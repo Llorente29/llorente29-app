@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo } from 'react'
 import { useApp } from '../context/AppContext'
 import { Button, Select, Card, Modal, Alert } from '../components/ui'
 import type { WeeklySchedulePlan } from '../types'
+import ModificacionesPanel from './ModificacionesPanel'
+import type { ScheduleModification } from '../services/scheduler'
 import {
   generateSmartSchedule, createDefaultParams, buildScheduleFromManual,
   DAY_CODES, DAY_LABELS, calcHours,
@@ -383,9 +385,11 @@ export default function CalendarioPage() {
   const [showAdjustments, setShowAdjustments] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [currentSchedule, setCurrentSchedule] = useState<GeneratedSchedule | null>(null)
+  const [modifications, setModifications] = useState<ScheduleModification[]>([])
+  const [scheduleTab, setScheduleTab] = useState<'horario' | 'modificaciones'>('horario')
 
   const locEmployees = staff.filter(e => e.active && e.locationId === locId)
-  type SavedPlan = WeeklySchedulePlan & { generatedData?: GeneratedSchedule; params?: WeekParams }
+  type SavedPlan = WeeklySchedulePlan & { generatedData?: GeneratedSchedule; params?: WeekParams; modifications?: ScheduleModification[] }
   const existingSchedule = schedules.find(s => s.locationId === locId && s.weekStart === weekStart) as SavedPlan | undefined
 
   // Recargar al cambiar semana/local
@@ -401,6 +405,7 @@ export default function CalendarioPage() {
     }
     setEditMode(false)
     setSelectedWorker(null)
+    setModifications((existingSchedule as any)?.modifications || [])
   }, [locId, weekStart])
 
   // Sincronizar empleados del local cuando cambia locId
@@ -430,6 +435,7 @@ export default function CalendarioPage() {
       locationId: locId, weekStart, days: [], published: false,
       createdAt: existingSchedule?.createdAt || new Date().toISOString(),
       generatedData: currentSchedule, params,
+      modifications,
     }
     setSchedules(prev => [...prev.filter(s => !(s.locationId === locId && s.weekStart === weekStart)), plan as WeeklySchedulePlan])
     setEditMode(false)
@@ -440,8 +446,9 @@ export default function CalendarioPage() {
     if (!manual || manual.length === 0) { alert('Necesitas al menos 1 empleado activo en este local'); return }
     const result = buildScheduleFromManual(locEmployees, manual)
     setCurrentSchedule(result)
+    setModifications([])
     setStep('schedule')
-    setEditMode(true)
+    setEditMode(false)
   }
 
   function updateShift(empId: string, day: DayCode, part: 'manana' | 'tarde', start: string, end: string) {
@@ -597,9 +604,17 @@ export default function CalendarioPage() {
           {/* Switcher equipo/individual */}
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex gap-1 bg-white border rounded-lg p-1">
-              <button onClick={() => setView('equipo')} className={`text-xs px-4 py-2 rounded font-medium ${view==='equipo' ? 'bg-teal-600 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>👥 Vista equipo</button>
-              <button onClick={() => setView('individual')} className={`text-xs px-4 py-2 rounded font-medium ${view==='individual' ? 'bg-teal-600 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>👤 Vista individual</button>
+              <button onClick={() => setScheduleTab('horario')} className={`text-xs px-3 py-2 rounded font-medium ${scheduleTab==='horario' ? 'bg-teal-600 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>📅 Horario</button>
+              <button onClick={() => setScheduleTab('modificaciones')} className={`text-xs px-3 py-2 rounded font-medium flex items-center gap-1 ${scheduleTab==='modificaciones' ? 'bg-teal-600 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>
+                🔧 Modificaciones {modifications.length > 0 && <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${scheduleTab==='modificaciones' ? 'bg-white/30' : 'bg-amber-500 text-white'}`}>{modifications.length}</span>}
+              </button>
             </div>
+            {scheduleTab === 'horario' && (
+            <div className="flex gap-1 bg-white border rounded-lg p-1">
+              <button onClick={() => setView('equipo')} className={`text-xs px-4 py-2 rounded font-medium ${view==='equipo' ? 'bg-gray-700 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>👥 Equipo</button>
+              <button onClick={() => setView('individual')} className={`text-xs px-4 py-2 rounded font-medium ${view==='individual' ? 'bg-gray-700 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>👤 Individual</button>
+            </div>
+            )}
             {params.notes && (
               <p className="text-xs text-gray-500 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">📝 {params.notes}</p>
             )}
@@ -702,14 +717,27 @@ export default function CalendarioPage() {
             </div>
           )}
 
+          {scheduleTab === 'modificaciones' && (
+            <ModificacionesPanel
+              locationId={locId}
+              weekStart={weekStart}
+              existingMods={modifications}
+              onApply={(result, mods) => {
+                setCurrentSchedule(result)
+                setModifications(mods)
+                setScheduleTab('horario')
+              }}
+            />
+          )}
+
           {/* Leyenda */}
-          <div className="flex flex-wrap gap-2 text-[10px] text-gray-400 items-center">
+          {scheduleTab === 'horario' && <div className="flex flex-wrap gap-2 text-[10px] text-gray-400 items-center">
             <span className="bg-amber-50 border border-amber-200 px-2 py-0.5 rounded text-amber-600">☀️ Mediodía</span>
             <span className="bg-violet-50 border border-violet-200 px-2 py-0.5 rounded text-violet-600">🌙 Noche</span>
             <span className="bg-gray-100 border px-2 py-0.5 rounded">Libre</span>
             <span className="ml-2">· Clic en nombre → ver horario individual</span>
             {editMode && <span className="text-teal-600 font-medium">· Modo edición activo</span>}
-          </div>
+          </div>}
         </div>
       )}
 

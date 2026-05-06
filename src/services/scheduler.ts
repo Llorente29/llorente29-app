@@ -543,3 +543,246 @@ export function buildScheduleFromManual(
     coverageByDay
   }
 }
+
+// ─── PLANTILLA BASE (horario fijo de referencia) ──────────────────────────────
+// Este es el horario estándar del local. Es inmutable — solo se usa como
+// referencia para calcular reajustes cuando hay modificaciones.
+
+export const BASE_TEMPLATE_LABEL = 'Plantilla base (horario normal del local)'
+
+// Construye la plantilla base para N trabajadores
+// T1=idx 0, T2=idx 1, T3=idx 2
+export function getBaseTemplate(employees: Employee[]): ManualWorkerSchedule[] {
+  const r: ManualWorkerSchedule[] = []
+  if (employees[0]) r.push({ employeeId: employees[0].id, days: {
+    lunes:     { libre:false, manana:{start:'12:30',end:'16:45'}, tarde:{start:'19:45',end:'00:15'} },
+    martes:    { libre:true },
+    miercoles: { libre:false, libreHalfDay:'manana' as const, tarde:{start:'19:45',end:'00:15'}, notes:'Libre mañana' },
+    jueves:    { libre:false, tarde:{start:'16:45',end:'00:15'} },
+    viernes:   { libre:false, tarde:{start:'14:45',end:'00:15'} },
+    sabado:    { libre:false, manana:{start:'12:30',end:'16:45'}, tarde:{start:'19:45',end:'00:15'} },
+    domingo:   { libre:false, tarde:{start:'19:45',end:'00:15'} },
+  }})
+  if (employees[1]) r.push({ employeeId: employees[1].id, days: {
+    lunes:     { libre:true },
+    martes:    { libre:false, libreHalfDay:'manana' as const, tarde:{start:'19:45',end:'00:15'}, notes:'Libre mañana' },
+    miercoles: { libre:false, manana:{start:'12:30',end:'16:45'}, tarde:{start:'19:45',end:'00:15'} },
+    jueves:    { libre:false, manana:{start:'12:30',end:'16:45'} },
+    viernes:   { libre:false, manana:{start:'12:30',end:'16:45'}, tarde:{start:'19:45',end:'00:15'} },
+    sabado:    { libre:false, tarde:{start:'19:45',end:'00:15'} },
+    domingo:   { libre:false, manana:{start:'14:45',end:'00:15'} },
+  }})
+  if (employees[2]) r.push({ employeeId: employees[2].id, days: {
+    lunes:     { libre:false, tarde:{start:'19:45',end:'00:15'} },
+    martes:    { libre:false, manana:{start:'12:30',end:'16:45'}, tarde:{start:'19:45',end:'00:15'} },
+    miercoles: { libre:true },
+    jueves:    { libre:false, libreHalfDay:'manana' as const, tarde:{start:'19:45',end:'00:15'}, notes:'Libre mañana' },
+    viernes:   { libre:false, tarde:{start:'19:45',end:'00:15'} },
+    sabado:    { libre:false, manana:{start:'14:45',end:'00:15'} },
+    domingo:   { libre:false, manana:{start:'12:30',end:'16:45'}, tarde:{start:'19:45',end:'00:15'} },
+  }})
+  return r
+}
+
+// ─── TIPOS DE MODIFICACIÓN ────────────────────────────────────────────────────
+
+export type ModType = 'ausencia_dia' | 'ausencia_manana' | 'ausencia_tarde' | 'cambio_horario' | 'dia_libre_extra'
+
+export interface ScheduleModification {
+  id: string
+  employeeId: string
+  dayCode: DayCode
+  type: ModType
+  reason: string        // 'Baja médica' | 'Permiso' | 'Vacaciones' | 'Petición' | 'Otro'
+  newSlot?: TimeSlot    // para cambio_horario
+  createdAt: string
+}
+
+// ─── MOTOR DE REAJUSTE ────────────────────────────────────────────────────────
+// Parte de la plantilla base, aplica las modificaciones, y reajusta el resto
+// para mantener los mínimos de cobertura.
+
+export interface AdjustResult {
+  schedule: GeneratedSchedule
+  alerts: ScheduleAlert[]
+  adjustments: string[]
+}
+
+export function applyModifications(
+  employees: Employee[],
+  modifications: ScheduleModification[]
+): GeneratedSchedule {
+  const alerts: ScheduleAlert[] = []
+  const adjustments: string[] = []
+
+  // 1. Partir de la plantilla base
+  const base = getBaseTemplate(employees)
+  if (base.length === 0) {
+    return {
+      workers: [], alerts: [{ id:'no-staff', severity:'critical', message:'Sin empleados' }],
+      adjustments: [], coverageByDay: {} as GeneratedSchedule['coverageByDay']
+    }
+  }
+
+  // 2. Aplicar modificaciones sobre la base
+  const modified = base.map(w => {
+    const mods = modifications.filter(m => m.employeeId === w.employeeId)
+    const days = { ...w.days }
+    mods.forEach(mod => {
+      const cur = days[mod.dayCode] || { libre: true }
+      switch (mod.type) {
+        case 'ausencia_dia':
+          days[mod.dayCode] = { libre: true, notes: mod.reason }
+          break
+        case 'ausencia_manana':
+          days[mod.dayCode] = { ...cur, manana: undefined, libreHalfDay: 'manana', notes: `Libre mañana (${mod.reason})` }
+          break
+        case 'ausencia_tarde':
+          days[mod.dayCode] = { ...cur, tarde: undefined, libreHalfDay: 'tarde', notes: `Libre noche (${mod.reason})` }
+          break
+        case 'cambio_horario':
+          if (mod.newSlot) {
+            // Decidir si es manana o tarde según la hora
+            const h = parseInt(mod.newSlot.start)
+            if (h >= 12 && h < 17) days[mod.dayCode] = { ...cur, manana: mod.newSlot }
+            else days[mod.dayCode] = { ...cur, tarde: mod.newSlot }
+          }
+          break
+        case 'dia_libre_extra':
+          days[mod.dayCode] = { libre: true, notes: 'Día libre (petición)' }
+          break
+      }
+      adjustments.push(`${employees.find(e=>e.id===w.employeeId)?.name || w.employeeId}: ${mod.type.replace('_',' ')} el ${DAY_LABELS[mod.dayCode]} (${mod.reason})`)
+    })
+    return { ...w, days }
+  })
+
+  // 3. Construir schedule inicial con las modificaciones
+  const initial = buildScheduleFromManual(employees, modified)
+
+  // 4. Verificar cobertura y reajustar donde falte
+  const reajusted = rebalanceCoverage(employees, modified, initial, adjustments, alerts)
+
+  return {
+    ...reajusted,
+    alerts: [...alerts, ...reajusted.alerts],
+    adjustments: [...adjustments, ...reajusted.adjustments]
+  }
+}
+
+// ─── Rebalanceo de cobertura ──────────────────────────────────────────────────
+function rebalanceCoverage(
+  employees: Employee[],
+  modified: ManualWorkerSchedule[],
+  current: GeneratedSchedule,
+  adjustments: string[],
+  alerts: ScheduleAlert[]
+): GeneratedSchedule {
+  const workers = current.workers.map(w => ({ ...w, days: { ...w.days } }))
+
+  DAY_CODES.forEach(day => {
+    const dp = DEFAULT_DAY_PARAMS[day]
+    const cov = current.coverageByDay[day]
+    const isWeekend = isWeekendDay(day)
+
+    // ── Cobertura de NOCHE ──────────────────────────────────────────────────
+    if (cov.noche < dp.minNoche) {
+      const nocheShort = dp.minNoche - cov.noche
+      const empLabel = (id: string) => employees.find(e => e.id === id)?.name || id
+
+      // Buscar trabajadores que ese día tienen solo mañana o están libres (no por ausencia oficial)
+      const candidates = workers.filter(w => {
+        const d = w.days[day]
+        if (!d) return false
+        // Solo libre por descanso (no por ausencia registrada)
+        const hasOfficialAbsence = modified.find(m => m.employeeId === w.employeeId)?.days[day]?.notes?.includes('Baja') ||
+          modified.find(m => m.employeeId === w.employeeId)?.days[day]?.notes?.includes('Vacaciones')
+        if (hasOfficialAbsence) return false
+        return d.libre || (d.manana && !d.tarde)  // libre o solo mañana
+      })
+
+      // Asignar noche a los primeros candidatos necesarios
+      const toReassign = candidates.slice(0, nocheShort)
+      toReassign.forEach(w => {
+        const d = w.days[day]
+        const tardeSlot = dp.tarde || { start:'19:45', end:'00:15' }
+        w.days[day] = {
+          manana: d.libre ? undefined : d.manana,
+          tarde: tardeSlot,
+          libre: false,
+          totalHours: (d.manana ? calcHours(d.manana.start, d.manana.end) : 0) + calcHours(tardeSlot.start, tardeSlot.end),
+          notes: 'Reajustado: añadida noche'
+        } as DayShift
+        w.totalHours = Object.values(w.days).reduce((s, dd) => s + (dd.totalHours || 0), 0)
+        adjustments.push(`${empLabel(w.employeeId)}: asignado turno de noche el ${DAY_LABELS[day]} (reajuste por falta de personal)`)
+        alerts.push({
+          id: `reajuste-noche-${w.employeeId}-${day}`,
+          severity: 'warning',
+          message: `${empLabel(w.employeeId)}: turno de noche añadido el ${DAY_LABELS[day]} por reajuste`,
+          suggestion: 'Descanso cancelado para mantener cobertura mínima',
+          dayCode: day, employeeId: w.employeeId
+        })
+      })
+
+      // Si no hay candidatos suficientes: reducción de horario
+      const stillShort = dp.minNoche - workers.filter(w => w.days[day] && !w.days[day].libre && w.days[day].tarde).length
+      if (stillShort > 0) {
+        if (day === 'lunes' && cov.noche === 0) {
+          // Cerrar lunes
+          workers.forEach(w => {
+            if (w.days[day]) { w.days[day] = { libre: true, totalHours: 0, notes: 'Cerrado' }; w.restDays++ }
+          })
+          adjustments.push('Lunes: CERRADO por falta de personal suficiente en noche')
+          alerts.push({ id:'closed-lunes-adj', severity:'critical', message:'Lunes cerrado: sin personal disponible para noche', dayCode:'lunes' })
+        } else {
+          // Cerrar 30 min antes
+          workers.forEach(w => {
+            const d = w.days[day]
+            if (d && !d.libre && d.tarde) {
+              const newEnd = subMins(d.tarde.end, 30)
+              d.tarde = { start: d.tarde.start, end: newEnd }
+              d.totalHours = (d.manana ? calcHours(d.manana.start, d.manana.end) : 0) + calcHours(d.tarde.start, d.tarde.end)
+            }
+          })
+          adjustments.push(`${DAY_LABELS[day]}: cierre 30 min antes (${isWeekend?'reducción fin de semana':'L-J reducción'}) — ${stillShort} persona(s) menos`)
+          alerts.push({
+            id:`earlyclose-adj-${day}`, severity:'warning',
+            message:`${DAY_LABELS[day]}: cierre adelantado 30 min por personal insuficiente`,
+            suggestion:`Faltan ${stillShort} persona(s) para cubrir el mínimo de noche`, dayCode:day
+          })
+        }
+      }
+    }
+
+    // ── Cobertura de MAÑANA ─────────────────────────────────────────────────
+    if (cov.manana < dp.minManana) {
+      const candidates = workers.filter(w => {
+        const d = w.days[day]
+        return d && !d.libre && d.tarde && !d.manana  // tiene noche pero no mañana
+      })
+      const toAdd = candidates.slice(0, dp.minManana - cov.manana)
+      toAdd.forEach(w => {
+        const mSlot = dp.manana || { start:'12:30', end:'16:00' }
+        w.days[day] = {
+          ...w.days[day],
+          manana: mSlot,
+          totalHours: calcHours(mSlot.start, mSlot.end) + (w.days[day].tarde ? calcHours(w.days[day].tarde!.start, w.days[day].tarde!.end) : 0)
+        } as DayShift
+        w.totalHours = Object.values(w.days).reduce((s, dd) => s + (dd.totalHours || 0), 0)
+        adjustments.push(`${employees.find(e=>e.id===w.employeeId)?.name}: añadida mañana el ${DAY_LABELS[day]} por reajuste`)
+      })
+    }
+  })
+
+  // Recalcular coverageByDay
+  const coverageByDay = {} as GeneratedSchedule['coverageByDay']
+  DAY_CODES.forEach(day => {
+    const dp = DEFAULT_DAY_PARAMS[day]
+    const manana = workers.filter(w => w.days[day] && !w.days[day].libre && w.days[day].manana).length
+    const noche = workers.filter(w => w.days[day] && !w.days[day].libre && w.days[day].tarde).length
+    coverageByDay[day] = { manana, noche, minManana:dp.minManana, minNoche:dp.minNoche, ok: manana>=dp.minManana && noche>=dp.minNoche }
+  })
+
+  return { workers, alerts: [], adjustments, coverageByDay }
+}
+
