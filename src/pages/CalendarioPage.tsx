@@ -6,8 +6,9 @@ import ModificacionesPanel from './ModificacionesPanel'
 import type { ScheduleModification } from '../services/scheduler'
 import {
   generateSmartSchedule, createDefaultParams, buildScheduleFromManual, getBaseTemplate,
+  checkRestViolations, calcLaborCosts,
   DAY_CODES, DAY_LABELS, calcHours,
-  type GeneratedSchedule, type ScheduleAlert, type DayCode, type WorkerWeek, type WeekParams, type DayParams, type DayShift, type ManualWorkerSchedule
+  type GeneratedSchedule, type ScheduleAlert, type DayCode, type WorkerWeek, type WeekParams, type DayParams, type DayShift, type ManualWorkerSchedule, type RestViolation
 } from '../services/scheduler'
 
 // ─── Helpers de fecha ─────────────────────────────────────────────────────────
@@ -338,7 +339,7 @@ function buildExcelSchedule(emps: ReturnType<typeof useApp>['staff']): ManualWor
 }
 
 export default function CalendarioPage() {
-  const { staff, locations, schedules, setSchedules } = useApp()
+  const { staff, setStaff, locations, schedules, setSchedules } = useApp()
   const [locId, setLocId] = useState(locations[0]?.id || '')
   const [weekStart, setWeekStart] = useState(() => getMondayStr(new Date()))
   const [step, setStep] = useState<'params' | 'schedule'>('params')
@@ -352,8 +353,9 @@ export default function CalendarioPage() {
   const [currentSchedule, setCurrentSchedule] = useState<GeneratedSchedule | null>(null)
   const [modifications, setModifications] = useState<ScheduleModification[]>([])
   const [scheduleTab, setScheduleTab] = useState<'horario' | 'modificaciones'>('horario')
-  // Mapeo T1/T2/T3 → ID de empleado real
   const [tMapping, setTMapping] = useState<[string,string,string]>(['','',''])
+  const [showCosts, setShowCosts] = useState(false)
+  const [showViolations, setShowViolations] = useState(false)
 
   const locEmployees = staff.filter(e => e.active && e.locationId === locId)
   type SavedPlan = WeeklySchedulePlan & { generatedData?: GeneratedSchedule; params?: WeekParams; modifications?: ScheduleModification[]; tMapping?: [string,string,string] }
@@ -413,6 +415,17 @@ export default function CalendarioPage() {
       modifications, tMapping,
     }
     setSchedules(prev => [...prev.filter(s => !(s.locationId === locId && s.weekStart === weekStart)), plan as WeeklySchedulePlan])
+
+    // Actualizar bolsa de horas de cada trabajador
+    setStaff(prev => prev.map(emp => {
+      const workerData = currentSchedule.workers.find(w => w.employeeId === emp.id)
+      if (!workerData) return emp
+      const contracted = emp.weeklyHours || 40
+      const worked = workerData.totalHours
+      const diff = worked - contracted  // positivo = horas a favor del trabajador
+      return { ...emp, hourBank: Math.round(((emp.hourBank || 0) + diff) * 10) / 10 }
+    }))
+
     setEditMode(false)
   }
 
@@ -429,6 +442,22 @@ export default function CalendarioPage() {
     setModifications([])
     setStep('schedule')
     setEditMode(false)
+  }
+
+  function copyPrevWeek() {
+    const prevStart = (() => {
+      const d = new Date(weekStart + 'T12:00:00'); d.setDate(d.getDate() - 7)
+      return d.toISOString().slice(0, 10)
+    })()
+    const prevSchedule = schedules.find(s => s.locationId === locId && s.weekStart === prevStart) as any
+    if (!prevSchedule?.generatedData) {
+      alert('No hay horario guardado la semana anterior'); return
+    }
+    if (!confirm('¿Copiar el horario de la semana anterior como base para esta semana?')) return
+    setCurrentSchedule(prevSchedule.generatedData)
+    setModifications(prevSchedule.modifications || [])
+    setStep('schedule')
+    setEditMode(true)
   }
 
   function updateShift(empId: string, day: DayCode, part: 'manana' | 'tarde', start: string, end: string) {
@@ -524,6 +553,9 @@ export default function CalendarioPage() {
               }} className="border-emerald-400 text-emerald-700 hover:bg-emerald-50 font-semibold" title="Volver al horario oficial del local">
                 🔒 Restaurar base
               </Button>
+              <Button size="sm" variant="outline" onClick={copyPrevWeek} title="Copiar horario de la semana anterior">
+                📋 Copiar semana anterior
+              </Button>
             </>
           )}
         </div>
@@ -612,9 +644,13 @@ export default function CalendarioPage() {
               </button>
             </div>
             {scheduleTab === 'horario' && (
-            <div className="flex gap-1 bg-white border rounded-lg p-1">
-              <button onClick={() => setView('equipo')} className={`text-xs px-4 py-2 rounded font-medium ${view==='equipo' ? 'bg-gray-700 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>👥 Equipo</button>
-              <button onClick={() => setView('individual')} className={`text-xs px-4 py-2 rounded font-medium ${view==='individual' ? 'bg-gray-700 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>👤 Individual</button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex gap-1 bg-white border rounded-lg p-1">
+                <button onClick={() => setView('equipo')} className={`text-xs px-4 py-2 rounded font-medium ${view==='equipo' ? 'bg-gray-700 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>👥 Equipo</button>
+                <button onClick={() => setView('individual')} className={`text-xs px-4 py-2 rounded font-medium ${view==='individual' ? 'bg-gray-700 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>👤 Individual</button>
+              </div>
+              <button onClick={() => setShowCosts(true)} className="text-xs px-3 py-2 rounded-lg border bg-white text-gray-600 hover:bg-gray-50 font-medium">💰 Costes</button>
+              <button onClick={() => { const v = checkRestViolations(currentSchedule!); if(v.length===0) alert('✅ Sin violaciones de descanso de 12h'); else setShowViolations(true) }} className="text-xs px-3 py-2 rounded-lg border bg-white text-gray-600 hover:bg-gray-50 font-medium">⏱ Validar 12h</button>
             </div>
             )}
             {params.notes && (
@@ -765,6 +801,87 @@ export default function CalendarioPage() {
           )}
         </div>
         <Button onClick={() => setShowAdjustments(false)} className="w-full mt-3">Cerrar</Button>
+      </Modal>
+
+      {/* Modal Costes laborales */}
+      <Modal open={showCosts} onClose={() => setShowCosts(false)} title="💰 Costes laborales estimados" size="md">
+        {currentSchedule && (() => {
+          const costs = calcLaborCosts(currentSchedule, locEmployees)
+          const hasSalaries = locEmployees.some(e => (e.salary || 0) > 0)
+          return (
+            <div className="space-y-4">
+              {!hasSalaries && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
+                  ⚠️ Añade el salario bruto anual de cada empleado en Personal para ver el coste económico real. Ahora solo se muestran las horas.
+                </div>
+              )}
+              <div className="space-y-2">
+                {costs.byEmployee.map(e => (
+                  <div key={e.employeeId} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border">
+                    <div>
+                      <p className="font-medium text-sm">{e.employeeName}</p>
+                      <p className="text-xs text-gray-500">{e.hours.toFixed(1)}h trabajadas{e.overtime > 0 ? ` · ${e.overtime.toFixed(1)}h extras` : ''}</p>
+                    </div>
+                    <div className="text-right">
+                      {e.hourlyRate > 0 ? (
+                        <>
+                          <p className={`font-bold text-sm ${e.overtime > 0 ? 'text-orange-600' : 'text-emerald-600'}`}>
+                            {e.totalCost.toFixed(2)}€
+                          </p>
+                          {e.overtime > 0 && <p className="text-xs text-orange-500">+{e.overtimeCost.toFixed(2)}€ extras</p>}
+                        </>
+                      ) : (
+                        <p className="text-sm text-gray-400">{e.hours.toFixed(1)}h</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="p-4 bg-teal-50 border border-teal-200 rounded-xl grid grid-cols-3 gap-3 text-center">
+                <div><p className="text-xl font-bold text-teal-700">{costs.totalHours.toFixed(1)}h</p><p className="text-xs text-teal-500">Total horas</p></div>
+                {hasSalaries && <>
+                  <div><p className="text-xl font-bold text-teal-700">{costs.totalCost.toFixed(0)}€</p><p className="text-xs text-teal-500">Coste normal</p></div>
+                  <div><p className={`text-xl font-bold ${costs.overtimeCost > 0 ? 'text-orange-600' : 'text-gray-400'}`}>{costs.overtimeCost.toFixed(0)}€</p><p className="text-xs text-gray-500">Extras (+25%)</p></div>
+                </>}
+              </div>
+              <p className="text-xs text-gray-400">Calculado sobre salario bruto anual ÷ 52 semanas ÷ horas contrato</p>
+            </div>
+          )
+        })()}
+        <Button onClick={() => setShowCosts(false)} className="w-full mt-3">Cerrar</Button>
+      </Modal>
+
+      {/* Modal Violaciones 12h */}
+      <Modal open={showViolations} onClose={() => setShowViolations(false)} title="⏱ Validación descanso 12h" size="md">
+        {currentSchedule && (() => {
+          const violations = checkRestViolations(currentSchedule)
+          return violations.length === 0 ? (
+            <div className="py-8 text-center">
+              <p className="text-4xl mb-2">✅</p>
+              <p className="font-medium text-emerald-700">Sin violaciones de descanso</p>
+              <p className="text-xs text-gray-400 mt-1">Todos los trabajadores tienen al menos 12h entre el cierre y la apertura siguiente</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-800">
+                ⚠️ {violations.length} violación(es) detectadas. El convenio de hostelería exige mínimo 12h de descanso entre jornadas.
+              </div>
+              {violations.map((v: RestViolation, i: number) => (
+                <div key={i} className="p-3 bg-white border border-red-200 rounded-xl">
+                  <p className="font-medium text-sm">{v.employeeName}</p>
+                  <p className="text-xs text-gray-600 mt-1">
+                    {DAY_LABELS[v.dayFrom]} cierra a las <strong>{v.closingHour}</strong> →{' '}
+                    {DAY_LABELS[v.dayTo]} abre a las <strong>{v.openingHour}</strong>
+                  </p>
+                  <p className="text-xs text-red-600 mt-0.5 font-medium">
+                    Solo {v.restHours}h de descanso (mínimo 12h)
+                  </p>
+                </div>
+              ))}
+            </div>
+          )
+        })()}
+        <Button onClick={() => setShowViolations(false)} className="w-full mt-3">Cerrar</Button>
       </Modal>
     </div>
   )

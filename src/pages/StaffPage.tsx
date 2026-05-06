@@ -237,6 +237,8 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations }: {
     { value: 'documentos', label: '📄 Docs' },
     { value: 'ausencias', label: '🏖 Ausencias' },
     { value: 'contrato', label: '📋 Contrato' },
+    { value: 'disponibilidad', label: '📅 Disponibilidad' },
+    { value: 'bolsa', label: '⏳ Bolsa horas' },
   ]
 
   return (
@@ -480,6 +482,89 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations }: {
                   </tbody>
                 </table>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── DISPONIBILIDAD ── */}
+        {tab === 'disponibilidad' && (
+          <div className="space-y-3">
+            <p className="text-xs text-gray-500">Marca en qué turnos está disponible este trabajador. El generador de horarios lo respetará.</p>
+            <div className="border rounded-xl overflow-hidden">
+              <table className="w-full text-sm">
+                <thead><tr className="bg-gray-50 border-b">
+                  <th className="p-3 text-left text-xs font-semibold text-gray-500">Día</th>
+                  <th className="p-3 text-center text-xs font-semibold text-amber-600">☀️ Mediodía</th>
+                  <th className="p-3 text-center text-xs font-semibold text-violet-600">🌙 Noche</th>
+                  <th className="p-3 text-center text-xs font-semibold text-red-500">🚫 No disponible</th>
+                </tr></thead>
+                <tbody>
+                  {(['lunes','martes','miercoles','jueves','viernes','sabado','domingo'] as const).map(day => {
+                    const labels: Record<string,string> = {lunes:'Lunes',martes:'Martes',miercoles:'Miércoles',jueves:'Jueves',viernes:'Viernes',sabado:'Sábado',domingo:'Domingo'}
+                    const avail = emp.availability?.[day] || ['manana','tarde']
+                    const toggle = (val: string) => {
+                      const cur = avail.includes(val) ? avail.filter((v: string)=>v!==val) : [...avail, val]
+                      update('availability', {...(emp.availability||{}), [day]: cur})
+                    }
+                    const isNoDisp = avail.includes('no_disponible')
+                    return (
+                      <tr key={day} className={`border-b last:border-0 ${isNoDisp?'bg-red-50':''}`}>
+                        <td className="p-3 font-medium text-sm">{labels[day]}</td>
+                        {['manana','tarde'].map(t => (
+                          <td key={t} className="p-3 text-center">
+                            <input type="checkbox" checked={avail.includes(t) && !isNoDisp}
+                              onChange={()=>toggle(t)} disabled={isNoDisp}
+                              className={`w-4 h-4 rounded ${t==='manana'?'accent-amber-500':'accent-violet-500'}`} />
+                          </td>
+                        ))}
+                        <td className="p-3 text-center">
+                          <input type="checkbox" checked={isNoDisp} onChange={()=>toggle('no_disponible')} className="w-4 h-4 accent-red-500 rounded" />
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* ── BOLSA DE HORAS ── */}
+        {tab === 'bolsa' && (
+          <div className="space-y-4">
+            <p className="text-xs text-gray-500">Horas acumuladas en la bolsa. Positivo = el trabajador tiene horas a su favor. Negativo = debe horas.</p>
+            <div className="flex items-center gap-4 p-4 rounded-2xl border bg-gray-50">
+              <div className="text-center flex-1">
+                <p className={`text-4xl font-bold ${(emp.hourBank||0)>0?'text-emerald-600':(emp.hourBank||0)<0?'text-red-600':'text-gray-400'}`}>
+                  {(emp.hourBank||0)>0?'+':''}{(emp.hourBank||0).toFixed(1)}h
+                </p>
+                <p className="text-xs text-gray-500 mt-1">Saldo actual</p>
+              </div>
+              <div className="flex-1 space-y-2">
+                <div>
+                  <label className="text-xs text-gray-500 uppercase font-medium">Ajuste manual (horas)</label>
+                  <div className="flex gap-2 mt-1">
+                    <input type="number" step="0.5" placeholder="+2.5 o -1.0"
+                      className="flex-1 border rounded-lg px-3 py-2 text-sm"
+                      id={`hourbank-adj-${emp.id}`} />
+                    <button onClick={() => {
+                      const inp = document.getElementById(`hourbank-adj-${emp.id}`) as HTMLInputElement
+                      const val = parseFloat(inp?.value||'0')
+                      if(isNaN(val)) return
+                      update('hourBank', (emp.hourBank||0) + val)
+                      if(inp) inp.value = ''
+                    }} className="px-3 py-2 bg-teal-600 text-white text-sm rounded-lg hover:bg-teal-700">
+                      Añadir
+                    </button>
+                  </div>
+                </div>
+                <button onClick={()=>update('hourBank',0)} className="w-full text-xs text-gray-400 hover:text-red-500 border border-gray-200 rounded-lg py-1.5">
+                  Resetear bolsa a 0
+                </button>
+              </div>
+            </div>
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-800">
+              💡 La bolsa de horas permite compensar semanas con más o menos trabajo sin necesidad de pagar horas extras inmediatamente. Se actualiza automáticamente cada vez que un empleado trabaja por encima o por debajo de sus horas contratadas.
             </div>
           </div>
         )}

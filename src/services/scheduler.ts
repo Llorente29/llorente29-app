@@ -143,8 +143,17 @@ export function generateSmartSchedule(employees: Employee[], weekStartDate: stri
   const hoursAvail: Record<string, number> = {}
   active.forEach(e => { hoursAvail[e.id] = params.workers.find(w => w.employeeId === e.id)?.hoursAvailable ?? 40 })
 
-  // Detectar ausencias oficiales
+  // Detectar ausencias oficiales y disponibilidad
   const absences: Record<string, Partial<Record<DayCode, string>>> = {}
+  // Pre-build unavailability from employee.availability field
+  const unavailable: Record<string, DayCode[]> = {}
+  active.forEach(emp => {
+    unavailable[emp.id] = []
+    DAY_CODES.forEach(day => {
+      const avail = (emp as any).availability?.[day]
+      if (avail && avail.includes('no_disponible')) unavailable[emp.id].push(day)
+    })
+  })
   active.forEach(emp => {
     absences[emp.id] = {}
     DAY_CODES.forEach((day, di) => {
@@ -231,6 +240,10 @@ export function generateSmartSchedule(employees: Employee[], weekStartDate: stri
     // Disponibles: no ausentes, con horas suficientes
     const available = active.filter(emp => {
       if (absences[emp.id][day]) return false
+      if (unavailable[emp.id]?.includes(day)) return false
+      // Check availability by shift type
+      const avail = (emp as any).availability?.[day]
+      if (avail && !avail.includes('manana') && !avail.includes('tarde')) return false
       return true
     })
 
@@ -803,3 +816,93 @@ function rebalanceCoverage(
   return { workers, alerts: [], adjustments, coverageByDay }
 }
 
+
+// ─── VALIDACIÓN 12H DESCANSO ENTRE TURNOS ────────────────────────────────────
+export interface RestViolation {
+  employeeId: string
+  employeeName: string
+  dayFrom: DayCode
+  dayTo: DayCode
+  closingHour: string  // hora cierre día anterior
+  openingHour: string  // hora apertura día siguiente
+  restHours: number    // horas reales de descanso
+}
+
+export function checkRestViolations(schedule: GeneratedSchedule): RestViolation[] {
+  const violations: RestViolation[] = []
+  schedule.workers.forEach(worker => {
+    DAY_CODES.forEach((day, di) => {
+      if (di === 6) return
+      const today = worker.days[day]
+      const tomorrow = worker.days[DAY_CODES[di + 1]]
+      if (!today || !tomorrow) return
+      if (today.libre || tomorrow.libre) return
+
+      const closingSlot = today.tarde || today.manana
+      const openingSlot = tomorrow.manana || tomorrow.tarde
+      if (!closingSlot || !openingSlot) return
+
+      const closeMin = parseTimeToMin(closingSlot.end)
+      const openMin = parseTimeToMin(openingSlot.start)
+      // si cierre es pasada medianoche (e.g. 00:15 = 24h+15min)
+      const closeAdj = closeMin < 360 ? closeMin + 1440 : closeMin
+      const restHours = (openMin + 1440 - closeAdj) / 60
+      if (restHours < 12) {
+        violations.push({
+          employeeId: worker.employeeId,
+          employeeName: worker.employeeName,
+          dayFrom: day, dayTo: DAY_CODES[di + 1],
+          closingHour: closingSlot.end,
+          openingHour: openingSlot.start,
+          restHours: Math.round(restHours * 10) / 10
+        })
+      }
+    })
+  })
+  return violations
+}
+
+function parseTimeToMin(t: string): number {
+  const [h, m] = t.split(':').map(Number)
+  return h * 60 + m
+}
+
+// ─── COSTE LABORAL ESTIMADO ───────────────────────────────────────────────────
+export interface LaborCost {
+  employeeId: string
+  employeeName: string
+  hours: number
+  hourlyRate: number
+  cost: number
+  overtime: number  // horas >40h
+  overtimeCost: number
+  totalCost: number
+}
+
+export function calcLaborCosts(schedule: GeneratedSchedule, employees: Employee[]): {
+  byEmployee: LaborCost[]
+  totalHours: number
+  totalCost: number
+  overtimeCost: number
+} {
+  const byEmployee: LaborCost[] = schedule.workers.map(w => {
+    const emp = employees.find(e => e.id === w.employeeId)
+    const annualSalary = emp?.salary || 0
+    const weeklyHours = emp?.weeklyHours || 40
+    const hourlyRate = annualSalary > 0 ? annualSalary / 52 / weeklyHours : 0
+    const overtime = Math.max(0, w.totalHours - 40)
+    const normalHours = w.totalHours - overtime
+    const overtimeRate = hourlyRate * 1.25  // +25% horas extras
+    const cost = normalHours * hourlyRate
+    const overtimeCost = overtime * overtimeRate
+    return {
+      employeeId: w.employeeId, employeeName: w.employeeName,
+      hours: w.totalHours, hourlyRate,
+      cost, overtime, overtimeCost, totalCost: cost + overtimeCost
+    }
+  })
+  const totalHours = byEmployee.reduce((s, e) => s + e.hours, 0)
+  const totalCost = byEmployee.reduce((s, e) => s + e.cost, 0)
+  const overtimeCost = byEmployee.reduce((s, e) => s + e.overtimeCost, 0)
+  return { byEmployee, totalHours, totalCost, overtimeCost }
+}

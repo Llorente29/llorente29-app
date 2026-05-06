@@ -40,6 +40,8 @@ export interface Employee {
   schedule: string; weeklySchedule: WeeklySchedule; active: boolean; notes: string
   clockEntries: ClockEntry[]; documents: StaffDocument[]; vacations: Vacation[]
   formations: { id: string; name: string; date: string; expiry?: string; issuer?: string }[]
+  availability?: { lunes:string[]; martes:string[]; miercoles:string[]; jueves:string[]; viernes:string[]; sabado:string[]; domingo:string[] }  // 'manana'|'tarde'|'no_disponible'
+  hourBank?: number  // horas acumuladas en bolsa (puede ser negativo)
 }
 
 export interface ChecklistItem {
