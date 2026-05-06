@@ -352,9 +352,11 @@ export default function CalendarioPage() {
   const [currentSchedule, setCurrentSchedule] = useState<GeneratedSchedule | null>(null)
   const [modifications, setModifications] = useState<ScheduleModification[]>([])
   const [scheduleTab, setScheduleTab] = useState<'horario' | 'modificaciones'>('horario')
+  // Mapeo T1/T2/T3 → ID de empleado real
+  const [tMapping, setTMapping] = useState<[string,string,string]>(['','',''])
 
   const locEmployees = staff.filter(e => e.active && e.locationId === locId)
-  type SavedPlan = WeeklySchedulePlan & { generatedData?: GeneratedSchedule; params?: WeekParams; modifications?: ScheduleModification[] }
+  type SavedPlan = WeeklySchedulePlan & { generatedData?: GeneratedSchedule; params?: WeekParams; modifications?: ScheduleModification[]; tMapping?: [string,string,string] }
   const existingSchedule = schedules.find(s => s.locationId === locId && s.weekStart === weekStart) as SavedPlan | undefined
 
   // Recargar al cambiar semana/local
@@ -371,6 +373,14 @@ export default function CalendarioPage() {
     setEditMode(false)
     setSelectedWorker(null)
     setModifications((existingSchedule as any)?.modifications || [])
+    // Auto-map first 3 employees if not set
+    const saved = (existingSchedule as any)?.tMapping
+    if (saved) setTMapping(saved)
+    else setTMapping([
+      locEmployees[0]?.id || '',
+      locEmployees[1]?.id || '',
+      locEmployees[2]?.id || ''
+    ])
   }, [locId, weekStart])
 
   // Sincronizar empleados del local cuando cambia locId
@@ -400,16 +410,21 @@ export default function CalendarioPage() {
       locationId: locId, weekStart, days: [], published: false,
       createdAt: existingSchedule?.createdAt || new Date().toISOString(),
       generatedData: currentSchedule, params,
-      modifications,
+      modifications, tMapping,
     }
     setSchedules(prev => [...prev.filter(s => !(s.locationId === locId && s.weekStart === weekStart)), plan as WeeklySchedulePlan])
     setEditMode(false)
   }
 
   function loadTemplate() {
-    const manual = buildExcelSchedule(locEmployees)
-    if (!manual || manual.length === 0) { alert('Necesitas al menos 1 empleado activo en este local'); return }
-    const result = buildScheduleFromManual(locEmployees, manual)
+    // Ordenar empleados según el mapeo T1/T2/T3
+    const orderedEmps = tMapping
+      .map(id => locEmployees.find(e => e.id === id))
+      .filter(Boolean) as typeof locEmployees
+    if (orderedEmps.length === 0) { alert('Configura el mapeo T1/T2/T3 primero'); return }
+    const manual = buildExcelSchedule(orderedEmps)
+    if (!manual || manual.length === 0) return
+    const result = buildScheduleFromManual(orderedEmps, manual)
     setCurrentSchedule(result)
     setModifications([])
     setStep('schedule')
@@ -545,29 +560,36 @@ export default function CalendarioPage() {
       ) : step === 'params' ? (
         // ─── Paso 1: Parámetros ────────────────────────────────────────────
         <div className="space-y-4">
-          {/* Banner horario base — inmutable */}
-          <div className="p-4 bg-gradient-to-r from-emerald-50 to-teal-50 border-2 border-emerald-300 rounded-2xl">
+          {/* Banner horario base — inmutable + selector T1/T2/T3 */}
+          <div className="p-4 bg-gradient-to-r from-emerald-50 to-teal-50 border-2 border-emerald-300 rounded-2xl space-y-3">
             <div className="flex items-start justify-between gap-3 flex-wrap">
               <div>
-                <p className="font-bold text-emerald-800 flex items-center gap-2 text-sm">
-                  🔒 Horario base oficial del local
-                </p>
-                <p className="text-xs text-emerald-700 mt-1">
-                  Plantilla verificada e inmutable. Pulsa para cargarla como punto de partida de la semana.
-                </p>
-                {locEmployees.length >= 1 && (
-                  <div className="flex gap-2 mt-2 flex-wrap">
-                    {locEmployees.slice(0,3).map((e,i) => (
-                      <span key={e.id} className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-medium">
-                        T{i+1}: {e.name}
-                      </span>
-                    ))}
-                  </div>
-                )}
+                <p className="font-bold text-emerald-800 text-sm">🔒 Horario base oficial del local</p>
+                <p className="text-xs text-emerald-700 mt-0.5">Asigna quién es T1, T2 y T3 y carga el horario.</p>
               </div>
-              <Button onClick={loadTemplate} disabled={locEmployees.length < 1} className="shrink-0">
+              <Button onClick={loadTemplate} disabled={tMapping.filter(Boolean).length === 0} className="shrink-0">
                 🔒 Cargar horario base
               </Button>
+            </div>
+            {/* Selector T1/T2/T3 */}
+            <div className="grid grid-cols-3 gap-2">
+              {(['T1','T2','T3'] as const).map((t,i) => (
+                <div key={t} className="bg-white rounded-xl border border-emerald-200 p-2">
+                  <p className="text-xs font-bold text-emerald-700 mb-1">{t} — {i===0?'Libra Martes':i===1?'Libra Lunes':'Libra Miércoles'}</p>
+                  <select
+                    value={tMapping[i]}
+                    onChange={e => setTMapping(prev => { const n=[...prev] as [string,string,string]; n[i]=e.target.value; return n })}
+                    className="w-full text-xs border rounded-lg px-2 py-1.5 bg-white"
+                  >
+                    <option value="">— seleccionar —</option>
+                    {locEmployees.map(emp => (
+                      <option key={emp.id} value={emp.id} disabled={tMapping.some((id,j)=>id===emp.id&&j!==i)}>
+                        {emp.name || '(Sin nombre)'} · {emp.position}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ))}
             </div>
           </div>
           <Card className="p-6">
