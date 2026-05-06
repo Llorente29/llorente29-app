@@ -9,6 +9,7 @@ import IncidentsPage from './pages/IncidentsPage'
 import CalendarioPage from './pages/CalendarioPage'
 import TSpoonPage from './pages/TSpoonPage'
 import VentasAnalisisPage from './pages/VentasAnalisisPage'
+import PrediccionPersonalPage from './pages/PrediccionPersonalPage'
 import {
   DashboardPage, ScheduledPage, TemplatesPage,
   AuditsPage, HistoryPage, InventoryPage, TSpoonSettingsPage, LocationsPage
@@ -28,6 +29,7 @@ const NAV: { id: Page; label: string; icon: string; section?: string }[] = [
   { id: 'history',            label: 'Historial',           icon: '📜' },
   { id: 'tspoon',             label: 'Fichas Técnicas',     icon: '🧪', section: 'Inventario' },
   { id: 'ventas_analisis',    label: 'Análisis de Ventas',  icon: '📊' },
+  { id: 'prediccion_personal', label: 'Predicción Personal',  icon: '🔮' },
   { id: 'inventory',          label: 'Inventario',          icon: '📦' },
   { id: 'locations',          label: 'Locales',             icon: '📍', section: 'Configuración' },
   { id: 'tspoon_settings',    label: 'Avisos',              icon: '🔔' },
@@ -41,6 +43,7 @@ const PAGE_TITLES: Record<Page, string> = {
   history: 'Historial', tspoon: 'Fichas Técnicas', inventory: 'Inventario',
   tspoon_settings: 'Configuración de Avisos',
   ventas_analisis: 'Análisis de Ventas',
+  prediccion_personal: 'Predicción de Personal',
 }
 
 function renderPage(page: Page) {
@@ -58,6 +61,7 @@ function renderPage(page: Page) {
     case 'history':           return <HistoryPage />
     case 'tspoon':            return <TSpoonPage />
     case 'ventas_analisis':   return <VentasAnalisisPage />
+    case 'prediccion_personal': return <PrediccionPersonalPage />
     case 'inventory':         return <InventoryPage />
     case 'locations':         return <LocationsPage />
     case 'tspoon_settings':   return <TSpoonSettingsPage />

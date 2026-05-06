@@ -196,9 +196,28 @@ function parseDeliveries(deliveries: TspDelivery[], _customers: TspCustomer[]): 
     // Importe: usar base (precio venta) del albarán
     const amount = dAny.base || dAny.total || dAny.totalAmount || dAny.amount || 0
     if (amount <= 0) return
-    // Contar platos sumando quantity de cada línea del pedido
+    // Contar platos sumando quantity — excluir bebidas y postres (no generan elaboración)
+    // Productos excluidos: no generan elaboración en cocina
+    const EXCL_NAMES = ['agua','coca cola','coca-cola','cocacola','fanta','mahou','cerveza',
+      'tarta tres leches','tarta 3 leches','cheesecake','cheescake',
+      'tarrina (cuvo) brownie','tarrina (cuvo) cheescake',
+      'tarrina mayo','tarrina mil islas','tarrina salsa','tarrina sweet chilli',
+      'delivery','descuento']
+    const EXCL_FAMS = ['bebida','drink','postre','dessert','refresco','café','cafe','coffee',
+      'cerveza','vino','cocktail','cóctel','pasteleria','pastelería','bolleria','bollería',
+      'pastas','salsa','salsas']
+    const normalize = (t: string) => t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
     const lines = dAny.listLines || dAny.deliveryLines || dAny.lines || []
-    const dishes = lines.reduce((sum: number, l: any) => sum + (parseFloat(l.quantity) || 1), 0) || 1
+    const dishes = lines.reduce((sum: number, l: any) => {
+      const name = normalize(l.component || l.descr || l.description || '')
+      const types: string[] = (l.listTypes || []).map((t: any) => normalize(t.descr || t.description || ''))
+      // Excluir si el nombre contiene alguna palabra excluida
+      const nameExcluded = EXCL_NAMES.some(ex => name.includes(normalize(ex)))
+      // Excluir si alguna familia contiene alguna palabra excluida
+      const famExcluded = types.some(t => EXCL_FAMS.some(ex => t.includes(normalize(ex))))
+      if (nameExcluded || famExcluded) return sum
+      return sum + (parseFloat(l.quantity) || 1)
+    }, 0) || 1
 
     // Un albarán = un pedido/ticket
     const ticketId = dAny.id || `${dateStr}_${brand}_${Math.random()}`
@@ -471,4 +490,36 @@ export function loadSavedAnalysis(locId: string): { records: SaleRecord[]; analy
 }
 function loadAll(): Record<string,any> {
   try { const s = localStorage.getItem(KEY); return s?JSON.parse(s):{} } catch { return {} }
+}
+
+// ─── Extraer productos únicos de los albaranes descargados ──────────────────
+export async function fetchAllProducts(token: string, centerId: string): Promise<{
+  name: string; family: string; codi?: string
+}[]> {
+  const API = 'https://app.tspoonlab.com/recipes/api'
+  const headers = { rememberme: token, order: centerId }
+
+  // Usar los albaranes (que SÍ tienen listLines con component y listTypes)
+  const end = new Date().toISOString().slice(0,10)
+  const start = new Date(Date.now() - 60*24*3600000).toISOString().slice(0,10)
+  const raw = await fetch(`${API}/integration/sales/deliveries/all?startDate=${start}&endDate=${end}&includeInternal=true`, { headers })
+    .then(r => r.json()).catch(() => [])
+  const deliveries: any[] = Array.isArray(raw) ? raw : raw?.results || []
+
+  // Extraer productos únicos de todas las líneas
+  const seen = new Map<string, { name: string; family: string }>()
+  deliveries.forEach(d => {
+    const lines: any[] = d.listLines || d.deliveryLines || d.lines || []
+    lines.forEach(l => {
+      const name = (l.component || l.descr || '').trim()
+      if (!name) return
+      const key = name.toLowerCase()
+      if (!seen.has(key)) {
+        const families = (l.listTypes || []).map((t: any) => t.descr || t.description || '').filter(Boolean).join(', ')
+        seen.set(key, { name, family: families || '(sin familia)' })
+      }
+    })
+  })
+
+  return [...seen.values()].sort((a,b) => a.family.localeCompare(b.family) || a.name.localeCompare(b.name))
 }

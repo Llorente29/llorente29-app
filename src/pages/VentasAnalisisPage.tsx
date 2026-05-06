@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useApp } from '../context/AppContext'
 import { Button, Select, Card, Alert } from '../components/ui'
 import {
-  syncAllBrands, parseExcelFile, analyzeHistory, saveAnalysis, loadSavedAnalysis, debugDeliveryStructure,
+  syncAllBrands, parseExcelFile, analyzeHistory, saveAnalysis, loadSavedAnalysis, debugDeliveryStructure, fetchAllProducts,
   type SaleRecord, type SalesAnalysis, type BrandSyncResult
 } from '../services/salesAnalysis'
 
@@ -63,6 +63,9 @@ export default function VentasAnalisisPage() {
   const [filesUploaded, setFilesUploaded] = useState(0)
   const [debugInfo, setDebugInfo] = useState<any>(null)
   const [showDebug, setShowDebug] = useState(false)
+  const [products, setProducts] = useState<{name:string;family:string;codi?:string}[]>([])
+  const [showProducts, setShowProducts] = useState(false)
+  const [prodSearch, setProdSearch] = useState('')
   // Mapeo local Andy → centro tSpoonLab (guardado en localStorage)
   const [centerMapping, setCenterMapping] = useState<Record<string,string>>(() => {
     try { return JSON.parse(localStorage.getItem('andy-center-mapping') || '{}') } catch { return {} }
@@ -219,13 +222,22 @@ export default function VentasAnalisisPage() {
                   ? '⚡ Selecciona un centro tSpoonLab primero'
                   : `⚡ Sincronizar ${locations.find(l=>l.id===locId)?.name || 'local'} (${daysBack} días)`}
               </Button>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 <button onClick={async () => {
                   setShowDebug(true)
-                  const info = await debugDeliveryStructure(tspoon.token, tspoon.selectedCenter)
+                  const info = await debugDeliveryStructure(tspoon.token, centerMapping[locId] || tspoon.selectedCenter)
                   setDebugInfo(info)
                 }} className="text-xs text-gray-400 hover:text-gray-600 underline">
                   🔍 Ver estructura API
+                </button>
+                <button onClick={async () => {
+                  const cid = centerMapping[locId] || tspoon.selectedCenter
+                  const prods = await fetchAllProducts(tspoon.token, cid)
+                  setProducts(prods)
+                  setShowProducts(true)
+                  setProdSearch('')
+                }} className="text-xs text-gray-400 hover:text-gray-600 underline">
+                  🍽 Ver productos
                 </button>
               </div>
               {tspoon.centers?.length > 0 && (
@@ -530,6 +542,63 @@ export default function VentasAnalisisPage() {
           )}
         </>
       )}
+      {/* Products panel */}
+      {showProducts && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setShowProducts(false)}>
+          <div className="bg-white rounded-2xl p-5 max-w-2xl w-full max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-3">
+              <p className="font-bold text-gray-800">🍽 Productos en tSpoonLab ({products.length})</p>
+              <button onClick={() => setShowProducts(false)} className="text-gray-400 hover:text-gray-700 text-xl">×</button>
+            </div>
+            <input
+              placeholder="Buscar producto o familia..."
+              value={prodSearch} onChange={e => setProdSearch(e.target.value)}
+              className="border rounded-xl px-3 py-2 text-sm mb-3 w-full"
+              autoFocus
+            />
+            <div className="overflow-y-auto flex-1">
+              <table className="w-full text-xs">
+                <thead className="sticky top-0 bg-white border-b">
+                  <tr className="text-gray-500">
+                    <th className="p-2 text-left font-semibold">Producto</th>
+                    <th className="p-2 text-left font-semibold">Familia</th>
+                    <th className="p-2 text-center font-semibold">Excluido</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {products
+                    .filter(p => !prodSearch || p.name.toLowerCase().includes(prodSearch.toLowerCase()) || p.family.toLowerCase().includes(prodSearch.toLowerCase()))
+                    .map((p, i) => {
+                      const EXCL_NAMES = ['agua','coca cola','coca-cola','cocacola','fanta','mahou','cerveza',
+                        'tarta tres leches','tarta 3 leches','cheesecake','cheescake',
+                        'tarrina (cuvo) brownie','tarrina (cuvo) cheescake',
+                        'tarrina mayo','tarrina mil islas','tarrina salsa','tarrina sweet chilli',
+                        'delivery','descuento']
+                      const EXCL_FAMS = ['bebida','drink','postre','dessert','refresco','café','cafe','coffee',
+                        'cerveza','vino','cocktail','cóctel','pasteleria','pastelería','bolleria','bollería',
+                        'pastas','salsa','salsas']
+                      const norm = (t: string) => t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+                      const nameLow = norm(p.name)
+                      const famLow  = norm(p.family)
+                      const excluded = EXCL_NAMES.some(ex => nameLow.includes(norm(ex)))
+                        || EXCL_FAMS.some(ex => famLow.includes(norm(ex)))
+                      return (
+                        <tr key={i} className={`border-b last:border-0 ${excluded ? 'bg-red-50' : ''}`}>
+                          <td className="p-2 font-medium">{p.name}</td>
+                          <td className="p-2 text-gray-500">{p.family}</td>
+                          <td className="p-2 text-center">{excluded ? <span className="text-red-500 font-bold">✗</span> : <span className="text-emerald-500">✓</span>}</td>
+                        </tr>
+                      )
+                    })
+                  }
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-gray-400 mt-3">✗ rojo = excluido del cálculo de platos · ✓ verde = incluido</p>
+          </div>
+        </div>
+      )}
+
       {/* Debug panel */}
       {showDebug && debugInfo && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setShowDebug(false)}>
