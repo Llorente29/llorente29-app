@@ -1,16 +1,13 @@
 import type { Employee } from '../types'
 
-// ─── Tipos ────────────────────────────────────────────────────────────────────
-export interface TimeSlot {
-  start: string   // "HH:MM"
-  end: string     // "HH:MM"
-}
+// ─── Tipos públicos ───────────────────────────────────────────────────────────
 
+export interface TimeSlot { start: string; end: string }
 export type DayCode = 'lunes' | 'martes' | 'miercoles' | 'jueves' | 'viernes' | 'sabado' | 'domingo'
 
 export interface DayShift {
-  manana?: TimeSlot   // turno de mañana (mediodía)
-  tarde?: TimeSlot    // turno de tarde/noche
+  manana?: TimeSlot
+  tarde?: TimeSlot
   libre: boolean
   totalHours: number
   notes?: string
@@ -42,7 +39,27 @@ export interface GeneratedSchedule {
   coverageByDay: Record<DayCode, { count: number; min: number; ok: boolean }>
 }
 
-// ─── Constantes del negocio (extraídas del Excel) ─────────────────────────────
+// ─── Parámetros semanales (formulario) ───────────────────────────────────────
+
+export interface WorkerParam {
+  employeeId: string
+  hoursAvailable: number  // horas disponibles esta semana (puede diferir del contrato)
+}
+
+export interface DayParams {
+  open: boolean
+  manana?: TimeSlot
+  tarde?: TimeSlot
+  minStaff: number  // mínimo para abrir ese día
+}
+
+export interface WeekParams {
+  workers: WorkerParam[]
+  days: Record<DayCode, DayParams>
+  notes?: string
+}
+
+// ─── Constantes base (valores por defecto) ────────────────────────────────────
 
 export const DAY_CODES: DayCode[] = ['lunes','martes','miercoles','jueves','viernes','sabado','domingo']
 export const DAY_LABELS: Record<DayCode, string> = {
@@ -53,286 +70,309 @@ export const DAY_SHORT: Record<DayCode, string> = {
   lunes:'L', martes:'M', miercoles:'X', jueves:'J', viernes:'V', sabado:'S', domingo:'D'
 }
 
-// Horario del local según el Excel proporcionado
-export const LOCAL_SCHEDULE: Record<DayCode, { manana?: TimeSlot; tarde: TimeSlot }> = {
-  lunes:     { manana: { start:'13:00', end:'15:45' }, tarde: { start:'19:00', end:'23:30' } },
-  martes:    { manana: { start:'13:00', end:'15:45' }, tarde: { start:'19:00', end:'23:30' } },
-  miercoles: { manana: { start:'13:00', end:'15:45' }, tarde: { start:'19:00', end:'23:30' } },
-  jueves:    { manana: { start:'13:00', end:'15:45' }, tarde: { start:'19:00', end:'23:30' } },
-  viernes:   { manana: { start:'13:00', end:'15:00' }, tarde: { start:'19:00', end:'02:15' } },
-  sabado:    { manana: { start:'12:00', end:'16:00' }, tarde: { start:'19:00', end:'02:15' } },
-  domingo:   { manana: { start:'12:00', end:'16:00' }, tarde: { start:'19:00', end:'02:15' } },
-}
-
-// Mínimo de personal por día y turno
-export const MIN_STAFF: Record<DayCode, { manana: number; tarde: number }> = {
-  lunes:     { manana: 1, tarde: 1 },
-  martes:    { manana: 1, tarde: 1 },
-  miercoles: { manana: 1, tarde: 1 },
-  jueves:    { manana: 1, tarde: 1 },
-  viernes:   { manana: 1, tarde: 2 },
-  sabado:    { manana: 2, tarde: 3 },
-  domingo:   { manana: 2, tarde: 2 },
+export const DEFAULT_DAY_PARAMS: Record<DayCode, DayParams> = {
+  lunes:     { open:true,  manana:{start:'13:00',end:'15:45'}, tarde:{start:'19:00',end:'23:30'}, minStaff:1 },
+  martes:    { open:true,  manana:{start:'13:00',end:'15:45'}, tarde:{start:'19:00',end:'23:30'}, minStaff:1 },
+  miercoles: { open:true,  manana:{start:'13:00',end:'15:45'}, tarde:{start:'19:00',end:'23:30'}, minStaff:1 },
+  jueves:    { open:true,  manana:{start:'13:00',end:'15:45'}, tarde:{start:'19:00',end:'23:30'}, minStaff:1 },
+  viernes:   { open:true,  manana:{start:'13:00',end:'15:00'}, tarde:{start:'19:00',end:'02:15'}, minStaff:2 },
+  sabado:    { open:true,  manana:{start:'12:00',end:'16:00'}, tarde:{start:'19:00',end:'02:15'}, minStaff:3 },
+  domingo:   { open:true,  manana:{start:'12:00',end:'16:00'}, tarde:{start:'19:00',end:'02:15'}, minStaff:2 },
 }
 
 export const MAX_WEEKLY_HOURS = 40
-export const MIN_REST_DAYS = 2  // 1.5 redondeado a 2 para la semana
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-function parseTime(t: string): number {
-  // returns minutes from midnight, handles past-midnight (e.g. 00:15 = 24*60+15 if < 6:00)
-  const [h, m] = t.split(':').map(Number)
-  const mins = h * 60 + m
-  return mins < 360 ? mins + 1440 : mins  // past midnight → add 24h
-}
 
 export function calcHours(start: string, end: string): number {
   if (!start || !end) return 0
-  return Math.max(0, (parseTime(end) - parseTime(start)) / 60)
+  const [sh, sm] = start.split(':').map(Number)
+  const [eh, em] = end.split(':').map(Number)
+  let startMin = sh * 60 + sm
+  let endMin = eh * 60 + em
+  if (endMin <= startMin) endMin += 24 * 60  // past midnight
+  return Math.max(0, (endMin - startMin) / 60)
 }
 
-function addDays(date: string, n: number): string {
-  const d = new Date(date + 'T12:00:00')
-  d.setDate(d.getDate() + n)
+function subMinutes(time: string, mins: number): string {
+  const [h, m] = time.split(':').map(Number)
+  let total = h * 60 + m - mins
+  if (total < 0) total += 24 * 60
+  return `${Math.floor(total/60).toString().padStart(2,'0')}:${(total%60).toString().padStart(2,'0')}`
+}
+
+function addDaysStr(date: string, n: number): string {
+  const d = new Date(date + 'T12:00:00'); d.setDate(d.getDate() + n)
   return d.toISOString().slice(0, 10)
 }
 
 function isAbsent(emp: Employee, date: string): { absent: boolean; type: string } {
-  const vac = emp.vacations.find(v =>
-    v.status === 'aprobada' && v.startDate <= date && v.endDate >= date
-  )
+  const vac = emp.vacations.find(v => v.status === 'aprobada' && v.startDate <= date && v.endDate >= date)
   if (vac) return { absent: true, type: vac.type }
   return { absent: false, type: '' }
 }
 
-function emptyDayShift(libre = false, notes?: string): DayShift {
-  return { libre, totalHours: 0, notes }
-}
-
 // ─── Motor principal ──────────────────────────────────────────────────────────
-export function generateSmartSchedule(employees: Employee[], weekStartDate: string): GeneratedSchedule {
+
+export function generateSmartSchedule(
+  employees: Employee[],
+  weekStartDate: string,
+  params: WeekParams
+): GeneratedSchedule {
   const alerts: ScheduleAlert[] = []
   const adjustments: string[] = []
 
-  const active = employees.filter(e => e.active)
-
+  // Solo empleados incluidos en los parámetros, activos
+  const active = employees.filter(e => e.active && params.workers.some(w => w.employeeId === e.id))
   if (active.length === 0) {
     return {
       workers: [], adjustments: [],
-      alerts: [{ id: 'no-staff', severity: 'critical', message: 'No hay empleados activos', suggestion: 'Añade empleados en Personal' }],
-      coverageByDay: Object.fromEntries(DAY_CODES.map(d => [d, { count: 0, min: 1, ok: false }])) as GeneratedSchedule['coverageByDay']
+      alerts: [{ id:'no-staff', severity:'critical', message:'No hay trabajadores disponibles para esta semana', suggestion:'Añade trabajadores en el formulario de parámetros' }],
+      coverageByDay: Object.fromEntries(DAY_CODES.map(d=>[d,{count:0,min:1,ok:false}])) as GeneratedSchedule['coverageByDay']
     }
   }
 
-  // Paso 1: detectar ausencias y alertar
-  const absencesByEmp: Record<string, Record<DayCode, string>> = {}
+  // Horas disponibles por trabajador esta semana
+  const hoursAvailable: Record<string, number> = {}
   active.forEach(emp => {
-    absencesByEmp[emp.id] = {} as Record<DayCode, string>
-    DAY_CODES.forEach((day, _di) => {
-      const date = addDays(weekStartDate, DAY_CODES.indexOf(day))
+    const p = params.workers.find(w => w.employeeId === emp.id)
+    hoursAvailable[emp.id] = p?.hoursAvailable ?? emp.weeklyHours ?? 40
+  })
+
+  // Detectar ausencias
+  const absenceByEmpDay: Record<string, Partial<Record<DayCode, string>>> = {}
+  active.forEach(emp => {
+    absenceByEmpDay[emp.id] = {}
+    DAY_CODES.forEach((day) => {
+      const date = addDaysStr(weekStartDate, DAY_CODES.indexOf(day))
       const { absent, type } = isAbsent(emp, date)
       if (absent) {
-        absencesByEmp[emp.id][day] = type
+        absenceByEmpDay[emp.id][day] = type
         alerts.push({
-          id: `abs-${emp.id}-${day}`,
-          severity: type === 'Baja médica' ? 'critical' : 'warning',
+          id: `abs-${emp.id}-${day}`, severity: type === 'Baja médica' ? 'critical' : 'warning',
           message: `${emp.name}: ${type} el ${DAY_LABELS[day]}`,
-          suggestion: type === 'Baja médica' ? 'Busca sustituto urgente' : 'Horario ajustado',
+          suggestion: type === 'Baja médica' ? 'Busca sustituto urgente' : 'Horario ajustado automáticamente',
           dayCode: day, employeeId: emp.id
         })
       }
     })
   })
 
-  // Paso 2: distribuir descansos
-  // Preferencia: lunes o lunes+martes (días más tranquilos)
-  // Rotamos: con N trabajadores, en L-J siempre hay N-restantes trabajando
+  // Estado acumulado por trabajador
+  const hoursUsed: Record<string, number> = {}
+  active.forEach(e => { hoursUsed[e.id] = 0 })
+
+  // Distribuir descansos: entre semana (L-J), rotando por trabajador
   const n = active.length
-  const restAssignment: Record<string, DayCode[]> = {}
-
-  // Calcular cuántos pueden descansar cada día sin bajar del mínimo
-  // Lunes-Jueves: mínimo 1 → pueden descansar n-1 personas por día
-  // Viernes-Dom: mínimo 2-3 → solo pueden descansar n-min personas
+  const restByEmp: Record<string, DayCode[]> = {}
   active.forEach((emp, idx) => {
-    const restDays: DayCode[] = []
-
-    // Día principal de descanso rotativo (L, M, X, J alternando)
-    const mainRestDay = DAY_CODES[idx % 4]  // solo entre semana
-    restDays.push(mainRestDay)
-
-    // Segundo día de descanso: si hay suficiente personal
+    const r: DayCode[] = []
+    const main = DAY_CODES[idx % 4] as DayCode  // L, M, X, J rotando
+    r.push(main)
     if (n >= 3) {
-      const secondRestDay = DAY_CODES[(idx + 2) % 4]
-      if (!restDays.includes(secondRestDay)) restDays.push(secondRestDay)
+      const second = DAY_CODES[(idx + 2) % 4] as DayCode
+      if (second !== main) r.push(second)
     }
-
-    restAssignment[emp.id] = restDays
+    restByEmp[emp.id] = r
   })
 
-  // Paso 3: construir el horario semana a semana
-  const weeklyHours: Record<string, number> = {}
-  active.forEach(e => { weeklyHours[e.id] = 0 })
-
+  // Inicializar resultado
   const workersMap: Record<string, WorkerWeek> = {}
   active.forEach(emp => {
     workersMap[emp.id] = {
-      employeeId: emp.id,
-      employeeName: emp.name || '(Sin nombre)',
+      employeeId: emp.id, employeeName: emp.name || '(Sin nombre)',
       position: emp.position,
       days: {} as Record<DayCode, DayShift>,
-      totalHours: 0,
-      restDays: 0
+      totalHours: 0, restDays: 0
     }
   })
 
   const coverageByDay: GeneratedSchedule['coverageByDay'] = {} as GeneratedSchedule['coverageByDay']
 
-  DAY_CODES.forEach((day, _di) => {
-    const localSched = LOCAL_SCHEDULE[day]
-    const minStaff = MIN_STAFF[day]
+  // ── Iterar por día ─────────────────────────────────────────────────────────
+  DAY_CODES.forEach((day) => {
+    const dp = params.days[day]
 
-    // Horario completo de este día (mañana + tarde)
-    const mananaHours = localSched.manana ? calcHours(localSched.manana.start, localSched.manana.end) : 0
-    const tardeHours = calcHours(localSched.tarde.start, localSched.tarde.end)
+    // Día cerrado por parámetro
+    if (!dp.open) {
+      active.forEach(emp => {
+        workersMap[emp.id].days[day] = { libre: true, totalHours: 0, notes: 'Cerrado' }
+        workersMap[emp.id].restDays++
+      })
+      coverageByDay[day] = { count: 0, min: dp.minStaff, ok: true }  // ok porque es cierre voluntario
+      adjustments.push(`${DAY_LABELS[day]}: día cerrado (configurado en parámetros)`)
+      return
+    }
 
-    // Empleados disponibles (no ausentes, no sobre el límite 40h)
+    const mananaSlot = dp.manana
+    const tardeSlot = dp.tarde
+    const mananaH = mananaSlot ? calcHours(mananaSlot.start, mananaSlot.end) : 0
+
+    // Empleados disponibles: no ausentes, con horas restantes
     const available = active.filter(emp => {
-      if (absencesByEmp[emp.id][day]) return false
-      if (weeklyHours[emp.id] + mananaHours > MAX_WEEKLY_HOURS) return false
-      return true
+      if (absenceByEmpDay[emp.id][day]) return false
+      const remaining = hoursAvailable[emp.id] - hoursUsed[emp.id]
+      return remaining >= mananaH  // al menos puede hacer la mañana
     })
 
-    // Quién descansa hoy
-    const resting = available.filter(emp => restAssignment[emp.id]?.includes(day))
-    let working = available.filter(emp => !restAssignment[emp.id]?.includes(day))
+    // Quitar a quienes descansan hoy (si hay suficiente cobertura)
+    const wantRest = available.filter(emp => restByEmp[emp.id]?.includes(day))
+    let working = available.filter(emp => !restByEmp[emp.id]?.includes(day))
 
-    // Si con descansos no llegamos al mínimo, quitamos descansos
-    const minNeeded = Math.max(minStaff.manana, minStaff.tarde)
-    if (working.length < minNeeded) {
-      const needed = minNeeded - working.length
-      const borrowedFromRest = resting.slice(0, needed)
-      working = [...working, ...borrowedFromRest]
-      borrowedFromRest.forEach(emp => {
-        adjustments.push(`${DAY_LABELS[day]}: ${emp.name} trabaja (descanso cancelado por falta de personal)`)
+    // Si no llegamos al mínimo, recuperar de descanso
+    if (working.length < dp.minStaff) {
+      const needed = dp.minStaff - working.length
+      const rescued = wantRest.slice(0, needed)
+      working = [...working, ...rescued]
+      rescued.forEach(emp => {
+        adjustments.push(`${DAY_LABELS[day]}: ${emp.name} — descanso cancelado, se necesita cobertura mínima`)
         alerts.push({
-          id: `rest-cancelled-${emp.id}-${day}`, severity: 'warning',
-          message: `${emp.name}: descanso de ${DAY_LABELS[day]} cancelado por falta de cobertura`,
-          suggestion: 'Considera contratar más personal', employeeId: emp.id, dayCode: day
+          id: `rest-cancel-${emp.id}-${day}`, severity: 'warning',
+          message: `${emp.name}: descanso de ${DAY_LABELS[day]} cancelado (cobertura mínima)`,
+          suggestion: `Con ${n} trabajadores es difícil cubrir todos los días. Considera contratar más personal`,
+          employeeId: emp.id, dayCode: day
         })
       })
     }
 
-    // Cobertura real
-    const coverCount = working.length
-    const ok = coverCount >= minNeeded
+    // ── Reducción de horario si aún falta personal ─────────────────────────
+    // SOLO dos opciones permitidas:
+    //   1. Adelantar 30 min el cierre de noche
+    //   2. Cerrar el lunes completo
+    let efectiveTarde = tardeSlot ? { ...tardeSlot } : undefined
+    let efectiveManana = mananaSlot ? { ...mananaSlot } : undefined
+    let dayOpen = true
 
-    if (!ok) {
-      // Personal insuficiente → reducir horario
-      const reducedSchedule = getReducedSchedule(day, coverCount, minStaff)
-      adjustments.push(`${DAY_LABELS[day]}: solo ${coverCount} trabajador(es), mínimo ${minNeeded} → ${reducedSchedule.description}`)
-      alerts.push({
-        id: `understaffed-${day}`, severity: coverCount === 0 ? 'critical' : 'error',
-        message: `${DAY_LABELS[day]}: ${coverCount} trabajador(es) disponibles (mínimo ${minNeeded}). ${reducedSchedule.description}`,
-        suggestion: reducedSchedule.suggestion, dayCode: day
-      })
+    if (working.length === 0) {
+      // Sin nadie disponible → opción 2 si es lunes, si no → alerta crítica
+      if (day === 'lunes') {
+        dayOpen = false
+        adjustments.push('Lunes: CERRADO (sin personal disponible — reducción aplicada)')
+        alerts.push({ id:'closed-lunes', severity:'critical', message:'Lunes cerrado por falta de personal', suggestion:'Opción de reducción aplicada automáticamente', dayCode:day })
+      } else {
+        dayOpen = false
+        adjustments.push(`${DAY_LABELS[day]}: CERRADO por falta total de personal`)
+        alerts.push({ id:`closed-${day}`, severity:'critical', message:`${DAY_LABELS[day]}: cerrado, sin personal disponible`, suggestion:'Busca personal de refuerzo urgente', dayCode:day })
+      }
+    } else if (working.length < dp.minStaff) {
+      // Personal insuficiente → reducción
+      if (day === 'lunes' && working.length === 0) {
+        // Cerrar lunes
+        dayOpen = false
+        adjustments.push('Lunes: CERRADO (reducción — personal insuficiente)')
+      } else if (efectiveTarde) {
+        // Opción 1: adelantar 30 min el cierre de noche
+        const newEnd = subMinutes(efectiveTarde.end, 30)
+        adjustments.push(`${DAY_LABELS[day]}: cierre adelantado 30 min (${efectiveTarde.end} → ${newEnd}) por personal reducido (${working.length}/${dp.minStaff})`)
+        alerts.push({
+          id:`reduced-${day}`, severity:'warning',
+          message:`${DAY_LABELS[day]}: cierre a las ${newEnd} (30 min antes) — solo ${working.length} trabajador(es)`,
+          suggestion:`Mínimo recomendado: ${dp.minStaff}`, dayCode:day
+        })
+        efectiveTarde = { start: efectiveTarde.start, end: newEnd }
+      }
     }
 
-    coverageByDay[day] = { count: coverCount, min: minNeeded, ok }
+    // Si cerrado, asignar libre a todos
+    if (!dayOpen) {
+      active.forEach(emp => {
+        workersMap[emp.id].days[day] = { libre: true, totalHours: 0, notes: 'Cerrado' }
+        workersMap[emp.id].restDays++
+      })
+      coverageByDay[day] = { count: 0, min: dp.minStaff, ok: false }
+      return
+    }
 
-    // Asignar turnos
+    // ── Asignar turnos ─────────────────────────────────────────────────────
+    const efectivaMananaH = efectiveManana ? calcHours(efectiveManana.start, efectiveManana.end) : 0
+    const efectivaTardeH = efectiveTarde ? calcHours(efectiveTarde.start, efectiveTarde.end) : 0
+
     active.forEach(emp => {
-      const isAbsent = !!absencesByEmp[emp.id][day]
-      const isWorking = working.find(w => w.id === emp.id)
-
+      const isAbsent = !!absenceByEmpDay[emp.id][day]
       if (isAbsent) {
-        workersMap[emp.id].days[day] = emptyDayShift(true, absencesByEmp[emp.id][day])
+        workersMap[emp.id].days[day] = { libre: true, totalHours: 0, notes: absenceByEmpDay[emp.id][day] }
         workersMap[emp.id].restDays++
         return
       }
-
+      const isWorking = working.some(w => w.id === emp.id)
       if (!isWorking) {
-        workersMap[emp.id].days[day] = emptyDayShift(true)
+        workersMap[emp.id].days[day] = { libre: true, totalHours: 0 }
         workersMap[emp.id].restDays++
         return
       }
 
-      // Construir turno del día
-      // Verificar si le queda margen para turno completo o solo partido
-      const hoursLeft = MAX_WEEKLY_HOURS - weeklyHours[emp.id]
+      // Calcular cuántas horas le quedan al trabajador
+      const remaining = hoursAvailable[emp.id] - hoursUsed[emp.id]
       let manana: TimeSlot | undefined = undefined
       let tarde: TimeSlot | undefined = undefined
-      let dayHours = 0
+      let dayH = 0
 
-      if (localSched.manana && hoursLeft >= mananaHours) {
-        manana = localSched.manana
-        dayHours += mananaHours
+      if (efectiveManana && remaining >= efectivaMananaH) {
+        manana = efectiveManana
+        dayH += efectivaMananaH
       }
 
-      const tardeH = Math.min(tardeHours, hoursLeft - dayHours)
-      if (tardeH > 0) {
-        if (tardeH >= tardeHours) {
-          tarde = localSched.tarde
-          dayHours += tardeHours
-        } else {
-          // Turno tarde reducido por límite 40h
-          const newEnd = addMinutesToTime(localSched.tarde.start, Math.round(tardeH * 60))
-          tarde = { start: localSched.tarde.start, end: newEnd }
-          dayHours += tardeH
-          adjustments.push(`${emp.name} ${DAY_LABELS[day]}: turno tarde reducido (límite 40h)`)
+      if (efectiveTarde) {
+        const leftAfterManana = remaining - dayH
+        if (leftAfterManana >= efectivaTardeH) {
+          tarde = efectiveTarde
+          dayH += efectivaTardeH
+        } else if (leftAfterManana > 0) {
+          // Reducir tarde por límite personal de este trabajador
+          const [sh, sm] = efectiveTarde.start.split(':').map(Number)
+          const maxEnd = sh * 60 + sm + Math.floor(leftAfterManana * 60)
+          const hh = Math.floor(maxEnd / 60) % 24
+          const mm = maxEnd % 60
+          const capEnd = `${hh.toString().padStart(2,'0')}:${mm.toString().padStart(2,'0')}`
+          tarde = { start: efectiveTarde.start, end: capEnd }
+          dayH += leftAfterManana
+          adjustments.push(`${emp.name} ${DAY_LABELS[day]}: tarde reducida hasta ${capEnd} (límite ${hoursAvailable[emp.id]}h/sem)`)
         }
       }
 
-      workersMap[emp.id].days[day] = { manana, tarde, libre: false, totalHours: dayHours }
-      weeklyHours[emp.id] += dayHours
+      const totalDay = dayH
+      workersMap[emp.id].days[day] = { manana, tarde, libre: false, totalHours: totalDay }
+      hoursUsed[emp.id] += totalDay
     })
+
+    coverageByDay[day] = { count: working.length, min: dp.minStaff, ok: working.length >= dp.minStaff }
   })
 
-  // Paso 4: calcular totales y alertas de horas
+  // ── Totales y alertas de horas ─────────────────────────────────────────────
   active.forEach(emp => {
-    const worker = workersMap[emp.id]
-    worker.totalHours = Object.values(worker.days).reduce((s, d) => s + d.totalHours, 0)
-    if (worker.totalHours > MAX_WEEKLY_HOURS) {
-      alerts.push({ id: `overhours-${emp.id}`, severity: 'error', message: `${emp.name}: ${worker.totalHours.toFixed(1)}h (máximo 40h)`, employeeId: emp.id })
+    const w = workersMap[emp.id]
+    w.totalHours = Object.values(w.days).reduce((s, d) => s + (d.totalHours || 0), 0)
+    if (w.totalHours > hoursAvailable[emp.id]) {
+      alerts.push({ id:`overhours-${emp.id}`, severity:'error', message:`${emp.name}: ${w.totalHours.toFixed(1)}h asignadas (disponible: ${hoursAvailable[emp.id]}h)`, employeeId: emp.id })
     }
-    if (worker.restDays < 1) {
-      alerts.push({ id: `norest-${emp.id}`, severity: 'error', message: `${emp.name}: sin días de descanso`, suggestion: 'Obligatorio por convenio', employeeId: emp.id })
-    } else if (worker.restDays < 2) {
-      alerts.push({ id: `lowrest-${emp.id}`, severity: 'warning', message: `${emp.name}: solo ${worker.restDays} día libre (convenio: 1.5)`, employeeId: emp.id })
+    if (w.restDays < 1) {
+      alerts.push({ id:`norest-${emp.id}`, severity:'error', message:`${emp.name}: sin días libres esta semana`, suggestion:'Obligatorio por convenio', employeeId: emp.id })
+    } else if (w.restDays < 2) {
+      alerts.push({ id:`lowrest-${emp.id}`, severity:'warning', message:`${emp.name}: solo ${w.restDays} día libre (convenio: 1.5 días)`, employeeId: emp.id })
     }
   })
 
-  // Alerta global de personal insuficiente
-  const understaffedDays = Object.values(coverageByDay).filter(c => !c.ok).length
+  // Alerta de personal insuficiente global
+  const understaffedDays = Object.entries(coverageByDay).filter(([,c]) => !c.ok && c.min > 0).length
   if (understaffedDays >= 3) {
     alerts.unshift({
-      id: 'need-more-staff', severity: 'critical',
-      message: `⚠️ ${understaffedDays} días sin cobertura mínima. Necesitas más personal.`,
-      suggestion: `Con ${active.length} empleados no se cubren todos los turnos. Mínimo recomendado: ${Math.ceil(MAX_WEEKLY_HOURS / 7) + 1} empleados`
+      id:'need-more', severity:'critical',
+      message:`⚠️ ${understaffedDays} días sin cobertura mínima. Necesitas más trabajadores.`,
+      suggestion:`Reducción automática aplicada: cierre 30 min antes donde es posible, cierre de lunes si no hay personal`
     })
   }
 
+  return { workers: Object.values(workersMap), alerts, adjustments, coverageByDay }
+}
+
+// ─── Crear parámetros por defecto para una semana ────────────────────────────
+export function createDefaultParams(employees: Employee[]): WeekParams {
   return {
-    workers: Object.values(workersMap),
-    alerts,
-    adjustments,
-    coverageByDay
+    workers: employees.filter(e => e.active).map(e => ({
+      employeeId: e.id,
+      hoursAvailable: e.weeklyHours || 40
+    })),
+    days: { ...DEFAULT_DAY_PARAMS },
+    notes: ''
   }
-}
-
-// ─── Reducción de horario por falta de personal ───────────────────────────────
-function getReducedSchedule(day: DayCode, available: number, min: { manana: number; tarde: number }): { description: string; suggestion: string } {
-  const isWeekend = day === 'sabado' || day === 'domingo' || day === 'viernes'
-  if (available === 0) return { description: 'Local cerrado por falta de personal', suggestion: 'Busca personal de refuerzo urgente' }
-  if (isWeekend && available < min.tarde) {
-    return { description: `Cierre 30 min antes del horario (${available}/${min.tarde} para noche)`, suggestion: `Necesitas ${min.tarde - available} persona(s) más para cubrir la noche` }
-  }
-  return { description: `Solo servicio mediodía (${available}/${min.manana} mínimo noche)`, suggestion: 'Cierra a las 16:00, sin servicio de noche' }
-}
-
-function addMinutesToTime(time: string, minutes: number): string {
-  const [h, m] = time.split(':').map(Number)
-  const total = h * 60 + m + minutes
-  const hh = Math.floor(total / 60) % 24
-  const mm = total % 60
-  return `${hh.toString().padStart(2,'0')}:${mm.toString().padStart(2,'0')}`
 }
