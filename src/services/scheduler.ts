@@ -70,14 +70,15 @@ export const DAY_SHORT: Record<DayCode, string> = {
   lunes:'L', martes:'M', miercoles:'X', jueves:'J', viernes:'V', sabado:'S', domingo:'D'
 }
 
+// minStaff = mínimo noche: L-J=2, V-S-D=3
 export const DEFAULT_DAY_PARAMS: Record<DayCode, DayParams> = {
-  lunes:     { open:true,  manana:{start:'13:00',end:'15:45'}, tarde:{start:'19:00',end:'23:30'}, minStaff:1 },
-  martes:    { open:true,  manana:{start:'13:00',end:'15:45'}, tarde:{start:'19:00',end:'23:30'}, minStaff:1 },
-  miercoles: { open:true,  manana:{start:'13:00',end:'15:45'}, tarde:{start:'19:00',end:'23:30'}, minStaff:1 },
-  jueves:    { open:true,  manana:{start:'13:00',end:'15:45'}, tarde:{start:'19:00',end:'23:30'}, minStaff:1 },
-  viernes:   { open:true,  manana:{start:'13:00',end:'15:00'}, tarde:{start:'19:00',end:'02:15'}, minStaff:2 },
+  lunes:     { open:true,  manana:{start:'13:00',end:'15:45'}, tarde:{start:'19:00',end:'23:30'}, minStaff:2 },
+  martes:    { open:true,  manana:{start:'13:00',end:'15:45'}, tarde:{start:'19:00',end:'23:30'}, minStaff:2 },
+  miercoles: { open:true,  manana:{start:'13:00',end:'15:45'}, tarde:{start:'19:00',end:'23:30'}, minStaff:2 },
+  jueves:    { open:true,  manana:{start:'13:00',end:'15:45'}, tarde:{start:'19:00',end:'23:30'}, minStaff:2 },
+  viernes:   { open:true,  manana:{start:'13:00',end:'15:00'}, tarde:{start:'19:00',end:'02:15'}, minStaff:3 },
   sabado:    { open:true,  manana:{start:'12:00',end:'16:00'}, tarde:{start:'19:00',end:'02:15'}, minStaff:3 },
-  domingo:   { open:true,  manana:{start:'12:00',end:'16:00'}, tarde:{start:'19:00',end:'02:15'}, minStaff:2 },
+  domingo:   { open:true,  manana:{start:'12:00',end:'16:00'}, tarde:{start:'19:00',end:'02:15'}, minStaff:3 },
 }
 
 export const MAX_WEEKLY_HOURS = 40
@@ -235,7 +236,10 @@ export function generateSmartSchedule(
       })
     }
 
-    // ── Reducción de horario si aún falta personal ─────────────────────────
+    // ── Gestión de personal insuficiente ─────────────────────────────────────
+    // Mínimos OBLIGATORIOS: L-J noche=2, V-S-D noche=3
+    // Si faltan: los disponibles alargan horas + aviso urgente
+    // Reducciones SOLO si no hay nadie: -30min noche, o cerrar lunes
     // SOLO dos opciones permitidas:
     //   1. Adelantar 30 min el cierre de noche
     //   2. Cerrar el lunes completo
@@ -255,21 +259,37 @@ export function generateSmartSchedule(
         alerts.push({ id:`closed-${day}`, severity:'critical', message:`${DAY_LABELS[day]}: cerrado, sin personal disponible`, suggestion:'Busca personal de refuerzo urgente', dayCode:day })
       }
     } else if (working.length < dp.minStaff) {
-      // Personal insuficiente → reducción
-      if (day === 'lunes' && working.length === 0) {
-        // Cerrar lunes
-        dayOpen = false
-        adjustments.push('Lunes: CERRADO (reducción — personal insuficiente)')
-      } else if (efectiveTarde) {
-        // Opción 1: adelantar 30 min el cierre de noche
-        const newEnd = subMinutes(efectiveTarde.end, 30)
-        adjustments.push(`${DAY_LABELS[day]}: cierre adelantado 30 min (${efectiveTarde.end} → ${newEnd}) por personal reducido (${working.length}/${dp.minStaff})`)
+      const missing = dp.minStaff - working.length
+      const isWeekendNight = day === 'viernes' || day === 'sabado' || day === 'domingo'
+      const minLabel = isWeekendNight ? '3 (V-S-D noche)' : '2 (L-J noche)'
+
+      // Los disponibles alargan horas para cubrir el turno completo
+      if (efectiveTarde) {
+        const tardeHoursTotal = calcHours(efectiveTarde.start, efectiveTarde.end)
+        const extraPerWorker = (tardeHoursTotal * missing) / working.length
+        adjustments.push(
+          `${DAY_LABELS[day]}: ${working.length}/${dp.minStaff} en noche — cada trabajador extiende ~${extraPerWorker.toFixed(1)}h adicionales`
+        )
         alerts.push({
-          id:`reduced-${day}`, severity:'warning',
-          message:`${DAY_LABELS[day]}: cierre a las ${newEnd} (30 min antes) — solo ${working.length} trabajador(es)`,
-          suggestion:`Mínimo recomendado: ${dp.minStaff}`, dayCode:day
+          id: `short-${day}`, severity: 'error',
+          message: `⚠️ ${DAY_LABELS[day]}: solo ${working.length} trabajador(es) en noche (mínimo obligatorio: ${minLabel})`,
+          suggestion: `Los ${working.length} disponibles cubren el turno. Faltan ${missing} persona(s). Considera contratar refuerzo o reorganizar descansos`,
+          dayCode: day
         })
-        efectiveTarde = { start: efectiveTarde.start, end: newEnd }
+        // Reducción adicional solo en casos extremos: 1 de 3 en V-S-D → cerrar 30 min antes
+        if (isWeekendNight && working.length <= 1 && missing >= 2) {
+          const newEnd = subMinutes(efectiveTarde.end, 30)
+          efectiveTarde = { start: efectiveTarde.start, end: newEnd }
+          adjustments.push(`${DAY_LABELS[day]}: cierre adelantado 30 min (→ ${newEnd}) — situación crítica de personal`)
+          alerts.push({ id:`earlyclose-${day}`, severity:'warning', message:`${DAY_LABELS[day]}: cierre a las ${newEnd} (30 min antes)`, dayCode:day })
+        }
+        // Lunes con 1 de 2 → cerrar 30 min antes como primera reducción
+        else if (day === 'lunes' && working.length === 1) {
+          const newEnd = subMinutes(efectiveTarde.end, 30)
+          efectiveTarde = { start: efectiveTarde.start, end: newEnd }
+          adjustments.push(`Lunes: cierre adelantado 30 min (→ ${newEnd}) — 1/2 trabajadores en noche`)
+          alerts.push({ id:'earlyclose-lunes', severity:'warning', message:`Lunes: cierre a las ${newEnd} (30 min antes) con 1/2 trabajadores`, dayCode:day })
+        }
       }
     }
 
