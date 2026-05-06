@@ -5,7 +5,7 @@ import type { WeeklySchedulePlan } from '../types'
 import ModificacionesPanel from './ModificacionesPanel'
 import type { ScheduleModification } from '../services/scheduler'
 import {
-  generateSmartSchedule, createDefaultParams, buildScheduleFromManual,
+  generateSmartSchedule, createDefaultParams, buildScheduleFromManual, getBaseTemplate,
   DAY_CODES, DAY_LABELS, calcHours,
   type GeneratedSchedule, type ScheduleAlert, type DayCode, type WorkerWeek, type WeekParams, type DayParams, type DayShift, type ManualWorkerSchedule
 } from '../services/scheduler'
@@ -331,45 +331,10 @@ function WorkerView({ worker, weekStart }: { worker: WorkerWeek; weekStart: stri
 
 // ─── Página principal ─────────────────────────────────────────────────────────
 
-// ─── Horario real del Excel (T1=1er empleado, T2=2o, T3=3er) ─────────────────
-function buildExcelSchedule(emps: {id:string}[]): ManualWorkerSchedule[] | null {
+// Wrapper: fuente única de verdad en getBaseTemplate() del scheduler
+function buildExcelSchedule(emps: ReturnType<typeof useApp>['staff']): ManualWorkerSchedule[] | null {
   if (emps.length < 1) return null
-  const r: ManualWorkerSchedule[] = []
-
-  // T1: libra Martes + Miércoles mañana (43.5h)
-  if (emps[0]) r.push({ employeeId: emps[0].id, days: {
-    lunes:     { libre:false, manana:{start:'12:30',end:'16:45'}, tarde:{start:'19:45',end:'00:15'} },
-    martes:    { libre:true },
-    miercoles: { libre:false, libreHalfDay:'manana' as const, tarde:{start:'19:45',end:'00:15'}, notes:'Libre mañana' },
-    jueves:    { libre:false, tarde:{start:'20:15',end:'00:15'} },
-    viernes:   { libre:false, tarde:{start:'19:45',end:'00:15'} },
-    sabado:    { libre:false, manana:{start:'12:30',end:'16:45'}, tarde:{start:'19:45',end:'00:15'} },
-    domingo:   { libre:false, tarde:{start:'19:45',end:'00:15'} },
-  }})
-
-  // T2: libra Lunes + Martes mañana (40.25h)
-  if (emps[1]) r.push({ employeeId: emps[1].id, days: {
-    lunes:     { libre:true },
-    martes:    { libre:false, libreHalfDay:'manana' as const, tarde:{start:'19:45',end:'00:15'}, notes:'Libre mañana' },
-    miercoles: { libre:false, tarde:{start:'19:45',end:'00:15'} },
-    jueves:    { libre:false, tarde:{start:'19:45',end:'00:15'} },
-    viernes:   { libre:false, manana:{start:'14:45',end:'16:00'}, tarde:{start:'16:00',end:'00:15'} },
-    sabado:    { libre:false, tarde:{start:'19:45',end:'00:15'} },
-    domingo:   { libre:false, manana:{start:'12:30',end:'16:00'}, tarde:{start:'16:00',end:'00:15'} },
-  }})
-
-  // T3: libra Miércoles + Jueves mañana (40.5h)
-  if (emps[2]) r.push({ employeeId: emps[2].id, days: {
-    lunes:     { libre:false, tarde:{start:'19:45',end:'00:15'} },
-    martes:    { libre:false, manana:{start:'12:30',end:'16:00'}, tarde:{start:'19:45',end:'00:15'} },
-    miercoles: { libre:true },
-    jueves:    { libre:false, libreHalfDay:'manana' as const, tarde:{start:'19:45',end:'00:15'}, notes:'Libre mañana' },
-    viernes:   { libre:false, tarde:{start:'19:45',end:'00:15'} },
-    sabado:    { libre:false, manana:{start:'14:45',end:'16:00'}, tarde:{start:'16:00',end:'00:15'} },
-    domingo:   { libre:false, manana:{start:'12:30',end:'16:45'}, tarde:{start:'16:45',end:'00:15'} },
-  }})
-
-  return r
+  return getBaseTemplate(emps)
 }
 
 export default function CalendarioPage() {
