@@ -4,53 +4,59 @@ import type { Page } from './types'
 import StaffPage from './pages/StaffPage'
 import FichajesGlobalPage from './pages/FichajesGlobalPage'
 import InformesPage from './pages/InformesPage'
+import TasksPage from './pages/TasksPage'
+import IncidentsPage from './pages/IncidentsPage'
+import CalendarioPage from './pages/CalendarioPage'
 import {
-  DashboardPage, TasksPage, ScheduledPage, TemplatesPage, IncidentsPage,
+  DashboardPage, ScheduledPage, TemplatesPage,
   AuditsPage, HistoryPage, TSpoonPage, InventoryPage, TSpoonSettingsPage, LocationsPage
 } from './pages/OtherPages'
 
-const NAV_ITEMS: { id: Page; label: string; section?: string }[] = [
-  { id: 'dashboard', label: 'Dashboard' },
-  { id: 'staff', label: 'Personal', section: 'Personal' },
-  { id: 'fichajes_global', label: 'Control Horario' },
-  { id: 'informes_personal', label: 'Informes Gestoría' },
-  { id: 'tasks', label: 'Tareas', section: 'Operaciones' },
-  { id: 'scheduled', label: 'Programadas' },
-  { id: 'templates', label: 'Plantillas' },
-  { id: 'incidents', label: 'Incidencias' },
-  { id: 'audits', label: 'Auditorías' },
-  { id: 'history', label: 'Historial' },
-  { id: 'tspoon', label: 'Fichas Técnicas', section: 'Inventario' },
-  { id: 'inventory', label: 'Inventario' },
-  { id: 'locations', label: 'Locales', section: 'Configuración' },
-  { id: 'tspoon_settings', label: 'Avisos' },
+const NAV: { id: Page; label: string; icon: string; section?: string }[] = [
+  { id: 'dashboard',          label: 'Dashboard',           icon: '⊞' },
+  { id: 'staff',              label: 'Personal',            icon: '👤', section: 'Personal' },
+  { id: 'fichajes_global',    label: 'Control Horario',     icon: '⏰' },
+  { id: 'calendario',         label: 'Calendario',          icon: '📅' },
+  { id: 'informes_personal',  label: 'Informes Gestoría',   icon: '📄' },
+  { id: 'tasks',              label: 'Tareas',              icon: '✅', section: 'Operaciones' },
+  { id: 'scheduled',          label: 'Programadas',         icon: '🔁' },
+  { id: 'templates',          label: 'Plantillas',          icon: '📋' },
+  { id: 'incidents',          label: 'Incidencias',         icon: '⚠️' },
+  { id: 'audits',             label: 'Auditorías',          icon: '🔍' },
+  { id: 'history',            label: 'Historial',           icon: '📜' },
+  { id: 'tspoon',             label: 'Fichas Técnicas',     icon: '🧪', section: 'Inventario' },
+  { id: 'inventory',          label: 'Inventario',          icon: '📦' },
+  { id: 'locations',          label: 'Locales',             icon: '📍', section: 'Configuración' },
+  { id: 'tspoon_settings',    label: 'Avisos',              icon: '🔔' },
 ]
 
 const PAGE_TITLES: Record<Page, string> = {
   dashboard: 'Dashboard', staff: 'Personal', fichajes_global: 'Control Horario',
-  informes_personal: 'Informes Gestoría', tasks: 'Tareas', scheduled: 'Programadas',
-  templates: 'Plantillas', incidents: 'Incidencias', locations: 'Locales',
-  audits: 'Auditorías', history: 'Historial', tspoon: 'Fichas Técnicas',
-  inventory: 'Inventario', tspoon_settings: 'Avisos',
+  calendario: 'Calendario de Horarios', informes_personal: 'Informes Gestoría',
+  tasks: 'Tareas', scheduled: 'Programadas', templates: 'Plantillas',
+  incidents: 'Incidencias', locations: 'Locales', audits: 'Auditorías',
+  history: 'Historial', tspoon: 'Fichas Técnicas', inventory: 'Inventario',
+  tspoon_settings: 'Configuración de Avisos',
 }
 
 function renderPage(page: Page) {
   switch (page) {
-    case 'dashboard': return <DashboardPage />
-    case 'staff': return <StaffPage />
-    case 'fichajes_global': return <FichajesGlobalPage />
+    case 'dashboard':         return <DashboardPage />
+    case 'staff':             return <StaffPage />
+    case 'fichajes_global':   return <FichajesGlobalPage />
+    case 'calendario':        return <CalendarioPage />
     case 'informes_personal': return <InformesPage />
-    case 'tasks': return <TasksPage />
-    case 'scheduled': return <ScheduledPage />
-    case 'templates': return <TemplatesPage />
-    case 'incidents': return <IncidentsPage />
-    case 'audits': return <AuditsPage />
-    case 'history': return <HistoryPage />
-    case 'tspoon': return <TSpoonPage />
-    case 'inventory': return <InventoryPage />
-    case 'locations': return <LocationsPage />
-    case 'tspoon_settings': return <TSpoonSettingsPage />
-    default: return <DashboardPage />
+    case 'tasks':             return <TasksPage />
+    case 'scheduled':         return <ScheduledPage />
+    case 'templates':         return <TemplatesPage />
+    case 'incidents':         return <IncidentsPage />
+    case 'audits':            return <AuditsPage />
+    case 'history':           return <HistoryPage />
+    case 'tspoon':            return <TSpoonPage />
+    case 'inventory':         return <InventoryPage />
+    case 'locations':         return <LocationsPage />
+    case 'tspoon_settings':   return <TSpoonSettingsPage />
+    default:                  return <DashboardPage />
   }
 }
 
@@ -63,56 +69,54 @@ function Sidebar({ page, setPage, collapsed, setCollapsed }: {
   const badge = (id: Page) => id === 'tasks' ? pendingTasks : id === 'incidents' ? openInc : 0
 
   return (
-    <aside className={`fixed inset-y-0 left-0 z-40 flex flex-col bg-white border-r border-gray-200 transition-all duration-200 ${collapsed ? 'w-[68px]' : 'w-60'}`}>
-      <div className="h-16 flex items-center px-4 border-b gap-3 shrink-0">
-        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center shrink-0">
-          <span className="text-white font-bold text-sm" style={{ fontFamily: 'Instrument Serif, serif' }}>P</span>
+    <aside className={`fixed inset-y-0 left-0 z-40 flex flex-col bg-white border-r border-gray-200 transition-all duration-200 ${collapsed ? 'w-[64px]' : 'w-56'}`}>
+      <div className={`h-14 flex items-center border-b gap-3 shrink-0 ${collapsed ? 'px-3.5' : 'px-4'}`}>
+        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center shrink-0">
+          <span className="text-white font-bold text-sm" style={{ fontFamily: 'Instrument Serif, serif' }}>A</span>
         </div>
         {!collapsed && (
           <div className="min-w-0">
-            <p className="text-sm font-bold tracking-tight truncate">Panel Control</p>
+            <p className="text-sm font-bold tracking-tight truncate">Andy App</p>
             <p className="text-[10px] text-gray-400 truncate">Hostelería Pro</p>
           </div>
         )}
       </div>
-      <nav className="flex-1 py-3 px-2.5 space-y-0.5 overflow-y-auto">
-        {NAV_ITEMS.map((item, idx) => {
+
+      <nav className="flex-1 py-2 px-2 space-y-0.5 overflow-y-auto">
+        {NAV.map((item, idx) => {
           const isActive = page === item.id
-          const showSection = item.section && (idx === 0 || NAV_ITEMS[idx - 1].section !== item.section)
+          const showSection = item.section && (idx === 0 || NAV[idx - 1].section !== item.section)
           const b = badge(item.id)
           return (
             <div key={item.id}>
               {showSection && !collapsed && (
-                <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-widest px-3 pt-4 pb-1">{item.section}</p>
+                <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-widest px-2 pt-3 pb-1">{item.section}</p>
               )}
-              {showSection && collapsed && <div className="border-t border-gray-100 my-2 mx-2" />}
+              {showSection && collapsed && <div className="border-t border-gray-100 my-1.5 mx-1" />}
               <button
+                title={collapsed ? item.label : undefined}
                 onClick={() => setPage(item.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm font-medium transition-all ${
                   isActive ? 'bg-teal-50 text-teal-700' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
                 }`}
               >
-                <span className="relative shrink-0 w-5 h-5 flex items-center justify-center">
-                  <span className="text-base">{
-                    { dashboard: '⊞', staff: '👤', fichajes_global: '⏰', informes_personal: '📄',
-                      tasks: '✅', scheduled: '📅', templates: '📋', incidents: '⚠️',
-                      audits: '🔍', history: '📜', tspoon: '🧪', inventory: '📦',
-                      locations: '📍', tspoon_settings: '🔔' }[item.id]
-                  }</span>
+                <span className="relative shrink-0 text-base leading-none">
+                  {item.icon}
                   {b > 0 && (
-                    <span className="absolute -top-1 -right-1.5 w-4 h-4 bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center">{b}</span>
+                    <span className="absolute -top-1 -right-1.5 w-3.5 h-3.5 bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center leading-none">{b}</span>
                   )}
                 </span>
-                {!collapsed && <span className="truncate">{item.label}</span>}
+                {!collapsed && <span className="truncate text-sm">{item.label}</span>}
               </button>
             </div>
           )
         })}
       </nav>
-      <div className="p-2.5 border-t">
+
+      <div className="p-2 border-t">
         <button onClick={() => setCollapsed(!collapsed)}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs text-gray-400 hover:bg-gray-100">
-          <span>{collapsed ? '→' : '←'}</span>
+          className="w-full flex items-center justify-center gap-2 px-2 py-2 rounded-lg text-xs text-gray-400 hover:bg-gray-100">
+          <span className="text-sm">{collapsed ? '→' : '←'}</span>
           {!collapsed && <span>Contraer</span>}
         </button>
       </div>
@@ -121,15 +125,15 @@ function Sidebar({ page, setPage, collapsed, setCollapsed }: {
 }
 
 function BottomNav({ page, setPage }: { page: Page; setPage: (p: Page) => void }) {
-  const icons: Record<string, string> = { dashboard: '⊞', staff: '👤', fichajes_global: '⏰', tasks: '✅', locations: '📍' }
-  const main: Page[] = ['dashboard', 'staff', 'fichajes_global', 'tasks', 'locations']
+  const main: Page[] = ['dashboard', 'staff', 'calendario', 'tasks', 'locations']
+  const icons: Record<string, string> = { dashboard: '⊞', staff: '👤', calendario: '📅', tasks: '✅', locations: '📍' }
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 flex items-center justify-around py-1.5 px-2 lg:hidden">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 flex items-center justify-around py-1 px-1 lg:hidden">
       {main.map(id => (
         <button key={id} onClick={() => setPage(id)}
-          className={`flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-lg ${page === id ? 'text-teal-600' : 'text-gray-400'}`}>
-          <span className="text-xl">{icons[id]}</span>
-          <span className="text-[10px] font-medium">{PAGE_TITLES[id].split(' ')[0]}</span>
+          className={`flex flex-col items-center gap-0.5 py-1.5 px-2 rounded-lg min-w-0 ${page === id ? 'text-teal-600' : 'text-gray-400'}`}>
+          <span className="text-xl leading-none">{icons[id]}</span>
+          <span className="text-[9px] font-medium truncate">{PAGE_TITLES[id as Page].split(' ')[0]}</span>
         </button>
       ))}
     </nav>
@@ -139,8 +143,9 @@ function BottomNav({ page, setPage }: { page: Page; setPage: (p: Page) => void }
 export default function App() {
   const [page, setPage] = useState<Page>('dashboard')
   const [collapsed, setCollapsed] = useState(false)
-  const { tasks } = useApp()
+  const { tasks, incidents } = useApp()
   const pending = tasks.filter(t => t.status === 'pendiente' || t.status === 'vencida').length
+  const critInc = incidents.filter(i => i.severity === 'critica' && i.status !== 'resuelta').length
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -148,17 +153,22 @@ export default function App() {
         <Sidebar page={page} setPage={setPage} collapsed={collapsed} setCollapsed={setCollapsed} />
       </div>
       <BottomNav page={page} setPage={setPage} />
-      <div className={`transition-all duration-200 ${collapsed ? 'lg:ml-[68px]' : 'lg:ml-60'}`}>
-        <header className="h-16 border-b border-gray-200 bg-white/80 backdrop-blur-sm flex items-center justify-between px-5 shrink-0 sticky top-0 z-30">
+      <div className={`transition-all duration-200 ${collapsed ? 'lg:ml-[64px]' : 'lg:ml-56'}`}>
+        <header className="h-14 border-b border-gray-200 bg-white/90 backdrop-blur-sm flex items-center justify-between px-5 shrink-0 sticky top-0 z-30">
           <h1 className="text-lg font-semibold" style={{ fontFamily: 'Instrument Serif, serif' }}>{PAGE_TITLES[page]}</h1>
           <div className="flex items-center gap-2">
             {pending > 0 && (
-              <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-red-500 text-white animate-pulse">
-                {pending} pendiente{pending > 1 ? 's' : ''}
+              <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                {pending} tarea{pending > 1 ? 's' : ''}
               </span>
             )}
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-teal-400 to-emerald-600 flex items-center justify-center">
-              <span className="text-white text-xs font-bold">AM</span>
+            {critInc > 0 && (
+              <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-red-100 text-red-700 border border-red-200 animate-pulse">
+                ⚠️ {critInc} crítica{critInc > 1 ? 's' : ''}
+              </span>
+            )}
+            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-teal-400 to-emerald-600 flex items-center justify-center">
+              <span className="text-white text-xs font-bold">A</span>
             </div>
           </div>
         </header>
