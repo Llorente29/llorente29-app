@@ -455,3 +455,91 @@ export function generateSmartSchedule(employees: Employee[], weekStartDate: stri
 
   return { workers: Object.values(workersMap), alerts, adjustments, coverageByDay }
 }
+
+// ─── Importar horario manual desde datos reales ───────────────────────────────
+// Construye un GeneratedSchedule directamente desde turnos predefinidos
+// sin ejecutar el generador automático
+
+export interface ManualWorkerDay {
+  manana?: TimeSlot
+  tarde?: TimeSlot
+  libre: boolean
+  libreHalfDay?: 'manana' | 'tarde'
+  notes?: string
+}
+
+export interface ManualWorkerSchedule {
+  employeeId: string
+  days: Record<DayCode, ManualWorkerDay>
+}
+
+export function buildScheduleFromManual(
+  employees: Employee[],
+  manualData: ManualWorkerSchedule[]
+): GeneratedSchedule {
+  const workers: WorkerWeek[] = manualData.map(mw => {
+    const emp = employees.find(e => e.id === mw.employeeId)
+    let totalHours = 0
+    let restDays = 0
+    let restHalfDays = 0
+
+    const days = {} as Record<DayCode, DayShift>
+    DAY_CODES.forEach(day => {
+      const d = mw.days[day]
+      const mH = d.manana ? calcHours(d.manana.start, d.manana.end) : 0
+      const tH = d.tarde ? calcHours(d.tarde.start, d.tarde.end) : 0
+      const dayH = mH + tH
+      days[day] = {
+        manana: d.manana,
+        tarde: d.tarde,
+        libre: d.libre,
+        libreHalfDay: d.libreHalfDay,
+        totalHours: dayH,
+        notes: d.notes,
+        overtime: dayH > 9
+      }
+      if (d.libre) restDays++
+      else if (d.libreHalfDay) restHalfDays++
+      totalHours += dayH
+    })
+
+    return {
+      employeeId: mw.employeeId,
+      employeeName: emp?.name || '(Sin nombre)',
+      position: emp?.position || '',
+      days, totalHours, restDays, restHalfDays
+    }
+  })
+
+  // Calcular cobertura por día
+  const coverageByDay = {} as GeneratedSchedule['coverageByDay']
+  DAY_CODES.forEach(day => {
+    const dp = DEFAULT_DAY_PARAMS[day]
+    const manana = workers.filter(w => w.days[day] && !w.days[day].libre && w.days[day].manana).length
+    const noche = workers.filter(w => w.days[day] && !w.days[day].libre && w.days[day].tarde).length
+    coverageByDay[day] = {
+      manana, noche,
+      minManana: dp.minManana,
+      minNoche: dp.minNoche,
+      ok: manana >= dp.minManana && noche >= dp.minNoche
+    }
+  })
+
+  // Alertas de horas
+  const alerts: ScheduleAlert[] = []
+  workers.forEach(w => {
+    if (w.totalHours > MAX_OVERTIME_HOURS) {
+      alerts.push({ id:`ot-${w.employeeId}`, severity:'warning', message:`${w.employeeName}: ${w.totalHours.toFixed(2)}h esta semana (máximo recomendado: 40h)`, employeeId: w.employeeId })
+    }
+    if (w.restDays < 1) {
+      alerts.push({ id:`norest-${w.employeeId}`, severity:'error', message:`${w.employeeName}: sin día libre esta semana`, employeeId: w.employeeId })
+    }
+  })
+
+  return {
+    workers,
+    alerts,
+    adjustments: ['Horario importado manualmente desde plantilla real'],
+    coverageByDay
+  }
+}

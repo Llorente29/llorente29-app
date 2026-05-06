@@ -3,9 +3,9 @@ import { useApp } from '../context/AppContext'
 import { Button, Select, Card, Modal, Alert } from '../components/ui'
 import type { WeeklySchedulePlan } from '../types'
 import {
-  generateSmartSchedule, createDefaultParams,
+  generateSmartSchedule, createDefaultParams, buildScheduleFromManual,
   DAY_CODES, DAY_LABELS, calcHours,
-  type GeneratedSchedule, type ScheduleAlert, type DayCode, type WorkerWeek, type WeekParams, type DayParams, type DayShift
+  type GeneratedSchedule, type ScheduleAlert, type DayCode, type WorkerWeek, type WeekParams, type DayParams, type DayShift, type ManualWorkerSchedule
 } from '../services/scheduler'
 
 // ─── Helpers de fecha ─────────────────────────────────────────────────────────
@@ -328,6 +328,48 @@ function WorkerView({ worker, weekStart }: { worker: WorkerWeek; weekStart: stri
 }
 
 // ─── Página principal ─────────────────────────────────────────────────────────
+
+// ─── Horario real del Excel (T1=1er empleado, T2=2o, T3=3er) ─────────────────
+function buildExcelSchedule(emps: {id:string}[]): ManualWorkerSchedule[] | null {
+  if (emps.length < 1) return null
+  const r: ManualWorkerSchedule[] = []
+
+  // T1: libra Martes + Miércoles mañana (43.5h)
+  if (emps[0]) r.push({ employeeId: emps[0].id, days: {
+    lunes:     { libre:false, manana:{start:'12:30',end:'16:45'}, tarde:{start:'19:45',end:'00:15'} },
+    martes:    { libre:true },
+    miercoles: { libre:false, libreHalfDay:'manana' as const, tarde:{start:'19:45',end:'00:15'}, notes:'Libre mañana' },
+    jueves:    { libre:false, tarde:{start:'20:15',end:'00:15'} },
+    viernes:   { libre:false, tarde:{start:'19:45',end:'00:15'} },
+    sabado:    { libre:false, manana:{start:'12:30',end:'16:45'}, tarde:{start:'19:45',end:'00:15'} },
+    domingo:   { libre:false, tarde:{start:'19:45',end:'00:15'} },
+  }})
+
+  // T2: libra Lunes + Martes mañana (40.25h)
+  if (emps[1]) r.push({ employeeId: emps[1].id, days: {
+    lunes:     { libre:true },
+    martes:    { libre:false, libreHalfDay:'manana' as const, tarde:{start:'19:45',end:'00:15'}, notes:'Libre mañana' },
+    miercoles: { libre:false, tarde:{start:'19:45',end:'00:15'} },
+    jueves:    { libre:false, tarde:{start:'19:45',end:'00:15'} },
+    viernes:   { libre:false, manana:{start:'14:45',end:'16:00'}, tarde:{start:'16:00',end:'00:15'} },
+    sabado:    { libre:false, tarde:{start:'19:45',end:'00:15'} },
+    domingo:   { libre:false, manana:{start:'12:30',end:'16:00'}, tarde:{start:'16:00',end:'00:15'} },
+  }})
+
+  // T3: libra Miércoles + Jueves mañana (40.5h)
+  if (emps[2]) r.push({ employeeId: emps[2].id, days: {
+    lunes:     { libre:false, tarde:{start:'19:45',end:'00:15'} },
+    martes:    { libre:false, manana:{start:'12:30',end:'16:00'}, tarde:{start:'19:45',end:'00:15'} },
+    miercoles: { libre:true },
+    jueves:    { libre:false, libreHalfDay:'manana' as const, tarde:{start:'19:45',end:'00:15'}, notes:'Libre mañana' },
+    viernes:   { libre:false, tarde:{start:'19:45',end:'00:15'} },
+    sabado:    { libre:false, manana:{start:'14:45',end:'16:00'}, tarde:{start:'16:00',end:'00:15'} },
+    domingo:   { libre:false, manana:{start:'12:30',end:'16:45'}, tarde:{start:'16:45',end:'00:15'} },
+  }})
+
+  return r
+}
+
 export default function CalendarioPage() {
   const { staff, locations, schedules, setSchedules } = useApp()
   const [locId, setLocId] = useState(locations[0]?.id || '')
@@ -391,6 +433,15 @@ export default function CalendarioPage() {
     }
     setSchedules(prev => [...prev.filter(s => !(s.locationId === locId && s.weekStart === weekStart)), plan as WeeklySchedulePlan])
     setEditMode(false)
+  }
+
+  function loadTemplate() {
+    const manual = buildExcelSchedule(locEmployees)
+    if (!manual || manual.length === 0) { alert('Necesitas al menos 1 empleado activo en este local'); return }
+    const result = buildScheduleFromManual(locEmployees, manual)
+    setCurrentSchedule(result)
+    setStep('schedule')
+    setEditMode(true)
   }
 
   function updateShift(empId: string, day: DayCode, part: 'manana' | 'tarde', start: string, end: string) {
@@ -514,9 +565,28 @@ export default function CalendarioPage() {
         <Alert type="info">Selecciona un local para continuar</Alert>
       ) : step === 'params' ? (
         // ─── Paso 1: Parámetros ────────────────────────────────────────────
-        <Card className="p-6">
-          <ParamsForm params={params} setParams={setParams} employees={locEmployees} onGenerate={handleGenerate} loading={generating} />
-        </Card>
+        <div className="space-y-4">
+          {/* Banner: cargar plantilla Excel */}
+          <div className="p-4 bg-gradient-to-r from-blue-50 to-teal-50 border border-blue-200 rounded-2xl flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <p className="font-semibold text-blue-800 flex items-center gap-2">📋 Plantilla de horario actual</p>
+              <p className="text-xs text-blue-600 mt-0.5">
+                Carga el horario real del local (T1=1er empleado, T2=2º, T3=3er). Editable después.
+              </p>
+              {locEmployees.length >= 3 && (
+                <p className="text-xs text-gray-500 mt-1">
+                  T1={locEmployees[0]?.name} · T2={locEmployees[1]?.name} · T3={locEmployees[2]?.name}
+                </p>
+              )}
+            </div>
+            <Button variant="outline" onClick={loadTemplate} disabled={locEmployees.length < 1}>
+              📋 Cargar plantilla
+            </Button>
+          </div>
+          <Card className="p-6">
+            <ParamsForm params={params} setParams={setParams} employees={locEmployees} onGenerate={handleGenerate} loading={generating} />
+          </Card>
+        </div>
       ) : !currentSchedule ? (
         <Card className="p-10 text-center">
           <Button onClick={() => setStep('params')}>← Volver a parámetros</Button>
