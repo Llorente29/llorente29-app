@@ -151,7 +151,7 @@ function ParamsForm({ params, setParams, employees, onGenerate, loading }:
                       {/* Mínimo */}
                       <div className="flex items-center gap-1.5">
                         <span className="text-xs text-gray-500">Mín:</span>
-                        <input type="number" min={1} max={10} value={dp.minStaff} onChange={e => updDay(day, { minStaff: parseInt(e.target.value) || 1 })} className="w-12 border rounded px-1.5 py-1 text-xs text-center" />
+                        <input type="number" min={1} max={10} value={dp.minNoche} onChange={e => updDay(day, { minNoche: parseInt(e.target.value) || 1 })} className="w-12 border rounded px-1.5 py-1 text-xs text-center" />
                         <span className="text-xs text-gray-400">pers.</span>
                       </div>
                     </div>
@@ -569,7 +569,7 @@ export default function CalendarioPage() {
                           <p className="text-[9px] font-normal text-gray-400">{fmtShort(addDaysStr(weekStart, di))}</p>
                           {dp.open ? (
                             <span className={`mt-1 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold ${cov?.ok ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                              {cov?.count || 0}/{cov?.min || 0} {cov?.ok ? '✓' : '!'}
+                              {cov?.noche || 0}/{cov?.minNoche || 0} {cov?.ok ? '✓' : '!'}
                             </span>
                           ) : (
                             <span className="mt-1 inline-flex text-[9px] text-gray-400">Cerrado</span>

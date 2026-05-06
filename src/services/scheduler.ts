@@ -1,7 +1,6 @@
 import type { Employee } from '../types'
 
-// ─── Tipos públicos ───────────────────────────────────────────────────────────
-
+// ─── Tipos ────────────────────────────────────────────────────────────────────
 export interface TimeSlot { start: string; end: string }
 export type DayCode = 'lunes' | 'martes' | 'miercoles' | 'jueves' | 'viernes' | 'sabado' | 'domingo'
 
@@ -9,8 +8,10 @@ export interface DayShift {
   manana?: TimeSlot
   tarde?: TimeSlot
   libre: boolean
+  libreHalfDay?: 'manana' | 'tarde'  // medio día libre
   totalHours: number
   notes?: string
+  overtime?: boolean  // horas extras
 }
 
 export interface WorkerWeek {
@@ -19,7 +20,8 @@ export interface WorkerWeek {
   position: string
   days: Record<DayCode, DayShift>
   totalHours: number
-  restDays: number
+  restDays: number        // días completos libres
+  restHalfDays: number    // medios días libres
 }
 
 export type AlertSeverity = 'info' | 'warning' | 'error' | 'critical'
@@ -36,21 +38,21 @@ export interface GeneratedSchedule {
   workers: WorkerWeek[]
   alerts: ScheduleAlert[]
   adjustments: string[]
-  coverageByDay: Record<DayCode, { count: number; min: number; ok: boolean }>
+  coverageByDay: Record<DayCode, { manana: number; noche: number; minManana: number; minNoche: number; ok: boolean }>
 }
 
-// ─── Parámetros semanales (formulario) ───────────────────────────────────────
-
+// ─── Parámetros semanales ─────────────────────────────────────────────────────
 export interface WorkerParam {
   employeeId: string
-  hoursAvailable: number  // horas disponibles esta semana (puede diferir del contrato)
+  hoursAvailable: number
 }
 
 export interface DayParams {
   open: boolean
   manana?: TimeSlot
   tarde?: TimeSlot
-  minStaff: number  // mínimo para abrir ese día
+  minManana: number
+  minNoche: number
 }
 
 export interface WeekParams {
@@ -59,7 +61,7 @@ export interface WeekParams {
   notes?: string
 }
 
-// ─── Constantes base (valores por defecto) ────────────────────────────────────
+// ─── Reglas del negocio ───────────────────────────────────────────────────────
 
 export const DAY_CODES: DayCode[] = ['lunes','martes','miercoles','jueves','viernes','sabado','domingo']
 export const DAY_LABELS: Record<DayCode, string> = {
@@ -70,37 +72,41 @@ export const DAY_SHORT: Record<DayCode, string> = {
   lunes:'L', martes:'M', miercoles:'X', jueves:'J', viernes:'V', sabado:'S', domingo:'D'
 }
 
-// minStaff = mínimo noche: L-J=2, V-S-D=3
+// Horarios base del local
 export const DEFAULT_DAY_PARAMS: Record<DayCode, DayParams> = {
-  lunes:     { open:true,  manana:{start:'13:00',end:'15:45'}, tarde:{start:'19:00',end:'23:30'}, minStaff:2 },
-  martes:    { open:true,  manana:{start:'13:00',end:'15:45'}, tarde:{start:'19:00',end:'23:30'}, minStaff:2 },
-  miercoles: { open:true,  manana:{start:'13:00',end:'15:45'}, tarde:{start:'19:00',end:'23:30'}, minStaff:2 },
-  jueves:    { open:true,  manana:{start:'13:00',end:'15:45'}, tarde:{start:'19:00',end:'23:30'}, minStaff:2 },
-  viernes:   { open:true,  manana:{start:'13:00',end:'15:00'}, tarde:{start:'19:00',end:'02:15'}, minStaff:3 },
-  sabado:    { open:true,  manana:{start:'12:00',end:'16:00'}, tarde:{start:'19:00',end:'02:15'}, minStaff:3 },
-  domingo:   { open:true,  manana:{start:'12:00',end:'16:00'}, tarde:{start:'19:00',end:'02:15'}, minStaff:3 },
+  // L-J: partido 12:30-16:00 + 19:30-23:59 | mañana=1 noche=2
+  lunes:     { open:true, manana:{start:'12:30',end:'16:00'}, tarde:{start:'19:30',end:'23:59'}, minManana:1, minNoche:2 },
+  martes:    { open:true, manana:{start:'12:30',end:'16:00'}, tarde:{start:'19:30',end:'23:59'}, minManana:1, minNoche:2 },
+  miercoles: { open:true, manana:{start:'12:30',end:'16:00'}, tarde:{start:'19:30',end:'23:59'}, minManana:1, minNoche:2 },
+  jueves:    { open:true, manana:{start:'12:30',end:'16:00'}, tarde:{start:'19:30',end:'23:59'}, minManana:1, minNoche:2 },
+  // V-S-D: continuo 12:30-23:59 | viernes mañana=1 noche=3 | S-D mañana temprana + noche=3
+  viernes:   { open:true, manana:{start:'12:30',end:'16:00'}, tarde:{start:'16:00',end:'23:59'}, minManana:1, minNoche:3 },
+  sabado:    { open:true, manana:{start:'12:30',end:'16:00'}, tarde:{start:'16:00',end:'23:59'}, minManana:2, minNoche:3 },
+  domingo:   { open:true, manana:{start:'12:30',end:'16:00'}, tarde:{start:'16:00',end:'23:59'}, minManana:2, minNoche:3 },
 }
 
 export const MAX_WEEKLY_HOURS = 40
+export const MAX_OVERTIME_HOURS = 43  // límite con horas extras
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
 export function calcHours(start: string, end: string): number {
   if (!start || !end) return 0
   const [sh, sm] = start.split(':').map(Number)
   const [eh, em] = end.split(':').map(Number)
-  let startMin = sh * 60 + sm
-  let endMin = eh * 60 + em
-  if (endMin <= startMin) endMin += 24 * 60  // past midnight
-  return Math.max(0, (endMin - startMin) / 60)
+  let s = sh * 60 + sm, e = eh * 60 + em
+  if (e <= s) e += 1440
+  return Math.max(0, (e - s) / 60)
 }
 
-function subMinutes(time: string, mins: number): string {
-  const [h, m] = time.split(':').map(Number)
-  let total = h * 60 + m - mins
-  if (total < 0) total += 24 * 60
-  return `${Math.floor(total/60).toString().padStart(2,'0')}:${(total%60).toString().padStart(2,'0')}`
+function subMins(time: string, m: number): string {
+  const [h, min] = time.split(':').map(Number)
+  let t = h * 60 + min - m
+  if (t < 0) t += 1440
+  return `${Math.floor(t/60).toString().padStart(2,'0')}:${(t%60).toString().padStart(2,'0')}`
 }
+
+
+function isWeekendDay(d: DayCode) { return d === 'viernes' || d === 'sabado' || d === 'domingo' }
 
 function addDaysStr(date: string, n: number): string {
   const d = new Date(date + 'T12:00:00'); d.setDate(d.getDate() + n)
@@ -108,47 +114,43 @@ function addDaysStr(date: string, n: number): string {
 }
 
 function isAbsent(emp: Employee, date: string): { absent: boolean; type: string } {
-  const vac = emp.vacations.find(v => v.status === 'aprobada' && v.startDate <= date && v.endDate >= date)
-  if (vac) return { absent: true, type: vac.type }
-  return { absent: false, type: '' }
+  const v = emp.vacations.find(v => v.status === 'aprobada' && v.startDate <= date && v.endDate >= date)
+  return v ? { absent: true, type: v.type } : { absent: false, type: '' }
+}
+
+export function createDefaultParams(employees: Employee[]): WeekParams {
+  return {
+    workers: employees.filter(e => e.active).map(e => ({ employeeId: e.id, hoursAvailable: e.weeklyHours || 40 })),
+    days: JSON.parse(JSON.stringify(DEFAULT_DAY_PARAMS)),
+    notes: ''
+  }
 }
 
 // ─── Motor principal ──────────────────────────────────────────────────────────
-
-export function generateSmartSchedule(
-  employees: Employee[],
-  weekStartDate: string,
-  params: WeekParams
-): GeneratedSchedule {
+export function generateSmartSchedule(employees: Employee[], weekStartDate: string, params: WeekParams): GeneratedSchedule {
   const alerts: ScheduleAlert[] = []
   const adjustments: string[] = []
 
-  // Solo empleados incluidos en los parámetros, activos
   const active = employees.filter(e => e.active && params.workers.some(w => w.employeeId === e.id))
   if (active.length === 0) {
     return {
       workers: [], adjustments: [],
-      alerts: [{ id:'no-staff', severity:'critical', message:'No hay trabajadores disponibles para esta semana', suggestion:'Añade trabajadores en el formulario de parámetros' }],
-      coverageByDay: Object.fromEntries(DAY_CODES.map(d=>[d,{count:0,min:1,ok:false}])) as GeneratedSchedule['coverageByDay']
+      alerts: [{ id:'no-staff', severity:'critical', message:'No hay trabajadores disponibles esta semana', suggestion:'Añade trabajadores en el formulario de parámetros' }],
+      coverageByDay: Object.fromEntries(DAY_CODES.map(d => [d, { manana:0, noche:0, minManana:0, minNoche:0, ok:false }])) as GeneratedSchedule['coverageByDay']
     }
   }
 
-  // Horas disponibles por trabajador esta semana
-  const hoursAvailable: Record<string, number> = {}
-  active.forEach(emp => {
-    const p = params.workers.find(w => w.employeeId === emp.id)
-    hoursAvailable[emp.id] = p?.hoursAvailable ?? emp.weeklyHours ?? 40
-  })
+  const hoursAvail: Record<string, number> = {}
+  active.forEach(e => { hoursAvail[e.id] = params.workers.find(w => w.employeeId === e.id)?.hoursAvailable ?? 40 })
 
-  // Detectar ausencias
-  const absenceByEmpDay: Record<string, Partial<Record<DayCode, string>>> = {}
+  // Detectar ausencias oficiales
+  const absences: Record<string, Partial<Record<DayCode, string>>> = {}
   active.forEach(emp => {
-    absenceByEmpDay[emp.id] = {}
-    DAY_CODES.forEach((day) => {
-      const date = addDaysStr(weekStartDate, DAY_CODES.indexOf(day))
-      const { absent, type } = isAbsent(emp, date)
+    absences[emp.id] = {}
+    DAY_CODES.forEach((day, di) => {
+      const { absent, type } = isAbsent(emp, addDaysStr(weekStartDate, di))
       if (absent) {
-        absenceByEmpDay[emp.id][day] = type
+        absences[emp.id][day] = type
         alerts.push({
           id: `abs-${emp.id}-${day}`, severity: type === 'Baja médica' ? 'critical' : 'warning',
           message: `${emp.name}: ${type} el ${DAY_LABELS[day]}`,
@@ -159,240 +161,297 @@ export function generateSmartSchedule(
     })
   })
 
-  // Estado acumulado por trabajador
+  // ── Planificación de descansos ────────────────────────────────────────────
+  // Regla: 1 día completo + 1 medio día, preferiblemente seguidos
+  // Estrategia: descanso completo en L o M (rotando), medio día en el día siguiente
+  // Con fin de semana ocupado, forzamos descanso entre semana
+  const n = active.length
+  const restPlan: Record<string, { fullRest: DayCode; halfRest: DayCode; halfPart: 'manana' | 'tarde' }> = {}
+
+  active.forEach((emp, idx) => {
+    // Día de descanso completo: rotar entre lunes(0), martes(1), miércoles(2), jueves(3)
+    const fullRestDay = DAY_CODES[idx % 4] as DayCode
+    // Medio día: el día anterior o siguiente según disponibilidad
+    // Si descansa lunes → medio día martes mañana (seguido)
+    // Si descansa martes → medio día lunes tarde (seguido)
+    let halfRestDay: DayCode
+    let halfPart: 'manana' | 'tarde'
+    if (fullRestDay === 'lunes') {
+      halfRestDay = 'martes'; halfPart = 'manana'
+    } else if (fullRestDay === 'martes') {
+      halfRestDay = 'lunes'; halfPart = 'tarde'
+    } else if (fullRestDay === 'miercoles') {
+      halfRestDay = 'jueves'; halfPart = 'manana'
+    } else {
+      halfRestDay = 'miercoles'; halfPart = 'tarde'
+    }
+    restPlan[emp.id] = { fullRest: fullRestDay, halfRest: halfRestDay, halfPart }
+  })
+
+  // ── Inicializar workers ───────────────────────────────────────────────────
   const hoursUsed: Record<string, number> = {}
   active.forEach(e => { hoursUsed[e.id] = 0 })
 
-  // Distribuir descansos: entre semana (L-J), rotando por trabajador
-  const n = active.length
-  const restByEmp: Record<string, DayCode[]> = {}
-  active.forEach((emp, idx) => {
-    const r: DayCode[] = []
-    const main = DAY_CODES[idx % 4] as DayCode  // L, M, X, J rotando
-    r.push(main)
-    if (n >= 3) {
-      const second = DAY_CODES[(idx + 2) % 4] as DayCode
-      if (second !== main) r.push(second)
-    }
-    restByEmp[emp.id] = r
-  })
-
-  // Inicializar resultado
   const workersMap: Record<string, WorkerWeek> = {}
   active.forEach(emp => {
     workersMap[emp.id] = {
       employeeId: emp.id, employeeName: emp.name || '(Sin nombre)',
-      position: emp.position,
-      days: {} as Record<DayCode, DayShift>,
-      totalHours: 0, restDays: 0
+      position: emp.position, days: {} as Record<DayCode, DayShift>,
+      totalHours: 0, restDays: 0, restHalfDays: 0
     }
   })
 
   const coverageByDay: GeneratedSchedule['coverageByDay'] = {} as GeneratedSchedule['coverageByDay']
 
-  // ── Iterar por día ─────────────────────────────────────────────────────────
-  DAY_CODES.forEach((day) => {
+  // ── Iterar días ───────────────────────────────────────────────────────────
+  DAY_CODES.forEach(day => {
     const dp = params.days[day]
+    const isWeekend = isWeekendDay(day)
 
-    // Día cerrado por parámetro
+    // Día cerrado
     if (!dp.open) {
       active.forEach(emp => {
         workersMap[emp.id].days[day] = { libre: true, totalHours: 0, notes: 'Cerrado' }
         workersMap[emp.id].restDays++
       })
-      coverageByDay[day] = { count: 0, min: dp.minStaff, ok: true }  // ok porque es cierre voluntario
-      adjustments.push(`${DAY_LABELS[day]}: día cerrado (configurado en parámetros)`)
+      coverageByDay[day] = { manana:0, noche:0, minManana:dp.minManana, minNoche:dp.minNoche, ok:true }
       return
     }
 
-    const mananaSlot = dp.manana
-    const tardeSlot = dp.tarde
+    const mananaSlot = dp.manana  // 12:30-16:00
+    const tardeSlot = dp.tarde    // 19:30-23:59 (L-J) o 16:00-23:59 (V-S-D)
     const mananaH = mananaSlot ? calcHours(mananaSlot.start, mananaSlot.end) : 0
+    const tardeH = tardeSlot ? calcHours(tardeSlot.start, tardeSlot.end) : 0
 
-    // Empleados disponibles: no ausentes, con horas restantes
+    // Para V-S-D: turno corrido = mañana+tarde juntos (7.5-9h)
+    // Un trabajador hace el corrido, el resto entran a las 19:30 para la noche
+    const corridoH = mananaH + tardeH  // horas totales del día (turno corrido)
+
+    // ── Clasificar empleados ───────────────────────────────────────────────
+    // Disponibles: no ausentes, con horas suficientes
     const available = active.filter(emp => {
-      if (absenceByEmpDay[emp.id][day]) return false
-      const remaining = hoursAvailable[emp.id] - hoursUsed[emp.id]
-      return remaining >= mananaH  // al menos puede hacer la mañana
+      if (absences[emp.id][day]) return false
+      return true
     })
 
-    // Quitar a quienes descansan hoy (si hay suficiente cobertura)
-    const wantRest = available.filter(emp => restByEmp[emp.id]?.includes(day))
-    let working = available.filter(emp => !restByEmp[emp.id]?.includes(day))
+    // Quién descansa hoy (según plan de descansos)
+    const shouldRestFull = available.filter(emp => restPlan[emp.id]?.fullRest === day)
+    const shouldRestHalfManana = available.filter(emp => restPlan[emp.id]?.halfRest === day && restPlan[emp.id]?.halfPart === 'manana')
+    const shouldRestHalfTarde = available.filter(emp => restPlan[emp.id]?.halfRest === day && restPlan[emp.id]?.halfPart === 'tarde')
 
-    // Si no llegamos al mínimo, recuperar de descanso
-    if (working.length < dp.minStaff) {
-      const needed = dp.minStaff - working.length
-      const rescued = wantRest.slice(0, needed)
+    // Trabajadores activos (no descanso completo)
+    let working = available.filter(emp => !shouldRestFull.some(r => r.id === emp.id))
+
+    // ── Verificar cobertura mínima y ajustar descansos si hace falta ──────
+    const covNoche = working.filter(emp => {
+      const rp = restPlan[emp.id]
+      if (rp?.halfRest === day && rp?.halfPart === 'tarde') return false
+      return hoursUsed[emp.id] + tardeH <= MAX_OVERTIME_HOURS
+    }).length
+
+    // Si no hay suficientes para la noche, rescatar del descanso completo
+    if (covNoche < dp.minNoche && shouldRestFull.length > 0) {
+      const needed = dp.minNoche - covNoche
+      const rescued = shouldRestFull.splice(0, Math.min(needed, shouldRestFull.length))
       working = [...working, ...rescued]
       rescued.forEach(emp => {
-        adjustments.push(`${DAY_LABELS[day]}: ${emp.name} — descanso cancelado, se necesita cobertura mínima`)
+        adjustments.push(`${DAY_LABELS[day]}: ${emp.name} — descanso cancelado para cubrir mínimo de noche (${dp.minNoche})`)
         alerts.push({
           id: `rest-cancel-${emp.id}-${day}`, severity: 'warning',
-          message: `${emp.name}: descanso de ${DAY_LABELS[day]} cancelado (cobertura mínima)`,
-          suggestion: `Con ${n} trabajadores es difícil cubrir todos los días. Considera contratar más personal`,
+          message: `${emp.name}: descanso de ${DAY_LABELS[day]} cancelado (se necesitan ${dp.minNoche} en noche)`,
+          suggestion: 'Considera contratar más personal',
           employeeId: emp.id, dayCode: day
         })
       })
     }
 
-    // ── Gestión de personal insuficiente ─────────────────────────────────────
-    // Mínimos OBLIGATORIOS: L-J noche=2, V-S-D noche=3
-    // Si faltan: los disponibles alargan horas + aviso urgente
-    // Reducciones SOLO si no hay nadie: -30min noche, o cerrar lunes
-    // SOLO dos opciones permitidas:
-    //   1. Adelantar 30 min el cierre de noche
-    //   2. Cerrar el lunes completo
-    let efectiveTarde = tardeSlot ? { ...tardeSlot } : undefined
-    let efectiveManana = mananaSlot ? { ...mananaSlot } : undefined
-    let dayOpen = true
+    // Contar cobertura real
+    const realNoche = working.filter(emp => !(restPlan[emp.id]?.halfRest === day && restPlan[emp.id]?.halfPart === 'tarde')).length
 
-    if (working.length === 0) {
-      // Sin nadie disponible → opción 2 si es lunes, si no → alerta crítica
-      if (day === 'lunes') {
-        dayOpen = false
-        adjustments.push('Lunes: CERRADO (sin personal disponible — reducción aplicada)')
-        alerts.push({ id:'closed-lunes', severity:'critical', message:'Lunes cerrado por falta de personal', suggestion:'Opción de reducción aplicada automáticamente', dayCode:day })
-      } else {
-        dayOpen = false
-        adjustments.push(`${DAY_LABELS[day]}: CERRADO por falta total de personal`)
-        alerts.push({ id:`closed-${day}`, severity:'critical', message:`${DAY_LABELS[day]}: cerrado, sin personal disponible`, suggestion:'Busca personal de refuerzo urgente', dayCode:day })
-      }
-    } else if (working.length < dp.minStaff) {
-      const missing = dp.minStaff - working.length
-      const isWeekendNight = day === 'viernes' || day === 'sabado' || day === 'domingo'
-      const minLabel = isWeekendNight ? '3 (V-S-D noche)' : '2 (L-J noche)'
-
-      // Los disponibles alargan horas para cubrir el turno completo
-      if (efectiveTarde) {
-        const tardeHoursTotal = calcHours(efectiveTarde.start, efectiveTarde.end)
-        const extraPerWorker = (tardeHoursTotal * missing) / working.length
-        adjustments.push(
-          `${DAY_LABELS[day]}: ${working.length}/${dp.minStaff} en noche — cada trabajador extiende ~${extraPerWorker.toFixed(1)}h adicionales`
-        )
-        alerts.push({
-          id: `short-${day}`, severity: 'error',
-          message: `⚠️ ${DAY_LABELS[day]}: solo ${working.length} trabajador(es) en noche (mínimo obligatorio: ${minLabel})`,
-          suggestion: `Los ${working.length} disponibles cubren el turno. Faltan ${missing} persona(s). Considera contratar refuerzo o reorganizar descansos`,
-          dayCode: day
-        })
-        // Reducción adicional solo en casos extremos: 1 de 3 en V-S-D → cerrar 30 min antes
-        if (isWeekendNight && working.length <= 1 && missing >= 2) {
-          const newEnd = subMinutes(efectiveTarde.end, 30)
-          efectiveTarde = { start: efectiveTarde.start, end: newEnd }
-          adjustments.push(`${DAY_LABELS[day]}: cierre adelantado 30 min (→ ${newEnd}) — situación crítica de personal`)
-          alerts.push({ id:`earlyclose-${day}`, severity:'warning', message:`${DAY_LABELS[day]}: cierre a las ${newEnd} (30 min antes)`, dayCode:day })
-        }
-        // Lunes con 1 de 2 → cerrar 30 min antes como primera reducción
-        else if (day === 'lunes' && working.length === 1) {
-          const newEnd = subMinutes(efectiveTarde.end, 30)
-          efectiveTarde = { start: efectiveTarde.start, end: newEnd }
-          adjustments.push(`Lunes: cierre adelantado 30 min (→ ${newEnd}) — 1/2 trabajadores en noche`)
-          alerts.push({ id:'earlyclose-lunes', severity:'warning', message:`Lunes: cierre a las ${newEnd} (30 min antes) con 1/2 trabajadores`, dayCode:day })
-        }
-      }
-    }
-
-    // Si cerrado, asignar libre a todos
-    if (!dayOpen) {
-      active.forEach(emp => {
-        workersMap[emp.id].days[day] = { libre: true, totalHours: 0, notes: 'Cerrado' }
-        workersMap[emp.id].restDays++
+    // ── Alerta si aún faltan ──────────────────────────────────────────────
+    if (realNoche < dp.minNoche) {
+      const missing = dp.minNoche - realNoche
+      const minLabel = isWeekend ? `3 (${DAY_LABELS[day]} noche)` : `2 (L-J noche)`
+      alerts.push({
+        id: `short-${day}`, severity: 'error',
+        message: `⚠️ ${DAY_LABELS[day]}: ${realNoche}/${dp.minNoche} trabajadores en noche (mínimo obligatorio: ${minLabel})`,
+        suggestion: `Faltan ${missing} persona(s). Los disponibles alargan horas para cubrir el turno`,
+        dayCode: day
       })
-      coverageByDay[day] = { count: 0, min: dp.minStaff, ok: false }
-      return
+      adjustments.push(`${DAY_LABELS[day]}: ${realNoche}/${dp.minNoche} en noche — trabajadores disponibles hacen horas extras`)
+
+      // Reducción SOLO si hay 1 de 2 en L-J: cerrar 30 min antes
+      if (!isWeekend && realNoche === 1 && tardeSlot) {
+        const newEnd = subMins(tardeSlot.end, 30)
+        adjustments.push(`${DAY_LABELS[day]}: cierre adelantado 30 min (→ ${newEnd}) por personal insuficiente en noche`)
+        alerts.push({ id:`early-${day}`, severity:'warning', message:`${DAY_LABELS[day]}: cierre a las ${newEnd} (30 min antes) — 1/2 en noche`, dayCode:day })
+        dp.tarde = { start: tardeSlot.start, end: newEnd }  // mutamos para este día
+      }
+      // Si V-S-D con menos de 2 → cerrar 30 min antes
+      if (isWeekend && realNoche <= 1 && tardeSlot) {
+        const newEnd = subMins(tardeSlot.end, 30)
+        adjustments.push(`${DAY_LABELS[day]}: cierre adelantado 30 min (→ ${newEnd}) — situación crítica`)
+        dp.tarde = { start: tardeSlot.start, end: newEnd }
+      }
+      // Cerrar lunes si 0 disponibles
+      if (day === 'lunes' && realNoche === 0) {
+        active.forEach(emp => { workersMap[emp.id].days[day] = { libre: true, totalHours: 0, notes: 'Cerrado' }; workersMap[emp.id].restDays++ })
+        coverageByDay[day] = { manana:0, noche:0, minManana:dp.minManana, minNoche:dp.minNoche, ok:false }
+        adjustments.push('Lunes: CERRADO (sin personal disponible)')
+        alerts.push({ id:'closed-lunes', severity:'critical', message:'Lunes cerrado: sin personal disponible', dayCode:'lunes' })
+        return
+      }
     }
 
-    // ── Asignar turnos ─────────────────────────────────────────────────────
-    const efectivaMananaH = efectiveManana ? calcHours(efectiveManana.start, efectiveManana.end) : 0
-    const efectivaTardeH = efectiveTarde ? calcHours(efectiveTarde.start, efectiveTarde.end) : 0
-
+    // ── Asignar turnos a cada trabajador ──────────────────────────────────
     active.forEach(emp => {
-      const isAbsent = !!absenceByEmpDay[emp.id][day]
-      if (isAbsent) {
-        workersMap[emp.id].days[day] = { libre: true, totalHours: 0, notes: absenceByEmpDay[emp.id][day] }
+      const isAbsentToday = !!absences[emp.id][day]
+      if (isAbsentToday) {
+        workersMap[emp.id].days[day] = { libre: true, totalHours: 0, notes: absences[emp.id][day] }
         workersMap[emp.id].restDays++
         return
       }
-      const isWorking = working.some(w => w.id === emp.id)
-      if (!isWorking) {
+
+      const isFullRest = shouldRestFull.some(r => r.id === emp.id) && !working.some(w => w.id === emp.id)
+      if (isFullRest) {
         workersMap[emp.id].days[day] = { libre: true, totalHours: 0 }
         workersMap[emp.id].restDays++
         return
       }
 
-      // Calcular cuántas horas le quedan al trabajador
-      const remaining = hoursAvailable[emp.id] - hoursUsed[emp.id]
-      let manana: TimeSlot | undefined = undefined
-      let tarde: TimeSlot | undefined = undefined
-      let dayH = 0
+      const isHalfManana = shouldRestHalfManana.some(r => r.id === emp.id)
+      const isHalfTarde = shouldRestHalfTarde.some(r => r.id === emp.id)
+      const rp = restPlan[emp.id]
 
-      if (efectiveManana && remaining >= efectivaMananaH) {
-        manana = efectiveManana
-        dayH += efectivaMananaH
-      }
+      const remaining = hoursAvail[emp.id] - hoursUsed[emp.id]
 
-      if (efectiveTarde) {
-        const leftAfterManana = remaining - dayH
-        if (leftAfterManana >= efectivaTardeH) {
-          tarde = efectiveTarde
-          dayH += efectivaTardeH
-        } else if (leftAfterManana > 0) {
-          // Reducir tarde por límite personal de este trabajador
-          const [sh, sm] = efectiveTarde.start.split(':').map(Number)
-          const maxEnd = sh * 60 + sm + Math.floor(leftAfterManana * 60)
-          const hh = Math.floor(maxEnd / 60) % 24
-          const mm = maxEnd % 60
-          const capEnd = `${hh.toString().padStart(2,'0')}:${mm.toString().padStart(2,'0')}`
-          tarde = { start: efectiveTarde.start, end: capEnd }
-          dayH += leftAfterManana
-          adjustments.push(`${emp.name} ${DAY_LABELS[day]}: tarde reducida hasta ${capEnd} (límite ${hoursAvailable[emp.id]}h/sem)`)
+      if (isWeekend) {
+        // ── V-S-D: lógica especial ─────────────────────────────────────
+        // ¿Es este trabajador el candidato para el turno corrido?
+        // El corrido va al primero disponible con más horas libres que aún no haya hecho corrido esta semana
+        const corridoWorker = working.find(w => {
+          const rem = hoursAvail[w.id] - hoursUsed[w.id]
+          return rem >= 7.5 && rp?.fullRest !== day && rp?.halfRest !== day
+        })
+        const hasCorrido = corridoWorker?.id === emp.id
+
+        if (hasCorrido && dp.manana && dp.tarde) {
+          // Turno corrido: 12:30 hasta 23:59 (con la pausa entre mediodia y noche incluida como descanso)
+          // Horas reales: mañana + tarde
+          const totalH = Math.min(corridoH, remaining, MAX_OVERTIME_HOURS - hoursUsed[emp.id])
+          const isOT = totalH > 9
+          workersMap[emp.id].days[day] = {
+            manana: dp.manana, tarde: dp.tarde,
+            libre: false, totalHours: totalH,
+            notes: `Turno corrido (${totalH.toFixed(1)}h)`,
+            overtime: isOT
+          }
+          hoursUsed[emp.id] += totalH
+          if (isOT) {
+            alerts.push({ id:`ot-${emp.id}-${day}`, severity:'info', message:`${emp.name}: horas extras en ${DAY_LABELS[day]} (${totalH.toFixed(1)}h)`, employeeId:emp.id, dayCode:day })
+          }
+        } else if (isHalfManana && dp.tarde) {
+          // Medio día libre por la mañana → solo noche
+          const h = Math.min(calcHours(dp.tarde.start, dp.tarde.end), remaining)
+          workersMap[emp.id].days[day] = { tarde: dp.tarde, libre: false, libreHalfDay: 'manana', totalHours: h, notes: 'Libre mañana' }
+          hoursUsed[emp.id] += h
+          workersMap[emp.id].restHalfDays++
+        } else if (isHalfTarde) {
+          // Medio día libre por la tarde → solo mañana
+          const h = dp.manana ? Math.min(mananaH, remaining) : 0
+          workersMap[emp.id].days[day] = { manana: dp.manana, libre: false, libreHalfDay: 'tarde', totalHours: h, notes: 'Libre noche' }
+          hoursUsed[emp.id] += h
+          workersMap[emp.id].restHalfDays++
+        } else if (dp.tarde) {
+          // Sábado/domingo con 2 mínimo en mañana (12:30-14h o 14:30h)
+          // Los demás entran a la noche
+          const workerIdx = working.indexOf(emp)
+          if (day !== 'viernes' && workerIdx < dp.minManana && dp.manana) {
+            // Asignar turno completo con mañana
+            const h = Math.min(mananaH + calcHours(dp.tarde.start, dp.tarde.end), remaining)
+            workersMap[emp.id].days[day] = { manana: dp.manana, tarde: dp.tarde, libre: false, totalHours: h }
+            hoursUsed[emp.id] += h
+          } else {
+            // Solo noche
+            const h = Math.min(calcHours(dp.tarde.start, dp.tarde.end), remaining)
+            workersMap[emp.id].days[day] = { tarde: dp.tarde, libre: false, totalHours: h }
+            hoursUsed[emp.id] += h
+          }
+        }
+      } else {
+        // ── L-J: turno partido ─────────────────────────────────────────
+        if (isHalfManana && dp.tarde) {
+          // Libre por la mañana → solo noche
+          const h = Math.min(calcHours(dp.tarde.start, dp.tarde.end), remaining)
+          workersMap[emp.id].days[day] = { tarde: dp.tarde, libre: false, libreHalfDay: 'manana', totalHours: h, notes: 'Libre mañana' }
+          hoursUsed[emp.id] += h
+          workersMap[emp.id].restHalfDays++
+        } else if (isHalfTarde && dp.manana) {
+          // Libre por la noche → solo mañana
+          const h = Math.min(mananaH, remaining)
+          workersMap[emp.id].days[day] = { manana: dp.manana, libre: false, libreHalfDay: 'tarde', totalHours: h, notes: 'Libre noche' }
+          hoursUsed[emp.id] += h
+          workersMap[emp.id].restHalfDays++
+        } else {
+          // Turno partido completo (cuando el trabajador trabaja este día)
+          const isWorking = working.some(w => w.id === emp.id)
+          if (!isWorking) {
+            workersMap[emp.id].days[day] = { libre: true, totalHours: 0 }
+            workersMap[emp.id].restDays++
+            return
+          }
+          // Solo 1 trabajador en mañana (L-V) → el resto entra solo a la noche
+          const workerIdx = working.indexOf(emp)
+          if (dp.minManana === 1 && workerIdx > 0 && dp.tarde) {
+            // Los demás: solo noche
+            const h = Math.min(calcHours(dp.tarde.start, dp.tarde.end), remaining)
+            workersMap[emp.id].days[day] = { tarde: dp.tarde, libre: false, totalHours: h, notes: 'Solo noche' }
+            hoursUsed[emp.id] += h
+          } else {
+            // Turno completo partido
+            const hM = dp.manana && workerIdx === 0 ? Math.min(mananaH, remaining) : 0
+            const hT = dp.tarde ? Math.min(calcHours(dp.tarde.start, dp.tarde.end), remaining - hM) : 0
+            const totalH = hM + hT
+            const isOT = hoursUsed[emp.id] + totalH > MAX_WEEKLY_HOURS
+            workersMap[emp.id].days[day] = {
+              manana: dp.manana && hM > 0 ? dp.manana : undefined,
+              tarde: dp.tarde && hT > 0 ? dp.tarde : undefined,
+              libre: false, totalHours: totalH,
+              overtime: isOT
+            }
+            hoursUsed[emp.id] += totalH
+            if (isOT) alerts.push({ id:`ot-${emp.id}-${day}`, severity:'info', message:`${emp.name}: horas extras el ${DAY_LABELS[day]}`, employeeId:emp.id, dayCode:day })
+          }
         }
       }
-
-      const totalDay = dayH
-      workersMap[emp.id].days[day] = { manana, tarde, libre: false, totalHours: totalDay }
-      hoursUsed[emp.id] += totalDay
     })
 
-    coverageByDay[day] = { count: working.length, min: dp.minStaff, ok: working.length >= dp.minStaff }
+    // Cobertura real
+    const covM = active.filter(e => workersMap[e.id].days[day] && !workersMap[e.id].days[day].libre && workersMap[e.id].days[day].manana).length
+    const covN = active.filter(e => workersMap[e.id].days[day] && !workersMap[e.id].days[day].libre && workersMap[e.id].days[day].tarde).length
+    coverageByDay[day] = { manana:covM, noche:covN, minManana:dp.minManana, minNoche:dp.minNoche, ok: covM>=dp.minManana && covN>=dp.minNoche }
   })
 
-  // ── Totales y alertas de horas ─────────────────────────────────────────────
+  // ── Totales y alertas finales ─────────────────────────────────────────────
   active.forEach(emp => {
     const w = workersMap[emp.id]
     w.totalHours = Object.values(w.days).reduce((s, d) => s + (d.totalHours || 0), 0)
-    if (w.totalHours > hoursAvailable[emp.id]) {
-      alerts.push({ id:`overhours-${emp.id}`, severity:'error', message:`${emp.name}: ${w.totalHours.toFixed(1)}h asignadas (disponible: ${hoursAvailable[emp.id]}h)`, employeeId: emp.id })
+    if (w.totalHours > MAX_OVERTIME_HOURS) {
+      alerts.push({ id:`overhours-${emp.id}`, severity:'error', message:`${emp.name}: ${w.totalHours.toFixed(1)}h esta semana (máximo con extras: ${MAX_OVERTIME_HOURS}h)`, employeeId:emp.id })
+    } else if (w.totalHours > MAX_WEEKLY_HOURS) {
+      alerts.push({ id:`overtime-${emp.id}`, severity:'warning', message:`${emp.name}: ${w.totalHours.toFixed(1)}h — horas extras permitidas excepcionalmente`, employeeId:emp.id })
     }
     if (w.restDays < 1) {
-      alerts.push({ id:`norest-${emp.id}`, severity:'error', message:`${emp.name}: sin días libres esta semana`, suggestion:'Obligatorio por convenio', employeeId: emp.id })
-    } else if (w.restDays < 2) {
-      alerts.push({ id:`lowrest-${emp.id}`, severity:'warning', message:`${emp.name}: solo ${w.restDays} día libre (convenio: 1.5 días)`, employeeId: emp.id })
+      alerts.push({ id:`norest-${emp.id}`, severity:'error', message:`${emp.name}: sin día libre esta semana (obligatorio por convenio)`, employeeId:emp.id })
+    } else if (w.restHalfDays < 1) {
+      alerts.push({ id:`nohalf-${emp.id}`, severity:'warning', message:`${emp.name}: sin medio día libre (convenio: 1 día + medio)`, employeeId:emp.id })
     }
   })
 
-  // Alerta de personal insuficiente global
-  const understaffedDays = Object.entries(coverageByDay).filter(([,c]) => !c.ok && c.min > 0).length
-  if (understaffedDays >= 3) {
-    alerts.unshift({
-      id:'need-more', severity:'critical',
-      message:`⚠️ ${understaffedDays} días sin cobertura mínima. Necesitas más trabajadores.`,
-      suggestion:`Reducción automática aplicada: cierre 30 min antes donde es posible, cierre de lunes si no hay personal`
-    })
+  const understaffed = Object.values(coverageByDay).filter(c => !c.ok).length
+  if (understaffed >= 3) {
+    alerts.unshift({ id:'need-more', severity:'critical', message:`⚠️ ${understaffed} días sin cobertura mínima — se necesita más personal`, suggestion:`Con ${n} trabajadores no se cubren todos los mínimos. Mínimo recomendado: ${Math.ceil((n*40)/7/6)} empleados por turno pico` })
   }
 
   return { workers: Object.values(workersMap), alerts, adjustments, coverageByDay }
-}
-
-// ─── Crear parámetros por defecto para una semana ────────────────────────────
-export function createDefaultParams(employees: Employee[]): WeekParams {
-  return {
-    workers: employees.filter(e => e.active).map(e => ({
-      employeeId: e.id,
-      hoursAvailable: e.weeklyHours || 40
-    })),
-    days: { ...DEFAULT_DAY_PARAMS },
-    notes: ''
-  }
 }
