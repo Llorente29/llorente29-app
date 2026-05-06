@@ -2,7 +2,7 @@ export type Page =
   | 'dashboard' | 'staff' | 'fichajes_global' | 'informes_personal' | 'calendario'
   | 'tasks' | 'scheduled' | 'templates' | 'incidents'
   | 'locations' | 'audits' | 'history' | 'tspoon'
-  | 'inventory' | 'tspoon_settings'
+  | 'inventory' | 'tspoon_settings' | 'ventas_analisis'
 
 export interface Location {
   id: string; name: string; address: string; phone: string; active: boolean
