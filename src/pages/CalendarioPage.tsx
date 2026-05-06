@@ -721,9 +721,7 @@ export default function CalendarioPage() {
 
           {scheduleTab === 'modificaciones' && (
             <ModificacionesPanel
-              locationId={locId}
-              weekStart={weekStart}
-              existingMods={modifications}
+              tMapping={tMapping}
               onApply={(result, mods) => {
                 setCurrentSchedule(result)
                 setModifications(mods)

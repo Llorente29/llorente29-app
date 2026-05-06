@@ -567,7 +567,7 @@ export function getBaseTemplate(employees: Employee[]): ManualWorkerSchedule[] {
       martes:    { libre:true },
       miercoles: { libre:false, libreHalfDay:'manana' as const, tarde:{start:'19:45',end:'00:15'}, notes:'Libre mañana' },
       jueves:    { libre:false, tarde:{start:'20:15',end:'00:15'} },
-      viernes:   { libre:false, tarde:{start:'14:45',end:'00:15'} },
+      viernes:   { libre:false, manana:{start:'12:30',end:'16:45'}, tarde:{start:'14:45',end:'00:15'} },
       sabado:    { libre:false, manana:{start:'12:30',end:'16:45'}, tarde:{start:'19:45',end:'00:15'} },
       domingo:   { libre:false, tarde:{start:'19:45',end:'00:15'} },
     }},
