@@ -12,6 +12,7 @@ export interface SaleRecord {
   dayOfWeek: number   // 0=Lun…6=Dom
   turno: 'mediodia' | 'noche'
   amount: number
+  dishes: number      // total de platos/raciones en el pedido
   source: string      // marca/canal: "Glovo", "Uber", "Dos Coyotes"...
   brand: string       // cliente/marca de tSpoonLab
   ticket: string
@@ -170,7 +171,7 @@ function parseDeliveries(deliveries: TspDelivery[], _customers: TspCustomer[]): 
   // - d.id = identificador único del albarán → usamos como ticket ID
   // La HORA viene del timestamp del albarán, no de las líneas
 
-  const byTicket = new Map<string, { date:string; time:string; amount:number; source:string; brand:string }>()
+  const byTicket = new Map<string, { date:string; time:string; amount:number; dishes:number; source:string; brand:string }>()
 
   deliveries.forEach(d => {
     const dAny = d as any
@@ -195,6 +196,9 @@ function parseDeliveries(deliveries: TspDelivery[], _customers: TspCustomer[]): 
     // Importe: usar base (precio venta) del albarán
     const amount = dAny.base || dAny.total || dAny.totalAmount || dAny.amount || 0
     if (amount <= 0) return
+    // Contar platos sumando quantity de cada línea del pedido
+    const lines = dAny.listLines || dAny.deliveryLines || dAny.lines || []
+    const dishes = lines.reduce((sum: number, l: any) => sum + (parseFloat(l.quantity) || 1), 0) || 1
 
     // Un albarán = un pedido/ticket
     const ticketId = dAny.id || `${dateStr}_${brand}_${Math.random()}`
@@ -202,7 +206,7 @@ function parseDeliveries(deliveries: TspDelivery[], _customers: TspCustomer[]): 
     // Fuente: tipo de cliente (Delivery, Sala, etc.)
     const src = dAny.customerType || dAny.customerTypeCode || brand
 
-    byTicket.set(ticketId, { date: dateStr, time: timeStr, amount, source: src, brand })
+    byTicket.set(ticketId, { date: dateStr, time: timeStr, amount, dishes, source: src, brand })
   })
 
   const records: SaleRecord[] = []
@@ -214,6 +218,7 @@ function parseDeliveries(deliveries: TspDelivery[], _customers: TspCustomer[]): 
       date: v.date, time: v.time, hour, dayOfWeek: dow,
       turno: hour < 17 ? 'mediodia' : 'noche',
       amount: Math.round(v.amount * 100) / 100,
+      dishes: v.dishes,
       source: v.source, brand: v.brand, ticket
     })
   })
@@ -250,7 +255,7 @@ export async function parseExcelFile(buffer: ArrayBuffer): Promise<SaleRecord[]>
     ticket: col('numticket') || col('ticket') || col('pedido')
   }
 
-  const byTicket = new Map<string, { date:string; time:string; amount:number; source:string; brand:string }>()
+  const byTicket = new Map<string, { date:string; time:string; amount:number; dishes:number; source:string; brand:string }>()
   raw.forEach(row => {
     const amount = parseFloat(String(row[C.amount] || '0').replace(',', '.')) || 0
     if (amount <= 0) return
@@ -262,7 +267,7 @@ export async function parseExcelFile(buffer: ArrayBuffer): Promise<SaleRecord[]>
     if (byTicket.has(ticket)) {
       byTicket.get(ticket)!.amount += amount
     } else {
-      byTicket.set(ticket, { date, time, amount, source, brand: source })
+      byTicket.set(ticket, { date, time, amount, dishes: 1, source, brand: source })
     }
   })
 
@@ -274,7 +279,7 @@ export async function parseExcelFile(buffer: ArrayBuffer): Promise<SaleRecord[]>
     records.push({
       date: v.date, time: v.time, hour, dayOfWeek: dow,
       turno: hour < 17 ? 'mediodia' : 'noche',
-      amount: v.amount, source: v.source, brand: v.brand, ticket
+      amount: v.amount, dishes: v.dishes || 1, source: v.source, brand: v.brand, ticket
     })
   })
 
@@ -321,9 +326,11 @@ function normalizeTime(raw: unknown): string {
 export interface DayPattern {
   dayOfWeek: number; dayName: string
   avgTotal: number; avgMediadia: number; avgNoche: number
+  avgDishesMediadia: number; avgDishesNoche: number   // platos/raciones por turno
   ticketsMediadia: number; ticketsNoche: number
   weeks: number
   demandTotal: number; demandMediadia: number; demandNoche: number
+  demandDishesMediadia: number; demandDishesNoche: number
 }
 export interface HourlyPattern {
   hour: number; label: string
@@ -359,14 +366,14 @@ export function analyzeHistory(records: SaleRecord[]): SalesAnalysis {
     const recs = byDow[i]
     const dateSet = [...new Set(recs.map(r => r.date))]
     const weeks = dateSet.length
-    if (!weeks) return { dayOfWeek:i, dayName:DAY_NAMES[i], avgTotal:0, avgMediadia:0, avgNoche:0, ticketsMediadia:0, ticketsNoche:0, weeks:0, demandTotal:0, demandMediadia:0, demandNoche:0 }
+    if (!weeks) return { dayOfWeek:i, dayName:DAY_NAMES[i], avgTotal:0, avgMediadia:0, avgNoche:0, avgDishesMediadia:0, avgDishesNoche:0, ticketsMediadia:0, ticketsNoche:0, weeks:0, demandTotal:0, demandMediadia:0, demandNoche:0, demandDishesMediadia:0, demandDishesNoche:0 }
 
-    const byDate: Record<string,{total:number;med:number;noch:number;tMed:number;tNoch:number}> = {}
-    dateSet.forEach(d => { byDate[d] = {total:0,med:0,noch:0,tMed:0,tNoch:0} })
+    const byDate: Record<string,{total:number;med:number;noch:number;tMed:number;tNoch:number;dMed:number;dNoch:number}> = {}
+    dateSet.forEach(d => { byDate[d] = {total:0,med:0,noch:0,tMed:0,tNoch:0,dMed:0,dNoch:0} })
     recs.forEach(r => {
       byDate[r.date].total += r.amount
-      if (r.turno==='mediodia') { byDate[r.date].med += r.amount; byDate[r.date].tMed++ }
-      else { byDate[r.date].noch += r.amount; byDate[r.date].tNoch++ }
+      if (r.turno==='mediodia') { byDate[r.date].med += r.amount; byDate[r.date].tMed++; byDate[r.date].dMed += (r.dishes||1) }
+      else { byDate[r.date].noch += r.amount; byDate[r.date].tNoch++; byDate[r.date].dNoch += (r.dishes||1) }
     })
     const days = Object.values(byDate)
     const avg = (a: number[]) => a.length ? a.reduce((s,v)=>s+v,0)/a.length : 0
@@ -375,19 +382,25 @@ export function analyzeHistory(records: SaleRecord[]): SalesAnalysis {
       avgTotal:    Math.round(avg(days.map(d=>d.total))),
       avgMediadia: Math.round(avg(days.map(d=>d.med))),
       avgNoche:    Math.round(avg(days.map(d=>d.noch))),
+      avgDishesMediadia: Math.round(avg(days.map(d=>d.dMed))),
+      avgDishesNoche:    Math.round(avg(days.map(d=>d.dNoch))),
       ticketsMediadia: Math.round(avg(days.map(d=>d.tMed))),
       ticketsNoche:    Math.round(avg(days.map(d=>d.tNoch))),
-      weeks, demandTotal:0, demandMediadia:0, demandNoche:0
+      weeks, demandTotal:0, demandMediadia:0, demandNoche:0, demandDishesMediadia:0, demandDishesNoche:0
     }
   })
 
   const maxTotal = Math.max(...dayPatterns.map(p=>p.avgTotal),1)
   const maxMed   = Math.max(...dayPatterns.map(p=>p.avgMediadia),1)
   const maxNoch  = Math.max(...dayPatterns.map(p=>p.avgNoche),1)
+  const maxDMed  = Math.max(...dayPatterns.map(p=>p.avgDishesMediadia),1)
+  const maxDNoch = Math.max(...dayPatterns.map(p=>p.avgDishesNoche),1)
   dayPatterns.forEach(p => {
     p.demandTotal    = p.avgTotal    / maxTotal
     p.demandMediadia = p.avgMediadia / maxMed
     p.demandNoche    = p.avgNoche    / maxNoch
+    p.demandDishesMediadia = p.avgDishesMediadia / maxDMed
+    p.demandDishesNoche    = p.avgDishesNoche    / maxDNoch
   })
 
   // Patrones horarios
@@ -411,19 +424,31 @@ export function analyzeHistory(records: SaleRecord[]): SalesAnalysis {
   const recommendations: StaffRecommendation[] = dayPatterns.map(p => {
     const isWeekend = p.dayOfWeek >= 4
     const minNoche = isWeekend ? 3 : 2
-    const extraManana = isWeekend && p.demandMediadia >= 0.6 ? 1 : 0
-    const extraNoche  = p.demandNoche >= 0.85 ? 1 : 0
+    // Calcular personal por platos: ~15 platos/hora por trabajador en cocina dark kitchen
+    // Turno mañana ≈ 3.5h · turno noche ≈ 4.5h
+    const DISHES_PER_WORKER_HOUR = 15
+    const mananaHours = 3.5
+    const nocheHours = 4.5
+    const workersByDishesManana = p.avgDishesMediadia > 0
+      ? Math.ceil(p.avgDishesMediadia / (DISHES_PER_WORKER_HOUR * mananaHours))
+      : 1
+    const workersByDishesNoche = p.avgDishesNoche > 0
+      ? Math.ceil(p.avgDishesNoche / (DISHES_PER_WORKER_HOUR * nocheHours))
+      : minNoche
+    // Tomar el máximo entre el mínimo del convenio y el calculado por platos
+    const recManana = Math.max(1, workersByDishesManana)
+    const recNoche  = Math.max(minNoche, workersByDishesNoche)
     const confidence: StaffRecommendation['confidence'] = p.weeks >= 8 ? 'alta' : p.weeks >= 3 ? 'media' : 'baja'
     const reasons = []
-    if (p.avgTotal > 0) reasons.push(`media ${p.avgTotal.toLocaleString('es-ES')}€/día`)
-    if (extraNoche) reasons.push('noche de alta demanda')
-    if (extraManana) reasons.push('fin de semana con mediodía activo')
+    if (p.avgDishesMediadia > 0) reasons.push(`${p.avgDishesMediadia} platos mediodía`)
+    if (p.avgDishesNoche > 0) reasons.push(`${p.avgDishesNoche} platos noche`)
+    if (p.avgTotal > 0) reasons.push(`${p.avgTotal.toLocaleString('es-ES')}€/día`)
     if (p.weeks < 3) reasons.push(`solo ${p.weeks} día(s)`)
     return {
       dayOfWeek: p.dayOfWeek, dayName: p.dayName,
       avgTotal: p.avgTotal, demandTotal: p.demandTotal,
-      recommendedManana: 1 + extraManana,
-      recommendedNoche: minNoche + extraNoche,
+      recommendedManana: recManana,
+      recommendedNoche: recNoche,
       confidence, reason: reasons.join(' · ') || '—'
     }
   })

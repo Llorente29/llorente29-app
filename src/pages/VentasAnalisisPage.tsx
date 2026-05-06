@@ -63,6 +63,10 @@ export default function VentasAnalisisPage() {
   const [filesUploaded, setFilesUploaded] = useState(0)
   const [debugInfo, setDebugInfo] = useState<any>(null)
   const [showDebug, setShowDebug] = useState(false)
+  // Mapeo local Andy → centro tSpoonLab (guardado en localStorage)
+  const [centerMapping, setCenterMapping] = useState<Record<string,string>>(() => {
+    try { return JSON.parse(localStorage.getItem('andy-center-mapping') || '{}') } catch { return {} }
+  })
   const inputRef = useRef<HTMLInputElement>(null)
 
   const tspoon = (() => { try { return JSON.parse(localStorage.getItem('andy-tspoon-v4')||'{}') } catch { return {} } })()
@@ -76,22 +80,29 @@ export default function VentasAnalisisPage() {
   }, [locId])
 
   // ─── Sync automático desde API ────────────────────────────────────────────
+  function saveCenterMapping(mapping: Record<string,string>) {
+    setCenterMapping(mapping)
+    localStorage.setItem('andy-center-mapping', JSON.stringify(mapping))
+  }
+
   async function handleAutoSync() {
     if (!isConnected) return
+    const centerId = centerMapping[locId]
+    if (!centerId) {
+      setError('Asigna un centro de tSpoonLab a este local antes de sincronizar')
+      return
+    }
     setSyncing(true); setProgress([]); setError('')
     const log: string[] = []
     const addLog = (msg: string) => { log.push(msg); setProgress([...log]) }
 
     try {
-      const result = await syncAllBrands(tspoon.token, tspoon.selectedCenter, daysBack, addLog)
+      const result = await syncAllBrands(tspoon.token, centerId, daysBack, addLog)
       setBrandResults(result.brands)
 
       if (result.records.length > 0) {
-        // Mezclar con records existentes de otras fuentes (Excel manual)
-        const manualRecords = records.filter(r => r.source !== 'tspoon-api')
-        const newDates = new Set(result.records.map(r => r.date))
-        const combined = [...manualRecords.filter(r => !newDates.has(r.date)), ...result.records]
-          .sort((a,b) => a.date.localeCompare(b.date))
+        // Usar directamente los records del sync (todas las marcas incluidas)
+        const combined = result.records.sort((a,b) => a.date.localeCompare(b.date))
 
         const an = analyzeHistory(combined)
         setRecords(combined); setAnalysis(an)
@@ -173,9 +184,29 @@ export default function VentasAnalisisPage() {
           {isConnected && (
             <>
               <div className="flex items-center gap-3">
-                <Select value={locId} onChange={e => setLocId(e.target.value)} className="flex-1">
-                  {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-                </Select>
+                {/* Selector local */}
+                <div className="flex-1 space-y-1.5">
+                  <Select value={locId} onChange={e => setLocId(e.target.value)} className="w-full">
+                    {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                  </Select>
+                  {/* Vincular este local a un centro tSpoonLab */}
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-gray-400 shrink-0">Centro tSpoonLab:</span>
+                    <select
+                      value={centerMapping[locId] || ''}
+                      onChange={e => saveCenterMapping({ ...centerMapping, [locId]: e.target.value })}
+                      className="flex-1 text-xs border rounded-lg px-2 py-1 bg-white"
+                    >
+                      <option value="">— seleccionar centro —</option>
+                      {(tspoon.centers || []).map((ctr: any) => (
+                        <option key={ctr.id} value={ctr.id}>{ctr.description || ctr.descr || ctr.name || ctr.id}</option>
+                      ))}
+                    </select>
+                    {centerMapping[locId] && (
+                      <span className="text-[10px] text-emerald-600 shrink-0">✓ vinculado</span>
+                    )}
+                  </div>
+                </div>
                 <Select value={daysBack} onChange={e => setDaysBack(parseInt(e.target.value))} className="w-36">
                   <option value={30}>Último mes</option>
                   <option value={60}>Últimos 2 meses</option>
@@ -183,8 +214,10 @@ export default function VentasAnalisisPage() {
                   <option value={180}>Últimos 6 meses</option>
                 </Select>
               </div>
-              <Button onClick={handleAutoSync} disabled={syncing} className="w-full">
-                {syncing ? '⚙️ Sincronizando...' : `⚡ Sincronizar todas las marcas (${daysBack} días)`}
+              <Button onClick={handleAutoSync} disabled={syncing || !centerMapping[locId]} className="w-full">
+                {syncing ? '⚙️ Sincronizando...' : !centerMapping[locId]
+                  ? '⚡ Selecciona un centro tSpoonLab primero'
+                  : `⚡ Sincronizar ${locations.find(l=>l.id===locId)?.name || 'local'} (${daysBack} días)`}
               </Button>
               <div className="flex gap-2">
                 <button onClick={async () => {
@@ -196,7 +229,12 @@ export default function VentasAnalisisPage() {
                 </button>
               </div>
               {tspoon.centers?.length > 0 && (
-                <p className="text-xs text-gray-500">Centro activo: <strong>{tspoon.selectedCenterName || tspoon.selectedCenter}</strong> · {tspoon.centers.length} centro(s)</p>
+                <p className="text-xs text-gray-500">
+                  {tspoon.centers.length} centro(s) disponibles · 
+                  {Object.keys(centerMapping).length > 0
+                    ? ` ${Object.keys(centerMapping).length} local(es) vinculados`
+                    : ' Vincula cada local a su centro'}
+                </p>
               )}
             </>
           )}
@@ -291,7 +329,7 @@ export default function VentasAnalisisPage() {
               <Card>
                 <div className="p-4 border-b">
                   <p className="font-semibold">Personal recomendado por día y turno</p>
-                  <p className="text-xs text-gray-500 mt-0.5">Mínimos del convenio garantizados · +1 cuando la demanda histórica lo justifica</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Basado en platos/hora · ~15 platos por trabajador/hora · Mínimos del convenio garantizados</p>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm min-w-[700px]">
@@ -299,8 +337,8 @@ export default function VentasAnalisisPage() {
                       <th className="p-3 text-left">Día</th>
                       <th className="p-3 text-center text-amber-600">☀️ Mediodía</th>
                       <th className="p-3 text-center text-violet-600">🌙 Noche</th>
-                      <th className="p-3 text-left w-36">Dem. mediodía</th>
-                      <th className="p-3 text-left w-36">Dem. noche</th>
+                      <th className="p-3 text-center w-28">🍽 Platos med.</th>
+                      <th className="p-3 text-center w-28">🍽 Platos noch.</th>
                       <th className="p-3 text-center">Confianza</th>
                       <th className="p-3 text-left">Detalle</th>
                     </tr></thead>
@@ -313,17 +351,21 @@ export default function VentasAnalisisPage() {
                             <td className="p-3"><span className={`font-bold text-xs px-2 py-1 rounded-lg ${DAY_COLORS[i]}`}>{rec.dayName}</span></td>
                             <td className="p-3 text-center">
                               <span className="text-xl font-bold text-amber-700">{rec.recommendedManana}</span>
-                              {dp.avgMediadia>0 && <p className="text-[10px] text-gray-400">{dp.avgMediadia}€</p>}
+                              <p className="text-[9px] text-gray-400">{dp.avgDishesMediadia>0?`${dp.avgDishesMediadia} 🍽`:dp.avgMediadia>0?`${dp.avgMediadia}€`:''}</p>
                             </td>
                             <td className="p-3 text-center">
                               <div className="flex items-center justify-center gap-1">
                                 <span className="text-xl font-bold text-violet-700">{rec.recommendedNoche}</span>
                                 {extra>0 && <span className="text-[10px] bg-amber-100 text-amber-700 px-1 rounded">+{extra}</span>}
                               </div>
-                              {dp.avgNoche>0 && <p className="text-[10px] text-gray-400">{dp.avgNoche}€</p>}
+                              <p className="text-[9px] text-gray-400">{dp.avgDishesNoche>0?`${dp.avgDishesNoche} 🍽`:dp.avgNoche>0?`${dp.avgNoche}€`:''}</p>
                             </td>
-                            <td className="p-3"><Bar pct={dp.demandMediadia} color="bg-amber-400"/></td>
-                            <td className="p-3"><Bar pct={dp.demandNoche} color="bg-violet-500"/></td>
+                            <td className="p-3 text-center">
+                              {dp.avgDishesMediadia>0?<span className="font-bold text-amber-600">{dp.avgDishesMediadia}</span>:<span className="text-gray-300">—</span>}
+                            </td>
+                            <td className="p-3 text-center">
+                              {dp.avgDishesNoche>0?<span className="font-bold text-violet-600">{dp.avgDishesNoche}</span>:<span className="text-gray-300">—</span>}
+                            </td>
                             <td className="p-3 text-center">
                               <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${rec.confidence==='alta'?'bg-emerald-100 text-emerald-700':rec.confidence==='media'?'bg-amber-100 text-amber-700':'bg-gray-100 text-gray-500'}`}>
                                 {rec.confidence==='alta'?'●●●':rec.confidence==='media'?'●●○':'●○○'} {rec.confidence}
