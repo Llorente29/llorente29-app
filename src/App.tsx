@@ -7,9 +7,10 @@ import InformesPage from './pages/InformesPage'
 import TasksPage from './pages/TasksPage'
 import IncidentsPage from './pages/IncidentsPage'
 import CalendarioPage from './pages/CalendarioPage'
+import TSpoonPage from './pages/TSpoonPage'
 import {
   DashboardPage, ScheduledPage, TemplatesPage,
-  AuditsPage, HistoryPage, TSpoonPage, InventoryPage, TSpoonSettingsPage, LocationsPage
+  AuditsPage, HistoryPage, InventoryPage, TSpoonSettingsPage, LocationsPage
 } from './pages/OtherPages'
 
 const NAV: { id: Page; label: string; icon: string; section?: string }[] = [

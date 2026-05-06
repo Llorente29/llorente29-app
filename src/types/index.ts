@@ -30,6 +30,7 @@ export interface StaffDocument {
 export interface Vacation {
   id: string; type: 'Vacaciones' | 'Baja médica' | 'Permiso' | 'Asuntos propios'
   startDate: string; endDate: string; status: 'solicitada' | 'aprobada' | 'rechazada'; notes?: string
+  alerts?: unknown[]; adjustments?: string[]
 }
 
 export interface Employee {
@@ -92,6 +93,7 @@ export interface Audit {
   score: number; maxScore: number
   status: 'pendiente' | 'en_progreso' | 'completada'
   auditor: string; date: string; items: AuditItem[]; notes?: string
+  alerts?: unknown[]; adjustments?: string[]
 }
 
 export interface NotifConfig {
@@ -108,6 +110,7 @@ export type ShiftType = 'manana' | 'partido' | 'tarde_noche' | 'libre'
 
 export interface Shift {
   employeeId: string; type: ShiftType; start: string; end: string; hours: number; notes?: string
+  alerts?: unknown[]; adjustments?: string[]
 }
 
 export interface ScheduleDay { date: string; shifts: Shift[] }
@@ -115,4 +118,6 @@ export interface ScheduleDay { date: string; shifts: Shift[] }
 export interface WeeklySchedulePlan {
   id: string; locationId: string; weekStart: string
   days: ScheduleDay[]; published: boolean; createdAt: string; notes?: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  alerts?: any[]; adjustments?: string[]
 }
