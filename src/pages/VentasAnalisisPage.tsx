@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useApp } from '../context/AppContext'
 import { Button, Select, Card, Alert } from '../components/ui'
 import {
-  syncAllBrands, parseExcelFile, analyzeHistory, saveAnalysis, loadSavedAnalysis,
+  syncAllBrands, parseExcelFile, analyzeHistory, saveAnalysis, loadSavedAnalysis, debugDeliveryStructure,
   type SaleRecord, type SalesAnalysis, type BrandSyncResult
 } from '../services/salesAnalysis'
 
@@ -61,6 +61,8 @@ export default function VentasAnalisisPage() {
   const [tab, setTab] = useState<'recomendaciones'|'horario'|'marcas'|'datos'>('recomendaciones')
   const [daysBack, setDaysBack] = useState(30)
   const [filesUploaded, setFilesUploaded] = useState(0)
+  const [debugInfo, setDebugInfo] = useState<any>(null)
+  const [showDebug, setShowDebug] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const tspoon = (() => { try { return JSON.parse(localStorage.getItem('andy-tspoon-v4')||'{}') } catch { return {} } })()
@@ -184,6 +186,15 @@ export default function VentasAnalisisPage() {
               <Button onClick={handleAutoSync} disabled={syncing} className="w-full">
                 {syncing ? '⚙️ Sincronizando...' : `⚡ Sincronizar todas las marcas (${daysBack} días)`}
               </Button>
+              <div className="flex gap-2">
+                <button onClick={async () => {
+                  setShowDebug(true)
+                  const info = await debugDeliveryStructure(tspoon.token, tspoon.selectedCenter)
+                  setDebugInfo(info)
+                }} className="text-xs text-gray-400 hover:text-gray-600 underline">
+                  🔍 Ver estructura API
+                </button>
+              </div>
               {tspoon.centers?.length > 0 && (
                 <p className="text-xs text-gray-500">Centro activo: <strong>{tspoon.selectedCenterName || tspoon.selectedCenter}</strong> · {tspoon.centers.length} centro(s)</p>
               )}
@@ -476,6 +487,25 @@ export default function VentasAnalisisPage() {
             </Card>
           )}
         </>
+      )}
+      {/* Debug panel */}
+      {showDebug && debugInfo && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setShowDebug(false)}>
+          <div className="bg-gray-900 text-green-400 rounded-2xl p-5 max-w-3xl w-full max-h-[80vh] overflow-auto font-mono text-xs" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-3">
+              <p className="font-bold text-white">🔍 Estructura real de la API tSpoonLab</p>
+              <button onClick={() => setShowDebug(false)} className="text-gray-400 hover:text-white text-lg">×</button>
+            </div>
+            <p className="text-yellow-400 mb-2">Total albaranes (últimos 7 días): {debugInfo.total}</p>
+            <p className="text-yellow-400 mb-2">Clientes/marcas: {debugInfo.customers?.length || 0}</p>
+            <p className="text-blue-400 mb-1">Keys del 1er albarán:</p>
+            <p className="text-green-300 mb-3">{debugInfo.keys?.join(', ') || 'ninguna'}</p>
+            <p className="text-blue-400 mb-1">Muestra (primer albarán):</p>
+            <pre className="text-green-300 overflow-auto max-h-64">{JSON.stringify(debugInfo.sample, null, 2)}</pre>
+            <p className="text-blue-400 mt-3 mb-1">Clientes (primeros 3):</p>
+            <pre className="text-green-300">{JSON.stringify(debugInfo.customers?.slice(0,3), null, 2)}</pre>
+          </div>
+        </div>
       )}
     </div>
   )

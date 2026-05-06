@@ -30,6 +30,7 @@ export interface SyncResult {
   brands: BrandSyncResult[]
   dateRange: { from: string; to: string }
   totalDays: number
+  rawSample?: unknown[]
 }
 
 // ─── Tipos internos de la API de tSpoonLab ────────────────────────────────────
@@ -130,47 +131,78 @@ export async function syncAllBrands(
     records,
     brands: Object.values(brandMap),
     dateRange: { from: startDate, to: endDate },
-    totalDays: uniqueDates.length
+    totalDays: uniqueDates.length,
+    rawSample: allDeliveries.slice(0, 2)  // para debug
   }
 }
 
-function parseDeliveries(deliveries: TspDelivery[], customers: TspCustomer[]): SaleRecord[] {
-  const customerMap: Record<string, string> = {}
-  customers.forEach(c => { customerMap[c.id] = c.descr })
+// ─── Debug: inspeccionar estructura real de la API ────────────────────────────
+export async function debugDeliveryStructure(
+  token: string, centerId: string
+): Promise<{ keys: string[]; sample: unknown; total: number; customers: unknown[] }> {
+  const headers = { rememberme: token, order: centerId }
+  const end = new Date().toISOString().slice(0,10)
+  const start = new Date(Date.now() - 7*24*3600000).toISOString().slice(0,10)
 
-  // Agrupar por ticket para no duplicar líneas del mismo pedido
+  const [rawDeliveries, rawCustomers] = await Promise.all([
+    fetch(`${API_BASE}/integration/sales/deliveries/all?startDate=${start}&endDate=${end}&includeInternal=true`, { headers }).then(r => r.json()).catch(() => []),
+    fetch(`${API_BASE}/listCustomers`, { headers }).then(r => r.json()).catch(() => [])
+  ])
+
+  const arr: unknown[] = Array.isArray(rawDeliveries) ? rawDeliveries : (rawDeliveries as any)?.results || []
+  const cust: unknown[] = Array.isArray(rawCustomers) ? rawCustomers : (rawCustomers as any)?.results || []
+  const first = arr[0] as Record<string,unknown> | undefined
+
+  return {
+    total: arr.length,
+    keys: first ? Object.keys(first) : [],
+    sample: first,
+    customers: cust.slice(0, 5)
+  }
+}
+
+function parseDeliveries(deliveries: TspDelivery[], _customers: TspCustomer[]): SaleRecord[] {
+  // Estructura real confirmada de tSpoonLab:
+  // - d.date = timestamp ms (e.g. 1777499939000)
+  // - d.base = importe total del albarán en € (precio venta)
+  // - d.customer = nombre de la marca (viene directo en el albarán)
+  // - d.listLines = líneas de producto (con quantity y cost, NO price de venta)
+  // - d.id = identificador único del albarán → usamos como ticket ID
+  // La HORA viene del timestamp del albarán, no de las líneas
+
   const byTicket = new Map<string, { date:string; time:string; amount:number; source:string; brand:string }>()
 
   deliveries.forEach(d => {
-    const brand = customerMap[d.idCustomer] || d.customer || 'Desconocido'
-    const lines = d.deliveryLines || d.listLines || d.lines || []
-    const dateBase = normalizeDate(d.date)
+    const dAny = d as any
+    const brand = dAny.customer || dAny.idCustomer || 'Desconocido'
 
-    if (lines.length === 0) {
-      // Albaran sin líneas: usar total del albarán
-      const ticketId = d.id || `${dateBase}_${brand}_${Math.random()}`
-      const amount = d.total || d.totalAmount || 0
-      if (amount > 0) {
-        byTicket.set(ticketId, { date: dateBase, time: '13:00', amount, source: brand, brand })
-      }
-      return
+    // Fecha y hora desde timestamp ms
+    const tsMs = typeof dAny.date === 'number' ? dAny.date :
+                 typeof dAny.date === 'string' && /^\d{10,}$/.test(dAny.date.trim()) ? parseInt(dAny.date) : null
+    let dateStr: string
+    let timeStr: string
+    if (tsMs) {
+      const dt = new Date(tsMs)
+      dateStr = dt.toISOString().slice(0, 10)
+      // Hora local (España = UTC+1 o UTC+2)
+      const h = dt.getUTCHours() + 1  // aproximación UTC+1
+      timeStr = `${h.toString().padStart(2,'0')}:${dt.getUTCMinutes().toString().padStart(2,'0')}`
+    } else {
+      dateStr = normalizeDate(dAny.date)
+      timeStr = normalizeTime(dAny.time || dAny.hour || '')
     }
 
-    lines.forEach((line, li) => {
-      const ticketId = line.numTicket || line.numticket || line.ticket || `${d.id}_${li}`
-      const amount = line.amount || line.total || (line.quantity || 1) * (line.unitPrice || 0)
-      const lineDate = line.date ? normalizeDate(line.date) : dateBase
-      const lineTime = normalizeTime(line.time || line.hour || '')
-      const src = line.source || brand
+    // Importe: usar base (precio venta) del albarán
+    const amount = dAny.base || dAny.total || dAny.totalAmount || dAny.amount || 0
+    if (amount <= 0) return
 
-      if (amount <= 0) return
+    // Un albarán = un pedido/ticket
+    const ticketId = dAny.id || `${dateStr}_${brand}_${Math.random()}`
 
-      if (byTicket.has(ticketId)) {
-        byTicket.get(ticketId)!.amount += amount
-      } else {
-        byTicket.set(ticketId, { date: lineDate, time: lineTime, amount, source: src, brand })
-      }
-    })
+    // Fuente: tipo de cliente (Delivery, Sala, etc.)
+    const src = dAny.customerType || dAny.customerTypeCode || brand
+
+    byTicket.set(ticketId, { date: dateStr, time: timeStr, amount, source: src, brand })
   })
 
   const records: SaleRecord[] = []
@@ -250,26 +282,39 @@ export async function parseExcelFile(buffer: ArrayBuffer): Promise<SaleRecord[]>
 }
 
 // ─── Helpers de normalización ─────────────────────────────────────────────────
-function normalizeDate(raw: string): string {
-  if (!raw) return new Date().toISOString().slice(0,10)
-  // Timestamp largo: "2026-05-05T12:00:00" o "2026-05-05 00:00:00"
-  if (raw.length > 10) raw = raw.slice(0, 10)
-  // DD/MM/YYYY → YYYY-MM-DD
-  if (raw.includes('/')) {
-    const [d, m, y] = raw.split('/')
-    return `${y.length===4?y:'20'+y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`
-  }
-  return raw
+function normalizeDate(raw: unknown): string {
+  try {
+    if (!raw) return new Date().toISOString().slice(0,10)
+    // Si ya es un objeto Date
+    if (raw instanceof Date) return raw.toISOString().slice(0,10)
+    // Convertir a string de forma segura
+    let s = String(raw).trim()
+    if (!s || s === 'null' || s === 'undefined') return new Date().toISOString().slice(0,10)
+    // Timestamp numérico (ms desde epoch)
+    if (/^\d{10,}$/.test(s)) return new Date(parseInt(s)).toISOString().slice(0,10)
+    // Timestamp largo: "2026-05-05T12:00:00" o "2026-05-05 00:00:00"
+    if (s.length > 10) s = s.slice(0, 10)
+    // DD/MM/YYYY → YYYY-MM-DD
+    if (s.includes('/')) {
+      const parts = s.split('/')
+      if (parts.length === 3) {
+        const [d, m, y] = parts
+        return `${y.length===4?y:'20'+y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`
+      }
+    }
+    return s
+  } catch { return new Date().toISOString().slice(0,10) }
 }
 
-function normalizeTime(raw: string): string {
-  if (!raw) return '13:00'
-  const clean = raw.trim()
-  // HH:MM:SS → HH:MM
-  if (clean.match(/^\d{2}:\d{2}/)) return clean.slice(0,5)
-  // Solo hora: "12" → "12:00"
-  if (clean.match(/^\d{1,2}$/)) return `${clean.padStart(2,'0')}:00`
-  return '13:00'
+function normalizeTime(raw: unknown): string {
+  try {
+    if (!raw) return '13:00'
+    const clean = String(raw).trim()
+    if (!clean || clean === 'null') return '13:00'
+    if (/^\d{2}:\d{2}/.test(clean)) return clean.slice(0,5)
+    if (/^\d{1,2}$/.test(clean)) return `${clean.padStart(2,'0')}:00`
+    return '13:00'
+  } catch { return '13:00' }
 }
 
 // ─── Motor de análisis ────────────────────────────────────────────────────────
