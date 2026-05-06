@@ -906,3 +906,109 @@ export function calcLaborCosts(schedule: GeneratedSchedule, employees: Employee[
   const overtimeCost = byEmployee.reduce((s, e) => s + e.overtimeCost, 0)
   return { byEmployee, totalHours, totalCost, overtimeCost }
 }
+
+// ─── GENERACIÓN DE HORARIO DESDE PREDICCIÓN DE VENTAS ────────────────────────
+
+export type PredictionMode = 'alert' | 'reorganize' | 'generate'
+
+export interface PredictionScheduleResult {
+  schedule: GeneratedSchedule
+  mode: PredictionMode
+  coverageIssues: {
+    day: DayCode
+    dayName: string
+    turno: 'manana' | 'noche'
+    needed: number
+    available: number
+    deficit: number
+  }[]
+  reorganizationsApplied: string[]
+}
+
+export function generateFromPrediction(
+  employees: Employee[],
+  weekStartDate: string,
+  params: WeekParams,
+  staffNeeds: Record<DayCode, { manana: number; noche: number }>,
+  mode: PredictionMode
+): PredictionScheduleResult {
+  const issues: PredictionScheduleResult['coverageIssues'] = []
+  const reorganizations: string[] = []
+
+  // Construir params ajustados con los mínimos de la predicción
+  const adjustedParams: WeekParams = {
+    ...params,
+    days: Object.fromEntries(
+      DAY_CODES.map(day => {
+        const need = staffNeeds[day] || { manana: 1, noche: 2 }
+        const existing = params.days[day]
+        return [day, {
+          ...existing,
+          minManana: Math.max(existing.minManana ?? 1, need.manana),
+          minNoche:  Math.max(existing.minNoche  ?? 2, need.noche),
+        }]
+      })
+    ) as WeekParams['days']
+  }
+
+  // Detectar problemas de cobertura antes de generar
+  const active = employees.filter(e => e.active && params.workers.some(w => w.employeeId === e.id))
+
+  DAY_CODES.forEach(day => {
+    const dp = adjustedParams.days[day]
+    if (!dp.open) return
+    const need = staffNeeds[day] || { manana: 1, noche: 2 }
+    const availToday = active.filter(e => {
+      const avail = (e as any).availability?.[day]
+      if (avail?.includes('no_disponible')) return false
+      return true
+    }).length
+
+    if (availToday < need.noche) {
+      issues.push({
+        day, dayName: DAY_LABELS[day], turno: 'noche',
+        needed: need.noche, available: availToday,
+        deficit: need.noche - availToday
+      })
+    }
+    if (availToday < need.manana) {
+      issues.push({
+        day, dayName: DAY_LABELS[day], turno: 'manana',
+        needed: need.manana, available: availToday,
+        deficit: need.manana - availToday
+      })
+    }
+  })
+
+  if (mode === 'alert') {
+    // Solo generar con los mínimos base sin reorganizar
+    const schedule = generateSmartSchedule(employees, weekStartDate, params)
+    return { schedule, mode, coverageIssues: issues, reorganizationsApplied: [] }
+  }
+
+  if (mode === 'reorganize' && issues.length > 0) {
+    // Intentar redistribuir descansos para cubrir días con déficit
+    const criticalDays = issues.map(i => i.day)
+    const adjustedWorkers = params.workers.map(w => {
+      const emp = employees.find(e => e.id === w.employeeId)
+      if (!emp) return w
+      // Si el trabajador tiene disponibilidad en días críticos, aumentar horas disponibles
+      const availInCritical = criticalDays.filter(day => {
+        const avail = (emp as any).availability?.[day]
+        return !avail?.includes('no_disponible')
+      }).length
+      if (availInCritical > 0) {
+        reorganizations.push(`${emp.name}: descanso redistribuido para cubrir días con déficit`)
+        return { ...w, hoursAvailable: Math.min(w.hoursAvailable + 8, 48) }
+      }
+      return w
+    })
+    const reorganizedParams = { ...adjustedParams, workers: adjustedWorkers }
+    const schedule = generateSmartSchedule(employees, weekStartDate, reorganizedParams)
+    return { schedule, mode, coverageIssues: issues, reorganizationsApplied: reorganizations }
+  }
+
+  // mode === 'generate': generar con los mínimos de la predicción, marcar problemas en rojo
+  const schedule = generateSmartSchedule(employees, weekStartDate, adjustedParams)
+  return { schedule, mode, coverageIssues: issues, reorganizationsApplied: [] }
+}
