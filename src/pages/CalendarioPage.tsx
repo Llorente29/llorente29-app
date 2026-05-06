@@ -502,6 +502,13 @@ export default function CalendarioPage() {
                 <Button size="sm" variant="outline" onClick={() => setEditMode(true)}>✏️ Editar</Button>
               )}
               <Button size="sm" variant="outline" onClick={() => setStep('params')}>← Parámetros</Button>
+              <Button size="sm" variant="outline" onClick={() => {
+                if (confirm('¿Restaurar el horario base oficial? Se perderán los cambios de esta semana.')) {
+                  loadTemplate(); setModifications([])
+                }
+              }} className="border-emerald-400 text-emerald-700 hover:bg-emerald-50 font-semibold" title="Volver al horario oficial del local">
+                🔒 Restaurar base
+              </Button>
             </>
           )}
         </div>
@@ -538,22 +545,30 @@ export default function CalendarioPage() {
       ) : step === 'params' ? (
         // ─── Paso 1: Parámetros ────────────────────────────────────────────
         <div className="space-y-4">
-          {/* Banner: cargar plantilla Excel */}
-          <div className="p-4 bg-gradient-to-r from-blue-50 to-teal-50 border border-blue-200 rounded-2xl flex items-center justify-between flex-wrap gap-3">
-            <div>
-              <p className="font-semibold text-blue-800 flex items-center gap-2">📋 Plantilla de horario actual</p>
-              <p className="text-xs text-blue-600 mt-0.5">
-                Carga el horario real del local (T1=1er empleado, T2=2º, T3=3er). Editable después.
-              </p>
-              {locEmployees.length >= 3 && (
-                <p className="text-xs text-gray-500 mt-1">
-                  T1={locEmployees[0]?.name} · T2={locEmployees[1]?.name} · T3={locEmployees[2]?.name}
+          {/* Banner horario base — inmutable */}
+          <div className="p-4 bg-gradient-to-r from-emerald-50 to-teal-50 border-2 border-emerald-300 rounded-2xl">
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <div>
+                <p className="font-bold text-emerald-800 flex items-center gap-2 text-sm">
+                  🔒 Horario base oficial del local
                 </p>
-              )}
+                <p className="text-xs text-emerald-700 mt-1">
+                  Plantilla verificada e inmutable. Pulsa para cargarla como punto de partida de la semana.
+                </p>
+                {locEmployees.length >= 1 && (
+                  <div className="flex gap-2 mt-2 flex-wrap">
+                    {locEmployees.slice(0,3).map((e,i) => (
+                      <span key={e.id} className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-medium">
+                        T{i+1}: {e.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <Button onClick={loadTemplate} disabled={locEmployees.length < 1} className="shrink-0">
+                🔒 Cargar horario base
+              </Button>
             </div>
-            <Button variant="outline" onClick={loadTemplate} disabled={locEmployees.length < 1}>
-              📋 Cargar plantilla
-            </Button>
           </div>
           <Card className="p-6">
             <ParamsForm params={params} setParams={setParams} employees={locEmployees} onGenerate={handleGenerate} loading={generating} />

@@ -553,50 +553,53 @@ export const BASE_TEMPLATE_LABEL = 'Plantilla base (horario normal del local)'
 // Construye la plantilla base para N trabajadores
 // T1=idx 0, T2=idx 1, T3=idx 2
 export function getBaseTemplate(employees: Employee[]): ManualWorkerSchedule[] {
-  // ═══════════════════════════════════════════════════════════════════════
-  // PLANTILLA BASE INMUTABLE — Horario real del local (del Excel original)
-  // T1 = Natacha  (43.5h)  Libra: Martes + Miércoles mañana
-  // T2 = Yohanny  (40.25h) Libra: Lunes  + Martes mañana
-  // T3 = Pamela   (40.5h)  Libra: Miércoles + Jueves mañana
-  // NO MODIFICAR ESTE OBJETO — usar applyModifications() para cambios
-  // ═══════════════════════════════════════════════════════════════════════
-  const r: ManualWorkerSchedule[] = []
+  // ╔══════════════════════════════════════════════════════════════════════╗
+  // ║  PLANTILLA BASE INMUTABLE — Horario oficial del local               ║
+  // ║  Verificado en screenshot 16/05/2026                                ║
+  // ║  T1=Natacha(40h)  T2=Johanny(40.3h)  T3=Pamela(40.5h)             ║
+  // ║  PROHIBIDO modificar estos datos directamente.                      ║
+  // ║  Usar applyModifications() para cualquier cambio.                   ║
+  // ╚══════════════════════════════════════════════════════════════════════╝
+  const BASE: Omit<ManualWorkerSchedule,'employeeId'>[] = [
+    // ── T1: Natacha — Libra Martes completo + Miércoles mañana ──────────
+    { days: {
+      lunes:     { libre:false, manana:{start:'12:30',end:'16:45'}, tarde:{start:'19:45',end:'00:15'} },
+      martes:    { libre:true },
+      miercoles: { libre:false, libreHalfDay:'manana' as const, tarde:{start:'19:45',end:'00:15'}, notes:'Libre mañana' },
+      jueves:    { libre:false, tarde:{start:'20:15',end:'00:15'} },
+      viernes:   { libre:false, tarde:{start:'14:45',end:'00:15'} },
+      sabado:    { libre:false, manana:{start:'12:30',end:'16:45'}, tarde:{start:'19:45',end:'00:15'} },
+      domingo:   { libre:false, tarde:{start:'19:45',end:'00:15'} },
+    }},
+    // ── T2: Johanny — Libra Lunes completo + Martes mañana ──────────────
+    { days: {
+      lunes:     { libre:true },
+      martes:    { libre:false, libreHalfDay:'manana' as const, tarde:{start:'19:45',end:'00:15'}, notes:'Libre mañana' },
+      miercoles: { libre:false, manana:{start:'12:30',end:'16:45'}, tarde:{start:'19:45',end:'00:15'} },
+      jueves:    { libre:false, manana:{start:'12:30',end:'16:45'} },
+      viernes:   { libre:false, manana:{start:'12:30',end:'16:45'}, tarde:{start:'19:45',end:'00:15'} },
+      sabado:    { libre:false, tarde:{start:'19:45',end:'00:15'} },
+      domingo:   { libre:false, tarde:{start:'14:45',end:'00:15'} },
+    }},
+    // ── T3: Pamela — Libra Miércoles completo + Jueves mañana ───────────
+    { days: {
+      lunes:     { libre:false, tarde:{start:'19:45',end:'00:15'} },
+      martes:    { libre:false, manana:{start:'12:30',end:'16:45'}, tarde:{start:'19:45',end:'00:15'} },
+      miercoles: { libre:true },
+      jueves:    { libre:false, libreHalfDay:'manana' as const, tarde:{start:'19:45',end:'00:15'}, notes:'Libre mañana' },
+      viernes:   { libre:false, tarde:{start:'19:45',end:'00:15'} },
+      sabado:    { libre:false, tarde:{start:'14:45',end:'00:15'} },
+      domingo:   { libre:false, manana:{start:'12:30',end:'16:45'}, tarde:{start:'19:45',end:'00:15'} },
+    }},
+  ]
 
-  // T1: Natacha
-  if (employees[0]) r.push({ employeeId: employees[0].id, days: {
-    lunes:     { libre:false, manana:{start:'12:30',end:'16:45'}, tarde:{start:'19:45',end:'00:15'} },  // 8.8h
-    martes:    { libre:true },                                                                           // LIBRE
-    miercoles: { libre:false, libreHalfDay:'manana' as const, tarde:{start:'19:45',end:'00:15'}, notes:'Libre mañana' }, // 4.5h
-    jueves:    { libre:false, tarde:{start:'20:15',end:'00:15'} },                                      // 4h
-    viernes:   { libre:false, tarde:{start:'14:45',end:'00:15'} },                                      // 9.5h corrido
-    sabado:    { libre:false, manana:{start:'12:30',end:'16:45'}, tarde:{start:'19:45',end:'00:15'} },  // 8.8h
-    domingo:   { libre:false, tarde:{start:'19:45',end:'00:15'} },                                      // 4.5h
-  }})
-
-  // T2: Yohanny
-  if (employees[1]) r.push({ employeeId: employees[1].id, days: {
-    lunes:     { libre:true },                                                                           // LIBRE
-    martes:    { libre:false, libreHalfDay:'manana' as const, tarde:{start:'19:45',end:'00:15'}, notes:'Libre mañana' }, // 4.5h
-    miercoles: { libre:false, manana:{start:'12:30',end:'16:45'}, tarde:{start:'19:45',end:'00:15'} },  // 8.8h
-    jueves:    { libre:false, manana:{start:'12:30',end:'16:45'} },                                     // 4.25h solo mañana
-    viernes:   { libre:false, tarde:{start:'14:45',end:'00:15'} },                                      // 9.5h corrido
-    sabado:    { libre:false, tarde:{start:'19:45',end:'00:15'} },                                      // 4.5h
-    domingo:   { libre:false, manana:{start:'14:45',end:'00:15'} },                                     // 9.5h corrido
-  }})
-
-  // T3: Pamela
-  if (employees[2]) r.push({ employeeId: employees[2].id, days: {
-    lunes:     { libre:false, tarde:{start:'19:45',end:'00:15'} },                                      // 4.5h
-    martes:    { libre:false, manana:{start:'12:30',end:'16:45'}, tarde:{start:'19:45',end:'00:15'} },  // 8.8h
-    miercoles: { libre:true },                                                                           // LIBRE
-    jueves:    { libre:false, libreHalfDay:'manana' as const, tarde:{start:'19:45',end:'00:15'}, notes:'Libre mañana' }, // 4.5h
-    viernes:   { libre:false, tarde:{start:'19:45',end:'00:15'} },                                      // 4.5h
-    sabado:    { libre:false, tarde:{start:'14:45',end:'00:15'} },                                      // 9.5h corrido
-    domingo:   { libre:false, manana:{start:'12:30',end:'16:45'}, tarde:{start:'19:45',end:'00:15'} },  // 8.8h
-  }})
-
-  return r
+  // Asignar IDs de empleado manteniendo los datos base intactos
+  return employees.slice(0, BASE.length).map((emp, i) => ({
+    employeeId: emp.id,
+    days: BASE[i].days
+  }))
 }
+
 
 // ─── TIPOS DE MODIFICACIÓN ────────────────────────────────────────────────────
 
