@@ -263,8 +263,9 @@ export function subscribeToChanges(
   onClockEntriesChange: () => void,
 ): () => void {
   if (!supabase) return () => {}
+  const sb = supabase
 
-  const channel = supabase
+  const channel = sb
     .channel('andy-app-changes')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'locations' }, onLocationsChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, onEmployeesChange)
@@ -272,7 +273,7 @@ export function subscribeToChanges(
     .subscribe()
 
   return () => {
-    supabase.removeChannel(channel)
+    sb.removeChannel(channel)
   }
 }
 
