@@ -205,29 +205,63 @@ export default function ZonasPedidoPage() {
     if (!file) return
     setProgress('Leyendo CSV...')
     const text = await file.text()
-    const lines = text.split('\n')
-    const header = lines[0].split(';').map(h => h.replace(/"/g, '').trim())
-    const idxLocal = header.findIndex(h => h.toLowerCase().includes('local') || h.toLowerCase().includes('location'))
-    const idxAddr = header.findIndex(h => h.toLowerCase().includes('direcci') || h.toLowerCase().includes('address'))
-    const idxImporte = header.findIndex(h => h.toLowerCase().includes('importe') || h.toLowerCase().includes('total') || h.toLowerCase().includes('amount'))
-    const idxFuente = header.findIndex(h => h.toLowerCase().includes('fuente') || h.toLowerCase().includes('source') || h.toLowerCase().includes('canal'))
-    const idxFecha = header.findIndex(h => h.toLowerCase().includes('fecha') || h.toLowerCase().includes('date'))
-    const idxBarrio = header.findIndex(h => h.toLowerCase().includes('barrio') || h.toLowerCase().includes('distrito') || h.toLowerCase().includes('neighbourhood'))
+
+    // Detectar separador: coma o punto y coma
+    const firstLine = text.split('\n')[0]
+    const sep = firstLine.includes(';') ? ';' : ','
+
+    // Parser que respeta comillas (campos con comas dentro van entre "...")
+    function parseLine(line: string): string[] {
+      const result: string[] = []
+      let cur = ''; let inQ = false
+      for (let i = 0; i < line.length; i++) {
+        const c = line[i]
+        if (c === '"') { inQ = !inQ }
+        else if (c === sep && !inQ) { result.push(cur.trim()); cur = '' }
+        else { cur += c }
+      }
+      result.push(cur.trim())
+      return result
+    }
+
+    const lines = text.split('\n').filter(l => l.trim())
+    const header = parseLine(lines[0]).map(h => h.replace(/"/g, '').trim())
+
+    // Columnas del CSV de Last.app
+    const idxLocal   = header.findIndex(h => h === 'Ubicación' || h.toLowerCase().includes('ubicaci'))
+    const idxAddr    = header.findIndex(h => h === 'Dirección del cliente' || h.toLowerCase().includes('direcci'))
+    const idxImporte = header.findIndex(h => h === 'Total' || h.toLowerCase() === 'total')
+    const idxFuente  = header.findIndex(h => h === 'Fuente' || h.toLowerCase() === 'fuente')
+    const idxFecha   = header.findIndex(h => h === 'Hora de creación' || h.toLowerCase().includes('creaci'))
+    const idxBrand   = header.findIndex(h => h === 'Marca virtual' || h.toLowerCase().includes('marca'))
+
+    if (idxLocal < 0 || idxAddr < 0) {
+      setError(`CSV no reconocido. Columnas encontradas: ${header.slice(0,5).join(', ')}`)
+      setProgress('')
+      e.target.value = ''
+      return
+    }
 
     const csvRecords: DeliveryRecord[] = []
     for (let i = 1; i < lines.length; i++) {
-      const cols = lines[i].split(';').map(c => c.replace(/"/g, '').trim())
+      const cols = parseLine(lines[i])
       if (cols.length < 3) continue
-      const address = idxAddr >= 0 ? cols[idxAddr] : ''
-      const locationName = idxLocal >= 0 ? cols[idxLocal] : 'Desconocido'
-      const amount = idxImporte >= 0 ? parseFloat(cols[idxImporte].replace(',', '.')) || 0 : 0
-      const source = idxFuente >= 0 ? cols[idxFuente] : 'Desconocido'
-      const date = idxFecha >= 0 ? cols[idxFecha] : ''
-      const barrio = idxBarrio >= 0 ? cols[idxBarrio] : ''
-      if (!address && !barrio) continue
+      const address    = idxAddr >= 0    ? cols[idxAddr].replace(/"/g, '').trim()   : ''
+      const locationName = idxLocal >= 0 ? cols[idxLocal].replace(/"/g, '').trim()  : 'Desconocido'
+      const amountStr  = idxImporte >= 0 ? cols[idxImporte].replace(/"/g, '').trim(): '0'
+      const amount     = parseFloat(amountStr.replace(',', '.')) || 0
+      const source     = idxFuente >= 0  ? cols[idxFuente].replace(/"/g, '').trim() : 'Desconocido'
+      const dateRaw    = idxFecha >= 0   ? cols[idxFecha].replace(/"/g, '').trim()  : ''
+      const brand      = idxBrand >= 0   ? cols[idxBrand].replace(/"/g, '').trim()  : locationName
+      // Extraer fecha YYYY-MM-DD del timestamp ISO
+      const date       = dateRaw.slice(0, 10)
+      // Extraer barrio de la dirección (segundo componente separado por coma)
+      const addrParts  = address.split(',')
+      const barrio     = addrParts.length > 1 ? addrParts[addrParts.length - 2]?.trim() : 'Desconocido'
+      if (!address) continue
       csvRecords.push({
         id: `csv-${i}`, locationId: locationName, locationName,
-        date, amount, source, barrio: barrio || address.split(',')[1]?.trim() || 'Desconocido',
+        date, amount, source, barrio: barrio || 'Desconocido',
         address,
       })
     }
