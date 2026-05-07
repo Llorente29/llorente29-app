@@ -262,17 +262,35 @@ export function subscribeToChanges(
   onEmployeesChange: () => void,
   onClockEntriesChange: () => void,
 ): () => void {
-  if (!supabase) return () => {}
+  if (!supabase) {
+    console.warn('[Supabase] subscribeToChanges: cliente no inicializado')
+    return () => {}
+  }
   const sb = supabase
+
+  console.log('[Supabase] Iniciando suscripción a cambios...')
 
   const channel = sb
     .channel('andy-app-changes')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'locations' }, onLocationsChange)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, onEmployeesChange)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'clock_entries' }, onClockEntriesChange)
-    .subscribe()
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'locations' }, (payload) => {
+      console.log('[Supabase] 🔔 cambio en locations', payload.eventType)
+      onLocationsChange()
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, (payload) => {
+      console.log('[Supabase] 🔔 cambio en employees', payload.eventType)
+      onEmployeesChange()
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'clock_entries' }, (payload) => {
+      console.log('[Supabase] 🔔 cambio en clock_entries', payload.eventType)
+      onClockEntriesChange()
+    })
+    .subscribe((status, err) => {
+      console.log('[Supabase] Estado suscripción:', status)
+      if (err) console.error('[Supabase] Error suscripción:', err)
+    })
 
   return () => {
+    console.log('[Supabase] Desuscribiendo canal')
     sb.removeChannel(channel)
   }
 }
