@@ -1,6 +1,6 @@
 # Andy App — Código Fuente
 
-Panel de control  para hostelería. Construido con React + TypeScript + Vite + Tailwind CSS.
+Panel de  control  para hostelería. Construido con React + TypeScript + Vite + Tailwind CSS.
 
 ## Estructura
 
