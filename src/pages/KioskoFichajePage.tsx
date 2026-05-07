@@ -145,6 +145,35 @@ export default function KioskoFichajePage() {
     setStep('success')
   }
 
+  // ── Pantalla completa y detección de instalación ──────────────────────
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [isStandalone, setIsStandalone] = useState(false)
+
+  useEffect(() => {
+    // Detectar si la app está instalada como PWA (standalone)
+    const standalone = window.matchMedia('(display-mode: standalone)').matches ||
+      // iOS Safari usa una propiedad propia
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window.navigator as any).standalone === true
+    setIsStandalone(standalone)
+
+    const onFsChange = () => setIsFullscreen(!!document.fullscreenElement)
+    document.addEventListener('fullscreenchange', onFsChange)
+    return () => document.removeEventListener('fullscreenchange', onFsChange)
+  }, [])
+
+  async function toggleFullscreen() {
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen()
+      } else {
+        await document.exitFullscreen()
+      }
+    } catch (e) {
+      console.error('Error en pantalla completa:', e)
+    }
+  }
+
   if (!config || !activeLocation) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-teal-50 to-emerald-50 p-6">
@@ -163,7 +192,16 @@ export default function KioskoFichajePage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-teal-50 via-white to-emerald-50">
-      <KioskoHeader location={activeLocation} now={now} onConfig={() => setShowConfig(true)} />
+      <KioskoHeader
+        location={activeLocation} now={now}
+        onConfig={() => setShowConfig(true)}
+        isFullscreen={isFullscreen}
+        onToggleFullscreen={toggleFullscreen}
+      />
+
+      {!isStandalone && !isFullscreen && (
+        <InstallBanner onFullscreen={toggleFullscreen} />
+      )}
 
       <div className="max-w-3xl mx-auto px-4 pb-8">
         {step === 'select-employee' && (
@@ -201,8 +239,9 @@ export default function KioskoFichajePage() {
 }
 
 // ── Header del kiosko ─────────────────────────────────────────────────────
-function KioskoHeader({ location, now, onConfig }: {
+function KioskoHeader({ location, now, onConfig, isFullscreen, onToggleFullscreen }: {
   location: Location; now: Date; onConfig: () => void
+  isFullscreen: boolean; onToggleFullscreen: () => void
 }) {
   return (
     <div className="bg-white border-b border-gray-100 px-4 py-3 flex items-center justify-between">
@@ -218,10 +257,63 @@ function KioskoHeader({ location, now, onConfig }: {
           {now.toLocaleDateString('es-ES', { weekday: 'short', day: '2-digit', month: 'long' })}
         </p>
       </div>
-      <button onClick={onConfig} title="Configuración del kiosko"
-        className="ml-3 w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center">
-        ⚙️
-      </button>
+      <div className="flex items-center gap-2 ml-3">
+        <button onClick={onToggleFullscreen} title={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
+          className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center">
+          {isFullscreen ? '🔲' : '⛶'}
+        </button>
+        <button onClick={onConfig} title="Configuración del kiosko"
+          className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center">
+          ⚙️
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ── Banner de instalación / pantalla completa ────────────────────────────
+function InstallBanner({ onFullscreen }: { onFullscreen: () => void }) {
+  const [dismissed, setDismissed] = useState(false)
+  if (dismissed) return null
+
+  // Detectar plataforma para mostrar instrucciones específicas
+  const ua = navigator.userAgent
+  const isIOS = /iPhone|iPad|iPod/.test(ua) && !(window as unknown as { MSStream?: unknown }).MSStream
+  const isAndroid = /Android/.test(ua)
+
+  return (
+    <div className="bg-amber-50 border-b border-amber-200 px-4 py-3">
+      <div className="max-w-3xl mx-auto flex items-start gap-3">
+        <span className="text-2xl shrink-0">📱</span>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-amber-900">Convierte esta tablet en kiosko</p>
+          {isIOS && (
+            <p className="text-xs text-amber-700 mt-1">
+              Pulsa <strong>Compartir</strong> abajo y selecciona <strong>"Añadir a pantalla de inicio"</strong>. Después abre la app desde el icono.
+            </p>
+          )}
+          {isAndroid && (
+            <p className="text-xs text-amber-700 mt-1">
+              Pulsa el menú <strong>⋮</strong> arriba a la derecha y selecciona <strong>"Instalar app"</strong> o <strong>"Añadir a pantalla de inicio"</strong>.
+            </p>
+          )}
+          {!isIOS && !isAndroid && (
+            <p className="text-xs text-amber-700 mt-1">
+              Pulsa el botón <strong>⛶</strong> de arriba a la derecha para usar pantalla completa, o instala la app desde el menú del navegador.
+            </p>
+          )}
+        </div>
+        <div className="flex flex-col gap-1 shrink-0">
+          <button onClick={onFullscreen}
+            className="text-xs px-3 py-1.5 rounded-lg bg-amber-200 hover:bg-amber-300 text-amber-900 font-medium">
+            Pantalla completa
+          </button>
+          <button onClick={() => setDismissed(true)}
+            className="text-xs px-3 py-1 text-amber-600 hover:text-amber-800">
+            Ocultar
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
