@@ -17,7 +17,8 @@ jobs:
         with:
           node-version: 20
 
-       - run: npm install --no-audit --no-fund
+      - run: npm install --no-audit --no-fund
+
       - name: Build
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
