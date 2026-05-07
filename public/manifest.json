@@ -1,0 +1,41 @@
+{
+  "name": "Andy App — Hostelería Pro",
+  "short_name": "Andy App",
+  "description": "Gestión de hostelería: fichajes, turnos, tareas y más",
+  "start_url": "/llorente29-app/",
+  "scope": "/llorente29-app/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f0fdfa",
+  "theme_color": "#0d9488",
+  "icons": [
+    {
+      "src": "/llorente29-app/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/llorente29-app/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/llorente29-app/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Kiosko Fichaje",
+      "short_name": "Fichar",
+      "description": "Abrir directamente el kiosko de fichaje",
+      "url": "/llorente29-app/?page=kiosko_fichaje",
+      "icons": [
+        { "src": "/llorente29-app/favicon.svg", "sizes": "any", "type": "image/svg+xml" }
+      ]
+    }
+  ]
+}
