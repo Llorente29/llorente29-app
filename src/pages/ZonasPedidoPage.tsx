@@ -161,6 +161,7 @@ export default function ZonasPedidoPage() {
   const [savedAt, setSavedAt] = useState<string | null>(null)
   const [daysBack, setDaysBack] = useState(30)
   const [error, setError] = useState('')
+  const [csvUpdatedAt, setCsvUpdatedAt] = useState<string | null>(null)
 
   // Índice de color por locationId
   const locationIndex = useCallback((id: string) => {
@@ -192,7 +193,96 @@ export default function ZonasPedidoPage() {
       setRecords(saved.records)
       setSavedAt(saved.savedAt)
     }
+    // Cargar fecha del último CSV
+    const csvDate = localStorage.getItem('andy-geodata-csv-date')
+    if (csvDate) setCsvUpdatedAt(csvDate)
   }, [])
+
+  // Parsear CSV de Last.app y geocodificar direcciones
+  async function handleCsvUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setProgress('Leyendo CSV...')
+    const text = await file.text()
+    const lines = text.split('\n')
+    const header = lines[0].split(';').map(h => h.replace(/"/g, '').trim())
+    const idxLocal = header.findIndex(h => h.toLowerCase().includes('local') || h.toLowerCase().includes('location'))
+    const idxAddr = header.findIndex(h => h.toLowerCase().includes('direcci') || h.toLowerCase().includes('address'))
+    const idxImporte = header.findIndex(h => h.toLowerCase().includes('importe') || h.toLowerCase().includes('total') || h.toLowerCase().includes('amount'))
+    const idxFuente = header.findIndex(h => h.toLowerCase().includes('fuente') || h.toLowerCase().includes('source') || h.toLowerCase().includes('canal'))
+    const idxFecha = header.findIndex(h => h.toLowerCase().includes('fecha') || h.toLowerCase().includes('date'))
+    const idxBarrio = header.findIndex(h => h.toLowerCase().includes('barrio') || h.toLowerCase().includes('distrito') || h.toLowerCase().includes('neighbourhood'))
+
+    const csvRecords: DeliveryRecord[] = []
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(';').map(c => c.replace(/"/g, '').trim())
+      if (cols.length < 3) continue
+      const address = idxAddr >= 0 ? cols[idxAddr] : ''
+      const locationName = idxLocal >= 0 ? cols[idxLocal] : 'Desconocido'
+      const amount = idxImporte >= 0 ? parseFloat(cols[idxImporte].replace(',', '.')) || 0 : 0
+      const source = idxFuente >= 0 ? cols[idxFuente] : 'Desconocido'
+      const date = idxFecha >= 0 ? cols[idxFecha] : ''
+      const barrio = idxBarrio >= 0 ? cols[idxBarrio] : ''
+      if (!address && !barrio) continue
+      csvRecords.push({
+        id: `csv-${i}`, locationId: locationName, locationName,
+        date, amount, source, barrio: barrio || address.split(',')[1]?.trim() || 'Desconocido',
+        address,
+      })
+    }
+
+    setProgress(`${csvRecords.length} registros del CSV. Geocodificando direcciones nuevas...`)
+
+    // Geocodificar direcciones únicas que no tengan coordenadas ya
+    const existingAddrs = new Set(records.filter(r => r.lat).map(r => r.address || ''))
+    const newAddrs = [...new Set(csvRecords.map(r => r.address || '').filter(a => a && !existingAddrs.has(a)))]
+
+    const coordsCache: Record<string, { lat: number; lng: number }> = JSON.parse(localStorage.getItem('andy-geo-cache') || '{}')
+    const toGeocode = newAddrs.filter(a => !coordsCache[a])
+
+    if (toGeocode.length > 0) {
+      const BATCH = 5
+      for (let i = 0; i < toGeocode.length; i += BATCH) {
+        const batch = toGeocode.slice(i, i + BATCH)
+        setProgress(`Geocodificando ${i + batch.length}/${toGeocode.length}...`)
+        try {
+          const res = await fetch('https://lastapp-webhook.vercel.app/api/geocode', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ addresses: batch }),
+          })
+          if (res.ok) {
+            const data = await res.json()
+            for (const [addr, coords] of Object.entries(data.results || {})) {
+              const c = coords as { lat?: number; lng?: number; ok?: boolean }
+              if (c.ok && c.lat && c.lng) coordsCache[addr] = { lat: c.lat, lng: c.lng }
+            }
+          }
+        } catch { /* silencioso */ }
+      }
+      localStorage.setItem('andy-geo-cache', JSON.stringify(coordsCache))
+    }
+
+    // Añadir coordenadas a los registros CSV
+    const enrichedCsv: DeliveryRecord[] = csvRecords.map(r => {
+      const coords = coordsCache[r.address || '']
+      return coords ? { ...r, lat: coords.lat, lng: coords.lng } : r
+    })
+
+    // Combinar con records existentes (evitar duplicados por address+date)
+    const existingKeys = new Set(records.map(r => `${r.address}_${r.date}`))
+    const newRecords = enrichedCsv.filter(r => !existingKeys.has(`${r.address}_${r.date}`))
+    const combined = [...records, ...newRecords]
+
+    setRecords(combined)
+    saveRecords(combined)
+    const now = new Date().toISOString()
+    setSavedAt(now)
+    setCsvUpdatedAt(now)
+    localStorage.setItem('andy-geodata-csv-date', now)
+    setProgress('')
+    e.target.value = ''
+  }
 
   // Recalcular estadísticas cuando cambian records o zonas
   useEffect(() => {
@@ -279,7 +369,26 @@ export default function ZonasPedidoPage() {
         </div>
       </div>
 
-      {progress && (
+      {/* CSV status + subida */}
+      <div className="flex items-center gap-3 flex-wrap">
+        {csvUpdatedAt ? (
+          <span className={`text-xs px-3 py-1.5 rounded-full font-medium ${
+            (new Date().getTime() - new Date(csvUpdatedAt).getTime()) < 7 * 86400000
+              ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+          }`}>
+            ✅ CSV actualizado {new Date(csvUpdatedAt).toLocaleDateString('es-ES')}
+          </span>
+        ) : (
+          <span className="text-xs px-3 py-1.5 rounded-full bg-amber-100 text-amber-700 font-medium">
+            ⚠️ Sin datos CSV de Last.app
+          </span>
+        )}
+        <label className="cursor-pointer text-xs px-3 py-1.5 border border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-teal-400 hover:text-teal-600 transition-all">
+          📄 Subir CSV de Last.app
+          <input type="file" accept=".csv" className="hidden" onChange={handleCsvUpload} />
+        </label>
+        <span className="text-xs text-gray-400">Last.app → Reportes → Registros financieros → Cuentas → Exportar CSV</span>
+      </div>
         <div className="flex items-center gap-2 text-sm text-teal-700 bg-teal-50 rounded-lg px-4 py-2.5 border border-teal-100">
           <span className="animate-spin text-base">⏳</span> {progress}
         </div>
