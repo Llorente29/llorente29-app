@@ -252,7 +252,7 @@ export default function ZonasPedidoPage() {
       const amount     = parseFloat(amountStr.replace(',', '.')) || 0
       const source     = idxFuente >= 0  ? cols[idxFuente].replace(/"/g, '').trim() : 'Desconocido'
       const dateRaw    = idxFecha >= 0   ? cols[idxFecha].replace(/"/g, '').trim()  : ''
-      const brand      = idxBrand >= 0   ? cols[idxBrand].replace(/"/g, '').trim()  : locationName
+      const _brand     = idxBrand >= 0   ? cols[idxBrand].replace(/"/g, '').trim()  : locationName
       // Extraer fecha YYYY-MM-DD del timestamp ISO
       const date       = dateRaw.slice(0, 10)
       // Extraer barrio de la dirección (segundo componente separado por coma)
