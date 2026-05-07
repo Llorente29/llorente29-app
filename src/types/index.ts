@@ -3,6 +3,7 @@ export type Page =
   | 'tasks' | 'scheduled' | 'templates' | 'incidents'
   | 'locations' | 'audits' | 'history' | 'tspoon'
   | 'inventory' | 'tspoon_settings' | 'ventas_analisis' | 'prediccion_personal'
+  | 'zonas_pedido'
 
 export interface Location {
   id: string; name: string; address: string; phone: string; active: boolean
@@ -122,4 +123,26 @@ export interface WeeklySchedulePlan {
   days: ScheduleDay[]; published: boolean; createdAt: string; notes?: string
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   alerts?: any[]; adjustments?: string[]
+}
+
+export interface DeliveryRecord {
+  id: string
+  locationId: string
+  locationName: string
+  date: string
+  amount: number
+  source: string
+  barrio: string
+  lat?: number
+  lng?: number
+  address?: string
+  distanceKm?: number
+  closestLocationId?: string
+}
+
+export interface DeliveryZoneConfig {
+  locationId: string
+  radiusKm: number
+  lat: number
+  lng: number
 }
