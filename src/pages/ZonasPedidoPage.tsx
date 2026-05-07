@@ -389,6 +389,8 @@ export default function ZonasPedidoPage() {
         </label>
         <span className="text-xs text-gray-400">Last.app → Reportes → Registros financieros → Cuentas → Exportar CSV</span>
       </div>
+
+      {progress && (
         <div className="flex items-center gap-2 text-sm text-teal-700 bg-teal-50 rounded-lg px-4 py-2.5 border border-teal-100">
           <span className="animate-spin text-base">⏳</span> {progress}
         </div>
