@@ -11,6 +11,7 @@ import TSpoonPage from './pages/TSpoonPage'
 import VentasAnalisisPage from './pages/VentasAnalisisPage'
 import PrediccionPersonalPage from './pages/PrediccionPersonalPage'
 import ZonasPedidoPage from './pages/ZonasPedidoPage'
+import KioskoFichajePage from './pages/KioskoFichajePage'
 import {
   DashboardPage, ScheduledPage, TemplatesPage,
   AuditsPage, HistoryPage, InventoryPage, TSpoonSettingsPage, LocationsPage
@@ -20,6 +21,7 @@ const NAV: { id: Page; label: string; icon: string; section?: string }[] = [
   { id: 'dashboard',          label: 'Dashboard',           icon: '⊞' },
   { id: 'staff',              label: 'Personal',            icon: '👤', section: 'Personal' },
   { id: 'fichajes_global',    label: 'Control Horario',     icon: '⏰' },
+  { id: 'kiosko_fichaje',     label: 'Kiosko Fichaje',      icon: '🕐' },
   { id: 'calendario',         label: 'Calendario',          icon: '📅' },
   { id: 'informes_personal',  label: 'Informes Gestoría',   icon: '📄' },
   { id: 'tasks',              label: 'Tareas',              icon: '✅', section: 'Operaciones' },
@@ -39,6 +41,7 @@ const NAV: { id: Page; label: string; icon: string; section?: string }[] = [
 
 const PAGE_TITLES: Record<Page, string> = {
   dashboard: 'Dashboard', staff: 'Personal', fichajes_global: 'Control Horario',
+  kiosko_fichaje: 'Kiosko Fichaje',
   calendario: 'Calendario de Horarios', informes_personal: 'Informes Gestoría',
   tasks: 'Tareas', scheduled: 'Programadas', templates: 'Plantillas',
   incidents: 'Incidencias', locations: 'Locales', audits: 'Auditorías',
@@ -54,6 +57,7 @@ function renderPage(page: Page) {
     case 'dashboard':         return <DashboardPage />
     case 'staff':             return <StaffPage />
     case 'fichajes_global':   return <FichajesGlobalPage />
+    case 'kiosko_fichaje':    return <KioskoFichajePage />
     case 'calendario':        return <CalendarioPage />
     case 'informes_personal': return <InformesPage />
     case 'tasks':             return <TasksPage />
@@ -65,8 +69,8 @@ function renderPage(page: Page) {
     case 'tspoon':            return <TSpoonPage />
     case 'ventas_analisis':   return <VentasAnalisisPage />
     case 'prediccion_personal': return <PrediccionPersonalPage />
-    case 'zonas_pedido':        return <ZonasPedidoPage />
-    case 'inventory':           return <InventoryPage />
+    case 'zonas_pedido':      return <ZonasPedidoPage />
+    case 'inventory':         return <InventoryPage />
     case 'locations':         return <LocationsPage />
     case 'tspoon_settings':   return <TSpoonSettingsPage />
     default:                  return <DashboardPage />
@@ -138,8 +142,8 @@ function Sidebar({ page, setPage, collapsed, setCollapsed }: {
 }
 
 function BottomNav({ page, setPage }: { page: Page; setPage: (p: Page) => void }) {
-  const main: Page[] = ['dashboard', 'staff', 'calendario', 'tasks', 'locations']
-  const icons: Record<string, string> = { dashboard: '⊞', staff: '👤', calendario: '📅', tasks: '✅', locations: '📍' }
+  const main: Page[] = ['dashboard', 'staff', 'kiosko_fichaje', 'tasks', 'locations']
+  const icons: Record<string, string> = { dashboard: '⊞', staff: '👤', kiosko_fichaje: '🕐', tasks: '✅', locations: '📍' }
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 flex items-center justify-around py-1 px-1 lg:hidden">
       {main.map(id => (
@@ -159,6 +163,24 @@ export default function App() {
   const { tasks, incidents } = useApp()
   const pending = tasks.filter(t => t.status === 'pendiente' || t.status === 'vencida').length
   const critInc = incidents.filter(i => i.severity === 'critica' && i.status !== 'resuelta').length
+
+  // En el kiosko ocultamos sidebar y header — pantalla completa
+  const isKiosko = page === 'kiosko_fichaje'
+
+  if (isKiosko) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <KioskoFichajePage />
+        <button
+          onClick={() => setPage('dashboard')}
+          className="fixed bottom-4 left-4 text-xs text-gray-300 hover:text-gray-500"
+          title="Salir del kiosko"
+        >
+          ← salir
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
