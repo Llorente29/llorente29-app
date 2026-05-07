@@ -1,5 +1,5 @@
 // src/pages/ZonasPedidoPage.tsx
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useApp } from '../context/AppContext'
 import { Button, Card } from '../components/ui'
 import type { DeliveryRecord, DeliveryZoneConfig } from '../types'
@@ -162,6 +162,7 @@ export default function ZonasPedidoPage() {
   const [daysBack, setDaysBack] = useState(30)
   const [error, setError] = useState('')
   const [csvUpdatedAt, setCsvUpdatedAt] = useState<string | null>(null)
+  const csvInputRef = useRef<HTMLInputElement>(null)
 
   // Índice de color por locationId
   const locationIndex = useCallback((id: string) => {
@@ -383,10 +384,13 @@ export default function ZonasPedidoPage() {
             ⚠️ Sin datos CSV de Last.app
           </span>
         )}
-        <label className="cursor-pointer text-xs px-3 py-1.5 border border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-teal-400 hover:text-teal-600 transition-all">
+        <button
+          onClick={() => csvInputRef.current?.click()}
+          className="cursor-pointer text-xs px-3 py-1.5 border border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-teal-400 hover:text-teal-600 transition-all"
+        >
           📄 Subir CSV de Last.app
-          <input type="file" accept=".csv" className="hidden" onChange={handleCsvUpload} />
-        </label>
+        </button>
+        <input ref={csvInputRef} type="file" accept=".csv" className="hidden" onChange={handleCsvUpload} />
         <span className="text-xs text-gray-400">Last.app → Reportes → Registros financieros → Cuentas → Exportar CSV</span>
       </div>
 
