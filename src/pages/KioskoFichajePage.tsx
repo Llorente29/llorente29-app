@@ -13,7 +13,7 @@ import {
 type Step = 'select-employee' | 'enter-pin' | 'confirming' | 'success' | 'error'
 
 export default function KioskoFichajePage() {
-  const { locations, staff, setStaff } = useApp()
+  const { locations, staff, addClockEntry } = useApp()
   const [config, setConfig] = useState<KioskoConfig | null>(null)
   const [showConfig, setShowConfig] = useState(false)
   const [step, setStep] = useState<Step>('select-employee')
@@ -134,11 +134,8 @@ export default function KioskoFichajePage() {
       return
     }
 
-    // Guardar fichaje
-    setStaff(prev => prev.map(e => {
-      if (e.id !== selectedEmp.id) return e
-      return { ...e, clockEntries: [...(e.clockEntries || []), result.entry] }
-    }))
+    // Guardar fichaje (sincroniza con Supabase)
+    await addClockEntry(selectedEmp.id, result.entry)
 
     const verb = result.entry.type === 'entrada' ? 'Entrada' : 'Salida'
     setResultMsg(`✅ ${verb} registrada — ${selectedEmp.name}`)
