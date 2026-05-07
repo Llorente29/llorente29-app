@@ -999,7 +999,8 @@ function calcJelpCost(distKmRuta: number): number {
 
 function RentabilidadAnalysis({ records, locStats }: { records: DeliveryRecord[]; locStats: LocationStats[] }) {
   const [ticketMedio, setTicketMedio] = useState(20)
-  const [comisionGlovo, setComisionGlovo] = useState(30)
+  const [comisionGlovo, setComisionGlovo] = useState(15)   // reparto propio
+  const [comisionGlovoFull, setComisionGlovoFull] = useState(30) // Glovo pone repartidor
   const [tarifaEnvio, setTarifaEnvio] = useState(4.50)  // IVA incluido cobrado al cliente
   const [vista, setVista] = useState<'resumen' | 'pedidos'>('resumen')
   const [locFiltro, setLocFiltro] = useState('todos')
@@ -1030,9 +1031,9 @@ function RentabilidadAnalysis({ records, locStats }: { records: DeliveryRecord[]
     return records
       .filter(r => locFiltro === 'todos' || r.locationId === locFiltro)
       .map(r => {
-        // Glovo aplica su comisión sobre el importe sin IVA
         const importeBase = importeSinIva(r.amount)
         const costoGlovo = importeBase * (comisionGlovo / 100)
+        const costoGlovoFull = importeBase * (comisionGlovoFull / 100)
         let distKmLinea = 0
         let distKmRuta = 0
         let costoJelp = 5.95 // default si no hay coords
@@ -1052,9 +1053,10 @@ function RentabilidadAnalysis({ records, locStats }: { records: DeliveryRecord[]
         // Coste neto Jelp = coste Jelp - ingreso envío sin IVA
         const costoJelpNeto = costoJelp - envioSinIva
         const ahorroVsGlovo = costoGlovo - costoJelpNeto
+        const ahorroVsGlovoFull = costoGlovoFull - costoJelpNeto
         const rentable = costoJelpNeto <= costoGlovo
 
-        return { ...r, distKmLinea, distKmRuta, costoJelp, costoJelpNeto, costoGlovo, ahorroVsGlovo, rentable }
+        return { ...r, distKmLinea, distKmRuta, costoJelp, costoJelpNeto, costoGlovo, costoGlovoFull, ahorroVsGlovo, ahorroVsGlovoFull, rentable }
       })
       .sort((a, b) => a.ahorroVsGlovo - b.ahorroVsGlovo) // peores primero
   }, [records, locFiltro, comisionGlovo])
@@ -1092,8 +1094,13 @@ function RentabilidadAnalysis({ records, locStats }: { records: DeliveryRecord[]
               className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm" />
           </div>
           <div>
-            <label className="text-xs text-gray-500 block mb-1">Comisión Glovo (%)</label>
+            <label className="text-xs text-gray-500 block mb-1">Comisión Glovo reparto propio (%)</label>
             <input type="number" value={comisionGlovo} onChange={e => setComisionGlovo(+e.target.value)}
+              className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm" />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Comisión Glovo con su repartidor (%)</label>
+            <input type="number" value={comisionGlovoFull} onChange={e => setComisionGlovoFull(+e.target.value)}
               className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm" />
           </div>
           <div>
@@ -1146,9 +1153,9 @@ function RentabilidadAnalysis({ records, locStats }: { records: DeliveryRecord[]
                     <th className="text-right py-2">Jelp bruto</th>
                     <th className="text-right py-2">Ingreso envío</th>
                     <th className="text-right py-2">Jelp neto</th>
-                    <th className="text-right py-2">Coste Glovo ({comisionGlovo}%)</th>
+                    <th className="text-right py-2">Glovo {comisionGlovo}% (propio)</th>
+                    <th className="text-right py-2">Glovo {comisionGlovoFull}% (Glovo rep.)</th>
                     <th className="text-right py-2">Pedidos</th>
-                    <th className="text-right py-2">¿Rentable?</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -1157,21 +1164,26 @@ function RentabilidadAnalysis({ records, locStats }: { records: DeliveryRecord[]
                     const costoJelpBruto = rango.min === 0 ? 5.75 : rango.min === 3 ? 5.95 : rango.min === 5 ? 6.45 : rango.min === 6 ? 6.95 : 7.95
                     const costoJelpNetoRango = costoJelpBruto - envioSinIva
                     const costoGlovoRef = (ticketMedio / 1.10) * (comisionGlovo / 100)
-                    const esRentable = costoJelpNetoRango <= costoGlovoRef
+                    const costoGlovoFullRef = (ticketMedio / 1.10) * (comisionGlovoFull / 100)
+                    const esRentableVsPropio = costoJelpNetoRango <= costoGlovoRef
+                    const esRentableVsFull = costoJelpNetoRango <= costoGlovoFullRef
                     return (
-                      <tr key={rango.label} className={!esRentable ? 'bg-red-50' : ''}>
+                      <tr key={rango.label} className={!esRentableVsPropio ? 'bg-red-50' : !esRentableVsFull ? 'bg-amber-50' : ''}>
                         <td className="py-2 font-medium text-gray-800">{rango.label}</td>
                         <td className="py-2 text-right text-gray-500">{rango.precio}</td>
                         <td className="py-2 text-right text-green-600">-€{envioSinIva.toFixed(2)}</td>
                         <td className="py-2 text-right font-bold text-blue-700">€{costoJelpNetoRango.toFixed(2)}</td>
-                        <td className="py-2 text-right text-gray-600">€{costoGlovoRef.toFixed(2)}</td>
-                        <td className="py-2 text-right text-gray-700">{enRango.length}</td>
                         <td className="py-2 text-right">
-                          {esRentable
-                            ? <span className="text-green-600 font-semibold">✅ Sí</span>
-                            : <span className="text-red-600 font-semibold">❌ No</span>
-                          }
+                          <span className={esRentableVsPropio ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'}>
+                            €{costoGlovoRef.toFixed(2)} {esRentableVsPropio ? '✅' : '❌'}
+                          </span>
                         </td>
+                        <td className="py-2 text-right">
+                          <span className={esRentableVsFull ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'}>
+                            €{costoGlovoFullRef.toFixed(2)} {esRentableVsFull ? '✅' : '❌'}
+                          </span>
+                        </td>
+                        <td className="py-2 text-right text-gray-700">{enRango.length}</td>
                       </tr>
                     )
                   })}
@@ -1232,8 +1244,9 @@ function RentabilidadAnalysis({ records, locStats }: { records: DeliveryRecord[]
                   <th className="text-right px-3 py-2">Dist. ruta</th>
                   <th className="text-right px-3 py-2">Importe</th>
                   <th className="text-right px-3 py-2">Jelp neto</th>
-                  <th className="text-right px-3 py-2">Glovo</th>
-                  <th className="text-right px-3 py-2">Diferencia</th>
+                  <th className="text-right px-3 py-2">Glovo {comisionGlovo}%</th>
+                  <th className="text-right px-3 py-2">Glovo {comisionGlovoFull}%</th>
+                  <th className="text-right px-3 py-2">Ahorro</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -1245,6 +1258,7 @@ function RentabilidadAnalysis({ records, locStats }: { records: DeliveryRecord[]
                     <td className="px-3 py-2 text-right">€{r.amount.toFixed(2)}</td>
                     <td className="px-3 py-2 text-right font-medium text-blue-700">€{r.costoJelpNeto.toFixed(2)}</td>
                     <td className="px-3 py-2 text-right text-gray-600">€{r.costoGlovo.toFixed(2)}</td>
+                    <td className="px-3 py-2 text-right text-gray-500">€{r.costoGlovoFull.toFixed(2)}</td>
                     <td className={`px-3 py-2 text-right font-bold ${r.ahorroVsGlovo >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                       {r.ahorroVsGlovo >= 0 ? '+' : ''}€{r.ahorroVsGlovo.toFixed(2)}
                     </td>
