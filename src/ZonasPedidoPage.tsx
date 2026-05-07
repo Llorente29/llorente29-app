@@ -1,5 +1,5 @@
 // src/pages/ZonasPedidoPage.tsx
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useApp } from '../context/AppContext'
 import { Button, Card } from '../components/ui'
 import type { DeliveryRecord, DeliveryZoneConfig } from '../types'
@@ -549,152 +549,285 @@ export default function ZonasPedidoPage() {
       {/* ── TAB: SOLAPE ── */}
       {tab === 'solape' && (
         <div className="space-y-4">
-          {records.length === 0 ? <EmptyState /> : sharedBarrios.length === 0 ? (
-            <Card className="p-8 text-center text-gray-400">
-              <p className="text-3xl mb-2">✅</p>
-              <p className="font-medium">Sin solapes detectados</p>
-              <p className="text-sm mt-1">Ningún barrio tiene pedidos de más de un local.</p>
-            </Card>
-          ) : (
-            <>
-              {/* Resumen de impacto */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <Card className="p-4 text-center">
-                  <p className="text-2xl font-bold text-amber-600">{sharedBarrios.length}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">Barrios con solape</p>
-                </Card>
-                <Card className="p-4 text-center">
-                  <p className="text-2xl font-bold text-gray-800">
-                    {sharedBarrios.reduce((s, b) => s + b.total, 0)}
-                  </p>
-                  <p className="text-xs text-gray-400 mt-0.5">Entregas en zona solapada</p>
-                </Card>
-                <Card className="p-4 text-center">
-                  <p className="text-2xl font-bold text-teal-600">
-                    €{sharedBarrios.reduce((s, b) => s + b.totalAmount, 0).toLocaleString('es-ES', { maximumFractionDigits: 0 })}
-                  </p>
-                  <p className="text-xs text-gray-400 mt-0.5">Ventas en disputa</p>
-                </Card>
+          {records.length === 0 ? <EmptyState /> : <SolapeAnalysis records={records} locStats={locStats} />}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Coordenadas de barrios para cálculo de distancias ─────────────────────
+const BARRIO_CENTROIDES: Record<string, { lat: number; lng: number }> = {
+  'Cdad. Lineal':          { lat: 40.4423, lng: -3.6501 },
+  'Ciudad Lineal':         { lat: 40.4423, lng: -3.6501 },
+  'Salamanca':             { lat: 40.4286, lng: -3.6784 },
+  'San Blas-Canillejas':   { lat: 40.4266, lng: -3.6079 },
+  'Chamartín':             { lat: 40.4597, lng: -3.6770 },
+  'Retiro':                { lat: 40.4082, lng: -3.6843 },
+  'Carabanchel':           { lat: 40.3866, lng: -3.7366 },
+  'Latina':                { lat: 40.4068, lng: -3.7285 },
+  'Calle Piedrahita':      { lat: 40.3910, lng: -3.7280 },
+  'Arganzuela':            { lat: 40.3959, lng: -3.7037 },
+  'Tetuán':                { lat: 40.4597, lng: -3.7037 },
+  'Fuencarral-El Pardo':   { lat: 40.5049, lng: -3.7101 },
+  'Calle de Orense':       { lat: 40.4581, lng: -3.6938 },
+  'Moncloa - Aravaca':     { lat: 40.4357, lng: -3.7248 },
+  'Moratalaz':             { lat: 40.4052, lng: -3.6487 },
+  'Vallecas':              { lat: 40.3836, lng: -3.6549 },
+  'Hortaleza':             { lat: 40.4777, lng: -3.6385 },
+  'Centro':                { lat: 40.4168, lng: -3.7038 },
+  'Villaverde':            { lat: 40.3534, lng: -3.7078 },
+  'Usera':                 { lat: 40.3909, lng: -3.7136 },
+  'Calle de Arturo Soria': { lat: 40.4550, lng: -3.6450 },
+  'Calle de López de Hoyos': { lat: 40.4500, lng: -3.6700 },
+  'Calle del Príncipe de Vergara': { lat: 40.4380, lng: -3.6750 },
+  'Paseo de la Castellana': { lat: 40.4530, lng: -3.6920 },
+  'Calle Francolin':       { lat: 40.3875, lng: -3.7395 },
+  'Calle Franckolín':      { lat: 40.3875, lng: -3.7395 },
+  'España':                { lat: 40.4200, lng: -3.7100 },
+  'Calle de Cronos':       { lat: 40.4480, lng: -3.6380 },
+  'Calle de Sambara':      { lat: 40.4260, lng: -3.6500 },
+}
+
+// Factor urbano: línea recta × 1.40 ≈ distancia de recorrido en Madrid
+const URBAN_FACTOR = 1.40
+
+// Coordenadas conocidas de los 3 locales
+const LOCAL_COORDS_FIXED: Record<string, { lat: number; lng: number }> = {
+  'alcal':       { lat: 40.4346, lng: -3.6528 },  // C. Florencio Llorente 29
+  'carabanchel': { lat: 40.3912, lng: -3.7399 },  // C. Camichi 4
+  'castilla':    { lat: 40.4698, lng: -3.6928 },  // C. Cañaveral 75
+}
+
+function getLocalCoords(name: string): { lat: number; lng: number } | null {
+  const n = name.toLowerCase()
+  for (const [k, v] of Object.entries(LOCAL_COORDS_FIXED)) {
+    if (n.includes(k)) return v
+  }
+  return null
+}
+
+interface SolapeItem {
+  barrio: string
+  total: number
+  totalImporte: number
+  porLocal: Record<string, { count: number; amount: number; distLinea: number; distRuta: number }>
+  localMasCercano: string
+  localDominante: string
+  grado: 'alto' | 'medio' | 'bajo'
+  pedidosMal: number
+  importeMal: number
+}
+
+function SolapeAnalysis({ records, locStats }: { records: DeliveryRecord[]; locStats: LocationStats[] }) {
+  const [filtro, setFiltro] = useState<'todos' | 'alto' | 'medio'>('todos')
+  const [orden, setOrden] = useState<'mal' | 'pedidos' | 'importe'>('mal')
+
+  const solapes: SolapeItem[] = useMemo(() => {
+    // Agrupar por barrio
+    const byBarrio = new Map<string, DeliveryRecord[]>()
+    for (const r of records) {
+      const b = r.barrio || 'Desconocido'
+      if (b === 'Desconocido') continue
+      if (!byBarrio.has(b)) byBarrio.set(b, [])
+      byBarrio.get(b)!.push(r)
+    }
+
+    const resultado: SolapeItem[] = []
+    for (const [barrio, entries] of byBarrio) {
+      if (entries.length < 3) continue
+
+      const porLocal: SolapeItem['porLocal'] = {}
+      const centroide = BARRIO_CENTROIDES[barrio]
+
+      for (const r of entries) {
+        if (!porLocal[r.locationId]) {
+          const locCoords = getLocalCoords(r.locationName)
+          let distLinea = 0
+          if (locCoords && centroide) {
+            const dLat = ((centroide.lat - locCoords.lat) * Math.PI) / 180
+            const dLng = ((centroide.lng - locCoords.lng) * Math.PI) / 180
+            const a = Math.sin(dLat/2)**2 + Math.cos(locCoords.lat*Math.PI/180)*Math.cos(centroide.lat*Math.PI/180)*Math.sin(dLng/2)**2
+            distLinea = 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
+          }
+          porLocal[r.locationId] = { count: 0, amount: 0, distLinea, distRuta: distLinea * URBAN_FACTOR }
+        }
+        porLocal[r.locationId].count++
+        porLocal[r.locationId].amount += r.amount
+      }
+
+      const localesConPedidos = Object.keys(porLocal).filter(id => porLocal[id].count > 0)
+      if (localesConPedidos.length < 2) continue
+
+      const total = entries.length
+      const totalImporte = entries.reduce((s, e) => s + e.amount, 0)
+      const localDominante = [...localesConPedidos].sort((a, b) => porLocal[b].count - porLocal[a].count)[0]
+      const localMasCercano = centroide
+        ? [...localesConPedidos].sort((a, b) => porLocal[a].distRuta - porLocal[b].distRuta)[0]
+        : localDominante
+
+      let pedidosMal = 0; let importeMal = 0
+      for (const [locId, s] of Object.entries(porLocal)) {
+        if (locId !== localMasCercano) { pedidosMal += s.count; importeMal += s.amount }
+      }
+
+      const pctNoD = (total - porLocal[localDominante].count) / total
+      const grado: SolapeItem['grado'] = pctNoD > 0.30 ? 'alto' : pctNoD > 0.12 ? 'medio' : 'bajo'
+
+      resultado.push({ barrio, total, totalImporte, porLocal, localMasCercano, localDominante, grado, pedidosMal, importeMal })
+    }
+    return resultado
+  }, [records, locStats])
+
+  const filtrados = solapes
+    .filter(s => filtro === 'todos' || s.grado === filtro)
+    .sort((a, b) => orden === 'mal' ? b.pedidosMal - a.pedidosMal : orden === 'pedidos' ? b.total - a.total : b.totalImporte - a.totalImporte)
+
+  const totalMal = solapes.reduce((s, b) => s + b.pedidosMal, 0)
+  const importeMalTotal = solapes.reduce((s, b) => s + b.importeMal, 0)
+  const altos = solapes.filter(s => s.grado === 'alto').length
+
+  if (solapes.length === 0) {
+    return (
+      <Card className="p-8 text-center text-gray-400">
+        <p className="text-3xl mb-2">✅</p>
+        <p className="font-medium">Sin solapes detectados</p>
+        <p className="text-sm mt-1">Ningún barrio tiene pedidos de más de un local.</p>
+      </Card>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Nota metodológica */}
+      <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-2.5 text-xs text-blue-700">
+        <strong>Metodología:</strong> Distancia de recorrido estimada = distancia línea recta × 1.40 (factor empírico para Madrid urbano).
+        Los radios de las plataformas (3.5 km) son fijos. La acción correcta es <strong>activar el local más cercano en la plataforma</strong> para cada barrio en disputa.
+      </div>
+
+      {/* KPIs */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { label: 'Barrios solapados', value: solapes.length.toString(), color: 'text-amber-600' },
+          { label: 'Solape alto (>30%)', value: altos.toString(), color: 'text-red-600' },
+          { label: 'Pedidos a revisar', value: totalMal.toString(), color: 'text-gray-800' },
+          { label: 'Ventas afectadas', value: `€${importeMalTotal.toLocaleString('es-ES', { maximumFractionDigits: 0 })}`, color: 'text-teal-600' },
+        ].map(k => (
+          <Card key={k.label} className="p-4 text-center">
+            <p className={`text-2xl font-bold ${k.color}`}>{k.value}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{k.label}</p>
+          </Card>
+        ))}
+      </div>
+
+      {/* Filtros */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-gray-500 font-medium">Filtrar:</span>
+        {(['todos', 'alto', 'medio'] as const).map(f => (
+          <button key={f} onClick={() => setFiltro(f)}
+            className={`text-xs px-3 py-1 rounded-full font-medium border transition-all ${
+              filtro === f ? 'bg-teal-600 text-white border-teal-600' : 'border-gray-200 text-gray-600 hover:border-gray-300'
+            }`}>
+            {f === 'todos' ? 'Todos' : f === 'alto' ? '🔴 Alto' : '🟡 Medio'}
+          </button>
+        ))}
+        <div className="ml-auto flex items-center gap-2">
+          <span className="text-xs text-gray-500">Ordenar:</span>
+          <select value={orden} onChange={e => setOrden(e.target.value as typeof orden)}
+            className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white">
+            <option value="mal">Por pedidos a revisar</option>
+            <option value="pedidos">Por volumen</option>
+            <option value="importe">Por importe</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Lista */}
+      <div className="space-y-3">
+        {filtrados.map(b => {
+          const entries = Object.entries(b.porLocal).sort(([,a],[,b]) => b.count - a.count)
+          const esBien = b.localMasCercano === b.localDominante
+          const cercanoNombre = locStats.find(s => s.locationId === b.localMasCercano)?.locationName || b.localMasCercano
+          const dominanteNombre = locStats.find(s => s.locationId === b.localDominante)?.locationName || b.localDominante
+          const distCercano = b.porLocal[b.localMasCercano]?.distRuta?.toFixed(1)
+          const distDominante = b.porLocal[b.localDominante]?.distRuta?.toFixed(1)
+
+          return (
+            <Card key={b.barrio} className={`p-4 space-y-3 ${
+              b.grado === 'alto' ? 'border-red-200' : b.grado === 'medio' ? 'border-amber-200' : ''
+            }`}>
+              <div className="flex items-start justify-between flex-wrap gap-2">
+                <div>
+                  <p className="font-bold text-gray-900">{b.barrio}</p>
+                  <p className="text-xs text-gray-400">{b.total} pedidos · €{b.totalImporte.toFixed(0)}</p>
+                </div>
+                <div className="flex gap-1.5 flex-wrap">
+                  {b.grado === 'alto' && <span className="px-2 py-1 bg-red-100 text-red-700 text-xs font-semibold rounded-full">🔴 Solape alto</span>}
+                  {b.grado === 'medio' && <span className="px-2 py-1 bg-amber-100 text-amber-700 text-xs font-semibold rounded-full">🟡 Solape medio</span>}
+                  {esBien
+                    ? <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">✅ Bien asignado</span>
+                    : <span className="px-2 py-1 bg-red-100 text-red-700 text-xs font-semibold rounded-full">⚠️ {b.pedidosMal} pedidos a revisar</span>
+                  }
+                </div>
               </div>
 
-              {/* Lista de barrios solapados con análisis */}
-              <div className="space-y-3">
-                {sharedBarrios.map(b => {
-                  const entries = Object.entries(b.byLocation).sort(([,a],[,b]) => b.count - a.count)
-                  const dominant = entries[0]
-                  const minor = entries.slice(1)
-                  const dominantIdx = locStats.findIndex(s => s.locationId === dominant[0])
-                  const hasMalAsig = b.malAsignadosPct != null
-
+              {/* Barra */}
+              <div className="flex rounded-full overflow-hidden h-3">
+                {entries.map(([locId, v]) => {
+                  const idx = locStats.findIndex(s => s.locationId === locId)
                   return (
-                    <Card key={b.barrio} className="p-4">
-                      <div className="flex items-start justify-between flex-wrap gap-2">
-                        <div>
-                          <p className="font-bold text-gray-900">{b.barrio}</p>
-                          <p className="text-xs text-gray-400">{b.total} entregas · €{b.totalAmount.toFixed(0)}</p>
-                        </div>
-                        {hasMalAsig && b.malAsignadosPct! > 0.15 && (
-                          <span className="px-2 py-1 bg-red-100 text-red-700 text-xs font-semibold rounded-full">
-                            ⚠️ {(b.malAsignadosPct! * 100).toFixed(0)}% mal asignado
-                          </span>
-                        )}
-                        {hasMalAsig && b.malAsignadosPct! <= 0.15 && (
-                          <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">
-                            ✅ Bien asignado
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Barra de distribución */}
-                      <div className="mt-3 flex rounded-full overflow-hidden h-4">
-                        {entries.map(([locId, v]) => {
-                          const idx = locStats.findIndex(s => s.locationId === locId)
-                          const pct = (v.count / b.total) * 100
-                          return (
-                            <div
-                              key={locId}
-                              style={{ width: `${pct}%`, background: LOC_COLORS[idx % LOC_COLORS.length] }}
-                              title={`${locStats.find(s => s.locationId === locId)?.locationName}: ${v.count} (${pct.toFixed(0)}%)`}
-                            />
-                          )
-                        })}
-                      </div>
-
-                      <div className="mt-2 flex flex-wrap gap-3">
-                        {entries.map(([locId, v]) => {
-                          const idx = locStats.findIndex(s => s.locationId === locId)
-                          const stat = locStats.find(s => s.locationId === locId)
-                          return (
-                            <div key={locId} className="flex items-center gap-1.5 text-xs">
-                              <span className="w-2.5 h-2.5 rounded-full" style={{ background: LOC_COLORS[idx % LOC_COLORS.length] }} />
-                              <span className="text-gray-600">{stat?.locationName.split(' ').slice(-2).join(' ')}</span>
-                              <span className="font-bold text-gray-900">{v.count}</span>
-                              <span className="text-gray-400">({((v.count / b.total) * 100).toFixed(0)}%)</span>
-                            </div>
-                          )
-                        })}
-                      </div>
-
-                      {/* Recomendación */}
-                      <div className="mt-3 p-2.5 bg-gray-50 rounded-lg text-xs text-gray-600">
-                        <span className="font-semibold">Recomendación: </span>
-                        {!hasMalAsig
-                          ? `Asignar ${b.barrio} a ${locStats.find(s => s.locationId === dominant[0])?.locationName} (local dominante). Ajustar radio de ${minor.map(([id]) => locStats.find(s => s.locationId === id)?.locationName).join(', ')} para no cubrir este barrio.`
-                          : b.malAsignadosPct! > 0.5
-                            ? `Más del 50% de pedidos están más cerca de otro local. Considera reasignar este barrio.`
-                            : `Solape moderado. El local dominante es ${locStats.find(s => s.locationId === dominant[0])?.locationName}.`
-                        }
-                      </div>
-                    </Card>
+                    <div key={locId}
+                      style={{ width: `${(v.count/b.total)*100}%`, background: LOC_COLORS[idx % LOC_COLORS.length] }}
+                      title={`${locStats.find(s => s.locationId === locId)?.locationName}: ${v.count}`}
+                    />
                   )
                 })}
               </div>
 
-              {/* Simulador aquí también */}
-              <Card className="p-5 space-y-4">
-                <div className="flex items-center justify-between">
-                  <p className="font-semibold text-gray-800">Simulador de radios</p>
-                  <span className="text-xs text-gray-400">Ajusta para reducir solapes</span>
-                </div>
-                {zoneConfigs.map(z => {
-                  const idx = locationIndex(z.locationId)
-                  const stat = locStats.find(s => s.locationId === z.locationId)
-                  const sim = simResults.find(s => s.locationId === z.locationId)
+              {/* Detalle por local */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {entries.map(([locId, v]) => {
+                  const idx = locStats.findIndex(s => s.locationId === locId)
+                  const locName = locStats.find(s => s.locationId === locId)?.locationName || locId
+                  const esCercano = locId === b.localMasCercano
+                  const esDom = locId === b.localDominante
                   return (
-                    <div key={z.locationId} className="space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="w-3 h-3 rounded-full" style={{ background: LOC_COLORS[idx] }} />
-                          <span className="text-sm font-medium">{stat?.locationName || z.locationId}</span>
-                        </div>
-                        <span className="text-sm font-bold">{z.radiusKm.toFixed(1)} km</span>
+                    <div key={locId} className={`rounded-lg p-3 ${LOC_LIGHT[idx % LOC_LIGHT.length]} ${esCercano ? 'ring-1 ring-teal-400' : ''}`}>
+                      <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: LOC_COLORS[idx % LOC_COLORS.length] }} />
+                        <span className={`text-xs font-semibold ${LOC_TEXT[idx % LOC_TEXT.length]} truncate`}>{locName}</span>
+                        {esCercano && <span className="text-[9px] bg-teal-600 text-white px-1 py-0.5 rounded shrink-0">MÁS CERCA</span>}
+                        {esDom && <span className="text-[9px] bg-gray-700 text-white px-1 py-0.5 rounded shrink-0">DOMINANTE</span>}
                       </div>
-                      <input
-                        type="range" min={0.5} max={8} step={0.1}
-                        value={z.radiusKm}
-                        onChange={e => updateRadius(z.locationId, +e.target.value)}
-                        className="w-full accent-teal-600"
-                      />
-                      {sim && (
-                        <div className="flex gap-4 text-[11px]">
-                          <span className="text-green-700 font-medium">
-                            ✅ {sim.covered} pedidos ({(sim.coveredPct * 100).toFixed(0)}%) · €{sim.coveredAmount.toFixed(0)}
-                          </span>
-                          {sim.lost > 0 && (
-                            <span className="text-red-600 font-medium">
-                              ❌ {sim.lost} fuera · €{sim.lostAmount.toFixed(0)}
-                            </span>
-                          )}
-                        </div>
-                      )}
+                      <div className="space-y-0.5 text-[11px]">
+                        <div className="flex justify-between"><span className="text-gray-500">Pedidos</span><span className="font-bold">{v.count} ({((v.count/b.total)*100).toFixed(0)}%)</span></div>
+                        <div className="flex justify-between"><span className="text-gray-500">Importe</span><span>€{v.amount.toFixed(0)}</span></div>
+                        {v.distLinea > 0 && <>
+                          <div className="flex justify-between"><span className="text-gray-500">Línea recta</span><span>{v.distLinea.toFixed(1)} km</span></div>
+                          <div className="flex justify-between"><span className="text-gray-500">Recorrido est.</span><span className={`font-bold ${esCercano ? 'text-teal-700' : ''}`}>{v.distRuta.toFixed(1)} km</span></div>
+                        </>}
+                      </div>
                     </div>
                   )
                 })}
-              </Card>
-            </>
-          )}
-        </div>
-      )}
+              </div>
+
+              {/* Recomendación */}
+              <div className={`rounded-lg px-3 py-2.5 text-xs ${esBien ? 'bg-green-50 text-green-800' : 'bg-amber-50 text-amber-800'}`}>
+                {esBien
+                  ? `✅ ${dominanteNombre} es el local más cercano (${distCercano} km de recorrido estimado) y el dominante. Asignación correcta.`
+                  : `⚠️ ${b.pedidosMal} pedidos (€${b.importeMal.toFixed(0)}) están siendo servidos por ${dominanteNombre} (${distDominante} km) cuando ${cercanoNombre} está más cerca (${distCercano} km). Acción recomendada: activar ${cercanoNombre} en Glovo/Uber para este barrio o hablar con las plataformas para ajustar la zona de cobertura.`
+                }
+              </div>
+            </Card>
+          )
+        })}
+      </div>
+
+      <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-xs text-gray-600">
+        <p className="font-semibold text-gray-700 mb-1">Cómo actuar sobre los solapes</p>
+        <p>Los radios de 3.5 km los fijan las plataformas y no se pueden cambiar libremente. La vía correcta es entrar en el panel de partner de <strong>Glovo</strong> o <strong>Uber Eats</strong> y ajustar qué barrios cubre cada local en la configuración de zona de entrega. Para barrios frontera, contacta con tu gestor de cuenta en cada plataforma.</p>
+      </div>
     </div>
   )
 }
