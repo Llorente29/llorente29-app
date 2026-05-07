@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useApp } from './context/AppContext'
 import type { Page } from './types'
 import StaffPage from './pages/StaffPage'
@@ -12,10 +12,14 @@ import VentasAnalisisPage from './pages/VentasAnalisisPage'
 import PrediccionPersonalPage from './pages/PrediccionPersonalPage'
 import ZonasPedidoPage from './pages/ZonasPedidoPage'
 import KioskoFichajePage from './pages/KioskoFichajePage'
+import TrabajadorApp from './pages/trabajador/TrabajadorApp'
 import {
   DashboardPage, ScheduledPage, TemplatesPage,
   AuditsPage, HistoryPage, InventoryPage, TSpoonSettingsPage, LocationsPage
 } from './pages/OtherPages'
+
+const MODE_KEY = 'andy-app-mode-v1'
+type AppMode = 'gestor' | 'trabajador' | 'unset'
 
 const NAV: { id: Page; label: string; icon: string; section?: string }[] = [
   { id: 'dashboard',          label: 'Dashboard',           icon: '⊞' },
@@ -75,6 +79,54 @@ function renderPage(page: Page) {
     case 'tspoon_settings':   return <TSpoonSettingsPage />
     default:                  return <DashboardPage />
   }
+}
+
+function ModeSelector({ onSelect }: { onSelect: (mode: AppMode) => void }) {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-teal-50 via-white to-emerald-50 flex items-center justify-center p-4">
+      <div className="max-w-md w-full">
+        <div className="text-center mb-8">
+          <div className="w-20 h-20 mx-auto rounded-2xl bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center mb-4">
+            <span className="text-white font-bold text-4xl" style={{ fontFamily: 'Instrument Serif, serif' }}>A</span>
+          </div>
+          <h1 className="text-3xl font-bold text-gray-900" style={{ fontFamily: 'Instrument Serif, serif' }}>Andy App</h1>
+          <p className="text-sm text-gray-500 mt-2">¿Quién eres?</p>
+        </div>
+
+        <div className="space-y-3">
+          <button
+            onClick={() => onSelect('trabajador')}
+            className="w-full p-5 rounded-2xl border-2 border-gray-200 bg-white hover:border-teal-400 transition-all text-left active:scale-95"
+          >
+            <div className="flex items-center gap-4">
+              <span className="text-4xl">👷</span>
+              <div>
+                <p className="font-bold text-gray-900">Soy trabajador</p>
+                <p className="text-xs text-gray-500 mt-0.5">Fichar, ver mi horario, mis cosas</p>
+              </div>
+            </div>
+          </button>
+
+          <button
+            onClick={() => onSelect('gestor')}
+            className="w-full p-5 rounded-2xl border-2 border-gray-200 bg-white hover:border-blue-400 transition-all text-left active:scale-95"
+          >
+            <div className="flex items-center gap-4">
+              <span className="text-4xl">👔</span>
+              <div>
+                <p className="font-bold text-gray-900">Soy gestor / encargado</p>
+                <p className="text-xs text-gray-500 mt-0.5">Acceso completo a la gestión</p>
+              </div>
+            </div>
+          </button>
+        </div>
+
+        <p className="text-center text-xs text-gray-400 mt-6">
+          Tu elección se recordará. Puedes cambiar más tarde.
+        </p>
+      </div>
+    </div>
+  )
 }
 
 function Sidebar({ page, setPage, collapsed, setCollapsed }: {
@@ -160,10 +212,40 @@ function BottomNav({ page, setPage }: { page: Page; setPage: (p: Page) => void }
 export default function App() {
   const [page, setPage] = useState<Page>('dashboard')
   const [collapsed, setCollapsed] = useState(false)
+  const [mode, setMode] = useState<AppMode>('unset')
   const { tasks, incidents } = useApp()
   const pending = tasks.filter(t => t.status === 'pendiente' || t.status === 'vencida').length
   const critInc = incidents.filter(i => i.severity === 'critica' && i.status !== 'resuelta').length
 
+  // Cargar modo guardado
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(MODE_KEY) as AppMode | null
+      if (saved === 'gestor' || saved === 'trabajador') setMode(saved)
+    } catch { /* ignore */ }
+  }, [])
+
+  function selectMode(m: AppMode) {
+    localStorage.setItem(MODE_KEY, m)
+    setMode(m)
+  }
+
+  function exitTrabajadorMode() {
+    localStorage.removeItem(MODE_KEY)
+    setMode('unset')
+  }
+
+  // Modo no definido — pedir al usuario que elija
+  if (mode === 'unset') {
+    return <ModeSelector onSelect={selectMode} />
+  }
+
+  // Modo trabajador — UI específica del empleado
+  if (mode === 'trabajador') {
+    return <TrabajadorApp onExitMode={exitTrabajadorMode} />
+  }
+
+  // Modo gestor — la app completa de siempre
   // En el kiosko ocultamos sidebar y header — pantalla completa
   const isKiosko = page === 'kiosko_fichaje'
 
@@ -202,9 +284,13 @@ export default function App() {
                 ⚠️ {critInc} crítica{critInc > 1 ? 's' : ''}
               </span>
             )}
-            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-teal-400 to-emerald-600 flex items-center justify-center">
+            <button
+              onClick={exitTrabajadorMode}
+              title="Cambiar de modo"
+              className="w-7 h-7 rounded-full bg-gradient-to-br from-teal-400 to-emerald-600 flex items-center justify-center hover:opacity-90"
+            >
               <span className="text-white text-xs font-bold">A</span>
-            </div>
+            </button>
           </div>
         </header>
         <main className="p-4 sm:p-6 pb-24 lg:pb-6">
