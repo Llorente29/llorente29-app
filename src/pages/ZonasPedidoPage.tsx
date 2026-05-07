@@ -145,7 +145,7 @@ function MapaZonas({ records, locStats, zoneConfigs, locationIndex }: MapaZonasP
 }
 
 // ── Tabs ───────────────────────────────────────────────────────────────────
-type Tab = 'mapa' | 'barrios' | 'comparativa' | 'solape'
+type Tab = 'mapa' | 'barrios' | 'comparativa' | 'solape' | 'rentabilidad'
 
 // ── Página principal ───────────────────────────────────────────────────────
 export default function ZonasPedidoPage() {
@@ -371,10 +371,11 @@ export default function ZonasPedidoPage() {
   const sharedBarrios = barrioStats.filter(b => b.isShared)
 
   const TABS: { id: Tab; label: string; icon: string }[] = [
-    { id: 'mapa',        label: 'Mapa',        icon: '🗺️' },
-    { id: 'barrios',     label: 'Barrios',      icon: '📍' },
-    { id: 'comparativa', label: 'Comparativa',  icon: '📊' },
-    { id: 'solape',      label: 'Solape',       icon: '⚠️' },
+    { id: 'mapa',          label: 'Mapa',          icon: '🗺️' },
+    { id: 'barrios',       label: 'Barrios',        icon: '📍' },
+    { id: 'comparativa',   label: 'Comparativa',    icon: '📊' },
+    { id: 'solape',        label: 'Solape',         icon: '⚠️' },
+    { id: 'rentabilidad',  label: 'Rentabilidad',   icon: '💰' },
   ]
 
   return (
@@ -700,6 +701,13 @@ export default function ZonasPedidoPage() {
           {records.length === 0 ? <EmptyState /> : <SolapeAnalysis records={records} locStats={locStats} />}
         </div>
       )}
+
+      {/* ── TAB: RENTABILIDAD ── */}
+      {tab === 'rentabilidad' && (
+        <div className="space-y-4">
+          {records.length === 0 ? <EmptyState /> : <RentabilidadAnalysis records={records} locStats={locStats} />}
+        </div>
+      )}
     </div>
   )
 }
@@ -975,6 +983,283 @@ function SolapeAnalysis({ records, locStats }: { records: DeliveryRecord[]; locS
       <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-xs text-gray-600">
         <p className="font-semibold text-gray-700 mb-1">Cómo actuar sobre los solapes</p>
         <p>Los radios de 3.5 km los fijan las plataformas y no se pueden cambiar libremente. La vía correcta es entrar en el panel de partner de <strong>Glovo</strong> o <strong>Uber Eats</strong> y ajustar qué barrios cubre cada local en la configuración de zona de entrega. Para barrios frontera, contacta con tu gestor de cuenta en cada plataforma.</p>
+      </div>
+    </div>
+  )
+}
+
+// ── Cálculo de coste Jelp ─────────────────────────────────────────────────
+function calcJelpCost(distKmRuta: number): number {
+  if (distKmRuta <= 3) return 5.75
+  if (distKmRuta <= 5) return 5.95
+  // A partir de 5 km: €0.50 por cada 500m extra
+  const extra = Math.ceil((distKmRuta - 5) / 0.5) * 0.50
+  return 5.95 + extra
+}
+
+function RentabilidadAnalysis({ records, locStats }: { records: DeliveryRecord[]; locStats: LocationStats[] }) {
+  const [ticketMedio, setTicketMedio] = useState(20)
+  const [comisionGlovo, setComisionGlovo] = useState(30)
+  const [tarifaEnvio, setTarifaEnvio] = useState(4.50)  // IVA incluido cobrado al cliente
+  const [vista, setVista] = useState<'resumen' | 'pedidos'>('resumen')
+  const [locFiltro, setLocFiltro] = useState('todos')
+
+  // Todo sin IVA
+  // Envío cobrado al cliente (€4.50 IVA 10% incluido) → sin IVA
+  const envioSinIva = tarifaEnvio / 1.10
+
+  // Importe del pedido sin IVA (IVA alimentación 10%)
+  function importeSinIva(amount: number) { return amount / 1.10 }
+
+  // Calcular rentabilidad por pedido usando distancia haversine × factor urbano
+  const LOCAL_COORDS_RENT: Record<string, { lat: number; lng: number }> = {
+    'alcal':       { lat: 40.4346, lng: -3.6528 },
+    'carabanchel': { lat: 40.3912, lng: -3.7399 },
+    'castilla':    { lat: 40.4698, lng: -3.6928 },
+  }
+
+  function getLocCoords(name: string) {
+    const n = name.toLowerCase()
+    for (const [k, v] of Object.entries(LOCAL_COORDS_RENT)) {
+      if (n.includes(k)) return v
+    }
+    return null
+  }
+
+  const analisis = useMemo(() => {
+    return records
+      .filter(r => locFiltro === 'todos' || r.locationId === locFiltro)
+      .map(r => {
+        // Glovo aplica su comisión sobre el importe sin IVA
+        const importeBase = importeSinIva(r.amount)
+        const costoGlovo = importeBase * (comisionGlovo / 100)
+        let distKmLinea = 0
+        let distKmRuta = 0
+        let costoJelp = 5.95 // default si no hay coords
+
+        if (r.lat && r.lng) {
+          const lc = getLocCoords(r.locationName)
+          if (lc) {
+            const dLat = ((r.lat - lc.lat) * Math.PI) / 180
+            const dLng = ((r.lng - lc.lng) * Math.PI) / 180
+            const a = Math.sin(dLat/2)**2 + Math.cos(lc.lat*Math.PI/180)*Math.cos(r.lat*Math.PI/180)*Math.sin(dLng/2)**2
+            distKmLinea = 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
+            distKmRuta = distKmLinea * 1.40
+            costoJelp = calcJelpCost(distKmRuta)
+          }
+        }
+
+        // Coste neto Jelp = coste Jelp - ingreso envío sin IVA
+        const costoJelpNeto = costoJelp - envioSinIva
+        const ahorroVsGlovo = costoGlovo - costoJelpNeto
+        const rentable = costoJelpNeto <= costoGlovo
+
+        return { ...r, distKmLinea, distKmRuta, costoJelp, costoJelpNeto, costoGlovo, ahorroVsGlovo, rentable }
+      })
+      .sort((a, b) => a.ahorroVsGlovo - b.ahorroVsGlovo) // peores primero
+  }, [records, locFiltro, comisionGlovo])
+
+  const conCoords = analisis.filter(r => r.distKmLinea > 0)
+  const sinCoords = analisis.filter(r => r.distKmLinea === 0)
+  const rentables = conCoords.filter(r => r.rentable)
+  const noRentables = conCoords.filter(r => !r.rentable)
+  const totalAhorro = conCoords.reduce((s, r) => s + r.ahorroVsGlovo, 0)
+  const costoTotalJelp = conCoords.reduce((s, r) => s + r.costoJelp, 0)
+  const costoTotalGlovo = conCoords.reduce((s, r) => s + r.costoGlovo, 0)
+
+  // Resumen por rango de distancia
+  const rangos = [
+    { label: '0–3 km ruta', min: 0, max: 3, precio: '€5.75' },
+    { label: '3–5 km ruta', min: 3, max: 5, precio: '€5.95' },
+    { label: '5–6 km ruta', min: 5, max: 6, precio: '€6.45' },
+    { label: '6–7 km ruta', min: 6, max: 7, precio: '€6.95' },
+    { label: '>7 km ruta',  min: 7, max: 999, precio: '>€7.45' },
+  ]
+
+  return (
+    <div className="space-y-4">
+      {/* Config */}
+      <Card className="p-4">
+        <p className="text-sm font-semibold text-gray-700 mb-3">Parámetros de comparación</p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Envío cobrado cliente (€ con IVA 10%)</label>
+            <input type="number" value={tarifaEnvio} step="0.10" onChange={e => setTarifaEnvio(+e.target.value)}
+              className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm" />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Ticket medio (€)</label>
+            <input type="number" value={ticketMedio} onChange={e => setTicketMedio(+e.target.value)}
+              className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm" />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Comisión Glovo (%)</label>
+            <input type="number" value={comisionGlovo} onChange={e => setComisionGlovo(+e.target.value)}
+              className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm" />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Local</label>
+            <select value={locFiltro} onChange={e => setLocFiltro(e.target.value)}
+              className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm bg-white">
+              <option value="todos">Todos</option>
+              {locStats.map(s => <option key={s.locationId} value={s.locationId}>{s.locationName}</option>)}
+            </select>
+          </div>
+          <div className="flex items-end gap-1">
+            <button onClick={() => setVista('resumen')}
+              className={`flex-1 text-xs py-1.5 rounded-lg font-medium border transition-all ${vista === 'resumen' ? 'bg-teal-600 text-white border-teal-600' : 'border-gray-200 text-gray-600'}`}>
+              Resumen
+            </button>
+            <button onClick={() => setVista('pedidos')}
+              className={`flex-1 text-xs py-1.5 rounded-lg font-medium border transition-all ${vista === 'pedidos' ? 'bg-teal-600 text-white border-teal-600' : 'border-gray-200 text-gray-600'}`}>
+              Pedidos
+            </button>
+          </div>
+        </div>
+      </Card>
+
+      {/* KPIs */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { label: 'Coste total Jelp', value: `€${costoTotalJelp.toFixed(0)}`, color: 'text-blue-600', sub: `${conCoords.length} pedidos` },
+          { label: 'Coste si fuera Glovo', value: `€${costoTotalGlovo.toFixed(0)}`, color: 'text-red-600', sub: `${comisionGlovo}% comisión` },
+          { label: totalAhorro >= 0 ? 'Ahorro con Jelp' : 'Sobrecoste vs Glovo', value: `€${Math.abs(totalAhorro).toFixed(0)}`, color: totalAhorro >= 0 ? 'text-green-600' : 'text-red-600', sub: totalAhorro >= 0 ? '✅ Jelp más barato' : '❌ Glovo sería mejor' },
+          { label: 'Pedidos no rentables', value: noRentables.length.toString(), color: 'text-amber-600', sub: `${conCoords.length > 0 ? ((noRentables.length/conCoords.length)*100).toFixed(0) : 0}% del total` },
+        ].map(k => (
+          <Card key={k.label} className="p-4 text-center">
+            <p className={`text-2xl font-bold ${k.color}`}>{k.value}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{k.label}</p>
+            <p className="text-[10px] text-gray-300 mt-0.5">{k.sub}</p>
+          </Card>
+        ))}
+      </div>
+
+      {vista === 'resumen' && (
+        <>
+          {/* Tarifa Jelp por distancia */}
+          <Card className="p-4">
+            <p className="text-sm font-semibold text-gray-700 mb-3">Tarifa Jelp vs coste Glovo por distancia</p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-xs text-gray-500 uppercase border-b border-gray-200">
+                  <tr>
+                    <th className="text-left py-2">Distancia ruta</th>
+                    <th className="text-right py-2">Jelp bruto</th>
+                    <th className="text-right py-2">Ingreso envío</th>
+                    <th className="text-right py-2">Jelp neto</th>
+                    <th className="text-right py-2">Coste Glovo ({comisionGlovo}%)</th>
+                    <th className="text-right py-2">Pedidos</th>
+                    <th className="text-right py-2">¿Rentable?</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {rangos.map(rango => {
+                    const enRango = conCoords.filter(r => r.distKmRuta >= rango.min && r.distKmRuta < rango.max)
+                    const costoJelpBruto = rango.min === 0 ? 5.75 : rango.min === 3 ? 5.95 : rango.min === 5 ? 6.45 : rango.min === 6 ? 6.95 : 7.95
+                    const costoJelpNetoRango = costoJelpBruto - envioSinIva
+                    const costoGlovoRef = (ticketMedio / 1.10) * (comisionGlovo / 100)
+                    const esRentable = costoJelpNetoRango <= costoGlovoRef
+                    return (
+                      <tr key={rango.label} className={!esRentable ? 'bg-red-50' : ''}>
+                        <td className="py-2 font-medium text-gray-800">{rango.label}</td>
+                        <td className="py-2 text-right text-gray-500">{rango.precio}</td>
+                        <td className="py-2 text-right text-green-600">-€{envioSinIva.toFixed(2)}</td>
+                        <td className="py-2 text-right font-bold text-blue-700">€{costoJelpNetoRango.toFixed(2)}</td>
+                        <td className="py-2 text-right text-gray-600">€{costoGlovoRef.toFixed(2)}</td>
+                        <td className="py-2 text-right text-gray-700">{enRango.length}</td>
+                        <td className="py-2 text-right">
+                          {esRentable
+                            ? <span className="text-green-600 font-semibold">✅ Sí</span>
+                            : <span className="text-red-600 font-semibold">❌ No</span>
+                          }
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-3 p-3 bg-teal-50 rounded-lg text-xs text-teal-800">
+              <strong>Límite de rentabilidad:</strong> con ticket medio €{ticketMedio} y comisión Glovo {comisionGlovo}%, el reparto propio con Jelp es rentable hasta <strong>{(ticketMedio * comisionGlovo / 100 <= 5.75 ? 3 : ticketMedio * comisionGlovo / 100 <= 5.95 ? 5 : Math.floor(5 + ((ticketMedio * comisionGlovo / 100 - 5.95) / 0.50) * 0.5 * 10) / 10).toFixed(1)} km en ruta</strong> (≈{(ticketMedio * comisionGlovo / 100 <= 5.75 ? 2.1 : ticketMedio * comisionGlovo / 100 <= 5.95 ? 3.5 : 3.5 + ((ticketMedio * comisionGlovo / 100 - 5.95) / 0.50) * 0.35).toFixed(1)} km en línea recta).
+            </div>
+          </Card>
+
+          {/* Resumen por local */}
+          <Card className="p-4">
+            <p className="text-sm font-semibold text-gray-700 mb-3">Por local</p>
+            <div className="space-y-3">
+              {locStats.map((s, i) => {
+                const locRec = conCoords.filter(r => r.locationId === s.locationId)
+                if (!locRec.length) return null
+                const locAhorro = locRec.reduce((sum, r) => sum + r.ahorroVsGlovo, 0)
+                const locNoRent = locRec.filter(r => !r.rentable)
+                const distMedia = locRec.reduce((sum, r) => sum + r.distKmRuta, 0) / locRec.length
+                return (
+                  <div key={s.locationId} className="flex items-center gap-3 flex-wrap">
+                    <span className="w-3 h-3 rounded-full shrink-0" style={{ background: LOC_COLORS[i % LOC_COLORS.length] }} />
+                    <span className="text-sm font-medium text-gray-700 w-40">{s.locationName}</span>
+                    <span className="text-xs text-gray-500">{locRec.length} pedidos</span>
+                    <span className="text-xs text-gray-500">dist. media {distMedia.toFixed(1)} km</span>
+                    <span className={`text-xs font-semibold ${locAhorro >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {locAhorro >= 0 ? '+' : ''}€{locAhorro.toFixed(0)} vs Glovo
+                    </span>
+                    {locNoRent.length > 0 && (
+                      <span className="text-xs text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
+                        {locNoRent.length} no rentables
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </Card>
+        </>
+      )}
+
+      {vista === 'pedidos' && (
+        <Card className="p-0 overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+            <p className="text-sm font-semibold text-gray-700">Pedidos ordenados por rentabilidad (peores primero)</p>
+            {sinCoords.length > 0 && (
+              <span className="text-xs text-gray-400">{sinCoords.length} sin coords (excluidos)</span>
+            )}
+          </div>
+          <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-gray-50 text-gray-500 uppercase tracking-wide sticky top-0">
+                <tr>
+                  <th className="text-left px-4 py-2">Local</th>
+                  <th className="text-left px-4 py-2">Dirección</th>
+                  <th className="text-right px-3 py-2">Dist. ruta</th>
+                  <th className="text-right px-3 py-2">Importe</th>
+                  <th className="text-right px-3 py-2">Jelp neto</th>
+                  <th className="text-right px-3 py-2">Glovo</th>
+                  <th className="text-right px-3 py-2">Diferencia</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {analisis.filter(r => r.distKmLinea > 0).map((r, i) => (
+                  <tr key={i} className={r.rentable ? '' : 'bg-red-50'}>
+                    <td className="px-4 py-2 font-medium text-gray-700 whitespace-nowrap">{r.locationName.split(' ').slice(-2).join(' ')}</td>
+                    <td className="px-4 py-2 text-gray-500 max-w-[200px] truncate">{r.address || r.barrio}</td>
+                    <td className="px-3 py-2 text-right whitespace-nowrap">{r.distKmRuta.toFixed(1)} km</td>
+                    <td className="px-3 py-2 text-right">€{r.amount.toFixed(2)}</td>
+                    <td className="px-3 py-2 text-right font-medium text-blue-700">€{r.costoJelpNeto.toFixed(2)}</td>
+                    <td className="px-3 py-2 text-right text-gray-600">€{r.costoGlovo.toFixed(2)}</td>
+                    <td className={`px-3 py-2 text-right font-bold ${r.ahorroVsGlovo >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {r.ahorroVsGlovo >= 0 ? '+' : ''}€{r.ahorroVsGlovo.toFixed(2)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-xs text-gray-600">
+        <p className="font-semibold text-gray-700 mb-1">Nota metodológica</p>
+        <p>Todo calculado sin IVA. Importe pedido ÷ 1.10 (IVA alimentos 10%). Envío cobrado al cliente ÷ 1.10. Coste Jelp ya sin IVA según tarifa. Comisión Glovo sobre base imponible del pedido. Distancias estimadas línea recta × 1.40 (factor urbano Madrid).</p>
       </div>
     </div>
   )
