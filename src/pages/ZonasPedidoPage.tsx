@@ -1,5 +1,5 @@
 // src/pages/ZonasPedidoPage.tsx
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useApp } from '../context/AppContext'
 import { Button, Card } from '../components/ui'
 import type { DeliveryRecord, DeliveryZoneConfig } from '../types'
@@ -7,7 +7,7 @@ import {
   fetchWebhookRecords, enrichRecords, geocodeBarrios,
   saveRecords, loadRecords, saveZoneConfigs, loadZoneConfigs,
   computeBarrioStats, computeLocationStats, simulateRadius,
-  coordsForLocation, haversineKm,
+  coordsForLocation,
   type LocationStats, type BarrioStats, type RadiusSimResult,
 } from '../services/deliveryZones'
 
@@ -51,7 +51,7 @@ interface MapaZonasProps {
 }
 
 function MapaZonas({ records, locStats, zoneConfigs, locationIndex }: MapaZonasProps) {
-  const [hover, setHover] = useState<string | null>(null)
+  const [_hover, setHover] = useState<string | null>(null)
 
   // Cluster por barrio para no pintar 1271 puntos
   const clustered = (() => {
