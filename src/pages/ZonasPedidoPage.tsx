@@ -1061,7 +1061,6 @@ function RentabilidadAnalysis({ records, locStats }: { records: DeliveryRecord[]
 
   const conCoords = analisis.filter(r => r.distKmLinea > 0)
   const sinCoords = analisis.filter(r => r.distKmLinea === 0)
-  const rentables = conCoords.filter(r => r.rentable)
   const noRentables = conCoords.filter(r => !r.rentable)
   const totalAhorro = conCoords.reduce((s, r) => s + r.ahorroVsGlovo, 0)
   const costoTotalJelp = conCoords.reduce((s, r) => s + r.costoJelp, 0)
