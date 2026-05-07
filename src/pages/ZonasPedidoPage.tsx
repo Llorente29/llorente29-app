@@ -233,7 +233,6 @@ export default function ZonasPedidoPage() {
     const idxImporte = header.findIndex(h => h === 'Total' || h.toLowerCase() === 'total')
     const idxFuente  = header.findIndex(h => h === 'Fuente' || h.toLowerCase() === 'fuente')
     const idxFecha   = header.findIndex(h => h === 'Hora de creación' || h.toLowerCase().includes('creaci'))
-    const idxBrand   = header.findIndex(h => h === 'Marca virtual' || h.toLowerCase().includes('marca'))
 
     if (idxLocal < 0 || idxAddr < 0) {
       setError(`CSV no reconocido. Columnas encontradas: ${header.slice(0,5).join(', ')}`)
