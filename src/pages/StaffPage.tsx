@@ -17,7 +17,7 @@ function getScheduledMinutes(str: string) {
 }
 
 export default function StaffPage() {
-  const { staff, setStaff, locations, createEmployee } = useApp()
+  const { staff, locations, createEmployee, saveEmployee, removeEmployee } = useApp()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [locFilter, setLocFilter] = useState('todas')
@@ -43,10 +43,10 @@ export default function StaffPage() {
         </div>
         <Button
           size="sm"
-          onClick={() => {
+          onClick={async () => {
             if (locations.length === 0) return
             const emp = createEmployee(locations[0].id)
-            setStaff(prev => [emp, ...prev])
+            await saveEmployee(emp)
             setSelectedId(emp.id)
           }}
           disabled={locations.length === 0}
@@ -116,12 +116,12 @@ export default function StaffPage() {
         <EmployeeModal
           employee={staff.find(e => e.id === selectedId)!}
           onClose={() => setSelectedId(null)}
-          onSave={emp => {
-            setStaff(prev => prev.map(e => e.id === emp.id ? emp : e))
+          onSave={async emp => {
+            await saveEmployee(emp)
             setSelectedId(null)
           }}
-          onDelete={id => {
-            setStaff(prev => prev.filter(e => e.id !== id))
+          onDelete={async id => {
+            await removeEmployee(id)
             setSelectedId(null)
           }}
           locations={locations}
