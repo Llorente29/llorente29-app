@@ -272,10 +272,40 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations }: {
               </Select>
             </div>
             <div>
-              <Label>Local</Label>
+              <Label>Local principal</Label>
               <Select className="mt-1" value={emp.locationId} onChange={e => update('locationId', e.target.value)}>
                 {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
               </Select>
+            </div>
+            <div className="col-span-2">
+              <Label>Locales donde puede fichar</Label>
+              <p className="text-xs text-gray-400 mb-2">Si rota entre varios locales, marca todos. Si está vacío, solo podrá fichar en su local principal.</p>
+              <div className="flex flex-wrap gap-2 mt-1">
+                {locations.map(l => {
+                  const assigned = emp.assignedLocations || []
+                  const checked = assigned.includes(l.id)
+                  return (
+                    <label key={l.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm cursor-pointer transition-all ${checked ? 'bg-teal-50 border-teal-300 text-teal-700' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
+                      <input type="checkbox" checked={checked}
+                        onChange={e => {
+                          const next = e.target.checked
+                            ? [...assigned, l.id]
+                            : assigned.filter(x => x !== l.id)
+                          update('assignedLocations', next)
+                        }} />
+                      {l.name}
+                    </label>
+                  )
+                })}
+              </div>
+            </div>
+            <div>
+              <Label>PIN (4 dígitos)</Label>
+              <Input className="mt-1" type="text" inputMode="numeric" maxLength={4}
+                value={emp.pin || ''}
+                onChange={e => update('pin', e.target.value.replace(/\D/g, '').slice(0, 4))}
+                placeholder="0000" />
+              <p className="text-[10px] text-gray-400 mt-1">PIN para fichar en el kiosko. No compartir.</p>
             </div>
             <div className="col-span-2 flex items-center gap-3">
               <input type="checkbox" id="active" checked={emp.active} onChange={e => update('active', e.target.checked)} className="rounded" />
