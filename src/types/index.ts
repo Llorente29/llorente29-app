@@ -3,10 +3,12 @@ export type Page =
   | 'tasks' | 'scheduled' | 'templates' | 'incidents'
   | 'locations' | 'audits' | 'history' | 'tspoon'
   | 'inventory' | 'tspoon_settings' | 'ventas_analisis' | 'prediccion_personal'
-  | 'zonas_pedido'
+  | 'zonas_pedido' | 'kiosko_fichaje'
 
 export interface Location {
   id: string; name: string; address: string; phone: string; active: boolean
+  // Coordenadas para geofencing del kiosko
+  lat?: number; lng?: number
 }
 
 export interface DaySchedule { active: boolean; start: string; end: string }
@@ -20,6 +22,10 @@ export interface ClockEntry {
   id: string; type: 'entrada' | 'salida'; datetime: string; realDatetime?: string
   lat?: number; lng?: number; address?: string; scheduled?: string
   roundingApplied?: boolean; diffMinutes?: number
+  // Datos del fichaje en kiosko
+  source?: 'kiosko' | 'movil' | 'manual'
+  locationIdAtClock?: string         // local en el que fichó (puede no ser el principal)
+  photoDataUrl?: string              // foto opcional al fichar (base64)
 }
 
 export interface StaffDocument {
@@ -41,8 +47,11 @@ export interface Employee {
   schedule: string; weeklySchedule: WeeklySchedule; active: boolean; notes: string
   clockEntries: ClockEntry[]; documents: StaffDocument[]; vacations: Vacation[]
   formations: { id: string; name: string; date: string; expiry?: string; issuer?: string }[]
-  availability?: { lunes:string[]; martes:string[]; miercoles:string[]; jueves:string[]; viernes:string[]; sabado:string[]; domingo:string[] }  // 'manana'|'tarde'|'no_disponible'
-  hourBank?: number  // horas acumuladas en bolsa (puede ser negativo)
+  availability?: { lunes:string[]; martes:string[]; miercoles:string[]; jueves:string[]; viernes:string[]; sabado:string[]; domingo:string[] }
+  hourBank?: number
+  // === Campos para fichaje en kiosko/móvil ===
+  pin?: string                       // PIN de 4 dígitos para fichar
+  assignedLocations?: string[]       // locales donde puede fichar (si vacío, usa locationId)
 }
 
 export interface ChecklistItem {
@@ -125,24 +134,10 @@ export interface WeeklySchedulePlan {
   alerts?: any[]; adjustments?: string[]
 }
 
-export interface DeliveryRecord {
-  id: string
-  locationId: string
-  locationName: string
-  date: string
-  amount: number
-  source: string
-  barrio: string
-  lat?: number
-  lng?: number
-  address?: string
-  distanceKm?: number
-  closestLocationId?: string
-}
-
-export interface DeliveryZoneConfig {
-  locationId: string
-  radiusKm: number
-  lat: number
-  lng: number
+// === Configuración del kiosko ===
+export interface KioskoConfig {
+  locationId: string                 // local activo del kiosko
+  geofenceRadiusM: number            // radio en metros (default 200)
+  requirePhoto: boolean              // pedir foto al fichar (default false)
+  blockOutsideGeofence: boolean      // bloquear si fuera de zona (default true)
 }
