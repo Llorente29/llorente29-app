@@ -134,6 +134,18 @@ export interface WeeklySchedulePlan {
   alerts?: any[]; adjustments?: string[]
 }
 
+// === Zonas de Pedido ===
+export interface DeliveryRecord {
+  id: string; locationId: string; locationName: string
+  date: string; amount: number; source: string; barrio: string
+  lat?: number; lng?: number; address?: string
+  distanceKm?: number; closestLocationId?: string
+}
+
+export interface DeliveryZoneConfig {
+  locationId: string; radiusKm: number; lat: number; lng: number
+}
+
 // === Configuración del kiosko ===
 export interface KioskoConfig {
   locationId: string                 // local activo del kiosko
