@@ -988,8 +988,8 @@ function SolapeAnalysis({ records, locStats }: { records: DeliveryRecord[]; locS
   )
 }
 
-// ── Cálculo de coste Jelp ─────────────────────────────────────────────────
-function calcJelpCost(distKmRuta: number): number {
+// ── Cálculo de coste Rider ─────────────────────────────────────────────────
+function calcRiderCost(distKmRuta: number): number {
   if (distKmRuta <= 3) return 5.75
   if (distKmRuta <= 5) return 5.95
   // A partir de 5 km: €0.50 por cada 500m extra
@@ -1036,7 +1036,7 @@ function RentabilidadAnalysis({ records, locStats }: { records: DeliveryRecord[]
         const costoGlovoFull = importeBase * (comisionGlovoFull / 100)
         let distKmLinea = 0
         let distKmRuta = 0
-        let costoJelp = 5.95 // default si no hay coords
+        let costoRider = 5.95 // default si no hay coords
 
         if (r.lat && r.lng) {
           const lc = getLocCoords(r.locationName)
@@ -1046,17 +1046,17 @@ function RentabilidadAnalysis({ records, locStats }: { records: DeliveryRecord[]
             const a = Math.sin(dLat/2)**2 + Math.cos(lc.lat*Math.PI/180)*Math.cos(r.lat*Math.PI/180)*Math.sin(dLng/2)**2
             distKmLinea = 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
             distKmRuta = distKmLinea * 1.40
-            costoJelp = calcJelpCost(distKmRuta)
+            costoRider = calcRiderCost(distKmRuta)
           }
         }
 
-        // Coste neto Jelp = coste Jelp - ingreso envío sin IVA
-        const costoJelpNeto = costoJelp - envioSinIva
-        const ahorroVsGlovo = costoGlovo - costoJelpNeto
-        const ahorroVsGlovoFull = costoGlovoFull - costoJelpNeto
-        const rentable = costoJelpNeto <= costoGlovo
+        // Coste neto Rider = coste bruto - ingreso envío sin IVA
+        const costoRiderNeto = costoRider - envioSinIva
+        const ahorroVsGlovo = costoGlovo - costoRiderNeto
+        const ahorroVsGlovoFull = costoGlovoFull - costoRiderNeto
+        const rentable = costoRiderNeto <= costoGlovo
 
-        return { ...r, distKmLinea, distKmRuta, costoJelp, costoJelpNeto, costoGlovo, costoGlovoFull, ahorroVsGlovo, ahorroVsGlovoFull, rentable }
+        return { ...r, distKmLinea, distKmRuta, costoRider, costoRiderNeto, costoGlovo, costoGlovoFull, ahorroVsGlovo, ahorroVsGlovoFull, rentable }
       })
       .sort((a, b) => a.ahorroVsGlovo - b.ahorroVsGlovo) // peores primero
   }, [records, locFiltro, comisionGlovo])
@@ -1065,7 +1065,7 @@ function RentabilidadAnalysis({ records, locStats }: { records: DeliveryRecord[]
   const sinCoords = analisis.filter(r => r.distKmLinea === 0)
   const noRentables = conCoords.filter(r => !r.rentable)
   const totalAhorro = conCoords.reduce((s, r) => s + r.ahorroVsGlovo, 0)
-  const costoTotalJelp = conCoords.reduce((s, r) => s + r.costoJelp, 0)
+  const costoTotalRider = conCoords.reduce((s, r) => s + r.costoRider, 0)
   const costoTotalGlovo = conCoords.reduce((s, r) => s + r.costoGlovo, 0)
 
   // Resumen por rango de distancia
@@ -1127,9 +1127,9 @@ function RentabilidadAnalysis({ records, locStats }: { records: DeliveryRecord[]
       {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Coste total Jelp', value: `€${costoTotalJelp.toFixed(0)}`, color: 'text-blue-600', sub: `${conCoords.length} pedidos` },
+          { label: 'Coste total Rider', value: `€${costoTotalRider.toFixed(0)}`, color: 'text-blue-600', sub: `${conCoords.length} pedidos` },
           { label: 'Coste si fuera Glovo', value: `€${costoTotalGlovo.toFixed(0)}`, color: 'text-red-600', sub: `${comisionGlovo}% comisión` },
-          { label: totalAhorro >= 0 ? 'Ahorro con Jelp' : 'Sobrecoste vs Glovo', value: `€${Math.abs(totalAhorro).toFixed(0)}`, color: totalAhorro >= 0 ? 'text-green-600' : 'text-red-600', sub: totalAhorro >= 0 ? '✅ Jelp más barato' : '❌ Glovo sería mejor' },
+          { label: totalAhorro >= 0 ? 'Ahorro con reparto propio' : 'Sobrecoste vs Glovo', value: `€${Math.abs(totalAhorro).toFixed(0)}`, color: totalAhorro >= 0 ? 'text-green-600' : 'text-red-600', sub: totalAhorro >= 0 ? '✅ Rider más barato' : '❌ Glovo sería mejor' },
           { label: 'Pedidos no rentables', value: noRentables.length.toString(), color: 'text-amber-600', sub: `${conCoords.length > 0 ? ((noRentables.length/conCoords.length)*100).toFixed(0) : 0}% del total` },
         ].map(k => (
           <Card key={k.label} className="p-4 text-center">
@@ -1142,17 +1142,17 @@ function RentabilidadAnalysis({ records, locStats }: { records: DeliveryRecord[]
 
       {vista === 'resumen' && (
         <>
-          {/* Tarifa Jelp por distancia */}
+          {/* Tarifa Rider por distancia */}
           <Card className="p-4">
-            <p className="text-sm font-semibold text-gray-700 mb-3">Tarifa Jelp vs coste Glovo por distancia</p>
+            <p className="text-sm font-semibold text-gray-700 mb-3">Tarifa Rider vs coste Glovo por distancia</p>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="text-xs text-gray-500 uppercase border-b border-gray-200">
                   <tr>
                     <th className="text-left py-2">Distancia ruta</th>
-                    <th className="text-right py-2">Jelp bruto</th>
+                    <th className="text-right py-2">Coste Rider bruto</th>
                     <th className="text-right py-2">Ingreso envío</th>
-                    <th className="text-right py-2">Jelp neto</th>
+                    <th className="text-right py-2">Coste Rider neto</th>
                     <th className="text-right py-2">Glovo {comisionGlovo}% (propio)</th>
                     <th className="text-right py-2">Glovo {comisionGlovoFull}% (Glovo rep.)</th>
                     <th className="text-right py-2">Pedidos</th>
@@ -1161,18 +1161,18 @@ function RentabilidadAnalysis({ records, locStats }: { records: DeliveryRecord[]
                 <tbody className="divide-y divide-gray-100">
                   {rangos.map(rango => {
                     const enRango = conCoords.filter(r => r.distKmRuta >= rango.min && r.distKmRuta < rango.max)
-                    const costoJelpBruto = rango.min === 0 ? 5.75 : rango.min === 3 ? 5.95 : rango.min === 5 ? 6.45 : rango.min === 6 ? 6.95 : 7.95
-                    const costoJelpNetoRango = costoJelpBruto - envioSinIva
+                    const costoRiderBruto = rango.min === 0 ? 5.75 : rango.min === 3 ? 5.95 : rango.min === 5 ? 6.45 : rango.min === 6 ? 6.95 : 7.95
+                    const costoRiderNetoRango = costoRiderBruto - envioSinIva
                     const costoGlovoRef = (ticketMedio / 1.10) * (comisionGlovo / 100)
                     const costoGlovoFullRef = (ticketMedio / 1.10) * (comisionGlovoFull / 100)
-                    const esRentableVsPropio = costoJelpNetoRango <= costoGlovoRef
-                    const esRentableVsFull = costoJelpNetoRango <= costoGlovoFullRef
+                    const esRentableVsPropio = costoRiderNetoRango <= costoGlovoRef
+                    const esRentableVsFull = costoRiderNetoRango <= costoGlovoFullRef
                     return (
                       <tr key={rango.label} className={!esRentableVsPropio ? 'bg-red-50' : !esRentableVsFull ? 'bg-amber-50' : ''}>
                         <td className="py-2 font-medium text-gray-800">{rango.label}</td>
                         <td className="py-2 text-right text-gray-500">{rango.precio}</td>
                         <td className="py-2 text-right text-green-600">-€{envioSinIva.toFixed(2)}</td>
-                        <td className="py-2 text-right font-bold text-blue-700">€{costoJelpNetoRango.toFixed(2)}</td>
+                        <td className="py-2 text-right font-bold text-blue-700">€{costoRiderNetoRango.toFixed(2)}</td>
                         <td className="py-2 text-right">
                           <span className={esRentableVsPropio ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'}>
                             €{costoGlovoRef.toFixed(2)} {esRentableVsPropio ? '✅' : '❌'}
@@ -1191,7 +1191,25 @@ function RentabilidadAnalysis({ records, locStats }: { records: DeliveryRecord[]
               </table>
             </div>
             <div className="mt-3 p-3 bg-teal-50 rounded-lg text-xs text-teal-800">
-              <strong>Límite de rentabilidad:</strong> con ticket medio €{ticketMedio} y comisión Glovo {comisionGlovo}%, el reparto propio con Jelp es rentable hasta <strong>{(ticketMedio * comisionGlovo / 100 <= 5.75 ? 3 : ticketMedio * comisionGlovo / 100 <= 5.95 ? 5 : Math.floor(5 + ((ticketMedio * comisionGlovo / 100 - 5.95) / 0.50) * 0.5 * 10) / 10).toFixed(1)} km en ruta</strong> (≈{(ticketMedio * comisionGlovo / 100 <= 5.75 ? 2.1 : ticketMedio * comisionGlovo / 100 <= 5.95 ? 3.5 : 3.5 + ((ticketMedio * comisionGlovo / 100 - 5.95) / 0.50) * 0.35).toFixed(1)} km en línea recta).
+              {(() => {
+                // Coste Rider neto = Coste Rider bruto - envioSinIva ≤ costoGlovoRef
+                // Coste Rider bruto ≤ costoGlovoRef + envioSinIva
+                const costoGlovoRef = (ticketMedio / 1.10) * (comisionGlovo / 100)
+                const maxRiderBruto = costoGlovoRef + envioSinIva
+                let limiteKm = 0
+                let limiteLabel = ''
+                if (maxRiderBruto >= 5.75 && maxRiderBruto < 5.95) { limiteKm = 3; limiteLabel = '3.0' }
+                else if (maxRiderBruto >= 5.95 && maxRiderBruto < 6.45) { limiteKm = 5; limiteLabel = '5.0' }
+                else if (maxRiderBruto >= 6.45 && maxRiderBruto < 6.95) { limiteKm = 5.5; limiteLabel = '5.5' }
+                else if (maxRiderBruto >= 6.95 && maxRiderBruto < 7.45) { limiteKm = 6.5; limiteLabel = '6.5' }
+                else if (maxRiderBruto >= 7.45 && maxRiderBruto < 7.95) { limiteKm = 7.5; limiteLabel = '7.5' }
+                else if (maxRiderBruto >= 7.95) { limiteKm = 99; limiteLabel = '>8' }
+                else { limiteKm = 0; limiteLabel = '<3' }
+                const limiteLineal = (limiteKm / 1.40).toFixed(1)
+                return limiteKm >= 99
+                  ? <span>✅ <strong>Rentable a cualquier distancia</strong> con estos parámetros. Coste Rider neto (€{(5.95 - envioSinIva).toFixed(2)}) siempre por debajo de Glovo {comisionGlovo}% (€{costoGlovoRef.toFixed(2)}).</span>
+                  : <span><strong>Límite de rentabilidad vs Glovo {comisionGlovo}%:</strong> rentable hasta <strong>{limiteLabel} km en ruta</strong> (≈{limiteLineal} km línea recta). A partir de ahí Glovo {comisionGlovo}% sería más barato.</span>
+              })()}
             </div>
           </Card>
 
@@ -1243,7 +1261,7 @@ function RentabilidadAnalysis({ records, locStats }: { records: DeliveryRecord[]
                   <th className="text-left px-4 py-2">Dirección</th>
                   <th className="text-right px-3 py-2">Dist. ruta</th>
                   <th className="text-right px-3 py-2">Importe</th>
-                  <th className="text-right px-3 py-2">Jelp neto</th>
+                  <th className="text-right px-3 py-2">Coste Rider neto</th>
                   <th className="text-right px-3 py-2">Glovo {comisionGlovo}%</th>
                   <th className="text-right px-3 py-2">Glovo {comisionGlovoFull}%</th>
                   <th className="text-right px-3 py-2">Ahorro</th>
@@ -1256,7 +1274,7 @@ function RentabilidadAnalysis({ records, locStats }: { records: DeliveryRecord[]
                     <td className="px-4 py-2 text-gray-500 max-w-[200px] truncate">{r.address || r.barrio}</td>
                     <td className="px-3 py-2 text-right whitespace-nowrap">{r.distKmRuta.toFixed(1)} km</td>
                     <td className="px-3 py-2 text-right">€{r.amount.toFixed(2)}</td>
-                    <td className="px-3 py-2 text-right font-medium text-blue-700">€{r.costoJelpNeto.toFixed(2)}</td>
+                    <td className="px-3 py-2 text-right font-medium text-blue-700">€{r.costoRiderNeto.toFixed(2)}</td>
                     <td className="px-3 py-2 text-right text-gray-600">€{r.costoGlovo.toFixed(2)}</td>
                     <td className="px-3 py-2 text-right text-gray-500">€{r.costoGlovoFull.toFixed(2)}</td>
                     <td className={`px-3 py-2 text-right font-bold ${r.ahorroVsGlovo >= 0 ? 'text-green-600' : 'text-red-600'}`}>
@@ -1272,7 +1290,7 @@ function RentabilidadAnalysis({ records, locStats }: { records: DeliveryRecord[]
 
       <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-xs text-gray-600">
         <p className="font-semibold text-gray-700 mb-1">Nota metodológica</p>
-        <p>Todo calculado sin IVA. Importe pedido ÷ 1.10 (IVA alimentos 10%). Envío cobrado al cliente ÷ 1.10. Coste Jelp ya sin IVA según tarifa. Comisión Glovo sobre base imponible del pedido. Distancias estimadas línea recta × 1.40 (factor urbano Madrid).</p>
+        <p>Todo calculado sin IVA. Importe pedido ÷ 1.10 (IVA alimentos 10%). Envío cobrado al cliente ÷ 1.10. Coste Rider ya sin IVA según tarifa. Comisión Glovo sobre base imponible del pedido. Distancias estimadas línea recta × 1.40 (factor urbano Madrid).</p>
       </div>
     </div>
   )
