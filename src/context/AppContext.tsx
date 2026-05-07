@@ -1,5 +1,12 @@
-import React, { createContext, useContext, useState, useEffect } from 'react'
-import type { Location, Employee, Task, Template, Incident, Audit, NotifConfig, WeeklySchedule, WeeklySchedulePlan } from '../types'
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react'
+import type { Location, Employee, Task, Template, Incident, Audit, NotifConfig, WeeklySchedule, WeeklySchedulePlan, ClockEntry } from '../types'
+import {
+  isSupabaseEnabled,
+  fetchLocations, upsertLocation, deleteLocation,
+  fetchEmployees, upsertEmployee, deleteEmployee,
+  fetchClockEntries, insertClockEntry,
+  subscribeToChanges,
+} from '../services/supabaseSync'
 
 const DEFAULT_SCHEDULE: WeeklySchedule = {
   lunes: { active: true, start: '09:00', end: '17:00' },
@@ -99,6 +106,16 @@ interface AppContextType {
   schedules: WeeklySchedulePlan[]; setSchedules: React.Dispatch<React.SetStateAction<WeeklySchedulePlan[]>>
   createEmployee: (locationId: string) => Employee
   defaultSchedule: WeeklySchedule
+  // Estado de sincronización
+  syncing: boolean
+  cloudEnabled: boolean
+  lastSync: Date | null
+  // Acciones que sincronizan con Supabase
+  saveEmployee: (e: Employee) => Promise<void>
+  removeEmployee: (id: string) => Promise<void>
+  saveLocation: (l: Location) => Promise<void>
+  removeLocation: (id: string) => Promise<void>
+  addClockEntry: (employeeId: string, entry: ClockEntry) => Promise<void>
 }
 
 const AppContext = createContext<AppContextType | null>(null)
@@ -118,6 +135,56 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [notifConfig, setNotifConfig] = useState<NotifConfig>(saved?.notifConfig || DEFAULT_NOTIF)
   const [schedules, setSchedules] = useState<WeeklySchedulePlan[]>(saved?.schedules || [])
 
+  const [syncing, setSyncing] = useState(false)
+  const [lastSync, setLastSync] = useState<Date | null>(null)
+
+  // ─── Sincronización con Supabase ───────────────────────────────────────
+  const syncFromCloudRef = useRef(async () => {})
+
+  syncFromCloudRef.current = async () => {
+    if (!isSupabaseEnabled) return
+    setSyncing(true)
+    try {
+      const [cloudLocs, cloudEmps, cloudClocks] = await Promise.all([
+        fetchLocations(),
+        fetchEmployees(),
+        fetchClockEntries(),
+      ])
+      if (cloudLocs) setLocations(cloudLocs)
+      if (cloudEmps && cloudClocks) {
+        // Adjuntar fichajes a sus empleados
+        const byEmp = new Map<string, ClockEntry[]>()
+        for (const { employeeId, entry } of cloudClocks) {
+          if (!byEmp.has(employeeId)) byEmp.set(employeeId, [])
+          byEmp.get(employeeId)!.push(entry)
+        }
+        const enriched = cloudEmps.map(e => ({
+          ...e,
+          clockEntries: byEmp.get(e.id) || [],
+        }))
+        setStaff(enriched)
+      }
+      setLastSync(new Date())
+    } catch (e) {
+      console.error('Error sincronizando desde Supabase:', e)
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  // Carga inicial + suscripción a cambios en tiempo real
+  useEffect(() => {
+    if (!isSupabaseEnabled) return
+    syncFromCloudRef.current()
+    const unsub = subscribeToChanges(
+      () => syncFromCloudRef.current(),
+      () => syncFromCloudRef.current(),
+      () => syncFromCloudRef.current(),
+    )
+    return unsub
+  }, [])
+
+  // Persistir todo en localStorage como cache local
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
@@ -125,6 +192,61 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }))
     } catch { console.warn('localStorage full') }
   }, [locations, staff, tasks, templates, incidents, audits, notifConfig, schedules])
+
+  // ─── Acciones que escriben a Supabase ──────────────────────────────────
+
+  const saveEmployee = async (e: Employee) => {
+    // Actualización optimista local
+    setStaff(prev => {
+      const idx = prev.findIndex(p => p.id === e.id)
+      if (idx >= 0) {
+        const copy = [...prev]; copy[idx] = e; return copy
+      }
+      return [...prev, e]
+    })
+    if (isSupabaseEnabled) {
+      const result = await upsertEmployee(e)
+      if (result && result.id !== e.id) {
+        // Supabase asignó un id nuevo (UUID), actualizamos localmente
+        setStaff(prev => prev.map(p => p.id === e.id ? { ...result, clockEntries: p.clockEntries } : p))
+      }
+    }
+  }
+
+  const removeEmployee = async (id: string) => {
+    setStaff(prev => prev.filter(p => p.id !== id))
+    if (isSupabaseEnabled) await deleteEmployee(id)
+  }
+
+  const saveLocation = async (l: Location) => {
+    setLocations(prev => {
+      const idx = prev.findIndex(p => p.id === l.id)
+      if (idx >= 0) {
+        const copy = [...prev]; copy[idx] = l; return copy
+      }
+      return [...prev, l]
+    })
+    if (isSupabaseEnabled) {
+      const result = await upsertLocation(l)
+      if (result && result.id !== l.id) {
+        setLocations(prev => prev.map(p => p.id === l.id ? result : p))
+      }
+    }
+  }
+
+  const removeLocation = async (id: string) => {
+    setLocations(prev => prev.filter(p => p.id !== id))
+    if (isSupabaseEnabled) await deleteLocation(id)
+  }
+
+  const addClockEntry = async (employeeId: string, entry: ClockEntry) => {
+    setStaff(prev => prev.map(e =>
+      e.id === employeeId
+        ? { ...e, clockEntries: [...(e.clockEntries || []), entry] }
+        : e
+    ))
+    if (isSupabaseEnabled) await insertClockEntry(employeeId, entry)
+  }
 
   const createEmployee = (locationId: string): Employee => ({
     id: `s-${Date.now()}`, name: '', dni: '', phone: '', email: '', photo: '',
@@ -141,6 +263,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       templates, setTemplates, incidents, setIncidents, audits, setAudits,
       notifConfig, setNotifConfig, schedules, setSchedules,
       createEmployee, defaultSchedule: DEFAULT_SCHEDULE,
+      syncing, cloudEnabled: isSupabaseEnabled, lastSync,
+      saveEmployee, removeEmployee, saveLocation, removeLocation, addClockEntry,
     }}>
       {children}
     </AppContext.Provider>
