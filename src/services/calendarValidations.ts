@@ -241,6 +241,56 @@ export function validatePlan(ctx: ValidateContext): ValidationIssue[] {
     }
   }
 
+
+  // ── Regla CRÍTICA: V/S/D necesitan mínimo 3 trabajadores cubriendo 20:00–cierre ──
+  // Cuenta empleados asignados a turnos que cubran las 20:00–00:15 ese día.
+  // Cualquier turno cuya franja cruce las 20:00 cuenta (T2 14:45-00:15, T3 16:45-00:15,
+  // T1+T3 que vuelve a las 19:45-00:15).
+  for (const d of ctx.weekDays) {
+    const dayOfWeek = new Date(d + 'T00:00:00').getDay()
+    const isVSD = dayOfWeek === 5 || dayOfWeek === 6 || dayOfWeek === 0
+    if (!isVSD) continue
+
+    let coveringClose = 0
+    for (const a of ctx.assignments) {
+      if (a.date !== d || !a.shiftTypeId) continue
+      const t = typesById.get(a.shiftTypeId)
+      if (!t || t.isOff) continue
+
+      // Calcular si el turno cubre las 20:00 (1200 min desde 00:00)
+      // Tramo 1
+      if (t.startTime && t.endTime) {
+        const s1 = (() => { const [h,m] = t.startTime.split(':').map(Number); return h*60+m })()
+        let e1 = (() => { const [h,m] = t.endTime.split(':').map(Number); return h*60+m })()
+        if (e1 <= s1) e1 += 24 * 60
+        if (s1 <= 20 * 60 && e1 >= 20 * 60 + 15) {
+          coveringClose++
+          continue
+        }
+      }
+      // Tramo 2 (turno partido)
+      if (t.isSplit && t.split2Start && t.split2End) {
+        const s2 = (() => { const [h,m] = t.split2Start!.split(':').map(Number); return h*60+m })()
+        let e2 = (() => { const [h,m] = t.split2End!.split(':').map(Number); return h*60+m })()
+        if (e2 <= s2) e2 += 24 * 60
+        if (s2 <= 20 * 60 && e2 >= 20 * 60 + 15) {
+          coveringClose++
+        }
+      }
+    }
+
+    if (coveringClose < 3) {
+      const dayLabel = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'][dayOfWeek]
+      issues.push({
+        level: coveringClose === 0 ? 'error' : coveringClose === 1 ? 'error' : 'warning',
+        code: 'min_close_coverage',
+        title: `Cobertura 20–cierre insuficiente (${dayLabel})`,
+        description: `${dayLabel} ${d}: solo ${coveringClose}/3 trabajadores cubriendo de 20:00 al cierre. V/S/D requiere mínimo 3.`,
+        date: d,
+      })
+    }
+  }
+
   return issues
 }
 
