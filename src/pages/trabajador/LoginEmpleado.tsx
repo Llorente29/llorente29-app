@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useApp } from '../../context/AppContext'
 import { Card } from '../../components/ui'
+import Logo from '../../components/Logo'
 import type { Employee } from '../../types'
 
 interface Props {
@@ -38,14 +39,11 @@ export default function LoginEmpleado({ onLogin, onBackToSelector }: Props) {
 
   if (!selectedEmp) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-teal-50 via-white to-emerald-50 p-4">
+      <div className="min-h-screen bg-gradient-to-br from-[#F5E9D9] via-white to-[#F5E9D9] p-4">
         <div className="max-w-md mx-auto pt-6">
           <div className="text-center mb-6">
-            <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center mb-3">
-              <span className="text-white font-bold text-3xl" style={{ fontFamily: 'Instrument Serif, serif' }}>A</span>
-            </div>
-            <h1 className="text-2xl font-bold text-gray-900" style={{ fontFamily: 'Instrument Serif, serif' }}>Andy App</h1>
-            <p className="text-sm text-gray-500 mt-1">Pulsa tu nombre para entrar</p>
+            <Logo size="xl" withBg className="mb-3" />
+            <p className="text-sm text-gray-500 mt-3">Pulsa tu nombre para entrar</p>
           </div>
 
           <input
@@ -53,7 +51,7 @@ export default function LoginEmpleado({ onLogin, onBackToSelector }: Props) {
             placeholder="Buscar mi nombre..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-base mb-4 focus:outline-none focus:border-teal-400"
+            className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-base mb-4 focus:outline-none focus:border-[#7C1A1A]"
           />
 
           {employees.length === 0 ? (
@@ -68,7 +66,7 @@ export default function LoginEmpleado({ onLogin, onBackToSelector }: Props) {
                 <button
                   key={e.id}
                   onClick={() => setSelectedEmp(e)}
-                  className="w-full p-4 rounded-2xl border-2 border-gray-200 bg-white hover:border-teal-400 transition-all text-left active:scale-95"
+                  className="w-full p-4 rounded-2xl border-2 border-gray-200 bg-white hover:border-[#7C1A1A] transition-all text-left active:scale-95"
                 >
                   <p className="font-semibold text-gray-900">{e.name || 'Sin nombre'}</p>
                   <p className="text-xs text-gray-400 mt-0.5">{e.position || '—'}</p>
@@ -90,7 +88,7 @@ export default function LoginEmpleado({ onLogin, onBackToSelector }: Props) {
 
   // Pantalla de PIN
   return (
-    <div className="min-h-screen bg-gradient-to-br from-teal-50 via-white to-emerald-50 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-[#F5E9D9] via-white to-[#F5E9D9] p-4">
       <div className="max-w-sm mx-auto pt-8">
         <Card className="p-6 text-center">
           <p className="text-xs text-gray-400 uppercase tracking-wide">Hola</p>
@@ -101,7 +99,7 @@ export default function LoginEmpleado({ onLogin, onBackToSelector }: Props) {
             {[0, 1, 2, 3].map(i => (
               <span key={i} className={`w-4 h-4 rounded-full transition-all ${
                 error ? 'bg-red-400' :
-                pin.length > i ? 'bg-teal-600' : 'bg-gray-200'
+                pin.length > i ? 'bg-[#7C1A1A]' : 'bg-gray-200'
               }`} />
             ))}
           </div>
@@ -113,7 +111,7 @@ export default function LoginEmpleado({ onLogin, onBackToSelector }: Props) {
               <button
                 key={d}
                 onClick={() => { if (pin.length < 4) { setPin(p => p + d); setError('') } }}
-                className="h-16 rounded-xl text-2xl font-semibold bg-white border-2 border-gray-200 text-gray-900 hover:border-teal-400 hover:bg-teal-50 transition-all active:scale-95"
+                className="h-16 rounded-xl text-2xl font-semibold bg-white border-2 border-gray-200 text-gray-900 hover:border-[#7C1A1A] hover:bg-[#F5E9D9] transition-all active:scale-95"
               >
                 {d}
               </button>
@@ -126,7 +124,7 @@ export default function LoginEmpleado({ onLogin, onBackToSelector }: Props) {
             </button>
             <button
               onClick={() => { if (pin.length < 4) { setPin(p => p + '0'); setError('') } }}
-              className="h-16 rounded-xl text-2xl font-semibold bg-white border-2 border-gray-200 text-gray-900 hover:border-teal-400 hover:bg-teal-50 active:scale-95"
+              className="h-16 rounded-xl text-2xl font-semibold bg-white border-2 border-gray-200 text-gray-900 hover:border-[#7C1A1A] hover:bg-[#F5E9D9] active:scale-95"
             >
               0
             </button>
