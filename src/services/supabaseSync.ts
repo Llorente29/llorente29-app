@@ -3,7 +3,7 @@
 // Si Supabase no está configurado, las funciones devuelven null/false silenciosamente.
 
 import { supabase, isSupabaseEnabled } from '../lib/supabase'
-import type { Location, Employee, ClockEntry } from '../types'
+import type { Location, Employee, ClockEntry, ShiftPeriod, RestPattern } from '../types'
 
 // ─── LOCATIONS ────────────────────────────────────────────────────────────
 
@@ -88,6 +88,10 @@ interface EmployeeRow {
   weekly_schedule: unknown
   availability: unknown
   hour_bank: number | null
+  // === Campos del scheduler (sub-fase 3.2) ===
+  shift_code: string | null
+  shift_period: ShiftPeriod | null
+  rest_pattern: RestPattern | null
 }
 
 function rowToEmployee(r: EmployeeRow): Employee {
@@ -128,6 +132,10 @@ function rowToEmployee(r: EmployeeRow): Employee {
     documents: [],
     vacations: [],
     formations: [],
+    // === Campos del scheduler ===
+    shiftCode: r.shift_code || undefined,
+    shiftPeriod: r.shift_period || undefined,
+    restPattern: r.rest_pattern || undefined,
   }
 }
 
@@ -159,6 +167,10 @@ function employeeToRow(e: Employee): Partial<EmployeeRow> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     availability: e.availability as any,
     hour_bank: e.hourBank ?? 0,
+    // === Campos del scheduler ===
+    shift_code: e.shiftCode || null,
+    shift_period: e.shiftPeriod || null,
+    rest_pattern: e.restPattern || null,
   }
 }
 
