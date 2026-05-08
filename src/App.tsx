@@ -8,6 +8,7 @@ import InformesPage from './pages/InformesPage'
 import TasksPage from './pages/TasksPage'
 import IncidentsPage from './pages/IncidentsPage'
 import CalendarioPage from './pages/CalendarioPage'
+import PlantillaTurnosPage from './pages/PlantillaTurnosPage'
 import TSpoonPage from './pages/TSpoonPage'
 import VentasAnalisisPage from './pages/VentasAnalisisPage'
 import PrediccionPersonalPage from './pages/PrediccionPersonalPage'
@@ -35,6 +36,7 @@ const NAV: { id: Page; label: string; icon: string; section?: string }[] = [
   { id: 'solicitudes_pendientes', label: 'Solicitudes',     icon: '📨' },
   { id: 'turnos_abiertos',    label: 'Turnos abiertos',     icon: '🪑' },
   { id: 'calendario',         label: 'Calendario',          icon: '📅' },
+  { id: 'plantilla_turnos',   label: 'Plantilla turnos',    icon: '🗂️' },
   { id: 'informes_personal',  label: 'Informes Gestoría',   icon: '📄' },
   { id: 'tasks',              label: 'Tareas',              icon: '✅', section: 'Operaciones' },
   { id: 'scheduled',          label: 'Programadas',         icon: '🔁' },
@@ -57,7 +59,9 @@ const PAGE_TITLES: Record<Page, string> = {
   solicitudes_pendientes: 'Solicitudes pendientes',
   ahora_mismo: 'Ahora mismo',
   turnos_abiertos: 'Turnos abiertos',
-  calendario: 'Calendario de Horarios', informes_personal: 'Informes Gestoría',
+  calendario: 'Calendario de Horarios',
+  plantilla_turnos: 'Plantilla de turnos',
+  informes_personal: 'Informes Gestoría',
   tasks: 'Tareas', scheduled: 'Programadas', templates: 'Plantillas',
   incidents: 'Incidencias', locations: 'Locales', audits: 'Auditorías',
   history: 'Historial', tspoon: 'Fichas Técnicas', inventory: 'Inventario',
@@ -77,6 +81,7 @@ function renderPage(page: Page) {
     case 'ahora_mismo':       return <AhoraMismoPage />
     case 'turnos_abiertos':   return <TurnosAbiertosPage />
     case 'calendario':        return <CalendarioPage />
+    case 'plantilla_turnos':  return <PlantillaTurnosPage />
     case 'informes_personal': return <InformesPage />
     case 'tasks':             return <TasksPage />
     case 'scheduled':         return <ScheduledPage />
