@@ -4,6 +4,7 @@ export type Page =
   | 'locations' | 'audits' | 'history' | 'tspoon'
   | 'inventory' | 'tspoon_settings' | 'ventas_analisis' | 'prediccion_personal'
   | 'zonas_pedido' | 'kiosko_fichaje' | 'solicitudes_pendientes'
+  | 'ahora_mismo'
 
 export interface Location {
   id: string; name: string; address: string; phone: string; active: boolean
