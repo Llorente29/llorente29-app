@@ -173,7 +173,7 @@ export default function KioskoFichajePage() {
 
   if (!config || !activeLocation) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-teal-50 to-emerald-50 p-6">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#F5E9D9] to-[#F5E9D9] p-6">
         <Card className="p-8 max-w-md text-center">
           <p className="text-3xl mb-3">⚙️</p>
           <p className="font-semibold text-gray-700">Configura el kiosko</p>
@@ -188,7 +188,7 @@ export default function KioskoFichajePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-teal-50 via-white to-emerald-50">
+    <div className="min-h-screen bg-gradient-to-br from-[#F5E9D9] via-white to-[#F5E9D9]">
       <KioskoHeader
         location={activeLocation} now={now}
         onConfig={() => setShowConfig(true)}
@@ -342,7 +342,7 @@ function SelectEmployeeView({ employees, onSelect }: {
               className={`p-4 rounded-2xl border-2 transition-all text-left active:scale-95 ${
                 open
                   ? 'bg-emerald-50 border-emerald-200 hover:border-emerald-400'
-                  : 'bg-white border-gray-200 hover:border-teal-400'
+                  : 'bg-white border-gray-200 hover:border-[#7C1A1A]'
               }`}
             >
               <div className="flex items-start justify-between gap-2 mb-1">
@@ -351,7 +351,7 @@ function SelectEmployeeView({ employees, onSelect }: {
               </div>
               <p className="text-xs text-gray-400">{emp.position || '—'}</p>
               <p className={`text-xs font-bold mt-2 ${
-                next === 'entrada' ? 'text-teal-700' : 'text-orange-600'
+                next === 'entrada' ? 'text-[#7C1A1A]' : 'text-orange-600'
               }`}>
                 {next === 'entrada' ? '→ Fichar entrada' : '← Fichar salida'}
               </p>
@@ -370,7 +370,7 @@ function PinPadView({ employee, pin, error, onDigit, onClear, onBack, onCancel }
 }) {
   const next = nextClockType(employee)
   const verb = next === 'entrada' ? 'Fichar ENTRADA' : 'Fichar SALIDA'
-  const verbColor = next === 'entrada' ? 'text-teal-700' : 'text-orange-600'
+  const verbColor = next === 'entrada' ? 'text-[#7C1A1A]' : 'text-orange-600'
 
   return (
     <div className="mt-4 max-w-sm mx-auto">
@@ -383,7 +383,7 @@ function PinPadView({ employee, pin, error, onDigit, onClear, onBack, onCancel }
           {[0, 1, 2, 3].map(i => (
             <span key={i} className={`w-3.5 h-3.5 rounded-full transition-all ${
               error ? 'bg-red-400' :
-              pin.length > i ? 'bg-teal-600' : 'bg-gray-200'
+              pin.length > i ? 'bg-[#7C1A1A]' : 'bg-gray-200'
             }`} />
           ))}
         </div>
@@ -416,7 +416,7 @@ function PinKey({ children, onClick, variant }: {
       className={`h-14 rounded-xl text-xl font-semibold transition-all active:scale-95 ${
         variant === 'secondary'
           ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-          : 'bg-white border-2 border-gray-200 text-gray-900 hover:border-teal-400 hover:bg-teal-50'
+          : 'bg-white border-2 border-gray-200 text-gray-900 hover:border-[#7C1A1A] hover:bg-[#F5E9D9]'
       }`}
     >
       {children}
