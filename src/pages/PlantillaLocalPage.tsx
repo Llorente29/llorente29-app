@@ -8,7 +8,6 @@ import {
 } from '../services/calendarService'
 import {
   fetchLocationPlanning, upsertLocationPlanning,
-  type LocationPlanningRow,
 } from '../services/locationPlanningService'
 
 interface Props {
@@ -23,7 +22,7 @@ export default function PlantillaLocalPage({ onBack }: Props) {
   const { locations } = useApp()
   const [locationId, setLocationId] = useState<string>('')
   const [shiftTypes, setShiftTypes] = useState<ShiftType[]>([])
-  const [planning, setPlanning] = useState<LocationPlanningRow[]>([])
+
   const [editValues, setEditValues] = useState<Record<string, Record<DayKey | 'default', number>>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -44,7 +43,8 @@ export default function PlantillaLocalPage({ onBack }: Props) {
     if (!locationId) return
     setLoading(true)
     const p = await fetchLocationPlanning(locationId)
-    setPlanning(p)
+    
+
 
     // Cargar valores editables
     const ev: Record<string, Record<DayKey | 'default', number>> = {}
