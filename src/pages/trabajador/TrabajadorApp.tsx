@@ -10,12 +10,13 @@ import MisFichajes from './MisFichajes'
 import MisDocumentos from './MisDocumentos'
 import MisVacaciones from './MisVacaciones'
 import MiBolsaHoras from './MiBolsaHoras'
+import MisTurnos from './MisTurnos'
 import { fetchAppSettings } from '../../services/appSettingsService'
 import type { Employee } from '../../types'
 
 const SESSION_KEY = 'andy-empleado-session-v1'
 
-type SubPage = 'home' | 'fichar' | 'horario' | 'fichajes' | 'documentos' | 'vacaciones' | 'bolsa'
+type SubPage = 'home' | 'fichar' | 'horario' | 'fichajes' | 'documentos' | 'vacaciones' | 'bolsa' | 'turnos'
 
 interface Props {
   onExitMode: () => void  // Llamar para salir del modo trabajador (volver al selector inicial)
@@ -86,6 +87,10 @@ export default function TrabajadorApp({ onExitMode }: Props) {
 
   if (subPage === 'bolsa' && showBolsaHoras) {
     return <MiBolsaHoras employee={employee} onBack={() => setSubPage('home')} />
+  }
+
+  if (subPage === 'turnos') {
+    return <MisTurnos employee={employee} onBack={() => setSubPage('home')} />
   }
 
   // home
