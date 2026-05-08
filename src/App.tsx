@@ -15,10 +15,11 @@ import ZonasPedidoPage from './pages/ZonasPedidoPage'
 import KioskoFichajePage from './pages/KioskoFichajePage'
 import SolicitudesPendientesPage from './pages/SolicitudesPendientesPage'
 import AhoraMismoPage from './pages/AhoraMismoPage'
+import AvisosSettingsPage from './pages/AvisosSettingsPage'
 import TrabajadorApp from './pages/trabajador/TrabajadorApp'
 import {
   DashboardPage, ScheduledPage, TemplatesPage,
-  AuditsPage, HistoryPage, InventoryPage, TSpoonSettingsPage, LocationsPage
+  AuditsPage, HistoryPage, InventoryPage, LocationsPage
 } from './pages/OtherPages'
 
 const MODE_KEY = 'andy-app-mode-v1'
@@ -85,7 +86,7 @@ function renderPage(page: Page) {
     case 'zonas_pedido':      return <ZonasPedidoPage />
     case 'inventory':         return <InventoryPage />
     case 'locations':         return <LocationsPage />
-    case 'tspoon_settings':   return <TSpoonSettingsPage />
+    case 'tspoon_settings':   return <AvisosSettingsPage />
     default:                  return <DashboardPage />
   }
 }
