@@ -2,7 +2,7 @@
 import type { Employee } from '../../types'
 import { hasOpenShift } from '../../services/fichajeKiosko'
 
-type SubPage = 'home' | 'fichar' | 'horario' | 'fichajes' | 'documentos' | 'vacaciones' | 'bolsa'
+type SubPage = 'home' | 'fichar' | 'horario' | 'fichajes' | 'documentos' | 'vacaciones' | 'bolsa' | 'turnos'
 
 interface Props {
   employee: Employee
@@ -29,6 +29,14 @@ export default function HomeEmpleado({ employee, onNavigate, onLogout, showBolsa
       title: 'Mi horario',
       desc: 'Tus turnos de la semana',
       color: 'bg-white border-gray-200 hover:border-blue-400',
+      enabled: true,
+    },
+    {
+      id: 'turnos' as SubPage,
+      icon: '🪑',
+      title: 'Turnos abiertos',
+      desc: 'Coger turnos disponibles',
+      color: 'bg-white border-gray-200 hover:border-[#F39C2A]',
       enabled: true,
     },
     {
