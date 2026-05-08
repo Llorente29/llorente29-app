@@ -225,7 +225,16 @@ export function validatePlan(ctx: ValidateContext): ValidationIssue[] {
       if (t.isOff) continue
 
       // Contar asignaciones de este turno en este día
-      const count = ctx.assignments.filter(a => a.date === d && a.shiftTypeId === t.id).length
+      // Si t es T1 o T4, sumar también los turnos partidos (T1+T3) que cubren ambos
+      let count = ctx.assignments.filter(a => a.date === d && a.shiftTypeId === t.id).length
+      if (t.code === 'T1' || t.code === 'T4') {
+        const splitCount = ctx.assignments.filter(a => {
+          if (a.date !== d || !a.shiftTypeId) return false
+          const at = ctx.shiftTypes.find(x => x.id === a.shiftTypeId)
+          return at?.isSplit === true
+        }).length
+        count += splitCount
+      }
 
       // Determinar el mínimo aplicable
       let required = 0
@@ -328,11 +337,28 @@ export function shiftCoverage(
     for (const d of weekDays) byDay.set(d, 0)
     coverage.set(t.id, byDay)
   }
+
+  const t1 = shiftTypes.find(t => t.code === 'T1')
+  const t4 = shiftTypes.find(t => t.code === 'T4')
+
   for (const a of assignments) {
     if (!a.shiftTypeId) continue
     const byDay = coverage.get(a.shiftTypeId)
     if (!byDay) continue
     byDay.set(a.date, (byDay.get(a.date) || 0) + 1)
+
+    // Si es turno partido (isSplit), cuenta también para T1 y T4
+    const t = shiftTypes.find(x => x.id === a.shiftTypeId)
+    if (t?.isSplit) {
+      if (t1) {
+        const c1 = coverage.get(t1.id)
+        if (c1) c1.set(a.date, (c1.get(a.date) || 0) + 1)
+      }
+      if (t4) {
+        const c4 = coverage.get(t4.id)
+        if (c4) c4.set(a.date, (c4.get(a.date) || 0) + 1)
+      }
+    }
   }
   return coverage
 }
