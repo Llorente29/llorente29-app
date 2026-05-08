@@ -30,6 +30,32 @@ function dayLabel(d: DayOfWeek): string {
   return DAY_LABELS[d]
 }
 
+/* =====================================================
+   Helper de solape temporal entre dos turnos
+   Considera cruce de medianoche.
+   Devuelve true si los rangos [s1,e1) y [s2,e2) se solapan.
+   ===================================================== */
+function timeToMin(t: string): number {
+  const [h, m] = t.split(':').map(Number)
+  return h * 60 + m
+}
+
+// Devuelve los intervalos absolutos en minutos (desde medianoche del día X).
+// Si cruza medianoche, devuelve TODO como un único intervalo extendido más allá de 1440.
+function shiftIntervalAbs(start: string, end: string): { from: number; to: number } {
+  const s = timeToMin(start)
+  let e = timeToMin(end)
+  if (e <= s) e += 24 * 60
+  return { from: s, to: e }
+}
+
+function shiftsOverlap(start1: string, end1: string, start2: string, end2: string): boolean {
+  const a = shiftIntervalAbs(start1, end1)
+  const b = shiftIntervalAbs(start2, end2)
+  // Solapan si: a.from < b.to && b.from < a.to
+  return a.from < b.to && b.from < a.to
+}
+
 // Devuelve la franja del turno con tipo restrictivo (sin 'any').
 type SlotPeriod = 'morning' | 'evening'
 function slotPeriodOf(start: string): SlotPeriod {
@@ -268,11 +294,30 @@ export function generateSchedule(input: GeneratorInput): GeneratorResult {
 
     // Construir candidatos
     const candidates: (CandidateScore & { violatesRest: boolean })[] = []
+    // Pre-cálculo: mapa templateId → ShiftTemplate (para mirar horarios de otros turnos)
+    const templateById = new Map(templates.map(t => [t.id, t]))
     for (const emp of employees) {
       // Hard filter: ya asignado a este slot
       if (currentAssigned.includes(emp.id)) continue
       // Hard filter: vacaciones aprobadas (NUNCA violar)
       if (isOnVacation(emp, isoDate)) continue
+      // Hard filter: SOLAPE TEMPORAL con otro turno del mismo día
+      // Una persona no puede estar físicamente en dos turnos cuyos horarios chocan.
+      let hasOverlap = false
+      for (const otherTid of Object.keys(cells)) {
+        const otherIds = cells[otherTid]?.[dayKey] || []
+        if (!otherIds.includes(emp.id)) continue
+        const otherT = templateById.get(otherTid)
+        if (!otherT) continue
+        if (shiftsOverlap(
+          slot.startTime, slot.endTime,
+          otherT.start_time.slice(0, 5), otherT.end_time.slice(0, 5)
+        )) {
+          hasOverlap = true
+          break
+        }
+      }
+      if (hasOverlap) continue
       // Filter de descanso (relajable en pasada 3)
       const rest = restCache.get(emp.id)
       const violatesRest = rest ? rest.has(`${slot.day}:${slot.period}`) : false
@@ -551,16 +596,48 @@ export function computeWorkloads(
   templates: ShiftTemplate[],
   employees: Employee[]
 ): EmployeeWorkload[] {
-  const tHoursById = new Map(templates.map(t => [t.id, shiftDurationHours(t.start_time, t.end_time)]))
-  const sum = new Map<string, number>()
+  const templateById = new Map(templates.map(t => [t.id, t]))
+
+  // Por (empId, dayKey) recolectamos los intervalos absolutos en minutos
+  const intervalsByEmpDay = new Map<string, { from: number; to: number }[]>()
   for (const tid of Object.keys(cells)) {
-    const h = tHoursById.get(tid) || 0
+    const t = templateById.get(tid)
+    if (!t) continue
+    const startStr = t.start_time.slice(0, 5)
+    const endStr = t.end_time.slice(0, 5)
+    const interval = shiftIntervalAbs(startStr, endStr)
     for (const dk of Object.keys(cells[tid])) {
       for (const empId of cells[tid][dk]) {
-        sum.set(empId, (sum.get(empId) || 0) + h)
+        const key = `${empId}:${dk}`
+        if (!intervalsByEmpDay.has(key)) intervalsByEmpDay.set(key, [])
+        intervalsByEmpDay.get(key)!.push({ ...interval })
       }
     }
   }
+
+  // Merge de intervalos solapados → suma sin doble contar
+  const sum = new Map<string, number>()
+  for (const [key, list] of intervalsByEmpDay.entries()) {
+    const empId = key.split(':')[0]
+    list.sort((a, b) => a.from - b.from)
+    let totalMin = 0
+    let curFrom = list[0].from
+    let curTo = list[0].to
+    for (let i = 1; i < list.length; i++) {
+      const it = list[i]
+      if (it.from <= curTo) {
+        // solapan o tocan: extender
+        curTo = Math.max(curTo, it.to)
+      } else {
+        totalMin += curTo - curFrom
+        curFrom = it.from
+        curTo = it.to
+      }
+    }
+    totalMin += curTo - curFrom
+    sum.set(empId, (sum.get(empId) || 0) + totalMin / 60)
+  }
+
   return employees.map(emp => {
     const assigned = sum.get(emp.id) || 0
     const contracted = emp.weeklyHours || 40
@@ -580,7 +657,7 @@ export function computeWorkloads(
    ===================================================== */
 
 export interface ValidationIssue {
-  type: 'overtime' | 'rest_violation' | 'vacation_conflict' | 'gap'
+  type: 'overtime' | 'rest_violation' | 'vacation_conflict' | 'gap' | 'overlap'
   employeeId?: string
   templateId?: string
   day?: DayOfWeek
@@ -626,6 +703,44 @@ export function validateSchedule(
             templateId: tid,
             day,
             message: `${emp.name} está asignado en su descanso fijo (${t.label}, día ${day})`,
+          })
+        }
+      }
+    }
+  }
+
+  // 3) Solape temporal entre turnos del mismo empleado el mismo día
+  // Recolectar todas las asignaciones por (empleado, día) y comparar dos a dos.
+  const byEmpDay = new Map<string, { tid: string; start: string; end: string; label: string }[]>()
+  for (const tid of Object.keys(cells)) {
+    const t = templates.find(x => x.id === tid)
+    if (!t) continue
+    for (const dk of Object.keys(cells[tid])) {
+      for (const empId of cells[tid][dk]) {
+        const key = `${empId}:${dk}`
+        if (!byEmpDay.has(key)) byEmpDay.set(key, [])
+        byEmpDay.get(key)!.push({
+          tid,
+          start: t.start_time.slice(0, 5),
+          end: t.end_time.slice(0, 5),
+          label: t.label,
+        })
+      }
+    }
+  }
+  for (const [key, list] of byEmpDay.entries()) {
+    if (list.length < 2) continue
+    const [empId, dk] = key.split(':')
+    const day = parseInt(dk, 10) as DayOfWeek
+    const emp = empById.get(empId)
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        if (shiftsOverlap(list[i].start, list[i].end, list[j].start, list[j].end)) {
+          issues.push({
+            type: 'overlap',
+            employeeId: empId,
+            day,
+            message: `${emp?.name || empId} tiene dos turnos solapados el ${dayLabel(day)}: ${list[i].label} (${list[i].start}-${list[i].end}) y ${list[j].label} (${list[j].start}-${list[j].end})`,
           })
         }
       }
