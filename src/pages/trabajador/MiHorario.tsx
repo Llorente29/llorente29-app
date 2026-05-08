@@ -67,42 +67,25 @@ export default function MiHorario({ employee, onBack }: Props) {
     return m
   }, [published])
 
-  // Calcular horas: priorizamos publicado, fallback a weeklySchedule
-  function dayInfo(dayIndex: number, dateIso: string): {
-    label: string; subLabel?: string; hours: number; color: string; isFromCalendar: boolean
+  // MODELO A: solo calendario publicado. Sin fallback a weeklySchedule.
+  function dayInfo(_dayIndex: number, dateIso: string): {
+    label: string; subLabel?: string; hours: number; color: string; status: 'shift' | 'off' | 'no_calendar'
   } {
     const pub = byDate.get(dateIso)
-    if (pub) {
-      const t = pub.shiftType
-      if (t) {
-        if (t.isOff) {
-          return { label: 'Libre', hours: 0, color: '#9CA3AF', isFromCalendar: true }
-        }
-        const sub = t.startTime && t.endTime
-          ? `${t.startTime}–${t.endTime}${t.isSplit ? ` + ${t.split2Start}–${t.split2End}` : ''}`
-          : ''
-        return { label: `${t.code} ${t.label}`, subLabel: sub, hours: t.hours, color: t.color, isFromCalendar: true }
-      }
+    if (!pub) {
+      return { label: 'Sin horario publicado', hours: 0, color: '#E5E7EB', status: 'no_calendar' }
     }
-    // Fallback a weeklySchedule
-    const ws = current.weeklySchedule
-    if (!ws) return { label: 'Libre', hours: 0, color: '#9CA3AF', isFromCalendar: false }
-    const dayKey = ['domingo','lunes','martes','miercoles','jueves','viernes','sabado'][dayIndex]
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const day = (ws as any)[dayKey]
-    if (!day || !day.active || !day.start || !day.end) {
-      return { label: 'Libre', hours: 0, color: '#9CA3AF', isFromCalendar: false }
+    const t = pub.shiftType
+    if (!t) {
+      return { label: 'Sin asignar', hours: 0, color: '#E5E7EB', status: 'no_calendar' }
     }
-    const [sh, sm] = day.start.split(':').map(Number)
-    const [eh, em] = day.end.split(':').map(Number)
-    const hours = Math.max(0, (eh + em / 60) - (sh + sm / 60))
-    return {
-      label: 'Trabajo',
-      subLabel: `${day.start}–${day.end}`,
-      hours,
-      color: '#7C1A1A',
-      isFromCalendar: false,
+    if (t.isOff) {
+      return { label: 'Libre', hours: 0, color: '#9CA3AF', status: 'off' }
     }
+    const sub = t.startTime && t.endTime
+      ? `${t.startTime}–${t.endTime}${t.isSplit ? ` + ${t.split2Start}–${t.split2End}` : ''}`
+      : ''
+    return { label: `${t.code} ${t.label}`, subLabel: sub, hours: t.hours, color: t.color, status: 'shift' }
   }
 
   // Generar fechas de la semana
@@ -184,7 +167,7 @@ export default function MiHorario({ employee, onBack }: Props) {
         {!hasPublishedThisWeek && !loading && (
           <Card className="p-3 mb-4 bg-amber-50 border-amber-200">
             <p className="text-xs text-amber-800">
-              📋 Aún no hay calendario publicado para esta semana. Te mostramos tu horario base. Cuando tu encargado publique el calendario, lo verás aquí.
+              📋 Aún no hay calendario publicado para esta semana. Cuando tu encargado lo publique, lo verás aquí.
             </p>
           </Card>
         )}
@@ -197,7 +180,6 @@ export default function MiHorario({ employee, onBack }: Props) {
             {weekDays.map(d => {
               const info = dayInfo(d.index, d.dateIso)
               const isToday = d.date.getTime() === today.getTime()
-              const isOff = info.label === 'Libre'
               return (
                 <Card key={d.key} className={`p-3 ${isToday ? 'border-2 border-[#7C1A1A] bg-[#F5E9D9]/50' : ''}`}>
                   <div className="flex items-center justify-between">
@@ -208,7 +190,9 @@ export default function MiHorario({ employee, onBack }: Props) {
                           {d.label} {d.date.getDate()}
                           {isToday && <span className="ml-2 text-[10px] px-2 py-0.5 rounded-full bg-[#7C1A1A] text-white font-medium">HOY</span>}
                         </p>
-                        {isOff ? (
+                        {info.status === 'no_calendar' ? (
+                          <p className="text-xs text-gray-400 mt-0.5 italic">{info.label}</p>
+                        ) : info.status === 'off' ? (
                           <p className="text-xs text-gray-400 mt-0.5">Libre</p>
                         ) : (
                           <>
@@ -218,7 +202,7 @@ export default function MiHorario({ employee, onBack }: Props) {
                         )}
                       </div>
                     </div>
-                    {!isOff && info.hours > 0 && (
+                    {info.status === 'shift' && info.hours > 0 && (
                       <span className="text-sm font-medium text-gray-700">{info.hours.toFixed(1)}h</span>
                     )}
                   </div>
