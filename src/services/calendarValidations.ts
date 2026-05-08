@@ -141,11 +141,13 @@ export function validatePlan(ctx: ValidateContext): ValidationIssue[] {
       })
     }
 
-    // Regla: mínimo 12h descanso entre turnos (error)
+    // Regla: mínimo 12h descanso entre turnos (error) — solo entre días distintos
     allRanges.sort((a, b) => a.startAbs - b.startAbs)
     for (let i = 1; i < allRanges.length; i++) {
       const prev = allRanges[i - 1]
       const cur = allRanges[i]
+      // Si están en el mismo día, no aplicamos la regla (turnos partidos)
+      if (prev.date === cur.date) continue
       if (tooCloseRest(prev, cur, 12 * 60)) {
         const gap = (cur.startAbs - prev.endAbs) / 60
         if (gap < 12) {
