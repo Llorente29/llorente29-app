@@ -2,10 +2,10 @@
 // Panel del gestor: estado en tiempo real de quién está trabajando AHORA en cada local.
 import { useState, useEffect, useMemo } from 'react'
 import { useApp } from '../context/AppContext'
-import { Card, Button } from '../components/ui'
-import type { Employee, Location, ClockEntry } from '../types'
+import { Card } from '../components/ui'
+import type { Employee, Location } from '../types'
 import {
-  computeCurrentStatus, entriesOfDay, getTheoreticalShift,
+  computeCurrentStatus, entriesOfDay,
   type CurrentStatus,
 } from '../services/horasComputo'
 import { fetchAppSettings, type AppSettings } from '../services/appSettingsService'
