@@ -1,5 +1,6 @@
 export type Page =
   | 'dashboard' | 'staff' | 'fichajes_global' | 'informes_personal' | 'calendario'
+  | 'plantilla_turnos'
   | 'tasks' | 'scheduled' | 'templates' | 'incidents'
   | 'locations' | 'audits' | 'history' | 'tspoon'
   | 'inventory' | 'tspoon_settings' | 'ventas_analisis' | 'prediccion_personal'
@@ -53,6 +54,9 @@ export interface Employee {
   // === Campos para fichaje en kiosko/móvil ===
   pin?: string                       // PIN de 4 dígitos para fichar
   assignedLocations?: string[]       // locales donde puede fichar (si vacío, usa locationId)
+  // === Campos para el scheduler (sub-fase 3.1) ===
+  contractedHoursWeek?: number       // horas contratadas semanales (ej. 40, 43.5)
+  shiftCode?: string                 // código corto T1/T2/T3 para visualización en matriz
 }
 
 export interface ChecklistItem {
