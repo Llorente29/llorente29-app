@@ -152,12 +152,20 @@ export default function PlantillaLocalPage({ onBack }: Props) {
                   {shiftTypes.map(t => (
                     <tr key={t.id} className="border-b border-gray-100">
                       <td className="py-2.5">
-                        <span className="inline-flex items-center gap-2">
-                          <span className="w-3 h-3 rounded" style={{ backgroundColor: t.color }} />
-                          <span className="font-semibold text-gray-900">{t.code}</span>
-                          <span className="text-xs text-gray-500">{t.label}</span>
-                          <span className="text-[10px] text-gray-400">({t.hours}h)</span>
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="w-3 h-3 rounded shrink-0" style={{ backgroundColor: t.color }} />
+                          <div className="min-w-0">
+                            <p className="font-semibold text-gray-900 text-sm">
+                              {t.code} — {t.label}
+                              <span className="text-[10px] text-gray-400 ml-1">({t.hours}h)</span>
+                            </p>
+                            {t.startTime && t.endTime && (
+                              <p className="text-[11px] text-gray-500 tabular-nums">
+                                {t.startTime} – {t.endTime}
+                              </p>
+                            )}
+                          </div>
+                        </div>
                       </td>
                       {DAYS_KEYS.map((dKey, idx) => {
                         const isVSD = idx === 4 || idx === 5 || idx === 6
