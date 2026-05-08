@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useApp } from '../context/AppContext'
 import { Card, Button } from '../components/ui'
 import { fetchAppSettings, updateAppSettings, type AppSettings } from '../services/appSettingsService'
-import { fetchShiftTypes, type ShiftType } from '../services/calendarService'
+import { fetchShiftTypes } from '../services/calendarService'
 import { supabase } from '../lib/supabase'
 
 export default function AvisosSettingsPage() {
@@ -175,7 +175,6 @@ interface MinimumRowState {
 
 function MinimumsSection() {
   const { locations } = useApp()
-  const [shiftTypes, setShiftTypes] = useState<ShiftType[]>([])
   const [scope, setScope] = useState<string>('global')   // 'global' o id de local
   const [rows, setRows] = useState<MinimumRowState[]>([])
   const [loading, setLoading] = useState(true)
@@ -185,7 +184,6 @@ function MinimumsSection() {
   async function load() {
     setLoading(true)
     const types = await fetchShiftTypes()
-    setShiftTypes(types)
     if (!supabase) { setLoading(false); return }
     const { data } = await supabase.from('shift_minimums').select('*')
     const all = (data || []) as Array<{ shift_type_id: string; location_id: string | null; min_default: number; min_weekend: number | null }>
