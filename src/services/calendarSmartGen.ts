@@ -323,14 +323,20 @@ export function smartGenerate(input: SmartGenInput): SmartGenOutput {
       if (newMonthly > st.monthlyMaxAllowed) continue
 
       // ─── SCORE ───
-      // Priorizar empleados con MÁS horas pendientes hasta su contrato semanal
+      // Objetivo: equilibrar horas entre empleados, todos cerca de su contrato.
       const remainingToContract = st.weeklyHoursContract - st.weeklyAssigned
-      let score = remainingToContract * 10        // queremos que cumplan su contrato
-      score -= st.weeklyAssigned * 0.5            // penalizar si ya está cargado
-      // Si está dentro del margen sin pasar contrato, prioridad alta
-      if (newWeekly <= st.weeklyHoursContract) score += 100
-      // Penalizar si ya se va a pasar
-      if (newWeekly > st.weeklyHoursContract) score -= (newWeekly - st.weeklyHoursContract) * 5
+      let score = 0
+
+      // Si aún no llega al contrato, MUY prioritario
+      if (newWeekly <= st.weeklyHoursContract) {
+        score += 1000 + remainingToContract * 5
+      } else {
+        // Ya supera el contrato: penalizar fuerte el exceso
+        const excess = newWeekly - st.weeklyHoursContract
+        score -= excess * 30
+        // Si encima ya está sobre el contrato actual, penalizar aún más
+        if (st.weeklyAssigned > st.weeklyHoursContract) score -= 200
+      }
 
       if (score > bestScore) {
         bestScore = score
@@ -366,8 +372,29 @@ export function smartGenerate(input: SmartGenInput): SmartGenOutput {
     return true
   }
 
-  // PASE 0 — Asignar T1+T3 (PARTIDO) primero cuando un día necesita T1 y T4 a la vez.
-  // Esto evita asignar T1 y T4 separados a la misma persona y luego "fallar" en descanso.
+  // PASE 1 — turnos en orden de prioridad (T2/T3 primero, luego T1, T4)
+  for (const date of sortedDays) {
+    const dow = new Date(date + 'T00:00:00').getDay()
+    const sortedTypes = [...workTypes].sort((a, b) => typePriority(a) - typePriority(b))
+
+    for (const t of sortedTypes) {
+      if (t.isSplit) continue   // partido se asigna en pase 2 como último recurso
+      const planRow = planning.find(p => p.shiftTypeId === t.id)
+      if (!planRow) continue
+      const needed = neededFor(planRow, dow)
+      if (needed === 0) continue
+
+      // Calcular cuántos hay ya cubriendo este turno (incluidos partidos para T1/T4)
+      const getCoverage = (tid: string): number => cover.get(tid)?.get(date) || 0
+
+      while (getCoverage(t.id) < needed) {
+        const ok = tryAssignSingle(date, t)
+        if (!ok) break
+      }
+    }
+  }
+
+  // PASE 2 — Si quedan huecos en T1 o T4, asignar T1+T3 partido como último recurso
   const splitType = workTypes.find(t => t.isSplit && t.code === 'T1+T3')
   if (splitType) {
     for (const date of sortedDays) {
@@ -381,47 +408,11 @@ export function smartGenerate(input: SmartGenInput): SmartGenOutput {
       const t1Need = t1Plan ? neededFor(t1Plan, dow) : 0
       const t4Need = t4Plan ? neededFor(t4Plan, dow) : 0
 
-      // Calcular cuántos partidos podemos asignar: el mínimo de los dos déficits
-      const possibleSplits = Math.min(t1Need, t4Need)
-      let assigned = 0
-      while (assigned < possibleSplits) {
-        const ok = tryAssignSingle(date, splitType)
-        if (!ok) break
-        assigned++
-      }
-    }
-  }
-
-  // PASE 1 — turnos en orden de prioridad
-  for (const date of sortedDays) {
-    const dow = new Date(date + 'T00:00:00').getDay()
-    const sortedTypes = [...workTypes].sort((a, b) => typePriority(a) - typePriority(b))
-
-    for (const t of sortedTypes) {
-      const planRow = planning.find(p => p.shiftTypeId === t.id)
-      if (!planRow) continue
-      const needed = neededFor(planRow, dow)
-      if (needed === 0) continue
-
-      while ((cover.get(t.id)?.get(date) || 0) < needed) {
-        const ok = tryAssignSingle(date, t)
-        if (!ok) break
-      }
-    }
-  }
-
-  // PASE 2 — Si quedan huecos en T4 y hay alguien con T1 ese día y horas libres,
-  // convertir su T1 en T1+T3 partido (para que cubra también el T4)
-  // — Esto se hace en una pasada simple buscando candidatos cualificados
-  if (splitType) {
-    for (const date of sortedDays) {
-      const dow = new Date(date + 'T00:00:00').getDay()
-      const t4 = workTypes.find(t => t.code === 'T4')
-      if (!t4) continue
-      const t4Plan = planning.find(p => p.shiftTypeId === t4.id)
-      const t4Need = t4Plan ? neededFor(t4Plan, dow) : 0
-      while ((cover.get(t4.id)?.get(date) || 0) < t4Need) {
-        // Intentar asignar T1+T3 (servirá también para T4)
+      while (true) {
+        const t1Have = cover.get(t1.id)?.get(date) || 0
+        const t4Have = cover.get(t4.id)?.get(date) || 0
+        // Si hay déficit en T1 o T4, intentar partido
+        if (t1Have >= t1Need && t4Have >= t4Need) break
         const ok = tryAssignSingle(date, splitType)
         if (!ok) break
       }
