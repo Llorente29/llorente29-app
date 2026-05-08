@@ -1,7 +1,11 @@
 // src/services/calendarAutoGen.ts
 // Auto-generación de planes semanales: respeta weeklySchedule de cada empleado
 // y rellena libras + turnos según patrones simples.
-// REGLA: NUNCA asigna LIBRE automáticamente en V/S/D (alta demanda).
+//
+// REGLAS CRÍTICAS:
+// 1. NUNCA asigna LIBRE automáticamente en V/S/D (alta demanda).
+// 2. En V/S/D si el empleado tiene weeklySchedule inactivo, asignar T2 por defecto
+//    (cubre franja 14:45-00:15, garantiza presencia 20:00-cierre).
 
 import type { Employee } from '../types'
 import type { ShiftType, ShiftAssignment } from './calendarService'
@@ -50,6 +54,10 @@ export function autoGenerate(input: AutoGenInput): AutoGenOutput {
     return { toUpsert: [], unchanged: 0, conflicts: 0 }
   }
 
+  // Turno por defecto para V/S/D cuando el empleado tiene libra contractual:
+  // T2 (14:45-00:15) — cubre la franja crítica 20:00-cierre.
+  const defaultWeekendShift = shiftTypes.find(t => t.code === 'T2' && !t.isOff)
+
   const existing = new Map<string, ShiftAssignment>()
   for (const a of existingAssignments) {
     existing.set(`${a.employeeId}|${a.date}`, a)
@@ -73,7 +81,6 @@ export function autoGenerate(input: AutoGenInput): AutoGenOutput {
       const existingAssign = existing.get(`${emp.id}|${date}`)
       const hasExisting = !!existingAssign?.shiftTypeId
 
-      // REGLA CRÍTICA: NUNCA asignar LIBRE en V/S/D automáticamente.
       // dayOfWeek: 0=domingo, 5=viernes, 6=sábado
       const isWeekend = dayOfWeek === 5 || dayOfWeek === 6 || dayOfWeek === 0
 
@@ -82,11 +89,17 @@ export function autoGenerate(input: AutoGenInput): AutoGenOutput {
       if (!day.active) {
         // Día marcado como inactivo en weeklySchedule
         if (isWeekend) {
-          // V/S/D: NO asignar LIBRE automáticamente. Dejar vacío.
-          unchanged++
-          continue
+          // V/S/D: NO librar. Asignar T2 por defecto (cubre 20-cierre).
+          if (defaultWeekendShift) {
+            proposedTypeId = defaultWeekendShift.id
+          } else {
+            unchanged++
+            continue
+          }
+        } else {
+          // Lun-Jue: asignar LIBRE como hace el weeklySchedule
+          proposedTypeId = libreType.id
         }
-        proposedTypeId = libreType.id
       } else if (day.start && day.end) {
         const matchType = findShiftTypeForHours(day.start, day.end, shiftTypes)
         if (matchType) proposedTypeId = matchType.id
