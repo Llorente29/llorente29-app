@@ -6,11 +6,19 @@ import { Card, Button } from '../components/ui'
 import {
   fetchShiftTypes, getOrCreatePlan, fetchAssignmentsForPlan,
   upsertAssignment, publishPlan, unpublishPlan,
+  duplicatePreviousWeek, clearPlanAssignments,
+  fetchMinimums,
   mondayOf, weekDates, shortDayLabel, isWeekend,
-  type ShiftType, type WeeklyPlan, type ShiftAssignment,
+  type ShiftType, type WeeklyPlan, type ShiftAssignment, type ShiftMinimum,
 } from '../services/calendarService'
+import {
+  validatePlan, shiftCoverage,
+  type ValidationIssue,
+} from '../services/calendarValidations'
 import { isSupabaseEnabled, supabase } from '../lib/supabase'
 import type { Employee } from '../types'
+
+type ViewMode = 'tabla' | 'empleado'
 
 export default function CalendarioPage() {
   const { staff, locations } = useApp()
@@ -19,8 +27,12 @@ export default function CalendarioPage() {
   const [shiftTypes, setShiftTypes] = useState<ShiftType[]>([])
   const [plan, setPlan] = useState<WeeklyPlan | null>(null)
   const [assignments, setAssignments] = useState<ShiftAssignment[]>([])
+  const [minimums, setMinimums] = useState<ShiftMinimum[]>([])
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<{ employeeId: string; date: string } | null>(null)
+  const [viewMode, setViewMode] = useState<ViewMode>('tabla')
+  const [selectedEmpId, setSelectedEmpId] = useState<string | null>(null)
+  const [showValidations, setShowValidations] = useState(true)
 
   // Inicializar location al primer local activo
   useEffect(() => {
@@ -34,6 +46,11 @@ export default function CalendarioPage() {
   useEffect(() => {
     fetchShiftTypes().then(setShiftTypes)
   }, [])
+
+  // Cargar mínimos cuando cambia el local
+  useEffect(() => {
+    if (locationId) fetchMinimums(locationId).then(setMinimums)
+  }, [locationId])
 
   // Cargar plan + asignaciones cuando cambia semana o local
   async function loadPlan() {
@@ -147,6 +164,43 @@ export default function CalendarioPage() {
     return total
   }
 
+  // ─── Validaciones del convenio + cobertura ──────────────────────────────
+  const validations = useMemo<ValidationIssue[]>(() => {
+    if (!plan || localEmployees.length === 0) return []
+    return validatePlan({
+      assignments, shiftTypes,
+      employees: localEmployees,
+      minimums, weekDays: days, locationId,
+    })
+  }, [assignments, shiftTypes, localEmployees, minimums, days, locationId, plan])
+
+  const errors = validations.filter(v => v.level === 'error')
+  const warnings = validations.filter(v => v.level === 'warning')
+
+  const coverage = useMemo(() => shiftCoverage(assignments, shiftTypes, days), [assignments, shiftTypes, days])
+
+  // Acciones planificación rápida
+  async function handleDuplicatePrev() {
+    if (!plan) return
+    if (!confirm('¿Copiar las asignaciones de la semana anterior? Se sobrescribirá lo que ya tengas en esta semana.')) return
+    const copied = await duplicatePreviousWeek(plan.id, weekStart, locationId)
+    if (copied === null) {
+      alert('No hay plan en la semana anterior. Empieza esa semana primero.')
+    } else {
+      const a = await fetchAssignmentsForPlan(plan.id)
+      setAssignments(a)
+      alert(`✓ Copiadas ${copied} asignaciones de la semana anterior`)
+    }
+  }
+
+  async function handleClearWeek() {
+    if (!plan) return
+    if (!confirm('¿Borrar TODAS las asignaciones de esta semana? No se puede deshacer.')) return
+    await clearPlanAssignments(plan.id)
+    const a = await fetchAssignmentsForPlan(plan.id)
+    setAssignments(a)
+  }
+
   const weekRangeLabel = useMemo(() => {
     const start = new Date(weekStart + 'T00:00:00')
     const end = new Date(start)
@@ -177,7 +231,7 @@ export default function CalendarioPage() {
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <select value={locationId} onChange={e => setLocationId(e.target.value)}
               className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white">
               {locations.filter(l => l.active).map(l => (
@@ -201,7 +255,66 @@ export default function CalendarioPage() {
             )}
           </div>
         </div>
+
+        {/* Acciones rápidas y toggle vista */}
+        <div className="flex items-center justify-between flex-wrap gap-2 mt-3 pt-3 border-t border-gray-100">
+          <div className="flex items-center gap-1">
+            <button onClick={() => setViewMode('tabla')}
+              className={`text-xs px-3 py-1 rounded-l border ${viewMode === 'tabla' ? 'bg-[#7C1A1A] text-white border-[#7C1A1A]' : 'bg-white text-gray-600 border-gray-200'}`}>
+              📊 Tabla semanal
+            </button>
+            <button onClick={() => setViewMode('empleado')}
+              className={`text-xs px-3 py-1 rounded-r border ${viewMode === 'empleado' ? 'bg-[#7C1A1A] text-white border-[#7C1A1A]' : 'bg-white text-gray-600 border-gray-200'}`}>
+              👤 Por empleado
+            </button>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button onClick={handleDuplicatePrev}
+              className="text-xs px-3 py-1 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium">
+              📋 Duplicar semana anterior
+            </button>
+            <button onClick={handleClearWeek}
+              className="text-xs px-3 py-1 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 font-medium">
+              🗑 Limpiar semana
+            </button>
+          </div>
+        </div>
       </Card>
+
+      {/* Panel de validaciones */}
+      {(errors.length > 0 || warnings.length > 0) && showValidations && (
+        <Card className={`p-3 ${errors.length > 0 ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'}`}>
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-2">
+                <p className={`text-xs font-bold uppercase tracking-wide ${errors.length > 0 ? 'text-red-700' : 'text-amber-700'}`}>
+                  {errors.length > 0 && <>🚨 {errors.length} error{errors.length !== 1 ? 'es' : ''} </>}
+                  {warnings.length > 0 && <>⚠ {warnings.length} avis{warnings.length !== 1 ? 'os' : 'o'}</>}
+                </p>
+              </div>
+              <div className="space-y-1 max-h-40 overflow-y-auto">
+                {errors.map((v, i) => (
+                  <ValidationRow key={`e-${i}`} issue={v} />
+                ))}
+                {warnings.map((v, i) => (
+                  <ValidationRow key={`w-${i}`} issue={v} />
+                ))}
+              </div>
+            </div>
+            <button onClick={() => setShowValidations(false)}
+              className="text-xs text-gray-500 hover:text-gray-700 shrink-0">✕</button>
+          </div>
+        </Card>
+      )}
+
+      {(errors.length > 0 || warnings.length > 0) && !showValidations && (
+        <button onClick={() => setShowValidations(true)}
+          className={`text-xs px-3 py-1.5 rounded-full font-medium ${
+            errors.length > 0 ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+          }`}>
+          {errors.length > 0 ? `🚨 Mostrar ${errors.length} error${errors.length !== 1 ? 'es' : ''}` : `⚠ Mostrar ${warnings.length} aviso${warnings.length !== 1 ? 's' : ''}`}
+        </button>
+      )}
 
       {/* Tabla calendario */}
       {loading ? (
@@ -212,6 +325,17 @@ export default function CalendarioPage() {
           <p className="font-semibold text-gray-700">Sin empleados en este local</p>
           <p className="text-xs text-gray-500 mt-1">Asigna empleados al local desde Personal</p>
         </Card>
+      ) : viewMode === 'empleado' ? (
+        <EmployeeView
+          employees={localEmployees}
+          selectedId={selectedEmpId}
+          onSelect={setSelectedEmpId}
+          assignByEmpDate={assignByEmpDate}
+          typesById={typesById}
+          days={days}
+          weeklyHoursOf={weeklyHoursOf}
+          onCellClick={(emp, date) => setEditing({ employeeId: emp.id, date })}
+        />
       ) : (
         <Card className="overflow-x-auto p-0">
           <table className="w-full text-sm">
@@ -276,6 +400,49 @@ export default function CalendarioPage() {
                 )
               })}
             </tbody>
+
+            {/* Filas de cobertura */}
+            <tfoot>
+              <tr className="border-t-2 border-gray-300 bg-gray-50">
+                <td className="px-3 py-2 sticky left-0 bg-gray-50 z-10 text-[10px] uppercase tracking-wide text-gray-500 font-bold">
+                  Cobertura
+                </td>
+                {days.map(d => (
+                  <td key={d} className={`p-1 text-center ${isWeekend(d) ? 'bg-amber-50/30' : ''}`}>&nbsp;</td>
+                ))}
+                <td className="px-3 py-2"></td>
+              </tr>
+              {shiftTypes.filter(t => !t.isOff).map(t => (
+                <tr key={t.id} className="border-b border-gray-100 bg-gray-50/50 text-xs">
+                  <td className="px-3 py-1.5 sticky left-0 bg-gray-50/50 z-10">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: t.color }} />
+                      <span className="text-gray-600 font-medium">{t.code}</span>
+                    </span>
+                  </td>
+                  {days.map(d => {
+                    const count = coverage.get(t.id)?.get(d) || 0
+                    const min = minimums.find(m => m.shiftTypeId === t.id)
+                    const w = isWeekend(d)
+                    const required = min ? (w && min.minWeekend != null ? min.minWeekend : min.minDefault) : 0
+                    const ok = count >= required
+                    const empty = count === 0
+                    return (
+                      <td key={d} className={`p-1 text-center ${isWeekend(d) ? 'bg-amber-50/30' : ''}`}>
+                        <span className={`inline-block w-7 h-5 rounded text-[10px] font-bold leading-5 ${
+                          empty && required > 0 ? 'bg-red-100 text-red-700' :
+                          !ok ? 'bg-amber-100 text-amber-700' :
+                          'bg-emerald-50 text-emerald-700'
+                        }`} title={`Asignados: ${count} / Mínimo: ${required}`}>
+                          {count}/{required}
+                        </span>
+                      </td>
+                    )
+                  })}
+                  <td className="px-3 py-1.5"></td>
+                </tr>
+              ))}
+            </tfoot>
           </table>
         </Card>
       )}
@@ -382,6 +549,104 @@ function AssignModal({ employee, date, currentAssignment, shiftTypes, onAssign, 
           className="w-full mt-3 py-2 text-sm text-gray-500 hover:text-gray-700 border-t pt-3">
           Cerrar
         </button>
+      </div>
+    </div>
+  )
+}
+
+// ─── ValidationRow ────────────────────────────────────────────────────────
+
+function ValidationRow({ issue }: { issue: ValidationIssue }) {
+  const isError = issue.level === 'error'
+  return (
+    <div className={`flex items-start gap-2 text-xs ${isError ? 'text-red-800' : 'text-amber-800'}`}>
+      <span className="shrink-0">{isError ? '🚨' : '⚠'}</span>
+      <div className="flex-1 min-w-0">
+        <p className="font-semibold">{issue.title}</p>
+        <p className="opacity-80">{issue.description}</p>
+      </div>
+    </div>
+  )
+}
+
+// ─── EmployeeView ─────────────────────────────────────────────────────────
+
+function EmployeeView({
+  employees, selectedId, onSelect, assignByEmpDate, typesById, days, weeklyHoursOf, onCellClick,
+}: {
+  employees: Employee[]
+  selectedId: string | null
+  onSelect: (id: string) => void
+  assignByEmpDate: Map<string, ShiftAssignment>
+  typesById: Map<string, ShiftType>
+  days: string[]
+  weeklyHoursOf: (id: string) => number
+  onCellClick: (employee: Employee, date: string) => void
+}) {
+  const selected = selectedId ? employees.find(e => e.id === selectedId) : null
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-4">
+      {/* Lista empleados */}
+      <Card className="p-2 max-h-[600px] overflow-y-auto">
+        {employees.map(e => {
+          const total = weeklyHoursOf(e.id)
+          const isSelected = e.id === selectedId
+          return (
+            <button key={e.id} onClick={() => onSelect(e.id)}
+              className={`w-full p-2 rounded-lg text-left transition-all mb-1 ${
+                isSelected ? 'bg-[#F5E9D9] border border-[#7C1A1A]' : 'hover:bg-gray-50'
+              }`}>
+              <p className="text-sm font-medium text-gray-900 truncate">{e.name}</p>
+              <p className="text-[10px] text-gray-400">{e.position || '—'} · {total.toFixed(1)}h</p>
+            </button>
+          )
+        })}
+      </Card>
+
+      {/* Detalle del empleado */}
+      <div>
+        {!selected ? (
+          <Card className="p-12 text-center">
+            <p className="text-3xl mb-2">👤</p>
+            <p className="text-sm text-gray-500">Selecciona un empleado para ver su semana</p>
+          </Card>
+        ) : (
+          <Card className="overflow-hidden">
+            <div className="p-4 border-b">
+              <p className="font-bold text-gray-900">{selected.name}</p>
+              <p className="text-xs text-gray-500">{selected.position || '—'} · {selected.weeklyHours || 40}h contrato</p>
+            </div>
+            <div className="divide-y">
+              {days.map(d => {
+                const a = assignByEmpDate.get(`${selected.id}|${d}`)
+                const t = a?.shiftTypeId ? typesById.get(a.shiftTypeId) : null
+                const date = new Date(d + 'T00:00:00')
+                const dayLabel = date.toLocaleDateString('es-ES', { weekday: 'long', day: '2-digit', month: 'short' })
+                return (
+                  <button key={d}
+                    onClick={() => onCellClick(selected, d)}
+                    className="w-full p-3 flex items-center gap-3 hover:bg-gray-50 text-left">
+                    <div className="w-2 h-10 rounded-full" style={{ backgroundColor: t?.color || '#E5E7EB' }} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 capitalize">{dayLabel}</p>
+                      {t ? (
+                        <p className="text-xs" style={{ color: t.color }}>
+                          {t.code} {t.label}
+                          {t.startTime && ` · ${t.startTime}–${t.endTime}`}
+                          {t.isSplit && ` + ${t.split2Start}–${t.split2End}`}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-gray-400 italic">Sin asignar</p>
+                      )}
+                    </div>
+                    {t && !t.isOff && <p className="text-sm font-medium text-gray-700">{t.hours}h</p>}
+                  </button>
+                )
+              })}
+            </div>
+          </Card>
+        )}
       </div>
     </div>
   )
