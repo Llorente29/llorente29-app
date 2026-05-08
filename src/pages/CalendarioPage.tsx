@@ -15,6 +15,7 @@ import {
   validatePlan, shiftCoverage,
   type ValidationIssue,
 } from '../services/calendarValidations'
+import { autoGenerate, type AutoGenMode } from '../services/calendarAutoGen'
 import { isSupabaseEnabled, supabase } from '../lib/supabase'
 import type { Employee } from '../types'
 
@@ -33,6 +34,7 @@ export default function CalendarioPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('tabla')
   const [selectedEmpId, setSelectedEmpId] = useState<string | null>(null)
   const [showValidations, setShowValidations] = useState(true)
+  const [showAutoGen, setShowAutoGen] = useState(false)
 
   // Inicializar location al primer local activo
   useEffect(() => {
@@ -201,6 +203,40 @@ export default function CalendarioPage() {
     setAssignments(a)
   }
 
+  async function handleAutoGenerate(mode: AutoGenMode) {
+    if (!plan) return
+    const result = autoGenerate({
+      employees: localEmployees,
+      shiftTypes,
+      days,
+      existingAssignments: assignments,
+      mode,
+    })
+    if (result.toUpsert.length === 0) {
+      alert('No hay nada para generar. Comprueba que los empleados tengan horario semanal configurado.')
+      setShowAutoGen(false)
+      return
+    }
+    if (result.conflicts > 0 && mode === 'todo') {
+      if (!confirm(`Se sobrescribirán ${result.conflicts} asignaciones existentes con el patrón del horario semanal. ¿Continuar?`)) {
+        return
+      }
+    }
+    // Aplicar las asignaciones
+    for (const a of result.toUpsert) {
+      await upsertAssignment({
+        planId: plan.id,
+        employeeId: a.employeeId,
+        date: a.date,
+        shiftTypeId: a.shiftTypeId,
+      })
+    }
+    const refreshed = await fetchAssignmentsForPlan(plan.id)
+    setAssignments(refreshed)
+    setShowAutoGen(false)
+    alert(`✓ Generadas ${result.toUpsert.length} asignaciones`)
+  }
+
   const weekRangeLabel = useMemo(() => {
     const start = new Date(weekStart + 'T00:00:00')
     const end = new Date(start)
@@ -269,6 +305,10 @@ export default function CalendarioPage() {
             </button>
           </div>
           <div className="flex items-center gap-1.5">
+            <button onClick={() => setShowAutoGen(true)}
+              className="text-xs px-3 py-1 rounded bg-[#7C1A1A] text-white hover:bg-[#5A1212] font-medium">
+              🪄 Generar semana
+            </button>
             <button onClick={handleDuplicatePrev}
               className="text-xs px-3 py-1 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium">
               📋 Duplicar semana anterior
@@ -480,6 +520,21 @@ export default function CalendarioPage() {
           onClose={() => setEditing(null)}
         />
       )}
+
+      {/* Modal auto-generar */}
+      {showAutoGen && (
+        <AutoGenModal
+          onClose={() => setShowAutoGen(false)}
+          onGenerate={handleAutoGenerate}
+          employeesWithoutSchedule={localEmployees.filter(e => {
+            const ws = e.weeklySchedule
+            if (!ws) return true
+            const allDays = ['lunes','martes','miercoles','jueves','viernes','sabado','domingo']
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            return !allDays.some(d => (ws as any)[d]?.active)
+          })}
+        />
+      )}
     </div>
   )
 }
@@ -647,6 +702,84 @@ function EmployeeView({
             </div>
           </Card>
         )}
+      </div>
+    </div>
+  )
+}
+
+// ─── AutoGenModal ─────────────────────────────────────────────────────────
+
+function AutoGenModal({ onClose, onGenerate, employeesWithoutSchedule }: {
+  onClose: () => void
+  onGenerate: (mode: AutoGenMode) => void
+  employeesWithoutSchedule: Employee[]
+}) {
+  const [mode, setMode] = useState<AutoGenMode>('solo_vacios')
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl max-w-md w-full p-5">
+        <p className="text-xs text-gray-500 uppercase tracking-wide">Auto-generar</p>
+        <p className="font-bold text-lg text-gray-900">🪄 Generar semana automáticamente</p>
+        <p className="text-xs text-gray-500 mt-1">
+          Asignaremos turnos y libras a partir del horario semanal de cada empleado.
+        </p>
+
+        <div className="space-y-2 mt-4">
+          <label className={`flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
+            mode === 'solo_vacios' ? 'border-[#7C1A1A] bg-[#F5E9D9]' : 'border-gray-200 hover:border-gray-300'
+          }`}>
+            <input type="radio" name="mode" checked={mode === 'solo_vacios'}
+              onChange={() => setMode('solo_vacios')}
+              className="mt-1 accent-[#7C1A1A]" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-gray-900">Solo huecos vacíos</p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Rellena las celdas vacías con turnos y libras según el horario del empleado. No toca lo ya asignado.
+              </p>
+            </div>
+          </label>
+
+          <label className={`flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
+            mode === 'solo_libras' ? 'border-[#7C1A1A] bg-[#F5E9D9]' : 'border-gray-200 hover:border-gray-300'
+          }`}>
+            <input type="radio" name="mode" checked={mode === 'solo_libras'}
+              onChange={() => setMode('solo_libras')}
+              className="mt-1 accent-[#7C1A1A]" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-gray-900">Solo libras</p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Solo asigna LIBRE a los días que el empleado tiene marcados como inactivos en su horario semanal. No toca turnos.
+              </p>
+            </div>
+          </label>
+
+          <label className={`flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
+            mode === 'todo' ? 'border-[#7C1A1A] bg-[#F5E9D9]' : 'border-gray-200 hover:border-gray-300'
+          }`}>
+            <input type="radio" name="mode" checked={mode === 'todo'}
+              onChange={() => setMode('todo')}
+              className="mt-1 accent-[#7C1A1A]" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-gray-900">Reasignar todo</p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Sobrescribe TODAS las celdas con el patrón del horario semanal. Pedirá confirmación si hay asignaciones que cambian.
+              </p>
+            </div>
+          </label>
+        </div>
+
+        {employeesWithoutSchedule.length > 0 && (
+          <div className="mt-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800">
+            ⚠ {employeesWithoutSchedule.length} empleado{employeesWithoutSchedule.length !== 1 ? 's' : ''} sin horario semanal configurado: {employeesWithoutSchedule.map(e => e.name).join(', ')}.
+            No se les generará nada hasta que les asignes uno desde su ficha.
+          </div>
+        )}
+
+        <div className="flex gap-2 mt-5">
+          <Button variant="outline" onClick={onClose} className="flex-1">Cancelar</Button>
+          <Button onClick={() => onGenerate(mode)} className="flex-1">🪄 Generar</Button>
+        </div>
       </div>
     </div>
   )
