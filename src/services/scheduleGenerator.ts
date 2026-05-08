@@ -23,7 +23,14 @@ import type {
   EmployeeWorkload,
   GeneratorResult,
 } from '../types/scheduler'
-import { shiftDurationHours, periodOfShift, coverageForDay } from '../types/scheduler'
+import { shiftDurationHours, coverageForDay } from '../types/scheduler'
+
+// Devuelve la franja del turno con tipo restrictivo (sin 'any').
+type SlotPeriod = 'morning' | 'evening'
+function slotPeriodOf(start: string): SlotPeriod {
+  const [h] = start.split(':').map(Number)
+  return h < 17 ? 'morning' : 'evening'
+}
 
 const HOURS_OVERTIME_TOLERANCE = 0.10 // 10% sobre horas contratadas
 
@@ -117,7 +124,7 @@ function buildSlots(
           startTime: t.start_time.slice(0, 5),
           endTime: t.end_time.slice(0, 5),
           hours: shiftDurationHours(t.start_time, t.end_time),
-          period: periodOfShift(t.start_time.slice(0, 5)),
+          period: slotPeriodOf(t.start_time.slice(0, 5)),
           needed,
         })
       }
@@ -339,7 +346,7 @@ export interface SuggestFillInput {
 export function suggestFillForGap(input: SuggestFillInput): FillSuggestion[] {
   const { gap, template, weekStart, cells, employees } = input
   const slotHours = shiftDurationHours(template.start_time, template.end_time)
-  const slotPeriod = periodOfShift(template.start_time.slice(0, 5))
+  const slotPeriod = slotPeriodOf(template.start_time.slice(0, 5))
   const isoDate = isoForDay(weekStart, gap.day_of_week)
   const dayKey = String(gap.day_of_week)
 
@@ -507,7 +514,7 @@ export function validateSchedule(
   for (const tid of Object.keys(cells)) {
     const t = templates.find(x => x.id === tid)
     if (!t) continue
-    const period = periodOfShift(t.start_time.slice(0, 5))
+    const period = slotPeriodOf(t.start_time.slice(0, 5))
     for (const dk of Object.keys(cells[tid])) {
       const day = parseInt(dk, 10) as DayOfWeek
       for (const empId of cells[tid][dk]) {
