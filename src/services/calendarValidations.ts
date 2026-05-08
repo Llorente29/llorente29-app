@@ -2,6 +2,8 @@
 // Validaciones del calendario: reglas del convenio + mínimos de plantilla.
 import type { Employee } from '../types'
 import type { ShiftAssignment, ShiftType, ShiftMinimum } from './calendarService'
+import type { LocationPlanningRow } from './locationPlanningService'
+import { neededFor } from './locationPlanningService'
 
 export type ValidationLevel = 'error' | 'warning'
 
@@ -20,6 +22,7 @@ interface ValidateContext {
   shiftTypes: ShiftType[]
   employees: Employee[]
   minimums: ShiftMinimum[]
+  planning?: LocationPlanningRow[]    // Si se pasa, prevalece sobre minimums
   weekDays: string[]                 // 7 fechas YYYY-MM-DD
   locationId: string                 // local del plan
 }
@@ -210,8 +213,8 @@ export function validatePlan(ctx: ValidateContext): ValidationIssue[] {
     }
   }
 
-  // ── Reglas POR DÍA Y TURNO (mínimos de plantilla) ───────────────────────
-  // Para cada día y cada tipo de turno (no off), contar empleados asignados.
+  // ── Reglas POR DÍA Y TURNO (cobertura de plantilla) ─────────────────────
+  // Si hay planning del local, usarlo (más preciso por día). Si no, fallback a shift_minimums.
   for (const d of ctx.weekDays) {
     const dayOfWeek = new Date(d + 'T00:00:00').getDay()
     const isWeekend = dayOfWeek === 5 || dayOfWeek === 6 || dayOfWeek === 0
@@ -222,10 +225,25 @@ export function validatePlan(ctx: ValidateContext): ValidationIssue[] {
       // Contar asignaciones de este turno en este día
       const count = ctx.assignments.filter(a => a.date === d && a.shiftTypeId === t.id).length
 
-      // Buscar mínimo aplicable
-      const min = ctx.minimums.find(m => m.shiftTypeId === t.id)
-      if (!min) continue
-      const required = isWeekend && min.minWeekend != null ? min.minWeekend : min.minDefault
+      // Determinar el mínimo aplicable
+      let required = 0
+      let source: 'planning' | 'minimums' = 'minimums'
+
+      if (ctx.planning && ctx.planning.length > 0) {
+        const planRow = ctx.planning.find(p => p.shiftTypeId === t.id)
+        if (planRow) {
+          required = neededFor(planRow, dayOfWeek)
+          source = 'planning'
+        } else {
+          continue   // si hay planning pero no este turno, asumimos 0 requerido
+        }
+      } else {
+        const min = ctx.minimums.find(m => m.shiftTypeId === t.id)
+        if (!min) continue
+        required = isWeekend && min.minWeekend != null ? min.minWeekend : min.minDefault
+      }
+
+      if (required === 0) continue
 
       if (count < required) {
         const dayLabel = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'][dayOfWeek]
@@ -233,7 +251,7 @@ export function validatePlan(ctx: ValidateContext): ValidationIssue[] {
           level: count === 0 ? 'error' : 'warning',
           code: 'min_staff_per_shift',
           title: `${t.code} insuficiente`,
-          description: `${dayLabel} ${d}: ${count}/${required} en ${t.code} ${t.label}${isWeekend && min.minWeekend != null ? ' (V/S/D)' : ''}.`,
+          description: `${dayLabel} ${d}: ${count}/${required} en ${t.code} ${t.label}${source === 'planning' ? ' (según plantilla del local)' : ''}.`,
           date: d,
           shiftTypeCode: t.code,
         })
