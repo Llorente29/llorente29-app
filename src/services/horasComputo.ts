@@ -1,7 +1,9 @@
 // src/services/horasComputo.ts
 // Cálculos de horas, redondeo de fichajes, detección de retrasos/olvidos.
+// MODELO A: el calendario publicado es la fuente de verdad. weeklySchedule se ignora.
 
 import type { Employee, ClockEntry } from '../types'
+import type { ShiftAssignment, ShiftType } from './calendarService'
 
 const DAY_KEYS = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'] as const
 
@@ -30,6 +32,14 @@ export function dateToMinOfDay(d: Date): number {
   return d.getHours() * 60 + d.getMinutes()
 }
 
+/** Construye YYYY-MM-DD en hora local (NO UTC). */
+function toLocalIso(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${dd}`
+}
+
 // ─── Horario teórico del empleado para una fecha concreta ──────────────────
 
 export interface TheoreticalShift {
@@ -40,19 +50,48 @@ export interface TheoreticalShift {
   hours: number
 }
 
-export function getTheoreticalShift(employee: Employee, date: Date): TheoreticalShift | null {
-  const ws = employee.weeklySchedule
-  if (!ws) return null
-  const day = ws[dayKeyOf(date)]
-  if (!day || !day.active || !day.start || !day.end) return null
-  const startMin = hhmmToMin(day.start)
-  const endMin = hhmmToMin(day.end)
+/**
+ * Contexto opcional con asignaciones publicadas para resolver el horario teórico.
+ * - assignmentsByDate: mapa "YYYY-MM-DD" → asignación de ese empleado para ese día (puede ser null)
+ * - typesById: mapa tipoId → ShiftType
+ *
+ * Si pasas este contexto, se usa el calendario publicado.
+ * Si no pasas contexto, se devuelve null → no hay horario para ese día (Modelo A puro).
+ */
+export interface CalendarContext {
+  assignmentsByDate: Map<string, ShiftAssignment | null>
+  typesById: Map<string, ShiftType>
+}
+
+/**
+ * MODELO A: devuelve el horario teórico de UN día concreto.
+ * Solo usa calendario publicado. Si no hay asignación publicada para ese día → null.
+ */
+export function getTheoreticalShift(
+  _employee: Employee,
+  date: Date,
+  ctx?: CalendarContext,
+): TheoreticalShift | null {
+  if (!ctx) return null
+
+  const iso = toLocalIso(date)
+  const assignment = ctx.assignmentsByDate.get(iso)
+  if (!assignment || !assignment.shiftTypeId) return null
+
+  const t = ctx.typesById.get(assignment.shiftTypeId)
+  if (!t || t.isOff) return null
+  if (!t.startTime || !t.endTime) return null
+
+  const startMin = hhmmToMin(t.startTime)
+  let endMin = hhmmToMin(t.endTime)
+  if (endMin <= startMin) endMin += 24 * 60   // cruce medianoche
+
   return {
-    start: day.start,
-    end: day.end,
+    start: t.startTime,
+    end: t.endTime,
     startMin,
     endMin,
-    hours: (endMin - startMin) / 60,
+    hours: t.hours,
   }
 }
 
@@ -72,17 +111,19 @@ export interface RoundingResult {
  *
  * @param realDate fecha real del fichaje
  * @param type     'entrada' o 'salida'
- * @param employee el empleado (para coger su weeklySchedule)
+ * @param employee el empleado
  * @param toleranceMin tolerancia en minutos (típico 8)
+ * @param ctx contexto opcional con calendario publicado (si no se pasa, no hay redondeo)
  */
 export function applyRounding(
   realDate: Date,
   type: 'entrada' | 'salida',
   employee: Employee,
   toleranceMin: number,
+  ctx?: CalendarContext,
 ): RoundingResult {
   const realISO = realDate.toISOString()
-  const shift = getTheoreticalShift(employee, realDate)
+  const shift = getTheoreticalShift(employee, realDate, ctx)
   if (!shift) {
     return { applied: false, realDateTime: realISO, effectiveDateTime: realISO, diffMin: 0 }
   }
@@ -190,17 +231,18 @@ export interface StatusContext {
   todayEntries: ClockEntry[]   // fichajes de HOY
   lateAlertMin: number
   forgotClockoutMin: number
+  calendarCtx?: CalendarContext
 }
 
 export function computeCurrentStatus(ctx: StatusContext): CurrentStatus {
-  const { now, employee, todayEntries, lateAlertMin, forgotClockoutMin } = ctx
+  const { now, employee, todayEntries, lateAlertMin, forgotClockoutMin, calendarCtx } = ctx
 
   const sorted = [...todayEntries].sort((a, b) =>
     new Date(a.datetime).getTime() - new Date(b.datetime).getTime()
   )
   const last = sorted[sorted.length - 1]
 
-  const theoretical = getTheoreticalShift(employee, now)
+  const theoretical = getTheoreticalShift(employee, now, calendarCtx)
   const nowMin = dateToMinOfDay(now)
 
   // Si tiene fichajes hoy y el último es entrada → está dentro
@@ -257,35 +299,18 @@ export interface HourBankPeriod {
 }
 
 /**
- * Devuelve los días laborables (con horario activo) del empleado entre dos fechas.
+ * Horas que el empleado DEBÍA trabajar entre dos fechas según el calendario PUBLICADO.
+ * MODELO A: solo cuenta días con asignación publicada de turno (no off, no LIBRE).
+ * Si una semana no está publicada, esos días NO cuentan en el saldo (no penalizan).
  */
-function activeWorkdaysBetween(employee: Employee, start: Date, end: Date): Date[] {
-  const days: Date[] = []
-  const ws = employee.weeklySchedule
-  if (!ws) return days
-
-  const cur = new Date(start)
-  cur.setHours(0, 0, 0, 0)
-  const stop = new Date(end)
-  stop.setHours(0, 0, 0, 0)
-
-  while (cur <= stop) {
-    const day = ws[dayKeyOf(cur)]
-    if (day && day.active && day.start && day.end) {
-      days.push(new Date(cur))
-    }
-    cur.setDate(cur.getDate() + 1)
-  }
-  return days
-}
-
-/**
- * Horas que el empleado DEBÍA trabajar según su weeklySchedule entre dos fechas.
- * Solo cuenta días que ya han pasado (incluyendo hoy hasta ahora si es parcial).
- */
-export function contractedHoursBetween(employee: Employee, start: Date, end: Date, now: Date = new Date()): number {
-  const ws = employee.weeklySchedule
-  if (!ws) return 0
+export function contractedHoursBetween(
+  _employee: Employee,
+  start: Date,
+  end: Date,
+  now: Date = new Date(),
+  ctx?: CalendarContext,
+): number {
+  if (!ctx) return 0
 
   const today = new Date(now)
   today.setHours(0, 0, 0, 0)
@@ -297,23 +322,27 @@ export function contractedHoursBetween(employee: Employee, start: Date, end: Dat
   stop.setHours(0, 0, 0, 0)
 
   while (cur <= stop) {
-    const day = ws[dayKeyOf(cur)]
-    if (day && day.active && day.start && day.end) {
-      const startMin = hhmmToMin(day.start)
-      const endMin = hhmmToMin(day.end)
-      const dayHours = (endMin - startMin) / 60
+    const iso = toLocalIso(cur)
+    const a = ctx.assignmentsByDate.get(iso)
+    if (a && a.shiftTypeId) {
+      const t = ctx.typesById.get(a.shiftTypeId)
+      if (t && !t.isOff) {
+        const startMin = t.startTime ? hhmmToMin(t.startTime) : 0
+        let endMin = t.endTime ? hhmmToMin(t.endTime) : 0
+        if (endMin <= startMin) endMin += 24 * 60
+        const dayHours = t.hours
 
-      if (cur < today) {
-        // Día pasado completo
-        total += dayHours
-      } else if (cur.getTime() === today.getTime()) {
-        // Hoy: contar solo hasta el momento actual
-        const nowMin = dateToMinOfDay(now)
-        if (nowMin >= endMin) total += dayHours
-        else if (nowMin > startMin) total += (nowMin - startMin) / 60
-        // Si es antes de su hora de entrada, no cuenta nada
+        if (cur < today) {
+          total += dayHours
+        } else if (cur.getTime() === today.getTime()) {
+          // Hoy: contar solo hasta el momento actual
+          const nowMin = dateToMinOfDay(now)
+          if (nowMin >= endMin) total += dayHours
+          else if (nowMin > startMin) total += (nowMin - startMin) / 60
+          // si aún no es la hora de empezar, 0
+        }
+        // futuro no cuenta
       }
-      // Días futuros no cuentan
     }
     cur.setDate(cur.getDate() + 1)
   }
@@ -358,6 +387,7 @@ export function accumulatedRange(employee: Employee, until: Date): { start: Date
 
 /**
  * Calcula la bolsa de horas para un empleado en un período concreto.
+ * MODELO A: solo cuenta horas teóricas de días con calendario publicado.
  */
 export function computeHourBankPeriod(
   employee: Employee,
@@ -365,15 +395,32 @@ export function computeHourBankPeriod(
   rangeEnd: Date,
   label: string,
   now: Date = new Date(),
+  ctx?: CalendarContext,
 ): HourBankPeriod {
-  const contractedHours = contractedHoursBetween(employee, rangeStart, rangeEnd, now)
+  const contractedHours = contractedHoursBetween(employee, rangeStart, rangeEnd, now, ctx)
   const workedHours = hoursWorkedInRange(
     employee.clockEntries || [],
     rangeStart,
     new Date(Math.min(rangeEnd.getTime(), now.getTime())),
   )
   const balance = workedHours - contractedHours
-  const daysInRange = activeWorkdaysBetween(employee, rangeStart, rangeEnd).length
+  // daysInRange: días con turno asignado en el calendario (no off)
+  let daysInRange = 0
+  if (ctx) {
+    const cur = new Date(rangeStart)
+    cur.setHours(0, 0, 0, 0)
+    const stop = new Date(rangeEnd)
+    stop.setHours(0, 0, 0, 0)
+    while (cur <= stop) {
+      const iso = toLocalIso(cur)
+      const a = ctx.assignmentsByDate.get(iso)
+      if (a && a.shiftTypeId) {
+        const t = ctx.typesById.get(a.shiftTypeId)
+        if (t && !t.isOff) daysInRange++
+      }
+      cur.setDate(cur.getDate() + 1)
+    }
+  }
   return {
     label,
     rangeStart,
@@ -394,7 +441,11 @@ export interface HourBankSummary {
   accumulated: HourBankPeriod
 }
 
-export function computeHourBankSummary(employee: Employee, now: Date = new Date()): HourBankSummary {
+export function computeHourBankSummary(
+  employee: Employee,
+  now: Date = new Date(),
+  ctx?: CalendarContext,
+): HourBankSummary {
   const w = weekRange(now)
   const m = monthRange(now)
   const a = accumulatedRange(employee, now)
@@ -405,8 +456,8 @@ export function computeHourBankSummary(employee: Employee, now: Date = new Date(
   const accLabel = `Desde el alta (${a.start.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })})`
 
   return {
-    week: computeHourBankPeriod(employee, w.start, w.end, weekLabel, now),
-    month: computeHourBankPeriod(employee, m.start, m.end, monthLabel, now),
-    accumulated: computeHourBankPeriod(employee, a.start, a.end, accLabel, now),
+    week: computeHourBankPeriod(employee, w.start, w.end, weekLabel, now, ctx),
+    month: computeHourBankPeriod(employee, m.start, m.end, monthLabel, now, ctx),
+    accumulated: computeHourBankPeriod(employee, a.start, a.end, accLabel, now, ctx),
   }
 }
