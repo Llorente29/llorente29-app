@@ -510,6 +510,54 @@ export default function CalendarioPage() {
                   <td className="px-3 py-1.5"></td>
                 </tr>
               ))}
+
+              {/* Fila especial: cobertura 20:00–cierre (solo aplica V/S/D, mínimo 3) */}
+              <tr className="border-t border-gray-200 bg-amber-50/50 text-xs">
+                <td className="px-3 py-1.5 sticky left-0 bg-amber-50/50 z-10">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="text-amber-700 font-bold">20–cierre</span>
+                    <span className="text-[10px] text-amber-600">(V/S/D, mín 3)</span>
+                  </span>
+                </td>
+                {days.map(d => {
+                  const dow = new Date(d + 'T00:00:00').getDay()
+                  const isVSD = dow === 5 || dow === 6 || dow === 0
+                  if (!isVSD) {
+                    return <td key={d} className="p-1 text-center text-gray-300">—</td>
+                  }
+                  // Contar empleados cuyo turno cubra 20:00–00:15
+                  let count = 0
+                  for (const a of assignments) {
+                    if (a.date !== d || !a.shiftTypeId) continue
+                    const t = typesById.get(a.shiftTypeId)
+                    if (!t || t.isOff) continue
+                    const checkRange = (s?: string, e?: string) => {
+                      if (!s || !e) return false
+                      const [sh, sm] = s.split(':').map(Number)
+                      const [eh, em] = e.split(':').map(Number)
+                      const s1 = sh * 60 + sm
+                      let e1 = eh * 60 + em
+                      if (e1 <= s1) e1 += 24 * 60
+                      return s1 <= 20 * 60 && e1 >= 20 * 60 + 15
+                    }
+                    if (checkRange(t.startTime, t.endTime)) { count++; continue }
+                    if (t.isSplit && checkRange(t.split2Start, t.split2End)) { count++ }
+                  }
+                  const ok = count >= 3
+                  return (
+                    <td key={d} className="p-1 text-center bg-amber-50/30">
+                      <span className={`inline-block w-7 h-5 rounded text-[10px] font-bold leading-5 ${
+                        count === 0 ? 'bg-red-100 text-red-700' :
+                        !ok ? 'bg-amber-100 text-amber-700' :
+                        'bg-emerald-50 text-emerald-700'
+                      }`} title={`Cubriendo 20:00–cierre: ${count} / 3`}>
+                        {count}/3
+                      </span>
+                    </td>
+                  )
+                })}
+                <td className="px-3 py-1.5"></td>
+              </tr>
             </tfoot>
           </table>
         </Card>
