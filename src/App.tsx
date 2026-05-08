@@ -16,6 +16,7 @@ import KioskoFichajePage from './pages/KioskoFichajePage'
 import SolicitudesPendientesPage from './pages/SolicitudesPendientesPage'
 import AhoraMismoPage from './pages/AhoraMismoPage'
 import AvisosSettingsPage from './pages/AvisosSettingsPage'
+import TurnosAbiertosPage from './pages/TurnosAbiertosPage'
 import TrabajadorApp from './pages/trabajador/TrabajadorApp'
 import {
   DashboardPage, ScheduledPage, TemplatesPage,
@@ -32,6 +33,7 @@ const NAV: { id: Page; label: string; icon: string; section?: string }[] = [
   { id: 'fichajes_global',    label: 'Control Horario',     icon: '⏰' },
   { id: 'kiosko_fichaje',     label: 'Kiosko Fichaje',      icon: '🕐' },
   { id: 'solicitudes_pendientes', label: 'Solicitudes',     icon: '📨' },
+  { id: 'turnos_abiertos',    label: 'Turnos abiertos',     icon: '🪑' },
   { id: 'calendario',         label: 'Calendario',          icon: '📅' },
   { id: 'informes_personal',  label: 'Informes Gestoría',   icon: '📄' },
   { id: 'tasks',              label: 'Tareas',              icon: '✅', section: 'Operaciones' },
@@ -54,6 +56,7 @@ const PAGE_TITLES: Record<Page, string> = {
   kiosko_fichaje: 'Kiosko Fichaje',
   solicitudes_pendientes: 'Solicitudes pendientes',
   ahora_mismo: 'Ahora mismo',
+  turnos_abiertos: 'Turnos abiertos',
   calendario: 'Calendario de Horarios', informes_personal: 'Informes Gestoría',
   tasks: 'Tareas', scheduled: 'Programadas', templates: 'Plantillas',
   incidents: 'Incidencias', locations: 'Locales', audits: 'Auditorías',
@@ -72,6 +75,7 @@ function renderPage(page: Page) {
     case 'kiosko_fichaje':    return <KioskoFichajePage />
     case 'solicitudes_pendientes': return <SolicitudesPendientesPage />
     case 'ahora_mismo':       return <AhoraMismoPage />
+    case 'turnos_abiertos':   return <TurnosAbiertosPage />
     case 'calendario':        return <CalendarioPage />
     case 'informes_personal': return <InformesPage />
     case 'tasks':             return <TasksPage />
