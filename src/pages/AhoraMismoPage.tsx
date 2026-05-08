@@ -1,20 +1,25 @@
 // src/pages/AhoraMismoPage.tsx
 // Panel del gestor: estado en tiempo real de quién está trabajando AHORA en cada local.
+// MODELO A: usa el calendario PUBLICADO como única fuente de horario teórico.
 import { useState, useEffect, useMemo } from 'react'
 import { useApp } from '../context/AppContext'
 import { Card } from '../components/ui'
 import type { Employee, Location } from '../types'
 import {
   computeCurrentStatus, entriesOfDay,
-  type CurrentStatus,
+  type CurrentStatus, type CalendarContext,
 } from '../services/horasComputo'
 import { fetchAppSettings, type AppSettings } from '../services/appSettingsService'
+import { fetchPublishedAssignmentsForRange } from '../services/calendarService'
+import { isSupabaseEnabled, supabase } from '../lib/supabase'
 
 export default function AhoraMismoPage() {
   const { staff, locations } = useApp()
   const [now, setNow] = useState(new Date())
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [filterLoc, setFilterLoc] = useState<string>('all')
+  // Mapa por empleado de su CalendarContext (asignaciones publicadas para hoy)
+  const [calendarCtxByEmp, setCalendarCtxByEmp] = useState<Map<string, CalendarContext>>(new Map())
 
   // Cargar settings
   useEffect(() => {
@@ -27,6 +32,41 @@ export default function AhoraMismoPage() {
     return () => clearInterval(id)
   }, [])
 
+  // Cargar asignaciones publicadas para hoy y enriquecer el contexto por empleado
+  async function loadCalendar() {
+    const todayIso = (() => {
+      const d = new Date()
+      const y = d.getFullYear()
+      const m = String(d.getMonth() + 1).padStart(2, '0')
+      const dd = String(d.getDate()).padStart(2, '0')
+      return `${y}-${m}-${dd}`
+    })()
+    const { assignments, types } = await fetchPublishedAssignmentsForRange(todayIso, todayIso)
+    const typesById = new Map(types.map(t => [t.id, t]))
+    const map = new Map<string, CalendarContext>()
+    for (const a of assignments) {
+      const empMap = map.get(a.employeeId) || { assignmentsByDate: new Map(), typesById }
+      empMap.assignmentsByDate.set(a.date, a)
+      empMap.typesById = typesById
+      map.set(a.employeeId, empMap)
+    }
+    // Para empleados sin asignación, ctx vacío con typesById
+    setCalendarCtxByEmp(map)
+  }
+
+  useEffect(() => { loadCalendar() }, [now])
+
+  // Realtime: si cambia un plan o asignación, recargamos
+  useEffect(() => {
+    if (!isSupabaseEnabled || !supabase) return
+    const sb = supabase
+    const ch = sb.channel('ahora-cal')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_assignments' }, () => loadCalendar())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'weekly_plans' }, () => loadCalendar())
+      .subscribe()
+    return () => { sb.removeChannel(ch) }
+  }, [])
+
   // Calcular el estado de cada empleado activo
   type EmpStatus = { employee: Employee; status: CurrentStatus; primaryLoc: Location | undefined }
 
@@ -36,15 +76,17 @@ export default function AhoraMismoPage() {
       .filter(e => e.active)
       .map(e => {
         const todayEntries = entriesOfDay(e.clockEntries || [], now)
+        const calendarCtx = calendarCtxByEmp.get(e.id)
         const status = computeCurrentStatus({
           now, employee: e, todayEntries,
           lateAlertMin: settings.lateAlertMin,
           forgotClockoutMin: settings.forgotClockoutMin,
+          calendarCtx,
         })
         const primaryLoc = locations.find(l => l.id === e.locationId)
         return { employee: e, status, primaryLoc }
       })
-  }, [staff, locations, now, settings])
+  }, [staff, locations, now, settings, calendarCtxByEmp])
 
   // Filtrar por local
   const filtered = useMemo(() => {
