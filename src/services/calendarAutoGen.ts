@@ -1,6 +1,7 @@
 // src/services/calendarAutoGen.ts
 // Auto-generación de planes semanales: respeta weeklySchedule de cada empleado
 // y rellena libras + turnos según patrones simples.
+// REGLA: NUNCA asigna LIBRE automáticamente en V/S/D (alta demanda).
 
 import type { Employee } from '../types'
 import type { ShiftType, ShiftAssignment } from './calendarService'
@@ -10,10 +11,10 @@ export type AutoGenMode = 'todo' | 'solo_libras' | 'solo_vacios'
 const DAY_KEYS = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'] as const
 
 interface AutoGenInput {
-  employees: Employee[]              // empleados activos del local
-  shiftTypes: ShiftType[]            // tipos disponibles
-  days: string[]                     // 7 fechas YYYY-MM-DD (lunes-domingo)
-  existingAssignments: ShiftAssignment[]  // las que ya hay
+  employees: Employee[]
+  shiftTypes: ShiftType[]
+  days: string[]
+  existingAssignments: ShiftAssignment[]
   mode: AutoGenMode
 }
 
@@ -23,16 +24,10 @@ interface AutoGenOutput {
   conflicts: number
 }
 
-/**
- * Devuelve el código de turno típico de unas horas concretas.
- * Si no encuentra match exacto, devuelve null.
- */
 function findShiftTypeForHours(start: string, end: string, types: ShiftType[]): ShiftType | null {
-  // Match exacto
   const exact = types.find(t => !t.isOff && t.startTime === start && t.endTime === end)
   if (exact) return exact
 
-  // Aproximación: misma hora de inicio (±15 min)
   const startMin = (s: string) => {
     const [h, m] = s.split(':').map(Number)
     return h * 60 + m
@@ -47,19 +42,6 @@ function findShiftTypeForHours(start: string, end: string, types: ShiftType[]): 
   return null
 }
 
-/**
- * Genera el plan automáticamente siguiendo el weeklySchedule de cada empleado.
- *
- * Reglas:
- * - Si el día está marcado como "active = false" en weeklySchedule → asignar LIBRE
- * - Si el día está marcado como "active = true" con start/end → buscar shiftType que coincida
- * - Si no hay weeklySchedule, deja el día vacío (no asigna nada)
- *
- * El parámetro `mode` controla qué celdas se tocan:
- * - 'todo': sobreescribe TODAS las celdas (incluso las ya asignadas)
- * - 'solo_libras': solo asigna LIBREs en días que weeklySchedule marca como inactivos. No toca turnos.
- * - 'solo_vacios': asigna en celdas vacías. No toca las que ya tienen turno.
- */
 export function autoGenerate(input: AutoGenInput): AutoGenOutput {
   const { employees, shiftTypes, days, existingAssignments, mode } = input
 
@@ -68,7 +50,6 @@ export function autoGenerate(input: AutoGenInput): AutoGenOutput {
     return { toUpsert: [], unchanged: 0, conflicts: 0 }
   }
 
-  // Index de asignaciones existentes
   const existing = new Map<string, ShiftAssignment>()
   for (const a of existingAssignments) {
     existing.set(`${a.employeeId}|${a.date}`, a)
@@ -92,10 +73,19 @@ export function autoGenerate(input: AutoGenInput): AutoGenOutput {
       const existingAssign = existing.get(`${emp.id}|${date}`)
       const hasExisting = !!existingAssign?.shiftTypeId
 
-      // Decidir qué turno proponer según weeklySchedule
+      // REGLA CRÍTICA: NUNCA asignar LIBRE en V/S/D automáticamente.
+      // dayOfWeek: 0=domingo, 5=viernes, 6=sábado
+      const isWeekend = dayOfWeek === 5 || dayOfWeek === 6 || dayOfWeek === 0
+
       let proposedTypeId: string | null = null
 
       if (!day.active) {
+        // Día marcado como inactivo en weeklySchedule
+        if (isWeekend) {
+          // V/S/D: NO asignar LIBRE automáticamente. Dejar vacío.
+          unchanged++
+          continue
+        }
         proposedTypeId = libreType.id
       } else if (day.start && day.end) {
         const matchType = findShiftTypeForHours(day.start, day.end, shiftTypes)
@@ -109,13 +99,11 @@ export function autoGenerate(input: AutoGenInput): AutoGenOutput {
 
       // Aplicar según modo
       if (mode === 'solo_libras') {
-        // Solo asignar si la propuesta es LIBRE
         if (proposedTypeId !== libreType.id) {
           unchanged++
           continue
         }
         if (hasExisting) {
-          // No tocar lo asignado en modo solo libras
           unchanged++
           continue
         }
@@ -125,7 +113,6 @@ export function autoGenerate(input: AutoGenInput): AutoGenOutput {
           continue
         }
       } else if (mode === 'todo') {
-        // Si hay algo asignado distinto a la propuesta, contamos como conflicto pero igual sobrescribimos
         if (hasExisting && existingAssign.shiftTypeId !== proposedTypeId) {
           conflicts++
         }
