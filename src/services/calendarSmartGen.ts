@@ -299,12 +299,17 @@ export function smartGenerate(input: SmartGenInput): SmartGenOutput {
       )
       if (todayShifts.length >= 2) continue
 
-      // Descanso 12h
+      // Descanso 12h SOLO entre días distintos. Dentro del mismo día se permite (turno partido).
       let restOk = true
       for (const r of st.ranges) {
         for (const newR of range) {
+          // Si están en el mismo día, no aplicamos la regla de 12h (es partido)
+          const sameDay = r.date === newR.date
+          // Comprobar solapamiento siempre (no se puede solapar)
           const overlap = !(newR.endAbs <= r.startAbs || newR.startAbs >= r.endAbs)
           if (overlap) { restOk = false; break }
+          if (sameDay) continue   // dentro del mismo día solo no solapar, sin descanso 12h
+          // Días distintos: aplicar descanso 12h
           const gap = newR.startAbs > r.endAbs ? newR.startAbs - r.endAbs : r.startAbs - newR.endAbs
           if (gap < 12 * 60) { restOk = false; break }
         }
@@ -343,6 +348,21 @@ export function smartGenerate(input: SmartGenInput): SmartGenOutput {
     best.ranges.sort((a, b) => a.startAbs - b.startAbs)
     const c = cover.get(t.id)
     if (c) c.set(date, (c.get(date) || 0) + 1)
+
+    // Si es turno partido (T1+T3), también cuenta como cobertura de T1 y T4
+    // porque cubre tanto la mañana como el cierre.
+    if (t.isSplit) {
+      const t1 = workTypes.find(x => x.code === 'T1')
+      const t4 = workTypes.find(x => x.code === 'T4')
+      if (t1) {
+        const c1 = cover.get(t1.id)
+        if (c1) c1.set(date, (c1.get(date) || 0) + 1)
+      }
+      if (t4) {
+        const c4 = cover.get(t4.id)
+        if (c4) c4.set(date, (c4.get(date) || 0) + 1)
+      }
+    }
     return true
   }
 
@@ -360,6 +380,36 @@ export function smartGenerate(input: SmartGenInput): SmartGenOutput {
       while ((cover.get(t.id)?.get(date) || 0) < needed) {
         const ok = tryAssignSingle(date, t)
         if (!ok) break   // no hay más candidatos
+      }
+    }
+  }
+
+  // PASE 2 — Intentar cubrir T1 y T4 con turno partido T1+T3 si quedan huecos
+  const splitType = workTypes.find(t => t.isSplit && t.code === 'T1+T3')
+  if (splitType) {
+    for (const date of sortedDays) {
+      const dow = new Date(date + 'T00:00:00').getDay()
+      const t1 = workTypes.find(t => t.code === 'T1')
+      const t4 = workTypes.find(t => t.code === 'T4')
+      if (!t1 || !t4) continue
+
+      const t1Plan = planning.find(p => p.shiftTypeId === t1.id)
+      const t4Plan = planning.find(p => p.shiftTypeId === t4.id)
+      const t1Need = t1Plan ? neededFor(t1Plan, dow) : 0
+      const t4Need = t4Plan ? neededFor(t4Plan, dow) : 0
+
+      // Si falta cobertura en T1 y T4 a la vez, y el partido cubre ambos, asignar partidos
+      while (true) {
+        const t1Have = cover.get(t1.id)?.get(date) || 0
+        const t4Have = cover.get(t4.id)?.get(date) || 0
+        const t1Missing = t1Need - t1Have
+        const t4Missing = t4Need - t4Have
+
+        // Sólo asignamos partido si AMBOS están en déficit (sino no tiene sentido)
+        if (t1Missing <= 0 || t4Missing <= 0) break
+
+        const ok = tryAssignSingle(date, splitType)
+        if (!ok) break
       }
     }
   }
