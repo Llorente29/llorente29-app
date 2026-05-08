@@ -4,7 +4,7 @@
 // Cálculo correcto de horas con cruce de medianoche.
 
 import { useEffect, useMemo, useState } from 'react'
-import { useApp } from '../../context/AppContext'
+import type { Employee } from '../../types'
 import { listShiftTemplates, getSchedule } from '../../services/schedulerService'
 import {
   type ShiftTemplate,
@@ -40,7 +40,7 @@ function formatWeekLabel(weekStartISO: string): string {
 }
 
 interface MiHorarioProps {
-  employeeId: string
+  employee: Employee
   onBack?: () => void
 }
 
@@ -53,9 +53,8 @@ interface DayShift {
   crossesMidnight: boolean
 }
 
-export default function MiHorario({ employeeId, onBack }: MiHorarioProps) {
-  const { staff } = useApp()
-  const employee = staff.find(e => e.id === employeeId)
+export default function MiHorario({ employee, onBack }: MiHorarioProps) {
+  const employeeId = employee.id
   const [weekStart, setWeekStart] = useState<string>(() => toISODate(getMondayOfWeek(new Date())))
   const [templates, setTemplates] = useState<ShiftTemplate[]>([])
   const [schedule, setSchedule] = useState<Schedule | null>(null)
@@ -128,14 +127,6 @@ export default function MiHorario({ employeeId, onBack }: MiHorarioProps) {
     }
     return null
   })()
-
-  if (!employee) {
-    return (
-      <div className="p-4 text-center text-gray-500">
-        Empleado no encontrado.
-      </div>
-    )
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#F5E9D9] via-white to-[#F5E9D9] pb-20">
