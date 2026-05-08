@@ -42,6 +42,20 @@ export interface Vacation {
   alerts?: unknown[]; adjustments?: string[]
 }
 
+// === Tipos del scheduler en la ficha del empleado (sub-fase 3.2) ===
+export type ShiftPeriod = 'manana' | 'tarde' | 'partido'
+// rest_pattern: cadena "<dia>:<tipo>"
+//   día: 'lun','mar','mie'
+//   tipo: 'tarde_dia' (tarde del día + día siguiente entero)
+//         'dia_manana' (día entero + mañana del día siguiente)
+// Ej: 'mar:dia_manana' = "Martes entero libre + Miércoles mañana libre" (Natacha)
+// Ej: 'lun:tarde_dia'  = "Lunes tarde libre + Martes entero libre"      (Yohanny)
+// Ej: 'mie:dia_manana' = "Miércoles entero libre + Jueves mañana libre" (Pamela)
+export type RestPattern =
+  | 'lun:tarde_dia' | 'lun:dia_manana'
+  | 'mar:tarde_dia' | 'mar:dia_manana'
+  | 'mie:tarde_dia' | 'mie:dia_manana'
+
 export interface Employee {
   id: string; name: string; dni: string; phone: string; email: string; photo: string
   locationId: string; position: string; department: string; contractType: string
@@ -54,9 +68,10 @@ export interface Employee {
   // === Campos para fichaje en kiosko/móvil ===
   pin?: string                       // PIN de 4 dígitos para fichar
   assignedLocations?: string[]       // locales donde puede fichar (si vacío, usa locationId)
-  // === Campos para el scheduler (sub-fase 3.1) ===
-  contractedHoursWeek?: number       // horas contratadas semanales (ej. 40, 43.5)
+  // === Campos para el scheduler (sub-fase 3.2) ===
   shiftCode?: string                 // código corto T1/T2/T3 para visualización en matriz
+  shiftPeriod?: ShiftPeriod          // franja habitual
+  restPattern?: RestPattern          // patrón de descanso fijo
 }
 
 export interface ChecklistItem {
