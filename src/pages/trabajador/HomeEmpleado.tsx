@@ -19,7 +19,7 @@ export default function HomeEmpleado({ employee, onNavigate, onLogout }: Props) 
       icon: open ? '🛑' : '🟢',
       title: open ? 'Fichar SALIDA' : 'Fichar ENTRADA',
       desc: open ? 'Cerrar tu jornada' : 'Empezar tu jornada',
-      color: open ? 'bg-orange-50 border-orange-200 hover:border-orange-400' : 'bg-teal-50 border-teal-200 hover:border-teal-400',
+      color: open ? 'bg-orange-50 border-orange-200 hover:border-orange-400' : 'bg-[#F5E9D9] border-[#E5D4B7] hover:border-[#7C1A1A]',
       enabled: true,
     },
     {
@@ -60,7 +60,7 @@ export default function HomeEmpleado({ employee, onNavigate, onLogout }: Props) 
   const greeting = now.getHours() < 14 ? 'Buenos días' : now.getHours() < 21 ? 'Buenas tardes' : 'Buenas noches'
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-teal-50 via-white to-emerald-50 pb-8">
+    <div className="min-h-screen bg-gradient-to-br from-[#F5E9D9] via-white to-[#F5E9D9] pb-8">
       {/* Header */}
       <div className="px-4 pt-5 pb-4">
         <div className="flex items-start justify-between">
