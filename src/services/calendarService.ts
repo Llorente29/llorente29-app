@@ -318,7 +318,11 @@ export function mondayOf(date: Date): string {
   const day = d.getDay()
   const offsetToMonday = day === 0 ? -6 : 1 - day
   d.setDate(d.getDate() + offsetToMonday)
-  return d.toISOString().slice(0, 10)
+  // Construir ISO string local (no UTC) para evitar problemas de zona horaria
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day2 = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day2}`
 }
 
 /** Genera array de 7 fechas (YYYY-MM-DD) desde el lunes. */
@@ -328,7 +332,10 @@ export function weekDates(weekStartIso: string): string[] {
   for (let i = 0; i < 7; i++) {
     const x = new Date(d)
     x.setDate(d.getDate() + i)
-    out.push(x.toISOString().slice(0, 10))
+    const y = x.getFullYear()
+    const m = String(x.getMonth() + 1).padStart(2, '0')
+    const day = String(x.getDate()).padStart(2, '0')
+    out.push(`${y}-${m}-${day}`)
   }
   return out
 }
