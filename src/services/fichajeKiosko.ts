@@ -1,5 +1,6 @@
 // src/services/fichajeKiosko.ts
 import type { Employee, ClockEntry, Location, KioskoConfig } from '../types'
+import { applyRounding } from './horasComputo'
 
 // Coordenadas conocidas de los locales (fallback si Location no tiene lat/lng)
 const KNOWN_LOCATION_COORDS: Record<string, { lat: number; lng: number }> = {
@@ -102,9 +103,11 @@ export function buildClockEntry(
   config: KioskoConfig,
   position: GeolocationPosition | null,
   photoDataUrl?: string,
+  roundingToleranceMin = 8,
 ): ClockResult {
   const type = nextClockType(employee)
-  const now = new Date().toISOString()
+  const realDate = new Date()
+  const realISO = realDate.toISOString()
 
   let withinGeofence = true
   let distanceM = 0
@@ -120,11 +123,17 @@ export function buildClockEntry(
     }
   }
 
+  // Aplicar redondeo amistoso (Opción 3)
+  const rounding = applyRounding(realDate, type, employee, roundingToleranceMin)
+
   const entry: ClockEntry = {
     id: 'fc-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
     type,
-    datetime: now,
-    realDatetime: now,
+    datetime: rounding.effectiveDateTime,    // hora efectiva (puede estar redondeada)
+    realDatetime: realISO,                   // hora real siempre
+    scheduled: rounding.scheduledTime,
+    roundingApplied: rounding.applied,
+    diffMinutes: rounding.diffMin,
     lat: position?.coords.latitude,
     lng: position?.coords.longitude,
     source: 'kiosko',
