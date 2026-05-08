@@ -410,6 +410,99 @@ export async function fetchMinimums(locationId?: string): Promise<ShiftMinimum[]
   return all.filter(m => !m.locationId)
 }
 
+
+// ─── EDITAR TIPOS DE TURNO ────────────────────────────────────────────────
+
+export async function fetchAllShiftTypes(): Promise<ShiftType[]> {
+  if (!supabase) return []
+  const { data, error } = await supabase.from('shift_types')
+    .select('*').order('display_order')
+  if (error) { console.error('fetchAllShiftTypes:', error); return [] }
+  return (data as ShiftTypeRow[]).map(rowToShiftType)
+}
+
+export async function upsertShiftType(input: {
+  id?: string
+  code: string
+  label: string
+  startTime?: string
+  endTime?: string
+  color: string
+  active?: boolean
+  displayOrder?: number
+}): Promise<ShiftType | null> {
+  if (!supabase) return null
+  const sb = supabase
+
+  // Calcular horas automáticamente desde el horario
+  let hours = 0
+  if (input.startTime && input.endTime) {
+    const [sh, sm] = input.startTime.split(':').map(Number)
+    const [eh, em] = input.endTime.split(':').map(Number)
+    const startMin = sh * 60 + sm
+    let endMin = eh * 60 + em
+    if (endMin <= startMin) endMin += 24 * 60   // cruce medianoche
+    hours = (endMin - startMin) / 60
+  }
+
+  const payload = {
+    code: input.code,
+    label: input.label,
+    start_time: input.startTime || null,
+    end_time: input.endTime || null,
+    hours,
+    color: input.color,
+    active: input.active ?? true,
+    display_order: input.displayOrder ?? 1,
+    is_split: false,
+    is_off: false,
+  }
+
+  if (input.id) {
+    const { data, error } = await sb.from('shift_types').update(payload).eq('id', input.id).select().single()
+    if (error) { console.error('upsertShiftType update:', error); return null }
+    return rowToShiftType(data as ShiftTypeRow)
+  } else {
+    const { data, error } = await sb.from('shift_types').insert(payload).select().single()
+    if (error) { console.error('upsertShiftType insert:', error); return null }
+    return rowToShiftType(data as ShiftTypeRow)
+  }
+}
+
+export async function setShiftTypeActive(id: string, active: boolean): Promise<boolean> {
+  if (!supabase) return false
+  const { error } = await supabase.from('shift_types').update({ active }).eq('id', id)
+  if (error) { console.error('setShiftTypeActive:', error); return false }
+  return true
+}
+
+/**
+ * Borra un tipo de turno. Solo si no tiene asignaciones (de lo contrario debe desactivarse).
+ * Devuelve número de asignaciones bloqueantes, o 0 si se borró correctamente.
+ */
+export async function deleteShiftType(id: string): Promise<number> {
+  if (!supabase) return -1
+  const sb = supabase
+
+  // Comprobar si hay asignaciones
+  const { count } = await sb.from('shift_assignments')
+    .select('id', { count: 'exact', head: true })
+    .eq('shift_type_id', id)
+
+  if (count && count > 0) {
+    return count   // hay asignaciones, no se puede borrar
+  }
+
+  // Borrar mínimos y planning relacionados
+  await sb.from('shift_minimums').delete().eq('shift_type_id', id)
+  await sb.from('location_planning').delete().eq('shift_type_id', id)
+
+  // Borrar el tipo
+  const { error } = await sb.from('shift_types').delete().eq('id', id)
+  if (error) { console.error('deleteShiftType:', error); return -1 }
+  return 0
+}
+
 // ─── HELPERS ──────────────────────────────────────────────────────────────
 
 /** Devuelve el lunes (ISO YYYY-MM-DD) de la semana de una fecha. */
