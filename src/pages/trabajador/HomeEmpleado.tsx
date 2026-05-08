@@ -42,17 +42,17 @@ export default function HomeEmpleado({ employee, onNavigate, onLogout }: Props) 
       id: 'documentos' as SubPage,
       icon: '📄',
       title: 'Mis documentos',
-      desc: 'Nóminas, contratos',
+      desc: 'Nóminas, contratos, partes',
       color: 'bg-white border-gray-200 hover:border-amber-400',
-      enabled: false,
+      enabled: true,
     },
     {
       id: 'vacaciones' as SubPage,
       icon: '🏖️',
       title: 'Mis vacaciones',
-      desc: 'Solicitar y consultar',
+      desc: 'Solicitar y consultar saldo',
       color: 'bg-white border-gray-200 hover:border-emerald-400',
-      enabled: false,
+      enabled: true,
     },
   ]
 
