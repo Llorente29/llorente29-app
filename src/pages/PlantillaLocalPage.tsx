@@ -9,6 +9,7 @@ import {
 import {
   fetchLocationPlanning, upsertLocationPlanning,
 } from '../services/locationPlanningService'
+import TiposTurnoPage from './TiposTurnoPage'
 
 interface Props {
   onBack: () => void
@@ -27,6 +28,7 @@ export default function PlantillaLocalPage({ onBack }: Props) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [savedAt, setSavedAt] = useState<Date | null>(null)
+  const [showTiposTurno, setShowTiposTurno] = useState(false)
 
   useEffect(() => {
     if (!locationId && locations.length > 0) {
@@ -108,8 +110,16 @@ export default function PlantillaLocalPage({ onBack }: Props) {
 
   return (
     <div className="space-y-4">
+      {showTiposTurno && (
+        <TiposTurnoPage onBack={() => { setShowTiposTurno(false); load() }} />
+      )}
+      {!showTiposTurno && <>
       <div className="flex items-center gap-3">
         <button onClick={onBack} className="text-sm text-gray-500 hover:text-gray-700">← Volver al calendario</button>
+        <button onClick={() => setShowTiposTurno(true)}
+          className="ml-auto text-xs px-3 py-1.5 rounded bg-purple-50 text-purple-700 hover:bg-purple-100 font-medium">
+          ⚙️ Editar tipos de turno
+        </button>
       </div>
 
       <Card className="p-5">
@@ -214,6 +224,7 @@ export default function PlantillaLocalPage({ onBack }: Props) {
             ampliar horas a un trabajador, contratar más personal o reducir necesidades.</p>
         </div>
       </Card>
+      </>}
     </div>
   )
 }
