@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useApp } from './context/AppContext'
 import type { Page } from './types'
+import Logo, { LogoSquare } from './components/Logo'
 import StaffPage from './pages/StaffPage'
 import FichajesGlobalPage from './pages/FichajesGlobalPage'
 import InformesPage from './pages/InformesPage'
@@ -83,20 +84,17 @@ function renderPage(page: Page) {
 
 function ModeSelector({ onSelect }: { onSelect: (mode: AppMode) => void }) {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-teal-50 via-white to-emerald-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-[#F5E9D9] via-white to-[#F5E9D9] flex items-center justify-center p-4">
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
-          <div className="w-20 h-20 mx-auto rounded-2xl bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center mb-4">
-            <span className="text-white font-bold text-4xl" style={{ fontFamily: 'Instrument Serif, serif' }}>A</span>
-          </div>
-          <h1 className="text-3xl font-bold text-gray-900" style={{ fontFamily: 'Instrument Serif, serif' }}>Andy App</h1>
-          <p className="text-sm text-gray-500 mt-2">¿Quién eres?</p>
+          <Logo size="xl" withBg className="mb-4" />
+          <p className="text-sm text-gray-500 mt-4">¿Quién eres?</p>
         </div>
 
         <div className="space-y-3">
           <button
             onClick={() => onSelect('trabajador')}
-            className="w-full p-5 rounded-2xl border-2 border-gray-200 bg-white hover:border-teal-400 transition-all text-left active:scale-95"
+            className="w-full p-5 rounded-2xl border-2 border-gray-200 bg-white hover:border-[#7C1A1A] transition-all text-left active:scale-95"
           >
             <div className="flex items-center gap-4">
               <span className="text-4xl">👷</span>
@@ -109,7 +107,7 @@ function ModeSelector({ onSelect }: { onSelect: (mode: AppMode) => void }) {
 
           <button
             onClick={() => onSelect('gestor')}
-            className="w-full p-5 rounded-2xl border-2 border-gray-200 bg-white hover:border-blue-400 transition-all text-left active:scale-95"
+            className="w-full p-5 rounded-2xl border-2 border-gray-200 bg-white hover:border-[#F39C2A] transition-all text-left active:scale-95"
           >
             <div className="flex items-center gap-4">
               <span className="text-4xl">👔</span>
@@ -140,13 +138,11 @@ function Sidebar({ page, setPage, collapsed, setCollapsed }: {
   return (
     <aside className={`fixed inset-y-0 left-0 z-40 flex flex-col bg-white border-r border-gray-200 transition-all duration-200 ${collapsed ? 'w-[64px]' : 'w-56'}`}>
       <div className={`h-14 flex items-center border-b gap-3 shrink-0 ${collapsed ? 'px-3.5' : 'px-4'}`}>
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center shrink-0">
-          <span className="text-white font-bold text-sm" style={{ fontFamily: 'Instrument Serif, serif' }}>A</span>
-        </div>
+        <LogoSquare size={32} />
         {!collapsed && (
           <div className="min-w-0">
-            <p className="text-sm font-bold tracking-tight truncate">Andy App</p>
-            <p className="text-[10px] text-gray-400 truncate">Hostelería Pro</p>
+            <p className="text-sm font-bold tracking-tight truncate">Foodint</p>
+            <p className="text-[10px] text-gray-400 truncate">App del equipo</p>
           </div>
         )}
       </div>
@@ -166,7 +162,7 @@ function Sidebar({ page, setPage, collapsed, setCollapsed }: {
                 title={collapsed ? item.label : undefined}
                 onClick={() => setPage(item.id)}
                 className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm font-medium transition-all ${
-                  isActive ? 'bg-teal-50 text-teal-700' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
+                  isActive ? 'bg-[#F5E9D9] text-[#7C1A1A]' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
                 }`}
               >
                 <span className="relative shrink-0 text-base leading-none">
@@ -200,7 +196,7 @@ function BottomNav({ page, setPage }: { page: Page; setPage: (p: Page) => void }
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 flex items-center justify-around py-1 px-1 lg:hidden">
       {main.map(id => (
         <button key={id} onClick={() => setPage(id)}
-          className={`flex flex-col items-center gap-0.5 py-1.5 px-2 rounded-lg min-w-0 ${page === id ? 'text-teal-600' : 'text-gray-400'}`}>
+          className={`flex flex-col items-center gap-0.5 py-1.5 px-2 rounded-lg min-w-0 ${page === id ? 'text-[#7C1A1A]' : 'text-gray-400'}`}>
           <span className="text-xl leading-none">{icons[id]}</span>
           <span className="text-[9px] font-medium truncate">{PAGE_TITLES[id as Page].split(' ')[0]}</span>
         </button>
@@ -287,9 +283,9 @@ export default function App() {
             <button
               onClick={exitTrabajadorMode}
               title="Cambiar de modo"
-              className="w-7 h-7 rounded-full bg-gradient-to-br from-teal-400 to-emerald-600 flex items-center justify-center hover:opacity-90"
+              className="hover:opacity-80 transition-opacity"
             >
-              <span className="text-white text-xs font-bold">A</span>
+              <LogoSquare size={28} />
             </button>
           </div>
         </header>
