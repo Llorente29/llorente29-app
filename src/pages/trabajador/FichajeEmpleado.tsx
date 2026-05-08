@@ -128,7 +128,7 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
                 Volver
               </button>
               <button onClick={() => { setStep('idle'); setErrorMsg('') }}
-                className="flex-1 py-3 rounded-xl bg-teal-600 text-white font-medium hover:bg-teal-700">
+                className="flex-1 py-3 rounded-xl bg-[#7C1A1A] text-white font-medium hover:bg-[#5A1212]">
                 Reintentar
               </button>
             </div>
@@ -140,7 +140,7 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
 
   if (step === 'success') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 p-4">
+      <div className="min-h-screen bg-gradient-to-br from-[#F5E9D9] to-[#F5E9D9] p-4">
         <div className="max-w-md mx-auto pt-12">
           <Card className="p-6 text-center">
             <p className="text-7xl mb-3">✅</p>
@@ -171,7 +171,7 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
 
   // step === 'idle' — pantalla principal de fichaje
   return (
-    <div className="min-h-screen bg-gradient-to-br from-teal-50 via-white to-emerald-50 p-4 pb-8">
+    <div className="min-h-screen bg-gradient-to-br from-[#F5E9D9] via-white to-[#F5E9D9] p-4 pb-8">
       <div className="max-w-md mx-auto">
         {/* Header */}
         <div className="flex items-center gap-3 mb-5">
@@ -200,7 +200,7 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
                     onClick={() => setSelectedLocId(l.id)}
                     className={`w-full p-3 rounded-xl border-2 text-left transition-all ${
                       selectedLocId === l.id
-                        ? 'bg-teal-50 border-teal-400'
+                        ? 'bg-[#F5E9D9] border-[#7C1A1A]'
                         : 'bg-white border-gray-200 hover:border-gray-300'
                     }`}
                   >
@@ -254,7 +254,7 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
             !inZone || !selectedLoc
               ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
               : nextType === 'entrada'
-                ? 'bg-gradient-to-br from-teal-500 to-emerald-600 text-white shadow-lg hover:shadow-xl'
+                ? 'bg-gradient-to-br from-[#7C1A1A] to-[#5A1212] text-white shadow-lg hover:shadow-xl'
                 : 'bg-gradient-to-br from-orange-500 to-red-500 text-white shadow-lg hover:shadow-xl'
           }`}
         >
@@ -273,7 +273,7 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
 
 function Centered({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-teal-50 to-emerald-50 p-6">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#F5E9D9] to-[#F5E9D9] p-6">
       <div className="text-center">{children}</div>
     </div>
   )
