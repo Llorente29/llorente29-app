@@ -9,11 +9,13 @@ import MiHorario from './MiHorario'
 import MisFichajes from './MisFichajes'
 import MisDocumentos from './MisDocumentos'
 import MisVacaciones from './MisVacaciones'
+import MiBolsaHoras from './MiBolsaHoras'
+import { fetchAppSettings } from '../../services/appSettingsService'
 import type { Employee } from '../../types'
 
 const SESSION_KEY = 'andy-empleado-session-v1'
 
-type SubPage = 'home' | 'fichar' | 'horario' | 'fichajes' | 'documentos' | 'vacaciones'
+type SubPage = 'home' | 'fichar' | 'horario' | 'fichajes' | 'documentos' | 'vacaciones' | 'bolsa'
 
 interface Props {
   onExitMode: () => void  // Llamar para salir del modo trabajador (volver al selector inicial)
@@ -25,6 +27,12 @@ export default function TrabajadorApp({ onExitMode }: Props) {
     try { return localStorage.getItem(SESSION_KEY) } catch { return null }
   })
   const [subPage, setSubPage] = useState<SubPage>('home')
+  const [showBolsaHoras, setShowBolsaHoras] = useState(false)
+
+  // Cargar setting de visibilidad de bolsa de horas
+  useEffect(() => {
+    fetchAppSettings().then(s => setShowBolsaHoras(s.showHourBankToEmployee))
+  }, [])
 
   // Si el empleado fue eliminado o cambió de PIN, expulsar
   useEffect(() => {
@@ -76,12 +84,17 @@ export default function TrabajadorApp({ onExitMode }: Props) {
     return <MisVacaciones employee={employee} onBack={() => setSubPage('home')} />
   }
 
+  if (subPage === 'bolsa' && showBolsaHoras) {
+    return <MiBolsaHoras employee={employee} onBack={() => setSubPage('home')} />
+  }
+
   // home
   return (
     <HomeEmpleado
       employee={employee}
       onNavigate={p => setSubPage(p)}
       onLogout={handleLogout}
+      showBolsaHoras={showBolsaHoras}
     />
   )
 }
