@@ -1,8 +1,11 @@
 // src/pages/AvisosSettingsPage.tsx
 // Configuración global de avisos y settings de Personal.
 import { useState, useEffect } from 'react'
+import { useApp } from '../context/AppContext'
 import { Card, Button } from '../components/ui'
 import { fetchAppSettings, updateAppSettings, type AppSettings } from '../services/appSettingsService'
+import { fetchShiftTypes, type ShiftType } from '../services/calendarService'
+import { supabase } from '../lib/supabase'
 
 export default function AvisosSettingsPage() {
   const [settings, setSettings] = useState<AppSettings | null>(null)
@@ -75,6 +78,9 @@ export default function AvisosSettingsPage() {
           </div>
         </label>
       </Card>
+
+      {/* Calendario: mínimos por turno */}
+      <MinimumsSection />
 
       {/* Personal: Fichajes */}
       <Card className="p-5">
@@ -153,5 +159,162 @@ export default function AvisosSettingsPage() {
         </Button>
       </div>
     </div>
+  )
+}
+
+// ─── MinimumsSection ──────────────────────────────────────────────────────
+
+interface MinimumRowState {
+  shiftTypeId: string
+  shiftCode: string
+  shiftLabel: string
+  shiftColor: string
+  minDefault: number
+  minWeekend: number
+}
+
+function MinimumsSection() {
+  const { locations } = useApp()
+  const [shiftTypes, setShiftTypes] = useState<ShiftType[]>([])
+  const [scope, setScope] = useState<string>('global')   // 'global' o id de local
+  const [rows, setRows] = useState<MinimumRowState[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [savedAt, setSavedAt] = useState<Date | null>(null)
+
+  async function load() {
+    setLoading(true)
+    const types = await fetchShiftTypes()
+    setShiftTypes(types)
+    if (!supabase) { setLoading(false); return }
+    const { data } = await supabase.from('shift_minimums').select('*')
+    const all = (data || []) as Array<{ shift_type_id: string; location_id: string | null; min_default: number; min_weekend: number | null }>
+
+    // Construir filas: una por shift_type no off
+    const newRows: MinimumRowState[] = []
+    for (const t of types.filter(t => !t.isOff)) {
+      // Buscar primero la específica del scope
+      const targetLoc = scope === 'global' ? null : scope
+      const localMin = all.find(m => m.shift_type_id === t.id && m.location_id === targetLoc)
+      const globalMin = all.find(m => m.shift_type_id === t.id && m.location_id === null)
+      const m = localMin || globalMin
+      newRows.push({
+        shiftTypeId: t.id,
+        shiftCode: t.code,
+        shiftLabel: t.label,
+        shiftColor: t.color,
+        minDefault: m?.min_default ?? 1,
+        minWeekend: m?.min_weekend ?? m?.min_default ?? 1,
+      })
+    }
+    setRows(newRows)
+    setLoading(false)
+  }
+
+  useEffect(() => { load() /* eslint-disable-line */ }, [scope])
+
+  async function save() {
+    if (!supabase) return
+    setSaving(true)
+    const targetLoc = scope === 'global' ? null : scope
+    for (const r of rows) {
+      // Upsert por (location_id, shift_type_id)
+      const { data: existing } = await supabase.from('shift_minimums')
+        .select('id')
+        .eq('shift_type_id', r.shiftTypeId)
+        .is('location_id', targetLoc as null)
+        .maybeSingle()
+      if (existing) {
+        await supabase.from('shift_minimums').update({
+          min_default: r.minDefault,
+          min_weekend: r.minWeekend,
+          updated_at: new Date().toISOString(),
+        }).eq('id', (existing as { id: string }).id)
+      } else {
+        await supabase.from('shift_minimums').insert({
+          location_id: targetLoc,
+          shift_type_id: r.shiftTypeId,
+          min_default: r.minDefault,
+          min_weekend: r.minWeekend,
+        })
+      }
+    }
+    setSaving(false)
+    setSavedAt(new Date())
+    setTimeout(() => setSavedAt(null), 3000)
+  }
+
+  function update(idx: number, patch: Partial<MinimumRowState>) {
+    setRows(prev => {
+      const copy = [...prev]
+      copy[idx] = { ...copy[idx], ...patch }
+      return copy
+    })
+  }
+
+  return (
+    <Card className="p-5">
+      <p className="text-xs uppercase tracking-wide text-gray-400 mb-3">Calendario</p>
+      <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
+        <h3 className="font-semibold text-gray-900">Mínimos de plantilla por turno</h3>
+        <select value={scope} onChange={e => setScope(e.target.value)}
+          className="text-xs border border-gray-200 rounded-lg px-3 py-1.5 bg-white">
+          <option value="global">Por defecto (todos los locales)</option>
+          {locations.filter(l => l.active).map(l => (
+            <option key={l.id} value={l.id}>{l.name}</option>
+          ))}
+        </select>
+      </div>
+
+      <p className="text-xs text-gray-500 mb-3">
+        Cuántas personas deben estar asignadas a cada turno. Si la cobertura es menor saltará un aviso al gestor en el calendario.
+      </p>
+
+      {loading ? (
+        <p className="text-sm text-gray-500">Cargando...</p>
+      ) : (
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-gray-200">
+              <th className="text-left py-2 text-xs font-medium text-gray-500 uppercase">Turno</th>
+              <th className="text-center py-2 text-xs font-medium text-gray-500 uppercase">Por defecto</th>
+              <th className="text-center py-2 text-xs font-medium text-gray-500 uppercase">V/S/D</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={r.shiftTypeId} className="border-b border-gray-100">
+                <td className="py-2">
+                  <span className="inline-flex items-center gap-2">
+                    <span className="w-3 h-3 rounded" style={{ backgroundColor: r.shiftColor }} />
+                    <span className="font-semibold text-gray-900">{r.shiftCode}</span>
+                    <span className="text-xs text-gray-500">{r.shiftLabel}</span>
+                  </span>
+                </td>
+                <td className="py-2 text-center">
+                  <input type="number" min={0} max={20} value={r.minDefault}
+                    onChange={e => update(i, { minDefault: parseInt(e.target.value) || 0 })}
+                    className="w-16 border rounded px-2 py-1 text-center text-sm" />
+                </td>
+                <td className="py-2 text-center">
+                  <input type="number" min={0} max={20} value={r.minWeekend}
+                    onChange={e => update(i, { minWeekend: parseInt(e.target.value) || 0 })}
+                    className="w-16 border rounded px-2 py-1 text-center text-sm" />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      <div className="flex items-center justify-between pt-3 mt-3 border-t border-gray-100">
+        <p className="text-xs text-gray-400">
+          {savedAt ? `✓ Guardado a las ${savedAt.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}` : ''}
+        </p>
+        <Button size="sm" onClick={save} disabled={saving}>
+          {saving ? 'Guardando...' : 'Guardar mínimos'}
+        </Button>
+      </div>
+    </Card>
   )
 }
