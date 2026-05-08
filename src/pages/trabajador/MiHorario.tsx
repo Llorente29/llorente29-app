@@ -37,7 +37,10 @@ export default function MiHorario({ employee, onBack }: Props) {
     const start = weekStart
     const endD = new Date(start + 'T00:00:00')
     endD.setDate(endD.getDate() + 6)
-    const end = endD.toISOString().slice(0, 10)
+    const ey = endD.getFullYear()
+    const em = String(endD.getMonth() + 1).padStart(2, '0')
+    const ed = String(endD.getDate()).padStart(2, '0')
+    const end = `${ey}-${em}-${ed}`
     const data = await fetchPublishedAssignmentsForEmployee(current.id, start, end)
     setPublished(data)
     setLoading(false)
@@ -106,13 +109,15 @@ export default function MiHorario({ employee, onBack }: Props) {
   const weekDays = useMemo(() => {
     const start = new Date(weekStart + 'T00:00:00')
     return DAYS.map(d => {
-      // Cada DAYS está en orden lunes-domingo, pero el lunes es el día 0 del weekStart
       const date = new Date(start)
       const offsetFromMonday = DAYS.findIndex(x => x.key === d.key)
       date.setDate(start.getDate() + offsetFromMonday)
+      const y = date.getFullYear()
+      const m = String(date.getMonth() + 1).padStart(2, '0')
+      const dd = String(date.getDate()).padStart(2, '0')
       return {
         ...d,
-        dateIso: date.toISOString().slice(0, 10),
+        dateIso: `${y}-${m}-${dd}`,
         date,
       }
     })
