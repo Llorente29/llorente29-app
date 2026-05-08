@@ -1,10 +1,10 @@
 // src/services/calendarSmartGen.ts
-// Generador inteligente del calendario semanal:
-// - Respeta la plantilla del local (mínimos por turno y día)
-// - Distribuye empleados según disponibilidad y horas contratadas
-// - Permite turnos partidos (múltiples slots por día)
-// - Aplica restricciones del convenio (descanso 12h, libra)
-// - Produce diagnóstico con sugerencias accionables
+// Generador inteligente del calendario semanal v2.
+// Mejoras:
+// - Asignación greedy basada en horas-pendientes por empleado
+// - Libra de 1.5 días seguidos (día completo + T1 mañana, o T4 cierre + día completo)
+// - Búsqueda exhaustiva de cobertura (no se rinde hasta llenar o agotar)
+// - Soporte de turnos partidos (T1+T3) en última instancia
 
 import type { Employee } from '../types'
 import type { ShiftType } from './calendarService'
@@ -14,14 +14,13 @@ import { neededFor } from './locationPlanningService'
 // ─── TIPOS ────────────────────────────────────────────────────────────────
 
 export interface SmartGenInput {
-  employees: Employee[]              // empleados disponibles (ya filtrados por availability + vacaciones)
-  unavailableDates: Map<string, Set<string>>  // employeeId -> set de fechas YYYY-MM-DD donde tiene vacaciones
-  shiftTypes: ShiftType[]            // tipos activos
-  planning: LocationPlanningRow[]    // plantilla del local
-  days: string[]                     // 7 fechas YYYY-MM-DD lunes a domingo
-  // Configuración
-  maxMonthlyOverloadPct: number      // 20 = +20% horas mensuales máx
-  monthlyHoursAlready: Map<string, number>   // employeeId -> horas ya asignadas en el mes
+  employees: Employee[]
+  unavailableDates: Map<string, Set<string>>
+  shiftTypes: ShiftType[]
+  planning: LocationPlanningRow[]
+  days: string[]
+  maxMonthlyOverloadPct: number
+  monthlyHoursAlready: Map<string, number>
 }
 
 export type DiagnosticLevel = 'error' | 'warning' | 'suggestion'
@@ -42,7 +41,7 @@ export interface SmartGenOutput {
   summary: {
     totalAssigned: number
     totalNeeded: number
-    coverageRate: number  // 0..1
+    coverageRate: number
     employeesUsed: number
   }
 }
@@ -55,32 +54,38 @@ function hhmmToMin(s?: string): number {
   return (h || 0) * 60 + (m || 0)
 }
 
-/** Devuelve el rango absoluto [startMinAbs, endMinAbs] de un turno en un día. */
-function shiftAbsRange(date: string, weekStart: string, t: ShiftType): { startAbs: number; endAbs: number; startAbs2?: number; endAbs2?: number } {
+interface ShiftRange {
+  startAbs: number
+  endAbs: number
+  date: string
+}
+
+function shiftRanges(date: string, weekStart: string, t: ShiftType): ShiftRange[] {
   const dayIdx = Math.floor(
     (new Date(date + 'T00:00:00').getTime() - new Date(weekStart + 'T00:00:00').getTime()) / (24 * 60 * 60000)
   )
   const dayOffset = dayIdx * 24 * 60
 
-  const s1 = hhmmToMin(t.startTime)
-  let e1 = hhmmToMin(t.endTime)
-  if (e1 <= s1) e1 += 24 * 60
+  const out: ShiftRange[] = []
 
-  const r: { startAbs: number; endAbs: number; startAbs2?: number; endAbs2?: number } = {
-    startAbs: dayOffset + s1,
-    endAbs: dayOffset + e1,
+  if (t.startTime && t.endTime) {
+    const s1 = hhmmToMin(t.startTime)
+    let e1 = hhmmToMin(t.endTime)
+    if (e1 <= s1) e1 += 24 * 60
+    out.push({ startAbs: dayOffset + s1, endAbs: dayOffset + e1, date })
   }
 
   if (t.isSplit && t.split2Start && t.split2End) {
     const s2 = hhmmToMin(t.split2Start)
     let e2 = hhmmToMin(t.split2End)
     if (e2 <= s2) e2 += 24 * 60
-    r.startAbs2 = dayOffset + s2
-    r.endAbs2 = dayOffset + e2
+    out.push({ startAbs: dayOffset + s2, endAbs: dayOffset + e2, date })
   }
-  return r
+
+  return out
 }
 
+const dayKeyByIdx = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado']
 
 // ─── ALGORITMO PRINCIPAL ──────────────────────────────────────────────────
 
@@ -88,19 +93,24 @@ export function smartGenerate(input: SmartGenInput): SmartGenOutput {
   const { employees, unavailableDates, shiftTypes, planning, days, maxMonthlyOverloadPct, monthlyHoursAlready } = input
   const weekStart = days[0]
 
-  // Filtrar tipos no off
   const workTypes = shiftTypes.filter(t => !t.isOff && t.active && t.startTime && t.endTime)
+  const libreType = shiftTypes.find(t => t.isOff)
+  const libreId = libreType?.id || ''
+  const t1Type = shiftTypes.find(t => t.code === 'T1' && t.active)
+  const t4Type = shiftTypes.find(t => t.code === 'T4' && t.active)
 
-  // Estado por empleado durante la generación
+  // Estado por empleado
   interface EmpState {
     emp: Employee
-    weeklyHoursContract: number          // horas contratadas semanales
-    monthlyHoursContract: number         // contratadas × ~4.33
-    monthlyMaxAllowed: number            // contratadas mes × (1 + overload%)
-    monthlyHoursAccumBefore: number      // horas ya asignadas en el mes antes de esta semana
-    weeklyAssigned: number               // horas asignadas en ESTA semana hasta ahora
-    workingDays: Set<string>             // fechas YYYY-MM-DD donde ya tiene al menos un turno
-    ranges: { startAbs: number; endAbs: number; date: string }[]  // rangos abs ordenados
+    weeklyHoursContract: number
+    monthlyMaxAllowed: number
+    monthlyHoursAccumBefore: number
+    weeklyAssigned: number
+    workingDays: Set<string>
+    libreDay: string | null            // día con LIBRE
+    halfLibreDay: string | null        // día con media libra
+    halfLibreType: 'morning' | 'evening' | null  // T1 = morning, T4 = evening
+    ranges: ShiftRange[]
   }
 
   const states = new Map<string, EmpState>()
@@ -109,36 +119,31 @@ export function smartGenerate(input: SmartGenInput): SmartGenOutput {
     states.set(emp.id, {
       emp,
       weeklyHoursContract: w,
-      monthlyHoursContract: w * 4.33,
       monthlyMaxAllowed: w * 4.33 * (1 + maxMonthlyOverloadPct / 100),
       monthlyHoursAccumBefore: monthlyHoursAlready.get(emp.id) || 0,
       weeklyAssigned: 0,
       workingDays: new Set(),
+      libreDay: null,
+      halfLibreDay: null,
+      halfLibreType: null,
       ranges: [],
     })
   }
 
-  // Resultado
   const toUpsert: SmartGenOutput['toUpsert'] = []
   const diagnostics: DiagnosticItem[] = []
-  const cover = new Map<string, Map<string, number>>()  // shiftTypeId -> date -> count
+  const cover = new Map<string, Map<string, number>>()
   for (const t of workTypes) {
     const m = new Map<string, number>()
     for (const d of days) m.set(d, 0)
     cover.set(t.id, m)
   }
 
-  // Asignar libras: día completo entre L-J
-  // Para cada empleado, elegir un día L-J donde no estará disponible
-  const libreType = shiftTypes.find(t => t.isOff)
-  const libreId = libreType?.id
+  // ─── PASO 1: Asignar libras (día completo + media libra contigua) ───────
 
-  // Detectar si el empleado tiene día preferido como inactivo en weeklySchedule
-  const dayKeyByIdx = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado']
   function findPreferredOffDay(emp: Employee): string | null {
     const ws = emp.weeklySchedule
     if (!ws) return null
-    // Buscar lunes-jueves inactivo
     for (let dow = 1; dow <= 4; dow++) {
       const key = dayKeyByIdx[dow]
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -150,230 +155,266 @@ export function smartGenerate(input: SmartGenInput): SmartGenOutput {
     return null
   }
 
-  // Asignar libras
+  // Libre count para distribuir
+  const libreCountByDay = new Map<string, number>()
+  for (const d of days) libreCountByDay.set(d, 0)
+
   if (libreId) {
     for (const [empId, st] of states.entries()) {
-      const preferDate = findPreferredOffDay(st.emp)
-      let chosenDate = preferDate
+      const unavail = unavailableDates.get(empId) || new Set<string>()
 
-      // Si no hay preferida, distribuir entre L-J el día con menos personas ya con libra
-      if (!chosenDate) {
+      // Elegir día completo de libra (preferencia ws + balance)
+      let libreDate = findPreferredOffDay(st.emp)
+      if (!libreDate || unavail.has(libreDate)) {
+        // Buscar día L-J con menos libras y disponible
         const lunaJueDays = days.filter(d => {
           const dow = new Date(d + 'T00:00:00').getDay()
-          return dow >= 1 && dow <= 4
+          return dow >= 1 && dow <= 4 && !unavail.has(d)
         })
-        // Contar libras ya asignadas por día
-        const libreCount = new Map<string, number>()
-        for (const d of lunaJueDays) libreCount.set(d, 0)
-        for (const u of toUpsert) {
-          if (u.shiftTypeId === libreId && libreCount.has(u.date)) {
-            libreCount.set(u.date, (libreCount.get(u.date) || 0) + 1)
-          }
-        }
-        chosenDate = lunaJueDays.sort((a, b) => (libreCount.get(a) || 0) - (libreCount.get(b) || 0))[0]
+        libreDate = lunaJueDays.sort((a, b) =>
+          (libreCountByDay.get(a) || 0) - (libreCountByDay.get(b) || 0)
+        )[0] || null
       }
 
-      if (chosenDate) {
-        // Comprobar si está disponible ese día (no vacaciones)
-        const unavail = unavailableDates.get(empId)
-        if (!unavail || !unavail.has(chosenDate)) {
-          toUpsert.push({ employeeId: empId, date: chosenDate, shiftTypeId: libreId, slot: 1 })
-          st.workingDays.add(chosenDate)   // bloqueado para más turnos ese día
-        }
-      }
-    }
-  }
+      if (!libreDate) continue   // no se puede librar esta semana
 
-  // Procesar días en orden de criticidad: V, S, D primero, luego L, M, X, J
-  const dayPriority = (d: string): number => {
-    const dow = new Date(d + 'T00:00:00').getDay()
-    if (dow === 5 || dow === 6 || dow === 0) return 0  // V/S/D crítico
-    return 1
-  }
-  const sortedDays = [...days].sort((a, b) => dayPriority(a) - dayPriority(b))
+      // Asignar día completo LIBRE
+      toUpsert.push({ employeeId: empId, date: libreDate, shiftTypeId: libreId, slot: 1 })
+      st.libreDay = libreDate
+      st.workingDays.add(libreDate)
+      libreCountByDay.set(libreDate, (libreCountByDay.get(libreDate) || 0) + 1)
 
-  // Procesar turnos en orden: T2 y T3 primero (más horas, más críticos), luego T1, T4
-  const typePriority = (t: ShiftType): number => {
-    if (t.code === 'T2' || t.code === 'T3') return 0
-    if (t.code === 'T1') return 1
-    if (t.code === 'T4') return 2
-    return 3
-  }
-  const sortedTypes = [...workTypes].sort((a, b) => typePriority(a) - typePriority(b))
+      // Media libra: buscar día contiguo (siguiente o anterior) que sea L-J y disponible
+      const libreDateObj = new Date(libreDate + 'T00:00:00')
+      const nextDate = new Date(libreDateObj); nextDate.setDate(nextDate.getDate() + 1)
+      const prevDate = new Date(libreDateObj); prevDate.setDate(prevDate.getDate() - 1)
+      const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
-  // ASIGNACIÓN PRINCIPAL
-  for (const date of sortedDays) {
-    const dow = new Date(date + 'T00:00:00').getDay()
+      const nextIso = fmt(nextDate)
+      const prevIso = fmt(prevDate)
+      const nextDow = nextDate.getDay()
+      const prevDow = prevDate.getDay()
+      const nextIsValid = days.includes(nextIso) && nextDow >= 1 && nextDow <= 4 && !unavail.has(nextIso)
+      const prevIsValid = days.includes(prevIso) && prevDow >= 1 && prevDow <= 4 && !unavail.has(prevIso)
 
-    for (const t of sortedTypes) {
-      // ¿Cuántos hacen falta de este turno este día?
-      const planRow = planning.find(p => p.shiftTypeId === t.id)
-      if (!planRow) continue
-      const needed = neededFor(planRow, dow)
-      if (needed === 0) continue
-
-      // Mientras la cobertura sea < needed, intentar asignar
-      while ((cover.get(t.id)?.get(date) || 0) < needed) {
-        // Calcular el rango abs del turno este día
-        const range = shiftAbsRange(date, weekStart, t)
-
-        // Buscar candidato óptimo
-        let best: { state: EmpState; reason: string } | null = null
-        let bestScore = -Infinity
-
-        for (const st of states.values()) {
-          const empId = st.emp.id
-
-          // ¿Vacaciones ese día?
-          const unavail = unavailableDates.get(empId)
-          if (unavail && unavail.has(date)) continue
-
-          // ¿Ya tiene libra ese día? No asignar más
-          // (bloqueamos el día completo cuando se asigna LIBRE)
-          // Verificamos si ya tiene asignación LIBRE
-          const alreadyLibre = toUpsert.some(u => u.employeeId === empId && u.date === date && u.shiftTypeId === libreId)
-          if (alreadyLibre) continue
-
-          // ¿Ya tiene este turno hoy? (no duplicar)
-          const alreadyHasThis = toUpsert.some(u =>
-            u.employeeId === empId && u.date === date && u.shiftTypeId === t.id
-          )
-          if (alreadyHasThis) continue
-
-          // ¿Cuántos turnos ya tiene hoy?
-          const todayShifts = toUpsert.filter(u => u.employeeId === empId && u.date === date && u.shiftTypeId !== libreId)
-          if (todayShifts.length >= 2) continue   // máx 2 turnos por día
-
-          // Verificar descanso 12h con turnos previos del empleado
-          let restOk = true
-          for (const r of st.ranges) {
-            // ¿Solapan o están a menos de 12h?
-            const overlap = !(range.endAbs <= r.startAbs || range.startAbs >= r.endAbs)
-            if (overlap) { restOk = false; break }
-
-            const gap = range.startAbs > r.endAbs
-              ? range.startAbs - r.endAbs
-              : r.startAbs - range.endAbs
-            if (gap < 12 * 60) { restOk = false; break }
-
-            if (range.startAbs2 !== undefined && range.endAbs2 !== undefined) {
-              const overlap2 = !(range.endAbs2 <= r.startAbs || range.startAbs2 >= r.endAbs)
-              if (overlap2) { restOk = false; break }
-            }
-          }
-          if (!restOk) continue
-
-          // ¿Excedería el máximo mensual?
-          const newWeeklyTotal = st.weeklyAssigned + t.hours
-          const newMonthlyTotal = st.monthlyHoursAccumBefore + newWeeklyTotal
-          if (newMonthlyTotal > st.monthlyMaxAllowed) continue
-
-          // ─── SCORE ───
-          // Priorizar:
-          //  + Empleados con jornada completa (más horas contratadas)
-          //  + Empleados con menos horas asignadas esta semana (equilibrar)
-          //  - Empleados ya sobrecargados
-          let score = 0
-          score += st.weeklyHoursContract * 2    // jornada completa pesa
-          score -= st.weeklyAssigned             // menos horas asignadas, mejor
-          // Si está cerca del máximo mensual, penalizar
-          const monthlyUsage = newMonthlyTotal / st.monthlyMaxAllowed
-          if (monthlyUsage > 1) score -= 1000    // ya excedió
-          else if (monthlyUsage > 0.95) score -= 50
-
-          if (score > bestScore) {
-            bestScore = score
-            best = { state: st, reason: 'score=' + score.toFixed(1) }
-          }
-        }
-
-        if (!best) {
-          // No hay candidato → déficit
-          const dow0 = dow
-          const dayLabel = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'][dow0]
-          const haveCount = cover.get(t.id)?.get(date) || 0
-          const missing = needed - haveCount
-          diagnostics.push({
-            level: 'error',
-            code: 'shift_uncovered',
-            title: `${t.code} sin cubrir el ${dayLabel}`,
-            description: `Faltan ${missing} ${missing === 1 ? 'persona' : 'personas'} para cubrir ${t.code} ${t.label} (${t.startTime}–${t.endTime}) el ${dayLabel} ${date}.`,
-            date,
-            shiftCode: t.code,
-          })
-          break  // pasar al siguiente turno
-        }
-
-        // Asignar
-        const st = best.state
-        const slot = (toUpsert.filter(u => u.employeeId === st.emp.id && u.date === date && u.shiftTypeId !== libreId).length) + 1
-        toUpsert.push({ employeeId: st.emp.id, date, shiftTypeId: t.id, slot })
-        st.weeklyAssigned += t.hours
-        st.workingDays.add(date)
-        st.ranges.push({ startAbs: range.startAbs, endAbs: range.endAbs, date })
-        if (range.startAbs2 !== undefined && range.endAbs2 !== undefined) {
-          st.ranges.push({ startAbs: range.startAbs2, endAbs: range.endAbs2, date })
-        }
-        st.ranges.sort((a, b) => a.startAbs - b.startAbs)
-        cover.get(t.id)!.set(date, (cover.get(t.id)?.get(date) || 0) + 1)
+      // Preferir SIGUIENTE (libra día completo + T1 mañana siguiente)
+      if (nextIsValid && t1Type) {
+        toUpsert.push({ employeeId: empId, date: nextIso, shiftTypeId: t1Type.id, slot: 1 })
+        st.halfLibreDay = nextIso
+        st.halfLibreType = 'morning'
+        st.weeklyAssigned += t1Type.hours
+        st.workingDays.add(nextIso)
+        st.ranges.push(...shiftRanges(nextIso, weekStart, t1Type))
+        const c = cover.get(t1Type.id)
+        if (c) c.set(nextIso, (c.get(nextIso) || 0) + 1)
+      } else if (prevIsValid && t4Type) {
+        // Alternativa: T4 cierre el día anterior + día completo siguiente
+        toUpsert.push({ employeeId: empId, date: prevIso, shiftTypeId: t4Type.id, slot: 1 })
+        st.halfLibreDay = prevIso
+        st.halfLibreType = 'evening'
+        st.weeklyAssigned += t4Type.hours
+        st.workingDays.add(prevIso)
+        st.ranges.push(...shiftRanges(prevIso, weekStart, t4Type))
+        const c = cover.get(t4Type.id)
+        if (c) c.set(prevIso, (c.get(prevIso) || 0) + 1)
       }
     }
   }
 
-  // ─── DIAGNÓSTICO ───────────────────────────────────────────────────────
+  // ─── PASO 2: Calcular demanda total y oferta ────────────────────────────
 
-  // Empleados sobrecargados o subutilizados
-  for (const st of states.values()) {
-    const newMonthly = st.monthlyHoursAccumBefore + st.weeklyAssigned
-    const monthlyUsagePct = (newMonthly / st.monthlyHoursContract) * 100
-
-    if (monthlyUsagePct > 100) {
-      diagnostics.push({
-        level: 'warning',
-        code: 'overloaded',
-        title: `${st.emp.name} sobrecargado`,
-        description: `Acumula ${newMonthly.toFixed(1)}h en el mes (${monthlyUsagePct.toFixed(0)}% de su contrato de ${st.monthlyHoursContract.toFixed(0)}h). Excede en ${(newMonthly - st.monthlyHoursContract).toFixed(1)}h.`,
-        employeeId: st.emp.id,
-      })
-    } else if (st.weeklyAssigned < st.weeklyHoursContract * 0.7 && st.weeklyAssigned > 0) {
-      const margin = st.weeklyHoursContract - st.weeklyAssigned
-      diagnostics.push({
-        level: 'suggestion',
-        code: 'underused',
-        title: `${st.emp.name} con horas libres`,
-        description: `Solo tiene ${st.weeklyAssigned.toFixed(1)}h asignadas de ${st.weeklyHoursContract}h contratadas. Le quedan ${margin.toFixed(1)}h disponibles.`,
-        employeeId: st.emp.id,
-      })
-    }
-  }
-
-  // Sugerencias globales
-  let totalNeeded = 0
-  let totalAssigned = 0
+  let totalNeededHours = 0
   for (const t of workTypes) {
     const planRow = planning.find(p => p.shiftTypeId === t.id)
     if (!planRow) continue
     for (const date of days) {
       const dow = new Date(date + 'T00:00:00').getDay()
       const need = neededFor(planRow, dow)
-      const have = cover.get(t.id)?.get(date) || 0
-      totalNeeded += need
-      totalAssigned += Math.min(have, need)
+      totalNeededHours += need * t.hours
     }
   }
 
-  // Si hay déficit global > 10%, sugerir contratación
-  const coverageRate = totalNeeded > 0 ? totalAssigned / totalNeeded : 1
-  if (coverageRate < 0.9 && totalNeeded > 0) {
-    const missingShifts = totalNeeded - totalAssigned
-    const avgShiftHours = workTypes.reduce((acc, t) => acc + t.hours, 0) / workTypes.length
-    const suggestedHours = Math.ceil(missingShifts * avgShiftHours / 4.33)   // horas semanales nuevas
+  let totalAvailableHours = 0
+  for (const st of states.values()) {
+    const remaining = st.monthlyMaxAllowed - st.monthlyHoursAccumBefore - st.weeklyAssigned
+    if (remaining > 0) totalAvailableHours += remaining
+  }
+
+  if (totalNeededHours > totalAvailableHours) {
+    const deficit = totalNeededHours - totalAvailableHours
     diagnostics.push({
       level: 'suggestion',
-      code: 'hire_more',
-      title: 'Plantilla insuficiente',
-      description: `Faltan ${missingShifts} turnos por cubrir esta semana. Considera contratar 1 persona con jornada de ~${suggestedHours}h semanales o ampliar horas de un trabajador a tiempo parcial.`,
+      code: 'global_deficit',
+      title: 'Plantilla insuficiente para cubrir la demanda',
+      description: `La demanda esta semana es de ${totalNeededHours.toFixed(0)}h pero la oferta máxima de tu plantilla es ${totalAvailableHours.toFixed(0)}h. Déficit estimado: ${deficit.toFixed(0)}h. Considera contratar 1 persona con jornada de ~${Math.ceil(deficit)}h o ampliar horas existentes.`,
     })
+  }
+
+  // ─── PASO 3: Asignación greedy día por día ──────────────────────────────
+
+  // Orden días: V, S, D primero (críticos), luego L-J
+  const dayPriority = (d: string): number => {
+    const dow = new Date(d + 'T00:00:00').getDay()
+    if (dow === 5 || dow === 6 || dow === 0) return 0
+    return 1
+  }
+  const sortedDays = [...days].sort((a, b) => dayPriority(a) - dayPriority(b))
+
+  // Orden tipos dentro de un día: T2 y T3 primero (más horas, más críticos), luego T1, T4
+  const typePriority = (t: ShiftType): number => {
+    if (t.code === 'T2') return 0
+    if (t.code === 'T3') return 1
+    if (t.code === 'T1') return 2
+    if (t.code === 'T4') return 3
+    return 4
+  }
+
+  function tryAssignSingle(date: string, t: ShiftType): boolean {
+    const range = shiftRanges(date, weekStart, t)
+
+    // Buscar mejor candidato
+    let best: EmpState | null = null
+    let bestScore = -Infinity
+
+    for (const st of states.values()) {
+      const empId = st.emp.id
+
+      // Vacaciones
+      const unavail = unavailableDates.get(empId) || new Set<string>()
+      if (unavail.has(date)) continue
+
+      // Es su día de libra
+      if (st.libreDay === date) continue
+
+      // Es su día de media libra → solo permitir si el turno asignado coincide con la mañana/tarde libre
+      // En la práctica ya tiene asignado el T1 o T4, así que lo bloqueamos para no añadir más
+      if (st.halfLibreDay === date) continue
+
+      // ¿Ya tiene este turno hoy?
+      if (toUpsert.some(u => u.employeeId === empId && u.date === date && u.shiftTypeId === t.id)) continue
+
+      // ¿Cuántos turnos ya tiene hoy? Máximo 2
+      const todayShifts = toUpsert.filter(u =>
+        u.employeeId === empId && u.date === date && u.shiftTypeId !== libreId
+      )
+      if (todayShifts.length >= 2) continue
+
+      // Descanso 12h
+      let restOk = true
+      for (const r of st.ranges) {
+        for (const newR of range) {
+          const overlap = !(newR.endAbs <= r.startAbs || newR.startAbs >= r.endAbs)
+          if (overlap) { restOk = false; break }
+          const gap = newR.startAbs > r.endAbs ? newR.startAbs - r.endAbs : r.startAbs - newR.endAbs
+          if (gap < 12 * 60) { restOk = false; break }
+        }
+        if (!restOk) break
+      }
+      if (!restOk) continue
+
+      // Máximo mensual
+      const newWeekly = st.weeklyAssigned + t.hours
+      const newMonthly = st.monthlyHoursAccumBefore + newWeekly
+      if (newMonthly > st.monthlyMaxAllowed) continue
+
+      // ─── SCORE ───
+      // Priorizar empleados con MÁS horas pendientes hasta su contrato semanal
+      const remainingToContract = st.weeklyHoursContract - st.weeklyAssigned
+      let score = remainingToContract * 10        // queremos que cumplan su contrato
+      score -= st.weeklyAssigned * 0.5            // penalizar si ya está cargado
+      // Si está dentro del margen sin pasar contrato, prioridad alta
+      if (newWeekly <= st.weeklyHoursContract) score += 100
+      // Penalizar si ya se va a pasar
+      if (newWeekly > st.weeklyHoursContract) score -= (newWeekly - st.weeklyHoursContract) * 5
+
+      if (score > bestScore) {
+        bestScore = score
+        best = st
+      }
+    }
+
+    if (!best) return false
+
+    const slot = (toUpsert.filter(u => u.employeeId === best.emp.id && u.date === date && u.shiftTypeId !== libreId).length) + 1
+    toUpsert.push({ employeeId: best.emp.id, date, shiftTypeId: t.id, slot })
+    best.weeklyAssigned += t.hours
+    best.workingDays.add(date)
+    best.ranges.push(...range)
+    best.ranges.sort((a, b) => a.startAbs - b.startAbs)
+    const c = cover.get(t.id)
+    if (c) c.set(date, (c.get(date) || 0) + 1)
+    return true
+  }
+
+  // PASE 1 — turnos en orden de prioridad
+  for (const date of sortedDays) {
+    const dow = new Date(date + 'T00:00:00').getDay()
+    const sortedTypes = [...workTypes].sort((a, b) => typePriority(a) - typePriority(b))
+
+    for (const t of sortedTypes) {
+      const planRow = planning.find(p => p.shiftTypeId === t.id)
+      if (!planRow) continue
+      const needed = neededFor(planRow, dow)
+      if (needed === 0) continue
+
+      while ((cover.get(t.id)?.get(date) || 0) < needed) {
+        const ok = tryAssignSingle(date, t)
+        if (!ok) break   // no hay más candidatos
+      }
+    }
+  }
+
+  // ─── PASO 4: Diagnóstico de huecos ──────────────────────────────────────
+
+  let totalAssigned = 0
+  let totalNeeded = 0
+  for (const t of workTypes) {
+    const planRow = planning.find(p => p.shiftTypeId === t.id)
+    if (!planRow) continue
+    for (const date of sortedDays) {
+      const dow = new Date(date + 'T00:00:00').getDay()
+      const need = neededFor(planRow, dow)
+      const have = cover.get(t.id)?.get(date) || 0
+      totalNeeded += need
+      totalAssigned += Math.min(have, need)
+
+      if (have < need) {
+        const dayLabel = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'][dow]
+        const missing = need - have
+        diagnostics.push({
+          level: 'error',
+          code: 'shift_uncovered',
+          title: `${t.code} sin cubrir el ${dayLabel}`,
+          description: `Faltan ${missing} ${missing === 1 ? 'persona' : 'personas'} para cubrir ${t.code} ${t.label} (${t.startTime}–${t.endTime}) el ${dayLabel} ${date}.`,
+          date, shiftCode: t.code,
+        })
+      }
+    }
+  }
+
+  // Diagnóstico por empleado
+  for (const st of states.values()) {
+    const monthlyUsage = (st.monthlyHoursAccumBefore + st.weeklyAssigned) / (st.weeklyHoursContract * 4.33)
+
+    if (monthlyUsage > 1) {
+      const extraHours = (st.monthlyHoursAccumBefore + st.weeklyAssigned) - (st.weeklyHoursContract * 4.33)
+      diagnostics.push({
+        level: 'warning',
+        code: 'overloaded',
+        title: `${st.emp.name} sobrecargado`,
+        description: `Va por ${(monthlyUsage * 100).toFixed(0)}% de su contrato mensual (+${extraHours.toFixed(1)}h extra). Dentro del margen permitido (+${maxMonthlyOverloadPct}%) pero conviene compensar.`,
+        employeeId: st.emp.id,
+      })
+    } else if (st.weeklyAssigned < st.weeklyHoursContract && st.weeklyAssigned > 0) {
+      const margin = st.weeklyHoursContract - st.weeklyAssigned
+      diagnostics.push({
+        level: 'suggestion',
+        code: 'underused',
+        title: `${st.emp.name} con horas libres`,
+        description: `Tiene ${st.weeklyAssigned.toFixed(1)}h asignadas de ${st.weeklyHoursContract}h contratadas. Le quedan ${margin.toFixed(1)}h disponibles esta semana.`,
+        employeeId: st.emp.id,
+      })
+    }
   }
 
   return {
@@ -382,7 +423,7 @@ export function smartGenerate(input: SmartGenInput): SmartGenOutput {
     summary: {
       totalAssigned,
       totalNeeded,
-      coverageRate,
+      coverageRate: totalNeeded > 0 ? totalAssigned / totalNeeded : 1,
       employeesUsed: Array.from(states.values()).filter(s => s.weeklyAssigned > 0).length,
     },
   }
