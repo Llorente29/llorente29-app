@@ -23,7 +23,12 @@ import type {
   EmployeeWorkload,
   GeneratorResult,
 } from '../types/scheduler'
-import { shiftDurationHours, coverageForDay } from '../types/scheduler'
+import { shiftDurationHours, coverageForDay, DAY_LABELS } from '../types/scheduler'
+
+// Helper de etiqueta de día por índice (0=Lun..6=Dom)
+function dayLabel(d: DayOfWeek): string {
+  return DAY_LABELS[d]
+}
 
 // Devuelve la franja del turno con tipo restrictivo (sin 'any').
 type SlotPeriod = 'morning' | 'evening'
@@ -220,65 +225,158 @@ export function generateSchedule(input: GeneratorInput): GeneratorResult {
     return b.hours - a.hours
   })
 
-  // 6) Asignación
-  for (const slot of ordered) {
-    if (!cells[slot.templateId]) cells[slot.templateId] = {}
+  // 6) Asignación en 3 pasadas:
+  //   Pasada 1 — normal (respeta franja habitual + descanso + tope)
+  //   Pasada 2 — fuera de franja habitual (rescate suave) si quedan huecos y empleados con horas libres
+  //   Pasada 3 — viola descanso fijo si aún quedan huecos (rescate fuerte, con warning)
+  //   En todas las pasadas: vacaciones aprobadas y tope absoluto siguen siendo paredes.
+
+  // Estado mutable común a las 3 pasadas
+  // (assignedHours y cells ya están declarados arriba)
+
+  // Estructura interna para iterar slots con su "demanda restante"
+  interface SlotState {
+    slot: Slot
+    needed: number
+  }
+  const slotStates: SlotState[] = ordered.map(s => ({ slot: s, needed: s.needed }))
+
+  // Inicializar cells para todos los slots
+  for (const ss of slotStates) {
+    if (!cells[ss.slot.templateId]) cells[ss.slot.templateId] = {}
+    const dk = String(ss.slot.day)
+    if (!cells[ss.slot.templateId][dk]) cells[ss.slot.templateId][dk] = []
+  }
+
+  // Helper: cuántas asignaciones tiene un slot a día de hoy
+  const slotAssignedCount = (s: Slot) => {
+    return (cells[s.templateId]?.[String(s.day)] || []).length
+  }
+
+  // Helper genérico: intenta asignar un slot dado un set de "filtros relajables"
+  function tryAssignSlot(
+    slotIdx: number,
+    relax: { ignoreShiftPeriod: boolean; ignoreRest: boolean }
+  ): boolean {
+    const ss = slotStates[slotIdx]
+    const slot = ss.slot
     const dayKey = String(slot.day)
-    if (!cells[slot.templateId][dayKey]) cells[slot.templateId][dayKey] = []
-
-    let assignedThis = 0
     const isoDate = isoForDay(weekStart, slot.day)
+    const currentAssigned = cells[slot.templateId][dayKey]
 
-    while (assignedThis < slot.needed) {
-      // Construir lista de candidatos válidos (no descartados por reglas duras)
-      const candidates: CandidateScore[] = []
+    if (slotAssignedCount(slot) >= slot.needed) return false
 
-      for (const emp of employees) {
-        // Hard filter 1: ya asignado a este mismo slot
-        if (cells[slot.templateId][dayKey].includes(emp.id)) continue
-        // Hard filter 2: vacaciones aprobadas
-        if (isOnVacation(emp, isoDate)) continue
-        // Hard filter 3: descanso fijo en esa (día, franja)
-        const rest = restCache.get(emp.id)
-        if (rest && rest.has(`${slot.day}:${slot.period}`)) continue
+    // Construir candidatos
+    const candidates: (CandidateScore & { violatesRest: boolean })[] = []
+    for (const emp of employees) {
+      // Hard filter: ya asignado a este slot
+      if (currentAssigned.includes(emp.id)) continue
+      // Hard filter: vacaciones aprobadas (NUNCA violar)
+      if (isOnVacation(emp, isoDate)) continue
+      // Filter de descanso (relajable en pasada 3)
+      const rest = restCache.get(emp.id)
+      const violatesRest = rest ? rest.has(`${slot.day}:${slot.period}`) : false
+      if (violatesRest && !relax.ignoreRest) continue
 
-        // Score
-        const cur = assignedHours.get(emp.id) || 0
-        const sc = scoreCandidate(emp, slot, cur)
-        if (sc) candidates.push(sc)
+      const cur = assignedHours.get(emp.id) || 0
+      const sc = scoreCandidate(emp, slot, cur)
+      if (!sc) continue
+
+      // Si no relajamos franja, descartar candidatos cuya franja habitual
+      // no encaja con el slot (manera dura). Por defecto, en pasada 1 no se descarta
+      // porque scoreCandidate ya penaliza salirse, pero si queremos pasada estricta
+      // sólo descartamos cuando NO sea pasada relajada.
+      if (!relax.ignoreShiftPeriod) {
+        if (
+          emp.shiftPeriod &&
+          emp.shiftPeriod !== 'partido' &&
+          ((emp.shiftPeriod === 'manana' && slot.period !== 'morning') ||
+            (emp.shiftPeriod === 'tarde' && slot.period !== 'evening'))
+        ) {
+          continue
+        }
       }
 
-      if (candidates.length === 0) {
-        // No hay candidatos válidos posibles
-        break
-      }
-
-      // Filtrar primero los que NO excedan tolerancia. Si hay alguno, elegir entre ellos.
-      const safe = candidates.filter(c => !c.wouldExceedTolerance)
-      const pool = safe.length > 0 ? safe : candidates // si todos exceden, dejamos hueco
-      if (safe.length === 0) {
-        // Todos los disponibles excederían el 10% → no asignamos para no sobrecargar
-        break
-      }
-
-      pool.sort((a, b) => a.score - b.score)
-      const winner = pool[0]
-      cells[slot.templateId][dayKey].push(winner.employeeId)
-      assignedHours.set(winner.employeeId, winner.newHours)
-      assignedThis++
+      candidates.push({ ...sc, violatesRest })
     }
 
-    // Registrar huecos
-    if (assignedThis < slot.needed) {
+    if (candidates.length === 0) return false
+
+    // Tope absoluto del 10%: nunca lo violamos
+    const safe = candidates.filter(c => !c.wouldExceedTolerance)
+    if (safe.length === 0) return false
+
+    // Para rescate (pasadas 2 y 3): priorizar al empleado con MÁS horas libres
+    // respecto a contrato (más lejos de cumplir = más necesidad de horas).
+    // Para pasada 1: usar el score normal.
+    let winner: (typeof safe)[number]
+    if (relax.ignoreShiftPeriod || relax.ignoreRest) {
+      // Rescate: prioriza minimizar (newHours - contracted) para empleados que aún no llegan,
+      // de mayor a menor diferencia con contrato.
+      // El que tenga la menor newHours relativa a su contrato gana.
+      safe.sort((a, b) => {
+        const empA = employees.find(e => e.id === a.employeeId)!
+        const empB = employees.find(e => e.id === b.employeeId)!
+        const cA = empA.weeklyHours || 40
+        const cB = empB.weeklyHours || 40
+        const ratioA = a.newHours / cA
+        const ratioB = b.newHours / cB
+        // Penalizar quien viola descanso (preferir quien no lo viola)
+        if (a.violatesRest !== b.violatesRest) return a.violatesRest ? 1 : -1
+        return ratioA - ratioB
+      })
+      winner = safe[0]
+    } else {
+      safe.sort((a, b) => a.score - b.score)
+      winner = safe[0]
+    }
+
+    cells[slot.templateId][dayKey].push(winner.employeeId)
+    assignedHours.set(winner.employeeId, winner.newHours)
+    if (winner.violatesRest) {
+      const emp = employees.find(e => e.id === winner.employeeId)
+      warnings.push(
+        `⚠️ ${emp?.name || winner.employeeId} asignado en su descanso fijo (${slot.templateLabel}, ${dayLabel(slot.day)})`
+      )
+    }
+    return true
+  }
+
+  // ─── PASADA 1 — normal ───────────────────────────────────────────
+  for (let i = 0; i < slotStates.length; i++) {
+    while (slotAssignedCount(slotStates[i].slot) < slotStates[i].needed) {
+      const ok = tryAssignSlot(i, { ignoreShiftPeriod: false, ignoreRest: false })
+      if (!ok) break
+    }
+  }
+
+  // ─── PASADA 2 — rescate suave (fuera de franja habitual) ─────────
+  for (let i = 0; i < slotStates.length; i++) {
+    while (slotAssignedCount(slotStates[i].slot) < slotStates[i].needed) {
+      const ok = tryAssignSlot(i, { ignoreShiftPeriod: true, ignoreRest: false })
+      if (!ok) break
+    }
+  }
+
+  // ─── PASADA 3 — rescate fuerte (viola descanso fijo) ─────────────
+  for (let i = 0; i < slotStates.length; i++) {
+    while (slotAssignedCount(slotStates[i].slot) < slotStates[i].needed) {
+      const ok = tryAssignSlot(i, { ignoreShiftPeriod: true, ignoreRest: true })
+      if (!ok) break
+    }
+  }
+
+  // ─── Registrar huecos finales ────────────────────────────────────
+  for (const ss of slotStates) {
+    const assignedFinal = slotAssignedCount(ss.slot)
+    if (assignedFinal < ss.needed) {
       uncovered.push({
-        template_id: slot.templateId,
-        template_label: slot.templateLabel,
-        day_of_week: slot.day,
-        needed: slot.needed,
-        assigned: assignedThis,
-        reason: assignedThis === 0
-          ? 'sin empleados disponibles (vacaciones, descanso fijo o tope de horas)'
-          : 'no hay suficiente personal disponible',
+        template_id: ss.slot.templateId,
+        template_label: ss.slot.templateLabel,
+        day_of_week: ss.slot.day,
+        needed: ss.needed,
+        assigned: assignedFinal,
+        reason: 'todos los empleados al tope del 10% o en vacaciones',
       })
     }
   }
