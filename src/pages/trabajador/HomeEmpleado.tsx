@@ -2,15 +2,16 @@
 import type { Employee } from '../../types'
 import { hasOpenShift } from '../../services/fichajeKiosko'
 
-type SubPage = 'home' | 'fichar' | 'horario' | 'fichajes' | 'documentos' | 'vacaciones'
+type SubPage = 'home' | 'fichar' | 'horario' | 'fichajes' | 'documentos' | 'vacaciones' | 'bolsa'
 
 interface Props {
   employee: Employee
   onNavigate: (page: SubPage) => void
   onLogout: () => void
+  showBolsaHoras?: boolean
 }
 
-export default function HomeEmpleado({ employee, onNavigate, onLogout }: Props) {
+export default function HomeEmpleado({ employee, onNavigate, onLogout, showBolsaHoras = false }: Props) {
   const open = hasOpenShift(employee)
 
   const menuItems = [
@@ -38,6 +39,14 @@ export default function HomeEmpleado({ employee, onNavigate, onLogout }: Props) 
       color: 'bg-white border-gray-200 hover:border-purple-400',
       enabled: true,
     },
+    ...(showBolsaHoras ? [{
+      id: 'bolsa' as SubPage,
+      icon: '⚖️',
+      title: 'Mi bolsa de horas',
+      desc: 'Saldo de horas extra/pendientes',
+      color: 'bg-white border-gray-200 hover:border-[#7C1A1A]',
+      enabled: true,
+    }] : []),
     {
       id: 'documentos' as SubPage,
       icon: '📄',
