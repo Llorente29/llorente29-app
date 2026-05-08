@@ -291,6 +291,76 @@ export async function deleteAssignment(planId: string, employeeId: string, date:
   return true
 }
 
+/**
+ * Duplica las asignaciones de la semana anterior al plan actual.
+ * - Busca el plan de la semana anterior para el mismo local
+ * - Copia cada asignación al día equivalente de la semana actual (+7 días)
+ * - Si ya hay asignación en la semana actual, la sobreescribe
+ * Devuelve número de asignaciones copiadas, o null si no hay semana anterior.
+ */
+export async function duplicatePreviousWeek(
+  currentPlanId: string,
+  currentWeekStart: string,
+  locationId: string,
+): Promise<number | null> {
+  if (!supabase) return null
+  const sb = supabase
+
+  // Calcular el lunes anterior
+  const d = new Date(currentWeekStart + 'T00:00:00')
+  d.setDate(d.getDate() - 7)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  const prevWeekStart = `${y}-${m}-${dd}`
+
+  // Buscar plan anterior
+  const { data: prevPlan } = await sb.from('weekly_plans')
+    .select('*').eq('week_start', prevWeekStart).eq('location_id', locationId).maybeSingle()
+  if (!prevPlan) return null
+
+  // Cargar asignaciones del plan anterior
+  const { data: prevAssigns } = await sb.from('shift_assignments')
+    .select('*').eq('plan_id', (prevPlan as { id: string }).id)
+  if (!prevAssigns) return 0
+
+  let copied = 0
+  for (const a of prevAssigns as Array<{ employee_id: string; date: string; shift_type_id: string | null; override_start: string | null; override_end: string | null; notes: string | null }>) {
+    // Sumar 7 días a la fecha
+    const da = new Date(a.date + 'T00:00:00')
+    da.setDate(da.getDate() + 7)
+    const ny = da.getFullYear()
+    const nm = String(da.getMonth() + 1).padStart(2, '0')
+    const ndd = String(da.getDate()).padStart(2, '0')
+    const newDate = `${ny}-${nm}-${ndd}`
+
+    if (!a.shift_type_id) continue
+
+    await sb.from('shift_assignments').upsert({
+      plan_id: currentPlanId,
+      employee_id: a.employee_id,
+      date: newDate,
+      shift_type_id: a.shift_type_id,
+      override_start: a.override_start,
+      override_end: a.override_end,
+      notes: a.notes,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'plan_id,employee_id,date' })
+    copied++
+  }
+  return copied
+}
+
+/**
+ * Borra todas las asignaciones de un plan (no borra el plan).
+ */
+export async function clearPlanAssignments(planId: string): Promise<boolean> {
+  if (!supabase) return false
+  const { error } = await supabase.from('shift_assignments').delete().eq('plan_id', planId)
+  if (error) { console.error('clearPlanAssignments:', error); return false }
+  return true
+}
+
 // ─── MINIMUMS ─────────────────────────────────────────────────────────────
 
 export async function fetchMinimums(locationId?: string): Promise<ShiftMinimum[]> {
