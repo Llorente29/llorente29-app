@@ -16,6 +16,9 @@ import {
   type ValidationIssue,
 } from '../services/calendarValidations'
 import { autoGenerate, type AutoGenMode } from '../services/calendarAutoGen'
+import { smartGenerate, type DiagnosticItem } from '../services/calendarSmartGen'
+import { fetchLocationPlanning } from '../services/locationPlanningService'
+import { fetchApprovedVacationDates, fetchMonthlyHoursBefore } from '../services/calendarService'
 import { isSupabaseEnabled, supabase } from '../lib/supabase'
 import type { Employee } from '../types'
 import PlantillaLocalPage from './PlantillaLocalPage'
@@ -37,6 +40,9 @@ export default function CalendarioPage() {
   const [showValidations, setShowValidations] = useState(true)
   const [showAutoGen, setShowAutoGen] = useState(false)
   const [showPlantilla, setShowPlantilla] = useState(false)
+  const [showSmartGen, setShowSmartGen] = useState(false)
+  const [diagnostics, setDiagnostics] = useState<DiagnosticItem[]>([])
+  const [showDiagnostics, setShowDiagnostics] = useState(true)
 
   // Inicializar location al primer local activo
   useEffect(() => {
@@ -205,6 +211,67 @@ export default function CalendarioPage() {
     setAssignments(a)
   }
 
+  async function handleSmartGenerate(selectedEmpIds: Set<string>) {
+    if (!plan) return
+
+    // Cargar plantilla del local
+    const planning = await fetchLocationPlanning(locationId)
+    if (planning.length === 0) {
+      alert('No has configurado la plantilla del local. Hazlo primero en "⚙️ Plantilla del local".')
+      return
+    }
+
+    // Empleados seleccionados
+    const selectedEmps = localEmployees.filter(e => selectedEmpIds.has(e.id))
+    if (selectedEmps.length === 0) {
+      alert('Selecciona al menos un empleado.')
+      return
+    }
+
+    // Vacaciones aprobadas en la semana
+    const weekEnd = days[6]
+    const vacationDates = await fetchApprovedVacationDates(weekStart, weekEnd)
+
+    // Horas mensuales ya asignadas
+    const monthlyHours = await fetchMonthlyHoursBefore(weekStart)
+
+    // Limpiar las asignaciones actuales del plan
+    await clearPlanAssignments(plan.id)
+
+    // Ejecutar algoritmo
+    const result = smartGenerate({
+      employees: selectedEmps,
+      unavailableDates: vacationDates,
+      shiftTypes,
+      planning,
+      days,
+      maxMonthlyOverloadPct: 20,
+      monthlyHoursAlready: monthlyHours,
+    })
+
+    // Aplicar asignaciones
+    for (const a of result.toUpsert) {
+      await upsertAssignment({
+        planId: plan.id,
+        employeeId: a.employeeId,
+        date: a.date,
+        shiftTypeId: a.shiftTypeId,
+        slot: a.slot,
+      })
+    }
+
+    // Refrescar
+    const refreshed = await fetchAssignmentsForPlan(plan.id)
+    setAssignments(refreshed)
+    setDiagnostics(result.diagnostics)
+    setShowDiagnostics(true)
+    setShowSmartGen(false)
+
+    const errors = result.diagnostics.filter(d => d.level === 'error').length
+    const warnings = result.diagnostics.filter(d => d.level === 'warning').length
+    alert(`✓ Generadas ${result.toUpsert.length} asignaciones\n\nCobertura: ${(result.summary.coverageRate * 100).toFixed(0)}%\nErrores: ${errors}\nAvisos: ${warnings}`)
+  }
+
   async function handleAutoGenerate(mode: AutoGenMode, weeksAhead: number) {
     if (!plan) return
     let totalCreated = 0
@@ -338,14 +405,18 @@ export default function CalendarioPage() {
               👤 Por empleado
             </button>
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
             <button onClick={() => setShowPlantilla(true)}
               className="text-xs px-3 py-1 rounded bg-purple-50 text-purple-700 hover:bg-purple-100 font-medium">
               ⚙️ Plantilla del local
             </button>
+            <button onClick={() => setShowSmartGen(true)}
+              className="text-xs px-3 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700 font-medium">
+              🤖 Generar inteligente
+            </button>
             <button onClick={() => setShowAutoGen(true)}
               className="text-xs px-3 py-1 rounded bg-[#7C1A1A] text-white hover:bg-[#5A1212] font-medium">
-              🪄 Generar semana
+              🪄 Generar simple
             </button>
             <button onClick={handleDuplicatePrev}
               className="text-xs px-3 py-1 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium">
@@ -358,6 +429,36 @@ export default function CalendarioPage() {
           </div>
         </div>
       </Card>
+
+      {/* Panel de diagnóstico (resultado del Generador Inteligente) */}
+      {diagnostics.length > 0 && showDiagnostics && (
+        <Card className="p-3 bg-blue-50 border-blue-200">
+          <div className="flex items-start justify-between gap-3 mb-2">
+            <p className="text-xs font-bold uppercase tracking-wide text-blue-700">
+              🤖 Diagnóstico del generador
+            </p>
+            <button onClick={() => setShowDiagnostics(false)}
+              className="text-xs text-gray-500 hover:text-gray-700 shrink-0">✕</button>
+          </div>
+          <div className="space-y-1.5 max-h-60 overflow-y-auto">
+            {diagnostics.map((d, i) => (
+              <div key={i} className={`flex items-start gap-2 text-xs ${
+                d.level === 'error' ? 'text-red-800' :
+                d.level === 'warning' ? 'text-amber-800' :
+                'text-blue-800'
+              }`}>
+                <span className="shrink-0">
+                  {d.level === 'error' ? '🚨' : d.level === 'warning' ? '⚠' : '💡'}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold">{d.title}</p>
+                  <p className="opacity-80">{d.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* Panel de validaciones */}
       {(errors.length > 0 || warnings.length > 0) && showValidations && (
@@ -619,6 +720,16 @@ export default function CalendarioPage() {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             return !allDays.some(d => (ws as any)[d]?.active)
           })}
+        />
+      )}
+
+      {/* Modal generación inteligente */}
+      {showSmartGen && (
+        <SmartGenModal
+          employees={localEmployees}
+          weekStart={weekStart}
+          onGenerate={handleSmartGenerate}
+          onClose={() => setShowSmartGen(false)}
         />
       )}
     </div>
@@ -888,6 +999,96 @@ function AutoGenModal({ onClose, onGenerate, employeesWithoutSchedule }: {
         <div className="flex gap-2 mt-5">
           <Button variant="outline" onClick={onClose} className="flex-1">Cancelar</Button>
           <Button onClick={() => onGenerate(mode, weeksAhead)} className="flex-1">🪄 Generar</Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── SmartGenModal ────────────────────────────────────────────────────────
+
+function SmartGenModal({ employees, weekStart, onGenerate, onClose }: {
+  employees: Employee[]
+  weekStart: string
+  onGenerate: (selectedIds: Set<string>) => void
+  onClose: () => void
+}) {
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => {
+    return new Set(employees.map(e => e.id))
+  })
+  const [generating, setGenerating] = useState(false)
+
+  function toggle(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function selectAll() { setSelectedIds(new Set(employees.map(e => e.id))) }
+  function selectNone() { setSelectedIds(new Set()) }
+
+  async function handleGen() {
+    setGenerating(true)
+    await onGenerate(selectedIds)
+    setGenerating(false)
+  }
+
+  const totalContractedHours = employees
+    .filter(e => selectedIds.has(e.id))
+    .reduce((acc, e) => acc + (e.weeklyHours || 40), 0)
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl max-w-md w-full p-5 max-h-[90vh] overflow-y-auto">
+        <p className="text-xs text-gray-500 uppercase tracking-wide">Generación inteligente</p>
+        <p className="font-bold text-lg text-gray-900">🤖 Generar semana del {weekStart}</p>
+        <p className="text-xs text-gray-500 mt-1">
+          El algoritmo distribuirá empleados respetando: plantilla del local, horas contratadas (+20% mes máx),
+          descanso 12h entre turnos, libra de día completo entre L-J, no librar V/S/D.
+        </p>
+
+        <div className="flex items-center justify-between mt-4 mb-2">
+          <p className="text-xs uppercase tracking-wide text-gray-500">Empleados disponibles</p>
+          <div className="flex gap-1.5">
+            <button onClick={selectAll} className="text-[10px] text-blue-600 hover:underline">Todos</button>
+            <span className="text-gray-300">·</span>
+            <button onClick={selectNone} className="text-[10px] text-gray-500 hover:underline">Ninguno</button>
+          </div>
+        </div>
+
+        <div className="space-y-1 max-h-72 overflow-y-auto border rounded-lg p-1">
+          {employees.length === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-4">No hay empleados en este local</p>
+          ) : employees.map(e => (
+            <label key={e.id} className="flex items-center gap-3 p-2 rounded hover:bg-gray-50 cursor-pointer">
+              <input type="checkbox" checked={selectedIds.has(e.id)}
+                onChange={() => toggle(e.id)}
+                className="w-4 h-4 accent-emerald-600" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900 truncate">{e.name}</p>
+                <p className="text-[10px] text-gray-400">
+                  {e.position || '—'} · {e.weeklyHours || 40}h contrato
+                </p>
+              </div>
+            </label>
+          ))}
+        </div>
+
+        <div className="mt-3 p-3 rounded-lg bg-blue-50 border border-blue-100 text-xs text-blue-800">
+          <p>📊 Disponible: <strong>{selectedIds.size}</strong> empleado{selectedIds.size !== 1 ? 's' : ''} · <strong>{totalContractedHours.toFixed(0)}h</strong> contratadas/semana</p>
+          <p className="text-[11px] mt-1 opacity-80">
+            Con margen +20% mensual: hasta <strong>~{(totalContractedHours * 1.2).toFixed(0)}h</strong> reales/semana
+          </p>
+        </div>
+
+        <div className="flex gap-2 mt-5">
+          <Button variant="outline" onClick={onClose} className="flex-1" disabled={generating}>Cancelar</Button>
+          <Button onClick={handleGen} disabled={generating || selectedIds.size === 0} className="flex-1">
+            {generating ? 'Generando...' : '🤖 Generar'}
+          </Button>
         </div>
       </div>
     </div>
