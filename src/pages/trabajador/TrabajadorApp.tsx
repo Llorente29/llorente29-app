@@ -7,6 +7,8 @@ import HomeEmpleado from './HomeEmpleado'
 import FichajeEmpleado from './FichajeEmpleado'
 import MiHorario from './MiHorario'
 import MisFichajes from './MisFichajes'
+import MisDocumentos from './MisDocumentos'
+import MisVacaciones from './MisVacaciones'
 import type { Employee } from '../../types'
 
 const SESSION_KEY = 'andy-empleado-session-v1'
@@ -64,6 +66,14 @@ export default function TrabajadorApp({ onExitMode }: Props) {
 
   if (subPage === 'fichajes') {
     return <MisFichajes employee={employee} onBack={() => setSubPage('home')} />
+  }
+
+  if (subPage === 'documentos') {
+    return <MisDocumentos employee={employee} onBack={() => setSubPage('home')} />
+  }
+
+  if (subPage === 'vacaciones') {
+    return <MisVacaciones employee={employee} onBack={() => setSubPage('home')} />
   }
 
   // home
