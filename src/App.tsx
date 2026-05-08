@@ -14,6 +14,7 @@ import PrediccionPersonalPage from './pages/PrediccionPersonalPage'
 import ZonasPedidoPage from './pages/ZonasPedidoPage'
 import KioskoFichajePage from './pages/KioskoFichajePage'
 import SolicitudesPendientesPage from './pages/SolicitudesPendientesPage'
+import AhoraMismoPage from './pages/AhoraMismoPage'
 import TrabajadorApp from './pages/trabajador/TrabajadorApp'
 import {
   DashboardPage, ScheduledPage, TemplatesPage,
@@ -26,6 +27,7 @@ type AppMode = 'gestor' | 'trabajador' | 'unset'
 const NAV: { id: Page; label: string; icon: string; section?: string }[] = [
   { id: 'dashboard',          label: 'Dashboard',           icon: '⊞' },
   { id: 'staff',              label: 'Personal',            icon: '👤', section: 'Personal' },
+  { id: 'ahora_mismo',        label: 'Ahora mismo',         icon: '🟢' },
   { id: 'fichajes_global',    label: 'Control Horario',     icon: '⏰' },
   { id: 'kiosko_fichaje',     label: 'Kiosko Fichaje',      icon: '🕐' },
   { id: 'solicitudes_pendientes', label: 'Solicitudes',     icon: '📨' },
@@ -50,6 +52,7 @@ const PAGE_TITLES: Record<Page, string> = {
   dashboard: 'Dashboard', staff: 'Personal', fichajes_global: 'Control Horario',
   kiosko_fichaje: 'Kiosko Fichaje',
   solicitudes_pendientes: 'Solicitudes pendientes',
+  ahora_mismo: 'Ahora mismo',
   calendario: 'Calendario de Horarios', informes_personal: 'Informes Gestoría',
   tasks: 'Tareas', scheduled: 'Programadas', templates: 'Plantillas',
   incidents: 'Incidencias', locations: 'Locales', audits: 'Auditorías',
@@ -67,6 +70,7 @@ function renderPage(page: Page) {
     case 'fichajes_global':   return <FichajesGlobalPage />
     case 'kiosko_fichaje':    return <KioskoFichajePage />
     case 'solicitudes_pendientes': return <SolicitudesPendientesPage />
+    case 'ahora_mismo':       return <AhoraMismoPage />
     case 'calendario':        return <CalendarioPage />
     case 'informes_personal': return <InformesPage />
     case 'tasks':             return <TasksPage />
