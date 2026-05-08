@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useApp } from '../context/AppContext'
 import { Button, Input, Select, Textarea, Badge, Card, Tabs, Modal, Label, Alert } from '../components/ui'
 import type { Employee, ClockEntry, WeeklySchedule } from '../types'
+import DocumentosTab from '../components/personal/DocumentosTab'
+import VacacionesTab from '../components/personal/VacacionesTab'
 
 const POSITIONS = ['Encargado', 'Jefe de cocina', 'Cocinero', 'Ayudante cocina', 'Camarero', 'Barra', 'Hostess', 'Limpieza', 'Gerente', 'Otro']
 const CONTRACT_TYPES = ['Indefinido', 'Temporal', 'Prácticas', 'Beca', 'Autónomo', 'Otro']
@@ -391,53 +393,12 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations }: {
 
         {/* ── DOCUMENTOS ── */}
         {tab === 'documentos' && (
-          <div className="space-y-3">
-            <Button size="sm" variant="outline" onClick={() => {
-              const doc = { id: `d-${Date.now()}`, name: 'Nuevo documento', type: 'otro' as const, date: new Date().toISOString().slice(0, 10) }
-              setEmp(prev => ({ ...prev, documents: [doc, ...prev.documents] }))
-            }}>+ Añadir documento</Button>
-            {emp.documents.length === 0 ? (
-              <Card className="p-6 text-center"><p className="text-gray-400 text-sm">Sin documentos</p></Card>
-            ) : emp.documents.map(doc => (
-              <Card key={doc.id} className="p-4 flex items-center gap-3">
-                <div className="flex-1 grid grid-cols-3 gap-3">
-                  <Input value={doc.name} onChange={e => setEmp(prev => ({ ...prev, documents: prev.documents.map(d => d.id === doc.id ? { ...d, name: e.target.value } : d) }))} placeholder="Nombre del documento" />
-                  <Select value={doc.type} onChange={e => setEmp(prev => ({ ...prev, documents: prev.documents.map(d => d.id === doc.id ? { ...d, type: e.target.value as typeof doc.type } : d) }))}>
-                    {['contrato', 'nomina', 'certificado', 'formacion', 'sancion', 'otro'].map(t => <option key={t} value={t}>{t}</option>)}
-                  </Select>
-                  <Input type="date" value={doc.date} onChange={e => setEmp(prev => ({ ...prev, documents: prev.documents.map(d => d.id === doc.id ? { ...d, date: e.target.value } : d) }))} />
-                </div>
-                <Button size="sm" variant="ghost" onClick={() => setEmp(prev => ({ ...prev, documents: prev.documents.filter(d => d.id !== doc.id) }))}>✕</Button>
-              </Card>
-            ))}
-          </div>
+          <DocumentosTab employee={emp} />
         )}
 
-        {/* ── AUSENCIAS ── */}
+        {/* ── AUSENCIAS / VACACIONES ── */}
         {tab === 'ausencias' && (
-          <div className="space-y-3">
-            <Button size="sm" variant="outline" onClick={() => {
-              const v = { id: `v-${Date.now()}`, type: 'Vacaciones' as const, startDate: new Date().toISOString().slice(0, 10), endDate: new Date().toISOString().slice(0, 10), status: 'solicitada' as const }
-              setEmp(prev => ({ ...prev, vacations: [v, ...prev.vacations] }))
-            }}>+ Añadir ausencia</Button>
-            {emp.vacations.length === 0 ? (
-              <Card className="p-6 text-center"><p className="text-gray-400 text-sm">Sin ausencias</p></Card>
-            ) : emp.vacations.map(v => (
-              <Card key={v.id} className="p-4 grid grid-cols-2 sm:grid-cols-4 gap-3 items-center">
-                <Select value={v.type} onChange={e => setEmp(prev => ({ ...prev, vacations: prev.vacations.map(x => x.id === v.id ? { ...x, type: e.target.value as typeof v.type } : x) }))}>
-                  {['Vacaciones', 'Baja médica', 'Permiso', 'Asuntos propios'].map(t => <option key={t} value={t}>{t}</option>)}
-                </Select>
-                <Input type="date" value={v.startDate} onChange={e => setEmp(prev => ({ ...prev, vacations: prev.vacations.map(x => x.id === v.id ? { ...x, startDate: e.target.value } : x) }))} />
-                <Input type="date" value={v.endDate} onChange={e => setEmp(prev => ({ ...prev, vacations: prev.vacations.map(x => x.id === v.id ? { ...x, endDate: e.target.value } : x) }))} />
-                <div className="flex items-center gap-2">
-                  <Select value={v.status} onChange={e => setEmp(prev => ({ ...prev, vacations: prev.vacations.map(x => x.id === v.id ? { ...x, status: e.target.value as typeof v.status } : x) }))}>
-                    {['solicitada', 'aprobada', 'rechazada'].map(s => <option key={s} value={s}>{s}</option>)}
-                  </Select>
-                  <Button size="sm" variant="ghost" onClick={() => setEmp(prev => ({ ...prev, vacations: prev.vacations.filter(x => x.id !== v.id) }))}>✕</Button>
-                </div>
-              </Card>
-            ))}
-          </div>
+          <VacacionesTab employee={emp} />
         )}
 
         {/* ── CONTRATO ── */}
