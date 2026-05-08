@@ -36,7 +36,7 @@ export default function MiHorario({ employee, onBack }: Props) {
   const todayKey = today === 0 ? 'domingo' : ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'][today - 1]
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-teal-50 via-white to-emerald-50 p-4 pb-8">
+    <div className="min-h-screen bg-gradient-to-br from-[#F5E9D9] via-white to-[#F5E9D9] p-4 pb-8">
       <div className="max-w-md mx-auto">
         {/* Header */}
         <div className="flex items-center gap-3 mb-5">
@@ -52,7 +52,7 @@ export default function MiHorario({ employee, onBack }: Props) {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-gray-500">Horas semanales</p>
-              <p className="text-2xl font-bold text-teal-600">{totalHours.toFixed(1)}h</p>
+              <p className="text-2xl font-bold text-[#7C1A1A]">{totalHours.toFixed(1)}h</p>
             </div>
             <div className="text-right">
               <p className="text-xs text-gray-500">Contrato</p>
@@ -68,14 +68,14 @@ export default function MiHorario({ employee, onBack }: Props) {
             const hours = hoursOfDay(sched)
             const isToday = d.key === todayKey
             return (
-              <Card key={d.key} className={`p-3 ${isToday ? 'border-2 border-teal-400 bg-teal-50/50' : ''}`}>
+              <Card key={d.key} className={`p-3 ${isToday ? 'border-2 border-[#7C1A1A] bg-[#F5E9D9]/50' : ''}`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className={`w-2 h-10 rounded-full ${sched.active ? 'bg-teal-500' : 'bg-gray-200'}`} />
+                    <div className={`w-2 h-10 rounded-full ${sched.active ? 'bg-[#F5E9D9]0' : 'bg-gray-200'}`} />
                     <div>
                       <p className="font-semibold text-gray-900 text-sm">
                         {d.label}
-                        {isToday && <span className="ml-2 text-[10px] px-2 py-0.5 rounded-full bg-teal-600 text-white font-medium">HOY</span>}
+                        {isToday && <span className="ml-2 text-[10px] px-2 py-0.5 rounded-full bg-[#7C1A1A] text-white font-medium">HOY</span>}
                       </p>
                       {sched.active ? (
                         <p className="text-xs text-gray-500 mt-0.5">{sched.start} – {sched.end}</p>
