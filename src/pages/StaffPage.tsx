@@ -421,8 +421,54 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations }: {
                 <Input className="mt-1" type="number" value={emp.salary} onChange={e => update('salary', parseFloat(e.target.value) || 0)} />
               </div>
               <div>
-                <Label>Horas semanales</Label>
-                <Input className="mt-1" type="number" value={emp.weeklyHours} onChange={e => update('weeklyHours', parseInt(e.target.value) || 0)} />
+                <Label>Horas semanales contratadas</Label>
+                <Input className="mt-1" type="number" step="0.25" value={emp.weeklyHours} onChange={e => update('weeklyHours', parseFloat(e.target.value) || 0)} />
+              </div>
+              <div>
+                <Label>Código en cuadrante (T1, T2, T3...)</Label>
+                <Input
+                  className="mt-1"
+                  maxLength={4}
+                  placeholder="T1"
+                  value={emp.shiftCode || ''}
+                  onChange={e => update('shiftCode', e.target.value.toUpperCase())}
+                />
+              </div>
+              <div>
+                <Label>Franja habitual</Label>
+                <Select
+                  className="mt-1"
+                  value={emp.shiftPeriod || ''}
+                  onChange={e => update('shiftPeriod', (e.target.value || undefined) as ('manana' | 'tarde' | 'partido' | undefined))}
+                >
+                  <option value="">— sin definir —</option>
+                  <option value="manana">Mañana (mediodía)</option>
+                  <option value="tarde">Tarde / Noche</option>
+                  <option value="partido">Partido (mañana + tarde)</option>
+                </Select>
+              </div>
+              <div className="col-span-2">
+                <Label>Patrón de descanso fijo</Label>
+                <Select
+                  className="mt-1"
+                  value={emp.restPattern || ''}
+                  onChange={e => {
+                    const v = e.target.value
+                    update('restPattern', v ? (v as 'lun:tarde_dia'|'lun:dia_manana'|'mar:tarde_dia'|'mar:dia_manana'|'mie:tarde_dia'|'mie:dia_manana') : undefined)
+                  }}
+                >
+                  <option value="">— sin descanso fijo —</option>
+                  <option value="lun:tarde_dia">Lun tarde libre + Mar entero libre</option>
+                  <option value="lun:dia_manana">Lun entero libre + Mar mañana libre</option>
+                  <option value="mar:tarde_dia">Mar tarde libre + Mié entero libre</option>
+                  <option value="mar:dia_manana">Mar entero libre + Mié mañana libre</option>
+                  <option value="mie:tarde_dia">Mié tarde libre + Jue entero libre</option>
+                  <option value="mie:dia_manana">Mié entero libre + Jue mañana libre</option>
+                </Select>
+                <p className="text-[11px] text-gray-500 mt-1">
+                  Los descansos siempre caen entre Lunes y Jueves. Viernes, sábado y
+                  domingo no descansa nadie por política del local.
+                </p>
               </div>
             </div>
 
