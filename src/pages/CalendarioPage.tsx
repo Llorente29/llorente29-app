@@ -33,6 +33,7 @@ export default function CalendarioPage() {
   const [plan, setPlan] = useState<WeeklyPlan | null>(null)
   const [assignments, setAssignments] = useState<ShiftAssignment[]>([])
   const [minimums, setMinimums] = useState<ShiftMinimum[]>([])
+  const [locationPlanning, setLocationPlanning] = useState<Awaited<ReturnType<typeof fetchLocationPlanning>>>([])
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<{ employeeId: string; date: string } | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>('tabla')
@@ -59,7 +60,10 @@ export default function CalendarioPage() {
 
   // Cargar mínimos cuando cambia el local
   useEffect(() => {
-    if (locationId) fetchMinimums(locationId).then(setMinimums)
+    if (locationId) {
+      fetchMinimums(locationId).then(setMinimums)
+      fetchLocationPlanning(locationId).then(setLocationPlanning)
+    }
   }, [locationId])
 
   // Cargar plan + asignaciones cuando cambia semana o local
@@ -180,9 +184,11 @@ export default function CalendarioPage() {
     return validatePlan({
       assignments, shiftTypes,
       employees: localEmployees,
-      minimums, weekDays: days, locationId,
+      minimums,
+      planning: locationPlanning,
+      weekDays: days, locationId,
     })
-  }, [assignments, shiftTypes, localEmployees, minimums, days, locationId, plan])
+  }, [assignments, shiftTypes, localEmployees, minimums, locationPlanning, days, locationId, plan])
 
   const errors = validations.filter(v => v.level === 'error')
   const warnings = validations.filter(v => v.level === 'warning')
@@ -601,9 +607,23 @@ export default function CalendarioPage() {
                   </td>
                   {days.map(d => {
                     const count = coverage.get(t.id)?.get(d) || 0
-                    const min = minimums.find(m => m.shiftTypeId === t.id)
+                    const dow = new Date(d + 'T00:00:00').getDay()
                     const w = isWeekend(d)
-                    const required = min ? (w && min.minWeekend != null ? min.minWeekend : min.minDefault) : 0
+                    // Usar planning si está, fallback a minimums
+                    let required = 0
+                    if (locationPlanning && locationPlanning.length > 0) {
+                      const planRow = locationPlanning.find(p => p.shiftTypeId === t.id)
+                      if (planRow) {
+                        const map: Record<number, number | null | undefined> = {
+                          1: planRow.neededLun, 2: planRow.neededMar, 3: planRow.neededMie,
+                          4: planRow.neededJue, 5: planRow.neededVie, 6: planRow.neededSab, 0: planRow.neededDom,
+                        }
+                        required = map[dow] ?? planRow.neededDefault
+                      }
+                    } else {
+                      const min = minimums.find(m => m.shiftTypeId === t.id)
+                      required = min ? (w && min.minWeekend != null ? min.minWeekend : min.minDefault) : 0
+                    }
                     const ok = count >= required
                     const empty = count === 0
                     return (
