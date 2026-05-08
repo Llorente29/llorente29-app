@@ -7,7 +7,7 @@
 // - Produce diagnóstico con sugerencias accionables
 
 import type { Employee } from '../types'
-import type { ShiftType, ShiftAssignment } from './calendarService'
+import type { ShiftType } from './calendarService'
 import type { LocationPlanningRow } from './locationPlanningService'
 import { neededFor } from './locationPlanningService'
 
@@ -81,10 +81,6 @@ function shiftAbsRange(date: string, weekStart: string, t: ShiftType): { startAb
   return r
 }
 
-/** Comprueba descanso 12h entre dos rangos. */
-function hasMinRest(prevEnd: number, nextStart: number): boolean {
-  return (nextStart - prevEnd) >= 12 * 60
-}
 
 // ─── ALGORITMO PRINCIPAL ──────────────────────────────────────────────────
 
