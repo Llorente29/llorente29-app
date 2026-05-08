@@ -18,6 +18,7 @@ import {
 import { autoGenerate, type AutoGenMode } from '../services/calendarAutoGen'
 import { isSupabaseEnabled, supabase } from '../lib/supabase'
 import type { Employee } from '../types'
+import PlantillaLocalPage from './PlantillaLocalPage'
 
 type ViewMode = 'tabla' | 'empleado'
 
@@ -35,6 +36,7 @@ export default function CalendarioPage() {
   const [selectedEmpId, setSelectedEmpId] = useState<string | null>(null)
   const [showValidations, setShowValidations] = useState(true)
   const [showAutoGen, setShowAutoGen] = useState(false)
+  const [showPlantilla, setShowPlantilla] = useState(false)
 
   // Inicializar location al primer local activo
   useEffect(() => {
@@ -274,6 +276,10 @@ export default function CalendarioPage() {
 
   const isCurrentWeek = weekStart === mondayOf(new Date())
 
+  if (showPlantilla) {
+    return <PlantillaLocalPage onBack={() => setShowPlantilla(false)} />
+  }
+
   return (
     <div className="space-y-4">
       {/* Header con navegación */}
@@ -333,6 +339,10 @@ export default function CalendarioPage() {
             </button>
           </div>
           <div className="flex items-center gap-1.5">
+            <button onClick={() => setShowPlantilla(true)}
+              className="text-xs px-3 py-1 rounded bg-purple-50 text-purple-700 hover:bg-purple-100 font-medium">
+              ⚙️ Plantilla del local
+            </button>
             <button onClick={() => setShowAutoGen(true)}
               className="text-xs px-3 py-1 rounded bg-[#7C1A1A] text-white hover:bg-[#5A1212] font-medium">
               🪄 Generar semana
