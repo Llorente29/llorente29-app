@@ -4,6 +4,7 @@ import { Button, Input, Select, Textarea, Badge, Card, Tabs, Modal, Label, Alert
 import type { Employee, ClockEntry, WeeklySchedule } from '../types'
 import DocumentosTab from '../components/personal/DocumentosTab'
 import VacacionesTab from '../components/personal/VacacionesTab'
+import BolsaHorasView from '../components/personal/BolsaHorasView'
 
 const POSITIONS = ['Encargado', 'Jefe de cocina', 'Cocinero', 'Ayudante cocina', 'Camarero', 'Barra', 'Hostess', 'Limpieza', 'Gerente', 'Otro']
 const CONTRACT_TYPES = ['Indefinido', 'Temporal', 'Prácticas', 'Beca', 'Autónomo', 'Otro']
@@ -523,20 +524,24 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations }: {
         {/* ── BOLSA DE HORAS ── */}
         {tab === 'bolsa' && (
           <div className="space-y-4">
-            <p className="text-xs text-gray-500">Horas acumuladas en la bolsa. Positivo = el trabajador tiene horas a su favor. Negativo = debe horas.</p>
-            <div className="flex items-center gap-4 p-4 rounded-2xl border bg-gray-50">
-              <div className="text-center flex-1">
-                <p className={`text-4xl font-bold ${(emp.hourBank||0)>0?'text-emerald-600':(emp.hourBank||0)<0?'text-red-600':'text-gray-400'}`}>
-                  {(emp.hourBank||0)>0?'+':''}{(emp.hourBank||0).toFixed(1)}h
-                </p>
-                <p className="text-xs text-gray-500 mt-1">Saldo actual</p>
-              </div>
-              <div className="flex-1 space-y-2">
-                <div>
-                  <label className="text-xs text-gray-500 uppercase font-medium">Ajuste manual (horas)</label>
-                  <div className="flex gap-2 mt-1">
-                    <input type="number" step="0.5" placeholder="+2.5 o -1.0"
-                      className="flex-1 border rounded-lg px-3 py-2 text-sm"
+            <BolsaHorasView employee={emp} variant="desktop" />
+
+            <Card className="p-4">
+              <p className="text-xs font-semibold text-gray-700 mb-2">Ajuste manual</p>
+              <p className="text-[11px] text-gray-500 mb-3">
+                Si necesitas registrar horas que no se reflejan en los fichajes (ej: día de baja compensado, festivo trabajado), añade un ajuste manual. Se sumará/restará al cálculo automático.
+              </p>
+              <div className="flex items-center gap-3">
+                <div className="flex-1">
+                  <label className="text-[10px] text-gray-500 uppercase tracking-wide">Saldo manual (horas)</label>
+                  <p className={`text-2xl font-bold tabular-nums ${(emp.hourBank||0)>0?'text-emerald-600':(emp.hourBank||0)<0?'text-red-600':'text-gray-400'}`}>
+                    {(emp.hourBank||0)>0?'+':''}{(emp.hourBank||0).toFixed(1)}h
+                  </p>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex gap-1">
+                    <input type="number" step="0.5" placeholder="±h"
+                      className="w-20 border rounded-lg px-2 py-1.5 text-sm"
                       id={`hourbank-adj-${emp.id}`} />
                     <button onClick={() => {
                       const inp = document.getElementById(`hourbank-adj-${emp.id}`) as HTMLInputElement
@@ -544,19 +549,16 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations }: {
                       if(isNaN(val)) return
                       update('hourBank', (emp.hourBank||0) + val)
                       if(inp) inp.value = ''
-                    }} className="px-3 py-2 bg-teal-600 text-white text-sm rounded-lg hover:bg-teal-700">
+                    }} className="px-3 py-1.5 bg-[#7C1A1A] text-white text-xs rounded-lg hover:bg-[#5A1212]">
                       Añadir
                     </button>
                   </div>
+                  <button onClick={()=>update('hourBank',0)} className="text-[10px] text-gray-400 hover:text-red-500">
+                    Resetear a 0
+                  </button>
                 </div>
-                <button onClick={()=>update('hourBank',0)} className="w-full text-xs text-gray-400 hover:text-red-500 border border-gray-200 rounded-lg py-1.5">
-                  Resetear bolsa a 0
-                </button>
               </div>
-            </div>
-            <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-800">
-              💡 La bolsa de horas permite compensar semanas con más o menos trabajo sin necesidad de pagar horas extras inmediatamente. Se actualiza automáticamente cada vez que un empleado trabaja por encima o por debajo de sus horas contratadas.
-            </div>
+            </Card>
           </div>
         )}
 
