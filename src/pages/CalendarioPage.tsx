@@ -1,1114 +1,744 @@
 // src/pages/CalendarioPage.tsx
-// Calendario semanal de horarios. Vista principal del gestor.
-import { useState, useEffect, useMemo } from 'react'
-import { useApp } from '../context/AppContext'
-import { Card, Button } from '../components/ui'
-import {
-  fetchShiftTypes, getOrCreatePlan, fetchAssignmentsForPlan,
-  upsertAssignment, publishPlan, unpublishPlan,
-  duplicatePreviousWeek, clearPlanAssignments,
-  fetchMinimums,
-  mondayOf, weekDates, shortDayLabel, isWeekend,
-  type ShiftType, type WeeklyPlan, type ShiftAssignment, type ShiftMinimum,
-} from '../services/calendarService'
-import {
-  validatePlan, shiftCoverage,
-  type ValidationIssue,
-} from '../services/calendarValidations'
-import { autoGenerate, type AutoGenMode } from '../services/calendarAutoGen'
-import { smartGenerate, type DiagnosticItem } from '../services/calendarSmartGen'
-import { fetchLocationPlanning } from '../services/locationPlanningService'
-import { fetchApprovedVacationDates, fetchMonthlyHoursBefore } from '../services/calendarService'
-import { isSupabaseEnabled, supabase } from '../lib/supabase'
-import type { Employee } from '../types'
-import PlantillaLocalPage from './PlantillaLocalPage'
+// Sub-fase 3.2 — Vista tipo Excel del calendario de horarios.
+// - Selector de semana y local
+// - Botón generar automático
+// - Matriz turnos × días con celdas editables
+// - Resumen de carga por empleado
+// - Sugerencias para huecos sin cubrir
 
-type ViewMode = 'tabla' | 'empleado'
+import { useEffect, useMemo, useState } from 'react'
+import { useApp } from '../context/AppContext'
+import {
+  listShiftTemplates,
+  getSchedule,
+  upsertSchedule,
+  publishSchedule,
+} from '../services/schedulerService'
+import {
+  generateSchedule,
+  computeWorkloads,
+  suggestFillForGap,
+  setGlobalAssignedHoursSnapshot,
+  type FillSuggestion,
+} from '../services/scheduleGenerator'
+import {
+  type ShiftTemplate,
+  type DayOfWeek,
+  type ScheduleCells,
+  type CoverageOverrides,
+  type Schedule,
+  type UncoveredSlot,
+  type EmployeeWorkload,
+  shiftDurationHours,
+  coverageForDay,
+  getMondayOfWeek,
+  toISODate,
+  DAY_LABELS_SHORT,
+  DAY_LABELS,
+} from '../types/scheduler'
+import type { Employee } from '../types'
+
+const DAYS: DayOfWeek[] = [0, 1, 2, 3, 4, 5, 6]
+
+function addDays(iso: string, days: number): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  const dt = new Date(y, m - 1, d)
+  dt.setDate(dt.getDate() + days)
+  return toISODate(dt)
+}
+
+function formatWeekLabel(weekStartISO: string): string {
+  const [y, m, d] = weekStartISO.split('-').map(Number)
+  const start = new Date(y, m - 1, d)
+  const end = new Date(start)
+  end.setDate(end.getDate() + 6)
+  const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' }
+  return `${start.toLocaleDateString('es-ES', opts)} – ${end.toLocaleDateString('es-ES', opts)} ${end.getFullYear()}`
+}
 
 export default function CalendarioPage() {
-  const { staff, locations } = useApp()
-  const [weekStart, setWeekStart] = useState<string>(() => mondayOf(new Date()))
+  const { locations, staff } = useApp()
   const [locationId, setLocationId] = useState<string>('')
-  const [shiftTypes, setShiftTypes] = useState<ShiftType[]>([])
-  const [plan, setPlan] = useState<WeeklyPlan | null>(null)
-  const [assignments, setAssignments] = useState<ShiftAssignment[]>([])
-  const [minimums, setMinimums] = useState<ShiftMinimum[]>([])
-  const [locationPlanning, setLocationPlanning] = useState<Awaited<ReturnType<typeof fetchLocationPlanning>>>([])
-  const [loading, setLoading] = useState(true)
-  const [editing, setEditing] = useState<{ employeeId: string; date: string } | null>(null)
-  const [viewMode, setViewMode] = useState<ViewMode>('tabla')
-  const [selectedEmpId, setSelectedEmpId] = useState<string | null>(null)
-  const [showValidations, setShowValidations] = useState(true)
-  const [showAutoGen, setShowAutoGen] = useState(false)
-  const [showPlantilla, setShowPlantilla] = useState(false)
-  const [showSmartGen, setShowSmartGen] = useState(false)
-  const [diagnostics, setDiagnostics] = useState<DiagnosticItem[]>([])
-  const [showDiagnostics, setShowDiagnostics] = useState(true)
+  const [weekStart, setWeekStart] = useState<string>(() => toISODate(getMondayOfWeek(new Date())))
+  const [templates, setTemplates] = useState<ShiftTemplate[]>([])
+  const [cells, setCells] = useState<ScheduleCells>({})
+  const [overrides, setOverrides] = useState<CoverageOverrides>({})
+  const [scheduleRow, setScheduleRow] = useState<Schedule | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [dirty, setDirty] = useState(false)
+  const [gapModal, setGapModal] = useState<UncoveredSlot | null>(null)
 
-  // Inicializar location al primer local activo
+  // Empleados del local
+  const employees = useMemo(
+    () => staff.filter(e => e.active && (e.locationId === locationId || (e.assignedLocations || []).includes(locationId))),
+    [staff, locationId]
+  )
+
+  // Default: primer local
   useEffect(() => {
-    if (!locationId && locations.length > 0) {
-      const active = locations.find(l => l.active) || locations[0]
-      if (active) setLocationId(active.id)
-    }
+    if (!locationId && locations.length > 0) setLocationId(locations[0].id)
   }, [locations, locationId])
 
-  // Cargar tipos
-  useEffect(() => {
-    fetchShiftTypes().then(setShiftTypes)
-  }, [])
-
-  // Cargar mínimos cuando cambia el local
-  useEffect(() => {
-    if (locationId) {
-      fetchMinimums(locationId).then(setMinimums)
-      fetchLocationPlanning(locationId).then(setLocationPlanning)
-    }
-  }, [locationId])
-
-  // Cargar plan + asignaciones cuando cambia semana o local
-  async function loadPlan() {
-    if (!locationId || !weekStart) return
+  // Cargar templates + schedule de la semana seleccionada
+  async function refresh() {
+    if (!locationId) return
     setLoading(true)
-    const p = await getOrCreatePlan(weekStart, locationId)
-    setPlan(p)
-    if (p) {
-      const a = await fetchAssignmentsForPlan(p.id)
-      setAssignments(a)
-    }
+    const [tpls, sched] = await Promise.all([
+      listShiftTemplates(locationId),
+      getSchedule(locationId, weekStart),
+    ])
+    setTemplates(tpls)
+    setScheduleRow(sched)
+    setCells(sched?.cells || {})
+    setOverrides(sched?.coverage_overrides || {})
+    setDirty(false)
     setLoading(false)
   }
 
-  useEffect(() => { loadPlan() /* eslint-disable-line */ }, [weekStart, locationId])
-
-  // Realtime para asignaciones de este plan
   useEffect(() => {
-    if (!isSupabaseEnabled || !supabase || !plan) return
-    const sb = supabase
-    const ch = sb.channel('cal-' + plan.id)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_assignments', filter: `plan_id=eq.${plan.id}` },
-        async () => {
-          const a = await fetchAssignmentsForPlan(plan.id)
-          setAssignments(a)
-        })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'weekly_plans', filter: `id=eq.${plan.id}` },
-        () => loadPlan())
-      .subscribe()
-    return () => { sb.removeChannel(ch) }
+    refresh()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plan?.id])
+  }, [locationId, weekStart])
 
-  // Empleados del local actual
-  const localEmployees = useMemo(() => {
-    return staff
-      .filter(e => e.active)
-      .filter(e => e.locationId === locationId || (e.assignedLocations || []).includes(locationId))
-      .sort((a, b) => a.name.localeCompare(b.name))
-  }, [staff, locationId])
+  // Workloads en tiempo real
+  const workloads = useMemo<EmployeeWorkload[]>(
+    () => computeWorkloads(cells, templates, employees),
+    [cells, templates, employees]
+  )
 
-  const days = useMemo(() => weekDates(weekStart), [weekStart])
-
-  // Index para acceso rápido
-  const assignByEmpDate = useMemo(() => {
-    const map = new Map<string, ShiftAssignment>()
-    for (const a of assignments) map.set(`${a.employeeId}|${a.date}`, a)
-    return map
-  }, [assignments])
-
-  const typesById = useMemo(() => {
-    const map = new Map<string, ShiftType>()
-    for (const t of shiftTypes) map.set(t.id, t)
-    return map
-  }, [shiftTypes])
-
-  // Cargar weeklySchedule como plantilla inicial si la celda está vacía
-  function getCellSuggestion(employee: Employee, date: string): string | null {
-    if (!employee.weeklySchedule) return null
-    const d = new Date(date + 'T00:00:00')
-    const dayKey = ['domingo','lunes','martes','miercoles','jueves','viernes','sabado'][d.getDay()]
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const dayInfo = (employee.weeklySchedule as any)[dayKey]
-    if (!dayInfo || !dayInfo.active || !dayInfo.start || !dayInfo.end) return null
-    // Buscar tipo de turno que coincida (start o cercano)
-    const match = shiftTypes.find(t => !t.isOff && t.startTime === dayInfo.start)
-    return match ? match.id : null
-  }
-
-  // Cambiar semana
-  function shiftWeek(weeks: number) {
-    const d = new Date(weekStart + 'T00:00:00')
-    d.setDate(d.getDate() + weeks * 7)
-    setWeekStart(mondayOf(d))
-  }
-
-  function goToCurrentWeek() {
-    setWeekStart(mondayOf(new Date()))
-  }
-
-  async function handleAssign(employeeId: string, date: string, shiftTypeId: string | null) {
-    if (!plan) return
-    await upsertAssignment({ planId: plan.id, employeeId, date, shiftTypeId })
-    const a = await fetchAssignmentsForPlan(plan.id)
-    setAssignments(a)
-    setEditing(null)
-  }
-
-  async function handlePublish() {
-    if (!plan) return
-    if (plan.status === 'publicado') {
-      if (!confirm('Esto despublicará el plan. Los trabajadores dejarán de verlo. ¿Seguro?')) return
-      await unpublishPlan(plan.id)
-    } else {
-      if (!confirm('¿Publicar este plan? Los trabajadores podrán ver su horario.')) return
-      await publishPlan(plan.id)
-    }
-    await loadPlan()
-  }
-
-  // Cálculo total de horas planificadas por empleado en la semana
-  function weeklyHoursOf(employeeId: string): number {
-    let total = 0
-    for (const d of days) {
-      const a = assignByEmpDate.get(`${employeeId}|${d}`)
-      if (a && a.shiftTypeId) {
-        const t = typesById.get(a.shiftTypeId)
-        if (t) total += t.hours
+  // Huecos en tiempo real
+  const uncovered = useMemo<UncoveredSlot[]>(() => {
+    const list: UncoveredSlot[] = []
+    for (const t of templates) {
+      for (const d of DAYS) {
+        const baseCov = coverageForDay(t, d)
+        const ov = overrides[t.id]?.[String(d)]
+        const needed = ov !== undefined ? ov : baseCov
+        if (needed === 0) continue
+        const assigned = (cells[t.id]?.[String(d)] || []).length
+        if (assigned < needed) {
+          list.push({
+            template_id: t.id,
+            template_label: t.label,
+            day_of_week: d,
+            needed,
+            assigned,
+            reason: assigned === 0 ? 'sin asignar' : 'parcialmente cubierto',
+          })
+        }
       }
     }
-    return total
-  }
+    return list
+  }, [cells, overrides, templates])
 
-  // ─── Validaciones del convenio + cobertura ──────────────────────────────
-  const validations = useMemo<ValidationIssue[]>(() => {
-    if (!plan || localEmployees.length === 0) return []
-    return validatePlan({
-      assignments, shiftTypes,
-      employees: localEmployees,
-      minimums,
-      planning: locationPlanning,
-      weekDays: days, locationId,
+  function setCellAssign(templateId: string, day: DayOfWeek, ids: string[]) {
+    setCells(prev => {
+      const copy = { ...prev }
+      if (!copy[templateId]) copy[templateId] = {}
+      copy[templateId] = { ...copy[templateId], [String(day)]: ids }
+      return copy
     })
-  }, [assignments, shiftTypes, localEmployees, minimums, locationPlanning, days, locationId, plan])
-
-  const errors = validations.filter(v => v.level === 'error')
-  const warnings = validations.filter(v => v.level === 'warning')
-
-  const coverage = useMemo(() => shiftCoverage(assignments, shiftTypes, days), [assignments, shiftTypes, days])
-
-  // Acciones planificación rápida
-  async function handleDuplicatePrev() {
-    if (!plan) return
-    if (!confirm('¿Copiar las asignaciones de la semana anterior? Se sobrescribirá lo que ya tengas en esta semana.')) return
-    const copied = await duplicatePreviousWeek(plan.id, weekStart, locationId)
-    if (copied === null) {
-      alert('No hay plan en la semana anterior. Empieza esa semana primero.')
-    } else {
-      const a = await fetchAssignmentsForPlan(plan.id)
-      setAssignments(a)
-      alert(`✓ Copiadas ${copied} asignaciones de la semana anterior`)
-    }
+    setDirty(true)
   }
 
-  async function handleClearWeek() {
-    if (!plan) return
-    if (!confirm('¿Borrar TODAS las asignaciones de esta semana? No se puede deshacer.')) return
-    await clearPlanAssignments(plan.id)
-    const a = await fetchAssignmentsForPlan(plan.id)
-    setAssignments(a)
-  }
-
-  async function handleSmartGenerate(selectedEmpIds: Set<string>) {
-    if (!plan) return
-
-    // Cargar plantilla del local
-    const planning = await fetchLocationPlanning(locationId)
-    if (planning.length === 0) {
-      alert('No has configurado la plantilla del local. Hazlo primero en "⚙️ Plantilla del local".')
-      return
-    }
-
-    // Empleados seleccionados
-    const selectedEmps = localEmployees.filter(e => selectedEmpIds.has(e.id))
-    if (selectedEmps.length === 0) {
-      alert('Selecciona al menos un empleado.')
-      return
-    }
-
-    // Vacaciones aprobadas en la semana
-    const weekEnd = days[6]
-    const vacationDates = await fetchApprovedVacationDates(weekStart, weekEnd)
-
-    // Horas mensuales ya asignadas
-    const monthlyHours = await fetchMonthlyHoursBefore(weekStart)
-
-    // Limpiar las asignaciones actuales del plan
-    await clearPlanAssignments(plan.id)
-
-    // Ejecutar algoritmo
-    const result = smartGenerate({
-      employees: selectedEmps,
-      unavailableDates: vacationDates,
-      shiftTypes,
-      planning,
-      days,
-      maxMonthlyOverloadPct: 20,
-      monthlyHoursAlready: monthlyHours,
-    })
-
-    // Aplicar asignaciones
-    for (const a of result.toUpsert) {
-      await upsertAssignment({
-        planId: plan.id,
-        employeeId: a.employeeId,
-        date: a.date,
-        shiftTypeId: a.shiftTypeId,
-        slot: a.slot,
-      })
-    }
-
-    // Refrescar
-    const refreshed = await fetchAssignmentsForPlan(plan.id)
-    setAssignments(refreshed)
-    setDiagnostics(result.diagnostics)
-    setShowDiagnostics(true)
-    setShowSmartGen(false)
-
-    const errors = result.diagnostics.filter(d => d.level === 'error').length
-    const warnings = result.diagnostics.filter(d => d.level === 'warning').length
-    alert(`✓ Generadas ${result.toUpsert.length} asignaciones\n\nCobertura: ${(result.summary.coverageRate * 100).toFixed(0)}%\nErrores: ${errors}\nAvisos: ${warnings}`)
-  }
-
-  async function handleAutoGenerate(mode: AutoGenMode, weeksAhead: number) {
-    if (!plan) return
-    let totalCreated = 0
-    let totalConflicts = 0
-
-    for (let w = 0; w < weeksAhead; w++) {
-      // Calcular fecha de la semana objetivo
-      const target = new Date(weekStart + 'T00:00:00')
-      target.setDate(target.getDate() + w * 7)
-      const ty = target.getFullYear()
-      const tm = String(target.getMonth() + 1).padStart(2, '0')
-      const td = String(target.getDate()).padStart(2, '0')
-      const targetWeekStart = `${ty}-${tm}-${td}`
-
-      // Obtener o crear plan de esa semana
-      const targetPlan = await getOrCreatePlan(targetWeekStart, locationId)
-      if (!targetPlan) continue
-
-      // Cargar asignaciones existentes de ese plan
-      const existingAssigns = await fetchAssignmentsForPlan(targetPlan.id)
-
-      // Calcular días de esa semana
-      const targetDays = weekDates(targetWeekStart)
-
-      const result = autoGenerate({
-        employees: localEmployees,
-        shiftTypes,
-        days: targetDays,
-        existingAssignments: existingAssigns,
-        mode,
-      })
-
-      if (result.toUpsert.length === 0) continue
-
-      // Aplicar
-      for (const a of result.toUpsert) {
-        await upsertAssignment({
-          planId: targetPlan.id,
-          employeeId: a.employeeId,
-          date: a.date,
-          shiftTypeId: a.shiftTypeId,
-        })
+  function setOverride(templateId: string, day: DayOfWeek, value: number | null) {
+    setOverrides(prev => {
+      const copy = { ...prev }
+      if (!copy[templateId]) copy[templateId] = {}
+      copy[templateId] = { ...copy[templateId] }
+      if (value === null) {
+        delete copy[templateId][String(day)]
+      } else {
+        copy[templateId][String(day)] = value
       }
-      totalCreated += result.toUpsert.length
-      totalConflicts += result.conflicts
-    }
+      return copy
+    })
+    setDirty(true)
+  }
 
-    // Recargar plan actual para refrescar la vista
-    if (plan) {
-      const refreshed = await fetchAssignmentsForPlan(plan.id)
-      setAssignments(refreshed)
+  async function doGenerate() {
+    if (!locationId || templates.length === 0 || employees.length === 0) return
+    if (Object.keys(cells).length > 0) {
+      if (!confirm('Esto sobreescribirá los turnos actuales. ¿Continuar?')) return
     }
-    setShowAutoGen(false)
+    const result = generateSchedule({
+      locationId,
+      weekStart,
+      templates,
+      employees,
+      overrides,
+    })
+    setCells(result.cells)
+    setDirty(true)
+  }
 
-    if (totalCreated === 0) {
-      alert('No hay nada para generar. Comprueba que los empleados tengan horario semanal configurado.')
-    } else {
-      const weeksLabel = weeksAhead === 1 ? 'esta semana' : `${weeksAhead} semanas`
-      alert(`✓ Generadas ${totalCreated} asignaciones en ${weeksLabel}${totalConflicts > 0 ? ` (${totalConflicts} sobrescrituras)` : ''}`)
+  async function doSave() {
+    if (!locationId) return
+    const saved = await upsertSchedule({
+      location_id: locationId,
+      week_start: weekStart,
+      cells,
+      coverage_overrides: overrides,
+      status: scheduleRow?.status || 'draft',
+      generated_at: new Date().toISOString(),
+    })
+    if (saved) {
+      setScheduleRow(saved)
+      setDirty(false)
     }
   }
 
-  const weekRangeLabel = useMemo(() => {
-    const start = new Date(weekStart + 'T00:00:00')
-    const end = new Date(start)
-    end.setDate(start.getDate() + 6)
-    return `${start.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })} – ${end.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}`
-  }, [weekStart])
+  async function doPublish() {
+    if (!scheduleRow) {
+      // Guardar primero
+      await doSave()
+    }
+    if (scheduleRow?.id) {
+      await publishSchedule(scheduleRow.id)
+      await refresh()
+    } else {
+      // Guardar de nuevo y publicar
+      const saved = await upsertSchedule({
+        location_id: locationId,
+        week_start: weekStart,
+        cells,
+        coverage_overrides: overrides,
+        status: 'published',
+        generated_at: new Date().toISOString(),
+        published_at: new Date().toISOString(),
+      })
+      if (saved) setScheduleRow(saved)
+    }
+  }
 
-  const isCurrentWeek = weekStart === mondayOf(new Date())
+  function shiftWeek(deltaDays: number) {
+    if (dirty && !confirm('Tienes cambios sin guardar. ¿Cambiar de semana?')) return
+    setWeekStart(prev => addDays(prev, deltaDays))
+  }
 
-  if (showPlantilla) {
-    return <PlantillaLocalPage onBack={() => setShowPlantilla(false)} />
+  function clearCells() {
+    if (!confirm('¿Vaciar toda la matriz?')) return
+    setCells({})
+    setDirty(true)
   }
 
   return (
     <div className="space-y-4">
-      {/* Header con navegación */}
-      <Card className="p-4">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-3">
-            <button onClick={() => shiftWeek(-1)}
-              className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center">←</button>
-            <div className="min-w-[200px] text-center">
-              <p className="font-bold text-gray-900">{weekRangeLabel}</p>
-              {isCurrentWeek && <p className="text-[10px] text-[#7C1A1A] font-medium">Esta semana</p>}
-            </div>
-            <button onClick={() => shiftWeek(1)}
-              className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center">→</button>
-            {!isCurrentWeek && (
-              <button onClick={goToCurrentWeek} className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-600 hover:bg-gray-200">
-                Hoy
-              </button>
-            )}
-          </div>
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center gap-3 bg-white border rounded-lg p-3">
+        <select
+          value={locationId}
+          onChange={e => setLocationId(e.target.value)}
+          className="border rounded px-3 py-2 bg-white text-sm"
+        >
+          {locations.map(l => (
+            <option key={l.id} value={l.id}>{l.name}</option>
+          ))}
+        </select>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            <select value={locationId} onChange={e => setLocationId(e.target.value)}
-              className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white">
-              {locations.filter(l => l.active).map(l => (
-                <option key={l.id} value={l.id}>{l.name}</option>
-              ))}
-            </select>
-
-            {plan && (
-              <>
-                <span className={`text-[10px] font-medium px-2 py-1 rounded-full ${
-                  plan.status === 'publicado'
-                    ? 'bg-emerald-100 text-emerald-700'
-                    : 'bg-amber-100 text-amber-700'
-                }`}>
-                  {plan.status === 'publicado' ? '✓ Publicado' : '✏️ Borrador'}
-                </span>
-                <Button size="sm" onClick={handlePublish}>
-                  {plan.status === 'publicado' ? 'Despublicar' : 'Publicar'}
-                </Button>
-              </>
-            )}
+        <div className="flex items-center gap-1">
+          <button onClick={() => shiftWeek(-7)} className="px-2 py-1 border rounded hover:bg-gray-50">←</button>
+          <div className="px-3 py-1 text-sm font-medium min-w-[180px] text-center">
+            {formatWeekLabel(weekStart)}
           </div>
+          <button onClick={() => shiftWeek(+7)} className="px-2 py-1 border rounded hover:bg-gray-50">→</button>
+          <button
+            onClick={() => setWeekStart(toISODate(getMondayOfWeek(new Date())))}
+            className="ml-2 text-xs text-gray-500 hover:underline"
+          >
+            Hoy
+          </button>
         </div>
 
-        {/* Acciones rápidas y toggle vista */}
-        <div className="flex items-center justify-between flex-wrap gap-2 mt-3 pt-3 border-t border-gray-100">
-          <div className="flex items-center gap-1">
-            <button onClick={() => setViewMode('tabla')}
-              className={`text-xs px-3 py-1 rounded-l border ${viewMode === 'tabla' ? 'bg-[#7C1A1A] text-white border-[#7C1A1A]' : 'bg-white text-gray-600 border-gray-200'}`}>
-              📊 Tabla semanal
-            </button>
-            <button onClick={() => setViewMode('empleado')}
-              className={`text-xs px-3 py-1 rounded-r border ${viewMode === 'empleado' ? 'bg-[#7C1A1A] text-white border-[#7C1A1A]' : 'bg-white text-gray-600 border-gray-200'}`}>
-              👤 Por empleado
-            </button>
-          </div>
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <button onClick={() => setShowPlantilla(true)}
-              className="text-xs px-3 py-1 rounded bg-purple-50 text-purple-700 hover:bg-purple-100 font-medium">
-              ⚙️ Plantilla del local
-            </button>
-            <button onClick={() => setShowSmartGen(true)}
-              className="text-xs px-3 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700 font-medium">
-              🤖 Generar inteligente
-            </button>
-            <button onClick={() => setShowAutoGen(true)}
-              className="text-xs px-3 py-1 rounded bg-[#7C1A1A] text-white hover:bg-[#5A1212] font-medium">
-              🪄 Generar simple
-            </button>
-            <button onClick={handleDuplicatePrev}
-              className="text-xs px-3 py-1 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium">
-              📋 Duplicar semana anterior
-            </button>
-            <button onClick={handleClearWeek}
-              className="text-xs px-3 py-1 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 font-medium">
-              🗑 Limpiar semana
-            </button>
-          </div>
-        </div>
-      </Card>
+        <div className="flex-1" />
 
-      {/* Panel de diagnóstico (resultado del Generador Inteligente) */}
-      {diagnostics.length > 0 && showDiagnostics && (
-        <Card className="p-3 bg-blue-50 border-blue-200">
-          <div className="flex items-start justify-between gap-3 mb-2">
-            <p className="text-xs font-bold uppercase tracking-wide text-blue-700">
-              🤖 Diagnóstico del generador
-            </p>
-            <button onClick={() => setShowDiagnostics(false)}
-              className="text-xs text-gray-500 hover:text-gray-700 shrink-0">✕</button>
-          </div>
-          <div className="space-y-1.5 max-h-60 overflow-y-auto">
-            {diagnostics.map((d, i) => (
-              <div key={i} className={`flex items-start gap-2 text-xs ${
-                d.level === 'error' ? 'text-red-800' :
-                d.level === 'warning' ? 'text-amber-800' :
-                'text-blue-800'
-              }`}>
-                <span className="shrink-0">
-                  {d.level === 'error' ? '🚨' : d.level === 'warning' ? '⚠' : '💡'}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold">{d.title}</p>
-                  <p className="opacity-80">{d.description}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {/* Panel de validaciones */}
-      {(errors.length > 0 || warnings.length > 0) && showValidations && (
-        <Card className={`p-3 ${errors.length > 0 ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'}`}>
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-2">
-                <p className={`text-xs font-bold uppercase tracking-wide ${errors.length > 0 ? 'text-red-700' : 'text-amber-700'}`}>
-                  {errors.length > 0 && <>🚨 {errors.length} error{errors.length !== 1 ? 'es' : ''} </>}
-                  {warnings.length > 0 && <>⚠ {warnings.length} avis{warnings.length !== 1 ? 'os' : 'o'}</>}
-                </p>
-              </div>
-              <div className="space-y-1 max-h-40 overflow-y-auto">
-                {errors.map((v, i) => (
-                  <ValidationRow key={`e-${i}`} issue={v} />
-                ))}
-                {warnings.map((v, i) => (
-                  <ValidationRow key={`w-${i}`} issue={v} />
-                ))}
-              </div>
-            </div>
-            <button onClick={() => setShowValidations(false)}
-              className="text-xs text-gray-500 hover:text-gray-700 shrink-0">✕</button>
-          </div>
-        </Card>
-      )}
-
-      {(errors.length > 0 || warnings.length > 0) && !showValidations && (
-        <button onClick={() => setShowValidations(true)}
-          className={`text-xs px-3 py-1.5 rounded-full font-medium ${
-            errors.length > 0 ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
-          }`}>
-          {errors.length > 0 ? `🚨 Mostrar ${errors.length} error${errors.length !== 1 ? 'es' : ''}` : `⚠ Mostrar ${warnings.length} aviso${warnings.length !== 1 ? 's' : ''}`}
+        <button
+          onClick={doGenerate}
+          disabled={loading || templates.length === 0 || employees.length === 0}
+          className="px-3 py-2 rounded text-white text-sm font-medium disabled:opacity-40"
+          style={{ backgroundColor: '#7C1A1A' }}
+          title="Genera la matriz automáticamente respetando las reglas"
+        >
+          🪄 Generar automático
         </button>
-      )}
+        <button
+          onClick={clearCells}
+          className="px-3 py-2 rounded border text-sm hover:bg-gray-50"
+        >
+          Vaciar
+        </button>
+        <button
+          onClick={doSave}
+          disabled={!dirty}
+          className="px-3 py-2 rounded text-white text-sm font-medium disabled:opacity-40"
+          style={{ backgroundColor: dirty ? '#F39C2A' : '#aaa' }}
+        >
+          {dirty ? '💾 Guardar borrador' : '✓ Guardado'}
+        </button>
+        <button
+          onClick={doPublish}
+          className="px-3 py-2 rounded border-2 text-sm font-medium"
+          style={{ borderColor: '#7C1A1A', color: '#7C1A1A' }}
+          title="Publicar para que los empleados lo vean en su móvil"
+        >
+          📢 Publicar
+        </button>
+      </div>
 
-      {/* Tabla calendario */}
-      {loading ? (
-        <Card className="p-6 text-center"><p className="text-sm text-gray-500">Cargando...</p></Card>
-      ) : localEmployees.length === 0 ? (
-        <Card className="p-12 text-center">
-          <p className="text-5xl mb-3">👥</p>
-          <p className="font-semibold text-gray-700">Sin empleados en este local</p>
-          <p className="text-xs text-gray-500 mt-1">Asigna empleados al local desde Personal</p>
-        </Card>
-      ) : viewMode === 'empleado' ? (
-        <EmployeeView
-          employees={localEmployees}
-          selectedId={selectedEmpId}
-          onSelect={setSelectedEmpId}
-          assignByEmpDate={assignByEmpDate}
-          typesById={typesById}
-          days={days}
-          weeklyHoursOf={weeklyHoursOf}
-          onCellClick={(emp, date) => setEditing({ employeeId: emp.id, date })}
-        />
-      ) : (
-        <Card className="overflow-x-auto p-0">
+      {/* Status bar */}
+      <div className="flex items-center gap-3 text-xs text-gray-600">
+        {scheduleRow?.status === 'published' && (
+          <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-800 font-medium">
+            ● Publicado
+          </span>
+        )}
+        {scheduleRow?.status === 'draft' && (
+          <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-medium">
+            ● Borrador
+          </span>
+        )}
+        {!scheduleRow && (
+          <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 font-medium">
+            ● Sin guardar
+          </span>
+        )}
+        {employees.length === 0 && locationId && (
+          <span className="text-amber-600">⚠️ No hay empleados activos en este local</span>
+        )}
+        {templates.length === 0 && locationId && (
+          <span className="text-amber-600">⚠️ No hay turnos definidos en la plantilla</span>
+        )}
+      </div>
+
+      {/* Matriz */}
+      {templates.length > 0 && (
+        <div className="bg-white border rounded-lg overflow-x-auto">
           <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-200 bg-gray-50">
-                <th className="text-left px-3 py-2 sticky left-0 bg-gray-50 z-10 min-w-[140px]">Empleado</th>
-                {days.map(d => (
-                  <th key={d} className={`text-center px-2 py-2 font-medium ${
-                    isWeekend(d) ? 'bg-amber-50 text-amber-800' : 'text-gray-600'
-                  }`}>
-                    {shortDayLabel(d)}
+            <thead style={{ backgroundColor: '#7C1A1A' }} className="text-white">
+              <tr>
+                <th className="px-3 py-2 text-left">Turno</th>
+                {DAYS.map(d => (
+                  <th key={d} className="px-2 py-2 text-center w-32">
+                    {DAY_LABELS_SHORT[d]}
+                    <br />
+                    <span className="text-[10px] opacity-80 font-normal">
+                      {addDays(weekStart, d).slice(8, 10)}/{addDays(weekStart, d).slice(5, 7)}
+                    </span>
                   </th>
                 ))}
-                <th className="text-right px-3 py-2 text-gray-500">Total</th>
+                <th className="px-2 py-2 text-center w-16">h</th>
               </tr>
             </thead>
             <tbody>
-              {localEmployees.map(emp => {
-                const totalHours = weeklyHoursOf(emp.id)
-                const overWeekly = emp.weeklyHours && totalHours > emp.weeklyHours
+              {templates.map(t => {
+                const tHours = shiftDurationHours(t.start_time, t.end_time)
                 return (
-                  <tr key={emp.id} className="border-b border-gray-100 hover:bg-gray-50/50">
-                    <td className="px-3 py-2 sticky left-0 bg-white z-10">
-                      <p className="font-medium text-gray-900 text-sm truncate">{emp.name || '—'}</p>
-                      <p className="text-[10px] text-gray-400">{emp.position || '—'}</p>
+                  <tr key={t.id} className="border-b">
+                    <td className="px-3 py-2 align-top">
+                      <div className="font-medium">{t.label}</div>
+                      <div className="text-xs text-gray-500 font-mono">
+                        {t.start_time.slice(0, 5)} – {t.end_time.slice(0, 5)}
+                      </div>
+                      <div className="text-xs text-gray-400">{tHours}h</div>
                     </td>
-                    {days.map(d => {
-                      const a = assignByEmpDate.get(`${emp.id}|${d}`)
-                      const t = a?.shiftTypeId ? typesById.get(a.shiftTypeId) : null
-                      const suggestion = !a ? getCellSuggestion(emp, d) : null
-                      const sugType = suggestion ? typesById.get(suggestion) : null
+                    {DAYS.map(d => {
+                      const baseCov = coverageForDay(t, d)
+                      const ovKey = String(d)
+                      const ov = overrides[t.id]?.[ovKey]
+                      const needed = ov !== undefined ? ov : baseCov
+                      const assignedIds = cells[t.id]?.[ovKey] || []
+                      const isOverridden = ov !== undefined && ov !== baseCov
                       return (
-                        <td key={d} className={`p-1 ${isWeekend(d) ? 'bg-amber-50/30' : ''}`}>
-                          <button
-                            onClick={() => setEditing({ employeeId: emp.id, date: d })}
-                            className={`w-full px-2 py-1.5 rounded text-xs font-medium transition-all hover:ring-2 hover:ring-gray-300 ${
-                              t
-                                ? 'text-white'
-                                : sugType
-                                  ? 'bg-gray-50 text-gray-400 italic border border-dashed border-gray-300'
-                                  : 'bg-gray-100 text-gray-400'
-                            }`}
-                            style={t ? { backgroundColor: t.color } : undefined}
-                            title={t ? `${t.label} (${t.startTime}-${t.endTime})` : sugType ? `Sugerido: ${sugType.code}` : 'Sin asignar'}
-                          >
-                            {t ? t.code : sugType ? `~${sugType.code}` : '—'}
-                          </button>
-                        </td>
+                        <Cell
+                          key={d}
+                          template={t}
+                          day={d}
+                          needed={needed}
+                          baseCoverage={baseCov}
+                          isOverridden={isOverridden}
+                          assignedIds={assignedIds}
+                          allEmployees={employees}
+                          workloads={workloads}
+                          onChangeAssigned={(ids) => setCellAssign(t.id, d, ids)}
+                          onChangeNeeded={(v) => setOverride(t.id, d, v === baseCov ? null : v)}
+                        />
                       )
                     })}
-                    <td className="px-3 py-2 text-right">
-                      <p className={`text-sm font-bold tabular-nums ${
-                        overWeekly ? 'text-amber-600' : 'text-gray-700'
-                      }`}>
-                        {totalHours.toFixed(1)}h
-                      </p>
-                      <p className="text-[10px] text-gray-400">
-                        de {emp.weeklyHours || 40}h
-                      </p>
+                    <td className="px-2 py-2 text-center text-xs text-gray-500 font-mono">
+                      {tHours}
                     </td>
                   </tr>
                 )
               })}
             </tbody>
-
-            {/* Filas de cobertura */}
-            <tfoot>
-              <tr className="border-t-2 border-gray-300 bg-gray-50">
-                <td className="px-3 py-2 sticky left-0 bg-gray-50 z-10 text-[10px] uppercase tracking-wide text-gray-500 font-bold">
-                  Cobertura
-                </td>
-                {days.map(d => (
-                  <td key={d} className={`p-1 text-center ${isWeekend(d) ? 'bg-amber-50/30' : ''}`}>&nbsp;</td>
-                ))}
-                <td className="px-3 py-2"></td>
-              </tr>
-              {shiftTypes.filter(t => !t.isOff).map(t => (
-                <tr key={t.id} className="border-b border-gray-100 bg-gray-50/50 text-xs">
-                  <td className="px-3 py-1.5 sticky left-0 bg-gray-50/50 z-10">
-                    <span className="inline-flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: t.color }} />
-                      <span className="text-gray-600 font-medium">{t.code}</span>
-                    </span>
-                  </td>
-                  {days.map(d => {
-                    const count = coverage.get(t.id)?.get(d) || 0
-                    const dow = new Date(d + 'T00:00:00').getDay()
-                    const w = isWeekend(d)
-                    // Usar planning si está, fallback a minimums
-                    let required = 0
-                    if (locationPlanning && locationPlanning.length > 0) {
-                      const planRow = locationPlanning.find(p => p.shiftTypeId === t.id)
-                      if (planRow) {
-                        const map: Record<number, number | null | undefined> = {
-                          1: planRow.neededLun, 2: planRow.neededMar, 3: planRow.neededMie,
-                          4: planRow.neededJue, 5: planRow.neededVie, 6: planRow.neededSab, 0: planRow.neededDom,
-                        }
-                        required = map[dow] ?? planRow.neededDefault
-                      }
-                    } else {
-                      const min = minimums.find(m => m.shiftTypeId === t.id)
-                      required = min ? (w && min.minWeekend != null ? min.minWeekend : min.minDefault) : 0
-                    }
-                    const ok = count >= required
-                    const empty = count === 0
-                    return (
-                      <td key={d} className={`p-1 text-center ${isWeekend(d) ? 'bg-amber-50/30' : ''}`}>
-                        <span className={`inline-block w-7 h-5 rounded text-[10px] font-bold leading-5 ${
-                          empty && required > 0 ? 'bg-red-100 text-red-700' :
-                          !ok ? 'bg-amber-100 text-amber-700' :
-                          'bg-emerald-50 text-emerald-700'
-                        }`} title={`Asignados: ${count} / Mínimo: ${required}`}>
-                          {count}/{required}
-                        </span>
-                      </td>
-                    )
-                  })}
-                  <td className="px-3 py-1.5"></td>
-                </tr>
-              ))}
-
-              {/* Fila especial: cobertura 20:00–cierre (solo aplica V/S/D, mínimo 3) */}
-              <tr className="border-t border-gray-200 bg-amber-50/50 text-xs">
-                <td className="px-3 py-1.5 sticky left-0 bg-amber-50/50 z-10">
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="text-amber-700 font-bold">20–cierre</span>
-                    <span className="text-[10px] text-amber-600">(V/S/D, mín 3)</span>
-                  </span>
-                </td>
-                {days.map(d => {
-                  const dow = new Date(d + 'T00:00:00').getDay()
-                  const isVSD = dow === 5 || dow === 6 || dow === 0
-                  if (!isVSD) {
-                    return <td key={d} className="p-1 text-center text-gray-300">—</td>
-                  }
-                  // Contar empleados cuyo turno cubra 20:00–00:15
-                  let count = 0
-                  for (const a of assignments) {
-                    if (a.date !== d || !a.shiftTypeId) continue
-                    const t = typesById.get(a.shiftTypeId)
-                    if (!t || t.isOff) continue
-                    const checkRange = (s?: string, e?: string) => {
-                      if (!s || !e) return false
-                      const [sh, sm] = s.split(':').map(Number)
-                      const [eh, em] = e.split(':').map(Number)
-                      const s1 = sh * 60 + sm
-                      let e1 = eh * 60 + em
-                      if (e1 <= s1) e1 += 24 * 60
-                      return s1 <= 20 * 60 && e1 >= 20 * 60 + 15
-                    }
-                    if (checkRange(t.startTime, t.endTime)) { count++; continue }
-                    if (t.isSplit && checkRange(t.split2Start, t.split2End)) { count++ }
-                  }
-                  const ok = count >= 3
-                  return (
-                    <td key={d} className="p-1 text-center bg-amber-50/30">
-                      <span className={`inline-block w-7 h-5 rounded text-[10px] font-bold leading-5 ${
-                        count === 0 ? 'bg-red-100 text-red-700' :
-                        !ok ? 'bg-amber-100 text-amber-700' :
-                        'bg-emerald-50 text-emerald-700'
-                      }`} title={`Cubriendo 20:00–cierre: ${count} / 3`}>
-                        {count}/3
-                      </span>
-                    </td>
-                  )
-                })}
-                <td className="px-3 py-1.5"></td>
-              </tr>
-            </tfoot>
           </table>
-        </Card>
-      )}
-
-      {/* Leyenda de tipos */}
-      <Card className="p-3">
-        <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-2">Tipos de turno</p>
-        <div className="flex flex-wrap gap-2">
-          {shiftTypes.filter(t => !t.isOff).map(t => (
-            <div key={t.id} className="flex items-center gap-2 px-2 py-1 rounded text-xs">
-              <span className="w-3 h-3 rounded" style={{ backgroundColor: t.color }} />
-              <span className="font-semibold">{t.code}</span>
-              <span className="text-gray-500">{t.label}</span>
-              {t.startTime && t.endTime && (
-                <span className="text-gray-400">{t.startTime}–{t.endTime}{t.isSplit ? ` + ${t.split2Start}–${t.split2End}` : ''}</span>
-              )}
-              <span className="text-gray-400">({t.hours}h)</span>
-            </div>
-          ))}
-          <div className="flex items-center gap-2 px-2 py-1 rounded text-xs italic">
-            <span className="w-3 h-3 rounded border border-dashed border-gray-400" />
-            <span className="text-gray-500">~XX = sugerencia (sin guardar)</span>
-          </div>
         </div>
-      </Card>
+      )}
 
-      {/* Modal asignar */}
-      {editing && (
-        <AssignModal
-          employee={localEmployees.find(e => e.id === editing.employeeId)!}
-          date={editing.date}
-          currentAssignment={assignByEmpDate.get(`${editing.employeeId}|${editing.date}`)}
-          shiftTypes={shiftTypes}
-          onAssign={(shiftTypeId) => handleAssign(editing.employeeId, editing.date, shiftTypeId)}
-          onClose={() => setEditing(null)}
+      {/* Resumen carga empleados */}
+      {employees.length > 0 && templates.length > 0 && (
+        <WorkloadSummary workloads={workloads} />
+      )}
+
+      {/* Huecos sin cubrir */}
+      {uncovered.length > 0 && (
+        <UncoveredPanel
+          uncovered={uncovered}
+          templates={templates}
+          onClickGap={(g) => {
+            // Antes de abrir, sincronizamos el snapshot de horas
+            const map = new Map<string, number>()
+            for (const w of workloads) map.set(w.employee_id, w.assigned_hours)
+            setGlobalAssignedHoursSnapshot(map)
+            setGapModal(g)
+          }}
         />
       )}
 
-      {/* Modal auto-generar */}
-      {showAutoGen && (
-        <AutoGenModal
-          onClose={() => setShowAutoGen(false)}
-          onGenerate={handleAutoGenerate}
-          employeesWithoutSchedule={localEmployees.filter(e => {
-            const ws = e.weeklySchedule
-            if (!ws) return true
-            const allDays = ['lunes','martes','miercoles','jueves','viernes','sabado','domingo']
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            return !allDays.some(d => (ws as any)[d]?.active)
-          })}
-        />
-      )}
-
-      {/* Modal generación inteligente */}
-      {showSmartGen && (
-        <SmartGenModal
-          employees={localEmployees}
+      {/* Modal de sugerencias */}
+      {gapModal && (
+        <SuggestionsModal
+          gap={gapModal}
+          template={templates.find(t => t.id === gapModal.template_id)!}
           weekStart={weekStart}
-          onGenerate={handleSmartGenerate}
-          onClose={() => setShowSmartGen(false)}
+          cells={cells}
+          employees={employees}
+          onClose={() => setGapModal(null)}
+          onApply={(empId) => {
+            const cur = cells[gapModal.template_id]?.[String(gapModal.day_of_week)] || []
+            setCellAssign(gapModal.template_id, gapModal.day_of_week, [...cur, empId])
+            setGapModal(null)
+          }}
         />
       )}
     </div>
   )
 }
 
-// ─── Modal de asignación ──────────────────────────────────────────────────
+/* =====================================================
+   Celda de la matriz
+   ===================================================== */
 
-function AssignModal({ employee, date, currentAssignment, shiftTypes, onAssign, onClose }: {
-  employee: Employee
-  date: string
-  currentAssignment?: ShiftAssignment
-  shiftTypes: ShiftType[]
-  onAssign: (shiftTypeId: string | null) => void
-  onClose: () => void
-}) {
-  const dateLabel = new Date(date + 'T00:00:00').toLocaleDateString('es-ES', {
-    weekday: 'long', day: '2-digit', month: 'long'
-  })
-  const dayOfWeek = new Date(date + 'T00:00:00').getDay()
-  const isFriSatSun = dayOfWeek === 5 || dayOfWeek === 6 || dayOfWeek === 0
+interface CellProps {
+  template: ShiftTemplate
+  day: DayOfWeek
+  needed: number
+  baseCoverage: number
+  isOverridden: boolean
+  assignedIds: string[]
+  allEmployees: Employee[]
+  workloads: EmployeeWorkload[]
+  onChangeAssigned: (ids: string[]) => void
+  onChangeNeeded: (v: number) => void
+}
+
+function Cell({
+  template, day, needed, baseCoverage, isOverridden,
+  assignedIds, allEmployees, workloads,
+  onChangeAssigned, onChangeNeeded,
+}: CellProps) {
+  const [open, setOpen] = useState(false)
+  const empById = useMemo(() => new Map(allEmployees.map(e => [e.id, e])), [allEmployees])
+  const wlById = useMemo(() => new Map(workloads.map(w => [w.employee_id, w])), [workloads])
+  const isWeekend = day === 4 || day === 5 || day === 6
+  const isGap = needed > 0 && assignedIds.length < needed
+  const isOverFilled = assignedIds.length > needed
+
+  // Color de fondo
+  let bg = 'bg-white'
+  if (needed === 0) bg = 'bg-gray-50'
+  else if (isGap) bg = 'bg-red-50'
+  else if (isOverFilled) bg = 'bg-amber-50'
+  else if (isWeekend) bg = 'bg-amber-50/30'
+
+  function removeAt(idx: number) {
+    onChangeAssigned(assignedIds.filter((_, i) => i !== idx))
+  }
+  function addEmployee(id: string) {
+    if (!assignedIds.includes(id)) onChangeAssigned([...assignedIds, id])
+    setOpen(false)
+  }
+
+  const availableToAdd = allEmployees.filter(e => !assignedIds.includes(e.id))
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl max-w-md w-full p-5">
-        <p className="text-xs text-gray-500 uppercase tracking-wide">Asignar turno</p>
-        <p className="font-bold text-lg text-gray-900">{employee.name}</p>
-        <p className="text-sm text-gray-600 capitalize">{dateLabel}</p>
+    <td className={`px-1 py-1 align-top border-l ${bg}`}>
+      <div className="flex items-center justify-between gap-1 mb-1 px-1">
+        <div className="text-[10px] text-gray-500 flex items-center gap-1">
+          <input
+            type="number"
+            min={0}
+            max={9}
+            value={needed}
+            onChange={(e) => onChangeNeeded(Math.max(0, parseInt(e.target.value || '0', 10)))}
+            className={`w-9 border rounded px-1 text-[10px] text-center ${
+              isOverridden ? 'bg-violet-50 border-violet-300' : 'bg-white'
+            }`}
+            title={isOverridden ? `Override (base: ${baseCoverage})` : 'Personas necesarias'}
+          />
+          <span className="text-gray-400">×</span>
+        </div>
+        {isGap && (
+          <span className="text-[10px] text-red-600 font-bold" title="Hueco sin cubrir">
+            ⚠
+          </span>
+        )}
+      </div>
 
-        <div className="grid grid-cols-2 gap-2 mt-4">
-          {shiftTypes.map(t => {
-            const isCurrent = currentAssignment?.shiftTypeId === t.id
-            const showLibreWarning = t.isOff && isFriSatSun
-            return (
+      <div className="space-y-1 px-1 pb-1 min-h-[40px]">
+        {assignedIds.map((id, i) => {
+          const emp = empById.get(id)
+          const wl = wlById.get(id)
+          const code = emp?.shiftCode || emp?.name?.slice(0, 3).toUpperCase() || '?'
+          const exceedsContract = wl && wl.assigned_hours > wl.contracted_hours * 1.10
+          return (
+            <div
+              key={`${id}-${i}`}
+              className={`group flex items-center justify-between gap-1 rounded px-1.5 py-0.5 cursor-default ${
+                exceedsContract ? 'bg-red-100 text-red-900' : 'bg-[#F5E9D9] text-[#7C1A1A]'
+              }`}
+              title={emp?.name || ''}
+            >
+              <span className="text-xs font-bold">{code}</span>
               <button
-                key={t.id}
-                onClick={() => onAssign(t.id)}
-                className={`p-3 rounded-xl text-left text-sm transition-all ${
-                  isCurrent ? 'ring-2 ring-offset-2 ring-[#7C1A1A]' : 'hover:scale-105'
-                } ${t.isOff ? 'bg-gray-100 text-gray-700' : 'text-white'}`}
-                style={!t.isOff ? { backgroundColor: t.color } : undefined}
+                onClick={() => removeAt(i)}
+                className="opacity-0 group-hover:opacity-100 text-[10px] text-gray-500 hover:text-red-600"
+                title="Quitar"
               >
-                <p className="font-bold">{t.code} {t.label}</p>
-                {t.startTime && t.endTime && (
-                  <p className="text-xs opacity-90 mt-0.5">
-                    {t.startTime}–{t.endTime}
-                    {t.isSplit && <span> + {t.split2Start}–{t.split2End}</span>}
-                  </p>
-                )}
-                <p className="text-xs opacity-80 mt-0.5">{t.hours}h</p>
-                {showLibreWarning && (
-                  <p className="text-[10px] mt-1 px-1.5 py-0.5 rounded bg-amber-200 text-amber-900 inline-block">⚠ V/S/D</p>
-                )}
+                ✕
               </button>
+            </div>
+          )
+        })}
+
+        {needed > 0 && (
+          <div className="relative">
+            <button
+              onClick={() => setOpen(o => !o)}
+              className="w-full text-[10px] text-gray-400 hover:text-[#7C1A1A] py-0.5 border border-dashed border-gray-300 rounded hover:border-[#7C1A1A]"
+            >
+              + asignar
+            </button>
+            {open && (
+              <div className="absolute z-30 mt-1 left-0 right-0 bg-white border rounded shadow-lg max-h-48 overflow-y-auto">
+                {availableToAdd.length === 0 ? (
+                  <div className="px-2 py-1 text-[10px] text-gray-400">Todos asignados</div>
+                ) : availableToAdd.map(e => {
+                  const wl = wlById.get(e.id)
+                  const newH = (wl?.assigned_hours || 0) + shiftDurationHours(template.start_time, template.end_time)
+                  const max = (e.weeklyHours || 40) * 1.10
+                  const overflow = newH > max
+                  return (
+                    <button
+                      key={e.id}
+                      onClick={() => addEmployee(e.id)}
+                      className={`w-full text-left px-2 py-1 text-xs hover:bg-gray-50 flex items-center justify-between ${overflow ? 'text-red-700' : ''}`}
+                    >
+                      <span>
+                        <span className="font-bold mr-1">{e.shiftCode || '–'}</span>
+                        {e.name}
+                      </span>
+                      <span className={`text-[10px] ${overflow ? 'text-red-600 font-bold' : 'text-gray-400'}`}>
+                        {newH.toFixed(1)}h{overflow ? ' ⚠' : ''}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </td>
+  )
+}
+
+/* =====================================================
+   Resumen de carga por empleado
+   ===================================================== */
+
+function WorkloadSummary({ workloads }: { workloads: EmployeeWorkload[] }) {
+  return (
+    <div className="bg-white border rounded-lg p-4">
+      <h3 className="font-semibold mb-3" style={{ color: '#7C1A1A' }}>
+        Carga por empleado
+      </h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        {workloads.map(w => {
+          const pct = w.contracted_hours > 0 ? (w.assigned_hours / w.contracted_hours) * 100 : 0
+          const exceedsTol = w.assigned_hours > w.contracted_hours * 1.10
+          const underContract = w.assigned_hours < w.contracted_hours - 0.5
+          let barColor = 'bg-emerald-500'
+          if (exceedsTol) barColor = 'bg-red-500'
+          else if (underContract) barColor = 'bg-amber-400'
+          else if (pct > 100) barColor = 'bg-amber-500'
+          const widthPct = Math.min(100, pct)
+          return (
+            <div key={w.employee_id} className="border rounded-lg p-3">
+              <div className="flex items-center justify-between mb-1">
+                <div>
+                  <span className="font-bold text-sm" style={{ color: '#7C1A1A' }}>
+                    {w.shift_code || '–'}
+                  </span>
+                  <span className="ml-2 text-sm">{w.employee_name}</span>
+                </div>
+                <span className={`text-xs font-mono ${exceedsTol ? 'text-red-600 font-bold' : ''}`}>
+                  {w.assigned_hours.toFixed(2)} / {w.contracted_hours}h
+                </span>
+              </div>
+              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div className={`h-full ${barColor}`} style={{ width: `${widthPct}%` }} />
+              </div>
+              <div className="text-[10px] text-gray-500 mt-1">
+                {w.delta > 0 ? '+' : ''}{w.delta.toFixed(2)}h vs contrato
+                {exceedsTol && <span className="ml-2 text-red-600 font-bold">excede tope 10%</span>}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+/* =====================================================
+   Panel de huecos sin cubrir
+   ===================================================== */
+
+interface UncoveredPanelProps {
+  uncovered: UncoveredSlot[]
+  templates: ShiftTemplate[]
+  onClickGap: (g: UncoveredSlot) => void
+}
+
+function UncoveredPanel({ uncovered, templates, onClickGap }: UncoveredPanelProps) {
+  const tById = new Map(templates.map(t => [t.id, t]))
+  const totalGap = uncovered.reduce((acc, u) => {
+    const t = tById.get(u.template_id)
+    const h = t ? shiftDurationHours(t.start_time, t.end_time) : 0
+    return acc + (u.needed - u.assigned) * h
+  }, 0)
+
+  return (
+    <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+      <h3 className="font-semibold text-red-800 mb-2">
+        ⚠️ {uncovered.length} hueco(s) sin cubrir · {totalGap.toFixed(1)}h en total
+      </h3>
+      <p className="text-xs text-red-700 mb-3">
+        Pulsa un hueco para ver sugerencias de cobertura.
+      </p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+        {uncovered.map((u, i) => {
+          const t = tById.get(u.template_id)
+          if (!t) return null
+          return (
+            <button
+              key={i}
+              onClick={() => onClickGap(u)}
+              className="text-left bg-white border border-red-300 hover:bg-red-50 rounded p-2 text-sm"
+            >
+              <div className="font-medium">{DAY_LABELS[u.day_of_week]} · {t.label}</div>
+              <div className="text-xs text-gray-600">
+                {t.start_time.slice(0, 5)}–{t.end_time.slice(0, 5)} ·
+                {' '}faltan {u.needed - u.assigned} de {u.needed} ·
+                {' '}{shiftDurationHours(t.start_time, t.end_time)}h
+              </div>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+/* =====================================================
+   Modal de sugerencias para un hueco
+   ===================================================== */
+
+interface SuggestionsModalProps {
+  gap: UncoveredSlot
+  template: ShiftTemplate
+  weekStart: string
+  cells: ScheduleCells
+  employees: Employee[]
+  onClose: () => void
+  onApply: (empId: string) => void
+}
+
+function SuggestionsModal({ gap, template, weekStart, cells, employees, onClose, onApply }: SuggestionsModalProps) {
+  const suggestions: FillSuggestion[] = useMemo(
+    () => suggestFillForGap({ gap, template, weekStart, cells, employees }),
+    [gap, template, weekStart, cells, employees]
+  )
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
+      <div
+        className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-5 py-3 border-b" style={{ backgroundColor: '#7C1A1A', color: 'white' }}>
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="font-semibold">Cubrir hueco — {DAY_LABELS[gap.day_of_week]}</div>
+              <div className="text-xs opacity-90">
+                {template.label} · {template.start_time.slice(0, 5)}–{template.end_time.slice(0, 5)} ·
+                {' '}{shiftDurationHours(template.start_time, template.end_time)}h
+              </div>
+            </div>
+            <button onClick={onClose} className="text-white/80 hover:text-white">✕</button>
+          </div>
+        </div>
+
+        <div className="overflow-y-auto p-4 space-y-2">
+          {suggestions.length === 0 && (
+            <p className="text-sm text-gray-500">No hay sugerencias disponibles.</p>
+          )}
+          {suggestions.map((s) => {
+            const blocked = !!s.blockedReason
+            const exceeds = s.exceedsTolerance
+            return (
+              <div
+                key={s.employeeId}
+                className={`border rounded-lg p-3 flex items-center justify-between gap-3 ${
+                  blocked ? 'bg-gray-50 opacity-60' : exceeds ? 'bg-amber-50 border-amber-300' : 'bg-white'
+                }`}
+              >
+                <div className="flex-1">
+                  <div className="text-sm">
+                    <span className="font-bold mr-2" style={{ color: '#7C1A1A' }}>
+                      {s.shiftCode || '–'}
+                    </span>
+                    {s.employeeName}
+                  </div>
+                  <div className="text-xs text-gray-600 mt-0.5">
+                    Pasaría de <strong>{s.currentHours}h</strong> a <strong>{s.newHours}h</strong>
+                    {' '}(contratadas {s.contractedHours}h, {s.deltaPercent > 0 ? '+' : ''}{s.deltaPercent}%)
+                  </div>
+                  {blocked && (
+                    <div className="text-xs text-red-600 mt-1">🚫 {s.blockedReason}</div>
+                  )}
+                  {!blocked && exceeds && (
+                    <div className="text-xs text-amber-700 mt-1">⚠️ Excede tope del 10% sobre contratadas</div>
+                  )}
+                </div>
+                <button
+                  disabled={blocked}
+                  onClick={() => onApply(s.employeeId)}
+                  className="px-3 py-1.5 rounded text-white text-sm font-medium disabled:opacity-30"
+                  style={{ backgroundColor: exceeds ? '#F39C2A' : '#7C1A1A' }}
+                >
+                  Asignar
+                </button>
+              </div>
             )
           })}
         </div>
 
-        {currentAssignment && (
-          <button
-            onClick={() => onAssign(null)}
-            className="w-full mt-3 text-xs text-red-600 hover:text-red-700 py-2"
-          >
-            🗑 Quitar asignación
+        <div className="px-5 py-3 border-t bg-gray-50 flex justify-end">
+          <button onClick={onClose} className="px-4 py-2 text-sm border rounded bg-white hover:bg-gray-50">
+            Cerrar
           </button>
-        )}
-
-        <button onClick={onClose}
-          className="w-full mt-3 py-2 text-sm text-gray-500 hover:text-gray-700 border-t pt-3">
-          Cerrar
-        </button>
-      </div>
-    </div>
-  )
-}
-
-// ─── ValidationRow ────────────────────────────────────────────────────────
-
-function ValidationRow({ issue }: { issue: ValidationIssue }) {
-  const isError = issue.level === 'error'
-  return (
-    <div className={`flex items-start gap-2 text-xs ${isError ? 'text-red-800' : 'text-amber-800'}`}>
-      <span className="shrink-0">{isError ? '🚨' : '⚠'}</span>
-      <div className="flex-1 min-w-0">
-        <p className="font-semibold">{issue.title}</p>
-        <p className="opacity-80">{issue.description}</p>
-      </div>
-    </div>
-  )
-}
-
-// ─── EmployeeView ─────────────────────────────────────────────────────────
-
-function EmployeeView({
-  employees, selectedId, onSelect, assignByEmpDate, typesById, days, weeklyHoursOf, onCellClick,
-}: {
-  employees: Employee[]
-  selectedId: string | null
-  onSelect: (id: string) => void
-  assignByEmpDate: Map<string, ShiftAssignment>
-  typesById: Map<string, ShiftType>
-  days: string[]
-  weeklyHoursOf: (id: string) => number
-  onCellClick: (employee: Employee, date: string) => void
-}) {
-  const selected = selectedId ? employees.find(e => e.id === selectedId) : null
-
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-4">
-      {/* Lista empleados */}
-      <Card className="p-2 max-h-[600px] overflow-y-auto">
-        {employees.map(e => {
-          const total = weeklyHoursOf(e.id)
-          const isSelected = e.id === selectedId
-          return (
-            <button key={e.id} onClick={() => onSelect(e.id)}
-              className={`w-full p-2 rounded-lg text-left transition-all mb-1 ${
-                isSelected ? 'bg-[#F5E9D9] border border-[#7C1A1A]' : 'hover:bg-gray-50'
-              }`}>
-              <p className="text-sm font-medium text-gray-900 truncate">{e.name}</p>
-              <p className="text-[10px] text-gray-400">{e.position || '—'} · {total.toFixed(1)}h</p>
-            </button>
-          )
-        })}
-      </Card>
-
-      {/* Detalle del empleado */}
-      <div>
-        {!selected ? (
-          <Card className="p-12 text-center">
-            <p className="text-3xl mb-2">👤</p>
-            <p className="text-sm text-gray-500">Selecciona un empleado para ver su semana</p>
-          </Card>
-        ) : (
-          <Card className="overflow-hidden">
-            <div className="p-4 border-b">
-              <p className="font-bold text-gray-900">{selected.name}</p>
-              <p className="text-xs text-gray-500">{selected.position || '—'} · {selected.weeklyHours || 40}h contrato</p>
-            </div>
-            <div className="divide-y">
-              {days.map(d => {
-                const a = assignByEmpDate.get(`${selected.id}|${d}`)
-                const t = a?.shiftTypeId ? typesById.get(a.shiftTypeId) : null
-                const date = new Date(d + 'T00:00:00')
-                const dayLabel = date.toLocaleDateString('es-ES', { weekday: 'long', day: '2-digit', month: 'short' })
-                return (
-                  <button key={d}
-                    onClick={() => onCellClick(selected, d)}
-                    className="w-full p-3 flex items-center gap-3 hover:bg-gray-50 text-left">
-                    <div className="w-2 h-10 rounded-full" style={{ backgroundColor: t?.color || '#E5E7EB' }} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 capitalize">{dayLabel}</p>
-                      {t ? (
-                        <p className="text-xs" style={{ color: t.color }}>
-                          {t.code} {t.label}
-                          {t.startTime && ` · ${t.startTime}–${t.endTime}`}
-                          {t.isSplit && ` + ${t.split2Start}–${t.split2End}`}
-                        </p>
-                      ) : (
-                        <p className="text-xs text-gray-400 italic">Sin asignar</p>
-                      )}
-                    </div>
-                    {t && !t.isOff && <p className="text-sm font-medium text-gray-700">{t.hours}h</p>}
-                  </button>
-                )
-              })}
-            </div>
-          </Card>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ─── AutoGenModal ─────────────────────────────────────────────────────────
-
-function AutoGenModal({ onClose, onGenerate, employeesWithoutSchedule }: {
-  onClose: () => void
-  onGenerate: (mode: AutoGenMode, weeksAhead: number) => void
-  employeesWithoutSchedule: Employee[]
-}) {
-  const [mode, setMode] = useState<AutoGenMode>('solo_vacios')
-  const [weeksAhead, setWeeksAhead] = useState<number>(1)
-
-  return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl max-w-md w-full p-5 max-h-[90vh] overflow-y-auto">
-        <p className="text-xs text-gray-500 uppercase tracking-wide">Auto-generar</p>
-        <p className="font-bold text-lg text-gray-900">🪄 Generar calendario automáticamente</p>
-        <p className="text-xs text-gray-500 mt-1">
-          Asignaremos turnos y libras a partir del horario semanal de cada empleado.
-        </p>
-
-        {/* Período */}
-        <p className="text-xs uppercase tracking-wide text-gray-400 mt-4 mb-2">Período</p>
-        <div className="grid grid-cols-3 gap-2">
-          {[
-            { weeks: 1, label: '1 semana' },
-            { weeks: 4, label: '4 semanas (mes)' },
-            { weeks: 8, label: '8 semanas' },
-          ].map(opt => (
-            <button key={opt.weeks} onClick={() => setWeeksAhead(opt.weeks)}
-              className={`px-3 py-2 rounded-lg text-xs font-medium border-2 ${
-                weeksAhead === opt.weeks
-                  ? 'border-[#7C1A1A] bg-[#F5E9D9] text-[#7C1A1A]'
-                  : 'border-gray-200 text-gray-600 hover:border-gray-300'
-              }`}>
-              {opt.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Modo */}
-        <p className="text-xs uppercase tracking-wide text-gray-400 mt-4 mb-2">Modo</p>
-        <div className="space-y-2">
-          <label className={`flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
-            mode === 'solo_vacios' ? 'border-[#7C1A1A] bg-[#F5E9D9]' : 'border-gray-200 hover:border-gray-300'
-          }`}>
-            <input type="radio" name="mode" checked={mode === 'solo_vacios'}
-              onChange={() => setMode('solo_vacios')}
-              className="mt-1 accent-[#7C1A1A]" />
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-gray-900">Solo huecos vacíos</p>
-              <p className="text-xs text-gray-500 mt-0.5">
-                Rellena las celdas vacías con turnos y libras según el horario del empleado. No toca lo ya asignado.
-              </p>
-            </div>
-          </label>
-
-          <label className={`flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
-            mode === 'solo_libras' ? 'border-[#7C1A1A] bg-[#F5E9D9]' : 'border-gray-200 hover:border-gray-300'
-          }`}>
-            <input type="radio" name="mode" checked={mode === 'solo_libras'}
-              onChange={() => setMode('solo_libras')}
-              className="mt-1 accent-[#7C1A1A]" />
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-gray-900">Solo libras</p>
-              <p className="text-xs text-gray-500 mt-0.5">
-                Solo asigna LIBRE a los días que el empleado tiene marcados como inactivos en su horario semanal. No toca turnos.
-                <span className="text-amber-700"> Excluye V/S/D</span> (no se libra automáticamente fines de semana).
-              </p>
-            </div>
-          </label>
-
-          <label className={`flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
-            mode === 'todo' ? 'border-[#7C1A1A] bg-[#F5E9D9]' : 'border-gray-200 hover:border-gray-300'
-          }`}>
-            <input type="radio" name="mode" checked={mode === 'todo'}
-              onChange={() => setMode('todo')}
-              className="mt-1 accent-[#7C1A1A]" />
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-gray-900">Reasignar todo</p>
-              <p className="text-xs text-gray-500 mt-0.5">
-                Sobrescribe TODAS las celdas con el patrón del horario semanal.
-              </p>
-            </div>
-          </label>
-        </div>
-
-        {employeesWithoutSchedule.length > 0 && (
-          <div className="mt-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800">
-            ⚠ {employeesWithoutSchedule.length} empleado{employeesWithoutSchedule.length !== 1 ? 's' : ''} sin horario semanal configurado: {employeesWithoutSchedule.map(e => e.name).join(', ')}.
-            No se les generará nada hasta que les asignes uno desde su ficha.
-          </div>
-        )}
-
-        <div className="flex gap-2 mt-5">
-          <Button variant="outline" onClick={onClose} className="flex-1">Cancelar</Button>
-          <Button onClick={() => onGenerate(mode, weeksAhead)} className="flex-1">🪄 Generar</Button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ─── SmartGenModal ────────────────────────────────────────────────────────
-
-function SmartGenModal({ employees, weekStart, onGenerate, onClose }: {
-  employees: Employee[]
-  weekStart: string
-  onGenerate: (selectedIds: Set<string>) => void
-  onClose: () => void
-}) {
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => {
-    return new Set(employees.map(e => e.id))
-  })
-  const [generating, setGenerating] = useState(false)
-
-  function toggle(id: string) {
-    setSelectedIds(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  function selectAll() { setSelectedIds(new Set(employees.map(e => e.id))) }
-  function selectNone() { setSelectedIds(new Set()) }
-
-  async function handleGen() {
-    setGenerating(true)
-    await onGenerate(selectedIds)
-    setGenerating(false)
-  }
-
-  const totalContractedHours = employees
-    .filter(e => selectedIds.has(e.id))
-    .reduce((acc, e) => acc + (e.weeklyHours || 40), 0)
-
-  return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl max-w-md w-full p-5 max-h-[90vh] overflow-y-auto">
-        <p className="text-xs text-gray-500 uppercase tracking-wide">Generación inteligente</p>
-        <p className="font-bold text-lg text-gray-900">🤖 Generar semana del {weekStart}</p>
-        <p className="text-xs text-gray-500 mt-1">
-          El algoritmo distribuirá empleados respetando: plantilla del local, horas contratadas (+20% mes máx),
-          descanso 12h entre turnos, libra de día completo entre L-J, no librar V/S/D.
-        </p>
-
-        <div className="flex items-center justify-between mt-4 mb-2">
-          <p className="text-xs uppercase tracking-wide text-gray-500">Empleados disponibles</p>
-          <div className="flex gap-1.5">
-            <button onClick={selectAll} className="text-[10px] text-blue-600 hover:underline">Todos</button>
-            <span className="text-gray-300">·</span>
-            <button onClick={selectNone} className="text-[10px] text-gray-500 hover:underline">Ninguno</button>
-          </div>
-        </div>
-
-        <div className="space-y-1 max-h-72 overflow-y-auto border rounded-lg p-1">
-          {employees.length === 0 ? (
-            <p className="text-xs text-gray-400 text-center py-4">No hay empleados en este local</p>
-          ) : employees.map(e => (
-            <label key={e.id} className="flex items-center gap-3 p-2 rounded hover:bg-gray-50 cursor-pointer">
-              <input type="checkbox" checked={selectedIds.has(e.id)}
-                onChange={() => toggle(e.id)}
-                className="w-4 h-4 accent-emerald-600" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">{e.name}</p>
-                <p className="text-[10px] text-gray-400">
-                  {e.position || '—'} · {e.weeklyHours || 40}h contrato
-                </p>
-              </div>
-            </label>
-          ))}
-        </div>
-
-        <div className="mt-3 p-3 rounded-lg bg-blue-50 border border-blue-100 text-xs text-blue-800">
-          <p>📊 Disponible: <strong>{selectedIds.size}</strong> empleado{selectedIds.size !== 1 ? 's' : ''} · <strong>{totalContractedHours.toFixed(0)}h</strong> contratadas/semana</p>
-          <p className="text-[11px] mt-1 opacity-80">
-            Con margen +20% mensual: hasta <strong>~{(totalContractedHours * 1.2).toFixed(0)}h</strong> reales/semana
-          </p>
-        </div>
-
-        <div className="flex gap-2 mt-5">
-          <Button variant="outline" onClick={onClose} className="flex-1" disabled={generating}>Cancelar</Button>
-          <Button onClick={handleGen} disabled={generating || selectedIds.size === 0} className="flex-1">
-            {generating ? 'Generando...' : '🤖 Generar'}
-          </Button>
         </div>
       </div>
     </div>
