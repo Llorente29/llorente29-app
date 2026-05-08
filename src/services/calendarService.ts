@@ -40,6 +40,7 @@ export interface ShiftAssignment {
   planId: string
   employeeId: string
   date: string                  // "2026-05-04"
+  slot: number                  // 1 o 2 (turno partido = 2 asignaciones)
   shiftTypeId?: string          // null = sin asignar (dejar vacío)
   overrideStart?: string
   overrideEnd?: string
@@ -81,6 +82,7 @@ interface PlanRow {
 interface AssignmentRow {
   id: string; plan_id: string; employee_id: string
   date: string
+  slot: number
   shift_type_id: string | null
   override_start: string | null; override_end: string | null
   notes: string | null
@@ -124,6 +126,7 @@ function rowToAssignment(r: AssignmentRow): ShiftAssignment {
   return {
     id: r.id, planId: r.plan_id, employeeId: r.employee_id,
     date: r.date,
+    slot: r.slot ?? 1,
     shiftTypeId: r.shift_type_id || undefined,
     overrideStart: r.override_start || undefined,
     overrideEnd: r.override_end || undefined,
@@ -280,11 +283,13 @@ export async function fetchPublishedAssignmentsForRange(
 export async function upsertAssignment(input: {
   planId: string; employeeId: string; date: string;
   shiftTypeId?: string | null;
+  slot?: number;
   overrideStart?: string; overrideEnd?: string;
   notes?: string;
 }): Promise<ShiftAssignment | null> {
   if (!supabase) return null
   const sb = supabase
+  const slot = input.slot ?? 1
 
   // Si shiftTypeId es null o undefined, borrar la asignación si existe
   if (!input.shiftTypeId) {
@@ -293,6 +298,7 @@ export async function upsertAssignment(input: {
       .eq('plan_id', input.planId)
       .eq('employee_id', input.employeeId)
       .eq('date', input.date)
+      .eq('slot', slot)
     return null
   }
 
@@ -300,24 +306,27 @@ export async function upsertAssignment(input: {
     plan_id: input.planId,
     employee_id: input.employeeId,
     date: input.date,
+    slot,
     shift_type_id: input.shiftTypeId,
     override_start: input.overrideStart || null,
     override_end: input.overrideEnd || null,
     notes: input.notes || null,
     updated_at: new Date().toISOString(),
-  }, { onConflict: 'plan_id,employee_id,date' }).select().single()
+  }, { onConflict: 'plan_id,employee_id,date,slot' }).select().single()
 
   if (error) { console.error('upsertAssignment:', error); return null }
   return rowToAssignment(data as AssignmentRow)
 }
 
-export async function deleteAssignment(planId: string, employeeId: string, date: string): Promise<boolean> {
+export async function deleteAssignment(planId: string, employeeId: string, date: string, slot?: number): Promise<boolean> {
   if (!supabase) return false
-  const { error } = await supabase.from('shift_assignments')
+  let q = supabase.from('shift_assignments')
     .delete()
     .eq('plan_id', planId)
     .eq('employee_id', employeeId)
     .eq('date', date)
+  if (slot !== undefined) q = q.eq('slot', slot)
+  const { error } = await q
   if (error) { console.error('deleteAssignment:', error); return false }
   return true
 }
@@ -371,12 +380,13 @@ export async function duplicatePreviousWeek(
       plan_id: currentPlanId,
       employee_id: a.employee_id,
       date: newDate,
+      slot: (a as { slot?: number }).slot ?? 1,
       shift_type_id: a.shift_type_id,
       override_start: a.override_start,
       override_end: a.override_end,
       notes: a.notes,
       updated_at: new Date().toISOString(),
-    }, { onConflict: 'plan_id,employee_id,date' })
+    }, { onConflict: 'plan_id,employee_id,date,slot' })
     copied++
   }
   return copied
@@ -546,4 +556,72 @@ export function isWeekend(iso: string): boolean {
   const d = new Date(iso + 'T00:00:00')
   const day = d.getDay() // 0=dom, 5=vie, 6=sab
   return day === 5 || day === 6 || day === 0
+}
+
+// ─── HELPERS PARA SMART GEN ───────────────────────────────────────────────
+
+/**
+ * Devuelve las fechas (YYYY-MM-DD) en las que cada empleado tiene VACACIONES APROBADAS
+ * dentro del rango dado.
+ */
+export async function fetchApprovedVacationDates(fromDate: string, toDate: string): Promise<Map<string, Set<string>>> {
+  const result = new Map<string, Set<string>>()
+  if (!supabase) return result
+
+  const { data, error } = await supabase.from('vacations')
+    .select('employee_id, start_date, end_date, status')
+    .eq('status', 'aprobada')
+    .lte('start_date', toDate)
+    .gte('end_date', fromDate)
+
+  if (error) { console.error('fetchApprovedVacationDates:', error); return result }
+
+  for (const v of (data as Array<{ employee_id: string; start_date: string; end_date: string }>)) {
+    const set = result.get(v.employee_id) || new Set<string>()
+    const start = new Date(v.start_date + 'T00:00:00')
+    const end = new Date(v.end_date + 'T00:00:00')
+    const cur = new Date(start)
+    while (cur <= end) {
+      const y = cur.getFullYear()
+      const m = String(cur.getMonth() + 1).padStart(2, '0')
+      const d = String(cur.getDate()).padStart(2, '0')
+      set.add(`${y}-${m}-${d}`)
+      cur.setDate(cur.getDate() + 1)
+    }
+    result.set(v.employee_id, set)
+  }
+  return result
+}
+
+/**
+ * Calcula horas mensuales ya asignadas en planes PUBLICADOS, antes de una fecha.
+ * Devuelve mapa employee_id -> horas.
+ */
+export async function fetchMonthlyHoursBefore(weekStart: string): Promise<Map<string, number>> {
+  const result = new Map<string, number>()
+  if (!supabase) return result
+
+  // Inicio del mes
+  const d = new Date(weekStart + 'T00:00:00')
+  const monthStart = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
+
+  const { data: assigns } = await supabase.from('shift_assignments')
+    .select('employee_id, shift_type_id')
+    .gte('date', monthStart)
+    .lt('date', weekStart)
+
+  if (!assigns) return result
+
+  const { data: types } = await supabase.from('shift_types').select('id, hours, is_off')
+  const hoursByType = new Map<string, number>()
+  for (const t of (types || []) as Array<{ id: string; hours: number; is_off: boolean }>) {
+    if (!t.is_off) hoursByType.set(t.id, Number(t.hours))
+  }
+
+  for (const a of assigns as Array<{ employee_id: string; shift_type_id: string | null }>) {
+    if (!a.shift_type_id) continue
+    const h = hoursByType.get(a.shift_type_id) || 0
+    result.set(a.employee_id, (result.get(a.employee_id) || 0) + h)
+  }
+  return result
 }
