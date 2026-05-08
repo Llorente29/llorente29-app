@@ -52,7 +52,7 @@ export default function MisFichajes({ employee, onBack }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-teal-50 via-white to-emerald-50 p-4 pb-8">
+    <div className="min-h-screen bg-gradient-to-br from-[#F5E9D9] via-white to-[#F5E9D9] p-4 pb-8">
       <div className="max-w-md mx-auto">
         {/* Header */}
         <div className="flex items-center gap-3 mb-5">
@@ -79,7 +79,7 @@ export default function MisFichajes({ employee, onBack }: Props) {
                 <div key={day}>
                   <div className="flex items-center justify-between px-1 mb-2">
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{dayLabel}</p>
-                    {hrs > 0 && <p className="text-xs font-bold text-teal-600">{hrs.toFixed(1)}h</p>}
+                    {hrs > 0 && <p className="text-xs font-bold text-[#7C1A1A]">{hrs.toFixed(1)}h</p>}
                   </div>
                   <Card className="overflow-hidden">
                     {dayEntries.sort((a, b) => new Date(a.datetime).getTime() - new Date(b.datetime).getTime()).map((e, i) => (
