@@ -203,38 +203,66 @@ export default function CalendarioPage() {
     setAssignments(a)
   }
 
-  async function handleAutoGenerate(mode: AutoGenMode) {
+  async function handleAutoGenerate(mode: AutoGenMode, weeksAhead: number) {
     if (!plan) return
-    const result = autoGenerate({
-      employees: localEmployees,
-      shiftTypes,
-      days,
-      existingAssignments: assignments,
-      mode,
-    })
-    if (result.toUpsert.length === 0) {
-      alert('No hay nada para generar. Comprueba que los empleados tengan horario semanal configurado.')
-      setShowAutoGen(false)
-      return
-    }
-    if (result.conflicts > 0 && mode === 'todo') {
-      if (!confirm(`Se sobrescribirán ${result.conflicts} asignaciones existentes con el patrón del horario semanal. ¿Continuar?`)) {
-        return
-      }
-    }
-    // Aplicar las asignaciones
-    for (const a of result.toUpsert) {
-      await upsertAssignment({
-        planId: plan.id,
-        employeeId: a.employeeId,
-        date: a.date,
-        shiftTypeId: a.shiftTypeId,
+    let totalCreated = 0
+    let totalConflicts = 0
+
+    for (let w = 0; w < weeksAhead; w++) {
+      // Calcular fecha de la semana objetivo
+      const target = new Date(weekStart + 'T00:00:00')
+      target.setDate(target.getDate() + w * 7)
+      const ty = target.getFullYear()
+      const tm = String(target.getMonth() + 1).padStart(2, '0')
+      const td = String(target.getDate()).padStart(2, '0')
+      const targetWeekStart = `${ty}-${tm}-${td}`
+
+      // Obtener o crear plan de esa semana
+      const targetPlan = await getOrCreatePlan(targetWeekStart, locationId)
+      if (!targetPlan) continue
+
+      // Cargar asignaciones existentes de ese plan
+      const existingAssigns = await fetchAssignmentsForPlan(targetPlan.id)
+
+      // Calcular días de esa semana
+      const targetDays = weekDates(targetWeekStart)
+
+      const result = autoGenerate({
+        employees: localEmployees,
+        shiftTypes,
+        days: targetDays,
+        existingAssignments: existingAssigns,
+        mode,
       })
+
+      if (result.toUpsert.length === 0) continue
+
+      // Aplicar
+      for (const a of result.toUpsert) {
+        await upsertAssignment({
+          planId: targetPlan.id,
+          employeeId: a.employeeId,
+          date: a.date,
+          shiftTypeId: a.shiftTypeId,
+        })
+      }
+      totalCreated += result.toUpsert.length
+      totalConflicts += result.conflicts
     }
-    const refreshed = await fetchAssignmentsForPlan(plan.id)
-    setAssignments(refreshed)
+
+    // Recargar plan actual para refrescar la vista
+    if (plan) {
+      const refreshed = await fetchAssignmentsForPlan(plan.id)
+      setAssignments(refreshed)
+    }
     setShowAutoGen(false)
-    alert(`✓ Generadas ${result.toUpsert.length} asignaciones`)
+
+    if (totalCreated === 0) {
+      alert('No hay nada para generar. Comprueba que los empleados tengan horario semanal configurado.')
+    } else {
+      const weeksLabel = weeksAhead === 1 ? 'esta semana' : `${weeksAhead} semanas`
+      alert(`✓ Generadas ${totalCreated} asignaciones en ${weeksLabel}${totalConflicts > 0 ? ` (${totalConflicts} sobrescrituras)` : ''}`)
+    }
   }
 
   const weekRangeLabel = useMemo(() => {
@@ -711,21 +739,43 @@ function EmployeeView({
 
 function AutoGenModal({ onClose, onGenerate, employeesWithoutSchedule }: {
   onClose: () => void
-  onGenerate: (mode: AutoGenMode) => void
+  onGenerate: (mode: AutoGenMode, weeksAhead: number) => void
   employeesWithoutSchedule: Employee[]
 }) {
   const [mode, setMode] = useState<AutoGenMode>('solo_vacios')
+  const [weeksAhead, setWeeksAhead] = useState<number>(1)
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl max-w-md w-full p-5">
+      <div className="bg-white rounded-2xl max-w-md w-full p-5 max-h-[90vh] overflow-y-auto">
         <p className="text-xs text-gray-500 uppercase tracking-wide">Auto-generar</p>
-        <p className="font-bold text-lg text-gray-900">🪄 Generar semana automáticamente</p>
+        <p className="font-bold text-lg text-gray-900">🪄 Generar calendario automáticamente</p>
         <p className="text-xs text-gray-500 mt-1">
           Asignaremos turnos y libras a partir del horario semanal de cada empleado.
         </p>
 
-        <div className="space-y-2 mt-4">
+        {/* Período */}
+        <p className="text-xs uppercase tracking-wide text-gray-400 mt-4 mb-2">Período</p>
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            { weeks: 1, label: '1 semana' },
+            { weeks: 4, label: '4 semanas (mes)' },
+            { weeks: 8, label: '8 semanas' },
+          ].map(opt => (
+            <button key={opt.weeks} onClick={() => setWeeksAhead(opt.weeks)}
+              className={`px-3 py-2 rounded-lg text-xs font-medium border-2 ${
+                weeksAhead === opt.weeks
+                  ? 'border-[#7C1A1A] bg-[#F5E9D9] text-[#7C1A1A]'
+                  : 'border-gray-200 text-gray-600 hover:border-gray-300'
+              }`}>
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Modo */}
+        <p className="text-xs uppercase tracking-wide text-gray-400 mt-4 mb-2">Modo</p>
+        <div className="space-y-2">
           <label className={`flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
             mode === 'solo_vacios' ? 'border-[#7C1A1A] bg-[#F5E9D9]' : 'border-gray-200 hover:border-gray-300'
           }`}>
@@ -750,6 +800,7 @@ function AutoGenModal({ onClose, onGenerate, employeesWithoutSchedule }: {
               <p className="text-sm font-semibold text-gray-900">Solo libras</p>
               <p className="text-xs text-gray-500 mt-0.5">
                 Solo asigna LIBRE a los días que el empleado tiene marcados como inactivos en su horario semanal. No toca turnos.
+                <span className="text-amber-700"> Excluye V/S/D</span> (no se libra automáticamente fines de semana).
               </p>
             </div>
           </label>
@@ -763,7 +814,7 @@ function AutoGenModal({ onClose, onGenerate, employeesWithoutSchedule }: {
             <div className="flex-1">
               <p className="text-sm font-semibold text-gray-900">Reasignar todo</p>
               <p className="text-xs text-gray-500 mt-0.5">
-                Sobrescribe TODAS las celdas con el patrón del horario semanal. Pedirá confirmación si hay asignaciones que cambian.
+                Sobrescribe TODAS las celdas con el patrón del horario semanal.
               </p>
             </div>
           </label>
@@ -778,7 +829,7 @@ function AutoGenModal({ onClose, onGenerate, employeesWithoutSchedule }: {
 
         <div className="flex gap-2 mt-5">
           <Button variant="outline" onClick={onClose} className="flex-1">Cancelar</Button>
-          <Button onClick={() => onGenerate(mode)} className="flex-1">🪄 Generar</Button>
+          <Button onClick={() => onGenerate(mode, weeksAhead)} className="flex-1">🪄 Generar</Button>
         </div>
       </div>
     </div>
