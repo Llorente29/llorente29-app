@@ -98,7 +98,7 @@ export default function MisVacaciones({ employee, onBack }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-teal-50 via-white to-emerald-50 p-4 pb-8">
+    <div className="min-h-screen bg-gradient-to-br from-[#F5E9D9] via-white to-[#F5E9D9] p-4 pb-8">
       <div className="max-w-md mx-auto">
         <div className="flex items-center gap-3 mb-5">
           <button onClick={onBack} className="text-2xl text-gray-500">←</button>
@@ -107,7 +107,7 @@ export default function MisVacaciones({ employee, onBack }: Props) {
             <p className="font-bold text-gray-900">{employee.name.split(' ')[0]}</p>
           </div>
           <button onClick={() => setShowRequest(true)}
-            className="px-3 py-1.5 rounded-full bg-teal-600 text-white text-xs font-medium hover:bg-teal-700">
+            className="px-3 py-1.5 rounded-full bg-[#7C1A1A] text-white text-xs font-medium hover:bg-[#5A1212]">
             + Solicitar
           </button>
         </div>
@@ -228,7 +228,7 @@ export default function MisVacaciones({ employee, onBack }: Props) {
               {error && <p className="text-sm text-red-600 mb-2">{error}</p>}
 
               <button onClick={handleSubmit} disabled={submitting || !startDate || !endDate}
-                className="w-full py-3 rounded-xl bg-teal-600 text-white font-medium hover:bg-teal-700 disabled:opacity-50">
+                className="w-full py-3 rounded-xl bg-[#7C1A1A] text-white font-medium hover:bg-[#5A1212] disabled:opacity-50">
                 {submitting ? 'Enviando...' : 'Enviar solicitud'}
               </button>
 
