@@ -8,11 +8,14 @@ import {
   closePeriodForLocation,
   resolveClosure,
   getEffectiveCloseDay,
+  detectPendingAutoClose,
+  executeAutoClose,
   type LocationBalanceConfig,
   type EmployeeBalanceStateExtended,
   type DayAlert,
   type DayAlertType,
 } from '../services/hoursBalanceService'
+import type { Employee } from '../types'
 import type {
   MonthlyBalanceClosure,
   ClosureResolution,
@@ -54,6 +57,12 @@ const ALERT_COLORS: Record<DayAlertType, string> = {
   desviacion_grande: 'text-red-700 bg-red-50 border-red-200',
 }
 
+interface AutoCloseDetection {
+  shouldClose: boolean
+  period: { label: string; start: string; end: string }
+  employeesNotClosed: Employee[]
+}
+
 export default function BolsaHorasPage() {
   const { staff, locations } = useApp()
   const [locationId, setLocationId] = useState<string>('')
@@ -62,6 +71,8 @@ export default function BolsaHorasPage() {
   const [loading, setLoading] = useState(false)
   const [resolveModal, setResolveModal] = useState<MonthlyBalanceClosure | null>(null)
   const [alertsModal, setAlertsModal] = useState<{ employeeName: string; alerts: DayAlert[] } | null>(null)
+  const [autoClose, setAutoClose] = useState<AutoCloseDetection | null>(null)
+  const [autoClosing, setAutoClosing] = useState(false)
 
   useEffect(() => {
     if (!locationId && locations.length > 0) setLocationId(locations[0].id)
@@ -93,15 +104,21 @@ export default function BolsaHorasPage() {
   async function refresh() {
     if (employeesOfLocation.length === 0) {
       setStates([])
+      setAutoClose(null)
       return
     }
     setLoading(true)
     try {
-      const result = await getAllEmployeesBalanceStates(employeesOfLocation, closeDay)
+      const [result, autoCloseInfo] = await Promise.all([
+        getAllEmployeesBalanceStates(employeesOfLocation, closeDay),
+        detectPendingAutoClose(locationId, employeesOfLocation, closeDay),
+      ])
       setStates(result)
+      setAutoClose(autoCloseInfo.shouldClose ? autoCloseInfo : null)
     } catch (e) {
       console.error('[BolsaHoras] Error:', e)
       setStates([])
+      setAutoClose(null)
     } finally {
       setLoading(false)
     }
@@ -135,8 +152,56 @@ export default function BolsaHorasPage() {
     await refresh()
   }
 
+  async function handleAutoClose() {
+    if (!autoClose) return
+    if (!confirm(
+      `¿Cerrar automáticamente el periodo "${autoClose.period.label}"?\n\n` +
+      `Se creará un cierre para ${autoClose.employeesNotClosed.length} empleado(s) ` +
+      `que aún no lo tienen. Después podrás resolverlos en la pestaña Pendientes.`
+    )) return
+    setAutoClosing(true)
+    const result = await executeAutoClose(autoClose.employeesNotClosed, closeDay)
+    setAutoClosing(false)
+    alert(
+      `✅ Cierres automáticos creados: ${result.created.length}\n` +
+      (result.failed > 0 ? `⚠️ Fallidos: ${result.failed}` : '')
+    )
+    await refresh()
+    // Cambiar a pestaña Pendientes para que el gestor vea los cierres recién creados
+    setTab('pending')
+  }
+
   return (
     <div className="space-y-4">
+      {/* Banner de auto-cierre pendiente */}
+      {autoClose && (
+        <div className="bg-gradient-to-r from-orange-50 to-amber-50 border-2 border-orange-300 rounded-lg p-4 flex items-start gap-4">
+          <div className="text-3xl shrink-0">📅</div>
+          <div className="flex-1">
+            <div className="font-bold text-orange-900 mb-1">
+              Periodo "{autoClose.period.label}" pendiente de cerrar
+            </div>
+            <p className="text-sm text-orange-800">
+              El periodo del <strong>{autoClose.period.start}</strong> al <strong>{autoClose.period.end}</strong> ya
+              ha terminado pero {autoClose.employeesNotClosed.length === 1
+                ? '1 empleado tiene'
+                : `${autoClose.employeesNotClosed.length} empleados tienen`} su cierre pendiente.
+            </p>
+            <p className="text-xs text-orange-700 mt-1">
+              Puedes cerrarlo automáticamente ahora y luego decidir cómo resolver cada saldo (pagar / compensar / arrastrar).
+            </p>
+          </div>
+          <button
+            onClick={handleAutoClose}
+            disabled={autoClosing}
+            className="px-4 py-2 rounded-lg text-white font-medium text-sm shrink-0 disabled:opacity-40"
+            style={{ backgroundColor: '#F39C2A' }}
+          >
+            {autoClosing ? 'Cerrando...' : '🔒 Cerrar ahora'}
+          </button>
+        </div>
+      )}
+
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3 bg-white border rounded-lg p-3">
         <select
@@ -697,7 +762,6 @@ function AlertsModal({
   alerts: DayAlert[]
   onClose: () => void
 }) {
-  // Agrupar alertas por tipo
   const grouped: Record<DayAlertType, DayAlert[]> = {
     sin_fichaje: [],
     sin_horario: [],
