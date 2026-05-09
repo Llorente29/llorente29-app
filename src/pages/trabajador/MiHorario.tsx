@@ -4,8 +4,10 @@
 // Cálculo correcto de horas con cruce de medianoche.
 
 import { useEffect, useMemo, useState } from 'react'
-import type { Employee } from '../../types'
+import type { Employee, Location } from '../../types'
 import { listShiftTemplates, getSchedule } from '../../services/schedulerService'
+import { fetchLocations } from '../../services/supabaseSync'
+import MiBolsaHoras from '../../components/MiBolsaHoras'
 import {
   type ShiftTemplate,
   type Schedule,
@@ -59,6 +61,20 @@ export default function MiHorario({ employee, onBack }: MiHorarioProps) {
   const [templates, setTemplates] = useState<ShiftTemplate[]>([])
   const [schedule, setSchedule] = useState<Schedule | null>(null)
   const [loading, setLoading] = useState(false)
+  const [location, setLocation] = useState<Location | undefined>(undefined)
+
+  // Cargar el local del empleado (para configuración de bolsa de horas)
+  useEffect(() => {
+    let cancel = false
+    async function loadLoc() {
+      if (!employee?.locationId) return
+      const all = await fetchLocations()
+      if (cancel || !all) return
+      setLocation(all.find(l => l.id === employee.locationId))
+    }
+    loadLoc()
+    return () => { cancel = true }
+  }, [employee?.locationId])
 
   // Cargar templates + schedule de la semana
   useEffect(() => {
@@ -191,6 +207,11 @@ export default function MiHorario({ employee, onBack }: MiHorarioProps) {
           </div>
         </div>
       )}
+
+      {/* Bolsa de horas (si el empleado tiene visibilidad activa) */}
+      <div className="mx-4 mb-3">
+        <MiBolsaHoras employee={employee} location={location} />
+      </div>
 
       {/* Días */}
       <div className="px-4 space-y-2">
