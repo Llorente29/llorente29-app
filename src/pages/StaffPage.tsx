@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useApp } from '../context/AppContext'
-import { Button, Input, Select, Badge, Card, Tabs, Modal, Label, Alert } from '../components/ui'
+import { Button, Input, Select, Textarea, Badge, Card, Tabs, Modal, Label, Alert } from '../components/ui'
 import type { Employee, ClockEntry, WeeklySchedule } from '../types'
 import DocumentosTab from '../components/personal/DocumentosTab'
 import VacacionesTab from '../components/personal/VacacionesTab'
@@ -217,14 +217,19 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations }: {
       return
     }
 
-    // Salida or no schedule: plain clock
     setClocking(true)
     const now = new Date()
     const doRegister = (coords: Partial<ClockEntry>) => {
-      const entry: ClockEntry = { id: `ck-${Date.now()}`, type, datetime: now.toISOString(), ...coords }
+      const entry: ClockEntry = {
+        id: `ck-${Date.now()}`,
+        type,
+        datetime: now.toISOString(),
+        ...coords,
+      }
       setEmp(prev => ({ ...prev, clockEntries: [entry, ...prev.clockEntries] }))
       setClocking(false)
     }
+
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         pos => doRegister({ lat: pos.coords.latitude, lng: pos.coords.longitude, address: `${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}` }),
@@ -307,85 +312,82 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations }: {
               <Input className="mt-1" type="text" inputMode="numeric" maxLength={4}
                 value={emp.pin || ''}
                 onChange={e => update('pin', e.target.value.replace(/\D/g, '').slice(0, 4))}
-                placeholder="0000" /></div>
+                placeholder="0000" />
+            </div>
+            <div className="col-span-2 flex items-center gap-2">
+              <input type="checkbox" id="active" checked={emp.active} onChange={e => update('active', e.target.checked)} className="rounded" />
+              <Label htmlFor="active" className="cursor-pointer">Empleado activo</Label>
+            </div>
+            <div className="col-span-2">
+              <Label>Notas</Label>
+              <Textarea className="mt-1" rows={3} value={emp.notes} onChange={e => update('notes', e.target.value)} placeholder="Notas internas..." />
+            </div>
           </div>
         )}
 
         {/* ── FICHAJES ── */}
         {tab === 'fichajes' && (
           <div className="space-y-4">
-            {/* Estado actual */}
-            <div className="grid grid-cols-3 gap-3">
-              <Card className="p-3">
-                <p className="text-xs text-gray-500">Estado</p>
-                <p className="text-sm font-bold mt-1">
-                  {isWorking ? <span className="text-emerald-600">🟢 Trabajando</span> : <span className="text-gray-400">⚫ No</span>}
-                </p>
+            {!emp.id || !emp.locationId ? (
+              <Card className="p-4 text-center text-sm text-gray-500">
+                Guarda primero los datos del empleado para poder fichar.
               </Card>
-              <Card className="p-3">
-                <p className="text-xs text-gray-500">Hoy</p>
-                <p className="text-sm font-bold mt-1">{hoursToday.toFixed(1)}h</p>
+            ) : (
+              <Card className="p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <p className="text-xs text-gray-500">Estado actual</p>
+                    <p className="text-sm font-semibold" style={{ color: '#7C1A1A' }}>
+                      {isWorking ? '🟢 Trabajando' : '⚫ Sin entrada'}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-gray-500">Hoy</p>
+                    <p className="text-sm font-semibold tabular-nums">{hoursToday.toFixed(1)}h</p>
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-3">
+                  <Button size="sm" onClick={() => handleClock('entrada')} disabled={clocking || isWorking}>
+                    ▶ Entrada
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => handleClock('salida')} disabled={clocking || !isWorking}>
+                    ⏹ Salida
+                  </Button>
+                </div>
+                {clockWarn && (
+                  <Alert type={clockWarn.type === 'blocked' ? 'error' : clockWarn.type === 'rounded' ? 'warning' : 'info'}>
+                    {clockWarn.type === 'blocked' ? '🚫 ' : clockWarn.type === 'rounded' ? '🔄 ' : '✅ '}{clockWarn.msg}
+                  </Alert>
+                )}
               </Card>
-              <Card className="p-3">
-                <p className="text-xs text-gray-500">Esta semana</p>
-                <p className="text-sm font-bold mt-1">
-                  {emp.clockEntries.filter(e => {
-                    const d = new Date(e.datetime)
-                    const now = new Date()
-                    const diff = (now.getTime() - d.getTime()) / 86400000
-                    return diff <= 7
-                  }).length / 2}j
-                </p>
-              </Card>
-            </div>
-
-            {/* Avisos del fichaje */}
-            {clockWarn && (
-                {clockWarn.msg}
-              </Alert>
             )}
 
-            {/* Botones de fichaje */}
-            <div className="flex gap-2">
-              <Button onClick={() => handleClock('entrada')} disabled={isWorking || clocking} variant="primary" className="flex-1">
-                {clocking ? '⏳ Fichando...' : '🟢 Fichar entrada'}
-              </Button>
-              <Button onClick={() => handleClock('salida')} disabled={!isWorking || clocking} variant="outline" className="flex-1">
-                {clocking ? '⏳ Fichando...' : '🔴 Fichar salida'}
-              </Button>
-            </div>
-
-            {/* Historial */}
-            <div>
-              <Label className="mb-2 block">Historial de fichajes</Label>
-              {emp.clockEntries.length === 0 ? (
-                <p className="text-sm text-gray-400 italic">Sin fichajes aún.</p>
-              ) : (
-                <div className="border rounded-xl overflow-hidden max-h-72 overflow-y-auto">
-                  <table className="w-full text-sm">
-                    <tbody>
-                      {emp.clockEntries.slice(0, 30).map((e) => (
-                        <tr key={e.id} className="border-b last:border-0 hover:bg-gray-50">
-                          <td className="p-2 w-2">
-                            <span className={`inline-block w-2 h-2 rounded-full ${e.type === 'entrada' ? 'bg-emerald-500' : 'bg-red-500'}`}/>
-                          </td>
-                          <td className="p-2 capitalize text-xs">{e.type}</td>
-                          <td className="p-2 text-xs font-mono">
-                            {new Date(e.datetime).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                          </td>
-                          <td className="p-2 text-xs text-gray-400 hidden md:table-cell">
-                            {e.address ? `📍 ${e.address.slice(0, 25)}...` : '—'}
-                          </td>
-                          <td className="p-2 text-right">
-                            {e.roundingApplied && <Badge color="green">↺</Badge>}
-                            {e.diffMinutes != null && Math.abs(e.diffMinutes) > 10 && <Badge color="amber">+{e.diffMinutes}m</Badge>}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+            <div className="border rounded-2xl overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b">
+                  <tr>
+                    <th className="p-3 text-left text-xs font-semibold text-gray-500">Fecha y hora</th>
+                    <th className="p-3 text-left text-xs font-semibold text-gray-500">Tipo</th>
+                    <th className="p-3 text-left text-xs font-semibold text-gray-500">Notas</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {emp.clockEntries.length === 0 ? (
+                    <tr><td colSpan={3} className="p-4 text-center text-gray-400 italic">Sin fichajes</td></tr>
+                  ) : (
+                    emp.clockEntries.slice(0, 30).map((ce, i) => (
+                      <tr key={i} className="border-b last:border-0">
+                        <td className="p-2 text-xs">{new Date(ce.datetime).toLocaleString('es-ES')}</td>
+                        <td className="p-2"><Badge color={ce.type === 'entrada' ? 'green' : 'red'}>{ce.type}</Badge></td>
+                        <td className="p-2 text-xs text-gray-500">
+                          {ce.roundingApplied && '↻ redondeo · '}
+                          {ce.diffMinutes != null && `${ce.diffMinutes > 0 ? '+' : ''}${ce.diffMinutes} min`}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         )}
