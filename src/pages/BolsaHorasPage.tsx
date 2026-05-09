@@ -20,6 +20,8 @@ import type {
   MonthlyBalanceClosure,
   ClosureResolution,
 } from '../types/hoursBalance'
+import type { Location } from '../types'
+import { exportGestoriaCsv } from '../services/exportGestoriaService'
 
 type Tab = 'current' | 'pending' | 'history'
 
@@ -167,7 +169,6 @@ export default function BolsaHorasPage() {
       (result.failed > 0 ? `⚠️ Fallidos: ${result.failed}` : '')
     )
     await refresh()
-    // Cambiar a pestaña Pendientes para que el gestor vea los cierres recién creados
     setTab('pending')
   }
 
@@ -278,7 +279,12 @@ export default function BolsaHorasPage() {
         />
       )}
       {tab === 'history' && (
-        <HistoryTab states={states} loading={loading} />
+        <HistoryTab
+          states={states}
+          loading={loading}
+          employees={employeesOfLocation}
+          locations={locations}
+        />
       )}
 
       {resolveModal && (
@@ -506,15 +512,24 @@ function PendingTab({
       </table>
     </div>
   )
-}
-
-/* =====================================================
+}/* =====================================================
    PESTAÑA HISTÓRICO
    ===================================================== */
 
-function HistoryTab({ states, loading }: { states: EmployeeBalanceStateExtended[]; loading: boolean }) {
+function HistoryTab({
+  states,
+  loading,
+  employees,
+  locations,
+}: {
+  states: EmployeeBalanceStateExtended[]
+  loading: boolean
+  employees: import('../types').Employee[]
+  locations: Location[]
+}) {
   const [filterEmpId, setFilterEmpId] = useState<string>('')
   const [filterResolution, setFilterResolution] = useState<ClosureResolution | ''>('')
+  const [exporting, setExporting] = useState(false)
 
   if (loading) return <Skeleton />
 
@@ -529,6 +544,26 @@ function HistoryTab({ states, loading }: { states: EmployeeBalanceStateExtended[
   allResolved.sort((a, b) =>
     b.closure.periodEnd.localeCompare(a.closure.periodEnd)
   )
+
+  async function handleExport() {
+    if (allResolved.length === 0) {
+      alert('No hay cierres para exportar con los filtros actuales.')
+      return
+    }
+    setExporting(true)
+    try {
+      await exportGestoriaCsv({
+        closures: allResolved.map(r => r.closure),
+        employees,
+        locations,
+      })
+    } catch (e) {
+      console.error('[exportGestoria] Error:', e)
+      alert('Error al exportar. Revisa la consola.')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   return (
     <>
@@ -558,6 +593,15 @@ function HistoryTab({ states, loading }: { states: EmployeeBalanceStateExtended[
         </select>
         <div className="flex-1" />
         <span className="text-xs text-gray-500">{allResolved.length} cierre(s)</span>
+        <button
+          onClick={handleExport}
+          disabled={exporting || allResolved.length === 0}
+          className="px-3 py-1 rounded text-white text-xs font-medium disabled:opacity-40"
+          style={{ backgroundColor: '#7C1A1A' }}
+          title="Descargar CSV con datos para gestoría (respeta los filtros)"
+        >
+          {exporting ? '⏳ Generando...' : '📊 Exportar gestoría'}
+        </button>
       </div>
 
       {allResolved.length === 0 && (
