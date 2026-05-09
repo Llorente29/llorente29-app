@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useApp } from '../context/AppContext'
-import { Button, Input, Select, Textarea, Badge, Card, Tabs, Modal, Label, Alert } from '../components/ui'
+import { Button, Input, Select, Badge, Card, Tabs, Modal, Label, Alert } from '../components/ui'
 import type { Employee, ClockEntry, WeeklySchedule } from '../types'
 import DocumentosTab from '../components/personal/DocumentosTab'
 import VacacionesTab from '../components/personal/VacacionesTab'
@@ -341,7 +341,6 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations }: {
 
             {/* Avisos del fichaje */}
             {clockWarn && (
-              <Alert variant={clockWarn.type === 'blocked' ? 'error' : clockWarn.type === 'rounded' ? 'success' : 'warning'}>
                 {clockWarn.msg}
               </Alert>
             )}
@@ -351,7 +350,7 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations }: {
               <Button onClick={() => handleClock('entrada')} disabled={isWorking || clocking} variant="primary" className="flex-1">
                 {clocking ? '⏳ Fichando...' : '🟢 Fichar entrada'}
               </Button>
-              <Button onClick={() => handleClock('salida')} disabled={!isWorking || clocking} variant="secondary" className="flex-1">
+              <Button onClick={() => handleClock('salida')} disabled={!isWorking || clocking} variant="outline" className="flex-1">
                 {clocking ? '⏳ Fichando...' : '🔴 Fichar salida'}
               </Button>
             </div>
