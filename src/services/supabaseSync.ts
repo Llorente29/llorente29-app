@@ -15,6 +15,9 @@ interface LocationRow {
   active: boolean
   lat: number | null
   lng: number | null
+  // === Campos de bolsa de horas ===
+  hours_balance_close_day: number | null
+  hours_balance_sync_with_gestoria: boolean | null
 }
 
 function rowToLocation(r: LocationRow): Location {
@@ -26,6 +29,9 @@ function rowToLocation(r: LocationRow): Location {
     active: r.active,
     lat: r.lat ?? undefined,
     lng: r.lng ?? undefined,
+    // === Campos de bolsa de horas ===
+    hoursBalanceCloseDay: r.hours_balance_close_day ?? 25,
+    hoursBalanceSyncWithGestoria: r.hours_balance_sync_with_gestoria ?? true,
   }
 }
 
@@ -38,6 +44,9 @@ function locationToRow(l: Location): Omit<LocationRow, 'id'> & { id?: string } {
     active: l.active,
     lat: l.lat ?? null,
     lng: l.lng ?? null,
+    // === Campos de bolsa de horas ===
+    hours_balance_close_day: l.hoursBalanceCloseDay ?? 25,
+    hours_balance_sync_with_gestoria: l.hoursBalanceSyncWithGestoria ?? true,
   }
 }
 
@@ -92,6 +101,9 @@ interface EmployeeRow {
   shift_code: string | null
   shift_period: ShiftPeriod | null
   rest_pattern: RestPattern | null
+  // === Campos de bolsa de horas ===
+  initial_hours_balance: number | null
+  show_hours_balance: boolean | null
 }
 
 function rowToEmployee(r: EmployeeRow): Employee {
@@ -136,6 +148,9 @@ function rowToEmployee(r: EmployeeRow): Employee {
     shiftCode: r.shift_code || undefined,
     shiftPeriod: r.shift_period || undefined,
     restPattern: r.rest_pattern || undefined,
+    // === Campos de bolsa de horas ===
+    initialHoursBalance: r.initial_hours_balance != null ? Number(r.initial_hours_balance) : 0,
+    showHoursBalance: r.show_hours_balance ?? true,
   }
 }
 
@@ -171,6 +186,9 @@ function employeeToRow(e: Employee): Partial<EmployeeRow> {
     shift_code: e.shiftCode || null,
     shift_period: e.shiftPeriod || null,
     rest_pattern: e.restPattern || null,
+    // === Campos de bolsa de horas ===
+    initial_hours_balance: e.initialHoursBalance ?? 0,
+    show_hours_balance: e.showHoursBalance ?? true,
   }
 }
 
