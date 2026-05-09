@@ -13,7 +13,6 @@ import {
   getPeriodForDate,
   weeksTouchingPeriod,
   daysOfWeekInPeriod,
-  daysInPeriod,
 } from '../types/hoursBalance'
 
 /* =====================================================
