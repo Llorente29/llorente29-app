@@ -1,5 +1,5 @@
 // src/pages/BolsaHorasPage.tsx
-// Vista del gestor: bolsa de horas con 3 pestañas (En curso / Pendientes / Histórico)
+// Vista del gestor: bolsa de horas con sistema híbrido (planificado + fichaje + ausencias)
 
 import { useEffect, useMemo, useState } from 'react'
 import { useApp } from '../context/AppContext'
@@ -9,9 +9,11 @@ import {
   resolveClosure,
   getEffectiveCloseDay,
   type LocationBalanceConfig,
+  type EmployeeBalanceStateExtended,
+  type DayAlert,
+  type DayAlertType,
 } from '../services/hoursBalanceService'
 import type {
-  EmployeeBalanceState,
   MonthlyBalanceClosure,
   ClosureResolution,
 } from '../types/hoursBalance'
@@ -40,13 +42,26 @@ const RESOLUTION_COLORS: Record<ClosureResolution, string> = {
   descartado: 'text-gray-500 bg-gray-100',
 }
 
+const ALERT_LABELS: Record<DayAlertType, string> = {
+  sin_fichaje: '⚠️ Sin fichaje',
+  sin_horario: '🟡 Trabajo sin horario',
+  desviacion_grande: '🔴 Desviación >30 min',
+}
+
+const ALERT_COLORS: Record<DayAlertType, string> = {
+  sin_fichaje: 'text-amber-700 bg-amber-50 border-amber-200',
+  sin_horario: 'text-yellow-800 bg-yellow-50 border-yellow-300',
+  desviacion_grande: 'text-red-700 bg-red-50 border-red-200',
+}
+
 export default function BolsaHorasPage() {
   const { staff, locations } = useApp()
   const [locationId, setLocationId] = useState<string>('')
   const [tab, setTab] = useState<Tab>('current')
-  const [states, setStates] = useState<EmployeeBalanceState[]>([])
+  const [states, setStates] = useState<EmployeeBalanceStateExtended[]>([])
   const [loading, setLoading] = useState(false)
   const [resolveModal, setResolveModal] = useState<MonthlyBalanceClosure | null>(null)
+  const [alertsModal, setAlertsModal] = useState<{ employeeName: string; alerts: DayAlert[] } | null>(null)
 
   useEffect(() => {
     if (!locationId && locations.length > 0) setLocationId(locations[0].id)
@@ -65,7 +80,6 @@ export default function BolsaHorasPage() {
     [staff, locationId]
   )
 
-  // Configuración del local: closeDay efectivo
   const closeDay = useMemo(() => {
     if (!currentLocation) return 25
     const config: LocationBalanceConfig = {
@@ -98,8 +112,8 @@ export default function BolsaHorasPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locationId, closeDay, employeesOfLocation.length])
 
-  // Contar pendientes para el badge
   const totalPending = states.reduce((acc, s) => acc + s.pendingClosures.length, 0)
+  const totalAlerts = states.reduce((acc, s) => acc + s.alerts.length, 0)
 
   async function handleCloseManual() {
     if (!locationId) return
@@ -152,6 +166,11 @@ export default function BolsaHorasPage() {
                   {totalPending}
                 </span>
               )}
+              {t === 'current' && totalAlerts > 0 && (
+                <span className="ml-1.5 text-[10px] bg-red-500 text-white px-1.5 py-0.5 rounded-full font-bold">
+                  {totalAlerts}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -184,7 +203,7 @@ export default function BolsaHorasPage() {
 
       {/* Contenido por pestaña */}
       {tab === 'current' && (
-        <CurrentTab states={states} loading={loading} />
+        <CurrentTab states={states} loading={loading} onShowAlerts={setAlertsModal} />
       )}
       {tab === 'pending' && (
         <PendingTab
@@ -207,6 +226,14 @@ export default function BolsaHorasPage() {
           }}
         />
       )}
+
+      {alertsModal && (
+        <AlertsModal
+          employeeName={alertsModal.employeeName}
+          alerts={alertsModal.alerts}
+          onClose={() => setAlertsModal(null)}
+        />
+      )}
     </div>
   )
 }
@@ -215,10 +242,16 @@ export default function BolsaHorasPage() {
    PESTAÑA EN CURSO
    ===================================================== */
 
-function CurrentTab({ states, loading }: { states: EmployeeBalanceState[]; loading: boolean }) {
-  if (loading) {
-    return <Skeleton />
-  }
+function CurrentTab({
+  states,
+  loading,
+  onShowAlerts,
+}: {
+  states: EmployeeBalanceStateExtended[]
+  loading: boolean
+  onShowAlerts: (data: { employeeName: string; alerts: DayAlert[] }) => void
+}) {
+  if (loading) return <Skeleton />
   if (states.length === 0) {
     return (
       <div className="bg-white border rounded-lg p-8 text-center text-gray-500">
@@ -226,7 +259,6 @@ function CurrentTab({ states, loading }: { states: EmployeeBalanceState[]; loadi
       </div>
     )
   }
-  // Avisos de semanas sin publicar
   const allWeeksMissing = new Set<string>()
   for (const s of states) {
     for (const w of s.currentPeriod.weeksWithoutSchedule) allWeeksMissing.add(w)
@@ -249,10 +281,11 @@ function CurrentTab({ states, loading }: { states: EmployeeBalanceState[]; loadi
             <tr>
               <th className="px-3 py-2 text-left">Empleado</th>
               <th className="px-3 py-2 text-center">Periodo</th>
-              <th className="px-3 py-2 text-center w-24">Planificadas</th>
+              <th className="px-3 py-2 text-center w-24">Trabajadas</th>
               <th className="px-3 py-2 text-center w-20">Vacac.</th>
               <th className="px-3 py-2 text-center w-24">Contratadas</th>
               <th className="px-3 py-2 text-center w-24">Saldo</th>
+              <th className="px-3 py-2 text-center w-20">Alertas</th>
             </tr>
           </thead>
           <tbody>
@@ -260,6 +293,7 @@ function CurrentTab({ states, loading }: { states: EmployeeBalanceState[]; loadi
               const cp = s.currentPeriod
               const positive = cp.delta > 0.01
               const negative = cp.delta < -0.01
+              const numAlerts = s.alerts.length
               return (
                 <tr key={s.employeeId} className="border-b hover:bg-gray-50">
                   <td className="px-3 py-2">
@@ -268,9 +302,9 @@ function CurrentTab({ states, loading }: { states: EmployeeBalanceState[]; loadi
                     </span>
                     <span className="ml-2">{s.employeeName}</span>
                     <div className="text-[10px] text-gray-500">
-                      Contrato {s.contractedHours}h/sem ·
+                      Contrato {s.contractedHours}h/sem
                       {s.initialBalance !== 0 && (
-                        <span> Inicial: {s.initialBalance > 0 ? '+' : ''}{s.initialBalance.toFixed(1)}h</span>
+                        <span> · Inicial: {s.initialBalance > 0 ? '+' : ''}{s.initialBalance.toFixed(1)}h</span>
                       )}
                     </div>
                   </td>
@@ -296,12 +330,27 @@ function CurrentTab({ states, loading }: { states: EmployeeBalanceState[]; loadi
                   }`}>
                     {positive ? '+' : ''}{cp.delta.toFixed(2)}h
                   </td>
+                  <td className="px-3 py-2 text-center">
+                    {numAlerts > 0 ? (
+                      <button
+                        onClick={() => onShowAlerts({ employeeName: s.employeeName, alerts: s.alerts })}
+                        className="px-2 py-1 rounded bg-red-100 text-red-700 text-xs font-bold hover:bg-red-200"
+                      >
+                        ⚠️ {numAlerts}
+                      </button>
+                    ) : (
+                      <span className="text-emerald-600 text-xs">✓</span>
+                    )}
+                  </td>
                 </tr>
               )
             })}
           </tbody>
         </table>
       </div>
+      <p className="text-[11px] text-gray-500 mt-2">
+        💡 Sistema híbrido: prioridad ausencias → fichaje → planificado. Las alertas marcan días con incidencias.
+      </p>
     </>
   )
 }
@@ -315,13 +364,12 @@ function PendingTab({
   loading,
   onResolve,
 }: {
-  states: EmployeeBalanceState[]
+  states: EmployeeBalanceStateExtended[]
   loading: boolean
   onResolve: (c: MonthlyBalanceClosure) => void
 }) {
   if (loading) return <Skeleton />
-  // Aplanar todos los pendientes
-  const allPending: { state: EmployeeBalanceState; closure: MonthlyBalanceClosure }[] = []
+  const allPending: { state: EmployeeBalanceStateExtended; closure: MonthlyBalanceClosure }[] = []
   for (const s of states) {
     for (const c of s.pendingClosures) {
       allPending.push({ state: s, closure: c })
@@ -399,14 +447,13 @@ function PendingTab({
    PESTAÑA HISTÓRICO
    ===================================================== */
 
-function HistoryTab({ states, loading }: { states: EmployeeBalanceState[]; loading: boolean }) {
+function HistoryTab({ states, loading }: { states: EmployeeBalanceStateExtended[]; loading: boolean }) {
   const [filterEmpId, setFilterEmpId] = useState<string>('')
   const [filterResolution, setFilterResolution] = useState<ClosureResolution | ''>('')
 
   if (loading) return <Skeleton />
 
-  // Aplanar todos los resueltos
-  const allResolved: { state: EmployeeBalanceState; closure: MonthlyBalanceClosure }[] = []
+  const allResolved: { state: EmployeeBalanceStateExtended; closure: MonthlyBalanceClosure }[] = []
   for (const s of states) {
     for (const c of s.resolvedClosures) {
       if (filterEmpId && s.employeeId !== filterEmpId) continue
@@ -414,7 +461,6 @@ function HistoryTab({ states, loading }: { states: EmployeeBalanceState[]; loadi
       allResolved.push({ state: s, closure: c })
     }
   }
-  // Ordenar por fecha de cierre desc
   allResolved.sort((a, b) =>
     b.closure.periodEnd.localeCompare(a.closure.periodEnd)
   )
@@ -567,7 +613,8 @@ function ResolveModal({
               {closure.delta > 0 ? '+' : ''}{closure.delta.toFixed(2)}h
             </strong></div>
             <div className="text-xs text-gray-500 mt-1">
-              Planificadas {closure.scheduledHours.toFixed(2)}h + Vacaciones {closure.vacationHours.toFixed(2)}h
+              Trabajadas {closure.scheduledHours.toFixed(2)}h
+              (incl. vacac. {closure.vacationHours.toFixed(2)}h)
               − Contratadas {closure.contractedHoursPeriod.toFixed(2)}h
             </div>
           </div>
@@ -630,6 +677,82 @@ function ResolveModal({
             style={{ backgroundColor: '#7C1A1A' }}
           >
             {saving ? 'Guardando...' : 'Guardar resolución'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* =====================================================
+   MODAL DE ALERTAS
+   ===================================================== */
+
+function AlertsModal({
+  employeeName,
+  alerts,
+  onClose,
+}: {
+  employeeName: string
+  alerts: DayAlert[]
+  onClose: () => void
+}) {
+  // Agrupar alertas por tipo
+  const grouped: Record<DayAlertType, DayAlert[]> = {
+    sin_fichaje: [],
+    sin_horario: [],
+    desviacion_grande: [],
+  }
+  for (const a of alerts) grouped[a.type].push(a)
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
+      <div
+        className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="px-5 py-3 border-b" style={{ backgroundColor: '#7C1A1A', color: 'white' }}>
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="font-semibold">⚠️ Alertas del periodo</div>
+              <div className="text-xs opacity-90">{employeeName} · {alerts.length} alerta(s)</div>
+            </div>
+            <button onClick={onClose} className="text-white/80 hover:text-white">✕</button>
+          </div>
+        </div>
+
+        <div className="p-5 overflow-y-auto space-y-4">
+          {(['desviacion_grande', 'sin_fichaje', 'sin_horario'] as DayAlertType[]).map(type => {
+            const items = grouped[type]
+            if (items.length === 0) return null
+            return (
+              <div key={type}>
+                <div className={`text-xs font-semibold px-2 py-1 rounded mb-2 inline-block border ${ALERT_COLORS[type]}`}>
+                  {ALERT_LABELS[type]} · {items.length}
+                </div>
+                <div className="space-y-1">
+                  {items.map((a, i) => (
+                    <div key={i} className="text-xs bg-gray-50 rounded px-3 py-2 flex items-center justify-between">
+                      <div>
+                        <span className="font-mono text-gray-600">{a.date}</span>
+                        <span className="ml-2 text-gray-800">{a.message}</span>
+                      </div>
+                      {a.scheduledHours !== undefined && a.clockedHours !== undefined && (
+                        <div className="text-[10px] text-gray-500 font-mono">
+                          plan {a.scheduledHours.toFixed(2)}h · ficha {a.clockedHours.toFixed(2)}h
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        <div className="px-5 py-3 border-t bg-gray-50 flex justify-end">
+          <button onClick={onClose} className="px-4 py-2 text-sm border rounded bg-white hover:bg-gray-50">
+            Cerrar
           </button>
         </div>
       </div>
