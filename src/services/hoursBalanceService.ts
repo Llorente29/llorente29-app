@@ -10,13 +10,7 @@ import {
   type MonthlyBalanceClosure,
   type PeriodBalance,
   type EmployeeBalanceState,
-  toISODate,
-  parseISO,
-  addDays,
-  getMondayOfWeek,
   getPeriodForDate,
-  getPreviousPeriod,
-  getYearPeriods,
   weeksTouchingPeriod,
   daysOfWeekInPeriod,
   daysInPeriod,
@@ -37,6 +31,7 @@ async function loadPublishedSchedules(
   weekStartISOs: string[]
 ): Promise<Map<string, Schedule>> {
   const out = new Map<string, Schedule>()
+  if (!supabase) return out
   if (weekStartISOs.length === 0) return out
   const { data, error } = await supabase
     .from('schedules')
@@ -55,6 +50,7 @@ async function loadPublishedSchedules(
 }
 
 async function loadShiftTemplates(locationId: string): Promise<ShiftTemplate[]> {
+  if (!supabase) return []
   const { data, error } = await supabase
     .from('shift_templates')
     .select('*')
@@ -67,6 +63,7 @@ async function loadShiftTemplates(locationId: string): Promise<ShiftTemplate[]> 
 }
 
 async function loadApprovedVacations(employeeId: string): Promise<VacationRow[]> {
+  if (!supabase) return []
   const { data, error } = await supabase
     .from('vacations')
     .select('start_date, end_date, status')
@@ -82,6 +79,7 @@ async function loadApprovedVacations(employeeId: string): Promise<VacationRow[]>
 async function loadClosuresForEmployee(
   employeeId: string
 ): Promise<MonthlyBalanceClosure[]> {
+  if (!supabase) return []
   const { data, error } = await supabase
     .from('monthly_balance_closures')
     .select('*')
@@ -291,6 +289,7 @@ export async function closePeriodForEmployee(
   closeDay: number,
   options?: { closedBy?: string; useDate?: Date }
 ): Promise<MonthlyBalanceClosure | null> {
+  if (!supabase) return null
   const refDate = options?.useDate || new Date()
   // Cerrar el periodo que TERMINA en o antes de refDate
   const periodInfo = getPeriodForDate(refDate, closeDay)
@@ -397,6 +396,7 @@ export async function resolveClosure(
     resolvedBy?: string
   }
 ): Promise<MonthlyBalanceClosure | null> {
+  if (!supabase) return null
   const { data, error } = await supabase
     .from('monthly_balance_closures')
     .update({
