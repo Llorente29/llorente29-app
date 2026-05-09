@@ -19,27 +19,24 @@ import {
    ===================================================== */
 
 export type DayAlertType =
-  | 'sin_fichaje'        // había horario, no fichó
-  | 'sin_horario'        // fichó pero no había horario planificado
-  | 'desviacion_grande'  // desviación >30 min entre fichado y planificado
+  | 'sin_fichaje'
+  | 'sin_horario'
+  | 'desviacion_grande'
 
 export interface DayAlert {
   type: DayAlertType
-  date: string                 // YYYY-MM-DD
-  scheduledHours?: number      // horas planificadas ese día
-  clockedHours?: number        // horas fichadas ese día
-  diffMinutes?: number         // diferencia en minutos (positivo = fichó más, negativo = menos)
-  message: string              // mensaje legible
+  date: string
+  scheduledHours?: number
+  clockedHours?: number
+  diffMinutes?: number
+  message: string
 }
 
-/** Umbral de desviación en minutos para generar alerta */
 const DESVIATION_ALERT_THRESHOLD = 30
-
-/** Redondeo a la hora prevista si la diferencia es ≤ este valor (en minutos) */
 const ROUNDING_TOLERANCE_MIN = 10
 
 /* =====================================================
-   ROW INTERFACES (datos de Supabase)
+   ROW INTERFACES
    ===================================================== */
 
 interface VacationRow {
@@ -177,8 +174,36 @@ function rowToClosure(row: any): MonthlyBalanceClosure {
 }
 
 /* =====================================================
-   HELPERS DE FECHAS
+   CÁLCULO DEL SALDO DE UN PERIODO
    ===================================================== */
+
+interface ComputePeriodInput {
+  employee: Employee
+  periodStart: string
+  periodEnd: string
+  schedules: Map<string, Schedule>
+  templates: ShiftTemplate[]
+  vacations: VacationRow[]
+  clockEntries: ClockEntryRow[]
+}
+
+interface PeriodCalcResult {
+  scheduledHours: number
+  vacationHours: number
+  contractedHoursPeriod: number
+  delta: number
+  weeksWithoutSchedule: string[]
+  alerts: DayAlert[]
+  daysDetail: DayBalance[]
+}
+
+interface DayBalance {
+  date: string
+  workedHours: number
+  contractedShare: number
+  source: 'fichaje' | 'planificado' | 'ausencia_retribuida' | 'ausencia_no_retribuida' | 'libre'
+  alert?: DayAlert
+}
 
 function isoDate(d: Date): string {
   const y = d.getFullYear()
@@ -202,12 +227,10 @@ function* iterateDays(startISO: string, endISO: string): Generator<string> {
   }
 }
 
-/** Día de la semana 0=domingo, 1=lunes... 6=sábado */
 function getDayOfWeek(iso: string): number {
   return parseISO(iso).getDay()
 }
 
-/** Lunes de la semana al que pertenece el día */
 function getMondayOfWeek(iso: string): string {
   const d = parseISO(iso)
   const day = d.getDay()
@@ -216,11 +239,6 @@ function getMondayOfWeek(iso: string): string {
   return isoDate(d)
 }
 
-/* =====================================================
-   HORAS PLANIFICADAS POR DÍA
-   ===================================================== */
-
-/** Devuelve las horas planificadas para un empleado en un día concreto del periodo */
 function getScheduledHoursForDay(
   dayISO: string,
   schedule: Schedule | undefined,
@@ -228,23 +246,14 @@ function getScheduledHoursForDay(
   employee: Employee
 ): number {
   if (!schedule) return 0
-  // workloads viene en horas/semana. Para obtener horas/día necesitamos calcular
-  // mirando directamente las celdas del schedule en ese día concreto.
   const dow = getDayOfWeek(dayISO)
-  // El schedule.cells está estructurado: cells[templateId][dayKey] = [employeeIds]
-  // dayKey suele ser '0' a '6' (0=lunes? 0=domingo?). Comprobamos ambos formatos.
-  // Asumimos misma convención que computeWorkloads usa.
   let totalMinutes = 0
   const tplById = new Map(templates.map(t => [t.id, t]))
   for (const tid of Object.keys(schedule.cells)) {
     const t = tplById.get(tid)
     if (!t) continue
     for (const dayKey of Object.keys(schedule.cells[tid])) {
-      // dayKey puede ser '0'-'6' (lunes=0) o equivalente. Ajustar si scheduler usa otra convención.
-      // Aquí asumimos que en MiHorario.tsx el dayKey es 0=lunes, 1=martes... 6=domingo
       const dayKeyNum = parseInt(dayKey, 10)
-      // Convertir a getDay() format: lunes=1, ..., domingo=0
-      // Si dayKey 0=lunes en scheduler → equivalente a getDay()===1
       const expectedGetDay = dayKeyNum === 6 ? 0 : dayKeyNum + 1
       if (expectedGetDay !== dow) continue
       const ids = schedule.cells[tid][dayKey]
@@ -254,64 +263,41 @@ function getScheduledHoursForDay(
       const [sh, sm] = start.split(':').map(Number)
       const [eh, em] = end.split(':').map(Number)
       let mins = (eh * 60 + em) - (sh * 60 + sm)
-      if (mins <= 0) mins += 24 * 60 // cruza medianoche
+      if (mins <= 0) mins += 24 * 60
       totalMinutes += mins
     }
   }
   return Math.round((totalMinutes / 60) * 100) / 100
 }
 
-/* =====================================================
-   HORAS FICHADAS POR DÍA
-   ===================================================== */
-
-/**
- * Calcula horas fichadas en un día concreto.
- * Empareja entradas con salidas. Si la salida es del día siguiente (cruce medianoche)
- * la incluye en el día de la entrada.
- * Aplica redondeo de 10 min si la entrada está cerca del horario previsto.
- */
 function getClockedHoursForDay(
   dayISO: string,
   allEntries: ClockEntryRow[]
 ): { hours: number; complete: boolean } {
-  // Filtrar entradas del día (por la fecha de la entrada, no del cierre)
   const dayEntries = allEntries.filter(e => e.datetime.slice(0, 10) === dayISO)
   if (dayEntries.length === 0) return { hours: 0, complete: false }
-
-  // Emparejar entrada → salida cronológicamente
   let totalMinutes = 0
   let openEntry: ClockEntryRow | null = null
   let pairsClosed = 0
-
   for (const e of dayEntries) {
     if (e.type === 'entrada') {
       openEntry = e
     } else if (e.type === 'salida' && openEntry) {
-      // Calcular minutos entre openEntry y e
-      // Usar `datetime` que ya tiene aplicado el redondeo del kiosko si lo había
       const inMs = new Date(openEntry.datetime).getTime()
       const outMs = new Date(e.datetime).getTime()
       let mins = (outMs - inMs) / 60000
-      if (mins < 0) mins += 24 * 60 // por si acaso
+      if (mins < 0) mins += 24 * 60
       totalMinutes += mins
       pairsClosed++
       openEntry = null
     }
   }
-
-  // Si quedó una entrada sin salida → fichaje incompleto
   const complete = pairsClosed > 0 && openEntry === null
-
   return {
     hours: Math.round((totalMinutes / 60) * 100) / 100,
     complete,
   }
 }
-
-/* =====================================================
-   AUSENCIAS POR DÍA
-   ===================================================== */
 
 interface VacationOnDay {
   found: boolean
@@ -324,44 +310,12 @@ function getVacationOnDay(dayISO: string, vacations: VacationRow[]): VacationOnD
     if (dayISO >= v.start_date && dayISO <= v.end_date) {
       return {
         found: true,
-        paid: v.paid ?? true, // por defecto retribuida
+        paid: v.paid ?? true,
         type: v.type,
       }
     }
   }
   return { found: false, paid: false, type: '' }
-}
-
-/* =====================================================
-   CÁLCULO DÍA A DÍA (núcleo del sistema híbrido)
-   ===================================================== */
-
-interface DayBalance {
-  date: string
-  workedHours: number          // horas que cuentan a favor del trabajador
-  contractedShare: number      // fracción de contrato semanal que aplica este día (contrato/7) o 0 si no cuenta
-  source: 'fichaje' | 'planificado' | 'ausencia_retribuida' | 'ausencia_no_retribuida' | 'libre'
-  alert?: DayAlert
-}
-
-interface ComputePeriodInput {
-  employee: Employee
-  periodStart: string
-  periodEnd: string
-  schedules: Map<string, Schedule>
-  templates: ShiftTemplate[]
-  vacations: VacationRow[]
-  clockEntries: ClockEntryRow[]
-}
-
-interface PeriodCalcResult {
-  scheduledHours: number       // horas planificadas + fichadas + ausencias retribuidas
-  vacationHours: number        // solo las horas de ausencia retribuida
-  contractedHoursPeriod: number
-  delta: number
-  weeksWithoutSchedule: string[]
-  alerts: DayAlert[]
-  daysDetail: DayBalance[]
 }
 
 function computePeriodBalanceHybrid(input: ComputePeriodInput): PeriodCalcResult {
@@ -383,11 +337,9 @@ function computePeriodBalanceHybrid(input: ComputePeriodInput): PeriodCalcResult
       weeksWithoutScheduleSet.add(weekMonday)
     }
 
-    // 1) ¿Hay ausencia ese día?
     const vac = getVacationOnDay(dayISO, vacations)
     if (vac.found) {
       if (vac.paid) {
-        // Ausencia retribuida → cuenta como trabajada
         const hours = Math.round(dailyContract * 100) / 100
         totalWorkedHours += hours
         totalVacationHours += hours
@@ -399,7 +351,6 @@ function computePeriodBalanceHybrid(input: ComputePeriodInput): PeriodCalcResult
           source: 'ausencia_retribuida',
         })
       } else {
-        // Ausencia NO retribuida → no cuenta, descuenta del contrato del periodo
         daysDetail.push({
           date: dayISO,
           workedHours: 0,
@@ -410,15 +361,12 @@ function computePeriodBalanceHybrid(input: ComputePeriodInput): PeriodCalcResult
       continue
     }
 
-    // 2) ¿Hay fichaje ese día?
     const clocked = getClockedHoursForDay(dayISO, clockEntries)
     const scheduledH = getScheduledHoursForDay(dayISO, schedule, templates, employee)
 
     if (clocked.complete && clocked.hours > 0) {
-      // Cuenta las fichadas
       let alert: DayAlert | undefined
       if (scheduledH > 0) {
-        // Comparar con planificado
         const diffMin = Math.round((clocked.hours - scheduledH) * 60)
         if (Math.abs(diffMin) > DESVIATION_ALERT_THRESHOLD) {
           alert = {
@@ -432,7 +380,6 @@ function computePeriodBalanceHybrid(input: ComputePeriodInput): PeriodCalcResult
           alerts.push(alert)
         }
       } else {
-        // Fichó sin estar planificado
         alert = {
           type: 'sin_horario',
           date: dayISO,
@@ -453,11 +400,8 @@ function computePeriodBalanceHybrid(input: ComputePeriodInput): PeriodCalcResult
       continue
     }
 
-    // 3) ¿Hay horario planificado ese día?
     if (scheduledH > 0) {
-      // Asumimos que trabajó las planificadas (probable olvido de fichar)
       let alert: DayAlert | undefined
-      // Solo generar alerta si ya pasó el día (no para días futuros del periodo)
       const today = isoDate(new Date())
       if (dayISO < today) {
         alert = {
@@ -480,7 +424,6 @@ function computePeriodBalanceHybrid(input: ComputePeriodInput): PeriodCalcResult
       continue
     }
 
-    // 4) Día libre normal (no horario, no fichaje, no ausencia)
     daysDetail.push({
       date: dayISO,
       workedHours: 0,
@@ -506,7 +449,7 @@ function computePeriodBalanceHybrid(input: ComputePeriodInput): PeriodCalcResult
 }
 
 /* =====================================================
-   API PÚBLICA
+   API PÚBLICA: estado completo del empleado
    ===================================================== */
 
 export interface EmployeeBalanceStateExtended extends EmployeeBalanceState {
@@ -542,7 +485,6 @@ export async function getEmployeeBalanceState(
   const currentPeriodInfo = getPeriodForDate(today, closeDay)
   const allWeeks = weeksTouchingPeriod(currentPeriodInfo.start, currentPeriodInfo.end)
 
-  // Cargar todos los datos en paralelo
   const [schedulesMap, templates, vacations, clockEntries, closures] = await Promise.all([
     loadPublishedSchedules(locationId, allWeeks),
     loadShiftTemplates(locationId),
@@ -707,6 +649,10 @@ export async function closePeriodForLocation(
   return { created, existing }
 }
 
+/* =====================================================
+   RESOLUCIÓN DE UN CIERRE
+   ===================================================== */
+
 export async function resolveClosure(
   closureId: string,
   resolution: ClosureResolution,
@@ -763,8 +709,118 @@ export function getEffectiveCloseDay(config: LocationBalanceConfig): number {
   return config.closeDay
 }
 
-// Re-exportar para que las páginas no rompan imports
-export { weeksTouchingPeriod, daysOfWeekInPeriod }
+/* =====================================================
+   AUTO-CIERRE LAZY: detectar periodo anterior no cerrado
+   ===================================================== */
 
-// Constantes exportadas por si una UI las necesita
+/**
+ * Devuelve el periodo INMEDIATAMENTE ANTERIOR al actual.
+ * Útil para detectar qué periodo debería estar cerrado pero no lo está.
+ */
+export function getPreviousPeriod(closeDay: number, today = new Date()): {
+  label: string
+  start: string
+  end: string
+} {
+  // El periodo anterior termina justo antes del inicio del actual
+  const currentPeriod = getPeriodForDate(today, closeDay)
+  // Tomar un día antes del inicio del periodo actual
+  const dayBefore = parseISO(currentPeriod.start)
+  dayBefore.setDate(dayBefore.getDate() - 1)
+  return getPeriodForDate(dayBefore, closeDay)
+}
+
+/**
+ * Comprueba si el periodo anterior del local YA HA TERMINADO (es decir, hoy >= periodEnd+1)
+ * y si todos los empleados del local tienen ese periodo cerrado.
+ *
+ * Devuelve:
+ * - shouldClose: true si hay que cerrar el periodo anterior
+ * - period: info del periodo anterior
+ * - employeesNotClosed: lista de empleados sin cierre para ese periodo
+ */
+export async function detectPendingAutoClose(
+  locationId: string,
+  employees: Employee[],
+  closeDay: number,
+  today = new Date()
+): Promise<{
+  shouldClose: boolean
+  period: { label: string; start: string; end: string }
+  employeesNotClosed: Employee[]
+}> {
+  const previousPeriod = getPreviousPeriod(closeDay, today)
+  // Comprobar que el periodo anterior YA terminó (hoy > periodEnd)
+  const todayISO = isoDate(today)
+  if (todayISO <= previousPeriod.end) {
+    return { shouldClose: false, period: previousPeriod, employeesNotClosed: [] }
+  }
+
+  // Filtrar empleados del local
+  const empsOfLocation = employees.filter(e =>
+    e.active && (e.locationId === locationId ||
+      (e.assignedLocations || []).includes(locationId))
+  )
+
+  if (empsOfLocation.length === 0) {
+    return { shouldClose: false, period: previousPeriod, employeesNotClosed: [] }
+  }
+
+  if (!supabase) {
+    return { shouldClose: false, period: previousPeriod, employeesNotClosed: [] }
+  }
+
+  // Buscar cierres existentes para ese periodo y esos empleados
+  const empIds = empsOfLocation.map(e => e.id)
+  const { data, error } = await supabase
+    .from('monthly_balance_closures')
+    .select('employee_id')
+    .in('employee_id', empIds)
+    .eq('period_start', previousPeriod.start)
+    .eq('period_end', previousPeriod.end)
+
+  if (error) {
+    console.warn('[detectPendingAutoClose] Error:', error)
+    return { shouldClose: false, period: previousPeriod, employeesNotClosed: [] }
+  }
+
+  const closedIds = new Set((data || []).map((r: any) => r.employee_id))
+  const employeesNotClosed = empsOfLocation.filter(e => !closedIds.has(e.id))
+
+  return {
+    shouldClose: employeesNotClosed.length > 0,
+    period: previousPeriod,
+    employeesNotClosed,
+  }
+}
+
+/**
+ * Ejecuta el auto-cierre del periodo anterior para los empleados que faltan
+ */
+export async function executeAutoClose(
+  employeesNotClosed: Employee[],
+  closeDay: number,
+  options?: { closedBy?: string }
+): Promise<{ created: MonthlyBalanceClosure[]; failed: number }> {
+  const created: MonthlyBalanceClosure[] = []
+  let failed = 0
+  // useDate apunta a un día del periodo anterior (su periodEnd)
+  const previousPeriod = getPreviousPeriod(closeDay)
+  const useDate = parseISO(previousPeriod.end)
+
+  for (const emp of employeesNotClosed) {
+    const result = await closePeriodForEmployee(emp, closeDay, {
+      ...options,
+      useDate,
+    })
+    if (result) {
+      created.push(result)
+    } else {
+      failed++
+    }
+  }
+  return { created, failed }
+}
+
+export { weeksTouchingPeriod, daysOfWeekInPeriod }
 export { DESVIATION_ALERT_THRESHOLD, ROUNDING_TOLERANCE_MIN }
