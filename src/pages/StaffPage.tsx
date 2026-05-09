@@ -4,7 +4,6 @@ import { Button, Input, Select, Textarea, Badge, Card, Tabs, Modal, Label, Alert
 import type { Employee, ClockEntry, WeeklySchedule } from '../types'
 import DocumentosTab from '../components/personal/DocumentosTab'
 import VacacionesTab from '../components/personal/VacacionesTab'
-import BolsaHorasView from '../components/personal/BolsaHorasView'
 
 const POSITIONS = ['Encargado', 'Jefe de cocina', 'Cocinero', 'Ayudante cocina', 'Camarero', 'Barra', 'Hostess', 'Limpieza', 'Gerente', 'Otro']
 const CONTRACT_TYPES = ['Indefinido', 'Temporal', 'Prácticas', 'Beca', 'Autónomo', 'Otro']
@@ -246,7 +245,6 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations }: {
     { value: 'ausencias', label: '🏖 Ausencias' },
     { value: 'contrato', label: '📋 Contrato' },
     { value: 'disponibilidad', label: '📅 Disponibilidad' },
-    { value: 'bolsa', label: '⏳ Bolsa horas' },
   ]
 
   return (
@@ -316,7 +314,7 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations }: {
             </div>
             <div className="col-span-2 flex items-center gap-2">
               <input type="checkbox" id="active" checked={emp.active} onChange={e => update('active', e.target.checked)} className="rounded" />
-             <label htmlFor="active" className="cursor-pointer text-sm font-medium">Empleado activo</label>
+              <label htmlFor="active" className="cursor-pointer text-sm font-medium">Empleado activo</label>
             </div>
             <div className="col-span-2">
               <Label>Notas</Label>
@@ -589,47 +587,6 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations }: {
                 </tbody>
               </table>
             </div>
-          </div>
-        )}
-
-        {/* ── BOLSA DE HORAS ── */}
-        {tab === 'bolsa' && (
-          <div className="space-y-4">
-            <BolsaHorasView employee={emp} variant="desktop" />
-
-            <Card className="p-4">
-              <p className="text-xs font-semibold text-gray-700 mb-2">Ajuste manual</p>
-              <p className="text-[11px] text-gray-500 mb-3">
-                Si necesitas registrar horas que no se reflejan en los fichajes (ej: día de baja compensado, festivo trabajado), añade un ajuste manual. Se sumará/restará al cálculo automático.
-              </p>
-              <div className="flex items-center gap-3">
-                <div className="flex-1">
-                  <label className="text-[10px] text-gray-500 uppercase tracking-wide">Saldo manual (horas)</label>
-                  <p className={`text-2xl font-bold tabular-nums ${(emp.hourBank||0)>0?'text-emerald-600':(emp.hourBank||0)<0?'text-red-600':'text-gray-400'}`}>
-                    {(emp.hourBank||0)>0?'+':''}{(emp.hourBank||0).toFixed(1)}h
-                  </p>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <div className="flex gap-1">
-                    <input type="number" step="0.5" placeholder="±h"
-                      className="w-20 border rounded-lg px-2 py-1.5 text-sm"
-                      id={`hourbank-adj-${emp.id}`} />
-                    <button onClick={() => {
-                      const inp = document.getElementById(`hourbank-adj-${emp.id}`) as HTMLInputElement
-                      const val = parseFloat(inp?.value||'0')
-                      if(isNaN(val)) return
-                      update('hourBank', (emp.hourBank||0) + val)
-                      if(inp) inp.value = ''
-                    }} className="px-3 py-1.5 bg-[#7C1A1A] text-white text-xs rounded-lg hover:bg-[#5A1212]">
-                      Añadir
-                    </button>
-                  </div>
-                  <button onClick={()=>update('hourBank',0)} className="text-[10px] text-gray-400 hover:text-red-500">
-                    Resetear a 0
-                  </button>
-                </div>
-              </div>
-            </Card>
           </div>
         )}
 
