@@ -139,37 +139,62 @@ function computePeriodBalance(
   const { employee, periodStart, periodEnd, schedules, templates, vacations } = input
   const contractedWeekly = employee.weeklyHours || 40
 
-  // 1) Horas planificadas: para cada semana que toca el periodo, calcular horas del empleado
-  //    en esa semana y prorratear por días de la semana que caen dentro del periodo.
+  // 1) Iterar semanas: para cada una calcular días que caen en el periodo
+  //    y solo cuenta si la semana tiene horario publicado.
   const weeks = weeksTouchingPeriod(periodStart, periodEnd)
   let scheduledHours = 0
+  let publishedDaysOfPeriod = 0  // días del periodo en semanas SÍ publicadas
   const weeksWithoutSchedule: string[] = []
+
   for (const weekStart of weeks) {
     const sched = schedules.get(weekStart)
+    const daysInThisPeriod = daysOfWeekInPeriod(weekStart, periodStart, periodEnd)
+
     if (!sched) {
       weeksWithoutSchedule.push(weekStart)
-      continue
+      continue  // no sumamos ni contractedHours ni scheduledHours
     }
+
+    // Semana publicada: sumamos scheduled prorrateado y los días al contador
     const workloads = computeWorkloads(sched.cells, templates, [employee])
     const w = workloads.find(x => x.employee_id === employee.id)
     const weekHours = w ? w.assigned_hours : 0
-    // Prorrateo por días que caen dentro del periodo
-    const daysInThisPeriod = daysOfWeekInPeriod(weekStart, periodStart, periodEnd)
     const fraction = daysInThisPeriod / 7
     scheduledHours += weekHours * fraction
+    publishedDaysOfPeriod += daysInThisPeriod
   }
   scheduledHours = Math.round(scheduledHours * 100) / 100
 
-  // 2) Vacaciones aprobadas dentro del periodo
+  // 2) Vacaciones aprobadas dentro del periodo (solo días que caen en semanas publicadas)
   let vacationDays = 0
   for (const v of vacations) {
-    vacationDays += daysInPeriod(v.start_date, v.end_date, periodStart, periodEnd)
+    // Para cada semana publicada, calcular cuántos días de vacaciones caen
+    for (const weekStart of weeks) {
+      if (!schedules.has(weekStart)) continue
+      const weekEnd = (() => {
+        const [y, m, d] = weekStart.split('-').map(Number)
+        const dt = new Date(y, m - 1, d)
+        dt.setDate(dt.getDate() + 6)
+        return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
+      })()
+      // Intersección entre vacación, semana y periodo
+      const start = [v.start_date, weekStart, periodStart].sort().reverse()[0]
+      const end = [v.end_date, weekEnd, periodEnd].sort()[0]
+      if (start <= end) {
+        const [sy, sm, sd] = start.split('-').map(Number)
+        const [ey, em, ed] = end.split('-').map(Number)
+        const startDate = new Date(sy, sm - 1, sd)
+        const endDate = new Date(ey, em - 1, ed)
+        const days = Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
+        vacationDays += Math.max(0, days)
+      }
+    }
   }
   const vacationHours = Math.round((vacationDays * contractedWeekly / 7) * 100) / 100
 
-  // 3) Horas contratadas del periodo: nº de días del periodo / 7 × contrato semanal
-  const totalDaysOfPeriod = daysInPeriod(periodStart, periodEnd, periodStart, periodEnd)
-  const contractedHoursPeriod = Math.round((totalDaysOfPeriod * contractedWeekly / 7) * 100) / 100
+  // 3) Horas contratadas SOLO de los días que están en semanas publicadas
+  //    Si toda la semana está sin publicar, no penaliza.
+  const contractedHoursPeriod = Math.round((publishedDaysOfPeriod * contractedWeekly / 7) * 100) / 100
 
   // 4) Delta
   const delta = Math.round((scheduledHours + vacationHours - contractedHoursPeriod) * 100) / 100
@@ -373,7 +398,6 @@ export async function closePeriodForLocation(
   for (const emp of empsOfLocation) {
     const result = await closePeriodForEmployee(emp, closeDay, options)
     if (result) {
-      // Si ya existía, lo distinguimos comparando closedAt cercano
       const justCreated = result.closedAt &&
         Math.abs(Date.now() - new Date(result.closedAt).getTime()) < 5000
       if (justCreated) created.push(result)
