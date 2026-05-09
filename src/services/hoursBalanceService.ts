@@ -623,7 +623,28 @@ export async function closePeriodForEmployee(
     console.error('[closePeriod] Error:', error)
     return null
   }
-  return rowToClosure(data)
+
+  const closure = rowToClosure(data)
+
+  // Crear notificación in-app para el trabajador (sin bloquear si falla)
+  try {
+    await createNotification(
+      employee.id,
+      'period_closed',
+      'Periodo cerrado',
+      `Tu periodo de ${closure.periodLabel} se ha cerrado. Consulta tu bolsa de horas en la app.`,
+      {
+        closureId: closure.id,
+        periodLabel: closure.periodLabel,
+        periodStart: closure.periodStart,
+        periodEnd: closure.periodEnd,
+      }
+    )
+  } catch (e) {
+    console.warn('[closePeriod] No se pudo crear notificación:', e)
+  }
+
+  return closure
 }
 
 export async function closePeriodForLocation(
