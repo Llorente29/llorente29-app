@@ -10,6 +10,7 @@ import {
   fetchVacationSettings, availableDays, workingDaysBetween,
   requestVacation, updateVacationPaid,
 } from '../../services/vacationsService'
+import { createNotification } from '../../services/notificationsService'
 
 interface Props {
   employee: Employee
@@ -82,6 +83,37 @@ export default function VacacionesTab({ employee }: Props) {
     if (reviewModal.action === 'aprobar') {
       await updateVacationPaid(reviewModal.vac.id, reviewPaid)
     }
+
+    // Crear notificación in-app para el trabajador (sin bloquear si falla)
+    try {
+      const v = reviewModal.vac
+      const tipoLabel = typeLabel(v.type).toLowerCase()
+      const fechaInicio = new Date(v.startDate + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })
+      const fechaFin = new Date(v.endDate + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })
+      const rangoFechas = v.startDate === v.endDate ? `el ${fechaInicio}` : `del ${fechaInicio} al ${fechaFin}`
+
+      if (reviewModal.action === 'aprobar') {
+        await createNotification(
+          employee.id,
+          'vacation_approved',
+          '✅ Ausencia aprobada',
+          `Tu solicitud de ${tipoLabel} ${rangoFechas} ha sido aprobada.`,
+          { vacationId: v.id, type: v.type, startDate: v.startDate, endDate: v.endDate }
+        )
+      } else {
+        const motivoTexto = reviewNotes.trim() ? `\nMotivo: ${reviewNotes.trim()}` : ''
+        await createNotification(
+          employee.id,
+          'vacation_rejected',
+          '❌ Ausencia rechazada',
+          `Tu solicitud de ${tipoLabel} ${rangoFechas} ha sido rechazada.${motivoTexto}`,
+          { vacationId: v.id, type: v.type, startDate: v.startDate, endDate: v.endDate }
+        )
+      }
+    } catch (e) {
+      console.warn('[VacacionesTab] No se pudo crear notificación:', e)
+    }
+
     setReviewModal(null); setReviewNotes(''); setReviewPaid(true)
     await load()
   }
