@@ -8,7 +8,7 @@ import { VACATION_TYPES } from '../../types/personal'
 import {
   fetchVacations, reviewVacation, deleteVacation,
   fetchVacationSettings, availableDays, workingDaysBetween,
-  requestVacation,
+  requestVacation, updateVacationPaid,
 } from '../../services/vacationsService'
 
 interface Props {
@@ -21,6 +21,7 @@ export default function VacacionesTab({ employee }: Props) {
   const [loading, setLoading] = useState(true)
   const [reviewModal, setReviewModal] = useState<{ vac: VacationRequest; action: 'aprobar' | 'rechazar' } | null>(null)
   const [reviewNotes, setReviewNotes] = useState('')
+  const [reviewPaid, setReviewPaid] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
 
   // Form añadir manualmente
@@ -28,6 +29,7 @@ export default function VacacionesTab({ employee }: Props) {
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [notes, setNotes] = useState('')
+  const [paid, setPaid] = useState(true)
 
   async function load() {
     setLoading(true)
@@ -43,6 +45,26 @@ export default function VacacionesTab({ employee }: Props) {
 
   useEffect(() => { load() }, [employee.id])
 
+  // Cuando se abre el modal de revisar, inicializar el toggle paid según el tipo y valor actual
+  useEffect(() => {
+    if (reviewModal) {
+      const currentPaid = reviewModal.vac.paid
+      if (currentPaid !== undefined) {
+        setReviewPaid(currentPaid)
+      } else {
+        // Default según tipo
+        const typeMeta = VACATION_TYPES.find(t => t.id === reviewModal.vac.type)
+        setReviewPaid(typeMeta?.defaultPaid ?? true)
+      }
+    }
+  }, [reviewModal])
+
+  // Cuando cambia el tipo en el modal de añadir, ajustar el default de paid
+  useEffect(() => {
+    const typeMeta = VACATION_TYPES.find(t => t.id === type)
+    setPaid(typeMeta?.defaultPaid ?? true)
+  }, [type])
+
   const saldoVacaciones = useMemo(() => {
     if (!settings) return null
     return availableDays(employee, vacations, 'vacaciones', settings.vacationDaysPerYear)
@@ -56,7 +78,11 @@ export default function VacacionesTab({ employee }: Props) {
   async function doReview() {
     if (!reviewModal) return
     await reviewVacation(reviewModal.vac.id, reviewModal.action === 'aprobar' ? 'aprobada' : 'rechazada', null, reviewNotes, false)
-    setReviewModal(null); setReviewNotes('')
+    // Si se aprueba, actualizar también el flag paid (para que cuente correctamente en bolsa de horas)
+    if (reviewModal.action === 'aprobar') {
+      await updateVacationPaid(reviewModal.vac.id, reviewPaid)
+    }
+    setReviewModal(null); setReviewNotes(''); setReviewPaid(true)
     await load()
   }
 
@@ -66,17 +92,27 @@ export default function VacacionesTab({ employee }: Props) {
     await load()
   }
 
+  async function togglePaid(v: VacationRequest) {
+    const newPaid = !(v.paid ?? true)
+    await updateVacationPaid(v.id, newPaid)
+    await load()
+  }
+
   async function handleAdd() {
     if (!startDate || !endDate) return
     const dias = workingDaysBetween(startDate, endDate)
-    await requestVacation(employee.id, type, startDate, endDate, dias, notes, false)
+    await requestVacation(employee.id, type, startDate, endDate, dias, notes, false, paid)
     // Si lo crea el gestor, lo aprobamos automáticamente
     const refreshed = await fetchVacations(employee.id)
     if (refreshed) {
       const last = refreshed.find(v => v.startDate === startDate && v.endDate === endDate && v.status === 'solicitada')
-      if (last) await reviewVacation(last.id, 'aprobada', null, '', false)
+      if (last) {
+        await reviewVacation(last.id, 'aprobada', null, '', false)
+        // Asegurar que el campo paid queda con el valor que eligió el gestor
+        await updateVacationPaid(last.id, paid)
+      }
     }
-    setShowAdd(false); setStartDate(''); setEndDate(''); setNotes(''); setType('vacaciones')
+    setShowAdd(false); setStartDate(''); setEndDate(''); setNotes(''); setType('vacaciones'); setPaid(true)
     await load()
   }
 
@@ -130,6 +166,8 @@ export default function VacacionesTab({ employee }: Props) {
         <div className="space-y-2">
           {vacations.map(v => {
             const badge = statusBadge(v.status)
+            const isPaid = v.paid ?? true
+            const isApproved = v.status === 'aprobada'
             return (
               <Card key={v.id} className="p-3">
                 <div className="flex items-start gap-3">
@@ -137,6 +175,19 @@ export default function VacacionesTab({ employee }: Props) {
                     <div className="flex items-center gap-2 flex-wrap mb-1">
                       <p className="font-semibold text-gray-900 text-sm">{typeLabel(v.type)}</p>
                       <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${badge.cls}`}>{badge.label}</span>
+                      {isApproved && (
+                        <button
+                          onClick={() => togglePaid(v)}
+                          title={isPaid ? 'Retribuida (cuenta como horas trabajadas en bolsa). Click para cambiar.' : 'No retribuida (descuenta del contrato del periodo). Click para cambiar.'}
+                          className={`text-[10px] font-medium px-2 py-0.5 rounded-full transition cursor-pointer ${
+                            isPaid
+                              ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-300'
+                          }`}
+                        >
+                          {isPaid ? '💰 Retribuida' : '🚫 Sin sueldo'}
+                        </button>
+                      )}
                       {v.alertLeadTime && (
                         <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">⚠ Antelación corta</span>
                       )}
@@ -190,13 +241,34 @@ export default function VacacionesTab({ employee }: Props) {
               {typeLabel(reviewModal.vac.type)} · {reviewModal.vac.days} días
             </p>
 
+            {reviewModal.action === 'aprobar' && (
+              <div className="bg-gray-50 rounded-lg p-3 mb-3">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={reviewPaid}
+                    onChange={e => setReviewPaid(e.target.checked)}
+                    className="w-4 h-4 rounded accent-[#7C1A1A]"
+                  />
+                  <span className="text-sm font-medium">
+                    {reviewPaid ? '💰 Ausencia retribuida' : '🚫 Ausencia sin sueldo'}
+                  </span>
+                </label>
+                <p className="text-[11px] text-gray-500 mt-1.5 pl-6">
+                  {reviewPaid
+                    ? 'Cuenta como horas trabajadas en la bolsa de horas (no penaliza al trabajador).'
+                    : 'No cuenta como trabajada. Descuenta del contrato del periodo (permiso sin sueldo).'}
+                </p>
+              </div>
+            )}
+
             <label className="text-xs text-gray-500 block mb-1">Comentario (opcional)</label>
             <textarea value={reviewNotes} onChange={e => setReviewNotes(e.target.value)}
               placeholder={reviewModal.action === 'aprobar' ? 'Ej: Aprobado, disfrútalas' : 'Ej: No es buen momento, plantéalo en otra fecha'}
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm h-20 resize-none mb-3" />
 
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => { setReviewModal(null); setReviewNotes('') }} className="flex-1">Cancelar</Button>
+              <Button variant="outline" onClick={() => { setReviewModal(null); setReviewNotes(''); setReviewPaid(true) }} className="flex-1">Cancelar</Button>
               <Button onClick={doReview} className="flex-1">
                 {reviewModal.action === 'aprobar' ? 'Aprobar' : 'Rechazar'}
               </Button>
@@ -230,12 +302,31 @@ export default function VacacionesTab({ employee }: Props) {
               </div>
             </div>
 
+            <div className="bg-gray-50 rounded-lg p-3 mb-3">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={paid}
+                  onChange={e => setPaid(e.target.checked)}
+                  className="w-4 h-4 rounded accent-[#7C1A1A]"
+                />
+                <span className="text-sm font-medium">
+                  {paid ? '💰 Ausencia retribuida' : '🚫 Ausencia sin sueldo'}
+                </span>
+              </label>
+              <p className="text-[11px] text-gray-500 mt-1.5 pl-6">
+                {paid
+                  ? 'Cuenta como horas trabajadas en la bolsa de horas.'
+                  : 'No cuenta como trabajada. Descuenta del contrato del periodo.'}
+              </p>
+            </div>
+
             <label className="text-xs text-gray-500 block mb-1">Notas</label>
             <textarea value={notes} onChange={e => setNotes(e.target.value)}
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm h-16 resize-none mb-3" />
 
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => { setShowAdd(false); setStartDate(''); setEndDate(''); setNotes('') }} className="flex-1">Cancelar</Button>
+              <Button variant="outline" onClick={() => { setShowAdd(false); setStartDate(''); setEndDate(''); setNotes(''); setPaid(true) }} className="flex-1">Cancelar</Button>
               <Button onClick={handleAdd} disabled={!startDate || !endDate} className="flex-1">Añadir</Button>
             </div>
           </div>
