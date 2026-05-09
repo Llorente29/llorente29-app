@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { useApp } from '../context/AppContext'
 import { Card } from '../components/ui'
+import type { Location } from '../types'
 
 // Dashboard placeholder
 export function DashboardPage() {
@@ -69,6 +71,7 @@ export function TSpoonSettingsPage() { return <PlaceholderPage title="Configurac
 
 export function LocationsPage() {
   const { locations, setLocations } = useApp()
+  const [expandedId, setExpandedId] = useState<string | null>(null)
 
   function addLocation() {
     setLocations(prev => [...prev, {
@@ -77,7 +80,13 @@ export function LocationsPage() {
       address: '',
       phone: '',
       active: true,
+      hoursBalanceCloseDay: 25,
+      hoursBalanceSyncWithGestoria: true,
     }])
+  }
+
+  function updateLocation(id: string, patch: Partial<Location>) {
+    setLocations(prev => prev.map(l => l.id === id ? { ...l, ...patch } : l))
   }
 
   return (
@@ -94,48 +103,156 @@ export function LocationsPage() {
       <div className="space-y-3">
         {locations.length === 0 ? (
           <Card className="p-8 text-center"><p className="text-gray-500">Sin locales. Añade uno arriba.</p></Card>
-        ) : locations.map(loc => (
-          <Card key={loc.id} className="p-4">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div>
-                <label className="text-xs text-gray-500 uppercase font-medium">Nombre</label>
-                <input
-                  value={loc.name}
-                  onChange={e => setLocations(prev => prev.map(l => l.id === loc.id ? { ...l, name: e.target.value } : l))}
-                  className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 uppercase font-medium">Dirección</label>
-                <input
-                  value={loc.address}
-                  onChange={e => setLocations(prev => prev.map(l => l.id === loc.id ? { ...l, address: e.target.value } : l))}
-                  className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
-                  placeholder="Calle, número..."
-                />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 uppercase font-medium">Teléfono</label>
-                <input
-                  value={loc.phone}
-                  onChange={e => setLocations(prev => prev.map(l => l.id === loc.id ? { ...l, phone: e.target.value } : l))}
-                  className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
-                  placeholder="600000000"
-                />
-              </div>
-              <div className="flex items-end gap-2">
-                <div className="flex items-center gap-2 mb-2">
-                  <input type="checkbox" checked={loc.active} onChange={e => setLocations(prev => prev.map(l => l.id === loc.id ? { ...l, active: e.target.checked } : l))} />
-                  <span className="text-sm">Activo</span>
+        ) : locations.map(loc => {
+          const isExpanded = expandedId === loc.id
+          const closeDay = loc.hoursBalanceCloseDay ?? 25
+          const syncGestoria = loc.hoursBalanceSyncWithGestoria ?? true
+          return (
+            <Card key={loc.id} className="p-4">
+              {/* Datos básicos del local */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div>
+                  <label className="text-xs text-gray-500 uppercase font-medium">Nombre</label>
+                  <input
+                    value={loc.name}
+                    onChange={e => updateLocation(loc.id, { name: e.target.value })}
+                    className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
+                  />
                 </div>
-                <button onClick={() => { if (confirm('¿Eliminar este local?')) setLocations(prev => prev.filter(l => l.id !== loc.id)) }}
-                  className="mb-2 px-3 py-1.5 text-xs text-red-600 border border-red-200 rounded-lg hover:bg-red-50">
-                  Eliminar
-                </button>
+                <div>
+                  <label className="text-xs text-gray-500 uppercase font-medium">Dirección</label>
+                  <input
+                    value={loc.address}
+                    onChange={e => updateLocation(loc.id, { address: e.target.value })}
+                    className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
+                    placeholder="Calle, número..."
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 uppercase font-medium">Teléfono</label>
+                  <input
+                    value={loc.phone}
+                    onChange={e => updateLocation(loc.id, { phone: e.target.value })}
+                    className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
+                    placeholder="600000000"
+                  />
+                </div>
+                <div className="flex items-end gap-2">
+                  <div className="flex items-center gap-2 mb-2">
+                    <input type="checkbox" checked={loc.active} onChange={e => updateLocation(loc.id, { active: e.target.checked })} />
+                    <span className="text-sm">Activo</span>
+                  </div>
+                  <button onClick={() => { if (confirm('¿Eliminar este local?')) setLocations(prev => prev.filter(l => l.id !== loc.id)) }}
+                    className="mb-2 px-3 py-1.5 text-xs text-red-600 border border-red-200 rounded-lg hover:bg-red-50">
+                    Eliminar
+                  </button>
+                </div>
               </div>
-            </div>
-          </Card>
-        ))}
+
+              {/* Sección de configuración avanzada (plegable) */}
+              <div className="mt-3 pt-3 border-t">
+                <button
+                  onClick={() => setExpandedId(isExpanded ? null : loc.id)}
+                  className="text-xs text-[#7C1A1A] hover:underline font-medium"
+                >
+                  {isExpanded ? '▼ Ocultar configuración avanzada' : '▶ Configuración avanzada'}
+                </button>
+
+                {isExpanded && (
+                  <div className="mt-3 space-y-4">
+                    {/* Bolsa de horas */}
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <p className="text-xs font-semibold mb-2" style={{ color: '#7C1A1A' }}>
+                        💰 Configuración de bolsa de horas
+                      </p>
+
+                      <label className="flex items-start gap-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={syncGestoria}
+                          onChange={e => updateLocation(loc.id, { hoursBalanceSyncWithGestoria: e.target.checked })}
+                          className="mt-0.5 w-4 h-4 rounded accent-[#7C1A1A]"
+                        />
+                        <div className="flex-1">
+                          <span className="text-sm font-medium">
+                            Sincronizar cierre con envío a gestoría
+                          </span>
+                          <p className="text-[11px] text-gray-500">
+                            El periodo de bolsa de horas se cierra el mismo día que se envía el informe a gestoría (configurable en "Informes Gestoría").
+                          </p>
+                        </div>
+                      </label>
+
+                      {!syncGestoria && (
+                        <div className="mt-3 pl-6">
+                          <label className="text-xs text-gray-700 block mb-1">
+                            Día de cierre del periodo (1-31)
+                          </label>
+                          <input
+                            type="number"
+                            min={1}
+                            max={31}
+                            value={closeDay}
+                            onChange={e => {
+                              const v = parseInt(e.target.value, 10)
+                              if (isNaN(v)) return
+                              const clamped = Math.max(1, Math.min(31, v))
+                              updateLocation(loc.id, { hoursBalanceCloseDay: clamped })
+                            }}
+                            className="w-20 border rounded-lg px-3 py-1.5 text-sm"
+                          />
+                          <p className="text-[11px] text-gray-500 mt-1">
+                            El periodo va del día siguiente al cierre del mes anterior, hasta el día de cierre del mes actual.
+                            Ej: si pones 25, el periodo "Mayo" abarca del 26 abril al 25 mayo.
+                          </p>
+                        </div>
+                      )}
+
+                      {syncGestoria && (
+                        <p className="mt-2 pl-6 text-[11px] text-gray-500">
+                          ℹ️ Si aún no has configurado el día de envío a gestoría, ve a "Informes Gestoría" en el menú lateral.
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Geolocalización (si la tienes configurada) */}
+                    {(loc.lat !== undefined || loc.lng !== undefined) && (
+                      <div className="bg-gray-50 rounded-lg p-3">
+                        <p className="text-xs font-semibold mb-2 text-gray-700">
+                          📍 Geolocalización del kiosko
+                        </p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[10px] text-gray-500 uppercase font-medium">Latitud</label>
+                            <input
+                              type="number"
+                              step="any"
+                              value={loc.lat ?? ''}
+                              onChange={e => updateLocation(loc.id, { lat: e.target.value ? parseFloat(e.target.value) : undefined })}
+                              className="mt-1 w-full border rounded-lg px-3 py-1.5 text-sm"
+                              placeholder="40.4168"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-gray-500 uppercase font-medium">Longitud</label>
+                            <input
+                              type="number"
+                              step="any"
+                              value={loc.lng ?? ''}
+                              onChange={e => updateLocation(loc.id, { lng: e.target.value ? parseFloat(e.target.value) : undefined })}
+                              className="mt-1 w-full border rounded-lg px-3 py-1.5 text-sm"
+                              placeholder="-3.7038"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </Card>
+          )
+        })}
       </div>
     </div>
   )
