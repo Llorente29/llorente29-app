@@ -18,6 +18,7 @@ import SolicitudesPendientesPage from './pages/SolicitudesPendientesPage'
 import AhoraMismoPage from './pages/AhoraMismoPage'
 import AvisosSettingsPage from './pages/AvisosSettingsPage'
 import TurnosAbiertosPage from './pages/TurnosAbiertosPage'
+import BolsaHorasPage from './pages/BolsaHorasPage'
 import TrabajadorApp from './pages/trabajador/TrabajadorApp'
 import {
   DashboardPage, ScheduledPage, TemplatesPage,
@@ -38,6 +39,7 @@ const NAV: { id: Page; label: string; icon: string; section?: string }[] = [
   { id: 'calendario',         label: 'Calendario',          icon: '📅' },
   { id: 'plantilla_turnos',   label: 'Plantilla turnos',    icon: '🗂️' },
   { id: 'informes_personal',  label: 'Informes Gestoría',   icon: '📄' },
+  { id: 'bolsa_horas',        label: 'Bolsa de horas',      icon: '💰' },
   { id: 'tasks',              label: 'Tareas',              icon: '✅', section: 'Operaciones' },
   { id: 'scheduled',          label: 'Programadas',         icon: '🔁' },
   { id: 'templates',          label: 'Plantillas',          icon: '📋' },
@@ -62,6 +64,7 @@ const PAGE_TITLES: Record<Page, string> = {
   calendario: 'Calendario de Horarios',
   plantilla_turnos: 'Plantilla de turnos',
   informes_personal: 'Informes Gestoría',
+  bolsa_horas: 'Bolsa de horas',
   tasks: 'Tareas', scheduled: 'Programadas', templates: 'Plantillas',
   incidents: 'Incidencias', locations: 'Locales', audits: 'Auditorías',
   history: 'Historial', tspoon: 'Fichas Técnicas', inventory: 'Inventario',
@@ -83,6 +86,7 @@ function renderPage(page: Page) {
     case 'calendario':        return <CalendarioPage />
     case 'plantilla_turnos':  return <PlantillaTurnosPage />
     case 'informes_personal': return <InformesPage />
+    case 'bolsa_horas':       return <BolsaHorasPage />
     case 'tasks':             return <TasksPage />
     case 'scheduled':         return <ScheduledPage />
     case 'templates':         return <TemplatesPage />
