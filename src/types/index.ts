@@ -72,7 +72,6 @@ export interface Employee {
   clockEntries: ClockEntry[]; documents: StaffDocument[]; vacations: Vacation[]
   formations: { id: string; name: string; date: string; expiry?: string; issuer?: string }[]
   availability?: { lunes:string[]; martes:string[]; miercoles:string[]; jueves:string[]; viernes:string[]; sabado:string[]; domingo:string[] }
-  hourBank?: number
   // === Campos para fichaje en kiosko/móvil ===
   pin?: string                       // PIN de 4 dígitos para fichar
   assignedLocations?: string[]       // locales donde puede fichar (si vacío, usa locationId)
