@@ -316,7 +316,7 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations }: {
             </div>
             <div className="col-span-2 flex items-center gap-2">
               <input type="checkbox" id="active" checked={emp.active} onChange={e => update('active', e.target.checked)} className="rounded" />
-              <Label htmlFor="active" className="cursor-pointer">Empleado activo</Label>
+             <label htmlFor="active" className="cursor-pointer text-sm font-medium">Empleado activo</label>
             </div>
             <div className="col-span-2">
               <Label>Notas</Label>
