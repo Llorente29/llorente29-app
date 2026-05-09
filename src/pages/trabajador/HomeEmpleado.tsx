@@ -1,6 +1,7 @@
 // src/pages/trabajador/HomeEmpleado.tsx
 import type { Employee } from '../../types'
 import { hasOpenShift } from '../../services/fichajeKiosko'
+import NotificationBell from '../../components/NotificationBell'
 
 type SubPage = 'home' | 'fichar' | 'horario' | 'fichajes' | 'documentos' | 'vacaciones' | 'bolsa' | 'turnos'
 
@@ -80,17 +81,20 @@ export default function HomeEmpleado({ employee, onNavigate, onLogout, showBolsa
     <div className="min-h-screen bg-gradient-to-br from-[#F5E9D9] via-white to-[#F5E9D9] pb-8">
       {/* Header */}
       <div className="px-4 pt-5 pb-4">
-        <div className="flex items-start justify-between">
-          <div>
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
             <p className="text-xs text-gray-400 uppercase tracking-wide">{greeting}</p>
             <p className="text-xl font-bold text-gray-900" style={{ fontFamily: 'Instrument Serif, serif' }}>{employee.name.split(' ')[0]}</p>
           </div>
-          <button
-            onClick={onLogout}
-            className="text-xs px-3 py-1.5 rounded-full bg-white border border-gray-200 text-gray-500 hover:text-gray-700"
-          >
-            Salir
-          </button>
+          <div className="flex items-center gap-1 shrink-0">
+            <NotificationBell employeeId={employee.id} />
+            <button
+              onClick={onLogout}
+              className="text-xs px-3 py-1.5 rounded-full bg-white border border-gray-200 text-gray-500 hover:text-gray-700"
+            >
+              Salir
+            </button>
+          </div>
         </div>
 
         {open && (
