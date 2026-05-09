@@ -17,6 +17,7 @@ interface VacRow {
   review_notes: string | null
   alert_min_staff: boolean | null
   alert_lead_time: boolean | null
+  paid: boolean | null
   created_at: string
 }
 
@@ -36,6 +37,7 @@ function rowToVacation(r: VacRow): VacationRequest {
     reviewNotes: r.review_notes || undefined,
     alertMinStaff: r.alert_min_staff ?? undefined,
     alertLeadTime: r.alert_lead_time ?? undefined,
+    paid: r.paid ?? true,
     createdAt: r.created_at,
   }
 }
@@ -65,6 +67,7 @@ export async function requestVacation(
   days: number,
   notes: string,
   alertLeadTime: boolean,
+  paid: boolean = true,
 ): Promise<VacationRequest | null> {
   if (!supabase) return null
   const { data, error } = await supabase.from('vacations').insert({
@@ -77,6 +80,7 @@ export async function requestVacation(
     notes: notes || null,
     requested_at: new Date().toISOString(),
     alert_lead_time: alertLeadTime,
+    paid,
   }).select().single()
   if (error) { console.error('requestVacation:', error); throw new Error('Error solicitando: ' + error.message) }
   return rowToVacation(data as VacRow)
@@ -98,6 +102,13 @@ export async function reviewVacation(
     alert_min_staff: alertMinStaff,
   }).eq('id', id)
   if (error) { console.error('reviewVacation:', error); return false }
+  return true
+}
+
+export async function updateVacationPaid(id: string, paid: boolean): Promise<boolean> {
+  if (!supabase) return false
+  const { error } = await supabase.from('vacations').update({ paid }).eq('id', id)
+  if (error) { console.error('updateVacationPaid:', error); return false }
   return true
 }
 
