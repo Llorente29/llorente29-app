@@ -307,87 +307,86 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations }: {
               <Input className="mt-1" type="text" inputMode="numeric" maxLength={4}
                 value={emp.pin || ''}
                 onChange={e => update('pin', e.target.value.replace(/\D/g, '').slice(0, 4))}
-                placeholder="0000" />
-              <p className="text-[10px] text-gray-400 mt-1">PIN para fichar en el kiosko. No compartir.</p>
-            </div>
-            <div className="col-span-2 flex items-center gap-3">
-              <input type="checkbox" id="active" checked={emp.active} onChange={e => update('active', e.target.checked)} className="rounded" />
-              <label htmlFor="active" className="text-sm cursor-pointer">Activo (desmarcar para dar de baja)</label>
-            </div>
-            <div className="col-span-2">
-              <Label>Notas</Label>
-              <Textarea className="mt-1" rows={3} value={emp.notes} onChange={e => update('notes', e.target.value)} placeholder="Notas internas..." />
-            </div>
+                placeholder="0000" /></div>
           </div>
         )}
 
         {/* ── FICHAJES ── */}
         {tab === 'fichajes' && (
           <div className="space-y-4">
-            <Card className="p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium">{isWorking ? '🟢 Trabajando ahora' : '⚪ Fuera de turno'}</p>
-                  <p className="text-xs text-gray-500">Hoy: {hoursToday.toFixed(1)}h</p>
-                  {todaySchedule?.active && todaySchedule.start && (
-                    <p className="text-xs font-medium text-teal-600 mt-0.5">
-                      Turno: {todaySchedule.start} – {todaySchedule.end} · Fichar desde: {(() => {
-                        const m = getScheduledMinutes(todaySchedule.start) - 10
-                        return `${Math.floor(m / 60).toString().padStart(2, '0')}:${(m % 60).toString().padStart(2, '0')}`
-                      })()}
-                    </p>
-                  )}
-                  {todaySchedule?.active === false && (
-                    <p className="text-xs text-gray-400 mt-0.5">Hoy no trabaja según horario</p>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <Button size="sm" onClick={() => handleClock('entrada')} disabled={clocking || isWorking} className="bg-emerald-600 hover:bg-emerald-700 text-white">
-                    {clocking ? '📍...' : '▶ Entrada'}
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => handleClock('salida')} disabled={clocking || !isWorking}>
-                    ⏹ Salida
-                  </Button>
-                </div>
-              </div>
-              {clockWarn && (
-                <Alert type={clockWarn.type === 'blocked' ? 'error' : clockWarn.type === 'rounded' ? 'warning' : 'info'}>
-                  {clockWarn.type === 'blocked' ? '🚫 ' : clockWarn.type === 'rounded' ? '🔄 ' : '✅ '}{clockWarn.msg}
-                </Alert>
-              )}
-            </Card>
+            {/* Estado actual */}
+            <div className="grid grid-cols-3 gap-3">
+              <Card className="p-3">
+                <p className="text-xs text-gray-500">Estado</p>
+                <p className="text-sm font-bold mt-1">
+                  {isWorking ? <span className="text-emerald-600">🟢 Trabajando</span> : <span className="text-gray-400">⚫ No</span>}
+                </p>
+              </Card>
+              <Card className="p-3">
+                <p className="text-xs text-gray-500">Hoy</p>
+                <p className="text-sm font-bold mt-1">{hoursToday.toFixed(1)}h</p>
+              </Card>
+              <Card className="p-3">
+                <p className="text-xs text-gray-500">Esta semana</p>
+                <p className="text-sm font-bold mt-1">
+                  {emp.clockEntries.filter(e => {
+                    const d = new Date(e.datetime)
+                    const now = new Date()
+                    const diff = (now.getTime() - d.getTime()) / 86400000
+                    return diff <= 7
+                  }).length / 2}j
+                </p>
+              </Card>
+            </div>
 
-            <div className="border rounded-2xl overflow-hidden">
-              <table className="w-full text-sm">
-                <thead><tr className="border-b bg-gray-50">
-                  <th className="p-3 text-left text-xs font-semibold text-gray-500">Tipo</th>
-                  <th className="p-3 text-left text-xs font-semibold text-gray-500">Fecha y hora</th>
-                  <th className="p-3 text-left text-xs font-semibold text-gray-500 hidden sm:table-cell">Turno</th>
-                  <th className="p-3 text-left text-xs font-semibold text-gray-500 hidden sm:table-cell">GPS</th>
-                </tr></thead>
-                <tbody>
-                  {emp.clockEntries.length === 0 ? (
-                    <tr><td colSpan={4} className="p-8 text-center text-gray-400 text-sm">Sin fichajes</td></tr>
-                  ) : emp.clockEntries.map(ce => (
-                    <tr key={ce.id} className="border-b last:border-0 hover:bg-gray-50">
-                      <td className="p-3">
-                        <Badge color={ce.type === 'entrada' ? 'green' : 'red'}>
-                          {ce.type === 'entrada' ? '▶ Entrada' : '⏹ Salida'}
-                        </Badge>
-                      </td>
-                      <td className="p-3">
-                        <span className="font-medium">{new Date(ce.datetime).toLocaleString('es-ES')}</span>
-                        {ce.roundingApplied && <Badge color="yellow" className="ml-1">redondeado</Badge>}
-                        {ce.scheduled && !ce.roundingApplied && (ce.diffMinutes || 0) > 10 && (
-                          <Badge color="red" className="ml-1">+{ce.diffMinutes}min</Badge>
-                        )}
-                      </td>
-                      <td className="p-3 text-xs text-gray-500 hidden sm:table-cell">{ce.scheduled || '—'}</td>
-                      <td className="p-3 text-xs text-gray-500 hidden sm:table-cell">{ce.address || '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            {/* Avisos del fichaje */}
+            {clockWarn && (
+              <Alert variant={clockWarn.type === 'blocked' ? 'error' : clockWarn.type === 'rounded' ? 'success' : 'warning'}>
+                {clockWarn.msg}
+              </Alert>
+            )}
+
+            {/* Botones de fichaje */}
+            <div className="flex gap-2">
+              <Button onClick={() => handleClock('entrada')} disabled={isWorking || clocking} variant="primary" className="flex-1">
+                {clocking ? '⏳ Fichando...' : '🟢 Fichar entrada'}
+              </Button>
+              <Button onClick={() => handleClock('salida')} disabled={!isWorking || clocking} variant="secondary" className="flex-1">
+                {clocking ? '⏳ Fichando...' : '🔴 Fichar salida'}
+              </Button>
+            </div>
+
+            {/* Historial */}
+            <div>
+              <Label className="mb-2 block">Historial de fichajes</Label>
+              {emp.clockEntries.length === 0 ? (
+                <p className="text-sm text-gray-400 italic">Sin fichajes aún.</p>
+              ) : (
+                <div className="border rounded-xl overflow-hidden max-h-72 overflow-y-auto">
+                  <table className="w-full text-sm">
+                    <tbody>
+                      {emp.clockEntries.slice(0, 30).map((e) => (
+                        <tr key={e.id} className="border-b last:border-0 hover:bg-gray-50">
+                          <td className="p-2 w-2">
+                            <span className={`inline-block w-2 h-2 rounded-full ${e.type === 'entrada' ? 'bg-emerald-500' : 'bg-red-500'}`}/>
+                          </td>
+                          <td className="p-2 capitalize text-xs">{e.type}</td>
+                          <td className="p-2 text-xs font-mono">
+                            {new Date(e.datetime).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                          </td>
+                          <td className="p-2 text-xs text-gray-400 hidden md:table-cell">
+                            {e.address ? `📍 ${e.address.slice(0, 25)}...` : '—'}
+                          </td>
+                          <td className="p-2 text-right">
+                            {e.roundingApplied && <Badge color="green">↺</Badge>}
+                            {e.diffMinutes != null && Math.abs(e.diffMinutes) > 10 && <Badge color="amber">+{e.diffMinutes}m</Badge>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -423,6 +422,31 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations }: {
               <div>
                 <Label>Horas semanales contratadas</Label>
                 <Input className="mt-1" type="number" step="0.25" value={emp.weeklyHours} onChange={e => update('weeklyHours', parseFloat(e.target.value) || 0)} />
+              </div>
+              <div>
+                <Label>Saldo inicial bolsa de horas</Label>
+                <Input
+                  className="mt-1"
+                  type="number"
+                  step="0.25"
+                  value={emp.initialHoursBalance ?? 0}
+                  onChange={e => update('initialHoursBalance', parseFloat(e.target.value) || 0)}
+                  placeholder="0"
+                />
+                <p className="text-[11px] text-gray-500 mt-1">
+                  Positivo: la empresa le debe horas. Negativo: él debe.
+                </p>
+              </div>
+              <div className="col-span-2">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={emp.showHoursBalance ?? true}
+                    onChange={e => update('showHoursBalance', e.target.checked)}
+                    className="w-4 h-4 rounded accent-[#7C1A1A]"
+                  />
+                  <span className="text-sm">El trabajador ve su bolsa de horas en la app</span>
+                </label>
               </div>
               <div>
                 <Label>Código en cuadrante (T1, T2, T3...)</Label>
