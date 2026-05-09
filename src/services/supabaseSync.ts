@@ -96,7 +96,6 @@ interface EmployeeRow {
   assigned_locations: string[] | null
   weekly_schedule: unknown
   availability: unknown
-  hour_bank: number | null
   // === Campos del scheduler (sub-fase 3.2) ===
   shift_code: string | null
   shift_period: ShiftPeriod | null
@@ -139,7 +138,6 @@ function rowToEmployee(r: EmployeeRow): Employee {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     availability: (r.availability as any) || undefined,
-    hourBank: r.hour_bank ?? 0,
     clockEntries: [],   // se cargan aparte por si hay muchos
     documents: [],
     vacations: [],
@@ -181,7 +179,6 @@ function employeeToRow(e: Employee): Partial<EmployeeRow> {
     weekly_schedule: e.weeklySchedule as any,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     availability: e.availability as any,
-    hour_bank: e.hourBank ?? 0,
     // === Campos del scheduler ===
     shift_code: e.shiftCode || null,
     shift_period: e.shiftPeriod || null,
