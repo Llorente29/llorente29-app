@@ -6,11 +6,15 @@ export type Page =
   | 'inventory' | 'tspoon_settings' | 'ventas_analisis' | 'prediccion_personal'
   | 'zonas_pedido' | 'kiosko_fichaje' | 'solicitudes_pendientes'
   | 'ahora_mismo' | 'turnos_abiertos'
+  | 'bolsa_horas'
 
 export interface Location {
   id: string; name: string; address: string; phone: string; active: boolean
   // Coordenadas para geofencing del kiosko
   lat?: number; lng?: number
+  // === Configuración de bolsa de horas ===
+  hoursBalanceCloseDay?: number              // día del mes en que cierra el periodo (1-31, default 25)
+  hoursBalanceSyncWithGestoria?: boolean     // si true, usa el día configurado en Informes Gestoría
 }
 
 export interface DaySchedule { active: boolean; start: string; end: string }
@@ -72,6 +76,9 @@ export interface Employee {
   shiftCode?: string                 // código corto T1/T2/T3 para visualización en matriz
   shiftPeriod?: ShiftPeriod          // franja habitual
   restPattern?: RestPattern          // patrón de descanso fijo
+  // === Campos para bolsa de horas ===
+  initialHoursBalance?: number       // saldo inicial al empezar a usar Foodint (puede ser negativo)
+  showHoursBalance?: boolean         // si true, el trabajador ve su saldo en su app móvil (default true)
 }
 
 export interface ChecklistItem {
