@@ -4,6 +4,7 @@
 import { supabase } from '../lib/supabase'
 import type { Employee } from '../types'
 import type { ShiftTemplate, Schedule } from '../types/scheduler'
+import { createNotification } from './notificationsService'
 import {
   type ClosureResolution,
   type MonthlyBalanceClosure,
