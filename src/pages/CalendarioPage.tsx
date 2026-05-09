@@ -5,6 +5,7 @@
 // - Matriz turnos × días con celdas editables
 // - Resumen de carga por empleado
 // - Sugerencias para huecos sin cubrir
+// - Horario individualizado por empleado (plegable)
 
 import { useEffect, useMemo, useState } from 'react'
 import { useApp } from '../context/AppContext'
@@ -68,18 +69,15 @@ export default function CalendarioPage() {
   const [dirty, setDirty] = useState(false)
   const [gapModal, setGapModal] = useState<UncoveredSlot | null>(null)
 
-  // Empleados del local
   const employees = useMemo(
     () => staff.filter(e => e.active && (e.locationId === locationId || (e.assignedLocations || []).includes(locationId))),
     [staff, locationId]
   )
 
-  // Default: primer local
   useEffect(() => {
     if (!locationId && locations.length > 0) setLocationId(locations[0].id)
   }, [locations, locationId])
 
-  // Cargar templates + schedule de la semana seleccionada
   async function refresh() {
     if (!locationId) return
     setLoading(true)
@@ -100,13 +98,11 @@ export default function CalendarioPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locationId, weekStart])
 
-  // Workloads en tiempo real
   const workloads = useMemo<EmployeeWorkload[]>(
     () => computeWorkloads(cells, templates, employees),
     [cells, templates, employees]
   )
 
-  // Huecos en tiempo real
   const uncovered = useMemo<UncoveredSlot[]>(() => {
     const list: UncoveredSlot[] = []
     for (const t of templates) {
@@ -190,14 +186,12 @@ export default function CalendarioPage() {
 
   async function doPublish() {
     if (!scheduleRow) {
-      // Guardar primero
       await doSave()
     }
     if (scheduleRow?.id) {
       await publishSchedule(scheduleRow.id)
       await refresh()
     } else {
-      // Guardar de nuevo y publicar
       const saved = await upsertSchedule({
         location_id: locationId,
         week_start: weekStart,
@@ -224,7 +218,6 @@ export default function CalendarioPage() {
 
   return (
     <div className="space-y-4">
-      {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3 bg-white border rounded-lg p-3">
         <select
           value={locationId}
@@ -285,7 +278,6 @@ export default function CalendarioPage() {
         </button>
       </div>
 
-      {/* Status bar */}
       <div className="flex items-center gap-3 text-xs text-gray-600">
         {scheduleRow?.status === 'published' && (
           <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-800 font-medium">
@@ -310,7 +302,6 @@ export default function CalendarioPage() {
         )}
       </div>
 
-      {/* Matriz */}
       {templates.length > 0 && (
         <div className="bg-white border rounded-lg overflow-x-auto">
           <table className="w-full text-sm">
@@ -375,18 +366,24 @@ export default function CalendarioPage() {
         </div>
       )}
 
-      {/* Resumen carga empleados */}
       {employees.length > 0 && templates.length > 0 && (
         <WorkloadSummary workloads={workloads} />
       )}
 
-      {/* Huecos sin cubrir */}
+      {employees.length > 0 && templates.length > 0 && (
+        <EmployeeSchedules
+          employees={employees}
+          templates={templates}
+          cells={cells}
+          weekStart={weekStart}
+        />
+      )}
+
       {uncovered.length > 0 && (
         <UncoveredPanel
           uncovered={uncovered}
           templates={templates}
           onClickGap={(g) => {
-            // Antes de abrir, sincronizamos el snapshot de horas
             const map = new Map<string, number>()
             for (const w of workloads) map.set(w.employee_id, w.assigned_hours)
             setGlobalAssignedHoursSnapshot(map)
@@ -395,7 +392,6 @@ export default function CalendarioPage() {
         />
       )}
 
-      {/* Modal de sugerencias */}
       {gapModal && (
         <SuggestionsModal
           gap={gapModal}
@@ -444,7 +440,6 @@ function Cell({
   const isGap = needed > 0 && assignedIds.length < needed
   const isOverFilled = assignedIds.length > needed
 
-  // Color de fondo
   let bg = 'bg-white'
   if (needed === 0) bg = 'bg-gray-50'
   else if (isGap) bg = 'bg-red-50'
@@ -743,4 +738,154 @@ function SuggestionsModal({ gap, template, weekStart, cells, employees, onClose,
       </div>
     </div>
   )
+}
+
+/* =====================================================
+   Horario individualizado por empleado
+   ===================================================== */
+
+interface EmployeeSchedulesProps {
+  employees: Employee[]
+  templates: ShiftTemplate[]
+  cells: ScheduleCells
+  weekStart: string
+}
+
+interface EmpDayShift {
+  templateId: string
+  label: string
+  start: string
+  end: string
+  hours: number
+  crossesMidnight: boolean
+}
+
+function EmployeeSchedules({ employees, templates, cells }: EmployeeSchedulesProps) {
+  const [openId, setOpenId] = useState<string | null>(null)
+  const tplById = useMemo(() => new Map(templates.map(t => [t.id, t])), [templates])
+
+  const detailByEmp = useMemo(() => {
+    const map = new Map<string, { shifts: Record<string, EmpDayShift[]>; total: number }>()
+    for (const emp of employees) {
+      const shifts: Record<string, EmpDayShift[]> = {}
+      let total = 0
+      for (const tid of Object.keys(cells)) {
+        const t = tplById.get(tid)
+        if (!t) continue
+        for (const dk of Object.keys(cells[tid])) {
+          if (!cells[tid][dk].includes(emp.id)) continue
+          const start = t.start_time.slice(0, 5)
+          const end = t.end_time.slice(0, 5)
+          const [sh, sm] = start.split(':').map(Number)
+          const [eh, em] = end.split(':').map(Number)
+          const crossesMidnight = (eh * 60 + em) <= (sh * 60 + sm)
+          const hours = shiftDurationHours(start, end)
+          if (!shifts[dk]) shifts[dk] = []
+          shifts[dk].push({ templateId: tid, label: t.label, start, end, hours, crossesMidnight })
+          total += hours
+        }
+      }
+      for (const k of Object.keys(shifts)) {
+        shifts[k].sort((a, b) => a.start.localeCompare(b.start))
+      }
+      map.set(emp.id, { shifts, total: Math.round(total * 100) / 100 })
+    }
+    return map
+  }, [employees, cells, tplById])
+
+  return (
+    <div className="bg-white border rounded-lg p-4">
+      <h3 className="font-semibold mb-3" style={{ color: '#7C1A1A' }}>
+        Horario por empleado
+      </h3>
+      <div className="space-y-2">
+        {employees.map(emp => {
+          const detail = detailByEmp.get(emp.id) || { shifts: {}, total: 0 }
+          const isOpen = openId === emp.id
+          const contracted = emp.weeklyHours || 40
+          const delta = detail.total - contracted
+          const exceeds = detail.total > contracted * 1.10
+          return (
+            <div key={emp.id} className="border rounded-lg">
+              <button
+                onClick={() => setOpenId(isOpen ? null : emp.id)}
+                className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-mono text-gray-400">{isOpen ? '▼' : '▶'}</span>
+                  <span className="font-bold text-sm" style={{ color: '#7C1A1A' }}>
+                    {emp.shiftCode || '–'}
+                  </span>
+                  <span className="text-sm">{emp.name}</span>
+                  {emp.shiftPeriod && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                      {emp.shiftPeriod === 'manana' ? 'mañanas' : emp.shiftPeriod === 'tarde' ? 'tardes' : 'partido'}
+                    </span>
+                  )}
+                  {emp.restPattern && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700">
+                      libra: {humanRestPattern(emp.restPattern)}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className={`text-xs font-mono ${exceeds ? 'text-red-600 font-bold' : ''}`}>
+                    {detail.total.toFixed(2)} / {contracted}h
+                  </span>
+                  <span className={`text-[10px] ${exceeds ? 'text-red-600' : delta < -0.5 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                    {delta > 0 ? '+' : ''}{delta.toFixed(2)}h
+                  </span>
+                </div>
+              </button>
+              {isOpen && (
+                <div className="border-t p-3 grid grid-cols-1 md:grid-cols-7 gap-2">
+                  {[0, 1, 2, 3, 4, 5, 6].map(d => {
+                    const dk = String(d)
+                    const list = detail.shifts[dk] || []
+                    const dayTotal = list.reduce((acc, s) => acc + s.hours, 0)
+                    return (
+                      <div key={d} className="border rounded p-2 text-xs">
+                        <div className="font-semibold mb-1 flex items-center justify-between">
+                          <span>{DAY_LABELS_SHORT[d as DayOfWeek]}</span>
+                          {list.length > 0 && (
+                            <span className="text-[10px] text-gray-500 font-mono">{dayTotal.toFixed(2)}h</span>
+                          )}
+                        </div>
+                        {list.length === 0 ? (
+                          <div className="text-[10px] text-gray-400 italic">Libre</div>
+                        ) : (
+                          <div className="space-y-1">
+                            {list.map((s, i) => (
+                              <div key={i} className="bg-[#F5E9D9] rounded px-1.5 py-1">
+                                <div className="font-mono text-[10px]" style={{ color: '#7C1A1A' }}>
+                                  {s.start}–{s.end}
+                                  {s.crossesMidnight && <span className="ml-1 text-gray-400">+1d</span>}
+                                </div>
+                                <div className="text-[9px] text-gray-600">{s.label}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function humanRestPattern(p: string): string {
+  const [d, kind] = p.split(':')
+  const dayMap: Record<string, string> = { lun: 'Lun', mar: 'Mar', mie: 'Mié' }
+  const nextMap: Record<string, string> = { lun: 'Mar', mar: 'Mié', mie: 'Jue' }
+  const d1 = dayMap[d] || d
+  const d2 = nextMap[d] || ''
+  if (kind === 'tarde_dia') return `${d1} tarde + ${d2} día`
+  if (kind === 'dia_manana') return `${d1} día + ${d2} mañana`
+  return p
 }
