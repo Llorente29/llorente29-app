@@ -44,6 +44,10 @@ export interface Vacation {
   id: string; type: 'Vacaciones' | 'Baja médica' | 'Permiso' | 'Asuntos propios'
   startDate: string; endDate: string; status: 'solicitada' | 'aprobada' | 'rechazada'; notes?: string
   alerts?: unknown[]; adjustments?: string[]
+  // Si true (default), la ausencia es retribuida y cuenta como horas trabajadas.
+  // Si false, no cuenta y descuenta del contrato del periodo.
+  // Aplicable principalmente a 'Permiso' que puede ser retribuido o no según el convenio.
+  paid?: boolean
 }
 
 // === Tipos del scheduler en la ficha del empleado (sub-fase 3.2) ===
