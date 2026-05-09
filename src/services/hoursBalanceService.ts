@@ -4,7 +4,6 @@
 import { supabase } from '../lib/supabase'
 import type { Employee } from '../types'
 import type { ShiftTemplate, Schedule } from '../types/scheduler'
-import { computeWorkloads } from './scheduleGenerator'
 import {
   type ClosureResolution,
   type MonthlyBalanceClosure,
