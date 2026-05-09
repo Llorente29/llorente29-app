@@ -1,5 +1,5 @@
 // src/components/MiBolsaHoras.tsx
-// Vista del trabajador: su propia bolsa de horas con periodos cerrados.
+// Vista del trabajador: su propia bolsa de horas con periodos cerrados y alertas del periodo.
 // Solo se muestra si emp.showHoursBalance === true
 
 import { useEffect, useState } from 'react'
@@ -7,9 +7,11 @@ import {
   getEmployeeBalanceState,
   getEffectiveCloseDay,
   type LocationBalanceConfig,
+  type EmployeeBalanceStateExtended,
+  type DayAlert,
+  type DayAlertType,
 } from '../services/hoursBalanceService'
 import type {
-  EmployeeBalanceState,
   MonthlyBalanceClosure,
   ClosureResolution,
 } from '../types/hoursBalance'
@@ -36,10 +38,23 @@ const RESOLUTION_COLORS: Record<ClosureResolution, string> = {
   descartado: 'text-gray-500 bg-gray-100',
 }
 
+const ALERT_LABELS: Record<DayAlertType, string> = {
+  sin_fichaje: '⚠️ Sin fichaje',
+  sin_horario: '🟡 Sin horario',
+  desviacion_grande: '🔴 Desviación',
+}
+
+const ALERT_COLORS: Record<DayAlertType, string> = {
+  sin_fichaje: 'bg-amber-50 border-amber-200 text-amber-800',
+  sin_horario: 'bg-yellow-50 border-yellow-300 text-yellow-800',
+  desviacion_grande: 'bg-red-50 border-red-200 text-red-800',
+}
+
 export default function MiBolsaHoras({ employee, location }: Props) {
-  const [state, setState] = useState<EmployeeBalanceState | null>(null)
+  const [state, setState] = useState<EmployeeBalanceStateExtended | null>(null)
   const [loading, setLoading] = useState(true)
   const [showHistory, setShowHistory] = useState(false)
+  const [showAlerts, setShowAlerts] = useState(false)
 
   // closeDay efectivo para este local
   const closeDay = (() => {
@@ -69,7 +84,6 @@ export default function MiBolsaHoras({ employee, location }: Props) {
     return () => { cancelled = true }
   }, [employee.id, closeDay])
 
-  // Si el trabajador no tiene visibilidad, no mostrar nada
   if (!(employee as any).showHoursBalance) return null
 
   if (loading) {
@@ -89,8 +103,8 @@ export default function MiBolsaHoras({ employee, location }: Props) {
   const negative = cp.delta < -0.01
   const periodColor = positive ? 'text-emerald-600' : negative ? 'text-red-600' : 'text-gray-500'
 
-  // Últimos cierres (mostrar máximo 6)
   const recentClosures = state.resolvedClosures.slice(0, 6)
+  const numAlerts = state.alerts.length
 
   return (
     <div className="bg-white rounded-lg p-4 shadow-sm border">
@@ -112,8 +126,8 @@ export default function MiBolsaHoras({ employee, location }: Props) {
           {positive ? '+' : ''}{cp.delta.toFixed(2)}h
         </div>
         <div className="text-[11px] text-gray-600 mt-1">
-          Planificadas {cp.scheduledHours.toFixed(1)}h
-          {cp.vacationHours > 0 && ` + Vacaciones ${cp.vacationHours.toFixed(1)}h`}
+          Trabajadas {cp.scheduledHours.toFixed(1)}h
+          {cp.vacationHours > 0 && ` (incl. vacac. ${cp.vacationHours.toFixed(1)}h)`}
           {' '}− Contratadas {cp.contractedHoursPeriod.toFixed(1)}h
         </div>
         {cp.weeksWithoutSchedule.length > 0 && (
@@ -122,6 +136,30 @@ export default function MiBolsaHoras({ employee, location }: Props) {
           </div>
         )}
       </div>
+
+      {/* Alertas del periodo (si las hay) */}
+      {numAlerts > 0 && (
+        <div className="mb-3">
+          <button
+            onClick={() => setShowAlerts(s => !s)}
+            className="w-full text-left px-3 py-2 rounded bg-red-50 border border-red-200 text-xs hover:bg-red-100 transition"
+          >
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-red-800">
+                ⚠️ {numAlerts} día(s) con incidencias
+              </span>
+              <span className="text-red-600">{showAlerts ? '▼' : '▶'}</span>
+            </div>
+          </button>
+          {showAlerts && (
+            <div className="mt-2 space-y-1 max-h-48 overflow-y-auto">
+              {state.alerts.map((a, i) => (
+                <AlertCard key={i} alert={a} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Cierres pendientes */}
       {state.pendingClosures.length > 0 && (
@@ -188,6 +226,20 @@ export default function MiBolsaHoras({ employee, location }: Props) {
       <div className="mt-3 text-[10px] text-gray-400">
         Saldo positivo = la empresa te debe horas. Negativo = tú debes horas.
       </div>
+    </div>
+  )
+}
+
+function AlertCard({ alert }: { alert: DayAlert }) {
+  return (
+    <div className={`rounded px-2 py-1.5 text-[11px] border ${ALERT_COLORS[alert.type]}`}>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="font-mono text-[10px] shrink-0">{alert.date.slice(5)}</span>
+          <span className="font-semibold shrink-0">{ALERT_LABELS[alert.type]}</span>
+        </div>
+      </div>
+      <div className="text-[10px] mt-0.5 opacity-80">{alert.message}</div>
     </div>
   )
 }
