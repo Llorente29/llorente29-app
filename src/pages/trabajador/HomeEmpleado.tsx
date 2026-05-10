@@ -3,7 +3,7 @@ import type { Employee } from '../../types'
 import { hasOpenShift } from '../../services/fichajeKiosko'
 import NotificationBell from '../../components/NotificationBell'
 
-type SubPage = 'home' | 'fichar' | 'horario' | 'fichajes' | 'documentos' | 'vacaciones' | 'bolsa' | 'turnos'
+type SubPage = 'home' | 'fichar' | 'horario' | 'fichajes' | 'documentos' | 'vacaciones' | 'bolsa' | 'turnos' | 'cambios'
 
 interface Props {
   employee: Employee
