@@ -86,10 +86,19 @@ export default function InsightsPage() {
 
   const birthdays: BirthdayItem[] = useMemo(() => {
     const items: BirthdayItem[] = []
-    // No tenemos campo birthday en Employee actualmente. Usar startDate como fallback no es correcto.
-    // Si no hay campo, devolvemos vacío. (En siguiente iteración añadir campo birthday a Employee).
-    return items
-  }, [staff])
+    for (const emp of staff) {
+      if (!emp.active || !emp.birthDate) continue
+      const birth = isoDateNoon(emp.birthDate)
+      if (birth.getMonth() === currentMonth) {
+        items.push({
+          employee: emp,
+          day: birth.getDate(),
+          isToday: birth.getDate() === today.getDate(),
+        })
+      }
+    }
+    return items.sort((a, b) => a.day - b.day)
+  }, [staff, currentMonth, today])
 
   const anniversaries: AnniversaryItem[] = useMemo(() => {
     const items: AnniversaryItem[] = []
@@ -256,10 +265,7 @@ export default function InsightsPage() {
         <Card className="p-4">
           <h3 className="text-sm font-semibold text-gray-700 mb-3">🎂 Cumpleaños · {MONTHS[currentMonth]}</h3>
           {birthdays.length === 0 ? (
-            <p className="text-xs text-gray-400 italic">
-              No hay datos de fecha de nacimiento.
-              <span className="block mt-1">Para activar este widget, añade el campo <code className="bg-gray-100 px-1 rounded">birthDate</code> a los empleados.</span>
-            </p>
+            <p className="text-xs text-gray-400 italic">Sin cumpleaños este mes.</p>
           ) : (
             <div className="space-y-2">
               {birthdays.map((b, i) => (
