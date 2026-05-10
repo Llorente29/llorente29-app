@@ -460,7 +460,7 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifCo
                       <p className="text-xs text-gray-600">
                         {emp.terminationType ? (
                           <>
-                            Tipo: <strong>{TERMINATION_LABELS[emp.terminationType]}</strong>
+                            Tipo: <strong>{TERMINATION_LABELS[emp.terminationType as TerminationType]}</strong>
                             {emp.endDate && ` · ${new Date(emp.endDate + 'T00:00:00').toLocaleDateString('es-ES')}`}
                           </>
                         ) : 'Sin tipo registrado'}
