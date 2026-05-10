@@ -91,6 +91,10 @@ export interface Employee {
   terminationType?: 'despido' | 'fin_contrato' | 'voluntaria' | 'jubilacion' | 'otro'
   terminationReason?: string
   terminationCommunicatedToGestoria?: boolean
+  // === Periodo de prueba ===
+  // Duración en días desde startDate. La fecha fin se calcula on-the-fly.
+  // Valores por defecto al crear: 90 indef, 30 temporal, 60 prácticas, 30 otro.
+  trialPeriodDays?: number
 }
 
 export interface ChecklistItem {
