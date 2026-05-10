@@ -36,8 +36,6 @@ interface Props {
   onSubmitted: () => void
 }
 
-const DAYS: DayOfWeek[] = [0, 1, 2, 3, 4, 5, 6]
-
 function shortDate(iso: string): string {
   const [, m, d] = iso.split('-')
   return `${d}/${m}`
