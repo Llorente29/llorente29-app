@@ -6,9 +6,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { useApp } from '../context/AppContext'
 import { Card } from '../components/ui'
 import type { Employee } from '../types'
-import type { VacationRequest } from '../types/personal'
-import { VACATION_TYPES } from '../types/personal'
+import type { VacationRequest, Formation } from '../types/personal'
+import { VACATION_TYPES, FORMATION_CATALOG } from '../types/personal'
 import { fetchVacations } from '../services/vacationsService'
+import { fetchAllFormations, getFormationStatus } from '../services/formationsService'
 
 /* =====================================================
    TIPOS Y HELPERS
@@ -62,15 +63,20 @@ function todayDate(): Date {
 export default function InsightsPage() {
   const { staff, locations } = useApp()
   const [vacations, setVacations] = useState<VacationRequest[]>([])
+  const [formations, setFormations] = useState<Formation[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let alive = true
     async function load() {
       setLoading(true)
-      const v = await fetchVacations()
+      const [v, f] = await Promise.all([
+        fetchVacations(),
+        fetchAllFormations(),
+      ])
       if (alive) {
         setVacations(v || [])
+        setFormations(f || [])
         setLoading(false)
       }
     }
@@ -214,6 +220,30 @@ export default function InsightsPage() {
     return staff.filter(e => !e.active && e.endDate && e.endDate >= cutoffISO)
   }, [staff, today])
 
+  // Formaciones que necesitan acción: caducadas o caducan en próximos 30 días
+  const expiringFormations = useMemo(() => {
+    const items: Array<{ formation: Formation; statusInfo: ReturnType<typeof getFormationStatus> }> = []
+    for (const f of formations) {
+      const info = getFormationStatus(f)
+      if (info.status === 'caducada' || info.status === 'caduca_urgente' || info.status === 'caduca_critico' || info.status === 'caduca_pronto') {
+        // Solo de empleados activos
+        const emp = staff.find(e => e.id === f.employeeId)
+        if (emp?.active) {
+          items.push({ formation: f, statusInfo: info })
+        }
+      }
+    }
+    // Ordenar: peores primero (caducadas, luego urgentes, etc.)
+    const order: Record<string, number> = {
+      caducada: 0,
+      caduca_urgente: 1,
+      caduca_critico: 2,
+      caduca_pronto: 3,
+    }
+    items.sort((a, b) => (order[a.statusInfo.status] ?? 9) - (order[b.statusInfo.status] ?? 9))
+    return items
+  }, [formations, staff])
+
   /* ─── HELPERS DE VISUALIZACIÓN ────────────────────── */
 
   function findEmployee(id: string): Employee | undefined {
@@ -237,10 +267,11 @@ export default function InsightsPage() {
   return (
     <div className="space-y-4">
       {/* ─── KPIs OPERATIVOS (arriba, lo más relevante hoy) ─── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <KpiCard icon="🟢" label="Trabajando ahora" value={workingNow.length} accent="emerald" />
         <KpiCard icon="🤒" label="Bajas activas" value={sickToday.length} accent="red" />
         <KpiCard icon="🏖️" label="Vacaciones este mes" value={vacationsThisMonth.length} accent="blue" />
+        <KpiCard icon="🎓" label="Formaciones por renovar" value={expiringFormations.length} accent="amber" />
         <KpiCard icon="📉" label="Bajas últ. 12 meses" value={turnoverLast12Months.length} accent="amber" />
       </div>
 
@@ -407,6 +438,55 @@ export default function InsightsPage() {
                     </p>
                   </div>
                   <span className="text-xs text-blue-700 font-mono">{v.days}d</span>
+                </div>
+              )
+            })}
+          </div>
+        </Card>
+      )}
+
+      {/* ─── FORMACIONES POR RENOVAR ─── */}
+      {expiringFormations.length > 0 && (
+        <Card className="p-4">
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">🎓 Formaciones por renovar ({expiringFormations.length})</h3>
+          <div className="space-y-1.5">
+            {expiringFormations.map(({ formation, statusInfo }, i) => {
+              const emp = findEmployee(formation.employeeId)
+              const catalog = FORMATION_CATALOG.find(c => c.id === formation.type)
+              return (
+                <div
+                  key={i}
+                  className={`flex items-center gap-2 p-2 rounded border ${
+                    statusInfo.color === 'red' ? 'border-red-300 bg-red-50' :
+                    statusInfo.color === 'orange' ? 'border-orange-300 bg-orange-50' :
+                    'border-amber-300 bg-amber-50'
+                  }`}
+                >
+                  {emp && <MiniAvatar employee={emp} />}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">
+                      {emp?.name || '(empleado borrado)'}
+                    </p>
+                    <p className="text-[11px] text-gray-600 truncate">
+                      {catalog?.icon || '📚'} {formation.name}
+                      {catalog?.mandatory && (
+                        <span className="ml-1.5 text-[9px] font-bold text-red-600">OBLIG.</span>
+                      )}
+                    </p>
+                  </div>
+                  <span className={`text-xs font-bold ${
+                    statusInfo.color === 'red' ? 'text-red-700' :
+                    statusInfo.color === 'orange' ? 'text-orange-700' :
+                    'text-amber-700'
+                  }`}>
+                    {statusInfo.status === 'caducada'
+                      ? '⛔ Caducada'
+                      : statusInfo.status === 'caduca_urgente'
+                        ? `🔴 ${statusInfo.daysLeft}d`
+                        : statusInfo.status === 'caduca_critico'
+                          ? `🟠 ${statusInfo.daysLeft}d`
+                          : `🟡 ${statusInfo.daysLeft}d`}
+                  </span>
                 </div>
               )
             })}
