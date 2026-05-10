@@ -37,7 +37,7 @@ function getScheduledMinutes(str: string) {
 }
 
 export default function StaffPage() {
-  const { staff, locations, createEmployee, saveEmployee, removeEmployee } = useApp()
+  const { staff, locations, createEmployee, saveEmployee, removeEmployee, notifConfig } = useApp()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [locFilter, setLocFilter] = useState('todas')
@@ -145,6 +145,7 @@ export default function StaffPage() {
             setSelectedId(null)
           }}
           locations={locations}
+          notifConfig={notifConfig}
         />
       )}
     </div>
@@ -153,12 +154,13 @@ export default function StaffPage() {
 
 // ─── Employee Detail Modal ────────────────────────────────────────────────────
 
-function EmployeeModal({ employee, onClose, onSave, onDelete, locations }: {
+function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifConfig }: {
   employee: Employee
   onClose: () => void
   onSave: (e: Employee) => void
   onDelete: (id: string) => void
   locations: ReturnType<typeof useApp>['locations']
+  notifConfig: ReturnType<typeof useApp>['notifConfig']
 }) {
   const [emp, setEmp] = useState<Employee>({ ...employee, clockEntries: [...employee.clockEntries] })
   const [tab, setTab] = useState('info')
@@ -674,6 +676,7 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations }: {
         {showTerminationModal && (
           <TerminationModal
             employee={emp}
+            locations={locations}
             onCancel={() => setShowTerminationModal(false)}
             onConfirm={(data) => {
               const updated: Employee = {
@@ -685,6 +688,18 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations }: {
                 terminationCommunicatedToGestoria: data.communicated,
               }
               setShowTerminationModal(false)
+
+              // Si el gestor marcó "Comunicado a gestoría", abrir cliente de correo con email prerellenado
+              if (data.communicated) {
+                try {
+                  const mailtoUrl = buildGestoriaMailto(updated, locations, notifConfig?.gestoriaEmail || '')
+                  // Pequeño delay para que se vea el feedback visual del confirm antes de saltar al correo
+                  setTimeout(() => { window.location.href = mailtoUrl }, 100)
+                } catch (e) {
+                  console.warn('[Termination] No se pudo abrir cliente de correo:', e)
+                }
+              }
+
               onSave(updated)
             }}
           />
@@ -699,6 +714,7 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations }: {
 
 interface TerminationModalProps {
   employee: Employee
+  locations: ReturnType<typeof useApp>['locations']
   onCancel: () => void
   onConfirm: (data: {
     type: TerminationType
@@ -708,7 +724,7 @@ interface TerminationModalProps {
   }) => void
 }
 
-function TerminationModal({ employee, onCancel, onConfirm }: TerminationModalProps) {
+function TerminationModal({ employee, locations, onCancel, onConfirm }: TerminationModalProps) {
   const [type, setType] = useState<TerminationType>('voluntaria')
   const [endDate, setEndDate] = useState(new Date().toISOString().slice(0, 10))
   const [reason, setReason] = useState('')
@@ -794,12 +810,22 @@ function TerminationModal({ employee, onCancel, onConfirm }: TerminationModalPro
                 className="mt-0.5 w-4 h-4 rounded accent-[#7C1A1A]"
               />
               <div>
-                <span className="text-sm font-medium">Comunicado a la gestoría</span>
+                <span className="text-sm font-medium">📧 Enviar comunicación a la gestoría</span>
                 <p className="text-[11px] text-gray-500 mt-0.5">
-                  Marca esto cuando hayas notificado a la gestoría para que tramite la baja en SS.
+                  Al confirmar, se abrirá tu cliente de correo con un email prerellenado para la gestoría.
                 </p>
               </div>
             </label>
+            {communicated && (
+              <div className="mt-2 pl-6 text-[11px] text-gray-600 border-l-2 border-[#7C1A1A] py-1 pl-3">
+                <strong>Destinatario:</strong>{' '}
+                <span className="font-mono">
+                  {/* destino del email */}
+                  {/* Mostrar email gestoría desde notifConfig si existe (lo coge el parent al construir mailto) */}
+                  configurado en Informes Gestoría
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
@@ -821,4 +847,66 @@ function TerminationModal({ employee, onCancel, onConfirm }: TerminationModalPro
       </div>
     </div>
   )
+}
+
+// ─── Helper para construir mailto: con datos de baja ──────────────────────────
+
+/**
+ * Construye un URL `mailto:` con asunto y cuerpo prerellenados para enviar
+ * a la gestoría la comunicación de baja del empleado. Al disparar
+ * window.location.href = mailtoUrl, se abre el cliente de correo del usuario
+ * (Gmail, Outlook, Mail, etc.) con todo listo para enviar.
+ */
+function buildGestoriaMailto(
+  employee: Employee,
+  locations: ReturnType<typeof useApp>['locations'],
+  gestoriaEmail: string
+): string {
+  const location = locations.find(l => l.id === employee.locationId)
+  const locationName = location?.name || '(sin local)'
+  const tipoLabel = employee.terminationType
+    ? TERMINATION_LABELS[employee.terminationType as TerminationType]
+    : '(no especificado)'
+
+  const fechaAlta = employee.startDate
+    ? new Date(employee.startDate + 'T00:00:00').toLocaleDateString('es-ES')
+    : '(no registrada)'
+  const fechaBaja = employee.endDate
+    ? new Date(employee.endDate + 'T00:00:00').toLocaleDateString('es-ES')
+    : '(no especificada)'
+
+  const subject = `Baja de empleado: ${employee.name} - ${fechaBaja}`
+
+  const bodyLines = [
+    'Buenos días,',
+    '',
+    'Os comunico la baja del siguiente empleado para que tramitéis la baja en SS:',
+    '',
+    `Nombre: ${employee.name}`,
+    `DNI: ${employee.dni || '(no registrado)'}`,
+    `Local: ${locationName}`,
+    `Puesto: ${employee.position || '(no especificado)'}`,
+    `Tipo de contrato: ${employee.contractType || '(no especificado)'}`,
+    `Fecha de alta: ${fechaAlta}`,
+    `Fecha efectiva de baja: ${fechaBaja}`,
+    `Tipo de baja: ${tipoLabel}`,
+  ]
+
+  if (employee.terminationReason) {
+    bodyLines.push(`Motivo: ${employee.terminationReason}`)
+  }
+
+  bodyLines.push('')
+  bodyLines.push('Quedo a la espera de la documentación correspondiente.')
+  bodyLines.push('')
+  bodyLines.push('Saludos.')
+
+  const body = bodyLines.join('\n')
+
+  // encodeURIComponent codifica espacios, saltos de línea, acentos, etc.
+  const encodedSubject = encodeURIComponent(subject)
+  const encodedBody = encodeURIComponent(body)
+  const to = gestoriaEmail.trim()
+
+  return `mailto:${to}?subject=${encodedSubject}&body=${encodedBody}`
 }
