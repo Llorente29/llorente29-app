@@ -7,7 +7,13 @@ import { useEffect, useMemo, useState } from 'react'
 import type { Employee, Location } from '../../types'
 import { listShiftTemplates, getSchedule } from '../../services/schedulerService'
 import { fetchLocations } from '../../services/supabaseSync'
+import {
+  listSwapsForEmployee,
+  cancelSwap,
+} from '../../services/shiftSwapService'
+import type { ShiftSwapRequest } from '../../types/shiftSwap'
 import MiBolsaHoras from '../../components/MiBolsaHoras'
+import SolicitarCambioModal from '../../components/trabajador/SolicitarCambioModal'
 import {
   type ShiftTemplate,
   type Schedule,
@@ -62,6 +68,14 @@ export default function MiHorario({ employee, onBack }: MiHorarioProps) {
   const [schedule, setSchedule] = useState<Schedule | null>(null)
   const [loading, setLoading] = useState(false)
   const [location, setLocation] = useState<Location | undefined>(undefined)
+  const [swaps, setSwaps] = useState<ShiftSwapRequest[]>([])
+  const [swapModalShift, setSwapModalShift] = useState<{
+    scheduleId: string
+    templateId: string
+    template: ShiftTemplate
+    dayKey: string
+    date: string
+  } | null>(null)
 
   // Cargar el local del empleado (para configuración de bolsa de horas)
   useEffect(() => {
@@ -94,6 +108,22 @@ export default function MiHorario({ employee, onBack }: MiHorarioProps) {
     load()
     return () => { cancel = true }
   }, [employee?.locationId, weekStart])
+
+  // Cargar mis solicitudes de cambio (activas: abierta o propuesta)
+  async function loadSwaps() {
+    const all = await listSwapsForEmployee(employeeId)
+    setSwaps(all)
+  }
+  useEffect(() => {
+    let cancel = false
+    async function load() {
+      const all = await listSwapsForEmployee(employeeId)
+      if (cancel) return
+      setSwaps(all)
+    }
+    load()
+    return () => { cancel = true }
+  }, [employeeId])
 
   // Construir mis turnos por día
   const turnosPorDia = useMemo<Record<string, DayShift[]>>(() => {
@@ -143,6 +173,23 @@ export default function MiHorario({ employee, onBack }: MiHorarioProps) {
     }
     return null
   })()
+
+  // Helper: ¿hay solicitud activa para este turno (templateId + dayKey)?
+  function findActiveSwap(templateId: string, dayKey: string): ShiftSwapRequest | undefined {
+    return swaps.find(s =>
+      (s.status === 'abierta' || s.status === 'propuesta') &&
+      s.requesterId === employeeId &&
+      s.requesterTemplateId === templateId &&
+      s.requesterDayKey === dayKey &&
+      schedule && s.requesterScheduleId === schedule.id
+    )
+  }
+
+  async function handleCancelSwap(swapId: string) {
+    if (!confirm('¿Cancelar tu solicitud de cambio?')) return
+    const ok = await cancelSwap(swapId)
+    if (ok) await loadSwaps()
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#F5E9D9] via-white to-[#F5E9D9] pb-20">
@@ -249,29 +296,89 @@ export default function MiHorario({ employee, onBack }: MiHorarioProps) {
                 <div className="text-sm text-gray-400 italic">Libre</div>
               ) : (
                 <div className="space-y-1.5">
-                  {turnos.map((t, i) => (
-                    <div
-                      key={i}
-                      className="flex items-center justify-between bg-[#F5E9D9] rounded px-2.5 py-1.5"
-                    >
-                      <div>
-                        <span className="font-mono text-sm font-bold" style={{ color: '#7C1A1A' }}>
-                          {t.start} – {t.end}
-                        </span>
-                        {t.crossesMidnight && (
-                          <span className="ml-2 text-[10px] text-gray-500">(cruza 00:00)</span>
+                  {turnos.map((t, i) => {
+                    const activeSwap = findActiveSwap(t.templateId, String(d))
+                    const dateISO_t = dateISO
+                    return (
+                      <div
+                        key={i}
+                        className="bg-[#F5E9D9] rounded px-2.5 py-1.5"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="font-mono text-sm font-bold" style={{ color: '#7C1A1A' }}>
+                              {t.start} – {t.end}
+                            </span>
+                            {t.crossesMidnight && (
+                              <span className="ml-2 text-[10px] text-gray-500">(cruza 00:00)</span>
+                            )}
+                            <div className="text-[11px] text-gray-600">{t.label}</div>
+                          </div>
+                          <span className="text-xs font-mono text-gray-700">{t.hours}h</span>
+                        </div>
+
+                        {/* Estado del cambio o botón solicitar */}
+                        {isPublished && schedule && (
+                          <div className="mt-1.5 flex items-center justify-between gap-2">
+                            {activeSwap ? (
+                              <>
+                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                                  activeSwap.status === 'abierta'
+                                    ? 'bg-blue-100 text-blue-700'
+                                    : 'bg-amber-100 text-amber-700'
+                                }`}>
+                                  {activeSwap.status === 'abierta' ? '🌐 Abierta' : '⏳ Pendiente del gestor'}
+                                </span>
+                                <button
+                                  onClick={() => handleCancelSwap(activeSwap.id)}
+                                  className="text-[10px] px-2 py-0.5 rounded text-gray-500 hover:text-red-600 hover:bg-red-50"
+                                >
+                                  Cancelar solicitud
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <span></span>
+                                <button
+                                  onClick={() => setSwapModalShift({
+                                    scheduleId: schedule.id,
+                                    templateId: t.templateId,
+                                    template: templates.find(x => x.id === t.templateId)!,
+                                    dayKey: String(d),
+                                    date: dateISO_t,
+                                  })}
+                                  className="text-[10px] px-2 py-0.5 rounded text-[#7C1A1A] hover:bg-[#7C1A1A]/10 font-medium"
+                                >
+                                  🔄 Solicitar cambio
+                                </button>
+                              </>
+                            )}
+                          </div>
                         )}
-                        <div className="text-[11px] text-gray-600">{t.label}</div>
                       </div>
-                      <span className="text-xs font-mono text-gray-700">{t.hours}h</span>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>
           )
         })}
       </div>
+
+      {/* Modal de solicitar cambio */}
+      {swapModalShift && schedule && (
+        <SolicitarCambioModal
+          myShift={swapModalShift}
+          myEmployee={employee}
+          schedule={schedule}
+          templates={templates}
+          onClose={() => setSwapModalShift(null)}
+          onSubmitted={async () => {
+            setSwapModalShift(null)
+            await loadSwaps()
+          }}
+        />
+      )}
     </div>
   )
 }
