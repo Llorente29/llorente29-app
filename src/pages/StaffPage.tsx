@@ -676,7 +676,6 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifCo
         {showTerminationModal && (
           <TerminationModal
             employee={emp}
-            locations={locations}
             onCancel={() => setShowTerminationModal(false)}
             onConfirm={(data) => {
               const updated: Employee = {
@@ -714,7 +713,6 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifCo
 
 interface TerminationModalProps {
   employee: Employee
-  locations: ReturnType<typeof useApp>['locations']
   onCancel: () => void
   onConfirm: (data: {
     type: TerminationType
@@ -724,7 +722,7 @@ interface TerminationModalProps {
   }) => void
 }
 
-function TerminationModal({ employee, locations, onCancel, onConfirm }: TerminationModalProps) {
+function TerminationModal({ employee, onCancel, onConfirm }: TerminationModalProps) {
   const [type, setType] = useState<TerminationType>('voluntaria')
   const [endDate, setEndDate] = useState(new Date().toISOString().slice(0, 10))
   const [reason, setReason] = useState('')
