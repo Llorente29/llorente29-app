@@ -67,8 +67,10 @@ export type RestPattern =
 
 export interface Employee {
   id: string; name: string; dni: string; phone: string; email: string; photo: string
+  birthDate?: string                 // fecha de nacimiento ISO (YYYY-MM-DD)
   locationId: string; position: string; department: string; contractType: string
   startDate: string; endDate: string; salary: number; weeklyHours: number
+  trialPeriodDays?: number           // duración del periodo de prueba en días
   schedule: string; weeklySchedule: WeeklySchedule; active: boolean; notes: string
   clockEntries: ClockEntry[]; documents: StaffDocument[]; vacations: Vacation[]
   formations: { id: string; name: string; date: string; expiry?: string; issuer?: string }[]
@@ -83,6 +85,10 @@ export interface Employee {
   // === Campos para bolsa de horas ===
   initialHoursBalance?: number       // saldo inicial al empezar a usar Foodint (puede ser negativo)
   showHoursBalance?: boolean         // si true, el trabajador ve su saldo en su app móvil (default true)
+  // === Campos para baja de empleado ===
+  terminationType?: string           // tipo de baja: 'voluntaria' | 'no_renovacion' | 'despido' | etc.
+  terminationReason?: string         // motivo libre
+  terminationCommunicatedToGestoria?: boolean
 }
 
 export interface ChecklistItem {
