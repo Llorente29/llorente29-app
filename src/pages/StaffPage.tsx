@@ -4,6 +4,7 @@ import { Button, Input, Select, Textarea, Badge, Card, Tabs, Modal, Label, Alert
 import type { Employee, ClockEntry, WeeklySchedule } from '../types'
 import DocumentosTab from '../components/personal/DocumentosTab'
 import VacacionesTab from '../components/personal/VacacionesTab'
+import FormacionesTab from '../components/personal/FormacionesTab'
 import InsightsPage from './InsightsPage'
 
 const POSITIONS = ['Encargado', 'Jefe de cocina', 'Cocinero', 'Ayudante cocina', 'Camarero', 'Barra', 'Hostess', 'Limpieza', 'Gerente', 'Otro']
@@ -355,6 +356,7 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifCo
     { value: 'fichajes', label: '⏰ Fichajes' },
     { value: 'documentos', label: '📄 Docs' },
     { value: 'ausencias', label: '🏖 Ausencias' },
+    { value: 'formaciones', label: '🎓 Formaciones' },
     { value: 'contrato', label: '📋 Contrato' },
     { value: 'disponibilidad', label: '📅 Disponibilidad' },
   ]
@@ -567,6 +569,11 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifCo
         {/* ── AUSENCIAS / VACACIONES ── */}
         {tab === 'ausencias' && (
           <VacacionesTab employee={emp} />
+        )}
+
+        {/* ── FORMACIONES ── */}
+        {tab === 'formaciones' && (
+          <FormacionesTab employee={emp} />
         )}
 
         {/* ── CONTRATO ── */}
