@@ -7,6 +7,7 @@ import type {
   ShiftSwapRequest,
   SwapType,
   SwapStatus,
+  HoursAttribution,
 } from '../types/shiftSwap'
 import type { Schedule, ScheduleCells } from '../types/scheduler'
 import { createNotification } from './notificationsService'
@@ -29,6 +30,7 @@ interface ShiftSwapRow {
   acceptor_notes: string | null
   manager_notes: string | null
   reviewed_by: string | null
+  hours_attribution: string | null
   created_at: string
   updated_at: string
   reviewed_at: string | null
@@ -53,6 +55,7 @@ function rowToSwap(r: ShiftSwapRow): ShiftSwapRequest {
     acceptorNotes: r.acceptor_notes || undefined,
     managerNotes: r.manager_notes || undefined,
     reviewedBy: r.reviewed_by || undefined,
+    hoursAttribution: (r.hours_attribution as HoursAttribution) || undefined,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
     reviewedAt: r.reviewed_at || undefined,
@@ -239,11 +242,15 @@ export async function confirmTargetAccepts(
 /**
  * Gestor aprueba un cambio. Aplica los movimientos al/los schedules
  * correspondientes y marca la solicitud como 'aprobada'.
+ *
+ * @param hoursAttribution - 'worker' (default, legal): quien trabaja cobra.
+ *                           'requester': se imputan al cedente original (acuerdo excepcional).
  */
 export async function approveSwap(
   swapId: string,
   managerEmployeeId: string,
-  managerNotes?: string
+  managerNotes?: string,
+  hoursAttribution: HoursAttribution = 'worker'
 ): Promise<boolean> {
   if (!supabase) return false
 
@@ -264,14 +271,14 @@ export async function approveSwap(
     return false
   }
 
-  // Aplicar el movimiento al schedule
+  // Aplicar el movimiento al schedule (siempre, refleja la realidad física)
   const applied = await applySwapToSchedule(swap)
   if (!applied) {
     console.error('[shiftSwap] approveSwap: error aplicando al schedule')
     return false
   }
 
-  // Marcar como aprobada
+  // Marcar como aprobada con la atribución de horas
   const { error } = await supabase
     .from('shift_swap_requests')
     .update({
@@ -279,6 +286,7 @@ export async function approveSwap(
       manager_notes: managerNotes || null,
       reviewed_by: managerEmployeeId,
       reviewed_at: new Date().toISOString(),
+      hours_attribution: hoursAttribution,
     })
     .eq('id', swapId)
   if (error) {
