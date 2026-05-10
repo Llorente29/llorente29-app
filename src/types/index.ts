@@ -7,6 +7,7 @@ export type Page =
   | 'zonas_pedido' | 'kiosko_fichaje' | 'solicitudes_pendientes'
   | 'ahora_mismo' | 'turnos_abiertos'
   | 'bolsa_horas'
+  | 'cambios_pendientes'
 
 export interface Location {
   id: string; name: string; address: string; phone: string; active: boolean
@@ -66,7 +67,6 @@ export type RestPattern =
 
 export interface Employee {
   id: string; name: string; dni: string; phone: string; email: string; photo: string
-  birthDate?: string                 // fecha de nacimiento ISO (YYYY-MM-DD)
   locationId: string; position: string; department: string; contractType: string
   startDate: string; endDate: string; salary: number; weeklyHours: number
   schedule: string; weeklySchedule: WeeklySchedule; active: boolean; notes: string
@@ -83,19 +83,6 @@ export interface Employee {
   // === Campos para bolsa de horas ===
   initialHoursBalance?: number       // saldo inicial al empezar a usar Foodint (puede ser negativo)
   showHoursBalance?: boolean         // si true, el trabajador ve su saldo en su app móvil (default true)
-  // === Campos de baja del empleado ===
-  // Si el empleado se da de baja, además de marcarlo `active: false` se guarda:
-  //   - tipo de baja
-  //   - motivo (texto libre)
-  //   - flag de comunicación a la gestoría
-  // La fecha efectiva de baja se guarda en `endDate` (ya existente).
-  terminationType?: 'despido' | 'fin_contrato' | 'voluntaria' | 'jubilacion' | 'otro'
-  terminationReason?: string
-  terminationCommunicatedToGestoria?: boolean
-  // === Periodo de prueba ===
-  // Duración en días desde startDate. La fecha fin se calcula on-the-fly.
-  // Valores por defecto al crear: 90 indef, 30 temporal, 60 prácticas, 30 otro.
-  trialPeriodDays?: number
 }
 
 export interface ChecklistItem {
