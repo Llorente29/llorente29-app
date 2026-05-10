@@ -21,6 +21,15 @@ export type SwapType = 'cesion' | 'intercambio' | 'peticion_directa'
 export type SwapStatus = 'abierta' | 'propuesta' | 'aprobada' | 'rechazada' | 'cancelada'
 
 /**
+ * Atribución de horas tras aprobación del gestor:
+ * - 'worker':    Las horas se computan a quien trabaja efectivamente el turno (default, Modelo A).
+ *                Es el modelo legalmente correcto en España (convenio Hostelería).
+ * - 'requester': Las horas se computan al cedente original (uso excepcional con acuerdo previo).
+ *                Útil si el trabajador A quería conservar sus horas y B le hace el favor.
+ */
+export type HoursAttribution = 'worker' | 'requester'
+
+/**
  * Solicitud de cambio de turno.
  *
  * Para cesión: solo se rellena requesterXxx; targetId queda null hasta que alguien lo coge.
@@ -52,6 +61,7 @@ export interface ShiftSwapRequest {
   managerNotes?: string               // motivo de aprobación/rechazo
 
   reviewedBy?: string                 // gestor que aprobó/rechazó
+  hoursAttribution?: HoursAttribution // atribución de horas si está aprobada
   createdAt: string
   updatedAt: string
   reviewedAt?: string
