@@ -82,6 +82,15 @@ export interface Employee {
   // === Campos para bolsa de horas ===
   initialHoursBalance?: number       // saldo inicial al empezar a usar Foodint (puede ser negativo)
   showHoursBalance?: boolean         // si true, el trabajador ve su saldo en su app móvil (default true)
+  // === Campos de baja del empleado ===
+  // Si el empleado se da de baja, además de marcarlo `active: false` se guarda:
+  //   - tipo de baja
+  //   - motivo (texto libre)
+  //   - flag de comunicación a la gestoría
+  // La fecha efectiva de baja se guarda en `endDate` (ya existente).
+  terminationType?: 'despido' | 'fin_contrato' | 'voluntaria' | 'jubilacion' | 'otro'
+  terminationReason?: string
+  terminationCommunicatedToGestoria?: boolean
 }
 
 export interface ChecklistItem {
