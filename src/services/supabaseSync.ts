@@ -107,6 +107,8 @@ interface EmployeeRow {
   termination_type: string | null
   termination_reason: string | null
   termination_communicated_to_gestoria: boolean | null
+  // === Periodo de prueba ===
+  trial_period_days: number | null
 }
 
 function rowToEmployee(r: EmployeeRow): Employee {
@@ -157,6 +159,8 @@ function rowToEmployee(r: EmployeeRow): Employee {
     terminationType: (r.termination_type as Employee['terminationType']) || undefined,
     terminationReason: r.termination_reason || undefined,
     terminationCommunicatedToGestoria: r.termination_communicated_to_gestoria ?? false,
+    // === Periodo de prueba ===
+    trialPeriodDays: r.trial_period_days != null ? Number(r.trial_period_days) : undefined,
   }
 }
 
@@ -198,6 +202,8 @@ function employeeToRow(e: Employee): Partial<EmployeeRow> {
     termination_type: e.terminationType || null,
     termination_reason: e.terminationReason || null,
     termination_communicated_to_gestoria: e.terminationCommunicatedToGestoria ?? false,
+    // === Periodo de prueba ===
+    trial_period_days: e.trialPeriodDays ?? null,
   }
 }
 
