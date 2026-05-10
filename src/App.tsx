@@ -19,6 +19,7 @@ import AhoraMismoPage from './pages/AhoraMismoPage'
 import AvisosSettingsPage from './pages/AvisosSettingsPage'
 import TurnosAbiertosPage from './pages/TurnosAbiertosPage'
 import BolsaHorasPage from './pages/BolsaHorasPage'
+import CambiosPendientesPage from './pages/CambiosPendientesPage'
 import TrabajadorApp from './pages/trabajador/TrabajadorApp'
 import {
   DashboardPage, ScheduledPage, TemplatesPage,
@@ -36,6 +37,7 @@ const NAV: { id: Page; label: string; icon: string; section?: string }[] = [
   { id: 'kiosko_fichaje',     label: 'Kiosko Fichaje',      icon: '🕐' },
   { id: 'solicitudes_pendientes', label: 'Solicitudes',     icon: '📨' },
   { id: 'turnos_abiertos',    label: 'Turnos abiertos',     icon: '🪑' },
+  { id: 'cambios_pendientes', label: 'Cambios de turno',    icon: '🔄' },
   { id: 'calendario',         label: 'Calendario',          icon: '📅' },
   { id: 'plantilla_turnos',   label: 'Plantilla turnos',    icon: '🗂️' },
   { id: 'informes_personal',  label: 'Informes Gestoría',   icon: '📄' },
@@ -61,6 +63,7 @@ const PAGE_TITLES: Record<Page, string> = {
   solicitudes_pendientes: 'Solicitudes pendientes',
   ahora_mismo: 'Ahora mismo',
   turnos_abiertos: 'Turnos abiertos',
+  cambios_pendientes: 'Cambios de turno',
   calendario: 'Calendario de Horarios',
   plantilla_turnos: 'Plantilla de turnos',
   informes_personal: 'Informes Gestoría',
@@ -83,6 +86,7 @@ function renderPage(page: Page) {
     case 'solicitudes_pendientes': return <SolicitudesPendientesPage />
     case 'ahora_mismo':       return <AhoraMismoPage />
     case 'turnos_abiertos':   return <TurnosAbiertosPage />
+    case 'cambios_pendientes': return <CambiosPendientesPage />
     case 'calendario':        return <CalendarioPage />
     case 'plantilla_turnos':  return <PlantillaTurnosPage />
     case 'informes_personal': return <InformesPage />
@@ -154,6 +158,7 @@ function Sidebar({ page, setPage, collapsed, setCollapsed }: {
 }) {
   const { tasks, incidents } = useApp()
   const [pendingVacations, setPendingVacations] = useState(0)
+  const [pendingSwaps, setPendingSwaps] = useState(0)
   const pendingTasks = tasks.filter(t => t.status === 'pendiente' || t.status === 'vencida').length
   const openInc = incidents.filter(i => i.status !== 'resuelta').length
 
@@ -172,10 +177,26 @@ function Sidebar({ page, setPage, collapsed, setCollapsed }: {
     return () => { cancel = true; clearInterval(id) }
   }, [])
 
+  // Cargar conteo de cambios de turno pendientes
+  useEffect(() => {
+    let cancel = false
+    async function load() {
+      try {
+        const mod = await import('./services/shiftSwapService')
+        const list = await mod.listPendingForManager()
+        if (!cancel) setPendingSwaps((list || []).length)
+      } catch { /* ignore */ }
+    }
+    load()
+    const id = setInterval(load, 30000)
+    return () => { cancel = true; clearInterval(id) }
+  }, [])
+
   const badge = (id: Page) =>
     id === 'tasks' ? pendingTasks
     : id === 'incidents' ? openInc
     : id === 'solicitudes_pendientes' ? pendingVacations
+    : id === 'cambios_pendientes' ? pendingSwaps
     : 0
 
   return (
