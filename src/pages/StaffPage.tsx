@@ -4,6 +4,7 @@ import { Button, Input, Select, Textarea, Badge, Card, Tabs, Modal, Label, Alert
 import type { Employee, ClockEntry, WeeklySchedule } from '../types'
 import DocumentosTab from '../components/personal/DocumentosTab'
 import VacacionesTab from '../components/personal/VacacionesTab'
+import InsightsPage from './InsightsPage'
 
 const POSITIONS = ['Encargado', 'Jefe de cocina', 'Cocinero', 'Ayudante cocina', 'Camarero', 'Barra', 'Hostess', 'Limpieza', 'Gerente', 'Otro']
 const CONTRACT_TYPES = ['Indefinido', 'Temporal', 'Prácticas', 'Beca', 'Autónomo', 'Otro']
@@ -38,6 +39,7 @@ function getScheduledMinutes(str: string) {
 
 export default function StaffPage() {
   const { staff, locations, createEmployee, saveEmployee, removeEmployee, notifConfig } = useApp()
+  const [mainTab, setMainTab] = useState<'insights' | 'list'>('insights')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [locFilter, setLocFilter] = useState('todas')
@@ -85,110 +87,141 @@ export default function StaffPage() {
         </Button>
       </div>
 
-      {/* Banner de contratos / periodos de prueba próximos a vencer */}
-      {expiringEvents.length > 0 && (
-        <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-lg p-3 space-y-2">
-          <div className="flex items-center gap-2">
-            <span className="text-xl">⚠️</span>
-            <span className="font-semibold text-amber-900 text-sm">
-              {expiringEvents.length === 1
-                ? '1 evento próximo'
-                : `${expiringEvents.length} eventos próximos`}
-            </span>
-          </div>
-          <div className="space-y-1">
-            {expiringEvents.slice(0, 5).map((ev, i) => (
-              <button
-                key={i}
-                onClick={() => setSelectedId(ev.employeeId)}
-                className={`w-full text-left text-xs px-2 py-1.5 rounded border ${
-                  ev.urgency === 'red' ? 'border-red-300 bg-red-50 text-red-800' :
-                  ev.urgency === 'orange' ? 'border-orange-300 bg-orange-50 text-orange-800' :
-                  'border-amber-300 bg-amber-50 text-amber-800'
-                } hover:opacity-80`}
-              >
-                <strong>{ev.employeeName}</strong> · {ev.label} · vence en{' '}
-                <strong>{ev.daysLeft === 0 ? 'hoy' : ev.daysLeft === 1 ? 'mañana' : `${ev.daysLeft} días`}</strong>
-              </button>
-            ))}
-            {expiringEvents.length > 5 && (
-              <p className="text-[11px] text-amber-700 italic">y {expiringEvents.length - 5} más...</p>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Filters */}
-      <div className="flex flex-wrap gap-2">
-        <Input
-          placeholder="🔍 Buscar nombre, DNI, puesto..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="flex-1 min-w-[200px] max-w-xs"
-        />
-        <Select value={locFilter} onChange={e => setLocFilter(e.target.value)} className="w-44">
-          <option value="todas">Todos los locales</option>
-          {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-        </Select>
-        <Select value={stateFilter} onChange={e => setStateFilter(e.target.value as 'all' | 'active' | 'inactive')} className="w-36">
-          <option value="active">✅ Activos</option>
-          <option value="inactive">📅 Bajas</option>
-          <option value="all">Todos</option>
-        </Select>
-        <Select value={contractFilter} onChange={e => setContractFilter(e.target.value)} className="w-44">
-          <option value="todos">Todos los contratos</option>
-          {CONTRACT_TYPES.map(c => <option key={c} value={c}>{c}</option>)}
-        </Select>
+      {/* Pestañas principales: Insights / Empleados */}
+      <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1 w-fit">
+        <button
+          onClick={() => setMainTab('insights')}
+          className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${
+            mainTab === 'insights'
+              ? 'bg-white shadow text-[#7C1A1A]'
+              : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          📊 Insights
+        </button>
+        <button
+          onClick={() => setMainTab('list')}
+          className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${
+            mainTab === 'list'
+              ? 'bg-white shadow text-[#7C1A1A]'
+              : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          👥 Empleados
+        </button>
       </div>
 
-      {/* Employee list */}
-      {locations.length === 0 ? (
-        <Card className="p-8 text-center">
-          <p className="text-gray-500">Primero crea un local en la sección Locales</p>
-        </Card>
-      ) : filtered.length === 0 ? (
-        <Card className="p-8 text-center">
-          <p className="text-gray-500">{search || locFilter !== 'todas' || contractFilter !== 'todos' ? 'No se encontraron empleados con esos filtros' : 'No hay empleados. Crea uno arriba.'}</p>
-        </Card>
-      ) : (
-        <div className="grid gap-3">
-          {filtered.map(emp => {
-            const loc = locations.find(l => l.id === emp.locationId)
-            const isWorking = emp.clockEntries[0]?.type === 'entrada' && emp.active
-            const empExpiring = expiringEvents.filter(ev => ev.employeeId === emp.id)
-            return (
-              <Card
-                key={emp.id}
-                onClick={() => setSelectedId(emp.id)}
-                className={`p-4 flex items-center gap-4 cursor-pointer hover:shadow-md transition ${!emp.active ? 'opacity-60' : ''}`}
-              >
-                <EmployeeAvatar employee={emp} size="md" showWorkingDot={isWorking} />
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium truncate">{emp.name || 'Sin nombre'}</p>
-                  <p className="text-xs text-gray-500 truncate">
-                    {emp.position || '(sin puesto)'} · {loc?.name || '—'}
-                    {emp.contractType && <> · <span className="text-gray-400">{emp.contractType}</span></>}
-                  </p>
-                </div>
-                <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                  {!emp.active && <Badge color="gray">📅 Baja</Badge>}
-                  {isWorking && <Badge color="green">🟢 Trabajando</Badge>}
-                  {empExpiring.map((ev, i) => (
-                    <Badge
-                      key={i}
-                      color={ev.urgency === 'red' ? 'red' : ev.urgency === 'orange' ? 'amber' : 'amber'}
-                    >
-                      {ev.shortLabel}
-                    </Badge>
-                  ))}
-                </div>
-              </Card>
-            )
-          })}
-        </div>
+      {/* Contenido según pestaña */}
+      {mainTab === 'insights' && <InsightsPage />}
+
+      {mainTab === 'list' && (
+        <>
+          {/* Banner de contratos / periodos de prueba próximos a vencer */}
+          {expiringEvents.length > 0 && (
+            <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-lg p-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">⚠️</span>
+                <span className="font-semibold text-amber-900 text-sm">
+                  {expiringEvents.length === 1
+                    ? '1 evento próximo'
+                    : `${expiringEvents.length} eventos próximos`}
+                </span>
+              </div>
+              <div className="space-y-1">
+                {expiringEvents.slice(0, 5).map((ev, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setSelectedId(ev.employeeId)}
+                    className={`w-full text-left text-xs px-2 py-1.5 rounded border ${
+                      ev.urgency === 'red' ? 'border-red-300 bg-red-50 text-red-800' :
+                      ev.urgency === 'orange' ? 'border-orange-300 bg-orange-50 text-orange-800' :
+                      'border-amber-300 bg-amber-50 text-amber-800'
+                    } hover:opacity-80`}
+                  >
+                    <strong>{ev.employeeName}</strong> · {ev.label} · vence en{' '}
+                    <strong>{ev.daysLeft === 0 ? 'hoy' : ev.daysLeft === 1 ? 'mañana' : `${ev.daysLeft} días`}</strong>
+                  </button>
+                ))}
+                {expiringEvents.length > 5 && (
+                  <p className="text-[11px] text-amber-700 italic">y {expiringEvents.length - 5} más...</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Filters */}
+          <div className="flex flex-wrap gap-2">
+            <Input
+              placeholder="🔍 Buscar nombre, DNI, puesto..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="flex-1 min-w-[200px] max-w-xs"
+            />
+            <Select value={locFilter} onChange={e => setLocFilter(e.target.value)} className="w-44">
+              <option value="todas">Todos los locales</option>
+              {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+            </Select>
+            <Select value={stateFilter} onChange={e => setStateFilter(e.target.value as 'all' | 'active' | 'inactive')} className="w-36">
+              <option value="active">✅ Activos</option>
+              <option value="inactive">📅 Bajas</option>
+              <option value="all">Todos</option>
+            </Select>
+            <Select value={contractFilter} onChange={e => setContractFilter(e.target.value)} className="w-44">
+              <option value="todos">Todos los contratos</option>
+              {CONTRACT_TYPES.map(c => <option key={c} value={c}>{c}</option>)}
+            </Select>
+          </div>
+
+          {/* Employee list */}
+          {locations.length === 0 ? (
+            <Card className="p-8 text-center">
+              <p className="text-gray-500">Primero crea un local en la sección Locales</p>
+            </Card>
+          ) : filtered.length === 0 ? (
+            <Card className="p-8 text-center">
+              <p className="text-gray-500">{search || locFilter !== 'todas' || contractFilter !== 'todos' ? 'No se encontraron empleados con esos filtros' : 'No hay empleados. Crea uno arriba.'}</p>
+            </Card>
+          ) : (
+            <div className="grid gap-3">
+              {filtered.map(emp => {
+                const loc = locations.find(l => l.id === emp.locationId)
+                const isWorking = emp.clockEntries[0]?.type === 'entrada' && emp.active
+                const empExpiring = expiringEvents.filter(ev => ev.employeeId === emp.id)
+                return (
+                  <Card
+                    key={emp.id}
+                    onClick={() => setSelectedId(emp.id)}
+                    className={`p-4 flex items-center gap-4 cursor-pointer hover:shadow-md transition ${!emp.active ? 'opacity-60' : ''}`}
+                  >
+                    <EmployeeAvatar employee={emp} size="md" showWorkingDot={isWorking} />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">{emp.name || 'Sin nombre'}</p>
+                      <p className="text-xs text-gray-500 truncate">
+                        {emp.position || '(sin puesto)'} · {loc?.name || '—'}
+                        {emp.contractType && <> · <span className="text-gray-400">{emp.contractType}</span></>}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                      {!emp.active && <Badge color="gray">📅 Baja</Badge>}
+                      {isWorking && <Badge color="green">🟢 Trabajando</Badge>}
+                      {empExpiring.map((ev, i) => (
+                        <Badge
+                          key={i}
+                          color={ev.urgency === 'red' ? 'red' : ev.urgency === 'orange' ? 'amber' : 'amber'}
+                        >
+                          {ev.shortLabel}
+                        </Badge>
+                      ))}
+                    </div>
+                  </Card>
+                )
+              })}
+            </div>
+          )}
+        </>
       )}
 
-      {/* Employee Detail Modal */}
+      {/* Employee Detail Modal (siempre disponible, abierto desde cualquier pestaña) */}
       {selectedId && (
         <EmployeeModal
           employee={staff.find(e => e.id === selectedId)!}
@@ -208,6 +241,7 @@ export default function StaffPage() {
     </div>
   )
 }
+
 
 // ─── Employee Detail Modal ────────────────────────────────────────────────────
 
