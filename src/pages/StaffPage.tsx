@@ -13,6 +13,24 @@ const DAY_LABELS: Record<string, string> = {
   jueves: 'Jueves', viernes: 'Viernes', sabado: 'Sábado', domingo: 'Domingo'
 }
 
+type TerminationType = 'despido' | 'fin_contrato' | 'voluntaria' | 'jubilacion' | 'otro'
+
+const TERMINATION_LABELS: Record<TerminationType, string> = {
+  despido: 'Despido',
+  fin_contrato: 'Fin de contrato',
+  voluntaria: 'Voluntaria',
+  jubilacion: 'Jubilación',
+  otro: 'Otro',
+}
+
+const TERMINATION_OPTIONS: { id: TerminationType; label: string; icon: string; description: string }[] = [
+  { id: 'voluntaria', label: 'Voluntaria', icon: '🚶', description: 'El empleado ha decidido marcharse' },
+  { id: 'fin_contrato', label: 'Fin de contrato', icon: '📅', description: 'Contrato temporal que llega a su fin' },
+  { id: 'despido', label: 'Despido', icon: '⚠️', description: 'Por causas objetivas o disciplinarias' },
+  { id: 'jubilacion', label: 'Jubilación', icon: '👴', description: 'Jubilación ordinaria o anticipada' },
+  { id: 'otro', label: 'Otro', icon: '📋', description: 'Otra causa de baja' },
+]
+
 function getScheduledMinutes(str: string) {
   const [h, m] = str.split(':').map(Number)
   return h * 60 + m
@@ -146,6 +164,7 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations }: {
   const [tab, setTab] = useState('info')
   const [clocking, setClocking] = useState(false)
   const [clockWarn, setClockWarn] = useState<{ type: 'blocked' | 'rounded' | 'real'; msg: string } | null>(null)
+  const [showTerminationModal, setShowTerminationModal] = useState(false)
 
   const update = (field: keyof Employee, value: unknown) => setEmp(prev => ({ ...prev, [field]: value }))
 
@@ -312,9 +331,49 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations }: {
                 onChange={e => update('pin', e.target.value.replace(/\D/g, '').slice(0, 4))}
                 placeholder="0000" />
             </div>
-            <div className="col-span-2 flex items-center gap-2">
-              <input type="checkbox" id="active" checked={emp.active} onChange={e => update('active', e.target.checked)} className="rounded" />
-              <label htmlFor="active" className="cursor-pointer text-sm font-medium">Empleado activo</label>
+            <div className="col-span-2">
+              {emp.active ? (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  <span className="text-sm font-medium text-emerald-800">Empleado en activo</span>
+                </div>
+              ) : (
+                <div className="px-3 py-2 rounded-lg bg-gray-50 border border-gray-200">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-base">📅</span>
+                        <span className="text-sm font-bold text-gray-700">Empleado dado de baja</span>
+                      </div>
+                      <p className="text-xs text-gray-600">
+                        {emp.terminationType ? (
+                          <>
+                            Tipo: <strong>{TERMINATION_LABELS[emp.terminationType]}</strong>
+                            {emp.endDate && ` · ${new Date(emp.endDate + 'T00:00:00').toLocaleDateString('es-ES')}`}
+                          </>
+                        ) : 'Sin tipo registrado'}
+                      </p>
+                      {emp.terminationReason && (
+                        <p className="text-[11px] text-gray-500 italic mt-1">"{emp.terminationReason}"</p>
+                      )}
+                      {emp.terminationCommunicatedToGestoria && (
+                        <p className="text-[10px] text-emerald-700 mt-1">✓ Comunicado a gestoría</p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => {
+                        update('active', true)
+                        update('terminationType', undefined)
+                        update('terminationReason', undefined)
+                        update('terminationCommunicatedToGestoria', false)
+                      }}
+                      className="text-xs px-3 py-1.5 rounded bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50 font-medium shrink-0"
+                    >
+                      🔄 Reactivar
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="col-span-2">
               <Label>Notas</Label>
@@ -592,15 +651,174 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations }: {
 
         {/* Actions */}
         <div className="flex items-center justify-between pt-3 border-t">
-          <Button variant="danger" size="sm" onClick={() => {
-            if (confirm('¿Eliminar este empleado?')) onDelete(emp.id)
-          }}>Eliminar</Button>
+          <div className="flex gap-2">
+            {emp.active && (
+              <Button variant="outline" size="sm" onClick={() => setShowTerminationModal(true)}>
+                🚪 Dar de baja
+              </Button>
+            )}
+            <Button variant="danger" size="sm" onClick={() => {
+              if (!confirm('¿ELIMINAR PERMANENTEMENTE este empleado?\n\nSe perderán todos sus datos: fichajes, vacaciones, documentos.\n\nNormalmente prefieres "Dar de baja" en su lugar.')) return
+              if (!confirm('Confirma una vez más: esta acción NO se puede deshacer. ¿Continuar?')) return
+              onDelete(emp.id)
+            }}>
+              🗑️ Eliminar permanente
+            </Button>
+          </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose}>Cancelar</Button>
             <Button onClick={() => onSave(emp)}>Guardar</Button>
           </div>
         </div>
+
+        {showTerminationModal && (
+          <TerminationModal
+            employee={emp}
+            onCancel={() => setShowTerminationModal(false)}
+            onConfirm={(data) => {
+              const updated: Employee = {
+                ...emp,
+                active: false,
+                endDate: data.endDate,
+                terminationType: data.type,
+                terminationReason: data.reason || undefined,
+                terminationCommunicatedToGestoria: data.communicated,
+              }
+              setShowTerminationModal(false)
+              onSave(updated)
+            }}
+          />
+        )}
       </div>
     </Modal>
+  )
+}
+
+
+// ─── Termination Modal ────────────────────────────────────────────────────────
+
+interface TerminationModalProps {
+  employee: Employee
+  onCancel: () => void
+  onConfirm: (data: {
+    type: TerminationType
+    endDate: string
+    reason: string
+    communicated: boolean
+  }) => void
+}
+
+function TerminationModal({ employee, onCancel, onConfirm }: TerminationModalProps) {
+  const [type, setType] = useState<TerminationType>('voluntaria')
+  const [endDate, setEndDate] = useState(new Date().toISOString().slice(0, 10))
+  const [reason, setReason] = useState('')
+  const [communicated, setCommunicated] = useState(false)
+
+  const placeholderByType: Record<TerminationType, string> = {
+    voluntaria: 'Ej: cambio de ciudad, otro empleo, motivos personales...',
+    fin_contrato: 'Ej: fin de contrato temporal del 15/05/2026',
+    despido: 'Ej: bajo rendimiento reiterado, faltas injustificadas... (importante para defensa legal)',
+    jubilacion: 'Ej: jubilación ordinaria a los 65 años',
+    otro: 'Describe el motivo de la baja',
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+        <div className="px-5 py-3 border-b" style={{ backgroundColor: '#7C1A1A', color: 'white' }}>
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="font-semibold">🚪 Dar de baja empleado</div>
+              <div className="text-xs opacity-90">{employee.name}</div>
+            </div>
+            <button onClick={onCancel} className="text-white/80 hover:text-white text-lg">✕</button>
+          </div>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <div>
+            <Label>Tipo de baja</Label>
+            <div className="mt-1 space-y-1.5">
+              {TERMINATION_OPTIONS.map(opt => (
+                <button
+                  key={opt.id}
+                  onClick={() => setType(opt.id)}
+                  className={`w-full text-left px-3 py-2 rounded-lg border-2 transition ${
+                    type === opt.id
+                      ? 'border-[#7C1A1A] bg-[#F5E9D9]'
+                      : 'border-gray-200 bg-white hover:border-gray-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">{opt.icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold text-gray-900">{opt.label}</div>
+                      <div className="text-[11px] text-gray-500">{opt.description}</div>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <Label>Fecha efectiva de baja</Label>
+            <Input
+              className="mt-1"
+              type="date"
+              value={endDate}
+              onChange={e => setEndDate(e.target.value)}
+            />
+            <p className="text-[11px] text-gray-500 mt-1">
+              Día en el que el empleado deja de trabajar.
+            </p>
+          </div>
+
+          <div>
+            <Label>Motivo {type === 'despido' && <span className="text-red-600">(recomendado)</span>}</Label>
+            <Textarea
+              className="mt-1"
+              rows={3}
+              value={reason}
+              onChange={e => setReason(e.target.value)}
+              placeholder={placeholderByType[type]}
+            />
+          </div>
+
+          <div className="bg-gray-50 rounded-lg p-3">
+            <label className="flex items-start gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={communicated}
+                onChange={e => setCommunicated(e.target.checked)}
+                className="mt-0.5 w-4 h-4 rounded accent-[#7C1A1A]"
+              />
+              <div>
+                <span className="text-sm font-medium">Comunicado a la gestoría</span>
+                <p className="text-[11px] text-gray-500 mt-0.5">
+                  Marca esto cuando hayas notificado a la gestoría para que tramite la baja en SS.
+                </p>
+              </div>
+            </label>
+          </div>
+
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
+            <strong>📌 Importante:</strong> el empleado quedará marcado como inactivo pero sus datos
+            (fichajes, vacaciones, documentos, bolsa de horas) se conservarán. Podrás reactivarlo en
+            cualquier momento desde su ficha.
+          </div>
+        </div>
+
+        <div className="px-5 py-3 border-t bg-gray-50 flex justify-end gap-2">
+          <Button variant="outline" onClick={onCancel}>Cancelar</Button>
+          <Button
+            onClick={() => onConfirm({ type, endDate, reason, communicated })}
+            disabled={!endDate}
+          >
+            Confirmar baja
+          </Button>
+        </div>
+      </div>
+    </div>
   )
 }
