@@ -389,6 +389,10 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifCo
               <Input className="mt-1" value={emp.dni} onChange={e => update('dni', e.target.value)} placeholder="12345678A" />
             </div>
             <div>
+              <Label>Fecha de nacimiento</Label>
+              <Input className="mt-1" type="date" value={emp.birthDate || ''} onChange={e => update('birthDate', e.target.value)} />
+            </div>
+            <div>
               <Label>Teléfono</Label>
               <Input className="mt-1" value={emp.phone} onChange={e => update('phone', e.target.value)} placeholder="600000000" />
             </div>
