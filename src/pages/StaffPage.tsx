@@ -1141,7 +1141,7 @@ function getExpiringEvents(staff: Employee[]): ExpiringEvent[] {
           label: 'Fin de contrato',
           shortLabel: `📅 Contrato ${daysLeft}d`,
           daysLeft,
-          urgency: daysLeft <= 5 ? 'red' : daysLeft <= 15 ? 'orange' : 'yellow',
+          urgency: daysLeft <= 7 ? 'red' : daysLeft <= 15 ? 'orange' : 'yellow',
         })
       }
     }
@@ -1160,7 +1160,7 @@ function getExpiringEvents(staff: Employee[]): ExpiringEvent[] {
           label: 'Fin periodo de prueba',
           shortLabel: `🛡️ Prueba ${daysLeft}d`,
           daysLeft,
-          urgency: daysLeft <= 5 ? 'red' : daysLeft <= 15 ? 'orange' : 'yellow',
+          urgency: daysLeft <= 7 ? 'red' : daysLeft <= 15 ? 'orange' : 'yellow',
         })
       }
     }
@@ -1260,7 +1260,7 @@ function EmployeeExpiryBanners({ employee }: { employee: Employee }) {
       banners.push({
         label: 'Fin de contrato',
         daysLeft,
-        color: daysLeft <= 5 ? 'red' : daysLeft <= 15 ? 'orange' : 'yellow',
+        color: daysLeft <= 7 ? 'red' : daysLeft <= 15 ? 'orange' : 'yellow',
         icon: '📅',
       })
     }
@@ -1276,7 +1276,7 @@ function EmployeeExpiryBanners({ employee }: { employee: Employee }) {
       banners.push({
         label: 'Fin periodo de prueba',
         daysLeft,
-        color: daysLeft <= 5 ? 'red' : daysLeft <= 15 ? 'orange' : 'yellow',
+        color: daysLeft <= 7 ? 'red' : daysLeft <= 15 ? 'orange' : 'yellow',
         icon: '🛡️',
       })
     }
