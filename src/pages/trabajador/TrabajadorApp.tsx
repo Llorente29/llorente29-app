@@ -11,13 +11,14 @@ import MisDocumentos from './MisDocumentos'
 import MisVacaciones from './MisVacaciones'
 import MiBolsaHoras from '../../components/MiBolsaHoras'
 import MisTurnos from './MisTurnos'
+import CambiosTurnoPage from './CambiosTurnoPage'
 import { fetchAppSettings } from '../../services/appSettingsService'
 import { fetchLocations } from '../../services/supabaseSync'
 import type { Employee, Location } from '../../types'
 
 const SESSION_KEY = 'andy-empleado-session-v1'
 
-type SubPage = 'home' | 'fichar' | 'horario' | 'fichajes' | 'documentos' | 'vacaciones' | 'bolsa' | 'turnos'
+type SubPage = 'home' | 'fichar' | 'horario' | 'fichajes' | 'documentos' | 'vacaciones' | 'bolsa' | 'turnos' | 'cambios'
 
 interface Props {
   onExitMode: () => void
@@ -119,6 +120,10 @@ export default function TrabajadorApp({ onExitMode }: Props) {
 
   if (subPage === 'turnos') {
     return <MisTurnos employee={employee} onBack={() => setSubPage('home')} />
+  }
+
+  if (subPage === 'cambios') {
+    return <CambiosTurnoPage employee={employee} onBack={() => setSubPage('home')} />
   }
 
   // home
