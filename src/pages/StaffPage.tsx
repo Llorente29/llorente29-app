@@ -688,14 +688,14 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifCo
               }
               setShowTerminationModal(false)
 
-              // Si el gestor marcó "Comunicado a gestoría", abrir cliente de correo con email prerellenado
+              // Si el gestor marcó "Comunicado a gestoría", abrir Gmail con email prerellenado
               if (data.communicated) {
                 try {
-                  const mailtoUrl = buildGestoriaMailto(updated, locations, notifConfig?.gestoriaEmail || '')
-                  // Pequeño delay para que se vea el feedback visual del confirm antes de saltar al correo
-                  setTimeout(() => { window.location.href = mailtoUrl }, 100)
+                  const gmailUrl = buildGestoriaMailto(updated, locations, notifConfig?.gestoriaEmail || '')
+                  // Pequeño delay para que se vea el feedback visual del confirm antes de saltar a Gmail
+                  setTimeout(() => { window.open(gmailUrl, '_blank') }, 100)
                 } catch (e) {
-                  console.warn('[Termination] No se pudo abrir cliente de correo:', e)
+                  console.warn('[Termination] No se pudo abrir Gmail:', e)
                 }
               }
 
@@ -810,7 +810,7 @@ function TerminationModal({ employee, onCancel, onConfirm }: TerminationModalPro
               <div>
                 <span className="text-sm font-medium">📧 Enviar comunicación a la gestoría</span>
                 <p className="text-[11px] text-gray-500 mt-0.5">
-                  Al confirmar, se abrirá tu cliente de correo con un email prerellenado para la gestoría.
+                  Al confirmar, se abrirá Gmail en una pestaña nueva con un email prerellenado para la gestoría.
                 </p>
               </div>
             </label>
@@ -847,13 +847,14 @@ function TerminationModal({ employee, onCancel, onConfirm }: TerminationModalPro
   )
 }
 
-// ─── Helper para construir mailto: con datos de baja ──────────────────────────
+// ─── Helper para construir URL de Gmail Compose con datos de baja ────────────
 
 /**
- * Construye un URL `mailto:` con asunto y cuerpo prerellenados para enviar
- * a la gestoría la comunicación de baja del empleado. Al disparar
- * window.location.href = mailtoUrl, se abre el cliente de correo del usuario
- * (Gmail, Outlook, Mail, etc.) con todo listo para enviar.
+ * Construye un URL directo de Gmail Compose con asunto y cuerpo prerellenados.
+ * Ventaja sobre `mailto:`: NO depende de la configuración del navegador.
+ * Funciona siempre abriendo Gmail web en una pestaña nueva.
+ *
+ * Formato: https://mail.google.com/mail/?view=cm&fs=1&to=...&su=...&body=...
  */
 function buildGestoriaMailto(
   employee: Employee,
@@ -901,10 +902,14 @@ function buildGestoriaMailto(
 
   const body = bodyLines.join('\n')
 
-  // encodeURIComponent codifica espacios, saltos de línea, acentos, etc.
-  const encodedSubject = encodeURIComponent(subject)
-  const encodedBody = encodeURIComponent(body)
-  const to = gestoriaEmail.trim()
+  // URL directa de Gmail Compose (no requiere configuración del navegador)
+  const params = new URLSearchParams({
+    view: 'cm',
+    fs: '1',
+    to: gestoriaEmail.trim(),
+    su: subject,
+    body: body,
+  })
 
-  return `mailto:${to}?subject=${encodedSubject}&body=${encodedBody}`
+  return `https://mail.google.com/mail/?${params.toString()}`
 }
