@@ -41,6 +41,14 @@ export default function HomeEmpleado({ employee, onNavigate, onLogout, showBolsa
       enabled: true,
     },
     {
+      id: 'cambios' as SubPage,
+      icon: '🔄',
+      title: 'Cambios de turno',
+      desc: 'Solicitar y gestionar cambios',
+      color: 'bg-white border-gray-200 hover:border-[#7C1A1A]',
+      enabled: true,
+    },
+    {
       id: 'fichajes' as SubPage,
       icon: '⏰',
       title: 'Mis fichajes',
