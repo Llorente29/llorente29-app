@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { useApp } from '../context/AppContext'
 import { Button, Input, Select, Textarea, Badge, Card, Tabs, Modal, Label, Alert } from '../components/ui'
 import type { Employee, ClockEntry, WeeklySchedule } from '../types'
@@ -41,15 +41,25 @@ export default function StaffPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [locFilter, setLocFilter] = useState('todas')
+  const [stateFilter, setStateFilter] = useState<'all' | 'active' | 'inactive'>('active')
+  const [contractFilter, setContractFilter] = useState('todos')
 
-  const filtered = staff.filter(e =>
-    (locFilter === 'todas' || e.locationId === locFilter) &&
-    (e.name.toLowerCase().includes(search.toLowerCase()) ||
-     e.dni.toLowerCase().includes(search.toLowerCase()) ||
-     e.position.toLowerCase().includes(search.toLowerCase()))
-  )
+  const filtered = staff.filter(e => {
+    if (locFilter !== 'todas' && e.locationId !== locFilter) return false
+    if (stateFilter === 'active' && !e.active) return false
+    if (stateFilter === 'inactive' && e.active) return false
+    if (contractFilter !== 'todos' && e.contractType !== contractFilter) return false
+    const q = search.toLowerCase()
+    if (q && !(e.name.toLowerCase().includes(q) || e.dni.toLowerCase().includes(q) || e.position.toLowerCase().includes(q))) return false
+    return true
+  })
 
   const workingNow = staff.filter(e => e.clockEntries[0]?.type === 'entrada').length
+
+  // Detectar empleados con contrato o periodo de prueba próximos a vencer
+  const expiringEvents = useMemo(() => {
+    return getExpiringEvents(staff)
+  }, [staff])
 
   return (
     <div className="space-y-5">
@@ -75,17 +85,59 @@ export default function StaffPage() {
         </Button>
       </div>
 
+      {/* Banner de contratos / periodos de prueba próximos a vencer */}
+      {expiringEvents.length > 0 && (
+        <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-lg p-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">⚠️</span>
+            <span className="font-semibold text-amber-900 text-sm">
+              {expiringEvents.length === 1
+                ? '1 evento próximo'
+                : `${expiringEvents.length} eventos próximos`}
+            </span>
+          </div>
+          <div className="space-y-1">
+            {expiringEvents.slice(0, 5).map((ev, i) => (
+              <button
+                key={i}
+                onClick={() => setSelectedId(ev.employeeId)}
+                className={`w-full text-left text-xs px-2 py-1.5 rounded border ${
+                  ev.urgency === 'red' ? 'border-red-300 bg-red-50 text-red-800' :
+                  ev.urgency === 'orange' ? 'border-orange-300 bg-orange-50 text-orange-800' :
+                  'border-amber-300 bg-amber-50 text-amber-800'
+                } hover:opacity-80`}
+              >
+                <strong>{ev.employeeName}</strong> · {ev.label} · vence en{' '}
+                <strong>{ev.daysLeft === 0 ? 'hoy' : ev.daysLeft === 1 ? 'mañana' : `${ev.daysLeft} días`}</strong>
+              </button>
+            ))}
+            {expiringEvents.length > 5 && (
+              <p className="text-[11px] text-amber-700 italic">y {expiringEvents.length - 5} más...</p>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Filters */}
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-2">
         <Input
-          placeholder="Buscar por nombre, DNI, puesto..."
+          placeholder="🔍 Buscar nombre, DNI, puesto..."
           value={search}
           onChange={e => setSearch(e.target.value)}
-          className="max-w-xs"
+          className="flex-1 min-w-[200px] max-w-xs"
         />
-        <Select value={locFilter} onChange={e => setLocFilter(e.target.value)} className="w-48">
+        <Select value={locFilter} onChange={e => setLocFilter(e.target.value)} className="w-44">
           <option value="todas">Todos los locales</option>
           {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+        </Select>
+        <Select value={stateFilter} onChange={e => setStateFilter(e.target.value as 'all' | 'active' | 'inactive')} className="w-36">
+          <option value="active">✅ Activos</option>
+          <option value="inactive">📅 Bajas</option>
+          <option value="all">Todos</option>
+        </Select>
+        <Select value={contractFilter} onChange={e => setContractFilter(e.target.value)} className="w-44">
+          <option value="todos">Todos los contratos</option>
+          {CONTRACT_TYPES.map(c => <option key={c} value={c}>{c}</option>)}
         </Select>
       </div>
 
@@ -96,34 +148,39 @@ export default function StaffPage() {
         </Card>
       ) : filtered.length === 0 ? (
         <Card className="p-8 text-center">
-          <p className="text-gray-500">{search ? 'No se encontraron empleados' : 'No hay empleados. Crea uno arriba.'}</p>
+          <p className="text-gray-500">{search || locFilter !== 'todas' || contractFilter !== 'todos' ? 'No se encontraron empleados con esos filtros' : 'No hay empleados. Crea uno arriba.'}</p>
         </Card>
       ) : (
         <div className="grid gap-3">
           {filtered.map(emp => {
             const loc = locations.find(l => l.id === emp.locationId)
-            const isWorking = emp.clockEntries[0]?.type === 'entrada'
+            const isWorking = emp.clockEntries[0]?.type === 'entrada' && emp.active
+            const empExpiring = expiringEvents.filter(ev => ev.employeeId === emp.id)
             return (
               <Card
                 key={emp.id}
                 onClick={() => setSelectedId(emp.id)}
-                className="p-4 flex items-center gap-4"
+                className={`p-4 flex items-center gap-4 cursor-pointer hover:shadow-md transition ${!emp.active ? 'opacity-60' : ''}`}
               >
-                <div className="relative">
-                  <div className="w-11 h-11 rounded-full bg-gradient-to-br from-teal-400 to-emerald-600 flex items-center justify-center text-white font-semibold text-lg">
-                    {emp.name ? emp.name[0].toUpperCase() : '?'}
-                  </div>
-                  {isWorking && (
-                    <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-white animate-pulse" />
-                  )}
-                </div>
+                <EmployeeAvatar employee={emp} size="md" showWorkingDot={isWorking} />
                 <div className="flex-1 min-w-0">
                   <p className="font-medium truncate">{emp.name || 'Sin nombre'}</p>
-                  <p className="text-xs text-gray-500">{emp.position} · {loc?.name || '—'}</p>
+                  <p className="text-xs text-gray-500 truncate">
+                    {emp.position || '(sin puesto)'} · {loc?.name || '—'}
+                    {emp.contractType && <> · <span className="text-gray-400">{emp.contractType}</span></>}
+                  </p>
                 </div>
-                <div className="flex items-center gap-2">
-                  {!emp.active && <Badge color="gray">Baja</Badge>}
-                  {isWorking && <Badge color="green">Trabajando</Badge>}
+                <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                  {!emp.active && <Badge color="gray">📅 Baja</Badge>}
+                  {isWorking && <Badge color="green">🟢 Trabajando</Badge>}
+                  {empExpiring.map((ev, i) => (
+                    <Badge
+                      key={i}
+                      color={ev.urgency === 'red' ? 'red' : ev.urgency === 'orange' ? 'amber' : 'amber'}
+                    >
+                      {ev.shortLabel}
+                    </Badge>
+                  ))}
                 </div>
               </Card>
             )
@@ -276,6 +333,19 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifCo
         {/* ── DATOS ── */}
         {tab === 'info' && (
           <div className="grid grid-cols-2 gap-4">
+            {/* Foto + cabecera */}
+            <div className="col-span-2 flex items-center gap-4 pb-3 border-b">
+              <EmployeeAvatar employee={emp} size="xl" />
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-lg truncate">{emp.name || '(sin nombre)'}</p>
+                <p className="text-sm text-gray-500">{emp.position || '(sin puesto)'} · {emp.contractType || '(sin contrato)'}</p>
+              </div>
+              <PhotoUploader employee={emp} onChange={photo => update('photo', photo)} />
+            </div>
+
+            {/* Avisos de eventos próximos del empleado */}
+            <EmployeeExpiryBanners employee={emp} />
+
             <div className="col-span-2">
               <Label>Nombre completo</Label>
               <Input className="mt-1" value={emp.name} onChange={e => update('name', e.target.value)} placeholder="Nombre apellidos" />
@@ -467,13 +537,53 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifCo
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Tipo de contrato</Label>
-                <Select className="mt-1" value={emp.contractType} onChange={e => update('contractType', e.target.value)}>
+                <Select className="mt-1" value={emp.contractType} onChange={e => {
+                  const newType = e.target.value
+                  update('contractType', newType)
+                  // Si no hay periodo de prueba aún, autocompletar con el valor por defecto del tipo
+                  if (!emp.trialPeriodDays) {
+                    update('trialPeriodDays', defaultTrialDays(newType))
+                  }
+                }}>
                   {CONTRACT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                 </Select>
               </div>
               <div>
                 <Label>Fecha de alta</Label>
                 <Input className="mt-1" type="date" value={emp.startDate} onChange={e => update('startDate', e.target.value)} />
+              </div>
+              <div>
+                <Label>Fecha fin contrato (opcional)</Label>
+                <Input className="mt-1" type="date" value={emp.endDate || ''} onChange={e => update('endDate', e.target.value)} />
+                <p className="text-[11px] text-gray-500 mt-1">
+                  Solo para contratos temporales/prácticas. Verás aviso 30/15/5 días antes.
+                </p>
+              </div>
+              <div>
+                <Label>Periodo de prueba (días)</Label>
+                <div className="flex gap-2 items-start mt-1">
+                  <Input
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={emp.trialPeriodDays ?? ''}
+                    onChange={e => update('trialPeriodDays', parseInt(e.target.value, 10) || undefined)}
+                    placeholder={String(defaultTrialDays(emp.contractType))}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => update('trialPeriodDays', defaultTrialDays(emp.contractType))}
+                    className="text-xs px-2 py-2 rounded border border-gray-300 hover:bg-gray-50 whitespace-nowrap"
+                    title="Restaurar valor por defecto del tipo de contrato"
+                  >
+                    Por defecto
+                  </button>
+                </div>
+                <p className="text-[11px] text-gray-500 mt-1">
+                  {emp.startDate && emp.trialPeriodDays
+                    ? <>Termina el <strong>{new Date(new Date(emp.startDate + 'T00:00:00').getTime() + emp.trialPeriodDays * 86400000).toLocaleDateString('es-ES')}</strong></>
+                    : 'Recomendado: 90 indef. · 30 temp. · 60 prácticas'}
+                </p>
               </div>
               <div>
                 <Label>Salario bruto anual (€)</Label>
@@ -912,4 +1022,286 @@ function buildGestoriaMailto(
   })
 
   return `https://mail.google.com/mail/?${params.toString()}`
+}
+
+// ─── EmployeeAvatar: foto o iniciales con fondo granate ───────────────────────
+
+function EmployeeAvatar({
+  employee,
+  size = 'md',
+  showWorkingDot = false,
+}: {
+  employee: Employee
+  size?: 'sm' | 'md' | 'lg' | 'xl'
+  showWorkingDot?: boolean
+}) {
+  const sizes = {
+    sm: { wrap: 'w-8 h-8', text: 'text-sm', dot: 'w-2 h-2' },
+    md: { wrap: 'w-11 h-11', text: 'text-lg', dot: 'w-3 h-3' },
+    lg: { wrap: 'w-16 h-16', text: 'text-2xl', dot: 'w-4 h-4' },
+    xl: { wrap: 'w-24 h-24', text: 'text-3xl', dot: 'w-5 h-5' },
+  }
+  const s = sizes[size]
+  const initial = employee.name ? employee.name.trim()[0]?.toUpperCase() : '?'
+  const hasPhoto = !!employee.photo
+
+  return (
+    <div className="relative shrink-0">
+      <div
+        className={`${s.wrap} rounded-full overflow-hidden flex items-center justify-center text-white font-semibold ${s.text} border-2 border-white shadow-sm`}
+        style={!hasPhoto ? { backgroundColor: '#7C1A1A' } : undefined}
+      >
+        {hasPhoto ? (
+          <img src={employee.photo} alt={employee.name} className="w-full h-full object-cover" />
+        ) : (
+          initial
+        )}
+      </div>
+      {showWorkingDot && (
+        <span
+          className={`absolute -bottom-0.5 -right-0.5 ${s.dot} bg-emerald-500 rounded-full border-2 border-white animate-pulse`}
+        />
+      )}
+    </div>
+  )
+}
+
+// ─── Compresión de imagen para subida de foto ───────────────────────────────
+
+/**
+ * Comprime una imagen al tamaño máximo dado y la devuelve como base64.
+ * - Mantiene proporciones
+ * - Convierte siempre a JPEG con calidad 0.85 para reducir tamaño
+ * - Por defecto max 800x800px
+ */
+async function compressImageToBase64(file: File, maxSize = 800): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = e => {
+      const img = new Image()
+      img.onload = () => {
+        let { width, height } = img
+        // Reducir manteniendo proporciones
+        if (width > maxSize || height > maxSize) {
+          const ratio = Math.min(maxSize / width, maxSize / height)
+          width = Math.round(width * ratio)
+          height = Math.round(height * ratio)
+        }
+        const canvas = document.createElement('canvas')
+        canvas.width = width
+        canvas.height = height
+        const ctx = canvas.getContext('2d')
+        if (!ctx) { reject(new Error('No se pudo obtener el contexto canvas')); return }
+        ctx.drawImage(img, 0, 0, width, height)
+        // JPEG con calidad 85% (buen equilibrio tamaño/calidad)
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
+        resolve(dataUrl)
+      }
+      img.onerror = () => reject(new Error('No se pudo cargar la imagen'))
+      img.src = e.target?.result as string
+    }
+    reader.onerror = () => reject(new Error('No se pudo leer el archivo'))
+    reader.readAsDataURL(file)
+  })
+}
+
+// ─── Detector de eventos próximos a vencer ───────────────────────────────────
+
+interface ExpiringEvent {
+  employeeId: string
+  employeeName: string
+  type: 'contract' | 'trial'
+  label: string         // "Contrato termina" o "Periodo de prueba termina"
+  shortLabel: string    // "📅 Contrato 30d" o "🛡️ Prueba 5d"
+  daysLeft: number
+  urgency: 'red' | 'orange' | 'yellow'  // <=5 / 6-15 / 16-30
+}
+
+/**
+ * Devuelve la lista de empleados con eventos (fin de contrato / fin periodo prueba)
+ * en los próximos 30 días. Solo considera empleados activos.
+ */
+function getExpiringEvents(staff: Employee[]): ExpiringEvent[] {
+  const events: ExpiringEvent[] = []
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  for (const emp of staff) {
+    if (!emp.active) continue
+
+    // 1) Fin de contrato (endDate)
+    if (emp.endDate) {
+      const endDate = new Date(emp.endDate + 'T00:00:00')
+      const daysLeft = Math.floor((endDate.getTime() - today.getTime()) / 86400000)
+      if (daysLeft >= 0 && daysLeft <= 30) {
+        events.push({
+          employeeId: emp.id,
+          employeeName: emp.name || '(sin nombre)',
+          type: 'contract',
+          label: 'Fin de contrato',
+          shortLabel: `📅 Contrato ${daysLeft}d`,
+          daysLeft,
+          urgency: daysLeft <= 5 ? 'red' : daysLeft <= 15 ? 'orange' : 'yellow',
+        })
+      }
+    }
+
+    // 2) Fin de periodo de prueba (startDate + trialPeriodDays)
+    if (emp.startDate && emp.trialPeriodDays && emp.trialPeriodDays > 0) {
+      const startDate = new Date(emp.startDate + 'T00:00:00')
+      const trialEnd = new Date(startDate)
+      trialEnd.setDate(trialEnd.getDate() + emp.trialPeriodDays)
+      const daysLeft = Math.floor((trialEnd.getTime() - today.getTime()) / 86400000)
+      if (daysLeft >= 0 && daysLeft <= 30) {
+        events.push({
+          employeeId: emp.id,
+          employeeName: emp.name || '(sin nombre)',
+          type: 'trial',
+          label: 'Fin periodo de prueba',
+          shortLabel: `🛡️ Prueba ${daysLeft}d`,
+          daysLeft,
+          urgency: daysLeft <= 5 ? 'red' : daysLeft <= 15 ? 'orange' : 'yellow',
+        })
+      }
+    }
+  }
+
+  // Ordenar por urgencia (menos días primero)
+  events.sort((a, b) => a.daysLeft - b.daysLeft)
+  return events
+}
+
+// ─── Default trial period según tipo de contrato ─────────────────────────────
+
+function defaultTrialDays(contractType: string): number {
+  if (contractType === 'Indefinido') return 90
+  if (contractType === 'Temporal') return 30
+  if (contractType === 'Prácticas') return 60
+  return 30
+}
+
+// ─── Subir foto del empleado con compresión automática ────────────────────────
+
+function PhotoUploader({
+  employee,
+  onChange,
+}: {
+  employee: Employee
+  onChange: (photoBase64: string) => void
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(false)
+
+  async function handleFile(file: File) {
+    if (!file.type.startsWith('image/')) {
+      alert('El archivo debe ser una imagen (JPG, PNG, etc.)')
+      return
+    }
+    setUploading(true)
+    try {
+      const base64 = await compressImageToBase64(file, 800)
+      onChange(base64)
+    } catch (e) {
+      console.error('[PhotoUploader] Error:', e)
+      alert('No se pudo procesar la imagen. Intenta con otra.')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5 shrink-0">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={e => {
+          const f = e.target.files?.[0]
+          if (f) handleFile(f)
+        }}
+      />
+      <button
+        type="button"
+        onClick={() => fileInputRef.current?.click()}
+        disabled={uploading}
+        className="text-xs px-3 py-1.5 rounded border border-gray-300 hover:bg-gray-50 disabled:opacity-40"
+      >
+        {uploading ? '⏳ Subiendo...' : employee.photo ? '🔄 Cambiar foto' : '📸 Subir foto'}
+      </button>
+      {employee.photo && (
+        <button
+          type="button"
+          onClick={() => onChange('')}
+          className="text-[11px] text-gray-400 hover:text-red-600"
+        >
+          Quitar foto
+        </button>
+      )}
+    </div>
+  )
+}
+
+// ─── Banners de aviso en la pestaña Datos ────────────────────────────────────
+
+function EmployeeExpiryBanners({ employee }: { employee: Employee }) {
+  if (!employee.active) return null
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  const banners: { label: string; daysLeft: number; color: string; icon: string }[] = []
+
+  // Fin de contrato
+  if (employee.endDate) {
+    const endDate = new Date(employee.endDate + 'T00:00:00')
+    const daysLeft = Math.floor((endDate.getTime() - today.getTime()) / 86400000)
+    if (daysLeft >= 0 && daysLeft <= 30) {
+      banners.push({
+        label: 'Fin de contrato',
+        daysLeft,
+        color: daysLeft <= 5 ? 'red' : daysLeft <= 15 ? 'orange' : 'yellow',
+        icon: '📅',
+      })
+    }
+  }
+
+  // Fin periodo de prueba
+  if (employee.startDate && employee.trialPeriodDays && employee.trialPeriodDays > 0) {
+    const startDate = new Date(employee.startDate + 'T00:00:00')
+    const trialEnd = new Date(startDate)
+    trialEnd.setDate(trialEnd.getDate() + employee.trialPeriodDays)
+    const daysLeft = Math.floor((trialEnd.getTime() - today.getTime()) / 86400000)
+    if (daysLeft >= 0 && daysLeft <= 30) {
+      banners.push({
+        label: 'Fin periodo de prueba',
+        daysLeft,
+        color: daysLeft <= 5 ? 'red' : daysLeft <= 15 ? 'orange' : 'yellow',
+        icon: '🛡️',
+      })
+    }
+  }
+
+  if (banners.length === 0) return null
+
+  return (
+    <div className="col-span-2 space-y-1.5">
+      {banners.map((b, i) => (
+        <div
+          key={i}
+          className={`px-3 py-2 rounded-lg border-2 text-sm flex items-center gap-2 ${
+            b.color === 'red' ? 'border-red-300 bg-red-50 text-red-800' :
+            b.color === 'orange' ? 'border-orange-300 bg-orange-50 text-orange-800' :
+            'border-amber-300 bg-amber-50 text-amber-800'
+          }`}
+        >
+          <span className="text-lg">{b.icon}</span>
+          <div className="flex-1">
+            <strong>{b.label}</strong> en{' '}
+            <strong>{b.daysLeft === 0 ? 'hoy' : b.daysLeft === 1 ? 'mañana' : `${b.daysLeft} días`}</strong>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
 }
