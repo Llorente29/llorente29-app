@@ -2,6 +2,7 @@
 // Sub-fase 3.1 — CRUD del catálogo de turnos, disponibilidad y schedules
 
 import { supabase } from '../lib/supabase';
+import { createNotificationsForEmployees } from './notificationsService';
 import type {
   ShiftTemplate,
   EmployeeAvailability,
@@ -233,6 +234,51 @@ export async function publishSchedule(id: string): Promise<boolean> {
     console.error('[scheduler] publishSchedule', error);
     return false;
   }
+
+  // Notificar a todos los empleados con turnos en este schedule (sin bloquear si falla)
+  try {
+    const { data: scheduleRow } = await sb
+      .from('schedules')
+      .select('cells, week_start')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (scheduleRow) {
+      const cells = (scheduleRow.cells as ScheduleCells) || {};
+      const week_start = scheduleRow.week_start as string;
+
+      // Extraer todos los IDs de empleados únicos con al menos 1 turno
+      const employeeIds = new Set<string>();
+      for (const tid of Object.keys(cells)) {
+        for (const dayKey of Object.keys(cells[tid])) {
+          for (const empId of cells[tid][dayKey]) {
+            employeeIds.add(empId);
+          }
+        }
+      }
+
+      if (employeeIds.size > 0) {
+        // Formatear fecha de inicio de semana en español
+        const [y, m, d] = week_start.split('-').map(Number);
+        const startDate = new Date(y, m - 1, d);
+        const fechaLegible = startDate.toLocaleDateString('es-ES', {
+          day: '2-digit',
+          month: 'short',
+        });
+
+        await createNotificationsForEmployees(
+          Array.from(employeeIds),
+          'schedule_published',
+          '📅 Nuevo horario disponible',
+          `Tu horario para la semana del ${fechaLegible} ya está publicado. Consulta tus turnos en la app.`,
+          { scheduleId: id, weekStart: week_start }
+        );
+      }
+    }
+  } catch (e) {
+    console.warn('[scheduler] publishSchedule: error creando notificaciones:', e);
+  }
+
   return true;
 }
 
