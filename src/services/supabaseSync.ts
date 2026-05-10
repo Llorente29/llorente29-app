@@ -103,6 +103,10 @@ interface EmployeeRow {
   // === Campos de bolsa de horas ===
   initial_hours_balance: number | null
   show_hours_balance: boolean | null
+  // === Campos de baja del empleado ===
+  termination_type: string | null
+  termination_reason: string | null
+  termination_communicated_to_gestoria: boolean | null
 }
 
 function rowToEmployee(r: EmployeeRow): Employee {
@@ -149,6 +153,10 @@ function rowToEmployee(r: EmployeeRow): Employee {
     // === Campos de bolsa de horas ===
     initialHoursBalance: r.initial_hours_balance != null ? Number(r.initial_hours_balance) : 0,
     showHoursBalance: r.show_hours_balance ?? true,
+    // === Campos de baja del empleado ===
+    terminationType: (r.termination_type as Employee['terminationType']) || undefined,
+    terminationReason: r.termination_reason || undefined,
+    terminationCommunicatedToGestoria: r.termination_communicated_to_gestoria ?? false,
   }
 }
 
@@ -186,6 +194,10 @@ function employeeToRow(e: Employee): Partial<EmployeeRow> {
     // === Campos de bolsa de horas ===
     initial_hours_balance: e.initialHoursBalance ?? 0,
     show_hours_balance: e.showHoursBalance ?? true,
+    // === Campos de baja del empleado ===
+    termination_type: e.terminationType || null,
+    termination_reason: e.terminationReason || null,
+    termination_communicated_to_gestoria: e.terminationCommunicatedToGestoria ?? false,
   }
 }
 
