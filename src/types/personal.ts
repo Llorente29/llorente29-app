@@ -33,6 +33,9 @@ export interface VacationRequest {
   reviewNotes?: string
   alertMinStaff?: boolean
   alertLeadTime?: boolean
+  // Si true (default), la ausencia es retribuida y cuenta como horas trabajadas en bolsa de horas.
+  // Si false, no cuenta como trabajada y descuenta del contrato del periodo.
+  paid?: boolean
   createdAt: string
 }
 
@@ -48,14 +51,14 @@ export interface VacationSettings {
   updatedAt: string
 }
 
-export const VACATION_TYPES: { id: VacationType; label: string; descontable: boolean }[] = [
-  { id: 'vacaciones',           label: 'Vacaciones',           descontable: true  },
-  { id: 'asuntos_propios',      label: 'Asuntos propios',      descontable: true  },
-  { id: 'baja_medica',          label: 'Baja médica',          descontable: false },
-  { id: 'permiso_matrimonio',   label: 'Matrimonio (15 días)', descontable: false },
-  { id: 'permiso_fallecimiento',label: 'Fallecimiento familiar', descontable: false },
-  { id: 'permiso_mudanza',      label: 'Mudanza',              descontable: false },
-  { id: 'otro',                 label: 'Otro permiso',         descontable: false },
+export const VACATION_TYPES: { id: VacationType; label: string; descontable: boolean; defaultPaid: boolean }[] = [
+  { id: 'vacaciones',           label: 'Vacaciones',             descontable: true,  defaultPaid: true  },
+  { id: 'asuntos_propios',      label: 'Asuntos propios',        descontable: true,  defaultPaid: true  },
+  { id: 'baja_medica',          label: 'Baja médica',            descontable: false, defaultPaid: true  },
+  { id: 'permiso_matrimonio',   label: 'Matrimonio (15 días)',   descontable: false, defaultPaid: true  },
+  { id: 'permiso_fallecimiento',label: 'Fallecimiento familiar', descontable: false, defaultPaid: true  },
+  { id: 'permiso_mudanza',      label: 'Mudanza',                descontable: false, defaultPaid: true  },
+  { id: 'otro',                 label: 'Otro permiso',           descontable: false, defaultPaid: false },
 ]
 
 export const DOCUMENT_TYPES: { id: string; label: string; icon: string }[] = [
