@@ -81,6 +81,7 @@ interface EmployeeRow {
   phone: string | null
   email: string | null
   photo: string | null
+  birth_date: string | null
   position: string | null
   department: string | null
   contract_type: string | null
@@ -119,6 +120,7 @@ function rowToEmployee(r: EmployeeRow): Employee {
     phone: r.phone || '',
     email: r.email || '',
     photo: r.photo || '',
+    birthDate: r.birth_date || undefined,
     position: r.position || '',
     department: r.department || '',
     contractType: r.contract_type || '',
@@ -174,6 +176,7 @@ function employeeToRow(e: Employee): Partial<EmployeeRow> {
     phone: e.phone || null,
     email: e.email || null,
     photo: e.photo || null,
+    birth_date: e.birthDate || null,
     position: e.position || null,
     department: e.department || null,
     contract_type: e.contractType || null,
