@@ -63,11 +63,21 @@ export async function sendMagicLink(
 ): Promise<{ ok: boolean; error?: string }> {
   if (!supabase) return { ok: false, error: 'Supabase no disponible' }
 
+  // Construir URL de redirección desde window.location para que SIEMPRE
+  // coincida con la URL real de la app (evita problemas con Site URL
+  // mal configurado en el panel de Supabase).
+  // Necesitamos: https://llorente29.github.io/llorente29-app/
+  const origin = typeof window !== 'undefined' ? window.location.origin : ''
+  const pathname = typeof window !== 'undefined' ? window.location.pathname : '/'
+  // Normalizar: asegurarse de que termina con /
+  const basePath = pathname.endsWith('/') ? pathname : pathname.replace(/\/[^/]*$/, '/')
+  const redirectUrl = origin + basePath
+
   const { error } = await supabase.auth.signInWithOtp({
     email,
     options: {
       shouldCreateUser,
-      // emailRedirectTo: configurado en panel Supabase (Site URL + Redirect URLs)
+      emailRedirectTo: redirectUrl,
     },
   })
 
