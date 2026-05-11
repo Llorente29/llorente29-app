@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useApp } from './context/AppContext'
 import type { Page } from './types'
-import Logo, { LogoSquare } from './components/Logo'
+import { LogoSquare } from './components/Logo'
 import StaffPage from './pages/StaffPage'
 import FichajesGlobalPage from './pages/FichajesGlobalPage'
 import InformesPage from './pages/InformesPage'
@@ -21,12 +21,20 @@ import TurnosAbiertosPage from './pages/TurnosAbiertosPage'
 import BolsaHorasPage from './pages/BolsaHorasPage'
 import CambiosPendientesPage from './pages/CambiosPendientesPage'
 import TrabajadorApp from './pages/trabajador/TrabajadorApp'
+import LoginPage from './pages/LoginPage'
+import {
+  getCurrentProfile,
+  signOut,
+  onAuthStateChange,
+  isManagerOrAdmin,
+  isWorker,
+} from './services/authService'
+import type { UserProfile } from './services/authService'
 import {
   DashboardPage, ScheduledPage, TemplatesPage,
   AuditsPage, HistoryPage, InventoryPage, LocationsPage
 } from './pages/OtherPages'
 
-const MODE_KEY = 'andy-app-mode-v1'
 type AppMode = 'gestor' | 'trabajador' | 'unset'
 
 const NAV: { id: Page; label: string; icon: string; section?: string }[] = [
@@ -106,51 +114,6 @@ function renderPage(page: Page) {
     case 'tspoon_settings':   return <AvisosSettingsPage />
     default:                  return <DashboardPage />
   }
-}
-
-function ModeSelector({ onSelect }: { onSelect: (mode: AppMode) => void }) {
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-[#F5E9D9] via-white to-[#F5E9D9] flex items-center justify-center p-4">
-      <div className="max-w-md w-full">
-        <div className="text-center mb-8">
-          <Logo size="xl" withBg className="mb-4" />
-          <p className="text-sm text-gray-500 mt-4">¿Quién eres?</p>
-        </div>
-
-        <div className="space-y-3">
-          <button
-            onClick={() => onSelect('trabajador')}
-            className="w-full p-5 rounded-2xl border-2 border-gray-200 bg-white hover:border-[#7C1A1A] transition-all text-left active:scale-95"
-          >
-            <div className="flex items-center gap-4">
-              <span className="text-4xl">👷</span>
-              <div>
-                <p className="font-bold text-gray-900">Soy trabajador</p>
-                <p className="text-xs text-gray-500 mt-0.5">Fichar, ver mi horario, mis cosas</p>
-              </div>
-            </div>
-          </button>
-
-          <button
-            onClick={() => onSelect('gestor')}
-            className="w-full p-5 rounded-2xl border-2 border-gray-200 bg-white hover:border-[#F39C2A] transition-all text-left active:scale-95"
-          >
-            <div className="flex items-center gap-4">
-              <span className="text-4xl">👔</span>
-              <div>
-                <p className="font-bold text-gray-900">Soy gestor / encargado</p>
-                <p className="text-xs text-gray-500 mt-0.5">Acceso completo a la gestión</p>
-              </div>
-            </div>
-          </button>
-        </div>
-
-        <p className="text-center text-xs text-gray-400 mt-6">
-          Tu elección se recordará. Puedes cambiar más tarde.
-        </p>
-      </div>
-    </div>
-  )
 }
 
 function Sidebar({ page, setPage, collapsed, setCollapsed }: {
@@ -269,7 +232,10 @@ function BottomNav({ page, setPage }: { page: Page; setPage: (p: Page) => void }
   )
 }
 
-export default function App() {
+function AuthenticatedApp({ profile, onSignOut }: {
+  profile: UserProfile
+  onSignOut: () => void | Promise<void>
+}) {
   const [page, setPage] = useState<Page>('dashboard')
   const [collapsed, setCollapsed] = useState(false)
   const [mode, setMode] = useState<AppMode>('unset')
@@ -277,32 +243,27 @@ export default function App() {
   const pending = tasks.filter(t => t.status === 'pendiente' || t.status === 'vencida').length
   const critInc = incidents.filter(i => i.severity === 'critica' && i.status !== 'resuelta').length
 
-  // Cargar modo guardado
+  // Determinar el modo automáticamente según el rol
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(MODE_KEY) as AppMode | null
-      if (saved === 'gestor' || saved === 'trabajador') setMode(saved)
-    } catch { /* ignore */ }
-  }, [])
+    if (isWorker(profile)) {
+      setMode('trabajador')
+    } else if (isManagerOrAdmin(profile)) {
+      setMode('gestor')
+    }
+  }, [profile])
 
-  function selectMode(m: AppMode) {
-    localStorage.setItem(MODE_KEY, m)
-    setMode(m)
-  }
-
-  function exitTrabajadorMode() {
-    localStorage.removeItem(MODE_KEY)
-    setMode('unset')
-  }
-
-  // Modo no definido — pedir al usuario que elija
+  // Modo no definido — esperando carga de rol
   if (mode === 'unset') {
-    return <ModeSelector onSelect={selectMode} />
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#F5E9D9] via-white to-[#F5E9D9]">
+        <p className="text-sm text-gray-500">Cargando...</p>
+      </div>
+    )
   }
 
   // Modo trabajador — UI específica del empleado
   if (mode === 'trabajador') {
-    return <TrabajadorApp onExitMode={exitTrabajadorMode} />
+    return <TrabajadorApp onExitMode={onSignOut} />
   }
 
   // Modo gestor — la app completa de siempre
@@ -345,8 +306,8 @@ export default function App() {
               </span>
             )}
             <button
-              onClick={exitTrabajadorMode}
-              title="Cambiar de modo"
+              onClick={onSignOut}
+              title={`Cerrar sesión (${profile.displayName || profile.role})`}
               className="hover:opacity-80 transition-opacity"
             >
               <LogoSquare size={28} />
@@ -359,4 +320,69 @@ export default function App() {
       </div>
     </div>
   )
+}
+
+/* =====================================================
+   APP RAÍZ CON AUTH
+   ===================================================== */
+
+export default function App() {
+  const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  // Cargar perfil al arrancar y suscribirse a cambios de auth
+  useEffect(() => {
+    let cancel = false
+
+    async function loadProfile() {
+      setLoading(true)
+      const p = await getCurrentProfile()
+      if (!cancel) {
+        setProfile(p)
+        setLoading(false)
+      }
+    }
+
+    // Carga inicial
+    loadProfile()
+
+    // Suscribirse a cambios de auth (login, logout, token refresh)
+    const unsub = onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
+        loadProfile()
+      }
+    })
+
+    return () => {
+      cancel = true
+      unsub()
+    }
+  }, [])
+
+  async function handleSignOut() {
+    await signOut()
+    setProfile(null)
+  }
+
+  // Loading inicial
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#F5E9D9] via-white to-[#F5E9D9]">
+        <div className="text-center">
+          <p className="text-2xl font-bold mb-2" style={{ fontFamily: 'Instrument Serif, serif', color: '#7C1A1A' }}>
+            Foodint
+          </p>
+          <p className="text-sm text-gray-500">Cargando...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Sin sesión o sin perfil → mostrar Login
+  if (!profile) {
+    return <LoginPage onCheckSession={() => window.location.reload()} />
+  }
+
+  // Sesión válida → renderizar app autenticada
+  return <AuthenticatedApp profile={profile} onSignOut={handleSignOut} />
 }
