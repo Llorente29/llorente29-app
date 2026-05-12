@@ -11,7 +11,7 @@ import {
   deactivateEmployeeAccount,
   reactivateEmployeeAccount,
 } from '../services/employeeAuthService'
-import { getCurrentProfile, isAdmin } from '../services/authService'
+import { getCurrentProfile } from '../services/authService'
 import type { UserProfile } from '../services/authService'
 
 const POSITIONS = ['Encargado', 'Jefe de cocina', 'Cocinero', 'Ayudante cocina', 'Camarero', 'Barra', 'Hostess', 'Limpieza', 'Gerente', 'Otro']
@@ -77,8 +77,6 @@ export default function StaffPage() {
     }
     loadProfile()
   }, [])
-
-  const isAdminUser = isAdmin(currentProfile)
 
   const filtered = staff.filter(e => {
     if (locFilter !== 'todas' && e.locationId !== locFilter) return false
@@ -268,7 +266,6 @@ export default function StaffPage() {
           }}
           locations={locations}
           notifConfig={notifConfig}
-          isAdminUser={isAdminUser}
           canSeeSalaries={canSeeSalaries}
         />
       )}
@@ -305,14 +302,13 @@ export default function StaffPage() {
 
 // ─── Employee Detail Modal ────────────────────────────────────────────────────
 
-function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifConfig, isAdminUser, canSeeSalaries }: {
+function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifConfig, canSeeSalaries }: {
   employee: Employee
   onClose: () => void
   onSave: (e: Employee) => void
   onDelete: (id: string) => void
   locations: ReturnType<typeof useApp>['locations']
   notifConfig: ReturnType<typeof useApp>['notifConfig']
-  isAdminUser: boolean
   canSeeSalaries: boolean
 }) {
   const [emp, setEmp] = useState<Employee>({ ...employee, clockEntries: [...employee.clockEntries] })
