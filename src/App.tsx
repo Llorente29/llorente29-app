@@ -22,6 +22,7 @@ import BolsaHorasPage from './pages/BolsaHorasPage'
 import CambiosPendientesPage from './pages/CambiosPendientesPage'
 import TrabajadorApp from './pages/trabajador/TrabajadorApp'
 import LoginPage from './pages/LoginPage'
+import UsuariosAccesosPage from './pages/UsuariosAccesosPage'
 import {
   getCurrentProfile,
   signOut,
@@ -239,6 +240,7 @@ function AuthenticatedApp({ profile, onSignOut }: {
   const [page, setPage] = useState<Page>('dashboard')
   const [collapsed, setCollapsed] = useState(false)
   const [mode, setMode] = useState<AppMode>('unset')
+  const [showUsuariosAccesos, setShowUsuariosAccesos] = useState(false)
   const { tasks, incidents } = useApp()
   const pending = tasks.filter(t => t.status === 'pendiente' || t.status === 'vencida').length
   const critInc = incidents.filter(i => i.severity === 'critica' && i.status !== 'resuelta').length
@@ -293,17 +295,33 @@ function AuthenticatedApp({ profile, onSignOut }: {
       <BottomNav page={page} setPage={setPage} />
       <div className={`transition-all duration-200 ${collapsed ? 'lg:ml-[64px]' : 'lg:ml-56'}`}>
         <header className="h-14 border-b border-gray-200 bg-white/90 backdrop-blur-sm flex items-center justify-between px-5 shrink-0 sticky top-0 z-30">
-          <h1 className="text-lg font-semibold" style={{ fontFamily: 'Instrument Serif, serif' }}>{PAGE_TITLES[page]}</h1>
+          <h1 className="text-lg font-semibold" style={{ fontFamily: 'Instrument Serif, serif' }}>
+            {showUsuariosAccesos ? '👥 Usuarios y Accesos' : PAGE_TITLES[page]}
+          </h1>
           <div className="flex items-center gap-2">
-            {pending > 0 && (
+            {pending > 0 && !showUsuariosAccesos && (
               <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
                 {pending} tarea{pending > 1 ? 's' : ''}
               </span>
             )}
-            {critInc > 0 && (
+            {critInc > 0 && !showUsuariosAccesos && (
               <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-red-100 text-red-700 border border-red-200 animate-pulse">
                 ⚠️ {critInc} crítica{critInc > 1 ? 's' : ''}
               </span>
+            )}
+            {/* Botón Usuarios y Accesos (solo admin) */}
+            {profile.role === 'admin' && (
+              <button
+                onClick={() => setShowUsuariosAccesos(!showUsuariosAccesos)}
+                title={showUsuariosAccesos ? 'Volver' : 'Usuarios y Accesos'}
+                className={`text-xs px-2 py-1 rounded-md font-medium transition ${
+                  showUsuariosAccesos
+                    ? 'bg-[#7C1A1A] text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {showUsuariosAccesos ? '← Volver' : '👥 Usuarios'}
+              </button>
             )}
             <button
               onClick={onSignOut}
@@ -315,7 +333,7 @@ function AuthenticatedApp({ profile, onSignOut }: {
           </div>
         </header>
         <main className="p-4 sm:p-6 pb-24 lg:pb-6">
-          {renderPage(page)}
+          {showUsuariosAccesos ? <UsuariosAccesosPage /> : renderPage(page)}
         </main>
       </div>
     </div>
