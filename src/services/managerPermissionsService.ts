@@ -32,6 +32,7 @@ export interface ManagerPermissions {
   show_locations: boolean
   show_tspoon_settings: boolean
   show_salaries: boolean
+  can_manage_employees: boolean
 }
 
 // Valores por defecto razonables. Coinciden con los DEFAULT de la tabla.
@@ -62,6 +63,7 @@ export const DEFAULT_PERMISSIONS: Omit<ManagerPermissions, 'user_profile_id'> = 
   show_locations: false,
   show_tspoon_settings: false,
   show_salaries: false,
+  can_manage_employees: true,
 }
 
 /**
