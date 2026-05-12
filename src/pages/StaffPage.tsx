@@ -1398,8 +1398,15 @@ function NewEmployeeModal({ locations, onCancel, onCreated, onCreateLocal }: New
   const [email, setEmail] = useState('')
   const [pin, setPin] = useState('')
   const [locationId, setLocationId] = useState(locations[0]?.id || '')
+  const [additionalLocations, setAdditionalLocations] = useState<string[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  function toggleAdditional(locId: string) {
+    setAdditionalLocations(prev =>
+      prev.includes(locId) ? prev.filter(x => x !== locId) : [...prev, locId]
+    )
+  }
 
   async function handleSubmit() {
     setError(null)
@@ -1418,12 +1425,16 @@ function NewEmployeeModal({ locations, onCancel, onCreated, onCreateLocal }: New
 
     setSubmitting(true)
 
+    // Combinar local principal + adicionales (sin duplicar)
+    const allAssigned = [locationId, ...additionalLocations.filter(id => id !== locationId)]
+
     // Caso 1: con email → Edge Function (crea Auth + Magic Link)
     if (email.trim()) {
       const result = await createEmployeeWithAccount({
         name: name.trim(),
         email: email.trim().toLowerCase(),
         locationId,
+        assignedLocations: allAssigned,
         pin: pin || undefined,
       }, true)
 
@@ -1461,13 +1472,37 @@ function NewEmployeeModal({ locations, onCancel, onCreated, onCreateLocal }: New
         </div>
 
         <div>
-          <Label>Local *</Label>
+          <Label>Local principal *</Label>
           <Select value={locationId} onChange={e => setLocationId(e.target.value)}>
             {locations.map(l => (
               <option key={l.id} value={l.id}>{l.name}</option>
             ))}
           </Select>
         </div>
+
+        {locations.length > 1 && (
+          <div>
+            <Label>Locales adicionales (opcional)</Label>
+            <div className="space-y-1.5 mt-1">
+              {locations.filter(l => l.id !== locationId).map(l => (
+                <label
+                  key={l.id}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 hover:border-[#7C1A1A] cursor-pointer text-sm"
+                >
+                  <input
+                    type="checkbox"
+                    checked={additionalLocations.includes(l.id)}
+                    onChange={() => toggleAdditional(l.id)}
+                  />
+                  <span>{l.name}</span>
+                </label>
+              ))}
+            </div>
+            <p className="text-[11px] text-gray-500 mt-1">
+              Marca otros locales donde también puede trabajar y fichar.
+            </p>
+          </div>
+        )}
 
         <div>
           <Label>Email (opcional, recomendado)</Label>
