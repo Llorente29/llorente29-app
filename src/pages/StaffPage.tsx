@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { useApp } from '../context/AppContext'
 import { Button, Input, Select, Textarea, Badge, Card, Tabs, Modal, Label, Alert } from '../components/ui'
 import type { Employee, ClockEntry, WeeklySchedule } from '../types'
@@ -11,6 +11,8 @@ import {
   deactivateEmployeeAccount,
   reactivateEmployeeAccount,
 } from '../services/employeeAuthService'
+import { getCurrentProfile, isAdmin } from '../services/authService'
+import type { UserProfile } from '../services/authService'
 
 const POSITIONS = ['Encargado', 'Jefe de cocina', 'Cocinero', 'Ayudante cocina', 'Camarero', 'Barra', 'Hostess', 'Limpieza', 'Gerente', 'Otro']
 const CONTRACT_TYPES = ['Indefinido', 'Temporal', 'Prácticas', 'Beca', 'Autónomo', 'Otro']
@@ -52,6 +54,31 @@ export default function StaffPage() {
   const [stateFilter, setStateFilter] = useState<'all' | 'active' | 'inactive'>('active')
   const [contractFilter, setContractFilter] = useState('todos')
   const [showNewEmployeeModal, setShowNewEmployeeModal] = useState(false)
+  const [currentProfile, setCurrentProfile] = useState<UserProfile | null>(null)
+  const [canSeeSalaries, setCanSeeSalaries] = useState(false)
+
+  // Cargar perfil del usuario actual (para permisos)
+  useEffect(() => {
+    async function loadProfile() {
+      const p = await getCurrentProfile()
+      setCurrentProfile(p)
+      // Si es manager, verificar permiso show_salaries
+      if (p?.role === 'manager') {
+        try {
+          const mod = await import('../services/managerPermissionsService')
+          const perms = await mod.getManagerPermissions(p.id)
+          setCanSeeSalaries(perms.show_salaries)
+        } catch {
+          setCanSeeSalaries(false)
+        }
+      } else if (p?.role === 'admin') {
+        setCanSeeSalaries(true)
+      }
+    }
+    loadProfile()
+  }, [])
+
+  const isAdminUser = isAdmin(currentProfile)
 
   const filtered = staff.filter(e => {
     if (locFilter !== 'todas' && e.locationId !== locFilter) return false
@@ -241,6 +268,8 @@ export default function StaffPage() {
           }}
           locations={locations}
           notifConfig={notifConfig}
+          isAdminUser={isAdminUser}
+          canSeeSalaries={canSeeSalaries}
         />
       )}
 
@@ -276,13 +305,15 @@ export default function StaffPage() {
 
 // ─── Employee Detail Modal ────────────────────────────────────────────────────
 
-function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifConfig }: {
+function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifConfig, isAdminUser, canSeeSalaries }: {
   employee: Employee
   onClose: () => void
   onSave: (e: Employee) => void
   onDelete: (id: string) => void
   locations: ReturnType<typeof useApp>['locations']
   notifConfig: ReturnType<typeof useApp>['notifConfig']
+  isAdminUser: boolean
+  canSeeSalaries: boolean
 }) {
   const [emp, setEmp] = useState<Employee>({ ...employee, clockEntries: [...employee.clockEntries] })
   const [tab, setTab] = useState('info')
@@ -666,10 +697,12 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifCo
                     : 'Recomendado: 90 indef. · 30 temp. · 60 prácticas'}
                 </p>
               </div>
-              <div>
-                <Label>Salario bruto anual (€)</Label>
-                <Input className="mt-1" type="number" value={emp.salary} onChange={e => update('salary', parseFloat(e.target.value) || 0)} />
-              </div>
+              {canSeeSalaries && (
+                <div>
+                  <Label>Salario bruto anual (€)</Label>
+                  <Input className="mt-1" type="number" value={emp.salary} onChange={e => update('salary', parseFloat(e.target.value) || 0)} />
+                </div>
+              )}
               <div>
                 <Label>Horas semanales contratadas</Label>
                 <Input className="mt-1" type="number" step="0.25" value={emp.weeklyHours} onChange={e => update('weeklyHours', parseFloat(e.target.value) || 0)} />
