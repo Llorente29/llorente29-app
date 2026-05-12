@@ -263,7 +263,7 @@ function AuthenticatedApp({ profile, onSignOut }: {
 
   // Modo trabajador — UI específica del empleado
   if (mode === 'trabajador') {
-    return <TrabajadorApp onExitMode={onSignOut} />
+    return <TrabajadorApp employeeId={profile.employeeId} onExitMode={onSignOut} />
   }
 
   // Modo gestor — la app completa de siempre
