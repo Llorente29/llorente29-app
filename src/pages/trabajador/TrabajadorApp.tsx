@@ -1,8 +1,8 @@
 // src/pages/trabajador/TrabajadorApp.tsx
-// Orquestador del modo trabajador: gestiona login, sesión y navegación entre subpáginas.
+// Orquestador del modo trabajador: gestiona navegación entre subpáginas.
+// La sesión es global (Supabase Auth en App.tsx), aquí solo recibimos el employee resuelto.
 import { useState, useEffect } from 'react'
 import { useApp } from '../../context/AppContext'
-import LoginEmpleado from './LoginEmpleado'
 import HomeEmpleado from './HomeEmpleado'
 import FichajeEmpleado from './FichajeEmpleado'
 import MiHorario from './MiHorario'
@@ -16,19 +16,17 @@ import { fetchAppSettings } from '../../services/appSettingsService'
 import { fetchLocations } from '../../services/supabaseSync'
 import type { Employee, Location } from '../../types'
 
-const SESSION_KEY = 'andy-empleado-session-v1'
-
 type SubPage = 'home' | 'fichar' | 'horario' | 'fichajes' | 'documentos' | 'vacaciones' | 'bolsa' | 'turnos' | 'cambios'
 
 interface Props {
+  /** ID del empleado vinculado al user_profile del usuario logueado (Auth) */
+  employeeId?: string
+  /** Callback al pulsar "Salir" — cierra sesión global */
   onExitMode: () => void
 }
 
-export default function TrabajadorApp({ onExitMode }: Props) {
+export default function TrabajadorApp({ employeeId, onExitMode }: Props) {
   const { staff } = useApp()
-  const [employeeId, setEmployeeId] = useState<string | null>(() => {
-    try { return localStorage.getItem(SESSION_KEY) } catch { return null }
-  })
   const [subPage, setSubPage] = useState<SubPage>('home')
   const [showBolsaHoras, setShowBolsaHoras] = useState(false)
   const [location, setLocation] = useState<Location | undefined>(undefined)
@@ -37,16 +35,6 @@ export default function TrabajadorApp({ onExitMode }: Props) {
   useEffect(() => {
     fetchAppSettings().then(s => setShowBolsaHoras(s.showHourBankToEmployee))
   }, [])
-
-  // Si el empleado fue eliminado o cambió de PIN, expulsar
-  useEffect(() => {
-    if (!employeeId) return
-    const exists = staff.find(e => e.id === employeeId && e.active)
-    if (!exists) {
-      localStorage.removeItem(SESSION_KEY)
-      setEmployeeId(null)
-    }
-  }, [employeeId, staff])
 
   const employee: Employee | null = employeeId
     ? (staff.find(e => e.id === employeeId) || null)
@@ -65,22 +53,74 @@ export default function TrabajadorApp({ onExitMode }: Props) {
     return () => { cancel = true }
   }, [employee?.locationId])
 
-  function handleLogin(emp: Employee) {
-    localStorage.setItem(SESSION_KEY, emp.id)
-    setEmployeeId(emp.id)
-    setSubPage('home')
+  // Si no hay employeeId vinculado al user, mostrar mensaje claro
+  if (!employeeId) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#F5E9D9] via-white to-[#F5E9D9] flex items-center justify-center p-4">
+        <div className="max-w-md text-center bg-white rounded-2xl shadow-lg p-6">
+          <p className="text-4xl mb-3">⚠️</p>
+          <h2 className="font-bold text-gray-900 mb-2">Tu cuenta no está vinculada a un empleado</h2>
+          <p className="text-sm text-gray-600 mb-4">
+            Pide a tu administrador que vincule tu cuenta de email con tu ficha de empleado.
+          </p>
+          <button
+            onClick={onExitMode}
+            className="px-4 py-2 rounded-lg text-white text-sm"
+            style={{ backgroundColor: '#7C1A1A' }}
+          >
+            Salir
+          </button>
+        </div>
+      </div>
+    )
   }
 
-  function handleLogout() {
-    localStorage.removeItem(SESSION_KEY)
-    setEmployeeId(null)
-    setSubPage('home')
-  }
-
+  // El employeeId existe pero el empleado no se encuentra (puede estar inactivo o ya no existir)
   if (!employee) {
-    return <LoginEmpleado onLogin={handleLogin} onBackToSelector={onExitMode} />
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#F5E9D9] via-white to-[#F5E9D9] flex items-center justify-center p-4">
+        <div className="max-w-md text-center bg-white rounded-2xl shadow-lg p-6">
+          <p className="text-4xl mb-3">🚫</p>
+          <h2 className="font-bold text-gray-900 mb-2">No tienes acceso</h2>
+          <p className="text-sm text-gray-600 mb-4">
+            Tu ficha de empleado no está disponible. Posiblemente has sido dado de baja.
+            Contacta con tu administrador.
+          </p>
+          <button
+            onClick={onExitMode}
+            className="px-4 py-2 rounded-lg text-white text-sm"
+            style={{ backgroundColor: '#7C1A1A' }}
+          >
+            Salir
+          </button>
+        </div>
+      </div>
+    )
   }
 
+  // El empleado existe pero está inactivo (dado de baja)
+  if (!employee.active) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#F5E9D9] via-white to-[#F5E9D9] flex items-center justify-center p-4">
+        <div className="max-w-md text-center bg-white rounded-2xl shadow-lg p-6">
+          <p className="text-4xl mb-3">🚫</p>
+          <h2 className="font-bold text-gray-900 mb-2">Cuenta desactivada</h2>
+          <p className="text-sm text-gray-600 mb-4">
+            Tu cuenta ha sido dada de baja. Contacta con tu administrador si crees que es un error.
+          </p>
+          <button
+            onClick={onExitMode}
+            className="px-4 py-2 rounded-lg text-white text-sm"
+            style={{ backgroundColor: '#7C1A1A' }}
+          >
+            Salir
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Subpáginas
   if (subPage === 'fichar') {
     return <FichajeEmpleado employee={employee} onBack={() => setSubPage('home')} />
   }
@@ -126,12 +166,12 @@ export default function TrabajadorApp({ onExitMode }: Props) {
     return <CambiosTurnoPage employee={employee} onBack={() => setSubPage('home')} />
   }
 
-  // home
+  // home — usuario ya autenticado por Auth global, sin selector de empleado, sin PIN
   return (
     <HomeEmpleado
       employee={employee}
       onNavigate={p => setSubPage(p)}
-      onLogout={handleLogout}
+      onLogout={onExitMode}
       showBolsaHoras={showBolsaHoras}
     />
   )
