@@ -6,6 +6,10 @@ import DocumentosTab from '../components/personal/DocumentosTab'
 import VacacionesTab from '../components/personal/VacacionesTab'
 import FormacionesTab from '../components/personal/FormacionesTab'
 import InsightsPage from './InsightsPage'
+import {
+  createEmployeeWithAccount,
+  deactivateEmployeeAccount,
+} from '../services/employeeAuthService'
 
 const POSITIONS = ['Encargado', 'Jefe de cocina', 'Cocinero', 'Ayudante cocina', 'Camarero', 'Barra', 'Hostess', 'Limpieza', 'Gerente', 'Otro']
 const CONTRACT_TYPES = ['Indefinido', 'Temporal', 'Prácticas', 'Beca', 'Autónomo', 'Otro']
@@ -46,6 +50,7 @@ export default function StaffPage() {
   const [locFilter, setLocFilter] = useState('todas')
   const [stateFilter, setStateFilter] = useState<'all' | 'active' | 'inactive'>('active')
   const [contractFilter, setContractFilter] = useState('todos')
+  const [showNewEmployeeModal, setShowNewEmployeeModal] = useState(false)
 
   const filtered = staff.filter(e => {
     if (locFilter !== 'todas' && e.locationId !== locFilter) return false
@@ -76,11 +81,9 @@ export default function StaffPage() {
         </div>
         <Button
           size="sm"
-          onClick={async () => {
+          onClick={() => {
             if (locations.length === 0) return
-            const emp = createEmployee(locations[0].id)
-            await saveEmployee(emp)
-            setSelectedId(emp.id)
+            setShowNewEmployeeModal(true)
           }}
           disabled={locations.length === 0}
         >
@@ -237,6 +240,24 @@ export default function StaffPage() {
           }}
           locations={locations}
           notifConfig={notifConfig}
+        />
+      )}
+
+      {/* Modal "Nuevo Empleado": pide datos mínimos y crea cuenta con Magic Link */}
+      {showNewEmployeeModal && (
+        <NewEmployeeModal
+          locations={locations}
+          onCancel={() => setShowNewEmployeeModal(false)}
+          onCreated={(employeeId) => {
+            setShowNewEmployeeModal(false)
+            setSelectedId(employeeId)  // abrir ficha para completar datos
+          }}
+          onCreateLocal={async (locationId) => {
+            // Caso "sin email": crear local-only (sin cuenta auth)
+            const emp = createEmployee(locationId)
+            await saveEmployee(emp)
+            return emp.id
+          }}
         />
       )}
     </div>
@@ -832,7 +853,7 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifCo
           <TerminationModal
             employee={emp}
             onCancel={() => setShowTerminationModal(false)}
-            onConfirm={(data) => {
+            onConfirm={async (data) => {
               const updated: Employee = {
                 ...emp,
                 active: false,
@@ -842,6 +863,14 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifCo
                 terminationCommunicatedToGestoria: data.communicated,
               }
               setShowTerminationModal(false)
+
+              // Desactivar cuenta de acceso (auth) si existe.
+              // No bloquear si falla — la baja se aplica igualmente.
+              try {
+                await deactivateEmployeeAccount(emp.id)
+              } catch (e) {
+                console.warn('[Termination] No se pudo desactivar cuenta auth:', e)
+              }
 
               // Si el gestor marcó "Comunicado a gestoría", abrir Gmail con email prerellenado
               if (data.communicated) {
@@ -1348,5 +1377,140 @@ function EmployeeExpiryBanners({ employee }: { employee: Employee }) {
         </div>
       ))}
     </div>
+  )
+}
+
+
+// ─── New Employee Modal ───────────────────────────────────────────────────────
+// Pide datos mínimos (nombre, local, email opcional) para crear empleado.
+// Si email → crea cuenta Auth + envía Magic Link.
+// Si no email → crea solo empleado local.
+
+interface NewEmployeeModalProps {
+  locations: ReturnType<typeof useApp>['locations']
+  onCancel: () => void
+  onCreated: (employeeId: string) => void
+  onCreateLocal: (locationId: string) => Promise<string>
+}
+
+function NewEmployeeModal({ locations, onCancel, onCreated, onCreateLocal }: NewEmployeeModalProps) {
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [pin, setPin] = useState('')
+  const [locationId, setLocationId] = useState(locations[0]?.id || '')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleSubmit() {
+    setError(null)
+    if (!name.trim()) {
+      setError('Falta el nombre')
+      return
+    }
+    if (!locationId) {
+      setError('Selecciona un local')
+      return
+    }
+    if (pin && !/^\d{4}$/.test(pin)) {
+      setError('El PIN debe ser 4 dígitos')
+      return
+    }
+
+    setSubmitting(true)
+
+    // Caso 1: con email → Edge Function (crea Auth + Magic Link)
+    if (email.trim()) {
+      const result = await createEmployeeWithAccount({
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        locationId,
+        pin: pin || undefined,
+      }, true)
+
+      setSubmitting(false)
+      if (!result.ok || !result.employee) {
+        setError(result.error || 'Error al crear empleado')
+        return
+      }
+      onCreated(result.employee.id)
+      return
+    }
+
+    // Caso 2: sin email → empleado local (sin cuenta acceso)
+    try {
+      const empId = await onCreateLocal(locationId)
+      setSubmitting(false)
+      onCreated(empId)
+    } catch (e) {
+      setSubmitting(false)
+      setError(e instanceof Error ? e.message : 'Error al crear empleado')
+    }
+  }
+
+  return (
+    <Modal open onClose={onCancel} title="Nuevo empleado">
+      <div className="space-y-4">
+        <div>
+          <Label>Nombre completo *</Label>
+          <Input
+            value={name}
+            onChange={e => setName(e.target.value)}
+            placeholder="Ej: Pamela García"
+            autoFocus
+          />
+        </div>
+
+        <div>
+          <Label>Local *</Label>
+          <Select value={locationId} onChange={e => setLocationId(e.target.value)}>
+            {locations.map(l => (
+              <option key={l.id} value={l.id}>{l.name}</option>
+            ))}
+          </Select>
+        </div>
+
+        <div>
+          <Label>Email (opcional, recomendado)</Label>
+          <Input
+            type="email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            placeholder="ej: pamela@email.com"
+          />
+          <p className="text-[11px] text-gray-500 mt-1">
+            {email
+              ? '✉️ Recibirá un enlace de acceso a la app por email.'
+              : '⚠️ Sin email solo podrá fichar en kiosko, no acceder a la app personal.'}
+          </p>
+        </div>
+
+        <div>
+          <Label>PIN (4 dígitos, opcional)</Label>
+          <Input
+            type="text"
+            value={pin}
+            onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+            placeholder="Ej: 1234"
+            maxLength={4}
+          />
+          <p className="text-[11px] text-gray-500 mt-1">
+            Necesario para fichar en el kiosko.
+          </p>
+        </div>
+
+        {error && (
+          <Alert type="error">{error}</Alert>
+        )}
+
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="outline" onClick={onCancel} disabled={submitting}>
+            Cancelar
+          </Button>
+          <Button onClick={handleSubmit} disabled={submitting}>
+            {submitting ? 'Creando...' : email ? 'Crear y enviar acceso' : 'Crear empleado'}
+          </Button>
+        </div>
+      </div>
+    </Modal>
   )
 }
