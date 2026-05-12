@@ -43,6 +43,7 @@ const PERMISSION_ITEMS: PermissionItem[] = [
   { key: 'show_informes_personal',    label: 'Informes Gestoría',   icon: '📄', section: 'Personal', sensitive: true },
   { key: 'show_bolsa_horas',          label: 'Bolsa de horas',      icon: '💰', section: 'Personal' },
   { key: 'show_salaries',             label: 'Ver salarios',        icon: '💵', section: 'Personal', sensitive: true },
+  { key: 'can_manage_employees',      label: 'Crear / dar de baja / eliminar empleados', icon: '🛠️', section: 'Personal', sensitive: true },
 
   // Operaciones
   { key: 'show_tasks',                label: 'Tareas',              icon: '✅', section: 'Operaciones' },
