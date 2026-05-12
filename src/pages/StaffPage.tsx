@@ -9,6 +9,7 @@ import InsightsPage from './InsightsPage'
 import {
   createEmployeeWithAccount,
   deactivateEmployeeAccount,
+  reactivateEmployeeAccount,
 } from '../services/employeeAuthService'
 
 const POSITIONS = ['Encargado', 'Jefe de cocina', 'Cocinero', 'Ayudante cocina', 'Camarero', 'Barra', 'Hostess', 'Limpieza', 'Gerente', 'Otro']
@@ -502,11 +503,17 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifCo
                       )}
                     </div>
                     <button
-                      onClick={() => {
+                      onClick={async () => {
                         update('active', true)
                         update('terminationType', undefined)
                         update('terminationReason', undefined)
                         update('terminationCommunicatedToGestoria', false)
+                        // Reactivar cuenta de acceso (auth) si existe + enviar email.
+                        try {
+                          await reactivateEmployeeAccount(emp.id)
+                        } catch (e) {
+                          console.warn('[Reactivate] No se pudo reactivar cuenta auth:', e)
+                        }
                       }}
                       className="text-xs px-3 py-1.5 rounded bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50 font-medium shrink-0"
                     >
