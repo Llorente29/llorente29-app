@@ -226,7 +226,7 @@ export default function StaffPage() {
       )}
 
       {/* Employee Detail Modal (siempre disponible, abierto desde cualquier pestaña) */}
-      {selectedId && (
+      {selectedId && staff.find(e => e.id === selectedId) && (
         <EmployeeModal
           employee={staff.find(e => e.id === selectedId)!}
           onClose={() => setSelectedId(null)}
@@ -250,7 +250,15 @@ export default function StaffPage() {
           onCancel={() => setShowNewEmployeeModal(false)}
           onCreated={(employeeId) => {
             setShowNewEmployeeModal(false)
-            setSelectedId(employeeId)  // abrir ficha para completar datos
+            // Solo intentamos abrir la ficha si el empleado YA está en el array staff.
+            // Si fue creado vía Edge Function, puede tardar 1-2s en aparecer (vía realtime/sync),
+            // en ese caso no abrimos ficha — el usuario lo verá en el listado al refrescarse.
+            const exists = staff.some(e => e.id === employeeId)
+            if (exists) {
+              setSelectedId(employeeId)
+            }
+            // Forzar pestaña de listado para que el usuario vea su empleado
+            setMainTab('list')
           }}
           onCreateLocal={async (locationId) => {
             // Caso "sin email": crear local-only (sin cuenta auth)
