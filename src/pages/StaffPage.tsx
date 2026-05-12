@@ -12,7 +12,7 @@ import {
   reactivateEmployeeAccount,
 } from '../services/employeeAuthService'
 import { getCurrentProfile } from '../services/authService'
-import type { UserProfile } from '../services/authService'
+
 
 const POSITIONS = ['Encargado', 'Jefe de cocina', 'Cocinero', 'Ayudante cocina', 'Camarero', 'Barra', 'Hostess', 'Limpieza', 'Gerente', 'Otro']
 const CONTRACT_TYPES = ['Indefinido', 'Temporal', 'Prácticas', 'Beca', 'Autónomo', 'Otro']
@@ -54,14 +54,12 @@ export default function StaffPage() {
   const [stateFilter, setStateFilter] = useState<'all' | 'active' | 'inactive'>('active')
   const [contractFilter, setContractFilter] = useState('todos')
   const [showNewEmployeeModal, setShowNewEmployeeModal] = useState(false)
-  const [currentProfile, setCurrentProfile] = useState<UserProfile | null>(null)
   const [canSeeSalaries, setCanSeeSalaries] = useState(false)
 
   // Cargar perfil del usuario actual (para permisos)
   useEffect(() => {
     async function loadProfile() {
       const p = await getCurrentProfile()
-      setCurrentProfile(p)
       // Si es manager, verificar permiso show_salaries
       if (p?.role === 'manager') {
         try {
