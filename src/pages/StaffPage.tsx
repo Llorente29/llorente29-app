@@ -56,22 +56,26 @@ export default function StaffPage() {
   const [contractFilter, setContractFilter] = useState('todos')
   const [showNewEmployeeModal, setShowNewEmployeeModal] = useState(false)
   const [canSeeSalaries, setCanSeeSalaries] = useState(false)
+  const [canManageEmployees, setCanManageEmployees] = useState(false)
 
   // Cargar perfil del usuario actual (para permisos)
   useEffect(() => {
     async function loadProfile() {
       const p = await getCurrentProfile()
-      // Si es manager, verificar permiso show_salaries
+      // Si es manager, verificar permisos show_salaries y can_manage_employees
       if (p?.role === 'manager') {
         try {
           const mod = await import('../services/managerPermissionsService')
           const perms = await mod.getManagerPermissions(p.id)
           setCanSeeSalaries(perms.show_salaries)
+          setCanManageEmployees(perms.can_manage_employees)
         } catch {
           setCanSeeSalaries(false)
+          setCanManageEmployees(false)
         }
       } else if (p?.role === 'admin') {
         setCanSeeSalaries(true)
+        setCanManageEmployees(true)
       }
     }
     loadProfile()
@@ -104,16 +108,18 @@ export default function StaffPage() {
             {staff.length} empleados · {staff.filter(e => e.active).length} activos · {workingNow} trabajando ahora
           </p>
         </div>
-        <Button
-          size="sm"
-          onClick={() => {
-            if (locations.length === 0) return
-            setShowNewEmployeeModal(true)
-          }}
-          disabled={locations.length === 0}
-        >
-          + Nuevo Empleado
-        </Button>
+        {canManageEmployees && (
+          <Button
+            size="sm"
+            onClick={() => {
+              if (locations.length === 0) return
+              setShowNewEmployeeModal(true)
+            }}
+            disabled={locations.length === 0}
+          >
+            + Nuevo Empleado
+          </Button>
+        )}
       </div>
 
       {/* Pestañas principales: Insights / Empleados */}
@@ -266,6 +272,7 @@ export default function StaffPage() {
           locations={locations}
           notifConfig={notifConfig}
           canSeeSalaries={canSeeSalaries}
+          canManageEmployees={canManageEmployees}
         />
       )}
 
@@ -301,7 +308,7 @@ export default function StaffPage() {
 
 // ─── Employee Detail Modal ────────────────────────────────────────────────────
 
-function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifConfig, canSeeSalaries }: {
+function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifConfig, canSeeSalaries, canManageEmployees }: {
   employee: Employee
   onClose: () => void
   onSave: (e: Employee) => void
@@ -309,6 +316,7 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifCo
   locations: ReturnType<typeof useApp>['locations']
   notifConfig: ReturnType<typeof useApp>['notifConfig']
   canSeeSalaries: boolean
+  canManageEmployees: boolean
 }) {
   const [emp, setEmp] = useState<Employee>({ ...employee, clockEntries: [...employee.clockEntries] })
   const [tab, setTab] = useState('info')
@@ -528,23 +536,25 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifCo
                         <p className="text-[10px] text-emerald-700 mt-1">✓ Comunicado a gestoría</p>
                       )}
                     </div>
-                    <button
-                      onClick={async () => {
-                        update('active', true)
-                        update('terminationType', undefined)
-                        update('terminationReason', undefined)
-                        update('terminationCommunicatedToGestoria', false)
-                        // Reactivar cuenta de acceso (auth) si existe + enviar email.
-                        try {
-                          await reactivateEmployeeAccount(emp.id)
-                        } catch (e) {
-                          console.warn('[Reactivate] No se pudo reactivar cuenta auth:', e)
-                        }
-                      }}
-                      className="text-xs px-3 py-1.5 rounded bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50 font-medium shrink-0"
-                    >
-                      🔄 Reactivar
-                    </button>
+                    {canManageEmployees && (
+                      <button
+                        onClick={async () => {
+                          update('active', true)
+                          update('terminationType', undefined)
+                          update('terminationReason', undefined)
+                          update('terminationCommunicatedToGestoria', false)
+                          // Reactivar cuenta de acceso (auth) si existe + enviar email.
+                          try {
+                            await reactivateEmployeeAccount(emp.id)
+                          } catch (e) {
+                            console.warn('[Reactivate] No se pudo reactivar cuenta auth:', e)
+                          }
+                        }}
+                        className="text-xs px-3 py-1.5 rounded bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50 font-medium shrink-0"
+                      >
+                        🔄 Reactivar
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -873,32 +883,34 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifCo
         {/* Actions */}
         <div className="flex items-center justify-between pt-3 border-t">
           <div className="flex gap-2">
-            {emp.active && (
+            {canManageEmployees && emp.active && (
               <Button variant="outline" size="sm" onClick={() => setShowTerminationModal(true)}>
                 🚪 Dar de baja
               </Button>
             )}
-            <Button variant="danger" size="sm" onClick={async () => {
-              if (!confirm('¿ELIMINAR PERMANENTEMENTE este empleado?\n\nSe perderán TODOS sus datos: fichajes, vacaciones, documentos Y su cuenta de acceso.\n\nNormalmente prefieres "Dar de baja" en su lugar.')) return
-              if (!confirm('Confirma una vez más: esta acción NO se puede deshacer. ¿Continuar?')) return
+            {canManageEmployees && (
+              <Button variant="danger" size="sm" onClick={async () => {
+                if (!confirm('¿ELIMINAR PERMANENTEMENTE este empleado?\n\nSe perderán TODOS sus datos: fichajes, vacaciones, documentos Y su cuenta de acceso.\n\nNormalmente prefieres "Dar de baja" en su lugar.')) return
+                if (!confirm('Confirma una vez más: esta acción NO se puede deshacer. ¿Continuar?')) return
 
-              // Eliminación COMPLETA vía Edge Function:
-              // borra employee + user_profile + manager_locations + manager_permissions + auth.user
-              try {
-                const result = await deletePermanentEmployee(emp.id)
-                if (!result.ok) {
-                  alert(`Error al eliminar: ${result.error || 'desconocido'}`)
+                // Eliminación COMPLETA vía Edge Function:
+                // borra employee + user_profile + manager_locations + manager_permissions + auth.user
+                try {
+                  const result = await deletePermanentEmployee(emp.id)
+                  if (!result.ok) {
+                    alert(`Error al eliminar: ${result.error || 'desconocido'}`)
+                    return
+                  }
+                } catch (e) {
+                  alert(`Error: ${e instanceof Error ? e.message : 'desconocido'}`)
                   return
                 }
-              } catch (e) {
-                alert(`Error: ${e instanceof Error ? e.message : 'desconocido'}`)
-                return
-              }
-              // Cerrar modal y refrescar listado (el sync de Supabase actualizará staff)
-              onDelete(emp.id)
-            }}>
-              🗑️ Eliminar permanente
-            </Button>
+                // Cerrar modal y refrescar listado (el sync de Supabase actualizará staff)
+                onDelete(emp.id)
+              }}>
+                🗑️ Eliminar permanente
+              </Button>
+            )}
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose}>Cancelar</Button>
