@@ -12,6 +12,7 @@ import {
   type UserListItem,
 } from '../services/userManagementService'
 import { getCurrentProfile, type UserProfile, type UserRole } from '../services/authService'
+import ManagerPermissionsModal from '../components/ManagerPermissionsModal'
 
 const ROLE_LABELS: Record<UserRole, string> = {
   admin: 'Admin',
@@ -240,6 +241,7 @@ function EditUserModal({ user, isCurrentUser, locations, onClose, onSaved }: Edi
   const [active, setActive] = useState(user.active)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showPermissions, setShowPermissions] = useState(false)
 
   function toggleLoc(locId: string) {
     setManagedLocs(prev =>
@@ -369,6 +371,28 @@ function EditUserModal({ user, isCurrentUser, locations, onClose, onSaved }: Edi
           </div>
         )}
 
+        {/* Permisos del manager (botón que abre modal aparte) */}
+        {role === 'manager' && user.role === 'manager' && (
+          <div>
+            <Label>Pantallas que puede ver</Label>
+            <button
+              onClick={() => setShowPermissions(true)}
+              className="w-full mt-1 px-3 py-2 rounded-lg border border-gray-200 hover:border-[#7C1A1A] text-sm text-left flex items-center justify-between"
+            >
+              <span>🔐 Configurar permisos individuales</span>
+              <span className="text-gray-400">›</span>
+            </button>
+            <p className="text-[11px] text-gray-500 mt-1">
+              Define qué módulos podrá ver este encargado al entrar.
+            </p>
+          </div>
+        )}
+        {role === 'manager' && user.role !== 'manager' && (
+          <Alert type="info">
+            Tras guardar el cambio de rol, vuelve a abrir este usuario para configurar sus permisos.
+          </Alert>
+        )}
+
         {/* Activo / Inactivo */}
         {!isAdminUser && !isCurrentUser && (
           <div>
@@ -412,6 +436,15 @@ function EditUserModal({ user, isCurrentUser, locations, onClose, onSaved }: Edi
           </Button>
         </div>
       </div>
+
+      {/* Modal anidado: permisos del manager */}
+      {showPermissions && (
+        <ManagerPermissionsModal
+          userProfileId={user.id}
+          userName={user.displayName || user.employeeName || 'Encargado'}
+          onClose={() => setShowPermissions(false)}
+        />
+      )}
     </Modal>
   )
 }
