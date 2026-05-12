@@ -10,6 +10,7 @@ import {
   createEmployeeWithAccount,
   deactivateEmployeeAccount,
   reactivateEmployeeAccount,
+  deletePermanentEmployee,
 } from '../services/employeeAuthService'
 import { getCurrentProfile } from '../services/authService'
 
@@ -877,9 +878,23 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifCo
                 🚪 Dar de baja
               </Button>
             )}
-            <Button variant="danger" size="sm" onClick={() => {
-              if (!confirm('¿ELIMINAR PERMANENTEMENTE este empleado?\n\nSe perderán todos sus datos: fichajes, vacaciones, documentos.\n\nNormalmente prefieres "Dar de baja" en su lugar.')) return
+            <Button variant="danger" size="sm" onClick={async () => {
+              if (!confirm('¿ELIMINAR PERMANENTEMENTE este empleado?\n\nSe perderán TODOS sus datos: fichajes, vacaciones, documentos Y su cuenta de acceso.\n\nNormalmente prefieres "Dar de baja" en su lugar.')) return
               if (!confirm('Confirma una vez más: esta acción NO se puede deshacer. ¿Continuar?')) return
+
+              // Eliminación COMPLETA vía Edge Function:
+              // borra employee + user_profile + manager_locations + manager_permissions + auth.user
+              try {
+                const result = await deletePermanentEmployee(emp.id)
+                if (!result.ok) {
+                  alert(`Error al eliminar: ${result.error || 'desconocido'}`)
+                  return
+                }
+              } catch (e) {
+                alert(`Error: ${e instanceof Error ? e.message : 'desconocido'}`)
+                return
+              }
+              // Cerrar modal y refrescar listado (el sync de Supabase actualizará staff)
               onDelete(emp.id)
             }}>
               🗑️ Eliminar permanente
