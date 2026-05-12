@@ -1,15 +1,11 @@
 import { useState, useEffect } from 'react'
-import { useApp } from './context/AppContext'
 import type { Page } from './types'
 import { LogoSquare } from './components/Logo'
 import StaffPage from './pages/StaffPage'
 import FichajesGlobalPage from './pages/FichajesGlobalPage'
 import InformesPage from './pages/InformesPage'
-import TasksPage from './pages/TasksPage'
-import IncidentsPage from './pages/IncidentsPage'
 import CalendarioPage from './pages/CalendarioPage'
 import PlantillaTurnosPage from './pages/PlantillaTurnosPage'
-import TSpoonPage from './pages/TSpoonPage'
 import VentasAnalisisPage from './pages/VentasAnalisisPage'
 import PrediccionPersonalPage from './pages/PrediccionPersonalPage'
 import ZonasPedidoPage from './pages/ZonasPedidoPage'
@@ -32,42 +28,35 @@ import {
 } from './services/authService'
 import type { UserProfile } from './services/authService'
 import {
-  DashboardPage, ScheduledPage, TemplatesPage,
-  AuditsPage, HistoryPage, InventoryPage, LocationsPage
+  DashboardPage, LocationsPage
 } from './pages/OtherPages'
 
 type AppMode = 'gestor' | 'trabajador' | 'unset'
 
 const NAV: { id: Page; label: string; icon: string; section?: string }[] = [
-  { id: 'dashboard',          label: 'Dashboard',           icon: '⊞' },
-  { id: 'staff',              label: 'Personal',            icon: '👤', section: 'Personal' },
-  { id: 'ahora_mismo',        label: 'Ahora mismo',         icon: '🟢' },
-  { id: 'fichajes_global',    label: 'Control Horario',     icon: '⏰' },
-  { id: 'kiosko_fichaje',     label: 'Kiosko Fichaje',      icon: '🕐' },
-  { id: 'solicitudes_pendientes', label: 'Solicitudes',     icon: '📨' },
-  { id: 'turnos_abiertos',    label: 'Turnos abiertos',     icon: '🪑' },
-  { id: 'cambios_pendientes', label: 'Cambios de turno',    icon: '🔄' },
-  { id: 'calendario',         label: 'Calendario',          icon: '📅' },
-  { id: 'plantilla_turnos',   label: 'Plantilla turnos',    icon: '🗂️' },
-  { id: 'informes_personal',  label: 'Informes Gestoría',   icon: '📄' },
-  { id: 'bolsa_horas',        label: 'Bolsa de horas',      icon: '💰' },
-  { id: 'tasks',              label: 'Tareas',              icon: '✅', section: 'Operaciones' },
-  { id: 'scheduled',          label: 'Programadas',         icon: '🔁' },
-  { id: 'templates',          label: 'Plantillas',          icon: '📋' },
-  { id: 'incidents',          label: 'Incidencias',         icon: '⚠️' },
-  { id: 'audits',             label: 'Auditorías',          icon: '🔍' },
-  { id: 'history',            label: 'Historial',           icon: '📜' },
-  { id: 'tspoon',             label: 'Fichas Técnicas',     icon: '🧪', section: 'Inventario' },
-  { id: 'ventas_analisis',    label: 'Análisis de Ventas',  icon: '📊' },
-  { id: 'prediccion_personal', label: 'Predicción Personal',  icon: '🔮' },
-  { id: 'zonas_pedido',       label: 'Zonas de Pedido',     icon: '🛵' },
-  { id: 'inventory',          label: 'Inventario',          icon: '📦' },
-  { id: 'locations',          label: 'Locales',             icon: '📍', section: 'Configuración' },
-  { id: 'tspoon_settings',    label: 'Avisos',              icon: '🔔' },
+  { id: 'dashboard',              label: 'Dashboard',           icon: '⊞' },
+  { id: 'staff',                  label: 'Personal',            icon: '👤', section: 'Personal' },
+  { id: 'ahora_mismo',            label: 'Ahora mismo',         icon: '🟢' },
+  { id: 'fichajes_global',        label: 'Control Horario',     icon: '⏰' },
+  { id: 'kiosko_fichaje',         label: 'Kiosko Fichaje',      icon: '🕐' },
+  { id: 'solicitudes_pendientes', label: 'Solicitudes',         icon: '📨' },
+  { id: 'turnos_abiertos',        label: 'Turnos abiertos',     icon: '🪑' },
+  { id: 'cambios_pendientes',     label: 'Cambios de turno',    icon: '🔄' },
+  { id: 'calendario',             label: 'Calendario',          icon: '📅' },
+  { id: 'plantilla_turnos',       label: 'Plantilla turnos',    icon: '🗂️' },
+  { id: 'informes_personal',      label: 'Informes Gestoría',   icon: '📄' },
+  { id: 'bolsa_horas',            label: 'Bolsa de horas',      icon: '💰' },
+  { id: 'ventas_analisis',        label: 'Análisis de Ventas',  icon: '📊', section: 'Ventas' },
+  { id: 'prediccion_personal',    label: 'Predicción Personal', icon: '🔮' },
+  { id: 'zonas_pedido',           label: 'Zonas de Pedido',     icon: '🛵' },
+  { id: 'locations',              label: 'Locales',             icon: '📍', section: 'Configuración' },
+  { id: 'avisos_settings',        label: 'Avisos',              icon: '🔔' },
 ]
 
 const PAGE_TITLES: Record<Page, string> = {
-  dashboard: 'Dashboard', staff: 'Personal', fichajes_global: 'Control Horario',
+  dashboard: 'Dashboard',
+  staff: 'Personal',
+  fichajes_global: 'Control Horario',
   kiosko_fichaje: 'Kiosko Fichaje',
   solicitudes_pendientes: 'Solicitudes pendientes',
   ahora_mismo: 'Ahora mismo',
@@ -77,13 +66,11 @@ const PAGE_TITLES: Record<Page, string> = {
   plantilla_turnos: 'Plantilla de turnos',
   informes_personal: 'Informes Gestoría',
   bolsa_horas: 'Bolsa de horas',
-  tasks: 'Tareas', scheduled: 'Programadas', templates: 'Plantillas',
-  incidents: 'Incidencias', locations: 'Locales', audits: 'Auditorías',
-  history: 'Historial', tspoon: 'Fichas Técnicas', inventory: 'Inventario',
-  tspoon_settings: 'Configuración de Avisos',
   ventas_analisis: 'Análisis de Ventas',
   prediccion_personal: 'Predicción de Personal',
   zonas_pedido: 'Zonas de Pedido',
+  locations: 'Locales',
+  avisos_settings: 'Configuración de Avisos',
 }
 
 function renderPage(page: Page) {
@@ -100,19 +87,11 @@ function renderPage(page: Page) {
     case 'plantilla_turnos':  return <PlantillaTurnosPage />
     case 'informes_personal': return <InformesPage />
     case 'bolsa_horas':       return <BolsaHorasPage />
-    case 'tasks':             return <TasksPage />
-    case 'scheduled':         return <ScheduledPage />
-    case 'templates':         return <TemplatesPage />
-    case 'incidents':         return <IncidentsPage />
-    case 'audits':            return <AuditsPage />
-    case 'history':           return <HistoryPage />
-    case 'tspoon':            return <TSpoonPage />
     case 'ventas_analisis':   return <VentasAnalisisPage />
     case 'prediccion_personal': return <PrediccionPersonalPage />
     case 'zonas_pedido':      return <ZonasPedidoPage />
-    case 'inventory':         return <InventoryPage />
     case 'locations':         return <LocationsPage />
-    case 'tspoon_settings':   return <AvisosSettingsPage />
+    case 'avisos_settings':   return <AvisosSettingsPage />
     default:                  return <DashboardPage />
   }
 }
@@ -121,11 +100,11 @@ function Sidebar({ page, setPage, collapsed, setCollapsed, visiblePageIds }: {
   page: Page; setPage: (p: Page) => void; collapsed: boolean; setCollapsed: (v: boolean) => void
   visiblePageIds: Set<Page>
 }) {
-  const { tasks, incidents } = useApp()
+  // Tasks e incidents del antiguo módulo Operaciones se reactivarán cuando exista el nuevo módulo APPCC.
+  const pendingTasks = 0
+  const openInc = 0
   const [pendingVacations, setPendingVacations] = useState(0)
   const [pendingSwaps, setPendingSwaps] = useState(0)
-  const pendingTasks = tasks.filter(t => t.status === 'pendiente' || t.status === 'vencida').length
-  const openInc = incidents.filter(i => i.status !== 'resuelta').length
 
   // NAV filtrado según permisos del usuario
   const visibleNav = NAV.filter(item => visiblePageIds.has(item.id))
@@ -161,11 +140,12 @@ function Sidebar({ page, setPage, collapsed, setCollapsed, visiblePageIds }: {
   }, [])
 
   const badge = (id: Page) =>
-    id === 'tasks' ? pendingTasks
-    : id === 'incidents' ? openInc
-    : id === 'solicitudes_pendientes' ? pendingVacations
+    id === 'solicitudes_pendientes' ? pendingVacations
     : id === 'cambios_pendientes' ? pendingSwaps
     : 0
+
+  // Variables usadas más adelante en el módulo APPCC (declaradas aquí solo para evitar warning)
+  void pendingTasks; void openInc
 
   return (
     <aside className={`fixed inset-y-0 left-0 z-40 flex flex-col bg-white border-r border-gray-200 transition-all duration-200 ${collapsed ? 'w-[64px]' : 'w-56'}`}>
@@ -224,8 +204,8 @@ function Sidebar({ page, setPage, collapsed, setCollapsed, visiblePageIds }: {
 function BottomNav({ page, setPage, visiblePageIds }: {
   page: Page; setPage: (p: Page) => void; visiblePageIds: Set<Page>
 }) {
-  const main: Page[] = ['dashboard', 'staff', 'kiosko_fichaje', 'tasks', 'locations']
-  const icons: Record<string, string> = { dashboard: '⊞', staff: '👤', kiosko_fichaje: '🕐', tasks: '✅', locations: '📍' }
+  const main: Page[] = ['dashboard', 'staff', 'kiosko_fichaje', 'ahora_mismo', 'locations']
+  const icons: Record<string, string> = { dashboard: '⊞', staff: '👤', kiosko_fichaje: '🕐', ahora_mismo: '🟢', locations: '📍' }
   const visibleMain = main.filter(id => visiblePageIds.has(id))
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 flex items-center justify-around py-1 px-1 lg:hidden">
@@ -250,9 +230,9 @@ function AuthenticatedApp({ profile, onSignOut }: {
   const [showUsuariosAccesos, setShowUsuariosAccesos] = useState(false)
   const [forceWorkerMode, setForceWorkerMode] = useState(false)
   const [perms, setPerms] = useState<Set<Page> | null>(null)
-  const { tasks, incidents } = useApp()
-  const pending = tasks.filter(t => t.status === 'pendiente' || t.status === 'vencida').length
-  const critInc = incidents.filter(i => i.severity === 'critica' && i.status !== 'resuelta').length
+  // Tasks e incidents del antiguo módulo Operaciones — se reactivarán con módulo APPCC
+  const pending = 0
+  const critInc = 0
 
   // Determinar el modo automáticamente según el rol
   useEffect(() => {
@@ -289,19 +269,13 @@ function AuthenticatedApp({ profile, onSignOut }: {
           if (p.show_plantilla_turnos) allowed.add('plantilla_turnos')
           if (p.show_informes_personal) allowed.add('informes_personal')
           if (p.show_bolsa_horas) allowed.add('bolsa_horas')
-          if (p.show_tasks) allowed.add('tasks')
-          if (p.show_scheduled) allowed.add('scheduled')
-          if (p.show_templates) allowed.add('templates')
-          if (p.show_incidents) allowed.add('incidents')
-          if (p.show_audits) allowed.add('audits')
-          if (p.show_history) allowed.add('history')
-          if (p.show_tspoon) allowed.add('tspoon')
           if (p.show_ventas_analisis) allowed.add('ventas_analisis')
           if (p.show_prediccion_personal) allowed.add('prediccion_personal')
           if (p.show_zonas_pedido) allowed.add('zonas_pedido')
-          if (p.show_inventory) allowed.add('inventory')
           if (p.show_locations) allowed.add('locations')
-          if (p.show_tspoon_settings) allowed.add('tspoon_settings')
+          // avisos_settings se mantiene visible si el manager tiene el flag antiguo show_tspoon_settings
+          // (compatibilidad temporal hasta que se renombre la columna en Sprint 1)
+          if (p.show_tspoon_settings) allowed.add('avisos_settings')
           setPerms(allowed)
         } catch (e) {
           console.error('[perms] load:', e)
