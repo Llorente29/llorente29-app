@@ -172,3 +172,44 @@ export async function reactivateEmployeeAccount(
     return { ok: false, error: msg }
   }
 }
+
+/**
+ * ⚠️ ELIMINA PERMANENTEMENTE un empleado y todo su rastro.
+ * - Borra employees + manager_locations + manager_permissions + user_profile + auth.user
+ * - Es IRREVERSIBLE
+ * - La UI debe confirmar 2 veces antes de llamar a esta función
+ */
+export async function deletePermanentEmployee(
+  employeeId: string,
+): Promise<DeactivateResult> {
+  if (!supabase) return { ok: false, error: 'Supabase no disponible' }
+
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) return { ok: false, error: 'No hay sesión activa' }
+
+  const url = getFunctionUrl('manage-employee')
+  if (!url) return { ok: false, error: 'No se ha podido determinar la URL de la función' }
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        action: 'delete_permanent',
+        employeeId,
+      }),
+    })
+
+    const result = await response.json()
+    if (!response.ok || !result.ok) {
+      return { ok: false, error: result.error || `HTTP ${response.status}` }
+    }
+    return { ok: true, employeeId: result.employeeId }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Error desconocido'
+    return { ok: false, error: msg }
+  }
+}
