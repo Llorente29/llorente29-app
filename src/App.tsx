@@ -117,14 +117,18 @@ function renderPage(page: Page) {
   }
 }
 
-function Sidebar({ page, setPage, collapsed, setCollapsed }: {
+function Sidebar({ page, setPage, collapsed, setCollapsed, visiblePageIds }: {
   page: Page; setPage: (p: Page) => void; collapsed: boolean; setCollapsed: (v: boolean) => void
+  visiblePageIds: Set<Page>
 }) {
   const { tasks, incidents } = useApp()
   const [pendingVacations, setPendingVacations] = useState(0)
   const [pendingSwaps, setPendingSwaps] = useState(0)
   const pendingTasks = tasks.filter(t => t.status === 'pendiente' || t.status === 'vencida').length
   const openInc = incidents.filter(i => i.status !== 'resuelta').length
+
+  // NAV filtrado según permisos del usuario
+  const visibleNav = NAV.filter(item => visiblePageIds.has(item.id))
 
   // Cargar conteo de vacaciones pendientes
   useEffect(() => {
@@ -176,9 +180,9 @@ function Sidebar({ page, setPage, collapsed, setCollapsed }: {
       </div>
 
       <nav className="flex-1 py-2 px-2 space-y-0.5 overflow-y-auto">
-        {NAV.map((item, idx) => {
+        {visibleNav.map((item, idx) => {
           const isActive = page === item.id
-          const showSection = item.section && (idx === 0 || NAV[idx - 1].section !== item.section)
+          const showSection = item.section && (idx === 0 || visibleNav[idx - 1].section !== item.section)
           const b = badge(item.id)
           return (
             <div key={item.id}>
@@ -217,12 +221,15 @@ function Sidebar({ page, setPage, collapsed, setCollapsed }: {
   )
 }
 
-function BottomNav({ page, setPage }: { page: Page; setPage: (p: Page) => void }) {
+function BottomNav({ page, setPage, visiblePageIds }: {
+  page: Page; setPage: (p: Page) => void; visiblePageIds: Set<Page>
+}) {
   const main: Page[] = ['dashboard', 'staff', 'kiosko_fichaje', 'tasks', 'locations']
   const icons: Record<string, string> = { dashboard: '⊞', staff: '👤', kiosko_fichaje: '🕐', tasks: '✅', locations: '📍' }
+  const visibleMain = main.filter(id => visiblePageIds.has(id))
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 flex items-center justify-around py-1 px-1 lg:hidden">
-      {main.map(id => (
+      {visibleMain.map(id => (
         <button key={id} onClick={() => setPage(id)}
           className={`flex flex-col items-center gap-0.5 py-1.5 px-2 rounded-lg min-w-0 ${page === id ? 'text-[#7C1A1A]' : 'text-gray-400'}`}>
           <span className="text-xl leading-none">{icons[id]}</span>
@@ -241,6 +248,8 @@ function AuthenticatedApp({ profile, onSignOut }: {
   const [collapsed, setCollapsed] = useState(false)
   const [mode, setMode] = useState<AppMode>('unset')
   const [showUsuariosAccesos, setShowUsuariosAccesos] = useState(false)
+  const [forceWorkerMode, setForceWorkerMode] = useState(false)
+  const [perms, setPerms] = useState<Set<Page> | null>(null)
   const { tasks, incidents } = useApp()
   const pending = tasks.filter(t => t.status === 'pendiente' || t.status === 'vencida').length
   const critInc = incidents.filter(i => i.severity === 'critica' && i.status !== 'resuelta').length
@@ -254,6 +263,55 @@ function AuthenticatedApp({ profile, onSignOut }: {
     }
   }, [profile])
 
+  // Cargar permisos del usuario según su rol
+  useEffect(() => {
+    async function loadPerms() {
+      // Admin: ve todo
+      if (profile.role === 'admin') {
+        setPerms(new Set(NAV.map(n => n.id)))
+        return
+      }
+      // Manager: cargar permisos individuales de manager_permissions
+      if (profile.role === 'manager') {
+        try {
+          const mod = await import('./services/managerPermissionsService')
+          const p = await mod.getManagerPermissions(profile.id)
+          const allowed = new Set<Page>()
+          if (p.show_dashboard) allowed.add('dashboard')
+          if (p.show_staff) allowed.add('staff')
+          if (p.show_ahora_mismo) allowed.add('ahora_mismo')
+          if (p.show_fichajes_global) allowed.add('fichajes_global')
+          if (p.show_kiosko_fichaje) allowed.add('kiosko_fichaje')
+          if (p.show_solicitudes_pendientes) allowed.add('solicitudes_pendientes')
+          if (p.show_turnos_abiertos) allowed.add('turnos_abiertos')
+          if (p.show_cambios_pendientes) allowed.add('cambios_pendientes')
+          if (p.show_calendario) allowed.add('calendario')
+          if (p.show_plantilla_turnos) allowed.add('plantilla_turnos')
+          if (p.show_informes_personal) allowed.add('informes_personal')
+          if (p.show_bolsa_horas) allowed.add('bolsa_horas')
+          if (p.show_tasks) allowed.add('tasks')
+          if (p.show_scheduled) allowed.add('scheduled')
+          if (p.show_templates) allowed.add('templates')
+          if (p.show_incidents) allowed.add('incidents')
+          if (p.show_audits) allowed.add('audits')
+          if (p.show_history) allowed.add('history')
+          if (p.show_tspoon) allowed.add('tspoon')
+          if (p.show_ventas_analisis) allowed.add('ventas_analisis')
+          if (p.show_prediccion_personal) allowed.add('prediccion_personal')
+          if (p.show_zonas_pedido) allowed.add('zonas_pedido')
+          if (p.show_inventory) allowed.add('inventory')
+          if (p.show_locations) allowed.add('locations')
+          if (p.show_tspoon_settings) allowed.add('tspoon_settings')
+          setPerms(allowed)
+        } catch (e) {
+          console.error('[perms] load:', e)
+          setPerms(new Set())
+        }
+      }
+    }
+    loadPerms()
+  }, [profile])
+
   // Modo no definido — esperando carga de rol
   if (mode === 'unset') {
     return (
@@ -264,8 +322,22 @@ function AuthenticatedApp({ profile, onSignOut }: {
   }
 
   // Modo trabajador — UI específica del empleado
-  if (mode === 'trabajador') {
-    return <TrabajadorApp employeeId={profile.employeeId} onExitMode={onSignOut} />
+  // También se entra si el manager pulsó "Modo trabajador" voluntariamente
+  if (mode === 'trabajador' || forceWorkerMode) {
+    return (
+      <TrabajadorApp
+        employeeId={profile.employeeId}
+        onExitMode={forceWorkerMode ? () => setForceWorkerMode(false) : onSignOut}
+      />
+    )
+  }
+
+  // Auto-redirigir a primera página permitida si la actual no lo está
+  if (perms && !perms.has(page) && perms.size > 0) {
+    const firstAllowed = NAV.find(n => perms.has(n.id))?.id || 'dashboard'
+    if (firstAllowed !== page) {
+      setTimeout(() => setPage(firstAllowed), 0)
+    }
   }
 
   // Modo gestor — la app completa de siempre
@@ -287,12 +359,18 @@ function AuthenticatedApp({ profile, onSignOut }: {
     )
   }
 
+  // Calcular visiblePageIds para Sidebar y BottomNav
+  const visiblePageIds = perms || new Set<Page>(NAV.map(n => n.id))
+  const canSwitchToWorker = profile.role === 'manager' && !!profile.employeeId
+  const roleLabel = profile.role === 'admin' ? 'Admin' : profile.role === 'manager' ? 'Encargado' : 'Trabajador'
+  const roleIcon = profile.role === 'admin' ? '👑' : profile.role === 'manager' ? '👔' : '👷'
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="hidden lg:block">
-        <Sidebar page={page} setPage={setPage} collapsed={collapsed} setCollapsed={setCollapsed} />
+        <Sidebar page={page} setPage={setPage} collapsed={collapsed} setCollapsed={setCollapsed} visiblePageIds={visiblePageIds} />
       </div>
-      <BottomNav page={page} setPage={setPage} />
+      <BottomNav page={page} setPage={setPage} visiblePageIds={visiblePageIds} />
       <div className={`transition-all duration-200 ${collapsed ? 'lg:ml-[64px]' : 'lg:ml-56'}`}>
         <header className="h-14 border-b border-gray-200 bg-white/90 backdrop-blur-sm flex items-center justify-between px-5 shrink-0 sticky top-0 z-30">
           <h1 className="text-lg font-semibold" style={{ fontFamily: 'Instrument Serif, serif' }}>
@@ -308,6 +386,25 @@ function AuthenticatedApp({ profile, onSignOut }: {
               <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-red-100 text-red-700 border border-red-200 animate-pulse">
                 ⚠️ {critInc} crítica{critInc > 1 ? 's' : ''}
               </span>
+            )}
+            {/* Info del usuario actual */}
+            <div className="hidden sm:flex items-center gap-1.5 text-xs px-2 py-1 rounded-md bg-gray-50 border border-gray-200">
+              <span>{roleIcon}</span>
+              <span className="font-medium text-gray-700 max-w-[120px] truncate">
+                {profile.displayName || 'Usuario'}
+              </span>
+              <span className="text-gray-400">·</span>
+              <span className="text-gray-500">{roleLabel}</span>
+            </div>
+            {/* Botón modo trabajador (solo manager con employee_id) */}
+            {canSwitchToWorker && (
+              <button
+                onClick={() => setForceWorkerMode(true)}
+                title="Ver app de trabajador"
+                className="text-xs px-2 py-1 rounded-md font-medium bg-gray-100 text-gray-600 hover:bg-gray-200"
+              >
+                👤 Modo trabajador
+              </button>
             )}
             {/* Botón Usuarios y Accesos (solo admin) */}
             {profile.role === 'admin' && (
