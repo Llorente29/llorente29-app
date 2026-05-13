@@ -1,58 +1,3 @@
-export type Page =
-  | 'dashboard' | 'staff' | 'fichajes_global' | 'informes_personal' | 'calendario'
-  | 'plantilla_turnos'
-  | 'tasks' | 'scheduled' | 'templates' | 'incidents'
-  | 'locations' | 'audits' | 'history' | 'tspoon'
-| 'inventory' | 'tspoon_settings' | 'avisos_settings' | 'ventas_analisis' | 'prediccion_personal'
-  | 'zonas_pedido' | 'kiosko_fichaje' | 'solicitudes_pendientes'
-  | 'ahora_mismo' | 'turnos_abiertos'
-  | 'bolsa_horas'
-  | 'cambios_pendientes'
-
-export interface Location {
-  id: string; name: string; address: string; phone: string; active: boolean
-  // Coordenadas para geofencing del kiosko
-  lat?: number; lng?: number
-  // === Configuración de bolsa de horas ===
-  hoursBalanceCloseDay?: number              // día del mes en que cierra el periodo (1-31, default 25)
-  hoursBalanceSyncWithGestoria?: boolean     // si true, usa el día configurado en Informes Gestoría
-}
-
-export interface DaySchedule { active: boolean; start: string; end: string }
-
-export interface WeeklySchedule {
-  lunes: DaySchedule; martes: DaySchedule; miercoles: DaySchedule
-  jueves: DaySchedule; viernes: DaySchedule; sabado: DaySchedule; domingo: DaySchedule
-}
-
-export interface ClockEntry {
-  id: string; type: 'entrada' | 'salida'; datetime: string; realDatetime?: string
-  lat?: number; lng?: number; address?: string; scheduled?: string
-  roundingApplied?: boolean; diffMinutes?: number
-  // Datos del fichaje en kiosko
-  source?: 'kiosko' | 'movil' | 'manual'
-  locationIdAtClock?: string         // local en el que fichó (puede no ser el principal)
-  photoDataUrl?: string              // foto opcional al fichar (base64)
-}
-
-export interface StaffDocument {
-  id: string; name: string
-  type: 'contrato' | 'nomina' | 'certificado' | 'formacion' | 'sancion' | 'otro'
-  date: string; url?: string
-}
-
-export interface Vacation {
-  id: string; type: 'Vacaciones' | 'Baja médica' | 'Permiso' | 'Asuntos propios'
-  startDate: string; endDate: string; status: 'solicitada' | 'aprobada' | 'rechazada'; notes?: string
-  alerts?: unknown[]; adjustments?: string[]
-  // Si true (default), la ausencia es retribuida y cuenta como horas trabajadas.
-  // Si false, no cuenta y descuenta del contrato del periodo.
-  // Aplicable principalmente a 'Permiso' que puede ser retribuido o no según el convenio.
-  paid?: boolean
-}
-
-// === Tipos del scheduler en la ficha del empleado (sub-fase 3.2) ===
-export type ShiftPeriod = 'manana' | 'tarde' | 'partido'
 // rest_pattern: cadena "<dia>:<tipo>"
 //   día: 'lun','mar','mie'
 //   tipo: 'tarde_dia' (tarde del día + día siguiente entero)
@@ -112,6 +57,63 @@ export interface Task {
   history: { id: string; action: string; user: string; timestamp: string; notes?: string }[]
   tags: string[]; createdAt: string
 }
+
+export type Page =
+  | 'dashboard' | 'staff' | 'fichajes_global' | 'informes_personal' | 'calendario'
+  | 'plantilla_turnos'
+  | 'tasks' | 'scheduled' | 'templates' | 'incidents'
+  | 'locations' | 'audits' | 'history' | 'tspoon'
+  | 'inventory' | 'tspoon_settings' | 'avisos_settings' | 'ventas_analisis' | 'prediccion_personal'
+  | 'zonas_pedido' | 'kiosko_fichaje' | 'solicitudes_pendientes'
+  | 'ahora_mismo' | 'turnos_abiertos'
+  | 'bolsa_horas'
+  | 'cambios_pendientes'
+  | 'appcc_today'
+
+export interface Location {
+  id: string; name: string; address: string; phone: string; active: boolean
+  // Coordenadas para geofencing del kiosko
+  lat?: number; lng?: number
+  // === Configuración de bolsa de horas ===
+  hoursBalanceCloseDay?: number              // día del mes en que cierra el periodo (1-31, default 25)
+  hoursBalanceSyncWithGestoria?: boolean     // si true, usa el día configurado en Informes Gestoría
+}
+
+export interface DaySchedule { active: boolean; start: string; end: string }
+
+export interface WeeklySchedule {
+  lunes: DaySchedule; martes: DaySchedule; miercoles: DaySchedule
+  jueves: DaySchedule; viernes: DaySchedule; sabado: DaySchedule; domingo: DaySchedule
+}
+
+export interface ClockEntry {
+  id: string; type: 'entrada' | 'salida'; datetime: string; realDatetime?: string
+  lat?: number; lng?: number; address?: string; scheduled?: string
+  roundingApplied?: boolean; diffMinutes?: number
+  // Datos del fichaje en kiosko
+  source?: 'kiosko' | 'movil' | 'manual'
+  locationIdAtClock?: string         // local en el que fichó (puede no ser el principal)
+  photoDataUrl?: string              // foto opcional al fichar (base64)
+}
+
+export interface StaffDocument {
+  id: string; name: string
+  type: 'contrato' | 'nomina' | 'certificado' | 'formacion' | 'sancion' | 'otro'
+  date: string; url?: string
+}
+
+export interface Vacation {
+  id: string; type: 'Vacaciones' | 'Baja médica' | 'Permiso' | 'Asuntos propios'
+  startDate: string; endDate: string; status: 'solicitada' | 'aprobada' | 'rechazada'; notes?: string
+  alerts?: unknown[]; adjustments?: string[]
+  // Si true (default), la ausencia es retribuida y cuenta como horas trabajadas.
+  // Si false, no cuenta y descuenta del contrato del periodo.
+  // Aplicable principalmente a 'Permiso' que puede ser retribuido o no según el convenio.
+  paid?: boolean
+}
+
+// === Tipos del scheduler en la ficha del empleado (sub-fase 3.2) ===
+export type ShiftPeriod = 'manana' | 'tarde' | 'partido'
 
 export interface Template {
   id: string; name: string; description: string; category: string

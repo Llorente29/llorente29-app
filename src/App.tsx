@@ -19,6 +19,7 @@ import CambiosPendientesPage from './pages/CambiosPendientesPage'
 import TrabajadorApp from './pages/trabajador/TrabajadorApp'
 import LoginPage from './pages/LoginPage'
 import UsuariosAccesosPage from './pages/UsuariosAccesosPage'
+import TodayPage from './modules/appcc/pages/TodayPage'
 import {
   getCurrentProfile,
   signOut,
@@ -50,6 +51,7 @@ const NAV: { id: Page; label: string; icon: string; section?: string }[] = [
   { id: 'ventas_analisis',        label: 'Análisis de Ventas',  icon: '📊', section: 'Ventas' },
   { id: 'prediccion_personal',    label: 'Predicción Personal', icon: '🔮' },
   { id: 'zonas_pedido',           label: 'Zonas de Pedido',     icon: '🛵' },
+  { id: 'appcc_today',            label: 'APPCC: Hoy',          icon: '🍃', section: 'APPCC' },
   { id: 'locations',              label: 'Locales',             icon: '📍', section: 'Configuración' },
   { id: 'avisos_settings',        label: 'Avisos',              icon: '🔔' },
 ]
@@ -72,6 +74,7 @@ const PAGE_TITLES: Partial<Record<Page, string>> = {
   zonas_pedido: 'Zonas de Pedido',
   locations: 'Locales',
   avisos_settings: 'Configuración de Avisos',
+  appcc_today: 'APPCC: Checklists de hoy',
 }
 
 function renderPage(page: Page) {
@@ -93,6 +96,7 @@ function renderPage(page: Page) {
     case 'zonas_pedido':      return <ZonasPedidoPage />
     case 'locations':         return <LocationsPage />
     case 'avisos_settings':   return <AvisosSettingsPage />
+    case 'appcc_today':       return <TodayPage />
     default:                  return <DashboardPage />
   }
 }
