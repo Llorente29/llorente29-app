@@ -21,6 +21,7 @@ import LoginPage from './pages/LoginPage'
 import UsuariosAccesosPage from './pages/UsuariosAccesosPage'
 import TodayPage from './modules/appcc/pages/TodayPage'
 import ExecutionPage from './modules/appcc/pages/ExecutionPage'
+import IncidentsPage from './modules/appcc/pages/IncidentsPage'
 import {
   getCurrentProfile,
   signOut,
@@ -53,6 +54,7 @@ const NAV: { id: Page; label: string; icon: string; section?: string }[] = [
   { id: 'prediccion_personal',    label: 'Predicción Personal', icon: '🔮' },
   { id: 'zonas_pedido',           label: 'Zonas de Pedido',     icon: '🛵' },
   { id: 'appcc_today',            label: 'APPCC: Hoy',          icon: '🍃', section: 'APPCC' },
+  { id: 'appcc_incidents',        label: 'APPCC: Incidencias',  icon: '⚠️' },
   { id: 'locations',              label: 'Locales',             icon: '📍', section: 'Configuración' },
   { id: 'avisos_settings',        label: 'Avisos',              icon: '🔔' },
 ]
@@ -77,6 +79,7 @@ const PAGE_TITLES: Partial<Record<Page, string>> = {
   avisos_settings: 'Configuración de Avisos',
   appcc_today: 'APPCC: Checklists de hoy',
   appcc_execution: 'APPCC: Ejecutar checklist',
+  appcc_incidents: 'APPCC: Incidencias',
 }
 
 interface RenderPageContext {
@@ -105,6 +108,7 @@ function renderPage(page: Page, ctx: RenderPageContext) {
     case 'locations':         return <LocationsPage />
     case 'avisos_settings':   return <AvisosSettingsPage />
     case 'appcc_today':       return <TodayPage onOpenExecution={ctx.openExecution} />
+    case 'appcc_incidents':   return <IncidentsPage />
     case 'appcc_execution':
       if (!ctx.currentExecutionId) {
         // Sin id, no podemos renderizar. Volvemos a Hoy.

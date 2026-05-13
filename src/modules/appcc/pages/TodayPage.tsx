@@ -43,7 +43,6 @@ interface TodayPageProps {
 export default function TodayPage({ onOpenExecution }: TodayPageProps) {
   const { locations } = useApp()
 
-  // Solo locales activos, en orden estable
   const activeLocations = useMemo<Location[]>(
     () => locations.filter(l => l.active),
     [locations]
@@ -57,14 +56,12 @@ export default function TodayPage({ onOpenExecution }: TodayPageProps) {
   const [error, setError] = useState<string | null>(null)
   const [showCatalog, setShowCatalog] = useState(false)
 
-  // Al cargar, seleccionar el primer local activo
   useEffect(() => {
     if (!selectedLocationId && activeLocations.length > 0) {
       setSelectedLocationId(activeLocations[0].id)
     }
   }, [activeLocations, selectedLocationId])
 
-  // Cargar ejecuciones de hoy cuando cambia el local seleccionado
   useEffect(() => {
     if (!selectedLocationId) return
     let cancelled = false
@@ -78,7 +75,6 @@ export default function TodayPage({ onOpenExecution }: TodayPageProps) {
     return () => { cancelled = true }
   }, [selectedLocationId])
 
-  // Cargar catálogo (planes + plantillas) una sola vez
   useEffect(() => {
     Promise.all([
       templatesService.listPlans(),
@@ -91,14 +87,12 @@ export default function TodayPage({ onOpenExecution }: TodayPageProps) {
     })
   }, [])
 
-  // Mapa plan_id -> plan
   const planById = useMemo(() => {
     const m = new Map<string, AppccPlan>()
     plans.forEach(p => m.set(p.id, p))
     return m
   }, [plans])
 
-  // Mapa template_id -> template
   const templateById = useMemo(() => {
     const m = new Map<string, AppccTemplate>()
     templates.forEach(t => m.set(t.id, t))
@@ -117,12 +111,10 @@ export default function TodayPage({ onOpenExecution }: TodayPageProps) {
         selectedLocationId,
         templateId
       )
-      // Refrescar lista
       const fresh = await executionsService.listTodayExecutions(selectedLocationId)
       setExecutions(fresh)
       setShowCatalog(false)
       console.log('[TodayPage] Checklist creado:', newExec.id)
-      // Y abrirlo inmediatamente si tenemos callback
       onOpenExecution?.(newExec.id)
     } catch (err) {
       console.error('[TodayPage] Error creando checklist', err)
@@ -139,24 +131,24 @@ export default function TodayPage({ onOpenExecution }: TodayPageProps) {
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-6xl mx-auto">
       {/* Header */}
-      <div className="flex items-baseline justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-3 mb-6">
         <div>
           <h1
-            className="text-3xl mb-1"
+            className="text-4xl mb-1"
             style={{ fontFamily: '"Instrument Serif", serif', color: GRANATE }}
           >
             Checklists APPCC de hoy
           </h1>
-          <p className="text-sm text-gray-600">
+          <p className="text-base text-gray-600">
             {new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </p>
         </div>
         <button
           type="button"
           onClick={() => setShowCatalog(v => !v)}
-          className="px-4 py-2 rounded-lg text-sm font-medium transition-opacity hover:opacity-90"
+          className="px-5 py-3 rounded-lg text-base font-medium transition-opacity hover:opacity-90 min-h-[44px] shrink-0"
           style={{ backgroundColor: GRANATE, color: BEIGE }}
         >
           {showCatalog ? '× Cerrar catálogo' : '+ Arrancar checklist'}
@@ -173,7 +165,7 @@ export default function TodayPage({ onOpenExecution }: TodayPageProps) {
                 key={loc.id}
                 type="button"
                 onClick={() => setSelectedLocationId(loc.id)}
-                className="px-4 py-2 rounded-lg text-sm font-medium transition"
+                className="px-4 py-2.5 rounded-lg text-base font-medium transition min-h-[44px]"
                 style={{
                   backgroundColor: active ? GRANATE : '#fff',
                   color: active ? BEIGE : GRANATE,
@@ -187,16 +179,16 @@ export default function TodayPage({ onOpenExecution }: TodayPageProps) {
         </div>
       )}
 
-      {/* Catálogo desplegable para arrancar checklist ad-hoc */}
+      {/* Catálogo desplegable */}
       {showCatalog && (
         <div
           className="mb-6 rounded-xl p-5 border"
           style={{ backgroundColor: BEIGE, borderColor: GRANATE }}
         >
-          <h2 className="text-lg font-semibold mb-3" style={{ color: GRANATE }}>
+          <h2 className="text-xl font-semibold mb-2" style={{ color: GRANATE }}>
             Arrancar un checklist
           </h2>
-          <p className="text-sm text-gray-700 mb-4">
+          <p className="text-base text-gray-700 mb-4">
             Elige una plantilla para iniciar ahora una ejecución en este local.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -205,10 +197,10 @@ export default function TodayPage({ onOpenExecution }: TodayPageProps) {
                 key={t.id}
                 type="button"
                 onClick={() => handleStartChecklist(t.id)}
-                className="text-left px-3 py-2 rounded-lg bg-white hover:bg-gray-50 border border-gray-200 transition"
+                className="text-left px-4 py-3 rounded-lg bg-white hover:bg-gray-50 border border-gray-200 transition min-h-[60px]"
               >
-                <div className="font-medium text-sm">{t.name}</div>
-                <div className="text-xs text-gray-500">
+                <div className="font-medium text-base">{t.name}</div>
+                <div className="text-sm text-gray-500 mt-0.5">
                   {planById.get(t.plan_id)?.name ?? 'Plan APPCC'}
                   {t.estimated_minutes ? ` · ~${t.estimated_minutes} min` : ''}
                 </div>
@@ -220,66 +212,68 @@ export default function TodayPage({ onOpenExecution }: TodayPageProps) {
 
       {/* Estado: cargando, error, o lista */}
       {loading && (
-        <div className="py-12 text-center text-gray-500">Cargando checklists...</div>
+        <div className="py-12 text-center text-base text-gray-500">Cargando checklists...</div>
       )}
 
       {error && (
-        <div className="py-4 px-4 mb-4 rounded-lg border border-red-200 bg-red-50 text-red-700 text-sm">
+        <div className="py-4 px-4 mb-4 rounded-lg border border-red-200 bg-red-50 text-red-700 text-base">
           {error}
         </div>
       )}
 
       {!loading && !error && executions.length === 0 && (
         <div
-          className="py-12 text-center rounded-xl border-2 border-dashed"
+          className="py-12 px-4 text-center rounded-xl border-2 border-dashed"
           style={{ borderColor: GRANATE, backgroundColor: BEIGE }}
         >
-          <div className="text-4xl mb-3">📋</div>
-          <h3 className="text-lg font-semibold mb-1" style={{ color: GRANATE }}>
+          <div className="text-5xl mb-3">📋</div>
+          <h3 className="text-xl font-semibold mb-1" style={{ color: GRANATE }}>
             No hay checklists pendientes
           </h3>
-          <p className="text-sm text-gray-700">
+          <p className="text-base text-gray-700">
             Pulsa "+ Arrancar checklist" para iniciar uno ahora.
           </p>
         </div>
       )}
 
       {!loading && !error && executions.length > 0 && (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {executions.map(exec => {
             const tpl = templateById.get(exec.template_id)
             const plan = tpl ? planById.get(tpl.plan_id) : undefined
             return (
               <div
                 key={exec.id}
-                className="flex items-center gap-4 p-4 bg-white rounded-lg border border-gray-200 hover:shadow-sm transition"
+                className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 sm:p-5 bg-white rounded-lg border border-gray-200 hover:shadow-sm transition"
               >
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-sm">
+                  <div className="font-medium text-base">
                     {tpl?.name ?? 'Checklist sin nombre'}
                   </div>
-                  <div className="text-xs text-gray-500">
+                  <div className="text-sm text-gray-500 mt-0.5">
                     {plan?.name ?? 'Plan APPCC'}
                     {exec.scheduled_time ? ` · ${exec.scheduled_time.slice(0, 5)}` : ''}
                   </div>
                 </div>
-                <span
-                  className="text-xs px-2 py-1 rounded-full font-medium"
-                  style={{
-                    backgroundColor: STATUS_COLORS[exec.status] + '20',
-                    color: STATUS_COLORS[exec.status],
-                  }}
-                >
-                  {STATUS_LABELS[exec.status]}
-                </span>
-                <button
-                  type="button"
-                  className="text-xs px-3 py-1.5 rounded-lg font-medium transition-opacity hover:opacity-90"
-                  style={{ backgroundColor: GRANATE, color: BEIGE }}
-                  onClick={() => handleOpen(exec.id)}
-                >
-                  Abrir →
-                </button>
+                <div className="flex items-center gap-3 shrink-0">
+                  <span
+                    className="text-xs px-2.5 py-1 rounded-full font-medium"
+                    style={{
+                      backgroundColor: STATUS_COLORS[exec.status] + '20',
+                      color: STATUS_COLORS[exec.status],
+                    }}
+                  >
+                    {STATUS_LABELS[exec.status]}
+                  </span>
+                  <button
+                    type="button"
+                    className="text-base px-4 py-2.5 rounded-lg font-medium transition-opacity hover:opacity-90 min-h-[44px]"
+                    style={{ backgroundColor: GRANATE, color: BEIGE }}
+                    onClick={() => handleOpen(exec.id)}
+                  >
+                    Abrir →
+                  </button>
+                </div>
               </div>
             )
           })}

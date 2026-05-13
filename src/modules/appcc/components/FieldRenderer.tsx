@@ -12,8 +12,6 @@ import type {
 
 const GRANATE = '#7C1A1A'
 
-// Estructura que devuelve onChange con el campo correcto según field_type.
-// El padre la usa tal cual al llamar a saveResponse().
 export interface FieldValue {
   numeric_value?: number | null
   boolean_value?: boolean | null
@@ -24,13 +22,9 @@ export interface FieldValue {
 
 export interface FieldRendererProps {
   item: AppccTemplateItem & { options?: AppccTemplateItemOption[] }
-  /** Valor actual (vacío = sin respuesta). */
   value: FieldValue | null
-  /** Callback cuando el usuario modifica el valor. */
   onChange: (next: FieldValue) => void
-  /** Si está en true, los inputs se deshabilitan (ej. mientras se guarda). */
   disabled?: boolean
-  /** Mensaje a mostrar como warning (ej. "Fuera de rango"). */
   warning?: string | null
 }
 
@@ -45,7 +39,7 @@ export default function FieldRenderer({
     case 'numeric':
       return (
         <div className="space-y-2">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3 flex-wrap">
             <input
               type="number"
               step="any"
@@ -60,19 +54,19 @@ export default function FieldRenderer({
                   ? `${item.numeric_min} – ${item.numeric_max}`
                   : ''
               }
-              className="w-32 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 disabled:bg-gray-50"
+              className="w-36 px-4 py-3 border rounded-lg text-base focus:outline-none focus:ring-2 disabled:bg-gray-50 min-h-[48px]"
               style={{
                 borderColor: warning ? '#dc2626' : '#d1d5db',
               }}
             />
             {item.numeric_unit && (
-              <span className="text-sm text-gray-500">{item.numeric_unit}</span>
+              <span className="text-base text-gray-500">{item.numeric_unit}</span>
             )}
           </div>
           {warning && (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 border border-red-200">
-              <span className="text-base">⚠️</span>
-              <span className="text-sm text-red-700 font-medium">{warning}</span>
+            <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-red-50 border border-red-200">
+              <span className="text-lg">⚠️</span>
+              <span className="text-sm sm:text-base text-red-700 font-medium">{warning}</span>
             </div>
           )}
         </div>
@@ -86,7 +80,7 @@ export default function FieldRenderer({
               type="button"
               disabled={disabled}
               onClick={() => onChange({ boolean_value: true })}
-              className="px-4 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-50"
+              className="px-5 py-3 rounded-lg text-base font-medium transition-all disabled:opacity-50 min-h-[48px] min-w-[80px]"
               style={{
                 backgroundColor: value?.boolean_value === true ? '#16a34a' : '#f3f4f6',
                 color: value?.boolean_value === true ? 'white' : '#374151',
@@ -100,7 +94,7 @@ export default function FieldRenderer({
               type="button"
               disabled={disabled}
               onClick={() => onChange({ boolean_value: false })}
-              className="px-4 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-50"
+              className="px-5 py-3 rounded-lg text-base font-medium transition-all disabled:opacity-50 min-h-[48px] min-w-[80px]"
               style={{
                 backgroundColor: value?.boolean_value === false ? '#dc2626' : '#f3f4f6',
                 color: value?.boolean_value === false ? 'white' : '#374151',
@@ -112,9 +106,9 @@ export default function FieldRenderer({
             </button>
           </div>
           {warning && (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 border border-red-200">
-              <span className="text-base">⚠️</span>
-              <span className="text-sm text-red-700 font-medium">{warning}</span>
+            <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-red-50 border border-red-200">
+              <span className="text-lg">⚠️</span>
+              <span className="text-sm sm:text-base text-red-700 font-medium">{warning}</span>
             </div>
           )}
         </div>
@@ -131,7 +125,7 @@ export default function FieldRenderer({
                 type="button"
                 disabled={disabled}
                 onClick={() => onChange({ selected_option_id: opt.id })}
-                className="w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-50"
+                className="w-full text-left px-4 py-3 rounded-lg text-base font-medium transition-all disabled:opacity-50 min-h-[48px]"
                 style={{
                   backgroundColor: selected ? GRANATE : '#fff',
                   color: selected ? '#fff' : '#374151',
@@ -154,7 +148,7 @@ export default function FieldRenderer({
           onChange={e => onChange({ text_value: e.target.value })}
           placeholder="Escribe tu respuesta..."
           rows={3}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-y focus:outline-none focus:ring-2 disabled:bg-gray-50"
+          className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base resize-y focus:outline-none focus:ring-2 disabled:bg-gray-50"
         />
       )
 
@@ -165,27 +159,27 @@ export default function FieldRenderer({
           disabled={disabled}
           value={value?.date_value ?? ''}
           onChange={e => onChange({ date_value: e.target.value || null })}
-          className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 disabled:bg-gray-50"
+          className="px-4 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 disabled:bg-gray-50 min-h-[48px]"
         />
       )
 
     case 'photo':
       return (
-        <div className="text-xs text-gray-400 italic px-3 py-2 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+        <div className="text-sm text-gray-400 italic px-4 py-3 bg-gray-50 rounded-lg border border-dashed border-gray-300">
           📷 Adjuntar foto — pendiente de implementar (Supabase Storage)
         </div>
       )
 
     case 'signature':
       return (
-        <div className="text-xs text-gray-400 italic px-3 py-2 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+        <div className="text-sm text-gray-400 italic px-4 py-3 bg-gray-50 rounded-lg border border-dashed border-gray-300">
           ✍️ Firma manuscrita — disponible en plan Pro
         </div>
       )
 
     default:
       return (
-        <div className="text-xs text-red-500">
+        <div className="text-sm text-red-500">
           Tipo de campo no reconocido: {item.field_type}
         </div>
       )
