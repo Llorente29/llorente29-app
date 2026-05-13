@@ -69,6 +69,7 @@ export type Page =
   | 'bolsa_horas'
   | 'cambios_pendientes'
   | 'appcc_today'
+  | 'appcc_execution'
 
 export interface Location {
   id: string; name: string; address: string; phone: string; active: boolean

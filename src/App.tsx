@@ -20,6 +20,7 @@ import TrabajadorApp from './pages/trabajador/TrabajadorApp'
 import LoginPage from './pages/LoginPage'
 import UsuariosAccesosPage from './pages/UsuariosAccesosPage'
 import TodayPage from './modules/appcc/pages/TodayPage'
+import ExecutionPage from './modules/appcc/pages/ExecutionPage'
 import {
   getCurrentProfile,
   signOut,
@@ -75,9 +76,16 @@ const PAGE_TITLES: Partial<Record<Page, string>> = {
   locations: 'Locales',
   avisos_settings: 'Configuración de Avisos',
   appcc_today: 'APPCC: Checklists de hoy',
+  appcc_execution: 'APPCC: Ejecutar checklist',
 }
 
-function renderPage(page: Page) {
+interface RenderPageContext {
+  currentExecutionId: string | null
+  openExecution: (id: string) => void
+  closeExecution: () => void
+}
+
+function renderPage(page: Page, ctx: RenderPageContext) {
   switch (page) {
     case 'dashboard':         return <DashboardPage />
     case 'staff':             return <StaffPage />
@@ -96,7 +104,14 @@ function renderPage(page: Page) {
     case 'zonas_pedido':      return <ZonasPedidoPage />
     case 'locations':         return <LocationsPage />
     case 'avisos_settings':   return <AvisosSettingsPage />
-    case 'appcc_today':       return <TodayPage />
+    case 'appcc_today':       return <TodayPage onOpenExecution={ctx.openExecution} />
+    case 'appcc_execution':
+      if (!ctx.currentExecutionId) {
+        // Sin id, no podemos renderizar. Volvemos a Hoy.
+        ctx.closeExecution()
+        return <TodayPage onOpenExecution={ctx.openExecution} />
+      }
+      return <ExecutionPage executionId={ctx.currentExecutionId} onBack={ctx.closeExecution} />
     default:                  return <DashboardPage />
   }
 }
@@ -235,6 +250,8 @@ function AuthenticatedApp({ profile, onSignOut }: {
   const [showUsuariosAccesos, setShowUsuariosAccesos] = useState(false)
   const [forceWorkerMode, setForceWorkerMode] = useState(false)
   const [perms, setPerms] = useState<Set<Page> | null>(null)
+  // Para navegación a la página de ejecución de un checklist APPCC
+  const [currentExecutionId, setCurrentExecutionId] = useState<string | null>(null)
   // Tasks e incidents del antiguo módulo Operaciones — se reactivarán con módulo APPCC
   const pending = 0
   const critInc = 0
@@ -312,7 +329,8 @@ function AuthenticatedApp({ profile, onSignOut }: {
   }
 
   // Auto-redirigir a primera página permitida si la actual no lo está
-  if (perms && !perms.has(page) && perms.size > 0) {
+  // (excepción: appcc_execution se permite siempre si el usuario llegó vía TodayPage)
+  if (perms && !perms.has(page) && perms.size > 0 && page !== 'appcc_execution') {
     const firstAllowed = NAV.find(n => perms.has(n.id))?.id || 'dashboard'
     if (firstAllowed !== page) {
       setTimeout(() => setPage(firstAllowed), 0)
@@ -343,6 +361,19 @@ function AuthenticatedApp({ profile, onSignOut }: {
   const canSwitchToWorker = profile.role === 'manager' && !!profile.employeeId
   const roleLabel = profile.role === 'admin' ? 'Admin' : profile.role === 'manager' ? 'Encargado' : 'Trabajador'
   const roleIcon = profile.role === 'admin' ? '👑' : profile.role === 'manager' ? '👔' : '👷'
+
+  // Callbacks de navegación APPCC
+  const renderCtx: RenderPageContext = {
+    currentExecutionId,
+    openExecution: (id: string) => {
+      setCurrentExecutionId(id)
+      setPage('appcc_execution')
+    },
+    closeExecution: () => {
+      setCurrentExecutionId(null)
+      setPage('appcc_today')
+    },
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -409,7 +440,7 @@ function AuthenticatedApp({ profile, onSignOut }: {
           </div>
         </header>
         <main className="p-4 sm:p-6 pb-24 lg:pb-6">
-          {showUsuariosAccesos ? <UsuariosAccesosPage /> : renderPage(page)}
+          {showUsuariosAccesos ? <UsuariosAccesosPage /> : renderPage(page, renderCtx)}
         </main>
       </div>
     </div>

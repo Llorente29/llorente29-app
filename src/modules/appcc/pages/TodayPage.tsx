@@ -35,7 +35,12 @@ const STATUS_COLORS: Record<AppccExecutionStatus, string> = {
   skipped: '#9ca3af',
 }
 
-export default function TodayPage() {
+interface TodayPageProps {
+  /** Callback que invoca el padre cuando el usuario pulsa "Abrir" en un checklist. */
+  onOpenExecution?: (executionId: string) => void
+}
+
+export default function TodayPage({ onOpenExecution }: TodayPageProps) {
   const { locations } = useApp()
 
   // Solo locales activos, en orden estable
@@ -86,7 +91,7 @@ export default function TodayPage() {
     })
   }, [])
 
-  // Mapa plan_id -> plan, para mostrar nombre/icono del plan en cada execution
+  // Mapa plan_id -> plan
   const planById = useMemo(() => {
     const m = new Map<string, AppccPlan>()
     plans.forEach(p => m.set(p.id, p))
@@ -106,10 +111,6 @@ export default function TodayPage() {
     if (!template) return
 
     try {
-      // account_id no lo conocemos en frontend; lo deja el SQL si fuera necesario,
-      // pero createExecution lo pide. Lo cogemos del AppContext si está disponible.
-      // Para MVP: hardcoded a Grupo Foodint (cuenta interna).
-      // En el futuro: añadir current_account() al contexto.
       const accountId = '00000000-0000-0000-0000-000000000001'
       const newExec = await executionsService.createExecution(
         accountId,
@@ -121,9 +122,19 @@ export default function TodayPage() {
       setExecutions(fresh)
       setShowCatalog(false)
       console.log('[TodayPage] Checklist creado:', newExec.id)
+      // Y abrirlo inmediatamente si tenemos callback
+      onOpenExecution?.(newExec.id)
     } catch (err) {
       console.error('[TodayPage] Error creando checklist', err)
       setError('No se pudo crear el checklist')
+    }
+  }
+
+  function handleOpen(executionId: string) {
+    if (onOpenExecution) {
+      onOpenExecution(executionId)
+    } else {
+      console.warn('[TodayPage] onOpenExecution no proporcionado por el padre')
     }
   }
 
@@ -265,7 +276,7 @@ export default function TodayPage() {
                   type="button"
                   className="text-xs px-3 py-1.5 rounded-lg font-medium transition-opacity hover:opacity-90"
                   style={{ backgroundColor: GRANATE, color: BEIGE }}
-                  onClick={() => alert('Pantalla de ejecución pendiente (próximo paso)')}
+                  onClick={() => handleOpen(exec.id)}
                 >
                   Abrir →
                 </button>
