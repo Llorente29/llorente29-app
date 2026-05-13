@@ -30,6 +30,7 @@ import type { UserProfile } from './services/authService'
 import {
   DashboardPage, LocationsPage
 } from './pages/OtherPages'
+import { gate } from '@/platform/feature-gate/featureGateService'
 
 type AppMode = 'gestor' | 'trabajador' | 'unset'
 
@@ -53,7 +54,7 @@ const NAV: { id: Page; label: string; icon: string; section?: string }[] = [
   { id: 'avisos_settings',        label: 'Avisos',              icon: '🔔' },
 ]
 
-const PAGE_TITLES: Record<Page, string> = {
+const PAGE_TITLES: Partial<Record<Page, string>> = {
   dashboard: 'Dashboard',
   staff: 'Personal',
   fichajes_global: 'Control Horario',
@@ -213,7 +214,7 @@ function BottomNav({ page, setPage, visiblePageIds }: {
         <button key={id} onClick={() => setPage(id)}
           className={`flex flex-col items-center gap-0.5 py-1.5 px-2 rounded-lg min-w-0 ${page === id ? 'text-[#7C1A1A]' : 'text-gray-400'}`}>
           <span className="text-xl leading-none">{icons[id]}</span>
-          <span className="text-[9px] font-medium truncate">{PAGE_TITLES[id as Page].split(' ')[0]}</span>
+          <span className="text-[9px] font-medium truncate">{PAGE_TITLES[id as Page]?.split(' ')[0] ?? id}</span>
         </button>
       ))}
     </nav>
@@ -429,6 +430,18 @@ export default function App() {
       if (!cancel) {
         setProfile(p)
         setLoading(false)
+
+        // Cargar feature flags de la plataforma para esta cuenta
+        // (necesario para que el resto de componentes sepa qué puede mostrar)
+        if (p) {
+          const state = await gate.load()
+          if (state) {
+            console.log('[platform] Cuenta cargada:', state.account.name,
+              `| ${state.flags.size} feature flags activos`)
+          }
+        } else {
+          gate.clear()
+        }
       }
     }
 
@@ -450,6 +463,7 @@ export default function App() {
 
   async function handleSignOut() {
     await signOut()
+    gate.clear()      // limpiar feature flags al cerrar sesión
     setProfile(null)
   }
 
