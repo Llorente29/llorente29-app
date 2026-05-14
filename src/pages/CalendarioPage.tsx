@@ -8,6 +8,10 @@
 // - Horario individualizado por empleado (plegable)
 
 import { useEffect, useMemo, useState } from 'react'
+import {
+  Wand2, Save, Check, Megaphone, ChevronLeft, ChevronRight, X, Plus,
+  Users, AlertTriangle, CalendarDays,
+} from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import {
   listShiftTemplates,
@@ -218,11 +222,11 @@ export default function CalendarioPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3 bg-white border rounded-lg p-3">
+      <div className="flex flex-wrap items-center gap-3 bg-card border rounded-lg p-3">
         <select
           value={locationId}
           onChange={e => setLocationId(e.target.value)}
-          className="border rounded px-3 py-2 bg-white text-sm"
+          className="border rounded px-3 py-2 bg-card text-sm"
         >
           {locations.map(l => (
             <option key={l.id} value={l.id}>{l.name}</option>
@@ -230,14 +234,14 @@ export default function CalendarioPage() {
         </select>
 
         <div className="flex items-center gap-1">
-          <button onClick={() => shiftWeek(-7)} className="px-2 py-1 border rounded hover:bg-gray-50">←</button>
+          <button onClick={() => shiftWeek(-7)} className="px-2 py-1 border rounded hover:bg-page">←</button>
           <div className="px-3 py-1 text-sm font-medium min-w-[180px] text-center">
             {formatWeekLabel(weekStart)}
           </div>
-          <button onClick={() => shiftWeek(+7)} className="px-2 py-1 border rounded hover:bg-gray-50">→</button>
+          <button onClick={() => shiftWeek(+7)} className="px-2 py-1 border rounded hover:bg-page">→</button>
           <button
             onClick={() => setWeekStart(toISODate(getMondayOfWeek(new Date())))}
-            className="ml-2 text-xs text-gray-500 hover:underline"
+            className="ml-2 text-xs text-text-secondary hover:underline"
           >
             Hoy
           </button>
@@ -248,64 +252,63 @@ export default function CalendarioPage() {
         <button
           onClick={doGenerate}
           disabled={loading || templates.length === 0 || employees.length === 0}
-          className="px-3 py-2 rounded text-white text-sm font-medium disabled:opacity-40"
-          style={{ backgroundColor: '#7C1A1A' }}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded text-text-on-accent text-sm font-medium disabled:opacity-40 bg-accent hover:bg-accent-hover transition-base"
           title="Genera la matriz automáticamente respetando las reglas"
         >
-          🪄 Generar automático
+          <Wand2 size={14} /> Generar automático
         </button>
         <button
           onClick={clearCells}
-          className="px-3 py-2 rounded border text-sm hover:bg-gray-50"
+          className="px-3 py-2 rounded border border-border-default bg-card text-text-primary text-sm hover:bg-page transition-base"
         >
           Vaciar
         </button>
         <button
           onClick={doSave}
           disabled={!dirty}
-          className="px-3 py-2 rounded text-white text-sm font-medium disabled:opacity-40"
-          style={{ backgroundColor: dirty ? '#F39C2A' : '#aaa' }}
+          className={`inline-flex items-center gap-1.5 px-3 py-2 rounded text-text-on-accent text-sm font-medium disabled:opacity-40 transition-base ${
+            dirty ? 'bg-warning hover:opacity-90' : 'bg-text-secondary'
+          }`}
         >
-          {dirty ? '💾 Guardar borrador' : '✓ Guardado'}
+          {dirty ? <><Save size={14} /> Guardar borrador</> : <><Check size={14} /> Guardado</>}
         </button>
         <button
           onClick={doPublish}
-          className="px-3 py-2 rounded border-2 text-sm font-medium"
-          style={{ borderColor: '#7C1A1A', color: '#7C1A1A' }}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded border-2 border-accent text-accent bg-card text-sm font-medium hover:bg-accent-bg transition-base"
           title="Publicar para que los empleados lo vean en su móvil"
         >
-          📢 Publicar
+          <Megaphone size={14} /> Publicar
         </button>
       </div>
 
-      <div className="flex items-center gap-3 text-xs text-gray-600">
+      <div className="flex items-center gap-3 text-xs text-text-secondary">
         {scheduleRow?.status === 'published' && (
-          <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-800 font-medium">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-success-bg text-success font-medium">
             ● Publicado
           </span>
         )}
         {scheduleRow?.status === 'draft' && (
-          <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-medium">
+          <span className="px-2 py-0.5 rounded-full bg-warning-bg text-warning font-medium">
             ● Borrador
           </span>
         )}
         {!scheduleRow && (
-          <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 font-medium">
+          <span className="px-2 py-0.5 rounded-full bg-accent-bg text-text-primary font-medium">
             ● Sin guardar
           </span>
         )}
         {employees.length === 0 && locationId && (
-          <span className="text-amber-600">⚠️ No hay empleados activos en este local</span>
+          <span className="inline-flex items-center gap-1 text-warning"><AlertTriangle size={12} /> No hay empleados activos en este local</span>
         )}
         {templates.length === 0 && locationId && (
-          <span className="text-amber-600">⚠️ No hay turnos definidos en la plantilla</span>
+          <span className="inline-flex items-center gap-1 text-warning"><AlertTriangle size={12} /> No hay turnos definidos en la plantilla</span>
         )}
       </div>
 
       {templates.length > 0 && (
-        <div className="bg-white border rounded-lg overflow-x-auto">
+        <div className="bg-card border border-border-default rounded-lg overflow-x-auto">
           <table className="w-full text-sm">
-            <thead style={{ backgroundColor: '#7C1A1A' }} className="text-white">
+            <thead className="bg-accent text-text-on-accent">
               <tr>
                 <th className="px-3 py-2 text-left">Turno</th>
                 {DAYS.map(d => (
@@ -327,10 +330,10 @@ export default function CalendarioPage() {
                   <tr key={t.id} className="border-b">
                     <td className="px-3 py-2 align-top">
                       <div className="font-medium">{t.label}</div>
-                      <div className="text-xs text-gray-500 font-mono">
+                      <div className="text-xs text-text-secondary font-mono">
                         {t.start_time.slice(0, 5)} – {t.end_time.slice(0, 5)}
                       </div>
-                      <div className="text-xs text-gray-400">{tHours}h</div>
+                      <div className="text-xs text-text-secondary">{tHours}h</div>
                     </td>
                     {DAYS.map(d => {
                       const baseCov = coverageForDay(t, d)
@@ -355,7 +358,7 @@ export default function CalendarioPage() {
                         />
                       )
                     })}
-                    <td className="px-2 py-2 text-center text-xs text-gray-500 font-mono">
+                    <td className="px-2 py-2 text-center text-xs text-text-secondary font-mono">
                       {tHours}
                     </td>
                   </tr>
@@ -440,11 +443,11 @@ function Cell({
   const isGap = needed > 0 && assignedIds.length < needed
   const isOverFilled = assignedIds.length > needed
 
-  let bg = 'bg-white'
-  if (needed === 0) bg = 'bg-gray-50'
-  else if (isGap) bg = 'bg-red-50'
-  else if (isOverFilled) bg = 'bg-amber-50'
-  else if (isWeekend) bg = 'bg-amber-50/30'
+  let bg = 'bg-card'
+  if (needed === 0) bg = 'bg-page'
+  else if (isGap) bg = 'bg-danger-bg'
+  else if (isOverFilled) bg = 'bg-warning-bg'
+  else if (isWeekend) bg = 'bg-warning-bg/30'
 
   function removeAt(idx: number) {
     onChangeAssigned(assignedIds.filter((_, i) => i !== idx))
@@ -459,7 +462,7 @@ function Cell({
   return (
     <td className={`px-1 py-1 align-top border-l ${bg}`}>
       <div className="flex items-center justify-between gap-1 mb-1 px-1">
-        <div className="text-[10px] text-gray-500 flex items-center gap-1">
+        <div className="text-[10px] text-text-secondary flex items-center gap-1">
           <input
             type="number"
             min={0}
@@ -467,15 +470,15 @@ function Cell({
             value={needed}
             onChange={(e) => onChangeNeeded(Math.max(0, parseInt(e.target.value || '0', 10)))}
             className={`w-9 border rounded px-1 text-[10px] text-center ${
-              isOverridden ? 'bg-violet-50 border-violet-300' : 'bg-white'
+              isOverridden ? 'bg-accent-bg border-accent/30' : 'bg-card'
             }`}
             title={isOverridden ? `Override (base: ${baseCoverage})` : 'Personas necesarias'}
           />
-          <span className="text-gray-400">×</span>
+          <span className="text-text-secondary">×</span>
         </div>
         {isGap && (
-          <span className="text-[10px] text-red-600 font-bold" title="Hueco sin cubrir">
-            ⚠
+          <span className="text-danger" title="Hueco sin cubrir">
+            <AlertTriangle size={11} />
           </span>
         )}
       </div>
@@ -490,17 +493,17 @@ function Cell({
             <div
               key={`${id}-${i}`}
               className={`group flex items-center justify-between gap-1 rounded px-1.5 py-0.5 cursor-default ${
-                exceedsContract ? 'bg-red-100 text-red-900' : 'bg-[#F5E9D9] text-[#7C1A1A]'
+                exceedsContract ? 'bg-danger-bg text-danger' : 'bg-accent-bg text-accent'
               }`}
               title={emp?.name || ''}
             >
               <span className="text-xs font-bold">{code}</span>
               <button
                 onClick={() => removeAt(i)}
-                className="opacity-0 group-hover:opacity-100 text-[10px] text-gray-500 hover:text-red-600"
+                className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-danger transition-base"
                 title="Quitar"
               >
-                ✕
+                <X size={10} />
               </button>
             </div>
           )
@@ -510,14 +513,14 @@ function Cell({
           <div className="relative">
             <button
               onClick={() => setOpen(o => !o)}
-              className="w-full text-[10px] text-gray-400 hover:text-[#7C1A1A] py-0.5 border border-dashed border-gray-300 rounded hover:border-[#7C1A1A]"
+              className="inline-flex items-center justify-center gap-1 w-full text-[10px] text-text-secondary hover:text-accent py-0.5 border border-dashed border-border-default rounded hover:border-accent transition-base"
             >
-              + asignar
+              <Plus size={10} /> asignar
             </button>
             {open && (
-              <div className="absolute z-30 mt-1 left-0 right-0 bg-white border rounded shadow-lg max-h-48 overflow-y-auto">
+              <div className="absolute z-30 mt-1 left-0 right-0 bg-card border rounded shadow-lg max-h-48 overflow-y-auto">
                 {availableToAdd.length === 0 ? (
-                  <div className="px-2 py-1 text-[10px] text-gray-400">Todos asignados</div>
+                  <div className="px-2 py-1 text-[10px] text-text-secondary">Todos asignados</div>
                 ) : availableToAdd.map(e => {
                   const wl = wlById.get(e.id)
                   const newH = (wl?.assigned_hours || 0) + shiftDurationHours(template.start_time, template.end_time)
@@ -527,14 +530,14 @@ function Cell({
                     <button
                       key={e.id}
                       onClick={() => addEmployee(e.id)}
-                      className={`w-full text-left px-2 py-1 text-xs hover:bg-gray-50 flex items-center justify-between ${overflow ? 'text-red-700' : ''}`}
+                      className={`w-full text-left px-2 py-1 text-xs hover:bg-page flex items-center justify-between ${overflow ? 'text-danger' : ''}`}
                     >
                       <span>
                         <span className="font-bold mr-1">{e.shiftCode || '–'}</span>
                         {e.name}
                       </span>
-                      <span className={`text-[10px] ${overflow ? 'text-red-600 font-bold' : 'text-gray-400'}`}>
-                        {newH.toFixed(1)}h{overflow ? ' ⚠' : ''}
+                      <span className={`inline-flex items-center gap-0.5 text-[10px] ${overflow ? 'text-danger font-bold' : 'text-text-secondary'}`}>
+                        {newH.toFixed(1)}h{overflow && <AlertTriangle size={9} />}
                       </span>
                     </button>
                   )
@@ -554,39 +557,39 @@ function Cell({
 
 function WorkloadSummary({ workloads }: { workloads: EmployeeWorkload[] }) {
   return (
-    <div className="bg-white border rounded-lg p-4">
-      <h3 className="font-semibold mb-3" style={{ color: '#7C1A1A' }}>
-        Carga por empleado
+    <div className="bg-card border border-border-default rounded-lg p-4">
+      <h3 className="font-display font-semibold mb-3 text-accent inline-flex items-center gap-1.5">
+        <Users size={16} /> Carga por empleado
       </h3>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
         {workloads.map(w => {
           const pct = w.contracted_hours > 0 ? (w.assigned_hours / w.contracted_hours) * 100 : 0
           const exceedsTol = w.assigned_hours > w.contracted_hours * 1.10
           const underContract = w.assigned_hours < w.contracted_hours - 0.5
-          let barColor = 'bg-emerald-500'
-          if (exceedsTol) barColor = 'bg-red-500'
-          else if (underContract) barColor = 'bg-amber-400'
-          else if (pct > 100) barColor = 'bg-amber-500'
+          let barColor = 'bg-success'
+          if (exceedsTol) barColor = 'bg-danger'
+          else if (underContract) barColor = 'bg-warning'
+          else if (pct > 100) barColor = 'bg-warning'
           const widthPct = Math.min(100, pct)
           return (
-            <div key={w.employee_id} className="border rounded-lg p-3">
+            <div key={w.employee_id} className="border border-border-default rounded-lg p-3">
               <div className="flex items-center justify-between mb-1">
                 <div>
-                  <span className="font-bold text-sm" style={{ color: '#7C1A1A' }}>
+                  <span className="font-bold text-sm text-accent">
                     {w.shift_code || '–'}
                   </span>
-                  <span className="ml-2 text-sm">{w.employee_name}</span>
+                  <span className="ml-2 text-sm text-text-primary">{w.employee_name}</span>
                 </div>
-                <span className={`text-xs font-mono ${exceedsTol ? 'text-red-600 font-bold' : ''}`}>
+                <span className={`text-xs font-mono ${exceedsTol ? 'text-danger font-bold' : 'text-text-secondary'}`}>
                   {w.assigned_hours.toFixed(2)} / {w.contracted_hours}h
                 </span>
               </div>
-              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-2 bg-accent-bg rounded-full overflow-hidden">
                 <div className={`h-full ${barColor}`} style={{ width: `${widthPct}%` }} />
               </div>
-              <div className="text-[10px] text-gray-500 mt-1">
+              <div className="text-[10px] text-text-secondary mt-1">
                 {w.delta > 0 ? '+' : ''}{w.delta.toFixed(2)}h vs contrato
-                {exceedsTol && <span className="ml-2 text-red-600 font-bold">excede tope 10%</span>}
+                {exceedsTol && <span className="ml-2 text-danger font-bold">excede tope 10%</span>}
               </div>
             </div>
           )
@@ -615,11 +618,11 @@ function UncoveredPanel({ uncovered, templates, onClickGap }: UncoveredPanelProp
   }, 0)
 
   return (
-    <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-      <h3 className="font-semibold text-red-800 mb-2">
-        ⚠️ {uncovered.length} hueco(s) sin cubrir · {totalGap.toFixed(1)}h en total
+    <div className="bg-danger-bg border border-danger/30 rounded-lg p-4">
+      <h3 className="font-display font-semibold text-danger mb-2 inline-flex items-center gap-1.5">
+        <AlertTriangle size={16} /> {uncovered.length} hueco(s) sin cubrir · {totalGap.toFixed(1)}h en total
       </h3>
-      <p className="text-xs text-red-700 mb-3">
+      <p className="text-xs text-danger mb-3">
         Pulsa un hueco para ver sugerencias de cobertura.
       </p>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -630,10 +633,10 @@ function UncoveredPanel({ uncovered, templates, onClickGap }: UncoveredPanelProp
             <button
               key={i}
               onClick={() => onClickGap(u)}
-              className="text-left bg-white border border-red-300 hover:bg-red-50 rounded p-2 text-sm"
+              className="text-left bg-card border border-red-300 hover:bg-danger-bg rounded p-2 text-sm"
             >
               <div className="font-medium">{DAY_LABELS[u.day_of_week]} · {t.label}</div>
-              <div className="text-xs text-gray-600">
+              <div className="text-xs text-text-secondary">
                 {t.start_time.slice(0, 5)}–{t.end_time.slice(0, 5)} ·
                 {' '}faltan {u.needed - u.assigned} de {u.needed} ·
                 {' '}{shiftDurationHours(t.start_time, t.end_time)}h
@@ -669,10 +672,10 @@ function SuggestionsModal({ gap, template, weekStart, cells, employees, onClose,
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
       <div
-        className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col"
+        className="bg-card rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-5 py-3 border-b" style={{ backgroundColor: '#7C1A1A', color: 'white' }}>
+        <div className="px-5 py-3 border-b border-border-default bg-accent text-text-on-accent">
           <div className="flex items-center justify-between">
             <div>
               <div className="font-semibold">Cubrir hueco — {DAY_LABELS[gap.day_of_week]}</div>
@@ -681,13 +684,15 @@ function SuggestionsModal({ gap, template, weekStart, cells, employees, onClose,
                 {' '}{shiftDurationHours(template.start_time, template.end_time)}h
               </div>
             </div>
-            <button onClick={onClose} className="text-white/80 hover:text-white">✕</button>
+            <button onClick={onClose} className="text-text-on-accent/80 hover:text-text-on-accent">
+              <X size={18} />
+            </button>
           </div>
         </div>
 
         <div className="overflow-y-auto p-4 space-y-2">
           {suggestions.length === 0 && (
-            <p className="text-sm text-gray-500">No hay sugerencias disponibles.</p>
+            <p className="text-sm text-text-secondary">No hay sugerencias disponibles.</p>
           )}
           {suggestions.map((s) => {
             const blocked = !!s.blockedReason
@@ -696,32 +701,37 @@ function SuggestionsModal({ gap, template, weekStart, cells, employees, onClose,
               <div
                 key={s.employeeId}
                 className={`border rounded-lg p-3 flex items-center justify-between gap-3 ${
-                  blocked ? 'bg-gray-50 opacity-60' : exceeds ? 'bg-amber-50 border-amber-300' : 'bg-white'
+                  blocked ? 'bg-page border-border-default opacity-60' : exceeds ? 'bg-warning-bg border-warning/30' : 'bg-card border-border-default'
                 }`}
               >
                 <div className="flex-1">
-                  <div className="text-sm">
-                    <span className="font-bold mr-2" style={{ color: '#7C1A1A' }}>
+                  <div className="text-sm text-text-primary">
+                    <span className="font-bold mr-2 text-accent">
                       {s.shiftCode || '–'}
                     </span>
                     {s.employeeName}
                   </div>
-                  <div className="text-xs text-gray-600 mt-0.5">
+                  <div className="text-xs text-text-secondary mt-0.5">
                     Pasaría de <strong>{s.currentHours}h</strong> a <strong>{s.newHours}h</strong>
                     {' '}(contratadas {s.contractedHours}h, {s.deltaPercent > 0 ? '+' : ''}{s.deltaPercent}%)
                   </div>
                   {blocked && (
-                    <div className="text-xs text-red-600 mt-1">🚫 {s.blockedReason}</div>
+                    <div className="text-xs text-danger mt-1 inline-flex items-center gap-1">
+                      <AlertTriangle size={11} /> {s.blockedReason}
+                    </div>
                   )}
                   {!blocked && exceeds && (
-                    <div className="text-xs text-amber-700 mt-1">⚠️ Excede tope del 10% sobre contratadas</div>
+                    <div className="text-xs text-warning mt-1 inline-flex items-center gap-1">
+                      <AlertTriangle size={11} /> Excede tope del 10% sobre contratadas
+                    </div>
                   )}
                 </div>
                 <button
                   disabled={blocked}
                   onClick={() => onApply(s.employeeId)}
-                  className="px-3 py-1.5 rounded text-white text-sm font-medium disabled:opacity-30"
-                  style={{ backgroundColor: exceeds ? '#F39C2A' : '#7C1A1A' }}
+                  className={`px-3 py-1.5 rounded text-text-on-accent text-sm font-medium disabled:opacity-30 transition-base ${
+                    exceeds ? 'bg-warning hover:opacity-90' : 'bg-accent hover:bg-accent-hover'
+                  }`}
                 >
                   Asignar
                 </button>
@@ -730,8 +740,8 @@ function SuggestionsModal({ gap, template, weekStart, cells, employees, onClose,
           })}
         </div>
 
-        <div className="px-5 py-3 border-t bg-gray-50 flex justify-end">
-          <button onClick={onClose} className="px-4 py-2 text-sm border rounded bg-white hover:bg-gray-50">
+        <div className="px-5 py-3 border-t border-border-default bg-page flex justify-end">
+          <button onClick={onClose} className="px-4 py-2 text-sm border border-border-default rounded bg-card text-text-primary hover:bg-page transition-base">
             Cerrar
           </button>
         </div>
@@ -794,9 +804,9 @@ function EmployeeSchedules({ employees, templates, cells }: EmployeeSchedulesPro
   }, [employees, cells, tplById])
 
   return (
-    <div className="bg-white border rounded-lg p-4">
-      <h3 className="font-semibold mb-3" style={{ color: '#7C1A1A' }}>
-        Horario por empleado
+    <div className="bg-card border border-border-default rounded-lg p-4">
+      <h3 className="font-display font-semibold mb-3 text-accent inline-flex items-center gap-1.5">
+        <CalendarDays size={16} /> Horario por empleado
       </h3>
       <div className="space-y-2">
         {employees.map(emp => {
@@ -806,62 +816,64 @@ function EmployeeSchedules({ employees, templates, cells }: EmployeeSchedulesPro
           const delta = detail.total - contracted
           const exceeds = detail.total > contracted * 1.10
           return (
-            <div key={emp.id} className="border rounded-lg">
+            <div key={emp.id} className="border border-border-default rounded-lg">
               <button
                 onClick={() => setOpenId(isOpen ? null : emp.id)}
-                className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50"
+                className="w-full flex items-center justify-between px-3 py-2 hover:bg-page transition-base"
               >
                 <div className="flex items-center gap-3">
-                  <span className="text-xs font-mono text-gray-400">{isOpen ? '▼' : '▶'}</span>
-                  <span className="font-bold text-sm" style={{ color: '#7C1A1A' }}>
+                  {isOpen
+                    ? <ChevronLeft size={14} className="text-text-secondary rotate-[-90deg]" />
+                    : <ChevronRight size={14} className="text-text-secondary" />}
+                  <span className="font-bold text-sm text-accent">
                     {emp.shiftCode || '–'}
                   </span>
-                  <span className="text-sm">{emp.name}</span>
+                  <span className="text-sm text-text-primary">{emp.name}</span>
                   {emp.shiftPeriod && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent-bg text-text-secondary">
                       {emp.shiftPeriod === 'manana' ? 'mañanas' : emp.shiftPeriod === 'tarde' ? 'tardes' : 'partido'}
                     </span>
                   )}
                   {emp.restPattern && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent-bg text-accent">
                       libra: {humanRestPattern(emp.restPattern)}
                     </span>
                   )}
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className={`text-xs font-mono ${exceeds ? 'text-red-600 font-bold' : ''}`}>
+                  <span className={`text-xs font-mono ${exceeds ? 'text-danger font-bold' : 'text-text-secondary'}`}>
                     {detail.total.toFixed(2)} / {contracted}h
                   </span>
-                  <span className={`text-[10px] ${exceeds ? 'text-red-600' : delta < -0.5 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                  <span className={`text-[10px] ${exceeds ? 'text-danger' : delta < -0.5 ? 'text-warning' : 'text-success'}`}>
                     {delta > 0 ? '+' : ''}{delta.toFixed(2)}h
                   </span>
                 </div>
               </button>
               {isOpen && (
-                <div className="border-t p-3 grid grid-cols-1 md:grid-cols-7 gap-2">
+                <div className="border-t border-border-default p-3 grid grid-cols-1 md:grid-cols-7 gap-2">
                   {[0, 1, 2, 3, 4, 5, 6].map(d => {
                     const dk = String(d)
                     const list = detail.shifts[dk] || []
                     const dayTotal = list.reduce((acc, s) => acc + s.hours, 0)
                     return (
-                      <div key={d} className="border rounded p-2 text-xs">
-                        <div className="font-semibold mb-1 flex items-center justify-between">
+                      <div key={d} className="border border-border-default rounded p-2 text-xs">
+                        <div className="font-semibold mb-1 flex items-center justify-between text-text-primary">
                           <span>{DAY_LABELS_SHORT[d as DayOfWeek]}</span>
                           {list.length > 0 && (
-                            <span className="text-[10px] text-gray-500 font-mono">{dayTotal.toFixed(2)}h</span>
+                            <span className="text-[10px] text-text-secondary font-mono">{dayTotal.toFixed(2)}h</span>
                           )}
                         </div>
                         {list.length === 0 ? (
-                          <div className="text-[10px] text-gray-400 italic">Libre</div>
+                          <div className="text-[10px] text-text-secondary italic">Libre</div>
                         ) : (
                           <div className="space-y-1">
                             {list.map((s, i) => (
-                              <div key={i} className="bg-[#F5E9D9] rounded px-1.5 py-1">
-                                <div className="font-mono text-[10px]" style={{ color: '#7C1A1A' }}>
+                              <div key={i} className="bg-accent-bg rounded px-1.5 py-1">
+                                <div className="font-mono text-[10px] text-accent">
                                   {s.start}–{s.end}
-                                  {s.crossesMidnight && <span className="ml-1 text-gray-400">+1d</span>}
+                                  {s.crossesMidnight && <span className="ml-1 text-text-secondary">+1d</span>}
                                 </div>
-                                <div className="text-[9px] text-gray-600">{s.label}</div>
+                                <div className="text-[9px] text-text-secondary">{s.label}</div>
                               </div>
                             ))}
                           </div>

@@ -4,6 +4,9 @@
 // Cálculo correcto de horas con cruce de medianoche.
 
 import { useEffect, useMemo, useState } from 'react'
+import {
+  ArrowLeft, ChevronLeft, ChevronRight, RefreshCw, Globe2, Clock, FileText,
+} from 'lucide-react'
 import type { Employee, Location } from '../../types'
 import { listShiftTemplates, getSchedule } from '../../services/schedulerService'
 import { fetchLocations } from '../../services/supabaseSync'
@@ -192,15 +195,21 @@ export default function MiHorario({ employee, onBack }: MiHorarioProps) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#F5E9D9] via-white to-[#F5E9D9] pb-20">
+    <div className="min-h-screen bg-page pb-20">
       {/* Header */}
       <div className="px-4 py-3 flex items-center gap-2">
         {onBack && (
-          <button onClick={onBack} className="text-[#7C1A1A] text-2xl">←</button>
+          <button
+            onClick={onBack}
+            className="text-accent w-9 h-9 rounded-full hover:bg-accent-bg flex items-center justify-center transition-base"
+            aria-label="Volver"
+          >
+            <ArrowLeft size={20} />
+          </button>
         )}
         <div className="flex-1">
-          <h1 className="text-xl font-bold" style={{ color: '#7C1A1A' }}>Mi horario</h1>
-          <p className="text-xs text-gray-500">{employee.name}</p>
+          <h1 className="font-display text-xl text-accent">Mi horario</h1>
+          <p className="text-xs text-text-secondary">{employee.name}</p>
         </div>
       </div>
 
@@ -208,47 +217,47 @@ export default function MiHorario({ employee, onBack }: MiHorarioProps) {
       <div className="px-4 mb-3 flex items-center justify-between gap-2">
         <button
           onClick={() => setWeekStart(addDays(weekStart, -7))}
-          className="px-3 py-1.5 rounded bg-white border text-sm"
-        >←</button>
+          className="px-3 py-1.5 rounded bg-card border border-border-default text-sm text-text-primary hover:bg-accent-bg transition-base inline-flex items-center"
+        ><ChevronLeft size={16} /></button>
         <div className="text-center text-sm flex-1">
-          <div className="font-medium">{formatWeekLabel(weekStart)}</div>
+          <div className="font-medium text-text-primary">{formatWeekLabel(weekStart)}</div>
           <button
             onClick={() => setWeekStart(toISODate(getMondayOfWeek(new Date())))}
-            className="text-[10px] text-gray-400 hover:underline"
+            className="text-[10px] text-text-secondary hover:underline"
           >
             Hoy
           </button>
         </div>
         <button
           onClick={() => setWeekStart(addDays(weekStart, +7))}
-          className="px-3 py-1.5 rounded bg-white border text-sm"
-        >→</button>
+          className="px-3 py-1.5 rounded bg-card border border-border-default text-sm text-text-primary hover:bg-accent-bg transition-base inline-flex items-center"
+        ><ChevronRight size={16} /></button>
       </div>
 
       {/* Estado del schedule */}
       {!loading && !schedule && (
-        <div className="mx-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800">
+        <div className="mx-4 p-3 rounded-lg bg-warning-bg border border-warning/30 text-sm text-warning">
           Aún no se ha generado el horario de esta semana.
         </div>
       )}
       {!loading && schedule && !isPublished && (
-        <div className="mx-4 p-3 rounded-lg bg-gray-50 border text-sm text-gray-600">
-          📝 El horario de esta semana está en borrador. Tu encargado lo está preparando.
+        <div className="mx-4 p-3 rounded-lg bg-page border border-border-default text-sm text-text-secondary inline-flex items-center gap-1.5">
+          <FileText size={14} /> El horario de esta semana está en borrador. Tu encargado lo está preparando.
         </div>
       )}
 
       {/* Total horas */}
       {!loading && schedule && (
-        <div className="mx-4 mb-3 p-3 rounded-lg bg-white border flex items-center justify-between">
+        <div className="mx-4 mb-3 p-3 rounded-lg bg-card border border-border-default flex items-center justify-between">
           <div>
-            <div className="text-xs text-gray-500">Total horas semana</div>
-            <div className="text-2xl font-bold" style={{ color: '#7C1A1A' }}>
+            <div className="text-xs text-text-secondary">Total horas semana</div>
+            <div className="text-2xl font-bold text-accent">
               {totalHoras}h
             </div>
           </div>
           <div className="text-right">
-            <div className="text-xs text-gray-500">Contratadas</div>
-            <div className="text-lg font-semibold text-gray-700">
+            <div className="text-xs text-text-secondary">Contratadas</div>
+            <div className="text-lg font-semibold text-text-primary">
               {employee.weeklyHours || 40}h
             </div>
           </div>
@@ -271,29 +280,29 @@ export default function MiHorario({ employee, onBack }: MiHorarioProps) {
           return (
             <div
               key={d}
-              className={`bg-white rounded-lg border p-3 ${isToday ? 'ring-2 ring-[#7C1A1A]' : ''}`}
+              className={`bg-card rounded-lg border border-border-default p-3 ${isToday ? 'ring-2 ring-accent' : ''}`}
             >
               <div className="flex items-center justify-between mb-2">
                 <div>
-                  <span className={`text-sm font-bold ${isToday ? 'text-[#7C1A1A]' : ''}`}>
+                  <span className={`text-sm font-bold ${isToday ? 'text-accent' : 'text-text-primary'}`}>
                     {DAY_LABELS[d]}
                   </span>
-                  <span className="ml-2 text-xs text-gray-400">{shortDate(dateISO)}</span>
+                  <span className="ml-2 text-xs text-text-secondary">{shortDate(dateISO)}</span>
                   {isToday && (
-                    <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full bg-[#F5E9D9] text-[#7C1A1A] font-bold">
+                    <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full bg-accent-bg text-accent font-bold">
                       HOY
                     </span>
                   )}
                 </div>
                 {!libre && (
-                  <span className="text-xs font-mono text-gray-500">
+                  <span className="text-xs font-mono text-text-secondary">
                     {totalDia.toFixed(2)}h
                   </span>
                 )}
               </div>
 
               {libre ? (
-                <div className="text-sm text-gray-400 italic">Libre</div>
+                <div className="text-sm text-text-secondary italic">Libre</div>
               ) : (
                 <div className="space-y-1.5">
                   {turnos.map((t, i) => {
@@ -302,19 +311,19 @@ export default function MiHorario({ employee, onBack }: MiHorarioProps) {
                     return (
                       <div
                         key={i}
-                        className="bg-[#F5E9D9] rounded px-2.5 py-1.5"
+                        className="bg-accent-bg rounded px-2.5 py-1.5"
                       >
                         <div className="flex items-center justify-between">
                           <div>
-                            <span className="font-mono text-sm font-bold" style={{ color: '#7C1A1A' }}>
+                            <span className="font-mono text-sm font-bold text-accent">
                               {t.start} – {t.end}
                             </span>
                             {t.crossesMidnight && (
-                              <span className="ml-2 text-[10px] text-gray-500">(cruza 00:00)</span>
+                              <span className="ml-2 text-[10px] text-text-secondary">(cruza 00:00)</span>
                             )}
-                            <div className="text-[11px] text-gray-600">{t.label}</div>
+                            <div className="text-[11px] text-text-secondary">{t.label}</div>
                           </div>
-                          <span className="text-xs font-mono text-gray-700">{t.hours}h</span>
+                          <span className="text-xs font-mono text-text-primary">{t.hours}h</span>
                         </div>
 
                         {/* Estado del cambio o botón solicitar */}
@@ -322,16 +331,16 @@ export default function MiHorario({ employee, onBack }: MiHorarioProps) {
                           <div className="mt-1.5 flex items-center justify-between gap-2">
                             {activeSwap ? (
                               <>
-                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                                <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium ${
                                   activeSwap.status === 'abierta'
-                                    ? 'bg-blue-100 text-blue-700'
-                                    : 'bg-amber-100 text-amber-700'
+                                    ? 'bg-accent-bg text-accent'
+                                    : 'bg-warning-bg text-warning'
                                 }`}>
-                                  {activeSwap.status === 'abierta' ? '🌐 Abierta' : '⏳ Pendiente del gestor'}
+                                  {activeSwap.status === 'abierta' ? <><Globe2 size={10} /> Abierta</> : <><Clock size={10} /> Pendiente del gestor</>}
                                 </span>
                                 <button
                                   onClick={() => handleCancelSwap(activeSwap.id)}
-                                  className="text-[10px] px-2 py-0.5 rounded text-gray-500 hover:text-red-600 hover:bg-red-50"
+                                  className="text-[10px] px-2 py-0.5 rounded text-text-secondary hover:text-danger hover:bg-danger-bg transition-base"
                                 >
                                   Cancelar solicitud
                                 </button>
@@ -347,9 +356,9 @@ export default function MiHorario({ employee, onBack }: MiHorarioProps) {
                                     dayKey: String(d),
                                     date: dateISO_t,
                                   })}
-                                  className="text-[10px] px-2 py-0.5 rounded text-[#7C1A1A] hover:bg-[#7C1A1A]/10 font-medium"
+                                  className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded text-accent hover:bg-accent/10 font-medium transition-base"
                                 >
-                                  🔄 Solicitar cambio
+                                  <RefreshCw size={10} /> Solicitar cambio
                                 </button>
                               </>
                             )}

@@ -80,10 +80,10 @@ export default function PlantillaTurnosPage() {
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold" style={{ color: '#7C1A1A' }}>
+        <h1 className="font-display text-2xl text-accent">
           Plantilla de turnos del local
         </h1>
-        <p className="text-sm text-gray-600 mt-1">
+        <p className="text-sm text-text-secondary mt-1">
           Define qué horarios puede abrir el local y cuántas personas necesita
           en cada turno por día de la semana. El generador automático usará
           esto como base.
@@ -92,11 +92,11 @@ export default function PlantillaTurnosPage() {
 
       {/* Selector de local */}
       <div className="mb-4 flex items-center gap-3">
-        <label className="text-sm font-medium">Local:</label>
+        <label className="text-sm font-medium text-text-primary">Local:</label>
         <select
           value={locationId}
           onChange={(e) => setLocationId(e.target.value)}
-          className="border rounded px-3 py-2 bg-white"
+          className="border border-border-default rounded px-3 py-2 bg-card text-text-primary"
         >
           {locations.map((l) => (
             <option key={l.id} value={l.id}>
@@ -107,9 +107,9 @@ export default function PlantillaTurnosPage() {
       </div>
 
       {/* Tabla de turnos */}
-      <div className="bg-white rounded-lg shadow border overflow-x-auto">
+      <div className="bg-card rounded-lg shadow border border-border-default overflow-x-auto">
         <table className="w-full text-sm">
-          <thead style={{ backgroundColor: '#7C1A1A' }} className="text-white">
+          <thead className="bg-accent text-text-on-accent">
             <tr>
               <th className="px-3 py-2 text-left">Etiqueta</th>
               <th className="px-3 py-2 text-center">Entrada</th>
@@ -126,14 +126,14 @@ export default function PlantillaTurnosPage() {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={12} className="py-6 text-center text-gray-500">
+                <td colSpan={12} className="py-6 text-center text-text-secondary">
                   Cargando…
                 </td>
               </tr>
             )}
             {!loading && templates.length === 0 && (
               <tr>
-                <td colSpan={12} className="py-6 text-center text-gray-500">
+                <td colSpan={12} className="py-6 text-center text-text-secondary">
                   No hay turnos definidos. Pulsa "Añadir turno" para empezar.
                 </td>
               </tr>
@@ -161,8 +161,7 @@ export default function PlantillaTurnosPage() {
         {!showForm ? (
           <button
             onClick={() => setShowForm(true)}
-            className="px-4 py-2 rounded text-white font-medium"
-            style={{ backgroundColor: '#7C1A1A' }}
+            className="px-4 py-2 rounded text-text-on-accent font-medium bg-accent hover:bg-accent-hover transition-base"
           >
             + Añadir turno
           </button>
@@ -221,48 +220,48 @@ function TemplateRow({
   }
 
   return (
-    <tr className="border-b hover:bg-gray-50">
+    <tr className="border-b border-border-default hover:bg-page transition-base">
       <td className="px-3 py-2">
         {editing ? (
           <input
             value={label}
             onChange={(e) => setLabel(e.target.value)}
-            className="border rounded px-2 py-1 w-full"
+            className="border border-border-default rounded px-2 py-1 w-full bg-card text-text-primary"
           />
         ) : (
           <button
             onClick={onStartEdit}
-            className="text-left w-full hover:underline"
+            className="text-left w-full hover:underline text-text-primary"
           >
             {template.label}
           </button>
         )}
       </td>
-      <td className="px-3 py-2 text-center">
+      <td className="px-3 py-2 text-center text-text-primary">
         {editing ? (
           <input
             type="time"
             value={start}
             onChange={(e) => setStart(e.target.value)}
-            className="border rounded px-2 py-1"
+            className="border border-border-default rounded px-2 py-1 bg-card text-text-primary"
           />
         ) : (
           template.start_time.slice(0, 5)
         )}
       </td>
-      <td className="px-3 py-2 text-center">
+      <td className="px-3 py-2 text-center text-text-primary">
         {editing ? (
           <input
             type="time"
             value={end}
             onChange={(e) => setEnd(e.target.value)}
-            className="border rounded px-2 py-1"
+            className="border border-border-default rounded px-2 py-1 bg-card text-text-primary"
           />
         ) : (
           template.end_time.slice(0, 5)
         )}
       </td>
-      <td className="px-3 py-2 text-center font-mono">{hours}</td>
+      <td className="px-3 py-2 text-center font-mono text-text-primary">{hours}</td>
       {DAYS.map((d) => {
         const field = DAY_FIELD[d];
         const value = template[field] as number;
@@ -277,14 +276,13 @@ function TemplateRow({
               onChange={(e) =>
                 onCellChange(template, d, parseInt(e.target.value || '0', 10))
               }
-              className={`w-12 border rounded px-1 py-1 text-center ${
+              className={`w-12 border rounded px-1 py-1 text-center transition-base ${
                 value > 0
                   ? isWeekend
-                    ? 'bg-amber-50 border-amber-300'
-                    : 'bg-gray-50'
-                  : ''
+                    ? 'bg-warning-bg border-warning/30 text-accent font-semibold'
+                    : 'bg-page border-border-default text-accent font-semibold'
+                  : 'bg-card border-border-default text-text-primary'
               }`}
-              style={value > 0 ? { color: '#7C1A1A', fontWeight: 600 } : undefined}
             />
           </td>
         );
@@ -293,15 +291,14 @@ function TemplateRow({
         {editing ? (
           <button
             onClick={saveTimeChanges}
-            className="text-xs px-2 py-1 rounded text-white"
-            style={{ backgroundColor: '#7C1A1A' }}
+            className="text-xs px-2 py-1 rounded text-text-on-accent bg-accent hover:bg-accent-hover transition-base"
           >
             Guardar
           </button>
         ) : (
           <button
             onClick={onDelete}
-            className="text-xs text-red-600 hover:underline"
+            className="text-xs text-danger hover:underline"
           >
             Eliminar
           </button>
@@ -352,40 +349,37 @@ function NewTemplateForm({ locationId, onCancel, onCreated }: NewTemplateFormPro
   }
 
   return (
-    <div
-      className="p-4 rounded-lg border-2"
-      style={{ borderColor: '#7C1A1A', backgroundColor: '#F5E9D9' }}
-    >
+    <div className="p-4 rounded-lg border-2 border-accent bg-accent-bg">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
         <div>
-          <label className="text-xs font-medium block mb-1">Etiqueta</label>
+          <label className="text-xs font-medium block mb-1 text-text-primary">Etiqueta</label>
           <input
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             placeholder="Mañana corto"
-            className="border rounded px-2 py-1.5 w-full bg-white"
+            className="border border-border-default rounded px-2 py-1.5 w-full bg-card text-text-primary"
           />
         </div>
         <div>
-          <label className="text-xs font-medium block mb-1">Entrada</label>
+          <label className="text-xs font-medium block mb-1 text-text-primary">Entrada</label>
           <input
             type="time"
             value={start}
             onChange={(e) => setStart(e.target.value)}
-            className="border rounded px-2 py-1.5 w-full bg-white"
+            className="border border-border-default rounded px-2 py-1.5 w-full bg-card text-text-primary"
           />
         </div>
         <div>
-          <label className="text-xs font-medium block mb-1">Salida</label>
+          <label className="text-xs font-medium block mb-1 text-text-primary">Salida</label>
           <input
             type="time"
             value={end}
             onChange={(e) => setEnd(e.target.value)}
-            className="border rounded px-2 py-1.5 w-full bg-white"
+            className="border border-border-default rounded px-2 py-1.5 w-full bg-card text-text-primary"
           />
         </div>
         <div className="flex items-end gap-2">
-          <span className="text-sm">
+          <span className="text-sm text-text-primary">
             Duración: <strong>{hours}h</strong>
           </span>
         </div>
@@ -394,19 +388,18 @@ function NewTemplateForm({ locationId, onCancel, onCreated }: NewTemplateFormPro
         <button
           onClick={save}
           disabled={saving}
-          className="px-4 py-2 rounded text-white font-medium disabled:opacity-50"
-          style={{ backgroundColor: '#7C1A1A' }}
+          className="px-4 py-2 rounded text-text-on-accent font-medium disabled:opacity-50 bg-accent hover:bg-accent-hover transition-base"
         >
           {saving ? 'Guardando…' : 'Crear turno'}
         </button>
         <button
           onClick={onCancel}
-          className="px-4 py-2 rounded border bg-white"
+          className="px-4 py-2 rounded border border-border-default bg-card text-text-primary hover:bg-page transition-base"
         >
           Cancelar
         </button>
       </div>
-      <p className="text-xs text-gray-600 mt-3">
+      <p className="text-xs text-text-secondary mt-3">
         Después podrás ajustar cuántas personas se necesitan cada día desde la
         tabla.
       </p>
@@ -439,28 +432,25 @@ function CoverageSummary({ templates }: { templates: ShiftTemplate[] }) {
   if (templates.length === 0) return null;
 
   return (
-    <div
-      className="mt-6 p-4 rounded-lg"
-      style={{ backgroundColor: '#F5E9D9' }}
-    >
-      <h3 className="font-semibold mb-2" style={{ color: '#7C1A1A' }}>
+    <div className="mt-6 p-4 rounded-lg bg-accent-bg">
+      <h3 className="font-display font-semibold mb-2 text-accent">
         Necesidad semanal de cobertura
       </h3>
       <div className="grid grid-cols-2 gap-4 text-sm">
         <div>
-          <div className="text-gray-600">Turnos a cubrir/semana</div>
-          <div className="text-2xl font-bold" style={{ color: '#7C1A1A' }}>
+          <div className="text-text-secondary">Turnos a cubrir/semana</div>
+          <div className="text-2xl font-bold text-accent">
             {totals.totalShifts}
           </div>
         </div>
         <div>
-          <div className="text-gray-600">Horas-empleado/semana</div>
-          <div className="text-2xl font-bold" style={{ color: '#7C1A1A' }}>
+          <div className="text-text-secondary">Horas-empleado/semana</div>
+          <div className="text-2xl font-bold text-accent">
             {totals.totalHours}h
           </div>
         </div>
       </div>
-      <p className="text-xs text-gray-600 mt-2">
+      <p className="text-xs text-text-secondary mt-2">
         Estas horas se repartirán entre los empleados del local respetando sus
         jornadas contratadas.
       </p>

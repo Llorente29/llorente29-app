@@ -2,6 +2,10 @@
 // Vista del gestor: bolsa de horas con sistema híbrido (planificado + fichaje + ausencias)
 
 import { useEffect, useMemo, useState } from 'react'
+import {
+  BarChart3, Clock, History, Lightbulb, Calendar, AlertTriangle, X, RefreshCw,
+  Lock, Download,
+} from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import {
   getAllEmployeesBalanceStates,
@@ -26,37 +30,43 @@ import { exportGestoriaCsv } from '../services/exportGestoriaService'
 type Tab = 'current' | 'pending' | 'history'
 
 const TAB_LABELS: Record<Tab, string> = {
-  current: '📊 En curso',
-  pending: '⏳ Pendientes',
-  history: '📚 Histórico',
+  current: 'En curso',
+  pending: 'Pendientes',
+  history: 'Histórico',
+}
+
+const TAB_ICONS: Record<Tab, typeof BarChart3> = {
+  current: BarChart3,
+  pending: Clock,
+  history: History,
 }
 
 const RESOLUTION_LABELS: Record<ClosureResolution, string> = {
-  pendiente: '⏳ Pendiente',
-  pagado: '💰 Pagado',
-  compensado: '🌴 Compensado',
-  arrastrado: '↩️ Arrastrado',
-  descartado: '🗑️ Descartado',
+  pendiente: 'Pendiente',
+  pagado: 'Pagado',
+  compensado: 'Compensado',
+  arrastrado: 'Arrastrado',
+  descartado: 'Descartado',
 }
 
 const RESOLUTION_COLORS: Record<ClosureResolution, string> = {
-  pendiente: 'text-amber-700 bg-amber-50',
-  pagado: 'text-emerald-700 bg-emerald-50',
-  compensado: 'text-blue-700 bg-blue-50',
-  arrastrado: 'text-violet-700 bg-violet-50',
-  descartado: 'text-gray-500 bg-gray-100',
+  pendiente: 'text-warning bg-warning-bg',
+  pagado: 'text-success bg-success-bg',
+  compensado: 'text-accent bg-accent-bg',
+  arrastrado: 'text-accent bg-accent-bg',
+  descartado: 'text-text-secondary bg-accent-bg',
 }
 
 const ALERT_LABELS: Record<DayAlertType, string> = {
-  sin_fichaje: '⚠️ Sin fichaje',
-  sin_horario: '🟡 Trabajo sin horario',
-  desviacion_grande: '🔴 Desviación >30 min',
+  sin_fichaje: 'Sin fichaje',
+  sin_horario: 'Trabajo sin horario',
+  desviacion_grande: 'Desviación >30 min',
 }
 
 const ALERT_COLORS: Record<DayAlertType, string> = {
-  sin_fichaje: 'text-amber-700 bg-amber-50 border-amber-200',
-  sin_horario: 'text-yellow-800 bg-yellow-50 border-yellow-300',
-  desviacion_grande: 'text-red-700 bg-red-50 border-red-200',
+  sin_fichaje: 'text-warning bg-warning-bg border-warning/30',
+  sin_horario: 'text-warning bg-warning-bg border-warning/30',
+  desviacion_grande: 'text-danger bg-danger-bg border-danger/30',
 }
 
 interface AutoCloseDetection {
@@ -176,94 +186,94 @@ export default function BolsaHorasPage() {
     <div className="space-y-4">
       {/* Banner de auto-cierre pendiente */}
       {autoClose && (
-        <div className="bg-gradient-to-r from-orange-50 to-amber-50 border-2 border-orange-300 rounded-lg p-4 flex items-start gap-4">
-          <div className="text-3xl shrink-0">📅</div>
+        <div className="bg-warning-bg border-2 border-warning/30 rounded-lg p-4 flex items-start gap-4">
+          <Calendar size={32} className="text-warning shrink-0" />
           <div className="flex-1">
-            <div className="font-bold text-orange-900 mb-1">
+            <div className="font-bold text-warning mb-1">
               Periodo "{autoClose.period.label}" pendiente de cerrar
             </div>
-            <p className="text-sm text-orange-800">
+            <p className="text-sm text-warning">
               El periodo del <strong>{autoClose.period.start}</strong> al <strong>{autoClose.period.end}</strong> ya
               ha terminado pero {autoClose.employeesNotClosed.length === 1
                 ? '1 empleado tiene'
                 : `${autoClose.employeesNotClosed.length} empleados tienen`} su cierre pendiente.
             </p>
-            <p className="text-xs text-orange-700 mt-1">
+            <p className="text-xs text-warning mt-1">
               Puedes cerrarlo automáticamente ahora y luego decidir cómo resolver cada saldo (pagar / compensar / arrastrar).
             </p>
           </div>
           <button
             onClick={handleAutoClose}
             disabled={autoClosing}
-            className="px-4 py-2 rounded-lg text-white font-medium text-sm shrink-0 disabled:opacity-40"
-            style={{ backgroundColor: '#F39C2A' }}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-text-on-accent font-medium text-sm shrink-0 disabled:opacity-40 bg-warning hover:opacity-90 transition-base"
           >
-            {autoClosing ? 'Cerrando...' : '🔒 Cerrar ahora'}
+            {autoClosing ? 'Cerrando...' : <><Lock size={14} /> Cerrar ahora</>}
           </button>
         </div>
       )}
 
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-3 bg-white border rounded-lg p-3">
+      <div className="flex flex-wrap items-center gap-3 bg-card border border-border-default rounded-lg p-3">
         <select
           value={locationId}
           onChange={e => setLocationId(e.target.value)}
-          className="border rounded px-3 py-2 bg-white text-sm"
+          className="border border-border-default rounded px-3 py-2 bg-card text-text-primary text-sm"
         >
           {locations.map(l => (
             <option key={l.id} value={l.id}>{l.name}</option>
           ))}
         </select>
 
-        <div className="flex items-center gap-1 bg-gray-100 rounded p-1">
-          {(['current', 'pending', 'history'] as Tab[]).map(t => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`px-3 py-1 rounded text-sm transition ${
-                tab === t
-                  ? 'bg-white shadow text-[#7C1A1A] font-medium'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              {TAB_LABELS[t]}
-              {t === 'pending' && totalPending > 0 && (
-                <span className="ml-1.5 text-[10px] bg-amber-500 text-white px-1.5 py-0.5 rounded-full font-bold">
-                  {totalPending}
-                </span>
-              )}
-              {t === 'current' && totalAlerts > 0 && (
-                <span className="ml-1.5 text-[10px] bg-red-500 text-white px-1.5 py-0.5 rounded-full font-bold">
-                  {totalAlerts}
-                </span>
-              )}
-            </button>
-          ))}
+        <div className="flex items-center gap-1 bg-accent-bg rounded p-1">
+          {(['current', 'pending', 'history'] as Tab[]).map(t => {
+            const TabIcon = TAB_ICONS[t]
+            return (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded text-sm transition-base ${
+                  tab === t
+                    ? 'bg-card shadow text-accent font-medium'
+                    : 'text-text-secondary hover:text-text-primary'
+                }`}
+              >
+                <TabIcon size={14} /> {TAB_LABELS[t]}
+                {t === 'pending' && totalPending > 0 && (
+                  <span className="ml-1.5 text-[10px] bg-warning text-text-on-accent px-1.5 py-0.5 rounded-full font-bold">
+                    {totalPending}
+                  </span>
+                )}
+                {t === 'current' && totalAlerts > 0 && (
+                  <span className="ml-1.5 text-[10px] bg-danger text-text-on-accent px-1.5 py-0.5 rounded-full font-bold">
+                    {totalAlerts}
+                  </span>
+                )}
+              </button>
+            )
+          })}
         </div>
 
         <div className="flex-1" />
 
-        <div className="text-xs text-gray-500">
+        <div className="text-xs text-text-secondary">
           Cierre día <strong>{closeDay}</strong> de cada mes
         </div>
 
         <button
           onClick={handleCloseManual}
           disabled={loading || !locationId}
-          className="px-3 py-2 rounded border text-sm font-medium disabled:opacity-40 hover:bg-amber-50"
-          style={{ borderColor: '#F39C2A', color: '#F39C2A' }}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded border-2 border-warning text-warning bg-card text-sm font-medium disabled:opacity-40 hover:bg-warning-bg transition-base"
           title="Cerrar el periodo actual ahora"
         >
-          🔒 Cerrar periodo
+          <Lock size={14} /> Cerrar periodo
         </button>
 
         <button
           onClick={refresh}
           disabled={loading}
-          className="px-3 py-2 rounded text-white text-sm font-medium disabled:opacity-40"
-          style={{ backgroundColor: '#7C1A1A' }}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded text-text-on-accent text-sm font-medium disabled:opacity-40 bg-accent hover:bg-accent-hover transition-base"
         >
-          {loading ? 'Calculando...' : '🔄 Recalcular'}
+          {loading ? 'Calculando...' : <><RefreshCw size={14} /> Recalcular</>}
         </button>
       </div>
 
@@ -325,7 +335,7 @@ function CurrentTab({
   if (loading) return <Skeleton />
   if (states.length === 0) {
     return (
-      <div className="bg-white border rounded-lg p-8 text-center text-gray-500">
+      <div className="bg-card border rounded-lg p-8 text-center text-text-secondary">
         No hay empleados en este local
       </div>
     )
@@ -337,18 +347,18 @@ function CurrentTab({
   return (
     <>
       {allWeeksMissing.size > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3">
-          <div className="text-sm font-semibold text-amber-800 mb-1">
-            ⚠️ {allWeeksMissing.size} semana(s) sin horario publicado en este periodo
+        <div className="bg-warning-bg border border-warning/30 rounded-lg p-3 mb-3">
+          <div className="text-sm font-semibold text-warning mb-1 inline-flex items-center gap-1.5">
+            <AlertTriangle size={14} /> {allWeeksMissing.size} semana(s) sin horario publicado en este periodo
           </div>
-          <p className="text-xs text-amber-700">
+          <p className="text-xs text-warning">
             Estas semanas no se cuentan en el saldo. Publica los horarios para que el saldo refleje la realidad.
           </p>
         </div>
       )}
-      <div className="bg-white border rounded-lg overflow-hidden">
+      <div className="bg-card border border-border-default rounded-lg overflow-hidden">
         <table className="w-full text-sm">
-          <thead style={{ backgroundColor: '#7C1A1A' }} className="text-white">
+          <thead className="bg-accent text-text-on-accent">
             <tr>
               <th className="px-3 py-2 text-left">Empleado</th>
               <th className="px-3 py-2 text-center">Periodo</th>
@@ -366,38 +376,38 @@ function CurrentTab({
               const negative = cp.delta < -0.01
               const numAlerts = s.alerts.length
               return (
-                <tr key={s.employeeId} className="border-b hover:bg-gray-50">
+                <tr key={s.employeeId} className="border-b border-border-default hover:bg-page transition-base">
                   <td className="px-3 py-2">
-                    <span className="font-bold text-sm" style={{ color: '#7C1A1A' }}>
+                    <span className="font-bold text-sm text-accent">
                       {s.shiftCode || '–'}
                     </span>
-                    <span className="ml-2">{s.employeeName}</span>
-                    <div className="text-[10px] text-gray-500">
+                    <span className="ml-2 text-text-primary">{s.employeeName}</span>
+                    <div className="text-[10px] text-text-secondary">
                       Contrato {s.contractedHours}h/sem
                       {s.initialBalance !== 0 && (
                         <span> · Inicial: {s.initialBalance > 0 ? '+' : ''}{s.initialBalance.toFixed(1)}h</span>
                       )}
                     </div>
                   </td>
-                  <td className="px-3 py-2 text-center text-xs">
+                  <td className="px-3 py-2 text-center text-xs text-text-primary">
                     <div className="font-semibold">{cp.periodLabel}</div>
-                    <div className="text-[10px] text-gray-500 font-mono">
+                    <div className="text-[10px] text-text-secondary font-mono">
                       {cp.periodStart} → {cp.periodEnd}
                     </div>
                   </td>
-                  <td className="px-3 py-2 text-center text-xs font-mono">
+                  <td className="px-3 py-2 text-center text-xs font-mono text-text-primary">
                     {cp.scheduledHours.toFixed(2)}h
                   </td>
-                  <td className="px-3 py-2 text-center text-xs font-mono">
+                  <td className="px-3 py-2 text-center text-xs font-mono text-text-primary">
                     {cp.vacationHours > 0 ? `+${cp.vacationHours.toFixed(2)}h` : '–'}
                   </td>
-                  <td className="px-3 py-2 text-center text-xs font-mono text-gray-500">
+                  <td className="px-3 py-2 text-center text-xs font-mono text-text-secondary">
                     {cp.contractedHoursPeriod.toFixed(2)}h
                   </td>
                   <td className={`px-3 py-2 text-center font-bold text-sm ${
-                    positive ? 'text-emerald-600' :
-                    negative ? 'text-red-600' :
-                    'text-gray-500'
+                    positive ? 'text-success' :
+                    negative ? 'text-danger' :
+                    'text-text-secondary'
                   }`}>
                     {positive ? '+' : ''}{cp.delta.toFixed(2)}h
                   </td>
@@ -405,12 +415,12 @@ function CurrentTab({
                     {numAlerts > 0 ? (
                       <button
                         onClick={() => onShowAlerts({ employeeName: s.employeeName, alerts: s.alerts })}
-                        className="px-2 py-1 rounded bg-red-100 text-red-700 text-xs font-bold hover:bg-red-200"
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded bg-danger-bg text-danger text-xs font-bold hover:opacity-90 transition-base"
                       >
-                        ⚠️ {numAlerts}
+                        <AlertTriangle size={11} /> {numAlerts}
                       </button>
                     ) : (
-                      <span className="text-emerald-600 text-xs">✓</span>
+                      <span className="text-success text-xs">✓</span>
                     )}
                   </td>
                 </tr>
@@ -419,8 +429,8 @@ function CurrentTab({
           </tbody>
         </table>
       </div>
-      <p className="text-[11px] text-gray-500 mt-2">
-        💡 Sistema híbrido: prioridad ausencias → fichaje → planificado. Las alertas marcan días con incidencias.
+      <p className="text-[11px] text-text-secondary mt-2 inline-flex items-center gap-1">
+        <Lightbulb size={11} /> Sistema híbrido: prioridad ausencias → fichaje → planificado. Las alertas marcan días con incidencias.
       </p>
     </>
   )
@@ -448,18 +458,20 @@ function PendingTab({
   }
   if (allPending.length === 0) {
     return (
-      <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-8 text-center">
-        <div className="text-4xl mb-2">✅</div>
-        <div className="text-sm text-emerald-800 font-medium">
+      <div className="bg-success-bg border border-success/30 rounded-lg p-8 text-center">
+        <div className="flex justify-center mb-2">
+          <BarChart3 size={36} className="text-success" />
+        </div>
+        <div className="text-sm text-success font-medium">
           No hay periodos pendientes de resolución
         </div>
       </div>
     )
   }
   return (
-    <div className="bg-white border rounded-lg overflow-hidden">
+    <div className="bg-card border border-border-default rounded-lg overflow-hidden">
       <table className="w-full text-sm">
-        <thead style={{ backgroundColor: '#7C1A1A' }} className="text-white">
+        <thead className="bg-accent text-text-on-accent">
           <tr>
             <th className="px-3 py-2 text-left">Empleado</th>
             <th className="px-3 py-2 text-center">Periodo</th>
@@ -473,34 +485,33 @@ function PendingTab({
             const positive = closure.delta > 0.01
             const negative = closure.delta < -0.01
             return (
-              <tr key={closure.id} className="border-b hover:bg-gray-50">
+              <tr key={closure.id} className="border-b border-border-default hover:bg-page transition-base">
                 <td className="px-3 py-2">
-                  <span className="font-bold text-sm" style={{ color: '#7C1A1A' }}>
+                  <span className="font-bold text-sm text-accent">
                     {state.shiftCode || '–'}
                   </span>
-                  <span className="ml-2">{state.employeeName}</span>
+                  <span className="ml-2 text-text-primary">{state.employeeName}</span>
                 </td>
-                <td className="px-3 py-2 text-center text-xs">
+                <td className="px-3 py-2 text-center text-xs text-text-primary">
                   <div className="font-semibold">{closure.periodLabel}</div>
-                  <div className="text-[10px] text-gray-500 font-mono">
+                  <div className="text-[10px] text-text-secondary font-mono">
                     {closure.periodStart} → {closure.periodEnd}
                   </div>
                 </td>
                 <td className={`px-3 py-2 text-center font-bold text-sm ${
-                  positive ? 'text-emerald-600' :
-                  negative ? 'text-red-600' :
-                  'text-gray-500'
+                  positive ? 'text-success' :
+                  negative ? 'text-danger' :
+                  'text-text-secondary'
                 }`}>
                   {positive ? '+' : ''}{closure.delta.toFixed(2)}h
                 </td>
-                <td className="px-3 py-2 text-center text-xs text-gray-500 font-mono">
+                <td className="px-3 py-2 text-center text-xs text-text-secondary font-mono">
                   {new Date(closure.closedAt).toLocaleDateString('es-ES')}
                 </td>
                 <td className="px-3 py-2 text-center">
                   <button
                     onClick={() => onResolve(closure)}
-                    className="px-3 py-1 rounded text-white text-xs font-medium"
-                    style={{ backgroundColor: '#F39C2A' }}
+                    className="px-3 py-1 rounded text-text-on-accent text-xs font-medium bg-warning hover:opacity-90 transition-base"
                   >
                     Resolver
                   </button>
@@ -567,11 +578,11 @@ function HistoryTab({
 
   return (
     <>
-      <div className="flex items-center gap-2 bg-white border rounded-lg p-2 mb-3">
+      <div className="flex items-center gap-2 bg-card border rounded-lg p-2 mb-3">
         <select
           value={filterEmpId}
           onChange={e => setFilterEmpId(e.target.value)}
-          className="border rounded px-2 py-1 bg-white text-xs"
+          className="border rounded px-2 py-1 bg-card text-xs"
         >
           <option value="">Todos los empleados</option>
           {states.map(s => (
@@ -583,37 +594,36 @@ function HistoryTab({
         <select
           value={filterResolution}
           onChange={e => setFilterResolution(e.target.value as ClosureResolution | '')}
-          className="border rounded px-2 py-1 bg-white text-xs"
+          className="border border-border-default rounded px-2 py-1 bg-card text-text-primary text-xs"
         >
           <option value="">Todas las resoluciones</option>
-          <option value="pagado">💰 Pagado</option>
-          <option value="compensado">🌴 Compensado</option>
-          <option value="arrastrado">↩️ Arrastrado</option>
-          <option value="descartado">🗑️ Descartado</option>
+          <option value="pagado">Pagado</option>
+          <option value="compensado">Compensado</option>
+          <option value="arrastrado">Arrastrado</option>
+          <option value="descartado">Descartado</option>
         </select>
         <div className="flex-1" />
-        <span className="text-xs text-gray-500">{allResolved.length} cierre(s)</span>
+        <span className="text-xs text-text-secondary">{allResolved.length} cierre(s)</span>
         <button
           onClick={handleExport}
           disabled={exporting || allResolved.length === 0}
-          className="px-3 py-1 rounded text-white text-xs font-medium disabled:opacity-40"
-          style={{ backgroundColor: '#7C1A1A' }}
+          className="inline-flex items-center gap-1.5 px-3 py-1 rounded text-text-on-accent text-xs font-medium disabled:opacity-40 bg-accent hover:bg-accent-hover transition-base"
           title="Descargar CSV con datos para gestoría (respeta los filtros)"
         >
-          {exporting ? '⏳ Generando...' : '📊 Exportar gestoría'}
+          {exporting ? <><Clock size={11} /> Generando...</> : <><Download size={11} /> Exportar gestoría</>}
         </button>
       </div>
 
       {allResolved.length === 0 && (
-        <div className="bg-white border rounded-lg p-8 text-center text-gray-500">
+        <div className="bg-card border border-border-default rounded-lg p-8 text-center text-text-secondary">
           No hay cierres en el histórico
         </div>
       )}
 
       {allResolved.length > 0 && (
-        <div className="bg-white border rounded-lg overflow-hidden">
+        <div className="bg-card border border-border-default rounded-lg overflow-hidden">
           <table className="w-full text-sm">
-            <thead style={{ backgroundColor: '#7C1A1A' }} className="text-white">
+            <thead className="bg-accent text-text-on-accent">
               <tr>
                 <th className="px-3 py-2 text-left">Empleado</th>
                 <th className="px-3 py-2 text-center">Periodo</th>
@@ -628,20 +638,20 @@ function HistoryTab({
                 const positive = closure.delta > 0.01
                 const negative = closure.delta < -0.01
                 return (
-                  <tr key={closure.id} className="border-b hover:bg-gray-50">
+                  <tr key={closure.id} className="border-b border-border-default hover:bg-page transition-base">
                     <td className="px-3 py-2">
-                      <span className="font-bold text-xs" style={{ color: '#7C1A1A' }}>
+                      <span className="font-bold text-xs text-accent">
                         {state.shiftCode || '–'}
                       </span>
-                      <span className="ml-2 text-xs">{state.employeeName}</span>
+                      <span className="ml-2 text-xs text-text-primary">{state.employeeName}</span>
                     </td>
-                    <td className="px-3 py-2 text-center text-xs">
+                    <td className="px-3 py-2 text-center text-xs text-text-primary">
                       <div className="font-semibold">{closure.periodLabel}</div>
                     </td>
                     <td className={`px-3 py-2 text-center font-mono text-xs ${
-                      positive ? 'text-emerald-600 font-bold' :
-                      negative ? 'text-red-600 font-bold' :
-                      'text-gray-500'
+                      positive ? 'text-success font-bold' :
+                      negative ? 'text-danger font-bold' :
+                      'text-text-secondary'
                     }`}>
                       {positive ? '+' : ''}{closure.delta.toFixed(2)}h
                     </td>
@@ -650,13 +660,13 @@ function HistoryTab({
                         {RESOLUTION_LABELS[closure.resolution]}
                       </span>
                     </td>
-                    <td className="px-3 py-2 text-center text-xs font-mono">
+                    <td className="px-3 py-2 text-center text-xs font-mono text-text-primary">
                       {closure.resolutionAmount !== undefined
                         ? `${closure.resolutionAmount.toFixed(2)}h`
                         : '–'}
                     </td>
-                    <td className="px-3 py-2 text-xs text-gray-600">
-                      {closure.resolutionNotes || <span className="text-gray-300">–</span>}
+                    <td className="px-3 py-2 text-xs text-text-secondary">
+                      {closure.resolutionNotes || <span className="text-text-secondary">–</span>}
                     </td>
                   </tr>
                 )
@@ -701,10 +711,10 @@ function ResolveModal({
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
       <div
-        className="bg-white rounded-lg shadow-xl max-w-lg w-full overflow-hidden flex flex-col"
+        className="bg-card rounded-lg shadow-xl max-w-lg w-full overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-5 py-3 border-b" style={{ backgroundColor: '#7C1A1A', color: 'white' }}>
+        <div className="px-5 py-3 border-b border-border-default bg-accent text-text-on-accent">
           <div className="flex items-center justify-between">
             <div>
               <div className="font-semibold">Resolver cierre — {closure.periodLabel}</div>
@@ -712,16 +722,18 @@ function ResolveModal({
                 {closure.periodStart} → {closure.periodEnd}
               </div>
             </div>
-            <button onClick={onClose} className="text-white/80 hover:text-white">✕</button>
+            <button onClick={onClose} className="text-text-on-accent/80 hover:text-text-on-accent">
+              <X size={18} />
+            </button>
           </div>
         </div>
 
         <div className="p-5 space-y-4">
-          <div className="bg-gray-50 rounded p-3 text-sm">
-            <div>Saldo del periodo: <strong className={closure.delta > 0 ? 'text-emerald-600' : 'text-red-600'}>
+          <div className="bg-page rounded p-3 text-sm text-text-primary">
+            <div>Saldo del periodo: <strong className={closure.delta > 0 ? 'text-success' : 'text-danger'}>
               {closure.delta > 0 ? '+' : ''}{closure.delta.toFixed(2)}h
             </strong></div>
-            <div className="text-xs text-gray-500 mt-1">
+            <div className="text-xs text-text-secondary mt-1">
               Trabajadas {closure.scheduledHours.toFixed(2)}h
               (incl. vacac. {closure.vacationHours.toFixed(2)}h)
               − Contratadas {closure.contractedHoursPeriod.toFixed(2)}h
@@ -729,16 +741,16 @@ function ResolveModal({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">Resolución</label>
+            <label className="block text-xs font-semibold text-text-primary mb-1">Resolución</label>
             <div className="grid grid-cols-2 gap-2">
               {(['pagado', 'compensado', 'arrastrado', 'descartado'] as ClosureResolution[]).map(r => (
                 <button
                   key={r}
                   onClick={() => setResolution(r)}
-                  className={`px-3 py-2 rounded border text-sm font-medium transition ${
+                  className={`px-3 py-2 rounded border text-sm font-medium transition-base ${
                     resolution === r
-                      ? 'border-[#7C1A1A] bg-[#F5E9D9] text-[#7C1A1A]'
-                      : 'border-gray-300 bg-white hover:bg-gray-50'
+                      ? 'border-accent bg-accent-bg text-accent'
+                      : 'border-border-default bg-card text-text-primary hover:bg-page'
                   }`}
                 >
                   {RESOLUTION_LABELS[r]}
@@ -748,7 +760,7 @@ function ResolveModal({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">
+            <label className="block text-xs font-semibold text-text-primary mb-1">
               Importe en horas (puede ser distinto al saldo)
             </label>
             <input
@@ -756,34 +768,33 @@ function ResolveModal({
               step="0.25"
               value={amount}
               onChange={e => setAmount(e.target.value)}
-              className="w-full border rounded px-3 py-2 text-sm"
+              className="w-full border border-border-default rounded px-3 py-2 text-sm bg-card text-text-primary"
             />
-            <p className="text-[10px] text-gray-500 mt-1">
+            <p className="text-[10px] text-text-secondary mt-1">
               Por defecto se usa el saldo. Puedes ajustar si solo pagas/compensas parte.
             </p>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">Notas (opcional)</label>
+            <label className="block text-xs font-semibold text-text-primary mb-1">Notas (opcional)</label>
             <textarea
               value={notes}
               onChange={e => setNotes(e.target.value)}
               rows={2}
-              className="w-full border rounded px-3 py-2 text-sm"
+              className="w-full border border-border-default rounded px-3 py-2 text-sm bg-card text-text-primary"
               placeholder="Ej: pagado en nómina mayo, compensado con día libre 5 junio..."
             />
           </div>
         </div>
 
-        <div className="px-5 py-3 border-t bg-gray-50 flex justify-end gap-2">
-          <button onClick={onClose} className="px-4 py-2 text-sm border rounded bg-white hover:bg-gray-50">
+        <div className="px-5 py-3 border-t border-border-default bg-page flex justify-end gap-2">
+          <button onClick={onClose} className="px-4 py-2 text-sm border border-border-default rounded bg-card text-text-primary hover:bg-page transition-base">
             Cancelar
           </button>
           <button
             onClick={handleSave}
             disabled={saving}
-            className="px-4 py-2 rounded text-white text-sm font-medium disabled:opacity-40"
-            style={{ backgroundColor: '#7C1A1A' }}
+            className="px-4 py-2 rounded text-text-on-accent text-sm font-medium disabled:opacity-40 bg-accent hover:bg-accent-hover transition-base"
           >
             {saving ? 'Guardando...' : 'Guardar resolución'}
           </button>
@@ -816,16 +827,20 @@ function AlertsModal({
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
       <div
-        className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col"
+        className="bg-card rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col"
         onClick={e => e.stopPropagation()}
       >
-        <div className="px-5 py-3 border-b" style={{ backgroundColor: '#7C1A1A', color: 'white' }}>
+        <div className="px-5 py-3 border-b border-border-default bg-accent text-text-on-accent">
           <div className="flex items-center justify-between">
             <div>
-              <div className="font-semibold">⚠️ Alertas del periodo</div>
+              <div className="font-semibold inline-flex items-center gap-1.5">
+                <AlertTriangle size={16} /> Alertas del periodo
+              </div>
               <div className="text-xs opacity-90">{employeeName} · {alerts.length} alerta(s)</div>
             </div>
-            <button onClick={onClose} className="text-white/80 hover:text-white">✕</button>
+            <button onClick={onClose} className="text-text-on-accent/80 hover:text-text-on-accent">
+              <X size={18} />
+            </button>
           </div>
         </div>
 
@@ -840,13 +855,13 @@ function AlertsModal({
                 </div>
                 <div className="space-y-1">
                   {items.map((a, i) => (
-                    <div key={i} className="text-xs bg-gray-50 rounded px-3 py-2 flex items-center justify-between">
+                    <div key={i} className="text-xs bg-page rounded px-3 py-2 flex items-center justify-between">
                       <div>
-                        <span className="font-mono text-gray-600">{a.date}</span>
-                        <span className="ml-2 text-gray-800">{a.message}</span>
+                        <span className="font-mono text-text-secondary">{a.date}</span>
+                        <span className="ml-2 text-text-primary">{a.message}</span>
                       </div>
                       {a.scheduledHours !== undefined && a.clockedHours !== undefined && (
-                        <div className="text-[10px] text-gray-500 font-mono">
+                        <div className="text-[10px] text-text-secondary font-mono">
                           plan {a.scheduledHours.toFixed(2)}h · ficha {a.clockedHours.toFixed(2)}h
                         </div>
                       )}
@@ -858,8 +873,8 @@ function AlertsModal({
           })}
         </div>
 
-        <div className="px-5 py-3 border-t bg-gray-50 flex justify-end">
-          <button onClick={onClose} className="px-4 py-2 text-sm border rounded bg-white hover:bg-gray-50">
+        <div className="px-5 py-3 border-t border-border-default bg-page flex justify-end">
+          <button onClick={onClose} className="px-4 py-2 text-sm border border-border-default rounded bg-card text-text-primary hover:bg-page transition-base">
             Cerrar
           </button>
         </div>
@@ -870,7 +885,7 @@ function AlertsModal({
 
 function Skeleton() {
   return (
-    <div className="bg-white border rounded-lg p-8 text-center text-gray-400">
+    <div className="bg-card border rounded-lg p-8 text-center text-text-secondary">
       Calculando...
     </div>
   )
