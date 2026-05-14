@@ -3,13 +3,21 @@
 // Muestra pendientes y permite aprobar/rechazar.
 
 import { useEffect, useMemo, useState } from 'react'
+import {
+  Clock,
+  CheckCircle2,
+  FileText,
+  Inbox,
+  Sparkles,
+  RefreshCw,
+  ArrowRight,
+} from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { Card } from '../components/ui'
 import type { ShiftSwapRequest, SwapStatus } from '../types/shiftSwap'
 import {
   SWAP_STATUS_LABELS,
   SWAP_STATUS_COLORS,
-  SWAP_TYPE_ICONS,
   SWAP_TYPE_LABELS,
 } from '../types/shiftSwap'
 import { listAllSwaps } from '../services/shiftSwapService'
@@ -87,8 +95,8 @@ export default function CambiosPendientesPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl" style={{ fontFamily: 'Instrument Serif, serif' }}>Cambios de turno</h1>
-        <p className="text-sm text-gray-500 mt-0.5">
+        <h1 className="font-display text-2xl text-accent">Cambios de turno</h1>
+        <p className="text-sm text-text-secondary mt-0.5">
           Aprueba o rechaza las solicitudes de cambio entre empleados.
         </p>
       </div>
@@ -96,13 +104,13 @@ export default function CambiosPendientesPage() {
       {/* Filtros */}
       <div className="flex flex-wrap gap-2">
         <FilterPill active={filter === 'pendientes'} onClick={() => setFilter('pendientes')}>
-          ⏳ Pendientes ({counts.pendientes})
+          <Clock size={14} /> Pendientes ({counts.pendientes})
         </FilterPill>
         <FilterPill active={filter === 'aprobados'} onClick={() => setFilter('aprobados')}>
-          ✅ Aprobados ({counts.aprobados})
+          <CheckCircle2 size={14} /> Aprobados ({counts.aprobados})
         </FilterPill>
         <FilterPill active={filter === 'historial'} onClick={() => setFilter('historial')}>
-          📜 Historial ({counts.historial})
+          <FileText size={14} /> Historial ({counts.historial})
         </FilterPill>
         <FilterPill active={filter === 'todos'} onClick={() => setFilter('todos')}>
           Todos ({counts.todos})
@@ -110,21 +118,23 @@ export default function CambiosPendientesPage() {
       </div>
 
       {loading && (
-        <Card className="p-6 text-center text-sm text-gray-400">Cargando solicitudes...</Card>
+        <Card className="p-6 text-center text-sm text-text-secondary">Cargando solicitudes...</Card>
       )}
 
       {!loading && visible.length === 0 && (
         <Card className="p-8 text-center">
-          <div className="text-5xl mb-2">
-            {filter === 'pendientes' ? '✨' : '📭'}
+          <div className="flex justify-center mb-2">
+            {filter === 'pendientes'
+              ? <Sparkles size={48} className="text-accent" strokeWidth={2} />
+              : <Inbox size={48} className="text-text-secondary" strokeWidth={2} />}
           </div>
-          <p className="text-sm text-gray-700 font-medium">
+          <p className="text-sm text-text-primary font-medium">
             {filter === 'pendientes'
               ? 'No hay solicitudes pendientes de aprobación.'
               : 'Sin solicitudes en este filtro.'}
           </p>
           {filter === 'pendientes' && (
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-text-secondary mt-1">
               Todo al día. Cuando los trabajadores soliciten cambios, aparecerán aquí.
             </p>
           )}
@@ -151,42 +161,43 @@ export default function CambiosPendientesPage() {
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 font-semibold">
-                        {SWAP_TYPE_ICONS[swap.swapType]} {SWAP_TYPE_LABELS[swap.swapType]}
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-accent-bg text-accent font-semibold">
+                        {SWAP_TYPE_LABELS[swap.swapType]}
                       </span>
                       <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${SWAP_STATUS_COLORS[swap.status]}`}>
                         {SWAP_STATUS_LABELS[swap.status]}
                       </span>
                     </div>
-                    <p className="text-sm">
+                    <p className="text-sm text-text-primary">
                       <strong>{requester?.name || '(borrado)'}</strong>
                       {target && <> → <strong>{target.name}</strong></>}
-                      {!target && <span className="text-gray-400"> · sin asignar</span>}
+                      {!target && <span className="text-text-secondary"> · sin asignar</span>}
                     </p>
-                    <p className="text-xs text-gray-600 mt-0.5">
+                    <p className="text-xs text-text-secondary mt-0.5">
                       <span className="font-medium">{DAY_LABELS[reqDayN] || swap.requesterDayKey}</span>
-                      {' '}<span className="text-gray-400">{shortDate(swap.requesterDate)}</span>
+                      {' '}<span className="text-text-secondary">{shortDate(swap.requesterDate)}</span>
                       {' · '}
                       <span className="font-mono">{tStart}–{tEnd}</span>
                       {reqTpl?.label && <> · {reqTpl.label}</>}
                     </p>
                     {swap.swapType === 'intercambio' && tgtTpl && swap.targetDate && (
-                      <p className="text-[11px] text-blue-700 mt-0.5">
-                        🔄 A cambio: {DAY_LABELS[parseInt(swap.targetDayKey || '0', 10) as DayOfWeek]}{' '}
-                        <span className="text-blue-500">{shortDate(swap.targetDate)}</span>
+                      <p className="text-[11px] text-accent mt-0.5 inline-flex items-center gap-1">
+                        <RefreshCw size={12} />
+                        A cambio: {DAY_LABELS[parseInt(swap.targetDayKey || '0', 10) as DayOfWeek]}{' '}
+                        <span>{shortDate(swap.targetDate)}</span>
                         {' · '}
                         <span className="font-mono">{tgtTpl.start_time.slice(0, 5)}–{tgtTpl.end_time.slice(0, 5)}</span>
                       </p>
                     )}
                     {swap.requestNotes && (
-                      <p className="text-[11px] text-gray-500 italic mt-1">"{swap.requestNotes}"</p>
+                      <p className="text-[11px] text-text-secondary italic mt-1">"{swap.requestNotes}"</p>
                     )}
                     {swap.status === 'aprobada' && swap.hoursAttribution && (
-                      <p className="text-[10px] text-emerald-700 mt-1">
+                      <p className="text-[10px] text-success mt-1">
                         Atribución: {swap.hoursAttribution === 'worker' ? 'Quien trabaja cobra' : 'Imputado al cedente'}
                       </p>
                     )}
-                    <p className="text-[10px] text-gray-400 mt-1">
+                    <p className="text-[10px] text-text-secondary mt-1">
                       Solicitada {new Date(swap.createdAt).toLocaleString('es-ES')}
                       {swap.reviewedAt && (
                         <> · Resuelta {new Date(swap.reviewedAt).toLocaleString('es-ES')}</>
@@ -198,10 +209,10 @@ export default function CambiosPendientesPage() {
                   {isPending && requester && target && (
                     <button
                       onClick={() => setOpenSwap(swap)}
-                      className="text-xs px-3 py-1.5 rounded text-white font-medium shrink-0"
-                      style={{ backgroundColor: '#7C1A1A' }}
+                      className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded font-medium shrink-0 bg-accent text-text-on-accent hover:bg-accent-hover transition-base"
                     >
-                      Revisar →
+                      Revisar
+                      <ArrowRight size={12} />
                     </button>
                   )}
                 </div>
@@ -246,10 +257,10 @@ function FilterPill({ active, onClick, children }: { active: boolean; onClick: (
   return (
     <button
       onClick={onClick}
-      className={`text-xs font-medium px-3 py-1.5 rounded-full border transition ${
+      className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border transition-base ${
         active
-          ? 'bg-[#7C1A1A] text-white border-[#7C1A1A]'
-          : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+          ? 'bg-accent text-text-on-accent border-accent hover:bg-accent-hover'
+          : 'bg-card text-text-secondary border-border-default hover:bg-accent-bg'
       }`}
     >
       {children}
@@ -259,12 +270,12 @@ function FilterPill({ active, onClick, children }: { active: boolean; onClick: (
 
 function Avatar({ employee, size = 'md' }: { employee?: { name: string; photo?: string }; size?: 'sm' | 'md' }) {
   const px = size === 'sm' ? 'w-8 h-8 text-xs' : 'w-10 h-10 text-sm'
-  if (!employee) return <div className={`${px} rounded-full bg-gray-200 shrink-0`} />
+  if (!employee) return <div className={`${px} rounded-full bg-page shrink-0`} />
   if (employee.photo) {
-    return <img src={employee.photo} alt={employee.name} className={`${px} rounded-full object-cover shrink-0 border-2 border-white shadow-sm`} />
+    return <img src={employee.photo} alt={employee.name} className={`${px} rounded-full object-cover shrink-0 border-2 border-card shadow-sm`} />
   }
   return (
-    <div className={`${px} rounded-full flex items-center justify-center text-white font-semibold shrink-0 border-2 border-white shadow-sm`} style={{ backgroundColor: '#7C1A1A' }}>
+    <div className={`${px} rounded-full flex items-center justify-center text-text-on-accent font-semibold shrink-0 border-2 border-card shadow-sm bg-accent`}>
       {(employee.name[0] || '?').toUpperCase()}
     </div>
   )
