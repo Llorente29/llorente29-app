@@ -231,8 +231,8 @@ function AuthenticatedApp({ profile, onSignOut }: {
   // Modo no definido — esperando carga de rol
   if (mode === 'unset') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#F5E9D9] via-white to-[#F5E9D9]">
-        <p className="text-sm text-gray-500">Cargando...</p>
+      <div className="min-h-screen flex items-center justify-center bg-page">
+        <p className="text-sm text-text-secondary">Cargando...</p>
       </div>
     )
   }
@@ -266,11 +266,11 @@ function AuthenticatedApp({ profile, onSignOut }: {
 
   if (isKiosko) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-page">
         <KioskoFichajePage />
         <button
           onClick={() => setPage('dashboard')}
-          className="fixed bottom-4 left-4 text-xs text-gray-300 hover:text-gray-500"
+          className="fixed bottom-4 left-4 text-xs text-text-secondary hover:text-text-primary"
           title="Salir del kiosko"
         >
           ← salir
@@ -311,7 +311,7 @@ function AuthenticatedApp({ profile, onSignOut }: {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-page">
       {/* Sidebar — siempre en el DOM. En desktop fijo, en móvil drawer controlado por mobileMenuOpen */}
       <Sidebar
         page={page}
@@ -335,7 +335,7 @@ function AuthenticatedApp({ profile, onSignOut }: {
       )}
 
       <div className={`transition-all duration-200 ${collapsed ? 'lg:ml-[64px]' : 'lg:ml-56'}`}>
-        <header className="h-14 border-b border-gray-200 bg-white/90 backdrop-blur-sm flex items-center justify-between gap-2 px-3 sm:px-5 shrink-0 sticky top-0 z-30">
+        <header className="h-14 border-b border-border-default bg-card/90 backdrop-blur-sm flex items-center justify-between gap-2 px-3 sm:px-5 shrink-0 sticky top-0 z-30">
           <div className="flex items-center gap-2 min-w-0">
             {/* Botón hamburguesa solo en móvil */}
             <button
@@ -344,7 +344,7 @@ function AuthenticatedApp({ profile, onSignOut }: {
               onClick={() => setMobileMenuOpen(true)}
               aria-label="Abrir menú"
               aria-expanded={mobileMenuOpen}
-              className="lg:hidden p-2 -ml-2 rounded-md text-gray-600 hover:bg-gray-100"
+              className="lg:hidden p-2 -ml-2 rounded-md text-text-secondary hover:bg-page"
             >
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <line x1="3" y1="6" x2="21" y2="6" />
@@ -352,38 +352,38 @@ function AuthenticatedApp({ profile, onSignOut }: {
                 <line x1="3" y1="18" x2="21" y2="18" />
               </svg>
             </button>
-            <h1 className="text-base sm:text-lg font-semibold truncate" style={{ fontFamily: 'Instrument Serif, serif' }}>
-              {showUsuariosAccesos ? '👥 Usuarios y Accesos' : PAGE_TITLES[page]}
+            <h1 className="text-lg sm:text-xl font-display font-medium truncate text-text-primary">
+              {showUsuariosAccesos ? 'Usuarios y Accesos' : PAGE_TITLES[page]}
             </h1>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {pending > 0 && !showUsuariosAccesos && (
-              <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+              <span className="text-xs font-medium px-2 py-1 rounded-md bg-warning-bg text-warning border border-warning/20">
                 {pending} tarea{pending > 1 ? 's' : ''}
               </span>
             )}
             {critInc > 0 && !showUsuariosAccesos && (
-              <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-red-100 text-red-700 border border-red-200 animate-pulse">
-                ⚠️ {critInc} crítica{critInc > 1 ? 's' : ''}
+              <span className="text-xs font-medium px-2 py-1 rounded-md bg-danger-bg text-danger border border-danger/20 animate-pulse">
+                {critInc} crítica{critInc > 1 ? 's' : ''}
               </span>
             )}
             {/* Info del usuario actual */}
-            <div className="hidden sm:flex items-center gap-1.5 text-xs px-2 py-1 rounded-md bg-gray-50 border border-gray-200">
+            <div className="hidden sm:flex items-center gap-1.5 text-xs px-2 py-1 rounded-md bg-accent-bg border border-border-default">
               <span>{roleIcon}</span>
-              <span className="font-medium text-gray-700 max-w-[120px] truncate">
+              <span className="font-medium text-text-primary max-w-[120px] truncate">
                 {profile.displayName || 'Usuario'}
               </span>
-              <span className="text-gray-400">·</span>
-              <span className="text-gray-500">{roleLabel}</span>
+              <span className="text-text-secondary">·</span>
+              <span className="text-text-secondary">{roleLabel}</span>
             </div>
             {/* Botón modo trabajador (solo manager con employee_id) — oculto en móvil para ahorrar espacio */}
             {canSwitchToWorker && (
               <button
                 onClick={() => setForceWorkerMode(true)}
                 title="Ver app de trabajador"
-                className="hidden sm:inline-flex text-xs px-2 py-1 rounded-md font-medium bg-gray-100 text-gray-600 hover:bg-gray-200"
+                className="hidden sm:inline-flex text-xs px-2 py-1 rounded-md font-medium bg-accent-bg text-text-secondary hover:bg-page hover:text-text-primary"
               >
-                👤 Modo trabajador
+                Modo trabajador
               </button>
             )}
             {/* Botón Usuarios y Accesos (solo admin) — oculto en móvil */}
@@ -391,19 +391,19 @@ function AuthenticatedApp({ profile, onSignOut }: {
               <button
                 onClick={() => setShowUsuariosAccesos(!showUsuariosAccesos)}
                 title={showUsuariosAccesos ? 'Volver' : 'Usuarios y Accesos'}
-                className={`hidden sm:inline-flex text-xs px-2 py-1 rounded-md font-medium transition ${
+                className={`hidden sm:inline-flex text-xs px-2 py-1 rounded-md font-medium transition-base ${
                   showUsuariosAccesos
-                    ? 'bg-[#7C1A1A] text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    ? 'bg-accent text-text-on-accent'
+                    : 'bg-accent-bg text-text-secondary hover:bg-page hover:text-text-primary'
                 }`}
               >
-                {showUsuariosAccesos ? '← Volver' : '👥 Usuarios'}
+                {showUsuariosAccesos ? '← Volver' : 'Usuarios'}
               </button>
             )}
             <button
               onClick={onSignOut}
               title={`Cerrar sesión (${profile.displayName || profile.role})`}
-              className="hover:opacity-80 transition-opacity shrink-0"
+              className="hover:opacity-80 transition-base shrink-0"
             >
               <LogoSquare size={28} />
             </button>
@@ -475,12 +475,12 @@ export default function App() {
   // Loading inicial
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#F5E9D9] via-white to-[#F5E9D9]">
+      <div className="min-h-screen flex items-center justify-center bg-page">
         <div className="text-center">
-          <p className="text-2xl font-bold mb-2" style={{ fontFamily: 'Instrument Serif, serif', color: '#7C1A1A' }}>
+          <p className="text-2xl font-display font-medium mb-2 text-accent">
             Foodint
           </p>
-          <p className="text-sm text-gray-500">Cargando...</p>
+          <p className="text-sm text-text-secondary">Cargando...</p>
         </div>
       </div>
     )
