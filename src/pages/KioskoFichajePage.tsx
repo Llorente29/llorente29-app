@@ -1,5 +1,18 @@
 // src/pages/KioskoFichajePage.tsx
 import { useState, useEffect, useMemo } from 'react'
+import {
+  Settings,
+  Maximize2,
+  Minimize2,
+  Smartphone,
+  Users,
+  CheckCircle2,
+  AlertCircle,
+  MapPin,
+  LogIn,
+  LogOut,
+  ArrowLeft,
+} from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { Button, Card } from '../components/ui'
 import type { Employee, Location, KioskoConfig } from '../types'
@@ -138,7 +151,7 @@ export default function KioskoFichajePage() {
     await addClockEntry(selectedEmp.id, result.entry)
 
     const verb = result.entry.type === 'entrada' ? 'Entrada' : 'Salida'
-    setResultMsg(`✅ ${verb} registrada — ${selectedEmp.name}`)
+    setResultMsg(`${verb} registrada — ${selectedEmp.name}`)
     setStep('success')
   }
 
@@ -173,11 +186,13 @@ export default function KioskoFichajePage() {
 
   if (!config || !activeLocation) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#F5E9D9] to-[#F5E9D9] p-6">
+      <div className="min-h-screen flex items-center justify-center bg-page p-6">
         <Card className="p-8 max-w-md text-center">
-          <p className="text-3xl mb-3">⚙️</p>
-          <p className="font-semibold text-gray-700">Configura el kiosko</p>
-          <p className="text-sm text-gray-500 mt-1">Necesitas asignar este kiosko a un local activo.</p>
+          <div className="flex justify-center mb-3">
+            <Settings size={32} className="text-accent" />
+          </div>
+          <p className="font-semibold text-text-primary">Configura el kiosko</p>
+          <p className="text-sm text-text-secondary mt-1">Necesitas asignar este kiosko a un local activo.</p>
           <Button onClick={() => setShowConfig(true)} className="mt-4">Configurar</Button>
         </Card>
         {showConfig && <ConfigModal config={config || defaultKioskoConfig(locations[0]?.id || '')} locations={locations}
@@ -188,7 +203,7 @@ export default function KioskoFichajePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#F5E9D9] via-white to-[#F5E9D9]">
+    <div className="min-h-screen bg-page">
       <KioskoHeader
         location={activeLocation} now={now}
         onConfig={() => setShowConfig(true)}
@@ -216,13 +231,13 @@ export default function KioskoFichajePage() {
           />
         )}
         {step === 'confirming' && (
-          <CenteredMessage icon="🛰️" title="Comprobando ubicación..." />
+          <CenteredMessage Icon={MapPin} title="Comprobando ubicación..." color="text-accent" />
         )}
         {step === 'success' && (
-          <CenteredMessage icon="✅" title={resultMsg} sub="Volviendo al inicio..." color="text-green-700" />
+          <CenteredMessage Icon={CheckCircle2} title={resultMsg} sub="Volviendo al inicio..." color="text-success" />
         )}
         {step === 'error' && (
-          <CenteredMessage icon="❌" title="No se pudo fichar" sub={resultMsg} color="text-red-700" />
+          <CenteredMessage Icon={AlertCircle} title="No se pudo fichar" sub={resultMsg} color="text-danger" />
         )}
       </div>
 
@@ -241,27 +256,27 @@ function KioskoHeader({ location, now, onConfig, isFullscreen, onToggleFullscree
   isFullscreen: boolean; onToggleFullscreen: () => void
 }) {
   return (
-    <div className="bg-white border-b border-gray-100 px-4 py-3 flex items-center justify-between">
+    <div className="bg-card border-b border-border-default px-4 py-3 flex items-center justify-between">
       <div>
-        <p className="text-xs text-gray-400 uppercase tracking-wide">Kiosko de fichaje</p>
-        <p className="font-bold text-gray-900">{location.name}</p>
+        <p className="text-xs text-text-secondary uppercase tracking-wide">Kiosko de fichaje</p>
+        <p className="font-bold text-text-primary">{location.name}</p>
       </div>
       <div className="text-right">
-        <p className="text-3xl font-bold text-gray-900 tabular-nums">
+        <p className="text-3xl font-bold text-text-primary tabular-nums">
           {now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
         </p>
-        <p className="text-xs text-gray-400">
+        <p className="text-xs text-text-secondary">
           {now.toLocaleDateString('es-ES', { weekday: 'short', day: '2-digit', month: 'long' })}
         </p>
       </div>
       <div className="flex items-center gap-2 ml-3">
         <button onClick={onToggleFullscreen} title={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
-          className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center">
-          {isFullscreen ? '🔲' : '⛶'}
+          className="w-10 h-10 rounded-full bg-accent-bg hover:bg-page flex items-center justify-center text-accent transition-base">
+          {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
         </button>
         <button onClick={onConfig} title="Configuración del kiosko"
-          className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center">
-          ⚙️
+          className="w-10 h-10 rounded-full bg-accent-bg hover:bg-page flex items-center justify-center text-accent transition-base">
+          <Settings size={18} />
         </button>
       </div>
     </div>
@@ -279,34 +294,34 @@ function InstallBanner({ onFullscreen }: { onFullscreen: () => void }) {
   const isAndroid = /Android/.test(ua)
 
   return (
-    <div className="bg-amber-50 border-b border-amber-200 px-4 py-3">
+    <div className="bg-warning-bg border-b border-warning/30 px-4 py-3">
       <div className="max-w-3xl mx-auto flex items-start gap-3">
-        <span className="text-2xl shrink-0">📱</span>
+        <Smartphone size={24} className="text-warning shrink-0" />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-amber-900">Convierte esta tablet en kiosko</p>
+          <p className="text-sm font-semibold text-warning">Convierte esta tablet en kiosko</p>
           {isIOS && (
-            <p className="text-xs text-amber-700 mt-1">
+            <p className="text-xs text-warning mt-1">
               Pulsa <strong>Compartir</strong> abajo y selecciona <strong>"Añadir a pantalla de inicio"</strong>. Después abre la app desde el icono.
             </p>
           )}
           {isAndroid && (
-            <p className="text-xs text-amber-700 mt-1">
+            <p className="text-xs text-warning mt-1">
               Pulsa el menú <strong>⋮</strong> arriba a la derecha y selecciona <strong>"Instalar app"</strong> o <strong>"Añadir a pantalla de inicio"</strong>.
             </p>
           )}
           {!isIOS && !isAndroid && (
-            <p className="text-xs text-amber-700 mt-1">
+            <p className="text-xs text-warning mt-1">
               Pulsa el botón <strong>⛶</strong> de arriba a la derecha para usar pantalla completa, o instala la app desde el menú del navegador.
             </p>
           )}
         </div>
         <div className="flex flex-col gap-1 shrink-0">
           <button onClick={onFullscreen}
-            className="text-xs px-3 py-1.5 rounded-lg bg-amber-200 hover:bg-amber-300 text-amber-900 font-medium">
+            className="text-xs px-3 py-1.5 rounded-lg bg-warning hover:opacity-90 text-text-on-accent font-medium transition-base">
             Pantalla completa
           </button>
           <button onClick={() => setDismissed(true)}
-            className="text-xs px-3 py-1 text-amber-600 hover:text-amber-800">
+            className="text-xs px-3 py-1 text-warning hover:opacity-80">
             Ocultar
           </button>
         </div>
@@ -322,15 +337,17 @@ function SelectEmployeeView({ employees, onSelect }: {
   if (!employees.length) {
     return (
       <div className="mt-12 text-center">
-        <p className="text-5xl mb-4">👥</p>
-        <p className="font-semibold text-gray-700 text-lg">Sin empleados asignados</p>
-        <p className="text-sm text-gray-500 mt-1">Asigna empleados a este local desde Personal.</p>
+        <div className="flex justify-center mb-4">
+          <Users size={48} className="text-accent" />
+        </div>
+        <p className="font-semibold text-text-primary text-lg">Sin empleados asignados</p>
+        <p className="text-sm text-text-secondary mt-1">Asigna empleados a este local desde Personal.</p>
       </div>
     )
   }
   return (
     <div className="mt-6">
-      <p className="text-center text-gray-500 text-sm mb-4">Pulsa tu nombre para fichar</p>
+      <p className="text-center text-text-secondary text-sm mb-4">Pulsa tu nombre para fichar</p>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {employees.map(emp => {
           const open = hasOpenShift(emp)
@@ -339,21 +356,21 @@ function SelectEmployeeView({ employees, onSelect }: {
             <button
               key={emp.id}
               onClick={() => onSelect(emp)}
-              className={`p-4 rounded-2xl border-2 transition-all text-left active:scale-95 ${
+              className={`p-4 rounded-xl border-2 transition-base text-left active:scale-95 ${
                 open
-                  ? 'bg-emerald-50 border-emerald-200 hover:border-emerald-400'
-                  : 'bg-white border-gray-200 hover:border-[#7C1A1A]'
+                  ? 'bg-success-bg border-success/30 hover:border-success'
+                  : 'bg-card border-border-default hover:border-accent'
               }`}
             >
               <div className="flex items-start justify-between gap-2 mb-1">
-                <p className="font-semibold text-gray-900 text-sm leading-tight">{emp.name || 'Sin nombre'}</p>
-                {open && <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0 mt-1" />}
+                <p className="font-semibold text-text-primary text-sm leading-tight">{emp.name || 'Sin nombre'}</p>
+                {open && <span className="w-2 h-2 rounded-full bg-success animate-pulse shrink-0 mt-1" />}
               </div>
-              <p className="text-xs text-gray-400">{emp.position || '—'}</p>
-              <p className={`text-xs font-bold mt-2 ${
-                next === 'entrada' ? 'text-[#7C1A1A]' : 'text-orange-600'
+              <p className="text-xs text-text-secondary">{emp.position || '—'}</p>
+              <p className={`text-xs font-bold mt-2 inline-flex items-center gap-1 ${
+                next === 'entrada' ? 'text-accent' : 'text-warning'
               }`}>
-                {next === 'entrada' ? '→ Fichar entrada' : '← Fichar salida'}
+                {next === 'entrada' ? <><LogIn size={12} /> Fichar entrada</> : <><LogOut size={12} /> Fichar salida</>}
               </p>
             </button>
           )
@@ -370,25 +387,28 @@ function PinPadView({ employee, pin, error, onDigit, onClear, onBack, onCancel }
 }) {
   const next = nextClockType(employee)
   const verb = next === 'entrada' ? 'Fichar ENTRADA' : 'Fichar SALIDA'
-  const verbColor = next === 'entrada' ? 'text-[#7C1A1A]' : 'text-orange-600'
+  const verbColor = next === 'entrada' ? 'text-accent' : 'text-warning'
+  const VerbIcon = next === 'entrada' ? LogIn : LogOut
 
   return (
     <div className="mt-4 max-w-sm mx-auto">
       <Card className="p-5 text-center">
-        <p className="text-xs text-gray-400 uppercase tracking-wide">Hola</p>
-        <p className="font-bold text-xl text-gray-900 mt-0.5">{employee.name}</p>
-        <p className={`text-sm font-bold mt-1 ${verbColor}`}>{verb}</p>
+        <p className="text-xs text-text-secondary uppercase tracking-wide">Hola</p>
+        <p className="font-bold text-xl text-text-primary mt-0.5">{employee.name}</p>
+        <p className={`text-sm font-bold mt-1 inline-flex items-center gap-1.5 ${verbColor}`}>
+          <VerbIcon size={14} /> {verb}
+        </p>
 
         <div className="my-5 flex justify-center gap-2">
           {[0, 1, 2, 3].map(i => (
-            <span key={i} className={`w-3.5 h-3.5 rounded-full transition-all ${
-              error ? 'bg-red-400' :
-              pin.length > i ? 'bg-[#7C1A1A]' : 'bg-gray-200'
+            <span key={i} className={`w-3.5 h-3.5 rounded-full transition-base ${
+              error ? 'bg-danger' :
+              pin.length > i ? 'bg-accent' : 'bg-border-default'
             }`} />
           ))}
         </div>
 
-        {error && <p className="text-sm text-red-600 mb-2 font-medium">{error}</p>}
+        {error && <p className="text-sm text-danger mb-2 font-medium">{error}</p>}
 
         <div className="grid grid-cols-3 gap-2">
           {['1','2','3','4','5','6','7','8','9'].map(d => (
@@ -396,10 +416,10 @@ function PinPadView({ employee, pin, error, onDigit, onClear, onBack, onCancel }
           ))}
           <PinKey onClick={onClear} variant="secondary">C</PinKey>
           <PinKey onClick={() => onDigit('0')}>0</PinKey>
-          <PinKey onClick={onBack} variant="secondary">←</PinKey>
+          <PinKey onClick={onBack} variant="secondary"><ArrowLeft size={18} /></PinKey>
         </div>
 
-        <button onClick={onCancel} className="mt-4 text-sm text-gray-500 hover:text-gray-700">
+        <button onClick={onCancel} className="mt-4 text-sm text-text-secondary hover:text-text-primary transition-base">
           Cancelar
         </button>
       </Card>
@@ -413,10 +433,10 @@ function PinKey({ children, onClick, variant }: {
   return (
     <button
       onClick={onClick}
-      className={`h-14 rounded-xl text-xl font-semibold transition-all active:scale-95 ${
+      className={`h-14 rounded-xl text-xl font-semibold transition-base active:scale-95 flex items-center justify-center ${
         variant === 'secondary'
-          ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-          : 'bg-white border-2 border-gray-200 text-gray-900 hover:border-[#7C1A1A] hover:bg-[#F5E9D9]'
+          ? 'bg-accent-bg text-text-secondary hover:bg-page'
+          : 'bg-card border-2 border-border-default text-text-primary hover:border-accent hover:bg-accent-bg'
       }`}
     >
       {children}
@@ -425,14 +445,16 @@ function PinKey({ children, onClick, variant }: {
 }
 
 // ── Mensaje centrado ──────────────────────────────────────────────────────
-function CenteredMessage({ icon, title, sub, color }: {
-  icon: string; title: string; sub?: string; color?: string
+function CenteredMessage({ Icon, title, sub, color }: {
+  Icon: typeof CheckCircle2; title: string; sub?: string; color?: string
 }) {
   return (
     <div className="mt-16 text-center">
-      <p className="text-7xl mb-4">{icon}</p>
-      <p className={`font-bold text-2xl ${color || 'text-gray-800'}`}>{title}</p>
-      {sub && <p className="text-sm text-gray-500 mt-2">{sub}</p>}
+      <div className="flex justify-center mb-4">
+        <Icon size={72} className={color || 'text-text-primary'} strokeWidth={2} />
+      </div>
+      <p className={`font-bold text-2xl ${color || 'text-text-primary'}`}>{title}</p>
+      {sub && <p className="text-sm text-text-secondary mt-2">{sub}</p>}
     </div>
   )
 }
@@ -455,7 +477,7 @@ function ConfigModal({ config, locations, onSave, onCancel }: {
       if (!lc) { setTestResult(`Tu ubicación: ${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}. El local no tiene coordenadas configuradas.`); return }
       const d = Math.round(distanceMeters(pos.coords.latitude, pos.coords.longitude, lc.lat, lc.lng))
       const ok = d <= draft.geofenceRadiusM
-      setTestResult(`${ok ? '✅' : '❌'} Distancia al local: ${d}m (límite ${draft.geofenceRadiusM}m)`)
+      setTestResult(`Distancia al local: ${d}m (límite ${draft.geofenceRadiusM}m) ${ok ? '✓' : '✗'}`)
     } catch (e: unknown) {
       setTestResult('Error: ' + (e instanceof Error ? e.message : 'desconocido'))
     }
@@ -463,41 +485,43 @@ function ConfigModal({ config, locations, onSave, onCancel }: {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl max-w-md w-full p-5 max-h-[90vh] overflow-y-auto">
-        <p className="font-bold text-gray-900 text-lg mb-4">Configuración del kiosko</p>
+      <div className="bg-card rounded-xl max-w-md w-full p-5 max-h-[90vh] overflow-y-auto">
+        <p className="font-bold text-text-primary text-lg mb-4">Configuración del kiosko</p>
 
-        <label className="block text-xs font-medium text-gray-600 mb-1">Local del kiosko</label>
+        <label className="block text-xs font-medium text-text-secondary mb-1">Local del kiosko</label>
         <select
           value={draft.locationId}
           onChange={e => setDraft(d => ({ ...d, locationId: e.target.value }))}
-          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white mb-4"
+          className="w-full border border-border-default rounded-lg px-3 py-2 text-sm bg-card text-text-primary mb-4"
         >
           {locations.filter(l => l.active).map(l => (
             <option key={l.id} value={l.id}>{l.name}</option>
           ))}
         </select>
 
-        <label className="block text-xs font-medium text-gray-600 mb-1">Radio de geofencing (metros)</label>
+        <label className="block text-xs font-medium text-text-secondary mb-1">Radio de geofencing (metros)</label>
         <input type="number" value={draft.geofenceRadiusM}
           onChange={e => setDraft(d => ({ ...d, geofenceRadiusM: +e.target.value }))}
-          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-4" />
+          className="w-full border border-border-default rounded-lg px-3 py-2 text-sm bg-card text-text-primary mb-4" />
 
-        <label className="flex items-center gap-2 text-sm text-gray-700 mb-3">
+        <label className="flex items-center gap-2 text-sm text-text-primary mb-3">
           <input type="checkbox" checked={draft.blockOutsideGeofence}
-            onChange={e => setDraft(d => ({ ...d, blockOutsideGeofence: e.target.checked }))} />
+            onChange={e => setDraft(d => ({ ...d, blockOutsideGeofence: e.target.checked }))}
+            className="accent-accent" />
           Bloquear fichajes fuera de zona
         </label>
 
-        <label className="flex items-center gap-2 text-sm text-gray-700 mb-4">
+        <label className="flex items-center gap-2 text-sm text-text-primary mb-4">
           <input type="checkbox" checked={draft.requirePhoto}
-            onChange={e => setDraft(d => ({ ...d, requirePhoto: e.target.checked }))} />
+            onChange={e => setDraft(d => ({ ...d, requirePhoto: e.target.checked }))}
+            className="accent-accent" />
           Pedir foto al fichar (próximamente)
         </label>
 
         <Button onClick={testGps} variant="outline" size="sm" className="w-full mb-2">
-          🛰️ Probar GPS
+          <span className="inline-flex items-center gap-1.5"><MapPin size={14} /> Probar GPS</span>
         </Button>
-        {testResult && <p className="text-xs text-gray-600 bg-gray-50 rounded-lg p-2 mb-3">{testResult}</p>}
+        {testResult && <p className="text-xs text-text-secondary bg-page rounded-lg p-2 mb-3">{testResult}</p>}
 
         <div className="flex gap-2 mt-4">
           <Button onClick={onCancel} variant="outline" className="flex-1">Cancelar</Button>
