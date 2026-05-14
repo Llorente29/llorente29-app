@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { Trash2, RefreshCw, FolderOpen, Search, ClipboardList, Calendar, Tag, Wallet, BarChart3, Users, Check, X, Inbox, Sun, Moon } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { Button, Select, Card, Alert } from '../components/ui'
 import {
@@ -7,15 +8,15 @@ import {
 } from '../services/salesAnalysis'
 
 const DAY_SHORT  = ['L','M','X','J','V','S','D']
-const DAY_COLORS = ['bg-slate-100 text-slate-700','bg-slate-100 text-slate-700','bg-slate-100 text-slate-700','bg-slate-100 text-slate-700','bg-teal-100 text-teal-700','bg-violet-100 text-violet-700','bg-violet-100 text-violet-700']
+const DAY_COLORS = ['bg-slate-100 text-slate-700','bg-slate-100 text-slate-700','bg-slate-100 text-slate-700','bg-slate-100 text-slate-700','bg-accent-bg text-accent','bg-violet-100 text-violet-700','bg-violet-100 text-violet-700']
 
-function Bar({ pct, color='bg-teal-500' }: { pct:number; color?:string }) {
+function Bar({ pct, color='bg-accent' }: { pct:number; color?:string }) {
   return (
     <div className="flex items-center gap-2 w-full">
-      <div className="flex-1 bg-gray-100 rounded-full h-2 overflow-hidden">
+      <div className="flex-1 bg-accent-bg rounded-full h-2 overflow-hidden">
         <div className={`h-2 rounded-full ${color} transition-all`} style={{width:`${Math.round(pct*100)}%`}}/>
       </div>
-      <span className="text-[10px] text-gray-400 w-7 text-right">{Math.round(pct*100)}%</span>
+      <span className="text-[10px] text-text-secondary w-7 text-right">{Math.round(pct*100)}%</span>
     </div>
   )
 }
@@ -26,7 +27,7 @@ function HeatmapHour({ patterns }: { patterns: SalesAnalysis['hourlyPatterns'] }
   const HOURS = Array.from({length:14},(_,i)=>i+10)
   return (
     <div>
-      <p className="text-xs font-semibold text-gray-500 uppercase mb-3">Venta media por franja horaria</p>
+      <p className="text-xs font-semibold text-text-secondary uppercase mb-3">Venta media por franja horaria</p>
       <div className="flex gap-1 items-end" style={{height:'80px'}}>
         {HOURS.map(h => {
           const p = patterns.find(x => x.hour === h)
@@ -36,12 +37,12 @@ function HeatmapHour({ patterns }: { patterns: SalesAnalysis['hourlyPatterns'] }
               <div className="w-full flex flex-col justify-end" style={{height:'64px'}}>
                 <div className={`w-full rounded-t ${h<17?'bg-amber-400':'bg-violet-500'} ${pct===0?'opacity-10':''}`} style={{height:`${Math.max(pct*100,pct>0?6:0)}%`}}/>
               </div>
-              <span className="text-[7px] text-gray-400">{h}</span>
+              <span className="text-[7px] text-text-secondary">{h}</span>
             </div>
           )
         })}
       </div>
-      <div className="flex gap-4 mt-2 text-[10px] text-gray-400">
+      <div className="flex gap-4 mt-2 text-[10px] text-text-secondary">
         <span className="flex items-center gap-1"><span className="w-2 h-2 bg-amber-400 rounded-sm inline-block"/>&lt;17h mediodía</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 bg-violet-500 rounded-sm inline-block"/>≥17h noche</span>
       </div>
@@ -163,22 +164,22 @@ export default function VentasAnalisisPage() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl" style={{fontFamily:'Instrument Serif, serif'}}>Análisis de Ventas</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Sincroniza todas las marcas automáticamente · Granularidad horaria · Predicción de personal</p>
+          <h1 className="font-display text-2xl text-accent">Análisis de Ventas</h1>
+          <p className="text-sm text-text-secondary mt-0.5">Sincroniza todas las marcas automáticamente · Granularidad horaria · Predicción de personal</p>
         </div>
-        {records.length > 0 && <Button size="sm" variant="outline" onClick={clearData}>🗑 Limpiar</Button>}
+        {records.length > 0 && <Button size="sm" variant="outline" onClick={clearData}><span className="inline-flex items-center gap-1.5"><Trash2 size={14} /> Limpiar</span></Button>}
       </div>
 
       {/* Controles principales */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
         {/* ── Bloque 1: Sync automático ──────────────────────────────── */}
-        <div className={`p-5 rounded-2xl border-2 space-y-4 ${isConnected ? 'border-teal-300 bg-teal-50/50' : 'border-gray-200 bg-gray-50 opacity-70'}`}>
+        <div className={`p-5 rounded-xl border-2 space-y-4 ${isConnected ? 'border-accent bg-accent-bg/50' : 'border-border-default bg-page opacity-70'}`}>
           <div className="flex items-center gap-2">
-            <span className="text-xl">🔄</span>
+            <RefreshCw size={20} className="text-accent" />
             <div>
-              <p className="font-semibold text-gray-800">Sincronización automática</p>
-              <p className="text-xs text-gray-500">Descarga todas las marcas y canales de una vez via API tSpoonLab</p>
+              <p className="font-semibold text-text-primary">Sincronización automática</p>
+              <p className="text-xs text-text-secondary">Descarga todas las marcas y canales de una vez via API tSpoonLab</p>
             </div>
           </div>
           {!isConnected && (
@@ -194,11 +195,11 @@ export default function VentasAnalisisPage() {
                   </Select>
                   {/* Vincular este local a un centro tSpoonLab */}
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-gray-400 shrink-0">Centro tSpoonLab:</span>
+                    <span className="text-[10px] text-text-secondary shrink-0">Centro tSpoonLab:</span>
                     <select
                       value={centerMapping[locId] || ''}
                       onChange={e => saveCenterMapping({ ...centerMapping, [locId]: e.target.value })}
-                      className="flex-1 text-xs border rounded-lg px-2 py-1 bg-white"
+                      className="flex-1 text-xs border rounded-lg px-2 py-1 bg-card"
                     >
                       <option value="">— seleccionar centro —</option>
                       {(tspoon.centers || []).map((ctr: any) => (
@@ -206,7 +207,7 @@ export default function VentasAnalisisPage() {
                       ))}
                     </select>
                     {centerMapping[locId] && (
-                      <span className="text-[10px] text-emerald-600 shrink-0">✓ vinculado</span>
+                      <span className="inline-flex items-center gap-0.5 text-[10px] text-success shrink-0"><Check size={10} /> vinculado</span>
                     )}
                   </div>
                 </div>
@@ -218,17 +219,20 @@ export default function VentasAnalisisPage() {
                 </Select>
               </div>
               <Button onClick={handleAutoSync} disabled={syncing || !centerMapping[locId]} className="w-full">
-                {syncing ? '⚙️ Sincronizando...' : !centerMapping[locId]
-                  ? '⚡ Selecciona un centro tSpoonLab primero'
-                  : `⚡ Sincronizar ${locations.find(l=>l.id===locId)?.name || 'local'} (${daysBack} días)`}
+                <span className="inline-flex items-center justify-center gap-1.5">
+                  <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
+                  {syncing ? 'Sincronizando...' : !centerMapping[locId]
+                    ? 'Selecciona un centro tSpoonLab primero'
+                    : `Sincronizar ${locations.find(l=>l.id===locId)?.name || 'local'} (${daysBack} días)`}
+                </span>
               </Button>
               <div className="flex gap-2 flex-wrap">
                 <button onClick={async () => {
                   setShowDebug(true)
                   const info = await debugDeliveryStructure(tspoon.token, centerMapping[locId] || tspoon.selectedCenter)
                   setDebugInfo(info)
-                }} className="text-xs text-gray-400 hover:text-gray-600 underline">
-                  🔍 Ver estructura API
+                }} className="inline-flex items-center gap-1 text-xs text-text-secondary hover:text-text-primary underline">
+                  <Search size={12} /> Ver estructura API
                 </button>
                 <button onClick={async () => {
                   const cid = centerMapping[locId] || tspoon.selectedCenter
@@ -236,12 +240,12 @@ export default function VentasAnalisisPage() {
                   setProducts(prods)
                   setShowProducts(true)
                   setProdSearch('')
-                }} className="text-xs text-gray-400 hover:text-gray-600 underline">
-                  🍽 Ver productos
+                }} className="inline-flex items-center gap-1 text-xs text-text-secondary hover:text-text-primary underline">
+                  <ClipboardList size={12} /> Ver productos
                 </button>
               </div>
               {tspoon.centers?.length > 0 && (
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-text-secondary">
                   {tspoon.centers.length} centro(s) disponibles · 
                   {Object.keys(centerMapping).length > 0
                     ? ` ${Object.keys(centerMapping).length} local(es) vinculados`
@@ -253,28 +257,28 @@ export default function VentasAnalisisPage() {
         </div>
 
         {/* ── Bloque 2: Upload manual ─────────────────────────────────── */}
-        <div className="p-5 rounded-2xl border-2 border-gray-200 space-y-3">
+        <div className="p-5 rounded-xl border-2 border-border-default space-y-3">
           <div className="flex items-center gap-2">
-            <span className="text-xl">📂</span>
+            <FolderOpen size={20} className="text-accent" />
             <div>
-              <p className="font-semibold text-gray-800">Subida manual de Excel</p>
-              <p className="text-xs text-gray-500">Para datos históricos o si la API no devuelve el detalle horario</p>
+              <p className="font-semibold text-text-primary">Subida manual de Excel</p>
+              <p className="text-xs text-text-secondary">Para datos históricos o si la API no devuelve el detalle horario</p>
             </div>
           </div>
           <div onClick={() => inputRef.current?.click()} onDragOver={e=>e.preventDefault()}
             onDrop={e=>{e.preventDefault();handleFiles(e.dataTransfer.files)}}
-            className="border-2 border-dashed border-gray-300 rounded-xl px-4 py-5 text-center cursor-pointer hover:bg-gray-50 transition-colors">
+            className="border-2 border-dashed border-border-default rounded-xl px-4 py-5 text-center cursor-pointer hover:bg-page transition-colors">
             <input ref={inputRef} type="file" accept=".xlsx,.xls" multiple className="hidden"
               onChange={e=>handleFiles(e.target.files)}/>
             {syncing
-              ? <p className="text-sm text-teal-600 animate-pulse">⚙️ Procesando...</p>
+              ? <p className="text-sm text-accent animate-pulse inline-flex items-center justify-center gap-1.5"><RefreshCw size={14} className="animate-spin" /> Procesando...</p>
               : <>
-                  <p className="text-sm font-medium text-gray-600">Arrastra aquí o haz clic</p>
-                  <p className="text-xs text-gray-400 mt-1">Exporta desde tSpoonLab → Clientes → Excel de ventas<br/>Puedes subir varios archivos a la vez, se acumulan</p>
+                  <p className="text-sm font-medium text-text-secondary">Arrastra aquí o haz clic</p>
+                  <p className="text-xs text-text-secondary mt-1">Exporta desde tSpoonLab → Clientes → Excel de ventas<br/>Puedes subir varios archivos a la vez, se acumulan</p>
                 </>
             }
           </div>
-          {filesUploaded > 0 && <p className="text-xs text-emerald-600 font-medium">✓ {filesUploaded} archivo(s) procesado(s)</p>}
+          {filesUploaded > 0 && <p className="text-xs text-success font-medium inline-flex items-center gap-1"><Check size={12} /> {filesUploaded} archivo(s) procesado(s)</p>}
         </div>
       </div>
 
@@ -282,7 +286,7 @@ export default function VentasAnalisisPage() {
       {progress.length > 0 && (
         <div className="bg-gray-900 rounded-xl p-4 max-h-40 overflow-y-auto">
           {progress.map((line, i) => (
-            <p key={i} className={`text-xs font-mono ${line.startsWith('✅')?'text-emerald-400':line.startsWith('❌')?'text-red-400':line.startsWith('⚠️')?'text-amber-400':'text-gray-300'}`}>
+            <p key={i} className={`text-xs font-mono ${line.startsWith('✅')?'text-success':line.startsWith('❌')?'text-danger':line.startsWith('⚠️')?'text-warning':'text-text-secondary'}`}>
               {line}
             </p>
           ))}
@@ -293,9 +297,11 @@ export default function VentasAnalisisPage() {
       {/* Sin datos */}
       {!analysis || !records.length ? (
         <Card className="p-12 text-center space-y-3">
-          <p className="text-5xl">📊</p>
-          <p className="font-semibold text-gray-700">Sin datos de ventas todavía</p>
-          <p className="text-sm text-gray-400 max-w-lg mx-auto">
+          <div className="flex justify-center">
+            <BarChart3 size={48} className="text-accent" strokeWidth={2} />
+          </div>
+          <p className="font-semibold text-text-primary">Sin datos de ventas todavía</p>
+          <p className="text-sm text-text-secondary max-w-lg mx-auto">
             Usa la sincronización automática (recomendado) para descargar el histórico de <strong>todas las marcas</strong> de un golpe.<br/>
             O sube los Excel exportados desde tSpoonLab → Clientes → cada marca.
           </p>
@@ -305,32 +311,37 @@ export default function VentasAnalisisPage() {
           {/* Stats */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              {icon:'📅', val:analysis.totalWeeks+' sem.',  label:'Historial analizado'},
-              {icon:'🗓', val:uniqueDates+' días',          label:'Días con ventas'},
-              {icon:'🏷', val:uniqueBrands.length+' marcas', label:'Canales/marcas'},
-              {icon:'💶', val:totalAmount.toLocaleString('es-ES',{style:'currency',currency:'EUR',maximumFractionDigits:0}), label:'Ventas totales'},
-            ].map(s=>(
-              <Card key={s.label} className="p-3">
-                <p className="text-lg">{s.icon}</p>
-                <p className="font-bold text-sm">{s.val}</p>
-                <p className="text-xs text-gray-400">{s.label}</p>
-              </Card>
-            ))}
+              {icon: Calendar, val:analysis.totalWeeks+' sem.',  label:'Historial analizado'},
+              {icon: Calendar, val:uniqueDates+' días',          label:'Días con ventas'},
+              {icon: Tag, val:uniqueBrands.length+' marcas', label:'Canales/marcas'},
+              {icon: Wallet, val:totalAmount.toLocaleString('es-ES',{style:'currency',currency:'EUR',maximumFractionDigits:0}), label:'Ventas totales'},
+            ].map(s=>{
+              const Icon = s.icon
+              return (
+                <Card key={s.label} className="p-3">
+                  <Icon size={18} className="text-accent" />
+                  <p className="font-bold text-sm text-text-primary mt-1">{s.val}</p>
+                  <p className="text-xs text-text-secondary">{s.label}</p>
+                </Card>
+              )
+            })}
           </div>
 
           {/* Heatmap siempre visible */}
           <Card className="p-5"><HeatmapHour patterns={analysis.hourlyPatterns}/></Card>
 
           {/* Tabs */}
-          <div className="flex gap-1 bg-white border rounded-xl p-1 w-fit flex-wrap">
+          <div className="flex gap-1 bg-card border border-border-default rounded-xl p-1 w-fit flex-wrap">
             {([
-              {v:'recomendaciones',l:'👥 Personal'},
-              {v:'horario',l:'📈 Por día'},
-              {v:'marcas',l:`🏷 Marcas (${uniqueBrands.length})`},
-              {v:'datos',l:'📋 Datos'},
-            ] as const).map(({v,l})=>(
+              {v:'recomendaciones',l:'Personal', Icon: Users},
+              {v:'horario',l:'Por día', Icon: BarChart3},
+              {v:'marcas',l:`Marcas (${uniqueBrands.length})`, Icon: Tag},
+              {v:'datos',l:'Datos', Icon: ClipboardList},
+            ] as const).map(({v,l,Icon})=>(
               <button key={v} onClick={()=>setTab(v)}
-                className={`text-xs px-3 py-2 rounded-lg font-medium ${tab===v?'bg-teal-600 text-white':'text-gray-500 hover:bg-gray-50'}`}>{l}</button>
+                className={`inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg font-medium transition-base ${tab===v?'bg-accent text-text-on-accent':'text-text-secondary hover:bg-accent-bg'}`}>
+                <Icon size={14} /> {l}
+              </button>
             ))}
           </div>
 
@@ -341,16 +352,20 @@ export default function VentasAnalisisPage() {
               <Card>
                 <div className="p-4 border-b">
                   <p className="font-semibold">Personal recomendado por día y turno</p>
-                  <p className="text-xs text-gray-500 mt-0.5">Basado en platos/hora · ~15 platos por trabajador/hora · Mínimos del convenio garantizados</p>
+                  <p className="text-xs text-text-secondary mt-0.5">Basado en platos/hora · ~15 platos por trabajador/hora · Mínimos del convenio garantizados</p>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm min-w-[700px]">
-                    <thead><tr className="border-b bg-gray-50 text-xs">
+                    <thead><tr className="border-b border-border-default bg-page text-xs">
                       <th className="p-3 text-left">Día</th>
-                      <th className="p-3 text-center text-amber-600">☀️ Mediodía</th>
-                      <th className="p-3 text-center text-violet-600">🌙 Noche</th>
-                      <th className="p-3 text-center w-28">🍽 Platos med.</th>
-                      <th className="p-3 text-center w-28">🍽 Platos noch.</th>
+                      <th className="p-3 text-center text-amber-600">
+                        <span className="inline-flex items-center gap-1 justify-center"><Sun size={14} /> Mediodía</span>
+                      </th>
+                      <th className="p-3 text-center text-violet-600">
+                        <span className="inline-flex items-center gap-1 justify-center"><Moon size={14} /> Noche</span>
+                      </th>
+                      <th className="p-3 text-center w-28">Platos med.</th>
+                      <th className="p-3 text-center w-28">Platos noch.</th>
                       <th className="p-3 text-center">Confianza</th>
                       <th className="p-3 text-left">Detalle</th>
                     </tr></thead>
@@ -359,31 +374,31 @@ export default function VentasAnalisisPage() {
                         const dp = analysis.dayPatterns[i]
                         const minN = i>=4?3:2; const extra = rec.recommendedNoche - minN
                         return (
-                          <tr key={i} className={`border-b last:border-0 ${i>=4?'bg-teal-50/30':''}`}>
+                          <tr key={i} className={`border-b last:border-0 ${i>=4?'bg-accent-bg':''}`}>
                             <td className="p-3"><span className={`font-bold text-xs px-2 py-1 rounded-lg ${DAY_COLORS[i]}`}>{rec.dayName}</span></td>
                             <td className="p-3 text-center">
                               <span className="text-xl font-bold text-amber-700">{rec.recommendedManana}</span>
-                              <p className="text-[9px] text-gray-400">{dp.avgDishesMediadia>0?`${dp.avgDishesMediadia} 🍽`:dp.avgMediadia>0?`${dp.avgMediadia}€`:''}</p>
+                              <p className="text-[9px] text-text-secondary">{dp.avgDishesMediadia>0?`${dp.avgDishesMediadia} pl.`:dp.avgMediadia>0?`${dp.avgMediadia}€`:''}</p>
                             </td>
                             <td className="p-3 text-center">
                               <div className="flex items-center justify-center gap-1">
                                 <span className="text-xl font-bold text-violet-700">{rec.recommendedNoche}</span>
                                 {extra>0 && <span className="text-[10px] bg-amber-100 text-amber-700 px-1 rounded">+{extra}</span>}
                               </div>
-                              <p className="text-[9px] text-gray-400">{dp.avgDishesNoche>0?`${dp.avgDishesNoche} 🍽`:dp.avgNoche>0?`${dp.avgNoche}€`:''}</p>
+                              <p className="text-[9px] text-text-secondary">{dp.avgDishesNoche>0?`${dp.avgDishesNoche} pl.`:dp.avgNoche>0?`${dp.avgNoche}€`:''}</p>
                             </td>
                             <td className="p-3 text-center">
-                              {dp.avgDishesMediadia>0?<span className="font-bold text-amber-600">{dp.avgDishesMediadia}</span>:<span className="text-gray-300">—</span>}
+                              {dp.avgDishesMediadia>0?<span className="font-bold text-amber-600">{dp.avgDishesMediadia}</span>:<span className="text-text-secondary">—</span>}
                             </td>
                             <td className="p-3 text-center">
-                              {dp.avgDishesNoche>0?<span className="font-bold text-violet-600">{dp.avgDishesNoche}</span>:<span className="text-gray-300">—</span>}
+                              {dp.avgDishesNoche>0?<span className="font-bold text-violet-600">{dp.avgDishesNoche}</span>:<span className="text-text-secondary">—</span>}
                             </td>
                             <td className="p-3 text-center">
-                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${rec.confidence==='alta'?'bg-emerald-100 text-emerald-700':rec.confidence==='media'?'bg-amber-100 text-amber-700':'bg-gray-100 text-gray-500'}`}>
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${rec.confidence==='alta'?'bg-success-bg text-success':rec.confidence==='media'?'bg-amber-100 text-amber-700':'bg-accent-bg text-text-secondary'}`}>
                                 {rec.confidence==='alta'?'●●●':rec.confidence==='media'?'●●○':'●○○'} {rec.confidence}
                               </span>
                             </td>
-                            <td className="p-3 text-xs text-gray-400">{rec.reason}</td>
+                            <td className="p-3 text-xs text-text-secondary">{rec.reason}</td>
                           </tr>
                         )
                       })}
@@ -402,15 +417,15 @@ export default function VentasAnalisisPage() {
                         <div className="flex items-center gap-1.5">
                           <span className="text-[9px] text-amber-500 w-14 shrink-0">Mediodía</span>
                           <Bar pct={p.demandMediadia} color="bg-amber-400"/>
-                          <span className="text-[10px] text-gray-400 w-14 text-right">{p.avgMediadia>0?`${p.avgMediadia}€`:'—'}</span>
+                          <span className="text-[10px] text-text-secondary w-14 text-right">{p.avgMediadia>0?`${p.avgMediadia}€`:'—'}</span>
                         </div>
                         <div className="flex items-center gap-1.5">
                           <span className="text-[9px] text-violet-500 w-14 shrink-0">Noche</span>
                           <Bar pct={p.demandNoche} color="bg-violet-500"/>
-                          <span className="text-[10px] text-gray-400 w-14 text-right">{p.avgNoche>0?`${p.avgNoche}€`:'—'}</span>
+                          <span className="text-[10px] text-text-secondary w-14 text-right">{p.avgNoche>0?`${p.avgNoche}€`:'—'}</span>
                         </div>
                       </div>
-                      <span className="text-[10px] text-gray-300 w-6 text-right">{p.weeks}s</span>
+                      <span className="text-[10px] text-text-secondary w-6 text-right">{p.weeks}s</span>
                     </div>
                   ))}
                 </div>
@@ -429,12 +444,12 @@ export default function VentasAnalisisPage() {
                     return (
                       <div key={i} className="flex items-center gap-3">
                         <span className={`text-xs font-bold px-2 py-1 rounded-lg w-24 text-center ${DAY_COLORS[i]}`}>{p.dayName}</span>
-                        <div className="flex-1 bg-gray-100 rounded-full h-6 overflow-hidden flex">
+                        <div className="flex-1 bg-accent-bg rounded-full h-6 overflow-hidden flex">
                           <div className="bg-amber-400 h-6 transition-all" style={{width:`${p.avgTotal>0?(p.avgMediadia/p.avgTotal)*(p.avgTotal/maxT)*100:0}%`}}/>
                           <div className="bg-violet-500 h-6 transition-all" style={{width:`${p.avgTotal>0?(p.avgNoche/p.avgTotal)*(p.avgTotal/maxT)*100:0}%`}}/>
                         </div>
-                        <span className="text-sm font-bold text-gray-700 w-20 text-right">{p.avgTotal>0?`${p.avgTotal.toLocaleString('es-ES')}€`:'—'}</span>
-                        <span className="text-[10px] text-gray-300 w-5">{p.weeks}s</span>
+                        <span className="text-sm font-bold text-text-primary w-20 text-right">{p.avgTotal>0?`${p.avgTotal.toLocaleString('es-ES')}€`:'—'}</span>
+                        <span className="text-[10px] text-text-secondary w-5">{p.weeks}s</span>
                       </div>
                     )
                   })}
@@ -444,13 +459,13 @@ export default function VentasAnalisisPage() {
                 <HeatmapHour patterns={analysis.hourlyPatterns}/>
                 {analysis.hourlyPatterns.length > 0 && (
                   <div className="mt-4 pt-4 border-t">
-                    <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Horas de mayor actividad</p>
+                    <p className="text-xs font-semibold text-text-secondary uppercase mb-2">Horas de mayor actividad</p>
                     <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
                       {[...analysis.hourlyPatterns].sort((a,b)=>b.avgAmount-a.avgAmount).slice(0,6).map(p=>(
                         <div key={p.hour} className={`p-2 rounded-xl border text-center text-xs ${p.hour<17?'bg-amber-50 border-amber-200':'bg-violet-50 border-violet-200'}`}>
                           <p className="font-bold">{p.hour}:00</p>
-                          <p className="text-gray-600">{p.avgAmount}€</p>
-                          <p className="text-gray-400">{p.ticketCount} ped.</p>
+                          <p className="text-text-secondary">{p.avgAmount}€</p>
+                          <p className="text-text-secondary">{p.ticketCount} ped.</p>
                         </div>
                       ))}
                     </div>
@@ -469,10 +484,14 @@ export default function VentasAnalisisPage() {
                   <p className="font-semibold text-sm mb-3">Resultado de la última sincronización</p>
                   <div className="space-y-1.5">
                     {brandResults.map((b,i)=>(
-                      <div key={i} className={`flex items-center gap-3 p-2 rounded-lg ${b.status==='ok'?'bg-emerald-50':b.status==='empty'?'bg-gray-50':'bg-red-50'}`}>
-                        <span className="text-sm">{b.status==='ok'?'✅':b.status==='empty'?'⚪':'❌'}</span>
-                        <span className="font-medium text-sm flex-1">{b.brand}</span>
-                        <span className="text-xs text-gray-500">{b.records>0?`${b.records} tickets`:b.message||'sin datos'}</span>
+                      <div key={i} className={`flex items-center gap-3 p-2 rounded-lg ${b.status==='ok'?'bg-success-bg':b.status==='empty'?'bg-page':'bg-danger-bg'}`}>
+                        {b.status==='ok'
+                          ? <Check size={14} className="text-success" />
+                          : b.status==='empty'
+                            ? <Inbox size={14} className="text-text-secondary" />
+                            : <X size={14} className="text-danger" />}
+                        <span className="font-medium text-sm flex-1 text-text-primary">{b.brand}</span>
+                        <span className="text-xs text-text-secondary">{b.records>0?`${b.records} tickets`:b.message||'sin datos'}</span>
                       </div>
                     ))}
                   </div>
@@ -490,11 +509,11 @@ export default function VentasAnalisisPage() {
                     return (
                       <div key={brand} className="flex items-center gap-3">
                         <span className="text-xs font-medium w-36 truncate">{brand}</span>
-                        <div className="flex-1 bg-gray-100 rounded-full h-4 overflow-hidden">
-                          <div className="bg-teal-500 h-4 transition-all" style={{width:`${(total/maxBrand)*100}%`}}/>
+                        <div className="flex-1 bg-accent-bg rounded-full h-4 overflow-hidden">
+                          <div className="bg-accent h-4 transition-all" style={{width:`${(total/maxBrand)*100}%`}}/>
                         </div>
-                        <span className="text-xs font-bold text-gray-700 w-24 text-right">{total.toLocaleString('es-ES',{style:'currency',currency:'EUR',maximumFractionDigits:0})}</span>
-                        <span className="text-[10px] text-gray-400 w-12 text-right">{days}d · {bRecs.length}t</span>
+                        <span className="text-xs font-bold text-text-primary w-24 text-right">{total.toLocaleString('es-ES',{style:'currency',currency:'EUR',maximumFractionDigits:0})}</span>
+                        <span className="text-[10px] text-text-secondary w-12 text-right">{days}d · {bRecs.length}t</span>
                       </div>
                     )
                   })}
@@ -508,32 +527,33 @@ export default function VentasAnalisisPage() {
             <Card>
               <div className="p-3 border-b flex justify-between items-center">
                 <p className="text-sm font-medium">{records.length} tickets · {uniqueDates} días · {uniqueBrands.length} marcas</p>
-                <p className="text-xs text-gray-400">{analysis.dateRange.from} → {analysis.dateRange.to}</p>
+                <p className="text-xs text-text-secondary">{analysis.dateRange.from} → {analysis.dateRange.to}</p>
               </div>
               <div className="overflow-x-auto max-h-96">
                 <table className="w-full text-xs">
-                  <thead className="sticky top-0 bg-white border-b text-gray-500">
+                  <thead className="sticky top-0 bg-card border-b text-text-secondary">
                     <tr>{['Fecha','Hora','Turno','Marca','Canal','Importe'].map(h=>(
                       <th key={h} className="p-2 text-left font-semibold">{h}</th>
                     ))}</tr>
                   </thead>
                   <tbody>
                     {[...records].reverse().slice(0,200).map((r,i)=>(
-                      <tr key={i} className="border-b last:border-0 hover:bg-gray-50">
+                      <tr key={i} className="border-b last:border-0 hover:bg-page">
                         <td className="p-2 font-medium">{r.date}</td>
                         <td className="p-2">{r.time}</td>
                         <td className="p-2">
-                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${r.turno==='mediodia'?'bg-amber-100 text-amber-700':'bg-violet-100 text-violet-700'}`}>
-                            {r.turno==='mediodia'?'☀️ Med.':'🌙 Noch.'}
+                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${r.turno==='mediodia'?'bg-amber-100 text-amber-700':'bg-violet-100 text-violet-700'}`}>
+                            {r.turno==='mediodia'?<Sun size={10} />:<Moon size={10} />}
+                            {r.turno==='mediodia'?'Med.':'Noch.'}
                           </span>
                         </td>
-                        <td className="p-2 text-gray-600 max-w-28 truncate">{r.brand}</td>
-                        <td className="p-2 text-gray-400">{r.source}</td>
+                        <td className="p-2 text-text-secondary max-w-28 truncate">{r.brand}</td>
+                        <td className="p-2 text-text-secondary">{r.source}</td>
                         <td className="p-2 font-semibold">{r.amount.toLocaleString('es-ES',{style:'currency',currency:'EUR'})}</td>
                       </tr>
                     ))}
                     {records.length > 200 && (
-                      <tr><td colSpan={6} className="p-3 text-center text-xs text-gray-400">... y {records.length-200} más</td></tr>
+                      <tr><td colSpan={6} className="p-3 text-center text-xs text-text-secondary">... y {records.length-200} más</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -545,10 +565,15 @@ export default function VentasAnalisisPage() {
       {/* Products panel */}
       {showProducts && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setShowProducts(false)}>
-          <div className="bg-white rounded-2xl p-5 max-w-2xl w-full max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+          <div className="bg-card rounded-xl p-5 max-w-2xl w-full max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-3">
-              <p className="font-bold text-gray-800">🍽 Productos en tSpoonLab ({products.length})</p>
-              <button onClick={() => setShowProducts(false)} className="text-gray-400 hover:text-gray-700 text-xl">×</button>
+              <p className="font-bold text-text-primary inline-flex items-center gap-1.5">
+                <ClipboardList size={16} className="text-accent" />
+                Productos en tSpoonLab ({products.length})
+              </p>
+              <button onClick={() => setShowProducts(false)} className="text-text-secondary hover:text-text-primary">
+                <X size={20} />
+              </button>
             </div>
             <input
               placeholder="Buscar producto o familia..."
@@ -558,8 +583,8 @@ export default function VentasAnalisisPage() {
             />
             <div className="overflow-y-auto flex-1">
               <table className="w-full text-xs">
-                <thead className="sticky top-0 bg-white border-b">
-                  <tr className="text-gray-500">
+                <thead className="sticky top-0 bg-card border-b">
+                  <tr className="text-text-secondary">
                     <th className="p-2 text-left font-semibold">Producto</th>
                     <th className="p-2 text-left font-semibold">Familia</th>
                     <th className="p-2 text-center font-semibold">Excluido</th>
@@ -583,10 +608,10 @@ export default function VentasAnalisisPage() {
                       const excluded = EXCL_NAMES.some(ex => nameLow.includes(norm(ex)))
                         || EXCL_FAMS.some(ex => famLow.includes(norm(ex)))
                       return (
-                        <tr key={i} className={`border-b last:border-0 ${excluded ? 'bg-red-50' : ''}`}>
+                        <tr key={i} className={`border-b last:border-0 ${excluded ? 'bg-danger-bg' : ''}`}>
                           <td className="p-2 font-medium">{p.name}</td>
-                          <td className="p-2 text-gray-500">{p.family}</td>
-                          <td className="p-2 text-center">{excluded ? <span className="text-red-500 font-bold">✗</span> : <span className="text-emerald-500">✓</span>}</td>
+                          <td className="p-2 text-text-secondary">{p.family}</td>
+                          <td className="p-2 text-center">{excluded ? <X size={14} className="text-danger inline" /> : <Check size={14} className="text-success inline" />}</td>
                         </tr>
                       )
                     })
@@ -594,7 +619,11 @@ export default function VentasAnalisisPage() {
                 </tbody>
               </table>
             </div>
-            <p className="text-xs text-gray-400 mt-3">✗ rojo = excluido del cálculo de platos · ✓ verde = incluido</p>
+            <p className="text-xs text-text-secondary mt-3 inline-flex items-center gap-2 flex-wrap">
+              <span className="inline-flex items-center gap-1"><X size={12} className="text-danger" /> excluido del cálculo</span>
+              <span>·</span>
+              <span className="inline-flex items-center gap-1"><Check size={12} className="text-success" /> incluido</span>
+            </p>
           </div>
         </div>
       )}
@@ -602,10 +631,15 @@ export default function VentasAnalisisPage() {
       {/* Debug panel */}
       {showDebug && debugInfo && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setShowDebug(false)}>
-          <div className="bg-gray-900 text-green-400 rounded-2xl p-5 max-w-3xl w-full max-h-[80vh] overflow-auto font-mono text-xs" onClick={e => e.stopPropagation()}>
+          <div className="bg-gray-900 text-green-400 rounded-xl p-5 max-w-3xl w-full max-h-[80vh] overflow-auto font-mono text-xs" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-3">
-              <p className="font-bold text-white">🔍 Estructura real de la API tSpoonLab</p>
-              <button onClick={() => setShowDebug(false)} className="text-gray-400 hover:text-white text-lg">×</button>
+              <p className="font-bold text-white inline-flex items-center gap-1.5">
+                <Search size={14} />
+                Estructura real de la API tSpoonLab
+              </p>
+              <button onClick={() => setShowDebug(false)} className="text-gray-400 hover:text-white">
+                <X size={18} />
+              </button>
             </div>
             <p className="text-yellow-400 mb-2">Total albaranes (últimos 7 días): {debugInfo.total}</p>
             <p className="text-yellow-400 mb-2">Clientes/marcas: {debugInfo.customers?.length || 0}</p>

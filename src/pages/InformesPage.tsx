@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Download, Settings, CheckCircle2, RefreshCw } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { Button, Card, Label, Input, Alert } from '../components/ui'
 
@@ -84,76 +85,83 @@ export default function InformesPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl" style={{ fontFamily: 'Instrument Serif, serif' }}>Informes Gestoría</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Resumen mensual de personal para envío a gestoría</p>
+        <h1 className="font-display text-2xl text-accent">Informes Gestoría</h1>
+        <p className="text-sm text-text-secondary mt-0.5">Resumen mensual de personal para envío a gestoría</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Left: report */}
         <div className="lg:col-span-2 space-y-4">
           {/* Controls */}
-          <div className="flex flex-wrap items-center gap-3 p-4 bg-gray-50 rounded-2xl border">
+          <div className="flex flex-wrap items-center gap-3 p-4 bg-page rounded-xl border border-border-default">
             <div className="flex items-center gap-2">
-              <label className="text-xs text-gray-500">Mes</label>
+              <label className="text-xs text-text-secondary">Mes</label>
               <select value={month} onChange={e => setMonth(Number(e.target.value))}
-                className="border rounded-lg px-3 py-1.5 text-sm bg-white">
+                className="border border-border-default rounded-md px-3 py-1.5 text-sm bg-card text-text-primary">
                 {MESES.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
               </select>
             </div>
             <div className="flex items-center gap-2">
-              <label className="text-xs text-gray-500">Año</label>
+              <label className="text-xs text-text-secondary">Año</label>
               <select value={year} onChange={e => setYear(Number(e.target.value))}
-                className="border rounded-lg px-3 py-1.5 text-sm bg-white">
+                className="border border-border-default rounded-md px-3 py-1.5 text-sm bg-card text-text-primary">
                 {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
               </select>
             </div>
             <div className="ml-auto flex items-center gap-3">
-              {downloaded && <span className="text-xs text-emerald-600 font-medium">✅ Descargado</span>}
+              {downloaded && (
+                <span className="inline-flex items-center gap-1 text-xs text-success font-medium">
+                  <CheckCircle2 size={14} /> Descargado
+                </span>
+              )}
               <Button size="sm" onClick={downloadTxt} disabled={generating}>
-                {generating ? '⏳ Generando...' : '📥 Descargar TXT'}
+                <span className="inline-flex items-center gap-1.5">
+                  {generating ? <RefreshCw size={14} className="animate-spin" /> : <Download size={14} />}
+                  {generating ? 'Generando...' : 'Descargar TXT'}
+                </span>
               </Button>
             </div>
           </div>
 
           {/* Table */}
           <Card>
-            <div className="p-4 border-b bg-gray-50 rounded-t-2xl">
-              <h3 className="font-semibold text-sm">{MESES[month - 1]} {year} — Resumen</h3>
+            <div className="p-4 border-b border-border-default bg-page rounded-t-xl">
+              <h3 className="font-semibold text-sm text-text-primary">{MESES[month - 1]} {year} — Resumen</h3>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead><tr className="border-b bg-gray-50">
-                  <th className="p-3 text-left text-xs font-semibold text-gray-500">Empleado</th>
-                  <th className="p-3 text-center text-xs font-semibold text-gray-500">Días trab.</th>
-                  <th className="p-3 text-center text-xs font-semibold text-gray-500">Horas</th>
-                  <th className="p-3 text-center text-xs font-semibold text-gray-500">Vacac.</th>
-                  <th className="p-3 text-center text-xs font-semibold text-gray-500">Bajas</th>
-                  <th className="p-3 text-center text-xs font-semibold text-gray-500">Permisos</th>
+                <thead><tr className="border-b border-border-default bg-page">
+                  <th className="p-3 text-left text-xs font-semibold text-text-secondary">Empleado</th>
+                  <th className="p-3 text-center text-xs font-semibold text-text-secondary">Días trab.</th>
+                  <th className="p-3 text-center text-xs font-semibold text-text-secondary">Horas</th>
+                  <th className="p-3 text-center text-xs font-semibold text-text-secondary">Vacac.</th>
+                  <th className="p-3 text-center text-xs font-semibold text-text-secondary">Bajas</th>
+                  <th className="p-3 text-center text-xs font-semibold text-text-secondary">Permisos</th>
                 </tr></thead>
                 <tbody>
                   {report.length === 0 ? (
-                    <tr><td colSpan={6} className="p-8 text-center text-gray-400 text-sm">Sin empleados registrados</td></tr>
+                    <tr><td colSpan={6} className="p-8 text-center text-text-secondary text-sm">Sin empleados registrados</td></tr>
                   ) : report.map(e => (
-                    <tr key={e.id} className="border-b last:border-0 hover:bg-gray-50">
+                    <tr key={e.id} className="border-b border-border-default last:border-0 hover:bg-accent-bg">
                       <td className="p-3">
-                        <p className="font-medium">{e.name}</p>
-                        <p className="text-xs text-gray-500">{e.position}</p>
+                        <p className="font-medium text-text-primary">{e.name}</p>
+                        <p className="text-xs text-text-secondary">{e.position}</p>
                       </td>
-                      <td className="p-3 text-center">{e.diasTrabajados}</td>
-                      <td className="p-3 text-center font-medium">{e.totalHours}h</td>
+                      <td className="p-3 text-center text-text-primary">{e.diasTrabajados}</td>
+                      <td className="p-3 text-center font-medium text-text-primary">{e.totalHours}h</td>
                       <td className="p-3 text-center">
                         {e.vacaciones.length > 0
-                          ? <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{e.vacaciones.length}</span>
+                          ? <span className="text-xs bg-accent-bg text-accent px-2 py-0.5 rounded-full">{e.vacaciones.length}</span>
                           : '-'}
                       </td>
                       <td className="p-3 text-center">
                         {e.bajas.length > 0
-                          ? <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">{e.bajas.length}</span>
+                          ? <span className="text-xs bg-danger-bg text-danger px-2 py-0.5 rounded-full">{e.bajas.length}</span>
                           : '-'}
                       </td>
                       <td className="p-3 text-center">
                         {e.permisos.length > 0
-                          ? <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">{e.permisos.length}</span>
+                          ? <span className="text-xs bg-warning-bg text-warning px-2 py-0.5 rounded-full">{e.permisos.length}</span>
                           : '-'}
                       </td>
                     </tr>
@@ -167,8 +175,10 @@ export default function InformesPage() {
         {/* Right: config */}
         <Card className="p-4 space-y-4 h-fit">
           <div>
-            <h3 className="font-semibold text-sm">⚙️ Configuración gestoría</h3>
-            <p className="text-xs text-gray-500 mt-0.5">Envío automático el día {notifConfig.gestoriaDayOfMonth} de cada mes</p>
+            <h3 className="font-semibold text-sm text-text-primary inline-flex items-center gap-1.5">
+              <Settings size={16} /> Configuración gestoría
+            </h3>
+            <p className="text-xs text-text-secondary mt-0.5">Envío automático el día {notifConfig.gestoriaDayOfMonth} de cada mes</p>
           </div>
           <div className="space-y-3">
             <div>
@@ -183,14 +193,15 @@ export default function InformesPage() {
               <Label>Día de envío</Label>
               <Input className="mt-1" type="number" min={1} max={28} value={notifConfig.gestoriaDayOfMonth || 25} onChange={e => setNotifConfig(p => ({ ...p, gestoriaDayOfMonth: parseInt(e.target.value) || 25 }))} />
             </div>
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border">
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-page border border-border-default">
               <input
                 type="checkbox"
                 id="gest-on"
                 checked={notifConfig.gestoriaEnabled || false}
                 onChange={e => setNotifConfig(p => ({ ...p, gestoriaEnabled: e.target.checked }))}
+                className="accent-accent"
               />
-              <label htmlFor="gest-on" className="text-sm cursor-pointer">
+              <label htmlFor="gest-on" className="text-sm cursor-pointer text-text-primary">
                 Activar envío automático el día {notifConfig.gestoriaDayOfMonth || 25}
               </label>
             </div>
@@ -198,8 +209,11 @@ export default function InformesPage() {
               El envío automático requiere integración SMTP/EmailJS. Por ahora el informe se descarga en TXT listo para adjuntar.
             </Alert>
           </div>
-          <div className="pt-2 border-t text-xs text-gray-400">
-            {notifConfig.gestoriaEnabled ? '✅ Envío automático activo' : '⚪ Desactivado'} · Último envío: {notifConfig.gestoriaLastSent ? new Date(notifConfig.gestoriaLastSent).toLocaleDateString('es-ES') : 'Nunca'}
+          <div className="pt-2 border-t border-border-default text-xs text-text-secondary inline-flex items-center gap-1.5">
+            {notifConfig.gestoriaEnabled
+              ? <><CheckCircle2 size={12} className="text-success" /> Envío automático activo</>
+              : <>Desactivado</>}
+            <span>· Último envío: {notifConfig.gestoriaLastSent ? new Date(notifConfig.gestoriaLastSent).toLocaleDateString('es-ES') : 'Nunca'}</span>
           </div>
         </Card>
       </div>

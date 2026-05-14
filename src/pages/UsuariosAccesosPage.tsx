@@ -2,6 +2,7 @@
 // Panel de administración de usuarios y roles. SOLO PARA ADMIN.
 
 import { useState, useEffect } from 'react'
+import { Users, RefreshCw, ShieldCheck, Briefcase, User, Ban, MapPin, AlertTriangle, Lock, Check, ChevronRight } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { Button, Card, Badge, Modal, Label, Select, Alert } from '../components/ui'
 import {
@@ -26,10 +27,10 @@ const ROLE_COLORS: Record<UserRole, 'red' | 'amber' | 'gray'> = {
   worker: 'gray',
 }
 
-const ROLE_ICONS: Record<UserRole, string> = {
-  admin: '👑',
-  manager: '👔',
-  worker: '👷',
+const ROLE_ICONS: Record<UserRole, typeof ShieldCheck> = {
+  admin: ShieldCheck,
+  manager: Briefcase,
+  worker: User,
 }
 
 export default function UsuariosAccesosPage() {
@@ -68,9 +69,11 @@ export default function UsuariosAccesosPage() {
     return (
       <div className="max-w-md mx-auto mt-16">
         <Card className="p-6 text-center">
-          <p className="text-4xl mb-3">🚫</p>
-          <p className="font-bold text-gray-900 mb-2">Acceso denegado</p>
-          <p className="text-sm text-gray-600">
+          <div className="flex justify-center mb-3">
+            <Ban size={40} className="text-danger" strokeWidth={2} />
+          </div>
+          <p className="font-bold text-text-primary mb-2">Acceso denegado</p>
+          <p className="text-sm text-text-secondary">
             Solo los administradores pueden gestionar usuarios y roles.
           </p>
         </Card>
@@ -98,53 +101,55 @@ export default function UsuariosAccesosPage() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl" style={{ fontFamily: 'Instrument Serif, serif' }}>👥 Usuarios y Accesos</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
+          <h1 className="font-display text-2xl text-accent inline-flex items-center gap-2">
+            <Users size={24} /> Usuarios y Accesos
+          </h1>
+          <p className="text-sm text-text-secondary mt-0.5">
             {stats.total} usuarios activos · {stats.inactive} inactivos
           </p>
         </div>
         <Button size="sm" variant="outline" onClick={reload}>
-          🔄 Recargar
+          <span className="inline-flex items-center gap-1.5"><RefreshCw size={14} /> Recargar</span>
         </Button>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card className="p-3">
-          <p className="text-xs text-gray-500">👑 Admins</p>
-          <p className="text-2xl font-bold">{stats.admins}</p>
+          <p className="text-xs text-text-secondary inline-flex items-center gap-1"><ShieldCheck size={12} /> Admins</p>
+          <p className="text-2xl font-bold text-text-primary">{stats.admins}</p>
         </Card>
         <Card className="p-3">
-          <p className="text-xs text-gray-500">👔 Encargados</p>
-          <p className="text-2xl font-bold">{stats.managers}</p>
+          <p className="text-xs text-text-secondary inline-flex items-center gap-1"><Briefcase size={12} /> Encargados</p>
+          <p className="text-2xl font-bold text-text-primary">{stats.managers}</p>
         </Card>
         <Card className="p-3">
-          <p className="text-xs text-gray-500">👷 Trabajadores</p>
-          <p className="text-2xl font-bold">{stats.workers}</p>
+          <p className="text-xs text-text-secondary inline-flex items-center gap-1"><User size={12} /> Trabajadores</p>
+          <p className="text-2xl font-bold text-text-primary">{stats.workers}</p>
         </Card>
         <Card className="p-3">
-          <p className="text-xs text-gray-500">🚫 Inactivos</p>
-          <p className="text-2xl font-bold">{stats.inactive}</p>
+          <p className="text-xs text-text-secondary inline-flex items-center gap-1"><Ban size={12} /> Inactivos</p>
+          <p className="text-2xl font-bold text-text-primary">{stats.inactive}</p>
         </Card>
       </div>
 
       {/* Filtros */}
-      <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1 w-fit">
+      <div className="flex items-center gap-1 bg-accent-bg rounded-lg p-1 w-fit flex-wrap">
         {(['all', 'admin', 'manager', 'worker', 'inactive'] as const).map(f => (
           <button
             key={f}
             onClick={() => setFilter(f)}
-            className={`px-3 py-1 rounded-md text-xs font-medium transition ${
+            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-base ${
               filter === f
-                ? 'bg-white shadow text-[#7C1A1A]'
-                : 'text-gray-600 hover:text-gray-900'
+                ? 'bg-card shadow text-accent'
+                : 'text-text-secondary hover:text-text-primary'
             }`}
           >
             {f === 'all' ? 'Activos' :
-             f === 'admin' ? '👑 Admins' :
-             f === 'manager' ? '👔 Encargados' :
-             f === 'worker' ? '👷 Trabajadores' :
-             '🚫 Inactivos'}
+             f === 'admin' ? <><ShieldCheck size={12} /> Admins</> :
+             f === 'manager' ? <><Briefcase size={12} /> Encargados</> :
+             f === 'worker' ? <><User size={12} /> Trabajadores</> :
+             <><Ban size={12} /> Inactivos</>}
           </button>
         ))}
       </div>
@@ -154,53 +159,54 @@ export default function UsuariosAccesosPage() {
 
       {/* Lista de usuarios */}
       {loading ? (
-        <Card className="p-6 text-center text-sm text-gray-500">Cargando usuarios...</Card>
+        <Card className="p-6 text-center text-sm text-text-secondary">Cargando usuarios...</Card>
       ) : filteredUsers.length === 0 ? (
-        <Card className="p-6 text-center text-sm text-gray-500">
+        <Card className="p-6 text-center text-sm text-text-secondary">
           No hay usuarios en este filtro
         </Card>
       ) : (
         <div className="space-y-2">
           {filteredUsers.map(u => {
             const isCurrentUser = u.userId === currentProfile?.userId
+            const RoleIcon = ROLE_ICONS[u.role]
             return (
               <Card
                 key={u.id}
-                className={`p-4 cursor-pointer hover:shadow-md transition ${!u.active ? 'opacity-60' : ''}`}
+                className={`p-4 cursor-pointer hover:shadow-md transition-base ${!u.active ? 'opacity-60' : ''}`}
                 onClick={() => setEditingUser(u)}
               >
                 <div className="flex items-center gap-3">
                   {/* Avatar / icon */}
-                  <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-xl">
-                    {ROLE_ICONS[u.role]}
+                  <div className="w-10 h-10 rounded-full bg-accent-bg flex items-center justify-center text-accent">
+                    <RoleIcon size={20} />
                   </div>
 
                   {/* Info principal */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-medium text-gray-900 truncate">
+                      <p className="font-medium text-text-primary truncate">
                         {u.displayName || u.employeeName || '(Sin nombre)'}
                       </p>
                       {isCurrentUser && (
                         <Badge color="gray">Yo</Badge>
                       )}
                       <Badge color={ROLE_COLORS[u.role]}>{ROLE_LABELS[u.role]}</Badge>
-                      {!u.active && <Badge color="gray">🚫 Inactivo</Badge>}
+                      {!u.active && <Badge color="gray"><span className="inline-flex items-center gap-1"><Ban size={10} /> Inactivo</span></Badge>}
                     </div>
-                    <p className="text-xs text-gray-500 truncate">{u.email || '—'}</p>
+                    <p className="text-xs text-text-secondary truncate">{u.email || '—'}</p>
                     {u.role === 'manager' && (
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        📍 {u.managedLocationIds.length} {u.managedLocationIds.length === 1 ? 'local' : 'locales'} asignados
+                      <p className="text-xs text-text-secondary mt-0.5 inline-flex items-center gap-1">
+                        <MapPin size={11} /> {u.managedLocationIds.length} {u.managedLocationIds.length === 1 ? 'local' : 'locales'} asignados
                       </p>
                     )}
                     {!u.employeeId && u.role !== 'admin' && (
-                      <p className="text-xs text-amber-600 mt-0.5">
-                        ⚠️ Sin empleado vinculado
+                      <p className="text-xs text-warning mt-0.5 inline-flex items-center gap-1">
+                        <AlertTriangle size={11} /> Sin empleado vinculado
                       </p>
                     )}
                   </div>
 
-                  <div className="text-gray-400">›</div>
+                  <ChevronRight size={16} className="text-text-secondary" />
                 </div>
               </Card>
             )
@@ -294,13 +300,13 @@ function EditUserModal({ user, isCurrentUser, locations, onClose, onSaved }: Edi
     <Modal open onClose={onClose} title={user.displayName || user.employeeName || 'Usuario'}>
       <div className="space-y-4">
         {/* Info del usuario */}
-        <Card className="p-3 bg-gray-50">
-          <p className="text-xs text-gray-500">Email</p>
-          <p className="text-sm font-medium">{user.email || '—'}</p>
+        <Card className="p-3 bg-page">
+          <p className="text-xs text-text-secondary">Email</p>
+          <p className="text-sm font-medium text-text-primary">{user.email || '—'}</p>
           {user.employeeName && (
             <>
-              <p className="text-xs text-gray-500 mt-2">Empleado vinculado</p>
-              <p className="text-sm font-medium">{user.employeeName}</p>
+              <p className="text-xs text-text-secondary mt-2">Empleado vinculado</p>
+              <p className="text-sm font-medium text-text-primary">{user.employeeName}</p>
             </>
           )}
         </Card>
@@ -328,17 +334,17 @@ function EditUserModal({ user, isCurrentUser, locations, onClose, onSaved }: Edi
             onChange={e => setRole(e.target.value as UserRole)}
             disabled={isAdminUser}
           >
-            <option value="worker">👷 Trabajador</option>
-            <option value="manager">👔 Encargado</option>
-            {role === 'admin' && <option value="admin">👑 Admin</option>}
+            <option value="worker">Trabajador</option>
+            <option value="manager">Encargado</option>
+            {role === 'admin' && <option value="admin">Admin</option>}
           </Select>
           {role === 'manager' && (
-            <p className="text-[11px] text-gray-500 mt-1">
+            <p className="text-[11px] text-text-secondary mt-1">
               El encargado gestionará los locales que selecciones abajo.
             </p>
           )}
           {role === 'worker' && (
-            <p className="text-[11px] text-gray-500 mt-1">
+            <p className="text-[11px] text-text-secondary mt-1">
               El trabajador solo verá su información personal (horario, vacaciones, fichajes).
             </p>
           )}
@@ -352,20 +358,21 @@ function EditUserModal({ user, isCurrentUser, locations, onClose, onSaved }: Edi
               {locations.map(l => (
                 <label
                   key={l.id}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 hover:border-[#7C1A1A] cursor-pointer text-sm"
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border-default hover:border-accent cursor-pointer text-sm text-text-primary transition-base"
                 >
                   <input
                     type="checkbox"
                     checked={managedLocs.includes(l.id)}
                     onChange={() => toggleLoc(l.id)}
+                    className="accent-accent"
                   />
                   <span>{l.name}</span>
                 </label>
               ))}
             </div>
             {managedLocs.length === 0 && (
-              <p className="text-[11px] text-amber-600 mt-1">
-                ⚠️ Un encargado sin locales asignados no podrá ver datos.
+              <p className="text-[11px] text-warning mt-1 inline-flex items-center gap-1">
+                <AlertTriangle size={11} /> Un encargado sin locales asignados no podrá ver datos.
               </p>
             )}
           </div>
@@ -377,12 +384,12 @@ function EditUserModal({ user, isCurrentUser, locations, onClose, onSaved }: Edi
             <Label>Pantallas que puede ver</Label>
             <button
               onClick={() => setShowPermissions(true)}
-              className="w-full mt-1 px-3 py-2 rounded-lg border border-gray-200 hover:border-[#7C1A1A] text-sm text-left flex items-center justify-between"
+              className="w-full mt-1 px-3 py-2 rounded-lg border border-border-default hover:border-accent text-sm text-left flex items-center justify-between text-text-primary transition-base"
             >
-              <span>🔐 Configurar permisos individuales</span>
-              <span className="text-gray-400">›</span>
+              <span className="inline-flex items-center gap-1.5"><Lock size={14} className="text-accent" /> Configurar permisos individuales</span>
+              <ChevronRight size={16} className="text-text-secondary" />
             </button>
-            <p className="text-[11px] text-gray-500 mt-1">
+            <p className="text-[11px] text-text-secondary mt-1">
               Define qué módulos podrá ver este encargado al entrar.
             </p>
           </div>
@@ -400,26 +407,26 @@ function EditUserModal({ user, isCurrentUser, locations, onClose, onSaved }: Edi
             <div className="flex gap-2 mt-1">
               <button
                 onClick={() => setActive(true)}
-                className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border ${
+                className={`flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border transition-base ${
                   active
-                    ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
-                    : 'bg-white border-gray-200 text-gray-500'
+                    ? 'bg-success-bg border-success/30 text-success'
+                    : 'bg-card border-border-default text-text-secondary'
                 }`}
               >
-                ✅ Activa
+                <Check size={14} /> Activa
               </button>
               <button
                 onClick={() => setActive(false)}
-                className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border ${
+                className={`flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border transition-base ${
                   !active
-                    ? 'bg-red-50 border-red-300 text-red-700'
-                    : 'bg-white border-gray-200 text-gray-500'
+                    ? 'bg-danger-bg border-danger/30 text-danger'
+                    : 'bg-card border-border-default text-text-secondary'
                 }`}
               >
-                🚫 Inactiva
+                <Ban size={14} /> Inactiva
               </button>
             </div>
-            <p className="text-[11px] text-gray-500 mt-1">
+            <p className="text-[11px] text-text-secondary mt-1">
               Si desactivas, el usuario no podrá entrar a la app (su empleado sigue existiendo).
             </p>
           </div>
