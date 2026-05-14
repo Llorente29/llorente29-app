@@ -4,6 +4,17 @@
 // Permite ver detalle inline, marcar como en curso, añadir acciones y resolver.
 
 import { useEffect, useMemo, useState } from 'react'
+import {
+  ShieldCheck,
+  ChevronDown,
+  ChevronRight,
+  AlertTriangle,
+  Clock,
+  Play,
+  Check,
+  Bot,
+  Hand,
+} from 'lucide-react'
 import type { Location } from '@/types'
 import { useApp } from '@/context/AppContext'
 import { supabase } from '@/lib/supabase'
@@ -15,22 +26,19 @@ import type {
 } from '@/modules/appcc/types'
 import type { AppccIncidentAction } from '@/modules/appcc/services/incidentsService'
 
-const GRANATE = '#7C1A1A'
-const BEIGE = '#F5E9D9'
-
-const SEVERITY_STYLE: Record<AppccSeverity, { bg: string; fg: string; label: string }> = {
-  critical: { bg: '#fee2e2', fg: '#991b1b', label: 'Crítica' },
-  high:     { bg: '#fed7aa', fg: '#9a3412', label: 'Alta' },
-  medium:   { bg: '#fef3c7', fg: '#92400e', label: 'Media' },
-  low:      { bg: '#dbeafe', fg: '#1e40af', label: 'Baja' },
+const SEVERITY_STYLE: Record<AppccSeverity, { className: string; label: string }> = {
+  critical: { className: 'bg-danger-bg text-danger', label: 'Crítica' },
+  high:     { className: 'bg-warning-bg text-warning', label: 'Alta' },
+  medium:   { className: 'bg-warning-bg text-warning', label: 'Media' },
+  low:      { className: 'bg-accent-bg text-accent', label: 'Baja' },
 }
 
-const STATUS_STYLE: Record<AppccIncidentStatus, { bg: string; fg: string; label: string }> = {
-  open:        { bg: '#fee2e2', fg: '#991b1b', label: 'Abierta' },
-  in_progress: { bg: '#dbeafe', fg: '#1e40af', label: 'En curso' },
-  resolved:    { bg: '#dcfce7', fg: '#166534', label: 'Resuelta' },
-  closed:      { bg: '#f3f4f6', fg: '#374151', label: 'Cerrada' },
-  cancelled:   { bg: '#f3f4f6', fg: '#6b7280', label: 'Cancelada' },
+const STATUS_STYLE: Record<AppccIncidentStatus, { className: string; label: string }> = {
+  open:        { className: 'bg-danger-bg text-danger', label: 'Abierta' },
+  in_progress: { className: 'bg-accent-bg text-accent', label: 'En curso' },
+  resolved:    { className: 'bg-success-bg text-success', label: 'Resuelta' },
+  closed:      { className: 'bg-page text-text-secondary', label: 'Cerrada' },
+  cancelled:   { className: 'bg-page text-text-secondary', label: 'Cancelada' },
 }
 
 const ACTION_TYPE_LABEL: Record<string, string> = {
@@ -206,13 +214,10 @@ export default function IncidentsPage() {
     <div className="p-4 sm:p-6 max-w-5xl mx-auto">
       {/* Header */}
       <header className="mb-6">
-        <h1
-          className="text-4xl mb-1"
-          style={{ fontFamily: '"Instrument Serif", serif', color: GRANATE }}
-        >
+        <h1 className="font-display text-4xl mb-1 text-accent">
           Incidencias APPCC
         </h1>
-        <p className="text-base text-gray-600">
+        <p className="text-base text-text-secondary">
           Acciones correctivas pendientes y resueltas por local.
         </p>
       </header>
@@ -227,12 +232,11 @@ export default function IncidentsPage() {
                 key={loc.id}
                 type="button"
                 onClick={() => { setSelectedLocationId(loc.id); setExpandedId(null) }}
-                className="px-4 py-2.5 rounded-lg text-base font-medium transition min-h-[44px]"
-                style={{
-                  backgroundColor: active ? GRANATE : '#fff',
-                  color: active ? BEIGE : GRANATE,
-                  border: `1px solid ${GRANATE}`,
-                }}
+                className={`px-4 py-2.5 rounded-lg text-base font-medium transition-base min-h-touch border border-accent ${
+                  active
+                    ? 'bg-accent text-text-on-accent hover:bg-accent-hover'
+                    : 'bg-card text-accent hover:bg-accent-bg'
+                }`}
               >
                 {loc.name}
               </button>
@@ -246,24 +250,22 @@ export default function IncidentsPage() {
         <button
           type="button"
           onClick={() => setFilter('open_only')}
-          className="px-4 py-2 rounded-lg text-sm font-medium transition min-h-[40px]"
-          style={{
-            backgroundColor: filter === 'open_only' ? GRANATE : '#fff',
-            color: filter === 'open_only' ? BEIGE : '#374151',
-            border: '1px solid #d1d5db',
-          }}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-base min-h-[40px] border ${
+            filter === 'open_only'
+              ? 'bg-accent text-text-on-accent border-accent hover:bg-accent-hover'
+              : 'bg-card text-text-primary border-border-default hover:bg-accent-bg'
+          }`}
         >
           Solo abiertas
         </button>
         <button
           type="button"
           onClick={() => setFilter('all')}
-          className="px-4 py-2 rounded-lg text-sm font-medium transition min-h-[40px]"
-          style={{
-            backgroundColor: filter === 'all' ? GRANATE : '#fff',
-            color: filter === 'all' ? BEIGE : '#374151',
-            border: '1px solid #d1d5db',
-          }}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-base min-h-[40px] border ${
+            filter === 'all'
+              ? 'bg-accent text-text-on-accent border-accent hover:bg-accent-hover'
+              : 'bg-card text-text-primary border-border-default hover:bg-accent-bg'
+          }`}
         >
           Todas (30 días)
         </button>
@@ -271,25 +273,24 @@ export default function IncidentsPage() {
 
       {/* Estados */}
       {loading && (
-        <div className="py-12 text-center text-base text-gray-500">Cargando incidencias...</div>
+        <div className="py-12 text-center text-base text-text-secondary">Cargando incidencias...</div>
       )}
 
       {error && (
-        <div className="py-4 px-4 mb-4 rounded-lg border border-red-200 bg-red-50 text-red-700 text-base">
+        <div className="py-4 px-4 mb-4 rounded-lg border border-danger/30 bg-danger-bg text-danger text-base">
           {error}
         </div>
       )}
 
       {!loading && !error && incidents.length === 0 && (
-        <div
-          className="py-12 px-4 text-center rounded-xl border-2 border-dashed"
-          style={{ borderColor: GRANATE, backgroundColor: BEIGE }}
-        >
-          <div className="text-5xl mb-3">✓</div>
-          <h3 className="text-xl font-semibold mb-1" style={{ color: GRANATE }}>
+        <div className="py-12 px-4 text-center rounded-xl border-2 border-dashed border-accent bg-accent-bg">
+          <div className="flex justify-center mb-3">
+            <ShieldCheck size={48} className="text-accent" strokeWidth={2} />
+          </div>
+          <h3 className="text-xl font-semibold mb-1 text-accent">
             Sin incidencias
           </h3>
-          <p className="text-base text-gray-700">
+          <p className="text-base text-text-primary">
             {filter === 'open_only'
               ? 'No hay incidencias abiertas en este local.'
               : 'No hay incidencias en los últimos 30 días.'}
@@ -311,44 +312,45 @@ export default function IncidentsPage() {
             return (
               <div
                 key={inc.id}
-                className="bg-white rounded-lg border border-gray-200 overflow-hidden"
+                className="bg-card rounded-lg border border-border-default overflow-hidden"
               >
                 {/* Fila principal — responsive */}
                 <button
                   type="button"
                   onClick={() => handleExpand(inc.id)}
-                  className="w-full text-left p-4 sm:p-5 hover:bg-gray-50 transition"
+                  className="w-full text-left p-4 sm:p-5 hover:bg-accent-bg transition-base"
                 >
                   {/* MÓVIL: línea superior con badges y flecha */}
                   <div className="flex sm:hidden items-center gap-2 mb-2 flex-wrap">
-                    <span
-                      className="text-xs px-2.5 py-1 rounded font-semibold uppercase"
-                      style={{ backgroundColor: sevStyle.bg, color: sevStyle.fg }}
-                    >
+                    <span className={`text-xs px-2.5 py-1 rounded font-semibold uppercase ${sevStyle.className}`}>
                       {sevStyle.label}
                     </span>
-                    <span
-                      className="text-xs px-2.5 py-1 rounded-full font-medium"
-                      style={{ backgroundColor: stStyle.bg, color: stStyle.fg }}
-                    >
+                    <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${stStyle.className}`}>
                       {stStyle.label}
                     </span>
-                    <span className="ml-auto text-gray-400 text-base">{expanded ? '▲' : '▼'}</span>
+                    <span className="ml-auto text-text-secondary">
+                      {expanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                    </span>
                   </div>
 
                   {/* MÓVIL: título + meta */}
                   <div className="sm:hidden">
-                    <div className="text-base font-medium mb-1">{inc.title}</div>
-                    <div className="text-sm text-gray-500">
-                      {inc.source === 'auto' ? '🤖 Automática' : '✋ Manual'}
-                      {' · '}
-                      {new Date(inc.created_at).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    <div className="text-base font-medium mb-1 text-text-primary">{inc.title}</div>
+                    <div className="text-sm text-text-secondary flex items-center gap-1.5 flex-wrap">
+                      {inc.source === 'auto' ? (
+                        <span className="inline-flex items-center gap-1">
+                          <Bot size={14} /> Automática
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1">
+                          <Hand size={14} /> Manual
+                        </span>
+                      )}
+                      <span>·</span>
+                      <span>{new Date(inc.created_at).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
                       {isOpen && (
-                        <span
-                          className="ml-2"
-                          style={{ color: sla.overdue ? '#dc2626' : '#6b7280' }}
-                        >
-                          {sla.overdue ? '⚠ ' : '· ⏱ '}
+                        <span className={`inline-flex items-center gap-1 ml-1 ${sla.overdue ? 'text-danger' : 'text-text-secondary'}`}>
+                          {sla.overdue ? <AlertTriangle size={14} /> : <Clock size={14} />}
                           {sla.text}
                         </span>
                       )}
@@ -357,66 +359,67 @@ export default function IncidentsPage() {
 
                   {/* DESKTOP: layout horizontal */}
                   <div className="hidden sm:flex items-center gap-3">
-                    <span
-                      className="text-xs px-2.5 py-1 rounded font-semibold uppercase shrink-0"
-                      style={{ backgroundColor: sevStyle.bg, color: sevStyle.fg }}
-                    >
+                    <span className={`text-xs px-2.5 py-1 rounded font-semibold uppercase shrink-0 ${sevStyle.className}`}>
                       {sevStyle.label}
                     </span>
                     <div className="flex-1 min-w-0">
-                      <div className="text-base font-medium truncate">{inc.title}</div>
-                      <div className="text-sm text-gray-500 mt-0.5">
-                        {inc.source === 'auto' ? '🤖 Automática' : '✋ Manual'}
-                        {' · '}
-                        {new Date(inc.created_at).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      <div className="text-base font-medium truncate text-text-primary">{inc.title}</div>
+                      <div className="text-sm text-text-secondary mt-0.5 flex items-center gap-1.5 flex-wrap">
+                        {inc.source === 'auto' ? (
+                          <span className="inline-flex items-center gap-1">
+                            <Bot size={14} /> Automática
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1">
+                            <Hand size={14} /> Manual
+                          </span>
+                        )}
+                        <span>·</span>
+                        <span>{new Date(inc.created_at).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
                       </div>
                     </div>
-                    <span
-                      className="text-xs px-2.5 py-1 rounded-full font-medium shrink-0"
-                      style={{ backgroundColor: stStyle.bg, color: stStyle.fg }}
-                    >
+                    <span className={`text-xs px-2.5 py-1 rounded-full font-medium shrink-0 ${stStyle.className}`}>
                       {stStyle.label}
                     </span>
                     {isOpen && (
-                      <span
-                        className="text-sm shrink-0"
-                        style={{ color: sla.overdue ? '#dc2626' : '#6b7280' }}
-                      >
-                        {sla.overdue ? '⚠ ' : '⏱ '}
+                      <span className={`text-sm shrink-0 inline-flex items-center gap-1 ${sla.overdue ? 'text-danger' : 'text-text-secondary'}`}>
+                        {sla.overdue ? <AlertTriangle size={14} /> : <Clock size={14} />}
                         {sla.text}
                       </span>
                     )}
-                    <span className="text-gray-400 text-base shrink-0">{expanded ? '▲' : '▼'}</span>
+                    <span className="text-text-secondary shrink-0">
+                      {expanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                    </span>
                   </div>
                 </button>
 
                 {/* Detalle desplegable */}
                 {expanded && (
-                  <div className="border-t border-gray-200 p-4 sm:p-5 bg-gray-50 space-y-4">
+                  <div className="border-t border-border-default p-4 sm:p-5 bg-page space-y-4">
                     {inc.description && (
-                      <p className="text-base text-gray-700">{inc.description}</p>
+                      <p className="text-base text-text-primary">{inc.description}</p>
                     )}
 
                     {/* Historial de acciones */}
                     <div>
-                      <div className="text-sm font-semibold uppercase tracking-wider text-gray-500 mb-2">
+                      <div className="text-sm font-semibold uppercase tracking-wider text-text-secondary mb-2">
                         Historial de acciones ({actions.length})
                       </div>
                       {actions.length === 0 ? (
-                        <p className="text-sm text-gray-500 italic">Aún no se ha registrado ninguna acción.</p>
+                        <p className="text-sm text-text-secondary italic">Aún no se ha registrado ninguna acción.</p>
                       ) : (
                         <div className="space-y-2">
                           {actions.map(a => (
-                            <div key={a.id} className="bg-white rounded-md border border-gray-200 p-3 text-sm">
+                            <div key={a.id} className="bg-card rounded-md border border-border-default p-3 text-sm">
                               <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                <span className="font-semibold text-gray-700">
+                                <span className="font-semibold text-text-primary">
                                   {ACTION_TYPE_LABEL[a.action_type ?? ''] ?? 'Acción'}
                                 </span>
-                                <span className="text-gray-400 text-xs">
+                                <span className="text-text-secondary text-xs">
                                   {new Date(a.taken_at).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                                 </span>
                               </div>
-                              <div className="text-gray-700 text-base">{a.description}</div>
+                              <div className="text-text-primary text-base">{a.description}</div>
                             </div>
                           ))}
                         </div>
@@ -425,23 +428,23 @@ export default function IncidentsPage() {
 
                     {/* Acciones disponibles */}
                     {isOpen && (
-                      <div className="space-y-4 pt-2 border-t border-gray-200">
+                      <div className="space-y-4 pt-2 border-t border-border-default">
                         {/* Marcar en curso */}
                         {inc.status === 'open' && (
                           <button
                             type="button"
                             disabled={busyId === inc.id}
                             onClick={() => handleMarkInProgress(inc.id)}
-                            className="text-base px-4 py-2.5 rounded-lg font-medium transition disabled:opacity-50 min-h-[44px]"
-                            style={{ backgroundColor: '#2563eb', color: '#fff' }}
+                            className="inline-flex items-center gap-2 text-base px-4 py-2.5 rounded-lg font-medium transition-base disabled:opacity-50 min-h-touch bg-accent text-text-on-accent hover:bg-accent-hover"
                           >
-                            ▶ Marcar en curso
+                            <Play size={16} />
+                            Marcar en curso
                           </button>
                         )}
 
                         {/* Añadir acción intermedia */}
                         <div>
-                          <label className="text-sm font-semibold uppercase tracking-wider text-gray-500 block mb-2">
+                          <label className="text-sm font-semibold uppercase tracking-wider text-text-secondary block mb-2">
                             Registrar acción intermedia
                           </label>
                           <div className="flex flex-col sm:flex-row gap-2">
@@ -450,14 +453,13 @@ export default function IncidentsPage() {
                               value={newActionText}
                               onChange={e => setNewActionText(e.target.value)}
                               placeholder="Ej: Avisado al técnico..."
-                              className="flex-1 px-4 py-2.5 border border-gray-300 rounded-md text-base focus:outline-none focus:ring-2 min-h-[44px]"
+                              className="flex-1 px-4 py-2.5 border border-border-default rounded-md text-base focus:outline-none focus:ring-2 focus:ring-accent min-h-touch bg-card text-text-primary"
                             />
                             <button
                               type="button"
                               disabled={!newActionText.trim() || busyId === inc.id}
                               onClick={() => handleAddAction(inc.id)}
-                              className="text-base px-4 py-2.5 rounded-md font-medium transition disabled:opacity-50 min-h-[44px] shrink-0"
-                              style={{ backgroundColor: '#fff', color: GRANATE, border: `1px solid ${GRANATE}` }}
+                              className="text-base px-4 py-2.5 rounded-md font-medium transition-base disabled:opacity-50 min-h-touch shrink-0 bg-card text-accent border border-accent hover:bg-accent-bg"
                             >
                               Añadir
                             </button>
@@ -466,7 +468,7 @@ export default function IncidentsPage() {
 
                         {/* Resolver */}
                         <div>
-                          <label className="text-sm font-semibold uppercase tracking-wider text-gray-500 block mb-2">
+                          <label className="text-sm font-semibold uppercase tracking-wider text-text-secondary block mb-2">
                             Resolver incidencia
                           </label>
                           <div className="flex flex-col sm:flex-row gap-2">
@@ -475,16 +477,16 @@ export default function IncidentsPage() {
                               value={resolveText}
                               onChange={e => setResolveText(e.target.value)}
                               placeholder="Describe la resolución final..."
-                              className="flex-1 px-4 py-2.5 border border-gray-300 rounded-md text-base focus:outline-none focus:ring-2 min-h-[44px]"
+                              className="flex-1 px-4 py-2.5 border border-border-default rounded-md text-base focus:outline-none focus:ring-2 focus:ring-accent min-h-touch bg-card text-text-primary"
                             />
                             <button
                               type="button"
                               disabled={!resolveText.trim() || busyId === inc.id}
                               onClick={() => handleResolve(inc.id)}
-                              className="text-base px-4 py-2.5 rounded-md font-medium transition disabled:opacity-50 min-h-[44px] shrink-0"
-                              style={{ backgroundColor: '#16a34a', color: '#fff' }}
+                              className="inline-flex items-center justify-center gap-2 text-base px-4 py-2.5 rounded-md font-medium transition-base disabled:opacity-50 min-h-touch shrink-0 bg-success-bg text-success border border-success/30 hover:opacity-90"
                             >
-                              ✓ Resolver
+                              <Check size={16} />
+                              Resolver
                             </button>
                           </div>
                         </div>
@@ -493,7 +495,7 @@ export default function IncidentsPage() {
 
                     {/* Si ya está resuelta o cerrada, mostrar info */}
                     {!isOpen && inc.resolved_at && (
-                      <div className="text-sm text-gray-500 pt-2 border-t border-gray-200">
+                      <div className="text-sm text-text-secondary pt-2 border-t border-border-default">
                         Resuelta el {new Date(inc.resolved_at).toLocaleString('es-ES')}
                       </div>
                     )}
