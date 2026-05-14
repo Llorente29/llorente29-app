@@ -1,8 +1,19 @@
 // src/components/NotificationBell.tsx
-// Campana 🔔 con dropdown de notificaciones para el trabajador.
+// Campana con dropdown de notificaciones para el trabajador.
 // Muestra badge con número de no leídas, lista al pulsar, marca como leída al click.
 
 import { useEffect, useRef, useState } from 'react'
+import {
+  Bell,
+  Wallet,
+  CheckCircle2,
+  XCircle,
+  Calendar,
+  RefreshCw,
+  Megaphone,
+  Inbox,
+  type LucideIcon,
+} from 'lucide-react'
 import {
   fetchNotifications,
   countUnread,
@@ -15,20 +26,18 @@ import {
 
 interface Props {
   employeeId: string
-  /** Color del icono y del badge. Por defecto granate Foodint */
-  color?: string
 }
 
-const ICONS: Record<NotificationType, string> = {
-  period_closed: '💰',
-  vacation_approved: '✅',
-  vacation_rejected: '❌',
-  schedule_published: '📅',
-  shift_swap_request: '🔄',
-  generic: '📢',
+const ICONS: Record<NotificationType, LucideIcon> = {
+  period_closed: Wallet,
+  vacation_approved: CheckCircle2,
+  vacation_rejected: XCircle,
+  schedule_published: Calendar,
+  shift_swap_request: RefreshCw,
+  generic: Megaphone,
 }
 
-export default function NotificationBell({ employeeId, color = '#7C1A1A' }: Props) {
+export default function NotificationBell({ employeeId }: Props) {
   const [open, setOpen] = useState(false)
   const [unread, setUnread] = useState(0)
   const [items, setItems] = useState<EmployeeNotification[]>([])
@@ -44,7 +53,7 @@ export default function NotificationBell({ employeeId, color = '#7C1A1A' }: Prop
       if (!cancel) setUnread(c)
     }
     tick()
-    const interval = setInterval(tick, 60_000) // refresca cada minuto
+    const interval = setInterval(tick, 60_000)
     return () => { cancel = true; clearInterval(interval) }
   }, [employeeId])
 
@@ -111,13 +120,13 @@ export default function NotificationBell({ employeeId, color = '#7C1A1A' }: Prop
       {/* Botón campana */}
       <button
         onClick={openAndLoad}
-        className="relative w-10 h-10 rounded-full hover:bg-black/5 flex items-center justify-center transition"
+        className="relative w-10 h-10 rounded-full hover:bg-accent-bg flex items-center justify-center transition-base"
         aria-label={`Notificaciones${unread > 0 ? ` (${unread} sin leer)` : ''}`}
       >
-        <span className="text-xl" style={{ color }}>🔔</span>
+        <Bell size={20} className="text-accent" />
         {unread > 0 && (
           <span
-            className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center border-2 border-white"
+            className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-danger text-text-on-accent text-[10px] font-bold flex items-center justify-center border-2 border-card"
             aria-hidden="true"
           >
             {unread > 99 ? '99+' : unread}
@@ -128,19 +137,16 @@ export default function NotificationBell({ employeeId, color = '#7C1A1A' }: Prop
       {/* Dropdown */}
       {open && (
         <div
-          className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] bg-white rounded-xl shadow-xl border z-50 overflow-hidden"
+          className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] bg-card rounded-xl shadow-xl border border-border-default z-50 overflow-hidden"
           style={{ maxHeight: '70vh' }}
         >
           {/* Header */}
-          <div
-            className="flex items-center justify-between px-4 py-2.5 border-b"
-            style={{ backgroundColor: color }}
-          >
-            <div className="text-white font-semibold text-sm">Notificaciones</div>
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-border-default bg-accent">
+            <div className="text-text-on-accent font-semibold text-sm">Notificaciones</div>
             {unread > 0 && (
               <button
                 onClick={handleMarkAllRead}
-                className="text-[11px] text-white/80 hover:text-white underline"
+                className="text-[11px] text-text-on-accent/80 hover:text-text-on-accent underline"
               >
                 Marcar todas como leídas
               </button>
@@ -150,52 +156,56 @@ export default function NotificationBell({ employeeId, color = '#7C1A1A' }: Prop
           {/* Lista */}
           <div className="overflow-y-auto" style={{ maxHeight: 'calc(70vh - 44px)' }}>
             {loading ? (
-              <div className="p-6 text-center text-sm text-gray-400">Cargando...</div>
+              <div className="p-6 text-center text-sm text-text-secondary">Cargando...</div>
             ) : items.length === 0 ? (
               <div className="p-6 text-center">
-                <div className="text-3xl mb-2">📭</div>
-                <div className="text-sm text-gray-500">Sin notificaciones</div>
+                <div className="flex justify-center mb-2">
+                  <Inbox size={28} className="text-text-secondary" />
+                </div>
+                <div className="text-sm text-text-secondary">Sin notificaciones</div>
               </div>
             ) : (
-              items.map(n => (
-                <button
-                  key={n.id}
-                  onClick={() => handleClickItem(n)}
-                  className={`w-full text-left px-3 py-2.5 border-b last:border-0 hover:bg-gray-50 flex gap-2.5 transition group ${
-                    !n.read ? 'bg-blue-50/50' : ''
-                  }`}
-                >
-                  <div className="text-2xl shrink-0 leading-none">
-                    {ICONS[n.type] || '📢'}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className={`text-sm leading-tight ${!n.read ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>
-                        {n.title}
+              items.map(n => {
+                const ItemIcon = ICONS[n.type] || Megaphone
+                return (
+                  <button
+                    key={n.id}
+                    onClick={() => handleClickItem(n)}
+                    className={`w-full text-left px-3 py-2.5 border-b border-border-default last:border-0 hover:bg-accent-bg flex gap-2.5 transition-base group ${
+                      !n.read ? 'bg-accent-bg/50' : ''
+                    }`}
+                  >
+                    <div className="shrink-0 mt-0.5">
+                      <ItemIcon size={20} className="text-accent" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className={`text-sm leading-tight ${!n.read ? 'font-semibold text-text-primary' : 'text-text-primary'}`}>
+                          {n.title}
+                        </div>
+                        {!n.read && (
+                          <span
+                            className="w-2 h-2 rounded-full shrink-0 mt-1.5 bg-accent"
+                            aria-label="No leída"
+                          />
+                        )}
                       </div>
-                      {!n.read && (
+                      <div className="text-xs text-text-secondary mt-0.5 line-clamp-2">
+                        {n.body}
+                      </div>
+                      <div className="flex items-center justify-between mt-1.5">
+                        <div className="text-[10px] text-text-secondary">{timeAgo(n.createdAt)}</div>
                         <span
-                          className="w-2 h-2 rounded-full shrink-0 mt-1.5"
-                          style={{ backgroundColor: color }}
-                          aria-label="No leída"
-                        />
-                      )}
+                          onClick={e => handleDelete(n.id, e)}
+                          className="text-[10px] text-text-secondary hover:text-danger opacity-0 group-hover:opacity-100 transition-base cursor-pointer"
+                        >
+                          Borrar
+                        </span>
+                      </div>
                     </div>
-                    <div className="text-xs text-gray-600 mt-0.5 line-clamp-2">
-                      {n.body}
-                    </div>
-                    <div className="flex items-center justify-between mt-1.5">
-                      <div className="text-[10px] text-gray-400">{timeAgo(n.createdAt)}</div>
-                      <span
-                        onClick={e => handleDelete(n.id, e)}
-                        className="text-[10px] text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition cursor-pointer"
-                      >
-                        Borrar
-                      </span>
-                    </div>
-                  </div>
-                </button>
-              ))
+                  </button>
+                )
+              })
             )}
           </div>
         </div>

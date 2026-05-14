@@ -3,6 +3,7 @@
 // Solo se muestra si emp.showHoursBalance === true
 
 import { useEffect, useState } from 'react'
+import { Wallet, AlertTriangle, Clock, ChevronDown, ChevronRight } from 'lucide-react'
 import {
   getEmployeeBalanceState,
   getEffectiveCloseDay,
@@ -23,31 +24,31 @@ interface Props {
 }
 
 const RESOLUTION_LABELS: Record<ClosureResolution, string> = {
-  pendiente: '⏳ Pendiente',
-  pagado: '💰 Pagado',
-  compensado: '🌴 Compensado',
-  arrastrado: '↩️ Arrastrado',
-  descartado: '🗑️ Descartado',
+  pendiente: 'Pendiente',
+  pagado: 'Pagado',
+  compensado: 'Compensado',
+  arrastrado: 'Arrastrado',
+  descartado: 'Descartado',
 }
 
 const RESOLUTION_COLORS: Record<ClosureResolution, string> = {
-  pendiente: 'text-amber-700 bg-amber-50',
-  pagado: 'text-emerald-700 bg-emerald-50',
-  compensado: 'text-blue-700 bg-blue-50',
-  arrastrado: 'text-violet-700 bg-violet-50',
-  descartado: 'text-gray-500 bg-gray-100',
+  pendiente: 'text-warning bg-warning-bg',
+  pagado: 'text-success bg-success-bg',
+  compensado: 'text-accent bg-accent-bg',
+  arrastrado: 'text-accent bg-accent-bg',
+  descartado: 'text-text-secondary bg-accent-bg',
 }
 
 const ALERT_LABELS: Record<DayAlertType, string> = {
-  sin_fichaje: '⚠️ Sin fichaje',
-  sin_horario: '🟡 Sin horario',
-  desviacion_grande: '🔴 Desviación',
+  sin_fichaje: 'Sin fichaje',
+  sin_horario: 'Sin horario',
+  desviacion_grande: 'Desviación',
 }
 
 const ALERT_COLORS: Record<DayAlertType, string> = {
-  sin_fichaje: 'bg-amber-50 border-amber-200 text-amber-800',
-  sin_horario: 'bg-yellow-50 border-yellow-300 text-yellow-800',
-  desviacion_grande: 'bg-red-50 border-red-200 text-red-800',
+  sin_fichaje: 'bg-warning-bg border-warning/30 text-warning',
+  sin_horario: 'bg-warning-bg border-warning/30 text-warning',
+  desviacion_grande: 'bg-danger-bg border-danger/30 text-danger',
 }
 
 export default function MiBolsaHoras({ employee, location }: Props) {
@@ -88,8 +89,8 @@ export default function MiBolsaHoras({ employee, location }: Props) {
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg p-4 shadow-sm border">
-        <div className="text-sm text-gray-500 text-center py-2">
+      <div className="bg-card rounded-lg p-4 shadow-sm border">
+        <div className="text-sm text-text-secondary text-center py-2">
           Cargando bolsa de horas...
         </div>
       </div>
@@ -101,38 +102,38 @@ export default function MiBolsaHoras({ employee, location }: Props) {
   const cp = state.currentPeriod
   const positive = cp.delta > 0.01
   const negative = cp.delta < -0.01
-  const periodColor = positive ? 'text-emerald-600' : negative ? 'text-red-600' : 'text-gray-500'
+  const periodColor = positive ? 'text-success' : negative ? 'text-danger' : 'text-text-secondary'
 
   const recentClosures = state.resolvedClosures.slice(0, 6)
   const numAlerts = state.alerts.length
 
   return (
-    <div className="bg-white rounded-lg p-4 shadow-sm border">
-      <h3 className="font-semibold text-base mb-3" style={{ color: '#7C1A1A' }}>
-        💰 Mi bolsa de horas
+    <div className="bg-card rounded-lg p-4 shadow-sm border border-border-default">
+      <h3 className="font-semibold text-base mb-3 text-accent inline-flex items-center gap-1.5">
+        <Wallet size={18} /> Mi bolsa de horas
       </h3>
 
       {/* Periodo en curso */}
-      <div className="bg-[#F5E9D9] rounded-lg p-3 mb-3">
+      <div className="bg-accent-bg rounded-lg p-3 mb-3">
         <div className="flex items-baseline justify-between mb-1">
-          <div className="text-[10px] uppercase font-semibold" style={{ color: '#7C1A1A' }}>
+          <div className="text-[10px] uppercase font-semibold text-accent">
             En curso · {cp.periodLabel}
           </div>
-          <div className="text-[10px] text-gray-600 font-mono">
+          <div className="text-[10px] text-text-secondary font-mono">
             {cp.periodStart.slice(5)} → {cp.periodEnd.slice(5)}
           </div>
         </div>
         <div className={`text-3xl font-bold ${periodColor}`}>
           {positive ? '+' : ''}{cp.delta.toFixed(2)}h
         </div>
-        <div className="text-[11px] text-gray-600 mt-1">
+        <div className="text-[11px] text-text-secondary mt-1">
           Trabajadas {cp.scheduledHours.toFixed(1)}h
           {cp.vacationHours > 0 && ` (incl. vacac. ${cp.vacationHours.toFixed(1)}h)`}
           {' '}− Contratadas {cp.contractedHoursPeriod.toFixed(1)}h
         </div>
         {cp.weeksWithoutSchedule.length > 0 && (
-          <div className="mt-2 text-[10px] text-amber-700">
-            ⚠️ {cp.weeksWithoutSchedule.length} semana(s) pendiente(s) de publicar
+          <div className="mt-2 text-[10px] text-warning inline-flex items-center gap-1">
+            <AlertTriangle size={10} /> {cp.weeksWithoutSchedule.length} semana(s) pendiente(s) de publicar
           </div>
         )}
       </div>
@@ -142,13 +143,15 @@ export default function MiBolsaHoras({ employee, location }: Props) {
         <div className="mb-3">
           <button
             onClick={() => setShowAlerts(s => !s)}
-            className="w-full text-left px-3 py-2 rounded bg-red-50 border border-red-200 text-xs hover:bg-red-100 transition"
+            className="w-full text-left px-3 py-2 rounded bg-danger-bg border border-danger/30 text-xs hover:opacity-90 transition-base"
           >
             <div className="flex items-center justify-between">
-              <span className="font-semibold text-red-800">
-                ⚠️ {numAlerts} día(s) con incidencias
+              <span className="font-semibold text-danger inline-flex items-center gap-1.5">
+                <AlertTriangle size={12} /> {numAlerts} día(s) con incidencias
               </span>
-              <span className="text-red-600">{showAlerts ? '▼' : '▶'}</span>
+              <span className="text-danger">
+                {showAlerts ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              </span>
             </div>
           </button>
           {showAlerts && (
@@ -164,26 +167,26 @@ export default function MiBolsaHoras({ employee, location }: Props) {
       {/* Cierres pendientes */}
       {state.pendingClosures.length > 0 && (
         <div className="mb-3">
-          <div className="text-[10px] uppercase font-semibold text-amber-700 mb-2">
-            ⏳ Pendiente de resolución por el gestor
+          <div className="text-[10px] uppercase font-semibold text-warning mb-2 inline-flex items-center gap-1">
+            <Clock size={11} /> Pendiente de resolución por el gestor
           </div>
           <div className="space-y-2">
             {state.pendingClosures.map(c => {
               const cPositive = c.delta > 0.01
               const cNegative = c.delta < -0.01
               return (
-                <div key={c.id} className="bg-amber-50 border border-amber-200 rounded p-2 text-xs">
+                <div key={c.id} className="bg-warning-bg border border-warning/30 rounded p-2 text-xs">
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="font-semibold">{c.periodLabel}</div>
-                      <div className="text-[10px] text-gray-500 font-mono">
+                      <div className="text-[10px] text-text-secondary font-mono">
                         {c.periodStart} → {c.periodEnd}
                       </div>
                     </div>
                     <div className={`text-base font-bold ${
-                      cPositive ? 'text-emerald-600' :
-                      cNegative ? 'text-red-600' :
-                      'text-gray-500'
+                      cPositive ? 'text-success' :
+                      cNegative ? 'text-danger' :
+                      'text-text-secondary'
                     }`}>
                       {cPositive ? '+' : ''}{c.delta.toFixed(2)}h
                     </div>
@@ -196,7 +199,7 @@ export default function MiBolsaHoras({ employee, location }: Props) {
       )}
 
       {/* Datos del contrato */}
-      <div className="text-[11px] text-gray-500">
+      <div className="text-[11px] text-text-secondary">
         Contrato: {state.contractedHours}h/semana
         {state.initialBalance !== 0 && (
           <span> · Saldo inicial: {state.initialBalance > 0 ? '+' : ''}{state.initialBalance.toFixed(1)}h</span>
@@ -208,9 +211,11 @@ export default function MiBolsaHoras({ employee, location }: Props) {
         <>
           <button
             onClick={() => setShowHistory(s => !s)}
-            className="mt-3 text-xs text-[#7C1A1A] hover:underline"
+            className="mt-3 text-xs text-accent hover:underline inline-flex items-center gap-1"
           >
-            {showHistory ? '▼ Ocultar histórico' : `▶ Ver histórico (${recentClosures.length})`}
+            {showHistory
+              ? <><ChevronDown size={12} /> Ocultar histórico</>
+              : <><ChevronRight size={12} /> Ver histórico ({recentClosures.length})</>}
           </button>
 
           {showHistory && (
@@ -223,7 +228,7 @@ export default function MiBolsaHoras({ employee, location }: Props) {
         </>
       )}
 
-      <div className="mt-3 text-[10px] text-gray-400">
+      <div className="mt-3 text-[10px] text-text-secondary">
         Saldo positivo = la empresa te debe horas. Negativo = tú debes horas.
       </div>
     </div>
@@ -248,19 +253,19 @@ function ClosureCard({ closure }: { closure: MonthlyBalanceClosure }) {
   const positive = closure.delta > 0.01
   const negative = closure.delta < -0.01
   return (
-    <div className="bg-gray-50 rounded p-2 text-xs">
+    <div className="bg-page rounded p-2 text-xs">
       <div className="flex items-start justify-between mb-1">
         <div>
           <div className="font-semibold">{closure.periodLabel}</div>
-          <div className="text-[10px] text-gray-500 font-mono">
+          <div className="text-[10px] text-text-secondary font-mono">
             {closure.periodStart} → {closure.periodEnd}
           </div>
         </div>
         <div className="text-right">
           <div className={`text-sm font-bold ${
-            positive ? 'text-emerald-600' :
-            negative ? 'text-red-600' :
-            'text-gray-500'
+            positive ? 'text-success' :
+            negative ? 'text-danger' :
+            'text-text-secondary'
           }`}>
             {positive ? '+' : ''}{closure.delta.toFixed(2)}h
           </div>
@@ -270,12 +275,12 @@ function ClosureCard({ closure }: { closure: MonthlyBalanceClosure }) {
         </div>
       </div>
       {closure.resolutionAmount !== undefined && (
-        <div className="text-[10px] text-gray-600">
+        <div className="text-[10px] text-text-secondary">
           Resuelto: {closure.resolutionAmount.toFixed(2)}h
         </div>
       )}
       {closure.resolutionNotes && (
-        <div className="text-[10px] text-gray-600 italic mt-1">
+        <div className="text-[10px] text-text-secondary italic mt-1">
           {closure.resolutionNotes}
         </div>
       )}

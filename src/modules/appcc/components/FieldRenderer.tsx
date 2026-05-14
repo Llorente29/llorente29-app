@@ -5,12 +5,11 @@
 // Es agnóstico al guardado: emite onChange(value) y el padre decide qué hacer
 // (auto-guardar en Supabase, mantener en estado local, etc.).
 
+import { Check, X, AlertTriangle, Camera, Edit3 } from 'lucide-react'
 import type {
   AppccTemplateItem,
   AppccTemplateItemOption,
 } from '@/modules/appcc/types'
-
-const GRANATE = '#7C1A1A'
 
 export interface FieldValue {
   numeric_value?: number | null
@@ -54,19 +53,18 @@ export default function FieldRenderer({
                   ? `${item.numeric_min} – ${item.numeric_max}`
                   : ''
               }
-              className="w-36 px-4 py-3 border rounded-lg text-base focus:outline-none focus:ring-2 disabled:bg-gray-50 min-h-[48px]"
-              style={{
-                borderColor: warning ? '#dc2626' : '#d1d5db',
-              }}
+              className={`w-36 px-4 py-3 border rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-accent disabled:bg-page min-h-touch-base bg-card text-text-primary ${
+                warning ? 'border-danger' : 'border-border-default'
+              }`}
             />
             {item.numeric_unit && (
-              <span className="text-base text-gray-500">{item.numeric_unit}</span>
+              <span className="text-base text-text-secondary">{item.numeric_unit}</span>
             )}
           </div>
           {warning && (
-            <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-red-50 border border-red-200">
-              <span className="text-lg">⚠️</span>
-              <span className="text-sm sm:text-base text-red-700 font-medium">{warning}</span>
+            <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-danger-bg border border-danger/30">
+              <AlertTriangle size={18} className="text-danger shrink-0" />
+              <span className="text-sm sm:text-base text-danger font-medium">{warning}</span>
             </div>
           )}
         </div>
@@ -80,35 +78,31 @@ export default function FieldRenderer({
               type="button"
               disabled={disabled}
               onClick={() => onChange({ boolean_value: true })}
-              className="px-5 py-3 rounded-lg text-base font-medium transition-all disabled:opacity-50 min-h-[48px] min-w-[80px]"
-              style={{
-                backgroundColor: value?.boolean_value === true ? '#16a34a' : '#f3f4f6',
-                color: value?.boolean_value === true ? 'white' : '#374151',
-                border: '1px solid',
-                borderColor: value?.boolean_value === true ? '#16a34a' : '#d1d5db',
-              }}
+              className={`inline-flex items-center justify-center gap-1.5 px-5 py-3 rounded-lg text-base font-medium transition-base disabled:opacity-50 min-h-touch-base min-w-[80px] border ${
+                value?.boolean_value === true
+                  ? 'bg-success text-text-on-accent border-success'
+                  : 'bg-page text-text-primary border-border-default hover:border-success'
+              }`}
             >
-              ✓ Sí
+              <Check size={16} /> Sí
             </button>
             <button
               type="button"
               disabled={disabled}
               onClick={() => onChange({ boolean_value: false })}
-              className="px-5 py-3 rounded-lg text-base font-medium transition-all disabled:opacity-50 min-h-[48px] min-w-[80px]"
-              style={{
-                backgroundColor: value?.boolean_value === false ? '#dc2626' : '#f3f4f6',
-                color: value?.boolean_value === false ? 'white' : '#374151',
-                border: '1px solid',
-                borderColor: value?.boolean_value === false ? '#dc2626' : '#d1d5db',
-              }}
+              className={`inline-flex items-center justify-center gap-1.5 px-5 py-3 rounded-lg text-base font-medium transition-base disabled:opacity-50 min-h-touch-base min-w-[80px] border ${
+                value?.boolean_value === false
+                  ? 'bg-danger text-text-on-accent border-danger'
+                  : 'bg-page text-text-primary border-border-default hover:border-danger'
+              }`}
             >
-              ✗ No
+              <X size={16} /> No
             </button>
           </div>
           {warning && (
-            <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-red-50 border border-red-200">
-              <span className="text-lg">⚠️</span>
-              <span className="text-sm sm:text-base text-red-700 font-medium">{warning}</span>
+            <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-danger-bg border border-danger/30">
+              <AlertTriangle size={18} className="text-danger shrink-0" />
+              <span className="text-sm sm:text-base text-danger font-medium">{warning}</span>
             </div>
           )}
         </div>
@@ -125,13 +119,11 @@ export default function FieldRenderer({
                 type="button"
                 disabled={disabled}
                 onClick={() => onChange({ selected_option_id: opt.id })}
-                className="w-full text-left px-4 py-3 rounded-lg text-base font-medium transition-all disabled:opacity-50 min-h-[48px]"
-                style={{
-                  backgroundColor: selected ? GRANATE : '#fff',
-                  color: selected ? '#fff' : '#374151',
-                  border: '1px solid',
-                  borderColor: selected ? GRANATE : '#d1d5db',
-                }}
+                className={`w-full text-left px-4 py-3 rounded-lg text-base font-medium transition-base disabled:opacity-50 min-h-touch-base border ${
+                  selected
+                    ? 'bg-accent text-text-on-accent border-accent hover:bg-accent-hover'
+                    : 'bg-card text-text-primary border-border-default hover:border-accent'
+                }`}
               >
                 {opt.label}
               </button>
@@ -148,7 +140,7 @@ export default function FieldRenderer({
           onChange={e => onChange({ text_value: e.target.value })}
           placeholder="Escribe tu respuesta..."
           rows={3}
-          className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base resize-y focus:outline-none focus:ring-2 disabled:bg-gray-50"
+          className="w-full px-4 py-3 border border-border-default rounded-lg text-base resize-y focus:outline-none focus:ring-2 focus:ring-accent disabled:bg-page bg-card text-text-primary"
         />
       )
 
@@ -159,27 +151,27 @@ export default function FieldRenderer({
           disabled={disabled}
           value={value?.date_value ?? ''}
           onChange={e => onChange({ date_value: e.target.value || null })}
-          className="px-4 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 disabled:bg-gray-50 min-h-[48px]"
+          className="px-4 py-3 border border-border-default rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-accent disabled:bg-page min-h-touch-base bg-card text-text-primary"
         />
       )
 
     case 'photo':
       return (
-        <div className="text-sm text-gray-400 italic px-4 py-3 bg-gray-50 rounded-lg border border-dashed border-gray-300">
-          📷 Adjuntar foto — pendiente de implementar (Supabase Storage)
+        <div className="inline-flex items-center gap-2 text-sm text-text-secondary italic px-4 py-3 bg-page rounded-lg border border-dashed border-border-default">
+          <Camera size={16} /> Adjuntar foto — pendiente de implementar (Supabase Storage)
         </div>
       )
 
     case 'signature':
       return (
-        <div className="text-sm text-gray-400 italic px-4 py-3 bg-gray-50 rounded-lg border border-dashed border-gray-300">
-          ✍️ Firma manuscrita — disponible en plan Pro
+        <div className="inline-flex items-center gap-2 text-sm text-text-secondary italic px-4 py-3 bg-page rounded-lg border border-dashed border-border-default">
+          <Edit3 size={16} /> Firma manuscrita — disponible en plan Pro
         </div>
       )
 
     default:
       return (
-        <div className="text-sm text-red-500">
+        <div className="text-sm text-danger">
           Tipo de campo no reconocido: {item.field_type}
         </div>
       )

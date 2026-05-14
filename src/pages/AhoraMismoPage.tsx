@@ -2,6 +2,7 @@
 // Panel del gestor: estado en tiempo real de quién está trabajando AHORA en cada local.
 // MODELO A: usa el calendario PUBLICADO como única fuente de horario teórico.
 import { useState, useEffect, useMemo } from 'react'
+import { Check, AlertCircle, AlertTriangle, Clock, Users, MapPin } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { Card } from '../components/ui'
 import type { Employee, Location } from '../types'
@@ -135,48 +136,48 @@ export default function AhoraMismoPage() {
   return (
     <div className="space-y-4">
       {/* Header con reloj */}
-      <Card className="p-4 bg-[#F5E9D9] border-[#E5D4B7]">
+      <Card className="p-4 bg-accent-bg border-accent/30">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Ahora mismo</p>
-            <p className="text-3xl font-bold text-[#7C1A1A] tabular-nums">
+            <p className="text-xs text-text-secondary uppercase tracking-wide">Ahora mismo</p>
+            <p className="text-3xl font-bold text-accent tabular-nums">
               {now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
             </p>
-            <p className="text-xs text-gray-500 mt-1 capitalize">
+            <p className="text-xs text-text-secondary mt-1 capitalize">
               {now.toLocaleDateString('es-ES', { weekday: 'long', day: '2-digit', month: 'long' })}
             </p>
           </div>
           <div className="text-right">
-            <p className="text-3xl font-bold text-emerald-600">{groups.inside.length}</p>
-            <p className="text-xs text-gray-500">trabajando</p>
+            <p className="text-3xl font-bold text-success">{groups.inside.length}</p>
+            <p className="text-xs text-text-secondary">trabajando</p>
           </div>
         </div>
       </Card>
 
       {/* KPIs rápidos */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <KpiCard color="emerald" label="Trabajando" value={groups.inside.length} icon="✓" />
-        <KpiCard color="red" label="No fichó" value={groups.lateArrivals.length} icon="!" />
-        <KpiCard color="amber" label="Olvidó salir" value={groups.forgotClockout.length} icon="?" />
-        <KpiCard color="gray" label="Esperados" value={groups.pendingArrival.length} icon="○" />
+        <KpiCard color="emerald" label="Trabajando" value={groups.inside.length} Icon={Check} />
+        <KpiCard color="red" label="No fichó" value={groups.lateArrivals.length} Icon={AlertCircle} />
+        <KpiCard color="amber" label="Olvidó salir" value={groups.forgotClockout.length} Icon={Clock} />
+        <KpiCard color="gray" label="Esperados" value={groups.pendingArrival.length} Icon={Users} />
       </div>
 
       {/* Filtro por local */}
       <div className="flex flex-wrap items-center gap-2">
         <button onClick={() => setFilterLoc('all')}
-          className={`px-3 py-1.5 rounded-full text-xs font-medium ${
+          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-base ${
             filterLoc === 'all'
-              ? 'bg-[#7C1A1A] text-white'
-              : 'bg-white border border-gray-200 text-gray-600 hover:border-gray-300'
+              ? 'bg-accent text-text-on-accent'
+              : 'bg-card border border-border-default text-text-secondary hover:border-accent'
           }`}>
           Todos los locales
         </button>
         {locations.filter(l => l.active).map(l => (
           <button key={l.id} onClick={() => setFilterLoc(l.id)}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium ${
+            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-base ${
               filterLoc === l.id
-                ? 'bg-[#7C1A1A] text-white'
-                : 'bg-white border border-gray-200 text-gray-600 hover:border-gray-300'
+                ? 'bg-accent text-text-on-accent'
+                : 'bg-card border border-border-default text-text-secondary hover:border-accent'
             }`}>
             {l.name}
           </button>
@@ -185,19 +186,19 @@ export default function AhoraMismoPage() {
 
       {/* Grupos */}
       {groups.lateArrivals.length > 0 && (
-        <Section title="🚨 No han fichado y deberían estar trabajando" colorClass="border-red-200 bg-red-50/50">
+        <Section TitleIcon={AlertCircle} title="No han fichado y deberían estar trabajando" colorClass="border-danger/30 bg-danger-bg/50">
           {groups.lateArrivals.map(s => <EmpCard key={s.employee.id} status={s} />)}
         </Section>
       )}
 
       {groups.forgotClockout.length > 0 && (
-        <Section title="⚠️ Posible olvido de salida" colorClass="border-amber-200 bg-amber-50/50">
+        <Section TitleIcon={AlertTriangle} title="Posible olvido de salida" colorClass="border-warning/30 bg-warning-bg/50">
           {groups.forgotClockout.map(s => <EmpCard key={s.employee.id} status={s} />)}
         </Section>
       )}
 
       {groups.inside.length > 0 && (
-        <Section title="✓ Trabajando ahora">
+        <Section TitleIcon={Check} title="Trabajando ahora">
           {groups.inside.map(s => <EmpCard key={s.employee.id} status={s} />)}
         </Section>
       )}
@@ -222,9 +223,11 @@ export default function AhoraMismoPage() {
 
       {filtered.length === 0 && (
         <Card className="p-12 text-center">
-          <p className="text-5xl mb-3">👥</p>
-          <p className="font-semibold text-gray-700">Sin empleados</p>
-          <p className="text-xs text-gray-500 mt-1">No hay empleados activos en este local</p>
+          <div className="flex justify-center mb-3">
+            <Users size={48} className="text-accent" />
+          </div>
+          <p className="font-semibold text-text-primary">Sin empleados</p>
+          <p className="text-xs text-text-secondary mt-1">No hay empleados activos en este local</p>
         </Card>
       )}
     </div>
@@ -233,12 +236,12 @@ export default function AhoraMismoPage() {
 
 // ─── Sub-componentes ───────────────────────────────────────────────────────
 
-function KpiCard({ color, label, value, icon }: { color: string; label: string; value: number; icon: string }) {
+function KpiCard({ color, label, value, Icon }: { color: string; label: string; value: number; Icon: typeof Check }) {
   const colors: Record<string, string> = {
-    emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    red: 'bg-red-50 text-red-700 border-red-200',
-    amber: 'bg-amber-50 text-amber-700 border-amber-200',
-    gray: 'bg-gray-50 text-gray-600 border-gray-200',
+    emerald: 'bg-success-bg text-success border-success/30',
+    red: 'bg-danger-bg text-danger border-danger/30',
+    amber: 'bg-warning-bg text-warning border-warning/30',
+    gray: 'bg-page text-text-secondary border-border-default',
   }
   return (
     <Card className={`p-3 border ${colors[color] || colors.gray}`}>
@@ -247,16 +250,18 @@ function KpiCard({ color, label, value, icon }: { color: string; label: string; 
           <p className="text-xs uppercase tracking-wide opacity-80">{label}</p>
           <p className="text-2xl font-bold mt-1 tabular-nums">{value}</p>
         </div>
-        <span className="text-2xl opacity-50">{icon}</span>
+        <Icon size={28} className="opacity-50" />
       </div>
     </Card>
   )
 }
 
-function Section({ title, children, colorClass }: { title: string; children: React.ReactNode; colorClass?: string }) {
+function Section({ title, TitleIcon, children, colorClass }: { title: string; TitleIcon?: typeof Check; children: React.ReactNode; colorClass?: string }) {
   return (
     <div>
-      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide px-1 mb-2">{title}</p>
+      <p className="text-xs font-semibold text-text-secondary uppercase tracking-wide px-1 mb-2 inline-flex items-center gap-1.5">
+        {TitleIcon && <TitleIcon size={12} />} {title}
+      </p>
       <div className={`space-y-2 ${colorClass ? `p-2 rounded-xl border ${colorClass}` : ''}`}>
         {children}
       </div>
@@ -276,51 +281,55 @@ function EmpCard({ status }: { status: { employee: Employee; status: CurrentStat
     case 'inside':
       mainText = `Entró a las ${s.entryAt.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`
       subText = `Lleva ${formatMinutes(s.minutesWorked)}${s.theoretical ? ` · Sale a las ${s.theoretical.end}` : ''}`
-      badge = { label: '✓ Dentro', cls: 'bg-emerald-100 text-emerald-700' }
+      badge = { label: 'Dentro', cls: 'bg-success-bg text-success' }
       break
     case 'late_arrival':
       mainText = `Debía empezar a las ${s.theoretical.start}`
       subText = `${formatMinutes(s.minutesLate)} de retraso`
-      badge = { label: '🚨 No fichó', cls: 'bg-red-100 text-red-700' }
+      badge = { label: 'No fichó', cls: 'bg-danger-bg text-danger' }
       break
     case 'forgot_clockout':
       mainText = `Entró a las ${s.entryAt.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`
       subText = `Debía salir a las ${s.theoretical.end} · ${formatMinutes(s.minutesOver)} de exceso`
-      badge = { label: '⚠️ Olvidó salir', cls: 'bg-amber-100 text-amber-700' }
+      badge = { label: 'Olvidó salir', cls: 'bg-warning-bg text-warning' }
       break
     case 'pending_arrival':
       mainText = `Empieza a las ${s.theoretical.start}`
       subText = s.minutesEarly > 0
         ? `Quedan ${formatMinutes(s.minutesEarly)}`
         : `Hace ${formatMinutes(-s.minutesEarly)} (todavía dentro de margen)`
-      badge = { label: '○ Pendiente', cls: 'bg-gray-100 text-gray-600' }
+      badge = { label: 'Pendiente', cls: 'bg-page text-text-secondary' }
       break
     case 'finished':
       mainText = `Terminó a las ${s.lastExitAt.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`
       subText = 'Jornada completada'
-      badge = { label: '✓ Hecho', cls: 'bg-blue-100 text-blue-700' }
+      badge = { label: 'Hecho', cls: 'bg-accent-bg text-accent' }
       break
     case 'no_scheduled':
       mainText = 'Sin horario asignado hoy'
       subText = ''
-      badge = { label: '— Libre', cls: 'bg-gray-100 text-gray-500' }
+      badge = { label: 'Libre', cls: 'bg-page text-text-secondary' }
       break
   }
 
   return (
     <Card className="p-3">
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 shrink-0 rounded-full bg-[#F5E9D9] flex items-center justify-center">
-          <span className="text-sm font-bold text-[#7C1A1A]">{initials || '?'}</span>
+        <div className="w-10 h-10 shrink-0 rounded-full bg-accent-bg flex items-center justify-center">
+          <span className="text-sm font-bold text-accent">{initials || '?'}</span>
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <p className="font-semibold text-gray-900 text-sm">{employee.name || 'Sin nombre'}</p>
-            <span className="text-xs text-gray-400">{employee.position || '—'}</span>
-            {primaryLoc && <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">{primaryLoc.name}</span>}
+            <p className="font-semibold text-text-primary text-sm">{employee.name || 'Sin nombre'}</p>
+            <span className="text-xs text-text-secondary">{employee.position || '—'}</span>
+            {primaryLoc && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent-bg text-text-secondary inline-flex items-center gap-1">
+                <MapPin size={10} /> {primaryLoc.name}
+              </span>
+            )}
           </div>
-          <p className="text-sm text-gray-700 mt-0.5">{mainText}</p>
-          {subText && <p className="text-xs text-gray-500">{subText}</p>}
+          <p className="text-sm text-text-primary mt-0.5">{mainText}</p>
+          {subText && <p className="text-xs text-text-secondary">{subText}</p>}
         </div>
         {badge && (
           <span className={`text-[10px] font-medium px-2 py-1 rounded-full shrink-0 ${badge.cls}`}>
