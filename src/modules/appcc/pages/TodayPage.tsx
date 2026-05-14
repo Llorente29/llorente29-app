@@ -20,10 +20,8 @@ import type {
   AppccTemplate,
   AppccPlan,
 } from '@/modules/appcc/types'
+import { Plus, X, ClipboardList, ArrowRight, AlertCircle } from 'lucide-react'
 
-// Colores del branding Foodint
-const GRANATE = '#7C1A1A'
-const BEIGE = '#F5E9D9'
 const ACCOUNT_ID_FOODINT = '00000000-0000-0000-0000-000000000001'
 
 const STATUS_LABELS: Record<AppccExecutionStatus, string> = {
@@ -34,12 +32,13 @@ const STATUS_LABELS: Record<AppccExecutionStatus, string> = {
   skipped: 'Saltado',
 }
 
-const STATUS_COLORS: Record<AppccExecutionStatus, string> = {
-  pending: '#6b7280',
-  in_progress: '#2563eb',
-  completed: '#16a34a',
-  overdue: '#dc2626',
-  skipped: '#9ca3af',
+// Clases tailwind por status (usan tokens del sistema)
+const STATUS_BADGE: Record<AppccExecutionStatus, string> = {
+  pending: 'bg-accent-bg text-text-secondary',
+  in_progress: 'bg-accent-bg text-accent',
+  completed: 'bg-success-bg text-success',
+  overdue: 'bg-danger-bg text-danger',
+  skipped: 'bg-page text-text-secondary',
 }
 
 interface TodayPageProps {
@@ -69,7 +68,6 @@ export default function TodayPage({ onOpenExecution }: TodayPageProps) {
     }
   }, [activeLocations, selectedLocationId])
 
-  // Cargar catálogo (plans + templates) — independiente del local
   useEffect(() => {
     Promise.all([
       templatesService.listPlans(),
@@ -84,14 +82,6 @@ export default function TodayPage({ onOpenExecution }: TodayPageProps) {
 
   /**
    * Lazy generation + listado de executions del día.
-   *
-   * Flujo:
-   *   1. Lee los schedules activos que aplican hoy en este local.
-   *   2. Lee las executions ya existentes de hoy (en cualquier estado).
-   *   3. Para cada schedule sin execution todavía, crea una pending.
-   *   4. Lista las executions pending/in_progress/overdue del día para pintar.
-   *
-   * Se ejecuta cada vez que cambia el local seleccionado.
    */
   useEffect(() => {
     if (!selectedLocationId) return
@@ -102,24 +92,19 @@ export default function TodayPage({ onOpenExecution }: TodayPageProps) {
       setError(null)
 
       try {
-        const locationId = selectedLocationId!  // garantizado por el if anterior
-        const today = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
+        const locationId = selectedLocationId!
+        const today = new Date().toISOString().slice(0, 10)
 
-        // 1. Schedules del día
         const schedulesToday = await schedulesService.getSchedulesForDate(locationId, today)
 
         if (schedulesToday.length > 0) {
-          // 2. Executions ya existentes hoy en este local (cualquier estado)
           const existingExecs = await executionsService.listExecutionsForDate(locationId, today)
 
-          // Para evitar duplicados, miramos qué schedule_ids ya tienen execution.
-          // Las executions manuales (sin schedule_id) no cuentan aquí.
           const existingScheduleIds = new Set<string>()
           for (const e of existingExecs) {
             if (e.schedule_id) existingScheduleIds.add(e.schedule_id)
           }
 
-          // 3. Schedules sin execution todavía → crear pending
           const toCreate = schedulesToday.filter(s => !existingScheduleIds.has(s.id))
 
           if (toCreate.length > 0) {
@@ -142,7 +127,6 @@ export default function TodayPage({ onOpenExecution }: TodayPageProps) {
           }
         }
 
-        // 4. Listar para pintar
         if (cancelled) return
         const data = await executionsService.listTodayExecutions(locationId)
         if (!cancelled) setExecutions(data)
@@ -208,23 +192,22 @@ export default function TodayPage({ onOpenExecution }: TodayPageProps) {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-3 mb-6">
         <div>
-          <h1
-            className="text-4xl mb-1"
-            style={{ fontFamily: '"Instrument Serif", serif', color: GRANATE }}
-          >
+          <h1 className="text-4xl font-display text-text-primary mb-1">
             Checklists APPCC de hoy
           </h1>
-          <p className="text-base text-gray-600">
+          <p className="text-base text-text-secondary">
             {new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </p>
         </div>
         <button
           type="button"
           onClick={() => setShowCatalog(v => !v)}
-          className="px-5 py-3 rounded-lg text-base font-medium transition-opacity hover:opacity-90 min-h-[44px] shrink-0"
-          style={{ backgroundColor: GRANATE, color: BEIGE }}
+          className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-md text-base font-medium bg-accent text-text-on-accent hover:bg-accent-hover transition-base min-h-touch shrink-0"
         >
-          {showCatalog ? '× Cerrar catálogo' : '+ Arrancar checklist'}
+          {showCatalog
+            ? <><X size={18} /> Cerrar catálogo</>
+            : <><Plus size={18} /> Arrancar checklist</>
+          }
         </button>
       </div>
 
@@ -238,12 +221,11 @@ export default function TodayPage({ onOpenExecution }: TodayPageProps) {
                 key={loc.id}
                 type="button"
                 onClick={() => setSelectedLocationId(loc.id)}
-                className="px-4 py-2.5 rounded-lg text-base font-medium transition min-h-[44px]"
-                style={{
-                  backgroundColor: active ? GRANATE : '#fff',
-                  color: active ? BEIGE : GRANATE,
-                  border: `1px solid ${GRANATE}`,
-                }}
+                className={`px-4 py-2.5 rounded-md text-base font-medium transition-base min-h-touch border ${
+                  active
+                    ? 'bg-accent text-text-on-accent border-accent'
+                    : 'bg-card text-text-primary border-border-default hover:border-accent'
+                }`}
               >
                 {loc.name}
               </button>
@@ -254,14 +236,11 @@ export default function TodayPage({ onOpenExecution }: TodayPageProps) {
 
       {/* Catálogo desplegable */}
       {showCatalog && (
-        <div
-          className="mb-6 rounded-xl p-5 border"
-          style={{ backgroundColor: BEIGE, borderColor: GRANATE }}
-        >
-          <h2 className="text-xl font-semibold mb-2" style={{ color: GRANATE }}>
+        <div className="mb-6 rounded-lg p-5 border border-border-default bg-accent-bg">
+          <h2 className="text-xl font-display text-text-primary mb-2">
             Arrancar un checklist
           </h2>
-          <p className="text-base text-gray-700 mb-4">
+          <p className="text-base text-text-secondary mb-4">
             Elige una plantilla para iniciar ahora una ejecución en este local.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -270,10 +249,10 @@ export default function TodayPage({ onOpenExecution }: TodayPageProps) {
                 key={t.id}
                 type="button"
                 onClick={() => handleStartChecklist(t.id)}
-                className="text-left px-4 py-3 rounded-lg bg-white hover:bg-gray-50 border border-gray-200 transition min-h-[60px]"
+                className="text-left px-4 py-3 rounded-md bg-card hover:bg-page border border-border-default transition-base min-h-[60px]"
               >
-                <div className="font-medium text-base">{t.name}</div>
-                <div className="text-sm text-gray-500 mt-0.5">
+                <div className="font-medium text-base text-text-primary">{t.name}</div>
+                <div className="text-sm text-text-secondary mt-0.5">
                   {planById.get(t.plan_id)?.name ?? 'Plan APPCC'}
                   {t.estimated_minutes ? ` · ~${t.estimated_minutes} min` : ''}
                 </div>
@@ -285,26 +264,24 @@ export default function TodayPage({ onOpenExecution }: TodayPageProps) {
 
       {/* Estado: cargando, error, o lista */}
       {loading && (
-        <div className="py-12 text-center text-base text-gray-500">Cargando checklists...</div>
+        <div className="py-12 text-center text-base text-text-secondary">Cargando checklists...</div>
       )}
 
       {error && (
-        <div className="py-4 px-4 mb-4 rounded-lg border border-red-200 bg-red-50 text-red-700 text-base">
-          {error}
+        <div className="py-4 px-4 mb-4 rounded-md border border-danger/30 bg-danger-bg text-danger text-base inline-flex items-start gap-2 w-full">
+          <AlertCircle size={18} className="shrink-0 mt-0.5" />
+          <span>{error}</span>
         </div>
       )}
 
       {!loading && !error && executions.length === 0 && (
-        <div
-          className="py-12 px-4 text-center rounded-xl border-2 border-dashed"
-          style={{ borderColor: GRANATE, backgroundColor: BEIGE }}
-        >
-          <div className="text-5xl mb-3">📋</div>
-          <h3 className="text-xl font-semibold mb-1" style={{ color: GRANATE }}>
+        <div className="py-12 px-4 text-center rounded-lg border-2 border-dashed border-border-default bg-accent-bg">
+          <ClipboardList size={48} className="text-accent mx-auto mb-3" />
+          <h3 className="text-xl font-display text-text-primary mb-1">
             No hay checklists pendientes
           </h3>
-          <p className="text-base text-gray-700">
-            Pulsa "+ Arrancar checklist" para iniciar uno ahora.
+          <p className="text-base text-text-secondary">
+            Pulsa "Arrancar checklist" para iniciar uno ahora.
           </p>
         </div>
       )}
@@ -317,34 +294,27 @@ export default function TodayPage({ onOpenExecution }: TodayPageProps) {
             return (
               <div
                 key={exec.id}
-                className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 sm:p-5 bg-white rounded-lg border border-gray-200 hover:shadow-sm transition"
+                className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 sm:p-5 bg-card rounded-lg border border-border-default hover:shadow-sm transition-base"
               >
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-base">
+                  <div className="font-medium text-base text-text-primary">
                     {tpl?.name ?? 'Checklist sin nombre'}
                   </div>
-                  <div className="text-sm text-gray-500 mt-0.5">
+                  <div className="text-sm text-text-secondary mt-0.5">
                     {plan?.name ?? 'Plan APPCC'}
                     {exec.scheduled_time ? ` · ${exec.scheduled_time.slice(0, 5)}` : ''}
                   </div>
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
-                  <span
-                    className="text-xs px-2.5 py-1 rounded-full font-medium"
-                    style={{
-                      backgroundColor: STATUS_COLORS[exec.status] + '20',
-                      color: STATUS_COLORS[exec.status],
-                    }}
-                  >
+                  <span className={`text-xs px-2.5 py-1 rounded-sm font-medium ${STATUS_BADGE[exec.status]}`}>
                     {STATUS_LABELS[exec.status]}
                   </span>
                   <button
                     type="button"
-                    className="text-base px-4 py-2.5 rounded-lg font-medium transition-opacity hover:opacity-90 min-h-[44px]"
-                    style={{ backgroundColor: GRANATE, color: BEIGE }}
+                    className="inline-flex items-center gap-1.5 text-base px-4 py-2.5 rounded-md bg-accent text-text-on-accent font-medium hover:bg-accent-hover transition-base min-h-touch"
                     onClick={() => handleOpen(exec.id)}
                   >
-                    Abrir →
+                    Abrir <ArrowRight size={16} />
                   </button>
                 </div>
               </div>
