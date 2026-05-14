@@ -27,10 +27,6 @@ export default {
           DEFAULT: '#BA7517',
           bg: '#FAEEDA',
         },
-        'legacy': {
-          granate: '#7C1A1A',
-          beige: '#F5E9D9',
-        },
       },
       fontFamily: {
         display: ['Fraunces', '"Iowan Old Style"', 'Charter', 'Georgia', 'serif'],
