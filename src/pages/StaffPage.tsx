@@ -16,7 +16,7 @@ import { getCurrentProfile } from '../services/authService'
 import {
   BarChart3, Users, AlertTriangle, Search, LogOut, Trash2, RefreshCw,
   Camera, LogIn, Square, Mail, X, ShieldCheck, Calendar, Sun, Moon, Ban,
-  User, UserMinus, UserX, Briefcase, FileText, BookOpen, Clock,
+  User, UserMinus, UserX, FileText,
   type LucideIcon,
 } from 'lucide-react'
 
