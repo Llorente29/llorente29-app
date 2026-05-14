@@ -3,6 +3,24 @@
 // distribuciones por local/contrato/puesto, KPIs operativos.
 
 import { useEffect, useMemo, useState } from 'react'
+import {
+  Activity,
+  HeartPulse,
+  Sun,
+  GraduationCap,
+  TrendingDown,
+  Cake,
+  Trophy,
+  Calendar,
+  ShieldCheck,
+  Ban,
+  AlertTriangle,
+  BookOpen,
+  BarChart3,
+  FileText,
+  Briefcase,
+  type LucideIcon,
+} from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { Card } from '../components/ui'
 import type { Employee } from '../types'
@@ -259,7 +277,7 @@ export default function InsightsPage() {
   if (loading) {
     return (
       <div className="space-y-4">
-        <Card className="p-8 text-center text-gray-400">Cargando insights...</Card>
+        <Card className="p-8 text-center text-text-secondary">Cargando insights...</Card>
       </div>
     )
   }
@@ -268,22 +286,24 @@ export default function InsightsPage() {
     <div className="space-y-4">
       {/* ─── KPIs OPERATIVOS (arriba, lo más relevante hoy) ─── */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <KpiCard icon="🟢" label="Trabajando ahora" value={workingNow.length} accent="emerald" />
-        <KpiCard icon="🤒" label="Bajas activas" value={sickToday.length} accent="red" />
-        <KpiCard icon="🏖️" label="Vacaciones este mes" value={vacationsThisMonth.length} accent="blue" />
-        <KpiCard icon="🎓" label="Formaciones por renovar" value={expiringFormations.length} accent="amber" />
-        <KpiCard icon="📉" label="Bajas últ. 12 meses" value={turnoverLast12Months.length} accent="amber" />
+        <KpiCard Icon={Activity} label="Trabajando ahora" value={workingNow.length} accent="success" />
+        <KpiCard Icon={HeartPulse} label="Bajas activas" value={sickToday.length} accent="danger" />
+        <KpiCard Icon={Sun} label="Vacaciones este mes" value={vacationsThisMonth.length} accent="accent" />
+        <KpiCard Icon={GraduationCap} label="Formaciones por renovar" value={expiringFormations.length} accent="warning" />
+        <KpiCard Icon={TrendingDown} label="Bajas últ. 12 meses" value={turnoverLast12Months.length} accent="warning" />
       </div>
 
       {/* ─── TRABAJANDO AHORA: avatares ───────────── */}
       {workingNow.length > 0 && (
         <Card className="p-4">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">🟢 Trabajando ahora ({workingNow.length})</h3>
+          <h3 className="text-sm font-semibold text-text-primary mb-3 inline-flex items-center gap-1.5">
+            <Activity size={14} className="text-success" /> Trabajando ahora ({workingNow.length})
+          </h3>
           <div className="flex flex-wrap gap-2">
             {workingNow.map(e => (
-              <div key={e.id} className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-full pl-1 pr-3 py-1">
+              <div key={e.id} className="flex items-center gap-2 bg-success-bg border border-success/30 rounded-full pl-1 pr-3 py-1">
                 <MiniAvatar employee={e} />
-                <span className="text-xs text-emerald-800 font-medium">{e.name?.split(' ')[0] || '?'}</span>
+                <span className="text-xs text-success font-medium">{e.name?.split(' ')[0] || '?'}</span>
               </div>
             ))}
           </div>
@@ -294,19 +314,21 @@ export default function InsightsPage() {
       <div className="grid md:grid-cols-2 gap-3">
         {/* Cumpleaños */}
         <Card className="p-4">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">🎂 Cumpleaños · {MONTHS[currentMonth]}</h3>
+          <h3 className="text-sm font-semibold text-text-primary mb-3 inline-flex items-center gap-1.5">
+            <Cake size={14} className="text-accent" /> Cumpleaños · {MONTHS[currentMonth]}
+          </h3>
           {birthdays.length === 0 ? (
-            <p className="text-xs text-gray-400 italic">Sin cumpleaños este mes.</p>
+            <p className="text-xs text-text-secondary italic">Sin cumpleaños este mes.</p>
           ) : (
             <div className="space-y-2">
               {birthdays.map((b, i) => (
-                <div key={i} className={`flex items-center gap-2 p-2 rounded ${b.isToday ? 'bg-amber-50 border border-amber-200' : ''}`}>
+                <div key={i} className={`flex items-center gap-2 p-2 rounded ${b.isToday ? 'bg-warning-bg border border-warning/30' : ''}`}>
                   <MiniAvatar employee={b.employee} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm truncate">{b.employee.name}</p>
-                    {b.isToday && <p className="text-[11px] text-amber-700 font-bold">¡HOY!</p>}
+                    <p className="text-sm truncate text-text-primary">{b.employee.name}</p>
+                    {b.isToday && <p className="text-[11px] text-warning font-bold">¡HOY!</p>}
                   </div>
-                  <span className="text-xs text-gray-500 font-mono">día {b.day}</span>
+                  <span className="text-xs text-text-secondary font-mono">día {b.day}</span>
                 </div>
               ))}
             </div>
@@ -315,19 +337,21 @@ export default function InsightsPage() {
 
         {/* Aniversarios laborales */}
         <Card className="p-4">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">🏆 Aniversarios laborales · {MONTHS[currentMonth]}</h3>
+          <h3 className="text-sm font-semibold text-text-primary mb-3 inline-flex items-center gap-1.5">
+            <Trophy size={14} className="text-accent" /> Aniversarios laborales · {MONTHS[currentMonth]}
+          </h3>
           {anniversaries.length === 0 ? (
-            <p className="text-xs text-gray-400 italic">Sin aniversarios este mes.</p>
+            <p className="text-xs text-text-secondary italic">Sin aniversarios este mes.</p>
           ) : (
             <div className="space-y-2">
               {anniversaries.map((a, i) => (
-                <div key={i} className={`flex items-center gap-2 p-2 rounded ${a.isToday ? 'bg-amber-50 border border-amber-200' : ''}`}>
+                <div key={i} className={`flex items-center gap-2 p-2 rounded ${a.isToday ? 'bg-warning-bg border border-warning/30' : ''}`}>
                   <MiniAvatar employee={a.employee} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm truncate">{a.employee.name}</p>
-                    <p className="text-[11px] text-gray-500">{a.years} {a.years === 1 ? 'año' : 'años'} en la empresa</p>
+                    <p className="text-sm truncate text-text-primary">{a.employee.name}</p>
+                    <p className="text-[11px] text-text-secondary">{a.years} {a.years === 1 ? 'año' : 'años'} en la empresa</p>
                   </div>
-                  <span className="text-xs text-gray-500 font-mono">día {a.day}</span>
+                  <span className="text-xs text-text-secondary font-mono">día {a.day}</span>
                 </div>
               ))}
             </div>
@@ -337,33 +361,36 @@ export default function InsightsPage() {
 
       {/* Eventos próximos */}
       <Card className="p-4">
-        <h3 className="text-sm font-semibold text-gray-700 mb-3">📅 Eventos próximos (30 días)</h3>
+        <h3 className="text-sm font-semibold text-text-primary mb-3 inline-flex items-center gap-1.5">
+          <Calendar size={14} className="text-accent" /> Eventos próximos (30 días)
+        </h3>
         {expiringEvents.length === 0 ? (
-          <p className="text-xs text-gray-400 italic">No hay eventos próximos.</p>
+          <p className="text-xs text-text-secondary italic">No hay eventos próximos.</p>
         ) : (
           <div className="space-y-1.5">
             {expiringEvents.map((ev, i) => {
               const emp = findEmployee(ev.employeeId)
+              const EvIcon = ev.type === 'trial' ? ShieldCheck : Calendar
               return (
                 <div
                   key={i}
                   className={`flex items-center gap-2 p-2 rounded border ${
-                    ev.urgency === 'red' ? 'border-red-300 bg-red-50' :
-                    ev.urgency === 'orange' ? 'border-orange-300 bg-orange-50' :
-                    'border-amber-300 bg-amber-50'
+                    ev.urgency === 'red' ? 'border-danger/30 bg-danger-bg' :
+                    ev.urgency === 'orange' ? 'border-warning/30 bg-warning-bg' :
+                    'border-warning/30 bg-warning-bg'
                   }`}
                 >
                   {emp && <MiniAvatar employee={emp} />}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{ev.employeeName}</p>
-                    <p className="text-[11px] text-gray-600">
-                      {ev.type === 'trial' ? '🛡️' : '📅'} {ev.label}
+                    <p className="text-sm font-medium truncate text-text-primary">{ev.employeeName}</p>
+                    <p className="text-[11px] text-text-secondary inline-flex items-center gap-1">
+                      <EvIcon size={11} /> {ev.label}
                     </p>
                   </div>
                   <span className={`text-xs font-bold ${
-                    ev.urgency === 'red' ? 'text-red-700' :
-                    ev.urgency === 'orange' ? 'text-orange-700' :
-                    'text-amber-700'
+                    ev.urgency === 'red' ? 'text-danger' :
+                    ev.urgency === 'orange' ? 'text-warning' :
+                    'text-warning'
                   }`}>
                     {ev.daysLeft === 0 ? 'HOY' : ev.daysLeft === 1 ? 'mañana' : `${ev.daysLeft}d`}
                   </span>
@@ -377,38 +404,43 @@ export default function InsightsPage() {
       {/* ─── BLOQUE 2: ESTADO PLANTILLA con gráficos ─── */}
       <div className="grid md:grid-cols-3 gap-3">
         <DistributionCard
-          title="📊 Por local"
+          title="Por local"
+          TitleIcon={BarChart3}
           items={staffByLocation}
           total={activeStaff.length}
-          accentColor="#7C1A1A"
+          accentColor="var(--color-accent)"
         />
         <DistributionCard
-          title="📋 Por contrato"
+          title="Por contrato"
+          TitleIcon={FileText}
           items={staffByContract}
           total={activeStaff.length}
-          accentColor="#F39C2A"
+          accentColor="var(--color-warning)"
         />
         <DistributionCard
-          title="💼 Por puesto"
+          title="Por puesto"
+          TitleIcon={Briefcase}
           items={staffByPosition}
           total={activeStaff.length}
-          accentColor="#0EA5E9"
+          accentColor="var(--color-success)"
         />
       </div>
 
       {/* ─── BAJAS MÉDICAS DETALLE ─── */}
       {sickToday.length > 0 && (
         <Card className="p-4">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">🤒 Bajas médicas activas hoy</h3>
+          <h3 className="text-sm font-semibold text-text-primary mb-3 inline-flex items-center gap-1.5">
+            <HeartPulse size={14} className="text-danger" /> Bajas médicas activas hoy
+          </h3>
           <div className="space-y-2">
             {sickToday.map(v => {
               const emp = findEmployee(v.employeeId)
               return (
-                <div key={v.id} className="flex items-center gap-2 p-2 rounded bg-red-50 border border-red-200">
+                <div key={v.id} className="flex items-center gap-2 p-2 rounded bg-danger-bg border border-danger/30">
                   {emp && <MiniAvatar employee={emp} />}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{emp?.name || '(empleado borrado)'}</p>
-                    <p className="text-[11px] text-red-700">
+                    <p className="text-sm font-medium truncate text-text-primary">{emp?.name || '(empleado borrado)'}</p>
+                    <p className="text-[11px] text-danger">
                       Desde {new Date(v.startDate + 'T00:00:00').toLocaleDateString('es-ES')} hasta {new Date(v.endDate + 'T00:00:00').toLocaleDateString('es-ES')}
                     </p>
                   </div>
@@ -422,22 +454,24 @@ export default function InsightsPage() {
       {/* ─── VACACIONES DEL MES DETALLE ─── */}
       {vacationsThisMonth.length > 0 && (
         <Card className="p-4">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">🏖️ Vacaciones este mes</h3>
+          <h3 className="text-sm font-semibold text-text-primary mb-3 inline-flex items-center gap-1.5">
+            <Sun size={14} className="text-accent" /> Vacaciones este mes
+          </h3>
           <div className="space-y-2">
             {vacationsThisMonth.map(v => {
               const emp = findEmployee(v.employeeId)
               return (
-                <div key={v.id} className="flex items-center gap-2 p-2 rounded bg-blue-50 border border-blue-200">
+                <div key={v.id} className="flex items-center gap-2 p-2 rounded bg-accent-bg border border-accent/30">
                   {emp && <MiniAvatar employee={emp} />}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{emp?.name || '(empleado borrado)'}</p>
-                    <p className="text-[11px] text-blue-700">
+                    <p className="text-sm font-medium truncate text-text-primary">{emp?.name || '(empleado borrado)'}</p>
+                    <p className="text-[11px] text-accent">
                       {typeLabel(v.type)} · {new Date(v.startDate + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
                       {' – '}
                       {new Date(v.endDate + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
                     </p>
                   </div>
-                  <span className="text-xs text-blue-700 font-mono">{v.days}d</span>
+                  <span className="text-xs text-accent font-mono">{v.days}d</span>
                 </div>
               )
             })}
@@ -448,7 +482,9 @@ export default function InsightsPage() {
       {/* ─── FORMACIONES POR RENOVAR ─── */}
       {expiringFormations.length > 0 && (
         <Card className="p-4">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">🎓 Formaciones por renovar ({expiringFormations.length})</h3>
+          <h3 className="text-sm font-semibold text-text-primary mb-3 inline-flex items-center gap-1.5">
+            <GraduationCap size={14} className="text-warning" /> Formaciones por renovar ({expiringFormations.length})
+          </h3>
           <div className="space-y-1.5">
             {expiringFormations.map(({ formation, statusInfo }, i) => {
               const emp = findEmployee(formation.employeeId)
@@ -457,35 +493,31 @@ export default function InsightsPage() {
                 <div
                   key={i}
                   className={`flex items-center gap-2 p-2 rounded border ${
-                    statusInfo.color === 'red' ? 'border-red-300 bg-red-50' :
-                    statusInfo.color === 'orange' ? 'border-orange-300 bg-orange-50' :
-                    'border-amber-300 bg-amber-50'
+                    statusInfo.color === 'red' ? 'border-danger/30 bg-danger-bg' :
+                    statusInfo.color === 'orange' ? 'border-warning/30 bg-warning-bg' :
+                    'border-warning/30 bg-warning-bg'
                   }`}
                 >
                   {emp && <MiniAvatar employee={emp} />}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">
+                    <p className="text-sm font-medium truncate text-text-primary">
                       {emp?.name || '(empleado borrado)'}
                     </p>
-                    <p className="text-[11px] text-gray-600 truncate">
-                      {catalog?.icon || '📚'} {formation.name}
+                    <p className="text-[11px] text-text-secondary truncate inline-flex items-center gap-1">
+                      <BookOpen size={11} /> {formation.name}
                       {catalog?.mandatory && (
-                        <span className="ml-1.5 text-[9px] font-bold text-red-600">OBLIG.</span>
+                        <span className="ml-1.5 text-[9px] font-bold text-danger">OBLIG.</span>
                       )}
                     </p>
                   </div>
-                  <span className={`text-xs font-bold ${
-                    statusInfo.color === 'red' ? 'text-red-700' :
-                    statusInfo.color === 'orange' ? 'text-orange-700' :
-                    'text-amber-700'
+                  <span className={`text-xs font-bold inline-flex items-center gap-1 ${
+                    statusInfo.color === 'red' ? 'text-danger' :
+                    statusInfo.color === 'orange' ? 'text-warning' :
+                    'text-warning'
                   }`}>
                     {statusInfo.status === 'caducada'
-                      ? '⛔ Caducada'
-                      : statusInfo.status === 'caduca_urgente'
-                        ? `🔴 ${statusInfo.daysLeft}d`
-                        : statusInfo.status === 'caduca_critico'
-                          ? `🟠 ${statusInfo.daysLeft}d`
-                          : `🟡 ${statusInfo.daysLeft}d`}
+                      ? <><Ban size={11} /> Caducada</>
+                      : <><AlertTriangle size={11} /> {statusInfo.daysLeft}d</>}
                   </span>
                 </div>
               )
@@ -497,14 +529,16 @@ export default function InsightsPage() {
       {/* ─── ROTACIÓN 12 MESES DETALLE ─── */}
       {turnoverLast12Months.length > 0 && (
         <Card className="p-4">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">📉 Bajas últimos 12 meses ({turnoverLast12Months.length})</h3>
+          <h3 className="text-sm font-semibold text-text-primary mb-3 inline-flex items-center gap-1.5">
+            <TrendingDown size={14} className="text-warning" /> Bajas últimos 12 meses ({turnoverLast12Months.length})
+          </h3>
           <div className="space-y-2">
             {turnoverLast12Months.map(e => (
-              <div key={e.id} className="flex items-center gap-2 p-2 rounded bg-gray-50 border border-gray-200">
+              <div key={e.id} className="flex items-center gap-2 p-2 rounded bg-page border border-border-default">
                 <MiniAvatar employee={e} />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{e.name}</p>
-                  <p className="text-[11px] text-gray-500">
+                  <p className="text-sm font-medium truncate text-text-primary">{e.name}</p>
+                  <p className="text-[11px] text-text-secondary">
                     {e.terminationType ? `${e.terminationType} · ` : ''}
                     {e.endDate && `Baja ${new Date(e.endDate + 'T00:00:00').toLocaleDateString('es-ES')}`}
                   </p>
@@ -523,27 +557,29 @@ export default function InsightsPage() {
    ===================================================== */
 
 function KpiCard({
-  icon,
+  Icon,
   label,
   value,
   accent,
 }: {
-  icon: string
+  Icon: LucideIcon
   label: string
   value: number
-  accent: 'emerald' | 'red' | 'blue' | 'amber'
+  accent: 'success' | 'danger' | 'accent' | 'warning'
 }) {
   const colorMap = {
-    emerald: 'text-emerald-600',
-    red: 'text-red-600',
-    blue: 'text-blue-600',
-    amber: 'text-amber-600',
+    success: 'text-success',
+    danger: 'text-danger',
+    accent: 'text-accent',
+    warning: 'text-warning',
   }
   return (
     <Card className="p-3 text-center">
-      <p className="text-xl">{icon}</p>
+      <div className="flex justify-center">
+        <Icon size={20} className={colorMap[accent]} />
+      </div>
       <p className={`text-3xl font-bold mt-1 ${colorMap[accent]}`}>{value}</p>
-      <p className="text-[11px] text-gray-500 uppercase tracking-wide mt-0.5">{label}</p>
+      <p className="text-[11px] text-text-secondary uppercase tracking-wide mt-0.5">{label}</p>
     </Card>
   )
 }
@@ -555,14 +591,14 @@ function MiniAvatar({ employee }: { employee: Employee }) {
       <img
         src={employee.photo}
         alt={employee.name}
-        className="w-8 h-8 rounded-full object-cover border-2 border-white shadow-sm shrink-0"
+        className="w-8 h-8 rounded-full object-cover border-2 border-card shadow-sm shrink-0"
       />
     )
   }
   return (
     <div
-      className="w-8 h-8 rounded-full flex items-center justify-center text-white font-semibold text-sm border-2 border-white shadow-sm shrink-0"
-      style={{ backgroundColor: '#7C1A1A' }}
+      className="w-8 h-8 rounded-full flex items-center justify-center text-white font-semibold text-sm border-2 border-card shadow-sm shrink-0"
+      style={{ backgroundColor: 'var(--color-accent)' }}
     >
       {initial}
     </div>
@@ -571,31 +607,35 @@ function MiniAvatar({ employee }: { employee: Employee }) {
 
 function DistributionCard({
   title,
+  TitleIcon,
   items,
   total,
   accentColor,
 }: {
   title: string
+  TitleIcon: LucideIcon
   items: DistributionItem[]
   total: number
   accentColor: string
 }) {
   return (
     <Card className="p-4">
-      <h3 className="text-sm font-semibold text-gray-700 mb-3">{title}</h3>
+      <h3 className="text-sm font-semibold text-text-primary mb-3 inline-flex items-center gap-1.5">
+        <TitleIcon size={14} className="text-accent" /> {title}
+      </h3>
       {items.length === 0 ? (
-        <p className="text-xs text-gray-400 italic">Sin datos.</p>
+        <p className="text-xs text-text-secondary italic">Sin datos.</p>
       ) : (
         <div className="space-y-2">
           {items.map((item, i) => (
             <div key={i}>
               <div className="flex items-center justify-between text-xs mb-0.5">
-                <span className="text-gray-700 truncate flex-1 pr-2">{item.label}</span>
-                <span className="text-gray-500 font-mono shrink-0">{item.count}</span>
+                <span className="text-text-primary truncate flex-1 pr-2">{item.label}</span>
+                <span className="text-text-secondary font-mono shrink-0">{item.count}</span>
               </div>
-              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-2 bg-accent-bg rounded-full overflow-hidden">
                 <div
-                  className="h-full transition-all"
+                  className="h-full transition-base"
                   style={{
                     width: `${item.percentage}%`,
                     backgroundColor: accentColor,
@@ -604,7 +644,7 @@ function DistributionCard({
               </div>
             </div>
           ))}
-          <p className="text-[10px] text-gray-400 text-right pt-1">Total: {total}</p>
+          <p className="text-[10px] text-text-secondary text-right pt-1">Total: {total}</p>
         </div>
       )}
     </Card>
