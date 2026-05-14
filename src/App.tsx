@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Page } from './types'
 import { LogoSquare } from './components/Logo'
+import Sidebar, { NAV } from './components/Sidebar'
 import StaffPage from './pages/StaffPage'
 import FichajesGlobalPage from './pages/FichajesGlobalPage'
 import InformesPage from './pages/InformesPage'
@@ -37,31 +38,6 @@ import {
 import { gate } from '@/platform/feature-gate/featureGateService'
 
 type AppMode = 'gestor' | 'trabajador' | 'unset'
-
-// Items del menú lateral. `roleRequired` opcional: si está, solo se muestra
-// a usuarios con ese rol. Ahora mismo lo usamos para 'admin' (configuración APPCC).
-const NAV: { id: Page; label: string; icon: string; section?: string; roleRequired?: 'admin' }[] = [
-  { id: 'dashboard',              label: 'Dashboard',           icon: '⊞' },
-  { id: 'staff',                  label: 'Personal',            icon: '👤', section: 'Personal' },
-  { id: 'ahora_mismo',            label: 'Ahora mismo',         icon: '🟢' },
-  { id: 'fichajes_global',        label: 'Control Horario',     icon: '⏰' },
-  { id: 'kiosko_fichaje',         label: 'Kiosko Fichaje',      icon: '🕐' },
-  { id: 'solicitudes_pendientes', label: 'Solicitudes',         icon: '📨' },
-  { id: 'turnos_abiertos',        label: 'Turnos abiertos',     icon: '🪑' },
-  { id: 'cambios_pendientes',     label: 'Cambios de turno',    icon: '🔄' },
-  { id: 'calendario',             label: 'Calendario',          icon: '📅' },
-  { id: 'plantilla_turnos',       label: 'Plantilla turnos',    icon: '🗂️' },
-  { id: 'informes_personal',      label: 'Informes Gestoría',   icon: '📄' },
-  { id: 'bolsa_horas',            label: 'Bolsa de horas',      icon: '💰' },
-  { id: 'ventas_analisis',        label: 'Análisis de Ventas',  icon: '📊', section: 'Ventas' },
-  { id: 'prediccion_personal',    label: 'Predicción Personal', icon: '🔮' },
-  { id: 'zonas_pedido',           label: 'Zonas de Pedido',     icon: '🛵' },
-  { id: 'appcc_today',            label: 'APPCC: Hoy',          icon: '🍃', section: 'APPCC' },
-  { id: 'appcc_incidents',        label: 'APPCC: Incidencias',  icon: '⚠️' },
-  { id: 'appcc_onboarding',       label: 'APPCC: Configurar',   icon: '⚙️', roleRequired: 'admin' },
-  { id: 'locations',              label: 'Locales',             icon: '📍', section: 'Configuración' },
-  { id: 'avisos_settings',        label: 'Avisos',              icon: '🔔' },
-]
 
 const PAGE_TITLES: Partial<Record<Page, string>> = {
   dashboard: 'Dashboard',
@@ -119,7 +95,6 @@ function renderPage(page: Page, ctx: RenderPageContext) {
     case 'appcc_incidents':   return <IncidentsPage />
     case 'appcc_execution':
       if (!ctx.currentExecutionId) {
-        // Sin id, no podemos renderizar. Volvemos a Hoy.
         ctx.closeExecution()
         return <TodayPage onOpenExecution={ctx.openExecution} />
       }
@@ -133,168 +108,6 @@ function renderPage(page: Page, ctx: RenderPageContext) {
       )
     default:                  return <DashboardPage />
   }
-}
-
-/* =====================================================
-   SIDEBAR — desktop fijo / móvil drawer
-   ===================================================== */
-
-function Sidebar({
-  page, setPage, collapsed, setCollapsed, visiblePageIds,
-  isMobile, mobileOpen, onCloseMobile,
-}: {
-  page: Page
-  setPage: (p: Page) => void
-  collapsed: boolean
-  setCollapsed: (v: boolean) => void
-  visiblePageIds: Set<Page>
-  isMobile: boolean
-  mobileOpen: boolean
-  onCloseMobile: () => void
-}) {
-  // Tasks e incidents del antiguo módulo Operaciones se reactivarán cuando exista el nuevo módulo APPCC.
-  const pendingTasks = 0
-  const openInc = 0
-  const [pendingVacations, setPendingVacations] = useState(0)
-  const [pendingSwaps, setPendingSwaps] = useState(0)
-
-  // NAV filtrado según permisos del usuario
-  const visibleNav = NAV.filter(item => visiblePageIds.has(item.id))
-
-  // Cargar conteo de vacaciones pendientes
-  useEffect(() => {
-    let cancel = false
-    async function load() {
-      try {
-        const mod = await import('./services/vacationsService')
-        const list = await mod.fetchPendingVacations()
-        if (!cancel) setPendingVacations((list || []).length)
-      } catch { /* ignore */ }
-    }
-    load()
-    const id = setInterval(load, 30000) // refrescar cada 30s
-    return () => { cancel = true; clearInterval(id) }
-  }, [])
-
-  // Cargar conteo de cambios de turno pendientes
-  useEffect(() => {
-    let cancel = false
-    async function load() {
-      try {
-        const mod = await import('./services/shiftSwapService')
-        const list = await mod.listPendingForManager()
-        if (!cancel) setPendingSwaps((list || []).length)
-      } catch { /* ignore */ }
-    }
-    load()
-    const id = setInterval(load, 30000)
-    return () => { cancel = true; clearInterval(id) }
-  }, [])
-
-  const badge = (id: Page) =>
-    id === 'solicitudes_pendientes' ? pendingVacations
-    : id === 'cambios_pendientes' ? pendingSwaps
-    : 0
-
-  // Variables usadas más adelante en el módulo APPCC (declaradas aquí solo para evitar warning)
-  void pendingTasks; void openInc
-
-  // Cuando pulsamos un item en móvil, cerramos el drawer
-  function handleSelect(p: Page) {
-    setPage(p)
-    if (isMobile) onCloseMobile()
-  }
-
-  // ====== Cálculo de clases del aside ======
-  // En desktop: fijo, ancho según collapsed (64px / 224px)
-  // En móvil: drawer 280px que entra desde la izquierda, controlado por mobileOpen
-  const widthClass = collapsed && !isMobile ? 'w-[64px]' : 'w-[280px] lg:w-56'
-
-  const translateClass = isMobile
-    ? (mobileOpen ? 'translate-x-0' : '-translate-x-full')
-    : 'translate-x-0'
-
-  // ARIA: solo marcar aria-hidden cuando está cerrado Y no es desktop
-  // (en desktop el sidebar siempre es visible y accesible)
-  const ariaHidden = isMobile && !mobileOpen
-
-  // INERT: bloquea totalmente la interacción y el foco dentro del aside
-  // cuando está oculto. Evita el warning "Blocked aria-hidden because
-  // descendant retained focus".
-  const inert = ariaHidden ? true : undefined
-
-  return (
-    <aside
-      // @ts-expect-error - 'inert' es una prop de HTML estándar pero el tipado de React puede no incluirla en versiones antiguas
-      inert={inert}
-      className={`fixed inset-y-0 left-0 z-50 flex flex-col bg-white border-r border-gray-200 transition-transform duration-200 ease-out ${widthClass} ${translateClass}`}
-      aria-hidden={ariaHidden}
-    >
-      <div className={`h-14 flex items-center border-b gap-3 shrink-0 ${collapsed && !isMobile ? 'px-3.5' : 'px-4'}`}>
-        <LogoSquare size={32} />
-        {(!collapsed || isMobile) && (
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-bold tracking-tight truncate">Foodint</p>
-            <p className="text-[10px] text-gray-400 truncate">App del equipo</p>
-          </div>
-        )}
-        {/* Botón cerrar drawer solo en móvil */}
-        {isMobile && (
-          <button
-            type="button"
-            onClick={onCloseMobile}
-            aria-label="Cerrar menú"
-            className="ml-auto p-2 rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-          >
-            <span className="text-lg leading-none">✕</span>
-          </button>
-        )}
-      </div>
-
-      <nav className="flex-1 py-2 px-2 space-y-0.5 overflow-y-auto">
-        {visibleNav.map((item, idx) => {
-          const isActive = page === item.id
-          const showSection = item.section && (idx === 0 || visibleNav[idx - 1].section !== item.section)
-          const b = badge(item.id)
-          const showLabel = !collapsed || isMobile
-          return (
-            <div key={item.id}>
-              {showSection && showLabel && (
-                <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-widest px-2 pt-3 pb-1">{item.section}</p>
-              )}
-              {showSection && !showLabel && <div className="border-t border-gray-100 my-1.5 mx-1" />}
-              <button
-                title={!showLabel ? item.label : undefined}
-                onClick={() => handleSelect(item.id)}
-                className={`w-full flex items-center gap-2.5 px-2.5 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                  isActive ? 'bg-[#F5E9D9] text-[#7C1A1A]' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                }`}
-              >
-                <span className="relative shrink-0 text-base leading-none">
-                  {item.icon}
-                  {b > 0 && (
-                    <span className="absolute -top-1 -right-1.5 w-3.5 h-3.5 bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center leading-none">{b}</span>
-                  )}
-                </span>
-                {showLabel && <span className="truncate text-sm">{item.label}</span>}
-              </button>
-            </div>
-          )
-        })}
-      </nav>
-
-      {/* Botón contraer solo en desktop */}
-      {!isMobile && (
-        <div className="p-2 border-t">
-          <button onClick={() => setCollapsed(!collapsed)}
-            className="w-full flex items-center justify-center gap-2 px-2 py-2 rounded-lg text-xs text-gray-400 hover:bg-gray-100">
-            <span className="text-sm">{collapsed ? '→' : '←'}</span>
-            {!collapsed && <span>Contraer</span>}
-          </button>
-        </div>
-      )}
-    </aside>
-  )
 }
 
 function AuthenticatedApp({ profile, onSignOut }: {
