@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Page } from './types'
 import { LogoSquare } from './components/Logo'
 import StaffPage from './pages/StaffPage'
@@ -120,9 +120,22 @@ function renderPage(page: Page, ctx: RenderPageContext) {
   }
 }
 
-function Sidebar({ page, setPage, collapsed, setCollapsed, visiblePageIds }: {
-  page: Page; setPage: (p: Page) => void; collapsed: boolean; setCollapsed: (v: boolean) => void
+/* =====================================================
+   SIDEBAR — desktop fijo / móvil drawer
+   ===================================================== */
+
+function Sidebar({
+  page, setPage, collapsed, setCollapsed, visiblePageIds,
+  isMobile, mobileOpen, onCloseMobile,
+}: {
+  page: Page
+  setPage: (p: Page) => void
+  collapsed: boolean
+  setCollapsed: (v: boolean) => void
   visiblePageIds: Set<Page>
+  isMobile: boolean
+  mobileOpen: boolean
+  onCloseMobile: () => void
 }) {
   // Tasks e incidents del antiguo módulo Operaciones se reactivarán cuando exista el nuevo módulo APPCC.
   const pendingTasks = 0
@@ -171,15 +184,55 @@ function Sidebar({ page, setPage, collapsed, setCollapsed, visiblePageIds }: {
   // Variables usadas más adelante en el módulo APPCC (declaradas aquí solo para evitar warning)
   void pendingTasks; void openInc
 
+  // Cuando pulsamos un item en móvil, cerramos el drawer
+  function handleSelect(p: Page) {
+    setPage(p)
+    if (isMobile) onCloseMobile()
+  }
+
+  // ====== Cálculo de clases del aside ======
+  // En desktop: fijo, ancho según collapsed (64px / 224px)
+  // En móvil: drawer 280px que entra desde la izquierda, controlado por mobileOpen
+  const widthClass = collapsed && !isMobile ? 'w-[64px]' : 'w-[280px] lg:w-56'
+
+  const translateClass = isMobile
+    ? (mobileOpen ? 'translate-x-0' : '-translate-x-full')
+    : 'translate-x-0'
+
+  // ARIA: solo marcar aria-hidden cuando está cerrado Y no es desktop
+  // (en desktop el sidebar siempre es visible y accesible)
+  const ariaHidden = isMobile && !mobileOpen
+
+  // INERT: bloquea totalmente la interacción y el foco dentro del aside
+  // cuando está oculto. Evita el warning "Blocked aria-hidden because
+  // descendant retained focus".
+  const inert = ariaHidden ? true : undefined
+
   return (
-    <aside className={`fixed inset-y-0 left-0 z-40 flex flex-col bg-white border-r border-gray-200 transition-all duration-200 ${collapsed ? 'w-[64px]' : 'w-56'}`}>
-      <div className={`h-14 flex items-center border-b gap-3 shrink-0 ${collapsed ? 'px-3.5' : 'px-4'}`}>
+    <aside
+      // @ts-expect-error - 'inert' es una prop de HTML estándar pero el tipado de React puede no incluirla en versiones antiguas
+      inert={inert}
+      className={`fixed inset-y-0 left-0 z-50 flex flex-col bg-white border-r border-gray-200 transition-transform duration-200 ease-out ${widthClass} ${translateClass}`}
+      aria-hidden={ariaHidden}
+    >
+      <div className={`h-14 flex items-center border-b gap-3 shrink-0 ${collapsed && !isMobile ? 'px-3.5' : 'px-4'}`}>
         <LogoSquare size={32} />
-        {!collapsed && (
-          <div className="min-w-0">
+        {(!collapsed || isMobile) && (
+          <div className="min-w-0 flex-1">
             <p className="text-sm font-bold tracking-tight truncate">Foodint</p>
             <p className="text-[10px] text-gray-400 truncate">App del equipo</p>
           </div>
+        )}
+        {/* Botón cerrar drawer solo en móvil */}
+        {isMobile && (
+          <button
+            type="button"
+            onClick={onCloseMobile}
+            aria-label="Cerrar menú"
+            className="ml-auto p-2 rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+          >
+            <span className="text-lg leading-none">✕</span>
+          </button>
         )}
       </div>
 
@@ -188,17 +241,18 @@ function Sidebar({ page, setPage, collapsed, setCollapsed, visiblePageIds }: {
           const isActive = page === item.id
           const showSection = item.section && (idx === 0 || visibleNav[idx - 1].section !== item.section)
           const b = badge(item.id)
+          const showLabel = !collapsed || isMobile
           return (
             <div key={item.id}>
-              {showSection && !collapsed && (
+              {showSection && showLabel && (
                 <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-widest px-2 pt-3 pb-1">{item.section}</p>
               )}
-              {showSection && collapsed && <div className="border-t border-gray-100 my-1.5 mx-1" />}
+              {showSection && !showLabel && <div className="border-t border-gray-100 my-1.5 mx-1" />}
               <button
-                title={collapsed ? item.label : undefined}
-                onClick={() => setPage(item.id)}
-                className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm font-medium transition-all ${
-                  isActive ? 'bg-[#F5E9D9] text-[#7C1A1A]' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
+                title={!showLabel ? item.label : undefined}
+                onClick={() => handleSelect(item.id)}
+                className={`w-full flex items-center gap-2.5 px-2.5 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                  isActive ? 'bg-[#F5E9D9] text-[#7C1A1A]' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                 }`}
               >
                 <span className="relative shrink-0 text-base leading-none">
@@ -207,40 +261,24 @@ function Sidebar({ page, setPage, collapsed, setCollapsed, visiblePageIds }: {
                     <span className="absolute -top-1 -right-1.5 w-3.5 h-3.5 bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center leading-none">{b}</span>
                   )}
                 </span>
-                {!collapsed && <span className="truncate text-sm">{item.label}</span>}
+                {showLabel && <span className="truncate text-sm">{item.label}</span>}
               </button>
             </div>
           )
         })}
       </nav>
 
-      <div className="p-2 border-t">
-        <button onClick={() => setCollapsed(!collapsed)}
-          className="w-full flex items-center justify-center gap-2 px-2 py-2 rounded-lg text-xs text-gray-400 hover:bg-gray-100">
-          <span className="text-sm">{collapsed ? '→' : '←'}</span>
-          {!collapsed && <span>Contraer</span>}
-        </button>
-      </div>
+      {/* Botón contraer solo en desktop */}
+      {!isMobile && (
+        <div className="p-2 border-t">
+          <button onClick={() => setCollapsed(!collapsed)}
+            className="w-full flex items-center justify-center gap-2 px-2 py-2 rounded-lg text-xs text-gray-400 hover:bg-gray-100">
+            <span className="text-sm">{collapsed ? '→' : '←'}</span>
+            {!collapsed && <span>Contraer</span>}
+          </button>
+        </div>
+      )}
     </aside>
-  )
-}
-
-function BottomNav({ page, setPage, visiblePageIds }: {
-  page: Page; setPage: (p: Page) => void; visiblePageIds: Set<Page>
-}) {
-  const main: Page[] = ['dashboard', 'staff', 'kiosko_fichaje', 'ahora_mismo', 'locations']
-  const icons: Record<string, string> = { dashboard: '⊞', staff: '👤', kiosko_fichaje: '🕐', ahora_mismo: '🟢', locations: '📍' }
-  const visibleMain = main.filter(id => visiblePageIds.has(id))
-  return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 flex items-center justify-around py-1 px-1 lg:hidden">
-      {visibleMain.map(id => (
-        <button key={id} onClick={() => setPage(id)}
-          className={`flex flex-col items-center gap-0.5 py-1.5 px-2 rounded-lg min-w-0 ${page === id ? 'text-[#7C1A1A]' : 'text-gray-400'}`}>
-          <span className="text-xl leading-none">{icons[id]}</span>
-          <span className="text-[9px] font-medium truncate">{PAGE_TITLES[id as Page]?.split(' ')[0] ?? id}</span>
-        </button>
-      ))}
-    </nav>
   )
 }
 
@@ -250,6 +288,7 @@ function AuthenticatedApp({ profile, onSignOut }: {
 }) {
   const [page, setPage] = useState<Page>('dashboard')
   const [collapsed, setCollapsed] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [mode, setMode] = useState<AppMode>('unset')
   const [showUsuariosAccesos, setShowUsuariosAccesos] = useState(false)
   const [forceWorkerMode, setForceWorkerMode] = useState(false)
@@ -259,6 +298,53 @@ function AuthenticatedApp({ profile, onSignOut }: {
   // Tasks e incidents del antiguo módulo Operaciones — se reactivarán con módulo APPCC
   const pending = 0
   const critInc = 0
+
+  // Ref al botón hamburguesa, para devolver el foco ahí al cerrar el drawer
+  // (evita el warning "aria-hidden Blocked because descendant retained focus")
+  const hamburgerRef = useRef<HTMLButtonElement | null>(null)
+
+  // Detectar si estamos en móvil/tablet (<1024px) — coincide con breakpoint lg de Tailwind
+  const [isMobile, setIsMobile] = useState<boolean>(() =>
+    typeof window !== 'undefined' ? window.innerWidth < 1024 : false
+  )
+  useEffect(() => {
+    function onResize() {
+      const mobile = window.innerWidth < 1024
+      setIsMobile(mobile)
+      // Si pasamos de móvil a desktop, cerramos el drawer por limpieza
+      if (!mobile) setMobileMenuOpen(false)
+    }
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  // Bloquear scroll del body mientras el drawer móvil esté abierto
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      const prev = document.body.style.overflow
+      document.body.style.overflow = 'hidden'
+      return () => { document.body.style.overflow = prev }
+    }
+  }, [mobileMenuOpen])
+
+  /**
+   * Cierra el drawer móvil. Antes de aplicar aria-hidden al aside, devuelve
+   * el foco al botón hamburguesa. Si no hacemos esto, queda un botón con
+   * foco dentro de un contenedor con aria-hidden=true, y el navegador
+   * bloquea aria-hidden por motivos de accesibilidad.
+   */
+  function handleCloseMobileMenu() {
+    // Quitar el foco del elemento actual (el botón del menú que se pulsó)
+    if (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur()
+    }
+    // Devolver el foco al botón hamburguesa, para que el teclado/lector
+    // de pantalla quede en un sitio coherente y accesible
+    if (hamburgerRef.current) {
+      hamburgerRef.current.focus()
+    }
+    setMobileMenuOpen(false)
+  }
 
   // Determinar el modo automáticamente según el rol
   useEffect(() => {
@@ -322,7 +408,6 @@ function AuthenticatedApp({ profile, onSignOut }: {
   }
 
   // Modo trabajador — UI específica del empleado
-  // También se entra si el manager pulsó "Modo trabajador" voluntariamente
   if (mode === 'trabajador' || forceWorkerMode) {
     return (
       <TrabajadorApp
@@ -341,7 +426,6 @@ function AuthenticatedApp({ profile, onSignOut }: {
     }
   }
 
-  // Modo gestor — la app completa de siempre
   // En el kiosko ocultamos sidebar y header — pantalla completa
   const isKiosko = page === 'kiosko_fichaje'
 
@@ -360,7 +444,7 @@ function AuthenticatedApp({ profile, onSignOut }: {
     )
   }
 
-  // Calcular visiblePageIds para Sidebar y BottomNav
+  // Calcular visiblePageIds para Sidebar
   const visiblePageIds = perms || new Set<Page>(NAV.map(n => n.id))
   const canSwitchToWorker = profile.role === 'manager' && !!profile.employeeId
   const roleLabel = profile.role === 'admin' ? 'Admin' : profile.role === 'manager' ? 'Encargado' : 'Trabajador'
@@ -381,16 +465,51 @@ function AuthenticatedApp({ profile, onSignOut }: {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="hidden lg:block">
-        <Sidebar page={page} setPage={setPage} collapsed={collapsed} setCollapsed={setCollapsed} visiblePageIds={visiblePageIds} />
-      </div>
-      <BottomNav page={page} setPage={setPage} visiblePageIds={visiblePageIds} />
+      {/* Sidebar — siempre en el DOM. En desktop fijo, en móvil drawer controlado por mobileMenuOpen */}
+      <Sidebar
+        page={page}
+        setPage={setPage}
+        collapsed={collapsed}
+        setCollapsed={setCollapsed}
+        visiblePageIds={visiblePageIds}
+        isMobile={isMobile}
+        mobileOpen={mobileMenuOpen}
+        onCloseMobile={handleCloseMobileMenu}
+      />
+
+      {/* Overlay oscuro detrás del drawer en móvil */}
+      {isMobile && mobileMenuOpen && (
+        <button
+          type="button"
+          aria-label="Cerrar menú"
+          onClick={handleCloseMobileMenu}
+          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+        />
+      )}
+
       <div className={`transition-all duration-200 ${collapsed ? 'lg:ml-[64px]' : 'lg:ml-56'}`}>
-        <header className="h-14 border-b border-gray-200 bg-white/90 backdrop-blur-sm flex items-center justify-between px-5 shrink-0 sticky top-0 z-30">
-          <h1 className="text-lg font-semibold" style={{ fontFamily: 'Instrument Serif, serif' }}>
-            {showUsuariosAccesos ? '👥 Usuarios y Accesos' : PAGE_TITLES[page]}
-          </h1>
-          <div className="flex items-center gap-2">
+        <header className="h-14 border-b border-gray-200 bg-white/90 backdrop-blur-sm flex items-center justify-between gap-2 px-3 sm:px-5 shrink-0 sticky top-0 z-30">
+          <div className="flex items-center gap-2 min-w-0">
+            {/* Botón hamburguesa solo en móvil */}
+            <button
+              ref={hamburgerRef}
+              type="button"
+              onClick={() => setMobileMenuOpen(true)}
+              aria-label="Abrir menú"
+              aria-expanded={mobileMenuOpen}
+              className="lg:hidden p-2 -ml-2 rounded-md text-gray-600 hover:bg-gray-100"
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <line x1="3" y1="12" x2="21" y2="12" />
+                <line x1="3" y1="18" x2="21" y2="18" />
+              </svg>
+            </button>
+            <h1 className="text-base sm:text-lg font-semibold truncate" style={{ fontFamily: 'Instrument Serif, serif' }}>
+              {showUsuariosAccesos ? '👥 Usuarios y Accesos' : PAGE_TITLES[page]}
+            </h1>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
             {pending > 0 && !showUsuariosAccesos && (
               <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
                 {pending} tarea{pending > 1 ? 's' : ''}
@@ -410,22 +529,22 @@ function AuthenticatedApp({ profile, onSignOut }: {
               <span className="text-gray-400">·</span>
               <span className="text-gray-500">{roleLabel}</span>
             </div>
-            {/* Botón modo trabajador (solo manager con employee_id) */}
+            {/* Botón modo trabajador (solo manager con employee_id) — oculto en móvil para ahorrar espacio */}
             {canSwitchToWorker && (
               <button
                 onClick={() => setForceWorkerMode(true)}
                 title="Ver app de trabajador"
-                className="text-xs px-2 py-1 rounded-md font-medium bg-gray-100 text-gray-600 hover:bg-gray-200"
+                className="hidden sm:inline-flex text-xs px-2 py-1 rounded-md font-medium bg-gray-100 text-gray-600 hover:bg-gray-200"
               >
                 👤 Modo trabajador
               </button>
             )}
-            {/* Botón Usuarios y Accesos (solo admin) */}
+            {/* Botón Usuarios y Accesos (solo admin) — oculto en móvil */}
             {profile.role === 'admin' && (
               <button
                 onClick={() => setShowUsuariosAccesos(!showUsuariosAccesos)}
                 title={showUsuariosAccesos ? 'Volver' : 'Usuarios y Accesos'}
-                className={`text-xs px-2 py-1 rounded-md font-medium transition ${
+                className={`hidden sm:inline-flex text-xs px-2 py-1 rounded-md font-medium transition ${
                   showUsuariosAccesos
                     ? 'bg-[#7C1A1A] text-white'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -437,13 +556,13 @@ function AuthenticatedApp({ profile, onSignOut }: {
             <button
               onClick={onSignOut}
               title={`Cerrar sesión (${profile.displayName || profile.role})`}
-              className="hover:opacity-80 transition-opacity"
+              className="hover:opacity-80 transition-opacity shrink-0"
             >
               <LogoSquare size={28} />
             </button>
           </div>
         </header>
-        <main className="p-4 sm:p-6 pb-24 lg:pb-6">
+        <main className="p-4 sm:p-6">
           {showUsuariosAccesos ? <UsuariosAccesosPage /> : renderPage(page, renderCtx)}
         </main>
       </div>
