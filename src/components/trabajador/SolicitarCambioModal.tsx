@@ -3,6 +3,7 @@
 // 3 modos: cesión (cualquiera), intercambio (con turno concreto), petición directa (a alguien).
 
 import { useEffect, useMemo, useState } from 'react'
+import { RefreshCw, X, Info } from 'lucide-react'
 import type { Employee } from '../../types'
 import type { ShiftTemplate, Schedule, DayOfWeek } from '../../types/scheduler'
 import {
@@ -11,7 +12,7 @@ import {
   DAY_LABELS,
 } from '../../types/scheduler'
 import type { SwapType } from '../../types/shiftSwap'
-import { SWAP_TYPE_LABELS, SWAP_TYPE_DESCRIPTIONS, SWAP_TYPE_ICONS } from '../../types/shiftSwap'
+import { SWAP_TYPE_LABELS, SWAP_TYPE_DESCRIPTIONS } from '../../types/shiftSwap'
 import { fetchEmployees } from '../../services/supabaseSync'
 import {
   createCesionRequest,
@@ -192,38 +193,41 @@ export default function SolicitarCambioModal({
 
   return (
     <div className="fixed inset-0 z-[60] bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="bg-white rounded-t-2xl sm:rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-card rounded-t-xl sm:rounded-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="px-4 py-3 border-b sticky top-0" style={{ backgroundColor: '#7C1A1A', color: 'white' }}>
+        <div className="px-4 py-3 border-b border-border-default sticky top-0 bg-accent text-text-on-accent">
           <div className="flex items-center justify-between">
             <div>
-              <div className="font-semibold">🔄 Solicitar cambio</div>
+              <div className="font-semibold inline-flex items-center gap-1.5">
+                <RefreshCw size={16} /> Solicitar cambio
+              </div>
               <div className="text-xs opacity-90">
                 {dayLabel} · {tStart}–{tEnd} · {myShift.template.label}
               </div>
             </div>
-            <button onClick={onClose} className="text-white/80 hover:text-white text-xl">✕</button>
+            <button onClick={onClose} className="text-text-on-accent/80 hover:text-text-on-accent">
+              <X size={20} />
+            </button>
           </div>
         </div>
 
         <div className="p-4 space-y-4">
           {/* Selector de tipo */}
           <div>
-            <p className="text-xs font-semibold text-gray-700 mb-2">¿Qué tipo de cambio quieres?</p>
+            <p className="text-xs font-semibold text-text-primary mb-2">¿Qué tipo de cambio quieres?</p>
             <div className="space-y-2">
               {(['cesion', 'peticion_directa', 'intercambio'] as SwapType[]).map(t => (
                 <button
                   key={t}
                   onClick={() => { setTipo(t); setSelectedCompId(''); setSelectedShiftKey('') }}
-                  className={`w-full text-left px-3 py-2 rounded-lg border-2 transition ${
-                    tipo === t ? 'border-[#7C1A1A] bg-[#F5E9D9]' : 'border-gray-200 bg-white hover:border-gray-300'
+                  className={`w-full text-left px-3 py-2 rounded-lg border-2 transition-base ${
+                    tipo === t ? 'border-accent bg-accent-bg' : 'border-border-default bg-card hover:border-accent'
                   }`}
                 >
                   <div className="flex items-center gap-2">
-                    <span className="text-xl shrink-0">{SWAP_TYPE_ICONS[t]}</span>
                     <div>
-                      <div className="text-sm font-semibold">{SWAP_TYPE_LABELS[t]}</div>
-                      <div className="text-[11px] text-gray-500">{SWAP_TYPE_DESCRIPTIONS[t]}</div>
+                      <div className="text-sm font-semibold text-text-primary">{SWAP_TYPE_LABELS[t]}</div>
+                      <div className="text-[11px] text-text-secondary">{SWAP_TYPE_DESCRIPTIONS[t]}</div>
                     </div>
                   </div>
                 </button>
@@ -234,7 +238,7 @@ export default function SolicitarCambioModal({
           {/* Selector de compañero (intercambio o petición directa) */}
           {tipo !== 'cesion' && (
             <div>
-              <p className="text-xs font-semibold text-gray-700 mb-2">
+              <p className="text-xs font-semibold text-text-primary mb-2">
                 {tipo === 'peticion_directa'
                   ? '¿A qué compañero le pides el cambio?'
                   : '¿Con qué compañero quieres intercambiar?'}
@@ -242,7 +246,7 @@ export default function SolicitarCambioModal({
               <select
                 value={selectedCompId}
                 onChange={e => { setSelectedCompId(e.target.value); setSelectedShiftKey('') }}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+                className="w-full border border-border-default rounded-lg px-3 py-2 text-sm bg-card"
               >
                 <option value="">— Elige un compañero —</option>
                 {compañeros.map(c => (
@@ -255,9 +259,9 @@ export default function SolicitarCambioModal({
           {/* Selector de turno del compañero (solo intercambio) */}
           {tipo === 'intercambio' && selectedCompId && (
             <div>
-              <p className="text-xs font-semibold text-gray-700 mb-2">¿Qué turno suyo te interesa?</p>
+              <p className="text-xs font-semibold text-text-primary mb-2">¿Qué turno suyo te interesa?</p>
               {compañeroShifts.length === 0 ? (
-                <p className="text-xs text-gray-400 italic">
+                <p className="text-xs text-text-secondary italic">
                   Este compañero no tiene turnos esta semana.
                 </p>
               ) : (
@@ -269,20 +273,20 @@ export default function SolicitarCambioModal({
                       <button
                         key={key}
                         onClick={() => setSelectedShiftKey(key)}
-                        className={`w-full text-left px-3 py-2 rounded border-2 transition ${
-                          selectedShiftKey === key ? 'border-[#7C1A1A] bg-[#F5E9D9]' : 'border-gray-200 bg-white hover:border-gray-300'
+                        className={`w-full text-left px-3 py-2 rounded border-2 transition-base ${
+                          selectedShiftKey === key ? 'border-accent bg-accent-bg' : 'border-border-default bg-card hover:border-accent'
                         }`}
                       >
                         <div className="flex items-center justify-between">
                           <div>
-                            <div className="text-sm font-semibold">
-                              {DAY_LABELS[dayN] || s.dayKey} <span className="text-xs text-gray-400">{shortDate(s.date)}</span>
+                            <div className="text-sm font-semibold text-text-primary">
+                              {DAY_LABELS[dayN] || s.dayKey} <span className="text-xs text-text-secondary">{shortDate(s.date)}</span>
                             </div>
-                            <div className="text-[11px] text-gray-500">
+                            <div className="text-[11px] text-text-secondary">
                               {s.template.start_time.slice(0, 5)}–{s.template.end_time.slice(0, 5)} · {s.template.label}
                             </div>
                           </div>
-                          <span className="text-xs font-mono text-gray-500">{s.hours}h</span>
+                          <span className="text-xs font-mono text-text-secondary">{s.hours}h</span>
                         </div>
                       </button>
                     )
@@ -294,7 +298,7 @@ export default function SolicitarCambioModal({
 
           {/* Notas */}
           <div>
-            <p className="text-xs font-semibold text-gray-700 mb-1">Mensaje (opcional)</p>
+            <p className="text-xs font-semibold text-text-primary mb-1">Mensaje (opcional)</p>
             <textarea
               value={notes}
               onChange={e => setNotes(e.target.value)}
@@ -305,31 +309,31 @@ export default function SolicitarCambioModal({
                 : tipo === 'peticion_directa'
                   ? 'Ej: ¿Podrías cogerlo? Me harías un gran favor.'
                   : 'Ej: Te propongo intercambiar este turno por el tuyo del...'}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none"
+              className="w-full border border-border-default rounded-lg px-3 py-2 text-sm resize-none"
             />
-            <p className="text-[10px] text-gray-400 mt-0.5 text-right">{notes.length}/300</p>
+            <p className="text-[10px] text-text-secondary mt-0.5 text-right">{notes.length}/300</p>
           </div>
 
           {/* Aviso final */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-[11px] text-blue-800">
-            ℹ️ Al confirmar, la solicitud quedará pendiente de aprobación del gestor.
-            Hasta entonces, sigues asignado al turno como hasta ahora.
+          <div className="bg-accent-bg border border-accent/30 rounded-lg p-3 text-[11px] text-accent inline-flex items-start gap-1.5">
+            <Info size={14} className="shrink-0 mt-0.5" />
+            <span>Al confirmar, la solicitud quedará pendiente de aprobación del gestor.
+            Hasta entonces, sigues asignado al turno como hasta ahora.</span>
           </div>
         </div>
 
         {/* Botones */}
-        <div className="px-4 py-3 border-t bg-gray-50 sticky bottom-0 flex gap-2 justify-end">
+        <div className="px-4 py-3 border-t border-border-default bg-page sticky bottom-0 flex gap-2 justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm border rounded bg-white hover:bg-gray-50"
+            className="px-4 py-2 text-sm border border-border-default rounded bg-card text-text-primary hover:bg-page transition-base"
           >
             Cancelar
           </button>
           <button
             onClick={handleSubmit}
             disabled={submitting}
-            className="px-4 py-2 rounded text-white text-sm font-medium disabled:opacity-40"
-            style={{ backgroundColor: '#7C1A1A' }}
+            className="px-4 py-2 rounded text-text-on-accent text-sm font-medium disabled:opacity-40 bg-accent hover:bg-accent-hover transition-base"
           >
             {submitting ? 'Enviando...' : 'Enviar solicitud'}
           </button>

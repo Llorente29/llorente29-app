@@ -6,9 +6,10 @@
 // Tras coger/aceptar, la solicitud pasa a "propuesta" pendiente de aprobación del gestor.
 
 import { useEffect, useMemo, useState } from 'react'
+import { RefreshCw, Bell, Globe2, Hand, Check, X } from 'lucide-react'
 import type { Employee } from '../../types'
 import type { ShiftSwapRequest } from '../../types/shiftSwap'
-import { SWAP_TYPE_ICONS, SWAP_TYPE_LABELS } from '../../types/shiftSwap'
+import { SWAP_TYPE_LABELS } from '../../types/shiftSwap'
 import {
   listOpenCesiones,
   listSwapsForEmployee,
@@ -149,16 +150,18 @@ export default function TablonCambiosView({ myEmployee, onChanged }: Props) {
   return (
     <div className="space-y-3">
       {loading && (
-        <div className="bg-white border rounded-lg p-6 text-center text-sm text-gray-400">
+        <div className="bg-card border border-border-default rounded-lg p-6 text-center text-sm text-text-secondary">
           Cargando tablón...
         </div>
       )}
 
       {!loading && totalPending === 0 && (
-        <div className="bg-white border rounded-lg p-8 text-center">
-          <div className="text-5xl mb-2">🔄</div>
-          <p className="text-sm text-gray-700 font-medium">No hay cambios disponibles</p>
-          <p className="text-xs text-gray-500 mt-1">
+        <div className="bg-card border border-border-default rounded-lg p-8 text-center">
+          <div className="flex justify-center mb-2">
+            <RefreshCw size={32} className="text-accent" />
+          </div>
+          <p className="text-sm text-text-primary font-medium">No hay cambios disponibles</p>
+          <p className="text-xs text-text-secondary mt-1">
             Cuando algún compañero libre un turno o te pida un cambio, aparecerá aquí.
           </p>
         </div>
@@ -167,8 +170,8 @@ export default function TablonCambiosView({ myEmployee, onChanged }: Props) {
       {/* INCOMING: peticiones que ME hacen */}
       {!loading && incomingRequests.length > 0 && (
         <div>
-          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2 px-1">
-            🔔 Te lo piden a ti ({incomingRequests.length})
+          <h3 className="text-xs font-bold text-text-secondary uppercase tracking-wide mb-2 px-1 inline-flex items-center gap-1.5">
+            <Bell size={12} /> Te lo piden a ti ({incomingRequests.length})
           </h3>
           <div className="space-y-2">
             {incomingRequests.map(swap => (
@@ -189,8 +192,8 @@ export default function TablonCambiosView({ myEmployee, onChanged }: Props) {
       {/* CESIONES ABIERTAS */}
       {!loading && openCesiones.length > 0 && (
         <div>
-          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2 px-1 mt-4">
-            🌐 Cesiones disponibles ({openCesiones.length})
+          <h3 className="text-xs font-bold text-text-secondary uppercase tracking-wide mb-2 px-1 mt-4 inline-flex items-center gap-1.5">
+            <Globe2 size={12} /> Cesiones disponibles ({openCesiones.length})
           </h3>
           <div className="space-y-2">
             {openCesiones.map(swap => (
@@ -246,14 +249,14 @@ function SwapCard({
   const tLabel = swap.requesterTemplate?.label || ''
 
   return (
-    <div className="bg-white border rounded-lg p-3 space-y-2">
+    <div className="bg-card border border-border-default rounded-lg p-3 space-y-2">
       <div className="flex items-start gap-3">
         {/* Avatar */}
         <div className="shrink-0">
           {swap.requesterPhoto ? (
             <img src={swap.requesterPhoto} alt={swap.requesterName} className="w-10 h-10 rounded-full object-cover" />
           ) : (
-            <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold" style={{ backgroundColor: '#7C1A1A' }}>
+            <div className="w-10 h-10 rounded-full flex items-center justify-center text-text-on-accent font-semibold bg-accent">
               {(swap.requesterName[0] || '?').toUpperCase()}
             </div>
           )}
@@ -262,14 +265,14 @@ function SwapCard({
         {/* Info principal */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <p className="font-semibold text-sm truncate">{swap.requesterName}</p>
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-medium">
-              {SWAP_TYPE_ICONS[swap.swapType]} {SWAP_TYPE_LABELS[swap.swapType]}
+            <p className="font-semibold text-sm truncate text-text-primary">{swap.requesterName}</p>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-accent-bg text-text-secondary font-medium">
+              {SWAP_TYPE_LABELS[swap.swapType]}
             </span>
           </div>
-          <p className="text-xs text-gray-700 mt-1">
+          <p className="text-xs text-text-primary mt-1">
             <span className="font-medium">{DAY_LABELS[dayN] || swap.requesterDayKey}</span>{' '}
-            <span className="text-gray-400">{shortDate(swap.requesterDate)}</span>
+            <span className="text-text-secondary">{shortDate(swap.requesterDate)}</span>
             {' · '}
             <span className="font-mono">{tStart}–{tEnd}</span>
             {tLabel && <> · {tLabel}</>}
@@ -277,17 +280,17 @@ function SwapCard({
 
           {/* Si es intercambio, mostrar el turno propuesto a cambio */}
           {swap.swapType === 'intercambio' && swap.targetTemplate && swap.targetDate && swap.targetDayKey && (
-            <div className="mt-1 text-[11px] bg-blue-50 border border-blue-200 rounded px-2 py-1">
-              <span className="font-medium text-blue-800">A cambio de tu turno:</span>{' '}
+            <div className="mt-1 text-[11px] bg-accent-bg border border-accent/30 rounded px-2 py-1">
+              <span className="font-medium text-accent">A cambio de tu turno:</span>{' '}
               {DAY_LABELS[parseInt(swap.targetDayKey, 10) as DayOfWeek]}{' '}
-              <span className="text-blue-600">{shortDate(swap.targetDate)}</span>
+              <span className="text-accent">{shortDate(swap.targetDate)}</span>
               {' · '}
               <span className="font-mono">{swap.targetTemplate.start_time.slice(0, 5)}–{swap.targetTemplate.end_time.slice(0, 5)}</span>
             </div>
           )}
 
           {swap.requestNotes && (
-            <p className="text-[11px] text-gray-500 italic mt-1">"{swap.requestNotes}"</p>
+            <p className="text-[11px] text-text-secondary italic mt-1">"{swap.requestNotes}"</p>
           )}
         </div>
       </div>
@@ -301,15 +304,14 @@ function SwapCard({
             maxLength={200}
             value={acceptorNote || ''}
             onChange={e => onChangeAcceptorNote?.(e.target.value)}
-            className="w-full text-xs border border-gray-200 rounded px-2 py-1.5"
+            className="w-full text-xs border border-border-default rounded px-2 py-1.5 bg-card text-text-primary"
           />
           <button
             onClick={onTake}
             disabled={acting}
-            className="w-full text-sm py-1.5 rounded text-white font-medium disabled:opacity-40"
-            style={{ backgroundColor: '#7C1A1A' }}
+            className="inline-flex items-center justify-center gap-1.5 w-full text-sm py-1.5 rounded text-text-on-accent font-medium disabled:opacity-40 bg-accent hover:bg-accent-hover transition-base"
           >
-            {acting ? 'Cogiendo...' : '✋ Coger este turno'}
+            <Hand size={14} /> {acting ? 'Cogiendo...' : 'Coger este turno'}
           </button>
         </div>
       )}
@@ -318,17 +320,16 @@ function SwapCard({
           <button
             onClick={onReject}
             disabled={acting}
-            className="flex-1 text-xs py-1.5 rounded border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+            className="inline-flex items-center justify-center gap-1 flex-1 text-xs py-1.5 rounded border border-border-default text-text-secondary hover:bg-danger-bg hover:text-danger hover:border-danger/30 disabled:opacity-40 transition-base"
           >
-            ❌ Rechazar
+            <X size={12} /> Rechazar
           </button>
           <button
             onClick={onAccept}
             disabled={acting}
-            className="flex-1 text-xs py-1.5 rounded text-white font-medium disabled:opacity-40"
-            style={{ backgroundColor: '#7C1A1A' }}
+            className="inline-flex items-center justify-center gap-1 flex-1 text-xs py-1.5 rounded text-text-on-accent font-medium disabled:opacity-40 bg-accent hover:bg-accent-hover transition-base"
           >
-            ✅ Aceptar
+            <Check size={12} /> Aceptar
           </button>
         </div>
       )}

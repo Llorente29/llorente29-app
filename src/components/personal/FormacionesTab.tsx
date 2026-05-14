@@ -2,6 +2,18 @@
 // Pestaña de formaciones del empleado: lista, alta, edición, alertas de caducidad.
 
 import { useState, useEffect, useMemo } from 'react'
+import {
+  BarChart3,
+  GraduationCap,
+  BookOpen,
+  Paperclip,
+  Ban,
+  AlertTriangle,
+  Clock,
+  Check,
+  Infinity,
+  X,
+} from 'lucide-react'
 import { Card, Button, Input, Select, Label, Textarea } from '../ui'
 import type { Employee } from '../../types'
 import type { Formation, FormationType } from '../../types/personal'
@@ -57,26 +69,28 @@ export default function FormacionesTab({ employee }: Props) {
       <Card className="p-3">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-semibold text-gray-700">📊 Cumplimiento legal</p>
-            <p className="text-xs text-gray-500 mt-0.5">
+            <p className="text-sm font-semibold text-text-primary inline-flex items-center gap-1.5">
+              <BarChart3 size={14} /> Cumplimiento legal
+            </p>
+            <p className="text-xs text-text-secondary mt-0.5">
               Formaciones obligatorias cubiertas y vigentes
             </p>
           </div>
           <div className="text-right">
             <p className={`text-2xl font-bold ${
-              obligatoryStats.covered === obligatoryStats.total ? 'text-emerald-600' :
-              obligatoryStats.covered >= obligatoryStats.total / 2 ? 'text-amber-600' :
-              'text-red-600'
+              obligatoryStats.covered === obligatoryStats.total ? 'text-success' :
+              obligatoryStats.covered >= obligatoryStats.total / 2 ? 'text-warning' :
+              'text-danger'
             }`}>
               {obligatoryStats.covered}/{obligatoryStats.total}
             </p>
-            <p className="text-[10px] text-gray-500 uppercase">Obligatorias</p>
+            <p className="text-[10px] text-text-secondary uppercase">Obligatorias</p>
           </div>
         </div>
       </Card>
 
       <div className="flex items-center justify-between">
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-text-secondary">
           {formations.length} formación{formations.length !== 1 ? 'es' : ''}
         </p>
         <Button size="sm" onClick={() => { setEditing(null); setShowModal(true) }}>
@@ -85,12 +99,14 @@ export default function FormacionesTab({ employee }: Props) {
       </div>
 
       {loading ? (
-        <Card className="p-6 text-center"><p className="text-sm text-gray-500">Cargando...</p></Card>
+        <Card className="p-6 text-center"><p className="text-sm text-text-secondary">Cargando...</p></Card>
       ) : formations.length === 0 ? (
         <Card className="p-6 text-center">
-          <p className="text-3xl mb-2">🎓</p>
-          <p className="text-sm text-gray-700">Sin formaciones registradas</p>
-          <p className="text-[11px] text-gray-500 mt-2">
+          <div className="flex justify-center mb-2">
+            <GraduationCap size={32} className="text-accent" />
+          </div>
+          <p className="text-sm text-text-primary">Sin formaciones registradas</p>
+          <p className="text-[11px] text-text-secondary mt-2">
             Recuerda registrar al menos las 5 obligatorias por ley:<br />
             Manipulador de alimentos, PRL, APPCC, Alérgenos, Igualdad.
           </p>
@@ -100,62 +116,64 @@ export default function FormacionesTab({ employee }: Props) {
           {formations.map(f => {
             const status = getFormationStatus(f)
             const catalog = FORMATION_CATALOG.find(c => c.id === f.type)
+            const StatusIcon =
+              status.status === 'caducada' ? Ban :
+              status.status === 'caduca_urgente' ? AlertTriangle :
+              status.status === 'caduca_critico' ? AlertTriangle :
+              status.status === 'caduca_pronto' ? Clock :
+              status.status === 'vigente' ? Check : Infinity
             return (
               <Card key={f.id} className="p-3">
                 <div className="flex items-start gap-3">
-                  <div className="text-2xl shrink-0">{catalog?.icon || '📚'}</div>
+                  <BookOpen size={24} className="text-accent shrink-0" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <p className="font-semibold text-gray-900 text-sm">{f.name}</p>
+                      <p className="font-semibold text-text-primary text-sm">{f.name}</p>
                       {catalog?.mandatory && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 font-medium border border-red-200">
+                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-danger-bg text-danger font-medium border border-danger/30">
                           OBLIGATORIA
                         </span>
                       )}
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                        status.color === 'red' ? 'bg-red-50 text-red-700 border border-red-200' :
-                        status.color === 'orange' ? 'bg-orange-50 text-orange-700 border border-orange-200' :
-                        status.color === 'yellow' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
-                        status.color === 'green' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
-                        'bg-gray-50 text-gray-600 border border-gray-200'
+                      <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                        status.color === 'red' ? 'bg-danger-bg text-danger border border-danger/30' :
+                        status.color === 'orange' ? 'bg-warning-bg text-warning border border-warning/30' :
+                        status.color === 'yellow' ? 'bg-warning-bg text-warning border border-warning/30' :
+                        status.color === 'green' ? 'bg-success-bg text-success border border-success/30' :
+                        'bg-page text-text-secondary border border-border-default'
                       }`}>
-                        {status.status === 'caducada' ? '⛔' :
-                         status.status === 'caduca_urgente' ? '🔴' :
-                         status.status === 'caduca_critico' ? '🟠' :
-                         status.status === 'caduca_pronto' ? '🟡' :
-                         status.status === 'vigente' ? '✅' : '∞'}
-                        {' '}{status.label}
+                        <StatusIcon size={10} />
+                        {status.label}
                       </span>
                     </div>
-                    <p className="text-xs text-gray-600">
+                    <p className="text-xs text-text-secondary">
                       Emitida: {new Date(f.issueDate + 'T00:00:00').toLocaleDateString('es-ES')}
                       {f.expiryDate && (
                         <> · Caduca: {new Date(f.expiryDate + 'T00:00:00').toLocaleDateString('es-ES')}</>
                       )}
                       {f.issuer && <> · {f.issuer}</>}
                     </p>
-                    {f.notes && <p className="text-[11px] text-gray-500 italic mt-1">"{f.notes}"</p>}
+                    {f.notes && <p className="text-[11px] text-text-secondary italic mt-1">"{f.notes}"</p>}
                     {f.documentUrl && (
                       <a
                         href={f.documentUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-[11px] text-blue-600 hover:underline mt-1 inline-block"
+                        className="text-[11px] text-accent hover:underline mt-1 inline-flex items-center gap-1"
                       >
-                        📎 Ver documento
+                        <Paperclip size={11} /> Ver documento
                       </a>
                     )}
                   </div>
                   <div className="flex flex-col gap-1 shrink-0">
                     <button
                       onClick={() => { setEditing(f); setShowModal(true) }}
-                      className="text-xs px-3 py-1 rounded text-gray-600 hover:bg-gray-100"
+                      className="text-xs px-3 py-1 rounded text-text-secondary hover:bg-accent-bg transition-base"
                     >
                       Editar
                     </button>
                     <button
                       onClick={() => handleDelete(f.id)}
-                      className="text-xs px-3 py-1 rounded text-gray-400 hover:text-red-600"
+                      className="text-xs px-3 py-1 rounded text-text-secondary hover:text-danger transition-base"
                     >
                       Borrar
                     </button>
@@ -247,13 +265,16 @@ function FormationModal({
 
   return (
     <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
-        <div className="px-5 py-3 border-b" style={{ backgroundColor: '#7C1A1A', color: 'white' }}>
+      <div className="bg-card rounded-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+        <div className="px-5 py-3 border-b border-border-default bg-accent text-text-on-accent">
           <div className="flex items-center justify-between">
-            <div className="font-semibold">
-              {formation ? '✏️ Editar formación' : '🎓 Nueva formación'}
+            <div className="font-semibold inline-flex items-center gap-1.5">
+              <GraduationCap size={16} />
+              {formation ? 'Editar formación' : 'Nueva formación'}
             </div>
-            <button onClick={onClose} className="text-white/80 hover:text-white text-lg">✕</button>
+            <button onClick={onClose} className="text-text-on-accent/80 hover:text-text-on-accent">
+              <X size={18} />
+            </button>
           </div>
         </div>
 
@@ -263,12 +284,12 @@ function FormationModal({
             <Select className="mt-1" value={type} onChange={e => handleTypeChange(e.target.value as FormationType)}>
               {FORMATION_CATALOG.map(c => (
                 <option key={c.id} value={c.id}>
-                  {c.icon} {c.label} {c.mandatory ? '(obligatoria)' : ''}
+                  {c.label} {c.mandatory ? '(obligatoria)' : ''}
                 </option>
               ))}
             </Select>
             {catalog && (
-              <p className="text-[11px] text-gray-500 mt-1">{catalog.description}</p>
+              <p className="text-[11px] text-text-secondary mt-1">{catalog.description}</p>
             )}
           </div>
 
@@ -291,7 +312,7 @@ function FormationModal({
               <Label>Fecha de caducidad</Label>
               <Input className="mt-1" type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} />
               {catalog?.recommendedExpiryYears && (
-                <p className="text-[10px] text-gray-500 mt-0.5">
+                <p className="text-[10px] text-text-secondary mt-0.5">
                   Recomendado: {catalog.recommendedExpiryYears} {catalog.recommendedExpiryYears === 1 ? 'año' : 'años'}
                 </p>
               )}
@@ -317,7 +338,7 @@ function FormationModal({
               onChange={e => setDocumentUrl(e.target.value)}
               placeholder="https://..."
             />
-            <p className="text-[10px] text-gray-500 mt-0.5">
+            <p className="text-[10px] text-text-secondary mt-0.5">
               Para subir el PDF, hazlo en la pestaña Documentos y pega aquí el enlace.
             </p>
           </div>
@@ -334,7 +355,7 @@ function FormationModal({
           </div>
         </div>
 
-        <div className="px-5 py-3 border-t bg-gray-50 flex justify-end gap-2">
+        <div className="px-5 py-3 border-t bg-page flex justify-end gap-2">
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
           <Button onClick={handleSave} disabled={saving || !name.trim() || !issueDate}>
             {saving ? 'Guardando...' : (formation ? 'Guardar cambios' : 'Añadir formación')}
