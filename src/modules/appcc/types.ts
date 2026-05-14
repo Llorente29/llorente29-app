@@ -105,6 +105,14 @@ export interface AppccSchedule {
   created_by: string | null
 }
 
+export interface AppccScheduleResponsible {
+  id: string
+  schedule_id: string
+  user_id: string
+  role: 'primary' | 'backup'
+  created_at: string
+}
+
 // ============================================================
 // EJECUCIÓN
 // ============================================================
@@ -180,4 +188,45 @@ export interface AppccIncident {
   created_at: string
   updated_at: string
   created_by: string | null
+}
+
+// ============================================================
+// ONBOARDING (wizard de configuración inicial)
+// ============================================================
+
+/**
+ * Borrador del wizard de onboarding APPCC para un local.
+ * Vive solo en el state del componente OnboardingPage, no se persiste
+ * hasta que el admin pulsa "Guardar configuración".
+ */
+export interface AppccOnboardingDraft {
+  locationId: string
+  /** Horario habitual del local en formato 'HH:MM' (24h) */
+  openingTime: string
+  closingTime: string
+  /** Plantillas seleccionadas para activar como schedules diarios */
+  selectedTemplateIds: Set<string>
+  /**
+   * Hora deseada por plantilla seleccionada.
+   * - Si un valor es null o no está, no se programa hora específica.
+   * - Por defecto se rellena a partir de openingTime/closingTime según el momento sugerido.
+   */
+  scheduleTimes: Map<string, string | null>
+}
+
+/** Momento sugerido del día para una plantilla, usado por el wizard
+ *  para sugerir una hora por defecto a partir de apertura/cierre. */
+export type AppccDayPeriod = 'opening' | 'service' | 'closing' | 'anytime'
+
+/**
+ * Configuración por defecto de las 8 plantillas esenciales que la factory
+ * usa para preseleccionar y sugerir horas en el wizard.
+ * `templateCode` debe coincidir con AppccTemplate.code de la BBDD.
+ */
+export interface AppccEssentialPreset {
+  templateCode: string
+  dayPeriod: AppccDayPeriod
+  /** Offset en minutos respecto a apertura (positivo) o cierre (negativo).
+   *  Solo se usa cuando dayPeriod != 'anytime' para sugerir hora inicial. */
+  timeOffsetMinutes: number | null
 }

@@ -54,6 +54,31 @@ export async function listTodayExecutions(
 }
 
 /**
+ * Devuelve TODAS las ejecuciones de una fecha concreta en un local,
+ * sin filtrar por estado. Útil para la lazy generation, que necesita saber
+ * si ya existe alguna execution (en cualquier estado) para un schedule dado,
+ * antes de crear una nueva.
+ */
+export async function listExecutionsForDate(
+  locationId: string,
+  isoDate: string  // YYYY-MM-DD
+): Promise<AppccExecution[]> {
+  if (!supabase) return []
+
+  const { data, error } = await supabase
+    .from('appcc_executions')
+    .select('*')
+    .eq('location_id', locationId)
+    .eq('scheduled_date', isoDate)
+
+  if (error) {
+    console.error('[appcc/executionsService] listExecutionsForDate error', error)
+    throw error
+  }
+  return (data ?? []) as AppccExecution[]
+}
+
+/**
  * Devuelve ejecuciones en un rango de fechas (para histórico/inspecciones).
  */
 export async function listByDateRange(
@@ -116,18 +141,48 @@ export async function getExecution(
 }
 
 /**
- * Crea una ejecución manual (sin schedule asociado).
- * Útil para arrancar un checklist ad-hoc fuera de la programación.
+ * Opciones extra para crear una ejecución.
+ * Se usan principalmente desde la lazy generation:
+ *   - scheduleId   → enlaza esta execution con el schedule que la generó.
+ *   - scheduledTime → hora del día prevista, en HH:MM o HH:MM:SS.
+ */
+export interface CreateExecutionOptions {
+  scheduledDate?: string         // YYYY-MM-DD (default: hoy)
+  scheduleId?: string | null
+  scheduledTime?: string | null  // 'HH:MM' o 'HH:MM:SS'
+}
+
+/**
+ * Crea una ejecución.
+ *
+ * Usos:
+ *   - Manual ad-hoc (botón "+ Arrancar checklist"):
+ *       createExecution(accountId, locationId, templateId)
+ *   - Generada por un schedule (lazy generation en TodayPage):
+ *       createExecution(accountId, locationId, templateId, {
+ *         scheduleId: s.id,
+ *         scheduledTime: s.scheduled_time,
+ *       })
+ *
+ * El 4º parámetro acepta tanto un string (compatibilidad con la firma antigua,
+ * donde era simplemente scheduledDate) como un objeto CreateExecutionOptions.
  */
 export async function createExecution(
   accountId: string,
   locationId: string,
   templateId: string,
-  scheduledDate?: string // YYYY-MM-DD; default hoy
+  optionsOrDate?: string | CreateExecutionOptions
 ): Promise<AppccExecution> {
   if (!supabase) throw new Error('Supabase no disponible')
 
-  const date = scheduledDate ?? new Date().toISOString().slice(0, 10)
+  // Normalizar el cuarto argumento: string (legacy) o objeto (nuevo)
+  const opts: CreateExecutionOptions =
+    typeof optionsOrDate === 'string'
+      ? { scheduledDate: optionsOrDate }
+      : (optionsOrDate ?? {})
+
+  const date = opts.scheduledDate ?? new Date().toISOString().slice(0, 10)
+  const time = normalizeTime(opts.scheduledTime ?? null)
 
   const { data, error } = await supabase
     .from('appcc_executions')
@@ -135,7 +190,9 @@ export async function createExecution(
       account_id: accountId,
       location_id: locationId,
       template_id: templateId,
+      schedule_id: opts.scheduleId ?? null,
       scheduled_date: date,
+      scheduled_time: time,
       status: 'pending',
     })
     .select()
@@ -283,4 +340,15 @@ async function hashString(input: string): Promise<string> {
   return Array.from(new Uint8Array(buffer))
     .map(b => b.toString(16).padStart(2, '0'))
     .join('')
+}
+
+/**
+ * Normaliza un valor de hora al formato 'HH:MM:SS' que espera Postgres.
+ * Acepta 'HH:MM' o 'HH:MM:SS', null lo deja pasar.
+ */
+function normalizeTime(value: string | null): string | null {
+  if (value === null || value === undefined || value === '') return null
+  if (/^\d{2}:\d{2}$/.test(value)) return value + ':00'
+  if (/^\d{2}:\d{2}:\d{2}$/.test(value)) return value
+  return value
 }

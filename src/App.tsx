@@ -22,6 +22,7 @@ import UsuariosAccesosPage from './pages/UsuariosAccesosPage'
 import TodayPage from './modules/appcc/pages/TodayPage'
 import ExecutionPage from './modules/appcc/pages/ExecutionPage'
 import IncidentsPage from './modules/appcc/pages/IncidentsPage'
+import OnboardingPage from './modules/appcc/pages/OnboardingPage'
 import {
   getCurrentProfile,
   signOut,
@@ -37,7 +38,9 @@ import { gate } from '@/platform/feature-gate/featureGateService'
 
 type AppMode = 'gestor' | 'trabajador' | 'unset'
 
-const NAV: { id: Page; label: string; icon: string; section?: string }[] = [
+// Items del menú lateral. `roleRequired` opcional: si está, solo se muestra
+// a usuarios con ese rol. Ahora mismo lo usamos para 'admin' (configuración APPCC).
+const NAV: { id: Page; label: string; icon: string; section?: string; roleRequired?: 'admin' }[] = [
   { id: 'dashboard',              label: 'Dashboard',           icon: '⊞' },
   { id: 'staff',                  label: 'Personal',            icon: '👤', section: 'Personal' },
   { id: 'ahora_mismo',            label: 'Ahora mismo',         icon: '🟢' },
@@ -55,6 +58,7 @@ const NAV: { id: Page; label: string; icon: string; section?: string }[] = [
   { id: 'zonas_pedido',           label: 'Zonas de Pedido',     icon: '🛵' },
   { id: 'appcc_today',            label: 'APPCC: Hoy',          icon: '🍃', section: 'APPCC' },
   { id: 'appcc_incidents',        label: 'APPCC: Incidencias',  icon: '⚠️' },
+  { id: 'appcc_onboarding',       label: 'APPCC: Configurar',   icon: '⚙️', roleRequired: 'admin' },
   { id: 'locations',              label: 'Locales',             icon: '📍', section: 'Configuración' },
   { id: 'avisos_settings',        label: 'Avisos',              icon: '🔔' },
 ]
@@ -80,12 +84,16 @@ const PAGE_TITLES: Partial<Record<Page, string>> = {
   appcc_today: 'APPCC: Checklists de hoy',
   appcc_execution: 'APPCC: Ejecutar checklist',
   appcc_incidents: 'APPCC: Incidencias',
+  appcc_onboarding: 'APPCC: Configurar',
 }
 
 interface RenderPageContext {
   currentExecutionId: string | null
   openExecution: (id: string) => void
   closeExecution: () => void
+  currentOnboardingLocationId: string | null
+  openOnboarding: (locationId?: string | null) => void
+  closeOnboarding: (result: { saved: boolean; locationId: string | null }) => void
 }
 
 function renderPage(page: Page, ctx: RenderPageContext) {
@@ -116,6 +124,13 @@ function renderPage(page: Page, ctx: RenderPageContext) {
         return <TodayPage onOpenExecution={ctx.openExecution} />
       }
       return <ExecutionPage executionId={ctx.currentExecutionId} onBack={ctx.closeExecution} />
+    case 'appcc_onboarding':
+      return (
+        <OnboardingPage
+          initialLocationId={ctx.currentOnboardingLocationId}
+          onFinish={ctx.closeOnboarding}
+        />
+      )
     default:                  return <DashboardPage />
   }
 }
@@ -295,6 +310,8 @@ function AuthenticatedApp({ profile, onSignOut }: {
   const [perms, setPerms] = useState<Set<Page> | null>(null)
   // Para navegación a la página de ejecución de un checklist APPCC
   const [currentExecutionId, setCurrentExecutionId] = useState<string | null>(null)
+  // Para el wizard de onboarding APPCC
+  const [currentOnboardingLocationId, setCurrentOnboardingLocationId] = useState<string | null>(null)
   // Tasks e incidents del antiguo módulo Operaciones — se reactivarán con módulo APPCC
   const pending = 0
   const critInc = 0
@@ -329,17 +346,12 @@ function AuthenticatedApp({ profile, onSignOut }: {
 
   /**
    * Cierra el drawer móvil. Antes de aplicar aria-hidden al aside, devuelve
-   * el foco al botón hamburguesa. Si no hacemos esto, queda un botón con
-   * foco dentro de un contenedor con aria-hidden=true, y el navegador
-   * bloquea aria-hidden por motivos de accesibilidad.
+   * el foco al botón hamburguesa.
    */
   function handleCloseMobileMenu() {
-    // Quitar el foco del elemento actual (el botón del menú que se pulsó)
     if (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) {
       document.activeElement.blur()
     }
-    // Devolver el foco al botón hamburguesa, para que el teclado/lector
-    // de pantalla quede en un sitio coherente y accesible
     if (hamburgerRef.current) {
       hamburgerRef.current.focus()
     }
@@ -358,12 +370,14 @@ function AuthenticatedApp({ profile, onSignOut }: {
   // Cargar permisos del usuario según su rol
   useEffect(() => {
     async function loadPerms() {
-      // Admin: ve todo
+      // Admin: ve todo (incluyendo entradas con roleRequired)
       if (profile.role === 'admin') {
         setPerms(new Set(NAV.map(n => n.id)))
         return
       }
       // Manager: cargar permisos individuales de manager_permissions
+      // OJO: items con roleRequired='admin' nunca se añaden al set, así que
+      // los managers no los verán aunque tengan permisos amplios.
       if (profile.role === 'manager') {
         try {
           const mod = await import('./services/managerPermissionsService')
@@ -388,6 +402,9 @@ function AuthenticatedApp({ profile, onSignOut }: {
           // avisos_settings se mantiene visible si el manager tiene el flag antiguo show_tspoon_settings
           // (compatibilidad temporal hasta que se renombre la columna en Sprint 1)
           if (p.show_tspoon_settings) allowed.add('avisos_settings')
+          // Nota: appcc_today, appcc_incidents y appcc_onboarding NO están
+          // todavía en manager_permissions, así que los managers no los ven.
+          // Apuntar como TODO para Sprint 3.
           setPerms(allowed)
         } catch (e) {
           console.error('[perms] load:', e)
@@ -418,8 +435,13 @@ function AuthenticatedApp({ profile, onSignOut }: {
   }
 
   // Auto-redirigir a primera página permitida si la actual no lo está
-  // (excepción: appcc_execution se permite siempre si el usuario llegó vía TodayPage)
-  if (perms && !perms.has(page) && perms.size > 0 && page !== 'appcc_execution') {
+  // (excepciones: appcc_execution y appcc_onboarding se permiten si el usuario
+  // llegó vía TodayPage o vía un callback interno)
+  if (
+    perms && !perms.has(page) && perms.size > 0
+    && page !== 'appcc_execution'
+    && page !== 'appcc_onboarding'
+  ) {
     const firstAllowed = NAV.find(n => perms.has(n.id))?.id || 'dashboard'
     if (firstAllowed !== page) {
       setTimeout(() => setPage(firstAllowed), 0)
@@ -460,6 +482,18 @@ function AuthenticatedApp({ profile, onSignOut }: {
     closeExecution: () => {
       setCurrentExecutionId(null)
       setPage('appcc_today')
+    },
+    currentOnboardingLocationId,
+    openOnboarding: (locationId?: string | null) => {
+      setCurrentOnboardingLocationId(locationId ?? null)
+      setPage('appcc_onboarding')
+    },
+    closeOnboarding: (result) => {
+      setCurrentOnboardingLocationId(null)
+      // Si guardó, llevarlo a Hoy del local configurado.
+      // Si canceló, volverlo a la página anterior (o Hoy por defecto).
+      setPage('appcc_today')
+      void result // se usa por TodayPage para refrescar cuando recibe el callback
     },
   }
 

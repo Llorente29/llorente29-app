@@ -2,11 +2,17 @@
 // Página "Checklists APPCC de hoy".
 // Muestra las ejecuciones pendientes/en curso del día para un local seleccionado.
 // Permite también arrancar checklists ad-hoc desde el catálogo de plantillas.
+//
+// LAZY GENERATION:
+// Al entrar en la página (o al cambiar de local), revisa los schedules activos
+// que aplican hoy y crea automáticamente las executions pendientes que falten.
+// De este modo, abrir APPCC: Hoy es la "alarma operativa" del día.
 
 import { useEffect, useMemo, useState } from 'react'
 import type { Location } from '@/types'
 import { useApp } from '@/context/AppContext'
 import * as executionsService from '@/modules/appcc/services/executionsService'
+import * as schedulesService from '@/modules/appcc/services/schedulesService'
 import * as templatesService from '@/modules/appcc/services/templatesService'
 import type {
   AppccExecution,
@@ -18,6 +24,7 @@ import type {
 // Colores del branding Foodint
 const GRANATE = '#7C1A1A'
 const BEIGE = '#F5E9D9'
+const ACCOUNT_ID_FOODINT = '00000000-0000-0000-0000-000000000001'
 
 const STATUS_LABELS: Record<AppccExecutionStatus, string> = {
   pending: 'Pendiente',
@@ -62,19 +69,7 @@ export default function TodayPage({ onOpenExecution }: TodayPageProps) {
     }
   }, [activeLocations, selectedLocationId])
 
-  useEffect(() => {
-    if (!selectedLocationId) return
-    let cancelled = false
-    setLoading(true)
-    setError(null)
-    executionsService
-      .listTodayExecutions(selectedLocationId)
-      .then(data => { if (!cancelled) setExecutions(data) })
-      .catch(err => { if (!cancelled) setError(err.message || 'Error cargando checklists') })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [selectedLocationId])
-
+  // Cargar catálogo (plans + templates) — independiente del local
   useEffect(() => {
     Promise.all([
       templatesService.listPlans(),
@@ -86,6 +81,85 @@ export default function TodayPage({ onOpenExecution }: TodayPageProps) {
       console.error('[TodayPage] Error cargando catálogo', err)
     })
   }, [])
+
+  /**
+   * Lazy generation + listado de executions del día.
+   *
+   * Flujo:
+   *   1. Lee los schedules activos que aplican hoy en este local.
+   *   2. Lee las executions ya existentes de hoy (en cualquier estado).
+   *   3. Para cada schedule sin execution todavía, crea una pending.
+   *   4. Lista las executions pending/in_progress/overdue del día para pintar.
+   *
+   * Se ejecuta cada vez que cambia el local seleccionado.
+   */
+  useEffect(() => {
+    if (!selectedLocationId) return
+    let cancelled = false
+
+    async function loadAndEnsure() {
+      setLoading(true)
+      setError(null)
+
+      try {
+        const locationId = selectedLocationId!  // garantizado por el if anterior
+        const today = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
+
+        // 1. Schedules del día
+        const schedulesToday = await schedulesService.getSchedulesForDate(locationId, today)
+
+        if (schedulesToday.length > 0) {
+          // 2. Executions ya existentes hoy en este local (cualquier estado)
+          const existingExecs = await executionsService.listExecutionsForDate(locationId, today)
+
+          // Para evitar duplicados, miramos qué schedule_ids ya tienen execution.
+          // Las executions manuales (sin schedule_id) no cuentan aquí.
+          const existingScheduleIds = new Set<string>()
+          for (const e of existingExecs) {
+            if (e.schedule_id) existingScheduleIds.add(e.schedule_id)
+          }
+
+          // 3. Schedules sin execution todavía → crear pending
+          const toCreate = schedulesToday.filter(s => !existingScheduleIds.has(s.id))
+
+          if (toCreate.length > 0) {
+            console.log(
+              `[TodayPage] Lazy generation: creando ${toCreate.length} executions pending`
+            )
+            for (const schedule of toCreate) {
+              if (cancelled) return
+              await executionsService.createExecution(
+                ACCOUNT_ID_FOODINT,
+                locationId,
+                schedule.template_id,
+                {
+                  scheduleId: schedule.id,
+                  scheduledDate: today,
+                  scheduledTime: schedule.scheduled_time,
+                }
+              )
+            }
+          }
+        }
+
+        // 4. Listar para pintar
+        if (cancelled) return
+        const data = await executionsService.listTodayExecutions(locationId)
+        if (!cancelled) setExecutions(data)
+      } catch (err) {
+        if (!cancelled) {
+          const msg = err instanceof Error ? err.message : 'Error cargando checklists'
+          setError(msg)
+          console.error('[TodayPage] loadAndEnsure error', err)
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    loadAndEnsure()
+    return () => { cancelled = true }
+  }, [selectedLocationId])
 
   const planById = useMemo(() => {
     const m = new Map<string, AppccPlan>()
@@ -105,16 +179,15 @@ export default function TodayPage({ onOpenExecution }: TodayPageProps) {
     if (!template) return
 
     try {
-      const accountId = '00000000-0000-0000-0000-000000000001'
       const newExec = await executionsService.createExecution(
-        accountId,
+        ACCOUNT_ID_FOODINT,
         selectedLocationId,
         templateId
       )
       const fresh = await executionsService.listTodayExecutions(selectedLocationId)
       setExecutions(fresh)
       setShowCatalog(false)
-      console.log('[TodayPage] Checklist creado:', newExec.id)
+      console.log('[TodayPage] Checklist manual creado:', newExec.id)
       onOpenExecution?.(newExec.id)
     } catch (err) {
       console.error('[TodayPage] Error creando checklist', err)
