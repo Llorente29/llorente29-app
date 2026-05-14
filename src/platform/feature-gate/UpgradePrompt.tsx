@@ -1,9 +1,9 @@
 // src/platform/feature-gate/UpgradePrompt.tsx
 // Componente que se muestra cuando un usuario intenta acceder a una
 // funcionalidad bloqueada por su plan actual.
-// Branding Foodint: granate #7C1A1A, beige #F5E9D9, Instrument Serif en titulares.
 
 import type { FC } from 'react'
+import { Lock } from 'lucide-react'
 
 export interface UpgradePromptProps {
   /** Clave de la feature concreta que se intentó usar (opcional, informativo) */
@@ -19,9 +19,6 @@ export interface UpgradePromptProps {
   /** Texto del botón. Por defecto: "Ver planes disponibles". */
   ctaLabel?: string
 }
-
-const GRANATE = '#7C1A1A'
-const BEIGE = '#F5E9D9'
 
 export const UpgradePrompt: FC<UpgradePromptProps> = ({
   feature,
@@ -45,37 +42,26 @@ export const UpgradePrompt: FC<UpgradePromptProps> = ({
     <div
       role="region"
       aria-label="Funcionalidad bloqueada"
-      className="w-full max-w-xl mx-auto my-8 rounded-2xl shadow-md border overflow-hidden"
-      style={{ backgroundColor: BEIGE, borderColor: GRANATE }}
+      className="w-full max-w-xl mx-auto my-8 rounded-xl shadow-md border border-accent bg-accent-bg overflow-hidden"
     >
-      <div
-        className="px-6 py-3 flex items-center gap-3"
-        style={{ backgroundColor: GRANATE, color: BEIGE }}
-      >
-        <span aria-hidden="true" className="text-xl leading-none">🔒</span>
+      <div className="px-6 py-3 flex items-center gap-2 bg-accent text-text-on-accent">
+        <Lock size={18} />
         <span className="text-sm uppercase tracking-wider font-medium">
           Plan superior requerido
         </span>
       </div>
 
       <div className="px-6 py-6">
-        <h2
-          className="text-2xl mb-3"
-          style={{
-            fontFamily: '"Instrument Serif", serif',
-            color: GRANATE,
-            lineHeight: 1.2,
-          }}
-        >
+        <h2 className="font-display text-2xl mb-3 text-accent leading-tight">
           {resolvedTitle}
         </h2>
 
-        <p className="text-sm leading-relaxed" style={{ color: '#3a2a2a' }}>
+        <p className="text-sm leading-relaxed text-text-primary">
           {resolvedDescription}
         </p>
 
         {(feature || submodule) && (
-          <dl className="mt-4 text-xs grid grid-cols-[auto_1fr] gap-x-3 gap-y-1" style={{ color: '#3a2a2a' }}>
+          <dl className="mt-4 text-xs grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-text-primary">
             {submodule && (
               <>
                 <dt className="font-semibold">Módulo:</dt>
@@ -96,8 +82,7 @@ export const UpgradePrompt: FC<UpgradePromptProps> = ({
             <button
               type="button"
               onClick={onUpgrade}
-              className="px-5 py-2.5 rounded-lg text-sm font-medium transition-opacity hover:opacity-90 active:opacity-80"
-              style={{ backgroundColor: GRANATE, color: BEIGE }}
+              className="px-5 py-2.5 rounded-lg text-sm font-medium transition-base bg-accent text-text-on-accent hover:bg-accent-hover"
             >
               {ctaLabel}
             </button>
