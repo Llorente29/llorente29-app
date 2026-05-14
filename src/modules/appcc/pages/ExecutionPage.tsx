@@ -13,9 +13,7 @@ import type {
   AppccExecutionResponse,
   AppccTemplateWithItems,
 } from '@/modules/appcc/types'
-
-const GRANATE = '#7C1A1A'
-const BEIGE = '#F5E9D9'
+import { ArrowLeft, Check, Circle, AlertCircle, AlertTriangle, CheckCircle2 } from 'lucide-react'
 
 interface ExecutionPageProps {
   executionId: string
@@ -222,7 +220,7 @@ export default function ExecutionPage({ executionId, onBack }: ExecutionPageProp
   if (loading) {
     return (
       <div className="p-4 sm:p-6 max-w-3xl mx-auto">
-        <div className="py-12 text-center text-base text-gray-500">Cargando checklist...</div>
+        <div className="py-12 text-center text-base text-text-secondary">Cargando checklist...</div>
       </div>
     )
   }
@@ -233,12 +231,13 @@ export default function ExecutionPage({ executionId, onBack }: ExecutionPageProp
         <button
           type="button"
           onClick={onBack}
-          className="text-base mb-4 text-gray-500 hover:text-gray-700 min-h-[44px]"
+          className="inline-flex items-center gap-1.5 text-base mb-4 text-text-secondary hover:text-text-primary transition-base min-h-touch"
         >
-          ← Volver
+          <ArrowLeft size={16} /> Volver
         </button>
-        <div className="py-4 px-4 rounded-lg border border-red-200 bg-red-50 text-red-700 text-base">
-          {error ?? 'No se pudo cargar la ejecución.'}
+        <div className="py-4 px-4 rounded-md border border-danger/30 bg-danger-bg text-danger text-base inline-flex items-start gap-2 w-full">
+          <AlertCircle size={18} className="shrink-0 mt-0.5" />
+          <span>{error ?? 'No se pudo cargar la ejecución.'}</span>
         </div>
       </div>
     )
@@ -248,67 +247,55 @@ export default function ExecutionPage({ executionId, onBack }: ExecutionPageProp
   if (execution.status === 'completed') {
     return (
       <div className="p-4 sm:p-6 max-w-3xl mx-auto">
-        <div
-          className="rounded-2xl p-6 sm:p-8 text-center border"
-          style={{ backgroundColor: BEIGE, borderColor: GRANATE }}
-        >
-          <div className="text-7xl mb-3">✓</div>
-          <h1
-            className="text-4xl mb-2"
-            style={{ fontFamily: '"Instrument Serif", serif', color: GRANATE }}
-          >
+        <div className="rounded-xl p-6 sm:p-8 text-center border border-border-default bg-accent-bg">
+          <CheckCircle2 size={64} className="text-success mx-auto mb-3" />
+          <h1 className="text-4xl font-display text-text-primary mb-2">
             Checklist completado y firmado
           </h1>
-          <p className="text-base text-gray-700 mb-4">{template.name}</p>
+          <p className="text-base text-text-secondary mb-4">{template.name}</p>
 
           {execution.has_failures && execution.failure_count > 0 ? (
-            <div
-              className="inline-block px-4 py-2.5 rounded-lg mb-6 text-base"
-              style={{ backgroundColor: '#fef3c7', color: '#92400e', border: '1px solid #fbbf24' }}
-            >
-              ⚠️ {execution.failure_count} incidencia{execution.failure_count > 1 ? 's' : ''} abierta{execution.failure_count > 1 ? 's' : ''} pendiente{execution.failure_count > 1 ? 's' : ''} de gestión
+            <div className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md mb-6 text-base bg-warning-bg text-warning border border-warning/30">
+              <AlertTriangle size={16} />
+              {execution.failure_count} incidencia{execution.failure_count > 1 ? 's' : ''} abierta{execution.failure_count > 1 ? 's' : ''} pendiente{execution.failure_count > 1 ? 's' : ''} de gestión
             </div>
           ) : (
-            <div
-              className="inline-block px-4 py-2.5 rounded-lg mb-6 text-base"
-              style={{ backgroundColor: '#dcfce7', color: '#166534', border: '1px solid #4ade80' }}
-            >
-              ✓ Sin incidencias
+            <div className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md mb-6 text-base bg-success-bg text-success border border-success/30">
+              <Check size={16} /> Sin incidencias
             </div>
           )}
 
-          <div className="text-sm text-gray-500 mb-6">
+          <div className="text-sm text-text-secondary mb-6">
             Firmado el {execution.completed_at ? new Date(execution.completed_at).toLocaleString('es-ES') : '—'}
           </div>
 
           <button
             type="button"
             onClick={onBack}
-            className="px-6 py-3 rounded-lg text-base font-medium transition-opacity hover:opacity-90 min-h-[48px]"
-            style={{ backgroundColor: GRANATE, color: BEIGE }}
+            className="px-6 py-3 rounded-md text-base font-medium bg-accent text-text-on-accent hover:bg-accent-hover transition-base min-h-[48px]"
           >
             Volver a Hoy
           </button>
         </div>
 
         <details className="mt-6">
-          <summary className="text-base text-gray-500 cursor-pointer hover:text-gray-700 py-2">
+          <summary className="text-base text-text-secondary cursor-pointer hover:text-text-primary py-2 transition-base">
             Ver respuestas registradas
           </summary>
           <div className="mt-3 space-y-2">
             {template.items.map(item => {
               const r = responses.get(item.id)
               return (
-                <div key={item.id} className="p-4 bg-white rounded-lg border border-gray-200 text-base">
-                  <div className="font-medium">{item.label}</div>
-                  <div className="text-sm text-gray-500 mt-1">
+                <div key={item.id} className="p-4 bg-card rounded-md border border-border-default text-base">
+                  <div className="font-medium text-text-primary">{item.label}</div>
+                  <div className="text-sm text-text-secondary mt-1">
                     {r?.numeric_value !== null && r?.numeric_value !== undefined && `${r.numeric_value} ${item.numeric_unit ?? ''}`}
                     {r?.boolean_value === true && '✓ Sí'}
                     {r?.boolean_value === false && '✗ No'}
                     {r?.text_value && r.text_value}
                     {r?.date_value && r.date_value}
                     {!r && <span className="italic">Sin respuesta</span>}
-                    {r?.is_out_of_range && <span className="text-red-600 ml-2">⚠️ Fuera de rango</span>}
+                    {r?.is_out_of_range && <span className="text-danger ml-2 inline-flex items-center gap-1"><AlertTriangle size={12} /> Fuera de rango</span>}
                   </div>
                 </div>
               )
@@ -333,37 +320,34 @@ export default function ExecutionPage({ executionId, onBack }: ExecutionPageProp
       <button
         type="button"
         onClick={onBack}
-        className="text-base mb-4 text-gray-500 hover:text-gray-700 py-2 min-h-[44px]"
+        className="inline-flex items-center gap-1.5 text-base mb-4 text-text-secondary hover:text-text-primary py-2 min-h-touch transition-base"
       >
-        ← Volver a Hoy
+        <ArrowLeft size={16} /> Volver a Hoy
       </button>
 
       <header className="mb-6">
-        <div className="text-sm text-gray-500 mb-1">{template.plan.name}</div>
-        <h1
-          className="text-4xl mb-2"
-          style={{ fontFamily: '"Instrument Serif", serif', color: GRANATE }}
-        >
+        <div className="text-sm text-text-secondary mb-1">{template.plan.name}</div>
+        <h1 className="text-4xl font-display text-text-primary mb-2">
           {template.name}
         </h1>
         {template.description && (
-          <p className="text-base text-gray-600">{template.description}</p>
+          <p className="text-base text-text-secondary">{template.description}</p>
         )}
       </header>
 
-      <div className="mb-6 p-4 sm:p-5 rounded-lg" style={{ backgroundColor: BEIGE }}>
+      <div className="mb-6 p-4 sm:p-5 rounded-lg bg-accent-bg border border-border-default">
         <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
-          <span className="text-sm font-semibold uppercase tracking-wider" style={{ color: GRANATE }}>
+          <span className="text-sm font-semibold uppercase tracking-wider text-accent">
             Progreso
           </span>
-          <span className="text-sm font-medium" style={{ color: GRANATE }}>
+          <span className="text-sm font-medium text-accent">
             {answeredRequired} / {totalRequired} obligatorios ({progressPct}%)
           </span>
         </div>
-        <div className="h-3 bg-white rounded-full overflow-hidden">
+        <div className="h-3 bg-card rounded-full overflow-hidden">
           <div
-            className="h-full transition-all"
-            style={{ width: `${progressPct}%`, backgroundColor: GRANATE }}
+            className="h-full bg-accent transition-all"
+            style={{ width: `${progressPct}%` }}
           />
         </div>
       </div>
@@ -393,25 +377,28 @@ export default function ExecutionPage({ executionId, onBack }: ExecutionPageProp
           return (
             <div
               key={item.id}
-              className="p-4 sm:p-5 bg-white rounded-lg border border-gray-200"
+              className="p-4 sm:p-5 bg-card rounded-lg border border-border-default"
             >
               <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
                 <div className="flex items-start gap-3 flex-1 min-w-0">
-                  <span className="text-xl shrink-0 mt-0.5">{answered ? '✓' : '○'}</span>
+                  {answered
+                    ? <Check size={20} className="text-success shrink-0 mt-0.5" />
+                    : <Circle size={20} className="text-text-secondary shrink-0 mt-0.5" />
+                  }
                   <div className="flex-1 min-w-0">
-                    <div className="text-base font-medium">
+                    <div className="text-base font-medium text-text-primary">
                       {item.label}
-                      {item.is_required && <span className="text-red-500 ml-1">*</span>}
+                      {item.is_required && <span className="text-danger ml-1">*</span>}
                     </div>
                     {item.help_text && (
-                      <div className="text-sm text-gray-500 mt-0.5">{item.help_text}</div>
+                      <div className="text-sm text-text-secondary mt-0.5">{item.help_text}</div>
                     )}
                   </div>
                 </div>
                 <div className="shrink-0 text-sm">
-                  {status === 'saving' && <span className="text-gray-400">Guardando…</span>}
-                  {status === 'saved' && <span className="text-green-600">✓ Guardado</span>}
-                  {status === 'error' && <span className="text-red-600">⚠ Error</span>}
+                  {status === 'saving' && <span className="text-text-secondary">Guardando…</span>}
+                  {status === 'saved' && <span className="text-success inline-flex items-center gap-1"><Check size={12} /> Guardado</span>}
+                  {status === 'error' && <span className="text-danger inline-flex items-center gap-1"><AlertCircle size={12} /> Error</span>}
                 </div>
               </div>
 
@@ -428,14 +415,16 @@ export default function ExecutionPage({ executionId, onBack }: ExecutionPageProp
       </section>
 
       {!allRequiredAnswered && (
-        <div className="mb-4 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-base text-amber-800">
-          ⚠️ Faltan {missingRequired.length} respuesta{missingRequired.length > 1 ? 's' : ''} obligatoria{missingRequired.length > 1 ? 's' : ''} por rellenar.
+        <div className="mb-4 px-4 py-3 rounded-md bg-warning-bg border border-warning/30 text-base text-warning inline-flex items-start gap-2 w-full">
+          <AlertTriangle size={18} className="shrink-0 mt-0.5" />
+          <span>Faltan {missingRequired.length} respuesta{missingRequired.length > 1 ? 's' : ''} obligatoria{missingRequired.length > 1 ? 's' : ''} por rellenar.</span>
         </div>
       )}
 
       {completeError && (
-        <div className="mb-4 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-base text-red-700">
-          {completeError}
+        <div className="mb-4 px-4 py-3 rounded-md bg-danger-bg border border-danger/30 text-base text-danger inline-flex items-start gap-2 w-full">
+          <AlertCircle size={18} className="shrink-0 mt-0.5" />
+          <span>{completeError}</span>
         </div>
       )}
 
@@ -443,20 +432,16 @@ export default function ExecutionPage({ executionId, onBack }: ExecutionPageProp
         type="button"
         disabled={!allRequiredAnswered || completing}
         onClick={handleComplete}
-        className="w-full py-4 sm:py-5 rounded-xl text-lg font-semibold transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed min-h-[56px]"
-        style={{
-          backgroundColor: GRANATE,
-          color: BEIGE,
-        }}
+        className="w-full py-4 sm:py-5 rounded-lg text-lg font-semibold bg-accent text-text-on-accent hover:bg-accent-hover transition-base disabled:opacity-50 disabled:cursor-not-allowed min-h-[56px] inline-flex items-center justify-center gap-2"
       >
         {completing
           ? 'Firmando…'
           : allRequiredAnswered
-            ? '✓ Completar y firmar checklist'
+            ? <><Check size={20} /> Completar y firmar checklist</>
             : `Completa los ${missingRequired.length} obligatorios pendientes`}
       </button>
 
-      <p className="text-sm text-gray-500 mt-3 text-center">
+      <p className="text-sm text-text-secondary mt-3 text-center">
         Al firmar quedará registrada tu identidad y la hora exacta. Firma electrónica simple según eIDAS UE 910/2014.
       </p>
     </div>
