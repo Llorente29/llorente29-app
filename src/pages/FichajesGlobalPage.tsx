@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { LogIn, LogOut, Users, Clock, Activity } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { Badge, Card } from '../components/ui'
 
@@ -34,43 +35,43 @@ export default function FichajesGlobalPage() {
   })
 
   const stats = [
-    { label: 'Fichajes', val: allEntries.length, color: 'bg-blue-50 text-blue-700' },
-    { label: 'Empleados activos', val: filtered.filter(e => e.clockEntries.some(c => c.datetime >= dateFrom)).length, color: 'bg-emerald-50 text-emerald-700' },
-    { label: 'Fichajes hoy', val: allEntries.filter(e => e.datetime.startsWith(today.toISOString().slice(0, 10))).length, color: 'bg-violet-50 text-violet-700' },
-    { label: 'Trabajando ahora', val: filtered.filter(e => e.clockEntries[0]?.type === 'entrada').length, color: 'bg-amber-50 text-amber-700' },
+    { label: 'Fichajes', val: allEntries.length, icon: Clock },
+    { label: 'Empleados activos', val: filtered.filter(e => e.clockEntries.some(c => c.datetime >= dateFrom)).length, icon: Users },
+    { label: 'Fichajes hoy', val: allEntries.filter(e => e.datetime.startsWith(today.toISOString().slice(0, 10))).length, icon: Activity },
+    { label: 'Trabajando ahora', val: filtered.filter(e => e.clockEntries[0]?.type === 'entrada').length, icon: LogIn },
   ]
 
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl" style={{ fontFamily: 'Instrument Serif, serif' }}>Control Horario</h1>
-        <p className="text-sm text-gray-500 mt-0.5">{allEntries.length} fichajes en el periodo</p>
+        <h1 className="font-display text-2xl text-accent">Control Horario</h1>
+        <p className="text-sm text-text-secondary mt-0.5">{allEntries.length} fichajes en el periodo</p>
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-3 p-4 bg-gray-50 rounded-2xl border">
+      <div className="flex flex-wrap gap-3 p-4 bg-page rounded-xl border border-border-default">
         <div className="flex items-center gap-2">
-          <label className="text-xs text-gray-500">Desde</label>
+          <label className="text-xs text-text-secondary">Desde</label>
           <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-            className="border rounded-lg px-2 py-1.5 text-sm bg-white" />
+            className="border border-border-default rounded-md px-2 py-1.5 text-sm bg-card text-text-primary" />
         </div>
         <div className="flex items-center gap-2">
-          <label className="text-xs text-gray-500">Hasta</label>
+          <label className="text-xs text-text-secondary">Hasta</label>
           <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-            className="border rounded-lg px-2 py-1.5 text-sm bg-white" />
+            className="border border-border-default rounded-md px-2 py-1.5 text-sm bg-card text-text-primary" />
         </div>
         <div className="flex items-center gap-2">
-          <label className="text-xs text-gray-500">Empleado</label>
+          <label className="text-xs text-text-secondary">Empleado</label>
           <select value={empFilter} onChange={e => setEmpFilter(e.target.value)}
-            className="border rounded-lg px-2 py-1.5 text-sm bg-white">
+            className="border border-border-default rounded-md px-2 py-1.5 text-sm bg-card text-text-primary">
             <option value="">Todos</option>
             {staff.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
           </select>
         </div>
         <div className="flex items-center gap-2">
-          <label className="text-xs text-gray-500">Local</label>
+          <label className="text-xs text-text-secondary">Local</label>
           <select value={locFilter} onChange={e => setLocFilter(e.target.value)}
-            className="border rounded-lg px-2 py-1.5 text-sm bg-white">
+            className="border border-border-default rounded-md px-2 py-1.5 text-sm bg-card text-text-primary">
             <option value="todas">Todos</option>
             {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
           </select>
@@ -79,49 +80,58 @@ export default function FichajesGlobalPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {stats.map(s => (
-          <div key={s.label} className={`p-4 rounded-xl border ${s.color}`}>
-            <p className="text-2xl font-bold">{s.val}</p>
-            <p className="text-xs mt-0.5">{s.label}</p>
-          </div>
-        ))}
+        {stats.map(s => {
+          const Icon = s.icon
+          return (
+            <div key={s.label} className="p-4 rounded-lg border border-border-default bg-accent-bg text-accent">
+              <div className="flex items-center gap-2 mb-1">
+                <Icon size={18} />
+                <p className="text-2xl font-bold">{s.val}</p>
+              </div>
+              <p className="text-xs">{s.label}</p>
+            </div>
+          )
+        })}
       </div>
 
       {/* Fichajes table */}
       <Card>
-        <div className="p-4 border-b bg-gray-50 rounded-t-2xl">
-          <h3 className="font-semibold text-sm">Todos los fichajes</h3>
+        <div className="p-4 border-b border-border-default bg-page rounded-t-xl">
+          <h3 className="font-semibold text-sm text-text-primary">Todos los fichajes</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead><tr className="border-b bg-gray-50">
-              <th className="p-3 text-left text-xs font-semibold text-gray-500">Empleado</th>
-              <th className="p-3 text-left text-xs font-semibold text-gray-500">Tipo</th>
-              <th className="p-3 text-left text-xs font-semibold text-gray-500">Fecha y hora</th>
-              <th className="p-3 text-left text-xs font-semibold text-gray-500 hidden sm:table-cell">Turno</th>
-              <th className="p-3 text-left text-xs font-semibold text-gray-500 hidden sm:table-cell">GPS</th>
+            <thead><tr className="border-b border-border-default bg-page">
+              <th className="p-3 text-left text-xs font-semibold text-text-secondary">Empleado</th>
+              <th className="p-3 text-left text-xs font-semibold text-text-secondary">Tipo</th>
+              <th className="p-3 text-left text-xs font-semibold text-text-secondary">Fecha y hora</th>
+              <th className="p-3 text-left text-xs font-semibold text-text-secondary hidden sm:table-cell">Turno</th>
+              <th className="p-3 text-left text-xs font-semibold text-text-secondary hidden sm:table-cell">GPS</th>
             </tr></thead>
             <tbody>
               {allEntries.length === 0 ? (
-                <tr><td colSpan={5} className="p-8 text-center text-gray-400 text-sm">Sin fichajes en este periodo</td></tr>
+                <tr><td colSpan={5} className="p-8 text-center text-text-secondary text-sm">Sin fichajes en este periodo</td></tr>
               ) : allEntries.map(e => (
-                <tr key={e.id + e.datetime} className="border-b last:border-0 hover:bg-gray-50">
+                <tr key={e.id + e.datetime} className="border-b border-border-default last:border-0 hover:bg-accent-bg">
                   <td className="p-3">
-                    <p className="font-medium text-sm">{e.employeeName}</p>
-                    <p className="text-xs text-gray-500">{e.employeePos}</p>
+                    <p className="font-medium text-sm text-text-primary">{e.employeeName}</p>
+                    <p className="text-xs text-text-secondary">{e.employeePos}</p>
                   </td>
                   <td className="p-3">
                     <Badge color={e.type === 'entrada' ? 'green' : 'red'}>
-                      {e.type === 'entrada' ? '▶ Entrada' : '⏹ Salida'}
+                      <span className="inline-flex items-center gap-1">
+                        {e.type === 'entrada' ? <LogIn size={12} /> : <LogOut size={12} />}
+                        {e.type === 'entrada' ? 'Entrada' : 'Salida'}
+                      </span>
                     </Badge>
                   </td>
-                  <td className="p-3">
+                  <td className="p-3 text-text-primary">
                     <span className="font-medium">{new Date(e.datetime).toLocaleString('es-ES')}</span>
                     {e.roundingApplied && <Badge color="yellow" className="ml-1">redondeado</Badge>}
                     {!e.roundingApplied && (e.diffMinutes || 0) > 10 && <Badge color="red" className="ml-1">+{e.diffMinutes}min</Badge>}
                   </td>
-                  <td className="p-3 text-xs text-gray-500 hidden sm:table-cell">{e.scheduled || '—'}</td>
-                  <td className="p-3 text-xs text-gray-500 hidden sm:table-cell">{e.address || '—'}</td>
+                  <td className="p-3 text-xs text-text-secondary hidden sm:table-cell">{e.scheduled || '—'}</td>
+                  <td className="p-3 text-xs text-text-secondary hidden sm:table-cell">{e.address || '—'}</td>
                 </tr>
               ))}
             </tbody>
@@ -131,26 +141,26 @@ export default function FichajesGlobalPage() {
 
       {/* Summary table */}
       <Card>
-        <div className="p-4 border-b bg-gray-50 rounded-t-2xl">
-          <h3 className="font-semibold text-sm">Resumen por empleado</h3>
+        <div className="p-4 border-b border-border-default bg-page rounded-t-xl">
+          <h3 className="font-semibold text-sm text-text-primary">Resumen por empleado</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead><tr className="border-b bg-gray-50">
-              <th className="p-3 text-left text-xs font-semibold text-gray-500">Empleado</th>
-              <th className="p-3 text-center text-xs font-semibold text-gray-500">Fichajes</th>
-              <th className="p-3 text-center text-xs font-semibold text-gray-500">Horas</th>
-              <th className="p-3 text-center text-xs font-semibold text-gray-500">Estado</th>
+            <thead><tr className="border-b border-border-default bg-page">
+              <th className="p-3 text-left text-xs font-semibold text-text-secondary">Empleado</th>
+              <th className="p-3 text-center text-xs font-semibold text-text-secondary">Fichajes</th>
+              <th className="p-3 text-center text-xs font-semibold text-text-secondary">Horas</th>
+              <th className="p-3 text-center text-xs font-semibold text-text-secondary">Estado</th>
             </tr></thead>
             <tbody>
               {summary.map(e => (
-                <tr key={e.id} className="border-b last:border-0 hover:bg-gray-50">
+                <tr key={e.id} className="border-b border-border-default last:border-0 hover:bg-accent-bg">
                   <td className="p-3">
-                    <p className="font-medium">{e.name}</p>
-                    <p className="text-xs text-gray-500">{e.position}</p>
+                    <p className="font-medium text-text-primary">{e.name}</p>
+                    <p className="text-xs text-text-secondary">{e.position}</p>
                   </td>
-                  <td className="p-3 text-center">{e.totalEntries}</td>
-                  <td className="p-3 text-center font-medium">{e.totalHours}h</td>
+                  <td className="p-3 text-center text-text-primary">{e.totalEntries}</td>
+                  <td className="p-3 text-center font-medium text-text-primary">{e.totalHours}h</td>
                   <td className="p-3 text-center">
                     <Badge color={e.clockEntries[0]?.type === 'entrada' ? 'green' : 'gray'}>
                       {e.clockEntries[0]?.type === 'entrada' ? 'Dentro' : 'Fuera'}
