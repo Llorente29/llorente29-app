@@ -13,6 +13,12 @@ import {
   deletePermanentEmployee,
 } from '../services/employeeAuthService'
 import { getCurrentProfile } from '../services/authService'
+import {
+  BarChart3, Users, AlertTriangle, Search, LogOut, Trash2, RefreshCw,
+  Camera, LogIn, Square, Mail, X, ShieldCheck, Calendar, Sun, Moon, Ban,
+  User, UserMinus, UserX, Briefcase, FileText, BookOpen, Clock,
+  type LucideIcon,
+} from 'lucide-react'
 
 
 const POSITIONS = ['Encargado', 'Jefe de cocina', 'Cocinero', 'Ayudante cocina', 'Camarero', 'Barra', 'Hostess', 'Limpieza', 'Gerente', 'Otro']
@@ -33,12 +39,12 @@ const TERMINATION_LABELS: Record<TerminationType, string> = {
   otro: 'Otro',
 }
 
-const TERMINATION_OPTIONS: { id: TerminationType; label: string; icon: string; description: string }[] = [
-  { id: 'voluntaria', label: 'Voluntaria', icon: '🚶', description: 'El empleado ha decidido marcharse' },
-  { id: 'fin_contrato', label: 'Fin de contrato', icon: '📅', description: 'Contrato temporal que llega a su fin' },
-  { id: 'despido', label: 'Despido', icon: '⚠️', description: 'Por causas objetivas o disciplinarias' },
-  { id: 'jubilacion', label: 'Jubilación', icon: '👴', description: 'Jubilación ordinaria o anticipada' },
-  { id: 'otro', label: 'Otro', icon: '📋', description: 'Otra causa de baja' },
+const TERMINATION_OPTIONS: { id: TerminationType; label: string; Icon: LucideIcon; description: string }[] = [
+  { id: 'voluntaria', label: 'Voluntaria', Icon: UserMinus, description: 'El empleado ha decidido marcharse' },
+  { id: 'fin_contrato', label: 'Fin de contrato', Icon: Calendar, description: 'Contrato temporal que llega a su fin' },
+  { id: 'despido', label: 'Despido', Icon: UserX, description: 'Por causas objetivas o disciplinarias' },
+  { id: 'jubilacion', label: 'Jubilación', Icon: User, description: 'Jubilación ordinaria o anticipada' },
+  { id: 'otro', label: 'Otro', Icon: FileText, description: 'Otra causa de baja' },
 ]
 
 function getScheduledMinutes(str: string) {
@@ -103,8 +109,8 @@ export default function StaffPage() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl" style={{ fontFamily: 'Instrument Serif, serif' }}>Personal</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
+          <h1 className="text-2xl font-display text-text-primary">Personal</h1>
+          <p className="text-sm text-text-secondary mt-0.5">
             {staff.length} empleados · {staff.filter(e => e.active).length} activos · {workingNow} trabajando ahora
           </p>
         </div>
@@ -123,26 +129,26 @@ export default function StaffPage() {
       </div>
 
       {/* Pestañas principales: Insights / Empleados */}
-      <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1 w-fit">
+      <div className="flex items-center gap-1 bg-accent-bg rounded-lg p-1 w-fit">
         <button
           onClick={() => setMainTab('insights')}
-          className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${
+          className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-base ${
             mainTab === 'insights'
-              ? 'bg-white shadow text-[#7C1A1A]'
-              : 'text-gray-600 hover:text-gray-900'
+              ? 'bg-card shadow-sm text-accent'
+              : 'text-text-secondary hover:text-text-primary'
           }`}
         >
-          📊 Insights
+          <BarChart3 size={14} /> Insights
         </button>
         <button
           onClick={() => setMainTab('list')}
-          className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${
+          className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-base ${
             mainTab === 'list'
-              ? 'bg-white shadow text-[#7C1A1A]'
-              : 'text-gray-600 hover:text-gray-900'
+              ? 'bg-card shadow-sm text-accent'
+              : 'text-text-secondary hover:text-text-primary'
           }`}
         >
-          👥 Empleados
+          <Users size={14} /> Empleados
         </button>
       </div>
 
@@ -153,10 +159,10 @@ export default function StaffPage() {
         <>
           {/* Banner de contratos / periodos de prueba próximos a vencer */}
           {expiringEvents.length > 0 && (
-            <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-lg p-3 space-y-2">
+            <div className="bg-warning-bg border-2 border-warning/30 rounded-lg p-3 space-y-2">
               <div className="flex items-center gap-2">
-                <span className="text-xl">⚠️</span>
-                <span className="font-semibold text-amber-900 text-sm">
+                <AlertTriangle size={18} className="text-warning" />
+                <span className="font-semibold text-warning text-sm">
                   {expiringEvents.length === 1
                     ? '1 evento próximo'
                     : `${expiringEvents.length} eventos próximos`}
@@ -167,18 +173,18 @@ export default function StaffPage() {
                   <button
                     key={i}
                     onClick={() => setSelectedId(ev.employeeId)}
-                    className={`w-full text-left text-xs px-2 py-1.5 rounded border ${
-                      ev.urgency === 'red' ? 'border-red-300 bg-red-50 text-red-800' :
-                      ev.urgency === 'orange' ? 'border-orange-300 bg-orange-50 text-orange-800' :
-                      'border-amber-300 bg-amber-50 text-amber-800'
-                    } hover:opacity-80`}
+                    className={`w-full text-left text-xs px-2 py-1.5 rounded-md border transition-base hover:opacity-80 ${
+                      ev.urgency === 'red' ? 'border-danger/30 bg-danger-bg text-danger' :
+                      ev.urgency === 'orange' ? 'border-warning/40 bg-warning-bg text-warning' :
+                      'border-warning/30 bg-warning-bg text-warning'
+                    }`}
                   >
                     <strong>{ev.employeeName}</strong> · {ev.label} · vence en{' '}
                     <strong>{ev.daysLeft === 0 ? 'hoy' : ev.daysLeft === 1 ? 'mañana' : `${ev.daysLeft} días`}</strong>
                   </button>
                 ))}
                 {expiringEvents.length > 5 && (
-                  <p className="text-[11px] text-amber-700 italic">y {expiringEvents.length - 5} más...</p>
+                  <p className="text-xs text-warning italic">y {expiringEvents.length - 5} más...</p>
                 )}
               </div>
             </div>
@@ -186,19 +192,22 @@ export default function StaffPage() {
 
           {/* Filters */}
           <div className="flex flex-wrap gap-2">
-            <Input
-              placeholder="🔍 Buscar nombre, DNI, puesto..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="flex-1 min-w-[200px] max-w-xs"
-            />
+            <div className="relative flex-1 min-w-[200px] max-w-xs">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary pointer-events-none" />
+              <Input
+                placeholder="Buscar nombre, DNI, puesto..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="pl-8"
+              />
+            </div>
             <Select value={locFilter} onChange={e => setLocFilter(e.target.value)} className="w-44">
               <option value="todas">Todos los locales</option>
               {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
             </Select>
             <Select value={stateFilter} onChange={e => setStateFilter(e.target.value as 'all' | 'active' | 'inactive')} className="w-36">
-              <option value="active">✅ Activos</option>
-              <option value="inactive">📅 Bajas</option>
+              <option value="active">Activos</option>
+              <option value="inactive">Bajas</option>
               <option value="all">Todos</option>
             </Select>
             <Select value={contractFilter} onChange={e => setContractFilter(e.target.value)} className="w-44">
@@ -210,11 +219,11 @@ export default function StaffPage() {
           {/* Employee list */}
           {locations.length === 0 ? (
             <Card className="p-8 text-center">
-              <p className="text-gray-500">Primero crea un local en la sección Locales</p>
+              <p className="text-text-secondary">Primero crea un local en la sección Locales</p>
             </Card>
           ) : filtered.length === 0 ? (
             <Card className="p-8 text-center">
-              <p className="text-gray-500">{search || locFilter !== 'todas' || contractFilter !== 'todos' ? 'No se encontraron empleados con esos filtros' : 'No hay empleados. Crea uno arriba.'}</p>
+              <p className="text-text-secondary">{search || locFilter !== 'todas' || contractFilter !== 'todos' ? 'No se encontraron empleados con esos filtros' : 'No hay empleados. Crea uno arriba.'}</p>
             </Card>
           ) : (
             <div className="grid gap-3">
@@ -226,23 +235,23 @@ export default function StaffPage() {
                   <Card
                     key={emp.id}
                     onClick={() => setSelectedId(emp.id)}
-                    className={`p-4 flex items-center gap-4 cursor-pointer hover:shadow-md transition ${!emp.active ? 'opacity-60' : ''}`}
+                    className={`p-4 flex items-center gap-4 cursor-pointer hover:shadow-md transition-base ${!emp.active ? 'opacity-60' : ''}`}
                   >
                     <EmployeeAvatar employee={emp} size="md" showWorkingDot={isWorking} />
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">{emp.name || 'Sin nombre'}</p>
-                      <p className="text-xs text-gray-500 truncate">
+                      <p className="font-medium truncate text-text-primary">{emp.name || 'Sin nombre'}</p>
+                      <p className="text-xs text-text-secondary truncate">
                         {emp.position || '(sin puesto)'} · {loc?.name || '—'}
-                        {emp.contractType && <> · <span className="text-gray-400">{emp.contractType}</span></>}
+                        {emp.contractType && <> · <span className="text-text-secondary">{emp.contractType}</span></>}
                       </p>
                     </div>
                     <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                      {!emp.active && <Badge color="gray">📅 Baja</Badge>}
-                      {isWorking && <Badge color="green">🟢 Trabajando</Badge>}
+                      {!emp.active && <Badge color="gray">Baja</Badge>}
+                      {isWorking && <Badge color="green">Trabajando</Badge>}
                       {empExpiring.map((ev, i) => (
                         <Badge
                           key={i}
-                          color={ev.urgency === 'red' ? 'red' : ev.urgency === 'orange' ? 'amber' : 'amber'}
+                          color={ev.urgency === 'red' ? 'red' : 'yellow'}
                         >
                           {ev.shortLabel}
                         </Badge>
@@ -283,18 +292,13 @@ export default function StaffPage() {
           onCancel={() => setShowNewEmployeeModal(false)}
           onCreated={(employeeId) => {
             setShowNewEmployeeModal(false)
-            // Solo intentamos abrir la ficha si el empleado YA está en el array staff.
-            // Si fue creado vía Edge Function, puede tardar 1-2s en aparecer (vía realtime/sync),
-            // en ese caso no abrimos ficha — el usuario lo verá en el listado al refrescarse.
             const exists = staff.some(e => e.id === employeeId)
             if (exists) {
               setSelectedId(employeeId)
             }
-            // Forzar pestaña de listado para que el usuario vea su empleado
             setMainTab('list')
           }}
           onCreateLocal={async (locationId) => {
-            // Caso "sin email": crear local-only (sin cuenta auth)
             const emp = createEmployee(locationId)
             await saveEmployee(emp)
             return emp.id
@@ -416,13 +420,13 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifCo
   }
 
   const TABS = [
-    { value: 'info', label: '👤 Datos' },
-    { value: 'fichajes', label: '⏰ Fichajes' },
-    { value: 'documentos', label: '📄 Docs' },
-    { value: 'ausencias', label: '🏖 Ausencias' },
-    { value: 'formaciones', label: '🎓 Formaciones' },
-    { value: 'contrato', label: '📋 Contrato' },
-    { value: 'disponibilidad', label: '📅 Disponibilidad' },
+    { value: 'info', label: 'Datos' },
+    { value: 'fichajes', label: 'Fichajes' },
+    { value: 'documentos', label: 'Docs' },
+    { value: 'ausencias', label: 'Ausencias' },
+    { value: 'formaciones', label: 'Formaciones' },
+    { value: 'contrato', label: 'Contrato' },
+    { value: 'disponibilidad', label: 'Disponibilidad' },
   ]
 
   return (
@@ -434,11 +438,11 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifCo
         {tab === 'info' && (
           <div className="grid grid-cols-2 gap-4">
             {/* Foto + cabecera */}
-            <div className="col-span-2 flex items-center gap-4 pb-3 border-b">
+            <div className="col-span-2 flex items-center gap-4 pb-3 border-b border-border-default">
               <EmployeeAvatar employee={emp} size="xl" />
               <div className="flex-1 min-w-0">
-                <p className="font-bold text-lg truncate">{emp.name || '(sin nombre)'}</p>
-                <p className="text-sm text-gray-500">{emp.position || '(sin puesto)'} · {emp.contractType || '(sin contrato)'}</p>
+                <p className="font-bold text-lg truncate text-text-primary">{emp.name || '(sin nombre)'}</p>
+                <p className="text-sm text-text-secondary">{emp.position || '(sin puesto)'} · {emp.contractType || '(sin contrato)'}</p>
               </div>
               <PhotoUploader employee={emp} onChange={photo => update('photo', photo)} />
             </div>
@@ -480,14 +484,15 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifCo
             </div>
             <div className="col-span-2">
               <Label>Locales donde puede fichar</Label>
-              <p className="text-xs text-gray-400 mb-2">Si rota entre varios locales, marca todos. Si está vacío, solo podrá fichar en su local principal.</p>
+              <p className="text-xs text-text-secondary mb-2">Si rota entre varios locales, marca todos. Si está vacío, solo podrá fichar en su local principal.</p>
               <div className="flex flex-wrap gap-2 mt-1">
                 {locations.map(l => {
                   const assigned = emp.assignedLocations || []
                   const checked = assigned.includes(l.id)
                   return (
-                    <label key={l.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm cursor-pointer transition-all ${checked ? 'bg-teal-50 border-teal-300 text-teal-700' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
+                    <label key={l.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-md border text-sm cursor-pointer transition-base ${checked ? 'bg-accent-bg border-accent text-accent' : 'border-border-default text-text-secondary hover:border-text-secondary'}`}>
                       <input type="checkbox" checked={checked}
+                        className="accent-accent"
                         onChange={e => {
                           const next = e.target.checked
                             ? [...assigned, l.id]
@@ -509,19 +514,19 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifCo
             </div>
             <div className="col-span-2">
               {emp.active ? (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                  <span className="text-sm font-medium text-emerald-800">Empleado en activo</span>
+                <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-success-bg border border-success/20">
+                  <span className="w-2 h-2 rounded-full bg-success" />
+                  <span className="text-sm font-medium text-success">Empleado en activo</span>
                 </div>
               ) : (
-                <div className="px-3 py-2 rounded-lg bg-gray-50 border border-gray-200">
+                <div className="px-3 py-2 rounded-md bg-page border border-border-default">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-base">📅</span>
-                        <span className="text-sm font-bold text-gray-700">Empleado dado de baja</span>
+                        <Calendar size={16} className="text-text-secondary" />
+                        <span className="text-sm font-bold text-text-primary">Empleado dado de baja</span>
                       </div>
-                      <p className="text-xs text-gray-600">
+                      <p className="text-xs text-text-secondary">
                         {emp.terminationType ? (
                           <>
                             Tipo: <strong>{TERMINATION_LABELS[emp.terminationType as TerminationType]}</strong>
@@ -530,10 +535,10 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifCo
                         ) : 'Sin tipo registrado'}
                       </p>
                       {emp.terminationReason && (
-                        <p className="text-[11px] text-gray-500 italic mt-1">"{emp.terminationReason}"</p>
+                        <p className="text-xs text-text-secondary italic mt-1">"{emp.terminationReason}"</p>
                       )}
                       {emp.terminationCommunicatedToGestoria && (
-                        <p className="text-[10px] text-emerald-700 mt-1">✓ Comunicado a gestoría</p>
+                        <p className="text-xs text-success mt-1">✓ Comunicado a gestoría</p>
                       )}
                     </div>
                     {canManageEmployees && (
@@ -543,16 +548,15 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifCo
                           update('terminationType', undefined)
                           update('terminationReason', undefined)
                           update('terminationCommunicatedToGestoria', false)
-                          // Reactivar cuenta de acceso (auth) si existe + enviar email.
                           try {
                             await reactivateEmployeeAccount(emp.id)
                           } catch (e) {
                             console.warn('[Reactivate] No se pudo reactivar cuenta auth:', e)
                           }
                         }}
-                        className="text-xs px-3 py-1.5 rounded bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50 font-medium shrink-0"
+                        className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-card border border-success/30 text-success hover:bg-success-bg font-medium shrink-0 transition-base"
                       >
-                        🔄 Reactivar
+                        <RefreshCw size={12} /> Reactivar
                       </button>
                     )}
                   </div>
@@ -570,57 +574,60 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifCo
         {tab === 'fichajes' && (
           <div className="space-y-4">
             {!emp.id || !emp.locationId ? (
-              <Card className="p-4 text-center text-sm text-gray-500">
+              <Card className="p-4 text-center text-sm text-text-secondary">
                 Guarda primero los datos del empleado para poder fichar.
               </Card>
             ) : (
               <Card className="p-4">
                 <div className="flex items-center justify-between mb-2">
                   <div>
-                    <p className="text-xs text-gray-500">Estado actual</p>
-                    <p className="text-sm font-semibold" style={{ color: '#7C1A1A' }}>
-                      {isWorking ? '🟢 Trabajando' : '⚫ Sin entrada'}
+                    <p className="text-xs text-text-secondary">Estado actual</p>
+                    <p className="text-sm font-semibold text-accent inline-flex items-center gap-1.5">
+                      {isWorking
+                        ? <><span className="w-2 h-2 rounded-full bg-success" /> Trabajando</>
+                        : <><span className="w-2 h-2 rounded-full bg-text-secondary" /> Sin entrada</>
+                      }
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-xs text-gray-500">Hoy</p>
-                    <p className="text-sm font-semibold tabular-nums">{hoursToday.toFixed(1)}h</p>
+                    <p className="text-xs text-text-secondary">Hoy</p>
+                    <p className="text-sm font-semibold tabular-nums text-text-primary">{hoursToday.toFixed(1)}h</p>
                   </div>
                 </div>
                 <div className="flex gap-2 mt-3">
                   <Button size="sm" onClick={() => handleClock('entrada')} disabled={clocking || isWorking}>
-                    ▶ Entrada
+                    <LogIn size={14} /> Entrada
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => handleClock('salida')} disabled={clocking || !isWorking}>
-                    ⏹ Salida
+                    <Square size={14} /> Salida
                   </Button>
                 </div>
                 {clockWarn && (
                   <Alert type={clockWarn.type === 'blocked' ? 'error' : clockWarn.type === 'rounded' ? 'warning' : 'info'}>
-                    {clockWarn.type === 'blocked' ? '🚫 ' : clockWarn.type === 'rounded' ? '🔄 ' : '✅ '}{clockWarn.msg}
+                    {clockWarn.msg}
                   </Alert>
                 )}
               </Card>
             )}
 
-            <div className="border rounded-2xl overflow-hidden">
+            <div className="border border-border-default rounded-lg overflow-hidden">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b">
+                <thead className="bg-page border-b border-border-default">
                   <tr>
-                    <th className="p-3 text-left text-xs font-semibold text-gray-500">Fecha y hora</th>
-                    <th className="p-3 text-left text-xs font-semibold text-gray-500">Tipo</th>
-                    <th className="p-3 text-left text-xs font-semibold text-gray-500">Notas</th>
+                    <th className="p-3 text-left text-xs font-semibold text-text-secondary">Fecha y hora</th>
+                    <th className="p-3 text-left text-xs font-semibold text-text-secondary">Tipo</th>
+                    <th className="p-3 text-left text-xs font-semibold text-text-secondary">Notas</th>
                   </tr>
                 </thead>
                 <tbody>
                   {emp.clockEntries.length === 0 ? (
-                    <tr><td colSpan={3} className="p-4 text-center text-gray-400 italic">Sin fichajes</td></tr>
+                    <tr><td colSpan={3} className="p-4 text-center text-text-secondary italic">Sin fichajes</td></tr>
                   ) : (
                     emp.clockEntries.slice(0, 30).map((ce, i) => (
-                      <tr key={i} className="border-b last:border-0">
-                        <td className="p-2 text-xs">{new Date(ce.datetime).toLocaleString('es-ES')}</td>
+                      <tr key={i} className="border-b border-border-default last:border-0">
+                        <td className="p-2 text-xs text-text-primary">{new Date(ce.datetime).toLocaleString('es-ES')}</td>
                         <td className="p-2"><Badge color={ce.type === 'entrada' ? 'green' : 'red'}>{ce.type}</Badge></td>
-                        <td className="p-2 text-xs text-gray-500">
+                        <td className="p-2 text-xs text-text-secondary">
                           {ce.roundingApplied && '↻ redondeo · '}
                           {ce.diffMinutes != null && `${ce.diffMinutes > 0 ? '+' : ''}${ce.diffMinutes} min`}
                         </td>
@@ -657,7 +664,6 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifCo
                 <Select className="mt-1" value={emp.contractType} onChange={e => {
                   const newType = e.target.value
                   update('contractType', newType)
-                  // Si no hay periodo de prueba aún, autocompletar con el valor por defecto del tipo
                   if (!emp.trialPeriodDays) {
                     update('trialPeriodDays', defaultTrialDays(newType))
                   }
@@ -672,7 +678,7 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifCo
               <div>
                 <Label>Fecha fin contrato (opcional)</Label>
                 <Input className="mt-1" type="date" value={emp.endDate || ''} onChange={e => update('endDate', e.target.value)} />
-                <p className="text-[11px] text-gray-500 mt-1">
+                <p className="text-xs text-text-secondary mt-1">
                   Solo para contratos temporales/prácticas. Verás aviso 30/15/5 días antes.
                 </p>
               </div>
@@ -690,13 +696,13 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifCo
                   <button
                     type="button"
                     onClick={() => update('trialPeriodDays', defaultTrialDays(emp.contractType))}
-                    className="text-xs px-2 py-2 rounded border border-gray-300 hover:bg-gray-50 whitespace-nowrap"
+                    className="text-xs px-2 py-2 rounded-md border border-border-default text-text-secondary hover:bg-page whitespace-nowrap transition-base"
                     title="Restaurar valor por defecto del tipo de contrato"
                   >
                     Por defecto
                   </button>
                 </div>
-                <p className="text-[11px] text-gray-500 mt-1">
+                <p className="text-xs text-text-secondary mt-1">
                   {emp.startDate && emp.trialPeriodDays
                     ? <>Termina el <strong>{new Date(new Date(emp.startDate + 'T00:00:00').getTime() + emp.trialPeriodDays * 86400000).toLocaleDateString('es-ES')}</strong></>
                     : 'Recomendado: 90 indef. · 30 temp. · 60 prácticas'}
@@ -722,7 +728,7 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifCo
                   onChange={e => update('initialHoursBalance', parseFloat(e.target.value) || 0)}
                   placeholder="0"
                 />
-                <p className="text-[11px] text-gray-500 mt-1">
+                <p className="text-xs text-text-secondary mt-1">
                   Positivo: la empresa le debe horas. Negativo: él debe.
                 </p>
               </div>
@@ -732,9 +738,9 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifCo
                     type="checkbox"
                     checked={emp.showHoursBalance ?? true}
                     onChange={e => update('showHoursBalance', e.target.checked)}
-                    className="w-4 h-4 rounded accent-[#7C1A1A]"
+                    className="w-4 h-4 rounded accent-accent"
                   />
-                  <span className="text-sm">El trabajador ve su bolsa de horas en la app</span>
+                  <span className="text-sm text-text-primary">El trabajador ve su bolsa de horas en la app</span>
                 </label>
               </div>
               <div>
@@ -778,7 +784,7 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifCo
                   <option value="mie:tarde_dia">Mié tarde libre + Jue entero libre</option>
                   <option value="mie:dia_manana">Mié entero libre + Jue mañana libre</option>
                 </Select>
-                <p className="text-[11px] text-gray-500 mt-1">
+                <p className="text-xs text-text-secondary mt-1">
                   Los descansos siempre caen entre Lunes y Jueves. Viernes, sábado y
                   domingo no descansa nadie por política del local.
                 </p>
@@ -787,7 +793,7 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifCo
 
             <div>
               <Label className="mb-2 block">Horario por días</Label>
-              <div className="border rounded-xl overflow-hidden">
+              <div className="border border-border-default rounded-lg overflow-hidden">
                 <table className="w-full text-sm">
                   <tbody>
                     {DAYS.map(day => {
@@ -796,15 +802,16 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifCo
                         ? ((getScheduledMinutes(sched.end) - getScheduledMinutes(sched.start)) / 60).toFixed(1)
                         : null
                       return (
-                        <tr key={day} className={`border-b last:border-0 ${!sched.active ? 'bg-gray-50' : ''}`}>
+                        <tr key={day} className={`border-b border-border-default last:border-0 ${!sched.active ? 'bg-page' : ''}`}>
                           <td className="p-2 w-8">
                             <input
                               type="checkbox"
                               checked={sched.active}
+                              className="accent-accent"
                               onChange={e => update('weeklySchedule', { ...emp.weeklySchedule, [day]: { ...sched, active: e.target.checked } })}
                             />
                           </td>
-                          <td className={`p-2 w-28 font-medium text-sm ${!sched.active ? 'text-gray-400' : ''}`}>{DAY_LABELS[day]}</td>
+                          <td className={`p-2 w-28 font-medium text-sm ${!sched.active ? 'text-text-secondary' : 'text-text-primary'}`}>{DAY_LABELS[day]}</td>
                           <td className="p-2">
                             {sched.active ? (
                               <div className="flex items-center gap-2">
@@ -812,19 +819,19 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifCo
                                   type="time"
                                   value={sched.start}
                                   onChange={e => update('weeklySchedule', { ...emp.weeklySchedule, [day]: { ...sched, start: e.target.value } })}
-                                  className="border rounded px-2 py-1 text-xs bg-white"
+                                  className="border border-border-default rounded px-2 py-1 text-xs bg-card text-text-primary"
                                 />
-                                <span className="text-gray-400">→</span>
+                                <span className="text-text-secondary">→</span>
                                 <input
                                   type="time"
                                   value={sched.end}
                                   onChange={e => update('weeklySchedule', { ...emp.weeklySchedule, [day]: { ...sched, end: e.target.value } })}
-                                  className="border rounded px-2 py-1 text-xs bg-white"
+                                  className="border border-border-default rounded px-2 py-1 text-xs bg-card text-text-primary"
                                 />
                               </div>
                             ) : null}
                           </td>
-                          <td className="p-2 text-xs text-gray-400 w-16">
+                          <td className="p-2 text-xs text-text-secondary w-16">
                             {hours ? `${hours}h` : sched.active ? '' : 'Libre'}
                           </td>
                         </tr>
@@ -840,14 +847,20 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifCo
         {/* ── DISPONIBILIDAD ── */}
         {tab === 'disponibilidad' && (
           <div className="space-y-3">
-            <p className="text-xs text-gray-500">Marca en qué turnos está disponible este trabajador. El generador de horarios lo respetará.</p>
-            <div className="border rounded-xl overflow-hidden">
+            <p className="text-xs text-text-secondary">Marca en qué turnos está disponible este trabajador. El generador de horarios lo respetará.</p>
+            <div className="border border-border-default rounded-lg overflow-hidden">
               <table className="w-full text-sm">
-                <thead><tr className="bg-gray-50 border-b">
-                  <th className="p-3 text-left text-xs font-semibold text-gray-500">Día</th>
-                  <th className="p-3 text-center text-xs font-semibold text-amber-600">☀️ Mediodía</th>
-                  <th className="p-3 text-center text-xs font-semibold text-violet-600">🌙 Noche</th>
-                  <th className="p-3 text-center text-xs font-semibold text-red-500">🚫 No disponible</th>
+                <thead><tr className="bg-page border-b border-border-default">
+                  <th className="p-3 text-left text-xs font-semibold text-text-secondary">Día</th>
+                  <th className="p-3 text-center text-xs font-semibold text-warning">
+                    <span className="inline-flex items-center gap-1.5 justify-center"><Sun size={14} /> Mediodía</span>
+                  </th>
+                  <th className="p-3 text-center text-xs font-semibold text-accent">
+                    <span className="inline-flex items-center gap-1.5 justify-center"><Moon size={14} /> Noche</span>
+                  </th>
+                  <th className="p-3 text-center text-xs font-semibold text-danger">
+                    <span className="inline-flex items-center gap-1.5 justify-center"><Ban size={14} /> No disponible</span>
+                  </th>
                 </tr></thead>
                 <tbody>
                   {(['lunes','martes','miercoles','jueves','viernes','sabado','domingo'] as const).map(day => {
@@ -859,17 +872,17 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifCo
                     }
                     const isNoDisp = avail.includes('no_disponible')
                     return (
-                      <tr key={day} className={`border-b last:border-0 ${isNoDisp?'bg-red-50':''}`}>
-                        <td className="p-3 font-medium text-sm">{labels[day]}</td>
+                      <tr key={day} className={`border-b border-border-default last:border-0 ${isNoDisp ? 'bg-danger-bg' : ''}`}>
+                        <td className="p-3 font-medium text-sm text-text-primary">{labels[day]}</td>
                         {['manana','tarde'].map(t => (
                           <td key={t} className="p-3 text-center">
                             <input type="checkbox" checked={avail.includes(t) && !isNoDisp}
                               onChange={()=>toggle(t)} disabled={isNoDisp}
-                              className={`w-4 h-4 rounded ${t==='manana'?'accent-amber-500':'accent-violet-500'}`} />
+                              className={`w-4 h-4 rounded ${t==='manana'?'accent-warning':'accent-accent'}`} />
                           </td>
                         ))}
                         <td className="p-3 text-center">
-                          <input type="checkbox" checked={isNoDisp} onChange={()=>toggle('no_disponible')} className="w-4 h-4 accent-red-500 rounded" />
+                          <input type="checkbox" checked={isNoDisp} onChange={()=>toggle('no_disponible')} className="w-4 h-4 accent-danger rounded" />
                         </td>
                       </tr>
                     )
@@ -881,11 +894,11 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifCo
         )}
 
         {/* Actions */}
-        <div className="flex items-center justify-between pt-3 border-t">
+        <div className="flex items-center justify-between pt-3 border-t border-border-default">
           <div className="flex gap-2">
             {canManageEmployees && emp.active && (
               <Button variant="outline" size="sm" onClick={() => setShowTerminationModal(true)}>
-                🚪 Dar de baja
+                <LogOut size={14} /> Dar de baja
               </Button>
             )}
             {canManageEmployees && (
@@ -893,8 +906,6 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifCo
                 if (!confirm('¿ELIMINAR PERMANENTEMENTE este empleado?\n\nSe perderán TODOS sus datos: fichajes, vacaciones, documentos Y su cuenta de acceso.\n\nNormalmente prefieres "Dar de baja" en su lugar.')) return
                 if (!confirm('Confirma una vez más: esta acción NO se puede deshacer. ¿Continuar?')) return
 
-                // Eliminación COMPLETA vía Edge Function:
-                // borra employee + user_profile + manager_locations + manager_permissions + auth.user
                 try {
                   const result = await deletePermanentEmployee(emp.id)
                   if (!result.ok) {
@@ -905,10 +916,9 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifCo
                   alert(`Error: ${e instanceof Error ? e.message : 'desconocido'}`)
                   return
                 }
-                // Cerrar modal y refrescar listado (el sync de Supabase actualizará staff)
                 onDelete(emp.id)
               }}>
-                🗑️ Eliminar permanente
+                <Trash2 size={14} /> Eliminar permanente
               </Button>
             )}
           </div>
@@ -933,19 +943,15 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifCo
               }
               setShowTerminationModal(false)
 
-              // Desactivar cuenta de acceso (auth) si existe.
-              // No bloquear si falla — la baja se aplica igualmente.
               try {
                 await deactivateEmployeeAccount(emp.id)
               } catch (e) {
                 console.warn('[Termination] No se pudo desactivar cuenta auth:', e)
               }
 
-              // Si el gestor marcó "Comunicado a gestoría", abrir Gmail con email prerellenado
               if (data.communicated) {
                 try {
                   const gmailUrl = buildGestoriaMailto(updated, locations, notifConfig?.gestoriaEmail || '')
-                  // Pequeño delay para que se vea el feedback visual del confirm antes de saltar a Gmail
                   setTimeout(() => { window.open(gmailUrl, '_blank') }, 100)
                 } catch (e) {
                   console.warn('[Termination] No se pudo abrir Gmail:', e)
@@ -991,14 +997,18 @@ function TerminationModal({ employee, onCancel, onConfirm }: TerminationModalPro
 
   return (
     <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
-        <div className="px-5 py-3 border-b" style={{ backgroundColor: '#7C1A1A', color: 'white' }}>
+      <div className="bg-card rounded-xl max-w-md w-full max-h-[90vh] overflow-y-auto shadow-lg">
+        <div className="px-5 py-3 border-b border-border-default bg-accent text-text-on-accent">
           <div className="flex items-center justify-between">
             <div>
-              <div className="font-semibold">🚪 Dar de baja empleado</div>
+              <div className="font-display text-base inline-flex items-center gap-2">
+                <LogOut size={16} /> Dar de baja empleado
+              </div>
               <div className="text-xs opacity-90">{employee.name}</div>
             </div>
-            <button onClick={onCancel} className="text-white/80 hover:text-white text-lg">✕</button>
+            <button onClick={onCancel} className="text-white/80 hover:text-white">
+              <X size={18} />
+            </button>
           </div>
         </div>
 
@@ -1006,25 +1016,28 @@ function TerminationModal({ employee, onCancel, onConfirm }: TerminationModalPro
           <div>
             <Label>Tipo de baja</Label>
             <div className="mt-1 space-y-1.5">
-              {TERMINATION_OPTIONS.map(opt => (
-                <button
-                  key={opt.id}
-                  onClick={() => setType(opt.id)}
-                  className={`w-full text-left px-3 py-2 rounded-lg border-2 transition ${
-                    type === opt.id
-                      ? 'border-[#7C1A1A] bg-[#F5E9D9]'
-                      : 'border-gray-200 bg-white hover:border-gray-300'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl">{opt.icon}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-semibold text-gray-900">{opt.label}</div>
-                      <div className="text-[11px] text-gray-500">{opt.description}</div>
+              {TERMINATION_OPTIONS.map(opt => {
+                const Icon = opt.Icon
+                return (
+                  <button
+                    key={opt.id}
+                    onClick={() => setType(opt.id)}
+                    className={`w-full text-left px-3 py-2 rounded-md border-2 transition-base ${
+                      type === opt.id
+                        ? 'border-accent bg-accent-bg'
+                        : 'border-border-default bg-card hover:border-text-secondary'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Icon size={18} className={type === opt.id ? 'text-accent' : 'text-text-secondary'} />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-semibold text-text-primary">{opt.label}</div>
+                        <div className="text-xs text-text-secondary">{opt.description}</div>
+                      </div>
                     </div>
-                  </div>
-                </button>
-              ))}
+                  </button>
+                )
+              })}
             </div>
           </div>
 
@@ -1036,13 +1049,13 @@ function TerminationModal({ employee, onCancel, onConfirm }: TerminationModalPro
               value={endDate}
               onChange={e => setEndDate(e.target.value)}
             />
-            <p className="text-[11px] text-gray-500 mt-1">
+            <p className="text-xs text-text-secondary mt-1">
               Día en el que el empleado deja de trabajar.
             </p>
           </div>
 
           <div>
-            <Label>Motivo {type === 'despido' && <span className="text-red-600">(recomendado)</span>}</Label>
+            <Label>Motivo {type === 'despido' && <span className="text-danger">(recomendado)</span>}</Label>
             <Textarea
               className="mt-1"
               rows={3}
@@ -1052,41 +1065,39 @@ function TerminationModal({ employee, onCancel, onConfirm }: TerminationModalPro
             />
           </div>
 
-          <div className="bg-gray-50 rounded-lg p-3">
+          <div className="bg-page rounded-md p-3">
             <label className="flex items-start gap-2 cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={communicated}
                 onChange={e => setCommunicated(e.target.checked)}
-                className="mt-0.5 w-4 h-4 rounded accent-[#7C1A1A]"
+                className="mt-0.5 w-4 h-4 rounded accent-accent"
               />
               <div>
-                <span className="text-sm font-medium">📧 Enviar comunicación a la gestoría</span>
-                <p className="text-[11px] text-gray-500 mt-0.5">
+                <span className="text-sm font-medium text-text-primary inline-flex items-center gap-1.5">
+                  <Mail size={14} /> Enviar comunicación a la gestoría
+                </span>
+                <p className="text-xs text-text-secondary mt-0.5">
                   Al confirmar, se abrirá Gmail en una pestaña nueva con un email prerellenado para la gestoría.
                 </p>
               </div>
             </label>
             {communicated && (
-              <div className="mt-2 pl-6 text-[11px] text-gray-600 border-l-2 border-[#7C1A1A] py-1 pl-3">
+              <div className="mt-2 ml-6 pl-3 text-xs text-text-secondary border-l-2 border-accent py-1">
                 <strong>Destinatario:</strong>{' '}
-                <span className="font-mono">
-                  {/* destino del email */}
-                  {/* Mostrar email gestoría desde notifConfig si existe (lo coge el parent al construir mailto) */}
-                  configurado en Informes Gestoría
-                </span>
+                <span className="font-mono">configurado en Informes Gestoría</span>
               </div>
             )}
           </div>
 
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
-            <strong>📌 Importante:</strong> el empleado quedará marcado como inactivo pero sus datos
+          <div className="bg-warning-bg border border-warning/30 rounded-md p-3 text-xs text-warning">
+            <strong>Importante:</strong> el empleado quedará marcado como inactivo pero sus datos
             (fichajes, vacaciones, documentos, bolsa de horas) se conservarán. Podrás reactivarlo en
             cualquier momento desde su ficha.
           </div>
         </div>
 
-        <div className="px-5 py-3 border-t bg-gray-50 flex justify-end gap-2">
+        <div className="px-5 py-3 border-t border-border-default bg-page flex justify-end gap-2">
           <Button variant="outline" onClick={onCancel}>Cancelar</Button>
           <Button
             onClick={() => onConfirm({ type, endDate, reason, communicated })}
@@ -1102,13 +1113,6 @@ function TerminationModal({ employee, onCancel, onConfirm }: TerminationModalPro
 
 // ─── Helper para construir URL de Gmail Compose con datos de baja ────────────
 
-/**
- * Construye un URL directo de Gmail Compose con asunto y cuerpo prerellenados.
- * Ventaja sobre `mailto:`: NO depende de la configuración del navegador.
- * Funciona siempre abriendo Gmail web en una pestaña nueva.
- *
- * Formato: https://mail.google.com/mail/?view=cm&fs=1&to=...&su=...&body=...
- */
 function buildGestoriaMailto(
   employee: Employee,
   locations: ReturnType<typeof useApp>['locations'],
@@ -1155,7 +1159,6 @@ function buildGestoriaMailto(
 
   const body = bodyLines.join('\n')
 
-  // URL directa de Gmail Compose (no requiere configuración del navegador)
   const params = new URLSearchParams({
     view: 'cm',
     fs: '1',
@@ -1167,7 +1170,7 @@ function buildGestoriaMailto(
   return `https://mail.google.com/mail/?${params.toString()}`
 }
 
-// ─── EmployeeAvatar: foto o iniciales con fondo granate ───────────────────────
+// ─── EmployeeAvatar: foto o iniciales con fondo accent ────────────────────────
 
 function EmployeeAvatar({
   employee,
@@ -1191,8 +1194,7 @@ function EmployeeAvatar({
   return (
     <div className="relative shrink-0">
       <div
-        className={`${s.wrap} rounded-full overflow-hidden flex items-center justify-center text-white font-semibold ${s.text} border-2 border-white shadow-sm`}
-        style={!hasPhoto ? { backgroundColor: '#7C1A1A' } : undefined}
+        className={`${s.wrap} rounded-full overflow-hidden flex items-center justify-center text-text-on-accent font-semibold ${s.text} border-2 border-card shadow-sm ${!hasPhoto ? 'bg-accent' : ''}`}
       >
         {hasPhoto ? (
           <img src={employee.photo} alt={employee.name} className="w-full h-full object-cover" />
@@ -1202,7 +1204,7 @@ function EmployeeAvatar({
       </div>
       {showWorkingDot && (
         <span
-          className={`absolute -bottom-0.5 -right-0.5 ${s.dot} bg-emerald-500 rounded-full border-2 border-white animate-pulse`}
+          className={`absolute -bottom-0.5 -right-0.5 ${s.dot} bg-success rounded-full border-2 border-card animate-pulse`}
         />
       )}
     </div>
@@ -1211,12 +1213,6 @@ function EmployeeAvatar({
 
 // ─── Compresión de imagen para subida de foto ───────────────────────────────
 
-/**
- * Comprime una imagen al tamaño máximo dado y la devuelve como base64.
- * - Mantiene proporciones
- * - Convierte siempre a JPEG con calidad 0.85 para reducir tamaño
- * - Por defecto max 800x800px
- */
 async function compressImageToBase64(file: File, maxSize = 800): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -1224,7 +1220,6 @@ async function compressImageToBase64(file: File, maxSize = 800): Promise<string>
       const img = new Image()
       img.onload = () => {
         let { width, height } = img
-        // Reducir manteniendo proporciones
         if (width > maxSize || height > maxSize) {
           const ratio = Math.min(maxSize / width, maxSize / height)
           width = Math.round(width * ratio)
@@ -1236,7 +1231,6 @@ async function compressImageToBase64(file: File, maxSize = 800): Promise<string>
         const ctx = canvas.getContext('2d')
         if (!ctx) { reject(new Error('No se pudo obtener el contexto canvas')); return }
         ctx.drawImage(img, 0, 0, width, height)
-        // JPEG con calidad 85% (buen equilibrio tamaño/calidad)
         const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
         resolve(dataUrl)
       }
@@ -1254,16 +1248,12 @@ interface ExpiringEvent {
   employeeId: string
   employeeName: string
   type: 'contract' | 'trial'
-  label: string         // "Contrato termina" o "Periodo de prueba termina"
-  shortLabel: string    // "📅 Contrato 30d" o "🛡️ Prueba 5d"
+  label: string
+  shortLabel: string
   daysLeft: number
-  urgency: 'red' | 'orange' | 'yellow'  // <=5 / 6-15 / 16-30
+  urgency: 'red' | 'orange' | 'yellow'
 }
 
-/**
- * Devuelve la lista de empleados con eventos (fin de contrato / fin periodo prueba)
- * en los próximos 30 días. Solo considera empleados activos.
- */
 function getExpiringEvents(staff: Employee[]): ExpiringEvent[] {
   const events: ExpiringEvent[] = []
   const today = new Date()
@@ -1272,7 +1262,6 @@ function getExpiringEvents(staff: Employee[]): ExpiringEvent[] {
   for (const emp of staff) {
     if (!emp.active) continue
 
-    // 1) Fin de contrato (endDate)
     if (emp.endDate) {
       const endDate = new Date(emp.endDate + 'T00:00:00')
       const daysLeft = Math.floor((endDate.getTime() - today.getTime()) / 86400000)
@@ -1282,14 +1271,13 @@ function getExpiringEvents(staff: Employee[]): ExpiringEvent[] {
           employeeName: emp.name || '(sin nombre)',
           type: 'contract',
           label: 'Fin de contrato',
-          shortLabel: `📅 Contrato ${daysLeft}d`,
+          shortLabel: `Contrato ${daysLeft}d`,
           daysLeft,
           urgency: daysLeft <= 7 ? 'red' : daysLeft <= 15 ? 'orange' : 'yellow',
         })
       }
     }
 
-    // 2) Fin de periodo de prueba (startDate + trialPeriodDays)
     if (emp.startDate && emp.trialPeriodDays && emp.trialPeriodDays > 0) {
       const startDate = new Date(emp.startDate + 'T00:00:00')
       const trialEnd = new Date(startDate)
@@ -1301,7 +1289,7 @@ function getExpiringEvents(staff: Employee[]): ExpiringEvent[] {
           employeeName: emp.name || '(sin nombre)',
           type: 'trial',
           label: 'Fin periodo de prueba',
-          shortLabel: `🛡️ Prueba ${daysLeft}d`,
+          shortLabel: `Prueba ${daysLeft}d`,
           daysLeft,
           urgency: daysLeft <= 7 ? 'red' : daysLeft <= 15 ? 'orange' : 'yellow',
         })
@@ -1309,7 +1297,6 @@ function getExpiringEvents(staff: Employee[]): ExpiringEvent[] {
     }
   }
 
-  // Ordenar por urgencia (menos días primero)
   events.sort((a, b) => a.daysLeft - b.daysLeft)
   return events
 }
@@ -1368,15 +1355,20 @@ function PhotoUploader({
         type="button"
         onClick={() => fileInputRef.current?.click()}
         disabled={uploading}
-        className="text-xs px-3 py-1.5 rounded border border-gray-300 hover:bg-gray-50 disabled:opacity-40"
+        className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-border-default text-text-primary hover:bg-page disabled:opacity-40 transition-base"
       >
-        {uploading ? '⏳ Subiendo...' : employee.photo ? '🔄 Cambiar foto' : '📸 Subir foto'}
+        {uploading
+          ? <>Subiendo...</>
+          : employee.photo
+            ? <><RefreshCw size={12} /> Cambiar foto</>
+            : <><Camera size={12} /> Subir foto</>
+        }
       </button>
       {employee.photo && (
         <button
           type="button"
           onClick={() => onChange('')}
-          className="text-[11px] text-gray-400 hover:text-red-600"
+          className="text-xs text-text-secondary hover:text-danger transition-base"
         >
           Quitar foto
         </button>
@@ -1393,9 +1385,8 @@ function EmployeeExpiryBanners({ employee }: { employee: Employee }) {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
-  const banners: { label: string; daysLeft: number; color: string; icon: string }[] = []
+  const banners: { label: string; daysLeft: number; color: string; Icon: LucideIcon }[] = []
 
-  // Fin de contrato
   if (employee.endDate) {
     const endDate = new Date(employee.endDate + 'T00:00:00')
     const daysLeft = Math.floor((endDate.getTime() - today.getTime()) / 86400000)
@@ -1404,12 +1395,11 @@ function EmployeeExpiryBanners({ employee }: { employee: Employee }) {
         label: 'Fin de contrato',
         daysLeft,
         color: daysLeft <= 7 ? 'red' : daysLeft <= 15 ? 'orange' : 'yellow',
-        icon: '📅',
+        Icon: Calendar,
       })
     }
   }
 
-  // Fin periodo de prueba
   if (employee.startDate && employee.trialPeriodDays && employee.trialPeriodDays > 0) {
     const startDate = new Date(employee.startDate + 'T00:00:00')
     const trialEnd = new Date(startDate)
@@ -1420,7 +1410,7 @@ function EmployeeExpiryBanners({ employee }: { employee: Employee }) {
         label: 'Fin periodo de prueba',
         daysLeft,
         color: daysLeft <= 7 ? 'red' : daysLeft <= 15 ? 'orange' : 'yellow',
-        icon: '🛡️',
+        Icon: ShieldCheck,
       })
     }
   }
@@ -1432,13 +1422,12 @@ function EmployeeExpiryBanners({ employee }: { employee: Employee }) {
       {banners.map((b, i) => (
         <div
           key={i}
-          className={`px-3 py-2 rounded-lg border-2 text-sm flex items-center gap-2 ${
-            b.color === 'red' ? 'border-red-300 bg-red-50 text-red-800' :
-            b.color === 'orange' ? 'border-orange-300 bg-orange-50 text-orange-800' :
-            'border-amber-300 bg-amber-50 text-amber-800'
+          className={`px-3 py-2 rounded-md border-2 text-sm flex items-center gap-2 ${
+            b.color === 'red' ? 'border-danger/30 bg-danger-bg text-danger' :
+            'border-warning/30 bg-warning-bg text-warning'
           }`}
         >
-          <span className="text-lg">{b.icon}</span>
+          <b.Icon size={18} />
           <div className="flex-1">
             <strong>{b.label}</strong> en{' '}
             <strong>{b.daysLeft === 0 ? 'hoy' : b.daysLeft === 1 ? 'mañana' : `${b.daysLeft} días`}</strong>
@@ -1451,9 +1440,6 @@ function EmployeeExpiryBanners({ employee }: { employee: Employee }) {
 
 
 // ─── New Employee Modal ───────────────────────────────────────────────────────
-// Pide datos mínimos (nombre, local, email opcional) para crear empleado.
-// Si email → crea cuenta Auth + envía Magic Link.
-// Si no email → crea solo empleado local.
 
 interface NewEmployeeModalProps {
   locations: ReturnType<typeof useApp>['locations']
@@ -1493,11 +1479,8 @@ function NewEmployeeModal({ locations, onCancel, onCreated, onCreateLocal }: New
     }
 
     setSubmitting(true)
-
-    // Combinar local principal + adicionales (sin duplicar)
     const allAssigned = [locationId, ...additionalLocations.filter(id => id !== locationId)]
 
-    // Caso 1: con email → Edge Function (crea Auth + Magic Link)
     if (email.trim()) {
       const result = await createEmployeeWithAccount({
         name: name.trim(),
@@ -1516,7 +1499,6 @@ function NewEmployeeModal({ locations, onCancel, onCreated, onCreateLocal }: New
       return
     }
 
-    // Caso 2: sin email → empleado local (sin cuenta acceso)
     try {
       const empId = await onCreateLocal(locationId)
       setSubmitting(false)
@@ -1556,18 +1538,19 @@ function NewEmployeeModal({ locations, onCancel, onCreated, onCreateLocal }: New
               {locations.filter(l => l.id !== locationId).map(l => (
                 <label
                   key={l.id}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 hover:border-[#7C1A1A] cursor-pointer text-sm"
+                  className="flex items-center gap-2 px-3 py-2 rounded-md border border-border-default hover:border-accent cursor-pointer text-sm transition-base"
                 >
                   <input
                     type="checkbox"
                     checked={additionalLocations.includes(l.id)}
                     onChange={() => toggleAdditional(l.id)}
+                    className="accent-accent"
                   />
-                  <span>{l.name}</span>
+                  <span className="text-text-primary">{l.name}</span>
                 </label>
               ))}
             </div>
-            <p className="text-[11px] text-gray-500 mt-1">
+            <p className="text-xs text-text-secondary mt-1">
               Marca otros locales donde también puede trabajar y fichar.
             </p>
           </div>
@@ -1581,10 +1564,10 @@ function NewEmployeeModal({ locations, onCancel, onCreated, onCreateLocal }: New
             onChange={e => setEmail(e.target.value)}
             placeholder="ej: pamela@email.com"
           />
-          <p className="text-[11px] text-gray-500 mt-1">
+          <p className="text-xs text-text-secondary mt-1">
             {email
-              ? '✉️ Recibirá un enlace de acceso a la app por email.'
-              : '⚠️ Sin email solo podrá fichar en kiosko, no acceder a la app personal.'}
+              ? 'Recibirá un enlace de acceso a la app por email.'
+              : 'Sin email solo podrá fichar en kiosko, no acceder a la app personal.'}
           </p>
         </div>
 
@@ -1597,7 +1580,7 @@ function NewEmployeeModal({ locations, onCancel, onCreated, onCreateLocal }: New
             placeholder="Ej: 1234"
             maxLength={4}
           />
-          <p className="text-[11px] text-gray-500 mt-1">
+          <p className="text-xs text-text-secondary mt-1">
             Necesario para fichar en el kiosko.
           </p>
         </div>
