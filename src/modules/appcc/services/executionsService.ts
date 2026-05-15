@@ -150,6 +150,7 @@ export interface CreateExecutionOptions {
   scheduledDate?: string         // YYYY-MM-DD (default: hoy)
   scheduleId?: string | null
   scheduledTime?: string | null  // 'HH:MM' o 'HH:MM:SS'
+  assignedTo?: string | null     // employee_id del asignado
 }
 
 /**
@@ -194,6 +195,7 @@ export async function createExecution(
       scheduled_date: date,
       scheduled_time: time,
       status: 'pending',
+      assigned_to: opts.assignedTo ?? null,
     })
     .select()
     .single()

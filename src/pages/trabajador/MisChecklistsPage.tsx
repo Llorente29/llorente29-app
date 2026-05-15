@@ -35,7 +35,7 @@ export default function MisChecklistsPage({ employee, onBack, onOpenExecution }:
         const today = new Date().toISOString().slice(0, 10)
 
         // Obtener executions del día para este local
-        const { data: executions, error: execErr } = await supabase!
+        const { data: allExecutions, error: execErr } = await supabase!
           .from('appcc_executions')
           .select('*')
           .eq('location_id', employee.locationId)
@@ -44,10 +44,15 @@ export default function MisChecklistsPage({ employee, onBack, onOpenExecution }:
           .order('scheduled_time', { ascending: true, nullsFirst: false })
 
         if (execErr) throw execErr
-        if (!executions || executions.length === 0) {
+        if (!allExecutions || allExecutions.length === 0) {
           if (!cancel) { setItems([]); setLoading(false) }
           return
         }
+
+        // Filtrar: solo los asignados a este empleado O los sin asignar
+        const executions = allExecutions.filter((e: AppccExecution) =>
+          e.assigned_to === employee.id || e.assigned_to === null
+        )
 
         // Obtener templates para nombres
         const templateIds = [...new Set(executions.map((e: AppccExecution) => e.template_id))]

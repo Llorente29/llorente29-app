@@ -14,6 +14,7 @@ import { useApp } from '@/context/AppContext'
 import * as executionsService from '@/modules/appcc/services/executionsService'
 import * as schedulesService from '@/modules/appcc/services/schedulesService'
 import * as templatesService from '@/modules/appcc/services/templatesService'
+import * as assignmentService from '@/modules/appcc/services/assignmentService'
 import type {
   AppccExecution,
   AppccExecutionStatus,
@@ -113,6 +114,11 @@ export default function TodayPage({ onOpenExecution }: TodayPageProps) {
             )
             for (const schedule of toCreate) {
               if (cancelled) return
+              // Resolver asignación: responsable fijo → fichado → sin asignar
+              const assignedTo = await assignmentService.resolveAssignment(
+                schedule.id,
+                locationId,
+              )
               await executionsService.createExecution(
                 ACCOUNT_ID_FOODINT,
                 locationId,
@@ -121,6 +127,7 @@ export default function TodayPage({ onOpenExecution }: TodayPageProps) {
                   scheduleId: schedule.id,
                   scheduledDate: today,
                   scheduledTime: schedule.scheduled_time,
+                  assignedTo,
                 }
               )
             }
