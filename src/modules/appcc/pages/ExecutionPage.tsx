@@ -13,7 +13,8 @@ import type {
   AppccExecutionResponse,
   AppccTemplateWithItems,
 } from '@/modules/appcc/types'
-import { ArrowLeft, Check, Circle, AlertCircle, AlertTriangle, CheckCircle2 } from 'lucide-react'
+import { ArrowLeft, Check, Circle, AlertCircle, AlertTriangle, CheckCircle2, Download } from 'lucide-react'
+import { generateChecklistPdf } from '@/modules/appcc/services/pdfExportService'
 
 interface ExecutionPageProps {
   executionId: string
@@ -32,6 +33,7 @@ export default function ExecutionPage({ executionId, onBack }: ExecutionPageProp
   const [saveStatus, setSaveStatus] = useState<Map<string, SaveStatus>>(new Map())
   const [completing, setCompleting] = useState(false)
   const [completeError, setCompleteError] = useState<string | null>(null)
+  const [pdfLoading, setPdfLoading] = useState(false)
 
   const saveTimers = useRef<Map<string, number>>(new Map())
 
@@ -269,13 +271,40 @@ export default function ExecutionPage({ executionId, onBack }: ExecutionPageProp
             Firmado el {execution.completed_at ? new Date(execution.completed_at).toLocaleString('es-ES') : '—'}
           </div>
 
-          <button
-            type="button"
-            onClick={onBack}
-            className="px-6 py-3 rounded-md text-base font-medium bg-accent text-text-on-accent hover:bg-accent-hover transition-base min-h-[48px]"
-          >
-            Volver a Hoy
-          </button>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={onBack}
+              className="px-6 py-3 rounded-md text-base font-medium bg-accent text-text-on-accent hover:bg-accent-hover transition-base min-h-[48px]"
+            >
+              Volver a Hoy
+            </button>
+            <button
+              type="button"
+              disabled={pdfLoading}
+              onClick={async () => {
+                setPdfLoading(true)
+                try {
+                  // Cargar nombre del local
+                  let locationName = 'Local'
+                  let locationAddress = ''
+                  if (supabase && execution.location_id) {
+                    const { data: loc } = await supabase.from('locations').select('name, address').eq('id', execution.location_id).maybeSingle()
+                    if (loc) { locationName = loc.name; locationAddress = loc.address ?? '' }
+                  }
+                  await generateChecklistPdf(executionId, { name: locationName, address: locationAddress })
+                } catch (err) {
+                  console.error('[ExecutionPage] PDF error', err)
+                  alert('Error generando PDF: ' + (err instanceof Error ? err.message : 'desconocido'))
+                } finally {
+                  setPdfLoading(false)
+                }
+              }}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-md text-base font-medium border-2 border-accent text-accent bg-card hover:bg-accent-bg transition-base min-h-[48px] disabled:opacity-50"
+            >
+              <Download size={16} /> {pdfLoading ? 'Generando...' : 'Descargar PDF'}
+            </button>
+          </div>
         </div>
 
         <details className="mt-6">
