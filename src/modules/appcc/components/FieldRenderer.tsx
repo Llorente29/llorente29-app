@@ -1,11 +1,9 @@
 // src/modules/appcc/components/FieldRenderer.tsx
 // Renderiza el input apropiado para un item de checklist APPCC
 // según su field_type: numeric, boolean, select, text, date, photo, signature.
-//
-// Es agnóstico al guardado: emite onChange(value) y el padre decide qué hacer
-// (auto-guardar en Supabase, mantener en estado local, etc.).
 
-import { Check, X, AlertTriangle, Camera, Edit3 } from 'lucide-react'
+import { Check, X, AlertTriangle, Edit3 } from 'lucide-react'
+import PhotoUploader from './PhotoUploader'
 import type {
   AppccTemplateItem,
   AppccTemplateItemOption,
@@ -25,6 +23,10 @@ export interface FieldRendererProps {
   onChange: (next: FieldValue) => void
   disabled?: boolean
   warning?: string | null
+  /** ID de la respuesta guardada (para vincular fotos) */
+  responseId?: string | null
+  /** ID del usuario actual (para subir fotos) */
+  userId?: string | null
 }
 
 export default function FieldRenderer({
@@ -33,6 +35,8 @@ export default function FieldRenderer({
   onChange,
   disabled = false,
   warning = null,
+  responseId = null,
+  userId = null,
 }: FieldRendererProps) {
   switch (item.field_type) {
     case 'numeric':
@@ -157,9 +161,11 @@ export default function FieldRenderer({
 
     case 'photo':
       return (
-        <div className="inline-flex items-center gap-2 text-sm text-text-secondary italic px-4 py-3 bg-page rounded-lg border border-dashed border-border-default">
-          <Camera size={16} /> Adjuntar foto — pendiente de implementar (Supabase Storage)
-        </div>
+        <PhotoUploader
+          responseId={responseId ?? null}
+          userId={userId ?? ''}
+          disabled={disabled}
+        />
       )
 
     case 'signature':

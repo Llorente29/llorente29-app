@@ -408,6 +408,8 @@ export default function ExecutionPage({ executionId, onBack }: ExecutionPageProp
                 onChange={(v) => handleChange(item.id, item.field_type, v)}
                 disabled={completing}
                 warning={warning}
+                responseId={resp?.id ?? null}
+                userId={userId}
               />
             </div>
           )
