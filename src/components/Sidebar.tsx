@@ -38,6 +38,7 @@ export const NAV: { id: Page; label: string; Icon: LucideIcon; section?: string;
   { id: 'appcc_today',            label: 'APPCC: Hoy',          Icon: Leaf, section: 'APPCC' },
   { id: 'appcc_incidents',        label: 'APPCC: Incidencias',  Icon: AlertTriangle },
   { id: 'appcc_reports',          label: 'APPCC: Informes',     Icon: FileText },
+  { id: 'appcc_templates',        label: 'APPCC: Plantillas',   Icon: FolderOpen },
   { id: 'appcc_onboarding',       label: 'APPCC: Configurar',   Icon: Settings, roleRequired: 'admin' },
   { id: 'locations',              label: 'Locales',             Icon: MapPin, section: 'Configuración' },
   { id: 'avisos_settings',        label: 'Avisos',              Icon: Bell },

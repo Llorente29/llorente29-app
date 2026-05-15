@@ -25,6 +25,7 @@ import ExecutionPage from './modules/appcc/pages/ExecutionPage'
 import IncidentsPage from './modules/appcc/pages/IncidentsPage'
 import OnboardingPage from './modules/appcc/pages/OnboardingPage'
 import ReportsPage from './modules/appcc/pages/ReportsPage'
+import TemplateEditorPage from './modules/appcc/pages/TemplateEditorPage'
 import {
   getCurrentProfile,
   signOut,
@@ -63,6 +64,7 @@ const PAGE_TITLES: Partial<Record<Page, string>> = {
   appcc_incidents: 'APPCC: Incidencias',
   appcc_onboarding: 'APPCC: Configurar',
   appcc_reports: 'APPCC: Informes',
+  appcc_templates: 'APPCC: Plantillas',
 }
 
 interface RenderPageContext {
@@ -96,6 +98,7 @@ function renderPage(page: Page, ctx: RenderPageContext) {
     case 'appcc_today':       return <TodayPage onOpenExecution={ctx.openExecution} />
     case 'appcc_incidents':   return <IncidentsPage />
     case 'appcc_reports':     return <ReportsPage />
+    case 'appcc_templates':   return <TemplateEditorPage onBack={ctx.closeExecution} />
     case 'appcc_execution':
       if (!ctx.currentExecutionId) {
         ctx.closeExecution()
@@ -222,6 +225,7 @@ function AuthenticatedApp({ profile, onSignOut }: {
           if ((p as unknown as Record<string, unknown>).show_appcc_today) allowed.add('appcc_today')
           if ((p as unknown as Record<string, unknown>).show_appcc_incidents) allowed.add('appcc_incidents')
           if ((p as unknown as Record<string, unknown>).show_appcc_today) allowed.add('appcc_reports')
+          if ((p as unknown as Record<string, unknown>).show_appcc_today) allowed.add('appcc_templates')
           setPerms(allowed)
         } catch (e) {
           console.error('[perms] load:', e)
