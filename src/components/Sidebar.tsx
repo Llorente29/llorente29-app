@@ -178,7 +178,6 @@ export default function Sidebar({
 
   return (
     <aside
-      // @ts-expect-error - inert prop
       inert={inert}
       className={`fixed inset-y-0 left-0 z-50 flex flex-col bg-card border-r border-border-default transition-transform duration-base ease-out ${widthClass} ${translateClass}`}
       aria-hidden={ariaHidden}

@@ -1,6 +1,6 @@
 // src/pages/trabajador/MisDocumentos.tsx
 import { useState, useEffect, useRef } from 'react'
-import { ArrowLeft, FileText, Upload, Download, Trash2, Plus } from 'lucide-react'
+import { ArrowLeft, FileText, Plus } from 'lucide-react'
 import { Card } from '../../components/ui'
 import type { Employee } from '../../types'
 import type { DocumentFile } from '../../types/personal'

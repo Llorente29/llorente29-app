@@ -1,7 +1,7 @@
 // src/pages/trabajador/MisTurnos.tsx
 // El empleado ve los turnos abiertos disponibles y puede solicitar coger alguno.
 import { useState, useEffect, useMemo } from 'react'
-import { ArrowLeft, CalendarPlus, ClipboardList, Clock } from 'lucide-react'
+import { ArrowLeft, CalendarPlus, ClipboardList } from 'lucide-react'
 import { useApp } from '../../context/AppContext'
 import { Card, Button } from '../../components/ui'
 import {

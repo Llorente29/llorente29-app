@@ -1,6 +1,6 @@
 // src/pages/trabajador/MisVacaciones.tsx
 import { useState, useEffect, useMemo } from 'react'
-import { ArrowLeft, Plus, Sun, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, Plus, Sun } from 'lucide-react'
 import { Card } from '../../components/ui'
 import type { Employee } from '../../types'
 import type { VacationRequest, VacationType, VacationSettings } from '../../types/personal'
