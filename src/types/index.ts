@@ -72,6 +72,7 @@ export type Page =
   | 'appcc_execution'
   | 'appcc_incidents'
   | 'appcc_onboarding'
+  | 'appcc_reports'
 
 export interface Location {
   id: string; name: string; address: string; phone: string; active: boolean

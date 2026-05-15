@@ -11,10 +11,13 @@ import jsPDF from 'jspdf'
 import { supabase } from '@/lib/supabase'
 import * as executionsService from './executionsService'
 import * as templatesService from './templatesService'
+import * as incidentsService from './incidentsService'
+import type { AppccIncidentAction } from './incidentsService'
 import type {
   AppccExecutionResponse,
   AppccTemplateWithItems,
   AppccTemplateItem,
+  AppccIncident,
 } from '@/modules/appcc/types'
 
 // Colores del branding
@@ -247,6 +250,427 @@ export async function generateDailySummaryPdf(
 
   const fileName = `APPCC_Resumen_${date}_${locationInfo.name.replace(/\s/g, '_')}.pdf`
   doc.save(fileName)
+}
+
+// ============================================================
+// 3. INFORME DE CONTROLES (rango de fechas)
+// ============================================================
+
+export async function generateControlsReportPdf(
+  locationId: string,
+  fromDate: string,
+  toDate: string,
+  locationInfo: LocationInfo,
+): Promise<void> {
+  const executions = await executionsService.listByDateRange(locationId, fromDate, toDate)
+  if (executions.length === 0) throw new Error('No hay registros en este periodo')
+
+  const templateIds = [...new Set(executions.map(e => e.template_id))]
+  const tplCache = new Map<string, AppccTemplateWithItems>()
+  for (const tid of templateIds) {
+    const t = await templatesService.getTemplateWithItems(tid)
+    if (t) tplCache.set(tid, t)
+  }
+
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  const W = doc.internal.pageSize.getWidth()
+  const margin = 15
+  const contentW = W - margin * 2
+  let y = margin
+
+  y = drawHeader(doc, y, margin, contentW, locationInfo, 'Informe de controles APPCC')
+
+  // Título
+  doc.setFontSize(14)
+  doc.setTextColor(ACCENT[0], ACCENT[1], ACCENT[2])
+  doc.setFont('helvetica', 'bold')
+  doc.text(`Controles del ${fromDate} al ${toDate}`, margin, y)
+  y += 8
+
+  // Estadísticas
+  const completed = executions.filter(e => e.status === 'completed').length
+  const withFailures = executions.filter(e => e.has_failures).length
+  const totalFailures = executions.reduce((acc, e) => acc + e.failure_count, 0)
+  doc.setFontSize(9)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(GRAY[0], GRAY[1], GRAY[2])
+  doc.text(`Total: ${executions.length}  |  Completados: ${completed}  |  Con incidencias: ${withFailures}  |  Incidencias totales: ${totalFailures}`, margin, y)
+  y += 8
+
+  // Agrupar por fecha
+  const byDate = new Map<string, typeof executions>()
+  for (const e of executions) {
+    const d = e.scheduled_date
+    if (!byDate.has(d)) byDate.set(d, [])
+    byDate.get(d)!.push(e)
+  }
+
+  for (const [date, dayExecs] of [...byDate.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+    if (y > 255) { doc.addPage(); y = margin }
+
+    // Cabecera del día
+    const dateLabel = new Date(date + 'T00:00:00').toLocaleDateString('es-ES', {
+      weekday: 'long', day: 'numeric', month: 'long'
+    })
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(ACCENT[0], ACCENT[1], ACCENT[2])
+    doc.text(dateLabel, margin, y)
+    y += 5
+
+    for (const exec of dayExecs.sort((a, b) => (a.scheduled_time ?? '').localeCompare(b.scheduled_time ?? ''))) {
+      if (y > 265) { doc.addPage(); y = margin }
+      const tpl = tplCache.get(exec.template_id)
+      const isCompleted = exec.status === 'completed'
+
+      doc.setFontSize(8)
+      doc.setFont('helvetica', 'normal')
+
+      // Indicador + nombre
+      if (exec.has_failures) {
+        doc.setFillColor(DANGER[0], DANGER[1], DANGER[2])
+      } else if (isCompleted) {
+        doc.setFillColor(SUCCESS[0], SUCCESS[1], SUCCESS[2])
+      } else {
+        doc.setFillColor(200, 200, 200)
+      }
+      doc.circle(margin + 2, y - 0.5, 1.2, 'F')
+
+      doc.setTextColor(0, 0, 0)
+      doc.text(`${tpl?.name ?? 'Checklist'}`, margin + 6, y)
+
+      doc.setTextColor(GRAY[0], GRAY[1], GRAY[2])
+      doc.text(
+        `${exec.scheduled_time?.slice(0, 5) ?? '—'}  |  ${isCompleted ? 'OK' : exec.status}${exec.has_failures ? `  |  ${exec.failure_count} incid.` : ''}`,
+        margin + 90, y
+      )
+      y += 4.5
+    }
+    y += 3
+  }
+
+  // Pie
+  y += 4
+  doc.setFontSize(7)
+  doc.setTextColor(GRAY[0], GRAY[1], GRAY[2])
+  doc.setFont('helvetica', 'italic')
+  doc.text('Documento generado por Foodint APPCC. Registros respaldados por firma electrónica simple (eIDAS UE 910/2014).', margin, y, { maxWidth: contentW })
+
+  drawFooter(doc)
+  doc.save(`APPCC_Controles_${fromDate}_${toDate}_${locationInfo.name.replace(/\s/g, '_')}.pdf`)
+}
+
+// ============================================================
+// 4. INFORME DE INCIDENCIAS (rango de fechas)
+// ============================================================
+
+export async function generateIncidentsReportPdf(
+  locationId: string,
+  fromDate: string,
+  toDate: string,
+  locationInfo: LocationInfo,
+): Promise<void> {
+  const incidents = await incidentsService.listIncidentsByDateRange(locationId, fromDate, toDate)
+  if (incidents.length === 0) throw new Error('No hay incidencias en este periodo')
+
+  // Cargar acciones de cada incidencia
+  const incidentsWithActions: { incident: AppccIncident; actions: AppccIncidentAction[] }[] = []
+  for (const inc of incidents) {
+    const detail = await incidentsService.getIncidentWithActions(inc.id)
+    if (detail) incidentsWithActions.push(detail)
+  }
+
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  const W = doc.internal.pageSize.getWidth()
+  const margin = 15
+  const contentW = W - margin * 2
+  let y = margin
+
+  y = drawHeader(doc, y, margin, contentW, locationInfo, 'Informe de incidencias APPCC')
+
+  doc.setFontSize(14)
+  doc.setTextColor(ACCENT[0], ACCENT[1], ACCENT[2])
+  doc.setFont('helvetica', 'bold')
+  doc.text(`Incidencias del ${fromDate} al ${toDate}`, margin, y)
+  y += 8
+
+  // Estadísticas
+  const open = incidents.filter(i => i.status === 'open').length
+  const resolved = incidents.filter(i => i.status === 'resolved' || i.status === 'closed').length
+  const critical = incidents.filter(i => i.severity === 'critical').length
+  doc.setFontSize(9)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(GRAY[0], GRAY[1], GRAY[2])
+  doc.text(`Total: ${incidents.length}  |  Abiertas: ${open}  |  Resueltas: ${resolved}  |  Críticas: ${critical}`, margin, y)
+  y += 8
+
+  const SEVERITY_COLORS: Record<string, readonly [number, number, number]> = {
+    critical: DANGER,
+    high: [234, 88, 12] as const,  // orange
+    medium: [202, 138, 4] as const, // amber
+    low: GRAY,
+  }
+
+  for (const { incident: inc, actions } of incidentsWithActions) {
+    if (y > 240) { doc.addPage(); y = margin }
+
+    // Severidad
+    const sevColor = SEVERITY_COLORS[inc.severity] ?? GRAY
+    doc.setFillColor(sevColor[0], sevColor[1], sevColor[2])
+    doc.rect(margin, y - 3, contentW, 0.8, 'F')
+
+    // Título
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(0, 0, 0)
+    doc.text(inc.title, margin, y + 2)
+    y += 6
+
+    // Metadata
+    doc.setFontSize(8)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(GRAY[0], GRAY[1], GRAY[2])
+    doc.text(
+      `Severidad: ${inc.severity.toUpperCase()}  |  Estado: ${inc.status}  |  Fuente: ${inc.source}  |  Creada: ${new Date(inc.created_at).toLocaleString('es-ES')}`,
+      margin, y
+    )
+    y += 4
+
+    if (inc.description) {
+      doc.text(`Descripción: ${inc.description.slice(0, 120)}`, margin, y, { maxWidth: contentW })
+      y += 4
+    }
+
+    if (inc.resolved_at) {
+      doc.setTextColor(SUCCESS[0], SUCCESS[1], SUCCESS[2])
+      doc.text(`Resuelta: ${new Date(inc.resolved_at).toLocaleString('es-ES')}`, margin, y)
+      doc.setTextColor(GRAY[0], GRAY[1], GRAY[2])
+      y += 4
+    }
+
+    // Acciones correctivas
+    if (actions.length > 0) {
+      doc.setFontSize(8)
+      doc.setFont('helvetica', 'bold')
+      doc.text('Acciones:', margin + 4, y)
+      y += 4
+      doc.setFont('helvetica', 'normal')
+      for (const act of actions) {
+        if (y > 270) { doc.addPage(); y = margin }
+        const typeLabel = act.action_type === 'corrective' ? '✓ Correctiva' : act.action_type === 'preventive' ? '→ Preventiva' : '· ' + (act.action_type ?? 'Nota')
+        doc.text(`${typeLabel}: ${act.description.slice(0, 100)}`, margin + 8, y, { maxWidth: contentW - 12 })
+        y += 4
+        doc.setTextColor(180, 180, 180)
+        doc.text(`${new Date(act.taken_at).toLocaleString('es-ES')}`, margin + 8, y)
+        doc.setTextColor(GRAY[0], GRAY[1], GRAY[2])
+        y += 4
+      }
+    }
+    y += 4
+  }
+
+  doc.setFontSize(7)
+  doc.setTextColor(GRAY[0], GRAY[1], GRAY[2])
+  doc.setFont('helvetica', 'italic')
+  doc.text('Documento generado por Foodint APPCC.', margin, y, { maxWidth: contentW })
+
+  drawFooter(doc)
+  doc.save(`APPCC_Incidencias_${fromDate}_${toDate}_${locationInfo.name.replace(/\s/g, '_')}.pdf`)
+}
+
+// ============================================================
+// 5. INFORME COMPLETO INSPECTOR (controles + incidencias + resoluciones)
+// ============================================================
+
+export async function generateInspectorReportPdf(
+  locationId: string,
+  fromDate: string,
+  toDate: string,
+  locationInfo: LocationInfo,
+): Promise<void> {
+  // Cargar todo en paralelo
+  const [executions, incidents] = await Promise.all([
+    executionsService.listByDateRange(locationId, fromDate, toDate),
+    incidentsService.listIncidentsByDateRange(locationId, fromDate, toDate),
+  ])
+
+  if (executions.length === 0 && incidents.length === 0) {
+    throw new Error('No hay registros ni incidencias en este periodo')
+  }
+
+  // Templates
+  const templateIds = [...new Set(executions.map(e => e.template_id))]
+  const tplCache = new Map<string, AppccTemplateWithItems>()
+  for (const tid of templateIds) {
+    const t = await templatesService.getTemplateWithItems(tid)
+    if (t) tplCache.set(tid, t)
+  }
+
+  // Acciones de incidencias
+  const incActions = new Map<string, AppccIncidentAction[]>()
+  for (const inc of incidents) {
+    const detail = await incidentsService.getIncidentWithActions(inc.id)
+    if (detail) incActions.set(inc.id, detail.actions)
+  }
+
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  const W = doc.internal.pageSize.getWidth()
+  const margin = 15
+  const contentW = W - margin * 2
+  let y = margin
+
+  y = drawHeader(doc, y, margin, contentW, locationInfo, 'INFORME INSPECCIÓN APPCC')
+
+  // Título principal
+  doc.setFontSize(16)
+  doc.setTextColor(ACCENT[0], ACCENT[1], ACCENT[2])
+  doc.setFont('helvetica', 'bold')
+  doc.text('Informe de registros APPCC', margin, y)
+  y += 7
+  doc.setFontSize(11)
+  doc.setFont('helvetica', 'normal')
+  doc.text(`Periodo: ${fromDate} al ${toDate}`, margin, y)
+  y += 8
+
+  // === RESUMEN EJECUTIVO ===
+  doc.setFillColor(LIGHT[0], LIGHT[1], LIGHT[2])
+  doc.rect(margin, y, contentW, 22, 'F')
+  doc.setFontSize(9)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(ACCENT[0], ACCENT[1], ACCENT[2])
+  doc.text('RESUMEN EJECUTIVO', margin + 3, y + 5)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(0, 0, 0)
+  doc.setFontSize(8)
+
+  const totalControls = executions.length
+  const completedControls = executions.filter(e => e.status === 'completed').length
+  const complianceRate = totalControls > 0 ? Math.round((completedControls / totalControls) * 100) : 0
+  const totalIncidents = incidents.length
+  const resolvedIncidents = incidents.filter(i => i.status === 'resolved' || i.status === 'closed').length
+  const criticalIncidents = incidents.filter(i => i.severity === 'critical').length
+
+  doc.text(`Controles programados: ${totalControls}  |  Completados: ${completedControls}  |  Tasa de cumplimiento: ${complianceRate}%`, margin + 3, y + 11)
+  doc.text(`Incidencias: ${totalIncidents}  |  Resueltas: ${resolvedIncidents}  |  Críticas: ${criticalIncidents}`, margin + 3, y + 16)
+  y += 28
+
+  // === SECCIÓN 1: CONTROLES ===
+  doc.setFontSize(12)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(ACCENT[0], ACCENT[1], ACCENT[2])
+  doc.text('1. Registro de controles', margin, y)
+  y += 7
+
+  // Tabla de controles por fecha
+  const byDate = new Map<string, typeof executions>()
+  for (const e of executions) {
+    if (!byDate.has(e.scheduled_date)) byDate.set(e.scheduled_date, [])
+    byDate.get(e.scheduled_date)!.push(e)
+  }
+
+  for (const [date, dayExecs] of [...byDate.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+    if (y > 255) { doc.addPage(); y = margin }
+
+    const dateLabel = new Date(date + 'T00:00:00').toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })
+    doc.setFontSize(9)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(ACCENT[0], ACCENT[1], ACCENT[2])
+    doc.text(dateLabel, margin, y)
+    y += 4.5
+
+    for (const exec of dayExecs.sort((a, b) => (a.scheduled_time ?? '').localeCompare(b.scheduled_time ?? ''))) {
+      if (y > 268) { doc.addPage(); y = margin }
+      const tpl = tplCache.get(exec.template_id)
+      doc.setFontSize(7.5)
+      doc.setFont('helvetica', 'normal')
+
+      if (exec.has_failures) {
+        doc.setFillColor(DANGER[0], DANGER[1], DANGER[2])
+      } else if (exec.status === 'completed') {
+        doc.setFillColor(SUCCESS[0], SUCCESS[1], SUCCESS[2])
+      } else {
+        doc.setFillColor(200, 200, 200)
+      }
+      doc.circle(margin + 2, y - 0.5, 1, 'F')
+
+      doc.setTextColor(0, 0, 0)
+      doc.text(`${tpl?.name ?? '—'}`, margin + 5, y)
+      doc.setTextColor(GRAY[0], GRAY[1], GRAY[2])
+      doc.text(`${exec.scheduled_time?.slice(0, 5) ?? '—'}  ${exec.status === 'completed' ? '✓' : exec.status}${exec.failure_count > 0 ? ` (${exec.failure_count} inc.)` : ''}`, margin + 95, y)
+      y += 3.8
+    }
+    y += 2
+  }
+
+  // === SECCIÓN 2: INCIDENCIAS ===
+  if (incidents.length > 0) {
+    if (y > 230) { doc.addPage(); y = margin }
+
+    y += 4
+    doc.setFontSize(12)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(ACCENT[0], ACCENT[1], ACCENT[2])
+    doc.text('2. Incidencias y acciones correctoras', margin, y)
+    y += 7
+
+    for (const inc of incidents) {
+      if (y > 240) { doc.addPage(); y = margin }
+
+      const actions = incActions.get(inc.id) ?? []
+      const isResolved = inc.status === 'resolved' || inc.status === 'closed'
+
+      // Barra de severidad
+      const sevColors: Record<string, readonly [number, number, number]> = {
+        critical: DANGER, high: [234, 88, 12] as const, medium: [202, 138, 4] as const, low: GRAY,
+      }
+      const sc = sevColors[inc.severity] ?? GRAY
+      doc.setFillColor(sc[0], sc[1], sc[2])
+      doc.rect(margin, y - 2.5, 2, 8, 'F')
+
+      doc.setFontSize(9)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(0, 0, 0)
+      doc.text(inc.title, margin + 5, y)
+      y += 4
+
+      doc.setFontSize(7.5)
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(GRAY[0], GRAY[1], GRAY[2])
+      doc.text(`${inc.severity.toUpperCase()} | ${inc.source} | ${new Date(inc.created_at).toLocaleDateString('es-ES')} | ${isResolved ? 'RESUELTA' : inc.status.toUpperCase()}`, margin + 5, y)
+      y += 4
+
+      if (inc.description) {
+        doc.text(inc.description.slice(0, 150), margin + 5, y, { maxWidth: contentW - 8 })
+        y += 4
+      }
+
+      // Acciones
+      for (const act of actions) {
+        if (y > 270) { doc.addPage(); y = margin }
+        doc.setFontSize(7)
+        const prefix = act.action_type === 'corrective' ? '→ Correctiva' : act.action_type === 'preventive' ? '→ Preventiva' : '→ ' + (act.action_type ?? 'Nota')
+        doc.setTextColor(isResolved ? SUCCESS[0] : GRAY[0], isResolved ? SUCCESS[1] : GRAY[1], isResolved ? SUCCESS[2] : GRAY[2])
+        doc.text(`${prefix}: ${act.description.slice(0, 100)}  (${new Date(act.taken_at).toLocaleDateString('es-ES')})`, margin + 8, y, { maxWidth: contentW - 12 })
+        y += 3.5
+      }
+      y += 4
+    }
+  }
+
+  // Pie legal
+  y += 6
+  if (y > 270) { doc.addPage(); y = margin }
+  doc.setFontSize(7)
+  doc.setTextColor(GRAY[0], GRAY[1], GRAY[2])
+  doc.setFont('helvetica', 'italic')
+  doc.text(
+    'Informe generado automáticamente por Foodint APPCC. Todos los registros están respaldados por firma electrónica simple según Reglamento eIDAS UE 910/2014. ' +
+    'Este documento puede ser presentado ante las autoridades sanitarias competentes conforme al Reglamento CE 852/2004 y RD 109/2010.',
+    margin, y, { maxWidth: contentW }
+  )
+
+  drawFooter(doc)
+  doc.save(`APPCC_Inspector_${fromDate}_${toDate}_${locationInfo.name.replace(/\s/g, '_')}.pdf`)
 }
 
 // ============================================================
