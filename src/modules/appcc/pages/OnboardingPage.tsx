@@ -63,6 +63,10 @@ export default function OnboardingPage({ initialLocationId, onFinish }: Onboardi
   const [saveError, setSaveError] = useState<string | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
 
+  // Anti-duplicación: schedules ya existentes para el local seleccionado
+  const [existingCount, setExistingCount] = useState<number>(0)
+  const [loadingExisting, setLoadingExisting] = useState(false)
+
   // === EFECTOS ===
 
   // Si no hay local preseleccionado y solo hay uno activo, seleccionarlo automáticamente
@@ -71,6 +75,18 @@ export default function OnboardingPage({ initialLocationId, onFinish }: Onboardi
       setLocationId(activeLocations[0].id)
     }
   }, [activeLocations, locationId])
+
+  // Detectar si el local ya tiene schedules activos (anti-duplicación)
+  useEffect(() => {
+    if (!locationId) { setExistingCount(0); return }
+    let cancel = false
+    setLoadingExisting(true)
+    schedulesService.countActiveSchedules(locationId)
+      .then(n => { if (!cancel) setExistingCount(n) })
+      .catch(() => { if (!cancel) setExistingCount(0) })
+      .finally(() => { if (!cancel) setLoadingExisting(false) })
+    return () => { cancel = true }
+  }, [locationId])
 
   // Cargar catálogo (plantillas + planes)
   useEffect(() => {
@@ -216,10 +232,27 @@ export default function OnboardingPage({ initialLocationId, onFinish }: Onboardi
     if (!locationId || !userId) return
     if (selectedCount === 0) return
 
+    // Si hay schedules existentes, confirmar reemplazo
+    if (existingCount > 0) {
+      const ok = confirm(
+        `${currentLocation?.name || 'Este local'} ya tiene ${existingCount} controles APPCC activos.\n\n` +
+        `¿Desactivar los existentes y reemplazar con la nueva configuración?`
+      )
+      if (!ok) return
+    }
+
     setSaving(true)
     setSaveError(null)
 
     try {
+      // Desactivar schedules existentes antes de crear los nuevos
+      if (existingCount > 0) {
+        const existing = await schedulesService.listActiveSchedules(locationId)
+        for (const s of existing) {
+          await schedulesService.deactivateSchedule(s.id)
+        }
+      }
+
       const items: schedulesService.CreateScheduleInput[] = selectedRows.map(row => ({
         accountId: ACCOUNT_ID_FOODINT,
         locationId,
@@ -230,8 +263,7 @@ export default function OnboardingPage({ initialLocationId, onFinish }: Onboardi
         createdBy: userId,
       }))
 
-      const created = await schedulesService.bulkCreateSchedules(items)
-      console.log('[OnboardingPage] schedules creados:', created.length)
+      await schedulesService.bulkCreateSchedules(items)
 
       onFinish({ saved: true, locationId })
     } catch (err) {
@@ -328,6 +360,21 @@ export default function OnboardingPage({ initialLocationId, onFinish }: Onboardi
               </div>
             )}
           </div>
+
+          {/* Warning: local ya configurado */}
+          {locationId && !loadingExisting && existingCount > 0 && (
+            <div className="flex items-start gap-3 p-4 rounded-lg bg-warning-bg border border-warning/30">
+              <AlertCircle size={20} className="text-warning shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-warning">
+                  {currentLocation?.name || 'Este local'} ya tiene {existingCount} controles APPCC activos.
+                </p>
+                <p className="text-xs text-warning mt-1">
+                  Si continúas y guardas, los controles existentes se desactivarán y se reemplazarán por los que configures aquí.
+                </p>
+              </div>
+            </div>
+          )}
 
           <div>
             <h2 className="text-xl font-display text-text-primary mb-3">
