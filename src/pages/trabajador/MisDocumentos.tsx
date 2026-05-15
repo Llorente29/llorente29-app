@@ -1,5 +1,6 @@
 // src/pages/trabajador/MisDocumentos.tsx
 import { useState, useEffect, useRef } from 'react'
+import { ArrowLeft, FileText, Upload, Download, Trash2, Plus } from 'lucide-react'
 import { Card } from '../../components/ui'
 import type { Employee } from '../../types'
 import type { DocumentFile } from '../../types/personal'
@@ -65,31 +66,33 @@ export default function MisDocumentos({ employee, onBack }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#F5E9D9] via-white to-[#F5E9D9] p-4 pb-8">
+    <div className="min-h-screen bg-page p-4 pb-8">
       <div className="max-w-md mx-auto">
         <div className="flex items-center gap-3 mb-5">
-          <button onClick={onBack} className="text-2xl text-gray-500">←</button>
+          <button onClick={onBack} className="text-text-secondary w-9 h-9 rounded-full hover:bg-accent-bg flex items-center justify-center transition-base" aria-label="Volver">
+            <ArrowLeft size={20} />
+          </button>
           <div className="flex-1">
-            <p className="text-xs text-gray-400 uppercase tracking-wide">Mis documentos</p>
-            <p className="font-bold text-gray-900">{employee.name.split(' ')[0]}</p>
+            <p className="text-xs text-text-secondary uppercase tracking-wide">Mis documentos</p>
+            <p className="font-bold text-text-primary">{employee.name.split(' ')[0]}</p>
           </div>
           <button
             onClick={() => setShowUpload(true)}
-            className="px-3 py-1.5 rounded-full bg-[#7C1A1A] text-white text-xs font-medium hover:bg-[#5A1212]"
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-accent text-text-on-accent text-xs font-medium hover:bg-accent-hover transition-base"
           >
-            + Subir
+            <Plus size={12} /> Subir
           </button>
         </div>
 
         {loading ? (
           <Card className="p-6 text-center">
-            <p className="text-sm text-gray-500">Cargando...</p>
+            <p className="text-sm text-text-secondary">Cargando...</p>
           </Card>
         ) : docs.length === 0 ? (
           <Card className="p-6 text-center">
-            <p className="text-4xl mb-2">📁</p>
-            <p className="font-semibold text-gray-700">Sin documentos</p>
-            <p className="text-xs text-gray-500 mt-1">Aún no tienes documentos. Tu encargado los subirá aquí.</p>
+            <div className="flex justify-center mb-2"><FileText size={32} className="text-accent" /></div>
+            <p className="font-semibold text-text-primary">Sin documentos</p>
+            <p className="text-xs text-text-secondary mt-1">Aún no tienes documentos. Tu encargado los subirá aquí.</p>
           </Card>
         ) : (
           <div className="space-y-2">
@@ -100,23 +103,23 @@ export default function MisDocumentos({ employee, onBack }: Props) {
                   <div className="flex items-start gap-3">
                     <span className="text-2xl">{t.icon}</span>
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900 text-sm truncate">{doc.name}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">
+                      <p className="font-medium text-text-primary text-sm truncate">{doc.name}</p>
+                      <p className="text-xs text-text-secondary mt-0.5">
                         {t.label} · {(doc.fileSizeKb).toLocaleString()} KB · {new Date(doc.createdAt).toLocaleDateString('es-ES')}
                       </p>
                       {doc.uploadedRole === 'trabajador' && (
-                        <p className="text-[10px] text-[#7C1A1A] mt-0.5">Subido por ti</p>
+                        <p className="text-[10px] text-accent font-medium mt-0.5">Subido por ti</p>
                       )}
-                      {doc.notes && <p className="text-xs text-gray-400 mt-1 italic">{doc.notes}</p>}
+                      {doc.notes && <p className="text-xs text-text-secondary mt-1 italic">{doc.notes}</p>}
                     </div>
                     <div className="flex flex-col gap-1">
                       <button onClick={() => handleDownload(doc)}
-                        className="text-xs px-2 py-1 rounded bg-blue-50 text-blue-700 hover:bg-blue-100">
+                        className="text-xs px-2 py-1 rounded bg-accent-bg text-accent hover:opacity-90 transition-base">
                         Ver
                       </button>
                       {doc.uploadedRole === 'trabajador' && (
                         <button onClick={() => handleDelete(doc)}
-                          className="text-xs px-2 py-1 rounded bg-red-50 text-red-700 hover:bg-red-100">
+                          className="text-xs px-2 py-1 rounded bg-danger-bg text-danger hover:bg-danger-bg">
                           Borrar
                         </button>
                       )}
@@ -131,41 +134,41 @@ export default function MisDocumentos({ employee, onBack }: Props) {
         {/* Modal de subida */}
         {showUpload && (
           <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center">
-            <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-md p-5 max-h-[90vh] overflow-y-auto">
+            <div className="bg-card rounded-t-3xl sm:rounded-2xl w-full max-w-md p-5 max-h-[90vh] overflow-y-auto">
               <p className="font-bold text-lg mb-4">Subir documento</p>
 
-              <label className="text-xs text-gray-500 block mb-1">Tipo</label>
+              <label className="text-xs text-text-secondary block mb-1">Tipo</label>
               <select value={uploadType} onChange={e => setUploadType(e.target.value)}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white mb-3">
+                className="w-full border border-border-default rounded-lg px-3 py-2 text-sm bg-card text-text-primary mb-3">
                 {DOCUMENT_TYPES.map(t => (
                   <option key={t.id} value={t.id}>{t.icon} {t.label}</option>
                 ))}
               </select>
 
-              <label className="text-xs text-gray-500 block mb-1">Notas (opcional)</label>
+              <label className="text-xs text-text-secondary block mb-1">Notas (opcional)</label>
               <textarea value={uploadNotes} onChange={e => setUploadNotes(e.target.value)}
                 placeholder="Ej: Baja desde el 10 al 15 de mayo"
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-3 h-20 resize-none" />
+                className="w-full border border-border-default rounded-lg px-3 py-2 text-sm mb-3 h-20 resize-none" />
 
               <input ref={fileInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.webp"
                 onChange={handleUpload} className="hidden" />
 
-              {error && <p className="text-sm text-red-600 mb-2">{error}</p>}
+              {error && <p className="text-sm text-danger mb-2">{error}</p>}
 
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploading}
-                className="w-full py-3 rounded-xl bg-[#7C1A1A] text-white font-medium hover:bg-[#5A1212] disabled:opacity-50"
+                className="w-full py-3 rounded-xl bg-accent text-text-on-accent font-medium hover:bg-accent-hover disabled:opacity-50 transition-base"
               >
                 {uploading ? 'Subiendo...' : 'Elegir archivo y subir'}
               </button>
 
               <button onClick={() => { setShowUpload(false); setError(''); setUploadNotes('') }}
-                className="w-full py-2 mt-2 text-sm text-gray-500 hover:text-gray-700">
+                className="w-full py-2 mt-2 text-sm text-text-secondary hover:text-text-primary">
                 Cancelar
               </button>
 
-              <p className="text-[10px] text-gray-400 text-center mt-3">
+              <p className="text-[10px] text-text-secondary text-center mt-3">
                 PDF, JPG, PNG o WEBP. Máximo 5 MB.
               </p>
             </div>

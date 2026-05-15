@@ -2,6 +2,7 @@
 // Orquestador del modo trabajador: gestiona navegación entre subpáginas.
 // La sesión es global (Supabase Auth en App.tsx), aquí solo recibimos el employee resuelto.
 import { useState, useEffect } from 'react'
+import { ArrowLeft, AlertTriangle, Ban } from 'lucide-react'
 import { useApp } from '../../context/AppContext'
 import HomeEmpleado from './HomeEmpleado'
 import FichajeEmpleado from './FichajeEmpleado'
@@ -56,17 +57,16 @@ export default function TrabajadorApp({ employeeId, onExitMode }: Props) {
   // Si no hay employeeId vinculado al user, mostrar mensaje claro
   if (!employeeId) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#F5E9D9] via-white to-[#F5E9D9] flex items-center justify-center p-4">
-        <div className="max-w-md text-center bg-white rounded-2xl shadow-lg p-6">
-          <p className="text-4xl mb-3">⚠️</p>
-          <h2 className="font-bold text-gray-900 mb-2">Tu cuenta no está vinculada a un empleado</h2>
-          <p className="text-sm text-gray-600 mb-4">
+      <div className="min-h-screen bg-page flex items-center justify-center p-4">
+        <div className="max-w-md text-center bg-card rounded-xl shadow-lg p-6">
+          <div className="flex justify-center mb-3"><AlertTriangle size={40} className="text-warning" /></div>
+          <h2 className="font-bold text-text-primary mb-2">Tu cuenta no está vinculada a un empleado</h2>
+          <p className="text-sm text-text-secondary mb-4">
             Pide a tu administrador que vincule tu cuenta de email con tu ficha de empleado.
           </p>
           <button
             onClick={onExitMode}
-            className="px-4 py-2 rounded-lg text-white text-sm"
-            style={{ backgroundColor: '#7C1A1A' }}
+            className="px-4 py-2 rounded-lg text-text-on-accent text-sm bg-accent hover:bg-accent-hover transition-base"
           >
             Salir
           </button>
@@ -78,18 +78,17 @@ export default function TrabajadorApp({ employeeId, onExitMode }: Props) {
   // El employeeId existe pero el empleado no se encuentra (puede estar inactivo o ya no existir)
   if (!employee) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#F5E9D9] via-white to-[#F5E9D9] flex items-center justify-center p-4">
-        <div className="max-w-md text-center bg-white rounded-2xl shadow-lg p-6">
-          <p className="text-4xl mb-3">🚫</p>
-          <h2 className="font-bold text-gray-900 mb-2">No tienes acceso</h2>
-          <p className="text-sm text-gray-600 mb-4">
+      <div className="min-h-screen bg-page flex items-center justify-center p-4">
+        <div className="max-w-md text-center bg-card rounded-xl shadow-lg p-6">
+          <div className="flex justify-center mb-3"><Ban size={40} className="text-danger" /></div>
+          <h2 className="font-bold text-text-primary mb-2">No tienes acceso</h2>
+          <p className="text-sm text-text-secondary mb-4">
             Tu ficha de empleado no está disponible. Posiblemente has sido dado de baja.
             Contacta con tu administrador.
           </p>
           <button
             onClick={onExitMode}
-            className="px-4 py-2 rounded-lg text-white text-sm"
-            style={{ backgroundColor: '#7C1A1A' }}
+            className="px-4 py-2 rounded-lg text-text-on-accent text-sm bg-accent hover:bg-accent-hover transition-base"
           >
             Salir
           </button>
@@ -101,17 +100,16 @@ export default function TrabajadorApp({ employeeId, onExitMode }: Props) {
   // El empleado existe pero está inactivo (dado de baja)
   if (!employee.active) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#F5E9D9] via-white to-[#F5E9D9] flex items-center justify-center p-4">
-        <div className="max-w-md text-center bg-white rounded-2xl shadow-lg p-6">
-          <p className="text-4xl mb-3">🚫</p>
-          <h2 className="font-bold text-gray-900 mb-2">Cuenta desactivada</h2>
-          <p className="text-sm text-gray-600 mb-4">
+      <div className="min-h-screen bg-page flex items-center justify-center p-4">
+        <div className="max-w-md text-center bg-card rounded-xl shadow-lg p-6">
+          <div className="flex justify-center mb-3"><Ban size={40} className="text-danger" /></div>
+          <h2 className="font-bold text-text-primary mb-2">Cuenta desactivada</h2>
+          <p className="text-sm text-text-secondary mb-4">
             Tu cuenta ha sido dada de baja. Contacta con tu administrador si crees que es un error.
           </p>
           <button
             onClick={onExitMode}
-            className="px-4 py-2 rounded-lg text-white text-sm"
-            style={{ backgroundColor: '#7C1A1A' }}
+            className="px-4 py-2 rounded-lg text-text-on-accent text-sm bg-accent hover:bg-accent-hover transition-base"
           >
             Salir
           </button>
@@ -143,13 +141,13 @@ export default function TrabajadorApp({ employeeId, onExitMode }: Props) {
 
   if (subPage === 'bolsa' && showBolsaHoras) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#F5E9D9] via-white to-[#F5E9D9] p-4 pb-8">
+      <div className="min-h-screen bg-page p-4 pb-8">
         <div className="max-w-md mx-auto">
           <div className="flex items-center gap-3 mb-5">
-            <button onClick={() => setSubPage('home')} className="text-2xl text-gray-500">←</button>
+            <button onClick={() => setSubPage('home')} className="text-text-secondary w-9 h-9 rounded-full hover:bg-accent-bg flex items-center justify-center transition-base" aria-label="Volver"><ArrowLeft size={20} /></button>
             <div>
-              <p className="text-xs text-gray-400 uppercase tracking-wide">Mi bolsa de horas</p>
-              <p className="font-bold text-gray-900">{employee.name.split(' ')[0]}</p>
+              <p className="text-xs text-text-secondary uppercase tracking-wide">Mi bolsa de horas</p>
+              <p className="font-bold text-text-primary">{employee.name.split(' ')[0]}</p>
             </div>
           </div>
           <MiBolsaHoras employee={employee} location={location} />

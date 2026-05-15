@@ -1,6 +1,7 @@
 // src/pages/trabajador/MisTurnos.tsx
 // El empleado ve los turnos abiertos disponibles y puede solicitar coger alguno.
 import { useState, useEffect, useMemo } from 'react'
+import { ArrowLeft, CalendarPlus, ClipboardList, Clock } from 'lucide-react'
 import { useApp } from '../../context/AppContext'
 import { Card, Button } from '../../components/ui'
 import {
@@ -93,32 +94,34 @@ export default function MisTurnos({ employee, onBack }: Props) {
   const myActiveRequests = myRequestsWithShift.filter(x => x.request.status === 'pendiente' || x.request.status === 'aceptada')
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#F5E9D9] via-white to-[#F5E9D9] p-4 pb-8">
+    <div className="min-h-screen bg-page p-4 pb-8">
       <div className="max-w-md mx-auto">
         <div className="flex items-center gap-3 mb-5">
-          <button onClick={onBack} className="text-2xl text-gray-500">←</button>
+          <button onClick={onBack} className="text-text-secondary w-9 h-9 rounded-full hover:bg-accent-bg flex items-center justify-center transition-base" aria-label="Volver">
+            <ArrowLeft size={20} />
+          </button>
           <div>
-            <p className="text-xs text-gray-400 uppercase tracking-wide">Turnos abiertos</p>
-            <p className="font-bold text-gray-900">{employee.name.split(' ')[0]}</p>
+            <p className="text-xs text-text-secondary uppercase tracking-wide">Turnos abiertos</p>
+            <p className="font-bold text-text-primary">{employee.name.split(' ')[0]}</p>
           </div>
         </div>
 
         {/* Tabs */}
         <div className="flex items-center gap-2 mb-4">
           <button onClick={() => setTab('disponibles')}
-            className={`flex-1 px-3 py-2 rounded-full text-sm font-medium transition-all ${
-              tab === 'disponibles' ? 'bg-[#7C1A1A] text-white' : 'bg-white border border-gray-200 text-gray-600'
+            className={`inline-flex items-center gap-1.5 flex-1 px-3 py-2 rounded-full text-sm font-medium transition-base ${
+              tab === 'disponibles' ? 'bg-accent text-text-on-accent' : 'bg-card border border-border-default text-text-secondary'
             }`}>
-            🟢 Disponibles
+            <CalendarPlus size={14} /> Disponibles
           </button>
           <button onClick={() => setTab('mis_solicitudes')}
-            className={`flex-1 px-3 py-2 rounded-full text-sm font-medium transition-all relative ${
-              tab === 'mis_solicitudes' ? 'bg-[#7C1A1A] text-white' : 'bg-white border border-gray-200 text-gray-600'
+            className={`inline-flex items-center gap-1.5 flex-1 px-3 py-2 rounded-full text-sm font-medium transition-base relative ${
+              tab === 'mis_solicitudes' ? 'bg-accent text-text-on-accent' : 'bg-card border border-border-default text-text-secondary'
             }`}>
-            📋 Mis solicitudes
+            <ClipboardList size={14} /> Mis solicitudes
             {myActiveRequests.length > 0 && (
               <span className={`absolute -top-1 -right-1 w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center ${
-                tab === 'mis_solicitudes' ? 'bg-white text-[#7C1A1A]' : 'bg-[#F39C2A] text-white'
+                tab === 'mis_solicitudes' ? 'bg-card text-accent' : 'bg-warning text-text-on-accent'
               }`}>
                 {myActiveRequests.length}
               </span>
@@ -127,13 +130,13 @@ export default function MisTurnos({ employee, onBack }: Props) {
         </div>
 
         {loading ? (
-          <Card className="p-6 text-center"><p className="text-sm text-gray-500">Cargando...</p></Card>
+          <Card className="p-6 text-center"><p className="text-sm text-text-secondary">Cargando...</p></Card>
         ) : tab === 'disponibles' ? (
           shifts.length === 0 ? (
             <Card className="p-6 text-center">
-              <p className="text-4xl mb-2">🪑</p>
-              <p className="font-semibold text-gray-700">Sin turnos disponibles</p>
-              <p className="text-xs text-gray-500 mt-1">Cuando tu encargado publique uno, aparecerá aquí</p>
+              <div className="flex justify-center mb-2"><CalendarPlus size={32} className="text-accent" /></div>
+              <p className="font-semibold text-text-primary">Sin turnos disponibles</p>
+              <p className="text-xs text-text-secondary mt-1">Cuando tu encargado publique uno, aparecerá aquí</p>
             </Card>
           ) : (
             <div className="space-y-2">
@@ -144,23 +147,23 @@ export default function MisTurnos({ employee, onBack }: Props) {
                 })
                 return (
                   <Card key={s.id} className="p-3">
-                    <p className="font-semibold text-gray-900 text-sm capitalize">{dateLabel}</p>
-                    <p className="text-sm text-gray-700 mt-0.5">
+                    <p className="font-semibold text-text-primary text-sm capitalize">{dateLabel}</p>
+                    <p className="text-sm text-text-primary mt-0.5">
                       {s.startTime} – {s.endTime}
-                      <span className="text-gray-400"> · {shiftHours(s.startTime, s.endTime).toFixed(1)}h</span>
+                      <span className="text-text-secondary"> · {shiftHours(s.startTime, s.endTime).toFixed(1)}h</span>
                     </p>
-                    <p className="text-xs text-gray-500 mt-0.5">
+                    <p className="text-xs text-text-secondary mt-0.5">
                       {locationName(s.locationId)}
                       {s.position && <span> · {s.position}</span>}
                     </p>
-                    {s.notes && <p className="text-xs text-gray-500 italic mt-1">"{s.notes}"</p>}
+                    {s.notes && <p className="text-xs text-text-secondary italic mt-1">"{s.notes}"</p>}
 
                     <div className="mt-3">
                       {myReq ? (
-                        <div className="flex items-center justify-between gap-2 p-2 rounded-lg bg-amber-50 border border-amber-200">
-                          <p className="text-xs text-amber-800 font-medium">⏳ Solicitud enviada</p>
+                        <div className="flex items-center justify-between gap-2 p-2 rounded-lg bg-warning-bg border border-warning/30">
+                          <p className="text-xs text-warning font-medium">Solicitud enviada</p>
                           <button onClick={() => handleWithdraw(myReq)}
-                            className="text-xs text-amber-700 hover:text-amber-900 underline">
+                            className="text-xs text-warning hover:text-amber-900 underline">
                             Retirar
                           </button>
                         </div>
@@ -180,9 +183,9 @@ export default function MisTurnos({ employee, onBack }: Props) {
           // Tab: mis solicitudes
           myRequestsWithShift.length === 0 ? (
             <Card className="p-6 text-center">
-              <p className="text-4xl mb-2">📋</p>
-              <p className="font-semibold text-gray-700">Sin solicitudes</p>
-              <p className="text-xs text-gray-500 mt-1">No has solicitado ningún turno todavía</p>
+              <div className="flex justify-center mb-2"><ClipboardList size={32} className="text-accent" /></div>
+              <p className="font-semibold text-text-primary">Sin solicitudes</p>
+              <p className="text-xs text-text-secondary mt-1">No has solicitado ningún turno todavía</p>
             </Card>
           ) : (
             <div className="space-y-2">
@@ -192,32 +195,32 @@ export default function MisTurnos({ employee, onBack }: Props) {
                   weekday: 'short', day: '2-digit', month: 'long'
                 })
                 const reqBadge = {
-                  pendiente: { label: '⏳ Pendiente', cls: 'bg-amber-100 text-amber-700' },
-                  aceptada:  { label: '✓ Aceptada',   cls: 'bg-emerald-100 text-emerald-700' },
-                  rechazada: { label: '✕ Rechazada',  cls: 'bg-red-100 text-red-700' },
-                  retirada:  { label: '↩ Retirada',   cls: 'bg-gray-100 text-gray-500' },
+                  pendiente: { label: 'Pendiente', cls: 'bg-warning-bg text-warning' },
+                  aceptada:  { label: 'Aceptada',   cls: 'bg-success-bg text-success' },
+                  rechazada: { label: 'Rechazada',  cls: 'bg-danger-bg text-danger' },
+                  retirada:  { label: 'Retirada',   cls: 'bg-accent-bg text-text-secondary' },
                 }[request.status]
                 return (
                   <Card key={request.id} className="p-3">
                     <div className="flex items-center justify-between gap-2 mb-1">
-                      <p className="font-semibold text-gray-900 text-sm capitalize">{dateLabel}</p>
+                      <p className="font-semibold text-text-primary text-sm capitalize">{dateLabel}</p>
                       <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${reqBadge.cls}`}>{reqBadge.label}</span>
                     </div>
-                    <p className="text-sm text-gray-700">
+                    <p className="text-sm text-text-primary">
                       {shift.startTime} – {shift.endTime}
-                      <span className="text-gray-400"> · {shiftHours(shift.startTime, shift.endTime).toFixed(1)}h</span>
+                      <span className="text-text-secondary"> · {shiftHours(shift.startTime, shift.endTime).toFixed(1)}h</span>
                     </p>
-                    <p className="text-xs text-gray-500 mt-0.5">
+                    <p className="text-xs text-text-secondary mt-0.5">
                       {locationName(shift.locationId)}
                       {shift.position && <span> · {shift.position}</span>}
                     </p>
-                    {request.notes && <p className="text-xs text-gray-500 italic mt-1">"{request.notes}"</p>}
+                    {request.notes && <p className="text-xs text-text-secondary italic mt-1">"{request.notes}"</p>}
                     {request.reviewNotes && (
-                      <p className="text-xs mt-1 px-2 py-1 rounded bg-gray-50 text-gray-600">💬 {request.reviewNotes}</p>
+                      <p className="text-xs mt-1 px-2 py-1 rounded bg-page text-text-secondary">{request.reviewNotes}</p>
                     )}
                     {request.status === 'pendiente' && (
                       <button onClick={() => handleWithdraw(request)}
-                        className="text-xs text-gray-500 hover:text-red-600 underline mt-2">
+                        className="text-xs text-text-secondary hover:text-danger underline mt-2">
                         Retirar solicitud
                       </button>
                     )}
@@ -231,16 +234,16 @@ export default function MisTurnos({ employee, onBack }: Props) {
         {/* Modal con notas */}
         {showNotesModal && (
           <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center">
-            <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-md p-5">
+            <div className="bg-card rounded-t-3xl sm:rounded-2xl w-full max-w-md p-5">
               <p className="font-bold text-lg mb-1">Solicitar turno</p>
-              <p className="text-sm text-gray-600 mb-3">
+              <p className="text-sm text-text-secondary mb-3">
                 {locationName(showNotesModal.locationId)} · {showNotesModal.startTime}–{showNotesModal.endTime}
               </p>
 
-              <label className="text-xs text-gray-500 block mb-1">Mensaje (opcional)</label>
+              <label className="text-xs text-text-secondary block mb-1">Mensaje (opcional)</label>
               <textarea value={requestNotes} onChange={e => setRequestNotes(e.target.value)}
                 placeholder="Ej: tengo disponibilidad ese día"
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm h-20 resize-none mb-3" />
+                className="w-full border border-border-default rounded-lg px-3 py-2 text-sm h-20 resize-none mb-3" />
 
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => { setShowNotesModal(null); setRequestNotes('') }} className="flex-1">Cancelar</Button>

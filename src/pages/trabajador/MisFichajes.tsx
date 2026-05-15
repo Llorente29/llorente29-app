@@ -1,5 +1,6 @@
 // src/pages/trabajador/MisFichajes.tsx
 import { useMemo } from 'react'
+import { ArrowLeft, Clock } from 'lucide-react'
 import { useApp } from '../../context/AppContext'
 import { Card } from '../../components/ui'
 import type { Employee, ClockEntry } from '../../types'
@@ -52,22 +53,24 @@ export default function MisFichajes({ employee, onBack }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#F5E9D9] via-white to-[#F5E9D9] p-4 pb-8">
+    <div className="min-h-screen bg-page p-4 pb-8">
       <div className="max-w-md mx-auto">
         {/* Header */}
         <div className="flex items-center gap-3 mb-5">
-          <button onClick={onBack} className="text-2xl text-gray-500">←</button>
+          <button onClick={onBack} className="text-text-secondary w-9 h-9 rounded-full hover:bg-accent-bg flex items-center justify-center transition-base" aria-label="Volver">
+            <ArrowLeft size={20} />
+          </button>
           <div>
-            <p className="text-xs text-gray-400 uppercase tracking-wide">Mis fichajes</p>
-            <p className="font-bold text-gray-900">{current.name.split(' ')[0]}</p>
+            <p className="text-xs text-text-secondary uppercase tracking-wide">Mis fichajes</p>
+            <p className="font-bold text-text-primary">{current.name.split(' ')[0]}</p>
           </div>
         </div>
 
         {grouped.length === 0 ? (
           <Card className="p-8 text-center">
-            <p className="text-4xl mb-2">⏰</p>
-            <p className="font-semibold text-gray-700">Sin fichajes aún</p>
-            <p className="text-xs text-gray-500 mt-1">Tus fichajes aparecerán aquí</p>
+            <div className="flex justify-center mb-2"><Clock size={32} className="text-accent" /></div>
+            <p className="font-semibold text-text-primary">Sin fichajes aún</p>
+            <p className="text-xs text-text-secondary mt-1">Tus fichajes aparecerán aquí</p>
           </Card>
         ) : (
           <div className="space-y-4">
@@ -78,22 +81,22 @@ export default function MisFichajes({ employee, onBack }: Props) {
               return (
                 <div key={day}>
                   <div className="flex items-center justify-between px-1 mb-2">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{dayLabel}</p>
-                    {hrs > 0 && <p className="text-xs font-bold text-[#7C1A1A]">{hrs.toFixed(1)}h</p>}
+                    <p className="text-xs font-semibold text-text-secondary uppercase tracking-wide">{dayLabel}</p>
+                    {hrs > 0 && <p className="text-xs font-bold text-accent">{hrs.toFixed(1)}h</p>}
                   </div>
                   <Card className="overflow-hidden">
                     {dayEntries.sort((a, b) => new Date(a.datetime).getTime() - new Date(b.datetime).getTime()).map((e, i) => (
-                      <div key={e.id || i} className={`flex items-center gap-3 px-4 py-3 ${i > 0 ? 'border-t border-gray-100' : ''}`}>
-                        <span className={`w-2 h-2 rounded-full ${e.type === 'entrada' ? 'bg-emerald-500' : 'bg-orange-500'}`} />
+                      <div key={e.id || i} className={`flex items-center gap-3 px-4 py-3 ${i > 0 ? 'border-t border-border-default' : ''}`}>
+                        <span className={`w-2 h-2 rounded-full ${e.type === 'entrada' ? 'bg-success' : 'bg-warning'}`} />
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900">
+                          <p className="text-sm font-medium text-text-primary">
                             {e.type === 'entrada' ? '→ Entrada' : '← Salida'}
                           </p>
                           {e.locationIdAtClock && (
-                            <p className="text-[10px] text-gray-400">{locationName(e.locationIdAtClock)}</p>
+                            <p className="text-[10px] text-text-secondary">{locationName(e.locationIdAtClock)}</p>
                           )}
                         </div>
-                        <p className="text-sm tabular-nums text-gray-600 font-medium">
+                        <p className="text-sm tabular-nums text-text-secondary font-medium">
                           {new Date(e.datetime).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
                         </p>
                       </div>
