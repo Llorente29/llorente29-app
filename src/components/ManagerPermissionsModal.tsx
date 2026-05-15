@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react'
 import {
   LayoutDashboard, User, Activity, Clock, MonitorSmartphone, Inbox, Armchair,
   RefreshCw, Calendar, ClipboardList, FileText, Wallet, DollarSign, Settings2,
-  CheckSquare, Repeat, FilePlus2, AlertTriangle, Search, History,
+  Leaf, AlertTriangle,
   FlaskConical, BarChart3, Brain, Bike, Package, MapPin, Bell,
   type LucideIcon,
 } from 'lucide-react'
@@ -52,13 +52,9 @@ const PERMISSION_ITEMS: PermissionItem[] = [
   { key: 'show_salaries',             label: 'Ver salarios',        Icon: DollarSign, section: 'Personal', sensitive: true },
   { key: 'can_manage_employees',      label: 'Crear / dar de baja / eliminar empleados', Icon: Settings2, section: 'Personal', sensitive: true },
 
-  // Operaciones
-  { key: 'show_tasks',                label: 'Tareas',              Icon: CheckSquare, section: 'Operaciones' },
-  { key: 'show_scheduled',            label: 'Programadas',         Icon: Repeat, section: 'Operaciones' },
-  { key: 'show_templates',            label: 'Plantillas',          Icon: FilePlus2, section: 'Operaciones', sensitive: true },
-  { key: 'show_incidents',            label: 'Incidencias',         Icon: AlertTriangle, section: 'Operaciones' },
-  { key: 'show_audits',               label: 'Auditorías',          Icon: Search, section: 'Operaciones' },
-  { key: 'show_history',              label: 'Historial',           Icon: History, section: 'Operaciones' },
+  // APPCC
+  { key: 'show_appcc_today' as keyof Omit<ManagerPermissions, 'user_profile_id'>,      label: 'APPCC: Hoy',          Icon: Leaf, section: 'APPCC' },
+  { key: 'show_appcc_incidents' as keyof Omit<ManagerPermissions, 'user_profile_id'>,   label: 'APPCC: Incidencias',  Icon: AlertTriangle, section: 'APPCC' },
 
   // Inventario y análisis
   { key: 'show_tspoon',               label: 'Fichas Técnicas',     Icon: FlaskConical, section: 'Inventario' },
@@ -72,7 +68,7 @@ const PERMISSION_ITEMS: PermissionItem[] = [
   { key: 'show_tspoon_settings',      label: 'Avisos',              Icon: Bell, section: 'Configuración', sensitive: true },
 ]
 
-const SECTIONS = ['Principal', 'Personal', 'Operaciones', 'Inventario', 'Configuración']
+const SECTIONS = ['Principal', 'Personal', 'APPCC', 'Inventario', 'Configuración']
 
 export default function ManagerPermissionsModal({ userProfileId, userName, onClose, onSaved }: Props) {
   const [perms, setPerms] = useState<ManagerPermissions | null>(null)
@@ -89,16 +85,17 @@ export default function ManagerPermissionsModal({ userProfileId, userName, onClo
 
   function toggle(key: keyof Omit<ManagerPermissions, 'user_profile_id'>) {
     if (!perms) return
-    setPerms({ ...perms, [key]: !perms[key] })
+    const p = perms as unknown as Record<string, unknown>
+    setPerms({ ...perms, [key]: !p[key] })
   }
 
   function setSection(section: string, value: boolean) {
     if (!perms) return
-    const updates: Partial<ManagerPermissions> = {}
+    const updates: Record<string, unknown> = {}
     PERMISSION_ITEMS
       .filter(i => i.section === section)
-      .forEach(i => { updates[i.key] = value })
-    setPerms({ ...perms, ...updates })
+      .forEach(i => { updates[i.key as string] = value })
+    setPerms({ ...perms, ...updates } as ManagerPermissions)
   }
 
   async function handleSave() {
@@ -129,7 +126,7 @@ export default function ManagerPermissionsModal({ userProfileId, userName, onClo
   }
 
   const enabledCount = perms
-    ? PERMISSION_ITEMS.filter(i => perms[i.key]).length
+    ? PERMISSION_ITEMS.filter(i => (perms as unknown as Record<string, unknown>)[i.key as string]).length
     : 0
 
   return (
@@ -161,8 +158,8 @@ export default function ManagerPermissionsModal({ userProfileId, userName, onClo
 
             {SECTIONS.map(section => {
               const items = PERMISSION_ITEMS.filter(i => i.section === section)
-              const allOn = items.every(i => perms[i.key])
-              const allOff = items.every(i => !perms[i.key])
+              const allOn = items.every(i => (perms as unknown as Record<string, unknown>)[i.key as string])
+              const allOff = items.every(i => !(perms as unknown as Record<string, unknown>)[i.key as string])
 
               return (
                 <div key={section} className="border border-border-default rounded-lg overflow-hidden">
@@ -195,7 +192,7 @@ export default function ManagerPermissionsModal({ userProfileId, userName, onClo
                         >
                           <input
                             type="checkbox"
-                            checked={perms[item.key]}
+                            checked={!!(perms as unknown as Record<string, unknown>)[item.key as string]}
                             onChange={() => toggle(item.key)}
                             className="w-4 h-4 rounded accent-accent"
                           />

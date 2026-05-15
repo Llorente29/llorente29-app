@@ -1,8 +1,10 @@
 // src/modules/appcc/components/FieldRenderer.tsx
 // Renderiza el input apropiado para un item de checklist APPCC
 // según su field_type: numeric, boolean, select, text, date, photo, signature.
+// Todos los tipos incluyen opción de adjuntar foto debajo del input principal.
 
-import { Check, X, AlertTriangle, Edit3 } from 'lucide-react'
+import { useState } from 'react'
+import { Check, X, AlertTriangle, Edit3, Camera } from 'lucide-react'
 import PhotoUploader from './PhotoUploader'
 import type {
   AppccTemplateItem,
@@ -29,6 +31,42 @@ export interface FieldRendererProps {
   userId?: string | null
 }
 
+/** Botón + panel de fotos colapsable, reutilizado en todos los tipos de campo */
+function PhotoSection({
+  responseId,
+  userId,
+  disabled,
+}: {
+  responseId: string | null
+  userId: string | null
+  disabled: boolean
+}) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <div className="mt-2">
+      {!open ? (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          disabled={disabled}
+          className="inline-flex items-center gap-1.5 text-xs text-text-secondary hover:text-accent transition-base disabled:opacity-40"
+        >
+          <Camera size={13} /> Adjuntar foto
+        </button>
+      ) : (
+        <div className="pt-2 border-t border-border-default mt-1">
+          <PhotoUploader
+            responseId={responseId}
+            userId={userId ?? ''}
+            disabled={disabled}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function FieldRenderer({
   item,
   value,
@@ -38,6 +76,15 @@ export default function FieldRenderer({
   responseId = null,
   userId = null,
 }: FieldRendererProps) {
+
+  const photoSection = (
+    <PhotoSection
+      responseId={responseId}
+      userId={userId}
+      disabled={disabled}
+    />
+  )
+
   switch (item.field_type) {
     case 'numeric':
       return (
@@ -71,6 +118,7 @@ export default function FieldRenderer({
               <span className="text-sm sm:text-base text-danger font-medium">{warning}</span>
             </div>
           )}
+          {photoSection}
         </div>
       )
 
@@ -109,6 +157,7 @@ export default function FieldRenderer({
               <span className="text-sm sm:text-base text-danger font-medium">{warning}</span>
             </div>
           )}
+          {photoSection}
         </div>
       )
 
@@ -133,36 +182,44 @@ export default function FieldRenderer({
               </button>
             )
           })}
+          {photoSection}
         </div>
       )
 
     case 'text':
       return (
-        <textarea
-          disabled={disabled}
-          value={value?.text_value ?? ''}
-          onChange={e => onChange({ text_value: e.target.value })}
-          placeholder="Escribe tu respuesta..."
-          rows={3}
-          className="w-full px-4 py-3 border border-border-default rounded-lg text-base resize-y focus:outline-none focus:ring-2 focus:ring-accent disabled:bg-page bg-card text-text-primary"
-        />
+        <div>
+          <textarea
+            disabled={disabled}
+            value={value?.text_value ?? ''}
+            onChange={e => onChange({ text_value: e.target.value })}
+            placeholder="Escribe tu respuesta..."
+            rows={3}
+            className="w-full px-4 py-3 border border-border-default rounded-lg text-base resize-y focus:outline-none focus:ring-2 focus:ring-accent disabled:bg-page bg-card text-text-primary"
+          />
+          {photoSection}
+        </div>
       )
 
     case 'date':
       return (
-        <input
-          type="date"
-          disabled={disabled}
-          value={value?.date_value ?? ''}
-          onChange={e => onChange({ date_value: e.target.value || null })}
-          className="px-4 py-3 border border-border-default rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-accent disabled:bg-page min-h-touch-base bg-card text-text-primary"
-        />
+        <div>
+          <input
+            type="date"
+            disabled={disabled}
+            value={value?.date_value ?? ''}
+            onChange={e => onChange({ date_value: e.target.value || null })}
+            className="px-4 py-3 border border-border-default rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-accent disabled:bg-page min-h-touch-base bg-card text-text-primary"
+          />
+          {photoSection}
+        </div>
       )
 
     case 'photo':
+      // Campo dedicado solo a foto (sin input previo)
       return (
         <PhotoUploader
-          responseId={responseId ?? null}
+          responseId={responseId}
           userId={userId ?? ''}
           disabled={disabled}
         />

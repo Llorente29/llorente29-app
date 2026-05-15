@@ -215,9 +215,9 @@ function AuthenticatedApp({ profile, onSignOut }: {
           // avisos_settings se mantiene visible si el manager tiene el flag antiguo show_tspoon_settings
           // (compatibilidad temporal hasta que se renombre la columna en Sprint 1)
           if (p.show_tspoon_settings) allowed.add('avisos_settings')
-          // Nota: appcc_today, appcc_incidents y appcc_onboarding NO están
-          // todavía en manager_permissions, así que los managers no los ven.
-          // Apuntar como TODO para Sprint 3.
+          // APPCC
+          if ((p as unknown as Record<string, unknown>).show_appcc_today) allowed.add('appcc_today')
+          if ((p as unknown as Record<string, unknown>).show_appcc_incidents) allowed.add('appcc_incidents')
           setPerms(allowed)
         } catch (e) {
           console.error('[perms] load:', e)

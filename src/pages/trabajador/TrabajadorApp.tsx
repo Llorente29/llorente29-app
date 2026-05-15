@@ -1,10 +1,13 @@
 // src/pages/trabajador/TrabajadorApp.tsx
-// Orquestador del modo trabajador: gestiona navegación entre subpáginas.
-// La sesión es global (Supabase Auth en App.tsx), aquí solo recibimos el employee resuelto.
+// Orquestador del modo trabajador: gestiona navegación entre módulos y subpáginas.
+// Home: 2 botones grandes (APPCC + Portal). Preparado para añadir más módulos.
 import { useState, useEffect } from 'react'
-import { ArrowLeft, AlertTriangle, Ban } from 'lucide-react'
+import { ArrowLeft, Ban, AlertTriangle } from 'lucide-react'
 import { useApp } from '../../context/AppContext'
 import HomeEmpleado from './HomeEmpleado'
+import type { WorkerModule } from './HomeEmpleado'
+import PortalEmpleado from './PortalEmpleado'
+import type { PortalSubPage } from './PortalEmpleado'
 import FichajeEmpleado from './FichajeEmpleado'
 import MiHorario from './MiHorario'
 import MisFichajes from './MisFichajes'
@@ -13,16 +16,21 @@ import MisVacaciones from './MisVacaciones'
 import MiBolsaHoras from '../../components/MiBolsaHoras'
 import MisTurnos from './MisTurnos'
 import CambiosTurnoPage from './CambiosTurnoPage'
+import MisChecklistsPage from './MisChecklistsPage'
+import ExecutionPage from '../../modules/appcc/pages/ExecutionPage'
 import { fetchAppSettings } from '../../services/appSettingsService'
 import { fetchLocations } from '../../services/supabaseSync'
+import { supabase } from '../../lib/supabase'
 import type { Employee, Location } from '../../types'
 
-type SubPage = 'home' | 'fichar' | 'horario' | 'fichajes' | 'documentos' | 'vacaciones' | 'bolsa' | 'turnos' | 'cambios'
+type SubPage =
+  | 'home'
+  | 'portal'
+  | 'fichar' | 'horario' | 'fichajes' | 'documentos' | 'vacaciones' | 'bolsa' | 'turnos' | 'cambios'
+  | 'appcc_list' | 'appcc_execution'
 
 interface Props {
-  /** ID del empleado vinculado al user_profile del usuario logueado (Auth) */
   employeeId?: string
-  /** Callback al pulsar "Salir" — cierra sesión global */
   onExitMode: () => void
 }
 
@@ -31,8 +39,9 @@ export default function TrabajadorApp({ employeeId, onExitMode }: Props) {
   const [subPage, setSubPage] = useState<SubPage>('home')
   const [showBolsaHoras, setShowBolsaHoras] = useState(false)
   const [location, setLocation] = useState<Location | undefined>(undefined)
+  const [currentExecutionId, setCurrentExecutionId] = useState<string | null>(null)
+  const [appccPendingCount, setAppccPendingCount] = useState(0)
 
-  // Cargar setting de visibilidad de bolsa de horas
   useEffect(() => {
     fetchAppSettings().then(s => setShowBolsaHoras(s.showHourBankToEmployee))
   }, [])
@@ -41,7 +50,6 @@ export default function TrabajadorApp({ employeeId, onExitMode }: Props) {
     ? (staff.find(e => e.id === employeeId) || null)
     : null
 
-  // Cargar el local del empleado (para la bolsa de horas como página independiente)
   useEffect(() => {
     let cancel = false
     async function loadLoc() {
@@ -54,7 +62,24 @@ export default function TrabajadorApp({ employeeId, onExitMode }: Props) {
     return () => { cancel = true }
   }, [employee?.locationId])
 
-  // Si no hay employeeId vinculado al user, mostrar mensaje claro
+  // Contar checklists APPCC pendientes del día
+  useEffect(() => {
+    if (!supabase || !employee?.locationId) return
+    let cancel = false
+    const today = new Date().toISOString().slice(0, 10)
+    supabase
+      .from('appcc_executions')
+      .select('id', { count: 'exact', head: true })
+      .eq('location_id', employee.locationId)
+      .eq('scheduled_date', today)
+      .in('status', ['pending', 'in_progress'])
+      .then(({ count }) => {
+        if (!cancel) setAppccPendingCount(count ?? 0)
+      })
+    return () => { cancel = true }
+  }, [employee?.locationId, subPage])
+
+  // Error screens
   if (!employeeId) {
     return (
       <div className="min-h-screen bg-page flex items-center justify-center p-4">
@@ -64,10 +89,7 @@ export default function TrabajadorApp({ employeeId, onExitMode }: Props) {
           <p className="text-sm text-text-secondary mb-4">
             Pide a tu administrador que vincule tu cuenta de email con tu ficha de empleado.
           </p>
-          <button
-            onClick={onExitMode}
-            className="px-4 py-2 rounded-lg text-text-on-accent text-sm bg-accent hover:bg-accent-hover transition-base"
-          >
+          <button onClick={onExitMode} className="px-4 py-2 rounded-lg text-text-on-accent text-sm bg-accent hover:bg-accent-hover transition-base">
             Salir
           </button>
         </div>
@@ -75,7 +97,6 @@ export default function TrabajadorApp({ employeeId, onExitMode }: Props) {
     )
   }
 
-  // El employeeId existe pero el empleado no se encuentra (puede estar inactivo o ya no existir)
   if (!employee) {
     return (
       <div className="min-h-screen bg-page flex items-center justify-center p-4">
@@ -83,13 +104,9 @@ export default function TrabajadorApp({ employeeId, onExitMode }: Props) {
           <div className="flex justify-center mb-3"><Ban size={40} className="text-danger" /></div>
           <h2 className="font-bold text-text-primary mb-2">No tienes acceso</h2>
           <p className="text-sm text-text-secondary mb-4">
-            Tu ficha de empleado no está disponible. Posiblemente has sido dado de baja.
-            Contacta con tu administrador.
+            Tu ficha de empleado no está disponible. Contacta con tu administrador.
           </p>
-          <button
-            onClick={onExitMode}
-            className="px-4 py-2 rounded-lg text-text-on-accent text-sm bg-accent hover:bg-accent-hover transition-base"
-          >
+          <button onClick={onExitMode} className="px-4 py-2 rounded-lg text-text-on-accent text-sm bg-accent hover:bg-accent-hover transition-base">
             Salir
           </button>
         </div>
@@ -97,7 +114,6 @@ export default function TrabajadorApp({ employeeId, onExitMode }: Props) {
     )
   }
 
-  // El empleado existe pero está inactivo (dado de baja)
   if (!employee.active) {
     return (
       <div className="min-h-screen bg-page flex items-center justify-center p-4">
@@ -107,10 +123,7 @@ export default function TrabajadorApp({ employeeId, onExitMode }: Props) {
           <p className="text-sm text-text-secondary mb-4">
             Tu cuenta ha sido dada de baja. Contacta con tu administrador si crees que es un error.
           </p>
-          <button
-            onClick={onExitMode}
-            className="px-4 py-2 rounded-lg text-text-on-accent text-sm bg-accent hover:bg-accent-hover transition-base"
-          >
+          <button onClick={onExitMode} className="px-4 py-2 rounded-lg text-text-on-accent text-sm bg-accent hover:bg-accent-hover transition-base">
             Salir
           </button>
         </div>
@@ -118,33 +131,46 @@ export default function TrabajadorApp({ employeeId, onExitMode }: Props) {
     )
   }
 
-  // Subpáginas
-  if (subPage === 'fichar') {
-    return <FichajeEmpleado employee={employee} onBack={() => setSubPage('home')} />
+  // === ROUTING ===
+
+  // APPCC: ejecución de un checklist
+  if (subPage === 'appcc_execution' && currentExecutionId) {
+    return (
+      <ExecutionPage
+        executionId={currentExecutionId}
+        onBack={() => { setCurrentExecutionId(null); setSubPage('appcc_list') }}
+      />
+    )
   }
 
-  if (subPage === 'horario') {
-    return <MiHorario employee={employee} onBack={() => setSubPage('home')} />
+  // APPCC: lista de checklists del día
+  if (subPage === 'appcc_list') {
+    return (
+      <MisChecklistsPage
+        employee={employee}
+        onBack={() => setSubPage('home')}
+        onOpenExecution={(id) => { setCurrentExecutionId(id); setSubPage('appcc_execution') }}
+      />
+    )
   }
 
-  if (subPage === 'fichajes') {
-    return <MisFichajes employee={employee} onBack={() => setSubPage('home')} />
-  }
-
-  if (subPage === 'documentos') {
-    return <MisDocumentos employee={employee} onBack={() => setSubPage('home')} />
-  }
-
-  if (subPage === 'vacaciones') {
-    return <MisVacaciones employee={employee} onBack={() => setSubPage('home')} />
-  }
+  // Portal: subpáginas
+  if (subPage === 'fichar') return <FichajeEmpleado employee={employee} onBack={() => setSubPage('portal')} />
+  if (subPage === 'horario') return <MiHorario employee={employee} onBack={() => setSubPage('portal')} />
+  if (subPage === 'fichajes') return <MisFichajes employee={employee} onBack={() => setSubPage('portal')} />
+  if (subPage === 'documentos') return <MisDocumentos employee={employee} onBack={() => setSubPage('portal')} />
+  if (subPage === 'vacaciones') return <MisVacaciones employee={employee} onBack={() => setSubPage('portal')} />
+  if (subPage === 'turnos') return <MisTurnos employee={employee} onBack={() => setSubPage('portal')} />
+  if (subPage === 'cambios') return <CambiosTurnoPage employee={employee} onBack={() => setSubPage('portal')} />
 
   if (subPage === 'bolsa' && showBolsaHoras) {
     return (
       <div className="min-h-screen bg-page p-4 pb-8">
         <div className="max-w-md mx-auto">
           <div className="flex items-center gap-3 mb-5">
-            <button onClick={() => setSubPage('home')} className="text-text-secondary w-9 h-9 rounded-full hover:bg-accent-bg flex items-center justify-center transition-base" aria-label="Volver"><ArrowLeft size={20} /></button>
+            <button onClick={() => setSubPage('portal')} className="text-text-secondary w-9 h-9 rounded-full hover:bg-accent-bg flex items-center justify-center transition-base" aria-label="Volver">
+              <ArrowLeft size={20} />
+            </button>
             <div>
               <p className="text-xs text-text-secondary uppercase tracking-wide">Mi bolsa de horas</p>
               <p className="font-bold text-text-primary">{employee.name.split(' ')[0]}</p>
@@ -156,21 +182,28 @@ export default function TrabajadorApp({ employeeId, onExitMode }: Props) {
     )
   }
 
-  if (subPage === 'turnos') {
-    return <MisTurnos employee={employee} onBack={() => setSubPage('home')} />
+  // Portal: menú de botones
+  if (subPage === 'portal') {
+    return (
+      <PortalEmpleado
+        employee={employee}
+        onNavigate={(p: PortalSubPage) => setSubPage(p)}
+        onBack={() => setSubPage('home')}
+        showBolsaHoras={showBolsaHoras}
+      />
+    )
   }
 
-  if (subPage === 'cambios') {
-    return <CambiosTurnoPage employee={employee} onBack={() => setSubPage('home')} />
-  }
-
-  // home — usuario ya autenticado por Auth global, sin selector de empleado, sin PIN
+  // Home: botones grandes de módulos
   return (
     <HomeEmpleado
       employee={employee}
-      onNavigate={p => setSubPage(p)}
+      onNavigate={(mod: WorkerModule) => {
+        if (mod === 'appcc') setSubPage('appcc_list')
+        else if (mod === 'portal') setSubPage('portal')
+      }}
       onLogout={onExitMode}
-      showBolsaHoras={showBolsaHoras}
+      appccPendingCount={appccPendingCount}
     />
   )
 }
