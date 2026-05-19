@@ -1,290 +1,372 @@
-FOODINT — Contexto para Claude
-> **Propósito:** este documento es el "salvavidas" del proyecto. Si una conversación con Claude se queda sin contexto, abre una nueva conversación, pega el contenido de este archivo y dile: *"Continúa el desarrollo de Foodint. Lee este contexto y dime el estado actual antes de proseguir."*
+# CONTEXTO_CLAUDE.md
+
+> **Documento maestro de memoria persistente del proyecto Folvy.**
+> Lectura obligatoria al inicio de cada sesión técnica.
+> Última actualización: **19 de mayo de 2026, tras Sesión 5 (Sprint 1 ejecutado).**
+
 ---
-1. Identidad del proyecto
-Foodint (antes "Andy App") — software de gestión de hostelería para 3 locales en Madrid.
-Locales: Foodint Alcalá, Foodint Carabanchel, Foodint Pza Castilla
-Empleados totales: ~20 entre los 3 locales
-Stack: React + TypeScript + Vite + Tailwind CSS + Supabase (Postgres + Realtime + Storage)
-Modo: PWA en GitHub Pages instalable como app
-Paleta de marca
-Granate principal: `#7C1A1A`
-Granate oscuro: `#5A1212`
-Naranja/llama: `#F39C2A`
-Crema/humo: `#F5E9D9`
-Verde solo en éxito; rojo solo en error/salida
+
+## 1. CONTEXTO BÁSICO DEL PROYECTO
+
+**Empresa:** Foodint (rebrand en curso a Folvy SL).
+**CEO:** Julio Gascón Colón (`jgcolon@idasal.com`).
+**Refuerzo técnico:** José (junior, autoridad delegada total cuando opera identificado).
+**Producto:** Folvy V1 — SaaS multi-tenant modular para hostelería.
+
+**Cliente activo:** Llorente29 (3 locales: Alcalá, Pza Castilla, Carabanchel + Pamela como empleada).
+**Cartera comercial:** estado pendiente de actualización tras Julio (anoche dijo "Solo Llorente29" pero docs decían "+1 esperando + cartera"). Revisar en próxima sesión.
+
+**Fecha producción objetivo:** domingo 7 septiembre 2026 (16 semanas desde 18/05/2026).
+**Camino A puro:** Fase 0 técnica antes de migrar Llorente29. Sin atajos.
+
+**Stack:** React 19 + Vite 8 + TS 6 strict + Tailwind 3 + Supabase eu-west-1 (`xzmpnchlguibclvxyynt`).
+
 ---
-2. Infraestructura
-GitHub: `github.com/Llorente29/llorente29-app` (rama `source` editamos, `main` deploy)
-URL: `https://llorente29.github.io/llorente29-app/`
-Workflow: `npm install --no-audit --no-fund` (NO `npm ci`). Inyecta secretos VITE_*.
-Webhook Last.app: `github.com/Llorente29/lastapp-webhook` → Vercel
-Supabase: `https://xzmpnchlguibclvxyynt.supabase.co` (West EU, Free)
-Publishable key: `sb_publishable_PyzPVoi69TlRLWcfsEMPlA_pxMU8S9-`
-Tablas Supabase
-`locations`, `employees`, `clock_entries`
-`documents`, `vacations`, `vacation_settings`
-`app_settings`
-`open_shifts`, `open_shift_requests`
-`shift_types` (T1/T2/T3/T1+T3/LIBRE)
-`weekly_plans` (cabecera plan semanal)
-`shift_assignments` (celdas calendario)
-`shift_minimums` (mínimos plantilla)
-Bucket Storage: `employee-documents` (público, policy abierta)
-RLS abierto, realtime activo
----
-3. ⚠️ SEGURIDAD CRÍTICA — PENDIENTE
-LASTAPP_TOKEN expuesto hardcodeado en webhook Vercel:
-`api/webhook.js:1` y `api/debug.js:1`
-Token: `247ef137-6740-4c9c-bc1e-5e9a70fbad43`
-Acciones: rotar token Last.app, actualizar Vercel env, eliminar fallback.
----
-4. ⚠️ DECISIÓN CLAVE: MODELO A
-El calendario publicado es la única fuente de verdad para el horario teórico:
-"Ahora mismo" usa calendarCtx
-Bolsa de horas usa calendarCtx
-Mi horario solo muestra calendario publicado (sin fallback a weeklySchedule)
-Redondeo solo si hay calendario publicado
-`weeklySchedule` queda como plantilla informativa para auto-generar
----
-5. Estado de los módulos
-Personal — COMPLETO ✅
-Gestor:
-👤 Personal (ficha empleado con 7 pestañas, Bolsa horas Modelo A)
-🟢 Ahora mismo (KPIs, Modelo A)
-⏰ Control Horario
-🕐 Kiosko Fichaje
-📨 Solicitudes pendientes (badge con conteo)
-🪑 Turnos abiertos (rechazo automático del resto al asignar)
-📅 Calendario (completo)
-📄 Informes Gestoría
-🔔 Avisos (toggle bolsa, tolerancia, alertas, mínimos plantilla)
-Kiosko: PIN, geofencing 200m, multi-local, redondeo Modelo A, PWA.
-Trabajador: Login PIN, sesión persistente. Menú: Fichar / Mi horario / Turnos abiertos / Mis fichajes / Mi bolsa / Mis docs / Mis vacaciones.
-Calendario — COMPLETO ✅
-Tipos turno Foodint:
-T1 Mañana 12:30-16:45 (4.25h)
-T2 Tarde 14:45-00:15 (9.5h)
-T3 Noche 16:45-00:15 (7.5h)
-T1+T3 Partido 12:30-16:45+19:45-00:15 (8.75h)
-LIBRE
-Mínimos plantilla:
-T1: default 1
-T2/T3: default 2, V/S/D 3
-T1+T3: default 1
-Configurables por local en Avisos
-Funciones:
-Vista semanal tabla + vista por empleado (toggle)
-Auto-gen con 3 modos: solo huecos vacíos / solo libras / reasignar todo
-Período auto-gen: 1 / 4 / 8 semanas
-Auto-gen respeta weeklySchedule como plantilla
-NO asigna LIBRE automáticamente en V/S/D
-Validaciones convenio en tiempo real:
-Errores: <12h descanso, >10.5h diarias, mínimo a 0
-Warnings: >40h semana, >6 días seguidos, sin libra, libra V/S/D, cobertura insuf
-Filas cobertura (X/Y) con colores
-Botones: Duplicar semana anterior, Limpiar semana
-Estado borrador/publicado, botón Publicar
-Realtime entre dispositivos
-Foodint Brand ✅
-Logo, iconos PWA, manifest, favicon
-Componente Logo/LogoSquare reutilizable
-Paleta granate en TODAS las pantallas
-Zonas de Pedido (FUNCIONAL — sin migrar a Supabase)
-5 pestañas: Mapa, Barrios, Comparativa, Solape, Rentabilidad
-Coste Rider vs Glovo 15%/30%
-Pendientes
-Programadas, Plantillas, Auditorías, Historial, Locales (UI gestión): stubs
-Tasks, Incidents, Audits, Schedules, Templates, Inventory: localStorage (sin migrar)
----
-6. Decisiones técnicas/de negocio
-IVAs
-Pedido al cliente: IVA 10%
-Envío: €4.50/1.10 = €4.09 sin IVA
-Coste Rider: ya sin IVA
-Glovo: sobre base sin IVA
-Tarifa Rider
-0–3 km: €5.75 / 3–5 km: €5.95 / +€0.50/500m extra
-Comisiones Glovo
-15% reparto propio / 30% Glovo
-Coordenadas locales
-Alcalá: 40.4346, -3.6528
-Carabanchel: 40.3912, -3.7399
-Pza Castilla: 40.4698, -3.6928
-Vacaciones
-22 días + 3 asuntos propios; prorrateo 2.5/mes
-Aviso si <30 días antelación
-Aviso si quedaría <2 trabajadores
-Año natural
-Bolsa horas / Redondeo (MODELO A)
-Tolerancia ±8 min (configurable)
-Solo si hay calendario publicado
-`real_datetime` siempre se guarda
-Bolsa = trabajadas - calendario publicado
-3 vistas: Esta semana / Este mes / Acumulado
-Si no hay plan publicado, NO penaliza
-Toggle visibilidad para trabajador
-Calendario / Libra
-Libra hostelería: 1 día completo + media mañana o media tarde, a ser posible seguidos
-Día de libra FIJO por defecto (siempre el mismo)
-Cambios manuales puntuales
-NUNCA librar V/S/D salvo excepción manual (alta demanda)
-⚠️ PENDIENTE: modelo formal de "1.5 días libres" (no implementado aún — el usuario y Claude estaban discutiéndolo al cierre)
-Alertas Ahora mismo
-Retraso: +15 min de horario teórico
-Olvido salida: +30 min después de salida teórica
-Configurables. Push: Fase 4.
----
-7. Convenciones código
-Estructura
+
+## 2. ESTADO ACTUAL DE LA BBDD (19 MAYO 2026)
+
+### 2.1 — Hechos clave verificados
+
+- ✅ **75 tablas en `public` schema** (no 40 como decía CONTEXTO viejo).
+- ✅ **100% de tablas con RLS ON** (auditoría confirmada).
+- ✅ **9 tablas auth nuevas creadas en Sprint 1** (ejecutado 18-19 mayo):
+  - `platform_admins` (1 fila: Julio CEO)
+  - `platform_admin_permissions` (1 fila: Julio con todos flags=true)
+  - `platform_admin_2fa` (0 filas; setup Sprint 4)
+  - `auth_rate_limits` (0 filas; activo via Edge Function Sprint 2)
+  - `impersonation_sessions` (0 filas)
+  - `platform_audit_log` (1 fila: admin_created de Julio en seed M19)
+  - `platform_settings` (1 fila: backup de current_user_is_admin pre-C2)
+  - `permission_sets` (4 filas: 4 sets system globales con account_id NULL)
+  - `permission_set_assignments` (0 filas)
+
+### 2.2 — Columnas añadidas a tablas existentes
+
+**`accounts`** (5 columnas nuevas):
+- `suspended_at`, `suspended_by`, `suspension_reason`
+- `archived_at`, `deleted_at`
+- 3 constraints nuevos: `suspended_consistency`, `lifecycle_order`, `accounts_slug_format` (este último ya existía).
+
+**`user_profiles`** (6 columnas nuevas):
+- `terms_accepted_at`, `welcome_completed_at`, `last_password_change_at`, `last_login_at`
+- `suspended_at`, `suspended_by`
+- 2 constraints nuevos: `welcome_requires_terms`, `suspended_consistency`.
+- 2 índices nuevos: `idx_user_profiles_active`, `idx_user_profiles_login_resolution`.
+
+### 2.3 — FK constraints modificados (CRÍTICO LEGAL)
+
+**`clock_entries.employee_id`**: `ON DELETE CASCADE` → **`ON DELETE RESTRICT`**.
+**`documents.employee_id`**: `ON DELETE CASCADE` → **`ON DELETE RESTRICT`**.
+
+⚠️ **Implicación para frontend Fase 1**: NO ofrecer botón "Eliminar empleado" físico. Solo soft delete (`UPDATE employees SET active = false`). Cumple Real Decreto-ley 8/2019.
+
+### 2.4 — Funciones auxiliares RLS
+
+**Funciones del Bloque S del 16/05 (mantenidas):**
+- `current_user_is_admin_of(uuid)` — admin de cuenta específica.
+- `current_user_is_admin_or_manager_of(uuid)` — admin o manager.
+- `current_user_account_ids()` — array de cuentas del user.
+
+**Función refactorizada en M13 (19/05):**
+- `current_user_is_admin()` — **YA NO usa `accounts.is_internal`**. Ahora consulta `platform_admins`.
+- Backup de definición vieja guardado en `platform_settings.key='backup_current_user_is_admin_pre_C2'`.
+
+**Funciones nuevas en M14 (19/05):**
+- `has_permission(account_id, permission_key)` — cascada B: admin → legacy column → permission_set jsonb → DENY.
+- `current_user_has_platform_permission(flag)` — verifica flag en `platform_admin_permissions`.
+- `belongs_to_account(uuid)` — wrapper sobre current_user_account_ids.
+
+### 2.5 — Triggers nuevos
+
+- `trg_protect_last_admin` en `platform_admins` (BEFORE UPDATE/DELETE) — impide self-lockout del último CEO.
+- `trg_replicate_system_permission_sets` en `accounts` (AFTER INSERT) — copia 4 sets system a cada cuenta nueva.
+- `trg_platform_admin_permissions_updated_at` (BEFORE UPDATE) — set_updated_at.
+- `trg_permission_sets_updated_at` (BEFORE UPDATE) — set_updated_at.
+- `trg_platform_settings_updated_at` (BEFORE UPDATE) — set_updated_at.
+
+### 2.6 — Cron jobs activos (pg_cron disponible)
+
+- `cleanup_auth_rate_limits_daily` — diario a las 03:00 UTC.
+- `force_close_impersonations_5min` — cada 5 minutos.
+
+### 2.7 — Conteo de filas relevantes
+
 ```
-src/
-  pages/
-    trabajador/                ← LoginEmpleado, HomeEmpleado, FichajeEmpleado,
-                                 MiHorario v5 (Modelo A), MisFichajes,
-                                 MisDocumentos, MisVacaciones, MiBolsaHoras,
-                                 MisTurnos, TrabajadorApp v3
-    KioskoFichajePage v4
-    SolicitudesPendientesPage
-    AhoraMismoPage v3 (Modelo A)
-    AvisosSettingsPage v3 (con MinimumsSection)
-    TurnosAbiertosPage
-    CalendarioPage v5 (auto-gen mensual)
-    StaffPage v5
-  components/
-    ui/
-    personal/
-      DocumentosTab, VacacionesTab
-      BolsaHorasView v2 (Modelo A)
-    Logo
-  context/
-    AppContext
-  services/
-    supabaseSync v3
-    documentsService, vacationsService, appSettingsService
-    horasComputo v3 (CalendarContext)
-    openShiftsService
-    fichajeKiosko v3 (calendarCtx)
-    calendarService v4 (fetchPublishedAssignmentsForRange)
-    calendarValidations
-    calendarAutoGen v2 (no LIBRE en V/S/D)
-    deliveryZones
-  lib/supabase
-  types/ index v5, personal
+accounts                   2  (Llorente29 + Foodint Interno)
+user_profiles              3  (incluye Julio admin en cuenta interna)
+employees                  4
+locations                  3  (los 3 de Llorente29)
+clock_entries              0
+appcc_executions           0
+appcc_templates           52  (26 seed × 2 cuentas, vía trigger seed)
+platform_admins            1  (Julio CEO)
+permission_sets            4  (4 templates system globales)
+platform_audit_log         1
+platform_settings          1
 ```
-Patrones
-Leer: `useApp()` → staff, locations, tasks
-Escribir empleados: `saveEmployee` / `removeEmployee`
-Fichajes: `addClockEntry`
-Locales: `saveLocation` / `removeLocation`
-Documentos/Vacaciones/Settings/OpenShifts/Calendar: llamar servicios
-Tasks/Incidents: localStorage (pendiente migrar)
-LocalStorage keys
-`andy-app-v4` — cache estado completo
-`andy-app-mode-v1` — gestor/trabajador
-`andy-empleado-session-v1` — sesión empleado
-`andy-delivery-*`, `andy-geo-*` — Zonas de Pedido
-`andy-kiosko-config-v1` — config kiosko
-TS estricto
-`noUnusedLocals: true` → eliminar variables no usadas (NO `_`)
-`noUnusedParameters: true`
-`noImplicitAny: true`
-Narrowing null en closures: `if (!supabase) return; const sb = supabase`
-Deploy
-NO `npm ci`. Usar `npm install --no-audit --no-fund`
-Builds intermedios pueden fallar; solo importa el ÚLTIMO en verde
-Nombres archivo: prefijos `services_`, `trabajador_`, `personal_` son SOLO mi convención local
-Bug timezone (RESUELTO)
-NUNCA `toISOString()` para YYYY-MM-DD de fecha local (España UTC+1/+2)
-Construir manual:
-```javascript
-const y = d.getFullYear()
-const m = String(d.getMonth() + 1).padStart(2, '0')
-const dd = String(d.getDate()).padStart(2, '0')
-const iso = `${y}-${m}-${dd}`
+
+**Diagnóstico**: Llorente29 NO usa la app todavía. 0 fichajes en BBDD. Esto justifica el riesgo aceptado de ejecutar migrations sin PITR activo.
+
+---
+
+## 3. INFRAESTRUCTURA DESPLEGADA
+
+### 3.1 — Dominios
+
+- `folvy.app` apex → Vercel proyecto `folvy-landing` (producción).
+- `app.folvy.app` → Vercel proyecto `folvy-app-staging` (staging Folvy V1).
+- `folvy.es` → registrado, sin configurar.
+- ⚠️ Documentos viejos mencionan `folvy.com` — **ya no aplica**, cambiar a `folvy.app` en próxima sesión.
+
+### 3.2 — Hosting Vercel
+
+- 2 proyectos creados con SSL Let's Encrypt automático.
+- Repos GitHub: `folvy-landing`, `folvy-app-staging`.
+- 2FA GitHub activo, backup codes guardados por Julio.
+
+### 3.3 — BBDD Supabase
+
+- Plan: **Supabase Pro** ✅ activo.
+- Región: eu-west-1 (Ireland).
+- **PITR: ❌ NO activado.** PITR es **add-on de pago adicional al plan Pro** (~+100$/mes). Detectado por José el 18/05 ~23:00 UTC.
+- Backups disponibles actualmente: **"Scheduled backups" diarios** (1 backup/día, retención ~7 días).
+- Decisión Julio aprobada 18/05/2026 23:16 UTC vía WhatsApp: **Opción B — aceptar riesgo con scheduled backups, NO activar PITR add-on por ahora**.
+- 🟡 **Pendiente revisar PITR antes de Llorente29 producción (Sprint 14, septiembre 2026).**
+
+### 3.4 — Email transaccional Resend
+
+- Cuenta: workspace "Folvy", owner `jgcolon@idasal.com`.
+- Dominio `folvy.app` verificado (DKIM + SPF + DMARC + MX en OVH).
+- API key `folvy-production-v1` generada, scope "Sending access", guardada por Julio.
+- 🟡 **Pendiente activar 2FA en Resend** (deuda registrada 18/05).
+- 🟡 **Pendiente migrar owner cuenta** de `@idasal.com` a `@folvy.app` cuando email Folvy operativo.
+
+### 3.5 — Email Folvy operativo
+
+- **NO existe todavía**. OVH MX Plan solo permite redirects, no buzones.
+- Decisión presupuestaria pendiente: Email Pro OVH (~40€/año) vs Zoho gratis vs Google Workspace.
+
+---
+
+## 4. DECISIONES ARQUITECTÓNICAS APROBADAS (18-19 MAYO 2026)
+
+Todas formalmente aprobadas por Julio CEO. Registradas en audit log + en este documento.
+
+### D1 — Permisos (Opción B)
+
+**Aprobado 18/05/2026 ~22:30 UTC.**
+
+Mantener `manager_permissions` (columnas booleanas legacy del Bloque S) + añadir `permission_sets` + `permission_set_assignments` como capa jsonb superior.
+
+Resolución cascada en función `has_permission()`:
+1. Admin de cuenta → siempre `true`.
+2. Override en columna `manager_permissions` (si existe) → gana.
+3. Lectura desde `permission_set.permissions` jsonb → vale.
+4. Default → `false`.
+
+Migración gradual de columnas legacy a jsonb cuando UI ya no las lee.
+
+### D2 — Feature flags y plan_id
+
+**Aprobado 18/05/2026 ~22:35 UTC.**
+
+Mantener tabla `feature_flags` separada (ya existe, más auditable con granted_by/expires_at/source). Mantener `subscriptions.plan_id` como fuente de truth. NO añadir `accounts.feature_flags jsonb` ni `accounts.plan_id`.
+
+Sesión 2 §2.3 queda enmendada: la BBDD actual está mejor normalizada que la propuesta del documento.
+
+### D3 — Patrón platform admin (Opción C2)
+
+**Aprobado 18/05/2026 ~22:40 UTC.**
+
+Tabla `platform_admins` separada según Sesión 2 §2.2. Implicó:
+- Crear `platform_admins` + `platform_admin_permissions` + `platform_admin_2fa` (M03, M04, M05).
+- Reescribir `current_user_is_admin()` para consultar nueva tabla (M13).
+- Migrar Julio CEO de `user_profile` admin en cuenta `is_internal=true` → fila en `platform_admins` con role='ceo' (M19).
+- Columna `accounts.is_internal` mantenida por compatibilidad. **Pendiente decidir Sprint 2+** si DROP COLUMN o mantener.
+
+### D4 — CASCADE legal (Opción α)
+
+**Aprobado 18/05/2026 ~22:55 UTC.**
+
+Cambiar FK `clock_entries.employee_id` y `documents.employee_id` de `ON DELETE CASCADE` a **`ON DELETE RESTRICT`** (M12). Frontend usa soft delete (`active = false`). Cumple Real Decreto-ley 8/2019 (conservación fichajes 4 años).
+
+⚠️ Implicación: frontend NO debe ofrecer DELETE físico de empleados con fichajes/docs.
+
+### D5 (decisión menor) — PITR Supabase
+
+**Aprobado 18/05/2026 23:16 UTC vía WhatsApp.**
+
+NO activar add-on PITR. Aceptar riesgo de pérdida hasta 18h con scheduled backups diarios. Justificación: Llorente29 no usa app, datos recuperables manualmente en 10 min.
+
+**Revisar antes de Sprint 14 (migración Llorente29 producción).**
+
+---
+
+## 5. HISTORIAL DE SESIONES
+
+- **P1-P3:** construcción inicial app cliente Llorente29 (APPCC, employees, locations, brands).
+- **P4 (16/05/2026):** Bloque C Fase 1 cerrada — URL slug + BrowserRouter. **Bloque S blindó RLS** en 40 tablas iniciales + creó 4 funciones auxiliares.
+- **P5 (17/05/2026):** preparación Bloque C Fases 2-3. Sesión sin código.
+- **P6 (17/05/2026):** Catálogo APPCC seed completo + locales reales Llorente29 + 1 empleado Pamela. Bug 3 Edge Function `manage-employee` aplazado.
+- **Sesión 0 (18/05/2026 mañana):** Reconciliación arquitectónica completa. Rebrand Folvy. Decisión Escenario C1 (Fase 0 antes Llorente29). 4 documentos maestros producidos (~4325 líneas).
+- **Sesión 1-2-3 (18/05/2026 día):** Sprint 0.1 — pre-requisitos CEO cerrados al 100% (Vercel, Resend, Supabase Pro, dominios, GitHub 2FA).
+- **Sesión 4 (18/05/2026 noche):** Auditoría BBDD completa (75 tablas reales). 4 decisiones arquitectónicas D1-D4 aprobadas. 19 migrations SQL generadas como borrador.
+- **Sesión 5 (18-19/05/2026 noche+mañana):** **SPRINT 1 EJECUTADO.** 19 migrations aplicadas en producción Supabase. 3 bugs SQL detectados en vivo y corregidos. PITR descubierto NO activo (D5 aprobada). Julio + José ejecutaron por turnos.
+
+---
+
+## 6. ESTADO DE EJECUCIÓN SPRINT 1 (19 MAYO 2026)
+
+**🎉 SPRINT 1 EJECUTADO AL 100% — 19/19 MIGRATIONS COMPLETADAS.**
+
 ```
+✅ M01 — alter_accounts_add_auth_columns          (Llorente29 noche 18/05, José)
+✅ M02 — alter_user_profiles_add_auth_columns     (Llorente29 noche 18/05, José)
+✅ M03 — create_platform_admins                   (Llorente29 noche 18/05, José)
+✅ M04 — create_platform_admin_permissions        (Llorente29 noche 18/05, José)
+✅ M05 — create_platform_admin_2fa                (mañana 19/05, Julio) [BUG FIX]
+✅ M06 — create_auth_rate_limits                  (mañana 19/05, Julio)
+✅ M07 — create_impersonation_sessions            (mañana 19/05, Julio)
+✅ M08 — create_platform_audit_log                (mañana 19/05, Julio)
+✅ M09 — create_platform_settings                 (mañana 19/05, Julio)
+✅ M10 — create_permission_sets                   (mañana 19/05, Julio)
+✅ M11 — create_permission_set_assignments        (mañana 19/05, Julio)
+✅ M12 — fix_cascade_clock_entries_documents      (mañana 19/05, Julio)
+✅ M14 — create_auth_helper_functions             (mañana 19/05, Julio)
+✅ M15 — create_auth_rls_policies (23 policies)   (mañana 19/05, Julio)
+✅ M16 — create_auth_triggers (+2 cron jobs)      (mañana 19/05, Julio)
+✅ M17 — create_auth_indices                      (mañana 19/05, Julio)
+✅ M18 — seed_default_permission_sets (4 sets)    (mañana 19/05, Julio) [BUG FIX]
+✅ M19 — seed_first_platform_admin (Julio CEO)    (mañana 19/05, Julio)
+✅ M13 — refactor_current_user_is_admin           (mañana 19/05, Julio) [ÚLTIMA]
+```
+
+### 3 bugs SQL detectados y corregidos en vivo
+
+1. **M01**: `accounts_slug_format` ya existía en BBDD con regex distinta. Solución: quitar de M01, mantener el existente.
+2. **M02**: `valid_role` ya existía (constraint role IN admin/manager/worker). Solución: quitar `user_profiles_role_valid` de M02.
+3. **M05**: `CHECK (NOT EXISTS (SELECT...))` rechazado por PostgreSQL — no permite subqueries en CHECK. Solución: usar operador `<@` (array contenido en array).
+4. **M06**: Índice parcial con `WHERE first_attempt < now() - 24h` rechazado — `now()` es función volátil. Solución: eliminar índice (cleanup hace seq scan, BBDD pequeña).
+5. **M18**: `jsonb_build_object()` con 51 permisos = 102 args = falla. PostgreSQL acepta máximo 100 args. Solución: usar literal jsonb `'{...}'::jsonb`.
+
+### Reglas técnicas aprendidas para futuras migrations
+
+1. ❌ Nunca subqueries (`NOT EXISTS`, `SELECT`) en CHECK constraints.
+2. ❌ Nunca funciones volátiles (`now()`, `random()`) en `WHERE` de índice parcial.
+3. ❌ Nunca `jsonb_build_object()` con más de 50 pares clave-valor — usar literal `'{...}'::jsonb`.
+4. ✅ Siempre preview-antes (consulta read-only) antes de cada migration.
+5. ✅ Verificación post-ejecución obligatoria antes de pasar a siguiente migration.
+
 ---
-8. Plan de fases — Estado
-Fase 1A — Kiosko ✅ (foto al fichar pendiente UI)
-Fase 1B — Modo trabajador móvil ✅
-Fase 2 — Gestor: aprobaciones ✅
-Fase 3 — Operativa avanzada ✅
-Ahora mismo, Bolsa horas, Turnos abiertos, Avisos config
-Fase 3 PARTE 2 — Calendario ✅
-Entrega 1: Modelo BD + vistas
-Entrega 2: Validaciones + mínimos + por empleado + duplicar
-Entrega 3A: Auto-gen 3 modos
-Entrega 3C: Modelo A puro
-Entrega 3D: Auto-gen mensual (1/4/8 semanas)
-Entrega 3B PENDIENTE: Cambios de turno entre empleados (tabla `shift_swaps`)
-Fase 4 — Notificaciones push (PENDIENTE)
-Fase 5 — Migrar resto módulos a Supabase (PENDIENTE)
+
+## 7. PENDIENTE PRÓXIMAS SESIONES
+
+### Inmediato (Sprint 0.2 restante)
+
+1. **Limpiar repo Foodint actual** + crear branch `folvy-v1`.
+2. **Actualizar 4 documentos maestros**: `folvy.com` → `folvy.app`.
+3. **Generar addendum Sesión 2** con decisiones aprobadas (en curso, paralelo a este documento).
+4. **Decidir email Folvy** (OVH Email Pro vs Zoho vs Google Workspace).
+5. **Activar 2FA en Resend** (deuda).
+6. **Llamada Llorente29** + calendario realista (pre-requisito CEO Sprint 0.1 pendiente).
+
+### Sprint 2 (2-6 junio 2026): Edge Functions auth
+
+Construir:
+- `custom-access-token-hook` (JWT claims Folvy).
+- `login-handler` (rate limit + audit log).
+- `welcome-handler` (set password + accept T&C).
+- `password-reset-handler`.
+- `activate-platform-admin-2fa` (TOTP secret cifrado + 10 backup codes hash bcrypt).
+- `verify-2fa`.
+- `start-impersonation` + `end-impersonation`.
+
+### Sprint 3 (16-20 junio 2026): Shell + Rebrand Folvy
+
+- Shell base (`src/shell/*`, ModuleRegistry, EventBus).
+- Rebranding Folvy completo (paleta, tipografías, logos, manifests, email templates).
+
+### Cuestiones a decidir más adelante
+
+- Decidir destino columna `accounts.is_internal` (DROP COLUMN o mantener) tras auditar uso en frontend.
+- Activar PITR Supabase add-on antes de Sprint 14 (migración Llorente29 producción).
+- Limpiar 10 tablas backup del Bloque S (`_backup_20260516_*`) — confirmar con Julio.
+
 ---
-9. Cómo trabajar con Claude
-Lee este archivo completo antes de hacer nada.
-Pregunta al usuario el estado antes de empezar.
-No reinventes lo construido.
-Edición: usuario edita en GitHub web rama `source`. Claude genera en `/mnt/user-data/outputs/`.
-Build falla: suele ser TS estricto. Eliminar variables, NO `_` delante.
-Versiona: `_vN.tsx`.
-Al terminar sesión: ofrece actualizar `CONTEXTO_CLAUDE.md`.
-Datos compartidos: Supabase, NO localStorage.
-Paleta Foodint: granate `#7C1A1A`, crema `#F5E9D9`. Verde solo éxito. Rojo solo error.
-Nombres archivo: prefijos `services_/trabajador_/personal_` son solo mi convención. Usuario los quita al subir.
-MODELO A: calendario publicado = verdad. weeklySchedule = plantilla informativa.
-Bug timezone: nunca `toISOString()` para YYYY-MM-DD de fecha local.
+
+## 8. REGLAS DE TRABAJO (consolidadas)
+
+### Reglas no negociables del proyecto
+
+1. **Archivos completos, NO diffs.** Si modifico un fichero, lo paso entero.
+2. **Pedir fichero original ANTES de modificarlo.** No inventar código sobre suposiciones.
+3. **NO modificar `App.tsx`** sin permiso explícito de Julio.
+4. **NO sobrescribir `notificationsService.ts`** (firma posicional consolidada).
+5. **Antes de cualquier decisión arquitectónica, consultar BBDD real vía `information_schema`.** La BBDD es la verdad. CONTEXTO_CLAUDE puede estar desactualizado.
+6. **SQL transaccional (BEGIN/COMMIT)** cuando hay varios cambios relacionados.
+7. **SQL revisable ANTES de ejecutar.** Yo (Claude) propongo, humano operando ejecuta y verifica.
+8. **Yo (Julio) decido cuándo cerrar sesión.** Pero si Claude detecta riesgo o fatiga, lo recomienda con argumentos.
+9. **Sin pelotismo.** Si Claude discrepa con decisión de Julio, lo dice.
+10. **Al final de cada sesión técnica importante, ofrecer actualizar CONTEXTO_CLAUDE.md.**
+
+### Reglas técnicas
+
+- TypeScript strict, camelCase en cliente, snake_case en BBDD.
+- Doble cast `as unknown as Json` para columnas jsonb.
+- tsconfig.app.json: verbatimModuleSyntax + erasableSyntaxOnly → NO enums, NO parameter properties.
+- Oxc parser Vite 8: NO mezclar `??` con `&&` sin paréntesis.
+
+### Reglas de protocolo refuerzo
+
+- **Identificación obligatoria del refuerzo** al inicio: "Soy [Nombre], el refuerzo técnico de Julio".
+- Si Claude no sabe quién está al teclado, asume Julio por defecto.
+- Refuerzo tiene autoridad delegada total para decisiones técnicas en su turno.
+- Decisiones que cambian planos documentales aprobados merecen escalación a Julio aunque refuerzo tenga autoridad delegada.
+- Para autorizaciones que llegan vía otro canal (WhatsApp, oral), exigir **trazabilidad escrita en chat** (screenshot o que Julio escriba directamente).
+
+### Reglas de seguridad operativa
+
+- **No ejecutar SQL en producción sin red de seguridad confirmada** (PITR o staging).
+- **No ejecutar SQL borrador no probado en producción** sin auditoría preview-antes.
+- **Verificar identidad** cuando entran decisiones de impacto presupuestario o producción.
+- **Parar inmediatamente** ante cualquier output inesperado durante ejecución de migrations.
+
 ---
-10. Versión actual del código clave
-Páginas
-`src/pages/CalendarioPage.tsx` — v5 (auto-gen mensual)
-`src/pages/AhoraMismoPage.tsx` — v3 (Modelo A)
-`src/pages/AvisosSettingsPage.tsx` — v3 (MinimumsSection)
-`src/pages/StaffPage.tsx` — v5
-`src/pages/trabajador/MiHorario.tsx` — v5 (Modelo A)
-`src/pages/trabajador/TrabajadorApp.tsx` — v4
-`src/pages/trabajador/HomeEmpleado.tsx` — v5
-`src/App.tsx` — v7
-Componentes
-`src/components/personal/BolsaHorasView.tsx` — v2 (Modelo A)
-`src/components/Logo.tsx`
-Servicios
-`src/services/horasComputo.ts` — v3 (CalendarContext)
-`src/services/calendarService.ts` — v4 (fetchPublishedAssignmentsForRange)
-`src/services/calendarAutoGen.ts` — v2 (no LIBRE en V/S/D)
-`src/services/calendarValidations.ts`
-`src/services/fichajeKiosko.ts` — v3 (calendarCtx)
-`src/services/openShiftsService.ts`
-`src/services/appSettingsService.ts`
-`src/services/documentsService.ts`
-`src/services/vacationsService.ts`
-`src/services/supabaseSync.ts` — v3
-Tipos
-`src/types/index.ts` — v5
-`src/types/personal.ts`
+
+## 9. ENTREGABLES Y ASSETS
+
+### Documentos maestros (Project Knowledge)
+
+1. `CONTEXTO_CLAUDE.md` — este documento (actualizado 19/05/2026).
+2. `folvy_arquitectura_reconciliada.md` (Sesión 0).
+3. `folvy_v1_spec.md` (Sesión 1).
+4. `folvy_auth_model.md` (Sesión 2).
+5. `folvy_roadmap.md` (Sesión 3).
+6. **Addendum Sesión 2** con decisiones aprobadas — pendiente subir al knowledge (generado hoy).
+
+### Logos y assets
+
+1. `folvy_logo_principal.png` — logo color sobre blanco.
+2. `folvy_logo_oscuro.svg` — logo sobre fondo accent.
+3. `folvy_isotipo_manager.svg` — app icon Manager 512×512.
+4. `folvy_isotipo_empleados.svg` — app icon Empleados 512×512.
+
+### Migrations SQL ejecutadas
+
+Las 19 migrations están en `/home/claude/folvy-sprint1-migrations/` (versiones borrador) y en `/mnt/user-data/outputs/folvy-sprint1-migrations/` (versiones presentadas vía present_files). **Versiones realmente ejecutadas en producción incluyen los 5 bug fixes** documentados en §6.
+
 ---
-11. Bitácora
-2026-05-07 — Sesión inicial
-Zonas de Pedido, Análisis Personal, Fase 1A, migración Supabase, Fase 1B parcial.
-2026-05-08 mañana — Fase 1B + 2 + Branding
-Documentos, vacaciones, branding Foodint, Fase 2 aprobaciones, RLS Storage.
-2026-05-08 tarde — Fase 3 + Calendario
-Fase 3 completa (Ahora mismo, Bolsa, Turnos abiertos)
-Calendario completo:
-Entrega 1: SQL + vistas + bug timezone resuelto
-Entrega 2: validaciones + cobertura + duplicar/limpiar + por empleado + mínimos
-Entrega 3A: auto-gen 3 modos
-Decisión: Modelo A
-Entrega 3C: refactor a Modelo A puro (horasComputo, AhoraMismoPage, BolsaHorasView, MiHorario, fichajeKiosko)
-Entrega 3D: auto-gen mensual
-Regla: no LIBRE auto en V/S/D
-Estado al CIERRE
-Usuario sigue viendo LIBRE en S/D del calendario después de regenerar
-Explicación probable: asignaciones LIBRE persisten en BD desde generaciones anteriores al cambio de regla, hay que limpiar manualmente
-Pendiente confirmar con captura del usuario tras "Limpiar semana + Generar de nuevo"
-Pendiente decisión sobre cómo modelar formalmente "1.5 días libres seguidos":
-Opción simple: marcar día completo + día con media libra, sin asignar turno reducido (gestor lo pone a mano)
-Opción completa: añadir tipos T1-MEDIA y T3-MEDIA al sistema
-Recomendación de Claude: opción simple
-Pendiente Entrega 3B: cambios de turno entre empleados (tabla `shift_swaps`)
+
+## 10. CONTEXTO OPERATIVO
+
+- **Cliente activo Llorente29.** Romper = pérdida de ingreso. Pero NO usa app actualmente (0 fichajes).
+- **Estamos en Fase 0 de refactor** (Sprint 0.2 en curso, Sprint 1 cerrado anoche).
+- **BBDD blindada con RLS** (75 tablas tras Sprint 1).
+- **App actual sigue en Foodint legacy** (GitHub Pages). Folvy V1 no existe en código todavía.
+- **Próximo paso técnico real**: Sprint 2 (9-13 junio) Edge Functions auth.
+
 ---
-Última actualización: 2026-05-08 (tarde) — Calendario Modelo A + auto-gen mensual + regla V/S/D
+
+**Documento cerrado: 19 de mayo de 2026, ~08:30 UTC.**
+**Próxima sesión:** Sprint 0.2 restante (limpiar repo + branch + actualizar docs `folvy.com`→`folvy.app`).
+**Lectura obligatoria al arrancar:** este archivo + addendum Sesión 2.
