@@ -1,0 +1,5 @@
+# Folvy V1 - Supabase local config
+project_id = "xzmpnchlguibclvxyynt"
+
+[functions.check-account-status]
+verify_jwt = true
