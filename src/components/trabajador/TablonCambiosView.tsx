@@ -50,7 +50,7 @@ export default function TablonCambiosView({ myEmployee, onChanged }: Props) {
     const [cesionesRaw, mineRaw, allEmployees, templates] = await Promise.all([
       listOpenCesiones(),
       listSwapsForEmployee(myEmployee.id),
-      fetchEmployees(),
+      fetchEmployees(null),
       myEmployee.locationId ? listShiftTemplates(myEmployee.locationId) : Promise.resolve([] as ShiftTemplate[]),
     ])
     const empMap = new Map((allEmployees || []).map(e => [e.id, e]))

@@ -8,6 +8,7 @@
 // pasar account_id explícitamente, lo aplica la política de la base de datos.
 
 import { supabase } from '@/lib/supabase'
+import type { Database } from '@/types/database'
 import type {
   AppccPlan,
   AppccTemplate,
@@ -17,6 +18,10 @@ import type {
   AppccFieldType,
   AppccSeverity,
 } from '@/modules/appcc/types'
+
+// Tipos helper para updates tipados
+type TemplateUpdate = Database['public']['Tables']['appcc_templates']['Update']
+type TemplateItemUpdate = Database['public']['Tables']['appcc_template_items']['Update']
 
 /**
  * Devuelve los 14 planes APPCC activos, ordenados por display_order.
@@ -193,7 +198,8 @@ export async function updateTemplate(
 ): Promise<AppccTemplate> {
   if (!supabase) throw new Error('Supabase no disponible')
 
-  const update: Record<string, unknown> = {}
+  // FIX: tipado fuerte del update en lugar de Record<string, unknown>
+  const update: TemplateUpdate = {}
   if (patch.name !== undefined) update.name = patch.name
   if (patch.description !== undefined) update.description = patch.description
   if (patch.estimatedMinutes !== undefined) update.estimated_minutes = patch.estimatedMinutes
@@ -290,7 +296,8 @@ export async function updateItem(
 ): Promise<AppccTemplateItem> {
   if (!supabase) throw new Error('Supabase no disponible')
 
-  const update: Record<string, unknown> = {}
+  // FIX: tipado fuerte del update en lugar de Record<string, unknown>
+  const update: TemplateItemUpdate = {}
   if (patch.label !== undefined) update.label = patch.label
   if (patch.helpText !== undefined) update.help_text = patch.helpText
   if (patch.fieldType !== undefined) update.field_type = patch.fieldType

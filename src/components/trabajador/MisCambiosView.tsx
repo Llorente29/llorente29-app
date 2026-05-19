@@ -52,7 +52,7 @@ export default function MisCambiosView({ myEmployee, onChanged }: Props) {
     setLoading(true)
     const [mineRaw, allEmployees, templates] = await Promise.all([
       listSwapsForEmployee(myEmployee.id),
-      fetchEmployees(),
+      fetchEmployees(null),
       myEmployee.locationId ? listShiftTemplates(myEmployee.locationId) : Promise.resolve([] as ShiftTemplate[]),
     ])
     const empMap = new Map((allEmployees || []).map(e => [e.id, e]))

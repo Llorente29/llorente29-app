@@ -1,13 +1,22 @@
 // src/modules/appcc/pages/TemplateEditorPage.tsx
 // Editor de plantillas APPCC: crear, editar, añadir/quitar items, configurar rangos y alertas.
 // Solo admin. Las plantillas seed (is_seed=true) se pueden clonar pero no editar directamente.
+//
+// BLOQUE C Fases 2-3 (17/05/2026):
+//   - Eliminada prop `onBack` del componente top-level.
+//   - El botón "Volver" navega a appcc_dashboard vía useNavigate + pageToRoute.
+//   - El `onBack` interno del subcomponente TemplateDetail se conserva: es
+//     navegación interna entre la vista de lista y la vista de detalle.
 
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Plus, Trash2, Save, Copy, AlertTriangle,
   ChevronDown, ChevronRight, Pencil, X, Check,
 } from 'lucide-react'
 import * as templatesService from '@/modules/appcc/services/templatesService'
+import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
+import { pageToRoute } from '@/routes'
 import type {
   AppccPlan,
   AppccTemplate,
@@ -17,8 +26,6 @@ import type {
   AppccFieldType,
   AppccSeverity,
 } from '@/modules/appcc/types'
-
-const ACCOUNT_ID_FOODINT = '00000000-0000-0000-0000-000000000001'
 
 const FIELD_TYPE_LABELS: Record<AppccFieldType, string> = {
   numeric: 'Numérico',
@@ -37,11 +44,14 @@ const SEVERITY_LABELS: Record<AppccSeverity, string> = {
   critical: 'Crítica',
 }
 
-interface TemplateEditorPageProps {
-  onBack: () => void
-}
+export default function TemplateEditorPage() {
+  // BLOQUE B-5b (17/05/2026): migrado de const local ACCOUNT_ID_FOODINT a
+  // useActiveAccount(). Usado tanto en onClone (handler) como pasado al
+  // subcomponente CreateTemplateModal a través de su propio hook.
+  const { activeAccount, requireActiveAccountId } = useActiveAccount()
+  const navigate = useNavigate()
+  const slug = activeAccount?.slug ?? 'foodint'
 
-export default function TemplateEditorPage({ onBack }: TemplateEditorPageProps) {
   const [plans, setPlans] = useState<AppccPlan[]>([])
   const [templates, setTemplates] = useState<AppccTemplate[]>([])
   const [loading, setLoading] = useState(true)
@@ -63,7 +73,9 @@ export default function TemplateEditorPage({ onBack }: TemplateEditorPageProps) 
     setLoading(false)
   }
 
-
+  function handleBackToDashboard() {
+    navigate(pageToRoute('appcc_dashboard', slug))
+  }
 
   // Agrupar plantillas por plan
   const grouped = useMemo(() => {
@@ -88,7 +100,7 @@ export default function TemplateEditorPage({ onBack }: TemplateEditorPageProps) 
     <div className="p-4 sm:p-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between gap-3 mb-6">
         <div className="flex items-center gap-3">
-          <button onClick={onBack} className="text-text-secondary hover:text-text-primary transition-base">
+          <button onClick={handleBackToDashboard} className="text-text-secondary hover:text-text-primary transition-base">
             <ArrowLeft size={20} />
           </button>
           <div>
@@ -119,7 +131,7 @@ export default function TemplateEditorPage({ onBack }: TemplateEditorPageProps) 
                 onSelect={id => setSelectedTemplateId(id)}
                 onClone={async (tpl) => {
                   const cloned = await templatesService.createTemplate({
-                    accountId: ACCOUNT_ID_FOODINT,
+                    accountId: requireActiveAccountId(),
                     planId: tpl.plan_id,
                     code: tpl.code + '_copia',
                     name: tpl.name + ' (copia)',
@@ -247,6 +259,8 @@ function CreateTemplateModal({
   onClose: () => void
   onCreated: (tpl: AppccTemplate) => void
 }) {
+  // BLOQUE B-5b: hook propio (subcomponente).
+  const { requireActiveAccountId } = useActiveAccount()
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
   const [planId, setPlanId] = useState(plans[0]?.id ?? '')
@@ -259,7 +273,7 @@ function CreateTemplateModal({
     setSaving(true)
     try {
       const tpl = await templatesService.createTemplate({
-        accountId: ACCOUNT_ID_FOODINT,
+        accountId: requireActiveAccountId(),
         planId,
         code: code.trim().toUpperCase(),
         name: name.trim(),

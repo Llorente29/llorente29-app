@@ -7,10 +7,17 @@
 // Al entrar en la página (o al cambiar de local), revisa los schedules activos
 // que aplican hoy y crea automáticamente las executions pendientes que falten.
 // De este modo, abrir APPCC: Hoy es la "alarma operativa" del día.
+//
+// BLOQUE C Fases 2-3 (17/05/2026):
+//   - Eliminada prop `onOpenExecution`.
+//   - Navegación a ejecución vía useNavigate + pageToRoute('appcc_execution', ...).
 
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import type { Location } from '@/types'
 import { useApp } from '@/context/AppContext'
+import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
+import { pageToRoute } from '@/routes'
 import * as executionsService from '@/modules/appcc/services/executionsService'
 import * as schedulesService from '@/modules/appcc/services/schedulesService'
 import * as templatesService from '@/modules/appcc/services/templatesService'
@@ -22,8 +29,6 @@ import type {
   AppccPlan,
 } from '@/modules/appcc/types'
 import { Plus, X, ClipboardList, ArrowRight, AlertCircle } from 'lucide-react'
-
-const ACCOUNT_ID_FOODINT = '00000000-0000-0000-0000-000000000001'
 
 const STATUS_LABELS: Record<AppccExecutionStatus, string> = {
   pending: 'Pendiente',
@@ -42,13 +47,14 @@ const STATUS_BADGE: Record<AppccExecutionStatus, string> = {
   skipped: 'bg-page text-text-secondary',
 }
 
-interface TodayPageProps {
-  /** Callback que invoca el padre cuando el usuario pulsa "Abrir" en un checklist. */
-  onOpenExecution?: (executionId: string) => void
-}
-
-export default function TodayPage({ onOpenExecution }: TodayPageProps) {
+export default function TodayPage() {
   const { locations } = useApp()
+  // BLOQUE B-5b (17/05/2026): migrado de const local ACCOUNT_ID_FOODINT a
+  // useActiveAccount(). activeAccountId para el useEffect de lazy-generation
+  // (guard sin throw), requireActiveAccountId para el handler manual.
+  const { activeAccount, activeAccountId, requireActiveAccountId } = useActiveAccount()
+  const navigate = useNavigate()
+  const slug = activeAccount?.slug ?? 'foodint'
 
   const activeLocations = useMemo<Location[]>(
     () => locations.filter(l => l.active),
@@ -83,10 +89,14 @@ export default function TodayPage({ onOpenExecution }: TodayPageProps) {
 
   /**
    * Lazy generation + listado de executions del día.
+   * Espera a tener activeAccountId resuelto para evitar escribir en cuenta
+   * incorrecta durante el arranque.
    */
   useEffect(() => {
-    if (!selectedLocationId) return
+    if (!selectedLocationId || !activeAccountId) return
     let cancelled = false
+    // Captura local del id para que TS sepa que no es null dentro del closure.
+    const accountIdLocal = activeAccountId
 
     async function loadAndEnsure() {
       setLoading(true)
@@ -120,7 +130,7 @@ export default function TodayPage({ onOpenExecution }: TodayPageProps) {
                 locationId,
               )
               await executionsService.createExecution(
-                ACCOUNT_ID_FOODINT,
+                accountIdLocal,
                 locationId,
                 schedule.template_id,
                 {
@@ -150,7 +160,7 @@ export default function TodayPage({ onOpenExecution }: TodayPageProps) {
 
     loadAndEnsure()
     return () => { cancelled = true }
-  }, [selectedLocationId])
+  }, [selectedLocationId, activeAccountId])
 
   const planById = useMemo(() => {
     const m = new Map<string, AppccPlan>()
@@ -171,7 +181,7 @@ export default function TodayPage({ onOpenExecution }: TodayPageProps) {
 
     try {
       const newExec = await executionsService.createExecution(
-        ACCOUNT_ID_FOODINT,
+        requireActiveAccountId(),
         selectedLocationId,
         templateId
       )
@@ -179,7 +189,7 @@ export default function TodayPage({ onOpenExecution }: TodayPageProps) {
       setExecutions(fresh)
       setShowCatalog(false)
       console.log('[TodayPage] Checklist manual creado:', newExec.id)
-      onOpenExecution?.(newExec.id)
+      navigate(pageToRoute('appcc_execution', slug, { executionId: newExec.id }))
     } catch (err) {
       console.error('[TodayPage] Error creando checklist', err)
       setError('No se pudo crear el checklist')
@@ -187,11 +197,7 @@ export default function TodayPage({ onOpenExecution }: TodayPageProps) {
   }
 
   function handleOpen(executionId: string) {
-    if (onOpenExecution) {
-      onOpenExecution(executionId)
-    } else {
-      console.warn('[TodayPage] onOpenExecution no proporcionado por el padre')
-    }
+    navigate(pageToRoute('appcc_execution', slug, { executionId }))
   }
 
   return (

@@ -4,7 +4,7 @@
 // Solo accesible por admin (la app valida en UI; la BD aún no tiene RLS estricto).
 
 import { supabase } from '../lib/supabase'
-import type { UserRole } from './authService'
+import type { UserProfileRole as UserRole } from '../types/multitenancy'
 
 export interface UserListItem {
   id: string                  // user_profile.id
@@ -20,12 +20,22 @@ export interface UserListItem {
 }
 
 /**
- * Lista todos los usuarios con cuenta + sus locales asignados (si manager).
+ * Lista los usuarios de UNA cuenta + sus locales asignados (si manager).
+ *
+ * BLOQUE B-6c (17/05/2026): añadido scope obligatorio `accountId`.
+ *   Antes la función devolvía TODOS los user_profiles del sistema, lo que
+ *   producía duplicados visibles cuando un user tenía perfiles en N cuentas
+ *   (caso jgcolon@idasal.com con perfil en Llorente29 + Foodint Interno).
+ *   Ahora cada cuenta ve solo sus propios usuarios.
+ *
+ * NOTA Bloque S2 (Superadmin Global): si el caller es superadmin y necesita
+ * vista global cross-cuenta, hará falta una función paralela
+ * `listAllUsersGlobal()` con un gate distinto. No implementada todavía.
  */
-export async function listUsers(): Promise<UserListItem[]> {
+export async function listUsers(accountId: string): Promise<UserListItem[]> {
   if (!supabase) return []
 
-  // 1) Traer todos los user_profiles
+  // 1) Traer user_profiles de la cuenta indicada.
   const { data: profiles, error: pErr } = await supabase
     .from('user_profiles')
     .select(`
@@ -37,6 +47,7 @@ export async function listUsers(): Promise<UserListItem[]> {
       display_name,
       created_at
     `)
+    .eq('account_id', accountId)
     .order('created_at', { ascending: false })
 
   if (pErr) {
@@ -72,7 +83,10 @@ export async function listUsers(): Promise<UserListItem[]> {
   const emailByUserId = new Map<string, string>()
   for (const p of profiles) {
     if (p.employee_id) {
-      const emp = (employees || []).find((e: { id: string; email: string }) => e.id === p.employee_id)
+      // FIX: email puede ser null en BBDD (employees.email no es NOT NULL).
+      const emp = (employees || []).find(
+        (e: { id: string; email: string | null }) => e.id === p.employee_id
+      )
       if (emp?.email) emailByUserId.set(p.user_id, emp.email)
     }
   }
@@ -102,7 +116,7 @@ export async function listUsers(): Promise<UserListItem[]> {
       id: p.id,
       userId: p.user_id,
       employeeId: p.employee_id || undefined,
-      email: emailByUserId.get(p.user_id) || (employee as { email?: string } | null)?.email || '',
+      email: emailByUserId.get(p.user_id) || (employee as { email?: string | null } | null)?.email || '',
       displayName: p.display_name || undefined,
       role: p.role as UserRole,
       active: p.active,

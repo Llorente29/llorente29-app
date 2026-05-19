@@ -6,13 +6,20 @@ import { supabase } from '@/lib/supabase'
 
 const BUCKET = 'appcc-photos'
 
+/**
+ * Foto de respuesta APPCC.
+ *
+ * ⚠️ Tipo alineado con BBDD (mayo 2026):
+ * - file_name, mime_type, file_size_bytes pueden ser null si la foto se subió
+ *   sin esos metadatos (legacy, mobile sin permisos de info, etc.)
+ */
 export interface ExecutionPhoto {
   id: string
   response_id: string
   storage_path: string
-  file_name: string
-  mime_type: string
-  file_size_bytes: number
+  file_name: string | null
+  mime_type: string | null
+  file_size_bytes: number | null
   caption: string | null
   uploaded_at: string
   uploaded_by: string | null
@@ -143,14 +150,23 @@ export async function listPhotos(responseId: string): Promise<ExecutionPhoto[]> 
   if (error) throw error
   if (!data || data.length === 0) return []
 
-  // Generar URLs firmadas en batch
-  const paths = data.map((d: ExecutionPhoto) => d.storage_path)
+  // FIX: data ya viene tipado de Supabase, no necesita la anotación explícita ExecutionPhoto
+  //      que choca con file_name nullable. Lo casteamos como bloque al final.
+  const paths = data.map(d => d.storage_path)
   const { data: signed } = await supabase.storage
     .from(BUCKET)
     .createSignedUrls(paths, 3600)
 
-  return data.map((d: ExecutionPhoto, i: number) => ({
-    ...d,
+  return data.map((d, i) => ({
+    id: d.id,
+    response_id: d.response_id,
+    storage_path: d.storage_path,
+    file_name: d.file_name,
+    mime_type: d.mime_type,
+    file_size_bytes: d.file_size_bytes,
+    caption: d.caption,
+    uploaded_at: d.uploaded_at,
+    uploaded_by: d.uploaded_by,
     url: signed?.[i]?.signedUrl ?? undefined,
   }))
 }
@@ -183,9 +199,9 @@ export async function listPhotosForExecution(executionId: string): Promise<Execu
     id: d.id as string,
     response_id: d.response_id as string,
     storage_path: d.storage_path as string,
-    file_name: d.file_name as string,
-    mime_type: d.mime_type as string,
-    file_size_bytes: d.file_size_bytes as number,
+    file_name: (d.file_name as string | null) ?? null,
+    mime_type: (d.mime_type as string | null) ?? null,
+    file_size_bytes: (d.file_size_bytes as number | null) ?? null,
     caption: d.caption as string | null,
     uploaded_at: d.uploaded_at as string,
     uploaded_by: d.uploaded_by as string | null,

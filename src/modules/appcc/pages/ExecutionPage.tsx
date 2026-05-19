@@ -2,9 +2,19 @@
 // Pantalla de ejecución de un checklist APPCC.
 // El usuario rellena los items, se auto-guarda cada respuesta (con debounce),
 // y al final firma para completar la ejecución.
+//
+// BLOQUE C Fases 2-3 (17/05/2026):
+//   - Props `executionId` y `onBack` ahora OPCIONALES. Doble modo de uso:
+//     • Router (gestor): URL con :executionId → useParams; onBack=undefined → navigate.
+//     • TrabajadorApp: pasa props explícitas; se usan tal cual.
+//   - Fallback a useNavigate hacia appcc_today cuando no llegan props.
+//   - Si la URL llega sin executionId válido Y no hay prop, se redirige a appcc_today.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
+import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
+import { pageToRoute } from '@/routes'
 import * as executionsService from '@/modules/appcc/services/executionsService'
 import * as templatesService from '@/modules/appcc/services/templatesService'
 import FieldRenderer, { type FieldValue } from '@/modules/appcc/components/FieldRenderer'
@@ -13,17 +23,46 @@ import type {
   AppccExecutionResponse,
   AppccTemplateWithItems,
 } from '@/modules/appcc/types'
-import { ArrowLeft, Check, Circle, AlertCircle, AlertTriangle, CheckCircle2, Download } from 'lucide-react'
+import { ArrowLeft, Check, Circle, AlertCircle, AlertTriangle, CheckCircle2, Download, Eye } from 'lucide-react'
 import { generateChecklistPdf } from '@/modules/appcc/services/pdfExportService'
-
-interface ExecutionPageProps {
-  executionId: string
-  onBack: () => void
-}
+import type { PdfPreviewResult } from '@/modules/appcc/services/pdfExportService'
+import ReportPreviewModal from '@/components/ReportPreviewModal'
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
-export default function ExecutionPage({ executionId, onBack }: ExecutionPageProps) {
+interface ExecutionPageProps {
+  /** Si llega por prop (TrabajadorApp), se usa; sino se lee de la URL. */
+  executionId?: string
+  /** Si llega por prop, se invoca; sino se navega a appcc_today con useNavigate. */
+  onBack?: () => void
+}
+
+export default function ExecutionPage({ executionId: propExecutionId, onBack: propOnBack }: ExecutionPageProps = {}) {
+  const params = useParams<{ executionId: string }>()
+  const navigate = useNavigate()
+  const { activeAccount } = useActiveAccount()
+  const slug = activeAccount?.slug ?? 'foodint'
+
+  // Resolución de executionId: prop tiene prioridad sobre useParams.
+  const executionId = propExecutionId ?? params.executionId
+
+  // Si la URL no trae executionId Y no hay prop, volver a Hoy con replace.
+  // Solo aplica al caso router; cuando hay propOnBack, asumimos que el padre
+  // gestiona su propio routing y no debemos navegar.
+  useEffect(() => {
+    if (!executionId && !propOnBack) {
+      navigate(pageToRoute('appcc_today', slug), { replace: true })
+    }
+  }, [executionId, propOnBack, navigate, slug])
+
+  function goBack() {
+    if (propOnBack) {
+      propOnBack()
+    } else {
+      navigate(pageToRoute('appcc_today', slug))
+    }
+  }
+
   const [execution, setExecution] = useState<AppccExecution | null>(null)
   const [template, setTemplate] = useState<AppccTemplateWithItems | null>(null)
   const [responses, setResponses] = useState<Map<string, AppccExecutionResponse>>(new Map())
@@ -33,11 +72,13 @@ export default function ExecutionPage({ executionId, onBack }: ExecutionPageProp
   const [saveStatus, setSaveStatus] = useState<Map<string, SaveStatus>>(new Map())
   const [completing, setCompleting] = useState(false)
   const [completeError, setCompleteError] = useState<string | null>(null)
-  const [pdfLoading, setPdfLoading] = useState(false)
+  const [pdfLoading, setPdfLoading] = useState<'preview' | 'download' | null>(null)
+  const [preview, setPreview] = useState<PdfPreviewResult | null>(null)
 
   const saveTimers = useRef<Map<string, number>>(new Map())
 
   useEffect(() => {
+    if (!executionId) return
     let cancelled = false
 
     async function load() {
@@ -49,7 +90,7 @@ export default function ExecutionPage({ executionId, onBack }: ExecutionPageProp
         const { data: userData } = await supabase.auth.getUser()
         if (!userData.user) throw new Error('No hay sesión activa')
 
-        const execData = await executionsService.getExecution(executionId)
+        const execData = await executionsService.getExecution(executionId!)
         if (!execData) throw new Error('Ejecución no encontrada')
 
         const tplData = await templatesService.getTemplateWithItems(execData.execution.template_id)
@@ -60,7 +101,7 @@ export default function ExecutionPage({ executionId, onBack }: ExecutionPageProp
 
         let finalExecution = execData.execution
         if (execData.execution.status === 'pending') {
-          finalExecution = await executionsService.startExecution(executionId, userData.user.id)
+          finalExecution = await executionsService.startExecution(executionId!, userData.user.id)
         }
 
         if (!cancelled) {
@@ -92,6 +133,7 @@ export default function ExecutionPage({ executionId, onBack }: ExecutionPageProp
 
   function handleChange(itemId: string, fieldType: string, next: FieldValue) {
     if (!userId) return
+    if (!executionId) return
     if (execution?.status === 'completed') return
 
     const prevTimer = saveTimers.current.get(itemId)
@@ -194,7 +236,7 @@ export default function ExecutionPage({ executionId, onBack }: ExecutionPageProp
   }, [template, responses])
 
   async function handleComplete() {
-    if (!userId || !execution || !template) return
+    if (!userId || !execution || !template || !executionId) return
     if (missingRequired.length > 0) return
 
     const hasOutOfRange = Array.from(responses.values()).some(r => r.is_out_of_range)
@@ -219,6 +261,13 @@ export default function ExecutionPage({ executionId, onBack }: ExecutionPageProp
     }
   }
 
+  // Guard: sin executionId, no renderizar nada (el useEffect ya redirigió
+  // si era el modo router; si era TrabajadorApp con propOnBack, este caso no
+  // debería producirse porque el padre solo monta el componente con id válido).
+  if (!executionId) {
+    return null
+  }
+
   if (loading) {
     return (
       <div className="p-4 sm:p-6 max-w-3xl mx-auto">
@@ -232,7 +281,7 @@ export default function ExecutionPage({ executionId, onBack }: ExecutionPageProp
       <div className="p-4 sm:p-6 max-w-3xl mx-auto">
         <button
           type="button"
-          onClick={onBack}
+          onClick={goBack}
           className="inline-flex items-center gap-1.5 text-base mb-4 text-text-secondary hover:text-text-primary transition-base min-h-touch"
         >
           <ArrowLeft size={16} /> Volver
@@ -274,18 +323,46 @@ export default function ExecutionPage({ executionId, onBack }: ExecutionPageProp
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <button
               type="button"
-              onClick={onBack}
+              onClick={goBack}
               className="px-6 py-3 rounded-md text-base font-medium bg-accent text-text-on-accent hover:bg-accent-hover transition-base min-h-[48px]"
             >
               Volver a Hoy
             </button>
             <button
               type="button"
-              disabled={pdfLoading}
+              disabled={!!pdfLoading}
               onClick={async () => {
-                setPdfLoading(true)
+                setPdfLoading('preview')
                 try {
-                  // Cargar nombre del local
+                  let locationName = 'Local'
+                  let locationAddress = ''
+                  if (supabase && execution.location_id) {
+                    const { data: loc } = await supabase.from('locations').select('name, address').eq('id', execution.location_id).maybeSingle()
+                    if (loc) { locationName = loc.name; locationAddress = loc.address ?? '' }
+                  }
+                  const result = await generateChecklistPdf(
+                    executionId,
+                    { name: locationName, address: locationAddress },
+                    { mode: 'preview' },
+                  )
+                  if (result) setPreview(result)
+                } catch (err) {
+                  console.error('[ExecutionPage] preview error', err)
+                  alert('Error generando vista previa: ' + (err instanceof Error ? err.message : 'desconocido'))
+                } finally {
+                  setPdfLoading(null)
+                }
+              }}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-md text-base font-medium border-2 border-accent text-accent bg-card hover:bg-accent-bg transition-base min-h-[48px] disabled:opacity-50"
+            >
+              <Eye size={16} /> {pdfLoading === 'preview' ? 'Generando…' : 'Vista previa'}
+            </button>
+            <button
+              type="button"
+              disabled={!!pdfLoading}
+              onClick={async () => {
+                setPdfLoading('download')
+                try {
                   let locationName = 'Local'
                   let locationAddress = ''
                   if (supabase && execution.location_id) {
@@ -297,15 +374,23 @@ export default function ExecutionPage({ executionId, onBack }: ExecutionPageProp
                   console.error('[ExecutionPage] PDF error', err)
                   alert('Error generando PDF: ' + (err instanceof Error ? err.message : 'desconocido'))
                 } finally {
-                  setPdfLoading(false)
+                  setPdfLoading(null)
                 }
               }}
               className="inline-flex items-center gap-2 px-6 py-3 rounded-md text-base font-medium border-2 border-accent text-accent bg-card hover:bg-accent-bg transition-base min-h-[48px] disabled:opacity-50"
             >
-              <Download size={16} /> {pdfLoading ? 'Generando...' : 'Descargar PDF'}
+              <Download size={16} /> {pdfLoading === 'download' ? 'Generando…' : 'Descargar PDF'}
             </button>
           </div>
         </div>
+
+        {preview && (
+          <ReportPreviewModal
+            preview={preview}
+            title="Certificado del checklist"
+            onClose={() => setPreview(null)}
+          />
+        )}
 
         <details className="mt-6">
           <summary className="text-base text-text-secondary cursor-pointer hover:text-text-primary py-2 transition-base">
@@ -348,7 +433,7 @@ export default function ExecutionPage({ executionId, onBack }: ExecutionPageProp
     <div className="p-4 sm:p-6 max-w-3xl mx-auto">
       <button
         type="button"
-        onClick={onBack}
+        onClick={goBack}
         className="inline-flex items-center gap-1.5 text-base mb-4 text-text-secondary hover:text-text-primary py-2 min-h-touch transition-base"
       >
         <ArrowLeft size={16} /> Volver a Hoy

@@ -1,6 +1,13 @@
 // src/components/ManagerPermissionsModal.tsx
 // Modal para configurar permisos individuales de un manager.
 // Solo accesible para admin.
+//
+// BLOQUE B-7 (16/05/2026): migrado al service nuevo de multitenancy.
+//   - Shape camelCase (showDashboard, userProfileId, etc.)
+//   - 30 booleanos (incluye showAppccToday/showAppccIncidents que ahora
+//     aparecen como toggles en la UI; antes existían en BBDD pero la UI
+//     no los exponía).
+//   - Convención de errores: try/catch en lugar de { ok, error }.
 
 import { useState, useEffect } from 'react'
 import {
@@ -12,11 +19,11 @@ import {
 } from 'lucide-react'
 import { Modal, Button, Card, Alert } from './ui'
 import {
-  getManagerPermissions,
-  saveManagerPermissions,
-  resetManagerPermissions,
-  type ManagerPermissions,
-} from '../services/managerPermissionsService'
+  getPermissionsOrDefaults,
+  savePermissions,
+  resetPermissions,
+} from '@/modules/multitenancy/services/managerPermissionsService'
+import type { ManagerPermissions } from '@/types/multitenancy'
 
 interface Props {
   userProfileId: string
@@ -25,8 +32,14 @@ interface Props {
   onSaved?: () => void
 }
 
+/**
+ * Subset de claves de ManagerPermissions que son booleanos editables.
+ * Excluye campos meta (userProfileId, createdAt, updatedAt).
+ */
+type PermissionKey = Exclude<keyof ManagerPermissions, 'userProfileId' | 'createdAt' | 'updatedAt'>
+
 interface PermissionItem {
-  key: keyof Omit<ManagerPermissions, 'user_profile_id'>
+  key: PermissionKey
   label: string
   Icon: LucideIcon
   section: string
@@ -35,37 +48,37 @@ interface PermissionItem {
 
 const PERMISSION_ITEMS: PermissionItem[] = [
   // Principales
-  { key: 'show_dashboard',            label: 'Dashboard',           Icon: LayoutDashboard, section: 'Principal' },
-  { key: 'show_staff',                label: 'Personal',            Icon: User, section: 'Principal' },
-  { key: 'show_ahora_mismo',          label: 'Ahora mismo',         Icon: Activity, section: 'Principal' },
+  { key: 'showDashboard',             label: 'Dashboard',           Icon: LayoutDashboard, section: 'Principal' },
+  { key: 'showStaff',                 label: 'Personal',            Icon: User, section: 'Principal' },
+  { key: 'showAhoraMismo',            label: 'Ahora mismo',         Icon: Activity, section: 'Principal' },
 
   // Personal y horarios
-  { key: 'show_fichajes_global',      label: 'Control Horario',     Icon: Clock, section: 'Personal' },
-  { key: 'show_kiosko_fichaje',       label: 'Kiosko Fichaje',      Icon: MonitorSmartphone, section: 'Personal' },
-  { key: 'show_solicitudes_pendientes', label: 'Solicitudes',       Icon: Inbox, section: 'Personal' },
-  { key: 'show_turnos_abiertos',      label: 'Turnos abiertos',     Icon: Armchair, section: 'Personal' },
-  { key: 'show_cambios_pendientes',   label: 'Cambios de turno',    Icon: RefreshCw, section: 'Personal' },
-  { key: 'show_calendario',           label: 'Calendario',          Icon: Calendar, section: 'Personal' },
-  { key: 'show_plantilla_turnos',     label: 'Plantilla turnos',    Icon: ClipboardList, section: 'Personal' },
-  { key: 'show_informes_personal',    label: 'Informes Gestoría',   Icon: FileText, section: 'Personal', sensitive: true },
-  { key: 'show_bolsa_horas',          label: 'Bolsa de horas',      Icon: Wallet, section: 'Personal' },
-  { key: 'show_salaries',             label: 'Ver salarios',        Icon: DollarSign, section: 'Personal', sensitive: true },
-  { key: 'can_manage_employees',      label: 'Crear / dar de baja / eliminar empleados', Icon: Settings2, section: 'Personal', sensitive: true },
+  { key: 'showFichajesGlobal',        label: 'Control Horario',     Icon: Clock, section: 'Personal' },
+  { key: 'showKioskoFichaje',         label: 'Kiosko Fichaje',      Icon: MonitorSmartphone, section: 'Personal' },
+  { key: 'showSolicitudesPendientes', label: 'Solicitudes',         Icon: Inbox, section: 'Personal' },
+  { key: 'showTurnosAbiertos',        label: 'Turnos abiertos',     Icon: Armchair, section: 'Personal' },
+  { key: 'showCambiosPendientes',     label: 'Cambios de turno',    Icon: RefreshCw, section: 'Personal' },
+  { key: 'showCalendario',            label: 'Calendario',          Icon: Calendar, section: 'Personal' },
+  { key: 'showPlantillaTurnos',       label: 'Plantilla turnos',    Icon: ClipboardList, section: 'Personal' },
+  { key: 'showInformesPersonal',      label: 'Informes Gestoría',   Icon: FileText, section: 'Personal', sensitive: true },
+  { key: 'showBolsaHoras',            label: 'Bolsa de horas',      Icon: Wallet, section: 'Personal' },
+  { key: 'showSalaries',              label: 'Ver salarios',        Icon: DollarSign, section: 'Personal', sensitive: true },
+  { key: 'canManageEmployees',        label: 'Crear / dar de baja / eliminar empleados', Icon: Settings2, section: 'Personal', sensitive: true },
 
-  // APPCC
-  { key: 'show_appcc_today' as keyof Omit<ManagerPermissions, 'user_profile_id'>,      label: 'APPCC: Hoy',          Icon: Leaf, section: 'APPCC' },
-  { key: 'show_appcc_incidents' as keyof Omit<ManagerPermissions, 'user_profile_id'>,   label: 'APPCC: Incidencias',  Icon: AlertTriangle, section: 'APPCC' },
+  // APPCC (NUEVOS - antes ocultos en UI a pesar de existir en BBDD)
+  { key: 'showAppccToday',            label: 'APPCC: Hoy',          Icon: Leaf, section: 'APPCC' },
+  { key: 'showAppccIncidents',        label: 'APPCC: Incidencias',  Icon: AlertTriangle, section: 'APPCC' },
 
   // Inventario y análisis
-  { key: 'show_tspoon',               label: 'Fichas Técnicas',     Icon: FlaskConical, section: 'Inventario' },
-  { key: 'show_ventas_analisis',      label: 'Análisis de Ventas',  Icon: BarChart3, section: 'Inventario' },
-  { key: 'show_prediccion_personal',  label: 'Predicción Personal', Icon: Brain, section: 'Inventario' },
-  { key: 'show_zonas_pedido',         label: 'Zonas de Pedido',     Icon: Bike, section: 'Inventario', sensitive: true },
-  { key: 'show_inventory',            label: 'Inventario',          Icon: Package, section: 'Inventario' },
+  { key: 'showTspoon',                label: 'Fichas Técnicas',     Icon: FlaskConical, section: 'Inventario' },
+  { key: 'showVentasAnalisis',        label: 'Análisis de Ventas',  Icon: BarChart3, section: 'Inventario' },
+  { key: 'showPrediccionPersonal',    label: 'Predicción Personal', Icon: Brain, section: 'Inventario' },
+  { key: 'showZonasPedido',           label: 'Zonas de Pedido',     Icon: Bike, section: 'Inventario', sensitive: true },
+  { key: 'showInventory',             label: 'Inventario',          Icon: Package, section: 'Inventario' },
 
   // Configuración
-  { key: 'show_locations',            label: 'Locales',             Icon: MapPin, section: 'Configuración', sensitive: true },
-  { key: 'show_tspoon_settings',      label: 'Avisos',              Icon: Bell, section: 'Configuración', sensitive: true },
+  { key: 'showLocations',             label: 'Locales',             Icon: MapPin, section: 'Configuración', sensitive: true },
+  { key: 'showTspoonSettings',        label: 'Avisos',              Icon: Bell, section: 'Configuración', sensitive: true },
 ]
 
 const SECTIONS = ['Principal', 'Personal', 'APPCC', 'Inventario', 'Configuración']
@@ -77,56 +90,65 @@ export default function ManagerPermissionsModal({ userProfileId, userName, onClo
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    getManagerPermissions(userProfileId).then(p => {
-      setPerms(p)
-      setLoading(false)
+    let cancelled = false
+    getPermissionsOrDefaults(userProfileId).then(p => {
+      if (!cancelled) {
+        setPerms(p)
+        setLoading(false)
+      }
     })
+    return () => { cancelled = true }
   }, [userProfileId])
 
-  function toggle(key: keyof Omit<ManagerPermissions, 'user_profile_id'>) {
+  function toggle(key: PermissionKey) {
     if (!perms) return
-    const p = perms as unknown as Record<string, unknown>
-    setPerms({ ...perms, [key]: !p[key] })
+    setPerms({ ...perms, [key]: !perms[key] })
   }
 
   function setSection(section: string, value: boolean) {
     if (!perms) return
-    const updates: Record<string, unknown> = {}
+    const updates: Partial<ManagerPermissions> = {}
     PERMISSION_ITEMS
       .filter(i => i.section === section)
-      .forEach(i => { updates[i.key as string] = value })
-    setPerms({ ...perms, ...updates } as ManagerPermissions)
+      .forEach(i => { (updates as Record<string, unknown>)[i.key] = value })
+    setPerms({ ...perms, ...updates })
   }
 
   async function handleSave() {
     if (!perms) return
     setSaving(true)
     setError(null)
-    const result = await saveManagerPermissions(perms)
-    setSaving(false)
-    if (!result.ok) {
-      setError(result.error || 'Error al guardar')
-      return
+    try {
+      // El nuevo service espera Omit<ManagerPermissions, 'createdAt' | 'updatedAt'>.
+      // Quitamos las meta antes de mandar.
+      const { createdAt: _c, updatedAt: _u, ...payload } = perms
+      void _c; void _u
+      await savePermissions(payload)
+      onSaved?.()
+      onClose()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al guardar')
+    } finally {
+      setSaving(false)
     }
-    onSaved?.()
-    onClose()
   }
 
   async function handleReset() {
     if (!confirm('¿Restaurar permisos por defecto para este encargado?')) return
     setSaving(true)
-    const result = await resetManagerPermissions(userProfileId)
-    setSaving(false)
-    if (!result.ok) {
-      setError(result.error || 'Error al restaurar')
-      return
+    setError(null)
+    try {
+      const reloaded = await resetPermissions(userProfileId)
+      setPerms(reloaded)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al restaurar')
+    } finally {
+      setSaving(false)
     }
-    const reloaded = await getManagerPermissions(userProfileId)
-    setPerms(reloaded)
   }
 
   const enabledCount = perms
-    ? PERMISSION_ITEMS.filter(i => (perms as unknown as Record<string, unknown>)[i.key as string]).length
+    ? PERMISSION_ITEMS.filter(i => perms[i.key]).length
     : 0
 
   return (
@@ -158,8 +180,8 @@ export default function ManagerPermissionsModal({ userProfileId, userName, onClo
 
             {SECTIONS.map(section => {
               const items = PERMISSION_ITEMS.filter(i => i.section === section)
-              const allOn = items.every(i => (perms as unknown as Record<string, unknown>)[i.key as string])
-              const allOff = items.every(i => !(perms as unknown as Record<string, unknown>)[i.key as string])
+              const allOn = items.every(i => perms[i.key])
+              const allOff = items.every(i => !perms[i.key])
 
               return (
                 <div key={section} className="border border-border-default rounded-lg overflow-hidden">
@@ -192,7 +214,7 @@ export default function ManagerPermissionsModal({ userProfileId, userName, onClo
                         >
                           <input
                             type="checkbox"
-                            checked={!!(perms as unknown as Record<string, unknown>)[item.key as string]}
+                            checked={!!perms[item.key]}
                             onChange={() => toggle(item.key)}
                             className="w-4 h-4 rounded accent-accent"
                           />

@@ -147,7 +147,7 @@ export default function PhotoUploader({ responseId, userId, disabled = false }: 
                 {photo.url ? (
                   <img
                     src={photo.url}
-                    alt={photo.file_name}
+                    alt={photo.file_name ?? ''}
                     className="w-full h-full object-cover"
                   />
                 ) : (

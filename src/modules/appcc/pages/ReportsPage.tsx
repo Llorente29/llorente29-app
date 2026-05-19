@@ -1,15 +1,19 @@
 // src/modules/appcc/pages/ReportsPage.tsx
 // Pantalla para generar informes PDF APPCC: controles, incidencias, inspector completo.
+// Bloque E: añadidos botones "Vista previa" además de "Descargar PDF".
 
 import { useMemo, useState } from 'react'
-import { Download, FileText, AlertTriangle, ClipboardList, Loader2 } from 'lucide-react'
+import { Download, FileText, AlertTriangle, ClipboardList, Loader2, Eye } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import {
   generateControlsReportPdf,
   generateIncidentsReportPdf,
   generateInspectorReportPdf,
   generateDailySummaryPdf,
+  type PdfPreviewResult,
+  type PdfExportOptions,
 } from '@/modules/appcc/services/pdfExportService'
+import ReportPreviewModal from '@/components/ReportPreviewModal'
 import type { Location } from '@/types'
 
 type ReportType = 'controls' | 'incidents' | 'inspector' | 'daily'
@@ -41,43 +45,56 @@ export default function ReportsPage() {
   })
   const [toDate, setToDate] = useState<string>(() => new Date().toISOString().slice(0, 10))
   const [singleDate, setSingleDate] = useState<string>(() => new Date().toISOString().slice(0, 10))
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState<'preview' | 'download' | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [preview, setPreview] = useState<PdfPreviewResult | null>(null)
 
   const selectedLocation = activeLocations.find(l => l.id === locationId)
 
-  async function handleGenerate() {
+  /**
+   * Genera el informe en modo download o preview según el parámetro.
+   * Unifica la lógica de switch entre los 4 tipos de informe.
+   */
+  async function runGeneration(mode: 'preview' | 'download'): Promise<PdfPreviewResult | null> {
+    if (!locationId || !selectedLocation) return null
+    const locInfo = { name: selectedLocation.name, address: selectedLocation.address ?? '' }
+    const opts: PdfExportOptions = { mode }
+
+    switch (reportType) {
+      case 'controls':
+        return await generateControlsReportPdf(locationId, fromDate, toDate, locInfo, opts)
+      case 'incidents':
+        return await generateIncidentsReportPdf(locationId, fromDate, toDate, locInfo, opts)
+      case 'inspector':
+        return await generateInspectorReportPdf(locationId, fromDate, toDate, locInfo, opts)
+      case 'daily':
+        return await generateDailySummaryPdf(locationId, singleDate, locInfo, opts)
+    }
+  }
+
+  async function handleAction(mode: 'preview' | 'download') {
     if (!locationId || !selectedLocation) return
-    setLoading(true)
+    setLoading(mode)
     setError(null)
     setSuccess(false)
 
-    const locInfo = { name: selectedLocation.name, address: selectedLocation.address ?? '' }
-
     try {
-      switch (reportType) {
-        case 'controls':
-          await generateControlsReportPdf(locationId, fromDate, toDate, locInfo)
-          break
-        case 'incidents':
-          await generateIncidentsReportPdf(locationId, fromDate, toDate, locInfo)
-          break
-        case 'inspector':
-          await generateInspectorReportPdf(locationId, fromDate, toDate, locInfo)
-          break
-        case 'daily':
-          await generateDailySummaryPdf(locationId, singleDate, locInfo)
-          break
+      const result = await runGeneration(mode)
+      if (mode === 'preview' && result) {
+        setPreview(result)
+      } else if (mode === 'download') {
+        setSuccess(true)
+        setTimeout(() => setSuccess(false), 3000)
       }
-      setSuccess(true)
-      setTimeout(() => setSuccess(false), 3000)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error generando el informe')
     } finally {
-      setLoading(false)
+      setLoading(null)
     }
   }
+
+  const selectedOption = REPORT_OPTIONS.find(o => o.id === reportType)
 
   return (
     <div className="p-4 sm:p-6 max-w-3xl mx-auto">
@@ -181,23 +198,46 @@ export default function ReportsPage() {
         </div>
       )}
 
-      {/* Botón generar */}
-      <button
-        type="button"
-        onClick={handleGenerate}
-        disabled={loading || !locationId}
-        className="w-full inline-flex items-center justify-center gap-2 px-6 py-4 rounded-lg text-lg font-semibold bg-accent text-text-on-accent hover:bg-accent-hover transition-base disabled:opacity-50 min-h-[56px]"
-      >
-        {loading ? (
-          <><Loader2 size={20} className="animate-spin" /> Generando informe...</>
-        ) : (
-          <><Download size={20} /> Generar y descargar PDF</>
-        )}
-      </button>
+      {/* Botones: preview + descargar */}
+      <div className="flex flex-col sm:flex-row gap-2">
+        <button
+          type="button"
+          onClick={() => handleAction('preview')}
+          disabled={!!loading || !locationId}
+          className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-4 rounded-lg text-base font-semibold bg-card border-2 border-accent text-accent hover:bg-accent-bg transition-base disabled:opacity-50 min-h-[56px]"
+        >
+          {loading === 'preview' ? (
+            <><Loader2 size={20} className="animate-spin" /> Generando…</>
+          ) : (
+            <><Eye size={20} /> Vista previa</>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => handleAction('download')}
+          disabled={!!loading || !locationId}
+          className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-4 rounded-lg text-base font-semibold bg-accent text-text-on-accent hover:bg-accent-hover transition-base disabled:opacity-50 min-h-[56px]"
+        >
+          {loading === 'download' ? (
+            <><Loader2 size={20} className="animate-spin" /> Generando…</>
+          ) : (
+            <><Download size={20} /> Descargar PDF</>
+          )}
+        </button>
+      </div>
 
       <p className="text-xs text-text-secondary text-center mt-3">
         Los informes incluyen firma electrónica y son válidos para inspección sanitaria según CE 852/2004 y RD 109/2010.
       </p>
+
+      {/* Modal de previsualización */}
+      {preview && (
+        <ReportPreviewModal
+          preview={preview}
+          title={selectedOption?.title ?? 'Informe APPCC'}
+          onClose={() => setPreview(null)}
+        />
+      )}
     </div>
   )
 }

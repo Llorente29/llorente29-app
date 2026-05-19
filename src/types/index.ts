@@ -68,12 +68,17 @@ export type Page =
   | 'ahora_mismo' | 'turnos_abiertos'
   | 'bolsa_horas'
   | 'cambios_pendientes'
+  | 'appcc_dashboard'
   | 'appcc_today'
+  | 'appcc_audits'
+  | 'appcc_audit_execution'
+  | 'appcc_audit_templates'
   | 'appcc_execution'
   | 'appcc_incidents'
   | 'appcc_onboarding'
   | 'appcc_reports'
   | 'appcc_templates'
+  | 'brands'
 
 export interface Location {
   id: string; name: string; address: string; phone: string; active: boolean

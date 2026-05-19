@@ -39,13 +39,59 @@ interface SignatureInfo {
 }
 
 // ============================================================
+// MODO DE SALIDA (Bloque E — previsualización)
+// ------------------------------------------------------------
+// Todas las funciones generate*Pdf aceptan un parámetro opcional
+// `options` que controla qué hacer con el PDF generado:
+//   - mode 'download' (default): descarga directa (comportamiento legacy)
+//   - mode 'preview'           : devuelve { blob, url, filename } para
+//                                que un modal lo muestre en un iframe
+// Cuando se omite, el comportamiento es 'download' → retrocompatible.
+// ============================================================
+
+export type PdfMode = 'download' | 'preview'
+
+export interface PdfExportOptions {
+  mode?: PdfMode
+}
+
+export interface PdfPreviewResult {
+  blob: Blob
+  url: string       // object URL listo para <iframe src=...>
+  filename: string  // nombre sugerido para descargar
+}
+
+/**
+ * Helper interno: aplica el modo de salida a un doc de jsPDF.
+ * - download → doc.save y resuelve null
+ * - preview  → genera blob, object URL y devuelve PdfPreviewResult
+ *
+ * El llamador siempre debe retornar lo que devuelva este helper.
+ */
+function finalizePdf(
+  doc: jsPDF,
+  filename: string,
+  options?: PdfExportOptions,
+): PdfPreviewResult | null {
+  if (options?.mode === 'preview') {
+    const blob = doc.output('blob')
+    const url = URL.createObjectURL(blob)
+    return { blob, url, filename }
+  }
+  doc.save(filename)
+  return null
+}
+
+
+// ============================================================
 // 1. CERTIFICADO DE CHECKLIST INDIVIDUAL
 // ============================================================
 
 export async function generateChecklistPdf(
   executionId: string,
   locationInfo: LocationInfo,
-): Promise<void> {
+  options?: PdfExportOptions,
+): Promise<PdfPreviewResult | null> {
   const execData = await executionsService.getExecution(executionId)
   if (!execData) throw new Error('Ejecución no encontrada')
 
@@ -134,9 +180,9 @@ export async function generateChecklistPdf(
   // --- FOOTER ---
   drawFooter(doc)
 
-  // Descargar
+  // Descargar o previsualizar
   const fileName = `APPCC_${template.code}_${execution.scheduled_date}_${locationInfo.name.replace(/\s/g, '_')}.pdf`
-  doc.save(fileName)
+  return finalizePdf(doc, fileName, options)
 }
 
 // ============================================================
@@ -147,7 +193,8 @@ export async function generateDailySummaryPdf(
   locationId: string,
   date: string,
   locationInfo: LocationInfo,
-): Promise<void> {
+  options?: PdfExportOptions,
+): Promise<PdfPreviewResult | null> {
   const executions = await executionsService.listExecutionsForDate(locationId, date)
   if (executions.length === 0) throw new Error('No hay registros para esta fecha')
 
@@ -249,7 +296,7 @@ export async function generateDailySummaryPdf(
   drawFooter(doc)
 
   const fileName = `APPCC_Resumen_${date}_${locationInfo.name.replace(/\s/g, '_')}.pdf`
-  doc.save(fileName)
+  return finalizePdf(doc, fileName, options)
 }
 
 // ============================================================
@@ -261,7 +308,8 @@ export async function generateControlsReportPdf(
   fromDate: string,
   toDate: string,
   locationInfo: LocationInfo,
-): Promise<void> {
+  options?: PdfExportOptions,
+): Promise<PdfPreviewResult | null> {
   const executions = await executionsService.listByDateRange(locationId, fromDate, toDate)
   if (executions.length === 0) throw new Error('No hay registros en este periodo')
 
@@ -357,7 +405,7 @@ export async function generateControlsReportPdf(
   doc.text('Documento generado por Foodint APPCC. Registros respaldados por firma electrónica simple (eIDAS UE 910/2014).', margin, y, { maxWidth: contentW })
 
   drawFooter(doc)
-  doc.save(`APPCC_Controles_${fromDate}_${toDate}_${locationInfo.name.replace(/\s/g, '_')}.pdf`)
+  return finalizePdf(doc, `APPCC_Controles_${fromDate}_${toDate}_${locationInfo.name.replace(/\s/g, '_')}.pdf`, options)
 }
 
 // ============================================================
@@ -369,7 +417,8 @@ export async function generateIncidentsReportPdf(
   fromDate: string,
   toDate: string,
   locationInfo: LocationInfo,
-): Promise<void> {
+  options?: PdfExportOptions,
+): Promise<PdfPreviewResult | null> {
   const incidents = await incidentsService.listIncidentsByDateRange(locationId, fromDate, toDate)
   if (incidents.length === 0) throw new Error('No hay incidencias en este periodo')
 
@@ -396,7 +445,7 @@ export async function generateIncidentsReportPdf(
 
   // Estadísticas
   const open = incidents.filter(i => i.status === 'open').length
-  const resolved = incidents.filter(i => i.status === 'resolved' || i.status === 'closed').length
+  const resolved = incidents.filter(i => i.status === 'corrected' || i.status === 'verified' || i.status === 'closed').length
   const critical = incidents.filter(i => i.severity === 'critical').length
   doc.setFontSize(9)
   doc.setFont('helvetica', 'normal')
@@ -475,7 +524,7 @@ export async function generateIncidentsReportPdf(
   doc.text('Documento generado por Foodint APPCC.', margin, y, { maxWidth: contentW })
 
   drawFooter(doc)
-  doc.save(`APPCC_Incidencias_${fromDate}_${toDate}_${locationInfo.name.replace(/\s/g, '_')}.pdf`)
+  return finalizePdf(doc, `APPCC_Incidencias_${fromDate}_${toDate}_${locationInfo.name.replace(/\s/g, '_')}.pdf`, options)
 }
 
 // ============================================================
@@ -487,7 +536,8 @@ export async function generateInspectorReportPdf(
   fromDate: string,
   toDate: string,
   locationInfo: LocationInfo,
-): Promise<void> {
+  options?: PdfExportOptions,
+): Promise<PdfPreviewResult | null> {
   // Cargar todo en paralelo
   const [executions, incidents] = await Promise.all([
     executionsService.listByDateRange(locationId, fromDate, toDate),
@@ -547,7 +597,7 @@ export async function generateInspectorReportPdf(
   const completedControls = executions.filter(e => e.status === 'completed').length
   const complianceRate = totalControls > 0 ? Math.round((completedControls / totalControls) * 100) : 0
   const totalIncidents = incidents.length
-  const resolvedIncidents = incidents.filter(i => i.status === 'resolved' || i.status === 'closed').length
+  const resolvedIncidents = incidents.filter(i => i.status === 'corrected' || i.status === 'verified' || i.status === 'closed').length
   const criticalIncidents = incidents.filter(i => i.severity === 'critical').length
 
   doc.text(`Controles programados: ${totalControls}  |  Completados: ${completedControls}  |  Tasa de cumplimiento: ${complianceRate}%`, margin + 3, y + 11)
@@ -617,7 +667,7 @@ export async function generateInspectorReportPdf(
       if (y > 240) { doc.addPage(); y = margin }
 
       const actions = incActions.get(inc.id) ?? []
-      const isResolved = inc.status === 'resolved' || inc.status === 'closed'
+      const isResolved = inc.status === 'corrected' || inc.status === 'verified' || inc.status === 'closed'
 
       // Barra de severidad
       const sevColors: Record<string, readonly [number, number, number]> = {
@@ -670,7 +720,7 @@ export async function generateInspectorReportPdf(
   )
 
   drawFooter(doc)
-  doc.save(`APPCC_Inspector_${fromDate}_${toDate}_${locationInfo.name.replace(/\s/g, '_')}.pdf`)
+  return finalizePdf(doc, `APPCC_Inspector_${fromDate}_${toDate}_${locationInfo.name.replace(/\s/g, '_')}.pdf`, options)
 }
 
 // ============================================================
@@ -853,4 +903,247 @@ async function getSignature(executionId: string): Promise<SignatureInfo | null> 
     .limit(1)
     .maybeSingle()
   return data as SignatureInfo | null
+}
+
+// ============================================================
+// 5. INFORME CAPA DE UNA INCIDENCIA INDIVIDUAL
+// ============================================================
+
+/**
+ * PDF inspector-ready con todo el ciclo de vida de una incidencia:
+ * detección, root cause, acciones correctivas/preventivas, verificación,
+ * cierre y timeline cronológico.
+ */
+export async function generateIncidentCapaPdf(
+  incidentId: string,
+  locationInfo: LocationInfo,
+  options?: PdfExportOptions,
+): Promise<PdfPreviewResult | null> {
+  const detail = await incidentsService.getIncidentDetail(incidentId)
+  if (!detail) throw new Error('Incidencia no encontrada')
+
+  const { incident, events, photos } = detail
+
+  const doc = new jsPDF()
+  const W = doc.internal.pageSize.getWidth()
+  let y = 18
+
+  // ---------- HEADER ----------
+  doc.setFillColor(ACCENT[0], ACCENT[1], ACCENT[2])
+  doc.rect(0, 0, W, 28, 'F')
+  doc.setTextColor(255, 255, 255)
+  doc.setFontSize(18)
+  doc.setFont('helvetica', 'bold')
+  doc.text('INFORME DE INCIDENCIA CAPA', 15, 14)
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'normal')
+  doc.text(`Local: ${locationInfo.name}`, 15, 22)
+
+  y = 38
+  doc.setTextColor(0, 0, 0)
+
+  // ---------- DATOS PRINCIPALES ----------
+  doc.setFontSize(13)
+  doc.setFont('helvetica', 'bold')
+  doc.text(incident.title, 15, y)
+  y += 7
+
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'normal')
+  const sevColor =
+    incident.severity === 'critical' ? DANGER :
+    incident.severity === 'high' ? [251, 146, 60] as const :
+    incident.severity === 'medium' ? [234, 179, 8] as const :
+    GRAY
+  doc.setFillColor(sevColor[0], sevColor[1], sevColor[2])
+  doc.setTextColor(255, 255, 255)
+  doc.roundedRect(15, y - 4, 28, 6, 1, 1, 'F')
+  doc.setFontSize(8)
+  doc.setFont('helvetica', 'bold')
+  doc.text(`SEV: ${incident.severity.toUpperCase()}`, 16, y)
+  doc.setTextColor(0, 0, 0)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(10)
+  doc.text(`Estado: ${incident.status}  ·  Origen: ${incident.source}`, 48, y)
+  y += 8
+
+  doc.setFontSize(9)
+  doc.setTextColor(GRAY[0], GRAY[1], GRAY[2])
+  doc.text(`Creada: ${new Date(incident.created_at).toLocaleString('es-ES')}`, 15, y)
+  if (incident.due_at) {
+    doc.text(`Plazo SLA: ${new Date(incident.due_at).toLocaleString('es-ES')}`, 110, y)
+  }
+  y += 5
+  if (incident.escalated && incident.escalated_at) {
+    doc.setTextColor(DANGER[0], DANGER[1], DANGER[2])
+    doc.text(`⚠ Escalada automáticamente: ${new Date(incident.escalated_at).toLocaleString('es-ES')}`, 15, y)
+    y += 5
+  }
+
+  doc.setTextColor(0, 0, 0)
+  y += 3
+
+  // ---------- DESCRIPCIÓN ----------
+  if (incident.description) {
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'bold')
+    doc.text('Descripción', 15, y)
+    y += 5
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    const lines = doc.splitTextToSize(incident.description, W - 30)
+    doc.text(lines, 15, y)
+    y += lines.length * 4 + 4
+  }
+
+  // Helper para imprimir secciones
+  const printSection = (title: string, content: string | null | undefined, meta?: string) => {
+    if (!content) return
+    if (y > 250) { doc.addPage(); y = 20 }
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(ACCENT[0], ACCENT[1], ACCENT[2])
+    doc.text(title, 15, y)
+    y += 5
+    if (meta) {
+      doc.setFontSize(8)
+      doc.setTextColor(GRAY[0], GRAY[1], GRAY[2])
+      doc.setFont('helvetica', 'italic')
+      doc.text(meta, 15, y)
+      y += 4
+    }
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.setTextColor(0, 0, 0)
+    const lines = doc.splitTextToSize(content, W - 30)
+    doc.text(lines, 15, y)
+    y += lines.length * 4 + 6
+  }
+
+  // ---------- ROOT CAUSE ----------
+  if (incident.root_cause) {
+    printSection(
+      '1. ANÁLISIS DE CAUSA RAÍZ',
+      incident.root_cause,
+      `Método: ${incident.root_cause_method ?? 'directo'}`
+    )
+    // Si hay 5 whys, listarlos
+    const whys = (incident.root_cause_data as { whys?: string[] } | null)?.whys
+    if (Array.isArray(whys) && whys.length) {
+      doc.setFontSize(9)
+      whys.forEach((w, i) => {
+        if (y > 270) { doc.addPage(); y = 20 }
+        doc.text(`  ${i + 1}. ${w}`, 18, y)
+        y += 4
+      })
+      y += 3
+    }
+  }
+
+  // ---------- CORRECTIVA ----------
+  if (incident.corrective_action) {
+    printSection(
+      '2. ACCIÓN CORRECTIVA',
+      incident.corrective_action,
+      incident.corrective_action_at
+        ? `Aplicada: ${new Date(incident.corrective_action_at).toLocaleString('es-ES')}`
+        : undefined
+    )
+  }
+
+  // ---------- PREVENTIVA ----------
+  if (incident.preventive_action) {
+    printSection(
+      '3. ACCIÓN PREVENTIVA',
+      incident.preventive_action,
+      incident.preventive_action_at
+        ? `Aplicada: ${new Date(incident.preventive_action_at).toLocaleString('es-ES')}`
+        : undefined
+    )
+  }
+
+  // ---------- VERIFICACIÓN ----------
+  if (incident.verified_at) {
+    printSection(
+      '4. VERIFICACIÓN DE EFECTIVIDAD',
+      incident.verification_notes ?? '(sin notas)',
+      `${incident.verification_effective ? '✓ EFECTIVA' : '✗ NO EFECTIVA'} · ${new Date(incident.verified_at).toLocaleString('es-ES')}`
+    )
+  }
+
+  // ---------- CIERRE ----------
+  if (incident.closed_at) {
+    if (y > 250) { doc.addPage(); y = 20 }
+    doc.setFillColor(SUCCESS[0], SUCCESS[1], SUCCESS[2])
+    doc.setTextColor(255, 255, 255)
+    doc.roundedRect(15, y - 4, W - 30, 14, 2, 2, 'F')
+    doc.setFontSize(11)
+    doc.setFont('helvetica', 'bold')
+    doc.text('✓ INCIDENCIA CERRADA FORMALMENTE', 18, y + 2)
+    doc.setFontSize(8)
+    doc.setFont('helvetica', 'normal')
+    doc.text(`Cerrada: ${new Date(incident.closed_at).toLocaleString('es-ES')}`, 18, y + 7)
+    if (incident.closure_signature) {
+      doc.text(`Firma SHA-256: ${incident.closure_signature.slice(0, 32)}...`, 18, y + 11)
+    }
+    doc.setTextColor(0, 0, 0)
+    y += 20
+  }
+
+  // ---------- TIMELINE ----------
+  if (events.length > 0) {
+    if (y > 220) { doc.addPage(); y = 20 }
+    doc.setFontSize(11)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(ACCENT[0], ACCENT[1], ACCENT[2])
+    doc.text('CRONOLOGÍA DE EVENTOS', 15, y)
+    y += 6
+    doc.setTextColor(0, 0, 0)
+    doc.setFontSize(8)
+    doc.setFont('helvetica', 'normal')
+
+    events.forEach(evt => {
+      if (y > 280) { doc.addPage(); y = 20 }
+      const dt = new Date(evt.created_at).toLocaleString('es-ES', {
+        day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+      })
+      doc.setTextColor(GRAY[0], GRAY[1], GRAY[2])
+      doc.text(dt, 15, y)
+      doc.setTextColor(0, 0, 0)
+      const desc = `${evt.description ?? evt.event_type}${evt.actor_name ? ` — ${evt.actor_name}` : ''}`
+      const lines = doc.splitTextToSize(desc, W - 70)
+      doc.text(lines, 55, y)
+      y += Math.max(4, lines.length * 4)
+    })
+  }
+
+  // ---------- FOTOS (placeholder con conteo) ----------
+  if (photos.length > 0) {
+    if (y > 270) { doc.addPage(); y = 20 }
+    y += 5
+    doc.setFontSize(9)
+    doc.setTextColor(GRAY[0], GRAY[1], GRAY[2])
+    doc.setFont('helvetica', 'italic')
+    doc.text(`${photos.length} foto(s) de evidencia adjuntas en el sistema.`, 15, y)
+    doc.setTextColor(0, 0, 0)
+    doc.setFont('helvetica', 'normal')
+  }
+
+  // ---------- FOOTER ----------
+  const pages = doc.getNumberOfPages()
+  for (let i = 1; i <= pages; i++) {
+    doc.setPage(i)
+    const H = doc.internal.pageSize.getHeight()
+    doc.setFontSize(7)
+    doc.setTextColor(GRAY[0], GRAY[1], GRAY[2])
+    doc.setFont('helvetica', 'normal')
+    doc.text(`Foodint APPCC · CAPA Report · Generado ${new Date().toLocaleString('es-ES')}`, 15, H - 8)
+    doc.text(`Página ${i} de ${pages}`, W - 40, H - 8)
+  }
+
+  return finalizePdf(
+    doc,
+    `incidencia-CAPA-${incident.id.slice(0, 8)}-${new Date().toISOString().slice(0, 10)}.pdf`,
+    options,
+  )
 }

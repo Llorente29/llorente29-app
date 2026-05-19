@@ -85,7 +85,7 @@ export default function MiHorario({ employee, onBack }: MiHorarioProps) {
     let cancel = false
     async function loadLoc() {
       if (!employee?.locationId) return
-      const all = await fetchLocations()
+      const all = await fetchLocations(null)
       if (cancel || !all) return
       setLocation(all.find(l => l.id === employee.locationId))
     }

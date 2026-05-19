@@ -2,10 +2,22 @@
 // Wizard de configuración inicial APPCC para un local.
 // 3 pasos: (1) local + horarios, (2) plantillas, (3) horas individuales.
 // Al guardar, crea todos los schedules en bulk via bulkCreateSchedules().
+//
+// BLOQUE C Fases 2-3 (17/05/2026):
+//   - Eliminadas props `initialLocationId` y `onFinish`.
+//   - El local preseleccionado se lee de la query string: ?location=<id>.
+//   - Al cancelar o al guardar con éxito se navega a appcc_today.
+//   - El `result` que se pasaba antes a onFinish ({ saved, locationId }) ya no
+//     se propaga: el callback receptor (TodayPage) lo ignoraba con `void result`
+//     en el App.tsx anterior. Si en el futuro hace falta refrescar TodayPage
+//     en este flujo, se hará vía useLocation().state o query param adicional.
 
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import type { Location } from '@/types'
 import { useApp } from '@/context/AppContext'
+import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
+import { pageToRoute } from '@/routes'
 import { supabase } from '@/lib/supabase'
 import * as schedulesService from '@/modules/appcc/services/schedulesService'
 import * as templatesService from '@/modules/appcc/services/templatesService'
@@ -14,15 +26,6 @@ import type {
   AppccPlan,
 } from '@/modules/appcc/types'
 import { ArrowLeft, ArrowRight, Check, AlertCircle, Save } from 'lucide-react'
-
-const ACCOUNT_ID_FOODINT = '00000000-0000-0000-0000-000000000001'
-
-interface OnboardingPageProps {
-  /** Local preseleccionado (opcional). Si viene, salta el paso 1 al cargar. */
-  initialLocationId?: string | null
-  /** Callback al terminar (cancelar o guardar) — el padre decide a dónde ir. */
-  onFinish: (result: { saved: boolean; locationId: string | null }) => void
-}
 
 type WizardStep = 1 | 2 | 3
 
@@ -34,8 +37,19 @@ interface TemplateRow {
   isEssential: boolean
 }
 
-export default function OnboardingPage({ initialLocationId, onFinish }: OnboardingPageProps) {
+export default function OnboardingPage() {
   const { locations } = useApp()
+  // BLOQUE B-5b (17/05/2026): migrado de const local ACCOUNT_ID_FOODINT a
+  // useActiveAccount(). Antes, este wizard escribía siempre en la cuenta
+  // interna Foodint, incluso para clientes como Llorente29 → bug cross-tenancy.
+  const { activeAccount, requireActiveAccountId } = useActiveAccount()
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const slug = activeAccount?.slug ?? 'foodint'
+
+  // Local preseleccionado vía ?location=<id> (sustituye a la antigua prop
+  // initialLocationId). Se lee una sola vez en el init del useState.
+  const initialLocationId = searchParams.get('location')
 
   const activeLocations = useMemo<Location[]>(
     () => locations.filter(l => l.active),
@@ -44,7 +58,7 @@ export default function OnboardingPage({ initialLocationId, onFinish }: Onboardi
 
   // === ESTADO DEL WIZARD ===
   const [step, setStep] = useState<WizardStep>(1)
-  const [locationId, setLocationId] = useState<string | null>(initialLocationId ?? null)
+  const [locationId, setLocationId] = useState<string | null>(initialLocationId)
   const [openingTime, setOpeningTime] = useState<string>('12:30')
   const [closingTime, setClosingTime] = useState<string>('23:30')
 
@@ -228,6 +242,10 @@ export default function OnboardingPage({ initialLocationId, onFinish }: Onboardi
     })
   }
 
+  function handleCancel() {
+    navigate(pageToRoute('appcc_today', slug))
+  }
+
   async function handleSave() {
     if (!locationId || !userId) return
     if (selectedCount === 0) return
@@ -254,7 +272,7 @@ export default function OnboardingPage({ initialLocationId, onFinish }: Onboardi
       }
 
       const items: schedulesService.CreateScheduleInput[] = selectedRows.map(row => ({
-        accountId: ACCOUNT_ID_FOODINT,
+        accountId: requireActiveAccountId(),
         locationId,
         templateId: row.template.id,
         recurrenceType: 'daily',
@@ -265,7 +283,7 @@ export default function OnboardingPage({ initialLocationId, onFinish }: Onboardi
 
       await schedulesService.bulkCreateSchedules(items)
 
-      onFinish({ saved: true, locationId })
+      navigate(pageToRoute('appcc_today', slug))
     } catch (err) {
       console.error('[OnboardingPage] Error guardando', err)
       setSaveError(err instanceof Error ? err.message : 'Error al guardar la configuración')
@@ -282,7 +300,7 @@ export default function OnboardingPage({ initialLocationId, onFinish }: Onboardi
       <div className="mb-6">
         <button
           type="button"
-          onClick={() => onFinish({ saved: false, locationId })}
+          onClick={handleCancel}
           className="inline-flex items-center gap-1.5 text-base mb-3 text-text-secondary hover:text-text-primary transition-base min-h-touch"
         >
           <ArrowLeft size={16} /> Cancelar

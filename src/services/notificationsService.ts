@@ -2,8 +2,18 @@
 // Notificaciones in-app para trabajadores.
 // Se rellenan desde varios eventos (cierre de periodo, vacaciones aprobadas, etc.)
 // El trabajador las ve en su app móvil con una campana 🔔.
+//
+// ⚠️ REGLA v17.1: NO sobrescribir este archivo sin mantener intactas
+//                 las firmas posicionales:
+//                   createNotification(employeeId, type, title, body, data?)
+//                   createNotificationsForEmployees(employeeIds, type, title, body, data?)
 
 import { supabase } from '../lib/supabase'
+import type { Database } from '../types/database'
+
+// Tipos helper para los inserts tipados de la tabla employee_notifications
+type NotificationInsert = Database['public']['Tables']['employee_notifications']['Insert']
+type Json = Database['public']['Tables']['employee_notifications']['Row']['data']
 
 export type NotificationType =
   | 'period_closed'        // Cierre de periodo de bolsa de horas
@@ -52,7 +62,9 @@ function rowToNotification(r: NotificationRow): EmployeeNotification {
 }
 
 /**
- * Crear una notificación para un empleado
+ * Crear una notificación para un empleado.
+ *
+ * FIRMA POSICIONAL CONSOLIDADA (v17.1) — no cambiar.
  */
 export async function createNotification(
   employeeId: string,
@@ -62,15 +74,18 @@ export async function createNotification(
   data?: Record<string, unknown>
 ): Promise<EmployeeNotification | null> {
   if (!supabase) return null
+  // FIX: tipado fuerte del insert. data se castea a Json (compatible con
+  //      Record<string, unknown> en runtime, solo TS necesita el cast).
+  const insertRow: NotificationInsert = {
+    employee_id: employeeId,
+    type,
+    title,
+    body,
+    data: (data ?? null) as Json,
+  }
   const { data: row, error } = await supabase
     .from('employee_notifications')
-    .insert({
-      employee_id: employeeId,
-      type,
-      title,
-      body,
-      data: data || null,
-    })
+    .insert(insertRow)
     .select()
     .single()
   if (error) {
@@ -83,6 +98,8 @@ export async function createNotification(
 /**
  * Crear notificaciones para múltiples empleados de golpe.
  * Útil cuando se cierra un periodo para todo un local.
+ *
+ * FIRMA POSICIONAL CONSOLIDADA (v17.1) — no cambiar.
  */
 export async function createNotificationsForEmployees(
   employeeIds: string[],
@@ -93,12 +110,13 @@ export async function createNotificationsForEmployees(
 ): Promise<number> {
   if (!supabase) return 0
   if (employeeIds.length === 0) return 0
-  const rows = employeeIds.map(id => ({
+  // FIX: tipado fuerte del array de inserts.
+  const rows: NotificationInsert[] = employeeIds.map(id => ({
     employee_id: id,
     type,
     title,
     body,
-    data: data || null,
+    data: (data ?? null) as Json,
   }))
   const { error, count } = await supabase
     .from('employee_notifications')

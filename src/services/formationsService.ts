@@ -3,7 +3,11 @@
 // CRUD básico + detección de caducidades para alertas.
 
 import { supabase } from '../lib/supabase'
+import type { Database } from '../types/database'
 import type { Formation, FormationType } from '../types/personal'
+
+// Tipo helper para updates tipados de la tabla employee_formations
+type FormationUpdate = Database['public']['Tables']['employee_formations']['Update']
 
 interface FormationRow {
   id: string
@@ -125,7 +129,8 @@ export async function updateFormation(
   }>
 ): Promise<boolean> {
   if (!supabase) return false
-  const updateData: Record<string, unknown> = {}
+  // FIX: tipado fuerte del update en lugar de Record<string, unknown>
+  const updateData: FormationUpdate = {}
   if (patch.type !== undefined) updateData.type = patch.type
   if (patch.name !== undefined) updateData.name = patch.name
   if (patch.issuer !== undefined) updateData.issuer = patch.issuer || null

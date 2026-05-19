@@ -4,15 +4,24 @@
 // - Iconos Lucide React reemplazando emojis
 // - Secciones colapsables con persistencia en localStorage
 // - Auto-expand si la página activa está en una sección colapsada
+//
+// BLOQUE C Fases 2-3 (17/05/2026):
+//   - Eliminadas props `page` y `setPage`.
+//   - Página activa derivada de la URL con useLocation + pathToPage.
+//   - Items renderizados como <Link to={pageToRoute(item.id, slug)}>.
+//   - Cierre del drawer móvil al pulsar un item (preservado del onClick del Link).
 
 import { useEffect, useMemo, useState } from 'react'
+import { Link, useLocation } from 'react-router-dom'
 import type { Page } from '../types'
 import { LogoSquare } from './Logo'
+import { parseRoute, pathToPage, pageToRoute } from '../routes'
+import { useActiveAccount } from '../modules/multitenancy/hooks/useActiveAccount'
 import {
   LayoutDashboard, Users, Activity, Clock, Smartphone, Inbox, Armchair,
   RefreshCw, Calendar, FolderOpen, FileText, Wallet, BarChart3, Brain,
-  Bike, Leaf, AlertTriangle, Settings, MapPin, Bell,
-  ChevronDown, ChevronRight, X,
+  Bike, Leaf, AlertTriangle, ClipboardCheck, Settings, MapPin, Bell,
+  Tag, ChevronDown, ChevronRight, X,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -35,8 +44,12 @@ export const NAV: { id: Page; label: string; Icon: LucideIcon; section?: string;
   { id: 'ventas_analisis',        label: 'Análisis de Ventas',  Icon: BarChart3, section: 'Ventas' },
   { id: 'prediccion_personal',    label: 'Predicción Personal', Icon: Brain },
   { id: 'zonas_pedido',           label: 'Zonas de Pedido',     Icon: Bike },
-  { id: 'appcc_today',            label: 'APPCC: Hoy',          Icon: Leaf, section: 'APPCC' },
+  { id: 'brands',                 label: 'Marcas',              Icon: Tag, section: 'Stock', roleRequired: 'admin' },
+  { id: 'appcc_dashboard',        label: 'APPCC: Dashboard',    Icon: BarChart3, section: 'APPCC' },
+  { id: 'appcc_today',            label: 'APPCC: Hoy',          Icon: Leaf },
   { id: 'appcc_incidents',        label: 'APPCC: Incidencias',  Icon: AlertTriangle },
+  { id: 'appcc_audits',           label: 'APPCC: Auditorías',   Icon: ClipboardCheck },
+  { id: 'appcc_audit_templates',  label: 'APPCC: Plantillas Auditoría', Icon: FolderOpen, roleRequired: 'admin' },
   { id: 'appcc_reports',          label: 'APPCC: Informes',     Icon: FileText },
   { id: 'appcc_templates',        label: 'APPCC: Plantillas',   Icon: FolderOpen },
   { id: 'appcc_onboarding',       label: 'APPCC: Configurar',   Icon: Settings, roleRequired: 'admin' },
@@ -52,11 +65,9 @@ const STORAGE_KEY = 'sidebar:expanded_sections'
 //   Componente Sidebar
 // =============================================================
 export default function Sidebar({
-  page, setPage, collapsed, setCollapsed, visiblePageIds,
+  collapsed, setCollapsed, visiblePageIds,
   isMobile, mobileOpen, onCloseMobile,
 }: {
-  page: Page
-  setPage: (p: Page) => void
   collapsed: boolean
   setCollapsed: (v: boolean) => void
   visiblePageIds: Set<Page>
@@ -64,6 +75,15 @@ export default function Sidebar({
   mobileOpen: boolean
   onCloseMobile: () => void
 }) {
+  // ---------- Página activa derivada de la URL ----------
+  const location = useLocation()
+  const { rest } = parseRoute(location.pathname)
+  const page: Page = pathToPage(rest)
+
+  // ---------- Slug de cuenta activa para los <Link> ----------
+  const { activeAccount } = useActiveAccount()
+  const slug = activeAccount?.slug ?? 'foodint'
+
   const [pendingVacations, setPendingVacations] = useState(0)
   const [pendingSwaps, setPendingSwaps] = useState(0)
 
@@ -163,8 +183,7 @@ export default function Sidebar({
     })
   }
 
-  function handleSelect(p: Page) {
-    setPage(p)
+  function handleItemClick() {
     if (isMobile) onCloseMobile()
   }
 
@@ -235,10 +254,11 @@ export default function Sidebar({
                 const b = badge(item.id)
                 const Icon = item.Icon
                 return (
-                  <button
+                  <Link
                     key={item.id}
+                    to={pageToRoute(item.id, slug)}
                     title={!showLabels ? item.label : undefined}
-                    onClick={() => handleSelect(item.id)}
+                    onClick={handleItemClick}
                     className={`w-full flex items-center gap-2.5 px-2.5 py-2.5 rounded-md text-sm font-medium transition-base ${
                       isActive
                         ? 'bg-accent-bg text-accent'
@@ -254,7 +274,7 @@ export default function Sidebar({
                       )}
                     </span>
                     {showLabels && <span className="truncate">{item.label}</span>}
-                  </button>
+                  </Link>
                 )
               })}
             </div>

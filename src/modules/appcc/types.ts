@@ -1,6 +1,6 @@
 // src/modules/appcc/types.ts
 // Tipos TypeScript del módulo APPCC.
-// Reflejan el esquema SQL de Supabase (Sprint 2 SQL).
+// Reflejan el esquema SQL de Supabase.
 
 // ============================================================
 // CATÁLOGO
@@ -70,7 +70,6 @@ export interface AppccTemplateItemOption {
   display_order: number
 }
 
-// Estructura agregada cómoda para el frontend
 export interface AppccTemplateWithItems extends AppccTemplate {
   plan: AppccPlan
   items: (AppccTemplateItem & { options?: AppccTemplateItemOption[] })[]
@@ -160,15 +159,32 @@ export interface AppccExecutionResponse {
 }
 
 // ============================================================
-// INCIDENCIAS
+// INCIDENCIAS — WORKFLOW CAPA COMPLETO
 // ============================================================
 
+/**
+ * Estados del workflow CAPA (Corrective and Preventive Action).
+ * Inspirado en SafetyCulture / Intelex / EHS Insight.
+ *
+ * Flujo típico:
+ *   open → assigned → investigating → corrected → verified → closed
+ *
+ * Atajos:
+ *   - Cualquier estado → rejected (si se considera no aplicable / duplicada)
+ *
+ * Compatibilidad: 'in_progress' y 'resolved' (legacy) se mapean a
+ * 'investigating' y 'corrected' respectivamente en el frontend.
+ */
 export type AppccIncidentStatus =
-  | 'open'
-  | 'in_progress'
-  | 'resolved'
-  | 'closed'
-  | 'cancelled'
+  | 'open'           // recién detectada, sin asignar
+  | 'assigned'       // asignada a un responsable
+  | 'investigating'  // en investigación (root cause)
+  | 'corrected'      // acción correctiva aplicada, pendiente verificación
+  | 'verified'       // supervisor verificó efectividad
+  | 'closed'         // cerrada formalmente (firma)
+  | 'rejected'       // descartada (no aplicable, duplicada, falso positivo)
+
+export type AppccRootCauseMethod = '5whys' | 'fishbone' | 'direct' | 'other'
 
 export interface AppccIncident {
   id: string
@@ -176,57 +192,206 @@ export interface AppccIncident {
   location_id: string
   execution_id: string | null
   response_id: string | null
+
   title: string
   description: string | null
   severity: AppccSeverity
+  category: string | null
   status: AppccIncidentStatus
   source: 'auto' | 'manual'
+
+  // Asignación + SLA
   assigned_to: string | null
-  sla_due_at: string | null
+  assigned_at: string | null
+  due_at: string | null            // fecha límite calculada según severidad
+  sla_hours: number | null
+  sla_due_at: string | null        // legacy, equivale a due_at
+
+  // Escalado
+  escalated: boolean
+  escalated_at: string | null
+  escalated_to: string | null
+
+  // Investigación (root cause)
+  root_cause: string | null
+  root_cause_method: AppccRootCauseMethod | null
+  root_cause_data: Record<string, unknown> | null  // p.ej. {whys: [...]}
+
+  // Acción correctiva
+  corrective_action: string | null
+  corrective_action_at: string | null
+  corrective_action_by: string | null
+
+  // Acción preventiva (opcional)
+  preventive_action: string | null
+  preventive_action_at: string | null
+  preventive_action_by: string | null
+
+  // Verificación
+  verified_at: string | null
+  verified_by: string | null
+  verification_notes: string | null
+  verification_effective: boolean | null
+
+  // Cierre
+  closed_at: string | null
+  closed_by: string | null
+  closure_signature: string | null
+
+  // Legacy (resolved_at == corrected_at)
   resolved_at: string | null
   resolved_by: string | null
+
   created_at: string
   updated_at: string
   created_by: string | null
 }
 
-// ============================================================
-// ONBOARDING (wizard de configuración inicial)
-// ============================================================
+/**
+ * Evento del timeline visual de una incidencia.
+ * Cada cambio de estado, acción registrada o foto añadida deja huella aquí.
+ */
+export type AppccIncidentEventType =
+  | 'created'
+  | 'assigned'
+  | 'status_changed'
+  | 'note_added'
+  | 'photo_added'
+  | 'root_cause_set'
+  | 'corrective_applied'
+  | 'preventive_applied'
+  | 'verified'
+  | 'closed'
+  | 'reopened'
+  | 'rejected'
+  | 'escalated'
+  | 'sla_extended'
+
+export interface AppccIncidentEvent {
+  id: string
+  incident_id: string
+  event_type: AppccIncidentEventType
+  event_data: Record<string, unknown> | null
+  description: string | null
+  actor_id: string | null
+  actor_name: string | null
+  created_at: string
+}
 
 /**
- * Borrador del wizard de onboarding APPCC para un local.
- * Vive solo en el state del componente OnboardingPage, no se persiste
- * hasta que el admin pulsa "Guardar configuración".
+ * Foto adjunta a una incidencia.
+ *
+ * ⚠️ ALINEADO CON BBDD (mayo 2026 — refactor schema vs código):
+ * - photo_kind   (antes evidence_type)
+ * - uploaded_at  (antes taken_at)
+ * - uploaded_by  (antes taken_by)
+ *
+ * Las propiedades file_name, file_size_bytes, mime_type, action_id existen
+ * en BBDD pero pueden ser null si la foto se subió sin esos metadatos.
  */
+export interface AppccIncidentPhoto {
+  id: string
+  incident_id: string
+  storage_path: string
+  caption: string | null
+  /** Cuándo se subió la foto */
+  uploaded_at: string
+  /** Quién la subió (employee_id), null si fue un admin */
+  uploaded_by: string | null
+  /** Tipo de evidencia: del problema, de la acción correctiva o de verificación */
+  photo_kind: 'problem' | 'corrective' | 'verification' | null
+  /** Acción legacy vinculada (si la foto se adjuntó a una acción legacy) */
+  action_id: string | null
+  /** Metadatos del archivo (pueden ser null si no se capturaron al subir) */
+  file_name: string | null
+  file_size_bytes: number | null
+  mime_type: string | null
+}
+
+// ============================================================
+// NOTIFICACIONES IN-APP
+// ============================================================
+
+export type AppccNotificationSeverity = 'info' | 'warning' | 'error' | 'critical'
+
+export interface AppccNotification {
+  id: string
+  account_id: string
+  user_id: string
+  type: string
+  title: string
+  body: string | null
+  link_type: string | null
+  link_id: string | null
+  severity: AppccNotificationSeverity
+  read_at: string | null
+  email_sent: boolean
+  email_sent_at: string | null
+  created_at: string
+}
+
+// ============================================================
+// ONBOARDING
+// ============================================================
+
 export interface AppccOnboardingDraft {
   locationId: string
-  /** Horario habitual del local en formato 'HH:MM' (24h) */
   openingTime: string
   closingTime: string
-  /** Plantillas seleccionadas para activar como schedules diarios */
   selectedTemplateIds: Set<string>
-  /**
-   * Hora deseada por plantilla seleccionada.
-   * - Si un valor es null o no está, no se programa hora específica.
-   * - Por defecto se rellena a partir de openingTime/closingTime según el momento sugerido.
-   */
   scheduleTimes: Map<string, string | null>
 }
 
-/** Momento sugerido del día para una plantilla, usado por el wizard
- *  para sugerir una hora por defecto a partir de apertura/cierre. */
 export type AppccDayPeriod = 'opening' | 'service' | 'closing' | 'anytime'
 
-/**
- * Configuración por defecto de las 8 plantillas esenciales que la factory
- * usa para preseleccionar y sugerir horas en el wizard.
- * `templateCode` debe coincidir con AppccTemplate.code de la BBDD.
- */
 export interface AppccEssentialPreset {
   templateCode: string
   dayPeriod: AppccDayPeriod
-  /** Offset en minutos respecto a apertura (positivo) o cierre (negativo).
-   *  Solo se usa cuando dayPeriod != 'anytime' para sugerir hora inicial. */
   timeOffsetMinutes: number | null
 }
+
+// ============================================================
+// HELPERS UI (severidad → SLA por defecto, colores, etc.)
+// ============================================================
+
+/** Horas de SLA por severidad (estándar SafetyCulture/HACCP) */
+export const SLA_HOURS_BY_SEVERITY: Record<AppccSeverity, number> = {
+  critical: 2,
+  high: 8,
+  medium: 24,
+  low: 72,
+}
+
+/** Etiqueta legible de severidad */
+export const SEVERITY_LABEL: Record<AppccSeverity, string> = {
+  critical: 'Crítica',
+  high: 'Alta',
+  medium: 'Media',
+  low: 'Baja',
+}
+
+/** Etiqueta legible de status workflow CAPA */
+export const STATUS_LABEL: Record<AppccIncidentStatus, string> = {
+  open: 'Abierta',
+  assigned: 'Asignada',
+  investigating: 'Investigando',
+  corrected: 'Corregida',
+  verified: 'Verificada',
+  closed: 'Cerrada',
+  rejected: 'Descartada',
+}
+
+/** Estados considerados "abiertos" (requieren acción) */
+export const OPEN_STATUSES: AppccIncidentStatus[] = [
+  'open',
+  'assigned',
+  'investigating',
+  'corrected', // pendiente verificación
+]
+
+/** Estados considerados "cerrados" (no requieren acción) */
+export const CLOSED_STATUSES: AppccIncidentStatus[] = [
+  'verified',
+  'closed',
+  'rejected',
+]

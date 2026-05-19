@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { useApp } from '../context/AppContext'
 import { Button, Input, Select, Textarea, Badge, Card, Tabs, Modal, Label, Alert } from '../components/ui'
 import type { Employee, ClockEntry, WeeklySchedule } from '../types'
@@ -12,7 +12,7 @@ import {
   reactivateEmployeeAccount,
   deletePermanentEmployee,
 } from '../services/employeeAuthService'
-import { getCurrentProfile } from '../services/authService'
+import { usePermissions } from '@/modules/multitenancy/hooks/usePermissions'
 import {
   BarChart3, Users, AlertTriangle, Search, LogOut, Trash2, RefreshCw,
   Camera, LogIn, Square, Mail, X, ShieldCheck, Calendar, Sun, Moon, Ban,
@@ -61,31 +61,16 @@ export default function StaffPage() {
   const [stateFilter, setStateFilter] = useState<'all' | 'active' | 'inactive'>('active')
   const [contractFilter, setContractFilter] = useState('todos')
   const [showNewEmployeeModal, setShowNewEmployeeModal] = useState(false)
-  const [canSeeSalaries, setCanSeeSalaries] = useState(false)
-  const [canManageEmployees, setCanManageEmployees] = useState(false)
 
-  // Cargar perfil del usuario actual (para permisos)
-  useEffect(() => {
-    async function loadProfile() {
-      const p = await getCurrentProfile()
-      // Si es manager, verificar permisos show_salaries y can_manage_employees
-      if (p?.role === 'manager') {
-        try {
-          const mod = await import('../services/managerPermissionsService')
-          const perms = await mod.getManagerPermissions(p.id)
-          setCanSeeSalaries(perms.show_salaries)
-          setCanManageEmployees(perms.can_manage_employees)
-        } catch {
-          setCanSeeSalaries(false)
-          setCanManageEmployees(false)
-        }
-      } else if (p?.role === 'admin') {
-        setCanSeeSalaries(true)
-        setCanManageEmployees(true)
-      }
-    }
-    loadProfile()
-  }, [])
+  // Permisos del usuario logueado en la cuenta activa.
+  // BLOQUE B-7 (16/05/2026): migrado de fetch directo al service viejo
+  // (con dynamic import + getManagerPermissions) a hook usePermissions().
+  // - Reactivo: si cambian los permisos en otra pestaña, se actualiza solo.
+  // - Sin query Supabase adicional: AppContext ya tiene permissions cargados.
+  // - hasPermission() ya considera isFullAccess (admin bypasea permisos).
+  const { hasPermission } = usePermissions()
+  const canSeeSalaries = hasPermission('showSalaries')
+  const canManageEmployees = hasPermission('canManageEmployees')
 
   const filtered = staff.filter(e => {
     if (locFilter !== 'todas' && e.locationId !== locFilter) return false
@@ -298,8 +283,17 @@ export default function StaffPage() {
             }
             setMainTab('list')
           }}
-          onCreateLocal={async (locationId) => {
-            const emp = createEmployee(locationId)
+          onCreateLocal={async ({ name, locationId, assignedLocations, pin }) => {
+            // FIX P6: construir el empleado con los datos reales del formulario.
+            // Antes se llamaba a createEmployee(locationId) que solo conocía el
+            // locationId → empleado vacío con name='', PIN=''.
+            const base = createEmployee(locationId)
+            const emp: Employee = {
+              ...base,
+              name,
+              pin: pin ?? '',
+              assignedLocations: assignedLocations.length > 1 ? assignedLocations : undefined,
+            }
             await saveEmployee(emp)
             return emp.id
           }}
@@ -1445,7 +1439,16 @@ interface NewEmployeeModalProps {
   locations: ReturnType<typeof useApp>['locations']
   onCancel: () => void
   onCreated: (employeeId: string) => void
-  onCreateLocal: (locationId: string) => Promise<string>
+  // FIX P6 (17/05/2026): el handler recibe TODOS los datos del formulario,
+  // no solo locationId. Antes solo recibía locationId y se ignoraban name+pin
+  // → empleado creado con name='', PIN='', email=''. Bug detectado con
+  // Llorente29 antes de paso a producción.
+  onCreateLocal: (data: {
+    name: string
+    locationId: string
+    assignedLocations: string[]
+    pin?: string
+  }) => Promise<string>
 }
 
 function NewEmployeeModal({ locations, onCancel, onCreated, onCreateLocal }: NewEmployeeModalProps) {
@@ -1500,7 +1503,13 @@ function NewEmployeeModal({ locations, onCancel, onCreated, onCreateLocal }: New
     }
 
     try {
-      const empId = await onCreateLocal(locationId)
+      // FIX P6: pasar todos los datos del formulario, no solo locationId
+      const empId = await onCreateLocal({
+        name: name.trim(),
+        locationId,
+        assignedLocations: allAssigned,
+        pin: pin || undefined,
+      })
       setSubmitting(false)
       onCreated(empId)
     } catch (e) {

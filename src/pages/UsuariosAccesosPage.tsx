@@ -4,6 +4,7 @@
 import { useState, useEffect } from 'react'
 import { Users, RefreshCw, ShieldCheck, Briefcase, User, Ban, MapPin, AlertTriangle, Lock, Check, ChevronRight } from 'lucide-react'
 import { useApp } from '../context/AppContext'
+import { usePermissions } from '@/modules/multitenancy/hooks/usePermissions'
 import { Button, Card, Badge, Modal, Label, Select, Alert } from '../components/ui'
 import {
   listUsers,
@@ -12,7 +13,7 @@ import {
   setUserActive,
   type UserListItem,
 } from '../services/userManagementService'
-import { getCurrentProfile, type UserProfile, type UserRole } from '../services/authService'
+import { type UserProfileRole as UserRole } from '@/types/multitenancy'
 import ManagerPermissionsModal from '../components/ManagerPermissionsModal'
 
 const ROLE_LABELS: Record<UserRole, string> = {
@@ -34,24 +35,34 @@ const ROLE_ICONS: Record<UserRole, typeof ShieldCheck> = {
 }
 
 export default function UsuariosAccesosPage() {
-  const { locations } = useApp()
+  const { locations, authUserId, accountsLoading, activeAccountId } = useApp()
+  const { isFullAccess } = usePermissions()
   const [users, setUsers] = useState<UserListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [currentProfile, setCurrentProfile] = useState<UserProfile | null>(null)
   const [editingUser, setEditingUser] = useState<UserListItem | null>(null)
   const [filter, setFilter] = useState<'all' | 'admin' | 'manager' | 'worker' | 'inactive'>('all')
 
-  // Cargar profile actual y lista de usuarios
-  async function reload() {
+  // BLOQUE B-6a (17/05/2026): migrado de getCurrentProfile() a hooks.
+  //   - Gate de admin: usePermissions().isFullAccess (scope cuenta activa).
+  //   - Identificación del propio user: useApp().authUserId.
+  //   - Sin query Supabase adicional: el AppContext ya tiene todo cargado.
+  //
+  // BLOQUE B-6c (17/05/2026): listUsers ahora filtra por cuenta activa.
+  //   - Sin activeAccountId → vaciamos la lista (estamos cargando).
+  //   - Al cambiar de cuenta → re-disparar reload.
+
+  // Cargar lista de usuarios de la cuenta activa.
+  async function reload(accountId: string | null) {
+    if (!accountId) {
+      setUsers([])
+      setLoading(false)
+      return
+    }
     setLoading(true)
     setError(null)
     try {
-      const [profile, list] = await Promise.all([
-        getCurrentProfile(),
-        listUsers(),
-      ])
-      setCurrentProfile(profile)
+      const list = await listUsers(accountId)
       setUsers(list)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al cargar usuarios')
@@ -61,11 +72,22 @@ export default function UsuariosAccesosPage() {
   }
 
   useEffect(() => {
-    reload()
-  }, [])
+    reload(activeAccountId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeAccountId])
 
-  // Si NO es admin, denegar acceso
-  if (currentProfile && currentProfile.role !== 'admin') {
+  // Mientras se resuelve la cuenta activa (auth + accounts + userProfile),
+  // mostramos cargando para no flashear "Acceso denegado".
+  if (accountsLoading) {
+    return (
+      <div className="max-w-md mx-auto mt-16">
+        <Card className="p-6 text-center text-sm text-text-secondary">Cargando...</Card>
+      </div>
+    )
+  }
+
+  // Si NO tiene acceso pleno (admin global o admin de cuenta), denegar acceso.
+  if (!isFullAccess) {
     return (
       <div className="max-w-md mx-auto mt-16">
         <Card className="p-6 text-center">
@@ -108,7 +130,7 @@ export default function UsuariosAccesosPage() {
             {stats.total} usuarios activos · {stats.inactive} inactivos
           </p>
         </div>
-        <Button size="sm" variant="outline" onClick={reload}>
+        <Button size="sm" variant="outline" onClick={() => reload(activeAccountId)}>
           <span className="inline-flex items-center gap-1.5"><RefreshCw size={14} /> Recargar</span>
         </Button>
       </div>
@@ -167,7 +189,7 @@ export default function UsuariosAccesosPage() {
       ) : (
         <div className="space-y-2">
           {filteredUsers.map(u => {
-            const isCurrentUser = u.userId === currentProfile?.userId
+            const isCurrentUser = u.userId === authUserId
             const RoleIcon = ROLE_ICONS[u.role]
             return (
               <Card
@@ -215,15 +237,15 @@ export default function UsuariosAccesosPage() {
       )}
 
       {/* Modal de edición */}
-      {editingUser && currentProfile && (
+      {editingUser && (
         <EditUserModal
           user={editingUser}
-          isCurrentUser={editingUser.userId === currentProfile.userId}
+          isCurrentUser={editingUser.userId === authUserId}
           locations={locations}
           onClose={() => setEditingUser(null)}
           onSaved={() => {
             setEditingUser(null)
-            reload()
+            reload(activeAccountId)
           }}
         />
       )}

@@ -35,7 +35,7 @@ export default function MisChecklistsPage({ employee, onBack, onOpenExecution }:
         const today = new Date().toISOString().slice(0, 10)
 
         // Obtener executions del día para este local
-        const { data: allExecutions, error: execErr } = await supabase!
+        const { data: rawExecutions, error: execErr } = await supabase!
           .from('appcc_executions')
           .select('*')
           .eq('location_id', employee.locationId)
@@ -44,18 +44,23 @@ export default function MisChecklistsPage({ employee, onBack, onOpenExecution }:
           .order('scheduled_time', { ascending: true, nullsFirst: false })
 
         if (execErr) throw execErr
-        if (!allExecutions || allExecutions.length === 0) {
+        if (!rawExecutions || rawExecutions.length === 0) {
           if (!cancel) { setItems([]); setLoading(false) }
           return
         }
 
+        // FIX: cast a AppccExecution[] al bloque entero (BBDD devuelve status como
+        // string genérico, no como union literal AppccExecutionStatus).
+        // Esto permite que los callbacks subsiguientes infieran el tipo correcto.
+        const allExecutions = rawExecutions as unknown as AppccExecution[]
+
         // Filtrar: solo los asignados a este empleado O los sin asignar
-        const executions = allExecutions.filter((e: AppccExecution) =>
+        const executions = allExecutions.filter(e =>
           e.assigned_to === employee.id || e.assigned_to === null
         )
 
         // Obtener templates para nombres
-        const templateIds = [...new Set(executions.map((e: AppccExecution) => e.template_id))]
+        const templateIds = [...new Set(executions.map(e => e.template_id))]
         const { data: templates } = await supabase!
           .from('appcc_templates')
           .select('id, name, plan_id')
@@ -71,7 +76,7 @@ export default function MisChecklistsPage({ employee, onBack, onOpenExecution }:
         const tplMap = new Map((templates ?? []).map((t: { id: string; name: string; plan_id: string }) => [t.id, t]))
         const planMap = new Map((plans ?? []).map((p: { id: string; name: string }) => [p.id, p.name]))
 
-        const result: ChecklistItem[] = executions.map((e: AppccExecution) => {
+        const result: ChecklistItem[] = executions.map(e => {
           const tpl = tplMap.get(e.template_id)
           return {
             execution: e,
@@ -91,7 +96,7 @@ export default function MisChecklistsPage({ employee, onBack, onOpenExecution }:
 
     load()
     return () => { cancel = true }
-  }, [employee.locationId])
+  }, [employee.locationId, employee.id])
 
   const pending = items.filter(i => i.execution.status === 'pending' || i.execution.status === 'in_progress')
   const completed = items.filter(i => i.execution.status === 'completed')

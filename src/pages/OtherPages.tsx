@@ -1,54 +1,66 @@
 import { useState } from 'react'
 import { useApp } from '../context/AppContext'
 import { Card } from '../components/ui'
-import { Wallet, MapPin, Info, ChevronDown, ChevronRight } from 'lucide-react'
+import { Wallet, MapPin, Info, ChevronDown, ChevronRight, Check, AlertCircle, Loader2 } from 'lucide-react'
 import type { Location } from '../types'
 
-// Dashboard placeholder
-export function DashboardPage() {
-  const { staff, tasks, incidents, locations } = useApp()
-  const working = staff.filter(e => e.clockEntries[0]?.type === 'entrada').length
-  const pending = tasks.filter(t => t.status === 'pendiente' || t.status === 'vencida').length
-  const openInc = incidents.filter(i => i.status !== 'resuelta').length
+// DashboardPage se ha movido a su propia page: src/pages/DashboardPage.tsx
+// Re-exportar aquí para retrocompatibilidad con imports antiguos.
+export { DashboardPage } from './DashboardPage'
 
-  const stats = [
-    { label: 'Locales activos',     val: locations.filter(l => l.active).length,  color: 'bg-success-bg text-success' },
-    { label: 'Empleados activos',   val: staff.filter(e => e.active).length,      color: 'bg-success-bg text-success' },
-    { label: 'Trabajando ahora',    val: working,                                  color: 'bg-accent-bg text-accent' },
-    { label: 'Tareas pendientes',   val: pending,                                  color: pending > 0 ? 'bg-warning-bg text-warning' : 'bg-page text-text-secondary' },
-    { label: 'Incidencias abiertas',val: openInc,                                  color: openInc > 0 ? 'bg-danger-bg text-danger' : 'bg-page text-text-secondary' },
-  ]
+// ============================================================
+// LocationsPage — gestión de locales del cliente
+//
+// REFACTOR P6 (17/05/2026):
+// - Usa `saveLocation` y `removeLocation` del context (persisten en Supabase).
+// - YA NO usa `setLocations` (que solo actualizaba state local sin persistir).
+//   Eso causaba el bug de "los locales se ven pero F5 los borra" detectado
+//   con cliente Llorente29 antes de paso a producción.
+// - Patrón onBlur en campos de texto (Nombre, Dirección, Teléfono):
+//   editas → al salir del campo se persiste.
+// - Patrón inmediato en checkbox (Activo) y botón Eliminar.
+// - Feedback visual por local: spinner mientras guarda, ✓ tras éxito,
+//   ⚠ rojo si falla.
+// ============================================================
 
-  return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-display text-text-primary">Dashboard</h1>
-        <p className="text-sm text-text-secondary">Resumen general de tu negocio</p>
-      </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        {stats.map(s => (
-          <div key={s.label} className={`p-4 rounded-lg border border-border-default ${s.color}`}>
-            <p className="text-3xl font-bold">{s.val}</p>
-            <p className="text-xs mt-1">{s.label}</p>
-          </div>
-        ))}
-      </div>
-      {locations.length === 0 && (
-        <Card className="p-6">
-          <p className="font-medium text-text-primary">Empieza creando un local</p>
-          <p className="text-sm text-text-secondary mt-1">Ve a Locales en el menú para añadir tu primer local.</p>
-        </Card>
-      )}
-    </div>
-  )
-}
+// Estado de guardado por local. 'idle' por defecto, otros estados
+// duran solo unos segundos para feedback al usuario.
+type SaveState = 'idle' | 'saving' | 'saved' | 'error'
+
+// Buffer de edición local: lo que el usuario está escribiendo antes
+// de hacer onBlur. Permite teclear sin disparar peticiones por cada
+// pulsación. Solo el Location.id actúa de clave (los buffers son por id).
+type EditBuffers = Record<string, Partial<Location>>
 
 export function LocationsPage() {
-  const { locations, setLocations } = useApp()
+  const { locations, saveLocation, removeLocation } = useApp()
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [editBuffers, setEditBuffers] = useState<EditBuffers>({})
+  const [saveStates, setSaveStates] = useState<Record<string, SaveState>>({})
+  const [errorMessages, setErrorMessages] = useState<Record<string, string>>({})
 
-  function addLocation() {
-    setLocations(prev => [...prev, {
+  // Helpers para gestionar el feedback visual por local.
+  function markSaving(id: string) {
+    setSaveStates(prev => ({ ...prev, [id]: 'saving' }))
+    setErrorMessages(prev => ({ ...prev, [id]: '' }))
+  }
+
+  function markSaved(id: string) {
+    setSaveStates(prev => ({ ...prev, [id]: 'saved' }))
+    // Limpia el "saved" tras 2 segundos para no ser invasivo
+    setTimeout(() => {
+      setSaveStates(prev => prev[id] === 'saved' ? { ...prev, [id]: 'idle' } : prev)
+    }, 2000)
+  }
+
+  function markError(id: string, message: string) {
+    setSaveStates(prev => ({ ...prev, [id]: 'error' }))
+    setErrorMessages(prev => ({ ...prev, [id]: message }))
+  }
+
+  // Crear nuevo local. Persiste inmediato.
+  async function addLocation() {
+    const newLoc: Location = {
       id: `loc-${Date.now()}`,
       name: 'Nuevo local',
       address: '',
@@ -56,11 +68,117 @@ export function LocationsPage() {
       active: true,
       hoursBalanceCloseDay: 25,
       hoursBalanceSyncWithGestoria: true,
-    }])
+    }
+    markSaving(newLoc.id)
+    try {
+      await saveLocation(newLoc)
+      markSaved(newLoc.id)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'No se pudo crear el local'
+      markError(newLoc.id, msg)
+    }
   }
 
-  function updateLocation(id: string, patch: Partial<Location>) {
-    setLocations(prev => prev.map(l => l.id === id ? { ...l, ...patch } : l))
+  // Actualiza el buffer local (no persiste todavía).
+  function updateBuffer(id: string, patch: Partial<Location>) {
+    setEditBuffers(prev => ({
+      ...prev,
+      [id]: { ...(prev[id] ?? {}), ...patch },
+    }))
+  }
+
+  // Devuelve el valor actual (buffer si existe, sino el del location).
+  function getCurrentValue<K extends keyof Location>(loc: Location, key: K): Location[K] {
+    const buffered = editBuffers[loc.id]?.[key]
+    return (buffered ?? loc[key]) as Location[K]
+  }
+
+  // Persiste todos los cambios pendientes del buffer de un local.
+  // Solo persiste si hay diferencia real respecto a lo que tiene el location.
+  async function persistBuffer(loc: Location) {
+    const buffer = editBuffers[loc.id]
+    if (!buffer) return
+    // Construir la versión actualizada
+    const updated: Location = { ...loc, ...buffer }
+    // Detectar si hay cambios reales (compara claves del buffer)
+    const hasChanges = (Object.keys(buffer) as (keyof Location)[]).some(
+      k => buffer[k] !== loc[k]
+    )
+    if (!hasChanges) {
+      // Limpia el buffer sin disparar nada
+      setEditBuffers(prev => {
+        const next = { ...prev }
+        delete next[loc.id]
+        return next
+      })
+      return
+    }
+    markSaving(loc.id)
+    try {
+      await saveLocation(updated)
+      markSaved(loc.id)
+      setEditBuffers(prev => {
+        const next = { ...prev }
+        delete next[loc.id]
+        return next
+      })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'No se pudo guardar'
+      markError(loc.id, msg)
+    }
+  }
+
+  // Cambio inmediato (sin buffer): para checkbox activo y campos config avanzada.
+  async function persistImmediate(loc: Location, patch: Partial<Location>) {
+    const updated: Location = { ...loc, ...patch }
+    markSaving(loc.id)
+    try {
+      await saveLocation(updated)
+      markSaved(loc.id)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'No se pudo guardar'
+      markError(loc.id, msg)
+    }
+  }
+
+  async function deleteLocation(loc: Location) {
+    if (!confirm(`¿Eliminar el local "${loc.name}"? Esta acción es definitiva.`)) return
+    markSaving(loc.id)
+    try {
+      await removeLocation(loc.id)
+      // No marcamos saved porque la fila ya no existe
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'No se pudo eliminar'
+      markError(loc.id, msg)
+    }
+  }
+
+  // Componente local para el indicador de estado de guardado
+  function SaveIndicator({ id }: { id: string }) {
+    const state = saveStates[id] ?? 'idle'
+    const message = errorMessages[id]
+    if (state === 'saving') {
+      return (
+        <span className="inline-flex items-center gap-1 text-xs text-text-secondary">
+          <Loader2 size={12} className="animate-spin" /> Guardando...
+        </span>
+      )
+    }
+    if (state === 'saved') {
+      return (
+        <span className="inline-flex items-center gap-1 text-xs text-success">
+          <Check size={12} /> Guardado
+        </span>
+      )
+    }
+    if (state === 'error') {
+      return (
+        <span className="inline-flex items-center gap-1 text-xs text-danger" title={message}>
+          <AlertCircle size={12} /> Error al guardar
+        </span>
+      )
+    }
+    return null
   }
 
   return (
@@ -82,8 +200,8 @@ export function LocationsPage() {
           <Card className="p-8 text-center"><p className="text-text-secondary">Sin locales. Añade uno arriba.</p></Card>
         ) : locations.map(loc => {
           const isExpanded = expandedId === loc.id
-          const closeDay = loc.hoursBalanceCloseDay ?? 25
-          const syncGestoria = loc.hoursBalanceSyncWithGestoria ?? true
+          const closeDay = getCurrentValue(loc, 'hoursBalanceCloseDay') ?? 25
+          const syncGestoria = getCurrentValue(loc, 'hoursBalanceSyncWithGestoria') ?? true
           return (
             <Card key={loc.id} className="p-4">
               {/* Datos básicos del local */}
@@ -91,16 +209,18 @@ export function LocationsPage() {
                 <div>
                   <label className="text-xs text-text-secondary uppercase font-medium">Nombre</label>
                   <input
-                    value={loc.name}
-                    onChange={e => updateLocation(loc.id, { name: e.target.value })}
+                    value={getCurrentValue(loc, 'name')}
+                    onChange={e => updateBuffer(loc.id, { name: e.target.value })}
+                    onBlur={() => persistBuffer(loc)}
                     className="mt-1 w-full border border-border-default rounded-md px-3 py-2 text-sm bg-card text-text-primary focus:outline-none focus:ring-2 focus:ring-accent"
                   />
                 </div>
                 <div>
                   <label className="text-xs text-text-secondary uppercase font-medium">Dirección</label>
                   <input
-                    value={loc.address}
-                    onChange={e => updateLocation(loc.id, { address: e.target.value })}
+                    value={getCurrentValue(loc, 'address')}
+                    onChange={e => updateBuffer(loc.id, { address: e.target.value })}
+                    onBlur={() => persistBuffer(loc)}
                     className="mt-1 w-full border border-border-default rounded-md px-3 py-2 text-sm bg-card text-text-primary focus:outline-none focus:ring-2 focus:ring-accent"
                     placeholder="Calle, número..."
                   />
@@ -108,8 +228,9 @@ export function LocationsPage() {
                 <div>
                   <label className="text-xs text-text-secondary uppercase font-medium">Teléfono</label>
                   <input
-                    value={loc.phone}
-                    onChange={e => updateLocation(loc.id, { phone: e.target.value })}
+                    value={getCurrentValue(loc, 'phone')}
+                    onChange={e => updateBuffer(loc.id, { phone: e.target.value })}
+                    onBlur={() => persistBuffer(loc)}
                     className="mt-1 w-full border border-border-default rounded-md px-3 py-2 text-sm bg-card text-text-primary focus:outline-none focus:ring-2 focus:ring-accent"
                     placeholder="600000000"
                   />
@@ -119,18 +240,23 @@ export function LocationsPage() {
                     <input
                       type="checkbox"
                       checked={loc.active}
-                      onChange={e => updateLocation(loc.id, { active: e.target.checked })}
+                      onChange={e => persistImmediate(loc, { active: e.target.checked })}
                       className="accent-accent"
                     />
                     <span className="text-sm text-text-primary">Activo</span>
                   </div>
                   <button
-                    onClick={() => { if (confirm('¿Eliminar este local?')) setLocations(prev => prev.filter(l => l.id !== loc.id)) }}
+                    onClick={() => deleteLocation(loc)}
                     className="mb-2 px-3 py-1.5 text-xs text-danger border border-danger/30 rounded-md hover:bg-danger-bg transition-base"
                   >
                     Eliminar
                   </button>
                 </div>
+              </div>
+
+              {/* Indicador de estado de guardado */}
+              <div className="mt-2 min-h-[16px]">
+                <SaveIndicator id={loc.id} />
               </div>
 
               {/* Sección de configuración avanzada (plegable) */}
@@ -157,7 +283,7 @@ export function LocationsPage() {
                         <input
                           type="checkbox"
                           checked={syncGestoria}
-                          onChange={e => updateLocation(loc.id, { hoursBalanceSyncWithGestoria: e.target.checked })}
+                          onChange={e => persistImmediate(loc, { hoursBalanceSyncWithGestoria: e.target.checked })}
                           className="mt-0.5 w-4 h-4 rounded accent-accent"
                         />
                         <div className="flex-1">
@@ -184,8 +310,9 @@ export function LocationsPage() {
                               const v = parseInt(e.target.value, 10)
                               if (isNaN(v)) return
                               const clamped = Math.max(1, Math.min(31, v))
-                              updateLocation(loc.id, { hoursBalanceCloseDay: clamped })
+                              updateBuffer(loc.id, { hoursBalanceCloseDay: clamped })
                             }}
+                            onBlur={() => persistBuffer(loc)}
                             className="w-20 border border-border-default rounded-md px-3 py-1.5 text-sm bg-card text-text-primary focus:outline-none focus:ring-2 focus:ring-accent"
                           />
                           <p className="text-xs text-text-secondary mt-1">
@@ -215,8 +342,9 @@ export function LocationsPage() {
                             <input
                               type="number"
                               step="any"
-                              value={loc.lat ?? ''}
-                              onChange={e => updateLocation(loc.id, { lat: e.target.value ? parseFloat(e.target.value) : undefined })}
+                              value={getCurrentValue(loc, 'lat') ?? ''}
+                              onChange={e => updateBuffer(loc.id, { lat: e.target.value ? parseFloat(e.target.value) : undefined })}
+                              onBlur={() => persistBuffer(loc)}
                               className="mt-1 w-full border border-border-default rounded-md px-3 py-1.5 text-sm bg-card text-text-primary focus:outline-none focus:ring-2 focus:ring-accent"
                               placeholder="40.4168"
                             />
@@ -226,8 +354,9 @@ export function LocationsPage() {
                             <input
                               type="number"
                               step="any"
-                              value={loc.lng ?? ''}
-                              onChange={e => updateLocation(loc.id, { lng: e.target.value ? parseFloat(e.target.value) : undefined })}
+                              value={getCurrentValue(loc, 'lng') ?? ''}
+                              onChange={e => updateBuffer(loc.id, { lng: e.target.value ? parseFloat(e.target.value) : undefined })}
+                              onBlur={() => persistBuffer(loc)}
                               className="mt-1 w-full border border-border-default rounded-md px-3 py-1.5 text-sm bg-card text-text-primary focus:outline-none focus:ring-2 focus:ring-accent"
                               placeholder="-3.7038"
                             />

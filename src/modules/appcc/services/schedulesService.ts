@@ -5,11 +5,17 @@
 // crea automáticamente las executions del día a partir de los schedules activos.
 
 import { supabase } from '@/lib/supabase'
+import type { Database } from '@/types/database'
 import type {
   AppccSchedule,
   AppccRecurrenceType,
   AppccEssentialPreset,
 } from '@/modules/appcc/types'
+
+// Tipos helper para inserts/updates tipados
+type ScheduleInsert = Database['public']['Tables']['appcc_schedules']['Insert']
+type ScheduleUpdate = Database['public']['Tables']['appcc_schedules']['Update']
+type Json = Database['public']['Tables']['appcc_schedules']['Row']['recurrence_config']
 
 // ============================================================
 // PRESETS DE LAS 8 PLANTILLAS ESENCIALES
@@ -141,12 +147,13 @@ export interface CreateScheduleInput {
 export async function createSchedule(input: CreateScheduleInput): Promise<AppccSchedule> {
   if (!supabase) throw new Error('Supabase no disponible')
 
-  const row = {
+  // FIX: tipado fuerte del insert. recurrence_config se castea a Json.
+  const row: ScheduleInsert = {
     account_id: input.accountId,
     location_id: input.locationId,
     template_id: input.templateId,
     recurrence_type: input.recurrenceType,
-    recurrence_config: input.recurrenceConfig ?? {},
+    recurrence_config: (input.recurrenceConfig ?? {}) as Json,
     scheduled_time: normalizeTime(input.scheduledTime ?? null),
     valid_from: input.validFrom ?? new Date().toISOString().slice(0, 10),
     valid_until: input.validUntil ?? null,
@@ -171,12 +178,13 @@ export async function bulkCreateSchedules(items: CreateScheduleInput[]): Promise
   if (!supabase) throw new Error('Supabase no disponible')
   if (items.length === 0) return []
 
-  const rows = items.map(input => ({
+  // FIX: tipado fuerte del array de inserts.
+  const rows: ScheduleInsert[] = items.map(input => ({
     account_id: input.accountId,
     location_id: input.locationId,
     template_id: input.templateId,
     recurrence_type: input.recurrenceType,
-    recurrence_config: input.recurrenceConfig ?? {},
+    recurrence_config: (input.recurrenceConfig ?? {}) as Json,
     scheduled_time: normalizeTime(input.scheduledTime ?? null),
     valid_from: input.validFrom ?? new Date().toISOString().slice(0, 10),
     valid_until: input.validUntil ?? null,
@@ -211,10 +219,10 @@ export async function updateSchedule(
 ): Promise<AppccSchedule> {
   if (!supabase) throw new Error('Supabase no disponible')
 
-  // Construir el objeto de actualización solo con los campos definidos
-  const update: Record<string, unknown> = {}
+  // FIX: tipado fuerte del update en lugar de Record<string, unknown>
+  const update: ScheduleUpdate = {}
   if (patch.recurrenceType !== undefined) update.recurrence_type = patch.recurrenceType
-  if (patch.recurrenceConfig !== undefined) update.recurrence_config = patch.recurrenceConfig
+  if (patch.recurrenceConfig !== undefined) update.recurrence_config = patch.recurrenceConfig as Json
   if (patch.scheduledTime !== undefined) update.scheduled_time = normalizeTime(patch.scheduledTime)
   if (patch.validFrom !== undefined) update.valid_from = patch.validFrom
   if (patch.validUntil !== undefined) update.valid_until = patch.validUntil

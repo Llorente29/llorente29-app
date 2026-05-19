@@ -1,50 +1,30 @@
 // src/services/authService.ts
 // Servicio centralizado de autenticación con Supabase Auth.
-// Magic Link via email, gestión de sesión y perfil de usuario.
+// Magic Link via email, gestión de sesión.
+//
+// Bloque F-básico (17/05/2026): retirados `getCurrentProfile()`,
+// `UserProfileRow` y `rowToProfile()`.
+//
+// Bloque F-completo (17/05/2026): retirados los tipos `UserRole` y
+// `UserProfile` (sustituidos por `UserProfileRole` y `UserProfile` del
+// módulo multitenancy, `src/types/multitenancy.ts`). También retirados
+// los helpers `hasRole`, `isAdmin`, `isManagerOrAdmin`, `isWorker`
+// (inline en los callers o sustituidos por `usePermissions()`).
+//
+// Este archivo queda como **wrapper puro de Supabase Auth**:
+//   - sendMagicLink (login pasivo)
+//   - getCurrentUser (envoltorio de auth.getUser)
+//   - signOut
+//   - onAuthStateChange (envoltorio de auth.onAuthStateChange)
+//   - logSecurityEvent (audit log)
 
 import { supabase } from '../lib/supabase'
 import type { User, AuthChangeEvent, Session } from '@supabase/supabase-js'
+import type { Database } from '../types/database'
 
-/* =====================================================
-   TIPOS
-   ===================================================== */
-
-export type UserRole = 'admin' | 'manager' | 'worker'
-
-export interface UserProfile {
-  id: string
-  userId: string
-  employeeId?: string
-  role: UserRole
-  active: boolean
-  displayName?: string
-  createdAt: string
-  updatedAt: string
-}
-
-interface UserProfileRow {
-  id: string
-  user_id: string
-  employee_id: string | null
-  role: string
-  active: boolean
-  display_name: string | null
-  created_at: string
-  updated_at: string
-}
-
-function rowToProfile(r: UserProfileRow): UserProfile {
-  return {
-    id: r.id,
-    userId: r.user_id,
-    employeeId: r.employee_id || undefined,
-    role: r.role as UserRole,
-    active: r.active,
-    displayName: r.display_name || undefined,
-    createdAt: r.created_at,
-    updatedAt: r.updated_at,
-  }
-}
+// Tipos helper para el insert tipado de security_audit_log
+type SecurityAuditLogInsert = Database['public']['Tables']['security_audit_log']['Insert']
+type Json = Database['public']['Tables']['security_audit_log']['Row']['details']
 
 /* =====================================================
    AUTENTICACIÓN
@@ -105,31 +85,6 @@ export async function getCurrentUser(): Promise<User | null> {
 }
 
 /**
- * Obtiene el perfil (role, employee_id, etc.) del usuario actual.
- * Devuelve null si no hay sesión activa o no tiene profile creado.
- */
-export async function getCurrentProfile(): Promise<UserProfile | null> {
-  if (!supabase) return null
-
-  const user = await getCurrentUser()
-  if (!user) return null
-
-  const { data, error } = await supabase
-    .from('user_profiles')
-    .select('*')
-    .eq('user_id', user.id)
-    .eq('active', true)
-    .maybeSingle()
-
-  if (error) {
-    console.error('[auth] getCurrentProfile:', error)
-    return null
-  }
-  if (!data) return null
-  return rowToProfile(data as UserProfileRow)
-}
-
-/**
  * Cierra sesión del usuario actual.
  * Limpia tokens locales y notifica a Supabase.
  */
@@ -178,14 +133,17 @@ export async function logSecurityEvent(
 
   const actor = await getCurrentUser()
   try {
-    await supabase.from('security_audit_log').insert({
+    // FIX: tipado fuerte del insert. details se castea a Json (compatible con
+    //      Record<string, unknown> en runtime, solo TS necesita el cast).
+    const insertRow: SecurityAuditLogInsert = {
       actor_user_id: actor?.id || null,
       target_user_id: targetUserId || null,
       action,
-      details: details || null,
+      details: (details ?? null) as Json,
       ip_address: null,  // No tenemos acceso a IP desde frontend de forma fiable
       user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
-    })
+    }
+    await supabase.from('security_audit_log').insert(insertRow)
   } catch (e) {
     // No bloquear flujo principal por errores de logging
     console.warn('[auth] logSecurityEvent failed:', e)
@@ -195,40 +153,11 @@ export async function logSecurityEvent(
 /* =====================================================
    HELPERS DE PERMISOS
    ===================================================== */
+//
+// BLOQUE F-completo (17/05/2026): retirados `hasRole`, `isAdmin`,
+// `isManagerOrAdmin` y `isWorker`. Operaban sobre el tipo `UserProfile`
+// legacy de este archivo. Reemplazados por:
+//   - `usePermissions().isFullAccess` (admin global o admin de cuenta).
+//   - Inline `profile?.role === 'X' && profile.active` cuando hace falta.
+// Solo había 2 callers (ambos en App.tsx, ya inlined).
 
-/**
- * Comprueba si el rol del usuario tiene un permiso determinado.
- * Por ahora simple: jerárquico admin > manager > worker.
- */
-export function hasRole(profile: UserProfile | null, requiredRole: UserRole): boolean {
-  if (!profile || !profile.active) return false
-
-  const hierarchy: Record<UserRole, number> = {
-    worker: 1,
-    manager: 2,
-    admin: 3,
-  }
-  return hierarchy[profile.role] >= hierarchy[requiredRole]
-}
-
-/**
- * Comprueba si el usuario es admin.
- */
-export function isAdmin(profile: UserProfile | null): boolean {
-  return profile?.role === 'admin' && profile.active
-}
-
-/**
- * Comprueba si el usuario es manager o admin (perfil de "gestor").
- */
-export function isManagerOrAdmin(profile: UserProfile | null): boolean {
-  if (!profile || !profile.active) return false
-  return profile.role === 'admin' || profile.role === 'manager'
-}
-
-/**
- * Comprueba si el usuario es worker.
- */
-export function isWorker(profile: UserProfile | null): boolean {
-  return profile?.role === 'worker' && profile.active === true
-}

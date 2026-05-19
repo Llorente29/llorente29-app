@@ -79,7 +79,7 @@ export default function SolicitarCambioModal({
   useEffect(() => {
     let cancel = false
     async function load() {
-      const all = await fetchEmployees()
+      const all = await fetchEmployees(null)
       if (cancel || !all) return
       const list = all
         .filter(e => e.id !== myEmployee.id && e.active)
