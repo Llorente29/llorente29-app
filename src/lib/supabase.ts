@@ -25,15 +25,17 @@ export const supabase: SupabaseClient<Database> | null = url && key
   ? createClient<Database>(url, key, {
       auth: {
         // Detectar y procesar tokens automáticamente cuando la URL contiene
-        // un hash con access_token (Magic Link, OAuth, etc).
+        // un code de autorización PKCE en query string (post-login, recovery, invite).
         detectSessionInUrl: true,
         // Mantener la sesión guardada en localStorage entre recargas.
         persistSession: true,
         // Renovar tokens automáticamente antes de que expiren.
         autoRefreshToken: true,
-        // Flujo de auth para Magic Links: 'implicit' (hash con tokens en URL).
-        // PKCE no funciona con redirects fragmentados en GitHub Pages.
-        flowType: 'implicit',
+        // Flujo de auth para Folvy V1: PKCE (Proof Key for Code Exchange, RFC 7636).
+        // Estándar moderno OAuth 2.0/2.1 para SPAs. Decisión D-S2.1 (Sprint 2).
+        // PKCE funciona en Vercel (app.folvy.app) sin problemas. Implicit flow
+        // fue requisito legacy de GitHub Pages — obsoleto en Folvy V1.
+        flowType: 'pkce',
         // Almacenamiento de la sesión.
         storage: typeof window !== 'undefined' ? window.localStorage : undefined,
       },
