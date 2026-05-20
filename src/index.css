@@ -15,6 +15,11 @@
   --color-accent-hover: #162E4A;
   --color-accent-bg: #EDECE6;
 
+  /* Token de marca Folvy: terracota del arco del isotipo. Anadido Bloque H Sprint 3. */
+  --color-terracota: #D67442;
+  --color-terracota-hover: #C25F2E;
+  --color-terracota-bg: #FAEFE6;
+
   --color-success: #3F5C2F;
   --color-success-bg: #E2E8DA;
   --color-danger: #A32D2D;

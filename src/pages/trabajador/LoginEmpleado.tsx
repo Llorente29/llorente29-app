@@ -43,7 +43,7 @@ export default function LoginEmpleado({ onLogin, onBackToSelector }: Props) {
       <div className="min-h-screen bg-page p-4">
         <div className="max-w-md mx-auto pt-6">
           <div className="text-center mb-6">
-            <Logo size="xl" withBg className="mb-3" />
+            <Logo size="xl" className="mb-3" />
             <p className="text-sm text-text-secondary mt-3">Pulsa tu nombre para entrar</p>
           </div>
 

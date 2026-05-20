@@ -1,30 +1,25 @@
 {
-  "name": "Foodint",
-  "short_name": "Foodint",
-  "description": "App del equipo de Foodint",
+  "name": "Folvy",
+  "short_name": "Folvy",
+  "description": "Folvy - Hosteleria profesional. Software profesional.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#F5E9D9",
-  "theme_color": "#7C1A1A",
+  "background_color": "#F5F4F0",
+  "theme_color": "#1E3A5F",
   "icons": [
     {
-      "src": "/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/favicon.svg",
+      "src": "/folvy_isotipo_manager.svg",
       "sizes": "any",
-      "type": "image/svg+xml"
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/folvy_isotipo_manager.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
     }
   ]
 }

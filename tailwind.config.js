@@ -15,6 +15,16 @@ export default {
           hover: '#162E4A',
           bg: '#EDECE6',
         },
+        // Token de marca Folvy: color terracota del arco del isotipo y punto
+        // central del logo. Uso: enfasis visual, CTAs destacados, hover
+        // sobre elementos clave de marca. NO confundir con 'warning' (que
+        // es semantico, para alertas/avisos de validacion). Anadido Bloque H
+        // Sprint 3, 20/05/2026.
+        'terracota': {
+          DEFAULT: '#D67442',
+          hover: '#C25F2E',
+          bg: '#FAEFE6',
+        },
         'success': {
           DEFAULT: '#3F5C2F',
           bg: '#E2E8DA',

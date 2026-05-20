@@ -1,0 +1,10 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <title>Isotipo Folvy Manager app icon</title>
+  <desc>Isotipo cuadrado con esquinas redondeadas, círculo azul marino con arco terracota sobre fondo cream</desc>
+  <rect x="0" y="0" width="512" height="512" rx="102" fill="#F5F4F0"/>
+  <g transform="translate(256,256)">
+    <circle cx="0" cy="0" r="147" fill="none" stroke="#1E3A5F" stroke-width="22"/>
+    <path d="M 0 -147 A 147 147 0 0 1 103.9 103.9" fill="none" stroke="#D67442" stroke-width="38" stroke-linecap="round"/>
+    <circle cx="0" cy="0" r="22" fill="#D67442"/>
+  </g>
+</svg>

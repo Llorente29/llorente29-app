@@ -1,0 +1,11 @@
+<svg width="680" height="200" viewBox="0 0 680 200" xmlns="http://www.w3.org/2000/svg">
+  <title>Logo Folvy versión oscura sobre fondo azul marino</title>
+  <desc>Isotipo circular crema con arco terracota y wordmark "folvy" en Fraunces serif sobre fondo Ink</desc>
+  <rect x="0" y="0" width="680" height="200" fill="#1E3A5F"/>
+  <g transform="translate(150,100)">
+    <circle cx="0" cy="0" r="42" fill="none" stroke="#F5F4F0" stroke-width="6"/>
+    <path d="M 0 -42 A 42 42 0 0 1 29.7 29.7" fill="none" stroke="#D67442" stroke-width="11" stroke-linecap="round"/>
+    <circle cx="0" cy="0" r="6" fill="#F5F4F0"/>
+  </g>
+  <text x="220" y="130" font-family="Fraunces, Georgia, serif" font-size="120" font-weight="700" fill="#F5F4F0">folvy</text>
+</svg>
