@@ -9,7 +9,8 @@
 // FLOW:
 //   1. User introduce email + submit.
 //   2. resetPasswordForEmail(email) en authService.
-//   3. Mensaje neutro siempre (evita enumeración de cuentas, CWE-203).
+//   3. logSecurityEvent('password_reset_requested', { email }) (Sprint 2 E1).
+//   4. Mensaje neutro siempre (evita enumeración de cuentas, CWE-203).
 //
 // DISEÑO Sesión 9:
 //   - Decisión 2: si el user ya está autenticado, NO redirigimos. Permitimos
@@ -17,13 +18,18 @@
 //   - Mensaje neutro en éxito Y en fallo silenciable. Solo errores técnicos
 //     visibles (network, supabase down) muestran detalle real.
 //
-// PENDIENTE Bloque E1: insertar logSecurityEvent('password_reset_requested',
-//   { email }) cuando se ataque audit log integration.
+// CHANGELOG Sesión 10 E1 (20/05/2026):
+//   - Se loggea password_reset_requested incluso cuando el error es
+//     silenciado al usuario. Esto da visibilidad en auditoría sobre intentos
+//     de reset (incluso a emails que no existen). Útil para detectar
+//     reconnaissance.
+//   - actor_user_id será null en la mayoría de casos (no hay sesión).
+//     El email queda en details para correlación.
 
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Mail, AlertCircle, CheckCircle2, ArrowLeft } from 'lucide-react'
-import { resetPasswordForEmail } from '../services/authService'
+import { resetPasswordForEmail, logSecurityEvent } from '../services/authService'
 
 type FormState = 'idle' | 'submitting' | 'sent' | 'error'
 
@@ -46,6 +52,18 @@ export default function ResetPasswordPage() {
     setFormState('submitting')
 
     const result = await resetPasswordForEmail(trimmedEmail)
+
+    // E1 (20/05/2026): registrar el intento de reset SIEMPRE, antes de
+    // decidir qué mostrar al user. Independientemente de si el email
+    // existe o no, queremos visibilidad en auditoría:
+    //  - Para detectar intentos de reconnaissance (probar emails al azar).
+    //  - Para correlacionar con login_failed cuando se sospeche credential
+    //    stuffing.
+    // Usamos void para no bloquear el flow principal con el await del INSERT.
+    void logSecurityEvent('password_reset_requested', {
+      email: trimmedEmail,
+      ok: result.ok,
+    })
 
     // Importante: SIEMPRE mostramos éxito al usuario, incluso si Supabase
     // devolvió error (puede ser email inexistente). Solo errores técnicos

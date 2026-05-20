@@ -18,6 +18,15 @@
 //     email+password con PKCE (D-S2.1). Mantiene `sendMagicLink` como
 //     deprecated (D-S2.2) hasta Sprint 3.
 //
+//   Sprint 2 Bloque E1 (20/05/2026): integración del audit log.
+//     - signInWithPassword loggea login_success / login_failed.
+//     - signOut loggea logout antes de cerrar sesión (para que actor_user_id
+//       siga disponible vía getCurrentUser() al hacer el INSERT).
+//     - logSecurityEvent NO se modifica (Regla 4 proyecto).
+//     - Las pantallas WelcomePage, ResetPasswordPage y ResetPasswordConfirmPage
+//       loggean sus eventos directamente desde la pantalla (welcome_completed,
+//       password_reset_requested, password_reset_completed).
+//
 // Decisiones aplicadas:
 //   D-S2.1  flowType pkce (en supabase.ts).
 //   D-S2.2  sendMagicLink marcado @deprecated, no se borra hasta Sprint 3.
@@ -80,6 +89,11 @@ function getRedirectBaseUrl(): string {
  * (Edge Function) para resolver el redirect post-login según el estado
  * real de las cuentas del user. Esa orquestación NO vive aquí.
  *
+ * Sprint 2 E1 (20/05/2026): se loggea login_success o login_failed en
+ * security_audit_log. El email se almacena en details para auditoría
+ * (no es PII sensible en este contexto: el atacante ya sabe el email si
+ * está probando credenciales). NO se almacena la password.
+ *
  * @param email - email del usuario
  * @param password - password en claro (Supabase lo hashea server-side con bcrypt)
  */
@@ -98,12 +112,29 @@ export async function signInWithPassword(
     // Errores comunes: 'Invalid login credentials', 'Email not confirmed',
     // 'Too many requests' (rate limit), 'User not found'.
     console.error('[auth] signInWithPassword:', error)
+    // E1: registrar intento fallido. Sin actor_user_id (no hay sesión),
+    // se registra solo email + error en details.
+    void logSecurityEvent('login_failed', {
+      email,
+      error_message: error.message,
+    })
     return { ok: false, error: error.message }
   }
 
   if (!data.user) {
+    void logSecurityEvent('login_failed', {
+      email,
+      error_message: 'Login sin user retornado',
+    })
     return { ok: false, error: 'Login sin user retornado' }
   }
+
+  // E1: registrar login exitoso. En este punto ya hay sesión activa,
+  // por lo que getCurrentUser() dentro de logSecurityEvent resuelve
+  // actor_user_id correctamente.
+  void logSecurityEvent('login_success', {
+    email,
+  })
 
   return { ok: true, user: data.user }
 }
@@ -126,6 +157,11 @@ export async function signInWithPassword(
  * Por seguridad, esta función SIEMPRE devuelve `ok: true` (incluso si el
  * email no existe), evitando que un atacante enumere users válidos.
  * El frontend muestra siempre el mismo mensaje neutro.
+ *
+ * NOTA E1: el logging del evento `password_reset_requested` se hace
+ * en ResetPasswordPage tras invocar esta función (no aquí), porque
+ * actor_user_id es null en este flow (no hay sesión activa) y el contexto
+ * más completo (email solicitado) lo tiene la pantalla.
  *
  * @param email - email del usuario
  */
@@ -165,6 +201,10 @@ export async function resetPasswordForEmail(
  *
  * Supabase valida la password contra el policy configurado en el panel
  * (D-S2.14: min 8 chars, Lowercase+Uppercase+Digits, leaked passwords ON).
+ *
+ * NOTA E1: el logging del evento `password_reset_completed` /
+ * `welcome_completed` lo hacen las pantallas que llaman a esta función
+ * (ResetPasswordConfirmPage, WelcomePage), no este wrapper.
  *
  * @param newPassword - nueva password en claro
  */
@@ -302,9 +342,23 @@ export async function getCurrentUser(): Promise<User | null> {
 /**
  * Cierra sesión del usuario actual.
  * Limpia tokens locales y notifica a Supabase.
+ *
+ * Sprint 2 E1 (20/05/2026): se loggea el evento `logout` ANTES de la
+ * llamada a supabase.auth.signOut(), para que getCurrentUser() dentro
+ * de logSecurityEvent siga resolviendo actor_user_id. Si invocamos el
+ * log después del signOut, actor_user_id sería null y el registro
+ * perdería información valiosa para auditoría.
+ *
+ * Se usa `await` (no `void`) para garantizar que el INSERT en
+ * security_audit_log se complete antes de invalidar la sesión. Si el log
+ * falla, no bloqueamos el signOut (logSecurityEvent ya tiene try/catch
+ * interno y solo emite un console.warn).
  */
 export async function signOut(): Promise<{ ok: boolean; error?: string }> {
   if (!supabase) return { ok: false, error: 'Supabase no disponible' }
+
+  // E1: registrar logout antes de invalidar la sesión.
+  await logSecurityEvent('logout')
 
   const { error } = await supabase.auth.signOut()
   if (error) {

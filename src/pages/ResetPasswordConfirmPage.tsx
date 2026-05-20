@@ -21,7 +21,8 @@
 //   3. Esperar a que termine el procesamiento (variable waitingForPkce).
 //   4. Una vez hay sesión: user introduce password nueva + repetir.
 //   5. updateUserPassword(password).
-//   6. Decisión 1 (Sesión 9): NO redirect a /login. checkAccountStatus
+//   6. logSecurityEvent('password_reset_completed') (Sprint 2 E1).
+//   7. Decisión 1 (Sesión 9): NO redirect a /login. checkAccountStatus
 //      + navigate al Shell (Enfoque B, consistente con WelcomePage).
 //
 // ESTADOS POSIBLES:
@@ -42,14 +43,16 @@
 //   - Mensaje de "link inválido" cuando expira el PKCE sin sesión, con
 //     link manual a /login en vez de Navigate forzado.
 //
-// PENDIENTE Bloque E1: insertar logSecurityEvent('password_reset_completed')
-//   tras éxito del updateUserPassword.
+// CHANGELOG Sesión 10 E1 (20/05/2026):
+//   - logSecurityEvent('password_reset_completed') tras updateUserPassword
+//     exitoso. En este punto hay sesión activa, actor_user_id se resuelve
+//     correctamente vía getCurrentUser() dentro de logSecurityEvent.
 
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Lock, AlertCircle, KeyRound, ArrowLeft } from 'lucide-react'
 import { useAuth } from '../modules/multitenancy/hooks/useAuth'
-import { updateUserPassword } from '../services/authService'
+import { updateUserPassword, logSecurityEvent } from '../services/authService'
 import { checkAccountStatus } from '../services/accountStatusService'
 
 type FormState = 'idle' | 'submitting' | 'error'
@@ -196,7 +199,14 @@ export default function ResetPasswordConfirmPage() {
       return
     }
 
-    // 2) Resolver redirect al Shell con checkAccountStatus (Enfoque B,
+    // 2) E1 (20/05/2026): registrar password_reset_completed. En este
+    //    punto la sesión está activa (PKCE ya intercambió el code) y
+    //    updateUserPassword devolvió ok, así que actor_user_id resuelve
+    //    correctamente vía getCurrentUser() dentro de logSecurityEvent.
+    //    Usamos void para no bloquear el flow principal con el INSERT.
+    void logSecurityEvent('password_reset_completed')
+
+    // 3) Resolver redirect al Shell con checkAccountStatus (Enfoque B,
     //    Decisión 1 Sesión 9). El user ya tiene sesión válida; no
     //    necesita reentrar.
     try {

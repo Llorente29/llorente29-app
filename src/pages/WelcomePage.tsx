@@ -15,8 +15,9 @@
 //   4. updateUserPassword(password)
 //   5. UPDATE user_profiles SET terms_accepted_at=now(),
 //      welcome_completed_at=now() WHERE user_id = auth.uid().
-//   6. refreshUserProfile() en AppContext.
-//   7. checkAccountStatus() → navigate(redirect_to) (Enfoque B).
+//   6. logSecurityEvent('welcome_completed') (Sprint 2 E1).
+//   7. refreshUserProfile() en AppContext.
+//   8. checkAccountStatus() → navigate(redirect_to) (Enfoque B).
 //
 // CHANGELOG Sesión 10 (post-bug Test 2):
 //   - Detección de #access_token (invite legacy) y ?code= (PKCE) en URL
@@ -24,13 +25,19 @@
 //     redirigir, igual que ResetPasswordConfirmPage.
 //   - Sin esta espera, el flow invite caía a /login antes de que la sesión
 //     creada por el token se propagase al context.
+//
+// CHANGELOG Sesión 10 E1 (20/05/2026):
+//   - logSecurityEvent('welcome_completed') tras UPDATE exitoso. Importante
+//     loggearlo ANTES de refreshUserProfile, porque la sesión está activa
+//     y getCurrentUser() dentro de logSecurityEvent resuelve actor_user_id.
+//     Si fallase la query del refresh, el evento ya queda registrado.
 
 import { useEffect, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { Lock, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { useAuth } from '../modules/multitenancy/hooks/useAuth'
 import { useApp } from '../context/AppContext'
-import { updateUserPassword } from '../services/authService'
+import { updateUserPassword, logSecurityEvent } from '../services/authService'
 import { checkAccountStatus } from '../services/accountStatusService'
 import { supabase } from '../lib/supabase'
 
@@ -188,7 +195,13 @@ export default function WelcomePage() {
       return
     }
 
-    // 3) Refrescar userProfile en AppContext con las columnas actualizadas.
+    // 3) E1 (20/05/2026): registrar welcome_completed ANTES de refresh.
+    //    La sesión está activa y el UPDATE de user_profiles ya fue OK.
+    //    actor_user_id resuelve vía getCurrentUser() dentro del logger.
+    //    Usamos void para no bloquear el flow con el INSERT.
+    void logSecurityEvent('welcome_completed')
+
+    // 4) Refrescar userProfile en AppContext con las columnas actualizadas.
     //    CRÍTICO: si no refrescamos, App.tsx guard 3-bis seguirá viendo
     //    welcome_completed_at=null y rebotará a /welcome.
     const refreshed = await refreshUserProfile()
@@ -202,7 +215,7 @@ export default function WelcomePage() {
       return
     }
 
-    // 4) Resolver redirect post-welcome con checkAccountStatus (Enfoque B).
+    // 5) Resolver redirect post-welcome con checkAccountStatus (Enfoque B).
     try {
       const status = await checkAccountStatus()
       if (status.status === 'ok' && status.redirect_to) {
