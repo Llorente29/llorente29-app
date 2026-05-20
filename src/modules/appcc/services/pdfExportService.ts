@@ -289,7 +289,7 @@ export async function generateDailySummaryPdf(
   doc.setTextColor(GRAY[0], GRAY[1], GRAY[2])
   doc.setFont('helvetica', 'italic')
   doc.text(
-    'Documento generado automáticamente por Foodint APPCC. Los registros están respaldados por firma electrónica simple según Reglamento eIDAS UE 910/2014.',
+    'Documento generado automáticamente por Folvy APPCC. Los registros están respaldados por firma electrónica simple según Reglamento eIDAS UE 910/2014.',
     margin, y, { maxWidth: contentW }
   )
 
@@ -402,7 +402,7 @@ export async function generateControlsReportPdf(
   doc.setFontSize(7)
   doc.setTextColor(GRAY[0], GRAY[1], GRAY[2])
   doc.setFont('helvetica', 'italic')
-  doc.text('Documento generado por Foodint APPCC. Registros respaldados por firma electrónica simple (eIDAS UE 910/2014).', margin, y, { maxWidth: contentW })
+  doc.text('Documento generado por Folvy APPCC. Registros respaldados por firma electrónica simple (eIDAS UE 910/2014).', margin, y, { maxWidth: contentW })
 
   drawFooter(doc)
   return finalizePdf(doc, `APPCC_Controles_${fromDate}_${toDate}_${locationInfo.name.replace(/\s/g, '_')}.pdf`, options)
@@ -521,7 +521,7 @@ export async function generateIncidentsReportPdf(
   doc.setFontSize(7)
   doc.setTextColor(GRAY[0], GRAY[1], GRAY[2])
   doc.setFont('helvetica', 'italic')
-  doc.text('Documento generado por Foodint APPCC.', margin, y, { maxWidth: contentW })
+  doc.text('Documento generado por Folvy APPCC.', margin, y, { maxWidth: contentW })
 
   drawFooter(doc)
   return finalizePdf(doc, `APPCC_Incidencias_${fromDate}_${toDate}_${locationInfo.name.replace(/\s/g, '_')}.pdf`, options)
@@ -714,7 +714,7 @@ export async function generateInspectorReportPdf(
   doc.setTextColor(GRAY[0], GRAY[1], GRAY[2])
   doc.setFont('helvetica', 'italic')
   doc.text(
-    'Informe generado automáticamente por Foodint APPCC. Todos los registros están respaldados por firma electrónica simple según Reglamento eIDAS UE 910/2014. ' +
+    'Informe generado automáticamente por Folvy APPCC. Todos los registros están respaldados por firma electrónica simple según Reglamento eIDAS UE 910/2014. ' +
     'Este documento puede ser presentado ante las autoridades sanitarias competentes conforme al Reglamento CE 852/2004 y RD 109/2010.',
     margin, y, { maxWidth: contentW }
   )
@@ -737,7 +737,7 @@ function drawHeader(
   doc.setTextColor(255, 255, 255)
   doc.setFontSize(8)
   doc.setFont('helvetica', 'bold')
-  doc.text('FOODINT APPCC', margin, 8)
+  doc.text('FOLVY APPCC', margin, 8)
   doc.setFont('helvetica', 'normal')
   doc.text(subtitle, margin + 80, 8)
   doc.text(new Date().toLocaleDateString('es-ES'), margin + contentW - 20, 8)
@@ -888,7 +888,7 @@ function drawFooter(doc: jsPDF): void {
     doc.setFontSize(7)
     doc.setTextColor(GRAY[0], GRAY[1], GRAY[2])
     doc.setFont('helvetica', 'normal')
-    doc.text(`Foodint APPCC · Generado ${new Date().toLocaleString('es-ES')}`, 15, H - 8)
+    doc.text(`Folvy APPCC · Generado ${new Date().toLocaleString('es-ES')}`, 15, H - 8)
     doc.text(`Página ${i} de ${pages}`, W - 40, H - 8)
   }
 }
@@ -1137,7 +1137,7 @@ export async function generateIncidentCapaPdf(
     doc.setFontSize(7)
     doc.setTextColor(GRAY[0], GRAY[1], GRAY[2])
     doc.setFont('helvetica', 'normal')
-    doc.text(`Foodint APPCC · CAPA Report · Generado ${new Date().toLocaleString('es-ES')}`, 15, H - 8)
+    doc.text(`Folvy APPCC · CAPA Report · Generado ${new Date().toLocaleString('es-ES')}`, 15, H - 8)
     doc.text(`Página ${i} de ${pages}`, W - 40, H - 8)
   }
 

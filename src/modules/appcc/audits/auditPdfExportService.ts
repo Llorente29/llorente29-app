@@ -270,7 +270,7 @@ export async function generateAuditPdf(
     doc.setTextColor(GRAY[0], GRAY[1], GRAY[2])
     doc.setFont('helvetica', 'normal')
     doc.text(
-      `Foodint APPCC · Auditoría · Generado ${new Date().toLocaleString('es-ES')}`,
+      `Folvy APPCC · Auditoría · Generado ${new Date().toLocaleString('es-ES')}`,
       15, H - 8
     )
     doc.text(`Página ${i} de ${pages}`, W - 40, H - 8)
