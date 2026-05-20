@@ -2,42 +2,30 @@
 //
 // Pantalla de activación de cuenta (D-S2.30 paso 3, D2).
 // El user aterriza aquí tras pulsar el enlace del email de invite.
-// La plantilla "Invite user" de Supabase usa {{ .ConfirmationURL }}, así que
-// al llegar a /welcome ya hay sesión activa (detectSessionInUrl: true).
 //
 // FLOW:
-//   1. Aterriza con sesión activa (sin token a verificar manualmente).
-//   2. Si no hay sesión → <Navigate to="/login" /> declarativo (sin
-//      side-effects en render).
+//   1. Aterriza con sesión que supabase-js procesa asíncronamente:
+//      - Flow invite legacy: #access_token=... en hash.
+//      - Flow PKCE invite: ?code=... en query.
+//      Ambos son procesados por detectSessionInUrl: true al cargar el bundle.
+//   2. ESPERAR a que el procesamiento termine antes de decidir si redirigir
+//      (variable waitingForSession). Sin esta espera, AppContext.authUserId
+//      está null durante ~50-300ms y WelcomePage redirigiría a /login.
 //   3. User rellena password + repetir password + acepta T&C.
 //   4. updateUserPassword(password)
 //   5. UPDATE user_profiles SET terms_accepted_at=now(),
-//      welcome_completed_at=now() WHERE user_id = auth.uid()
-//      (CHECK constraint exige terms_accepted_at <= welcome_completed_at:
-//      por eso van en el mismo statement).
-//   6. refreshUserProfile() en AppContext: re-carga el profile con las
-//      columnas welcome_completed_at/terms_accepted_at actualizadas. CRÍTICO:
-//      sin este refresh, App.tsx guard 3-bis vería el profile stale y
-//      forzaría a /welcome en bucle tras navegar al Shell.
-//   7. checkAccountStatus() → navigate(redirect_to) (Enfoque B post-welcome).
+//      welcome_completed_at=now() WHERE user_id = auth.uid().
+//   6. refreshUserProfile() en AppContext.
+//   7. checkAccountStatus() → navigate(redirect_to) (Enfoque B).
 //
-// CHANGELOG D-S2.30 paso 3-bis (20/05/2026):
-//   - Movido el guard `!isAuthenticated` de side-effect-en-render a
-//     <Navigate> declarativo. Antes era `if (!isAuthenticated) {
-//     navigate('/login'); return null }` en render, que viola las reglas
-//     de React 18 strict mode.
-//   - Añadida llamada a refreshUserProfile() tras UPDATE exitoso, antes
-//     del checkAccountStatus()+navigate. Cierra el bucle "welcome OK pero
-//     state stale" detectado en review.
-//   - Si refreshUserProfile() falla, NO navegamos: mostramos error pidiendo
-//     al user recargar la página (Opción A acordada en review).
-//   - UPDATE directo a user_profiles sin cast tras regenerar database.ts
-//     en pre-work Sesión 9 (20/05/2026). El cast
-//     `as unknown as RowUserProfileUpdate` se eliminó al estar las columnas
-//     terms_accepted_at, welcome_completed_at y last_password_change_at
-//     en el tipo autogenerado.
+// CHANGELOG Sesión 10 (post-bug Test 2):
+//   - Detección de #access_token (invite legacy) y ?code= (PKCE) en URL
+//     inicial al montar. Si hay alguno, esperar timeout 3s antes de
+//     redirigir, igual que ResetPasswordConfirmPage.
+//   - Sin esta espera, el flow invite caía a /login antes de que la sesión
+//     creada por el token se propagase al context.
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { Lock, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { useAuth } from '../modules/multitenancy/hooks/useAuth'
@@ -49,20 +37,61 @@ import { supabase } from '../lib/supabase'
 type FormState = 'idle' | 'submitting' | 'error'
 
 // Política password Supabase D-S2.14: min 8, lowercase + uppercase + digits.
-// Validación cliente preventiva; Supabase la valida también server-side.
 const PASSWORD_MIN_LENGTH = 8
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/
+
+// Tiempo máximo de espera (ms) para que supabase-js procese el token de
+// invite antes de dar por inválido el flow. Probado E2E en reset password:
+// 3s es margen amplio sobre los 50-300ms reales.
+const SESSION_PROCESSING_TIMEOUT_MS = 3000
 
 export default function WelcomePage() {
   const navigate = useNavigate()
   const { user, isAuthenticated, isAuthResolved, signOut } = useAuth()
   const { refreshUserProfile } = useApp()
 
+  // Detección inicial al montar: ¿venimos de un link de invite?
+  // Calculado UNA VEZ con useState inicializer porque supabase-js LIMPIA
+  // el token tras procesarlo, y leer en cada render daría resultados
+  // inconsistentes.
+  const [initialHasToken] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false
+    // Hash: #access_token=... (invite legacy implicit flow).
+    const hashHasToken = window.location.hash.includes('access_token=')
+    // Query: ?code=... (invite PKCE) o ?error=... (token expirado etc.).
+    const params = new URLSearchParams(window.location.search)
+    const queryHasToken = params.has('code') || params.has('error')
+    return hashHasToken || queryHasToken
+  })
+
+  // Flag de "estamos esperando que termine el procesamiento del token".
+  const [waitingForSession, setWaitingForSession] = useState<boolean>(initialHasToken)
+
   const [password, setPassword] = useState('')
   const [passwordRepeat, setPasswordRepeat] = useState('')
   const [acceptedTerms, setAcceptedTerms] = useState(false)
   const [formState, setFormState] = useState<FormState>('idle')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+
+  // Timeout de espera: si tras 3s sigue sin haber sesión, declarar
+  // inválido el flow.
+  useEffect(() => {
+    if (!waitingForSession) return
+
+    const timer = setTimeout(() => {
+      console.warn('[WelcomePage] Procesamiento de token timeout sin sesión')
+      setWaitingForSession(false)
+    }, SESSION_PROCESSING_TIMEOUT_MS)
+
+    return () => clearTimeout(timer)
+  }, [waitingForSession])
+
+  // Cuando llega sesión, dejar de esperar.
+  useEffect(() => {
+    if (waitingForSession && isAuthenticated) {
+      setWaitingForSession(false)
+    }
+  }, [waitingForSession, isAuthenticated])
 
   // Esperar a que Auth resuelva antes de decidir qué pintar.
   if (!isAuthResolved) {
@@ -73,8 +102,18 @@ export default function WelcomePage() {
     )
   }
 
-  // Sin sesión activa → no estamos en flow de invite válido. Redirect
-  // declarativo a /login (sin side-effects en render).
+  // Aún esperando que supabase-js procese el token → mostrar "Verificando..."
+  // en lugar de redirigir a /login (que sería el bug original).
+  if (waitingForSession && !isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-page">
+        <p className="text-sm text-text-secondary">Verificando enlace...</p>
+      </div>
+    )
+  }
+
+  // Sin sesión activa Y sin esperar: el link del invite expiró, ya se usó,
+  // o el user navegó manualmente sin haber pasado por el flow.
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />
   }
@@ -152,10 +191,6 @@ export default function WelcomePage() {
     // 3) Refrescar userProfile en AppContext con las columnas actualizadas.
     //    CRÍTICO: si no refrescamos, App.tsx guard 3-bis seguirá viendo
     //    welcome_completed_at=null y rebotará a /welcome.
-    //
-    //    Opción A acordada en review: si refresh falla, NO navegamos.
-    //    El UPDATE en BBDD ya se hizo; pedimos recargar página para que
-    //    AppContext reinicie limpio.
     const refreshed = await refreshUserProfile()
     if (!refreshed || !refreshed.welcomeCompletedAt) {
       console.error('[WelcomePage] refreshUserProfile devolvió profile sin welcome_completed_at')
@@ -175,8 +210,6 @@ export default function WelcomePage() {
         return
       }
       // Estados terminales (no_active_profile / suspended / deleted).
-      // No debería ocurrir tras un welcome OK, pero por defensividad
-      // cerramos sesión y mostramos error.
       await signOut()
       setErrorMsg(
         status.message ??
@@ -339,10 +372,6 @@ export default function WelcomePage() {
    Helper: traducir errores de updateUserPassword
    ===================================================== */
 
-/**
- * updateUserPassword devuelve errores Supabase en inglés. Los traducimos
- * sin exponer el original al user. Si no reconocemos, mensaje genérico.
- */
 function translatePasswordError(supabaseError: string): string {
   const msg = supabaseError.toLowerCase()
   if (msg.includes('at least 8') || msg.includes('weak password')) {
