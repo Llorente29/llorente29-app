@@ -38,6 +38,7 @@ import { Navigate, useNavigate } from 'react-router-dom'
 import { Lock, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { useAuth } from '../modules/multitenancy/hooks/useAuth'
 import { useApp } from '../context/AppContext'
+import Logo from '../components/Logo'
 import { updateUserPassword, logSecurityEvent } from '../services/authService'
 import { checkAccountStatus } from '../services/accountStatusService'
 import { supabase } from '../lib/supabase'
@@ -254,7 +255,7 @@ export default function WelcomePage() {
       <div className="w-full max-w-md">
         {/* Cabecera */}
         <div className="text-center mb-8">
-          <h1 className="text-5xl font-display text-accent">Foodint</h1>
+          <Logo size="lg" variant="light" className="mb-2" />
           <p className="text-sm text-text-secondary mt-1">App del equipo</p>
         </div>
 
@@ -349,7 +350,7 @@ export default function WelcomePage() {
                 <a href="#" className="text-accent hover:underline" target="_blank" rel="noopener noreferrer">
                   Política de Privacidad
                 </a>
-                {' '}de Foodint.
+                {' '}de Folvy.
               </span>
             </label>
 
@@ -377,7 +378,7 @@ export default function WelcomePage() {
 
         {/* Pie */}
         <p className="text-center text-xs text-text-secondary mt-4">
-          Foodint · Hostelería Pro
+          Folvy · Restauración Profesional
         </p>
       </div>
     </div>

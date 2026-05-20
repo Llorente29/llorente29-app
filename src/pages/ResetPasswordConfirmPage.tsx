@@ -38,6 +38,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { Lock, AlertCircle, KeyRound, ArrowLeft } from 'lucide-react'
 import { useAuth } from '../modules/multitenancy/hooks/useAuth'
 import { updateUserPassword, logSecurityEvent } from '../services/authService'
+import Logo from '../components/Logo'
 import { checkAccountStatus } from '../services/accountStatusService'
 import {
   PASSWORD_MIN_LENGTH,
@@ -124,7 +125,7 @@ export default function ResetPasswordConfirmPage() {
       <div className="min-h-screen bg-page flex items-center justify-center p-4">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <h1 className="text-5xl font-display text-accent">Foodint</h1>
+            <Logo size="lg" variant="light" className="mb-2" />
             <p className="text-sm text-text-secondary mt-1">App del equipo</p>
           </div>
           <div className="bg-card rounded-xl shadow-lg overflow-hidden border border-border-default">
@@ -148,7 +149,7 @@ export default function ResetPasswordConfirmPage() {
             </div>
           </div>
           <p className="text-center text-xs text-text-secondary mt-4">
-            Foodint · Hostelería Pro
+            Folvy · Restauración Profesional
           </p>
         </div>
       </div>
@@ -233,7 +234,7 @@ export default function ResetPasswordConfirmPage() {
       <div className="w-full max-w-md">
         {/* Cabecera */}
         <div className="text-center mb-8">
-          <h1 className="text-5xl font-display text-accent">Foodint</h1>
+          <Logo size="lg" variant="light" className="mb-2" />
           <p className="text-sm text-text-secondary mt-1">App del equipo</p>
         </div>
 
@@ -319,7 +320,7 @@ export default function ResetPasswordConfirmPage() {
 
         {/* Pie */}
         <p className="text-center text-xs text-text-secondary mt-4">
-          Foodint · Hostelería Pro
+          Folvy · Restauración Profesional
         </p>
       </div>
     </div>

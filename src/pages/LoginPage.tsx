@@ -35,6 +35,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../modules/multitenancy/hooks/useAuth'
+import Logo from '../components/Logo'
 import { checkAccountStatus } from '../services/accountStatusService'
 import { Lock, Mail, AlertCircle, LogIn } from 'lucide-react'
 
@@ -130,9 +131,7 @@ export default function LoginPage({ onCheckSession: _onCheckSession }: Props) {
       <div className="w-full max-w-md">
         {/* Logo / cabecera */}
         <div className="text-center mb-8">
-          <h1 className="text-5xl font-display text-accent">
-            Foodint
-          </h1>
+          <Logo size="lg" variant="light" className="mb-2" />
           <p className="text-sm text-text-secondary mt-1">App del equipo</p>
         </div>
 
@@ -245,7 +244,7 @@ export default function LoginPage({ onCheckSession: _onCheckSession }: Props) {
 
         {/* Pie */}
         <p className="text-center text-xs text-text-secondary mt-4">
-          Foodint · Hostelería Pro
+          Folvy · Restauración Profesional
         </p>
       </div>
     </div>

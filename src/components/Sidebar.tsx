@@ -208,7 +208,7 @@ export default function Sidebar({
         <LogoSquare size={32} />
         {showLabels && (
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold tracking-tight truncate text-text-primary">Foodint</p>
+            <p className="text-sm font-semibold tracking-tight truncate text-text-primary">Folvy</p>
             <p className="text-xs text-text-secondary truncate">App del equipo</p>
           </div>
         )}

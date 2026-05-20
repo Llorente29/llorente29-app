@@ -30,6 +30,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Mail, AlertCircle, CheckCircle2, ArrowLeft } from 'lucide-react'
 import { resetPasswordForEmail, logSecurityEvent } from '../services/authService'
+import Logo from '../components/Logo'
 
 type FormState = 'idle' | 'submitting' | 'sent' | 'error'
 
@@ -93,7 +94,7 @@ export default function ResetPasswordPage() {
       <div className="w-full max-w-md">
         {/* Cabecera */}
         <div className="text-center mb-8">
-          <h1 className="text-5xl font-display text-accent">Foodint</h1>
+          <Logo size="lg" variant="light" className="mb-2" />
           <p className="text-sm text-text-secondary mt-1">App del equipo</p>
         </div>
 
@@ -164,7 +165,7 @@ export default function ResetPasswordPage() {
                 </p>
                 <p className="text-sm text-text-secondary">
                   Si <strong className="text-text-primary">{email}</strong> está
-                  registrado en Foodint, recibirás un enlace para crear una
+                  registrado en Folvy, recibirás un enlace para crear una
                   nueva contraseña en los próximos minutos.
                 </p>
                 <p className="text-xs text-text-secondary pt-2">
@@ -185,7 +186,7 @@ export default function ResetPasswordPage() {
 
         {/* Pie */}
         <p className="text-center text-xs text-text-secondary mt-4">
-          Foodint · Hostelería Pro
+          Folvy · Restauración Profesional
         </p>
       </div>
     </div>
