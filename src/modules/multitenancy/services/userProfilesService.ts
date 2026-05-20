@@ -25,10 +25,14 @@
 // Convención de errores: todos los métodos LANZAN Error si falla la query.
 //
 // CHANGELOG D-S2.30 paso 3-bis (20/05/2026):
-//   El mapper rowToUserProfile() ahora expone las 3 columnas de onboarding/auth
-//   (welcomeCompletedAt, termsAcceptedAt, lastPasswordChangeAt). Ya existían
-//   en BBDD desde Sesión 6 (Sprint 1) pero el dominio no las mapeaba, lo que
-//   bloqueaba el guard 3-bis de App.tsx.
+//   El mapper rowToUserProfile() expone las 3 columnas de onboarding/auth
+//   (welcomeCompletedAt, termsAcceptedAt, lastPasswordChangeAt). Existen
+//   en BBDD desde Sesión 6 (Sprint 1).
+//
+//   Acceso directo `row.welcome_completed_at` tras regenerar database.ts
+//   en pre-work Sesión 9 (20/05/2026). El cast defensivo
+//   `(row as Record<string, unknown>)` se eliminó al estar las columnas
+//   en el tipo autogenerado.
 //
 //   userProfileInsertToRow() NO incluye estas columnas: en BBDD tienen
 //   DEFAULT NULL y un INSERT vía service nunca debería establecerlas
@@ -55,17 +59,7 @@ import type {
 // ─────────────────────────────────────────────────────────────────────
 
 // NOTA: rowToUserProfile exportado para tests. No usar fuera de tests/service.
-//
-// Las 3 columnas welcome_completed_at/terms_accepted_at/last_password_change_at
-// pueden no estar todavía en el tipo Row* autogenerado si database.ts no se
-// ha regenerado tras los cambios de schema. Se accede de forma defensiva
-// con `(row as Record<string, unknown>)[col]` y se castea a string|null,
-// que coincide con cómo Supabase materializa columnas timestamp nullable.
-//
-// TODO post-Sprint 2: regenerar database.ts con `npm run types:gen` y
-// reemplazar este acceso defensivo por `row.welcome_completed_at` directo.
 export function rowToUserProfile(row: RowUserProfile): UserProfile {
-  const r = row as Record<string, unknown>
   return {
     id: row.id,
     userId: row.user_id,
@@ -74,9 +68,9 @@ export function rowToUserProfile(row: RowUserProfile): UserProfile {
     role: row.role as UserProfileRole,
     displayName: row.display_name,
     active: row.active,
-    welcomeCompletedAt: (r.welcome_completed_at as string | null | undefined) ?? null,
-    termsAcceptedAt: (r.terms_accepted_at as string | null | undefined) ?? null,
-    lastPasswordChangeAt: (r.last_password_change_at as string | null | undefined) ?? null,
+    welcomeCompletedAt: row.welcome_completed_at,
+    termsAcceptedAt: row.terms_accepted_at,
+    lastPasswordChangeAt: row.last_password_change_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }

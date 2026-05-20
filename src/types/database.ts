@@ -419,8 +419,27 @@ export type Database = {
         }
         Relationships: []
       }
+      _backup_20260517_user_profiles_read_policy: {
+        Row: {
+          cmd: string | null
+          old_qual: string | null
+          policy_name: string | null
+        }
+        Insert: {
+          cmd?: string | null
+          old_qual?: string | null
+          policy_name?: string | null
+        }
+        Update: {
+          cmd?: string | null
+          old_qual?: string | null
+          policy_name?: string | null
+        }
+        Relationships: []
+      }
       accounts: {
         Row: {
+          archived_at: string | null
           billing_address: Json | null
           billing_email: string | null
           billing_phone: string | null
@@ -429,6 +448,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           currency: string | null
+          deleted_at: string | null
           id: string
           is_internal: boolean
           legal_name: string | null
@@ -438,11 +458,15 @@ export type Database = {
           slug: string
           status: string
           stripe_customer_id: string | null
+          suspended_at: string | null
+          suspended_by: string | null
+          suspension_reason: string | null
           timezone: string | null
           trial_ends_at: string | null
           updated_at: string
         }
         Insert: {
+          archived_at?: string | null
           billing_address?: Json | null
           billing_email?: string | null
           billing_phone?: string | null
@@ -451,6 +475,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           currency?: string | null
+          deleted_at?: string | null
           id?: string
           is_internal?: boolean
           legal_name?: string | null
@@ -460,11 +485,15 @@ export type Database = {
           slug: string
           status?: string
           stripe_customer_id?: string | null
+          suspended_at?: string | null
+          suspended_by?: string | null
+          suspension_reason?: string | null
           timezone?: string | null
           trial_ends_at?: string | null
           updated_at?: string
         }
         Update: {
+          archived_at?: string | null
           billing_address?: Json | null
           billing_email?: string | null
           billing_phone?: string | null
@@ -473,6 +502,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           currency?: string | null
+          deleted_at?: string | null
           id?: string
           is_internal?: boolean
           legal_name?: string | null
@@ -482,6 +512,9 @@ export type Database = {
           slug?: string
           status?: string
           stripe_customer_id?: string | null
+          suspended_at?: string | null
+          suspended_by?: string | null
+          suspension_reason?: string | null
           timezone?: string | null
           trial_ends_at?: string | null
           updated_at?: string
@@ -1902,6 +1935,36 @@ export type Database = {
           },
         ]
       }
+      auth_rate_limits: {
+        Row: {
+          attempts: number
+          email: string
+          first_attempt: string
+          id: string
+          ip_address: unknown
+          locked_until: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          attempts?: number
+          email: string
+          first_attempt?: string
+          id?: string
+          ip_address?: unknown
+          locked_until?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          attempts?: number
+          email?: string
+          first_attempt?: string
+          id?: string
+          ip_address?: unknown
+          locked_until?: string | null
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
       billing_events: {
         Row: {
           account_id: string
@@ -2647,6 +2710,63 @@ export type Database = {
           },
         ]
       }
+      impersonation_sessions: {
+        Row: {
+          actions_taken: Json
+          ended_at: string | null
+          force_closed: boolean | null
+          id: string
+          ip_address: unknown
+          platform_admin_id: string
+          reason: string
+          started_at: string
+          target_account_id: string
+          target_user_id: string
+          user_agent: string | null
+        }
+        Insert: {
+          actions_taken?: Json
+          ended_at?: string | null
+          force_closed?: boolean | null
+          id?: string
+          ip_address?: unknown
+          platform_admin_id: string
+          reason: string
+          started_at?: string
+          target_account_id: string
+          target_user_id: string
+          user_agent?: string | null
+        }
+        Update: {
+          actions_taken?: Json
+          ended_at?: string | null
+          force_closed?: boolean | null
+          id?: string
+          ip_address?: unknown
+          platform_admin_id?: string
+          reason?: string
+          started_at?: string
+          target_account_id?: string
+          target_user_id?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "impersonation_sessions_platform_admin_id_fkey"
+            columns: ["platform_admin_id"]
+            isOneToOne: false
+            referencedRelation: "platform_admins"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "impersonation_sessions_target_account_id_fkey"
+            columns: ["target_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invoices: {
         Row: {
           account_id: string
@@ -3221,6 +3341,303 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      permission_set_assignments: {
+        Row: {
+          assigned_at: string
+          assigned_by: string | null
+          id: string
+          permission_set_id: string
+          user_profile_id: string
+        }
+        Insert: {
+          assigned_at?: string
+          assigned_by?: string | null
+          id?: string
+          permission_set_id: string
+          user_profile_id: string
+        }
+        Update: {
+          assigned_at?: string
+          assigned_by?: string | null
+          id?: string
+          permission_set_id?: string
+          user_profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "permission_set_assignments_permission_set_id_fkey"
+            columns: ["permission_set_id"]
+            isOneToOne: false
+            referencedRelation: "permission_sets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "permission_set_assignments_user_profile_id_fkey"
+            columns: ["user_profile_id"]
+            isOneToOne: true
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      permission_sets: {
+        Row: {
+          account_id: string | null
+          active: boolean
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_system: boolean
+          name: string
+          permissions: Json
+          updated_at: string
+        }
+        Insert: {
+          account_id?: string | null
+          active?: boolean
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_system?: boolean
+          name: string
+          permissions?: Json
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string | null
+          active?: boolean
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_system?: boolean
+          name?: string
+          permissions?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "permission_sets_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      platform_admin_2fa: {
+        Row: {
+          activated_at: string
+          backup_codes_hash: string[]
+          backup_codes_used: number[]
+          id: string
+          last_used_at: string | null
+          platform_admin_id: string
+          totp_secret: string
+        }
+        Insert: {
+          activated_at?: string
+          backup_codes_hash?: string[]
+          backup_codes_used?: number[]
+          id?: string
+          last_used_at?: string | null
+          platform_admin_id: string
+          totp_secret: string
+        }
+        Update: {
+          activated_at?: string
+          backup_codes_hash?: string[]
+          backup_codes_used?: number[]
+          id?: string
+          last_used_at?: string | null
+          platform_admin_id?: string
+          totp_secret?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_admin_2fa_platform_admin_id_fkey"
+            columns: ["platform_admin_id"]
+            isOneToOne: true
+            referencedRelation: "platform_admins"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      platform_admin_permissions: {
+        Row: {
+          id: string
+          platform_admin_id: string
+          platform_can_archive_accounts: boolean
+          platform_can_create_accounts: boolean
+          platform_can_delete_accounts: boolean
+          platform_can_edit_seed_data: boolean
+          platform_can_impersonate: boolean
+          platform_can_manage_admins: boolean
+          platform_can_reset_2fa_of_others: boolean
+          platform_can_send_global_notifications: boolean
+          platform_can_suspend_accounts: boolean
+          platform_can_view_audit_log: boolean
+          platform_can_view_system_health: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          id?: string
+          platform_admin_id: string
+          platform_can_archive_accounts?: boolean
+          platform_can_create_accounts?: boolean
+          platform_can_delete_accounts?: boolean
+          platform_can_edit_seed_data?: boolean
+          platform_can_impersonate?: boolean
+          platform_can_manage_admins?: boolean
+          platform_can_reset_2fa_of_others?: boolean
+          platform_can_send_global_notifications?: boolean
+          platform_can_suspend_accounts?: boolean
+          platform_can_view_audit_log?: boolean
+          platform_can_view_system_health?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          id?: string
+          platform_admin_id?: string
+          platform_can_archive_accounts?: boolean
+          platform_can_create_accounts?: boolean
+          platform_can_delete_accounts?: boolean
+          platform_can_edit_seed_data?: boolean
+          platform_can_impersonate?: boolean
+          platform_can_manage_admins?: boolean
+          platform_can_reset_2fa_of_others?: boolean
+          platform_can_send_global_notifications?: boolean
+          platform_can_suspend_accounts?: boolean
+          platform_can_view_audit_log?: boolean
+          platform_can_view_system_health?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_admin_permissions_platform_admin_id_fkey"
+            columns: ["platform_admin_id"]
+            isOneToOne: true
+            referencedRelation: "platform_admins"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      platform_admins: {
+        Row: {
+          active: boolean
+          created_at: string
+          created_by: string | null
+          full_name: string
+          id: string
+          last_login_at: string | null
+          notes: string | null
+          role: string
+          user_id: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          created_by?: string | null
+          full_name: string
+          id?: string
+          last_login_at?: string | null
+          notes?: string | null
+          role: string
+          user_id: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          created_by?: string | null
+          full_name?: string
+          id?: string
+          last_login_at?: string | null
+          notes?: string | null
+          role?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      platform_audit_log: {
+        Row: {
+          created_at: string
+          details: Json | null
+          event_type: string
+          id: string
+          ip_address: unknown
+          platform_admin_id: string | null
+          target_account_id: string | null
+          target_user_id: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          created_at?: string
+          details?: Json | null
+          event_type: string
+          id?: string
+          ip_address?: unknown
+          platform_admin_id?: string | null
+          target_account_id?: string | null
+          target_user_id?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          created_at?: string
+          details?: Json | null
+          event_type?: string
+          id?: string
+          ip_address?: unknown
+          platform_admin_id?: string | null
+          target_account_id?: string | null
+          target_user_id?: string | null
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_audit_log_platform_admin_id_fkey"
+            columns: ["platform_admin_id"]
+            isOneToOne: false
+            referencedRelation: "platform_admins"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "platform_audit_log_target_account_id_fkey"
+            columns: ["target_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      platform_settings: {
+        Row: {
+          description: string | null
+          key: string
+          updated_at: string
+          updated_by: string | null
+          value: Json
+        }
+        Insert: {
+          description?: string | null
+          key: string
+          updated_at?: string
+          updated_by?: string | null
+          value: Json
+        }
+        Update: {
+          description?: string | null
+          key?: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: Json
+        }
+        Relationships: []
       }
       quotas: {
         Row: {
@@ -3946,9 +4363,15 @@ export type Database = {
           display_name: string | null
           employee_id: string | null
           id: string
+          last_login_at: string | null
+          last_password_change_at: string | null
           role: string
+          suspended_at: string | null
+          suspended_by: string | null
+          terms_accepted_at: string | null
           updated_at: string
           user_id: string
+          welcome_completed_at: string | null
         }
         Insert: {
           account_id?: string | null
@@ -3957,9 +4380,15 @@ export type Database = {
           display_name?: string | null
           employee_id?: string | null
           id?: string
+          last_login_at?: string | null
+          last_password_change_at?: string | null
           role?: string
+          suspended_at?: string | null
+          suspended_by?: string | null
+          terms_accepted_at?: string | null
           updated_at?: string
           user_id: string
+          welcome_completed_at?: string | null
         }
         Update: {
           account_id?: string | null
@@ -3968,9 +4397,15 @@ export type Database = {
           display_name?: string | null
           employee_id?: string | null
           id?: string
+          last_login_at?: string | null
+          last_password_change_at?: string | null
           role?: string
+          suspended_at?: string | null
+          suspended_by?: string | null
+          terms_accepted_at?: string | null
           updated_at?: string
           user_id?: string
+          welcome_completed_at?: string | null
         }
         Relationships: [
           {
@@ -4197,11 +4632,31 @@ export type Database = {
     }
     Functions: {
       appcc_mark_overdue: { Args: never; Returns: undefined }
+      belongs_to_account: { Args: { p_account_id: string }; Returns: boolean }
+      cleanup_auth_rate_limits: { Args: never; Returns: number }
       current_user_account_ids: { Args: never; Returns: string[] }
+      current_user_has_platform_permission: {
+        Args: { p_permission_flag: string }
+        Returns: boolean
+      }
       current_user_is_admin: { Args: never; Returns: boolean }
       current_user_is_admin_of: {
         Args: { p_account_id: string }
         Returns: boolean
+      }
+      current_user_is_admin_or_manager_of: {
+        Args: { p_account_id: string }
+        Returns: boolean
+      }
+      custom_access_token_hook: { Args: { event: Json }; Returns: Json }
+      force_close_long_impersonations: { Args: never; Returns: number }
+      has_permission: {
+        Args: { p_account_id: string; p_permission_key: string }
+        Returns: boolean
+      }
+      seed_appcc_for_account: {
+        Args: { p_account_id: string }
+        Returns: undefined
       }
     }
     Enums: {

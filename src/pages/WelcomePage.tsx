@@ -31,13 +31,11 @@
 //     state stale" detectado en review.
 //   - Si refreshUserProfile() falla, NO navegamos: mostramos error pidiendo
 //     al user recargar la página (Opción A acordada en review).
-//   - Cast `as unknown as RowUserProfileUpdate` del payload del UPDATE
-//     para esquivar el tipo Row* desfasado en src/types/database.ts (las
-//     columnas terms_accepted_at, welcome_completed_at y last_password_change_at
-//     existen en BBDD desde Sesión 6 pero no en el tipo autogenerado). Sigue
-//     el idiom canónico del proyecto (regla técnica "doble cast as unknown
-//     as Json"). Deuda registrada: regenerar database.ts con `npm run
-//     types:gen` post-Sprint 2.
+//   - UPDATE directo a user_profiles sin cast tras regenerar database.ts
+//     en pre-work Sesión 9 (20/05/2026). El cast
+//     `as unknown as RowUserProfileUpdate` se eliminó al estar las columnas
+//     terms_accepted_at, welcome_completed_at y last_password_change_at
+//     en el tipo autogenerado.
 
 import { useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
@@ -47,7 +45,6 @@ import { useApp } from '../context/AppContext'
 import { updateUserPassword } from '../services/authService'
 import { checkAccountStatus } from '../services/accountStatusService'
 import { supabase } from '../lib/supabase'
-import type { RowUserProfileUpdate } from '../types/multitenancy'
 
 type FormState = 'idle' | 'submitting' | 'error'
 
@@ -127,14 +124,6 @@ export default function WelcomePage() {
     //    (CHECK constraint user_profiles_welcome_requires_terms exige
     //    terms_accepted_at IS NOT NULL AND terms_accepted_at <= welcome_completed_at).
     //    RLS policy user_profiles_update permite (user_id = auth.uid()).
-    //
-    //    DEUDA: el doble cast `as unknown as RowUserProfileUpdate` esquiva
-    //    el tipo Row* desfasado de database.ts. Las columnas terms_accepted_at,
-    //    welcome_completed_at y last_password_change_at existen en BBDD desde
-    //    Sesión 6 pero no aparecen en el tipo autogenerado. En runtime
-    //    Supabase recibe el JSON literal tal cual y Postgres lo aplica.
-    //    Se resuelve regenerando database.ts con `npm run types:gen`.
-    //    Apuntado en CONTEXTO_ESTADO.
     if (!supabase) {
       setErrorMsg('Supabase no disponible.')
       setFormState('error')
@@ -142,14 +131,12 @@ export default function WelcomePage() {
     }
 
     const now = new Date().toISOString()
-    const updatePayload = {
-      terms_accepted_at: now,
-      welcome_completed_at: now,
-    } as unknown as RowUserProfileUpdate
-
     const { error: updateError } = await supabase
       .from('user_profiles')
-      .update(updatePayload)
+      .update({
+        terms_accepted_at: now,
+        welcome_completed_at: now,
+      })
       .eq('user_id', user.id)
 
     if (updateError) {
