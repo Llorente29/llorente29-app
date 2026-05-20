@@ -37,6 +37,15 @@
 //   AppContext) y isPlatformAdmin (de folvy claims). En la práctica deberían
 //   coincidir, pero usar folvy.is_platform_admin es la forma correcta moving
 //   forward.
+//
+// CHANGELOG D-S2.30 paso 3-bis (20/05/2026):
+//   Fix tipo `signOut`: el retorno de authService.signOut() es
+//   `Promise<{ ok: boolean; error?: string }>` (firma suelta heredada),
+//   pero UseAuthResult['signOut'] declara discriminated union estricta
+//   `{ ok: true } | { ok: false; error: string }`. Ahora normalizamos el
+//   resultado al tipo de la interfaz dentro del hook en lugar de propagar.
+//   Esto no cambia comportamiento; arregla un error TS2322 que afloró al
+//   forzar recompilación profunda en la sesión 8.
 
 import { useEffect, useMemo, useState } from 'react'
 import { useApp } from '../../../context/AppContext'
@@ -239,14 +248,21 @@ export function useAuth(): UseAuthResult {
     }
   }
 
+  // D-S2.30 paso 3-bis: normalizamos el resultado al discriminated union
+  // estricto declarado en UseAuthResult['signOut']. authService.signOut()
+  // devuelve `{ ok: boolean; error?: string }` (firma suelta heredada),
+  // que TypeScript rechaza como asignable a `{ ok: true } | { ok: false;
+  // error: string }` porque no garantiza que error exista cuando ok=false.
+  // El comportamiento no cambia.
   const signOut: UseAuthResult['signOut'] = async () => {
     const result = await authService.signOut()
     if (result.ok) {
       // AppContext detectará el cambio via onAuthStateChange y limpiará
       // authUserId/adminEmail. Aquí solo limpiamos nuestro state local.
       setAccessToken(null)
+      return { ok: true }
     }
-    return result
+    return { ok: false, error: result.error ?? 'No se pudo cerrar sesión.' }
   }
 
   return {

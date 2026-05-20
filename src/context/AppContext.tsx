@@ -184,6 +184,17 @@ interface AppContextType {
   //   - No hay cuenta activa (accountsLoading o sin cuentas).
   //   - No se ha podido resolver el perfil (inconsistencia BBDD).
   userProfile: UserProfile | null
+  // refreshUserProfile: re-carga userProfile + permissions de BBDD para los
+  //   IDs actuales (authUserId, activeAccountId). Útil cuando una acción
+  //   externa (p.ej. WelcomePage UPDATE de welcome_completed_at) modifica
+  //   columnas del profile sin cambiar los IDs, por lo que el useEffect
+  //   dependiente de [authUserId, activeAccountId] no se dispara.
+  //
+  //   Devuelve el profile recargado o null si no se pudo. NUNCA throw:
+  //   los errores se loggean y devuelven null para que el caller decida.
+  //
+  //   Añadido en Sprint 2 Bloque D (D-S2.30 paso 3-bis, 20/05/2026).
+  refreshUserProfile: () => Promise<UserProfile | null>
   // roleInActiveAccount: rol del user en la cuenta activa.
   //   NO es el sustituto de isAdmin todavía (migración progresiva): isAdmin
   //   sigue siendo !!adminEmail. roleInActiveAccount expone el rol granular
@@ -199,6 +210,38 @@ interface AppContextType {
 }
 
 const AppContext = createContext<AppContextType | null>(null)
+
+/* =====================================================
+   HELPER PURO — resolución profile + permissions
+   ===================================================== */
+
+/**
+ * Resuelve userProfile + permissions desde BBDD para un par (uid, accountId).
+ * Función pura sin side effects de React: ideal para reutilizar entre el
+ * useEffect inicial y el refreshUserProfile() expuesto.
+ *
+ * Retorna ambos valores juntos para que el caller los aplique al state en
+ * un solo ciclo (evita renders intermedios con state inconsistente).
+ *
+ * Si profile es null, permissions también null. Si profile.role === 'worker',
+ * permissions null (los workers no tienen panel de manager_permissions).
+ *
+ * Añadido en Sprint 2 Bloque D (D-S2.30 paso 3-bis, 20/05/2026).
+ */
+async function loadProfileAndPermissions(
+  uid: string,
+  accountId: string,
+): Promise<{ profile: UserProfile | null; perms: ManagerPermissions | null }> {
+  const profile = await getUserProfile(uid, accountId)
+  if (!profile) {
+    return { profile: null, perms: null }
+  }
+  if (profile.role === 'worker') {
+    return { profile, perms: null }
+  }
+  const perms = await getPermissions(profile.id)
+  return { profile, perms }
+}
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const saved = (() => {
@@ -674,6 +717,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // Resolución de userProfile + permissions cuando cambia activeAccountId
   // (o cuando termina la carga inicial de cuentas).
+  //
+  // BLOQUE D D-S2.30 paso 3-bis (20/05/2026): la carga interna ahora delega
+  // en loadProfileAndPermissions() para que refreshUserProfile() comparta
+  // exactamente la misma lógica.
   useEffect(() => {
     if (!authUserId || !activeAccountId) {
       setUserProfile(null)
@@ -685,26 +732,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     ;(async () => {
       try {
-        const profile = await getUserProfile(authUserId, activeAccountId)
+        const { profile, perms } = await loadProfileAndPermissions(authUserId, activeAccountId)
         if (cancelled) return
         setUserProfile(profile)
-
-        if (!profile) {
-          setPermissions(null)
-          return
-        }
-
-        // Solo cargamos permissions si el rol potencialmente los necesita.
-        // Workers no tienen panel de manager_permissions; admin global tampoco
-        // (ve todo por su rol). Conservador: cargamos siempre para manager
-        // y admin de cuenta; workers se saltan.
-        if (profile.role === 'worker') {
-          setPermissions(null)
-          return
-        }
-
-        const perms = await getPermissions(profile.id)
-        if (!cancelled) setPermissions(perms)
+        setPermissions(perms)
       } catch (e) {
         console.error('[AppContext] Error resolviendo perfil/permisos:', e)
         if (!cancelled) {
@@ -715,6 +746,36 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     })()
 
     return () => { cancelled = true }
+  }, [authUserId, activeAccountId])
+
+  // refreshUserProfile: re-resuelve profile+permissions con los IDs actuales
+  // y aplica el resultado al state. Pensado para acciones externas que
+  // modifican columnas del profile sin tocar los IDs (p.ej. WelcomePage
+  // completando welcome_completed_at). El useEffect de arriba solo se
+  // dispara con cambios de [authUserId, activeAccountId], por lo que sin
+  // este helper el state quedaría stale tras un UPDATE puntual.
+  //
+  // Devuelve el profile recargado (o null) para que el caller pueda
+  // confirmar el éxito sin tener que esperar al re-render. NUNCA throw:
+  // ante error, devuelve null y loggea.
+  //
+  // Sin guard de "cancelled": esta función la dispara el usuario (acción
+  // explícita), no un ciclo de React. Si el componente caller se desmonta
+  // mientras espera, los setState son no-op de React (warning suprimido).
+  const refreshUserProfile = useCallback(async (): Promise<UserProfile | null> => {
+    if (!authUserId || !activeAccountId) {
+      console.warn('[AppContext] refreshUserProfile sin IDs: noop')
+      return null
+    }
+    try {
+      const { profile, perms } = await loadProfileAndPermissions(authUserId, activeAccountId)
+      setUserProfile(profile)
+      setPermissions(perms)
+      return profile
+    } catch (e) {
+      console.error('[AppContext] refreshUserProfile error:', e)
+      return null
+    }
   }, [authUserId, activeAccountId])
 
   const activeAccount = useMemo<Account | null>(
@@ -737,7 +798,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       activeLocationId, setActiveLocationId,
       activeBrandFilter, setActiveBrandFilter,
       accounts, accountsLoading, activeAccountId, setActiveAccountId,
-      activeAccount, userProfile, roleInActiveAccount, permissions,
+      activeAccount, userProfile, refreshUserProfile,
+      roleInActiveAccount, permissions,
     }}>
       {children}
     </AppContext.Provider>

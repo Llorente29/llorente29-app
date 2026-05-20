@@ -412,6 +412,16 @@ export interface AccountUpdate {
  * NOTA IMPORTANTE: un mismo user_id puede tener N user_profiles (uno por
  * cada cuenta a la que pertenece). UNIQUE (user_id, account_id) impide
  * duplicados dentro de la misma cuenta.
+ *
+ * CHANGELOG D-S2.30 paso 3-bis (20/05/2026):
+ *   Añadidas las 3 columnas de onboarding/auth que ya existían en BBDD
+ *   desde Sesión 6 (Sprint 1) pero no estaban expuestas en el tipo de
+ *   dominio. WelcomePage y el guard de App.tsx las necesitan.
+ *
+ *   Deliberadamente NO se añaden a UserProfileUpdate: el flow welcome
+ *   es autoservicio del propio usuario (UPDATE directo desde WelcomePage
+ *   bajo RLS user_id = auth.uid()), no un patch admin. Si en el futuro
+ *   un admin necesita resetear el welcome de alguien, se añade entonces.
  */
 export interface UserProfile {
   id: string
@@ -423,6 +433,25 @@ export interface UserProfile {
   role: UserProfileRole
   displayName: string | null
   active: boolean
+  /**
+   * Timestamp ISO. NULL = invite pendiente; user aún no ha completado el
+   * flow de welcome (set password + acepta T&C). El guard de App.tsx
+   * fuerza paso por /welcome mientras este campo sea null.
+   */
+  welcomeCompletedAt: string | null
+  /**
+   * Timestamp ISO. NULL si nunca aceptó.
+   * CHECK constraint `user_profiles_welcome_requires_terms`:
+   *   si welcomeCompletedAt no es null, termsAcceptedAt tampoco puede
+   *   serlo, y termsAcceptedAt <= welcomeCompletedAt.
+   */
+  termsAcceptedAt: string | null
+  /**
+   * Timestamp ISO. NULL si nunca cambió (cuenta recién creada con
+   * password autogenerada por invite). Útil para políticas de rotación
+   * de contraseña en el futuro.
+   */
+  lastPasswordChangeAt: string | null
   createdAt: string
   updatedAt: string
 }

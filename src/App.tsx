@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
-import { Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import type { Page } from './types'
 import { LogoSquare } from './components/Logo'
 import Sidebar, { NAV } from './components/Sidebar'
@@ -19,7 +19,8 @@ import TurnosAbiertosPage from './pages/TurnosAbiertosPage'
 import BolsaHorasPage from './pages/BolsaHorasPage'
 import CambiosPendientesPage from './pages/CambiosPendientesPage'
 import TrabajadorApp from './pages/trabajador/TrabajadorApp'
-import LoginPage from './pages/LoginPage'
+import AuthRouter from './auth/AuthRouter'
+import WelcomePage from './pages/WelcomePage'
 import UsuariosAccesosPage from './pages/UsuariosAccesosPage'
 import TodayPage from './modules/appcc/pages/TodayPage'
 import ExecutionPage from './modules/appcc/pages/ExecutionPage'
@@ -79,21 +80,11 @@ const PAGE_TITLES: Partial<Record<Page, string>> = {
   appcc_audit_templates: 'APPCC: Plantillas de auditoría',
 }
 
-// =============================================================
 // Mapeo Page → componente para registrar las rutas en <Routes>.
-//
-// BLOQUE C Fases 2-3 (17/05/2026):
-//   - Sustituye al `switch (page)` que existía en renderPage().
-//   - Las páginas con :param (appcc_execution, appcc_audit_execution) ya leen
-//     el id con useParams; no se les pasa por prop.
-//   - El antiguo `RenderPageContext` y los callbacks (openExecution/closeExecution/
-//     openAudit/closeAudit/openOnboarding/closeOnboarding) ya no existen — cada
-//     página navega con useNavigate + useActiveAccount.
-//
-// NOTA TIPO: usamos Partial<Record<Page, ...>> porque `type Page` define 39
-// valores pero solo ~26 tienen componente activo (resto es legacy del prototipo
-// según CONTEXTO_CLAUDE §7). Los entries no listados aquí caen al fallback.
-// =============================================================
+// Bloque C Fases 2-3 (17/05/2026). Las páginas con :param leen el id con
+// useParams; no se les pasa por prop.
+// type Page tiene 39 valores; solo ~26 tienen componente activo (el resto
+// es legacy del prototipo). Los entries no listados caen al fallback.
 const PAGE_COMPONENTS: Partial<Record<Page, () => ReactElement>> = {
   dashboard:              () => <DashboardPage />,
   staff:                  () => <StaffPage />,
@@ -129,9 +120,8 @@ function AuthenticatedApp({ profile, onSignOut }: {
   profile: UserProfile
   onSignOut: () => void | Promise<void>
 }) {
-  // BLOQUE C Fases 2-3 (17/05/2026): page deriva de la URL. Los states locales
-  // de Page e IDs (executionId/auditId/onboardingLocationId) desaparecen. Cada
-  // página hija usa useParams/useSearchParams para leer sus parámetros.
+  // Bloque C Fases 2-3 (17/05/2026): page deriva de la URL. Cada página
+  // hija usa useParams/useSearchParams para leer sus parámetros.
   const location = useLocation()
   const navigate = useNavigate()
   const { rest } = parseRoute(location.pathname)
@@ -146,17 +136,17 @@ function AuthenticatedApp({ profile, onSignOut }: {
   const [mode, setMode] = useState<AppMode>('unset')
   const [showUsuariosAccesos, setShowUsuariosAccesos] = useState(false)
   const [forceWorkerMode, setForceWorkerMode] = useState(false)
-  // BLOQUE B-7 (16/05/2026): perms ya NO es state propio.
-  // Se deriva con useMemo de (profile, permissions del context) más abajo.
-  // Tasks e incidents del antiguo módulo Operaciones — se reactivarán con módulo APPCC
+  // Bloque B-7 (16/05/2026): perms derivado con useMemo de (profile,
+  // permissions del context). Ver bloque más abajo.
+  // Tasks/incidents del antiguo módulo Operaciones — se reactivarán con APPCC.
   const pending = 0
   const critInc = 0
 
   // Ref al botón hamburguesa, para devolver el foco ahí al cerrar el drawer
-  // (evita el warning "aria-hidden Blocked because descendant retained focus")
+  // (evita warning "aria-hidden Blocked because descendant retained focus")
   const hamburgerRef = useRef<HTMLButtonElement | null>(null)
 
-  // Detectar si estamos en móvil/tablet (<1024px) — coincide con breakpoint lg de Tailwind
+  // Detectar móvil/tablet (<1024px) — breakpoint lg de Tailwind
   const [isMobile, setIsMobile] = useState<boolean>(() =>
     typeof window !== 'undefined' ? window.innerWidth < 1024 : false
   )
@@ -194,9 +184,9 @@ function AuthenticatedApp({ profile, onSignOut }: {
     setMobileMenuOpen(false)
   }
 
-  // Determinar el modo automáticamente según el rol.
-  // BLOQUE F-completo (17/05/2026): inlined isWorker / isManagerOrAdmin tras
-  // borrar los helpers de authService. La lógica es trivial y solo se usa aquí.
+  // Modo automático según rol.
+  // Bloque F-completo (17/05/2026): inlined isWorker / isManagerOrAdmin
+  // tras borrar los helpers de authService. Lógica trivial, solo se usa aquí.
   useEffect(() => {
     if (profile.active && profile.role === 'worker') {
       setMode('trabajador')
@@ -205,23 +195,15 @@ function AuthenticatedApp({ profile, onSignOut }: {
     }
   }, [profile])
 
-  // BLOQUE B-7 (16/05/2026): permisos derivados del context.
+  // Bloque B-7 (16/05/2026): permisos derivados del context.
+  // useMemo sobre `permissions` (ya en AppContext) + isFullAccess del hook
+  // (admin global o admin de cuenta bypasea). Reactivo: si admin edita
+  // permisos en otra pestaña, al refrescar AppContext este useMemo se
+  // recalcula automáticamente.
   //
-  // Antes: useState<Set<Page>> + useEffect con dynamic import del service viejo
-  //   (cargaba shape snake_case y construía el Set en cada cambio de profile).
-  // Ahora: useMemo derivado de `permissions` (ya cargado en AppContext) +
-  //   isFullAccess del hook (admin global o admin de cuenta bypasea).
-  //
-  // Beneficios:
-  //   - Reactivo: si admin edita permisos del manager en otra pestaña, al
-  //     refrescar AppContext este useMemo se recalcula automáticamente.
-  //   - Sin query Supabase adicional (AppContext ya las trae).
-  //   - Sin race entre setPerms y render.
-  //
-  // Detalle preservado (NO es bug del refactor, es legacy):
-  //   - 6 de 7 toggles APPCC dependen de `showAppccToday`.
-  //   - Solo `appcc_incidents` depende de `showAppccIncidents`.
-  //   Deuda menor apuntada; se revisará en sesión APPCC dedicada.
+  // Detalle legacy preservado (NO bug del refactor): 6 de 7 toggles APPCC
+  // dependen de `showAppccToday`; solo `appcc_incidents` depende de
+  // `showAppccIncidents`. Deuda menor, se revisará en sesión APPCC dedicada.
   const { permissions, isFullAccess } = usePermissions()
 
   const perms = useMemo<Set<Page> | null>(() => {
@@ -233,7 +215,7 @@ function AuthenticatedApp({ profile, onSignOut }: {
     if (profile.role !== 'manager') {
       return null
     }
-    // Manager sin permissions cargados aún → Set vacío (no rompe la auto-redirect).
+    // Manager sin permissions cargados aún → Set vacío (no rompe auto-redirect).
     if (!permissions) {
       return new Set<Page>()
     }
@@ -255,8 +237,8 @@ function AuthenticatedApp({ profile, onSignOut }: {
     if (permissions.showPrediccionPersonal) allowed.add('prediccion_personal')
     if (permissions.showZonasPedido) allowed.add('zonas_pedido')
     if (permissions.showLocations) allowed.add('locations')
-    // avisos_settings se mantiene visible si el manager tiene el flag antiguo
-    // showTspoonSettings (compatibilidad temporal hasta renombrar columna).
+    // avisos_settings: visible si el manager tiene showTspoonSettings
+    // (compatibilidad temporal hasta renombrar columna).
     if (permissions.showTspoonSettings) allowed.add('avisos_settings')
     // APPCC — comportamiento legacy preservado (deuda apuntada arriba).
     if (permissions.showAppccToday) allowed.add('appcc_dashboard')
@@ -269,9 +251,9 @@ function AuthenticatedApp({ profile, onSignOut }: {
     return allowed
   }, [profile, permissions, isFullAccess])
 
-  // BLOQUE C Fases 2-3 (17/05/2026): redirect inicial si la URL es solo /{slug}
-  // sin página (rest vacío). Navegamos a dashboard con replace para no romper
-  // el botón atrás.
+  // Bloque C Fases 2-3 (17/05/2026): redirect inicial si la URL es solo
+  // /{slug} sin página (rest vacío). Navegamos a dashboard con replace
+  // para no romper el botón atrás.
   useEffect(() => {
     if (mode !== 'gestor') return
     if (forceWorkerMode) return
@@ -280,10 +262,10 @@ function AuthenticatedApp({ profile, onSignOut }: {
     }
   }, [mode, forceWorkerMode, rest, slug, navigate])
 
-  // BLOQUE C Fases 2-3 (17/05/2026): redirect por permisos.
-  // Si la URL actual apunta a una página no permitida, redirigir a la primera
+  // Bloque C Fases 2-3 (17/05/2026): redirect por permisos. Si la URL
+  // actual apunta a una página no permitida, redirigir a la primera
   // permitida. Excepciones: appcc_execution, appcc_audit_execution y
-  // appcc_onboarding (usuarios pueden llegar vía links internos).
+  // appcc_onboarding (pueden llegar vía links internos).
   useEffect(() => {
     if (mode !== 'gestor') return
     if (forceWorkerMode) return
@@ -317,9 +299,9 @@ function AuthenticatedApp({ profile, onSignOut }: {
     )
   }
 
-  // En el kiosko ocultamos sidebar y header — pantalla completa.
-  // BLOQUE C Fases 2-3 (17/05/2026): la detección sigue por page derivado de
-  // URL (en lugar de state local). Salir del kiosko navega a dashboard.
+  // Kiosko: ocultamos sidebar y header — pantalla completa.
+  // Bloque C Fases 2-3 (17/05/2026): detección por page derivado de URL.
+  // Salir del kiosko navega a dashboard.
   const isKiosko = page === 'kiosko_fichaje'
   if (isKiosko) {
     return (
@@ -336,7 +318,7 @@ function AuthenticatedApp({ profile, onSignOut }: {
     )
   }
 
-  // Calcular visiblePageIds para Sidebar
+  // visiblePageIds para Sidebar
   const visiblePageIds = perms || new Set<Page>(NAV.map(n => n.id))
   const canSwitchToWorker = profile.role === 'manager' && !!profile.employeeId
   const roleLabel = profile.role === 'admin' ? 'Admin' : profile.role === 'manager' ? 'Encargado' : 'Trabajador'
@@ -344,8 +326,8 @@ function AuthenticatedApp({ profile, onSignOut }: {
 
   return (
     <div className="min-h-screen bg-page">
-      {/* Sidebar — siempre en el DOM. En desktop fijo, en móvil drawer controlado por mobileMenuOpen */}
-      {/* BLOQUE C Fases 2-3: Sidebar ya NO recibe page/setPage; deriva de URL. */}
+      {/* Sidebar: desktop fijo, móvil drawer controlado por mobileMenuOpen.
+          Bloque C Fases 2-3: ya NO recibe page/setPage; deriva de URL. */}
       <Sidebar
         collapsed={collapsed}
         setCollapsed={setCollapsed}
@@ -413,7 +395,7 @@ function AuthenticatedApp({ profile, onSignOut }: {
             <LocationSelector className="hidden sm:inline-flex" />
             {/* Filtro multi-select de marcas (módulo multitenancy / Stock) — oculto en móvil */}
             <BrandFilterSelector className="hidden sm:inline-flex" />
-            {/* Botón modo trabajador (solo manager con employee_id) — oculto en móvil para ahorrar espacio */}
+            {/* Botón modo trabajador (solo manager con employee_id) — oculto en móvil */}
             {canSwitchToWorker && (
               <button
                 onClick={() => setForceWorkerMode(true)}
@@ -450,12 +432,9 @@ function AuthenticatedApp({ profile, onSignOut }: {
           {showUsuariosAccesos ? (
             <UsuariosAccesosPage />
           ) : (
-            // BLOQUE C Fases 2-3: <Routes> sustituye al switch (page).
-            // Cada Route mapea el path declarado en routes.ts al componente
-            // correspondiente. Las rutas con :param leen sus parámetros con
-            // useParams dentro del propio componente.
-            //
-            // basename del BrowserRouter ya elimina '/llorente29-app'. Las
+            // Bloque C Fases 2-3: <Routes> sustituye al switch (page). Cada
+            // Route mapea el path declarado en routes.ts al componente.
+            // basename del BrowserRouter elimina '/llorente29-app'; las
             // rutas anidan: '/:slug/<rest>'.
             <Routes>
               {(Object.keys(PAGE_COMPONENTS) as Page[]).map(p => {
@@ -470,8 +449,8 @@ function AuthenticatedApp({ profile, onSignOut }: {
                   />
                 )
               })}
-              {/* Fallback: cualquier ruta no reconocida bajo el slug → Dashboard.
-                  La URL no se cambia aquí; el redirect por permisos / inicial
+              {/* Fallback: ruta no reconocida bajo el slug → Dashboard.
+                  La URL no se cambia aquí; el redirect inicial/por permisos
                   se hace en los useEffect de arriba. */}
               <Route path="*" element={<DashboardPage />} />
             </Routes>
@@ -487,16 +466,13 @@ function AuthenticatedApp({ profile, onSignOut }: {
    ===================================================== */
 
 export default function App() {
-  // BLOQUE B-6b (17/05/2026): App raíz consume AppContext en lugar de hacer
-  // su propia query a `getCurrentProfile()`.
-  //   - Sin query duplicada (AppContext ya carga userProfile).
-  //   - Sin useState<UserProfile> propio.
-  //   - Sin useEffect de loadProfile.
-  //   - Sin subscription propia a onAuthStateChange (AppContext la tiene).
+  // Bloque B-6b (17/05/2026): App raíz consume AppContext en lugar de
+  // hacer su propia query a `getCurrentProfile()`. Sin query duplicada,
+  // sin useState<UserProfile> propio, sin useEffect de loadProfile, sin
+  // subscription propia a onAuthStateChange (AppContext la tiene).
   //
-  // Feature flags (gate.load) se siguen invocando desde aquí: lo hacemos
-  // en useEffect dependiente de `userProfile` para que se cargue/limpie
-  // automáticamente cuando cambia la sesión.
+  // Feature flags (gate.load) se invocan desde aquí en useEffect dependiente
+  // de userProfile para cargar/limpiar automáticamente al cambiar sesión.
   const { authResolved, authUserId, userProfile, accountsLoading } = useApp()
 
   // Cargar/limpiar feature flags según userProfile.
@@ -518,7 +494,7 @@ export default function App() {
   async function handleSignOut() {
     await signOut()
     gate.clear()
-    // setProfile(null) ya NO hace falta: AppContext escucha SIGNED_OUT vía
+    // setProfile(null) no hace falta: AppContext escucha SIGNED_OUT vía
     // onAuthStateChange y resetea authUserId/userProfile automáticamente.
   }
 
@@ -536,9 +512,11 @@ export default function App() {
     )
   }
 
-  // 2. Sin sesión → Login.
+  // 2. Sin sesión → AuthRouter (D-S2.30 Opción B, 19/05/2026).
+  //    AuthRouter maneja /login y /welcome. /reset-password (D3) y
+  //    /reset-password/confirm (D4) se añaden en sesión próxima.
   if (!authUserId) {
-    return <LoginPage onCheckSession={() => window.location.reload()} />
+    return <AuthRouter />
   }
 
   // 3. Hay sesión, AppContext aún cargando accounts/userProfile.
@@ -555,8 +533,28 @@ export default function App() {
     )
   }
 
-  // 4. Sesión válida → renderizar app autenticada.
-  // BLOQUE F-completo (17/05/2026): pasamos userProfile directo (sin adaptador).
-  // AuthenticatedApp ahora consume multitenancy.UserProfile nativo.
+  // 3-bis. Sesión válida pero welcome_completed_at IS NULL.
+  //        D-S2.30 paso 3-bis (20/05/2026): el user fue invitado y aún no
+  //        ha completado la activación (set password + T&C). Forzar paso
+  //        por /welcome antes de entrar al Shell.
+  //
+  //        Mini-router propio (no <AuthRouter>): aquí ya HAY sesión, por
+  //        lo que el flow es distinto al pre-sesión. WelcomePage consume
+  //        userProfile vía useApp() y llama a refreshUserProfile() tras
+  //        completar el UPDATE; cuando el state se refresque,
+  //        welcome_completed_at dejará de ser null y este guard ya no
+  //        atrapará la rama → cae al paso 4 con redirect_to del status.
+  if (!userProfile.welcomeCompletedAt) {
+    return (
+      <Routes>
+        <Route path="/welcome" element={<WelcomePage />} />
+        <Route path="*" element={<Navigate to="/welcome" replace />} />
+      </Routes>
+    )
+  }
+
+  // 4. Sesión válida + welcome completado → app autenticada.
+  // Bloque F-completo (17/05/2026): userProfile directo (sin adaptador).
+  // AuthenticatedApp consume multitenancy.UserProfile nativo.
   return <AuthenticatedApp profile={userProfile} onSignOut={handleSignOut} />
 }
