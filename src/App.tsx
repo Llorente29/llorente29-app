@@ -21,6 +21,7 @@ import CambiosPendientesPage from './pages/CambiosPendientesPage'
 import TrabajadorApp from './pages/trabajador/TrabajadorApp'
 import AuthRouter from './auth/AuthRouter'
 import WelcomePage from './pages/WelcomePage'
+import ResetPasswordConfirmPage from './pages/ResetPasswordConfirmPage'
 import UsuariosAccesosPage from './pages/UsuariosAccesosPage'
 import TodayPage from './modules/appcc/pages/TodayPage'
 import ExecutionPage from './modules/appcc/pages/ExecutionPage'
@@ -40,7 +41,7 @@ import { useActiveAccount } from './modules/multitenancy/hooks/useActiveAccount'
 import { usePermissions } from './modules/multitenancy/hooks/usePermissions'
 import { useApp } from './context/AppContext'
 import { signOut } from './services/authService'
-import { pageToPath, pageToRoute, parseRoute, pathToPage } from './routes'
+import { pageToPath, pageToRoute, parseRoute, pathToPage, isPublicAuthRoute } from './routes'
 import type { UserProfile } from './types/multitenancy'
 import {
   DashboardPage, LocationsPage
@@ -474,6 +475,7 @@ export default function App() {
   // Feature flags (gate.load) se invocan desde aquí en useEffect dependiente
   // de userProfile para cargar/limpiar automáticamente al cambiar sesión.
   const { authResolved, authUserId, userProfile, accountsLoading } = useApp()
+  const location = useLocation()
 
   // Cargar/limpiar feature flags según userProfile.
   useEffect(() => {
@@ -512,9 +514,42 @@ export default function App() {
     )
   }
 
+  // 1-bis. PROTECCIÓN INTEGRAL DE RUTAS PÚBLICAS DE AUTH — Sesión 9.
+  //
+  //        Estas rutas (/login, /welcome, /reset-password, /reset-password/confirm)
+  //        viven FUERA del namespace de cuenta. Si el user las visita con
+  //        sesión activa, NO debemos meterlo automáticamente al Shell:
+  //
+  //          - /login: aunque haya sesión, si vino aquí manualmente quizá
+  //            quiere cambiar de cuenta; respetar la pantalla.
+  //          - /welcome: forzado por guard 3-bis cuando welcome IS NULL.
+  //          - /reset-password: pidiendo email de reset. El user explícitamente
+  //            quiso entrar aquí; no expulsarle.
+  //          - /reset-password/confirm: SECURITY-CRITICAL. El user vino
+  //            de un link de reset. Si le metemos al Shell sin completar
+  //            el form, alguien que intercepte el email entra al sistema
+  //            sin cambiar la password. Vulnerabilidad.
+  //
+  //        Comportamiento:
+  //          - /reset-password/confirm → renderiza siempre el componente
+  //            (esté autenticado o no). El componente decide qué hacer.
+  //          - /login, /welcome, /reset-password → AuthRouter, que ya
+  //            maneja estos paths declarativamente y respeta la sesión.
+  //
+  //        ESTO BLOQUEA el flow del bug Sesión 9 ("nueva pestaña abre
+  //        logueada sin haber cambiado password"): la entrada al Shell
+  //        se prohíbe cuando la URL es ruta pública, sin importar lo
+  //        que diga authUserId.
+  if (location.pathname === '/reset-password/confirm') {
+    return <ResetPasswordConfirmPage />
+  }
+  if (isPublicAuthRoute(location.pathname)) {
+    return <AuthRouter />
+  }
+
   // 2. Sin sesión → AuthRouter (D-S2.30 Opción B, 19/05/2026).
-  //    AuthRouter maneja /login y /welcome. /reset-password (D3) y
-  //    /reset-password/confirm (D4) se añaden en sesión próxima.
+  //    AuthRouter maneja /login, /welcome y /reset-password.
+  //    /reset-password/confirm vive fuera de AuthRouter (ver 1-bis).
   if (!authUserId) {
     return <AuthRouter />
   }

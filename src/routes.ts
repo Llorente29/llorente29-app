@@ -14,6 +14,22 @@
 //     - slug: identifica la cuenta activa (e.g. 'llorente29', 'foodint').
 //     - pageRest: identifica la página interna (e.g. 'dashboard', 'appcc/hoy').
 //
+// EXCEPCIÓN: RUTAS DE AUTH PÚBLICAS (D-S2.30 Sesión 9, 20/05/2026):
+//   Las pantallas pre-sesión y de gestión de password viven FUERA del
+//   namespace por cuenta. Su URL NO tiene slug delante. Ejemplos:
+//     - /login                       (pre-sesión: introducir credenciales)
+//     - /welcome                     (post-invite: activar cuenta)
+//     - /reset-password              (pre-sesión: pedir email de reset)
+//     - /reset-password/confirm      (post-link de reset: nueva password)
+//
+//   Helper `isPublicAuthRoute(pathname)` para detectarlas. AppContext lo
+//   usa para SALTARSE la lógica de "sincronizar slug en URL ↔ cuenta
+//   activa" cuando el user está en una ruta pública. Sin esto, AppContext
+//   interpretaba 'reset-password' como slug inválido y navegaba a
+//   '/{cuenta-activa}/{rest-de-la-url}', expulsando al user del flow
+//   (bug Sesión 9: "reset password redirige al dashboard sin pasar por
+//   la pantalla de nueva password").
+//
 // PÁGINAS CON PARÁMETROS:
 //   - appcc_execution       → /{slug}/appcc/hoy/:executionId
 //   - appcc_audit_execution → /{slug}/appcc/auditorias/:auditId
@@ -51,6 +67,41 @@ export function buildRoute(slug: string, rest: string = ''): string {
 
 export function isValidSlugShape(slug: string): boolean {
   return /^[a-z0-9][a-z0-9-]*$/.test(slug)
+}
+
+/* =====================================================
+   RUTAS DE AUTH PÚBLICAS (D-S2.30 Sesión 9)
+   ===================================================== */
+
+/**
+ * Lista de pathnames (sin basename) que son rutas de auth globales y NO
+ * deben mezclarse con la lógica de slug-de-cuenta del Shell.
+ *
+ * AppContext usa `isPublicAuthRoute(pathname)` para decidir si saltarse
+ * la corrección de URL hacia /{slug}/{rest} en arranque/cambio de cuenta.
+ * App.tsx usa estas rutas directamente vía routing declarativo (AuthRouter +
+ * paso 1-bis de /reset-password/confirm).
+ *
+ * Si se añaden más pantallas pre-sesión (e.g. /verify-email en Sprint 3),
+ * añadirlas aquí.
+ */
+export const PUBLIC_AUTH_ROUTES: readonly string[] = [
+  '/login',
+  '/welcome',
+  '/reset-password',
+  '/reset-password/confirm',
+] as const
+
+/**
+ * True si el pathname dado corresponde a una ruta de auth pública.
+ *
+ * Match exacto sobre la lista PUBLIC_AUTH_ROUTES. NO usa startsWith porque
+ * podría dar falsos positivos (p.ej. '/login-extra' empezaría con '/login').
+ *
+ * Pathname debe venir SIN basename (la firma de useLocation() ya lo elimina).
+ */
+export function isPublicAuthRoute(pathname: string): boolean {
+  return PUBLIC_AUTH_ROUTES.includes(pathname)
 }
 
 /* =====================================================

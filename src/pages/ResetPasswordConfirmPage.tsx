@@ -2,29 +2,52 @@
 //
 // Pantalla de confirmación de reset password (D-S2.30 paso 5 / D4).
 // El user aterriza aquí tras pulsar el link del email de reset.
-// El cliente PKCE (detectSessionInUrl: true) ya intercambió el code por
-// sesión activa antes de que esta página se monte.
+// El cliente PKCE (detectSessionInUrl: true) intercambia el code por
+// sesión activa de forma asíncrona.
+//
+// CONTRATO CON App.tsx (Sesión 9):
+//   App.tsx paso 1-bis garantiza que esta pantalla se monta SIEMPRE que
+//   pathname === '/reset-password/confirm', sin importar el estado de
+//   auth. NO debemos preocuparnos por "qué pasa si no hay sesión y no
+//   hay code en URL" más allá de mostrar un mensaje al user.
+//
+//   Esto previene el bug Sesión 9 ("flow reset entra al Shell sin
+//   cambiar password"): la pantalla controla la salida del flow, no el
+//   routing global.
 //
 // FLOW:
-//   1. Aterriza con sesión activa (PKCE ya procesó el code).
-//   2. Si no hay sesión → <Navigate to="/login" /> declarativo.
-//   3. User introduce password nueva + repetir.
-//   4. updateUserPassword(password).
-//   5. Decisión 1 (Sesión 9): NO redirect a /login. Llamamos
-//      checkAccountStatus() y navegamos directo al Shell (Enfoque B,
-//      consistente con WelcomePage). El user ya está autenticado.
+//   1. Aterriza con ?code=XXX en la URL.
+//   2. supabase-js detecta code y procesa async → crea sesión.
+//   3. Esperar a que termine el procesamiento (variable waitingForPkce).
+//   4. Una vez hay sesión: user introduce password nueva + repetir.
+//   5. updateUserPassword(password).
+//   6. Decisión 1 (Sesión 9): NO redirect a /login. checkAccountStatus
+//      + navigate al Shell (Enfoque B, consistente con WelcomePage).
+//
+// ESTADOS POSIBLES:
+//   - Auth no resuelto → "Cargando..." (sin botones).
+//   - Esperando PKCE (URL trae code pero aún no hay sesión) → "Verificando enlace..."
+//   - Timeout PKCE sin sesión → mensaje de link inválido + botón a /login.
+//   - Sesión activa → form para introducir nueva password.
 //
 // DIFERENCIAS RESPECTO A WelcomePage:
 //   - NO UPDATE a user_profiles (terms ya aceptados en welcome inicial).
 //   - NO refreshUserProfile (las columnas welcome/terms no cambian aquí).
 //   - SÍ valida password con misma política (D-S2.14).
+//   - SÍ detecta ?code= en URL para esperar procesamiento PKCE.
+//
+// CHANGELOG Sesión 9 (post-bug "shell auto-login"):
+//   - App.tsx paso 1-bis ahora protege esta ruta de raíz: no entra al
+//     Shell aunque haya sesión.
+//   - Mensaje de "link inválido" cuando expira el PKCE sin sesión, con
+//     link manual a /login en vez de Navigate forzado.
 //
 // PENDIENTE Bloque E1: insertar logSecurityEvent('password_reset_completed')
 //   tras éxito del updateUserPassword.
 
-import { useState } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
-import { Lock, AlertCircle, KeyRound } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { Lock, AlertCircle, KeyRound, ArrowLeft } from 'lucide-react'
 import { useAuth } from '../modules/multitenancy/hooks/useAuth'
 import { updateUserPassword } from '../services/authService'
 import { checkAccountStatus } from '../services/accountStatusService'
@@ -35,14 +58,54 @@ type FormState = 'idle' | 'submitting' | 'error'
 const PASSWORD_MIN_LENGTH = 8
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/
 
+// Tiempo máximo de espera (ms) para que PKCE procese el ?code= antes de
+// dar por inválido el flow. supabase-js suele tardar 50-200ms; damos 3s
+// de margen amplio.
+const PKCE_PROCESSING_TIMEOUT_MS = 3000
+
 export default function ResetPasswordConfirmPage() {
   const navigate = useNavigate()
   const { isAuthenticated, isAuthResolved, signOut } = useAuth()
+
+  // Detección inicial de ?code= en la URL al montar el componente. Si
+  // existe, supabase-js está procesándolo y debemos esperar.
+  //
+  // Calculado UNA VEZ al montar (useState inicializer), no en cada render,
+  // porque supabase-js LIMPIA el code tras procesarlo y leer la URL en
+  // cada render daría resultados inconsistentes.
+  const [initialHasCode] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false
+    const params = new URLSearchParams(window.location.search)
+    return params.has('code') || params.has('error')
+  })
+
+  // Flag de "estamos esperando que termine el procesamiento PKCE".
+  const [waitingForPkce, setWaitingForPkce] = useState<boolean>(initialHasCode)
 
   const [password, setPassword] = useState('')
   const [passwordRepeat, setPasswordRepeat] = useState('')
   const [formState, setFormState] = useState<FormState>('idle')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+
+  // Timeout de espera PKCE: si tras 3s sigue sin haber sesión y aún
+  // estamos esperando, declarar inválido el flow.
+  useEffect(() => {
+    if (!waitingForPkce) return
+
+    const timer = setTimeout(() => {
+      console.warn('[ResetPasswordConfirm] PKCE procesamiento timeout sin sesión')
+      setWaitingForPkce(false)
+    }, PKCE_PROCESSING_TIMEOUT_MS)
+
+    return () => clearTimeout(timer)
+  }, [waitingForPkce])
+
+  // Cuando llega sesión, dejar de esperar PKCE.
+  useEffect(() => {
+    if (waitingForPkce && isAuthenticated) {
+      setWaitingForPkce(false)
+    }
+  }, [waitingForPkce, isAuthenticated])
 
   // Esperar a que Auth resuelva antes de decidir qué pintar.
   if (!isAuthResolved) {
@@ -53,10 +116,54 @@ export default function ResetPasswordConfirmPage() {
     )
   }
 
-  // Sin sesión activa: el link del email expiró, ya se usó, o el user
-  // navegó manualmente sin haber pasado por el flow.
+  // Aún esperando que PKCE procese el ?code= → mostrar "Verificando enlace..."
+  if (waitingForPkce && !isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-page">
+        <p className="text-sm text-text-secondary">Verificando enlace...</p>
+      </div>
+    )
+  }
+
+  // Sin sesión activa Y sin esperar: el link del email expiró, ya se usó,
+  // o el user navegó manualmente sin haber pasado por el flow.
+  //
+  // En lugar de Navigate forzado (que podría causar loops si algo cambia
+  // entre renders), mostramos un mensaje claro con link manual.
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />
+    return (
+      <div className="min-h-screen bg-page flex items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          <div className="text-center mb-8">
+            <h1 className="text-5xl font-display text-accent">Foodint</h1>
+            <p className="text-sm text-text-secondary mt-1">App del equipo</p>
+          </div>
+          <div className="bg-card rounded-xl shadow-lg overflow-hidden border border-border-default">
+            <div className="p-8 text-center space-y-3">
+              <AlertCircle size={48} className="text-warning mx-auto" />
+              <p className="text-lg font-display text-text-primary">
+                Enlace no válido
+              </p>
+              <p className="text-sm text-text-secondary">
+                Este enlace de recuperación ha caducado, ya se usó, o no es válido.
+                Solicita uno nuevo desde la pantalla de inicio de sesión.
+              </p>
+              <div className="pt-4">
+                <Link
+                  to="/login"
+                  className="text-sm text-accent hover:underline transition-base inline-flex items-center gap-2"
+                >
+                  <ArrowLeft size={14} /> Volver a inicio de sesión
+                </Link>
+              </div>
+            </div>
+          </div>
+          <p className="text-center text-xs text-text-secondary mt-4">
+            Foodint · Hostelería Pro
+          </p>
+        </div>
+      </div>
+    )
   }
 
   async function handleSubmit(e: React.FormEvent) {

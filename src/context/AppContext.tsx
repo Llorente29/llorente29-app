@@ -13,8 +13,7 @@ import {
 import { listAccounts } from '../modules/multitenancy/services/accountsService'
 import { listUserProfilesByUser, getUserProfile } from '../modules/multitenancy/services/userProfilesService'
 import { getPermissions } from '../modules/multitenancy/services/managerPermissionsService'
-import { parseRoute, buildRoute, isValidSlugShape } from '../routes'
-
+import { parseRoute, buildRoute, isValidSlugShape, isPublicAuthRoute } from '../routes'
 const DEFAULT_SCHEDULE: WeeklySchedule = {
   lunes: { active: true, start: '09:00', end: '17:00' },
   martes: { active: true, start: '09:00', end: '17:00' },
@@ -24,7 +23,6 @@ const DEFAULT_SCHEDULE: WeeklySchedule = {
   sabado: { active: false, start: '', end: '' },
   domingo: { active: false, start: '', end: '' },
 }
-
 const DEFAULT_NOTIF: NotifConfig = {
   whatsappEnabled: false, whatsappNumber: '',
   emailEnabled: false, emailAddress: '',
@@ -164,7 +162,7 @@ interface AppContextType {
   //   NO persiste (intencionado: el admin reentra sin filtros confusos).
   activeBrandFilter: BrandFilter
   setActiveBrandFilter: (filter: BrandFilter) => void
-  // ─── Shell multi-tenant (Bloque B fase 2 — añadido 16-may-2026) ─────────
+  // ─── Shell multi-tenant (Bloque B fase 2 — añadido 16-may-2026) ────────
   // accounts: cuentas a las que pertenece el user logueado.
   //   Se cargan cuando hay sesión Supabase (adminEmail !== null).
   //   [] = aún no cargadas / user sin perfiles / fallo de carga.
@@ -261,7 +259,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [syncing, setSyncing] = useState(false)
   const [lastSync, setLastSync] = useState<Date | null>(null)
 
-  // ─── Router hooks (Bloque C completo Fase 1) ────────────────────────────
+  // ─── Router hooks (Bloque C completo Fase 1) ───────────────────────────
   //
   // useLocation/useNavigate provienen del <BrowserRouter> de main.tsx.
   // Usados más abajo para:
@@ -549,11 +547,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   //   - Compartir el link con otro usuario sin que cambie por su localStorage.
   //   - Múltiples pestañas con cuentas distintas (cada pestaña tiene su URL).
   //   - Botón "atrás" del navegador para deshacer cambios de cuenta.
+  //
+  // D-S2.30 Sesión 9 (20/05/2026): si el pathname actual es una ruta de
+  // auth pública (/login, /welcome, /reset-password*), NO navegamos. Estas
+  // rutas viven fuera del namespace por cuenta; cambiar el slug mientras
+  // el user está en una de ellas lo expulsaría del flow.
   const setActiveAccountId = useCallback((id: string) => {
     setActiveAccountIdState(id)
     try {
       localStorage.setItem(ACTIVE_ACCOUNT_KEY, id)
     } catch { /* localStorage no disponible */ }
+
+    // No tocar URL si estamos en una ruta de auth pública.
+    if (isPublicAuthRoute(location.pathname)) {
+      return
+    }
 
     // Actualizar URL si conocemos el slug. accountsRef se mantiene al día
     // vía un useEffect más abajo (sin dispararnos a nosotros mismos).
@@ -602,7 +610,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
 
         // Listar las accounts. listAccounts respeta RLS y filtra por las
-        // accesibles; aún así, includeInternal=true por si el user es admin
+        // accesibles; aún así includeInternal=true por si el user es admin
         // global y debe ver Foodint Interno.
         const allVisible = await listAccounts({ includeInternal: true })
         const mine = allVisible.filter(a => accountIds.includes(a.id))
@@ -616,6 +624,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         })
 
         setAccounts(mine)
+
+        // D-S2.30 Sesión 9 (20/05/2026): si el user está en una ruta de auth
+        // pública, NO sincronizar URL ↔ slug. Solo resolver activeAccountId
+        // desde localStorage o fallback. Sin esta guarda, AppContext
+        // interpretaba '/reset-password' como slug de cuenta inválido y
+        // navegaba a '/{cuenta-activa}/{rest}', expulsando al user del flow.
+        if (isPublicAuthRoute(location.pathname)) {
+          const persisted = (() => {
+            try { return localStorage.getItem(ACTIVE_ACCOUNT_KEY) } catch { return null }
+          })()
+          const persistedIsValid = persisted && mine.some(a => a.id === persisted)
+          const chosenId = persistedIsValid ? persisted : (mine[0]?.id ?? null)
+          if (activeAccountId !== chosenId) {
+            setActiveAccountIdState(chosenId)
+          }
+          try {
+            if (chosenId) localStorage.setItem(ACTIVE_ACCOUNT_KEY, chosenId)
+            else localStorage.removeItem(ACTIVE_ACCOUNT_KEY)
+          } catch { /* localStorage no disponible */ }
+          return
+        }
 
         // Resolver activeAccountId — BLOQUE C completo Fase 1:
         //   1. Si la URL trae un slug válido Y la cuenta es accesible → URL gana.
@@ -698,10 +727,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   //      - Comparamos contra activeAccountId actual para evitar loop:
   //        setActiveAccountId → navigate → useEffect (location cambió) →
   //        setActiveAccountId (mismo id, no-op) → fin.
+  //
+  // D-S2.30 Sesión 9 (20/05/2026): si la URL es ruta de auth pública,
+  // saltarse la sincronización slug→account. Solo mantener accountsRef.
   useEffect(() => {
     accountsRef.current = accounts
 
     if (accounts.length === 0) return
+    if (isPublicAuthRoute(location.pathname)) return
 
     const urlParsed = parseRoute(location.pathname)
     if (!urlParsed.slug || !isValidSlugShape(urlParsed.slug)) return
