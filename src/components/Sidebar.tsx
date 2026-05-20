@@ -206,7 +206,7 @@ export default function Sidebar({
       {/* ---------- Header del sidebar ---------- */}
       <div className={`h-14 flex items-center border-b border-border-default shrink-0 ${collapsed && !isMobile ? 'px-3.5 justify-center' : 'px-4'}`}>
         {showLabels ? (
-          <Logo size="md" variant="light" className="[&>img]:h-14 flex-1 !justify-start" />
+          <Logo size="md" variant="transparent" className="[&>img]:h-14 flex-1 !justify-start" />
         ) : (
           <LogoSquare size={32} />
         )}

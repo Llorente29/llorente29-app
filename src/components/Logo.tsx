@@ -14,7 +14,7 @@
 
 interface LogoProps {
   size?: 'sm' | 'md' | 'lg' | 'xl'
-  variant?: 'light' | 'dark'
+  variant?: 'light' | 'dark' | 'transparent'
   className?: string
 }
 
@@ -27,9 +27,14 @@ const SIZES = {
 
 export default function Logo({ size = 'md', variant = 'light', className = '' }: LogoProps) {
   const heightClass = SIZES[size]
-  const src = variant === 'dark'
-    ? `${import.meta.env.BASE_URL}folvy_logo_oscuro.svg`
-    : `${import.meta.env.BASE_URL}folvy_logo_principal.svg`
+  let src: string
+  if (variant === 'dark') {
+    src = `${import.meta.env.BASE_URL}folvy_logo_oscuro.svg`
+  } else if (variant === 'transparent') {
+    src = `${import.meta.env.BASE_URL}folvy_logo_transparente.svg`
+  } else {
+    src = `${import.meta.env.BASE_URL}folvy_logo_principal.svg`
+  }
 
   return (
     <div className={`inline-flex items-center justify-center ${className}`}>
