@@ -10,7 +10,7 @@
 // CONTRATO:
 //   URL completa = /{basename}/{slug}/{pageRest}
 //   Donde:
-//     - basename: gestionado por <BrowserRouter basename="/llorente29-app">.
+//     - basename: SIN basename (eliminado en Bloque K Sprint 3, 20/05/2026).
 //     - slug: identifica la cuenta activa (e.g. 'llorente29', 'foodint').
 //     - pageRest: identifica la página interna (e.g. 'dashboard', 'appcc/hoy').
 //

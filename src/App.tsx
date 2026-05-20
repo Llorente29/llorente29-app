@@ -435,7 +435,7 @@ function AuthenticatedApp({ profile, onSignOut }: {
           ) : (
             // Bloque C Fases 2-3: <Routes> sustituye al switch (page). Cada
             // Route mapea el path declarado en routes.ts al componente.
-            // basename del BrowserRouter elimina '/llorente29-app'; las
+            // SIN basename (eliminado en Bloque K Sprint 3, 20/05/2026). Las
             // rutas anidan: '/:slug/<rest>'.
             <Routes>
               {(Object.keys(PAGE_COMPONENTS) as Page[]).map(p => {
