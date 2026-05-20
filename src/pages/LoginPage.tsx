@@ -131,7 +131,7 @@ export default function LoginPage({ onCheckSession: _onCheckSession }: Props) {
       <div className="w-full max-w-md">
         {/* Logo / cabecera */}
         <div className="text-center mb-8">
-          <Logo size="lg" variant="light" className="mb-2" />
+          <Logo size="xl" variant="light" className="mb-2" />
           <p className="text-sm text-text-secondary mt-1">App del equipo</p>
         </div>
 

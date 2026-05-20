@@ -125,7 +125,7 @@ export default function ResetPasswordConfirmPage() {
       <div className="min-h-screen bg-page flex items-center justify-center p-4">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <Logo size="lg" variant="light" className="mb-2" />
+            <Logo size="xl" variant="light" className="mb-2" />
             <p className="text-sm text-text-secondary mt-1">App del equipo</p>
           </div>
           <div className="bg-card rounded-xl shadow-lg overflow-hidden border border-border-default">
@@ -234,7 +234,7 @@ export default function ResetPasswordConfirmPage() {
       <div className="w-full max-w-md">
         {/* Cabecera */}
         <div className="text-center mb-8">
-          <Logo size="lg" variant="light" className="mb-2" />
+          <Logo size="xl" variant="light" className="mb-2" />
           <p className="text-sm text-text-secondary mt-1">App del equipo</p>
         </div>
 
