@@ -28,14 +28,12 @@
 //   Reusa los design tokens Foodint (D-S2.31 Opción I): bg-card,
 //   text-accent, etc. Rebrand visual completo en Sprint 3.
 //
-// PENDIENTES:
-//   - Link "¿Olvidaste tu contraseña?" → /reset-password (D3, sesión futura).
-//   - Link "¿Primera vez? Activa tu cuenta" → /welcome (D2, sesión futura).
-//   - Ambos links no funcionan hasta refactor del patrón if/else en App.tsx
-//     (D-S2.30, requiere autorización explícita Julio).
+// CHANGELOG Sesión 9 (D-S2.30 paso 4):
+//   - Añadido link "¿Olvidaste tu contraseña?" → /reset-password (D3).
+//   - Eliminado bloque PENDIENTES obsoleto del header.
 
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../modules/multitenancy/hooks/useAuth'
 import { checkAccountStatus } from '../services/accountStatusService'
 import { Lock, Mail, AlertCircle, LogIn } from 'lucide-react'
@@ -205,9 +203,19 @@ export default function LoginPage({ onCheckSession: _onCheckSession }: Props) {
                   }
                 </button>
 
-                <p className="text-xs text-text-secondary text-center pt-2">
+                {/* Link a reset password (D-S2.30 paso 4, Sesión 9) */}
+                <div className="text-center pt-1">
+                  <Link
+                    to="/reset-password"
+                    className="text-sm text-accent hover:underline transition-base"
+                  >
+                    ¿Olvidaste tu contraseña?
+                  </Link>
+                </div>
+
+                <p className="text-xs text-text-secondary text-center pt-1">
                   Solo pueden entrar usuarios autorizados.
-                  Si has olvidado tu contraseña o no tienes acceso, contacta con tu administrador.
+                  Si no tienes acceso, contacta con tu administrador.
                 </p>
               </form>
             </>
