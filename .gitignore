@@ -4,3 +4,16 @@ dist/
 .env.backup
 *.local
 supabase/.temp/
+supabase/.branches/
+supabase/snippets/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Test/build artifacts
+coverage/
+*.tsbuildinfo
