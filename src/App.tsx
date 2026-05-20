@@ -506,7 +506,7 @@ export default function App() {
       <div className="min-h-screen flex items-center justify-center bg-page">
         <div className="text-center">
           <p className="text-2xl font-display font-medium mb-2 text-accent">
-            Foodint
+            Folvy
           </p>
           <p className="text-sm text-text-secondary">Cargando...</p>
         </div>
@@ -560,7 +560,7 @@ export default function App() {
       <div className="min-h-screen flex items-center justify-center bg-page">
         <div className="text-center">
           <p className="text-2xl font-display font-medium mb-2 text-accent">
-            Foodint
+            Folvy
           </p>
           <p className="text-sm text-text-secondary">Cargando...</p>
         </div>

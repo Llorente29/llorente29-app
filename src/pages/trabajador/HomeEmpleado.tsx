@@ -158,7 +158,7 @@ export default function HomeEmpleado({ employee, onNavigate, onLogout, appccPend
       </div>
 
       {/* Footer */}
-      <p className="text-center text-xs text-text-secondary pb-4">Foodint · Plataforma Hostelería</p>
+      <p className="text-center text-xs text-text-secondary pb-4">Folvy · Restauración Profesional</p>
     </div>
   )
 }
