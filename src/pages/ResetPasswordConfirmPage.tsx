@@ -25,28 +25,13 @@
 //   7. Decisión 1 (Sesión 9): NO redirect a /login. checkAccountStatus
 //      + navigate al Shell (Enfoque B, consistente con WelcomePage).
 //
-// ESTADOS POSIBLES:
-//   - Auth no resuelto → "Cargando..." (sin botones).
-//   - Esperando PKCE (URL trae code pero aún no hay sesión) → "Verificando enlace..."
-//   - Timeout PKCE sin sesión → mensaje de link inválido + botón a /login.
-//   - Sesión activa → form para introducir nueva password.
-//
-// DIFERENCIAS RESPECTO A WelcomePage:
-//   - NO UPDATE a user_profiles (terms ya aceptados en welcome inicial).
-//   - NO refreshUserProfile (las columnas welcome/terms no cambian aquí).
-//   - SÍ valida password con misma política (D-S2.14).
-//   - SÍ detecta ?code= en URL para esperar procesamiento PKCE.
-//
-// CHANGELOG Sesión 9 (post-bug "shell auto-login"):
-//   - App.tsx paso 1-bis ahora protege esta ruta de raíz: no entra al
-//     Shell aunque haya sesión.
-//   - Mensaje de "link inválido" cuando expira el PKCE sin sesión, con
-//     link manual a /login en vez de Navigate forzado.
-//
 // CHANGELOG Sesión 10 E1 (20/05/2026):
-//   - logSecurityEvent('password_reset_completed') tras updateUserPassword
-//     exitoso. En este punto hay sesión activa, actor_user_id se resuelve
-//     correctamente vía getCurrentUser() dentro de logSecurityEvent.
+//   - logSecurityEvent('password_reset_completed') tras updateUserPassword OK.
+//
+// CHANGELOG Sesión 10 F2 (20/05/2026):
+//   - Política password (PASSWORD_MIN_LENGTH + PASSWORD_REGEX) extraída a
+//     src/lib/passwordPolicy.ts. Ahora se valida con validatePassword().
+//     Misma política client-side; sin cambio funcional.
 
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
@@ -54,12 +39,13 @@ import { Lock, AlertCircle, KeyRound, ArrowLeft } from 'lucide-react'
 import { useAuth } from '../modules/multitenancy/hooks/useAuth'
 import { updateUserPassword, logSecurityEvent } from '../services/authService'
 import { checkAccountStatus } from '../services/accountStatusService'
+import {
+  PASSWORD_MIN_LENGTH,
+  PASSWORD_REGEX,
+  validatePassword,
+} from '../lib/passwordPolicy'
 
 type FormState = 'idle' | 'submitting' | 'error'
-
-// Política password Supabase D-S2.14: min 8, lowercase + uppercase + digits.
-const PASSWORD_MIN_LENGTH = 8
-const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/
 
 // Tiempo máximo de espera (ms) para que PKCE procese el ?code= antes de
 // dar por inválido el flow. supabase-js suele tardar 50-200ms; damos 3s
@@ -173,13 +159,14 @@ export default function ResetPasswordConfirmPage() {
     e.preventDefault()
     setErrorMsg(null)
 
-    if (password.length < PASSWORD_MIN_LENGTH) {
-      setErrorMsg(`La contraseña debe tener al menos ${PASSWORD_MIN_LENGTH} caracteres.`)
-      setFormState('error')
-      return
-    }
-    if (!PASSWORD_REGEX.test(password)) {
-      setErrorMsg('La contraseña debe incluir mayúsculas, minúsculas y números.')
+    // F2 Sesión 10: validación delegada a passwordPolicy.validatePassword.
+    const pwdValidation = validatePassword(password)
+    if (!pwdValidation.ok) {
+      if (pwdValidation.reason === 'too_short' || pwdValidation.reason === 'empty') {
+        setErrorMsg(`La contraseña debe tener al menos ${PASSWORD_MIN_LENGTH} caracteres.`)
+      } else {
+        setErrorMsg('La contraseña debe incluir mayúsculas, minúsculas y números.')
+      }
       setFormState('error')
       return
     }
@@ -234,7 +221,8 @@ export default function ResetPasswordConfirmPage() {
     }
   }
 
-  // Validación visual del estado de la password (sin bloquear inputs)
+  // Validación visual del estado de la password (sin bloquear inputs).
+  // F2: usa las constantes importadas. NO redefine PASSWORD_REGEX local.
   const passwordTooShort = password.length > 0 && password.length < PASSWORD_MIN_LENGTH
   const passwordWeak = password.length >= PASSWORD_MIN_LENGTH && !PASSWORD_REGEX.test(password)
   const passwordsDiffer = passwordRepeat.length > 0 && password !== passwordRepeat

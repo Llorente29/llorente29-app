@@ -23,14 +23,15 @@
 //   - Detección de #access_token (invite legacy) y ?code= (PKCE) en URL
 //     inicial al montar. Si hay alguno, esperar timeout 3s antes de
 //     redirigir, igual que ResetPasswordConfirmPage.
-//   - Sin esta espera, el flow invite caía a /login antes de que la sesión
-//     creada por el token se propagase al context.
 //
 // CHANGELOG Sesión 10 E1 (20/05/2026):
-//   - logSecurityEvent('welcome_completed') tras UPDATE exitoso. Importante
-//     loggearlo ANTES de refreshUserProfile, porque la sesión está activa
-//     y getCurrentUser() dentro de logSecurityEvent resuelve actor_user_id.
-//     Si fallase la query del refresh, el evento ya queda registrado.
+//   - logSecurityEvent('welcome_completed') tras UPDATE exitoso.
+//
+// CHANGELOG Sesión 10 F2 (20/05/2026):
+//   - Política password (PASSWORD_MIN_LENGTH + PASSWORD_REGEX) extraída a
+//     src/lib/passwordPolicy.ts. Ahora se valida con validatePassword().
+//     Mantiene exactamente la misma política client-side (regla F2:
+//     refactor sin cambio funcional).
 
 import { useEffect, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
@@ -40,12 +41,13 @@ import { useApp } from '../context/AppContext'
 import { updateUserPassword, logSecurityEvent } from '../services/authService'
 import { checkAccountStatus } from '../services/accountStatusService'
 import { supabase } from '../lib/supabase'
+import {
+  PASSWORD_MIN_LENGTH,
+  PASSWORD_REGEX,
+  validatePassword,
+} from '../lib/passwordPolicy'
 
 type FormState = 'idle' | 'submitting' | 'error'
-
-// Política password Supabase D-S2.14: min 8, lowercase + uppercase + digits.
-const PASSWORD_MIN_LENGTH = 8
-const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/
 
 // Tiempo máximo de espera (ms) para que supabase-js procese el token de
 // invite antes de dar por inválido el flow. Probado E2E en reset password:
@@ -129,14 +131,14 @@ export default function WelcomePage() {
     e.preventDefault()
     setErrorMsg(null)
 
-    // Validación cliente
-    if (password.length < PASSWORD_MIN_LENGTH) {
-      setErrorMsg(`La contraseña debe tener al menos ${PASSWORD_MIN_LENGTH} caracteres.`)
-      setFormState('error')
-      return
-    }
-    if (!PASSWORD_REGEX.test(password)) {
-      setErrorMsg('La contraseña debe incluir mayúsculas, minúsculas y números.')
+    // F2 Sesión 10: validación delegada a passwordPolicy.validatePassword.
+    const pwdValidation = validatePassword(password)
+    if (!pwdValidation.ok) {
+      if (pwdValidation.reason === 'too_short' || pwdValidation.reason === 'empty') {
+        setErrorMsg(`La contraseña debe tener al menos ${PASSWORD_MIN_LENGTH} caracteres.`)
+      } else {
+        setErrorMsg('La contraseña debe incluir mayúsculas, minúsculas y números.')
+      }
       setFormState('error')
       return
     }
@@ -240,7 +242,8 @@ export default function WelcomePage() {
     }
   }
 
-  // Validación visual del estado de la password (sin bloquear inputs)
+  // Validación visual del estado de la password (sin bloquear inputs).
+  // F2: usa las constantes importadas. NO redefine PASSWORD_REGEX local.
   const passwordTooShort = password.length > 0 && password.length < PASSWORD_MIN_LENGTH
   const passwordWeak = password.length >= PASSWORD_MIN_LENGTH && !PASSWORD_REGEX.test(password)
   const passwordsDiffer = passwordRepeat.length > 0 && password !== passwordRepeat
