@@ -14,7 +14,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import type { Page } from '../types'
-import { LogoSquare } from './Logo'
+import Logo, { LogoSquare } from './Logo'
 import { parseRoute, pathToPage, pageToRoute } from '../routes'
 import { useActiveAccount } from '../modules/multitenancy/hooks/useActiveAccount'
 import {
@@ -204,13 +204,11 @@ export default function Sidebar({
       aria-hidden={ariaHidden}
     >
       {/* ---------- Header del sidebar ---------- */}
-      <div className={`h-14 flex items-center border-b border-border-default gap-3 shrink-0 ${collapsed && !isMobile ? 'px-3.5' : 'px-4'}`}>
-        <LogoSquare size={32} />
-        {showLabels && (
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold tracking-tight truncate text-text-primary">Folvy</p>
-            <p className="text-xs text-text-secondary truncate">App del equipo</p>
-          </div>
+      <div className={`h-14 flex items-center border-b border-border-default shrink-0 ${collapsed && !isMobile ? 'px-3.5 justify-center' : 'px-4'}`}>
+        {showLabels ? (
+          <Logo size="md" variant="light" className="[&>img]:h-14 flex-1 !justify-start" />
+        ) : (
+          <LogoSquare size={32} />
         )}
         {isMobile && (
           <button
