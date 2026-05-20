@@ -128,10 +128,24 @@ export default function LoginPage({ onCheckSession: _onCheckSession }: Props) {
 
   return (
     <div className="min-h-screen bg-page flex items-center justify-center p-4">
+      {/* Animación de entrada del logo (solo LoginPage, no afecta a Logo.tsx
+          ni a otras pantallas). Fade + micro-zoom una sola vez al montar. */}
+      <style>{`
+        @keyframes folvyLogoIntro {
+          from { opacity: 0; transform: scale(0.95); }
+          to   { opacity: 1; transform: scale(1); }
+        }
+        .folvy-logo-intro {
+          animation: folvyLogoIntro 0.6s ease-out both;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .folvy-logo-intro { animation: none; }
+        }
+      `}</style>
       <div className="w-full max-w-md">
         {/* Logo / cabecera */}
         <div className="text-center mb-8">
-          <Logo size="xl" variant="light" className="mb-2" />
+          <Logo size="xl" variant="light" className="folvy-logo-intro [&>img]:h-28 mb-2" />
           <p className="text-sm text-text-secondary mt-1">App del equipo</p>
         </div>
 
