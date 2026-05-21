@@ -14,11 +14,12 @@
 // a la tabla `account_modules` para gating por cuenta.
 
 import type { ModuleDefinition } from './types'
+import { appccModule } from '@/modules/appcc/module'
 
 export const moduleRegistry: ModuleDefinition[] = [
-  // appccModule,      // G-3
-  // personalModule,   // G-5
-  // ventasModule,     // G-5
+  appccModule,        // G-3 (piloto)
+  // personalModule,  // G-5
+  // ventasModule,    // G-5
 ]
 
 /** Devuelve los módulos ordenados por su posición en el TopBar. */
