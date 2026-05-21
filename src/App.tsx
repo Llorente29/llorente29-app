@@ -9,6 +9,7 @@ import { gate } from '@/platform/feature-gate/featureGateService'
 import { usePlatformAdmin } from '@/platform/usePlatformAdmin'
 import AdminShell from './admin/AdminShell'
 import Shell from './shell/Shell'
+import AccountStatusGate from './components/AccountStatusGate'
 
 // G-8.6 (Sprint 3): App.tsx reducido. El render autenticado es el Shell modular
 // (src/shell/Shell.tsx), que vive en la raíz y resuelve la cuenta por AppContext.
@@ -131,5 +132,9 @@ export default function App() {
   // 4. Sesión válida + welcome completado → Shell modular (render por defecto).
   //    G-8.6: el Shell vive en la raíz (sin slug, opción C) y resuelve la
   //    cuenta activa por AppContext.
-  return <Shell />
+  return (
+    <AccountStatusGate>
+      <Shell />
+    </AccountStatusGate>
+  )
 }
