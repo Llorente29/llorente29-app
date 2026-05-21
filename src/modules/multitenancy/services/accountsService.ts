@@ -23,6 +23,7 @@
 
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
 import { slugify } from '../utils/slug'
+import { sendPlatformEmail } from '../../../services/platformEmailService'
 import type {
   Account,
   AccountInsert,
@@ -32,6 +33,11 @@ import type {
   RowAccountInsert,
   RowAccountUpdate,
 } from '../../../types/multitenancy'
+
+// Días de gracia tras impago. DEBE COINCIDIR con GRACE_PERIOD_DAYS del
+// componente AccountStatusGate (Sesión 16). Deuda menor: unificar en una
+// constante compartida cuando toque. Se usa aquí solo para el email de impago.
+const GRACE_PERIOD_DAYS = 7
 
 // ─────────────────────────────────────────────────────────────────────
 // Mappers (BBDD snake_case ↔ dominio camelCase)
@@ -137,6 +143,93 @@ export function validateAccountSlug(slug: string): void {
     throw new Error(
       `Slug "${slug}" inválido. Debe usar solo minúsculas, dígitos y guiones, ` +
         `entre 1 y 64 caracteres, sin empezar ni acabar con guión.`
+    )
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Capa C de portería: aviso por email según transición de estado
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Mapea un estado destino a la plantilla de email correspondiente.
+ * Devuelve null si ese estado no tiene aviso asociado (p. ej. 'trial').
+ */
+function templateForStatus(status: AccountStatus): string | null {
+  switch (status) {
+    case 'past_due':
+      return 'aviso_impago'
+    case 'suspended':
+      return 'aviso_suspension'
+    case 'canceled':
+      return 'aviso_cancelacion'
+    case 'active':
+      return 'aviso_reactivacion'
+    default:
+      return null
+  }
+}
+
+/**
+ * Dispara el email de aviso de portería según la transición de estado.
+ *
+ * BEST-EFFORT: no lanza nunca. Cualquier fallo se loguea con console.warn y
+ * se ignora — el cambio de estado (operación crítica) ya está persistido.
+ *
+ * Reglas de disparo:
+ *   - Solo si el estado CAMBIA de verdad (from !== to). Un re-marcado no reenvía.
+ *   - Solo si el estado destino tiene plantilla (past_due/suspended/canceled/active).
+ *   - 'active' solo se considera "reactivación" si venía de past_due o suspended
+ *     (entrar en active desde trial NO es reactivación; no se avisa).
+ *   - Solo si la cuenta tiene billingEmail (si no, no hay a quién enviar).
+ */
+async function notifyStatusChange(
+  account: Account,
+  fromStatus: AccountStatus,
+): Promise<void> {
+  const toStatus = account.status
+
+  // 1. Sin cambio real → nada que avisar.
+  if (fromStatus === toStatus) return
+
+  // 2. Reactivación solo desde un estado "malo".
+  if (toStatus === 'active' && fromStatus !== 'past_due' && fromStatus !== 'suspended') {
+    return
+  }
+
+  // 3. ¿Hay plantilla para este destino?
+  const template = templateForStatus(toStatus)
+  if (!template) return
+
+  // 4. ¿Hay email de facturación?
+  const to = account.billingEmail
+  if (!to || to.trim() === '') {
+    console.warn(
+      `[notifyStatusChange] cuenta ${account.id} (${account.name}) sin billingEmail; ` +
+        `no se envía aviso de "${toStatus}".`
+    )
+    return
+  }
+
+  // 5. Datos para la plantilla.
+  const data: Record<string, unknown> = {
+    nombreCuenta: account.name,
+  }
+  if (toStatus === 'past_due') {
+    data.diasGracia = GRACE_PERIOD_DAYS
+  }
+
+  // 6. Envío best-effort.
+  const result = await sendPlatformEmail(to, template, data)
+  if (!result.ok) {
+    console.warn(
+      `[notifyStatusChange] aviso "${template}" a ${to} (cuenta ${account.id}) ` +
+        `falló: ${result.error}`
+    )
+  } else {
+    console.log(
+      `[notifyStatusChange] aviso "${template}" enviado a ${to} ` +
+        `(cuenta ${account.id}, email_id=${result.emailId})`
     )
   }
 }
@@ -324,6 +417,12 @@ export async function updateAccount(
  *     (un doble clic no debe regalar días de gracia ni reiniciar el contador).
  *   - Cualquier otro estado (active/trial/suspended/canceled) → past_due_at = null.
  *
+ * AVISO POR EMAIL (Sesión 17, Bloque 2 — Capa C):
+ *   Tras el cambio, dispara un email de aviso al billing_email de la cuenta
+ *   según la transición (impago/suspensión/cancelación/reactivación). El envío
+ *   es BEST-EFFORT: si falla, se loguea y se ignora. El cambio de estado ya
+ *   está persistido y la función devuelve el Account igualmente.
+ *
  * Ejemplos de uso:
  *   - setAccountStatus(id, 'active')   → activar tras trial (limpia past_due_at)
  *   - setAccountStatus(id, 'past_due') → impago detectado (sella past_due_at)
@@ -335,11 +434,13 @@ export async function setAccountStatus(
 ): Promise<Account> {
   requireSupabase()
 
-  // Necesitamos el estado actual para no pisar past_due_at en un re-marcado.
+  // Necesitamos el estado actual para no pisar past_due_at en un re-marcado
+  // y para conocer la transición (origen → destino) del aviso por email.
   const current = await getAccountById(id)
   if (!current) {
     throw new Error(`Cuenta ${id} no encontrada.`)
   }
+  const fromStatus = current.status
 
   // Decide el valor de past_due_at según el estado destino.
   let pastDueAt: string | null
@@ -362,5 +463,11 @@ export async function setAccountStatus(
   if (error) {
     throw new Error(`Error cambiando status de cuenta ${id} a "${status}": ${error.message}`)
   }
-  return rowToAccount(data)
+
+  const updated = rowToAccount(data)
+
+  // Aviso por email (best-effort, no rompe si falla). El estado ya está guardado.
+  await notifyStatusChange(updated, fromStatus)
+
+  return updated
 }
