@@ -3,3 +3,6 @@ project_id = "xzmpnchlguibclvxyynt"
 
 [functions.check-account-status]
 verify_jwt = true
+
+[functions.create-account]
+verify_jwt = true
