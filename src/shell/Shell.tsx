@@ -22,7 +22,9 @@ import { configuracionModule } from '../modules/configuracion/module'
 import HomeGeneral from './home/HomeGeneral'
 import { useApp } from '../context/AppContext'
 
-const SHELL_BASE = '/shell'
+// G-8.6 (opción C): el Shell vive en la RAÍZ, sin prefijo /shell ni slug.
+// Las URLs son /, /appcc/hoy, /configuracion/locales, etc. La cuenta activa
+// se resuelve por AppContext, no por la URL (no se pierde multi-tenancy).
 const SETTINGS_BASE = 'configuracion'
 
 export default function Shell() {
@@ -30,8 +32,9 @@ export default function Shell() {
   const location = useLocation()
   const { userProfile } = useApp()
 
-  // Derivar sección activa del pathname. rest = lo que va tras /shell.
-  const rest = location.pathname.slice(SHELL_BASE.length).replace(/^\/+/, '')
+  // Derivar sección activa del pathname. Con SHELL_BASE='' el pathname ES
+  // directamente /:base/:item (sin prefijo). rest = pathname sin barras.
+  const rest = location.pathname.replace(/^\/+|\/+$/g, '')
   const segments = rest === '' ? [] : rest.split('/')
   const moduleBasePath = segments[0] ?? ''            // '' = Home
   const itemPathFromUrl = segments.slice(1).join('/') // resto = path del item
@@ -46,9 +49,8 @@ export default function Shell() {
   const settingsActive = moduleBasePath === SETTINGS_BASE
 
   // activeKey para el TopBar: HOME_KEY o el id del módulo activo. Configuración
-  // NO es pestaña del TopBar, así que cuando está activa el TopBar no resalta
-  // ninguna pestaña (activeKey = HOME_KEY no resalta Inicio porque el engranaje
-  // lleva su propio estado; aceptamos que ninguna pestaña quede activa).
+  // NO es pestaña del TopBar, así que cuando está activa ninguna pestaña queda
+  // resaltada (lo lleva el engranaje).
   const activeKey = (activeModule && !settingsActive) ? activeModule.id : HOME_KEY
 
   // Item activo del módulo: el que matchea el path de la URL, o el primero.
@@ -62,27 +64,26 @@ export default function Shell() {
     ? userName.trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase()
     : 'JG'
 
-  // Navega a una sección desde el TopBar. El TopBar entrega HOME_KEY o un id
-  // de módulo; traducimos el id a su basePath para la URL.
+  // Navega a una sección desde el TopBar. HOME_KEY → raíz; módulo → /:base.
   function goToKey(key: string) {
     if (key === HOME_KEY) {
-      navigate(SHELL_BASE)
+      navigate('/')
       return
     }
     const mod = getModuleById(key)
-    if (mod) navigate(`${SHELL_BASE}/${mod.basePath}`)
+    if (mod) navigate(`/${mod.basePath}`)
   }
 
   // Abre Configuración (engranaje).
   function openSettings() {
-    navigate(`${SHELL_BASE}/${SETTINGS_BASE}`)
+    navigate(`/${SETTINGS_BASE}`)
   }
 
   // Navega a un item del módulo activo. itemPath es relativo al basePath.
   function goToItemPath(itemPath: string) {
     if (!activeModule) return
     const suffix = itemPath === '' ? '' : `/${itemPath}`
-    navigate(`${SHELL_BASE}/${activeModule.basePath}${suffix}`)
+    navigate(`/${activeModule.basePath}${suffix}`)
   }
 
   return (
@@ -107,7 +108,7 @@ export default function Shell() {
                 'shell/:base/'. r.path es relativo al basePath. */}
             <Routes>
               {activeModule.routes.map(r => {
-                const full = `shell/${activeModule.basePath}/${r.path ?? ''}`.replace(/\/+$/, '')
+                const full = `${activeModule.basePath}/${r.path ?? ''}`.replace(/\/+$/, '')
                 return <Route key={r.path ?? 'index'} path={full} element={r.element} />
               })}
             </Routes>
