@@ -1,0 +1,78 @@
+// src/modules/personal/module.tsx
+//
+// ModuleDefinition del módulo Personal (Folvy Team) — Bloque G-8.4, Sprint 3.
+//
+// Referencia: folvy_arquitectura_reconciliada.md §6 (Personal = 'personal' /
+// display 'Folvy Team').
+//
+// NOTA DE RUTAS (importante): en la app actual las páginas de Personal NO
+// comparten un prefijo común (viven en /:slug/fichajes-global, /:slug/calendario,
+// etc., sin un /personal/ delante — ver src/routes.ts PAGE_TO_PATH). Para el
+// Shell modular, las agrupamos bajo el basePath 'personal' con paths relativos
+// nuevos (/shell/personal/<path>). Esto NO cambia las rutas de la app vieja
+// (que sigue activa hasta G-8.6); es la estructura limpia del Shell. La
+// unificación definitiva de URLs se hará en el cambio de default (G-8.6).
+//
+// Fichero .tsx porque los `element` de las rutas son JSX.
+
+import {
+  Users, Activity, Clock, Smartphone, Inbox, Armchair,
+  RefreshCw, Calendar, FolderOpen, FileText, Wallet,
+} from 'lucide-react'
+import type { ModuleDefinition } from '@/shell/types'
+
+import StaffPage from '@/pages/StaffPage'
+import FichajesGlobalPage from '@/pages/FichajesGlobalPage'
+import KioskoFichajePage from '@/pages/KioskoFichajePage'
+import SolicitudesPendientesPage from '@/pages/SolicitudesPendientesPage'
+import AhoraMismoPage from '@/pages/AhoraMismoPage'
+import TurnosAbiertosPage from '@/pages/TurnosAbiertosPage'
+import CambiosPendientesPage from '@/pages/CambiosPendientesPage'
+import CalendarioPage from '@/pages/CalendarioPage'
+import PlantillaTurnosPage from '@/pages/PlantillaTurnosPage'
+import InformesPage from '@/pages/InformesPage'
+import BolsaHorasPage from '@/pages/BolsaHorasPage'
+
+export const personalModule: ModuleDefinition = {
+  id: 'personal',
+  name: 'Folvy Team',
+  icon: Users,
+  topBarOrder: 1,
+  requiredRole: 'manager',
+
+  basePath: 'personal',
+  routes: [
+    { path: '',                element: <StaffPage /> },
+    { path: 'ahora-mismo',     element: <AhoraMismoPage /> },
+    { path: 'control-horario', element: <FichajesGlobalPage /> },
+    { path: 'kiosko',          element: <KioskoFichajePage /> },
+    { path: 'solicitudes',     element: <SolicitudesPendientesPage /> },
+    { path: 'turnos-abiertos', element: <TurnosAbiertosPage /> },
+    { path: 'cambios',         element: <CambiosPendientesPage /> },
+    { path: 'calendario',      element: <CalendarioPage /> },
+    { path: 'plantilla-turnos', element: <PlantillaTurnosPage /> },
+    { path: 'informes',        element: <InformesPage /> },
+    { path: 'bolsa-horas',     element: <BolsaHorasPage /> },
+  ],
+
+  sidebar: {
+    items: [
+      { id: 'personal_staff',       label: 'Empleados',       icon: Users,           path: '' },
+      { id: 'personal_ahora',       label: 'Ahora mismo',     icon: Activity,        path: 'ahora-mismo' },
+      { id: 'personal_horario',     label: 'Control horario', icon: Clock,           path: 'control-horario' },
+      { id: 'personal_kiosko',      label: 'Kiosko fichaje',  icon: Smartphone,      path: 'kiosko' },
+      { id: 'personal_solicitudes', label: 'Solicitudes',     icon: Inbox,           path: 'solicitudes' },
+      { id: 'personal_turnos',      label: 'Turnos abiertos', icon: Armchair,        path: 'turnos-abiertos' },
+      { id: 'personal_cambios',     label: 'Cambios de turno', icon: RefreshCw,      path: 'cambios' },
+      { id: 'personal_calendario',  label: 'Calendario',      icon: Calendar,        path: 'calendario' },
+      { id: 'personal_plantilla',   label: 'Plantilla turnos', icon: FolderOpen,     path: 'plantilla-turnos' },
+      { id: 'personal_informes',    label: 'Informes Gestoría', icon: FileText,      path: 'informes' },
+      { id: 'personal_bolsa',       label: 'Bolsa de horas',  icon: Wallet,          path: 'bolsa-horas' },
+    ],
+  },
+
+  publishes: [
+    { key: 'personal.employee.created', description: 'Se ha creado un empleado' },
+    { key: 'personal.clock.in',         description: 'Un empleado ha fichado' },
+  ],
+}

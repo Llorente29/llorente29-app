@@ -14,12 +14,14 @@
 // a la tabla `account_modules` para gating por cuenta.
 
 import type { ModuleDefinition } from './types'
+import { personalModule } from '@/modules/personal/module'
 import { appccModule } from '@/modules/appcc/module'
+import { ventasModule } from '@/modules/ventas/module'
 
 export const moduleRegistry: ModuleDefinition[] = [
-  appccModule,        // G-3 (piloto)
-  // personalModule,  // G-5
-  // ventasModule,    // G-5
+  personalModule,     // G-8.4 (Folvy Team, topBarOrder 1)
+  appccModule,        // G-3   (Folvy Safety, topBarOrder 2)
+  ventasModule,       // G-8.4 (Folvy Sales, topBarOrder 3)
 ]
 
 /** Devuelve los módulos ordenados por su posición en el TopBar. */
