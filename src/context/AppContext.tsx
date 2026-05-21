@@ -13,7 +13,7 @@ import {
 import { listAccounts } from '../modules/multitenancy/services/accountsService'
 import { listUserProfilesByUser, getUserProfile } from '../modules/multitenancy/services/userProfilesService'
 import { getPermissions } from '../modules/multitenancy/services/managerPermissionsService'
-import { parseRoute, buildRoute, isValidSlugShape, isPublicAuthRoute, isShellRoute } from '../routes'
+import { parseRoute, buildRoute, isValidSlugShape, isPublicAuthRoute, isShellRoute, isAdminRoute } from '../routes'
 const DEFAULT_SCHEDULE: WeeklySchedule = {
   lunes: { active: true, start: '09:00', end: '17:00' },
   martes: { active: true, start: '09:00', end: '17:00' },
@@ -559,7 +559,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch { /* localStorage no disponible */ }
 
     // No tocar URL si estamos en una ruta de auth pública.
-    if (isPublicAuthRoute(location.pathname) || isShellRoute(location.pathname)) {
+    if (isPublicAuthRoute(location.pathname) || isShellRoute(location.pathname) || isAdminRoute(location.pathname)) {
       return
     }
 
@@ -630,7 +630,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // desde localStorage o fallback. Sin esta guarda, AppContext
         // interpretaba '/reset-password' como slug de cuenta inválido y
         // navegaba a '/{cuenta-activa}/{rest}', expulsando al user del flow.
-        if (isPublicAuthRoute(location.pathname) || isShellRoute(location.pathname)) {
+        if (isPublicAuthRoute(location.pathname) || isShellRoute(location.pathname) || isAdminRoute(location.pathname)) {
           const persisted = (() => {
             try { return localStorage.getItem(ACTIVE_ACCOUNT_KEY) } catch { return null }
           })()
@@ -734,7 +734,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     accountsRef.current = accounts
 
     if (accounts.length === 0) return
-    if (isPublicAuthRoute(location.pathname) || isShellRoute(location.pathname)) return
+    if (isPublicAuthRoute(location.pathname) || isShellRoute(location.pathname) || isAdminRoute(location.pathname)) return
 
     const urlParsed = parseRoute(location.pathname)
     if (!urlParsed.slug || !isValidSlugShape(urlParsed.slug)) return

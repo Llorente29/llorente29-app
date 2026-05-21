@@ -4,8 +4,10 @@ import AuthRouter from './auth/AuthRouter'
 import WelcomePage from './pages/WelcomePage'
 import ResetPasswordConfirmPage from './pages/ResetPasswordConfirmPage'
 import { useApp } from './context/AppContext'
-import { isPublicAuthRoute } from './routes'
+import { isPublicAuthRoute, isAdminRoute } from './routes'
 import { gate } from '@/platform/feature-gate/featureGateService'
+import { usePlatformAdmin } from '@/platform/usePlatformAdmin'
+import AdminShell from './admin/AdminShell'
 import Shell from './shell/Shell'
 
 // G-8.6 (Sprint 3): App.tsx reducido. El render autenticado es el Shell modular
@@ -19,6 +21,10 @@ export default function App() {
   // Feature flags (gate.load) se cargan/limpian según userProfile.
   const { authResolved, authUserId, userProfile, accountsLoading } = useApp()
   const location = useLocation()
+  // Sesión 15 (Porteria/Panel Admin): platform-admin para gating de /_admin.
+  // Hook independiente que lee el claim folvy.is_platform_admin del JWT.
+  // Se llama aquí arriba (no dentro de un if) para respetar las reglas de hooks.
+  const { isPlatformAdmin, loading: platformAdminLoading } = usePlatformAdmin()
 
   // Cargar/limpiar feature flags según userProfile.
   useEffect(() => {
@@ -93,6 +99,33 @@ export default function App() {
         <Route path="*" element={<Navigate to="/welcome" replace />} />
       </Routes>
     )
+  }
+
+  // 3-ter. PANEL SUPERADMIN FOLVY (/_admin) — Sesión 15.
+  //        Plano de control separado del plano de cliente (Opción A: el panel
+  //        NO es un módulo del Shell, es una rama de render propia con su
+  //        AdminShell). Gating estricto por platform-admin (claim del JWT).
+  //          - Si aún resolviendo el claim → loading.
+  //          - Si platform-admin → AdminShell (layout y routing propios).
+  //          - Si NO platform-admin → fuera, al Shell de cliente (no se filtra
+  //            la existencia del panel: simplemente redirige a la raíz).
+  if (isAdminRoute(location.pathname)) {
+    if (platformAdminLoading) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-page">
+          <div className="text-center">
+            <p className="text-2xl font-display font-medium mb-2 text-accent">
+              Folvy
+            </p>
+            <p className="text-sm text-text-secondary">Cargando...</p>
+          </div>
+        </div>
+      )
+    }
+    if (!isPlatformAdmin) {
+      return <Navigate to="/" replace />
+    }
+    return <AdminShell />
   }
 
   // 4. Sesión válida + welcome completado → Shell modular (render por defecto).

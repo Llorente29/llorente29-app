@@ -129,6 +129,27 @@ export function isShellRoute(pathname: string): boolean {
 }
 
 /* =====================================================
+   RUTA DEL PANEL SUPERADMIN FOLVY (/_admin) — Sesión 15
+   ===================================================== */
+
+/**
+ * Prefijo del panel superadmin Folvy (plano de control, separado del plano
+ * de cliente). Vive FUERA del namespace por cuenta: igual que /shell y las
+ * rutas de auth públicas, AppContext debe SALTARSE la sincronización
+ * URL ↔ slug para estas rutas, o interpretaría '_admin' como slug de cuenta
+ * inválido y expulsaría al platform admin del panel.
+ *
+ * El render de /_admin lo decide App.tsx (rama dedicada con gating por
+ * usePlatformAdmin). Aquí solo declaramos la exención de routing.
+ */
+export const ADMIN_ROUTE_PREFIX = '/_admin'
+
+export function isAdminRoute(pathname: string): boolean {
+  // Prefijo: /_admin y cualquier sub-ruta /_admin/... (p.ej. /_admin/cuentas/nueva).
+  return pathname === ADMIN_ROUTE_PREFIX || pathname.startsWith(ADMIN_ROUTE_PREFIX + '/')
+}
+
+/* =====================================================
    MAPEO Page ↔ path
    ===================================================== */
 
