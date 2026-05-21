@@ -25,8 +25,8 @@ import { Banknote, Users, Inbox, Leaf, BarChart3 } from 'lucide-react'
 import MetricCard from './widgets/MetricCard'
 import ModuleSummaryCard from './widgets/ModuleSummaryCard'
 
-const INK = '#1E3A5F'
-const MUTED = '#8A8780'
+const INK = 'var(--color-accent)'
+const MUTED = 'var(--color-text-secondary)'
 
 interface HomeGeneralProps {
   // Nombre del usuario para el saludo. Si no se pasa (o el perfil no tiene
@@ -60,11 +60,11 @@ export default function HomeGeneral({ userName, onOpenModule }: HomeGeneralProps
     <div>
       {/* Saludo */}
       <h1
-        style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 28, color: INK, margin: '0 0 2px', fontWeight: 500 }}
+        style={{ fontFamily: 'var(--font-display)', fontSize: '1.75rem', color: INK, margin: '0 0 2px', fontWeight: 500 }}
       >
         {saludo}
       </h1>
-      <p style={{ fontSize: 13, color: MUTED, margin: '0 0 22px' }}>
+      <p style={{ fontSize: '0.875rem', color: MUTED, margin: '0 0 1.375rem' }}>
         Resumen de tu negocio · {todayLabel()}
       </p>
 

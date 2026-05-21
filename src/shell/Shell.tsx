@@ -71,7 +71,7 @@ export default function Shell() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: '#FBFAF7' }}>
+    <div className="min-h-screen flex flex-col" style={{ background: 'var(--color-bg-page)' }}>
       <ShellTopBar activeKey={activeKey} onSelect={goToKey} userInitials={initials} />
 
       {activeKey === HOME_KEY ? (
@@ -116,11 +116,11 @@ function PlaceholderPanel({ title, note }: { title: string; note: string }) {
     <div className="max-w-2xl">
       <h1
         className="text-2xl mb-1"
-        style={{ fontFamily: 'Fraunces, Georgia, serif', color: '#1E3A5F', fontWeight: 500 }}
+        style={{ fontFamily: 'var(--font-display)', color: 'var(--color-accent)', fontWeight: 500 }}
       >
         {title}
       </h1>
-      <p className="text-sm" style={{ color: '#8A8780' }}>{note}</p>
+      <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>{note}</p>
     </div>
   )
 }

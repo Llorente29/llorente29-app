@@ -1,30 +1,23 @@
 // src/shell/ModuleSidebar.tsx
 //
-// Barra lateral interna de un módulo (Bloque G-6, Sprint 3).
+// Barra lateral interna de un módulo (Bloque G-6 + G-8.4 legibilidad).
 // Cada módulo declara su navegación en ModuleDefinition.sidebar (G-3). El
 // Shell la renderiza aquí cuando ese módulo está activo. Patrón "Microsoft
 // 365": TopBar de módulos arriba + esta ModuleSidebar a la izquierda.
 //
-// G-6 (opción A): pinta los items y gestiona cuál está activo por estado
-// local. Al pulsar un item, cambia el item activo (el contenido real de cada
-// página se enchufa en una fase posterior; aquí el contenido es placeholder).
-//
-// Diseño: fondo cream claro, item activo en azul marino, resto en texto
-// neutro. Coherente con la maqueta del Shell.
+// LEGIBILIDAD (Sesión 14): usa los tokens de color de index.css (no grises
+// hardcodeados) para heredar el contraste del sistema, y tamaños en rem
+// (escalan con la preferencia de fuente del navegador → accesibilidad).
+// Items a 0.9375rem (15px): cómodos para etiquetas de navegación.
 
 import type { ModuleSidebarDefinition } from './types'
 
-const INK = '#1E3A5F'
-const TEXT = '#44443F'
-const MUTED = '#8A8780'
-const BORDER = '#D8D5CC'
-const SURFACE = '#F5F4F0'
+const SURFACE = 'var(--color-bg-page)'
+const BORDER = 'var(--color-border-default)'
 
 interface ModuleSidebarProps {
-  // Nombre comercial del módulo (cabecera de la sidebar).
   moduleName: string
   sidebar: ModuleSidebarDefinition
-  // id del item activo.
   activeItemId: string
   onSelectItem: (itemId: string) => void
 }
@@ -36,19 +29,20 @@ export default function ModuleSidebar({
     <aside
       className="shrink-0"
       style={{
-        width: 200,
+        width: 208,
         background: SURFACE,
         borderRight: `0.5px solid ${BORDER}`,
-        padding: '16px 10px',
+        padding: '1rem 0.625rem',
       }}
     >
       <p
         style={{
-          fontSize: 11,
+          fontSize: '0.6875rem',
           textTransform: 'uppercase',
           letterSpacing: '1px',
-          color: MUTED,
-          margin: '0 0 10px 8px',
+          color: 'var(--color-text-secondary)',
+          margin: '0 0 0.625rem 0.5rem',
+          fontWeight: 600,
         }}
       >
         {moduleName}
@@ -65,15 +59,15 @@ export default function ModuleSidebar({
               onClick={() => onSelectItem(item.id)}
               className="flex items-center text-left transition-colors"
               style={{
-                gap: 9,
-                padding: '8px 10px',
+                gap: 10,
+                padding: '0.5rem 0.625rem',
                 borderRadius: 8,
-                fontSize: 13,
-                background: active ? INK : 'transparent',
-                color: active ? '#fff' : TEXT,
+                fontSize: '0.9375rem',
+                background: active ? 'var(--color-accent)' : 'transparent',
+                color: active ? '#fff' : 'var(--color-text-primary)',
               }}
             >
-              <Icon size={16} />
+              <Icon size={17} />
               {item.label}
             </button>
           )
