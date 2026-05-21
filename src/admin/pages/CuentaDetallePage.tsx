@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { getAccountById, updateAccount, setAccountStatus } from '@/modules/multitenancy/services/accountsService'
 import type { Account, AccountStatus, AccountUpdate } from '@/types/multitenancy'
+import { getCatalog, getAccountItems, setAccountModules, type CatalogModule } from '@/platform/accountModulesService'
 
 type LoadState =
   | { state: 'loading' }
@@ -102,6 +103,12 @@ export default function CuentaDetallePage() {
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState<{ kind: 'ok' | 'error'; msg: string } | null>(null)
 
+  // Módulos (Sesión 16).
+  const [catalog, setCatalog] = useState<CatalogModule[] | null>(null)
+  const [selectedSubmodules, setSelectedSubmodules] = useState<Set<string>>(new Set())
+  const [modulesSaving, setModulesSaving] = useState(false)
+  const [modulesFeedback, setModulesFeedback] = useState<{ kind: 'ok' | 'error'; msg: string } | null>(null)
+
   function hydrateEdit(acc: Account) {
     const addr = acc.billingAddress ?? {}
     setEdit({
@@ -140,6 +147,49 @@ export default function CuentaDetallePage() {
     })()
     return () => { cancelled = true }
   }, [accountId])
+
+  // Carga catálogo + items de módulos de la cuenta.
+  useEffect(() => {
+    if (!accountId) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const [cat, items] = await Promise.all([getCatalog(), getAccountItems(accountId)])
+        if (cancelled) return
+        setCatalog(cat)
+        setSelectedSubmodules(new Set(items.filter(i => i.active).map(i => i.submoduleId)))
+      } catch (e) {
+        if (!cancelled) setModulesFeedback({ kind: 'error', msg: e instanceof Error ? e.message : String(e) })
+      }
+    })()
+    return () => { cancelled = true }
+  }, [accountId])
+
+  function toggleSubmodule(submoduleId: string) {
+    setSelectedSubmodules(prev => {
+      const next = new Set(prev)
+      if (next.has(submoduleId)) next.delete(submoduleId)
+      else next.add(submoduleId)
+      return next
+    })
+  }
+
+  async function handleSaveModules() {
+    if (!accountId) return
+    setModulesSaving(true)
+    setModulesFeedback(null)
+    try {
+      await setAccountModules(accountId, Array.from(selectedSubmodules))
+      // Recarga items para reflejar el estado real tras la reconciliación.
+      const items = await getAccountItems(accountId)
+      setSelectedSubmodules(new Set(items.filter(i => i.active).map(i => i.submoduleId)))
+      setModulesFeedback({ kind: 'ok', msg: 'Módulos actualizados.' })
+    } catch (e) {
+      setModulesFeedback({ kind: 'error', msg: e instanceof Error ? e.message : String(e) })
+    } finally {
+      setModulesSaving(false)
+    }
+  }
 
   async function handleSaveData() {
     if (!accountId) return
@@ -286,6 +336,55 @@ export default function CuentaDetallePage() {
       >
         {saving ? 'Guardando...' : 'Guardar datos'}
       </button>
+
+      {/* Módulos contratados (Sesión 16) */}
+      <section className="mb-8">
+        <h2 className="text-base font-display font-medium mb-3" style={{ color: 'var(--color-accent)' }}>Módulos contratados</h2>
+        {modulesFeedback && (
+          <div className="rounded-lg p-3 mb-3" style={modulesFeedback.kind === 'ok'
+            ? { background: '#E3F0E6', border: '1px solid #A8D0B5' }
+            : { background: '#FDECEC', border: '1px solid #E5A0A0' }}>
+            <p className="text-sm" style={{ color: modulesFeedback.kind === 'ok' ? '#1F6B3B' : '#A12626' }}>{modulesFeedback.msg}</p>
+          </div>
+        )}
+        {catalog === null ? (
+          <p className="text-sm" style={{ color: 'var(--color-text-secondary, #666)' }}>Cargando catálogo...</p>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              {catalog.map(mod => (
+                <div key={mod.id} className="rounded-lg p-3" style={{ border: '1px solid var(--color-border, #e5e5e5)' }}>
+                  <p className="text-sm font-medium mb-2" style={{ color: 'var(--color-accent)' }}>{mod.name}</p>
+                  <div className="flex flex-col gap-1.5">
+                    {mod.submodules.map(sub => (
+                      <label key={sub.id} className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: 'var(--color-text-primary, #1a1a1a)' }}>
+                        <input
+                          type="checkbox"
+                          checked={selectedSubmodules.has(sub.id)}
+                          onChange={() => toggleSubmodule(sub.id)}
+                        />
+                        <span>{sub.name}</span>
+                        {sub.type === 'addon' && (
+                          <span className="text-xs" style={{ color: 'var(--color-text-secondary, #999)' }}>(add-on)</span>
+                        )}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={handleSaveModules}
+              disabled={modulesSaving}
+              className="px-4 py-2 rounded-md text-sm font-medium"
+              style={{ background: 'var(--color-terracota)', color: '#fff', opacity: modulesSaving ? 0.6 : 1 }}
+            >
+              {modulesSaving ? 'Guardando...' : 'Guardar módulos'}
+            </button>
+          </>
+        )}
+      </section>
 
       {/* Ciclo de vida / estado */}
       <section>
