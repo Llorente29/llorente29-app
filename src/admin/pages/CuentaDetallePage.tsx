@@ -1,19 +1,10 @@
 // src/admin/pages/CuentaDetallePage.tsx
 //
-// Detalle de una cuenta cliente — panel superadmin. Sesión 15 (Parte B).
+// Detalle de una cuenta cliente — panel superadmin. Sesión 16 (ficha completa).
 //
-// Permite:
-//   - Ver/editar datos de la cuenta (nombre, razón social, CIF, email/tel facturación).
-//     Reusa updateAccount() del service.
-//   - Cambiar el estado del ciclo de vida (reactivar / impago / suspender / cancelar).
-//     Reusa setAccountStatus(). Suspender y cancelar piden confirmación.
-//
-// NOTA sobre el bloqueo efectivo al suspender: cambiar status a 'suspended' es
-// la marca + base de cobro. El forceLogout de los usuarios de la cuenta lo
-// gestiona el bus de eventos auth (auth.account_suspended) ya documentado en
-// el modelo; este panel dispara el cambio de estado, que es lo que esa capa
-// observa. El bloqueo en login (rechazar sesión de cuenta suspendida) es lógica
-// de AuthRouter/login — si no estuviera conectada aún, queda como deuda visible.
+// Edita: datos fiscales, dirección de facturación (desglose del jsonb
+// billing_address), contacto de facturación y localización. Reusa
+// updateAccount() y setAccountStatus() del service.
 
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
@@ -31,7 +22,47 @@ interface EditFields {
   cif: string
   billingEmail: string
   billingPhone: string
+  // Dirección (desglose de billing_address jsonb).
+  addrStreet: string
+  addrCity: string
+  addrPostalCode: string
+  addrProvince: string
+  // Localización.
+  country: string
+  timezone: string
+  locale: string
+  currency: string
 }
+
+const COUNTRY_OPTIONS = [
+  { value: 'ES', label: 'España' },
+  { value: 'PT', label: 'Portugal' },
+  { value: 'FR', label: 'Francia' },
+  { value: 'IT', label: 'Italia' },
+  { value: 'AD', label: 'Andorra' },
+]
+
+const LOCALE_OPTIONS = [
+  { value: 'es-ES', label: 'Español (España)' },
+  { value: 'ca-ES', label: 'Catalán' },
+  { value: 'gl-ES', label: 'Gallego' },
+  { value: 'eu-ES', label: 'Euskera' },
+  { value: 'pt-PT', label: 'Portugués' },
+  { value: 'en-GB', label: 'Inglés' },
+]
+
+const CURRENCY_OPTIONS = [
+  { value: 'EUR', label: 'Euro (€)' },
+  { value: 'USD', label: 'Dólar ($)' },
+  { value: 'GBP', label: 'Libra (£)' },
+]
+
+const TIMEZONE_OPTIONS = [
+  { value: 'Europe/Madrid', label: 'Madrid (CET)' },
+  { value: 'Atlantic/Canary', label: 'Canarias (WET)' },
+  { value: 'Europe/Lisbon', label: 'Lisboa (WET)' },
+  { value: 'Europe/Paris', label: 'París (CET)' },
+]
 
 function statusLabel(status: string): string {
   switch (status) {
@@ -55,21 +86,38 @@ function statusColor(status: string): { bg: string; fg: string } {
   }
 }
 
+function asStr(v: unknown): string {
+  return typeof v === 'string' ? v : ''
+}
+
 export default function CuentaDetallePage() {
   const { accountId } = useParams<{ accountId: string }>()
   const navigate = useNavigate()
   const [load, setLoad] = useState<LoadState>({ state: 'loading' })
-  const [edit, setEdit] = useState<EditFields>({ name: '', legalName: '', cif: '', billingEmail: '', billingPhone: '' })
+  const [edit, setEdit] = useState<EditFields>({
+    name: '', legalName: '', cif: '', billingEmail: '', billingPhone: '',
+    addrStreet: '', addrCity: '', addrPostalCode: '', addrProvince: '',
+    country: 'ES', timezone: 'Europe/Madrid', locale: 'es-ES', currency: 'EUR',
+  })
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState<{ kind: 'ok' | 'error'; msg: string } | null>(null)
 
   function hydrateEdit(acc: Account) {
+    const addr = acc.billingAddress ?? {}
     setEdit({
       name: acc.name,
       legalName: acc.legalName ?? '',
       cif: acc.cif ?? '',
       billingEmail: acc.billingEmail ?? '',
       billingPhone: acc.billingPhone ?? '',
+      addrStreet: asStr(addr.street),
+      addrCity: asStr(addr.city),
+      addrPostalCode: asStr(addr.postalCode),
+      addrProvince: asStr(addr.province),
+      country: acc.country ?? 'ES',
+      timezone: acc.timezone ?? 'Europe/Madrid',
+      locale: acc.locale ?? 'es-ES',
+      currency: acc.currency ?? 'EUR',
     })
   }
 
@@ -98,12 +146,24 @@ export default function CuentaDetallePage() {
     setSaving(true)
     setFeedback(null)
     try {
+      // Reconstruye el jsonb de dirección solo con los campos no vacíos.
+      const billingAddress: Record<string, unknown> = {}
+      if (edit.addrStreet.trim()) billingAddress.street = edit.addrStreet.trim()
+      if (edit.addrCity.trim()) billingAddress.city = edit.addrCity.trim()
+      if (edit.addrPostalCode.trim()) billingAddress.postalCode = edit.addrPostalCode.trim()
+      if (edit.addrProvince.trim()) billingAddress.province = edit.addrProvince.trim()
+
       const patch: AccountUpdate = {
         name: edit.name.trim(),
         legalName: edit.legalName.trim() || null,
         cif: edit.cif.trim() || null,
         billingEmail: edit.billingEmail.trim() || null,
         billingPhone: edit.billingPhone.trim() || null,
+        billingAddress,
+        country: edit.country,
+        timezone: edit.timezone,
+        locale: edit.locale,
+        currency: edit.currency,
       }
       const updated = await updateAccount(accountId, patch)
       setLoad({ state: 'ready', account: updated })
@@ -175,33 +235,63 @@ export default function CuentaDetallePage() {
         </div>
       )}
 
-      {/* Datos editables */}
-      <section className="mb-8">
-        <h2 className="text-base font-display font-medium mb-3" style={{ color: 'var(--color-accent)' }}>Datos de la cuenta</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+      {/* Datos fiscales */}
+      <section className="mb-6">
+        <h2 className="text-base font-display font-medium mb-3" style={{ color: 'var(--color-accent)' }}>Datos fiscales</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field label="Nombre" value={edit.name} onChange={v => setEdit(p => ({ ...p, name: v }))} />
           <Field label="Slug (no editable aquí)" value={acc.slug} onChange={() => {}} disabled />
           <Field label="Razón social" value={edit.legalName} onChange={v => setEdit(p => ({ ...p, legalName: v }))} />
-          <Field label="CIF" value={edit.cif} onChange={v => setEdit(p => ({ ...p, cif: v }))} />
+          <Field label="CIF / NIF" value={edit.cif} onChange={v => setEdit(p => ({ ...p, cif: v }))} />
+        </div>
+      </section>
+
+      {/* Dirección de facturación */}
+      <section className="mb-6">
+        <h2 className="text-base font-display font-medium mb-3" style={{ color: 'var(--color-accent)' }}>Dirección de facturación</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Field label="Calle y número" value={edit.addrStreet} onChange={v => setEdit(p => ({ ...p, addrStreet: v }))} />
+          <Field label="Población" value={edit.addrCity} onChange={v => setEdit(p => ({ ...p, addrCity: v }))} />
+          <Field label="Código postal" value={edit.addrPostalCode} onChange={v => setEdit(p => ({ ...p, addrPostalCode: v }))} />
+          <Field label="Provincia" value={edit.addrProvince} onChange={v => setEdit(p => ({ ...p, addrProvince: v }))} />
+        </div>
+      </section>
+
+      {/* Contacto de facturación */}
+      <section className="mb-6">
+        <h2 className="text-base font-display font-medium mb-3" style={{ color: 'var(--color-accent)' }}>Contacto de facturación</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field label="Email de facturación" value={edit.billingEmail} onChange={v => setEdit(p => ({ ...p, billingEmail: v }))} type="email" />
           <Field label="Teléfono de facturación" value={edit.billingPhone} onChange={v => setEdit(p => ({ ...p, billingPhone: v }))} />
         </div>
-        <button
-          type="button"
-          onClick={handleSaveData}
-          disabled={saving}
-          className="px-4 py-2 rounded-md text-sm font-medium"
-          style={{ background: 'var(--color-terracota)', color: '#fff', opacity: saving ? 0.6 : 1 }}
-        >
-          {saving ? 'Guardando...' : 'Guardar datos'}
-        </button>
       </section>
+
+      {/* Localización */}
+      <section className="mb-6">
+        <h2 className="text-base font-display font-medium mb-3" style={{ color: 'var(--color-accent)' }}>Localización</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <SelectField label="País" value={edit.country} options={COUNTRY_OPTIONS} onChange={v => setEdit(p => ({ ...p, country: v }))} />
+          <SelectField label="Zona horaria" value={edit.timezone} options={TIMEZONE_OPTIONS} onChange={v => setEdit(p => ({ ...p, timezone: v }))} />
+          <SelectField label="Idioma" value={edit.locale} options={LOCALE_OPTIONS} onChange={v => setEdit(p => ({ ...p, locale: v }))} />
+          <SelectField label="Moneda" value={edit.currency} options={CURRENCY_OPTIONS} onChange={v => setEdit(p => ({ ...p, currency: v }))} />
+        </div>
+      </section>
+
+      <button
+        type="button"
+        onClick={handleSaveData}
+        disabled={saving}
+        className="px-4 py-2 rounded-md text-sm font-medium mb-8"
+        style={{ background: 'var(--color-terracota)', color: '#fff', opacity: saving ? 0.6 : 1 }}
+      >
+        {saving ? 'Guardando...' : 'Guardar datos'}
+      </button>
 
       {/* Ciclo de vida / estado */}
       <section>
         <h2 className="text-base font-display font-medium mb-3" style={{ color: 'var(--color-accent)' }}>Estado de la cuenta</h2>
         <p className="text-xs mb-3" style={{ color: 'var(--color-text-secondary, #666)' }}>
-          Estado actual: <strong>{statusLabel(acc.status)}</strong>. (Nota: el bloqueo efectivo de acceso al suspender está pendiente de cablear en auth — por ahora este botón solo marca el estado.)
+          Estado actual: <strong>{statusLabel(acc.status)}</strong>.
         </p>
         <div className="flex flex-wrap gap-2">
           <StatusButton
@@ -253,6 +343,24 @@ function Field({ label, value, onChange, type = 'text', disabled = false }: {
         className="w-full px-3 py-2 rounded-md text-sm"
         style={{ border: '1px solid var(--color-border, #ccc)', opacity: disabled ? 0.6 : 1 }}
       />
+    </div>
+  )
+}
+
+function SelectField({ label, value, options, onChange }: {
+  label: string; value: string; options: { value: string; label: string }[]; onChange: (v: string) => void
+}) {
+  return (
+    <div>
+      <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text-primary, #1a1a1a)' }}>{label}</label>
+      <select
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        className="w-full px-3 py-2 rounded-md text-sm bg-white"
+        style={{ border: '1px solid var(--color-border, #ccc)' }}
+      >
+        {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
     </div>
   )
 }
