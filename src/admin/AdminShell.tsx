@@ -18,6 +18,7 @@
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import NuevaCuentaPage from './pages/NuevaCuentaPage'
 import CuentasListPage from './pages/CuentasListPage'
+import CuentaDetallePage from './pages/CuentaDetallePage'
 
 export default function AdminShell() {
   const navigate = useNavigate()
@@ -65,6 +66,7 @@ export default function AdminShell() {
           <Route path="/_admin" element={<Navigate to="/_admin/cuentas" replace />} />
           <Route path="/_admin/cuentas" element={<CuentasListPage />} />
           <Route path="/_admin/cuentas/nueva" element={<NuevaCuentaPage />} />
+          <Route path="/_admin/cuentas/:accountId" element={<CuentaDetallePage />} />
           {/* Fallback: cualquier /_admin/... desconocido → listado */}
           <Route path="*" element={<Navigate to="/_admin/cuentas" replace />} />
         </Routes>

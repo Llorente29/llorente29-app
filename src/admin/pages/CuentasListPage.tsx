@@ -108,7 +108,11 @@ export default function CuentasListPage() {
               {load.accounts.map(acc => {
                 const badge = statusBadge(acc.status)
                 return (
-                  <tr key={acc.id} style={{ borderTop: '1px solid var(--color-border, #eee)' }}>
+                  <tr
+                    key={acc.id}
+                    onClick={() => navigate(`/_admin/cuentas/${acc.id}`)}
+                    style={{ borderTop: '1px solid var(--color-border, #eee)', cursor: 'pointer' }}
+                  >
                     <td className="px-4 py-3" style={{ color: 'var(--color-text-primary, #1a1a1a)' }}>
                       {acc.name}
                       {acc.isInternal && (
