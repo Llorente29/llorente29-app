@@ -57,6 +57,7 @@ export function rowToAccount(row: RowAccount): Account {
     status: row.status as AccountStatus,
     isInternal: row.is_internal,
     trialEndsAt: row.trial_ends_at,
+    pastDueAt: row.past_due_at,
     stripeCustomerId: row.stripe_customer_id,
     metadata: (row.metadata as Record<string, unknown> | null) ?? {},
     createdAt: row.created_at,
@@ -316,19 +317,44 @@ export async function updateAccount(
 /**
  * Cambia el status de una cuenta. Sustituye a archive/restore del patrón brands.
  *
+ * Sella `past_due_at` de forma coherente con el estado (Sesión 16, Capa B):
+ *   - Al ENTRAR en 'past_due' por primera vez → past_due_at = now() (inicio del
+ *     impago, base del cálculo de días de gracia en cliente).
+ *   - Si ya estaba en 'past_due' y se vuelve a marcar → NO se pisa past_due_at
+ *     (un doble clic no debe regalar días de gracia ni reiniciar el contador).
+ *   - Cualquier otro estado (active/trial/suspended/canceled) → past_due_at = null.
+ *
  * Ejemplos de uso:
- *   - setAccountStatus(id, 'active')   → activar tras trial
- *   - setAccountStatus(id, 'past_due') → impago detectado
- *   - setAccountStatus(id, 'canceled') → cancelación definitiva (soft delete semántico)
+ *   - setAccountStatus(id, 'active')   → activar tras trial (limpia past_due_at)
+ *   - setAccountStatus(id, 'past_due') → impago detectado (sella past_due_at)
+ *   - setAccountStatus(id, 'canceled') → cancelación definitiva (limpia past_due_at)
  */
 export async function setAccountStatus(
   id: string,
   status: AccountStatus
 ): Promise<Account> {
   requireSupabase()
+
+  // Necesitamos el estado actual para no pisar past_due_at en un re-marcado.
+  const current = await getAccountById(id)
+  if (!current) {
+    throw new Error(`Cuenta ${id} no encontrada.`)
+  }
+
+  // Decide el valor de past_due_at según el estado destino.
+  let pastDueAt: string | null
+  if (status === 'past_due') {
+    // Solo sella la primera vez que entra en impago; conserva la marca si ya estaba.
+    pastDueAt = current.status === 'past_due' && current.pastDueAt
+      ? current.pastDueAt
+      : new Date().toISOString()
+  } else {
+    pastDueAt = null
+  }
+
   const { data, error } = await supabase!
     .from('accounts')
-    .update({ status })
+    .update({ status, past_due_at: pastDueAt })
     .eq('id', id)
     .select('*')
     .single()

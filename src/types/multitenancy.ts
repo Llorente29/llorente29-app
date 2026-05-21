@@ -358,6 +358,7 @@ export interface Account {
   status: AccountStatus
   isInternal: boolean
   trialEndsAt: string | null
+  pastDueAt: string | null
   stripeCustomerId: string | null
   /** JSONB libre para extensiones futuras. */
   metadata: Record<string, unknown>

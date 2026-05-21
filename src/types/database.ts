@@ -455,6 +455,7 @@ export type Database = {
           locale: string | null
           metadata: Json | null
           name: string
+          past_due_at: string | null
           slug: string
           status: string
           stripe_customer_id: string | null
@@ -482,6 +483,7 @@ export type Database = {
           locale?: string | null
           metadata?: Json | null
           name: string
+          past_due_at?: string | null
           slug: string
           status?: string
           stripe_customer_id?: string | null
@@ -509,6 +511,7 @@ export type Database = {
           locale?: string | null
           metadata?: Json | null
           name?: string
+          past_due_at?: string | null
           slug?: string
           status?: string
           stripe_customer_id?: string | null
