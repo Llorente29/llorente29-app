@@ -109,7 +109,7 @@ const ACTIVE_LOCATION_KEY = 'andy-app-active-location'
 //   - El UUID es estable; el slug puede cambiar (rebrand, decisión administrativa).
 //   - El binding URL↔slug es asunto de Bloque C (routing).
 // Prefijo "andy-app-" mantenido por consistencia con keys legacy; renombrar
-// a "foodint-active-account" se hará en Bloque F (limpieza naming).
+// a "Folvy-active-account" se hará en Bloque F (limpieza naming).
 const ACTIVE_ACCOUNT_KEY = 'andy-app-active-account'
 
 interface AppContextType {
@@ -611,7 +611,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
         // Listar las accounts. listAccounts respeta RLS y filtra por las
         // accesibles; aún así includeInternal=true por si el user es admin
-        // global y debe ver Foodint Interno.
+        // global y debe ver Folvy Interno.
         const allVisible = await listAccounts({ includeInternal: true })
         const mine = allVisible.filter(a => accountIds.includes(a.id))
 

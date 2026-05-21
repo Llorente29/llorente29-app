@@ -14,9 +14,9 @@
 - ✅ 2 cuentas admin creadas:
   - `jgcolon@idasal.com` (UID `e298629b-9d34-4d62-9a00-ff7c3fa29a1a`)
   - `llorente29food@gmail.com` (UID `a1d49759-a308-4b0b-a083-3f3c489f7fa9`)
-- ✅ SMTP propio configurado con Resend + dominio foodint.es
+- ✅ SMTP propio configurado con Resend + dominio folvy.app
   - DNS records verificados en OVH (DKIM, MX, SPF)
-  - Emails llegan desde `noreply@foodint.es`
+  - Emails llegan desde `noreply@folvy.app`
   - Region: Ireland (eu-west-1)
   - API key generada y guardada en Supabase
   - Rate limit interno configurado a 60 seg entre emails al mismo user
@@ -91,7 +91,7 @@ Supabase re-activa RLS por defecto aunque se incluya DISABLE en el CREATE TABLE 
 - Port: `465`
 - Username: `resend`
 - Password: API key Resend (re_...)
-- Sender: `noreply@foodint.es`
+- Sender: `noreply@folvy.app`
 - Min interval: 60 seg
 
 ### Configuración cliente Supabase
@@ -122,7 +122,7 @@ Construye `emailRedirectTo` desde `window.location.origin + pathname` para evita
 
 Abrir sesión nueva con Claude y decirle:
 
-> *"Continúo el desarrollo de Foodint. Lee `CONTEXTO_CLAUDE_v5.md` (raíz del repo) y `docs/PLAN_AUTH_ROLES.md`. Ayer cerramos con FASE 1 de auth completa y funcionando. Hoy queremos atacar FASE 2: Personal protegido con RLS. Antes de tocar nada, dime el plan paso a paso."*
+> *"Continúo el desarrollo de Folvy. Lee `CONTEXTO_CLAUDE_v5.md` (raíz del repo) y `docs/PLAN_AUTH_ROLES.md`. Ayer cerramos con FASE 1 de auth completa y funcionando. Hoy queremos atacar FASE 2: Personal protegido con RLS. Antes de tocar nada, dime el plan paso a paso."*
 
 Mostrarle también este archivo `ESTADO_AUTH_FASE1_COMPLETA.md` si lo subes al repo.
 

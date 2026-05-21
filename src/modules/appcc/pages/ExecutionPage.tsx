@@ -41,7 +41,7 @@ export default function ExecutionPage({ executionId: propExecutionId, onBack: pr
   const params = useParams<{ executionId: string }>()
   const navigate = useNavigate()
   const { activeAccount } = useActiveAccount()
-  const slug = activeAccount?.slug ?? 'foodint'
+  const slug = activeAccount?.slug ?? 'folvy'
 
   // Resolución de executionId: prop tiene prioridad sobre useParams.
   const executionId = propExecutionId ?? params.executionId

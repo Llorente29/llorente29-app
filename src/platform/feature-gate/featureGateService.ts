@@ -3,6 +3,7 @@
 // actual y permite preguntar si tiene acceso a una funcionalidad concreta.
 
 import { supabase } from '@/lib/supabase'
+import { ACCOUNT_ID_FOLVY } from '@/config/constants'
 import type {
   Account,
   AccountPlatformState,
@@ -64,12 +65,12 @@ async function load(): Promise<AccountPlatformState | null> {
       }
 
       // 3. Determinar account_id
-      //    - Admin: cuenta interna de Foodint
+      //    - Admin: cuenta interna de Folvy
       //    - Manager/Trabajador: vía manager_locations → locations
       let accountId: string | null = null
 
       if (profileData.role === 'admin') {
-        accountId = '00000000-0000-0000-0000-000000000001'
+        accountId = ACCOUNT_ID_FOLVY
       } else {
         const { data: managerLocs } = await supabase
           .from('manager_locations')
@@ -174,7 +175,7 @@ function account(): Account | null {
   return state?.account ?? null
 }
 
-/** ¿Es cuenta interna de Foodint (acceso total sin suscripción)? */
+/** ¿Es cuenta interna de Folvy (acceso total sin suscripción)? */
 function isInternal(): boolean {
   return state?.account.is_internal ?? false
 }

@@ -23,7 +23,7 @@ export interface UseFeatureGateResult {
   canCreate: (quotaKey: string) => boolean
   /** Datos de la cuenta actual (null si no hay sesión) */
   account: Account | null
-  /** ¿Es cuenta interna de Foodint? */
+  /** ¿Es cuenta interna de Folvy? */
   isInternal: boolean
   /** Forzar recarga desde BBDD */
   refresh: () => Promise<void>

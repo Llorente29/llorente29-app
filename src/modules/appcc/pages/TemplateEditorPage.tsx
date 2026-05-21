@@ -45,12 +45,12 @@ const SEVERITY_LABELS: Record<AppccSeverity, string> = {
 }
 
 export default function TemplateEditorPage() {
-  // BLOQUE B-5b (17/05/2026): migrado de const local ACCOUNT_ID_FOODINT a
+  // BLOQUE B-5b (17/05/2026): migrado de const local ACCOUNT_ID_FOLVY a
   // useActiveAccount(). Usado tanto en onClone (handler) como pasado al
   // subcomponente CreateTemplateModal a través de su propio hook.
   const { activeAccount, requireActiveAccountId } = useActiveAccount()
   const navigate = useNavigate()
-  const slug = activeAccount?.slug ?? 'foodint'
+  const slug = activeAccount?.slug ?? 'folvy'
 
   const [plans, setPlans] = useState<AppccPlan[]>([])
   const [templates, setTemplates] = useState<AppccTemplate[]>([])

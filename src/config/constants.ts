@@ -3,13 +3,13 @@
 // Constantes globales de la aplicación.
 //
 // Bloque F-básico (17/05/2026): retirado `CURRENT_ACCOUNT_ID`. Era un alias
-// hardcoded a Foodint Interno usado antes del Shell multi-tenant. Migrado
+// hardcoded a Folvy Interno usado antes del Shell multi-tenant. Migrado
 // en B-5 a `useActiveAccount()` (hook que devuelve la cuenta activa real).
 
 /**
- * UUID de la cuenta interna "Foodint Interno" en Supabase.
+ * UUID de la cuenta interna "Folvy Interno" en Supabase.
  *
- * Esta cuenta (slug `foodint`, is_internal=true) es la cuenta operativa
+ * Esta cuenta (slug `Folvy`, is_internal=true) es la cuenta operativa
  * del producto. Solo se usa para identificarla en código que necesite
  * referirla explícitamente (e.g., gates "esto solo lo ven internos").
  *
@@ -23,4 +23,4 @@
  * lo usan como `accountId`. Eso es bug funcional (cross-tenancy) que se
  * migra en sesión dedicada.
  */
-export const ACCOUNT_ID_FOODINT = '00000000-0000-0000-0000-000000000001'
+export const ACCOUNT_ID_FOLVY = '00000000-0000-0000-0000-000000000001'

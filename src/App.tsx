@@ -130,7 +130,7 @@ function AuthenticatedApp({ profile, onSignOut }: {
 
   // Slug de cuenta activa, necesario para construir rutas en redirects.
   const { activeAccount } = useActiveAccount()
-  const slug = activeAccount?.slug ?? 'foodint'
+  const slug = activeAccount?.slug ?? 'folvy'
 
   const [collapsed, setCollapsed] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)

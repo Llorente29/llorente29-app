@@ -8,15 +8,10 @@ const STORAGE_KEY = 'andy-delivery-v1'
 const ZONES_KEY   = 'andy-delivery-zones-v1'
 
 // ── Coordenadas por defecto de cada local ──────────────────────────────────
-// Se usan como semilla. Si el usuario configura en el módulo, se sobrescriben.
-export const DEFAULT_ZONE_COORDS: Record<string, { lat: number; lng: number; label: string }> = {
-  // Claves en minúsculas para comparación insensible a mayúsculas
-  'alcalá':        { lat: 40.4268, lng: -3.6687, label: 'Foodint Alcalá' },
-  'alcala':        { lat: 40.4268, lng: -3.6687, label: 'Foodint Alcalá' },
-  'carabanchel':   { lat: 40.3866, lng: -3.7366, label: 'Foodint Carabanchel' },
-  'pza castilla':  { lat: 40.4654, lng: -3.6918, label: 'Foodint Pza Castilla' },
-  'plaza castilla':{ lat: 40.4654, lng: -3.6918, label: 'Foodint Pza Castilla' },
-}
+// Vacío a propósito (Sesión 14): la app parte de cero. Cada cliente configura
+// sus propias zonas en el módulo Zonas de Pedido. Si está vacío,
+// coordsForLocation() devuelve null y no hay semilla automática.
+export const DEFAULT_ZONE_COORDS: Record<string, { lat: number; lng: number; label: string }> = {}
 
 // ── Coordenadas aproximadas de barrios de Madrid ───────────────────────────
 // Usado como fallback para no necesitar geocoding en cada render

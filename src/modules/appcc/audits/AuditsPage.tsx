@@ -37,7 +37,7 @@ export default function AuditsPage() {
   const { locations } = useApp()
   const { activeAccount } = useActiveAccount()
   const navigate = useNavigate()
-  const slug = activeAccount?.slug ?? 'foodint'
+  const slug = activeAccount?.slug ?? 'folvy'
 
   const activeLocations = useMemo(
     () => locations.filter(l => l.active),

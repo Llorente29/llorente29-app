@@ -82,7 +82,7 @@ export default function Sidebar({
 
   // ---------- Slug de cuenta activa para los <Link> ----------
   const { activeAccount } = useActiveAccount()
-  const slug = activeAccount?.slug ?? 'foodint'
+  const slug = activeAccount?.slug ?? 'folvy'
 
   const [pendingVacations, setPendingVacations] = useState(0)
   const [pendingSwaps, setPendingSwaps] = useState(0)

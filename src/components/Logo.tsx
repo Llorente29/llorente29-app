@@ -9,7 +9,7 @@
 //   - LogoSquare: solo el isotipo cuadrado con esquinas redondeadas, ideal
 //     para avatares, app icons, sidebars compactas.
 //
-// Bloque H Sprint 3 (20/05/2026): migracion completa de PNG Foodint a SVGs
+// Bloque H Sprint 3 (20/05/2026): migracion completa de PNG Folvy a SVGs
 // Folvy oficiales.
 
 interface LogoProps {

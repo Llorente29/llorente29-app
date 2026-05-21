@@ -18,7 +18,7 @@
 //
 // BLOQUE B-5 (16/05/2026): migrado de CURRENT_ACCOUNT_ID hardcoded a
 // useActiveAccount(). Ahora reacciona correctamente al cambio de cuenta:
-// si el user pasa de Llorente29 a Foodint Interno, las marcas se recargan.
+// si el user pasa de Llorente29 a Folvy Interno, las marcas se recargan.
 
 import { useEffect, useRef, useState } from 'react'
 import { useLocationScope } from '../hooks/useLocationScope'

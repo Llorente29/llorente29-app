@@ -49,12 +49,12 @@ const STATUS_BADGE: Record<AppccExecutionStatus, string> = {
 
 export default function TodayPage() {
   const { locations } = useApp()
-  // BLOQUE B-5b (17/05/2026): migrado de const local ACCOUNT_ID_FOODINT a
+  // BLOQUE B-5b (17/05/2026): migrado de const local ACCOUNT_ID_FOLVY a
   // useActiveAccount(). activeAccountId para el useEffect de lazy-generation
   // (guard sin throw), requireActiveAccountId para el handler manual.
   const { activeAccount, activeAccountId, requireActiveAccountId } = useActiveAccount()
   const navigate = useNavigate()
-  const slug = activeAccount?.slug ?? 'foodint'
+  const slug = activeAccount?.slug ?? 'folvy'
 
   const activeLocations = useMemo<Location[]>(
     () => locations.filter(l => l.active),

@@ -31,7 +31,7 @@ export default function AuditExecutionPage() {
   const navigate = useNavigate()
   const { currentEmployee, isAdmin, adminEmail, locations } = useApp()
   const { activeAccount } = useActiveAccount()
-  const slug = activeAccount?.slug ?? 'foodint'
+  const slug = activeAccount?.slug ?? 'folvy'
   const actorId = currentEmployee?.id ?? null
   const actorName = currentEmployee?.name ?? (isAdmin ? (adminEmail ?? 'Admin') : 'Anónimo')
 

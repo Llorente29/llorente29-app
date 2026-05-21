@@ -11,7 +11,7 @@
 //   URL completa = /{basename}/{slug}/{pageRest}
 //   Donde:
 //     - basename: SIN basename (eliminado en Bloque K Sprint 3, 20/05/2026).
-//     - slug: identifica la cuenta activa (e.g. 'llorente29', 'foodint').
+//     - slug: identifica la cuenta activa (e.g. 'llorente29', 'Folvy').
 //     - pageRest: identifica la página interna (e.g. 'dashboard', 'appcc/hoy').
 //
 // EXCEPCIÓN: RUTAS DE AUTH PÚBLICAS (D-S2.30 Sesión 9, 20/05/2026):

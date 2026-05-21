@@ -8,7 +8,7 @@
 
 ## 🎯 Resumen ejecutivo
 
-El sistema actual de Foodint **NO tiene control de acceso real**:
+El sistema actual de Folvy **NO tiene control de acceso real**:
 - Cualquiera con la URL accede al modo gestor
 - El "modo trabajador" se elige libremente, no se valida
 - Cualquier trabajador podría pulsar "Modo Gestor" y ver TODO
@@ -270,7 +270,7 @@ USING (
 - [ ] Crear tabla `user_profiles` en Supabase
 - [ ] Crear tabla `manager_locations` en Supabase
 - [ ] Crear tabla `security_audit_log` en Supabase
-- [ ] Configurar Auth en Supabase (Magic Link, dominio del enlace, plantillas de email en español con branding Foodint)
+- [ ] Configurar Auth en Supabase (Magic Link, dominio del enlace, plantillas de email en español con branding Folvy)
 - [ ] Servicio `authService.ts` con: login, logout, getCurrentUser, getCurrentProfile
 - [ ] Componente `LoginPage` con email + Magic Link
 - [ ] Modificar `App.tsx` para requerir auth antes de renderizar nada
@@ -323,7 +323,7 @@ USING (
 - [ ] Notificación cuando hay cambio de rol
 - [ ] Avisar al user antes de cerrar sesión si tiene cambios sin guardar
 - [ ] Manejar caso "usuario sin user_profile" (raro pero posible)
-- [ ] Plantilla de email de invitación bonita con branding Foodint
+- [ ] Plantilla de email de invitación bonita con branding Folvy
 
 ---
 
@@ -337,7 +337,7 @@ La introducción de auth puede romper temporalmente lo que ya funciona. **Soluci
 
 ### Riesgo 2: Empleados sin email
 Algunos trabajadores reales pueden NO tener email habitual. **Soluciones:**
-- Crear cuenta tipo `usuario@foodint.es` para ellos
+- Crear cuenta tipo `usuario@folvy.app` para ellos
 - O permitir login alternativo con teléfono SMS (más adelante)
 
 ### Riesgo 3: Manager malicioso

@@ -39,13 +39,13 @@ interface TemplateRow {
 
 export default function OnboardingPage() {
   const { locations } = useApp()
-  // BLOQUE B-5b (17/05/2026): migrado de const local ACCOUNT_ID_FOODINT a
+  // BLOQUE B-5b (17/05/2026): migrado de const local ACCOUNT_ID_FOLVY a
   // useActiveAccount(). Antes, este wizard escribía siempre en la cuenta
-  // interna Foodint, incluso para clientes como Llorente29 → bug cross-tenancy.
+  // interna Folvy, incluso para clientes como Llorente29 → bug cross-tenancy.
   const { activeAccount, requireActiveAccountId } = useActiveAccount()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const slug = activeAccount?.slug ?? 'foodint'
+  const slug = activeAccount?.slug ?? 'folvy'
 
   // Local preseleccionado vía ?location=<id> (sustituye a la antigua prop
   // initialLocationId). Se lee una sola vez en el init del useState.

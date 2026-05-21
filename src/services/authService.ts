@@ -301,7 +301,7 @@ export async function sendMagicLink(
   if (!supabase) return { ok: false, error: 'Supabase no disponible' }
 
   // D-S2.5: base URL desde env, NO hardcoded ni desde window.location.pathname
-  // (eso era patrón Foodint legacy en GitHub Pages).
+  // (eso era patrón Folvy legacy en GitHub Pages).
   const redirectUrl = getRedirectBaseUrl() || '/'
 
   const { error } = await supabase.auth.signInWithOtp({

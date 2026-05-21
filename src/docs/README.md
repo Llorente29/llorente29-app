@@ -1,14 +1,14 @@
-# 📖 Manual de Foodint
+# 📖 Manual de Folvy
 
-Bienvenido al manual de **Foodint**, el software de gestión de hostelería para tus locales.
+Bienvenido al manual de **Folvy**, el software de gestión de hostelería para tus locales.
 
 Este manual está pensado para que cualquier persona, sin conocimientos técnicos, pueda usar la app perfectamente.
 
 ---
 
-## 👥 ¿Quién va a usar Foodint?
+## 👥 ¿Quién va a usar Folvy?
 
-Foodint tiene **dos perfiles** muy distintos:
+Folvy tiene **dos perfiles** muy distintos:
 
 ### 🧑‍💼 Gestor / Encargado / Dueño
 Es quien gestiona los locales, plantilla, horarios y todas las operaciones desde el ordenador o tablet. Ve toda la información y toma todas las decisiones.

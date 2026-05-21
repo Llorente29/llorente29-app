@@ -28,7 +28,7 @@ export interface Employee {
   shiftPeriod?: ShiftPeriod          // franja habitual
   restPattern?: RestPattern          // patrón de descanso fijo
   // === Campos para bolsa de horas ===
-  initialHoursBalance?: number       // saldo inicial al empezar a usar Foodint (puede ser negativo)
+  initialHoursBalance?: number       // saldo inicial al empezar a usar Folvy (puede ser negativo)
   showHoursBalance?: boolean         // si true, el trabajador ve su saldo en su app móvil (default true)
   // === Campos para baja de empleado ===
   terminationType?: string           // tipo de baja: 'voluntaria' | 'no_renovacion' | 'despido' | etc.

@@ -46,7 +46,7 @@ Todo se guarda en la nube y se sincroniza al instante entre todos los dispositiv
 
 ## 2. Cómo entrar al módulo
 
-1. Abre Foodint en tu ordenador o tablet
+1. Abre Folvy en tu ordenador o tablet
 2. Si te pregunta el modo, pulsa **"Modo Gestor"**
 3. En el menú lateral izquierdo, pulsa **👤 Personal**
 
@@ -445,7 +445,7 @@ Puede que se haya creado por duplicado por error. Comprueba sus DNIs (deben ser 
 
 ### "No se actualiza la información en otros dispositivos"
 
-Foodint sincroniza en tiempo real. Si no ves los cambios, recarga la página (F5) en el dispositivo afectado.
+Folvy sincroniza en tiempo real. Si no ves los cambios, recarga la página (F5) en el dispositivo afectado.
 
 ---
 

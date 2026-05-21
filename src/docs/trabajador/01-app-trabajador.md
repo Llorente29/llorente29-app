@@ -1,6 +1,6 @@
-# 📱 La app de Foodint para trabajadores
+# 📱 La app de Folvy para trabajadores
 
-> **¿Para quién es esto?** Para ti si trabajas en Foodint y vas a usar la app desde tu móvil.
+> **¿Para quién es esto?** Para ti si trabajas en Folvy y vas a usar la app desde tu móvil.
 >
 > **¿Qué cubre?** Todo lo que puedes hacer: fichar, ver tu horario, pedir vacaciones, solicitar cambios de turno, descargar nóminas y más.
 
@@ -430,7 +430,7 @@ Mucha gente los confunde:
 
 ### ¿La app me cuesta dinero?
 
-No. Foodint la pone tu empresa. No tienes que pagar nada por usarla.
+No. Folvy la pone tu empresa. No tienes que pagar nada por usarla.
 
 ### ¿Puedo usarla en cualquier móvil?
 

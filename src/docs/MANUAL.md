@@ -1,4 +1,4 @@
-# 📚 Manual completo de Foodint
+# 📚 Manual completo de Folvy
 
 Este es el índice general del manual. Cada módulo tiene su propia sección.
 

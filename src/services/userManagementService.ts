@@ -25,7 +25,7 @@ export interface UserListItem {
  * BLOQUE B-6c (17/05/2026): añadido scope obligatorio `accountId`.
  *   Antes la función devolvía TODOS los user_profiles del sistema, lo que
  *   producía duplicados visibles cuando un user tenía perfiles en N cuentas
- *   (caso jgcolon@idasal.com con perfil en Llorente29 + Foodint Interno).
+ *   (caso jgcolon@idasal.com con perfil en Llorente29 + Folvy Interno).
  *   Ahora cada cuenta ve solo sus propios usuarios.
  *
  * NOTA Bloque S2 (Superadmin Global): si el caller es superadmin y necesita
