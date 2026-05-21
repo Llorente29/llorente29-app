@@ -17,6 +17,7 @@
 
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import NuevaCuentaPage from './pages/NuevaCuentaPage'
+import CuentasListPage from './pages/CuentasListPage'
 
 export default function AdminShell() {
   const navigate = useNavigate()
@@ -36,7 +37,7 @@ export default function AdminShell() {
         <nav className="flex items-center gap-4">
           <button
             type="button"
-            onClick={() => navigate('/_admin/cuentas/nueva')}
+            onClick={() => navigate('/_admin/cuentas')}
             className="text-sm"
             style={{
               color: 'var(--color-bg-page)',
@@ -60,11 +61,12 @@ export default function AdminShell() {
 
       <main className="flex-1" style={{ paddingLeft: 26, paddingRight: 26, paddingTop: 24, paddingBottom: 24 }}>
         <Routes>
-          {/* /_admin → redirige a la primera sección útil */}
-          <Route path="/_admin" element={<Navigate to="/_admin/cuentas/nueva" replace />} />
+          {/* /_admin → redirige al listado de cuentas */}
+          <Route path="/_admin" element={<Navigate to="/_admin/cuentas" replace />} />
+          <Route path="/_admin/cuentas" element={<CuentasListPage />} />
           <Route path="/_admin/cuentas/nueva" element={<NuevaCuentaPage />} />
-          {/* Fallback: cualquier /_admin/... desconocido → alta de cuenta */}
-          <Route path="*" element={<Navigate to="/_admin/cuentas/nueva" replace />} />
+          {/* Fallback: cualquier /_admin/... desconocido → listado */}
+          <Route path="*" element={<Navigate to="/_admin/cuentas" replace />} />
         </Routes>
       </main>
     </div>
