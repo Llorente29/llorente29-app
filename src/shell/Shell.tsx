@@ -14,7 +14,7 @@
 //        enchufado de páginas reales (G-8.2) y el cambio de default (G-8.6).
 //        Sigue tras la ruta /shell — NO es el render por defecto todavía.
 
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate, useLocation, Routes, Route } from 'react-router-dom'
 import ShellTopBar, { HOME_KEY } from './ShellTopBar'
 import ModuleSidebar from './ModuleSidebar'
 import { getModuleById, getModuleByBasePath } from './moduleRegistry'
@@ -90,10 +90,16 @@ export default function Shell() {
             }}
           />
           <main className="flex-1" style={{ paddingLeft: 26, paddingRight: 26, paddingTop: 24, paddingBottom: 24 }}>
-            <PlaceholderPanel
-              title={activeItem?.label ?? activeModule.name}
-              note={`Contenido de "${activeItem?.label ?? ''}" (${activeModule.name}). Las páginas reales se enchufan en G-8.2.`}
-            />
+            {/* G-8.2: rutas reales del módulo. El <Routes> del Shell ve el
+                pathname COMPLETO (no relativo), porque el Shell se monta fuera
+                del <Routes> raíz de App.tsx. Por eso el path incluye el prefijo
+                'shell/:base/'. r.path es relativo al basePath. */}
+            <Routes>
+              {activeModule.routes.map(r => {
+                const full = `shell/${activeModule.basePath}/${r.path ?? ''}`.replace(/\/+$/, '')
+                return <Route key={r.path ?? 'index'} path={full} element={r.element} />
+              })}
+            </Routes>
           </main>
         </div>
       ) : (
