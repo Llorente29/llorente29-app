@@ -4,9 +4,8 @@
 // Flow email + password con PKCE + redirect post-login basado en
 // check-account-status.
 //
-// Reemplaza el LoginPage Foodint legacy (Magic Link) que queda
-// archivado como LoginPageMagicLink.tsx por si necesitamos restaurarlo
-// en Sprint 3 (decisión D-S2.29).
+// Reemplaza el LoginPage legacy basado en Magic Link, eliminado en Sprint 3
+// Bloque L (decisión D-S2.29, retirado del repo en Sesión 14).
 //
 // API:
 //   <LoginPage onCheckSession={() => window.location.reload()} />
@@ -25,7 +24,7 @@
 //      - status='all_accounts_deleted' → mostrar mensaje + signOut.
 //
 // UI:
-//   Reusa los design tokens Foodint (D-S2.31 Opción I): bg-card,
+//   Reusa los design tokens Folvy (D-S2.31 Opción I): bg-card,
 //   text-accent, etc. Rebrand visual completo en Sprint 3.
 //
 // CHANGELOG Sesión 9 (D-S2.30 paso 4):
