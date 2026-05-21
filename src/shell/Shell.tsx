@@ -18,10 +18,12 @@ import { useNavigate, useLocation, Routes, Route } from 'react-router-dom'
 import ShellTopBar, { HOME_KEY } from './ShellTopBar'
 import ModuleSidebar from './ModuleSidebar'
 import { getModuleById, getModuleByBasePath } from './moduleRegistry'
+import { configuracionModule } from '../modules/configuracion/module'
 import HomeGeneral from './home/HomeGeneral'
 import { useApp } from '../context/AppContext'
 
 const SHELL_BASE = '/shell'
+const SETTINGS_BASE = 'configuracion'
 
 export default function Shell() {
   const navigate = useNavigate()
@@ -36,10 +38,18 @@ export default function Shell() {
 
   const activeModule = moduleBasePath === ''
     ? null
-    : getModuleByBasePath(moduleBasePath)
+    : moduleBasePath === SETTINGS_BASE
+      ? configuracionModule          // módulo especial: no está en el registry
+      : getModuleByBasePath(moduleBasePath)
 
-  // activeKey para el TopBar: HOME_KEY o el id del módulo activo.
-  const activeKey = activeModule ? activeModule.id : HOME_KEY
+  // ¿Estamos en Configuración? (para marcar el engranaje activo).
+  const settingsActive = moduleBasePath === SETTINGS_BASE
+
+  // activeKey para el TopBar: HOME_KEY o el id del módulo activo. Configuración
+  // NO es pestaña del TopBar, así que cuando está activa el TopBar no resalta
+  // ninguna pestaña (activeKey = HOME_KEY no resalta Inicio porque el engranaje
+  // lleva su propio estado; aceptamos que ninguna pestaña quede activa).
+  const activeKey = (activeModule && !settingsActive) ? activeModule.id : HOME_KEY
 
   // Item activo del módulo: el que matchea el path de la URL, o el primero.
   const activeItem = activeModule
@@ -63,6 +73,11 @@ export default function Shell() {
     if (mod) navigate(`${SHELL_BASE}/${mod.basePath}`)
   }
 
+  // Abre Configuración (engranaje).
+  function openSettings() {
+    navigate(`${SHELL_BASE}/${SETTINGS_BASE}`)
+  }
+
   // Navega a un item del módulo activo. itemPath es relativo al basePath.
   function goToItemPath(itemPath: string) {
     if (!activeModule) return
@@ -72,13 +87,9 @@ export default function Shell() {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'var(--color-bg-page)' }}>
-      <ShellTopBar activeKey={activeKey} onSelect={goToKey} userInitials={initials} />
+      <ShellTopBar activeKey={activeKey} onSelect={goToKey} onOpenSettings={openSettings} settingsActive={settingsActive} userInitials={initials} />
 
-      {activeKey === HOME_KEY ? (
-        <main className="flex-1" style={{ paddingLeft: 26, paddingRight: 26, paddingTop: 24, paddingBottom: 24 }}>
-          <HomeGeneral userName={userName} onOpenModule={goToKey} />
-        </main>
-      ) : activeModule ? (
+      {activeModule ? (
         <div className="flex-1 flex">
           <ModuleSidebar
             moduleName={activeModule.name}
@@ -103,24 +114,10 @@ export default function Shell() {
           </main>
         </div>
       ) : (
-        <main className="flex-1" style={{ padding: 26 }}>
-          <PlaceholderPanel title={moduleBasePath} note="Módulo no registrado." />
+        <main className="flex-1" style={{ paddingLeft: 26, paddingRight: 26, paddingTop: 24, paddingBottom: 24 }}>
+          <HomeGeneral userName={userName} onOpenModule={goToKey} />
         </main>
       )}
-    </div>
-  )
-}
-
-function PlaceholderPanel({ title, note }: { title: string; note: string }) {
-  return (
-    <div className="max-w-2xl">
-      <h1
-        className="text-2xl mb-1"
-        style={{ fontFamily: 'var(--font-display)', color: 'var(--color-accent)', fontWeight: 500 }}
-      >
-        {title}
-      </h1>
-      <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>{note}</p>
     </div>
   )
 }

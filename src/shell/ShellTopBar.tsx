@@ -13,7 +13,7 @@
 // .svg, para controlar las proporciones al pixel y que coincidan con la
 // maqueta independientemente del viewBox de ningún fichero.
 
-import { Home, Bell, MapPin } from 'lucide-react'
+import { Home, Bell, MapPin, Settings } from 'lucide-react'
 import { getOrderedModules } from './moduleRegistry'
 
 // Clave especial del Home general (no es un módulo, es del Shell).
@@ -27,6 +27,8 @@ const MUTED = '#9FB3C8'
 interface ShellTopBarProps {
   activeKey: string
   onSelect: (key: string) => void
+  onOpenSettings?: () => void
+  settingsActive?: boolean
   userInitials?: string
   locationLabel?: string
 }
@@ -34,6 +36,8 @@ interface ShellTopBarProps {
 export default function ShellTopBar({
   activeKey,
   onSelect,
+  onOpenSettings,
+  settingsActive = false,
   userInitials = 'JG',
   locationLabel = 'Todos los locales',
 }: ShellTopBarProps) {
@@ -83,6 +87,15 @@ export default function ShellTopBar({
         <span className="inline-flex items-center" style={{ color: MUTED, fontSize: 14, gap: 5 }}>
           <MapPin size={16} /> {locationLabel}
         </span>
+        <button
+          type="button"
+          aria-label="Configuración"
+          onClick={onOpenSettings}
+          className="inline-flex items-center"
+          style={{ color: settingsActive ? CREAM : MUTED }}
+        >
+          <Settings size={19} />
+        </button>
         <button type="button" aria-label="Notificaciones" className="inline-flex items-center" style={{ color: MUTED }}>
           <Bell size={19} />
         </button>
