@@ -41,7 +41,7 @@ import { useActiveAccount } from './modules/multitenancy/hooks/useActiveAccount'
 import { usePermissions } from './modules/multitenancy/hooks/usePermissions'
 import { useApp } from './context/AppContext'
 import { signOut } from './services/authService'
-import { pageToPath, pageToRoute, parseRoute, pathToPage, isPublicAuthRoute } from './routes'
+import { pageToPath, pageToRoute, parseRoute, pathToPage, isPublicAuthRoute, isShellRoute } from './routes'
 import type { UserProfile } from './types/multitenancy'
 import {
   DashboardPage, LocationsPage
@@ -506,7 +506,7 @@ export default function App() {
   // Se intercepta ANTES de toda la lógica de auth/slug (igual que las rutas
   // públicas), para que AppContext no le inyecte slug ni la redirija.
   // Es temporal: el Shell NO es el render por defecto todavía (eso es G-8).
-  if (location.pathname === '/shell') {
+  if (isShellRoute(location.pathname)) {
     return <Shell />
   }
 

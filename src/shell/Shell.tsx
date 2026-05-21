@@ -1,89 +1,110 @@
 // src/shell/Shell.tsx
 //
 // Contenedor raíz del Shell modular (Bloque G, Sprint 3).
-// Monta el TopBar y el área de contenido de la sección activa.
 //
 // G-4: TopBar + placeholder.
-// G-5: Home general (sección "Inicio") con sus widgets.
-// G-6 (opción A): cuando hay un módulo activo, layout de TRES ZONAS:
-//      TopBar (arriba) + ModuleSidebar (izquierda) + contenido. El contenido
-//      de cada item del sidebar es PLACEHOLDER honesto: enchufar las páginas
-//      reales (TodayPage, AuditsPage, etc.) con su contexto/slug se hará en
-//      una fase posterior bien acotada (resolver slug/AppContext sin romper
-//      Llorente29). Aquí solo se valida el layout y la navegación interna.
-//
-// Montado tras ruta /shell desde App.tsx — NO es el render por defecto
-// todavía (eso es G-8).
+// G-5: Home general con widgets.
+// G-6: ModuleSidebar + layout tres zonas (contenido placeholder).
+// G-8.1: el Shell navega por RUTAS (no useState). La sección activa se deriva
+//        del pathname:
+//          /shell                  → Home general
+//          /shell/:base            → módulo (primer item del sidebar)
+//          /shell/:base/:itemPath  → item concreto del módulo
+//        TopBar y ModuleSidebar navegan con navigate(). Esto prepara el
+//        enchufado de páginas reales (G-8.2) y el cambio de default (G-8.6).
+//        Sigue tras la ruta /shell — NO es el render por defecto todavía.
 
-import { useEffect, useState } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import ShellTopBar, { HOME_KEY } from './ShellTopBar'
 import ModuleSidebar from './ModuleSidebar'
-import { getModuleById } from './moduleRegistry'
+import { getModuleById, getModuleByBasePath } from './moduleRegistry'
 import HomeGeneral from './home/HomeGeneral'
 import { useApp } from '../context/AppContext'
 
+const SHELL_BASE = '/shell'
+
 export default function Shell() {
-  const [activeKey, setActiveKey] = useState<string>(HOME_KEY)
-  // Item activo dentro del módulo (id del ModuleSidebarItem).
-  const [activeItemId, setActiveItemId] = useState<string>('')
+  const navigate = useNavigate()
+  const location = useLocation()
   const { userProfile } = useApp()
 
-  const activeModule = activeKey === HOME_KEY ? null : getModuleById(activeKey)
+  // Derivar sección activa del pathname. rest = lo que va tras /shell.
+  const rest = location.pathname.slice(SHELL_BASE.length).replace(/^\/+/, '')
+  const segments = rest === '' ? [] : rest.split('/')
+  const moduleBasePath = segments[0] ?? ''            // '' = Home
+  const itemPathFromUrl = segments.slice(1).join('/') // resto = path del item
 
-  // Al entrar a un módulo, seleccionar su primer item del sidebar por defecto.
-  useEffect(() => {
-    if (activeModule && activeModule.sidebar.items.length > 0) {
-      setActiveItemId(activeModule.sidebar.items[0].id)
-    }
-  }, [activeModule])
+  const activeModule = moduleBasePath === ''
+    ? null
+    : getModuleByBasePath(moduleBasePath)
 
-  // Nombre real del usuario para el saludo del Home (null → saludo genérico).
-  // displayName es nullable en BBDD (invite pendiente, legacy).
+  // activeKey para el TopBar: HOME_KEY o el id del módulo activo.
+  const activeKey = activeModule ? activeModule.id : HOME_KEY
+
+  // Item activo del módulo: el que matchea el path de la URL, o el primero.
+  const activeItem = activeModule
+    ? (activeModule.sidebar.items.find(i => i.path === itemPathFromUrl)
+       ?? activeModule.sidebar.items[0])
+    : undefined
+
   const userName = userProfile?.displayName ?? undefined
-
-  // Iniciales para el avatar del TopBar a partir del displayName.
   const initials = userName
     ? userName.trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase()
     : 'JG'
 
-  const activeItem = activeModule?.sidebar.items.find(i => i.id === activeItemId)
+  // Navega a una sección desde el TopBar. El TopBar entrega HOME_KEY o un id
+  // de módulo; traducimos el id a su basePath para la URL.
+  function goToKey(key: string) {
+    if (key === HOME_KEY) {
+      navigate(SHELL_BASE)
+      return
+    }
+    const mod = getModuleById(key)
+    if (mod) navigate(`${SHELL_BASE}/${mod.basePath}`)
+  }
+
+  // Navega a un item del módulo activo. itemPath es relativo al basePath.
+  function goToItemPath(itemPath: string) {
+    if (!activeModule) return
+    const suffix = itemPath === '' ? '' : `/${itemPath}`
+    navigate(`${SHELL_BASE}/${activeModule.basePath}${suffix}`)
+  }
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: '#FBFAF7' }}>
-      <ShellTopBar activeKey={activeKey} onSelect={setActiveKey} userInitials={initials} />
+      <ShellTopBar activeKey={activeKey} onSelect={goToKey} userInitials={initials} />
 
       {activeKey === HOME_KEY ? (
-        // Home general transversal (sin ModuleSidebar, es del Shell).
         <main className="flex-1" style={{ paddingLeft: 26, paddingRight: 26, paddingTop: 24, paddingBottom: 24 }}>
-          <HomeGeneral userName={userName} onOpenModule={setActiveKey} />
+          <HomeGeneral userName={userName} onOpenModule={goToKey} />
         </main>
       ) : activeModule ? (
-        // Módulo activo: layout de tres zonas (sidebar + contenido).
         <div className="flex-1 flex">
           <ModuleSidebar
             moduleName={activeModule.name}
             sidebar={activeModule.sidebar}
-            activeItemId={activeItemId}
-            onSelectItem={setActiveItemId}
+            activeItemId={activeItem?.id ?? ''}
+            onSelectItem={(itemId) => {
+              const item = activeModule.sidebar.items.find(i => i.id === itemId)
+              if (item) goToItemPath(item.path)
+            }}
           />
           <main className="flex-1" style={{ paddingLeft: 26, paddingRight: 26, paddingTop: 24, paddingBottom: 24 }}>
             <PlaceholderPanel
               title={activeItem?.label ?? activeModule.name}
-              note={`Contenido de "${activeItem?.label ?? ''}" (${activeModule.name}). Las páginas reales se enchufan en la fase siguiente.`}
+              note={`Contenido de "${activeItem?.label ?? ''}" (${activeModule.name}). Las páginas reales se enchufan en G-8.2.`}
             />
           </main>
         </div>
       ) : (
-        // Módulo no encontrado en el registry (no debería pasar).
         <main className="flex-1" style={{ padding: 26 }}>
-          <PlaceholderPanel title={activeKey} note="Módulo no registrado." />
+          <PlaceholderPanel title={moduleBasePath} note="Módulo no registrado." />
         </main>
       )}
     </div>
   )
 }
 
-// Placeholder de contenido (provisional hasta enchufar páginas reales).
 function PlaceholderPanel({ title, note }: { title: string; note: string }) {
   return (
     <div className="max-w-2xl">

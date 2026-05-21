@@ -122,7 +122,10 @@ export function isPublicAuthRoute(pathname: string): boolean {
 export const SHELL_PREVIEW_ROUTE = '/shell'
 
 export function isShellRoute(pathname: string): boolean {
-  return pathname === SHELL_PREVIEW_ROUTE
+  // Prefijo: /shell y cualquier sub-ruta /shell/... (G-8.1: el Shell navega
+  // por rutas internas como /shell/appcc/hoy). AppContext debe saltarse la
+  // lógica de slug para TODAS ellas, no solo /shell exacto.
+  return pathname === SHELL_PREVIEW_ROUTE || pathname.startsWith(SHELL_PREVIEW_ROUTE + '/')
 }
 
 /* =====================================================
