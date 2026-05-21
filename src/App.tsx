@@ -47,6 +47,7 @@ import {
   DashboardPage, LocationsPage
 } from './pages/OtherPages'
 import { gate } from '@/platform/feature-gate/featureGateService'
+import Shell from './shell/Shell'
 
 type AppMode = 'gestor' | 'trabajador' | 'unset'
 
@@ -498,6 +499,15 @@ export default function App() {
     gate.clear()
     // setProfile(null) no hace falta: AppContext escucha SIGNED_OUT vía
     // onAuthStateChange y resetea authUserId/userProfile automáticamente.
+  }
+
+  // ── Bloque G-4 (Sprint 3): ruta de previsualización del Shell modular ──
+  // /shell monta el nuevo Shell (TopBar + módulos) en vez del layout actual.
+  // Se intercepta ANTES de toda la lógica de auth/slug (igual que las rutas
+  // públicas), para que AppContext no le inyecte slug ni la redirija.
+  // Es temporal: el Shell NO es el render por defecto todavía (eso es G-8).
+  if (location.pathname === '/shell') {
+    return <Shell />
   }
 
   // 1. Auth aún sin resolver (Supabase tarda ~50ms en saber si hay sesión).

@@ -105,6 +105,27 @@ export function isPublicAuthRoute(pathname: string): boolean {
 }
 
 /* =====================================================
+   RUTA DE PREVISUALIZACIÓN DEL SHELL (Bloque G-4, Sprint 3)
+   ===================================================== */
+
+/**
+ * Ruta temporal de previsualización del Shell modular (`/shell`).
+ *
+ * Igual que las rutas de auth públicas, vive FUERA del namespace por cuenta:
+ * AppContext debe SALTARSE la corrección de URL hacia /{slug}/{rest} cuando
+ * el pathname es `/shell`, o de lo contrario le inyecta el slug y expulsa al
+ * Shell al layout normal.
+ *
+ * Es temporal: desaparece en G-8 cuando el Shell pase a ser el render por
+ * defecto. Se mantiene separada de PUBLIC_AUTH_ROUTES porque NO es auth.
+ */
+export const SHELL_PREVIEW_ROUTE = '/shell'
+
+export function isShellRoute(pathname: string): boolean {
+  return pathname === SHELL_PREVIEW_ROUTE
+}
+
+/* =====================================================
    MAPEO Page ↔ path
    ===================================================== */
 
