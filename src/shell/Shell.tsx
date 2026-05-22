@@ -88,7 +88,14 @@ export default function Shell() {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'var(--color-bg-page)' }}>
-      <ShellTopBar activeKey={activeKey} onSelect={goToKey} onOpenSettings={openSettings} settingsActive={settingsActive} userInitials={initials} />
+      <ShellTopBar
+        activeKey={activeKey}
+        onSelect={goToKey}
+        onOpenSettings={openSettings}
+        settingsActive={settingsActive}
+        userInitials={initials}
+        currentEmployeeId={userProfile?.employeeId ?? null}
+      />
 
       {activeModule ? (
         <div className="flex-1 flex">

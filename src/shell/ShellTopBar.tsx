@@ -21,10 +21,11 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Home, Bell, MapPin, Settings, Shield, LogOut } from 'lucide-react'
+import { Home, MapPin, Settings, Shield, LogOut } from 'lucide-react'
 import { getOrderedModules } from './moduleRegistry'
 import { usePlatformAdmin } from '@/platform/usePlatformAdmin'
 import { signOut } from '@/services/authService'
+import NotificationBell from '@/components/NotificationBell'
 
 // Clave especial del Home general (no es un módulo, es del Shell).
 export const HOME_KEY = '__home__'
@@ -41,6 +42,9 @@ interface ShellTopBarProps {
   settingsActive?: boolean
   userInitials?: string
   locationLabel?: string
+  /** employee_id del user logueado. null = admin sin employee vinculado;
+   *  la campana se esconde. */
+  currentEmployeeId?: string | null
 }
 
 export default function ShellTopBar({
@@ -50,6 +54,7 @@ export default function ShellTopBar({
   settingsActive = false,
   userInitials = 'JG',
   locationLabel = 'Todos los locales',
+  currentEmployeeId = null,
 }: ShellTopBarProps) {
   const modules = getOrderedModules()
   const navigate = useNavigate()
@@ -135,9 +140,7 @@ export default function ShellTopBar({
         >
           <Settings size={19} />
         </button>
-        <button type="button" aria-label="Notificaciones" className="inline-flex items-center" style={{ color: MUTED }}>
-          <Bell size={19} />
-        </button>
+        {currentEmployeeId && <NotificationBell employeeId={currentEmployeeId} />}
 
         {/* Avatar con menú desplegable */}
         <div className="relative" ref={menuRef}>
