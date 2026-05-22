@@ -9,16 +9,17 @@
 // suscripción + items + audit).
 //
 // CATÁLOGO DE SUBMÓDULOS: hardcodeado de la BBDD (consultado Sesión 15). Los ids
-// son los reales de la tabla `submodules`. NOTA: esto debería cargarse dinámicamente
-// de BBDD en una iteración futura (deuda apuntada); por ahora estático para no
-// añadir una query más y porque el catálogo cambia rara vez.
+// son los reales de la tabla `submodules`. NOTA: debería cargarse dinámicamente
+// de BBDD en una iteración futura (deuda apuntada); por ahora estático.
 //
-// v1: contraseña temporal manual (sin welcome email; depende de SMTP pendiente).
+// ONBOARDING (Ses 18, welcome única vía): YA NO se teclea contraseña temporal.
+// El cliente recibe un email de bienvenida y establece su propia contraseña en
+// /welcome. La Edge Function genera el usuario sin password usable.
 
 import { useState } from 'react'
 import { createAccount, type CreateAccountPayload } from '@/platform/accountsAdminService'
 
-// ─── Catálogo de submódulos (ids reales de BBDD, Sesión 15) ────────────────
+// ─── Catálogo de submódulos (ids reales de BBDD, Sesión 15) ──────────────────
 interface SubmoduleOption {
   id: string
   label: string
@@ -70,24 +71,22 @@ const SUBMODULE_CATALOG: ModuleGroup[] = [
   },
 ]
 
-// ─── Estado del formulario ─────────────────────────────────────────────────
+// ─── Estado del formulario ───────────────────────────────────────────────────
 interface FormState {
   accountName: string
   accountSlug: string
   adminEmail: string
-  adminPassword: string
   adminDisplayName: string
   locationName: string
   brandName: string
   brandSlug: string
-  status: 'active' | 'trialing'
+  status: 'active' | 'trial'
 }
 
 const EMPTY_FORM: FormState = {
   accountName: '',
   accountSlug: '',
   adminEmail: '',
-  adminPassword: '',
   adminDisplayName: '',
   locationName: '',
   brandName: '',
@@ -95,7 +94,11 @@ const EMPTY_FORM: FormState = {
   status: 'active',
 }
 
-type Submitting = { state: 'idle' } | { state: 'sending' } | { state: 'done'; accountId: string; slug: string } | { state: 'error'; message: string; detail?: string }
+type Submitting =
+  | { state: 'idle' }
+  | { state: 'sending' }
+  | { state: 'done'; accountId: string; slug: string; welcomeSent: boolean }
+  | { state: 'error'; message: string; detail?: string }
 
 export default function NuevaCuentaPage() {
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
@@ -120,7 +123,6 @@ export default function NuevaCuentaPage() {
     if (!form.accountName.trim()) return 'El nombre de la cuenta es obligatorio.'
     if (!/^[a-z0-9][a-z0-9-]*$/.test(form.accountSlug)) return 'El slug debe ser minúsculas, números y guiones (ej. "llorente29").'
     if (!form.adminEmail.includes('@')) return 'El email del admin no es válido.'
-    if (form.adminPassword.length < 8) return 'La contraseña temporal debe tener al menos 8 caracteres.'
     if (!form.adminDisplayName.trim()) return 'El nombre del admin es obligatorio.'
     if (!form.locationName.trim()) return 'El nombre del local es obligatorio.'
     if (!form.brandName.trim()) return 'El nombre de la marca es obligatorio.'
@@ -141,7 +143,6 @@ export default function NuevaCuentaPage() {
       accountName: form.accountName.trim(),
       accountSlug: form.accountSlug.trim(),
       adminEmail: form.adminEmail.trim(),
-      adminPassword: form.adminPassword,
       adminDisplayName: form.adminDisplayName.trim(),
       locationName: form.locationName.trim(),
       brandName: form.brandName.trim(),
@@ -154,7 +155,12 @@ export default function NuevaCuentaPage() {
     const result = await createAccount(payload)
 
     if (result.ok) {
-      setSubmitting({ state: 'done', accountId: result.data.account_id, slug: result.data.slug })
+      setSubmitting({
+        state: 'done',
+        accountId: result.data.account_id,
+        slug: result.data.slug,
+        welcomeSent: result.data.welcome_sent !== false,
+      })
     } else {
       setSubmitting({ state: 'error', message: result.error, detail: result.detail })
     }
@@ -166,7 +172,7 @@ export default function NuevaCuentaPage() {
     setSubmitting({ state: 'idle' })
   }
 
-  // ─── Pantalla de éxito ────────────────────────────────────────────────────
+  // ─── Pantalla de éxito ───────────────────────────────────────────────────────
   if (submitting.state === 'done') {
     return (
       <div className="max-w-2xl">
@@ -175,7 +181,16 @@ export default function NuevaCuentaPage() {
         </h1>
         <div className="rounded-lg p-4 mb-4" style={{ background: 'var(--color-bg-surface, #fff)', border: '1px solid var(--color-border, #e5e5e5)' }}>
           <p className="text-sm mb-1"><strong>Slug:</strong> {submitting.slug}</p>
-          <p className="text-sm"><strong>Account ID:</strong> {submitting.accountId}</p>
+          <p className="text-sm mb-3"><strong>Account ID:</strong> {submitting.accountId}</p>
+          {submitting.welcomeSent ? (
+            <p className="text-sm" style={{ color: '#2F6B2F' }}>
+              ✓ Email de bienvenida enviado al admin. El cliente establecerá su contraseña desde el enlace.
+            </p>
+          ) : (
+            <p className="text-sm" style={{ color: '#A12626' }}>
+              ⚠ La cuenta se creó, pero el email de bienvenida NO se pudo enviar. Reenvíalo manualmente o revisa el log.
+            </p>
+          )}
         </div>
         <button
           type="button"
@@ -191,7 +206,7 @@ export default function NuevaCuentaPage() {
 
   const sending = submitting.state === 'sending'
 
-  // ─── Formulario ─────────────────────────────────────────────────────────
+  // ─── Formulario ────────────────────────────────────────────────────────────
   return (
     <div className="max-w-3xl">
       <h1 className="text-2xl font-display font-medium mb-6" style={{ color: 'var(--color-accent)' }}>
@@ -209,11 +224,16 @@ export default function NuevaCuentaPage() {
         <Field label="Nombre de la cuenta" value={form.accountName} onChange={v => update('accountName', v)} placeholder="Restaurante Llorente 29" />
         <Field label="Slug (URL)" value={form.accountSlug} onChange={v => update('accountSlug', v.toLowerCase())} placeholder="llorente29" />
         <Field label="Email del admin" value={form.adminEmail} onChange={v => update('adminEmail', v)} placeholder="admin@cliente.com" type="email" />
-        <Field label="Contraseña temporal" value={form.adminPassword} onChange={v => update('adminPassword', v)} placeholder="mín. 8 caracteres" type="text" />
         <Field label="Nombre del admin" value={form.adminDisplayName} onChange={v => update('adminDisplayName', v)} placeholder="Pamela García" />
         <Field label="Nombre del local inicial" value={form.locationName} onChange={v => update('locationName', v)} placeholder="Local Alcalá" />
         <Field label="Nombre de la marca" value={form.brandName} onChange={v => update('brandName', v)} placeholder="Llorente 29" />
         <Field label="Slug de la marca" value={form.brandSlug} onChange={v => update('brandSlug', v.toLowerCase())} placeholder="llorente29" />
+      </div>
+
+      <div className="rounded-lg p-3 mb-6" style={{ background: '#EDF2F7', border: '1px solid #C8D6E5' }}>
+        <p className="text-xs" style={{ color: '#2F4261' }}>
+          El admin recibirá un email de bienvenida para crear su propia contraseña. No se asigna contraseña temporal.
+        </p>
       </div>
 
       <div className="mb-6">
@@ -222,12 +242,12 @@ export default function NuevaCuentaPage() {
         </label>
         <select
           value={form.status}
-          onChange={e => update('status', e.target.value as 'active' | 'trialing')}
+          onChange={e => update('status', e.target.value as 'active' | 'trial')}
           className="w-full md:w-64 px-3 py-2 rounded-md text-sm"
           style={{ border: '1px solid var(--color-border, #ccc)' }}
         >
           <option value="active">Activa (cliente firmado)</option>
-          <option value="trialing">Trial</option>
+          <option value="trial">Trial</option>
         </select>
       </div>
 
@@ -277,7 +297,7 @@ export default function NuevaCuentaPage() {
   )
 }
 
-// ─── Campo de texto reutilizable ───────────────────────────────────────────
+// ─── Campo de texto reutilizable ─────────────────────────────────────────────
 function Field({ label, value, onChange, placeholder, type = 'text' }: {
   label: string
   value: string

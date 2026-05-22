@@ -422,8 +422,8 @@ function translatePasswordError(supabaseError: string): string {
   if (msg.includes('at least 8') || msg.includes('weak password')) {
     return 'La contraseña no cumple los requisitos mínimos.'
   }
-  if (msg.includes('leaked') || msg.includes('pwned')) {
-    return 'Esta contraseña aparece en filtraciones públicas. Elige otra.'
+  if (msg.includes('weak') || msg.includes('guess') || msg.includes('leaked') || msg.includes('pwned')) {
+    return 'Esta contraseña es demasiado débil o aparece en filtraciones públicas. Elige una más segura.'
   }
   if (msg.includes('lowercase') || msg.includes('uppercase') || msg.includes('digits')) {
     return 'La contraseña debe incluir mayúsculas, minúsculas y números.'
