@@ -5,6 +5,9 @@
 // FASE 2.A (22/05/2026): lee del schema canónico (schedulerService + schedules.cells)
 // en lugar del legacy (calendarService + shift_assignments). horasComputo sigue
 // recibiendo el mismo CalendarContext (sintetizado desde el canónico).
+//
+// FASE 2.A.2 (22/05/2026): horasComputo ya no depende de tipos de calendarService.
+// El adapter sintetiza ScheduledShift / ShiftTypeInfo (tipos propios de horasComputo).
 import { useState, useEffect, useMemo } from 'react'
 import { Check, AlertCircle, AlertTriangle, Clock, Users, MapPin } from 'lucide-react'
 import { useApp } from '../context/AppContext'
@@ -13,11 +16,11 @@ import type { Employee, Location } from '../types'
 import {
   computeCurrentStatus, entriesOfDay,
   type CurrentStatus, type CalendarContext,
+  type ScheduledShift, type ShiftTypeInfo,
 } from '../services/horasComputo'
 import { fetchAppSettings, type AppSettings } from '../services/appSettingsService'
 import { getSchedule, listShiftTemplates } from '../services/schedulerService'
 import { getMondayOfWeek, toISODate, shiftDurationHours, type DayOfWeek } from '../types/scheduler'
-import type { ShiftAssignment, ShiftType } from '../services/calendarService'
 import { isSupabaseEnabled, supabase } from '../lib/supabase'
 
 export default function AhoraMismoPage() {
@@ -41,8 +44,8 @@ export default function AhoraMismoPage() {
 
   // Cargar asignaciones publicadas para HOY desde el schema canónico
   // (schedulerService.schedules.cells + shift_templates), y sintetizar el
-  // CalendarContext que horasComputo espera (firma legacy con ShiftAssignment/ShiftType).
-  // Adapter temporal hasta que horasComputo se refactorice al canónico (deuda futura).
+  // CalendarContext que horasComputo espera. Tipos del propio horasComputo
+  // (ScheduledShift, ShiftTypeInfo) — independencia total de calendarService.
   async function loadCalendar() {
     const today = new Date()
     const weekMonday = getMondayOfWeek(today)
@@ -64,22 +67,15 @@ export default function AhoraMismoPage() {
       Promise.all(activeLocs.map(loc => listShiftTemplates(loc.id))),
     ])
 
-    // typesById: cada template -> ShiftType sintético con los campos que horasComputo lee
-    const typesById = new Map<string, ShiftType>()
+    // typesById: cada template -> ShiftTypeInfo con los 4 campos mínimos
+    const typesById = new Map<string, ShiftTypeInfo>()
     for (const tpls of allTemplates) {
       for (const t of tpls) {
         typesById.set(t.id, {
-          id: t.id,
-          code: t.label,
-          label: t.label,
           startTime: t.start_time,
           endTime: t.end_time,
           hours: shiftDurationHours(t.start_time, t.end_time),
-          color: '',
-          isSplit: false,
           isOff: false,
-          active: t.active,
-          displayOrder: 0,
         })
       }
     }
@@ -94,12 +90,7 @@ export default function AhoraMismoPage() {
         if (!employeeIds || employeeIds.length === 0) continue
         for (const empId of employeeIds) {
           const ctx = map.get(empId) || { assignmentsByDate: new Map(), typesById }
-          const fakeAssign: ShiftAssignment = {
-            id: `synthetic-${schedule.id}-${templateId}-${empId}`,
-            planId: schedule.id,
-            employeeId: empId,
-            date: todayIso,
-            slot: 1,
+          const fakeAssign: ScheduledShift = {
             shiftTypeId: templateId,
           }
           ctx.assignmentsByDate.set(todayIso, fakeAssign)

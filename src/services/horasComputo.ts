@@ -3,7 +3,6 @@
 // MODELO A: el calendario publicado es la fuente de verdad. weeklySchedule se ignora.
 
 import type { Employee, ClockEntry } from '../types'
-import type { ShiftAssignment, ShiftType } from './calendarService'
 
 const DAY_KEYS = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'] as const
 
@@ -51,16 +50,35 @@ export interface TheoreticalShift {
 }
 
 /**
+ * Asignación de turno para un día (info mínima que horasComputo necesita).
+ * Independiente del schema de cuadrante (legacy o canónico) — el caller sintetiza.
+ */
+export interface ScheduledShift {
+  shiftTypeId: string
+}
+
+/**
+ * Tipo de turno (info mínima que horasComputo necesita).
+ * Independiente del schema de cuadrante (legacy o canónico) — el caller sintetiza.
+ */
+export interface ShiftTypeInfo {
+  startTime?: string
+  endTime?: string
+  hours: number
+  isOff: boolean
+}
+
+/**
  * Contexto opcional con asignaciones publicadas para resolver el horario teórico.
  * - assignmentsByDate: mapa "YYYY-MM-DD" → asignación de ese empleado para ese día (puede ser null)
- * - typesById: mapa tipoId → ShiftType
+ * - typesById: mapa tipoId → tipo de turno
  *
  * Si pasas este contexto, se usa el calendario publicado.
  * Si no pasas contexto, se devuelve null → no hay horario para ese día (Modelo A puro).
  */
 export interface CalendarContext {
-  assignmentsByDate: Map<string, ShiftAssignment | null>
-  typesById: Map<string, ShiftType>
+  assignmentsByDate: Map<string, ScheduledShift | null>
+  typesById: Map<string, ShiftTypeInfo>
 }
 
 /**
