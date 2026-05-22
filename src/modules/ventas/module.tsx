@@ -11,7 +11,7 @@
 //
 // Fichero .tsx porque los `element` de las rutas son JSX.
 
-import { BarChart3, Brain, Bike } from 'lucide-react'
+import { BarChart3, Bike } from 'lucide-react'
 import type { ModuleDefinition } from '@/shell/types'
 
 import VentasAnalisisPage from '@/pages/VentasAnalisisPage'
@@ -35,7 +35,6 @@ export const ventasModule: ModuleDefinition = {
   sidebar: {
     items: [
       { id: 'ventas_analisis',   label: 'Análisis de ventas',  icon: BarChart3, path: '' },
-      { id: 'ventas_prediccion', label: 'Predicción personal', icon: Brain,     path: 'prediccion' },
       { id: 'ventas_zonas',      label: 'Zonas de pedido',     icon: Bike,      path: 'zonas' },
     ],
   },
