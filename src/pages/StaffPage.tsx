@@ -53,7 +53,7 @@ function getScheduledMinutes(str: string) {
 }
 
 export default function StaffPage() {
-  const { staff, locations, createEmployee, saveEmployee, removeEmployee, notifConfig } = useApp()
+  const { staff, locations, createEmployee, saveEmployee, removeEmployee, gestoriaConfig } = useApp()
   const [mainTab, setMainTab] = useState<'insights' | 'list'>('insights')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
@@ -264,7 +264,7 @@ export default function StaffPage() {
             setSelectedId(null)
           }}
           locations={locations}
-          notifConfig={notifConfig}
+          gestoriaEmail={gestoriaConfig?.gestoriaEmail ?? ''}
           canSeeSalaries={canSeeSalaries}
           canManageEmployees={canManageEmployees}
         />
@@ -306,13 +306,13 @@ export default function StaffPage() {
 
 // ─── Employee Detail Modal ────────────────────────────────────────────────────
 
-function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifConfig, canSeeSalaries, canManageEmployees }: {
+function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestoriaEmail, canSeeSalaries, canManageEmployees }: {
   employee: Employee
   onClose: () => void
   onSave: (e: Employee) => void
   onDelete: (id: string) => void
   locations: ReturnType<typeof useApp>['locations']
-  notifConfig: ReturnType<typeof useApp>['notifConfig']
+  gestoriaEmail: string
   canSeeSalaries: boolean
   canManageEmployees: boolean
 }) {
@@ -945,7 +945,7 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, notifCo
 
               if (data.communicated) {
                 try {
-                  const gmailUrl = buildGestoriaMailto(updated, locations, notifConfig?.gestoriaEmail || '')
+                  const gmailUrl = buildGestoriaMailto(updated, locations, gestoriaEmail)
                   setTimeout(() => { window.open(gmailUrl, '_blank') }, 100)
                 } catch (e) {
                   console.warn('[Termination] No se pudo abrir Gmail:', e)

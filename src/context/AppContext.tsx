@@ -13,6 +13,7 @@ import {
 import { listAccounts } from '../modules/multitenancy/services/accountsService'
 import { listUserProfilesByUser, getUserProfile } from '../modules/multitenancy/services/userProfilesService'
 import { getPermissions } from '../modules/multitenancy/services/managerPermissionsService'
+import { fetchGestoriaConfig, updateGestoriaConfig, type GestoriaConfig, type GestoriaConfigPatch } from '../services/gestoriaConfigService'
 import { parseRoute, buildRoute, isValidSlugShape, isPublicAuthRoute, isShellRoute, isAdminRoute } from '../routes'
 const DEFAULT_SCHEDULE: WeeklySchedule = {
   lunes: { active: true, start: '09:00', end: '17:00' },
@@ -29,8 +30,6 @@ const DEFAULT_NOTIF: NotifConfig = {
   pushEnabled: false, smsEnabled: false, smsNumber: '',
   reminderMinutes: 30, overdueMinutes: 15,
   escalateEnabled: false, escalateTo: '', escalateMinutes: 60,
-  gestoriaEmail: '', gestoriaEnabled: false, gestoriaDayOfMonth: 25,
-  gestoriaNombre: '', gestoriaLastSent: '',
 }
 
 const DEFAULT_TEMPLATES: Template[] = [
@@ -205,6 +204,12 @@ interface AppContextType {
   //   - El user_profile aún no tiene fila de permisos (perfil sin seed).
   //   - El rol del user no requiere permisos (admin global / worker).
   permissions: ManagerPermissions | null
+  // ─── Configuración de gestoría por cuenta (Sprint Personal T8 Punto 3) ──
+  // gestoriaConfig: fila de account_gestoria_config para la cuenta activa.
+  //   null mientras carga o si no hay cuenta activa.
+  gestoriaConfig: GestoriaConfig | null
+  // saveGestoriaConfig: actualización optimista local + UPDATE en BBDD.
+  saveGestoriaConfig: (patch: GestoriaConfigPatch) => Promise<void>
 }
 
 const AppContext = createContext<AppContextType | null>(null)
@@ -818,6 +823,38 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const roleInActiveAccount: UserProfileRole | null = userProfile?.role ?? null
 
+  // ─── Configuración de gestoría por cuenta ──────────────────────────────
+  // Se carga cuando cambia la cuenta activa. saveGestoriaConfig actualiza
+  // optimistamente el estado local y persiste en BBDD via service.
+  const [gestoriaConfig, setGestoriaConfig] = useState<GestoriaConfig | null>(null)
+
+  useEffect(() => {
+    if (!activeAccountId) {
+      setGestoriaConfig(null)
+      return
+    }
+    let cancel = false
+    fetchGestoriaConfig(activeAccountId).then(cfg => {
+      if (!cancel) setGestoriaConfig(cfg)
+    })
+    return () => { cancel = true }
+  }, [activeAccountId])
+
+  const saveGestoriaConfig = async (patch: GestoriaConfigPatch) => {
+    if (!activeAccountId) return
+    setGestoriaConfig(prev => {
+      if (!prev) return prev
+      const merged: GestoriaConfig = { ...prev }
+      if (patch.gestoriaNombre !== undefined) merged.gestoriaNombre = patch.gestoriaNombre
+      if (patch.gestoriaEmail  !== undefined) merged.gestoriaEmail  = patch.gestoriaEmail
+      if (patch.enabled        !== undefined) merged.enabled        = patch.enabled
+      if (patch.dayOfMonth     !== undefined) merged.dayOfMonth     = patch.dayOfMonth
+      if (patch.lastSentAt     !== undefined) merged.lastSentAt     = patch.lastSentAt ?? undefined
+      return merged
+    })
+    await updateGestoriaConfig(activeAccountId, patch)
+  }
+
   return (
     <AppContext.Provider value={{
       locations, staff, setStaff, tasks, setTasks,
@@ -833,6 +870,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       accounts, accountsLoading, activeAccountId, setActiveAccountId,
       activeAccount, userProfile, refreshUserProfile,
       roleInActiveAccount, permissions,
+      gestoriaConfig, saveGestoriaConfig,
     }}>
       {children}
     </AppContext.Provider>

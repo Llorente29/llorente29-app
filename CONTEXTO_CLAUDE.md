@@ -2,7 +2,7 @@
 
 > **Documento maestro de memoria persistente del proyecto Folvy.**
 > Lectura obligatoria al inicio de cada sesión técnica.
-> Última actualización: **19 de mayo de 2026, tras Sesión 5 (Sprint 1 ejecutado).**
+> Última actualización: **22 de mayo de 2026, tras sesión Personal T8 + Punto 3.**
 
 ---
 
@@ -212,6 +212,7 @@ NO activar add-on PITR. Aceptar riesgo de pérdida hasta 18h con scheduled backu
 - **Sesión 1-2-3 (18/05/2026 día):** Sprint 0.1 — pre-requisitos CEO cerrados al 100% (Vercel, Resend, Supabase Pro, dominios, GitHub 2FA).
 - **Sesión 4 (18/05/2026 noche):** Auditoría BBDD completa (75 tablas reales). 4 decisiones arquitectónicas D1-D4 aprobadas. 19 migrations SQL generadas como borrador.
 - **Sesión 5 (18-19/05/2026 noche+mañana):** **SPRINT 1 EJECUTADO.** 19 migrations aplicadas en producción Supabase. 3 bugs SQL detectados en vivo y corregidos. PITR descubierto NO activo (D5 aprobada). Julio + José ejecutaron por turnos.
+- **Sesión Personal T8 + Punto 3 (22/05/2026):** Onboarding sin password temporal cerrado (welcome via `hashed_token` + `/welcome` con `verifyOtp`, sin tocar `supabase.ts`). Wizard `NuevaCuentaPage` sin password, status corregido a `'trial'`. 404 SPA en Vercel resuelto (`vercel.json` rewrite). Auditoría módulo Personal T1-T8: T1-T7 completos contra Supabase, T8 estaba solo UI. **Punto 1 (T8 export gestoría) CERRADO:** enum `vacations.type` alineado en cliente y BBDD, vacations leídas de Supabase en `InformesPage`, TXT manual migrado a CSV vía nueva función `exportPersonalReportCsv` en `exportGestoriaService`. **Punto 3 (config gestoría en BBDD por cuenta) CERRADO:** tabla `account_gestoria_config` con RLS + triggers + backfill, service `gestoriaConfigService`, `NotifConfig` limpio (5 campos `gestoria*` removidos), `AppContext` expone `gestoriaConfig` + `saveGestoriaConfig`, `StaffPage` migrado. **CHECK constraint** `vacations_type_valid` añadido. **Punto 2 (schema cuadrante duplicado):** informe escrito generado, ejecución diferida — bug funcional confirmado en `AhoraMismoPage` (siempre `'no_scheduled'`).
 
 ---
 
@@ -285,6 +286,24 @@ Construir:
 
 - Shell base (`src/shell/*`, ModuleRegistry, EventBus).
 - Rebranding Folvy completo (paleta, tipografías, logos, manifests, email templates).
+
+### Roadmap módulo Personal (orden, sin plazos)
+
+1. **Punto 2: unificar schema cuadrante.** `schedulerService` (canónico, `shift_templates` + `schedules.cells`) vs `calendarService` (paralelo, `shift_types`/`weekly_plans`/`shift_assignments`/`shift_minimums`). `AhoraMismoPage` tiene bug funcional latente (siempre `'no_scheduled'` porque nadie escribe en las tablas que lee). 3 páginas y 3 services huérfanos sin ruta (PlantillaLocalPage, TiposTurnoPage, ModificacionesPanel, calendarAutoGen, calendarSmartGen, calendarValidations) — eliminables en fase 2.B sin riesgo. Plan completo en informe escrito del 22/05.
+2. **Prueba E2E real de Personal en producción** (cuenta real o de prueba): alta empleado → fichaje → vacación → cuadrante → cambio de turno → bolsa de horas → informe gestoría CSV.
+3. **Decisión de negocio:** producción Llorente29 vs siguiente módulo APPCC.
+4. **Convenio español al planificar.** Igualar capacidades de Skello/Combo: restricciones por convenio colectivo, horas extra, descansos obligatorios entre turnos (ya existe `checkRestViolations` en `scheduler.ts` legacy).
+5. **Comunicación en app del empleado.** Hueco actualmente cubierto por Combo/GuavaHR: chat, anuncios, encuestas.
+6. **IA Nivel 1** (asistente conversacional sobre datos propios) y **Nivel 2** (heurísticas predictivas: cobertura, absentismo, horas extras). **Nivel 3** (ML real) diferido a 2027.
+
+**Nota estratégica:** el foso real del producto no son las features individuales sino la **integración Personal–APPCC–Ventas**, ya construida sobre la base de datos compartida (75 tablas, RLS al 100%).
+
+### Deudas menores Personal (apuntadas 22/05/2026)
+
+- **BOM cosmético en `exportPersonalReportCsv`**: carácter literal U+FEFF en lugar de `﻿`. Funcional y equivalente; visualmente confuso.
+- **`staff[].vacations` siempre `[]` global**: `rowToEmployee` no rellena el campo. Resuelto solo dentro de `InformesPage` (fetch directo); cualquier futura pantalla que lo lea tendrá el mismo bug.
+- **`scheduler.ts:728-729`**: heurística `notes.includes('Baja'|'Vacaciones')` legacy. Sigue funcionando porque los nuevos `notes` mantienen prefijos compatibles, pero frágil — un rename del label rompería la heurística sin error.
+- **Filtro de período en tabla en pantalla** de `InformesPage`: `(start ∈ mes) || (end ∈ mes)` deja fuera ausencias que abarcan el mes entero. El CSV (vía `recalculatePeriodDetail`) exporta correctamente día a día.
 
 ### Cuestiones a decidir más adelante
 

@@ -1,4 +1,9 @@
 import type { Employee } from '../types'
+import { VACATION_TYPES, type VacationType } from '../types/personal'
+
+const VACATION_LABEL_BY_TYPE: Record<VacationType, string> = Object.fromEntries(
+  VACATION_TYPES.map(t => [t.id, t.label])
+) as Record<VacationType, string>
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 export interface TimeSlot { start: string; end: string }
@@ -113,9 +118,9 @@ function addDaysStr(date: string, n: number): string {
   return d.toISOString().slice(0, 10)
 }
 
-function isAbsent(emp: Employee, date: string): { absent: boolean; type: string } {
+function isAbsent(emp: Employee, date: string): { absent: true; type: VacationType } | { absent: false; type: null } {
   const v = emp.vacations.find(v => v.status === 'aprobada' && v.startDate <= date && v.endDate >= date)
-  return v ? { absent: true, type: v.type } : { absent: false, type: '' }
+  return v ? { absent: true, type: v.type } : { absent: false, type: null }
 }
 
 export function createDefaultParams(employees: Employee[]): WeekParams {
@@ -144,7 +149,7 @@ export function generateSmartSchedule(employees: Employee[], weekStartDate: stri
   active.forEach(e => { hoursAvail[e.id] = params.workers.find(w => w.employeeId === e.id)?.hoursAvailable ?? 40 })
 
   // Detectar ausencias oficiales y disponibilidad
-  const absences: Record<string, Partial<Record<DayCode, string>>> = {}
+  const absences: Record<string, Partial<Record<DayCode, VacationType>>> = {}
   // Pre-build unavailability from employee.availability field
   const unavailable: Record<string, DayCode[]> = {}
   active.forEach(emp => {
@@ -157,13 +162,15 @@ export function generateSmartSchedule(employees: Employee[], weekStartDate: stri
   active.forEach(emp => {
     absences[emp.id] = {}
     DAY_CODES.forEach((day, di) => {
-      const { absent, type } = isAbsent(emp, addDaysStr(weekStartDate, di))
-      if (absent) {
+      const result = isAbsent(emp, addDaysStr(weekStartDate, di))
+      if (result.absent) {
+        const type = result.type
+        const typeLabel = VACATION_LABEL_BY_TYPE[type]
         absences[emp.id][day] = type
         alerts.push({
-          id: `abs-${emp.id}-${day}`, severity: type === 'Baja médica' ? 'critical' : 'warning',
-          message: `${emp.name}: ${type} el ${DAY_LABELS[day]}`,
-          suggestion: type === 'Baja médica' ? 'Busca sustituto urgente' : 'Horario ajustado automáticamente',
+          id: `abs-${emp.id}-${day}`, severity: type === 'baja_medica' ? 'critical' : 'warning',
+          message: `${emp.name}: ${typeLabel} el ${DAY_LABELS[day]}`,
+          suggestion: type === 'baja_medica' ? 'Busca sustituto urgente' : 'Horario ajustado automáticamente',
           dayCode: day, employeeId: emp.id
         })
       }
@@ -318,9 +325,9 @@ export function generateSmartSchedule(employees: Employee[], weekStartDate: stri
 
     // ── Asignar turnos a cada trabajador ──────────────────────────────────
     active.forEach(emp => {
-      const isAbsentToday = !!absences[emp.id][day]
-      if (isAbsentToday) {
-        workersMap[emp.id].days[day] = { libre: true, totalHours: 0, notes: absences[emp.id][day] }
+      const absenceType = absences[emp.id][day]
+      if (absenceType) {
+        workersMap[emp.id].days[day] = { libre: true, totalHours: 0, notes: VACATION_LABEL_BY_TYPE[absenceType] }
         workersMap[emp.id].restDays++
         return
       }

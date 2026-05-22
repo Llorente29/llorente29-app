@@ -437,6 +437,47 @@ export type Database = {
         }
         Relationships: []
       }
+      account_gestoria_config: {
+        Row: {
+          account_id: string
+          created_at: string
+          day_of_month: number
+          enabled: boolean
+          gestoria_email: string
+          gestoria_nombre: string
+          last_sent_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          day_of_month?: number
+          enabled?: boolean
+          gestoria_email?: string
+          gestoria_nombre?: string
+          last_sent_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          day_of_month?: number
+          enabled?: boolean
+          gestoria_email?: string
+          gestoria_nombre?: string
+          last_sent_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "account_gestoria_config_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: true
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       accounts: {
         Row: {
           archived_at: string | null
@@ -4637,6 +4678,22 @@ export type Database = {
       appcc_mark_overdue: { Args: never; Returns: undefined }
       belongs_to_account: { Args: { p_account_id: string }; Returns: boolean }
       cleanup_auth_rate_limits: { Args: never; Returns: number }
+      create_account_tx: {
+        Args: {
+          p_account_name: string
+          p_account_slug: string
+          p_admin_display_name: string
+          p_admin_user_id: string
+          p_brand_name: string
+          p_brand_slug: string
+          p_created_by: string
+          p_location_name: string
+          p_plan_id: string
+          p_status: string
+          p_submodule_ids: string[]
+        }
+        Returns: string
+      }
       current_user_account_ids: { Args: never; Returns: string[] }
       current_user_has_platform_permission: {
         Args: { p_permission_flag: string }
@@ -4652,6 +4709,10 @@ export type Database = {
         Returns: boolean
       }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
+      delete_account_tx: {
+        Args: { p_account_id: string; p_admin_user_id: string }
+        Returns: undefined
+      }
       force_close_long_impersonations: { Args: never; Returns: number }
       has_permission: {
         Args: { p_account_id: string; p_permission_key: string }

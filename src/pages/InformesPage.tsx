@@ -1,17 +1,30 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Download, Settings, CheckCircle2, RefreshCw } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { Button, Card, Label, Input, Alert } from '../components/ui'
+import { fetchVacations } from '../services/vacationsService'
+import { exportPersonalReportCsv } from '../services/exportGestoriaService'
+import type { VacationRequest } from '../types/personal'
 
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
 
 export default function InformesPage() {
-  const { staff, notifConfig, setNotifConfig } = useApp()
+  const { staff, locations, gestoriaConfig, saveGestoriaConfig } = useApp()
   const now = new Date()
   const [month, setMonth] = useState(now.getMonth() + 1)
   const [year, setYear] = useState(now.getFullYear())
   const [generating, setGenerating] = useState(false)
   const [downloaded, setDownloaded] = useState(false)
+  const [allVacations, setAllVacations] = useState<VacationRequest[]>([])
+
+  useEffect(() => {
+    let cancel = false
+    fetchVacations().then(list => {
+      if (cancel) return
+      setAllVacations(list || [])
+    })
+    return () => { cancel = true }
+  }, [])
 
   const dateFrom = new Date(year, month - 1, 1).toISOString().slice(0, 10)
   const dateTo = new Date(year, month, 0).toISOString().slice(0, 10)
@@ -24,63 +37,47 @@ export default function InformesPage() {
         hours += (new Date(entries[i - 1].datetime).getTime() - new Date(entries[i].datetime).getTime()) / 3600000
       }
     }
-    const abs = e.vacations.filter(v => v.startDate >= dateFrom && v.startDate <= dateTo || v.endDate >= dateFrom && v.endDate <= dateTo)
+    const empVacs = allVacations.filter(v => v.employeeId === e.id)
+    const abs = empVacs.filter(v => (v.startDate >= dateFrom && v.startDate <= dateTo) || (v.endDate >= dateFrom && v.endDate <= dateTo))
+    const approved = abs.filter(v => v.status === 'aprobada')
     return {
       ...e,
       periodEntries: entries,
       totalHours: hours.toFixed(1),
       diasTrabajados: new Set(entries.map(c => c.datetime.slice(0, 10))).size,
-      vacaciones: abs.filter(v => v.status === 'aprobada' && v.type === 'Vacaciones'),
-      bajas: abs.filter(v => v.type === 'Baja médica'),
-      permisos: abs.filter(v => v.type === 'Permiso' || v.type === 'Asuntos propios'),
+      vacaciones: approved.filter(v => v.type === 'vacaciones'),
+      bajas:      approved.filter(v => v.type === 'baja_medica'),
+      permisos:   approved.filter(v =>
+        v.type === 'asuntos_propios' ||
+        v.type === 'permiso_matrimonio' ||
+        v.type === 'permiso_fallecimiento' ||
+        v.type === 'permiso_mudanza' ||
+        v.type === 'otro'
+      ),
     }
   })
 
-  function downloadTxt() {
+  async function downloadCsv() {
     setGenerating(true)
     setDownloaded(false)
-    setTimeout(() => {
-      const lines: string[] = [
-        `INFORME DE PERSONAL - ${MESES[month - 1].toUpperCase()} ${year}`,
-        '='.repeat(60),
-        `Generado: ${new Date().toLocaleString('es-ES')}`,
-        `Empleados: ${report.length}`,
-        '',
-      ]
-      report.forEach(e => {
-        lines.push(
-          `EMPLEADO: ${e.name}`,
-          '-'.repeat(40),
-          `Puesto: ${e.position} | DNI: ${e.dni || '—'} | Contrato: ${e.contractType || '—'}`,
-          `Salario bruto: ${e.salary ? e.salary.toLocaleString('es-ES') + ' EUR' : '—'}`,
-          '',
-          'RESUMEN PERIODO:',
-          `  Dias trabajados: ${e.diasTrabajados}`,
-          `  Horas totales: ${e.totalHours}h`,
-          `  Fichajes: ${e.periodEntries.length}`,
-          '',
-          'AUSENCIAS:',
-          `  Vacaciones: ${e.vacaciones.length} | Bajas: ${e.bajas.length} | Permisos: ${e.permisos.length}`,
-          '',
-          'FICHAJES:',
-          ...e.periodEntries.map(c => `  ${new Date(c.datetime).toLocaleString('es-ES')} | ${c.type.toUpperCase()}${c.roundingApplied ? ' [redondeado]' : ''}`),
-          '',
-          '',
-        )
+    try {
+      await exportPersonalReportCsv({
+        employees: staff,
+        locations,
+        periodStart: dateFrom,
+        periodEnd: dateTo,
+        periodLabel: `${MESES[month - 1]} ${year}`,
       })
-
-      const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' })
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(blob)
-      a.download = `informe_personal_${month}_${year}.txt`
-      a.click()
-      URL.revokeObjectURL(a.href)
-      setGenerating(false)
       setDownloaded(true)
-    }, 400)
+    } finally {
+      setGenerating(false)
+    }
   }
 
   const yearOptions = [now.getFullYear(), now.getFullYear() - 1]
+  const dayOfMonth = gestoriaConfig?.dayOfMonth ?? 25
+  const enabled = gestoriaConfig?.enabled ?? false
+  const lastSentAt = gestoriaConfig?.lastSentAt
 
   return (
     <div className="space-y-5">
@@ -114,10 +111,10 @@ export default function InformesPage() {
                   <CheckCircle2 size={14} /> Descargado
                 </span>
               )}
-              <Button size="sm" onClick={downloadTxt} disabled={generating}>
+              <Button size="sm" onClick={downloadCsv} disabled={generating}>
                 <span className="inline-flex items-center gap-1.5">
                   {generating ? <RefreshCw size={14} className="animate-spin" /> : <Download size={14} />}
-                  {generating ? 'Generando...' : 'Descargar TXT'}
+                  {generating ? 'Generando...' : 'Descargar CSV'}
                 </span>
               </Button>
             </div>
@@ -169,6 +166,9 @@ export default function InformesPage() {
                 </tbody>
               </table>
             </div>
+            <p className="px-4 py-2 text-xs text-text-secondary border-t border-border-default">
+              La tabla es un resumen rápido. El CSV es el informe oficial.
+            </p>
           </Card>
         </div>
 
@@ -178,42 +178,64 @@ export default function InformesPage() {
             <h3 className="font-semibold text-sm text-text-primary inline-flex items-center gap-1.5">
               <Settings size={16} /> Configuración gestoría
             </h3>
-            <p className="text-xs text-text-secondary mt-0.5">Envío automático el día {notifConfig.gestoriaDayOfMonth} de cada mes</p>
+            <p className="text-xs text-text-secondary mt-0.5">Envío automático el día {dayOfMonth} de cada mes</p>
           </div>
           <div className="space-y-3">
             <div>
               <Label>Nombre gestoría</Label>
-              <Input className="mt-1" value={notifConfig.gestoriaNombre || ''} onChange={e => setNotifConfig(p => ({ ...p, gestoriaNombre: e.target.value }))} placeholder="Gestoría López S.L." />
+              <Input
+                className="mt-1"
+                value={gestoriaConfig?.gestoriaNombre ?? ''}
+                onChange={e => saveGestoriaConfig({ gestoriaNombre: e.target.value })}
+                placeholder="Gestoría López S.L."
+                disabled={!gestoriaConfig}
+              />
             </div>
             <div>
               <Label>Email gestoría</Label>
-              <Input className="mt-1" type="email" value={notifConfig.gestoriaEmail || ''} onChange={e => setNotifConfig(p => ({ ...p, gestoriaEmail: e.target.value }))} placeholder="gestoria@ejemplo.com" />
+              <Input
+                className="mt-1"
+                type="email"
+                value={gestoriaConfig?.gestoriaEmail ?? ''}
+                onChange={e => saveGestoriaConfig({ gestoriaEmail: e.target.value })}
+                placeholder="gestoria@ejemplo.com"
+                disabled={!gestoriaConfig}
+              />
             </div>
             <div>
               <Label>Día de envío</Label>
-              <Input className="mt-1" type="number" min={1} max={28} value={notifConfig.gestoriaDayOfMonth || 25} onChange={e => setNotifConfig(p => ({ ...p, gestoriaDayOfMonth: parseInt(e.target.value) || 25 }))} />
+              <Input
+                className="mt-1"
+                type="number"
+                min={1}
+                max={28}
+                value={dayOfMonth}
+                onChange={e => saveGestoriaConfig({ dayOfMonth: parseInt(e.target.value) || 25 })}
+                disabled={!gestoriaConfig}
+              />
             </div>
             <div className="flex items-center gap-3 p-3 rounded-lg bg-page border border-border-default">
               <input
                 type="checkbox"
                 id="gest-on"
-                checked={notifConfig.gestoriaEnabled || false}
-                onChange={e => setNotifConfig(p => ({ ...p, gestoriaEnabled: e.target.checked }))}
+                checked={enabled}
+                onChange={e => saveGestoriaConfig({ enabled: e.target.checked })}
+                disabled={!gestoriaConfig}
                 className="accent-accent"
               />
               <label htmlFor="gest-on" className="text-sm cursor-pointer text-text-primary">
-                Activar envío automático el día {notifConfig.gestoriaDayOfMonth || 25}
+                Activar envío automático el día {dayOfMonth}
               </label>
             </div>
             <Alert type="warning">
-              El envío automático requiere integración SMTP/EmailJS. Por ahora el informe se descarga en TXT listo para adjuntar.
+              El envío automático requiere integración SMTP/EmailJS. Por ahora el informe se descarga en CSV listo para adjuntar.
             </Alert>
           </div>
           <div className="pt-2 border-t border-border-default text-xs text-text-secondary inline-flex items-center gap-1.5">
-            {notifConfig.gestoriaEnabled
+            {enabled
               ? <><CheckCircle2 size={12} className="text-success" /> Envío automático activo</>
               : <>Desactivado</>}
-            <span>· Último envío: {notifConfig.gestoriaLastSent ? new Date(notifConfig.gestoriaLastSent).toLocaleDateString('es-ES') : 'Nunca'}</span>
+            <span>· Último envío: {lastSentAt ? new Date(lastSentAt).toLocaleDateString('es-ES') : 'Nunca'}</span>
           </div>
         </Card>
       </div>

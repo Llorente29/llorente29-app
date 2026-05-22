@@ -113,12 +113,13 @@ export interface StaffDocument {
 }
 
 export interface Vacation {
-  id: string; type: 'Vacaciones' | 'Baja médica' | 'Permiso' | 'Asuntos propios'
-  startDate: string; endDate: string; status: 'solicitada' | 'aprobada' | 'rechazada'; notes?: string
+  id: string
+  type: 'vacaciones' | 'asuntos_propios' | 'baja_medica'
+      | 'permiso_matrimonio' | 'permiso_fallecimiento' | 'permiso_mudanza' | 'otro'
+  startDate: string; endDate: string
+  status: 'solicitada' | 'aprobada' | 'rechazada' | 'cancelada'
+  notes?: string
   alerts?: unknown[]; adjustments?: string[]
-  // Si true (default), la ausencia es retribuida y cuenta como horas trabajadas.
-  // Si false, no cuenta y descuenta del contrato del periodo.
-  // Aplicable principalmente a 'Permiso' que puede ser retribuido o no según el convenio.
   paid?: boolean
 }
 
@@ -163,8 +164,6 @@ export interface NotifConfig {
   pushEnabled: boolean; smsEnabled: boolean; smsNumber: string
   reminderMinutes: number; overdueMinutes: number
   escalateEnabled: boolean; escalateTo: string; escalateMinutes: number
-  gestoriaEmail: string; gestoriaEnabled: boolean; gestoriaDayOfMonth: number
-  gestoriaNombre: string; gestoriaLastSent: string
 }
 
 export type ShiftType = 'manana' | 'partido' | 'tarde_noche' | 'libre'

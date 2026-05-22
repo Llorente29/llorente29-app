@@ -13,6 +13,7 @@ interface VacationRow {
   start_date: string
   end_date: string
   paid: boolean | null
+  type: string
 }
 
 interface ClockEntryRow {
@@ -130,7 +131,7 @@ async function loadVacations(employeeId: string, periodStart: string, periodEnd:
   if (!supabase) return []
   const { data } = await supabase
     .from('vacations')
-    .select('start_date, end_date, paid')
+    .select('start_date, end_date, paid, type')
     .eq('employee_id', employeeId)
     .eq('status', 'aprobada')
     .lte('start_date', periodEnd)
@@ -207,34 +208,51 @@ function getClockedHoursForDay(dayISO: string, allEntries: ClockEntryRow[]): num
   return totalMinutes / 60
 }
 
-function getVacationOnDay(dayISO: string, vacations: VacationRow[]): { found: boolean; paid: boolean } {
+function getVacationOnDay(dayISO: string, vacations: VacationRow[]): { found: boolean; paid: boolean; type: string } {
   for (const v of vacations) {
     if (dayISO >= v.start_date && dayISO <= v.end_date) {
-      return { found: true, paid: v.paid ?? true }
+      return { found: true, paid: v.paid ?? true, type: v.type }
     }
   }
-  return { found: false, paid: false }
+  return { found: false, paid: false, type: '' }
+}
+
+interface PeriodDetail {
+  workedHoursReal: number
+  paidAbsenceHours: number
+  unpaidAbsenceHours: number
+  vacationDays: number
+  sickLeaveDays: number
+  permisoPaidDays: number
+  permisoUnpaidDays: number
+  daysWorked: number
 }
 
 /**
- * Recalcula un cierre para obtener el desglose detallado que la BD no guarda:
- * horas trabajadas reales (sin ausencias), ausencia retribuida y ausencia no retribuida
+ * Recalcula un período arbitrario (no necesariamente un cierre de bolsa).
+ * Devuelve horas reales/ausencia retribuida/no retribuida + desglose por tipo de ausencia
+ * en días y días trabajados (con horas > 0 sea fichaje o planificado).
  */
-async function recalculateClosureDetail(
+async function recalculatePeriodDetail(
   employee: Employee,
-  closure: MonthlyBalanceClosure
-): Promise<RecalculatedDetail> {
-  const locationId = employee.locationId
-  if (!locationId) {
-    return { workedHoursReal: 0, paidAbsenceHours: 0, unpaidAbsenceHours: 0 }
+  periodStart: string,
+  periodEnd: string
+): Promise<PeriodDetail> {
+  const empty: PeriodDetail = {
+    workedHoursReal: 0, paidAbsenceHours: 0, unpaidAbsenceHours: 0,
+    vacationDays: 0, sickLeaveDays: 0, permisoPaidDays: 0, permisoUnpaidDays: 0,
+    daysWorked: 0,
   }
 
-  const weeks = weeksTouchingPeriod(closure.periodStart, closure.periodEnd)
+  const locationId = employee.locationId
+  if (!locationId) return empty
+
+  const weeks = weeksTouchingPeriod(periodStart, periodEnd)
   const [schedules, templates, vacations, clockEntries] = await Promise.all([
     loadSchedulesForLocation(locationId, weeks),
     loadTemplates(locationId),
-    loadVacations(employee.id, closure.periodStart, closure.periodEnd),
-    loadClockEntries(employee.id, closure.periodStart, closure.periodEnd),
+    loadVacations(employee.id, periodStart, periodEnd),
+    loadClockEntries(employee.id, periodStart, periodEnd),
   ])
 
   const weeklyContract = employee.weeklyHours || 40
@@ -243,40 +261,57 @@ async function recalculateClosureDetail(
   let workedReal = 0
   let paidAbsence = 0
   let unpaidAbsence = 0
+  let vacationDays = 0
+  let sickLeaveDays = 0
+  let permisoPaidDays = 0
+  let permisoUnpaidDays = 0
+  let daysWorked = 0
 
-  for (const dayISO of iterateDays(closure.periodStart, closure.periodEnd)) {
-    // 1) Ausencia
+  for (const dayISO of iterateDays(periodStart, periodEnd)) {
     const vac = getVacationOnDay(dayISO, vacations)
     if (vac.found) {
-      if (vac.paid) {
-        paidAbsence += dailyContract
-      } else {
-        unpaidAbsence += dailyContract
-      }
+      if (vac.paid) paidAbsence += dailyContract
+      else unpaidAbsence += dailyContract
+      if (vac.type === 'vacaciones') vacationDays++
+      else if (vac.type === 'baja_medica') sickLeaveDays++
+      else if (vac.paid) permisoPaidDays++
+      else permisoUnpaidDays++
       continue
     }
 
-    // 2) Fichaje
     const clocked = getClockedHoursForDay(dayISO, clockEntries)
     if (clocked > 0) {
       workedReal += clocked
+      daysWorked++
       continue
     }
 
-    // 3) Planificado (sin fichaje, asumimos planificado)
     const weekMonday = getMondayOfWeek(dayISO)
     const schedule = schedules.get(weekMonday)
     const scheduled = getScheduledHoursForDay(dayISO, schedule, templates, employee.id)
     if (scheduled > 0) {
       workedReal += scheduled
+      daysWorked++
     }
-    // 4) Día libre, no suma nada
   }
 
   return {
     workedHoursReal: Math.round(workedReal * 100) / 100,
     paidAbsenceHours: Math.round(paidAbsence * 100) / 100,
     unpaidAbsenceHours: Math.round(unpaidAbsence * 100) / 100,
+    vacationDays, sickLeaveDays, permisoPaidDays, permisoUnpaidDays, daysWorked,
+  }
+}
+
+async function recalculateClosureDetail(
+  employee: Employee,
+  closure: MonthlyBalanceClosure
+): Promise<RecalculatedDetail> {
+  const detail = await recalculatePeriodDetail(employee, closure.periodStart, closure.periodEnd)
+  return {
+    workedHoursReal: detail.workedHoursReal,
+    paidAbsenceHours: detail.paidAbsenceHours,
+    unpaidAbsenceHours: detail.unpaidAbsenceHours,
   }
 }
 
@@ -419,6 +454,122 @@ export async function exportGestoriaCsv(input: ExportGestoriaInput): Promise<voi
   const mm = String(today.getMonth() + 1).padStart(2, '0')
   const dd = String(today.getDate()).padStart(2, '0')
   const filename = `bolsa-horas-gestoria-${yyyy}-${mm}-${dd}.csv`
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+/* =====================================================
+   INFORME MENSUAL DE GESTORÍA (independiente del cierre de bolsa)
+   ===================================================== */
+
+const PERSONAL_REPORT_HEADERS = [
+  'DNI',
+  'Nombre',
+  'Local',
+  'Puesto',
+  'Tipo contrato',
+  'Fecha alta',
+  'Horas contrato/sem',
+  'Periodo',
+  'Inicio periodo',
+  'Fin periodo',
+  'Días naturales',
+  'Días trabajados',
+  'Horas contratadas periodo',
+  'Horas trabajadas reales',
+  'Días vacaciones',
+  'Días baja médica',
+  'Días permiso retribuido',
+  'Días permiso NO retribuido',
+  'Horas ausencia retribuida',
+  'Horas ausencia NO retribuida',
+  'Total horas computables',
+]
+
+function buildPersonalReportRow(
+  employee: Employee,
+  location: Location | undefined,
+  periodStart: string,
+  periodEnd: string,
+  periodLabel: string,
+  detail: PeriodDetail
+): string {
+  const days = daysInPeriod(periodStart, periodEnd)
+  const contractedHours = (employee.weeklyHours || 40) * (days / 7)
+  const totalComputable = detail.workedHoursReal + detail.paidAbsenceHours
+
+  const cells = [
+    employee.dni,
+    employee.name,
+    location?.name || '',
+    employee.position,
+    employee.contractType,
+    employee.startDate,
+    formatNumberES(employee.weeklyHours || 0, 2),
+    periodLabel,
+    periodStart,
+    periodEnd,
+    String(days),
+    String(detail.daysWorked),
+    formatNumberES(contractedHours, 2),
+    formatNumberES(detail.workedHoursReal, 2),
+    String(detail.vacationDays),
+    String(detail.sickLeaveDays),
+    String(detail.permisoPaidDays),
+    String(detail.permisoUnpaidDays),
+    formatNumberES(detail.paidAbsenceHours, 2),
+    formatNumberES(detail.unpaidAbsenceHours, 2),
+    formatNumberES(totalComputable, 2),
+  ]
+
+  return cells.map(c => csvEscape(c)).join(';')
+}
+
+export interface ExportPersonalReportInput {
+  employees: Employee[]
+  locations: Location[]
+  periodStart: string   // 'YYYY-MM-DD'
+  periodEnd: string     // 'YYYY-MM-DD'
+  periodLabel: string   // ej: 'Mayo 2026'
+}
+
+/**
+ * Genera el CSV del informe mensual de personal para la gestoría.
+ * Calcula por empleado: días trabajados, horas reales, desglose de ausencias por tipo.
+ * Dispara la descarga del archivo.
+ */
+export async function exportPersonalReportCsv(input: ExportPersonalReportInput): Promise<void> {
+  const { employees, locations, periodStart, periodEnd, periodLabel } = input
+
+  if (employees.length === 0) {
+    alert('No hay empleados para exportar.')
+    return
+  }
+
+  const computations = await Promise.all(employees.map(async (employee) => {
+    const location = locations.find(l => l.id === employee.locationId)
+    const detail = await recalculatePeriodDetail(employee, periodStart, periodEnd)
+    return { employee, location, detail }
+  }))
+
+  const headerLine = PERSONAL_REPORT_HEADERS.map(csvEscape).join(';')
+  const dataLines = computations.map(r => buildPersonalReportRow(
+    r.employee, r.location, periodStart, periodEnd, periodLabel, r.detail
+  ))
+  const csvBody = [headerLine, ...dataLines].join('\r\n')
+
+  const BOM = '﻿'
+  const csv = BOM + csvBody
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const periodSafe = periodLabel.replace(/[^a-z0-9]/gi, '_').toLowerCase()
+  const filename = `informe-personal-${periodSafe}.csv`
   const a = document.createElement('a')
   a.href = url
   a.download = filename
