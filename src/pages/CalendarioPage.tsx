@@ -24,7 +24,9 @@ import {
   computeWorkloads,
   suggestFillForGap,
   setGlobalAssignedHoursSnapshot,
+  validateSchedule,
   type FillSuggestion,
+  type ValidationIssue,
 } from '../services/scheduleGenerator'
 import {
   type ShiftTemplate,
@@ -72,6 +74,8 @@ export default function CalendarioPage() {
   const [loading, setLoading] = useState(false)
   const [dirty, setDirty] = useState(false)
   const [gapModal, setGapModal] = useState<UncoveredSlot | null>(null)
+  const [issues, setIssues] = useState<ValidationIssue[]>([])
+  const [issuesShown, setIssuesShown] = useState(false)
 
   const employees = useMemo(
     () => staff.filter(e => e.active && (e.locationId === locationId || (e.assignedLocations || []).includes(locationId))),
@@ -154,6 +158,11 @@ export default function CalendarioPage() {
       return copy
     })
     setDirty(true)
+  }
+
+  function doValidate() {
+    setIssues(validateSchedule(cells, templates, employees))
+    setIssuesShown(true)
   }
 
   async function doGenerate() {
@@ -273,6 +282,14 @@ export default function CalendarioPage() {
           {dirty ? <><Save size={14} /> Guardar borrador</> : <><Check size={14} /> Guardado</>}
         </button>
         <button
+          onClick={doValidate}
+          disabled={templates.length === 0 || employees.length === 0}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded border border-border-default bg-card text-text-primary text-sm hover:bg-page disabled:opacity-40 transition-base"
+          title="Comprueba horas extras, descansos y solapes en el cuadrante actual"
+        >
+          <AlertTriangle size={14} /> Validar
+        </button>
+        <button
           onClick={doPublish}
           className="inline-flex items-center gap-1.5 px-3 py-2 rounded border-2 border-accent text-accent bg-card text-sm font-medium hover:bg-accent-bg transition-base"
           title="Publicar para que los empleados lo vean en su móvil"
@@ -304,6 +321,44 @@ export default function CalendarioPage() {
           <span className="inline-flex items-center gap-1 text-warning"><AlertTriangle size={12} /> No hay turnos definidos en la plantilla</span>
         )}
       </div>
+
+      {issuesShown && (
+        <div className="bg-card border border-border-default rounded-lg p-3">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-semibold text-text-secondary uppercase tracking-wide inline-flex items-center gap-1.5">
+              <AlertTriangle size={12} /> Validación del cuadrante
+            </p>
+            <button
+              onClick={() => setIssuesShown(false)}
+              className="text-xs text-text-secondary hover:text-text-primary"
+            >
+              <X size={14} />
+            </button>
+          </div>
+          {issues.length === 0 ? (
+            <p className="text-sm text-success inline-flex items-center gap-1.5">
+              <Check size={14} /> Sin avisos detectados.
+            </p>
+          ) : (
+            <ul className="space-y-1.5">
+              {issues.map((iss, i) => {
+                const cls =
+                  iss.type === 'overtime' ? 'bg-warning-bg text-warning' :
+                  iss.type === 'rest_violation' ? 'bg-danger-bg text-danger' :
+                  iss.type === 'vacation_conflict' ? 'bg-warning-bg text-warning' :
+                  iss.type === 'overlap' ? 'bg-danger-bg text-danger' :
+                  'bg-page text-text-secondary'
+                return (
+                  <li key={i} className="flex items-start gap-2 text-xs">
+                    <span className={`px-1.5 py-0.5 rounded font-medium shrink-0 ${cls}`}>{iss.type}</span>
+                    <span className="text-text-primary">{iss.message}</span>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </div>
+      )}
 
       {templates.length > 0 && (
         <div className="bg-card border border-border-default rounded-lg overflow-x-auto">
