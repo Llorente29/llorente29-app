@@ -130,7 +130,16 @@ Deno.serve(async (req) => {
 
     // ────────────────────────────────────────────────────────────
     // 3. AUTORIZACION POR CUENTA: el caller es admin/manager activo
-    //    en la cuenta declarada en el payload
+    //    en la cuenta declarada en el payload.
+    //
+    //    Query ESTRICTA con todos los filtros (active=true, role admin|manager):
+    //    es la fuente unica de decision fail-closed para el 403. Si devuelve
+    //    null, rechazamos.
+    //
+    //    SOLO en el camino de rechazo lanzamos una segunda query DIAGNOSTICA
+    //    sin los filtros active/role, para enriquecer el console.error con
+    //    el motivo real (sin profile / inactivo / rol). La diagnostica NO
+    //    interviene en la decision, solo alimenta el log.
     // ────────────────────────────────────────────────────────────
     const { data: profile, error: profErr } = await supabaseAdmin
       .from('user_profiles')
@@ -145,9 +154,34 @@ Deno.serve(async (req) => {
       console.error('[account-email] Error consultando user_profiles', profErr);
       return jsonResponse(500, { error: 'Error validando perfil' });
     }
+
     if (!profile) {
-      // Mensaje generico: no distingue "cuenta no existe" vs "no eres
-      // admin/manager activo alli". Defensa contra enumeracion.
+      // Decision 403 fail-closed ya tomada. Diagnostico server-side
+      // SOLO para enriquecer el log. NO afecta la respuesta.
+      const { data: rawProfile } = await supabaseAdmin
+        .from('user_profiles')
+        .select('role, active')
+        .eq('user_id', callerUserId)
+        .eq('account_id', p.accountId)
+        .maybeSingle();
+
+      let motivo: string;
+      if (!rawProfile) {
+        // Cubre 2 casos indistinguibles desde fuera: cuenta no existe
+        // O cuenta existe pero el user no tiene profile en ella.
+        motivo = 'sin profile en cuenta';
+      } else if (!rawProfile.active) {
+        motivo = 'profile inactivo';
+      } else if (rawProfile.role !== 'admin' && rawProfile.role !== 'manager') {
+        motivo = `rol no autorizado (${rawProfile.role})`;
+      } else {
+        // No deberia ocurrir: la diagnostica matchea pero la estricta no.
+        // Posible race condition o caso edge no contemplado.
+        motivo = 'desconocido (diagnostica y estricta divergen)';
+      }
+      console.error(
+        `[account-email] 403 motivo: ${motivo}. user=${callerUserId} account=${p.accountId}`,
+      );
       return jsonResponse(403, {
         error: 'No autorizado para enviar emails desde esta cuenta',
       });
@@ -251,6 +285,9 @@ Deno.serve(async (req) => {
     }
     const currentHour = hourCount ?? 0;
     if (currentHour + batchSize > RATE_LIMIT_PER_HOUR) {
+      console.error(
+        `[account-email] 429 rate limit horario. account=${callerAccountId} actual=${currentHour} batch=${batchSize} limite=${RATE_LIMIT_PER_HOUR}`,
+      );
       await logRateLimited(
         supabaseAdmin,
         resolvedRecipients,
@@ -263,7 +300,7 @@ Deno.serve(async (req) => {
         },
       );
       return jsonResponse(429, {
-        error: `Rate limit horario: ${RATE_LIMIT_PER_HOUR}/h. Actuales ${currentHour}, batch ${batchSize}.`,
+        error: 'Límite de envío alcanzado, reintenta más tarde',
       });
     }
 
@@ -279,6 +316,9 @@ Deno.serve(async (req) => {
     }
     const currentDay = dayCount ?? 0;
     if (currentDay + batchSize > RATE_LIMIT_PER_DAY) {
+      console.error(
+        `[account-email] 429 rate limit diario. account=${callerAccountId} actual=${currentDay} batch=${batchSize} limite=${RATE_LIMIT_PER_DAY}`,
+      );
       await logRateLimited(
         supabaseAdmin,
         resolvedRecipients,
@@ -291,7 +331,7 @@ Deno.serve(async (req) => {
         },
       );
       return jsonResponse(429, {
-        error: `Rate limit diario: ${RATE_LIMIT_PER_DAY}/dia. Actuales ${currentDay}, batch ${batchSize}.`,
+        error: 'Límite de envío alcanzado, reintenta más tarde',
       });
     }
 
