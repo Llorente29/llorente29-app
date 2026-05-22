@@ -2,7 +2,7 @@
 
 > **Documento maestro de memoria persistente del proyecto Folvy.**
 > Lectura obligatoria al inicio de cada sesión técnica.
-> Última actualización: **22 de mayo de 2026, tras sesión Personal T8 + Punto 3 + fase 2.B.**
+> Última actualización: **22 de mayo de 2026, tras sesión Personal T8 + Punto 3 + fases 2.B/2.A/2.A.2 + Fase 1 de cierre.**
 
 ---
 
@@ -299,12 +299,15 @@ Construir:
 
 **Nota estratégica:** el foso real del producto no son las features individuales sino la **integración Personal–APPCC–Ventas**, ya construida sobre la base de datos compartida (75 tablas, RLS al 100%).
 
+### Patrones decididos del módulo Personal (no son deuda)
+
+- **`Employee.vacations/documents/formations` viven siempre `[]` desde `supabaseSync.rowToEmployee`.** Es el patrón del módulo — cualquier pantalla que necesite estos datos los carga vía service dedicado (`vacationsService.fetchVacations`, `documentsService.fetchDocuments`, formaciones). Razón: cargar masivamente en cada sync escala mal y `supabaseSync.rowToEmployee` es zona consolidada que no se toca. Decisión 22/05/2026.
+
 ### Deudas menores Personal (apuntadas 22/05/2026)
 
-- **BOM cosmético en `exportPersonalReportCsv`**: carácter literal U+FEFF en lugar de `﻿`. Funcional y equivalente; visualmente confuso.
-- **`staff[].vacations` siempre `[]` global**: `rowToEmployee` no rellena el campo. Resuelto solo dentro de `InformesPage` (fetch directo); cualquier futura pantalla que lo lea tendrá el mismo bug.
-- **`scheduler.ts:728-729`**: heurística `notes.includes('Baja'|'Vacaciones')` legacy. Sigue funcionando porque los nuevos `notes` mantienen prefijos compatibles, pero frágil — un rename del label rompería la heurística sin error.
-- **Filtro de período en tabla en pantalla** de `InformesPage`: `(start ∈ mes) || (end ∈ mes)` deja fuera ausencias que abarcan el mes entero. El CSV (vía `recalculatePeriodDetail`) exporta correctamente día a día.
+- **BOM cosmético en `exportPersonalReportCsv`** (`exportGestoriaService.ts:566`): carácter literal U+FEFF en lugar de `'﻿'`. **Cerrada como cosmética sin solución técnica vía Edit**: el harness equipara las dos formas como idénticas y no permite el cambio sin reescribir el fichero completo. Funcionalmente correcto (UTF-8 válido).
+- **`scheduler.ts:735-736`**: heurística `notes.includes('Baja'|'Vacaciones')` legacy en `rebalanceCoverage` (interna de `applyModifications`). Pendiente eliminar junto con el código muerto de scheduler.ts (fase 1 punto 6).
+- **Filtro de período en tabla en pantalla** de `InformesPage` — ✅ **RESUELTO 22/05/2026**: cambiado a regla canónica de solapamiento `start <= dateTo && end >= dateFrom`.
 
 ### Cuestiones a decidir más adelante
 

@@ -38,7 +38,7 @@ export default function InformesPage() {
       }
     }
     const empVacs = allVacations.filter(v => v.employeeId === e.id)
-    const abs = empVacs.filter(v => (v.startDate >= dateFrom && v.startDate <= dateTo) || (v.endDate >= dateFrom && v.endDate <= dateTo))
+    const abs = empVacs.filter(v => v.startDate <= dateTo && v.endDate >= dateFrom)
     const approved = abs.filter(v => v.status === 'aprobada')
     return {
       ...e,
@@ -68,6 +68,7 @@ export default function InformesPage() {
         periodEnd: dateTo,
         periodLabel: `${MESES[month - 1]} ${year}`,
       })
+      await saveGestoriaConfig({ lastSentAt: new Date().toISOString() })
       setDownloaded(true)
     } finally {
       setGenerating(false)
