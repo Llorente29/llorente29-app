@@ -2,7 +2,7 @@
 
 > **Documento maestro de memoria persistente del proyecto Folvy.**
 > Lectura obligatoria al inicio de cada sesión técnica.
-> Última actualización: **22 de mayo de 2026, tras sesión Personal completo + APPCC notificaciones + PDF CAPA fotos.**
+> Última actualización: **22 de mayo de 2026, tras sesión APPCC + Comunicación (Arreglos 1-2, Despachador Fase A completa, Fase B paso 1).**
 
 ---
 
@@ -332,6 +332,98 @@ Auditoría completa realizada (8 áreas funcionales + portal trabajador). Veredi
 **Test manual requerido en producción tras deploy:**
 - Crear incidencia con 2-3 fotos adjuntas, aplicar correctiva, descargar PDF de CAPA. Verificar fotos visibles, captions correctos, peso < 5MB.
 - Aplicar una correctiva siendo manager. Verificar que otros admins/managers de la cuenta reciben notificación in-app pero el propio aplicador no.
+
+### Sesión Comunicación 22/05/2026 — sistema de notificaciones multi-canal
+
+#### En producción (cerrado y verificado)
+
+**APPCC (3 deudas cerradas):**
+- ✅ `src/modules/appcc/services/notificationsService.ts` (168 líneas) eliminado — era huérfano duplicado del global.
+- ✅ TODO `incidentsService:920` resuelto — `notifyVerificationPending` notifica admins/managers tras correctiva (filtra al propio aplicador para evitar autonotificación).
+- ✅ PDF CAPA con fotos embebidas (`pdfExportService:1120`) — placeholder reemplazado por embedding real (helper `loadAndResizeImage`, signed URLs batch, layout 1×fila, paginación).
+
+**Comunicación — Arreglos previos al despachador:**
+- ✅ **Arreglo 1**: bug RLS `_update` de `employee_notifications` corregido. Policy nueva con doble rama: admin de la cuenta OR el propio user (via `user_profiles.user_id = auth.uid()` AND `up.employee_id = employee_notifications.employee_id`). WITH CHECK simétrico. **Aplicado y verificado en BBDD.** El empleado ahora marca sus propias leídas y persiste tras F5.
+- ✅ **Arreglo 2**: bandeja del gestor. `NotificationBell` montado en `ShellTopBar` (sustituye el placeholder `<Bell>` previo). Si `userProfile?.employeeId` es null (platform admin, admin sin employee vinculado), la campana se esconde.
+
+**Despachador multi-canal — Fase A COMPLETA (4/4):**
+- ✅ **A.1** SQL: columna `sender_employee_id` nullable en `employee_notifications` + policy INSERT anti-spoofing (3 ramas: cuenta accesible AND (sender NULL OR propio user OR admin)). **Aplicado tras un primer intento fallido que no se llegó a commitear** — segunda ejecución verificada con `information_schema` y `pg_policies` antes de avanzar.
+- ✅ **A.2** `notificationsService.ts`: parámetro opcional `senderEmployeeId?` añadido AL FINAL en `createNotification` y `createNotificationsForEmployees`. **Regla v17.1 respetada** (los 5 parámetros posicionales originales NO se mueven). Los 6 consumidores legacy siguen compilando sin tocarse.
+- ✅ **A.3** `src/services/dispatcherService.ts` (nuevo): API `dispatch(event, recipients, channels)` con tipos `Channel = 'in_app' | 'email'`. Canal `in_app` real (vía `createNotificationsForEmployees` con sender propagado). Canal `email` STUB en Fase A: recipients cuentan como `skipped`, no envía. El caller decide canales explícitamente; sin inferencia automática (Fase C).
+- ✅ **A.4-Y** `EmployeeNotification` ampliado con `senderEmployeeId?: string` (cambio aditivo de tipo, coherente con v17.1 que aplica a firmas posicionales, no a tipos de retorno). `NotificationRow` y `rowToNotification` mapean la columna nueva. `NotificationBell` resuelve el sender vía `useApp().staff` y renderiza " · De {nombre}" junto al `timeAgo`. Best-effort si no se encuentra.
+
+**Despachador multi-canal — Fase B paso B.1:**
+- ✅ **B.1** SQL: tabla `account_email_log` creada con 12 columnas (id, account_id, sender_user_id, sender_employee_id, recipient_employee_id, to_email, template, subject, resend_email_id, status, error_message, sent_at). FKs con ON DELETE adecuado (account/recipient CASCADE; sender_employee SET NULL). CHECK `status IN ('sent', 'failed', 'rate_limited')`. RLS habilitado con **exactamente 1 policy**: SELECT solo para cuenta accesible. **Sin policies de escritura para `authenticated`** — solo service_role de la Edge Function escribe. Índice `(account_id, sent_at DESC)` para rate-limit y auditoría. **Verificado en BBDD** con 6 queries.
+
+#### Pendiente inmediato próxima sesión — B.2 Edge Function `account-email`
+
+**Estado:** código diseñado en chat (~280 líneas index.ts + ~110 líneas templates.ts), NO escrito ni desplegado.
+
+**⚠️ FALLO CRÍTICO de seguridad a corregir antes de escribir:**
+
+El borrador usa `decodeJwtSub(bearer)` — una función helper que solo **decodifica** el JWT en cliente sin verificar la firma. Un atacante podría fabricar un JWT con cualquier `sub`. El `send-email` legacy hace lo mismo (`decodeFolvyClaims`), aceptable allí porque `is_platform_admin` es un nivel más estricto y bajo control de Folvy; en `account-email` la superficie es mucho mayor (cualquier user de cuenta cliente).
+
+**Corrección obligatoria antes de desplegar:** sustituir `decodeJwtSub` por `supabase.auth.getUser(jwt)` que verifica criptográficamente la firma contra el secret del proyecto. Si retorna error o user null → 401. La consulta posterior a `user_profiles` con service_role (para bypass RLS) se mantiene como está.
+
+**Decisiones tomadas para B.2:**
+1. **Rechazar batch entero** si falta `employees.email` en algún recipient (fail-closed, no skip parcial).
+2. **Rate limit** vía conteo en `account_email_log` (no en `auth_rate_limits` — una tabla menos que tocar). 50/h, 200/día por cuenta.
+3. **Una sola cuenta por llamada** — el batch debe ser todo de la misma cuenta. Simplifica rate-limit y autorización.
+4. **Reply-To fijo** `jgcolon@idasal.com` en Fase B (no email del manager). Reply-to dinámico es Fase C tras validar UX.
+
+**Recordatorio técnico para B.2:**
+- Verificar el nombre exacto del campo en la API de Resend: `reply_to` vs `replyTo`. El código actual de `send-email` usa `reply_to`; confirmar contra doc oficial Resend antes de copiar al nuevo.
+
+**Otras validaciones diseñadas (mantener tal cual):**
+- Auth: JWT firma-verificada + `user_profile.active=true` + `role IN ('admin','manager')`.
+- `template === 'account_message'` único permitido.
+- Longitudes: title 1-200, body 1-5000, recipients 1-50.
+- Cross-tenant fail-closed: cada `employeeId` ∈ `employees` JOIN `locations.account_id` ∈ cuentas del caller. Si alguno no, rechaza batch.
+- `to_email` recalculado server-side desde `employees.email` — NO se confía en el payload (defensa contra relay SMTP).
+- From fijo `'Folvy <no-reply@folvy.app>'`. `senderName` solo en body (mitiga phishing por display name).
+- `escapeHtml` en title/body/senderName. Sin links cliqueables. Sin attachments.
+- Cada intento (sent/failed/rate_limited) registrado en `account_email_log`.
+
+**Pasos restantes Fase B:**
+- **B.2** Edge Function `account-email` (con la corrección de JWT). Escribir `index.ts` + `templates.ts`.
+- **B.3** templates.ts (incluido en el bloque B.2 según diseño; mantener separado por trazabilidad).
+- **B.4** Deploy `supabase functions deploy account-email` (lo hace Julio; Claude no tiene credenciales).
+- **B.5** `src/services/accountEmailService.ts` wrapper cliente sobre la Edge Function.
+- **B.6** Ampliar `dispatcherService` canal `'email'` (eliminar stub, llamar `accountEmailService`).
+- **B.7** UI modal manager "Enviar mensaje a [empleado]" (en StaffPage o sitio TBD).
+- **B.8** Build + commit + push.
+
+**Fases futuras (no en este bloque):**
+- C: preferencias por usuario (`user_notification_preferences`), webhooks Resend bounce/complaint, reply-to dinámico, broadcast a cuenta entera.
+- D: chat 1-a-1 con réplica (`threads`, `messages`). Posible Folvy V1.1.
+
+#### Tests manuales pendientes en producción
+
+Acumulados de esta sesión, pendientes de validar por Julio en navegador con datos reales:
+
+- **PDF CAPA con fotos**: crear incidencia con 2-3 fotos, aplicar correctiva, descargar PDF. Verificar fotos visibles + captions + peso < 5MB.
+- **Notificación de correctiva APPCC**: aplicar correctiva siendo Pamela → otros admins/managers de la cuenta reciben notificación en su campana; Pamela NO se autonotifica.
+- **Bandeja del gestor**: Pamela (manager con `employee_id`) ve campana en TopBar. Julio CEO (platform admin sin `employee_id`) NO ve campana.
+- **Marcar notificación leída persiste**: tras Arreglo 1, pulsar item en la campana del worker → recargar F5 → sigue marcada leída.
+- **Botón "Validar cuadrante"** en CalendarioPage: pulsar sobre cuadrante con/sin asignaciones → lista de issues color-coded o "Sin avisos".
+- **Issue `rest_12h`**: asignar a un empleado turno noche del día N (cierra tarde, ej. 19-02) + turno mañana día N+1 (ej. 10:00). Validar → debe aparecer issue rojo "rest_12h" con cálculo correcto de horas de descanso.
+
+#### Frente 3 pendiente tras canal — Folvy AI Capa 1
+
+Cuando se cierre el bloque comunicación (Fase B completa), siguiente frente: **Folvy AI Capa 1** (asistente conversacional). Arquitectura del bloque comunicación está pensada también para preparar terreno a futuros agentes (eventos semánticos `kind`, dispatcher como punto de orquestación, registro auditable en `account_email_log` aplicable a `agent_actions_log` con el mismo patrón). Diseño detallado pendiente.
+
+#### Riesgos consolidados del bloque comunicación
+
+| Vector | Estado |
+|---|---|
+| Sender spoofing in-app | ✅ Mitigado en producción (policy INSERT con 3 ramas) |
+| Email a destinatario arbitrario (relay SMTP) | Mitigación diseñada en B.2 (to_email server-side) |
+| Email cross-tenant | Mitigación diseñada en B.2 (validación fail-closed) |
+| **JWT no verificado (B.2 borrador)** | **⚠️ pendiente corregir antes de escribir/desplegar** |
+| Spam outbound — reputación dominio | Rate limit en B.2; webhooks Resend en Fase C |
+| XSS en cliente de email | escapeHtml diseñado en B.2 |
+| Manager despedido | Filtro `active=true` diseñado en B.2 |
+| Phishing por display name | From fijo + senderName en body, diseñado en B.2 |
 
 ### Cuestiones a decidir más adelante
 
