@@ -2,7 +2,7 @@
 
 > **Documento maestro de memoria persistente del proyecto Folvy.**
 > Lectura obligatoria al inicio de cada sesión técnica.
-> Última actualización: **22 de mayo de 2026, tras sesión Personal T8 + Punto 3 + fases 2.B/2.A/2.A.2 + Fase 1 + Cubo 2 A/B.**
+> Última actualización: **22 de mayo de 2026, tras sesión Personal completo + APPCC notificaciones + PDF CAPA fotos.**
 
 ---
 
@@ -311,6 +311,27 @@ Construir:
 - **Cruce medianoche en detector de solape mismo-día** (`scheduleGenerator.validateSchedule`, bloque "Solape temporal entre turnos del mismo empleado el mismo día"): si un empleado tiene un turno noche del día N (cerrando >24h) y otro turno madrugada del día N+1 (antes de la hora de cierre del anterior), no se detecta como solape porque el chequeo agrupa por día. Cota baja. Diferido.
 - **Cruce domingo→lunes(+1) en `rest_12h`**: la alerta de descanso 12h opera intra-semana (`Schedule` cubre lunes-domingo). No valida el descanso entre el último turno del domingo y el primero del lunes de la semana siguiente. Requiere look-ahead a otra `Schedule` row. Diferido.
 - **`manager_permissions.show_prediccion_personal`** ornamental tras ocultar la página (Cubo 2 B): la columna sigue en BBDD pero no controla nada. Retirar en migration futura junto al resto de `manager_permissions` cuando se migre a `permission_sets` jsonb (decisión D1).
+
+### Estado del módulo APPCC tras sesión 22/05/2026
+
+Auditoría completa realizada (8 áreas funcionales + portal trabajador). Veredicto general: **módulo maduro y coherente**, sin TODOs significativos antes de la sesión salvo los 3 cerrados hoy. Integración Personal↔APPCC verificada: `assignmentService` lee `clock_entries`/`employees`/`user_profiles` para asignación automática de checklists; portal trabajador filtra por `assigned_to`.
+
+**Deudas cerradas hoy:**
+- ✅ `src/modules/appcc/services/notificationsService.ts` (168 líneas) **eliminado** — era huérfano duplicado del global. Todo el módulo usa `src/services/notificationsService.ts` (que escribe en `employee_notifications`, no `appcc_notifications`).
+- ✅ **TODO `incidentsService:920`** resuelto — `notifyVerificationPending` ahora notifica a admins/managers de la cuenta tras aplicar correctiva (vía nuevo helper `getManagerEmployeeIdsForAccount` que resuelve `user_profiles` → `employee_id`). Filtra al propio aplicador para evitar autonotificación. Tipo `'generic'` con `kind: 'appcc_incident_action_applied'` en `data` (mismo patrón que `notifyAssignment`).
+- ✅ **PDF CAPA con fotos embebidas** (`pdfExportService:1120`) — placeholder de conteo reemplazado por embebido real: helper `loadAndResizeImage` (fetch + canvas resize a 800px max width, JPEG quality 0.7), signed URLs batch sobre bucket `appcc-photos`, layout 1 foto por fila con caption (`Foto N — timestamp — caption original si lo tiene`), paginación automática, placeholder por foto si falla la descarga.
+
+**Deudas menores apuntadas (no urgentes):**
+- **EXIF rotation** en `loadAndResizeImage`: `canvas.drawImage` no aplica la rotación EXIF de las fotos. Las fotos verticales subidas desde móvil pueden salir rotadas en el PDF.
+- **Uploader en caption del PDF**: `appcc_incident_photos.uploaded_by` es id sin resolver a nombre. Caption actual no lo incluye.
+- **Límite de tamaño PDF CAPA**: sin tope explícito. Si gestoría rechaza PDFs >10MB con muchas fotos, añadir paginación/limit.
+- **Reportador (`incident.created_by`) en notificación de correctiva**: pendiente clarificar si el campo guarda `user_id` o `employee_id`. Mientras tanto, solo se notifica a admins/managers, no al reportador.
+- **Filtro de notificaciones APPCC por severidad**: si en producción real resulta ruidoso, añadir `if severity in ('alta','critica')` antes de notificar (acordado con CEO en diseño).
+- **Tablas BBDD `appcc_audit_log` y `appcc_audit_schedules` sin consumidor en código cliente**: deuda inversa. Probable que `appcc_audit_log` se pueble por triggers BBDD; `appcc_audit_schedules` aparenta ser tabla preparada para "programación recurrente de auditorías" sin implementar.
+
+**Test manual requerido en producción tras deploy:**
+- Crear incidencia con 2-3 fotos adjuntas, aplicar correctiva, descargar PDF de CAPA. Verificar fotos visibles, captions correctos, peso < 5MB.
+- Aplicar una correctiva siendo manager. Verificar que otros admins/managers de la cuenta reciben notificación in-app pero el propio aplicador no.
 
 ### Cuestiones a decidir más adelante
 
