@@ -23,6 +23,7 @@ import {
   type EmployeeNotification,
   type NotificationType,
 } from '../services/notificationsService'
+import { useApp } from '../context/AppContext'
 
 interface Props {
   employeeId: string
@@ -38,6 +39,7 @@ const ICONS: Record<NotificationType, LucideIcon> = {
 }
 
 export default function NotificationBell({ employeeId }: Props) {
+  const { staff } = useApp()
   const [open, setOpen] = useState(false)
   const [unread, setUnread] = useState(0)
   const [items, setItems] = useState<EmployeeNotification[]>([])
@@ -194,7 +196,13 @@ export default function NotificationBell({ employeeId }: Props) {
                         {n.body}
                       </div>
                       <div className="flex items-center justify-between mt-1.5">
-                        <div className="text-[10px] text-text-secondary">{timeAgo(n.createdAt)}</div>
+                        <div className="text-[10px] text-text-secondary">
+                          {timeAgo(n.createdAt)}
+                          {n.senderEmployeeId && (() => {
+                            const senderName = staff.find(e => e.id === n.senderEmployeeId)?.name
+                            return senderName ? ` · De ${senderName}` : null
+                          })()}
+                        </div>
                         <span
                           onClick={e => handleDelete(n.id, e)}
                           className="text-[10px] text-text-secondary hover:text-danger opacity-0 group-hover:opacity-100 transition-base cursor-pointer"

@@ -33,6 +33,10 @@ export interface EmployeeNotification {
   read: boolean
   createdAt: string
   readAt?: string
+  /** Employee_id del remitente. undefined = notificación automática del
+   *  sistema (cierres, schedule_published, APPCC). Añadido mayo 2026
+   *  (bloque multi-canal Fase A.4). */
+  senderEmployeeId?: string
 }
 
 interface NotificationRow {
@@ -45,6 +49,7 @@ interface NotificationRow {
   read: boolean
   created_at: string
   read_at: string | null
+  sender_employee_id: string | null
 }
 
 function rowToNotification(r: NotificationRow): EmployeeNotification {
@@ -58,6 +63,7 @@ function rowToNotification(r: NotificationRow): EmployeeNotification {
     read: r.read,
     createdAt: r.created_at,
     readAt: r.read_at || undefined,
+    senderEmployeeId: r.sender_employee_id || undefined,
   }
 }
 
