@@ -2,7 +2,7 @@
 
 > **Documento maestro de memoria persistente del proyecto Folvy.**
 > Lectura obligatoria al inicio de cada sesión técnica.
-> Última actualización: **22 de mayo de 2026, tras sesión Personal T8 + Punto 3.**
+> Última actualización: **22 de mayo de 2026, tras sesión Personal T8 + Punto 3 + fase 2.B.**
 
 ---
 
@@ -290,6 +290,7 @@ Construir:
 ### Roadmap módulo Personal (orden, sin plazos)
 
 1. **Punto 2: unificar schema cuadrante.** `schedulerService` (canónico, `shift_templates` + `schedules.cells`) vs `calendarService` (paralelo, `shift_types`/`weekly_plans`/`shift_assignments`/`shift_minimums`). `AhoraMismoPage` tiene bug funcional latente (siempre `'no_scheduled'` porque nadie escribe en las tablas que lee). 3 páginas y 3 services huérfanos sin ruta (PlantillaLocalPage, TiposTurnoPage, ModificacionesPanel, calendarAutoGen, calendarSmartGen, calendarValidations) — eliminables en fase 2.B sin riesgo. Plan completo en informe escrito del 22/05.
+   - **Estado 22/05/2026:** fase 2.B ejecutada (6 archivos huérfanos eliminados, build verde). Tablas legacy verificadas a 0 filas (`shift_types`, `weekly_plans`, `shift_assignments`, `shift_minimums`) y canónicas también a 0 (`shift_templates`, `schedules`, `employee_availability`). **Drop limpio confirmado para 2.C**, sin migración de datos. Pendiente: 2.A (reescribir `AhoraMismoPage` sobre `schedulerService`) + periodo de observación antes del rename-then-drop de 2.C. `shift_types` se conserva mientras `AvisosSettingsPage` siga usándola.
 2. **Prueba E2E real de Personal en producción** (cuenta real o de prueba): alta empleado → fichaje → vacación → cuadrante → cambio de turno → bolsa de horas → informe gestoría CSV.
 3. **Decisión de negocio:** producción Llorente29 vs siguiente módulo APPCC.
 4. **Convenio español al planificar.** Igualar capacidades de Skello/Combo: restricciones por convenio colectivo, horas extra, descansos obligatorios entre turnos (ya existe `checkRestViolations` en `scheduler.ts` legacy).
