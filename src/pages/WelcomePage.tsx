@@ -1,13 +1,15 @@
 // src/pages/WelcomePage.tsx
 //
 // Pantalla de activación de cuenta (D-S2.30 paso 3, D2).
-// El user aterriza aquí tras pulsar el enlace del email de invite.
+// El user aterriza aquí tras pulsar el enlace del email de welcome.
 //
 // FLOW:
 //   1. Aterriza con sesión que supabase-js procesa asíncronamente:
+//      - Flow welcome (Ses 18): ?token_hash=...&type=recovery -> verifyOtp.
 //      - Flow invite legacy: #access_token=... en hash.
-//      - Flow PKCE invite: ?code=... en query.
-//      Ambos son procesados por detectSessionInUrl: true al cargar el bundle.
+//      - Flow PKCE: ?code=... en query.
+//      Los dos últimos los procesa detectSessionInUrl al cargar el bundle;
+//      el token_hash lo canjeamos explícitamente con verifyOtp (ver abajo).
 //   2. ESPERAR a que el procesamiento termine antes de decidir si redirigir
 //      (variable waitingForSession). Sin esta espera, AppContext.authUserId
 //      está null durante ~50-300ms y WelcomePage redirigiría a /login.
@@ -17,21 +19,24 @@
 //      welcome_completed_at=now() WHERE user_id = auth.uid().
 //   6. logSecurityEvent('welcome_completed') (Sprint 2 E1).
 //   7. refreshUserProfile() en AppContext.
-//   8. checkAccountStatus() → navigate(redirect_to) (Enfoque B).
+//   8. checkAccountStatus() -> navigate(redirect_to) (Enfoque B).
+//
+// CHANGELOG Sesión 18 (welcome unica via):
+//   - Rama verifyOtp({ token_hash, type }) al montar. generateLink (admin) NO
+//     emite ?code= PKCE; emite un hashed_token. create-account construye
+//     /welcome?token_hash=...&type=recovery y aquí lo canjeamos por sesión.
+//     Compatible con flowType:'pkce' SIN tocar supabase.ts.
 //
 // CHANGELOG Sesión 10 (post-bug Test 2):
 //   - Detección de #access_token (invite legacy) y ?code= (PKCE) en URL
-//     inicial al montar. Si hay alguno, esperar timeout 3s antes de
-//     redirigir, igual que ResetPasswordConfirmPage.
+//     inicial al montar. Si hay alguno, esperar timeout 3s antes de redirigir.
 //
 // CHANGELOG Sesión 10 E1 (20/05/2026):
 //   - logSecurityEvent('welcome_completed') tras UPDATE exitoso.
 //
 // CHANGELOG Sesión 10 F2 (20/05/2026):
 //   - Política password (PASSWORD_MIN_LENGTH + PASSWORD_REGEX) extraída a
-//     src/lib/passwordPolicy.ts. Ahora se valida con validatePassword().
-//     Mantiene exactamente la misma política client-side (regla F2:
-//     refactor sin cambio funcional).
+//     src/lib/passwordPolicy.ts. Se valida con validatePassword().
 
 import { useEffect, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
@@ -51,8 +56,8 @@ import {
 type FormState = 'idle' | 'submitting' | 'error'
 
 // Tiempo máximo de espera (ms) para que supabase-js procese el token de
-// invite antes de dar por inválido el flow. Probado E2E en reset password:
-// 3s es margen amplio sobre los 50-300ms reales.
+// welcome antes de dar por inválido el flow. 3s es margen amplio sobre los
+// 50-300ms reales.
 const SESSION_PROCESSING_TIMEOUT_MS = 3000
 
 export default function WelcomePage() {
@@ -60,18 +65,19 @@ export default function WelcomePage() {
   const { user, isAuthenticated, isAuthResolved, signOut } = useAuth()
   const { refreshUserProfile } = useApp()
 
-  // Detección inicial al montar: ¿venimos de un link de invite?
-  // Calculado UNA VEZ con useState inicializer porque supabase-js LIMPIA
-  // el token tras procesarlo, y leer en cada render daría resultados
-  // inconsistentes.
+  // Detección inicial al montar: ¿venimos de un link de welcome?
+  // Calculado UNA VEZ con useState initializer porque supabase-js LIMPIA el
+  // token tras procesarlo, y leer en cada render daría resultados inconsistentes.
   const [initialHasToken] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false
+    // Ses 18: ?token_hash=...&type=... (welcome via verifyOtp).
+    const params = new URLSearchParams(window.location.search)
+    const queryHasTokenHash = params.has('token_hash')
     // Hash: #access_token=... (invite legacy implicit flow).
     const hashHasToken = window.location.hash.includes('access_token=')
-    // Query: ?code=... (invite PKCE) o ?error=... (token expirado etc.).
-    const params = new URLSearchParams(window.location.search)
+    // Query: ?code=... (PKCE) o ?error=... (token expirado etc.).
     const queryHasToken = params.has('code') || params.has('error')
-    return hashHasToken || queryHasToken
+    return queryHasTokenHash || hashHasToken || queryHasToken
   })
 
   // Flag de "estamos esperando que termine el procesamiento del token".
@@ -83,16 +89,44 @@ export default function WelcomePage() {
   const [formState, setFormState] = useState<FormState>('idle')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
-  // Timeout de espera: si tras 3s sigue sin haber sesión, declarar
-  // inválido el flow.
+  // Ses 18: si la URL trae token_hash, canjearlo con verifyOtp para abrir
+  // sesión. Se ejecuta UNA VEZ al montar. Limpia el token_hash de la URL tras
+  // canjearlo (evita reintentos al re-render y deja la barra limpia).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const tokenHash = params.get('token_hash')
+    const type = params.get('type')
+    if (!tokenHash || !supabase) return
+
+    let cancelled = false
+    void (async () => {
+      const { error } = await supabase.auth.verifyOtp({
+        token_hash: tokenHash,
+        // recovery es el tipo que emite generateLink({type:'recovery'}).
+        type: (type as 'recovery' | 'invite' | 'magiclink' | 'email') ?? 'recovery',
+      })
+      if (cancelled) return
+      if (error) {
+        console.error('[WelcomePage] verifyOtp falló:', error)
+        setWaitingForSession(false)
+      } else {
+        // Sesión abierta. Limpiar token_hash de la URL.
+        window.history.replaceState({}, '', window.location.pathname)
+        // El efecto que observa isAuthenticated apagará waitingForSession.
+      }
+    })()
+    return () => { cancelled = true }
+    // Solo al montar.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Timeout de espera: si tras 3s sigue sin haber sesión, declarar inválido.
   useEffect(() => {
     if (!waitingForSession) return
-
     const timer = setTimeout(() => {
       console.warn('[WelcomePage] Procesamiento de token timeout sin sesión')
       setWaitingForSession(false)
     }, SESSION_PROCESSING_TIMEOUT_MS)
-
     return () => clearTimeout(timer)
   }, [waitingForSession])
 
@@ -112,8 +146,8 @@ export default function WelcomePage() {
     )
   }
 
-  // Aún esperando que supabase-js procese el token → mostrar "Verificando..."
-  // en lugar de redirigir a /login (que sería el bug original).
+  // Aún esperando que se procese el token -> "Verificando..." en lugar de
+  // redirigir a /login (que sería el bug original).
   if (waitingForSession && !isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-page">
@@ -122,8 +156,8 @@ export default function WelcomePage() {
     )
   }
 
-  // Sin sesión activa Y sin esperar: el link del invite expiró, ya se usó,
-  // o el user navegó manualmente sin haber pasado por el flow.
+  // Sin sesión activa Y sin esperar: el link expiró, ya se usó, o el user
+  // navegó manualmente sin haber pasado por el flow.
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />
   }
@@ -132,7 +166,6 @@ export default function WelcomePage() {
     e.preventDefault()
     setErrorMsg(null)
 
-    // F2 Sesión 10: validación delegada a passwordPolicy.validatePassword.
     const pwdValidation = validatePassword(password)
     if (!pwdValidation.ok) {
       if (pwdValidation.reason === 'too_short' || pwdValidation.reason === 'empty') {
@@ -170,9 +203,8 @@ export default function WelcomePage() {
     }
 
     // 2) UPDATE user_profiles: terms + welcome en el mismo statement
-    //    (CHECK constraint user_profiles_welcome_requires_terms exige
-    //    terms_accepted_at IS NOT NULL AND terms_accepted_at <= welcome_completed_at).
-    //    RLS policy user_profiles_update permite (user_id = auth.uid()).
+    //    (CHECK user_profiles_welcome_requires_terms exige terms_accepted_at
+    //    IS NOT NULL AND terms_accepted_at <= welcome_completed_at).
     if (!supabase) {
       setErrorMsg('Supabase no disponible.')
       setFormState('error')
@@ -198,10 +230,7 @@ export default function WelcomePage() {
       return
     }
 
-    // 3) E1 (20/05/2026): registrar welcome_completed ANTES de refresh.
-    //    La sesión está activa y el UPDATE de user_profiles ya fue OK.
-    //    actor_user_id resuelve vía getCurrentUser() dentro del logger.
-    //    Usamos void para no bloquear el flow con el INSERT.
+    // 3) E1: registrar welcome_completed ANTES de refresh.
     void logSecurityEvent('welcome_completed')
 
     // 4) Refrescar userProfile en AppContext con las columnas actualizadas.
@@ -244,7 +273,6 @@ export default function WelcomePage() {
   }
 
   // Validación visual del estado de la password (sin bloquear inputs).
-  // F2: usa las constantes importadas. NO redefine PASSWORD_REGEX local.
   const passwordTooShort = password.length > 0 && password.length < PASSWORD_MIN_LENGTH
   const passwordWeak = password.length >= PASSWORD_MIN_LENGTH && !PASSWORD_REGEX.test(password)
   const passwordsDiffer = passwordRepeat.length > 0 && password !== passwordRepeat

@@ -7,6 +7,14 @@
 // La parte Postgres va en la RPC create_account_tx (transaccional).
 // Esta function orquesta Auth (que vive fuera de Postgres) + RPC.
 //
+// ONBOARDING (Ses 18, welcome unica via):
+//   El usuario se crea SIN password usable (aleatoria fuerte que nadie conoce).
+//   Tras la RPC, se genera un enlace `recovery` (Supabase) y se envia el
+//   email de welcome (motor send-email + Resend) para que el cliente ponga
+//   su propia password. El cliente NUNCA recibe ni teclea password temporal.
+//   El envio del welcome es best-effort: si falla, la cuenta YA esta creada;
+//   se devuelve `welcome_sent: false` para que el panel avise/reintente.
+//
 // Endpoint: POST /functions/v1/create-account
 // Auth: JWT de platform_admin obligatorio.
 // ============================================================
@@ -18,15 +26,25 @@ interface CreateAccountPayload {
   accountName: string;
   accountSlug: string;
   adminEmail: string;
-  adminPassword: string;        // contrasena temporal (v1 sin welcome email)
   adminDisplayName: string;
   locationName: string;
   brandName: string;
   brandSlug: string;
   submoduleIds: string[];       // submodulos a activar
   planId: string | null;        // opcional
-  status: string;               // 'active' | 'trialing'
+  status: string;               // 'active' | 'trial'
+  // adminPassword: ELIMINADO. El welcome es la unica via de acceso del cliente.
+  // Si un cliente antiguo del wizard lo envia, se ignora (ver mas abajo).
 }
+
+// Dias de caducidad del enlace de welcome (informativo en el email).
+// Supabase controla la caducidad real del recovery token segun config del proyecto.
+const WELCOME_LINK_DAYS = 7;
+
+// URL base de la app (produccion). No hay secret APP_URL en el proyecto, asi que
+// se fija aqui de forma explicita (no via fallback silencioso). El enlace de
+// welcome redirige a `${APP_BASE_URL}/welcome`, ruta ya enrutada en App.tsx.
+const APP_BASE_URL = 'https://app.folvy.app';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -56,7 +74,8 @@ Deno.serve(async (req) => {
       return jsonResponse(400, { error: 'Body JSON invalido' });
     }
 
-    const required = ['accountName', 'accountSlug', 'adminEmail', 'adminPassword', 'adminDisplayName', 'locationName', 'brandName', 'brandSlug', 'status'];
+    // adminPassword ya NO es obligatorio (welcome unica via). Si llega, se ignora.
+    const required = ['accountName', 'accountSlug', 'adminEmail', 'adminDisplayName', 'locationName', 'brandName', 'brandSlug', 'status'];
     for (const f of required) {
       if (!p[f as keyof CreateAccountPayload]) {
         return jsonResponse(400, { error: `Campo obligatorio ausente: ${f}` });
@@ -93,10 +112,13 @@ Deno.serve(async (req) => {
       return jsonResponse(409, { error: `El slug "${p.accountSlug}" ya esta en uso` });
     }
 
-    // --- 6. Crear el auth.user (email confirmado, sin welcome email en v1) ---
+    // --- 6. Crear el auth.user con password ALEATORIA fuerte (nadie la conoce) ---
+    // email_confirm: true para que el recovery link funcione sin paso de confirmacion.
+    // El cliente establecera su password real via welcome (recovery link).
+    const randomPassword = generateStrongPassword();
     const { data: created, error: createErr } = await admin.auth.admin.createUser({
       email: p.adminEmail,
-      password: p.adminPassword,
+      password: randomPassword,
       email_confirm: true,
       user_metadata: { display_name: p.adminDisplayName },
     });
@@ -129,12 +151,70 @@ Deno.serve(async (req) => {
       });
     }
 
-    // --- 9. Exito ---
+    // --- 9. WELCOME (best-effort): generar recovery link + enviar email ---
+    // A partir de aqui, la cuenta YA esta creada. Cualquier fallo del welcome
+    // NO revierte nada: se reporta para que el panel reintente.
+    let welcomeSent = false;
+    let welcomeError: string | null = null;
+    try {
+      const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
+        type: 'recovery',
+        email: p.adminEmail,
+        options: { redirectTo: `${APP_BASE_URL}/welcome` },
+      });
+      if (linkErr || !linkData?.properties?.hashed_token) {
+        welcomeError = linkErr?.message ?? 'No se pudo generar el enlace de welcome';
+      } else {
+        // PKCE: generateLink (admin) NO emite ?code=, emite un hashed_token.
+        // Construimos un enlace propio a /welcome?token_hash=...&type=recovery
+        // y la WelcomePage lo canjea con verifyOtp({ token_hash, type }).
+        const hashedToken = linkData.properties.hashed_token;
+        const activarUrl =
+          `${APP_BASE_URL}/welcome?token_hash=${encodeURIComponent(hashedToken)}&type=recovery`;
+        // Llamada function-to-function a send-email con service-role.
+        // send-email acepta la service-role key como vIa interna (ver su index.ts).
+        const sendRes = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            // El gateway de Supabase valida el header Authorization como JWT.
+            // Mandamos un JWT valido ahi (el del admin que llama) para pasar el
+            // gateway, y la service-role en cabecera propia para la via interna.
+            'Authorization': authHeader,
+            'x-internal-key': serviceKey,
+          },
+          body: JSON.stringify({
+            to: p.adminEmail,
+            template: 'welcome',
+            data: {
+              nombre: p.adminDisplayName,
+              activarUrl,
+              diasCaducidad: WELCOME_LINK_DAYS,
+            },
+          }),
+        });
+        if (sendRes.ok) {
+          welcomeSent = true;
+        } else {
+          const body = await sendRes.text().catch(() => '');
+          welcomeError = `send-email respondio ${sendRes.status}: ${body.slice(0, 200)}`;
+        }
+      }
+    } catch (e) {
+      welcomeError = e instanceof Error ? e.message : String(e);
+    }
+    if (!welcomeSent) {
+      console.error('[create-account] welcome no enviado:', welcomeError);
+    }
+
+    // --- 10. Exito (la cuenta esta creada aunque el welcome haya fallado) ---
     return jsonResponse(200, {
       status: 'ok',
       account_id: accountId,
       admin_user_id: newUserId,
       slug: p.accountSlug,
+      welcome_sent: welcomeSent,
+      welcome_error: welcomeError,
     });
 
   } catch (error) {
@@ -155,6 +235,16 @@ function jsonResponse(status: number, body: unknown): Response {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
+}
+
+// Password aleatoria fuerte (cumple D-S2.14: minuscula+mayuscula+digito, min 8).
+// Nadie la conoce: el cliente pone la suya via welcome. ~28 chars base64url.
+function generateStrongPassword(): string {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  let b64 = btoa(String.fromCharCode(...bytes)).replace(/[^a-zA-Z0-9]/g, '');
+  // Garantizar que cumple la policy aunque el azar quite ciertos tipos.
+  return `Aa1${b64}`;
 }
 
 interface FolvyClaims {

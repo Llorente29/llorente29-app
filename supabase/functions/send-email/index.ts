@@ -1,13 +1,15 @@
 // ============================================================
 // Edge Function: send-email
-// Plataforma Folvy V1 — motor de envio de correos (Bloque 1).
+// Plataforma Folvy V1 — motor de envio de correos.
 //
 // Recibe { to, template, data } y envia el correo via Resend.
 // Remitente fijo: no-reply@folvy.app. Reply-to: jgcolon@idasal.com.
-// Gating: JWT de platform_admin obligatorio (igual que create-account).
 //
-// Bloque 1: envia y devuelve el id de Resend. SIN tabla de audit
-// (pendiente: tabla propia de log de emails en Bloque 2).
+// AUTORIZACION (dos vias):
+//   1. JWT de platform_admin (uso normal desde el panel).
+//   2. Service-role key en el Authorization (uso interno function-to-function:
+//      p.ej. create-account dispara el welcome). La service-role solo la
+//      conocen las Edge Functions del proyecto, nunca el cliente.
 //
 // Endpoint: POST /functions/v1/send-email
 // ============================================================
@@ -35,15 +37,26 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // --- 1. Verificar que el llamante es platform_admin ---
+    // --- 1. Autorizacion: platform_admin (JWT) O service-role (interno) ---
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       return jsonResponse(401, { error: 'Missing Authorization header' });
     }
-    const jwt = authHeader.replace('Bearer ', '');
-    const folvy = decodeFolvyClaims(jwt);
-    if (!folvy || folvy.is_platform_admin !== true) {
-      return jsonResponse(403, { error: 'Solo platform admins pueden enviar correos' });
+    const bearer = authHeader.replace('Bearer ', '').trim();
+
+    // Via interna: la llamada trae la service-role key en cabecera propia
+    // (x-internal-key). NO en Authorization, porque el gateway de Supabase
+    // valida ese header como JWT y rechazaria la service-role.
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    const internalKey = req.headers.get('x-internal-key') ?? '';
+    const isInternalCall = serviceKey.length > 0 && internalKey === serviceKey;
+
+    if (!isInternalCall) {
+      // Via normal: exigir claim platform_admin del JWT.
+      const folvy = decodeFolvyClaims(bearer);
+      if (!folvy || folvy.is_platform_admin !== true) {
+        return jsonResponse(403, { error: 'Solo platform admins pueden enviar correos' });
+      }
     }
 
     // --- 2. Parsear y validar payload ---
@@ -111,9 +124,9 @@ Deno.serve(async (req) => {
     }
 
     const emailId = (resendBody as { id?: string })?.id ?? null;
-    console.log(`[send-email] OK template=${p.template} to=${p.to} id=${emailId}`);
+    console.log(`[send-email] OK template=${p.template} to=${p.to} id=${emailId} internal=${isInternalCall}`);
 
-    // --- 7. Exito (Bloque 1: sin persistir audit; pendiente tabla propia) ---
+    // --- 7. Exito ---
     return jsonResponse(200, { status: 'ok', email_id: emailId });
 
   } catch (error) {

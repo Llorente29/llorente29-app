@@ -8,7 +8,9 @@
 // Bloque 1 (cimientos): test_ping (smoke test).
 // Bloque 2 (porteria, Capa C): aviso_impago, aviso_suspension,
 //   aviso_cancelacion, aviso_reactivacion.
-// Bloque 3 anadira: welcome (onboarding, roza AUTH).
+// Bloque 3: welcome (onboarding).
+//
+// Cabecera con isotipo Folvy servido desde public/email/ (URL produccion).
 // ============================================================
 
 export interface RenderedEmail {
@@ -20,7 +22,13 @@ export interface RenderedEmail {
 // El render recibe data ya parseada. Devuelve null si la plantilla no existe.
 export type TemplateFn = (data: Record<string, unknown>) => RenderedEmail;
 
-// ---- Layout HTML comun (cabecera/pie sobrios, sin imagenes externas) ----
+// URL publica del isotipo (servido por Vercel desde public/email/).
+// Fija a produccion: en local los correos cargaran el logo desde produccion (OK para pruebas).
+const LOGO_URL = 'https://app.folvy.app/email/folvy-isotipo-email.png';
+
+// ---- Layout HTML comun ----
+// Cabecera clara (#f5f4f0) para que el fondo del isotipo se funda con la franja
+// y no se vea ningun borde de recuadro.
 function layout(title: string, bodyHtml: string): string {
   return `<!DOCTYPE html>
 <html lang="es">
@@ -35,8 +43,18 @@ function layout(title: string, bodyHtml: string): string {
       <td align="center">
         <table role="presentation" width="520" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
           <tr>
-            <td style="background:#1e2a4a;padding:20px 32px;">
-              <span style="color:#ffffff;font-size:20px;font-weight:700;letter-spacing:-0.3px;">Folvy</span>
+            <td style="background:#f5f4f0;padding:22px 32px;border-bottom:1px solid #e6e4dd;">
+              <table role="presentation" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="vertical-align:middle;padding-right:12px;">
+                    <img src="${LOGO_URL}" width="40" height="40" alt="Folvy"
+                         style="display:block;width:40px;height:40px;border:0;outline:none;text-decoration:none;" />
+                  </td>
+                  <td style="vertical-align:middle;">
+                    <span style="color:#1e3a5f;font-size:22px;font-weight:700;letter-spacing:-0.5px;">Folvy</span>
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
           <tr>
@@ -78,6 +96,21 @@ function heading(text: string): string {
 // (NUNCA datos del usuario sin escapar).
 function paragraph(rawHtml: string): string {
   return `<p style="margin:0 0 12px;font-size:15px;line-height:1.6;color:#3a4256;">${rawHtml}</p>`;
+}
+
+// Boton CTA (tabla para compatibilidad email). `url` debe venir ya validada/escapada.
+function ctaButton(url: string, label: string): string {
+  return `
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:20px 0;">
+      <tr>
+        <td style="border-radius:8px;background:#1e3a5f;">
+          <a href="${url}" target="_blank" rel="noopener"
+             style="display:inline-block;padding:12px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;">
+            ${escapeHtml(label)}
+          </a>
+        </td>
+      </tr>
+    </table>`;
 }
 
 // ============================================================
@@ -176,6 +209,45 @@ const aviso_reactivacion: TemplateFn = (data) => {
   };
 };
 
+// ---- 5. WELCOME (onboarding: el cliente pone su propia password) ----
+// data esperada: { nombre, activarUrl, diasCaducidad? }
+// `activarUrl` debe venir ya generada por Supabase (generateLink) y validada
+// como http(s) en la function ANTES de pasarla aqui.
+const welcome: TemplateFn = (data) => {
+  const nombre = escapeHtml(data.nombre ?? '');
+  const saludo = nombre ? `Bienvenido, <strong>${nombre}</strong>.` : 'Bienvenido a Folvy.';
+  const url = sanitizeUrl(data.activarUrl);
+  const diasRaw = Number(data.diasCaducidad);
+  const dias = Number.isFinite(diasRaw) && diasRaw > 0 ? Math.floor(diasRaw) : 7;
+
+  const bodyHtml = `
+    ${heading('Tu cuenta de Folvy está lista')}
+    ${paragraph(saludo)}
+    ${paragraph('Ya puedes activar tu cuenta. Solo tienes que elegir tu contraseña haciendo clic en el botón:')}
+    ${url ? ctaButton(url, 'Activar mi cuenta') : paragraph('<em>El enlace de activación no está disponible. Responde a este correo y te lo reenviamos.</em>')}
+    ${paragraph(`Por seguridad, este enlace caduca a los <strong>${dias} días</strong>. Si caduca, escríbenos y te enviamos uno nuevo.`)}
+    ${url ? `<p style="margin:12px 0 0;font-size:12px;color:#8a92a6;line-height:1.5;">Si el botón no funciona, copia y pega esta dirección en tu navegador:<br /><span style="color:#3a4256;word-break:break-all;">${url}</span></p>` : ''}`;
+
+  const urlText = url || '(enlace no disponible; responde a este correo)';
+  return {
+    subject: 'Folvy · Activa tu cuenta',
+    html: layout('Tu cuenta de Folvy está lista', bodyHtml),
+    text:
+      `${nombre ? `Bienvenido, ${String(data.nombre)}.` : 'Bienvenido a Folvy.'}\n\n` +
+      `Tu cuenta de Folvy está lista. Activa tu cuenta eligiendo tu contraseña en este enlace:\n\n` +
+      `${urlText}\n\n` +
+      `Por seguridad, el enlace caduca a los ${dias} días. Si caduca, responde a este correo y te enviamos uno nuevo.`,
+  };
+};
+
+// URL segura para email: solo http(s); cualquier otra cosa -> cadena vacia.
+// Escapa comillas para que no rompa el atributo href.
+function sanitizeUrl(raw: unknown): string {
+  const s = String(raw ?? '').trim();
+  if (!/^https?:\/\//i.test(s)) return '';
+  return s.replace(/"/g, '%22').replace(/'/g, '%27');
+}
+
 // ---- Registro ----
 const TEMPLATES: Record<string, TemplateFn> = {
   test_ping,
@@ -183,6 +255,7 @@ const TEMPLATES: Record<string, TemplateFn> = {
   aviso_suspension,
   aviso_cancelacion,
   aviso_reactivacion,
+  welcome,
 };
 
 export function renderTemplate(
