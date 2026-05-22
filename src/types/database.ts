@@ -2559,6 +2559,7 @@ export type Database = {
           id: string
           read: boolean
           read_at: string | null
+          sender_employee_id: string | null
           title: string
           type: string
         }
@@ -2570,6 +2571,7 @@ export type Database = {
           id?: string
           read?: boolean
           read_at?: string | null
+          sender_employee_id?: string | null
           title: string
           type: string
         }
@@ -2581,6 +2583,7 @@ export type Database = {
           id?: string
           read?: boolean
           read_at?: string | null
+          sender_employee_id?: string | null
           title?: string
           type?: string
         }
@@ -2588,6 +2591,13 @@ export type Database = {
           {
             foreignKeyName: "employee_notifications_employee_id_fkey"
             columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_notifications_sender_employee_id_fkey"
+            columns: ["sender_employee_id"]
             isOneToOne: false
             referencedRelation: "employees"
             referencedColumns: ["id"]

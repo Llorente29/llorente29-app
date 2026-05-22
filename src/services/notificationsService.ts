@@ -64,24 +64,29 @@ function rowToNotification(r: NotificationRow): EmployeeNotification {
 /**
  * Crear una notificación para un empleado.
  *
- * FIRMA POSICIONAL CONSOLIDADA (v17.1) — no cambiar.
+ * FIRMA POSICIONAL CONSOLIDADA (v17.1) — los 5 primeros parámetros NO se mueven.
+ * Mayo 2026 (bloque multi-canal): añadido senderEmployeeId opcional al FINAL.
+ *   - NULL/undefined = notificación automática del sistema (default).
+ *   - employee_id válido = remitente identificado (manager directo, etc).
+ *   La policy INSERT de RLS valida que el sender_employee_id sea NULL o el
+ *   del propio caller o admin de la cuenta destinataria.
  */
 export async function createNotification(
   employeeId: string,
   type: NotificationType,
   title: string,
   body: string,
-  data?: Record<string, unknown>
+  data?: Record<string, unknown>,
+  senderEmployeeId?: string | null
 ): Promise<EmployeeNotification | null> {
   if (!supabase) return null
-  // FIX: tipado fuerte del insert. data se castea a Json (compatible con
-  //      Record<string, unknown> en runtime, solo TS necesita el cast).
   const insertRow: NotificationInsert = {
     employee_id: employeeId,
     type,
     title,
     body,
     data: (data ?? null) as Json,
+    sender_employee_id: senderEmployeeId ?? null,
   }
   const { data: row, error } = await supabase
     .from('employee_notifications')
@@ -99,24 +104,29 @@ export async function createNotification(
  * Crear notificaciones para múltiples empleados de golpe.
  * Útil cuando se cierra un periodo para todo un local.
  *
- * FIRMA POSICIONAL CONSOLIDADA (v17.1) — no cambiar.
+ * FIRMA POSICIONAL CONSOLIDADA (v17.1) — los 5 primeros parámetros NO se mueven.
+ * Mayo 2026 (bloque multi-canal): añadido senderEmployeeId opcional al FINAL.
+ *   - NULL/undefined = notificación automática del sistema (default).
+ *   - employee_id válido = remitente identificado (mismo para todos los
+ *     destinatarios del batch).
  */
 export async function createNotificationsForEmployees(
   employeeIds: string[],
   type: NotificationType,
   title: string,
   body: string,
-  data?: Record<string, unknown>
+  data?: Record<string, unknown>,
+  senderEmployeeId?: string | null
 ): Promise<number> {
   if (!supabase) return 0
   if (employeeIds.length === 0) return 0
-  // FIX: tipado fuerte del array de inserts.
   const rows: NotificationInsert[] = employeeIds.map(id => ({
     employee_id: id,
     type,
     title,
     body,
     data: (data ?? null) as Json,
+    sender_employee_id: senderEmployeeId ?? null,
   }))
   const { error, count } = await supabase
     .from('employee_notifications')
