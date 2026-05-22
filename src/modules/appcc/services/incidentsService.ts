@@ -901,6 +901,27 @@ export async function deleteIncidentPhoto(photoId: string): Promise<void> {
 // incidencia con incident_id/severity.
 // ============================================================
 
+/**
+ * Resuelve los employee_id de admins y managers de una cuenta.
+ * Lee user_profiles (account_id + role IN admin/manager) y devuelve los
+ * employee_id (filtrando los nulls — admins sin vínculo a un employee).
+ */
+async function getManagerEmployeeIdsForAccount(accountId: string): Promise<string[]> {
+  if (!supabase) return []
+  const { data, error } = await supabase
+    .from('user_profiles')
+    .select('employee_id')
+    .eq('account_id', accountId)
+    .in('role', ['admin', 'manager'])
+  if (error) {
+    console.error('[incidentsService] getManagerEmployeeIdsForAccount error', error)
+    return []
+  }
+  return (data ?? [])
+    .map(p => p.employee_id)
+    .filter((id): id is string => !!id)
+}
+
 async function notifyAssignment(incident: AppccIncident, employeeId: string) {
   await notificationsService.createNotification(
     employeeId,
@@ -917,15 +938,36 @@ async function notifyAssignment(incident: AppccIncident, employeeId: string) {
 }
 
 async function notifyVerificationPending(incident: AppccIncident) {
-  // TODO(Bloque C+): notificar a admins/managers cuando se aplica una correctiva.
-  // No se hace aquí porque el esquema de roles en `employees` no es accesible
-  // desde el servicio. Soluciones futuras:
-  //   1. Pasar la lista de managerIds desde el componente (que tiene useApp().staff)
-  //   2. Crear un trigger SQL que inserte la notificación directamente
-  //   3. Edge function que reciba el id y resuelva los managers
-  console.info(
-    '[incidentsService] notifyVerificationPending pendiente — incident:',
-    incident.id
+  // Resolver admins/managers de la cuenta (vía user_profiles → employee_id)
+  // y notificarles que hay una correctiva aplicada pendiente de verificación.
+  //
+  // Filtro de autonotificación: el aplicador (incident.corrective_action_by)
+  // guarda employee_id pese al nombre de la columna. Verificado en
+  // IncidentDetailModal: actorId = currentEmployee?.id, no user_id.
+  //
+  // Deuda menor apuntada: incident.created_by (reportador) tiene tipo
+  // ambiguo (no claro si user_id o employee_id) y no se incluye aquí.
+  const managerIds = await getManagerEmployeeIdsForAccount(incident.account_id)
+  const recipients = incident.corrective_action_by
+    ? managerIds.filter(id => id !== incident.corrective_action_by)
+    : managerIds
+  if (recipients.length === 0) {
+    console.info(
+      '[incidentsService] notifyVerificationPending: sin destinatarios para cuenta',
+      incident.account_id
+    )
+    return
+  }
+  await notificationsService.createNotificationsForEmployees(
+    recipients,
+    'generic',
+    `Correctiva aplicada: ${incident.title}`,
+    `Severidad ${incident.severity}. Pendiente de verificar la eficacia.`,
+    {
+      kind: 'appcc_incident_action_applied',
+      incident_id: incident.id,
+      severity: incident.severity,
+    },
   )
 }
 
