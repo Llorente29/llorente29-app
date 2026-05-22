@@ -352,46 +352,29 @@ Auditoría completa realizada (8 áreas funcionales + portal trabajador). Veredi
 - ✅ **A.3** `src/services/dispatcherService.ts` (nuevo): API `dispatch(event, recipients, channels)` con tipos `Channel = 'in_app' | 'email'`. Canal `in_app` real (vía `createNotificationsForEmployees` con sender propagado). Canal `email` STUB en Fase A: recipients cuentan como `skipped`, no envía. El caller decide canales explícitamente; sin inferencia automática (Fase C).
 - ✅ **A.4-Y** `EmployeeNotification` ampliado con `senderEmployeeId?: string` (cambio aditivo de tipo, coherente con v17.1 que aplica a firmas posicionales, no a tipos de retorno). `NotificationRow` y `rowToNotification` mapean la columna nueva. `NotificationBell` resuelve el sender vía `useApp().staff` y renderiza " · De {nombre}" junto al `timeAgo`. Best-effort si no se encuentra.
 
-**Despachador multi-canal — Fase B paso B.1:**
+**Despachador multi-canal — Fase B (B.1, B.2, B.4):**
 - ✅ **B.1** SQL: tabla `account_email_log` creada con 12 columnas (id, account_id, sender_user_id, sender_employee_id, recipient_employee_id, to_email, template, subject, resend_email_id, status, error_message, sent_at). FKs con ON DELETE adecuado (account/recipient CASCADE; sender_employee SET NULL). CHECK `status IN ('sent', 'failed', 'rate_limited')`. RLS habilitado con **exactamente 1 policy**: SELECT solo para cuenta accesible. **Sin policies de escritura para `authenticated`** — solo service_role de la Edge Function escribe. Índice `(account_id, sent_at DESC)` para rate-limit y auditoría. **Verificado en BBDD** con 6 queries.
+- ✅ **B.2** Edge Function `account-email` ESCRITA, COMMITEADA y EN GITHUB. Commits: `a8a4f7f` (función completa, ya con `getUser` desde el origen) + `846b7b9` (refactor seguridad: 403 con logging diagnóstico + 429 opaco al cliente). 3 archivos en `supabase/functions/account-email/`: `index.ts`, `templates.ts`, `deno.json`. `_shared/cors.ts` existe y resuelve. **Verificado con `git show`: el "fallo crítico decodeJwtSub" del borrador previo NUNCA llegó al repo** — el commit `a8a4f7f` ya entró con `supabase.auth.getUser(jwt)`.
+- ✅ **B.4** Edge Function DESPLEGADA en Supabase Functions (`supabase functions deploy account-email`; proyecto `xzmpnchlguibclvxyynt`, región `eu-west-3`). Validada externamente hasta donde el gateway permite: función viva, enrutada, responde 401 a JWT inválidos. **APRENDIZAJE del gateway de Supabase**: rechaza JWT por formato (`UNAUTHORIZED_INVALID_JWT_FORMAT`) y por algoritmo (`UNAUTHORIZED_LEGACY_JWT` — el proyecto usa claves asimétricas RS256/ES256 con JWKS; HS256 no se acepta a nivel gateway). Por eso el `getUser` interno NO es testeable con curl desde fuera: el gateway intercepta antes. Se validará end-to-end desde la app cuando exista la UI manager (B.7) y un caller real dispare un envío. **No bloqueante.** Empleado de prueba `TEST B4` creado y BORRADO al cierre de sesión (verificado 0 filas).
 
-#### Pendiente inmediato próxima sesión — B.2 Edge Function `account-email`
+**Decisiones cerradas y verificadas contra BBDD en esta sesión (Fase B):**
+- **Auth**: `supabase.auth.getUser(jwt)`, 401 si falla. NO `decodeJwtSub`. Dos clientes: anon para `getUser`, `service_role` para queries (bypass RLS).
+- **`accountId` en el PAYLOAD (requerido)**, validado contra las cuentas del caller. NO `profiles[0]` (no determinista, fallo de tenant-selection). `callerEmployeeId` se resuelve del profile concreto de esa cuenta.
+- **Pertenencia empleado→cuenta** vía `employees.location_id → locations.account_id` (Opción A). `assigned_locations` NO se usa (0 empleados lo usan hoy; verificado en BBDD).
+- **`reply_to` snake_case** (fetch directo a Resend, NO el SDK npm; verificado contra doc Resend).
+- **Rate limit ESTRICTO**: `currentCount + batchSize > LIMIT` (50/h, 200/día por cuenta).
+- **`to_email` recalculado server-side** desde `employees.email`. Fail-closed si falta email.
+- **PATRÓN AUTH (aplica a futuras decisiones)**: NUNCA debilitar la query de decisión para conseguir más info de logging. La query estricta (todos los filtros) DECIDE fail-closed; si hace falta logging rico, query de diagnóstico SEPARADA, solo en el camino de rechazo, solo alimenta `console.error`, nunca afecta la respuesta HTTP.
 
-**Estado:** código diseñado en chat (~280 líneas index.ts + ~110 líneas templates.ts), NO escrito ni desplegado.
+#### Pendiente próxima sesión — B.5 cliente `accountEmailService`
 
-**⚠️ FALLO CRÍTICO de seguridad a corregir antes de escribir:**
+**Siguiente paso**: `src/services/accountEmailService.ts` (wrapper cliente sobre la Edge Function). El wrapper debe pasar `activeAccountId` del `AppContext` como `accountId` del payload.
 
-El borrador usa `decodeJwtSub(bearer)` — una función helper que solo **decodifica** el JWT en cliente sin verificar la firma. Un atacante podría fabricar un JWT con cualquier `sub`. El `send-email` legacy hace lo mismo (`decodeFolvyClaims`), aceptable allí porque `is_platform_admin` es un nivel más estricto y bajo control de Folvy; en `account-email` la superficie es mucho mayor (cualquier user de cuenta cliente).
-
-**Corrección obligatoria antes de desplegar:** sustituir `decodeJwtSub` por `supabase.auth.getUser(jwt)` que verifica criptográficamente la firma contra el secret del proyecto. Si retorna error o user null → 401. La consulta posterior a `user_profiles` con service_role (para bypass RLS) se mantiene como está.
-
-**Decisiones tomadas para B.2:**
-1. **Rechazar batch entero** si falta `employees.email` en algún recipient (fail-closed, no skip parcial).
-2. **Rate limit** vía conteo en `account_email_log` (no en `auth_rate_limits` — una tabla menos que tocar). 50/h, 200/día por cuenta.
-3. **Una sola cuenta por llamada** — el batch debe ser todo de la misma cuenta. Simplifica rate-limit y autorización.
-4. **Reply-To fijo** `jgcolon@idasal.com` en Fase B (no email del manager). Reply-to dinámico es Fase C tras validar UX.
-
-**Recordatorio técnico para B.2:**
-- Verificar el nombre exacto del campo en la API de Resend: `reply_to` vs `replyTo`. El código actual de `send-email` usa `reply_to`; confirmar contra doc oficial Resend antes de copiar al nuevo.
-
-**Otras validaciones diseñadas (mantener tal cual):**
-- Auth: JWT firma-verificada + `user_profile.active=true` + `role IN ('admin','manager')`.
-- `template === 'account_message'` único permitido.
-- Longitudes: title 1-200, body 1-5000, recipients 1-50.
-- Cross-tenant fail-closed: cada `employeeId` ∈ `employees` JOIN `locations.account_id` ∈ cuentas del caller. Si alguno no, rechaza batch.
-- `to_email` recalculado server-side desde `employees.email` — NO se confía en el payload (defensa contra relay SMTP).
-- From fijo `'Folvy <no-reply@folvy.app>'`. `senderName` solo en body (mitiga phishing por display name).
-- `escapeHtml` en title/body/senderName. Sin links cliqueables. Sin attachments.
-- Cada intento (sent/failed/rate_limited) registrado en `account_email_log`.
-
-**Pasos restantes Fase B:**
-- **B.2** Edge Function `account-email` (con la corrección de JWT). Escribir `index.ts` + `templates.ts`.
-- **B.3** templates.ts (incluido en el bloque B.2 según diseño; mantener separado por trazabilidad).
-- **B.4** Deploy `supabase functions deploy account-email` (lo hace Julio; Claude no tiene credenciales).
+**Restante Fase B:**
 - **B.5** `src/services/accountEmailService.ts` wrapper cliente sobre la Edge Function.
 - **B.6** Ampliar `dispatcherService` canal `'email'` (eliminar stub, llamar `accountEmailService`).
 - **B.7** UI modal manager "Enviar mensaje a [empleado]" (en StaffPage o sitio TBD).
-- **B.8** Build + commit + push.
+- **B.8** Build + commit + push final de la Fase B.
 
 **Fases futuras (no en este bloque):**
 - C: preferencias por usuario (`user_notification_preferences`), webhooks Resend bounce/complaint, reply-to dinámico, broadcast a cuenta entera.
@@ -417,19 +400,21 @@ Cuando se cierre el bloque comunicación (Fase B completa), siguiente frente: **
 | Vector | Estado |
 |---|---|
 | Sender spoofing in-app | ✅ Mitigado en producción (policy INSERT con 3 ramas) |
-| Email a destinatario arbitrario (relay SMTP) | Mitigación diseñada en B.2 (to_email server-side) |
-| Email cross-tenant | Mitigación diseñada en B.2 (validación fail-closed) |
-| **JWT no verificado (B.2 borrador)** | **⚠️ pendiente corregir antes de escribir/desplegar** |
-| Spam outbound — reputación dominio | Rate limit en B.2; webhooks Resend en Fase C |
-| XSS en cliente de email | escapeHtml diseñado en B.2 |
-| Manager despedido | Filtro `active=true` diseñado en B.2 |
-| Phishing por display name | From fijo + senderName en body, diseñado en B.2 |
+| Email a destinatario arbitrario (relay SMTP) | ✅ Mitigado en producción (`to_email` server-side desde `employees.email`) |
+| Email cross-tenant | ✅ Mitigado en producción (validación fail-closed `account_id == callerAccountId`) |
+| JWT con firma falsa | ✅ Mitigado en producción (`supabase.auth.getUser(jwt)` verifica firma; `decodeJwtSub` nunca llegó al repo, verificado con `git show`) |
+| Spam outbound — reputación dominio | ✅ Rate limit estricto en producción (50/h, 200/día); webhooks Resend en Fase C |
+| XSS en cliente de email | ✅ `escapeHtml` en producción (title/body/senderName) |
+| Manager despedido | ✅ Filtro `active=true` + role IN admin\|manager en producción |
+| Phishing por display name | ✅ From fijo + senderName solo en body en producción |
 
 ### Cuestiones a decidir más adelante
 
 - Decidir destino columna `accounts.is_internal` (DROP COLUMN o mantener) tras auditar uso en frontend.
 - Activar PITR Supabase add-on antes de Sprint 14 (migración Llorente29 producción).
 - Limpiar 10 tablas backup del Bloque S (`_backup_20260516_*`) — confirmar con Julio.
+- **Deuda de documentación**: `CONTEXTO_ESTADO.md` y `CONTEXTO_REGLAS.md` están desincronizados con este documento — describen estado "Sesión 17 (portería/emails)" sin el bloque Comunicación/despachador (Fase A/B). Discrepancia en nº de tablas: **75** (CONTEXTO_CLAUDE) vs **40** (los otros dos). **VERIFICAR** contra BBDD `information_schema` cuál es real. Pendiente: reconciliar los tres docs y decidir si consolidar o definir responsabilidades claras por documento. Sesión dedicada, cabeza fresca, con BBDD a mano.
+- **Nota de proceso (aprendizaje sesión Comunicación)**: el commit `a8a4f7f` (función completa) se empujó a remoto sin revisión código-a-código previa. Salió seguro, pero el flujo correcto (regla 7 de §8) es revisar antes de commitear piezas sensibles. Mantener confirmación manual en cada `git commit`/`curl` (NO usar "don't ask again" en Claude Code para comandos sensibles).
 
 ---
 
