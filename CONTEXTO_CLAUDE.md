@@ -2,7 +2,7 @@
 
 > **Documento maestro de memoria persistente del proyecto Folvy.**
 > Lectura obligatoria al inicio de cada sesión técnica.
-> Última actualización: **22 de mayo de 2026, tras sesión Personal T8 + Punto 3 + fases 2.B/2.A/2.A.2 + Fase 1 de cierre.**
+> Última actualización: **22 de mayo de 2026, tras sesión Personal T8 + Punto 3 + fases 2.B/2.A/2.A.2 + Fase 1 + Cubo 2 A/B.**
 
 ---
 
@@ -290,7 +290,7 @@ Construir:
 ### Roadmap módulo Personal (orden, sin plazos)
 
 1. **Punto 2: unificar schema cuadrante.** `schedulerService` (canónico, `shift_templates` + `schedules.cells`) vs `calendarService` (paralelo, `shift_types`/`weekly_plans`/`shift_assignments`/`shift_minimums`). `AhoraMismoPage` tiene bug funcional latente (siempre `'no_scheduled'` porque nadie escribe en las tablas que lee). 3 páginas y 3 services huérfanos sin ruta (PlantillaLocalPage, TiposTurnoPage, ModificacionesPanel, calendarAutoGen, calendarSmartGen, calendarValidations) — eliminables en fase 2.B sin riesgo. Plan completo en informe escrito del 22/05.
-   - **Estado 22/05/2026:** fase 2.B ejecutada (6 archivos huérfanos eliminados, build verde). Tablas legacy verificadas a 0 filas (`shift_types`, `weekly_plans`, `shift_assignments`, `shift_minimums`) y canónicas también a 0 (`shift_templates`, `schedules`, `employee_availability`). **Drop limpio confirmado para 2.C**, sin migración de datos. Pendiente: 2.A (reescribir `AhoraMismoPage` sobre `schedulerService`) + periodo de observación antes del rename-then-drop de 2.C. `shift_types` se conserva mientras `AvisosSettingsPage` siga usándola.
+   - **Estado 22/05/2026:** fases ejecutadas y en producción — **2.B** (6 archivos huérfanos eliminados), **2.A** (`AhoraMismoPage` reescrita sobre `schedulerService` + `schedules.cells`), **2.A.2** (`horasComputo` agnóstico a `calendarService` vía tipos propios `ScheduledShift`/`ShiftTypeInfo`), **Fase 1** completa (`gestoriaLastSent` real, filtro de período corregido, patrón `vacations/documents/formations` documentado, botón "Validar cuadrante" en CalendarioPage, 348 líneas de código muerto eliminadas de `scheduler.ts`), **Cubo 2 A** (alerta `rest_12h` de descanso 12h entre jornadas en `validateSchedule`), **Cubo 2 B** (`PrediccionPersonalPage` oculta de la sidebar de Ventas; ruta accesible solo por URL directa). Tablas legacy verificadas a 0 filas el 22/05; drop limpio confirmado. **Pendiente:** **2.C** rename-then-drop SQL de `weekly_plans`/`shift_assignments`/`shift_minimums` tras periodo de observación, y **2.D** destino de `AvisosSettingsPage` (mientras viva, `shift_types` y `calendarService.ts` se conservan).
 2. **Prueba E2E real de Personal en producción** (cuenta real o de prueba): alta empleado → fichaje → vacación → cuadrante → cambio de turno → bolsa de horas → informe gestoría CSV.
 3. **Decisión de negocio:** producción Llorente29 vs siguiente módulo APPCC.
 4. **Convenio español al planificar.** Igualar capacidades de Skello/Combo: restricciones por convenio colectivo, horas extra, descansos obligatorios entre turnos (ya existe `checkRestViolations` en `scheduler.ts` legacy).
@@ -306,8 +306,11 @@ Construir:
 ### Deudas menores Personal (apuntadas 22/05/2026)
 
 - **BOM cosmético en `exportPersonalReportCsv`** (`exportGestoriaService.ts:566`): carácter literal U+FEFF en lugar de `'﻿'`. **Cerrada como cosmética sin solución técnica vía Edit**: el harness equipara las dos formas como idénticas y no permite el cambio sin reescribir el fichero completo. Funcionalmente correcto (UTF-8 válido).
-- **`scheduler.ts:735-736`**: heurística `notes.includes('Baja'|'Vacaciones')` legacy en `rebalanceCoverage` (interna de `applyModifications`). Pendiente eliminar junto con el código muerto de scheduler.ts (fase 1 punto 6).
+- **`scheduler.ts` heurística `notes.includes('Baja'|'Vacaciones')`** — ✅ **RESUELTA 22/05/2026** con la limpieza de 348 líneas de código muerto (Fase 1 punto 6). La función `rebalanceCoverage` y todo `applyModifications` fueron eliminados.
 - **Filtro de período en tabla en pantalla** de `InformesPage` — ✅ **RESUELTO 22/05/2026**: cambiado a regla canónica de solapamiento `start <= dateTo && end >= dateFrom`.
+- **Cruce medianoche en detector de solape mismo-día** (`scheduleGenerator.validateSchedule`, bloque "Solape temporal entre turnos del mismo empleado el mismo día"): si un empleado tiene un turno noche del día N (cerrando >24h) y otro turno madrugada del día N+1 (antes de la hora de cierre del anterior), no se detecta como solape porque el chequeo agrupa por día. Cota baja. Diferido.
+- **Cruce domingo→lunes(+1) en `rest_12h`**: la alerta de descanso 12h opera intra-semana (`Schedule` cubre lunes-domingo). No valida el descanso entre el último turno del domingo y el primero del lunes de la semana siguiente. Requiere look-ahead a otra `Schedule` row. Diferido.
+- **`manager_permissions.show_prediccion_personal`** ornamental tras ocultar la página (Cubo 2 B): la columna sigue en BBDD pero no controla nada. Retirar en migration futura junto al resto de `manager_permissions` cuando se migre a `permission_sets` jsonb (decisión D1).
 
 ### Cuestiones a decidir más adelante
 
