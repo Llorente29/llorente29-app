@@ -905,6 +905,49 @@ async function getSignature(executionId: string): Promise<SignatureInfo | null> 
   return data as SignatureInfo | null
 }
 
+/**
+ * Descarga una imagen desde URL, la redimensiona a maxWidth (manteniendo aspect ratio)
+ * y la devuelve como DataURL JPEG. Devuelve null si falla.
+ *
+ * Uso: para embeber fotos en PDFs sin saturar el tamaño final. Aplica:
+ *   - Max maxWidth px de ancho (típico 800).
+ *   - JPEG quality configurable (típico 0.7, balance peso/calidad).
+ *   - No aplica rotación EXIF (deuda menor: fotos verticales de móvil pueden
+ *     salir en horizontal según cómo se subieron originalmente).
+ */
+async function loadAndResizeImage(
+  url: string,
+  maxWidth: number,
+  quality: number,
+): Promise<{ dataUrl: string; widthPx: number; heightPx: number } | null> {
+  try {
+    const res = await fetch(url)
+    if (!res.ok) return null
+    const blob = await res.blob()
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const i = new Image()
+      i.onload = () => resolve(i)
+      i.onerror = () => reject(new Error('img load failed'))
+      i.src = URL.createObjectURL(blob)
+    })
+    const scale = Math.min(1, maxWidth / img.naturalWidth)
+    const w = Math.round(img.naturalWidth * scale)
+    const h = Math.round(img.naturalHeight * scale)
+    const canvas = document.createElement('canvas')
+    canvas.width = w
+    canvas.height = h
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return null
+    ctx.drawImage(img, 0, 0, w, h)
+    const dataUrl = canvas.toDataURL('image/jpeg', quality)
+    URL.revokeObjectURL(img.src)
+    return { dataUrl, widthPx: w, heightPx: h }
+  } catch (err) {
+    console.warn('[pdfExportService] loadAndResizeImage failed:', err)
+    return null
+  }
+}
+
 // ============================================================
 // 5. INFORME CAPA DE UNA INCIDENCIA INDIVIDUAL
 // ============================================================
@@ -1117,16 +1160,77 @@ export async function generateIncidentCapaPdf(
     })
   }
 
-  // ---------- FOTOS (placeholder con conteo) ----------
-  if (photos.length > 0) {
-    if (y > 270) { doc.addPage(); y = 20 }
+  // ---------- FOTOS (embebidas) ----------
+  if (photos.length > 0 && supabase) {
+    // Generar signed URLs en batch para todas las fotos.
+    const paths = photos.map(p => p.storage_path)
+    const { data: signed } = await supabase.storage
+      .from('appcc-photos')
+      .createSignedUrls(paths, 3600)
+
+    // Cargar + redimensionar todas en paralelo (orden preservado).
+    const loaded = await Promise.all(
+      photos.map(async (_, i) => {
+        const url = signed?.[i]?.signedUrl
+        if (!url) return null
+        return loadAndResizeImage(url, 800, 0.7)
+      })
+    )
+
+    if (y > 240) { doc.addPage(); y = 20 }
     y += 5
-    doc.setFontSize(9)
-    doc.setTextColor(GRAY[0], GRAY[1], GRAY[2])
-    doc.setFont('helvetica', 'italic')
-    doc.text(`${photos.length} foto(s) de evidencia adjuntas en el sistema.`, 15, y)
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(ACCENT[0], ACCENT[1], ACCENT[2])
+    doc.text('EVIDENCIAS FOTOGRÁFICAS', 15, y)
     doc.setTextColor(0, 0, 0)
     doc.setFont('helvetica', 'normal')
+    y += 7
+
+    const PAGE_H = doc.internal.pageSize.getHeight()
+    const photoWidthMm = 80           // ~7-8 cm de ancho en A4
+    const maxPhotoHeightMm = 100      // tope vertical razonable
+    const captionHeightMm = 8
+
+    for (let i = 0; i < photos.length; i++) {
+      const p = photos[i]
+      const img = loaded[i]
+      if (!img) {
+        if (y + 20 > PAGE_H - 20) { doc.addPage(); y = 20 }
+        doc.setFontSize(9)
+        doc.setTextColor(GRAY[0], GRAY[1], GRAY[2])
+        doc.setFont('helvetica', 'italic')
+        doc.text(`Foto ${i + 1} — no se pudo cargar`, 15, y)
+        doc.setTextColor(0, 0, 0)
+        doc.setFont('helvetica', 'normal')
+        y += 6
+        continue
+      }
+      const aspectRatio = img.heightPx / img.widthPx
+      let photoHeightMm = photoWidthMm * aspectRatio
+      if (photoHeightMm > maxPhotoHeightMm) {
+        photoHeightMm = maxPhotoHeightMm
+      }
+      const blockHeight = photoHeightMm + captionHeightMm + 4
+      if (y + blockHeight > PAGE_H - 20) {
+        doc.addPage()
+        y = 20
+      }
+      doc.addImage(img.dataUrl, 'JPEG', 15, y, photoWidthMm, photoHeightMm)
+      y += photoHeightMm + 2
+
+      doc.setFontSize(8)
+      doc.setTextColor(GRAY[0], GRAY[1], GRAY[2])
+      doc.setFont('helvetica', 'italic')
+      const ts = new Date(p.uploaded_at).toLocaleString('es-ES')
+      const captionText = p.caption
+        ? `Foto ${i + 1} — ${ts} — ${p.caption}`
+        : `Foto ${i + 1} — ${ts}`
+      doc.text(captionText, 15, y)
+      doc.setTextColor(0, 0, 0)
+      doc.setFont('helvetica', 'normal')
+      y += captionHeightMm
+    }
   }
 
   // ---------- FOOTER ----------
