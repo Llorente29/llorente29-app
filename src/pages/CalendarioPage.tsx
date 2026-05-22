@@ -345,6 +345,7 @@ export default function CalendarioPage() {
                 const cls =
                   iss.type === 'overtime' ? 'bg-warning-bg text-warning' :
                   iss.type === 'rest_violation' ? 'bg-danger-bg text-danger' :
+                  iss.type === 'rest_12h' ? 'bg-danger-bg text-danger' :
                   iss.type === 'vacation_conflict' ? 'bg-warning-bg text-warning' :
                   iss.type === 'overlap' ? 'bg-danger-bg text-danger' :
                   'bg-page text-text-secondary'

@@ -630,7 +630,7 @@ export function computeWorkloads(
    ===================================================== */
 
 export interface ValidationIssue {
-  type: 'overtime' | 'rest_violation' | 'vacation_conflict' | 'gap' | 'overlap'
+  type: 'overtime' | 'rest_violation' | 'rest_12h' | 'vacation_conflict' | 'gap' | 'overlap'
   employeeId?: string
   templateId?: string
   day?: DayOfWeek
@@ -713,6 +713,52 @@ export function validateSchedule(
             message: `${emp?.name || empId} tiene dos turnos solapados el ${dayLabel(day)}: ${list[i].label} (${list[i].start}-${list[i].end}) y ${list[j].label} (${list[j].start}-${list[j].end})`,
           })
         }
+      }
+    }
+  }
+
+  // Descanso 12h entre jornadas (días distintos).
+  // Recopila los turnos del empleado, ordena por inicio absoluto en mins
+  // (day*1440 + startMin con +1440 si cruza medianoche), y valida pares
+  // consecutivos en DÍAS DISTINTOS (mismo día = turno partido, no aplica).
+  const turnosPorEmp = new Map<string, { day: DayOfWeek; startAbs: number; endAbs: number; label: string }[]>()
+  for (const tid of Object.keys(cells)) {
+    const t = templates.find(x => x.id === tid)
+    if (!t) continue
+    const [sh, sm] = t.start_time.slice(0, 5).split(':').map(Number)
+    const [eh, em] = t.end_time.slice(0, 5).split(':').map(Number)
+    const startMin = sh * 60 + sm
+    let endMin = eh * 60 + em
+    if (endMin <= startMin) endMin += 24 * 60   // cruce medianoche
+    for (const dk of Object.keys(cells[tid])) {
+      const day = parseInt(dk, 10) as DayOfWeek
+      for (const empId of cells[tid][dk]) {
+        if (!turnosPorEmp.has(empId)) turnosPorEmp.set(empId, [])
+        turnosPorEmp.get(empId)!.push({
+          day,
+          startAbs: day * 1440 + startMin,
+          endAbs: day * 1440 + endMin,
+          label: t.label,
+        })
+      }
+    }
+  }
+  for (const [empId, turnos] of turnosPorEmp.entries()) {
+    if (turnos.length < 2) continue
+    turnos.sort((a, b) => a.startAbs - b.startAbs)
+    const emp = empById.get(empId)
+    for (let i = 0; i < turnos.length - 1; i++) {
+      const a = turnos[i]
+      const b = turnos[i + 1]
+      if (a.day === b.day) continue
+      const restHours = (b.startAbs - a.endAbs) / 60
+      if (restHours < 12) {
+        issues.push({
+          type: 'rest_12h',
+          employeeId: empId,
+          day: b.day,
+          message: `${emp?.name || empId}: solo ${restHours.toFixed(1)}h de descanso entre ${dayLabel(a.day)} (${a.label}) y ${dayLabel(b.day)} (${b.label})`,
+        })
       }
     }
   }
