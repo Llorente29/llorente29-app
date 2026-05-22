@@ -1,6 +1,10 @@
 // src/pages/AhoraMismoPage.tsx
 // Panel del gestor: estado en tiempo real de quién está trabajando AHORA en cada local.
 // MODELO A: usa el calendario PUBLICADO como única fuente de horario teórico.
+//
+// FASE 2.A (22/05/2026): lee del schema canónico (schedulerService + schedules.cells)
+// en lugar del legacy (calendarService + shift_assignments). horasComputo sigue
+// recibiendo el mismo CalendarContext (sintetizado desde el canónico).
 import { useState, useEffect, useMemo } from 'react'
 import { Check, AlertCircle, AlertTriangle, Clock, Users, MapPin } from 'lucide-react'
 import { useApp } from '../context/AppContext'
@@ -11,7 +15,9 @@ import {
   type CurrentStatus, type CalendarContext,
 } from '../services/horasComputo'
 import { fetchAppSettings, type AppSettings } from '../services/appSettingsService'
-import { fetchPublishedAssignmentsForRange } from '../services/calendarService'
+import { getSchedule, listShiftTemplates } from '../services/schedulerService'
+import { getMondayOfWeek, toISODate, shiftDurationHours, type DayOfWeek } from '../types/scheduler'
+import type { ShiftAssignment, ShiftType } from '../services/calendarService'
 import { isSupabaseEnabled, supabase } from '../lib/supabase'
 
 export default function AhoraMismoPage() {
@@ -33,37 +39,87 @@ export default function AhoraMismoPage() {
     return () => clearInterval(id)
   }, [])
 
-  // Cargar asignaciones publicadas para hoy y enriquecer el contexto por empleado
+  // Cargar asignaciones publicadas para HOY desde el schema canónico
+  // (schedulerService.schedules.cells + shift_templates), y sintetizar el
+  // CalendarContext que horasComputo espera (firma legacy con ShiftAssignment/ShiftType).
+  // Adapter temporal hasta que horasComputo se refactorice al canónico (deuda futura).
   async function loadCalendar() {
-    const todayIso = (() => {
-      const d = new Date()
-      const y = d.getFullYear()
-      const m = String(d.getMonth() + 1).padStart(2, '0')
-      const dd = String(d.getDate()).padStart(2, '0')
-      return `${y}-${m}-${dd}`
-    })()
-    const { assignments, types } = await fetchPublishedAssignmentsForRange(todayIso, todayIso)
-    const typesById = new Map(types.map(t => [t.id, t]))
-    const map = new Map<string, CalendarContext>()
-    for (const a of assignments) {
-      const empMap = map.get(a.employeeId) || { assignmentsByDate: new Map(), typesById }
-      empMap.assignmentsByDate.set(a.date, a)
-      empMap.typesById = typesById
-      map.set(a.employeeId, empMap)
+    const today = new Date()
+    const weekMonday = getMondayOfWeek(today)
+    const weekMondayIso = toISODate(weekMonday)
+    const todayIso = toISODate(today)
+    // schedulerService usa 0=Lun..6=Dom. JS Date.getDay() usa 0=Dom..6=Sab.
+    const jsDay = today.getDay()
+    const todayDayOfWeek: DayOfWeek = (jsDay === 0 ? 6 : jsDay - 1) as DayOfWeek
+
+    const activeLocs = locations.filter(l => l.active)
+    if (activeLocs.length === 0) {
+      setCalendarCtxByEmp(new Map())
+      return
     }
-    // Para empleados sin asignación, ctx vacío con typesById
+
+    // Cargar schedule (semana actual) + templates por local en paralelo
+    const [allSchedules, allTemplates] = await Promise.all([
+      Promise.all(activeLocs.map(loc => getSchedule(loc.id, weekMondayIso))),
+      Promise.all(activeLocs.map(loc => listShiftTemplates(loc.id))),
+    ])
+
+    // typesById: cada template -> ShiftType sintético con los campos que horasComputo lee
+    const typesById = new Map<string, ShiftType>()
+    for (const tpls of allTemplates) {
+      for (const t of tpls) {
+        typesById.set(t.id, {
+          id: t.id,
+          code: t.label,
+          label: t.label,
+          startTime: t.start_time,
+          endTime: t.end_time,
+          hours: shiftDurationHours(t.start_time, t.end_time),
+          color: '',
+          isSplit: false,
+          isOff: false,
+          active: t.active,
+          displayOrder: 0,
+        })
+      }
+    }
+
+    // assignmentsByDate por empleado: solo asignaciones de HOY de schedules publicados
+    const map = new Map<string, CalendarContext>()
+    for (const schedule of allSchedules) {
+      if (!schedule || schedule.status !== 'published') continue
+      for (const templateId of Object.keys(schedule.cells)) {
+        const byDay = schedule.cells[templateId]
+        const employeeIds = byDay?.[String(todayDayOfWeek)]
+        if (!employeeIds || employeeIds.length === 0) continue
+        for (const empId of employeeIds) {
+          const ctx = map.get(empId) || { assignmentsByDate: new Map(), typesById }
+          const fakeAssign: ShiftAssignment = {
+            id: `synthetic-${schedule.id}-${templateId}-${empId}`,
+            planId: schedule.id,
+            employeeId: empId,
+            date: todayIso,
+            slot: 1,
+            shiftTypeId: templateId,
+          }
+          ctx.assignmentsByDate.set(todayIso, fakeAssign)
+          ctx.typesById = typesById
+          map.set(empId, ctx)
+        }
+      }
+    }
     setCalendarCtxByEmp(map)
   }
 
   useEffect(() => { loadCalendar() }, [now])
 
-  // Realtime: si cambia un plan o asignación, recargamos
+  // Realtime: cambios en schedules o shift_templates -> recargar
   useEffect(() => {
     if (!isSupabaseEnabled || !supabase) return
     const sb = supabase
     const ch = sb.channel('ahora-cal')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_assignments' }, () => loadCalendar())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'weekly_plans' }, () => loadCalendar())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'schedules' }, () => loadCalendar())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_templates' }, () => loadCalendar())
       .subscribe()
     return () => { sb.removeChannel(ch) }
   }, [])
