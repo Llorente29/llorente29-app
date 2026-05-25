@@ -2,7 +2,7 @@
 
 > **Documento maestro único de memoria persistente del proyecto Folvy.**
 > Lectura obligatoria al inicio de cada sesión técnica.
-> **Última actualización: 25 de mayo de 2026 — consolidación documental (Frente B).**
+> **Última actualización: 25 de mayo de 2026 — Frente B (consolidación) + Fase B pasos B.5/B.6/B.7 cerrados.**
 >
 > Este es el ÚNICO documento de contexto. `CONTEXTO_ESTADO.md` y `CONTEXTO_REGLAS.md`
 > quedaron retirados el 25/05/2026: estaban desincronizados (describían "Sesión 17"
@@ -52,22 +52,39 @@ Folvy V1 es un SaaS multi-tenant **en producción** en `app.folvy.app`. NO estam
 
 ### 1.2 — Próximo paso inmediato
 
-**B.5 — `src/services/accountEmailService.ts`**: wrapper cliente sobre la Edge Function
-`account-email`. CRÍTICO: el wrapper debe pasar `activeAccountId` del `AppContext` como
-`accountId` del payload (requerido, validado server-side contra las cuentas del caller).
+**B.5, B.6 y B.7 CERRADOS** (sesión 25/05). Commits: B.5 `85e84aa`, B.6 `f1cab56`,
+B.7 `4b577c0`. Estado push: B.5 pusheado; **B.6 y B.7 en local SIN push** (rama main
++2 sobre origin/main).
+- **B.5** `src/services/accountEmailService.ts` — wrapper best-effort sobre la Edge
+  Function `account-email`. Firma `sendAccountMessage(accountId, recipients, {title,
+  body, senderName?})` → `{ ok, code, sent?, failed?, error? }`. NO lee React: el
+  caller pasa el `activeAccountId`. Fail-closed si falta accountId/sesión.
+- **B.6** `src/services/dispatcherService.ts` — canal `email` REAL (stub eliminado);
+  llama a `accountEmailService.sendAccountMessage`. `accountId` ahora vive en
+  `DispatchEvent` (opción A: el evento ocurre en una cuenta; el compilador obliga).
+- **B.7** `src/components/personal/SendMessageModal.tsx` (nuevo) + botón "Enviar
+  mensaje" en el `EmployeeModal` de StaffPage (gated por `canManageEmployees &&
+  active && accountId`). Envía in_app+email por defecto, sin selector de canal.
+  Feedback honesto según los conteos reales del dispatcher. Permiso reusado:
+  `canManageEmployees` (sin migration nueva).
 
-Restante de Fase B:
-- **B.6** — ampliar `dispatcherService` canal `'email'` (eliminar stub, llamar a `accountEmailService`).
-- **B.7** — UI modal manager "Enviar mensaje a [empleado]" (en StaffPage o sitio TBD).
-- **B.8** — build + commit + push final de la Fase B.
+**SIGUIENTE: B.8 — push + PRUEBA E2E REAL en navegador.** Es la PRIMERA ejecución
+del camino feliz completo (manager → modal → empleado recibe in_app Y email →
+Resend → buzón real); NUNCA se ha ejecutado de punta a punta. Plan:
+1. Preparar un empleado de PRUEBA con email CONTROLADO (tuyo, que puedas abrir). NO
+   usar emails reales de producción. Resend es real, no hay staging; cada envío
+   cuenta contra el rate limit (50/h, 200/día por cuenta).
+2. Probar en dev server local (`npm run dev`, VITE_* apuntando al proyecto real) o
+   tras push en producción. Recomendado: local primero, red de seguridad antes de
+   cementar en origin.
+3. Verificar AMBOS canales: campana in-app del empleado + email en buzón.
+4. Limpiar el empleado de prueba al cerrar (verificar 0 filas).
+5. Tras validar: push de B.6+B.7 + commit de cierre de Fase B.
 
-Ojo: el camino feliz end-to-end (incl. el `getUser` interno) solo se valida de verdad
-cuando exista la UI de B.7 con un caller real.
-
-**Frentes abiertos alternativos** (Julio elige al arrancar):
+**Frentes abiertos alternativos** (tras cerrar Comunicación):
 - Diseño del módulo **Operaciones/Cocina** (escandallo). Decisión arquitectónica cara;
   diseño en frío antes de codificar.
-- **Folvy AI Capa 1** (asistente conversacional), tras cerrar Comunicación.
+- **Folvy AI Capa 1** (asistente conversacional).
 
 ### 1.3 — Estado del repo (al cierre de la última sesión de código, 22/05)
 
@@ -484,6 +501,10 @@ soft delete `UPDATE employees SET active = false`.**
   con fotos; notificación de correctiva; despachador Fase A completa + Fase B (B.1, B.2, B.4).
 - **Frente B — consolidación documental (25/05):** verificado nº real de tablas (87=77+10);
   consolidados los tres docs de contexto en este maestro único; retirados ESTADO y REGLAS.
+- **Fase B pasos B.5/B.6/B.7 (25/05):** wrapper `accountEmailService` (B.5, `85e84aa`),
+  canal email real en el dispatcher con `accountId` en `DispatchEvent` (B.6, `f1cab56`),
+  y UI manager `SendMessageModal` + botón en StaffPage (B.7, `4b577c0`). Build verde en
+  cada paso. B.6+B.7 sin push. Pendiente B.8 (prueba E2E real + push de cierre).
 
 ### Migrations Sprint 1 (19/19) y bugs corregidos en vivo
 M01-M19 ejecutadas. Bugs: M01 (`accounts_slug_format` ya existía), M02 (`valid_role` ya
