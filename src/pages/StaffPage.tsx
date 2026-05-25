@@ -5,6 +5,7 @@ import type { Employee, ClockEntry, WeeklySchedule } from '../types'
 import DocumentosTab from '../components/personal/DocumentosTab'
 import VacacionesTab from '../components/personal/VacacionesTab'
 import FormacionesTab from '../components/personal/FormacionesTab'
+import SendMessageModal from '../components/personal/SendMessageModal'
 import InsightsPage from './InsightsPage'
 import {
   createEmployeeWithAccount,
@@ -53,7 +54,7 @@ function getScheduledMinutes(str: string) {
 }
 
 export default function StaffPage() {
-  const { staff, locations, createEmployee, saveEmployee, removeEmployee, gestoriaConfig } = useApp()
+  const { staff, locations, createEmployee, saveEmployee, removeEmployee, gestoriaConfig, activeAccountId, userProfile } = useApp()
   const [mainTab, setMainTab] = useState<'insights' | 'list'>('insights')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
@@ -267,6 +268,9 @@ export default function StaffPage() {
           gestoriaEmail={gestoriaConfig?.gestoriaEmail ?? ''}
           canSeeSalaries={canSeeSalaries}
           canManageEmployees={canManageEmployees}
+          accountId={activeAccountId}
+          senderEmployeeId={userProfile?.employeeId ?? null}
+          senderName={userProfile?.displayName ?? null}
         />
       )}
 
@@ -306,7 +310,7 @@ export default function StaffPage() {
 
 // ─── Employee Detail Modal ────────────────────────────────────────────────────
 
-function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestoriaEmail, canSeeSalaries, canManageEmployees }: {
+function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestoriaEmail, canSeeSalaries, canManageEmployees, accountId, senderEmployeeId, senderName }: {
   employee: Employee
   onClose: () => void
   onSave: (e: Employee) => void
@@ -315,12 +319,16 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
   gestoriaEmail: string
   canSeeSalaries: boolean
   canManageEmployees: boolean
+  accountId: string | null
+  senderEmployeeId: string | null
+  senderName: string | null
 }) {
   const [emp, setEmp] = useState<Employee>({ ...employee, clockEntries: [...employee.clockEntries] })
   const [tab, setTab] = useState('info')
   const [clocking, setClocking] = useState(false)
   const [clockWarn, setClockWarn] = useState<{ type: 'blocked' | 'rounded' | 'real'; msg: string } | null>(null)
   const [showTerminationModal, setShowTerminationModal] = useState(false)
+  const [showSendMessage, setShowSendMessage] = useState(false)
 
   const update = (field: keyof Employee, value: unknown) => setEmp(prev => ({ ...prev, [field]: value }))
 
@@ -890,6 +898,11 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
         {/* Actions */}
         <div className="flex items-center justify-between pt-3 border-t border-border-default">
           <div className="flex gap-2">
+            {canManageEmployees && employee.active && accountId && (
+              <Button variant="outline" size="sm" onClick={() => setShowSendMessage(true)}>
+                <Mail size={14} /> Enviar mensaje
+              </Button>
+            )}
             {canManageEmployees && emp.active && (
               <Button variant="outline" size="sm" onClick={() => setShowTerminationModal(true)}>
                 <LogOut size={14} /> Dar de baja
@@ -954,6 +967,15 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
 
               onSave(updated)
             }}
+          />
+        )}
+        {showSendMessage && accountId && (
+          <SendMessageModal
+            employee={employee}
+            accountId={accountId}
+            senderEmployeeId={senderEmployeeId}
+            senderName={senderName}
+            onClose={() => setShowSendMessage(false)}
           />
         )}
       </div>
