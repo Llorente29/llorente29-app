@@ -13,12 +13,13 @@ import {
   reactivateEmployeeAccount,
   deletePermanentEmployee,
   setEmployeePassword,
+  grantEmployeeAccess,
 } from '../services/employeeAuthService'
 import { usePermissions } from '@/modules/multitenancy/hooks/usePermissions'
 import {
   BarChart3, Users, AlertTriangle, Search, LogOut, Trash2, RefreshCw,
   Camera, LogIn, Square, Mail, X, ShieldCheck, Calendar, Sun, Moon, Ban,
-  User, UserMinus, UserX, FileText, Key,
+  User, UserMinus, UserX, FileText, Key, UserPlus,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -333,6 +334,14 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
   const [regeneratedPassword, setRegeneratedPassword] = useState<string | null>(null)
   const [regenerating, setRegenerating] = useState(false)
   const [copiedRegenerated, setCopiedRegenerated] = useState(false)
+  const [showGrantAccess, setShowGrantAccess] = useState(false)
+  const [grantUsername, setGrantUsername] = useState('')
+  const [grantPassword, setGrantPassword] = useState('')
+  const [grantRole, setGrantRole] = useState<'worker' | 'manager'>('worker')
+  const [grantSubmitting, setGrantSubmitting] = useState(false)
+  const [grantedCredentials, setGrantedCredentials] = useState<{ username: string; password: string } | null>(null)
+  const [grantError, setGrantError] = useState<string | null>(null)
+  const [grantCopied, setGrantCopied] = useState(false)
 
   const update = (field: keyof Employee, value: unknown) => setEmp(prev => ({ ...prev, [field]: value }))
 
@@ -911,6 +920,24 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
               <Button
                 variant="outline"
                 size="sm"
+                onClick={() => {
+                  const locName = locations.find(l => l.id === employee.locationId)?.name
+                  setGrantUsername(suggestUsername(employee.name, locName))
+                  setGrantPassword(generatePassword())
+                  setGrantRole(suggestRoleByPosition(employee.position))
+                  setGrantError(null)
+                  setGrantedCredentials(null)
+                  setGrantCopied(false)
+                  setShowGrantAccess(true)
+                }}
+              >
+                <UserPlus size={14} /> Dar acceso a la app
+              </Button>
+            )}
+            {canManageEmployees && emp.active && (
+              <Button
+                variant="outline"
+                size="sm"
                 disabled={regenerating}
                 onClick={async () => {
                   setRegenerating(true)
@@ -1001,6 +1028,186 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
             senderName={senderName}
             onClose={() => setShowSendMessage(false)}
           />
+        )}
+        {showGrantAccess && (
+          <Modal
+            open={true}
+            onClose={() => {
+              setShowGrantAccess(false)
+              setGrantedCredentials(null)
+              setGrantError(null)
+              setGrantCopied(false)
+            }}
+            title="Dar acceso a la app"
+            size="md"
+          >
+            {grantedCredentials ? (
+              <div className="flex flex-col gap-4">
+                <Alert type="success">
+                  Acceso creado correctamente. Apunta estos datos y entrégaselos al empleado:
+                  la contraseña <strong>no se volverá a mostrar</strong>.
+                </Alert>
+
+                <div className="rounded-lg border border-border-default p-4 bg-page">
+                  <div className="mb-3">
+                    <p className="text-xs text-text-secondary mb-1">Usuario</p>
+                    <p className="font-mono text-base font-semibold">{grantedCredentials.username}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-text-secondary mb-1">Contraseña</p>
+                    <p className="font-mono text-base font-semibold">{grantedCredentials.password}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-border-default">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      if (!grantedCredentials) return
+                      const text = `Usuario: ${grantedCredentials.username}\nContraseña: ${grantedCredentials.password}`
+                      try {
+                        await navigator.clipboard.writeText(text)
+                        setGrantCopied(true)
+                        setTimeout(() => setGrantCopied(false), 2000)
+                      } catch {
+                        setGrantCopied(false)
+                      }
+                    }}
+                  >
+                    {grantCopied ? 'Copiado ✓' : 'Copiar credenciales'}
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => {
+                      setShowGrantAccess(false)
+                      setGrantedCredentials(null)
+                      setGrantError(null)
+                      setGrantCopied(false)
+                    }}
+                  >
+                    Cerrar
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-4">
+                <div>
+                  <Label>Tipo de acceso</Label>
+                  <div className="mt-1 flex flex-col gap-2">
+                    <label className="flex items-start gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="grantRole"
+                        value="worker"
+                        checked={grantRole === 'worker'}
+                        onChange={() => setGrantRole('worker')}
+                        disabled={grantSubmitting}
+                        className="mt-1"
+                      />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-text-primary">Trabajador</p>
+                        <p className="text-xs text-text-secondary">Accede a su portal (fichar, turnos, documentos).</p>
+                      </div>
+                    </label>
+                    <label className="flex items-start gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="grantRole"
+                        value="manager"
+                        checked={grantRole === 'manager'}
+                        onChange={() => setGrantRole('manager')}
+                        disabled={grantSubmitting}
+                        className="mt-1"
+                      />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-text-primary">Encargado</p>
+                        <p className="text-xs text-text-secondary">Accede a gestión y también a su portal.</p>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
+                <div>
+                  <Label>Usuario</Label>
+                  <Input
+                    value={grantUsername}
+                    placeholder="pamela.alcala"
+                    onChange={(e) => setGrantUsername(e.target.value)}
+                    disabled={grantSubmitting}
+                  />
+                </div>
+
+                <div>
+                  <Label>Contraseña</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={grantPassword}
+                      onChange={(e) => setGrantPassword(e.target.value)}
+                      disabled={grantSubmitting}
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setGrantPassword(generatePassword())}
+                      disabled={grantSubmitting}
+                    >
+                      Regenerar
+                    </Button>
+                  </div>
+                  <p className="text-xs text-text-secondary mt-1">
+                    El empleado entrará con este usuario y contraseña. La verás una vez al crear.
+                  </p>
+                </div>
+
+                {grantError && <Alert type="error">{grantError}</Alert>}
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-border-default">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={grantSubmitting}
+                    onClick={() => {
+                      setShowGrantAccess(false)
+                      setGrantedCredentials(null)
+                      setGrantError(null)
+                      setGrantCopied(false)
+                    }}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    disabled={grantSubmitting}
+                    onClick={async () => {
+                      setGrantError(null)
+                      const cleanUsername = slugForUsername(grantUsername)
+                      if (cleanUsername.length < 3) {
+                        setGrantError('El usuario debe tener al menos 3 caracteres válidos (a-z, 0-9, punto, guion bajo).')
+                        return
+                      }
+                      if (grantPassword.length < 6) {
+                        setGrantError('La contraseña debe tener al menos 6 caracteres.')
+                        return
+                      }
+                      setGrantSubmitting(true)
+                      const result = await grantEmployeeAccess(emp.id, cleanUsername, grantPassword, grantRole)
+                      setGrantSubmitting(false)
+                      if (result.ok) {
+                        setGrantedCredentials({ username: result.username || cleanUsername, password: grantPassword })
+                      } else {
+                        setGrantError(result.error || 'No se pudo dar acceso.')
+                      }
+                    }}
+                  >
+                    {grantSubmitting ? 'Procesando…' : 'Dar acceso'}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </Modal>
         )}
         {regeneratedPassword !== null && (
           <Modal
@@ -1578,6 +1785,17 @@ function generatePassword(): string {
     suffix += digits[Math.floor(Math.random() * digits.length)]
   }
   return `${word}-${suffix}`
+}
+
+// Sugiere rol por puesto: si el puesto incluye palabras de gestión (encargad*,
+// gerente, jefe, responsable) → 'manager'; en cualquier otro caso → 'worker'.
+// Heurística; el manager puede cambiarlo en el sub-modal de "Dar acceso".
+function suggestRoleByPosition(position: string | undefined): 'worker' | 'manager' {
+  const p = (position || '').toLowerCase()
+  if (p.includes('encargad') || p.includes('gerente') || p.includes('jefe') || p.includes('responsable')) {
+    return 'manager'
+  }
+  return 'worker'
 }
 
 type CreatedCredentials = { username: string; password: string }
