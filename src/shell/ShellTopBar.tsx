@@ -21,7 +21,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Home, MapPin, Settings, Shield, LogOut } from 'lucide-react'
+import { Home, MapPin, Settings, Shield, LogOut, User } from 'lucide-react'
 import { getOrderedModules } from './moduleRegistry'
 import { usePlatformAdmin } from '@/platform/usePlatformAdmin'
 import { signOut } from '@/services/authService'
@@ -45,6 +45,10 @@ interface ShellTopBarProps {
   /** employee_id del user logueado. null = admin sin employee vinculado;
    *  la campana se esconde. */
   currentEmployeeId?: string | null
+  /** Callback opcional para entrar en modo trabajador. Solo se cablea cuando
+   *  el user es encargado dual (tiene employee_id). Si no se pasa, el item
+   *  "Ver como trabajador" del menú no se renderiza. */
+  onEnterWorkerMode?: () => void
 }
 
 export default function ShellTopBar({
@@ -55,6 +59,7 @@ export default function ShellTopBar({
   userInitials = 'JG',
   locationLabel = 'Todos los locales',
   currentEmployeeId = null,
+  onEnterWorkerMode,
 }: ShellTopBarProps) {
   const modules = getOrderedModules()
   const navigate = useNavigate()
@@ -181,12 +186,24 @@ export default function ShellTopBar({
                   Administración
                 </button>
               )}
+              {currentEmployeeId && onEnterWorkerMode && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => { setMenuOpen(false); onEnterWorkerMode() }}
+                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left"
+                  style={{ color: 'var(--color-text-primary, #1a1a1a)', borderTop: isPlatformAdmin ? '1px solid var(--color-border, #eee)' : 'none' }}
+                >
+                  <User size={16} style={{ color: INK }} />
+                  Ver como trabajador
+                </button>
+              )}
               <button
                 type="button"
                 role="menuitem"
                 onClick={handleSignOut}
                 className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left"
-                style={{ color: '#A12626', borderTop: isPlatformAdmin ? '1px solid var(--color-border, #eee)' : 'none' }}
+                style={{ color: '#A12626', borderTop: (isPlatformAdmin || (currentEmployeeId && onEnterWorkerMode)) ? '1px solid var(--color-border, #eee)' : 'none' }}
               >
                 <LogOut size={16} />
                 Cerrar sesión

@@ -14,12 +14,14 @@
 //        enchufado de páginas reales (G-8.2) y el cambio de default (G-8.6).
 //        Sigue tras la ruta /shell — NO es el render por defecto todavía.
 
+import { useState } from 'react'
 import { useNavigate, useLocation, Routes, Route } from 'react-router-dom'
 import ShellTopBar, { HOME_KEY } from './ShellTopBar'
 import ModuleSidebar from './ModuleSidebar'
 import { getModuleById, getModuleByBasePath } from './moduleRegistry'
 import { configuracionModule } from '../modules/configuracion/module'
 import HomeGeneral from './home/HomeGeneral'
+import TrabajadorApp from '../pages/trabajador/TrabajadorApp'
 import { useApp } from '../context/AppContext'
 
 // G-8.6 (opción C): el Shell vive en la RAÍZ, sin prefijo /shell ni slug.
@@ -31,6 +33,12 @@ export default function Shell() {
   const navigate = useNavigate()
   const location = useLocation()
   const { userProfile } = useApp()
+
+  // Modo trabajador del encargado dual: alterna en el cliente entre Shell de
+  // gestión y TrabajadorApp sin tocar App.tsx ni AppContext. Solo activable si
+  // el user tiene employee_id (encargado con ficha); para un admin sin ficha
+  // el botón del TopBar no se renderiza (ver onEnterWorkerMode más abajo).
+  const [workerMode, setWorkerMode] = useState(false)
 
   // Derivar sección activa del pathname. Con SHELL_BASE='' el pathname ES
   // directamente /:base/:item (sin prefijo). rest = pathname sin barras.
@@ -86,6 +94,18 @@ export default function Shell() {
     navigate(`/${activeModule.basePath}${suffix}`)
   }
 
+  // Si el encargado dual ha entrado en "Ver como trabajador", renderizamos
+  // TrabajadorApp en lugar del layout normal. onExitMode SOLO vuelve a gestión:
+  // NO cierra sesión (eso es competencia del menú de usuario del TopBar).
+  if (workerMode && userProfile?.employeeId) {
+    return (
+      <TrabajadorApp
+        employeeId={userProfile.employeeId}
+        onExitMode={() => setWorkerMode(false)}
+      />
+    )
+  }
+
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'var(--color-bg-page)' }}>
       <ShellTopBar
@@ -95,6 +115,7 @@ export default function Shell() {
         settingsActive={settingsActive}
         userInitials={initials}
         currentEmployeeId={userProfile?.employeeId ?? null}
+        onEnterWorkerMode={userProfile?.employeeId ? () => setWorkerMode(true) : undefined}
       />
 
       {activeModule ? (
