@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import type { Location, Employee, Task, Template, Incident, Audit, NotifConfig, WeeklySchedule, WeeklySchedulePlan, ClockEntry } from '../types'
-import type { ActiveLocationId, BrandFilter, Account, UserProfile, UserProfileRole, ManagerPermissions } from '../types/multitenancy'
+import type { ActiveLocationId, BrandFilter, Account, UserProfile, UserProfileRole } from '../types/multitenancy'
 import { supabase } from '../lib/supabase'
 import {
   isSupabaseEnabled,
@@ -12,7 +12,7 @@ import {
 } from '../services/supabaseSync'
 import { listAccounts } from '../modules/multitenancy/services/accountsService'
 import { listUserProfilesByUser, getUserProfile } from '../modules/multitenancy/services/userProfilesService'
-import { getPermissions } from '../modules/multitenancy/services/managerPermissionsService'
+import { getEffectivePermissions, type EffectivePermissions } from '../services/effectivePermissionsService'
 import { fetchGestoriaConfig, updateGestoriaConfig, type GestoriaConfig, type GestoriaConfigPatch } from '../services/gestoriaConfigService'
 import { parseRoute, buildRoute, isValidSlugShape, isPublicAuthRoute, isShellRoute, isAdminRoute } from '../routes'
 const DEFAULT_SCHEDULE: WeeklySchedule = {
@@ -204,12 +204,15 @@ interface AppContextType {
   //   para código nuevo que lo necesite. La migración de isAdmin se hará
   //   en una sesión posterior tras auditar todos sus usos.
   roleInActiveAccount: UserProfileRole | null
-  // permissions: manager_permissions del user en la cuenta activa.
+  // permissions: permisos efectivos del user en la cuenta activa, resueltos
+  //   server-side por la función SQL get_effective_permissions (cascada admin
+  //   → permission_set asignado → DENY). Objeto plano { snake_key: boolean }.
+  //   Marcador especial { __full_access: true } = admin con acceso total.
   //   null si:
   //   - No hay cuenta activa.
-  //   - El user_profile aún no tiene fila de permisos (perfil sin seed).
-  //   - El rol del user no requiere permisos (admin global / worker).
-  permissions: ManagerPermissions | null
+  //   - El RPC falló o BBDD no disponible (fail-closed).
+  //   `{}` = sin permisos efectivos (caller trata como denegación).
+  permissions: EffectivePermissions | null
   // ─── Configuración de gestoría por cuenta (Sprint Personal T8 Punto 3) ──
   // gestoriaConfig: fila de account_gestoria_config para la cuenta activa.
   //   null mientras carga o si no hay cuenta activa.
@@ -225,30 +228,28 @@ const AppContext = createContext<AppContextType | null>(null)
    ===================================================== */
 
 /**
- * Resuelve userProfile + permissions desde BBDD para un par (uid, accountId).
- * Función pura sin side effects de React: ideal para reutilizar entre el
- * useEffect inicial y el refreshUserProfile() expuesto.
+ * Resuelve userProfile + permissions efectivos desde BBDD para un par
+ * (uid, accountId). Función pura sin side effects de React: ideal para
+ * reutilizar entre el useEffect inicial y el refreshUserProfile() expuesto.
  *
  * Retorna ambos valores juntos para que el caller los aplique al state en
  * un solo ciclo (evita renders intermedios con state inconsistente).
  *
- * Si profile es null, permissions también null. Si profile.role === 'worker',
- * permissions null (los workers no tienen panel de manager_permissions).
- *
- * Añadido en Sprint 2 Bloque D (D-S2.30 paso 3-bis, 20/05/2026).
+ * Los permisos vienen del RPC get_effective_permissions(p_account_id), que
+ * resuelve la cascada server-side (admin → permission_set asignado → DENY)
+ * y devuelve un objeto plano { snake_key: boolean }. Para admins incluye
+ * el marcador { __full_access: true }. Para usuarios sin set asignado
+ * devuelve `{}` (fail-closed). Si profile es null, no llamamos al RPC.
  */
 async function loadProfileAndPermissions(
   uid: string,
   accountId: string,
-): Promise<{ profile: UserProfile | null; perms: ManagerPermissions | null }> {
+): Promise<{ profile: UserProfile | null; perms: EffectivePermissions | null }> {
   const profile = await getUserProfile(uid, accountId)
   if (!profile) {
     return { profile: null, perms: null }
   }
-  if (profile.role === 'worker') {
-    return { profile, perms: null }
-  }
-  const perms = await getPermissions(profile.id)
+  const perms = await getEffectivePermissions(accountId)
   return { profile, perms }
 }
 
@@ -544,7 +545,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // NOTA: activeAccountId se declara ARRIBA (antes del syncFromCloudRef de
   // Bloque B-3) para evitar TS2448/TS2454. Solo queda aquí su uso.
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
-  const [permissions, setPermissions] = useState<ManagerPermissions | null>(null)
+  const [permissions, setPermissions] = useState<EffectivePermissions | null>(null)
 
   // Ref para acceder a `accounts` desde callbacks sin recreate por dep.
   const accountsRef = useRef<Account[]>([])

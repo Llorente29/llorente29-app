@@ -72,8 +72,8 @@ export default function StaffPage() {
   // - Sin query Supabase adicional: AppContext ya tiene permissions cargados.
   // - hasPermission() ya considera isFullAccess (admin bypasea permisos).
   const { hasPermission } = usePermissions()
-  const canSeeSalaries = hasPermission('showSalaries')
-  const canManageEmployees = hasPermission('canManageEmployees')
+  const canSeeSalaries = hasPermission('show_salaries')
+  const canManageEmployees = hasPermission('can_manage_employees')
 
   const filtered = staff.filter(e => {
     if (locFilter !== 'todas' && e.locationId !== locFilter) return false
