@@ -1596,6 +1596,7 @@ function NewEmployeeModal({ locations, onCancel, onCreated, onCreateLocal }: New
   const [username, setUsername] = useState('')
   const [usernameEdited, setUsernameEdited] = useState(false) // si el manager lo tocó, no autorrellenar
   const [password, setPassword] = useState(() => generatePassword())
+  const [appRole, setAppRole] = useState<'worker' | 'manager'>('worker') // Trabajador por defecto
 
   // Tras crear con acceso: credenciales a mostrar (sustituye el form por la
   // pantalla de "apunta estos datos"). Si es null, se muestra el formulario.
@@ -1651,6 +1652,7 @@ function NewEmployeeModal({ locations, onCancel, onCreated, onCreateLocal }: New
         name: name.trim(),
         username: cleanUsername,
         password,
+        role: appRole,
         email: email.trim() || undefined,
         pin: pin || undefined,
         locationId,
@@ -1821,6 +1823,41 @@ function NewEmployeeModal({ locations, onCancel, onCreated, onCreateLocal }: New
 
         {withAppAccess ? (
           <>
+            <div>
+              <Label>Tipo de acceso</Label>
+              <div className="mt-1 flex flex-col gap-2">
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="appRole"
+                    value="worker"
+                    checked={appRole === 'worker'}
+                    onChange={() => setAppRole('worker')}
+                    disabled={submitting}
+                    className="mt-1"
+                  />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-text-primary">Trabajador</p>
+                    <p className="text-xs text-text-secondary">Accede a su portal (fichar, turnos, documentos).</p>
+                  </div>
+                </label>
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="appRole"
+                    value="manager"
+                    checked={appRole === 'manager'}
+                    onChange={() => setAppRole('manager')}
+                    disabled={submitting}
+                    className="mt-1"
+                  />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-text-primary">Encargado</p>
+                    <p className="text-xs text-text-secondary">Accede a gestión y también a su portal.</p>
+                  </div>
+                </label>
+              </div>
+            </div>
             <div>
               <Label>Usuario</Label>
               <Input

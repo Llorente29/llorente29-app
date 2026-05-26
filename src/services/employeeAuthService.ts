@@ -30,6 +30,7 @@ export interface CreateEmployeeInput {
   pin?: string
   birthDate?: string
   trialPeriodDays?: number
+  role?: 'worker' | 'manager' // C1: rol del user_profile. Por defecto el server lo pone a 'worker'. NUNCA admin desde el alta.
 }
 
 export interface CreateEmployeeResult {
