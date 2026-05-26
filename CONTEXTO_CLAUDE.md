@@ -2,7 +2,7 @@
 
 > **Documento maestro único de memoria persistente del proyecto Folvy.**
 > Lectura obligatoria al inicio de cada sesión técnica.
-> **Última actualización: 26/05/2026 — Acceso del trabajador C1 + Sistema de permisos del encargado (ambos en producción).**
+> **Última actualización: 26/05/2026 (2ª sesión del día) — Módulo FOLVY KITCHEN: BBDD + función de coste + catálogo de ingredientes + FICHA DE ESCANDALLO funcional con COSTE Y % POR LÍNEA (desglose SQL). 2 de 4 pantallas. Todo en producción. Próximo frente acordado: Capa 2 (precio/margen).**
 >
 > Este es el ÚNICO documento de contexto. `CONTEXTO_ESTADO.md` y `CONTEXTO_REGLAS.md`
 > quedaron retirados el 25/05/2026: estaban desincronizados (describían "Sesión 17"
@@ -35,41 +35,47 @@
 ---
 
 ## 1. ESTADO VIVO ⟵ se regenera cada sesión
-**Última actualización: 2026-05-26 (cierre de sesión — Acceso del trabajador C1 + Sistema de permisos del encargado)**
+**Última actualización: 2026-05-26 (2ª sesión del día — cierre — Módulo FOLVY KITCHEN, primer frente visible y desplegado)**
 
-### 1.1 — Dónde estamos HOY (2026-05-26)
+### 1.1 — Dónde estamos HOY (2026-05-26, 2ª sesión)
 
-Folvy V1 es un SaaS multi-tenant en producción en app.folvy.app. Hoy se cerraron DOS frentes grandes, ambos desplegados y verificados en producción con datos reales (Llorente29):
+Folvy V1 es un SaaS multi-tenant en producción en app.folvy.app. En esta sesión se construyó DESDE CERO el módulo **FOLVY KITCHEN** (escandallo / coste de recetas), el primer frente de Operaciones/Cocina. Resultado: módulo VISIBLE y FUNCIONAL en producción (4ª pestaña del TopBar, icono ChefHat). Detalle completo del frente en §7.9.
 
-**FRENTE A — Acceso del trabajador / encargado (C1): COMPLETADO Y VERIFICADO.**
-- Modelo C1: el trabajador entra con USUARIO + CONTRASEÑA prefijada por el manager. Email sintético interno {username}@empleado.folvy.app que el trabajador nunca ve.
-- Implementado y probado E2E en producción: alta C1 con selector Trabajador/Encargado, login por /acceso, gate de rol worker en App.tsx, regenerar contraseña, "Ver como trabajador" (encargado dual), "Volver a gestión", y grant_access (dar acceso a un empleado que YA existe, con chequeo cross-tenant y lista blanca de rol).
-- Validado con Pamela Guzmán Velásquez (employee_id 1be0b366-533f-4f6d-9182-f3a5c3c81a5e), dada de alta como ENCARGADA real (manager) vía botón "Dar acceso a la app": username pamela.alcala, role=manager, email sintético pamela.alcala@empleado.folvy.app. Ciclo dual completo validado (gestión → ver como trabajador → portal → volver a gestión).
+**Qué se hizo y está en producción:**
+- **BBDD completa (6 tablas Kitchen)**, modelo de 3 capas, todas con RLS patrón Bloque S y campos nativo-IA. Conteo total subió de 87 → **93 tablas** (verificado vía information_schema). Ver §4.1 y §7.9.
+- **Función de cálculo de coste** `kitchen_recompute_item(p_item_id uuid)` — SECURITY DEFINER, con guard de tenancy. Probada con 3 casos reales (conversión kg→g, merma bruto/neto, honestidad ante no-convertible). Ver §4.9.
+- **Pantalla 1/4 — Catálogo de ingredientes** (`KitchenItemsPage`): listar + crear + editar + archivar ingredientes raw. Recálculo automático visible al editar precio.
+- **Pantalla 2/4 — Ficha de escandallo** (`KitchenRecipePage`, sub-tandas A y B): crear platos/recetas (dish/recipe) con raciones; ficha con coste total + coste por ración en tarjetas; añadir/editar/quitar líneas de ingredientes (incl. sub-recetas, excluyendo autorreferencia) con cantidad/unidad/merma; el coste se recalcula EN VIVO tras cada mutación. VERIFICADO E2E en pantalla con datos reales: hamburguesa con carne(kg)+pan(ud)+queso(g) → coste correcto, con conversión g→kg dentro de la función.
+- 2 services de líneas/items + kitchenUnitService. recipeLineService recalcula el PLATO PADRE tras tocar una línea (patrón fail-safe).
+- **Coste y % POR LÍNEA en la ficha de escandallo** (función SQL `kitchen_recipe_breakdown`): cada ingrediente muestra su coste en € y su % del total del plato (ej. hamburguesa: carne 60,7%, pan 27,5%, queso 11,8%). El % se calcula en cliente (división simple); el coste viene del SQL (misma lógica de conversión que el total → las partes SUMAN el total, verificado al céntimo: 0,9265+0,42+0,18 = 1,5265 €). Líneas no convertibles (needs_review) en rojo con "sin coste" (patrón meez). Esto convierte el escandallo de "cuánto cuesta" a "dónde está el coste" (accionable). Ver §4.10.
 
-**FRENTE B — Sistema de permisos del encargado: COMPLETADO Y VERIFICADO.**
-- DECISIÓN FINAL: sistema de checkboxes por persona (NO permission_sets). Se exploró permission_sets durante la sesión pero se DESCARTÓ y se revirtió: la fuente de verdad es la tabla manager_permissions (1 fila por user_profile, ~29 booleanos), que es lo que el admin configura desde el modal de checkboxes (ManagerPermissionsModal, accesible desde Configuración → Usuarios y Accesos → editar manager → "Configurar permisos individuales").
-- El frontend lee los permisos vía el RPC get_effective_permissions(p_account_id) (función SQL SECURITY DEFINER): admin → marcador {__full_access: true}; manager → su fila de manager_permissions como jsonb (claves snake_case); sin fila → {} (deny, fail-closed).
-- has_permission(p_account_id, p_permission_key) también reescrita: admin → true; manager → lee la columna de manager_permissions; sin valor → false (fail-closed). Se ELIMINÓ la cascada a permission_sets (ya no se usa).
-- El hook usePermissions consume un diccionario dinámico (EffectivePermissions = Record<string, boolean>), claves snake_case, marcador __full_access. PermissionKey = string.
-- FIX CRÍTICO: isFullAccess ahora usa el ROL REAL (roleInActiveAccount === 'admin'), NO isAdmin del context (que era !!adminEmail = "hay sesión" = true para cualquier manager → trataba a todo manager como acceso total). Este era el bug que neutralizaba todo el gating.
-- Gating de UI implementado: menú lateral de cada módulo (vía requiredPermission y requiredRole en los items de sidebar, filtrado en ModuleSidebar.tsx), pestañas del TopBar y engranaje de Configuración (vía helper isModuleVisible = "al menos un item visible"), en ShellTopBar.tsx.
-- VERIFICADO en producción con Pamela: configurada con 11 de 23 pantallas. Ve solo lo marcado (Inicio, Folvy Team con su subset, Folvy Safety con Hoy+Incidencias); NO ve Folvy Sales, NI engranaje de Configuración, NI Empleados/Informes Gestoría/Bolsa de horas, NI Usuarios y accesos.
+**Decisiones de la sesión:**
+- El recálculo automático (no manual) es la expectativa BASE del mercado (meez/WISK/Craftybase/DishCost), contrastado. Implementado en create/update de items y en add/update/delete de líneas.
+- El PVP NO vive en el plato (recipe_item) sino en la marca virtual (Capa 2, menu_item, aún sin construir). Coste del plato vs precio de la marca. Diferenciador Folvy (marca virtual sobre cocina compartida) frente a tSpoonLab/Gstock.
+- Coste por línea NO se muestra todavía (Claude Code evitó replicar las conversiones del SQL en cliente para no arriesgar un número distinto al real). Mejora futura clara: que la función SQL devuelva también el desglose por línea (no calcular en cliente).
+- Catálogo inicial para clientes nuevos = fuente PROPIA o con licencia, NUNCA copia del catálogo de un competidor (tSpoonLab). Idea descartada por legal/práctica; las capturas de tSpoonLab valen solo como referencia de diseño.
 
 ### 1.2 — Próximo paso inmediato
 
-DEUDA IMPORTANTE (prioridad alta, PRIMERA tarea de la próxima sesión): GUARD DE RUTA POR URL.
-El gating actual oculta los MENÚS pero NO bloquea el acceso por URL directa. Un encargado que teclee app.folvy.app/personal/informes PODRÍA ver esa página aunque no esté en su menú. Es un agujero de seguridad. Para Pamela (que usa el menú) es asumible empezar, PERO no dar acceso a más encargados hasta cerrar esto. Solución: guard por ruta en el router que verifique el permiso correspondiente antes de renderizar cada página (el mapeo ruta→permiso ya existe del gating del menú). Es una tanda transversal sobre el sistema de rutas, no un arreglo de minutos.
+**PRÓXIMO FRENTE ACORDADO (decidido 26/05 2ª sesión): CAPA 2 — precio de venta + margen + food cost %.** Es el mayor salto de valor: convierte el módulo de "calculadora de costes" a "herramienta de rentabilidad". Tabla nueva `menu_item` que cuelga de `brand` (que YA existe). Aquí vive el PVP (NO en recipe_item). Permite la misma hamburguesa a 3 precios en 3 marcas virtuales = diferenciador Folvy. Coste (ya lo hay) + precio = margen y food cost %. NO se arrancó en la 2ª sesión a propósito: frente grande que toca `brand` en producción, mejor con cabeza despejada y CONTEXTO al día. Verificar estado real de `brand` vía information_schema antes de diseñar.
 
-Frentes alternativos que Julio puede elegir después del guard:
-- Operaciones / Cocina (escandallo). NO arrancado. Decisión arquitectónica cara; requiere diseño en frío y que Julio explique el alcance.
-- Refrescar permisos en vivo (hoy un cambio de permisos requiere que el encargado salga y vuelva a entrar para verlo).
+Estado de las 4 pantallas de Folvy Kitchen:
+1. ✅ Catálogo de ingredientes (lista/crear/editar/archivar) — HECHO.
+2. ✅ **Ficha de escandallo** (plato + líneas + coste/ración + coste y % por línea) — HECHO (sub-tandas A+B + breakdown).
+3. ⏳ Pantalla de conversiones por ingrediente (recipe_item_unit_conversion; ej. 1 ud huevo = 60g). Hoy solo por SQL.
+4. ⏳ Pantalla de ajustes (kitchen_settings).
 
-### 1.3 — Estado del repo (cierre 2026-05-26)
+DEUDAS DE ALTA PRIORIDAD que conviven (de sesiones previas + esta):
+- **GUARD DE RUTA POR URL** (heredada, §7.8): el gating oculta menús pero NO bloquea acceso por URL directa. Aplica también a /kitchen/*. NO dar acceso a más encargados (más allá de Pamela) hasta cerrar esto.
+- **Función de propagación de coste** `kitchen_recompute_dependents` (§7.9): al cambiar el precio de un ingrediente, recalcular hacia arriba los platos que lo usan. Necesaria para el "automático de verdad" entre platos. Aquí se resolverá el acceso de procesos de sistema sin sesión.
+
+### 1.3 — Estado del repo (cierre 2026-05-26, 2ª sesión)
 
 - Repo: Llorente29/llorente29-app, branch main, C:\dev\llorente29-app.
-- main SINCRONIZADA con origin/main (HEAD = 3ab55e4). Working tree limpio (salvo .claude/).
-- Edge Function manage-employee DESPLEGADA en producción (acepta 6 acciones: create, deactivate, reactivate, delete_permanent, set_password, grant_access).
-- Funciones SQL en producción: has_permission y get_effective_permissions (ambas leen de manager_permissions; permission_sets quedó sin uso).
+- main SINCRONIZADA con origin/main (HEAD = **827d3e0**). Working tree: solo `CONTEXTO_CLAUDE.md` modificado (esta actualización) + .claude/.
+- 8 commits de Folvy Kitchen, todos en origin: `2cf3cb7` (BBDD Capa 1), `559660e` (BBDD Capa 1.1-1.3), `f13e1a8` (frontend base), `5a82b6f` (módulo+catálogo), `ce123ed` (edición/archivado ingredientes), `0c6ff54` (escandallo A: read-only + recipeLineService), `aa520af` (escandallo B: CRUD líneas en vivo), `827d3e0` (coste y % por línea: RPC kitchen_recipe_breakdown + columnas).
+- 5 migrations Kitchen versionadas en supabase/migrations/: `20260526_folvy_kitchen_capa1.sql` … `_capa1_4.sql` (la 1_3 = función de coste; la 1_4 = función de desglose).
+- Ficheros frontend Kitchen: `src/types/kitchen.ts`; `src/modules/kitchen/services/` (recipeItemService, kitchenUnitService, recipeLineService con getRecipeBreakdown); `src/modules/kitchen/pages/` (KitchenItemsPage, KitchenRecipePage); `src/modules/kitchen/module.tsx`; registro en `src/shell/moduleRegistry.ts`.
 
 ### 1.4 — Cómo funciona el control de permisos (para el CEO)
 
@@ -77,6 +83,8 @@ Frentes alternativos que Julio puede elegir después del guard:
 2. Se abre el modal de checkboxes (23 pantallas agrupadas). Marca/desmarca lo que el encargado debe ver. Guardar.
 3. El encargado debe SALIR y VOLVER A ENTRAR para que el cambio surta efecto (los permisos se cargan al iniciar sesión).
 4. Admin (Julio) ve todo siempre, ignora los checkboxes.
+
+> NOTA sobre Folvy Kitchen y Pamela: el item de sidebar de Kitchen tiene `requiredRole:'manager'` sin clave granular en manager_permissions todavía. Pamela (manager) VERÁ la pestaña Folvy Kitchen en producción. Si NO se quiere que la vea aún (módulo a medias de cara al cliente), hay que añadir una clave granular (ej. show_kitchen_*) y filtrarla. DECISIÓN PENDIENTE de Julio.
 
 ### 1.5 — Tests manuales pendientes en producción (acumulados)
 
@@ -161,16 +169,17 @@ VITE_APP_URL=https://app.folvy.app    (Vercel)
 
 ## 4. ESTADO DE LA BBDD
 
-### 4.1 — Conteo de tablas (VERIFICADO 25/05/2026 vía information_schema)
+### 4.1 — Conteo de tablas (VERIFICADO 26/05/2026, 2ª sesión, vía information_schema)
 
-- **87 tablas totales** en schema `public`, de las cuales:
-  - **77 operativas.**
+- **93 tablas totales** en schema `public`, de las cuales:
+  - **83 operativas.**
   - **10 backups** (`_backup_20260516_*` y `_backup_20260517_*`) del Bloque S — pendientes
     de limpiar (confirmar con Julio).
 - **RLS activo** en todas las tablas operativas.
 
-> Histórico de la cifra: los docs viejos decían "75" (CONTEXTO_CLAUDE, conteo del 19/05) o
-> "40" (ESTADO/REGLAS, obsoleto). Ninguno era correcto al 25/05. **Citar siempre 87 (77+10)**.
+> Histórico de la cifra: 87 (77+10) al 25/05; subió a 93 (83+10) el 26/05 al añadir las 6
+> tablas del módulo Folvy Kitchen (ver §7.9). Docs muy viejos decían "75" o "40" — obsoletos.
+> **Citar siempre 93 (83+10)** salvo verificación posterior.
 
 ### 4.2 — Tablas auth creadas en Sprint 1 (18-19/05)
 
@@ -239,6 +248,51 @@ soft delete `UPDATE employees SET active = false`.**
   el del CEO lo bloquea `protect_last_admin`.
 - Cuentas hoy: Llorente29 + "Folvy Interno". RLS puede dar falsos "0 filas" en el SQL
   Editor para borrados → verificar con SELECT aparte.
+
+### 4.9 — Función de coste de Folvy Kitchen (26/05, 2ª sesión)
+
+`kitchen_recompute_item(p_item_id uuid) → numeric`. SECURITY DEFINER, `search_path=public`.
+Calcula y GUARDA el coste de UN item (raw/recipe/dish), devolviéndolo. Lógica:
+- Si `type IN ('raw','tool')`: coste desde su estrategia (hoy solo `fixed` calculable → `fixed_cost`).
+- Si `type IN ('recipe','dish')`: suma de líneas (`recipe_line`). Por línea: coste del hijo
+  (lee `computed_cost` cache, NO recursa hacia abajo) × cantidad convertida × (bruto si existe).
+  Conversión: misma dimensión → `kitchen_unit.factor_to_base` (universal); distinta dimensión
+  → busca `recipe_item_unit_conversion` (por-ingrediente); sin vía → NO inventa, marca
+  `needs_review=true` y esa línea aporta 0 (diseño honesto).
+- **GUARD de tenancy** (imprescindible porque SECURITY DEFINER salta RLS):
+  `IF NOT (current_user_is_admin() OR current_user_is_admin_or_manager_of(v_item.account_id))
+  THEN RAISE EXCEPTION`. Acepta admin de plataforma (CEO) o admin/manager de la cuenta.
+- Versionada en `supabase/migrations/20260526_folvy_kitchen_capa1_3.sql`. Tipada en
+  `database.ts` como `kitchen_recompute_item: { Args: { p_item_id: string }; Returns: number }`.
+- PROBADA en producción (Folvy Interno) con 3 casos: harina 500g a 2€/kg → 1.00€; solomillo
+  300g brutos a 20€/kg → 6.00€ (merma usa bruto); huevo 2ud sin conversión → 0 + needs_review.
+- NOTA de diseño futura (NO bug): el guard bloquea llamadas SIN sesión (auth.uid() null —
+  cron/OCR/IA/propagación). Correcto para el frontend hoy. El acceso de procesos de sistema
+  se resolverá al construir la propagación `kitchen_recompute_dependents` (ver §7.9). Opciones
+  apuntadas: (A) Edge Function con service_role JWT —verificar cómo lo trata
+  current_user_is_admin()—; (B) tercer canal en el guard —más complejo, riesgo de bypass—.
+
+### 4.10 — Función de desglose de coste por línea (26/05, 2ª sesión)
+
+`kitchen_recipe_breakdown(p_item_id uuid) → TABLE(line_id, child_item_id, child_name,
+quantity, unit_abbr, line_cost, needs_review)`. SECURITY DEFINER, `search_path=public`,
+MISMO guard de tenancy que kitchen_recompute_item. Solo lectura (no muta nada).
+- Devuelve una fila por línea del plato con el coste de esa línea, calculado con LA MISMA
+  lógica de conversión que kitchen_recompute_item (copiada, NO reinventada). INVARIANTE clave:
+  `SUM(line_cost) == recipe_item.computed_cost`. Test de regresión: si alguien toca una función
+  sin la otra, el invariante se rompe → `SELECT SUM(line_cost) FROM kitchen_recipe_breakdown(id)`
+  debe igualar `SELECT computed_cost FROM recipe_item WHERE id=...`.
+- needs_review por línea = true si esa línea no se pudo convertir (coste 0). La pantalla la
+  marca en rojo con "sin coste" (patrón meez).
+- El % de cada línea lo calcula la PANTALLA (line_cost / suma), división simple sin
+  conversiones → no compromete la honestidad (a diferencia de calcular el coste en cliente).
+- Versionada en `supabase/migrations/20260526_folvy_kitchen_capa1_4.sql`. Tipada en database.ts
+  (Args { p_item_id: string }; Returns array de 7 campos). Consumida por recipeLineService.getRecipeBreakdown.
+- VERIFICADA en producción: hamburguesa → carne 0,9265€ (60,7%) + pan 0,42€ (27,5%) + queso
+  0,18€ (11,8%) = 1,5265€ = computed_cost del plato. Cuadra al céntimo, en SQL y en pantalla.
+- NOTA: el guard también bloquea el SQL Editor (auth.uid() null), igual que kitchen_recompute_item.
+  Para verificar el cuadre desde el editor sin sesión se usó una query SELECT equivalente (sin
+  guard) que replica la lógica — confirmó el cuadre. La función real funciona desde la app (con sesión).
 
 ---
 
@@ -555,6 +609,113 @@ Limpieza pendiente de pruebas: borrar zz.foodint (6b687b5d), zz.foodint1 (ad32b7
 
 ---
 
+### 7.9 — FRENTE: FOLVY KITCHEN (escandallo / coste de recetas) — Capa 1 EN PRODUCCIÓN
+
+**Qué es:** módulo de escandallo (coste de recetas) para cocina. Nombre comercial Folvy
+Kitchen (patrón Folvy Team/Safety/Sales), prefijo de tablas `kitchen_*` / `recipe_*`. Primer
+frente de Operaciones. Construido desde cero el 26/05 (2ª sesión). Estado: BBDD + función de
+coste + catálogo de ingredientes EN PRODUCCIÓN y verificados.
+
+**Modelo de datos — 3 capas (Capa 1 construida; Capas 2-3 diseñadas, NO construidas):**
+- **Capa 1 = producto base** (receta + coste, definido una vez). CONSTRUIDA. 6 tablas:
+  - `recipe_item` — núcleo. Campo `type` (raw/recipe/tool/dish) unifica ingrediente y plato.
+    `cost_strategy` (fixed/last_purchase/average_weighted/average_window; hoy solo fixed
+    operativo), `fixed_cost`, `computed_cost` (cache calculado por la función), `cost_updated_at`,
+    `indirect_cost_pct` (override por plato; modelo prime cost), `cost_window_days`. Ficha
+    técnica: prep/cook_time_minutes, procedure_text, plating_notes, kitchen_photo_url,
+    yield_portions, conservation_type (fridge/freezer/dry/hot), service_temp_c. Nativo-IA:
+    `source` (manual/ai_recipe/ocr_invoice/import), `ai_confidence`, `needs_review`.
+    EL PVP NO VA AQUÍ (es de la marca, Capa 2).
+  - `recipe_line` — padre→hijo (ambos recipe_item; autorreferencia habilita sub-recetas).
+    `quantity_net`, `quantity_gross` (merma de despiece: la función usa bruto si existe),
+    `unit_id`, `cut_type_id`, `position`. Constraint no_self_reference.
+  - `kitchen_unit` — unidades + conversiones universales. `dimension` (weight/volume/unit),
+    `factor_to_base`, `is_seed` (globales account_id NULL). Semilla: g, kg, ml, L, ud.
+  - `kitchen_cut_type` — cortes/despiece por cuenta.
+  - `kitchen_settings` — 1 fila/cuenta (UNIQUE account_id). indirect_cost_pct_default,
+    target_food_cost_pct, currency EUR.
+  - `recipe_item_unit_conversion` — conversiones pieza↔peso POR INGREDIENTE (NO universales:
+    "1 ud huevo = 60g" ≠ universal, a diferencia de kg↔g). `from_unit_id`, `qty_in_base`
+    (en base del ingrediente). Varias por ingrediente. Nativo-IA. UNIQUE (item_id, from_unit_id).
+- **Capa 2 = ítem de carta por marca** (menu_item: nombre/foto/PVP/categoría por marca virtual,
+  cuelga de la tabla `brand` que YA existe). DISEÑADA, NO CONSTRUIDA. Aquí vive el precio.
+- **Capa 3 = disponibilidad por canal.** Futura.
+
+**Decisiones de arquitectura (todas contrastadas con competencia europea/mundial):**
+- Coste calculado en SQL (no en cliente) + cache en `computed_cost`, síncrono. Ver función §4.9.
+- Conversiones en DOS sitios: universales (kg↔g) en `kitchen_unit.factor_to_base`; ambiguas
+  (pieza↔peso) por-ingrediente en `recipe_item_unit_conversion`. Patrón confirmado en
+  tSpoonLab y Apicbase (la conversión vive EN el ingrediente; "1 botella ≠ 750ml universal").
+- Costes indirectos jerárquicos: global por cuenta (kitchen_settings) + override por plato
+  (recipe_item.indirect_cost_pct). Modelo prime cost.
+- **Recálculo automático** (no manual): create/update de un item dispara el recálculo de su
+  coste. Es la expectativa BASE del mercado (meez, WISK, Craftybase, DishCost lo venden como
+  estrella), NO un lujo. El "automático de verdad" (cambiar precio → propagar a platos) llega
+  con la propagación (pendiente). Verificado E2E en pantalla: editar precio recalcula solo.
+- Nativo-IA desde el minuto 0: campos source/ai_confidence/needs_review en las tablas que la
+  IA escribirá (recipe_item, recipe_item_unit_conversion). NINGUNA función de IA construida aún
+  (raíles puestos, tren no circula). "Coste computado" NO es IA, es la función SQL.
+
+**Mapa de IA del mercado (para cuando se aborde el frente IA — NO empezado):**
+4 apoyos vistos en competencia: (1) OCR de albaranes (foto→precios, actualiza coste), (2)
+creación de recetas por IA (foto/lista→receta casada con inventario), (3) previsión de
+demanda/pedidos sugeridos, (4) verificación visual/food safety. Hueco de Folvy: nativo europeo
+(IVA, cumplimiento ES/EU, implementación rápida) frente a americanos lentos; marca virtual nativa.
+
+**Frontend construido (patrón APPCC/brandsService):**
+- `src/types/kitchen.ts` — dominio camelCase de las 6 tablas + Insert/Update. Deriva Row* de
+  database.ts. Uniones de literales (NO enums, por verbatimModuleSyntax/erasableSyntaxOnly).
+- `src/modules/kitchen/services/recipeItemService.ts` — CRUD de recipe_item + recálculo
+  automático (recomputeRecipeItem llama RPC; tryRecompute fail-safe: si el recompute falla,
+  loguea pero NO revierte el guardado; create/update releen tras recompute).
+- `src/modules/kitchen/services/kitchenUnitService.ts` — lectura de unidades (listUnits NO
+  filtra account_id: la RLS ya da seed globales + de cuenta; filtrar ocultaría las seed).
+- `src/modules/kitchen/pages/KitchenItemsPage.tsx` — catálogo de ingredientes raw: tabla
+  (nombre/unidad/coste fijo/coste computado) + modal dual crear/editar + archivar. Usa
+  useApp() + useActiveAccount() (patrón APPCC). Recálculo visible al editar.
+- `src/modules/kitchen/module.tsx` — kitchenModule (id 'kitchen', icon ChefHat, topBarOrder 4,
+  requiredRole 'manager', basePath 'kitchen', publishes kitchen.item.recomputed).
+- Registrado en `src/shell/moduleRegistry.ts` (1 línea, tras ventasModule).
+
+**Deudas / pendientes del frente Kitchen (orden sugerido):**
+- ✅ [HECHO] Catálogo de ingredientes (pantalla 1/4) y **Ficha de escandallo** (pantalla 2/4,
+  sub-tandas A+B): crear platos, añadir/editar/quitar líneas (incl. sub-recetas), coste total
+  y coste/ración EN VIVO. Verificado E2E. Ver §1.1.
+- ✅ [HECHO] **Coste y % por línea**: función SQL `kitchen_recipe_breakdown` (§4.10) +
+  columnas Coste/% en la ficha, con líneas no convertibles en rojo. Verificado (cuadra al
+  céntimo). Mejora futura: gráfico de tarta de distribución de coste (tSpoonLab/meez lo tienen).
+- [PRÓXIMO FRENTE ACORDADO] **Capa 2 — menu_item / carta por marca** (sobre tabla `brand`
+  existente). Aquí vive el PVP. Coste (ya hay) + precio = MARGEN y food cost %. Convierte el
+  módulo en herramienta de rentabilidad. Diferenciador: misma receta a varios precios en varias
+  marcas virtuales. Verificar estado real de `brand` antes de diseñar.
+- **Función de propagación** `kitchen_recompute_dependents`: al cambiar precio de un ingrediente,
+  recalcular hacia arriba los platos que lo usan (de abajo a arriba). Resuelve aquí el acceso de
+  procesos de sistema sin sesión (ver nota §4.9).
+- **Ciclos en sub-recetas**: el constraint no_self_reference impide A→A, pero NO el ciclo
+  indirecto A→B→A. Hoy se mitiga en UI (el selector excluye el plato actual). Blindar en BBDD o
+  validación al añadir línea. Deuda menor, no bloqueante.
+- **Capa 2** (menu_item / carta por marca, sobre tabla brand existente). Aquí vive el PVP.
+- Huecos de Operaciones (diseñados, no construidos): allergen/item_allergen, supplier/
+  supplier_price (base del OCR), nutrition (tabla aparte, herencia como alérgenos).
+- Services restantes: kitchenCutTypeService (selector "tipo de corte" en líneas),
+  recipeItemUnitConversionService, kitchenSettingsService (patrón ya establecido).
+- Seed automático de `kitchen_settings` al crear cuenta (idea de Claude Code; iría en
+  create_account_tx).
+- Frente IA (el más diferenciador, NO empezado): abordar sobre cimientos sólidos (catálogo +
+  escandallo manual funcionando — YA cumplido — antes de poner IA encima).
+  - **[PRIORIZADO — origen: petición de cocinero real, 26/05 2ª sesión]** "Foto de cuaderno →
+    receta/escandallo": el cocinero fotografía una receta escrita a mano y la IA la sube a la
+    ficha de escandallo. Es uno de los 4 usos de IA del mercado (meez lo vende). Cimientos YA
+    puestos: recipe_item.source contempla 'ai_recipe', + ai_confidence + needs_review (la IA
+    propone con needs_review=true, el cocinero valida). Dos partes técnicas: (1) visión
+    foto→texto estructurado de ingredientes/cantidades; (2) CASAR ese texto con el catálogo
+    real (recipe_item existentes, o crearlos) — la parte (2) da el valor y exige catálogo +
+    escandallo maduros (YA disponibles). Los pasos de elaboración leídos irían a
+    recipe_item.procedure_text. Abordar como sesión propia.
+- Decisión Pamela/Kitchen (ver §1.4): clave granular para ocultar Kitchen a managers si se quiere.
+
+Commits del frente (todos en origin/main, HEAD=827d3e0): 2cf3cb7, 559660e, f13e1a8, 5a82b6f, ce123ed, 0c6ff54, aa520af, 827d3e0.
+
 ## 8. HISTORIAL DE SESIONES (arqueología — rara vez se consulta)
 
 - **P1-P3:** construcción inicial app cliente Llorente29 (APPCC, employees, locations, brands).
@@ -595,7 +756,10 @@ existía), M05 (subquery en CHECK → operador `<@`), M06 (`now()` en índice pa
 4. `folvy_auth_model.md` (Sesión 2) — D-S2.24 cambia el hook a Postgres Function.
 5. `folvy_roadmap.md` (Sesión 3).
 6. `folvy_addendum_sesion2_decisiones.md` — D1-D5 + bugs SQL (en `docs/`, ya en el repo).
-7. (Retirados: `CONTEXTO_ESTADO.md`, `CONTEXTO_REGLAS.md`.)
+7. `Folvy_Modulo_Menu_por_Marca.docx` — doc comercial del modelo de 3 capas de Folvy Kitchen
+   (producto base → ítem de carta por marca → disponibilidad por canal). Fuente de la decisión
+   "el PVP es de la marca, no del plato". Relevante para construir la Capa 2 (menu_item).
+8. (Retirados: `CONTEXTO_ESTADO.md`, `CONTEXTO_REGLAS.md`.)
 
 ### Código de referencia en el Knowledge
 `brandsService.ts` (patrón CRUD multi-tenancy), `supabase.ts`, `authService.ts`,
@@ -609,6 +773,6 @@ accent), `folvy_isotipo_manager.png` (app icon Manager 512×512), `folvy_isotipo
 
 ---
 
-**Documento consolidado: 25 de mayo de 2026 (Frente B).**
+**Documento actualizado: 26 de mayo de 2026 (2ª sesión — Folvy Kitchen: escandallo funcional con coste y % por línea, 2/4 pantallas. Próximo frente: Capa 2 precio/margen).**
 **Único documento de contexto. Próxima actualización: al cierre de la próxima sesión técnica
 (regenerar §1).**
