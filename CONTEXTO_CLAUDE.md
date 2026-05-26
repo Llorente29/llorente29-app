@@ -2,7 +2,7 @@
 
 > **Documento maestro único de memoria persistente del proyecto Folvy.**
 > Lectura obligatoria al inicio de cada sesión técnica.
-> **Última actualización: 25/05/2026 (noche) — Fase B cerrada (E2E real verde); rescate de `manage-employee` versionado; frente "Acceso del trabajador / Portal" abierto como bloqueante de producción.**
+> **Última actualización: 26/05/2026 — Acceso del trabajador C1 + Sistema de permisos del encargado (ambos en producción).**
 >
 > Este es el ÚNICO documento de contexto. `CONTEXTO_ESTADO.md` y `CONTEXTO_REGLAS.md`
 > quedaron retirados el 25/05/2026: estaban desincronizados (describían "Sesión 17"
@@ -34,63 +34,53 @@
 
 ---
 
-## 1. ESTADO VIVO  ⟵ se regenera cada sesión
+## 1. ESTADO VIVO ⟵ se regenera cada sesión
+**Última actualización: 2026-05-26 (cierre de sesión — Acceso del trabajador C1 + Sistema de permisos del encargado)**
 
-### 1.1 — Dónde estamos HOY (25/05/2026, cierre de sesión noche)
+### 1.1 — Dónde estamos HOY (2026-05-26)
 
-Folvy V1 es un SaaS multi-tenant **en producción** en `app.folvy.app`. Personal y APPCC
-maduros. El bloque **Comunicación (despachador multi-canal) está CERRADO**: la Fase B se
-completó hoy con la **primera prueba E2E real de extremo a extremo** (manager →
-SendMessageModal → dispatcher → accountEmailService → Edge Function `account-email` →
-Resend → buzón real), **verde por los dos canales** (email a Recibidos desde
-`no-reply@folvy.app` con `senderName`; notificación in-app en `employee_notifications`).
-Auditoría confirmada en `account_email_log` (`status=sent`, `resend_email_id` no nulo,
-`sender_user_id` = caller vía JWT). El dominio `folvy.app` está REALMENTE verificado en
-Resend (confirmado en vivo, no solo en config).
+Folvy V1 es un SaaS multi-tenant en producción en app.folvy.app. Hoy se cerraron DOS frentes grandes, ambos desplegados y verificados en producción con datos reales (Llorente29):
 
-### 1.2 — Próximo paso inmediato: FRENTE "ACCESO DEL TRABAJADOR / PORTAL"  (ver §7.7)
+**FRENTE A — Acceso del trabajador / encargado (C1): COMPLETADO Y VERIFICADO.**
+- Modelo C1: el trabajador entra con USUARIO + CONTRASEÑA prefijada por el manager. Email sintético interno {username}@empleado.folvy.app que el trabajador nunca ve.
+- Implementado y probado E2E en producción: alta C1 con selector Trabajador/Encargado, login por /acceso, gate de rol worker en App.tsx, regenerar contraseña, "Ver como trabajador" (encargado dual), "Volver a gestión", y grant_access (dar acceso a un empleado que YA existe, con chequeo cross-tenant y lista blanca de rol).
+- Validado con Pamela Guzmán Velásquez (employee_id 1be0b366-533f-4f6d-9182-f3a5c3c81a5e), dada de alta como ENCARGADA real (manager) vía botón "Dar acceso a la app": username pamela.alcala, role=manager, email sintético pamela.alcala@empleado.folvy.app. Ciclo dual completo validado (gestión → ver como trabajador → portal → volver a gestión).
 
-Es ahora la **máxima prioridad** porque es **bloqueante de producción Llorente29**: hoy un
-trabajador NO puede entrar a la app. El portal (`src/pages/trabajador/`, 12 páginas) está
-construido (~80%) pero **sin cablear**: no hay caller de `TrabajadorApp`, el gate por rol
-no existe en `App.tsx`. Además el alta de empleados está **probablemente rota en producción**
-(`manage-employee` envía emails desde `foodint.es`, dominio que casi seguro NO está
-verificado en Resend — es el "Bug 3 de P6" sin resolver). Modelo de acceso DECIDIDO: **C1
-(usuario + contraseña prefijada, email sintético interno)**. Plan completo y decisiones en §7.7.
+**FRENTE B — Sistema de permisos del encargado: COMPLETADO Y VERIFICADO.**
+- DECISIÓN FINAL: sistema de checkboxes por persona (NO permission_sets). Se exploró permission_sets durante la sesión pero se DESCARTÓ y se revirtió: la fuente de verdad es la tabla manager_permissions (1 fila por user_profile, ~29 booleanos), que es lo que el admin configura desde el modal de checkboxes (ManagerPermissionsModal, accesible desde Configuración → Usuarios y Accesos → editar manager → "Configurar permisos individuales").
+- El frontend lee los permisos vía el RPC get_effective_permissions(p_account_id) (función SQL SECURITY DEFINER): admin → marcador {__full_access: true}; manager → su fila de manager_permissions como jsonb (claves snake_case); sin fila → {} (deny, fail-closed).
+- has_permission(p_account_id, p_permission_key) también reescrita: admin → true; manager → lee la columna de manager_permissions; sin valor → false (fail-closed). Se ELIMINÓ la cascada a permission_sets (ya no se usa).
+- El hook usePermissions consume un diccionario dinámico (EffectivePermissions = Record<string, boolean>), claves snake_case, marcador __full_access. PermissionKey = string.
+- FIX CRÍTICO: isFullAccess ahora usa el ROL REAL (roleInActiveAccount === 'admin'), NO isAdmin del context (que era !!adminEmail = "hay sesión" = true para cualquier manager → trataba a todo manager como acceso total). Este era el bug que neutralizaba todo el gating.
+- Gating de UI implementado: menú lateral de cada módulo (vía requiredPermission y requiredRole en los items de sidebar, filtrado en ModuleSidebar.tsx), pestañas del TopBar y engranaje de Configuración (vía helper isModuleVisible = "al menos un item visible"), en ShellTopBar.tsx.
+- VERIFICADO en producción con Pamela: configurada con 11 de 23 pantallas. Ve solo lo marcado (Inicio, Folvy Team con su subset, Folvy Safety con Hoy+Incidencias); NO ve Folvy Sales, NI engranaje de Configuración, NI Empleados/Informes Gestoría/Bolsa de horas, NI Usuarios y accesos.
 
-**Frentes abiertos alternativos** (Julio elige):
-- **Diseño módulo Operaciones/Cocina** (escandallo). Decisión arquitectónica cara; diseño
-  en frío. NO arrancado (se aparcó hoy al detectar el bloqueante del portal).
-- Pre-producción Llorente29 (PITR, modelo de cobro, seguridad CEO).
+### 1.2 — Próximo paso inmediato
 
-### 1.3 — Estado del repo (al cierre 25/05 noche)
+DEUDA IMPORTANTE (prioridad alta, PRIMERA tarea de la próxima sesión): GUARD DE RUTA POR URL.
+El gating actual oculta los MENÚS pero NO bloquea el acceso por URL directa. Un encargado que teclee app.folvy.app/personal/informes PODRÍA ver esa página aunque no esté en su menú. Es un agujero de seguridad. Para Pamela (que usa el menú) es asumible empezar, PERO no dar acceso a más encargados hasta cerrar esto. Solución: guard por ruta en el router que verifique el permiso correspondiente antes de renderizar cada página (el mapeo ruta→permiso ya existe del gating del menú). Es una tanda transversal sobre el sistema de rutas, no un arreglo de minutos.
 
-- Repo: `Llorente29/llorente29-app`, branch `main`, `C:\dev\llorente29-app`.
-- `main` SINCRONIZADA con `origin/main`. Working tree limpio (salvo `.claude/`).
-- Commits de la sesión, ya pusheados:
-  - `f1cab56` (B.6), `4b577c0` (B.7), `4d63074` (docs) — empujados a origin al inicio de sesión.
-  - `a08b5f1` — **rescate de `manage-employee`** (Edge Function que estaba desplegada en
-    producción con 10 deploys pero SIN versionar; "bomba" desactivada). Solo `index.ts`;
-    falta el `deno.json` (añadir al tocar la función en C1).
-- Fase B (Comunicación): NO requirió commit de cierre nuevo — el código ya vivía en
-  f1cab56/4b577c0; la E2E solo generó datos en BBDD (ya limpiados, COMMIT verificado 0/0/0).
+Frentes alternativos que Julio puede elegir después del guard:
+- Operaciones / Cocina (escandallo). NO arrancado. Decisión arquitectónica cara; requiere diseño en frío y que Julio explique el alcance.
+- Refrescar permisos en vivo (hoy un cambio de permisos requiere que el encargado salga y vuelva a entrar para verlo).
 
-### 1.4 — Estado de los frentes tocados hoy (C, D)
+### 1.3 — Estado del repo (cierre 2026-05-26)
 
-- **D (docs):** `CLAUDE.md` raíz REVISADO y SANO (no fósil; coherente con CONTEXTO). El
-  resto de la auditoría de docs (legacy/, src/docs/ revuelto) queda como deuda cosmética
-  trivial, sin urgencia. Ver §7.6.
-- **C (deuda Personal):** INSPECCIONADO. Las 3 tablas legacy (`weekly_plans`,
-  `shift_assignments`, `shift_minimums`) están VACÍAS (0 filas) pero **el código las usa**:
-  `calendarService.ts` (las 3) y `AvisosSettingsPage.tsx` (directo a `shift_minimums`).
-  Conclusión: **la Fase 2.D (destino de AvisosSettingsPage) BLOQUEA la Fase 2.C** (no se
-  pueden renombrar/dropear mientras esas piezas las lean). 2.C no es ejecutable hasta
-  resolver 2.D. Ver §7.4.
+- Repo: Llorente29/llorente29-app, branch main, C:\dev\llorente29-app.
+- main SINCRONIZADA con origin/main (HEAD = 3ab55e4). Working tree limpio (salvo .claude/).
+- Edge Function manage-employee DESPLEGADA en producción (acepta 6 acciones: create, deactivate, reactivate, delete_permanent, set_password, grant_access).
+- Funciones SQL en producción: has_permission y get_effective_permissions (ambas leen de manager_permissions; permission_sets quedó sin uso).
 
-### 1.5 — Tests manuales pendientes en producción (acumulados, sin cambios)
+### 1.4 — Cómo funciona el control de permisos (para el CEO)
 
-- PDF CAPA con fotos; notificación de correctiva APPCC; bandeja del gestor (Pamela ve
-  campana, Julio CEO no); marcar leída persiste; botón "Validar cuadrante"; issue `rest_12h`.
+1. Configuración → Usuarios y Accesos → editar un encargado (manager) → botón "Configurar permisos individuales".
+2. Se abre el modal de checkboxes (23 pantallas agrupadas). Marca/desmarca lo que el encargado debe ver. Guardar.
+3. El encargado debe SALIR y VOLVER A ENTRAR para que el cambio surta efecto (los permisos se cargan al iniciar sesión).
+4. Admin (Julio) ve todo siempre, ignora los checkboxes.
+
+### 1.5 — Tests manuales pendientes en producción (acumulados)
+
+PDF CAPA con fotos; notificación de correctiva APPCC; marcar leída persiste; botón "Validar cuadrante"; issue rest_12h. (Sin cambios respecto a sesiones previas.)
 
 ---
 
@@ -539,6 +529,29 @@ no pasa por pantalla de welcome? (probable: el manager acepta en su nombre al da
 - `security_audit_log` — tabla a la que `manage-employee` escribe 4 veces, NO documentada en
   §2. Auditar si está viva/duplicada con `platform_audit_log`.
 - `manage-employee` rescatada solo con `index.ts`; falta `deno.json` (añadir al tocarla).
+
+### 7.8 — FRENTE: Permisos del encargado (estado y deudas)
+
+ESTADO: el frente está FUNCIONAL y verificado en producción. El control de permisos por checkboxes funciona de punta a punta (modal → manager_permissions → get_effective_permissions → usePermissions → gating de menús/pestañas/engranaje). Deudas vivas:
+
+- [IMPORTANTE — prioridad alta] Guard de ruta por URL. El gating oculta los menús pero NO bloquea el acceso por URL directa. Un encargado podría ver páginas fuera de su menú tecleando la dirección. Falta un guard en el router que valide el permiso antes de renderizar cada página. NO dar acceso a más encargados (más allá de Pamela, de confianza) hasta cerrar esto. Primera tarea de la próxima sesión.
+- Refrescar permisos en vivo. Hoy, cambiar los permisos de un encargado requiere que él salga y vuelva a entrar. Mejora futura: refrescar sin re-login.
+- 4 items de APPCC sin clave granular elevados temporalmente a requiredRole: 'admin' (appcc_audits, appcc_reports, appcc_templates). Si se quiere que un encargado los vea sin ser admin, añadir claves nuevas a manager_permissions y cambiar requiredRole por requiredPermission en appcc/module.tsx.
+- permission_sets quedó sin uso. Las tablas existen con 4 sets de sistema sembrados, pero NO se usan. has_permission y get_effective_permissions ya NO los leen. Candidatos a limpieza futura. El assignment de Julio (admin) a gerente_total quedó en permission_set_assignments — inocuo, limpiable.
+- show_prediccion_personal sigue ornamental (página oculta). Sin acción.
+
+Notas técnicas (referencia rápida):
+- Funciones SQL: has_permission(p_account_id uuid, p_permission_key text) y get_effective_permissions(p_account_id uuid). Ambas SECURITY DEFINER, leen manager_permissions, admin → bypass.
+- Service: src/services/effectivePermissionsService.ts (getEffectivePermissions, tipo EffectivePermissions = Record<string,boolean>).
+- Hook: src/modules/multitenancy/hooks/usePermissions.ts (diccionario dinámico, isFullAccess por rol real).
+- Gating: requiredPermission?: string y requiredRole?: ShellRole en ModuleSidebarItem (shell/types.ts), filtrado en ModuleSidebar.tsx; pestañas+engranaje en ShellTopBar.tsx (helper isModuleVisible).
+- Modal: src/components/ManagerPermissionsModal.tsx (escribe en manager_permissions).
+
+Commits de la sesión 2026-05-26 (todos en origin/main, HEAD=3ab55e4):
+Acceso C1: 70aeb89, 614eef3, 1793111, 5a35e0e, b370816, 1346b20, dba7b3a.
+Permisos: d12c886, d7f0b3c, 6609593, 822a5a8, cb46299, 3ab55e4.
+
+Limpieza pendiente de pruebas: borrar zz.foodint (6b687b5d), zz.foodint1 (ad32b762), ZZ Prueba Worker C1/C2, ZZ_PRUEBA_E2E_B8. Pamela NO se borra.
 
 ---
 
