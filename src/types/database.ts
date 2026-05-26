@@ -437,6 +437,73 @@ export type Database = {
         }
         Relationships: []
       }
+      account_email_log: {
+        Row: {
+          account_id: string
+          error_message: string | null
+          id: string
+          recipient_employee_id: string
+          resend_email_id: string | null
+          sender_employee_id: string | null
+          sender_user_id: string
+          sent_at: string
+          status: string
+          subject: string
+          template: string
+          to_email: string
+        }
+        Insert: {
+          account_id: string
+          error_message?: string | null
+          id?: string
+          recipient_employee_id: string
+          resend_email_id?: string | null
+          sender_employee_id?: string | null
+          sender_user_id: string
+          sent_at?: string
+          status: string
+          subject: string
+          template: string
+          to_email: string
+        }
+        Update: {
+          account_id?: string
+          error_message?: string | null
+          id?: string
+          recipient_employee_id?: string
+          resend_email_id?: string | null
+          sender_employee_id?: string | null
+          sender_user_id?: string
+          sent_at?: string
+          status?: string
+          subject?: string
+          template?: string
+          to_email?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "account_email_log_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "account_email_log_recipient_employee_id_fkey"
+            columns: ["recipient_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "account_email_log_sender_employee_id_fkey"
+            columns: ["sender_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       account_gestoria_config: {
         Row: {
           account_id: string
@@ -2638,6 +2705,7 @@ export type Database = {
           termination_type: string | null
           trial_period_days: number | null
           updated_at: string
+          username: string | null
           weekly_hours: number | null
           weekly_schedule: Json | null
         }
@@ -2674,6 +2742,7 @@ export type Database = {
           termination_type?: string | null
           trial_period_days?: number | null
           updated_at?: string
+          username?: string | null
           weekly_hours?: number | null
           weekly_schedule?: Json | null
         }
@@ -2710,6 +2779,7 @@ export type Database = {
           termination_type?: string | null
           trial_period_days?: number | null
           updated_at?: string
+          username?: string | null
           weekly_hours?: number | null
           weekly_schedule?: Json | null
         }
@@ -4724,6 +4794,10 @@ export type Database = {
         Returns: undefined
       }
       force_close_long_impersonations: { Args: never; Returns: number }
+      get_effective_permissions: {
+        Args: { p_account_id: string }
+        Returns: Json
+      }
       has_permission: {
         Args: { p_account_id: string; p_permission_key: string }
         Returns: boolean
