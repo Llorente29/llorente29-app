@@ -2,27 +2,39 @@
 //
 // Catálogo + ficha de escandallo de Folvy Kitchen.
 //
-// SUB-TANDA A (ESTA): estructura + visualización.
-//   - Lista de platos/recetas (type ∈ {dish, recipe}) con crear/seleccionar.
-//   - Ficha de detalle SOLO LECTURA: coste total, coste por ración (si hay
-//     yieldPortions), y líneas con nombre del ingrediente hijo + cantidad+unidad.
+// SUB-TANDA A (anterior): estructura + visualización (lista + ficha read-only).
+// SUB-TANDA B (esta):
+//   - Añadir ingrediente a la receta (addLine).
+//   - Editar cantidad / unidad / cantidad bruta de una línea (updateLine).
+//   - Quitar línea con confirmación (deleteLine).
+//   - Las 3 operaciones disparan el recálculo del plato server-side
+//     (recipeLineService.tryRecomputeParent) y, en cliente, refrescan
+//     tanto las líneas locales como el coste mostrado en las tarjetas
+//     (via onChanged → reloadTick del orquestador → itemsById fresco).
 //
-// SUB-TANDA B (siguiente): edición de líneas (añadir/editar/quitar),
-// reordenar, archivar/desarchivar plato.
+// COSTE POR LÍNEA NO se muestra: requiere replicar la lógica de conversiones
+// del SQL (factor_to_base + recipe_item_unit_conversion). Riesgo de mostrar
+// algo distinto a lo que calcula server-side. La fuente de verdad del coste
+// es computedCost del plato (que SÍ se recalcula tras cada edición de línea).
 //
 // Patrón: master-detail con state local (igual que BrandsPage). Reutiliza
 // listRecipeItems + listUnits (todo en una sola carga) para tener un mapa
 // id→item / id→unit que la ficha usa al renderizar las líneas.
 
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, ChefHat, X, ArrowLeft } from 'lucide-react'
+import { Plus, ChefHat, X, ArrowLeft, Pencil, Trash2 } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import {
   listRecipeItems,
   createRecipeItem,
 } from '@/modules/kitchen/services/recipeItemService'
-import { listLinesByParent } from '@/modules/kitchen/services/recipeLineService'
+import {
+  listLinesByParent,
+  addLine,
+  updateLine,
+  deleteLine,
+} from '@/modules/kitchen/services/recipeLineService'
 import { listUnits } from '@/modules/kitchen/services/kitchenUnitService'
 import type {
   RecipeItem,
@@ -134,6 +146,14 @@ export default function KitchenRecipePage() {
     setReloadTick(t => t + 1)
   }
 
+  function handleDetailChanged() {
+    // Cualquier mutación en la ficha (alta/edición/borrado de líneas) dispara
+    // la recarga global → itemsById trae el plato con el computedCost fresco
+    // → la ficha re-renderiza las tarjetas de coste sin recargar lines (que
+    // van con su propio linesReloadTick).
+    setReloadTick(t => t + 1)
+  }
+
   // Estados globales de carga / error: solo bloqueamos la pantalla cuando
   // estamos en el listado. La ficha gestiona su propia carga de líneas.
   if (loading && selectedRecipeId === null) {
@@ -174,9 +194,13 @@ export default function KitchenRecipePage() {
     return (
       <RecipeDetailView
         recipe={recipe}
+        accountId={activeAccountId!}
+        allItems={allItems}
         itemsById={itemsById}
+        units={units}
         unitsById={unitsById}
         onBack={() => setSelectedRecipeId(null)}
+        onChanged={handleDetailChanged}
       />
     )
   }
@@ -298,39 +322,64 @@ export default function KitchenRecipePage() {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Detalle: muestra cabecera con coste total + coste/ración, y las líneas
-// de la receta en SOLO LECTURA. La edición de líneas llega en sub-tanda B.
+// Detalle: cabecera con coste total + coste/ración + líneas editables.
+// Añadir/editar/quitar líneas dispara onChanged → reload global → tarjetas
+// actualizadas con el nuevo computedCost.
 // ─────────────────────────────────────────────────────────────────────
 
 interface RecipeDetailViewProps {
   recipe: RecipeItem
+  accountId: string
+  allItems: RecipeItem[]
   itemsById: Map<string, RecipeItem>
+  units: KitchenUnit[]
   unitsById: Map<string, KitchenUnit>
   onBack: () => void
+  /** Disparado tras cualquier mutación de líneas (alta/edit/delete). */
+  onChanged: () => void
 }
 
-function RecipeDetailView({ recipe, itemsById, unitsById, onBack }: RecipeDetailViewProps) {
+function RecipeDetailView({
+  recipe,
+  accountId,
+  allItems,
+  itemsById,
+  units,
+  unitsById,
+  onBack,
+  onChanged,
+}: RecipeDetailViewProps) {
   const [lines, setLines] = useState<RecipeLine[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [linesLoading, setLinesLoading] = useState(true)
+  const [linesError, setLinesError] = useState<string | null>(null)
+  // Tick local para recargar líneas tras una mutación sin recargar el resto.
+  const [linesReloadTick, setLinesReloadTick] = useState(0)
+
+  // Edición de líneas
+  const [lineFormOpen, setLineFormOpen] = useState(false)
+  const [editingLine, setEditingLine] = useState<RecipeLine | null>(null)
+  // Estado de borrado por línea: id de la línea en proceso (para deshabilitar
+  // sus botones) o null. Borrado es operación instantánea sin modal.
+  const [deletingLineId, setDeletingLineId] = useState<string | null>(null)
+  const [rowError, setRowError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
-    setLoading(true)
-    setError(null)
+    setLinesLoading(true)
+    setLinesError(null)
 
     listLinesByParent(recipe.id)
       .then(data => { if (!cancelled) setLines(data) })
       .catch((err: unknown) => {
         if (cancelled) return
         const msg = err instanceof Error ? err.message : 'Error desconocido'
-        setError(msg)
+        setLinesError(msg)
         setLines([])
       })
-      .finally(() => { if (!cancelled) setLoading(false) })
+      .finally(() => { if (!cancelled) setLinesLoading(false) })
 
     return () => { cancelled = true }
-  }, [recipe.id])
+  }, [recipe.id, linesReloadTick])
 
   const baseUnit = unitsById.get(recipe.baseUnitId)
 
@@ -338,6 +387,49 @@ function RecipeDetailView({ recipe, itemsById, unitsById, onBack }: RecipeDetail
     recipe.computedCost !== null && recipe.yieldPortions && recipe.yieldPortions > 0
       ? recipe.computedCost / recipe.yieldPortions
       : null
+
+  function openAddLine() {
+    setEditingLine(null)
+    setLineFormOpen(true)
+  }
+
+  function openEditLine(line: RecipeLine) {
+    setEditingLine(line)
+    setLineFormOpen(true)
+  }
+
+  function closeLineForm() {
+    setLineFormOpen(false)
+    setEditingLine(null)
+  }
+
+  function handleLineSaved() {
+    closeLineForm()
+    // Refrescar líneas locales y disparar reload global para que recipe.computedCost
+    // se refresque en las tarjetas de arriba.
+    setLinesReloadTick(t => t + 1)
+    onChanged()
+  }
+
+  async function handleDeleteLine(line: RecipeLine) {
+    const child = itemsById.get(line.childItemId)
+    const childName = child?.name ?? 'esta línea'
+    const ok = window.confirm(`¿Quitar "${childName}" de la receta?`)
+    if (!ok) return
+
+    setDeletingLineId(line.id)
+    setRowError(null)
+    try {
+      await deleteLine(line.id)
+      setLinesReloadTick(t => t + 1)
+      onChanged()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error desconocido'
+      setRowError(msg)
+    } finally {
+      setDeletingLineId(null)
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -392,29 +484,45 @@ function RecipeDetailView({ recipe, itemsById, unitsById, onBack }: RecipeDetail
 
       {/* Sección de ingredientes (líneas) */}
       <div className="space-y-2">
-        <h3 className="text-sm font-semibold text-text-primary">Ingredientes</h3>
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <h3 className="text-sm font-semibold text-text-primary">Ingredientes</h3>
+          <button
+            type="button"
+            onClick={openAddLine}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium bg-accent text-text-on-accent hover:opacity-90 transition-base"
+          >
+            <Plus size={14} />
+            Añadir ingrediente
+          </button>
+        </div>
 
-        {loading && (
+        {rowError && (
+          <div className="p-2 rounded-md bg-danger-bg text-danger border border-danger/20 text-xs">
+            {rowError}
+          </div>
+        )}
+
+        {linesLoading && (
           <div className="p-6 text-center text-sm text-text-secondary">
             Cargando líneas...
           </div>
         )}
 
-        {!loading && error && (
+        {!linesLoading && linesError && (
           <div className="p-4 rounded-md bg-danger-bg text-danger border border-danger/20 text-sm">
-            {error}
+            {linesError}
           </div>
         )}
 
-        {!loading && !error && lines.length === 0 && (
+        {!linesLoading && !linesError && lines.length === 0 && (
           <div className="p-6 rounded-md bg-card border border-border-default text-center">
             <p className="text-sm text-text-secondary">
-              Esta receta aún no tiene ingredientes.
+              Esta receta aún no tiene ingredientes. Pulsa "Añadir ingrediente" para empezar.
             </p>
           </div>
         )}
 
-        {!loading && !error && lines.length > 0 && (
+        {!linesLoading && !linesError && lines.length > 0 && (
           <div className="rounded-md bg-card border border-border-default overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -429,6 +537,7 @@ function RecipeDetailView({ recipe, itemsById, unitsById, onBack }: RecipeDetail
                     <th className="p-3 text-xs font-semibold text-text-secondary uppercase tracking-wide text-right">
                       Cantidad bruta
                     </th>
+                    <th className="p-3 w-24 text-right" aria-label="Acciones" />
                   </tr>
                 </thead>
                 <tbody>
@@ -436,6 +545,7 @@ function RecipeDetailView({ recipe, itemsById, unitsById, onBack }: RecipeDetail
                     const child = itemsById.get(line.childItemId)
                     const unit = unitsById.get(line.unitId)
                     const unitAbbr = unit?.abbreviation ?? '—'
+                    const isDeleting = deletingLineId === line.id
                     return (
                       <tr key={line.id} className="border-b border-border-default last:border-0">
                         <td className="p-3 text-text-primary">
@@ -454,6 +564,28 @@ function RecipeDetailView({ recipe, itemsById, unitsById, onBack }: RecipeDetail
                             ? `${formatQty(line.quantityGross)} ${unitAbbr}`
                             : '—'}
                         </td>
+                        <td className="p-3 text-right">
+                          <div className="inline-flex items-center gap-1">
+                            <button
+                              type="button"
+                              aria-label="Editar línea"
+                              onClick={() => openEditLine(line)}
+                              disabled={isDeleting}
+                              className="p-1.5 rounded-md text-text-secondary hover:bg-accent-bg hover:text-text-primary transition-base disabled:opacity-50"
+                            >
+                              <Pencil size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              aria-label="Quitar línea"
+                              onClick={() => handleDeleteLine(line)}
+                              disabled={isDeleting}
+                              className="p-1.5 rounded-md text-danger hover:bg-danger-bg transition-base disabled:opacity-50"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     )
                   })}
@@ -466,6 +598,20 @@ function RecipeDetailView({ recipe, itemsById, unitsById, onBack }: RecipeDetail
           </div>
         )}
       </div>
+
+      {/* Modal de añadir/editar línea */}
+      {lineFormOpen && (
+        <LineFormModal
+          accountId={accountId}
+          parentItemId={recipe.id}
+          allItems={allItems}
+          units={units}
+          line={editingLine}
+          existingLineCount={lines.length}
+          onClose={closeLineForm}
+          onSaved={handleLineSaved}
+        />
+      )}
     </div>
   )
 }
@@ -686,6 +832,317 @@ function RecipeFormModal({
             className="px-3 py-1.5 text-sm rounded-md font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base"
           >
             {submitting ? 'Creando...' : 'Crear'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Modal dual añadir/editar línea de receta.
+//   - line === null → modo añadir (addLine). Permite elegir el child.
+//   - line: RecipeLine → modo editar (updateLine). El child queda fijo
+//     (no se puede cambiar en updateLine; semánticamente es otra línea).
+// Tras éxito, llama a onSaved (que cierra modal + recarga líneas/coste).
+// ─────────────────────────────────────────────────────────────────────
+
+interface LineFormModalProps {
+  accountId: string
+  parentItemId: string
+  allItems: RecipeItem[]
+  units: KitchenUnit[]
+  /** null = modo añadir; RecipeLine = modo editar. */
+  line: RecipeLine | null
+  /** Número de líneas actuales en la receta — sirve para la position al añadir. */
+  existingLineCount: number
+  onClose: () => void
+  onSaved: () => void
+}
+
+function LineFormModal({
+  accountId,
+  parentItemId,
+  allItems,
+  units,
+  line,
+  existingLineCount,
+  onClose,
+  onSaved,
+}: LineFormModalProps) {
+  const isEditing = line !== null
+
+  // Items disponibles para elegir como child: todos menos el plato actual.
+  const selectableItems = useMemo(
+    () => allItems.filter(i => i.id !== parentItemId),
+    [allItems, parentItemId],
+  )
+
+  // En modo edición el child queda fijo. En modo añadir, el primer item.
+  const initialChildId = line?.childItemId ?? selectableItems[0]?.id ?? ''
+  const [childItemId, setChildItemId] = useState<string>(initialChildId)
+
+  // Para la unidad: por defecto, la baseUnit del child seleccionado. En edit,
+  // la unidad guardada de la línea.
+  const initialUnitId = line?.unitId ?? (() => {
+    const child = allItems.find(i => i.id === initialChildId)
+    return child?.baseUnitId ?? units[0]?.id ?? ''
+  })()
+  const [unitId, setUnitId] = useState<string>(initialUnitId)
+
+  const [quantityNet, setQuantityNet] = useState<string>(
+    line?.quantityNet !== undefined ? String(line.quantityNet) : '',
+  )
+  const [quantityGross, setQuantityGross] = useState<string>(
+    line?.quantityGross !== null && line?.quantityGross !== undefined
+      ? String(line.quantityGross)
+      : '',
+  )
+
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Si el usuario cambia el child en modo añadir, sugerimos su baseUnit por defecto
+  // (solo si la unidad actual no es válida o si nunca la ha tocado el usuario).
+  // Estrategia simple: al cambiar child en modo añadir, actualizar unitId al
+  // baseUnit del nuevo child. Si el usuario quería otra unidad la cambia después.
+  function handleChildChange(newChildId: string) {
+    setChildItemId(newChildId)
+    if (!isEditing) {
+      const child = allItems.find(i => i.id === newChildId)
+      if (child) setUnitId(child.baseUnitId)
+    }
+  }
+
+  // Agrupar items por tipo para el selector.
+  const itemsGrouped = useMemo(() => {
+    const groups = new Map<RecipeItemType, RecipeItem[]>()
+    selectableItems.forEach(i => {
+      const list = groups.get(i.type) ?? []
+      list.push(i)
+      groups.set(i.type, list)
+    })
+    // Ordenar cada grupo por nombre
+    groups.forEach(list => list.sort((a, b) => a.name.localeCompare(b.name, 'es')))
+    return groups
+  }, [selectableItems])
+
+  const TYPE_ORDER: RecipeItemType[] = ['raw', 'recipe', 'dish', 'tool']
+
+  const unitsGrouped = useMemo(() => {
+    const groups = new Map<string, KitchenUnit[]>()
+    units.forEach(u => {
+      const list = groups.get(u.dimension) ?? []
+      list.push(u)
+      groups.set(u.dimension, list)
+    })
+    return groups
+  }, [units])
+
+  const DIM_LABEL: Record<string, string> = {
+    weight: 'Peso',
+    volume: 'Volumen',
+    unit:   'Unidades',
+  }
+
+  async function handleSubmit() {
+    if (!childItemId) {
+      setError('Elige un ingrediente.')
+      return
+    }
+    if (!unitId) {
+      setError('Elige una unidad.')
+      return
+    }
+    const netParsed = quantityNet.trim() === '' ? NaN : Number(quantityNet.replace(',', '.'))
+    if (Number.isNaN(netParsed) || netParsed <= 0) {
+      setError('La cantidad neta debe ser un número > 0.')
+      return
+    }
+    const grossParsed = quantityGross.trim() === ''
+      ? null
+      : Number(quantityGross.replace(',', '.'))
+    if (grossParsed !== null && (Number.isNaN(grossParsed) || grossParsed < netParsed)) {
+      setError('La cantidad bruta debe ser ≥ neta (o déjala vacía si no hay merma).')
+      return
+    }
+
+    setSubmitting(true)
+    setError(null)
+    try {
+      if (isEditing && line) {
+        await updateLine(line.id, {
+          quantityNet: netParsed,
+          quantityGross: grossParsed,
+          unitId,
+        })
+      } else {
+        await addLine({
+          accountId,
+          parentItemId,
+          childItemId,
+          quantityNet: netParsed,
+          quantityGross: grossParsed,
+          unitId,
+          position: existingLineCount,
+        })
+      }
+      onSaved()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error desconocido'
+      setError(msg)
+      setSubmitting(false)
+    }
+  }
+
+  function onKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Escape' && !submitting) {
+      onClose()
+    }
+  }
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="line-form-title"
+      onKeyDown={onKeyDown}
+      className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-0 sm:p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-card w-full sm:max-w-md max-h-[95vh] sm:max-h-[90vh] rounded-t-xl sm:rounded-xl shadow-xl flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border-default">
+          <h3 id="line-form-title" className="text-base font-medium text-text-primary">
+            {isEditing ? 'Editar línea' : 'Añadir ingrediente'}
+          </h3>
+          <button
+            type="button"
+            aria-label="Cerrar"
+            onClick={onClose}
+            disabled={submitting}
+            className="text-text-secondary hover:text-text-primary transition-base disabled:opacity-50"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="px-4 py-4 space-y-3 overflow-y-auto">
+          <div>
+            <label className="block text-xs font-medium text-text-secondary mb-1">
+              Ingrediente / sub-receta
+            </label>
+            <select
+              value={childItemId}
+              onChange={e => handleChildChange(e.target.value)}
+              disabled={submitting || isEditing || selectableItems.length === 0}
+              className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+            >
+              {TYPE_ORDER.map(t => {
+                const list = itemsGrouped.get(t)
+                if (!list || list.length === 0) return null
+                return (
+                  <optgroup key={t} label={TYPE_LABEL[t]}>
+                    {list.map(i => (
+                      <option key={i.id} value={i.id}>{i.name}</option>
+                    ))}
+                  </optgroup>
+                )
+              })}
+            </select>
+            {isEditing && (
+              <p className="text-[11px] text-text-secondary mt-1">
+                No se puede cambiar el ingrediente de una línea. Si quieres otro, elimina y vuelve a añadir.
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-text-secondary mb-1">
+              Cantidad neta
+            </label>
+            <input
+              type="text"
+              inputMode="decimal"
+              autoFocus={!isEditing}
+              value={quantityNet}
+              onChange={e => setQuantityNet(e.target.value)}
+              disabled={submitting}
+              placeholder="Ej: 200"
+              className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+            />
+            <p className="text-[11px] text-text-secondary mt-1">
+              Cantidad realmente usada en la receta (sin merma).
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-text-secondary mb-1">
+              Unidad
+            </label>
+            <select
+              value={unitId}
+              onChange={e => setUnitId(e.target.value)}
+              disabled={submitting || units.length === 0}
+              className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+            >
+              {Array.from(unitsGrouped.entries()).map(([dim, list]) => (
+                <optgroup key={dim} label={DIM_LABEL[dim] ?? dim}>
+                  {list.map(u => (
+                    <option key={u.id} value={u.id}>
+                      {u.name} ({u.abbreviation})
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-text-secondary mb-1">
+              Cantidad bruta (con merma, opcional)
+            </label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={quantityGross}
+              onChange={e => setQuantityGross(e.target.value)}
+              disabled={submitting}
+              placeholder="Ej: 250 (si compras 250g pero usas 200g netos)"
+              className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+            />
+            <p className="text-[11px] text-text-secondary mt-1">
+              Si la compras pesa más que lo que acaba en la receta (mermas, pieles, huesos), pon aquí la cantidad bruta. Debe ser ≥ neta. Si no hay merma, déjala vacía.
+            </p>
+          </div>
+
+          {error && (
+            <div className="p-2 rounded-md bg-danger-bg text-danger border border-danger/20 text-xs">
+              {error}
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-border-default">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={submitting}
+            className="px-3 py-1.5 text-sm rounded-md text-text-secondary hover:bg-page transition-base disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={submitting}
+            className="px-3 py-1.5 text-sm rounded-md font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base"
+          >
+            {submitting
+              ? (isEditing ? 'Guardando...' : 'Añadiendo...')
+              : (isEditing ? 'Guardar cambios' : 'Añadir')}
           </button>
         </div>
       </div>
