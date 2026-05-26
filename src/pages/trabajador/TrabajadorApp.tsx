@@ -43,12 +43,17 @@ export default function TrabajadorApp({ employeeId, onExitMode }: Props) {
     authResolved,
     activeAccountId,
     cloudEnabled,
+    refreshStaff,
   } = useApp()
   const [subPage, setSubPage] = useState<SubPage>('home')
   const [showBolsaHoras, setShowBolsaHoras] = useState(false)
   const [location, setLocation] = useState<Location | undefined>(undefined)
   const [currentExecutionId, setCurrentExecutionId] = useState<string | null>(null)
   const [appccPendingCount, setAppccPendingCount] = useState(0)
+  // refreshAttempted: marca si ya hemos pedido un refresh para resolver el caso
+  // del encargado dual que entra al modo trabajador desde el Shell sin haber
+  // disparado el sync para esta cuenta todavía. Una sola oportunidad por montaje.
+  const [refreshAttempted, setRefreshAttempted] = useState(false)
 
   useEffect(() => {
     fetchAppSettings().then(s => setShowBolsaHoras(s.showHourBankToEmployee))
@@ -57,6 +62,16 @@ export default function TrabajadorApp({ employeeId, onExitMode }: Props) {
   const employee: Employee | null = employeeId
     ? (staff.find(e => e.id === employeeId) || null)
     : null
+
+  // Guarda de carga: solo afirmar "no existe el empleado" cuando ya hemos
+  // visto la BBDD al menos una vez para esta cuenta. Sin esto, el primer
+  // render tras login muestra "No tienes acceso" porque staff aún es [] o
+  // viene del cache global de localStorage.
+  const stillLoading =
+    !authResolved
+    || accountsLoading
+    || !activeAccountId
+    || (cloudEnabled && (syncing || lastSync === null))
 
   useEffect(() => {
     let cancel = false
@@ -87,6 +102,18 @@ export default function TrabajadorApp({ employeeId, onExitMode }: Props) {
     return () => { cancel = true }
   }, [employee?.locationId, subPage])
 
+  // Refresh único bajo demanda: si llegamos aquí con employeeId pero sin
+  // encontrar al empleado en staff, y el sync ya no está activo, puede ser
+  // que staff no se haya sincronizado para esta cuenta (caso del encargado
+  // dual que entra al modo trabajador desde el Shell). Forzamos UN refresh
+  // antes de declarar "No tienes acceso".
+  useEffect(() => {
+    if (employeeId && !stillLoading && !employee && !refreshAttempted) {
+      setRefreshAttempted(true)
+      void refreshStaff()
+    }
+  }, [employeeId, stillLoading, employee, refreshAttempted, refreshStaff])
+
   // Error screens
   if (!employeeId) {
     return (
@@ -105,17 +132,7 @@ export default function TrabajadorApp({ employeeId, onExitMode }: Props) {
     )
   }
 
-  // Guarda de carga: solo afirmar "no existe el empleado" cuando ya hemos
-  // visto la BBDD al menos una vez para esta cuenta. Sin esto, el primer
-  // render tras login muestra "No tienes acceso" porque staff aún es [] o
-  // viene del cache global de localStorage.
-  const stillLoading =
-    !authResolved
-    || accountsLoading
-    || !activeAccountId
-    || (cloudEnabled && (syncing || lastSync === null))
-
-  if (!employee && stillLoading) {
+  if (!employee && (stillLoading || !refreshAttempted)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-page">
         <div className="text-center">
