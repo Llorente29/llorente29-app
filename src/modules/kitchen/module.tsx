@@ -7,10 +7,11 @@
 // El resto del modelo (recetas, sub-recetas, platos, conversiones,
 // settings, plantillas) llegará en sesiones siguientes.
 
-import { ChefHat } from 'lucide-react'
+import { ChefHat, BookOpen } from 'lucide-react'
 import type { ModuleDefinition } from '@/shell/types'
 
 import KitchenItemsPage from '@/modules/kitchen/pages/KitchenItemsPage'
+import KitchenRecipePage from '@/modules/kitchen/pages/KitchenRecipePage'
 
 export const kitchenModule: ModuleDefinition = {
   // Identidad
@@ -26,13 +27,15 @@ export const kitchenModule: ModuleDefinition = {
   // bajo /:slug/kitchen/<path>.
   basePath: 'kitchen',
   routes: [
-    { path: '', element: <KitchenItemsPage /> },
+    { path: '',        element: <KitchenItemsPage /> },
+    { path: 'recetas', element: <KitchenRecipePage /> },
   ],
 
   // Navegación interna del módulo (ModuleSidebar).
   sidebar: {
     items: [
-      { id: 'kitchen_items', label: 'Ingredientes', icon: ChefHat, path: '' },
+      { id: 'kitchen_items',   label: 'Ingredientes', icon: ChefHat,  path: '' },
+      { id: 'kitchen_recipes', label: 'Recetas',      icon: BookOpen, path: 'recetas', requiredRole: 'manager' },
     ],
   },
 
