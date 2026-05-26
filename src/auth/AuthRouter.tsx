@@ -16,6 +16,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import LoginPage from '../pages/LoginPage'
 import WelcomePage from '../pages/WelcomePage'
 import ResetPasswordPage from '../pages/ResetPasswordPage'
+import AccesoTrabajadorPage from '../pages/AccesoTrabajadorPage'
 
 export default function AuthRouter() {
   return (
@@ -24,6 +25,7 @@ export default function AuthRouter() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/welcome" element={<WelcomePage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/acceso" element={<AccesoTrabajadorPage />} />
       {/* Fallback: cualquier URL desconocida pre-sesión → login.
           /reset-password/confirm NO está aquí: vive en App.tsx 1-bis para
           ser accesible con o sin sesión activa. */}

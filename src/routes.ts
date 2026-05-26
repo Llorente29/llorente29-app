@@ -90,6 +90,7 @@ export const PUBLIC_AUTH_ROUTES: readonly string[] = [
   '/welcome',
   '/reset-password',
   '/reset-password/confirm',
+  '/acceso',
 ] as const
 
 /**
