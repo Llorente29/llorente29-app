@@ -102,6 +102,7 @@ export default function Shell() {
       <TrabajadorApp
         employeeId={userProfile.employeeId}
         onExitMode={() => setWorkerMode(false)}
+        exitLabel="back-to-management"
       />
     )
   }

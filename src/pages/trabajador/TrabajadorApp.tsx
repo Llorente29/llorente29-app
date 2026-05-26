@@ -32,9 +32,14 @@ type SubPage =
 interface Props {
   employeeId?: string
   onExitMode: () => void
+  /** Etiquetado del botón de salida en HomeEmpleado. Default 'logout' (icono +
+   *  "Salir", cierra sesión para worker puro). 'back-to-management' para el
+   *  encargado dual: vuelve al Shell, no cierra sesión. Las pantallas de error
+   *  siguen mostrando "Salir" en ambos casos (fallback común). */
+  exitLabel?: 'logout' | 'back-to-management'
 }
 
-export default function TrabajadorApp({ employeeId, onExitMode }: Props) {
+export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'logout' }: Props) {
   const {
     staff,
     syncing,
@@ -251,6 +256,7 @@ export default function TrabajadorApp({ employeeId, onExitMode }: Props) {
         else if (mod === 'portal') setSubPage('portal')
       }}
       onLogout={onExitMode}
+      exitLabel={exitLabel}
       appccPendingCount={appccPendingCount}
     />
   )

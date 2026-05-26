@@ -3,7 +3,7 @@
 // Diseño preparado para añadir más módulos (Stock, etc.)
 
 import { useEffect, useState } from 'react'
-import { Leaf, User, LogOut, AlertCircle } from 'lucide-react'
+import { Leaf, User, LogOut, AlertCircle, ArrowLeft } from 'lucide-react'
 import type { Employee } from '../../types'
 import { hasOpenShift } from '../../services/fichajeKiosko'
 import NotificationBell from '../../components/NotificationBell'
@@ -15,6 +15,11 @@ interface Props {
   employee: Employee
   onNavigate: (module: WorkerModule) => void
   onLogout: () => void
+  /** Etiquetado del botón de salida. 'logout' (default): icono LogOut + aria
+   *  "Salir", semántica cerrar sesión (worker puro). 'back-to-management':
+   *  icono ArrowLeft + texto visible "Volver a gestión" (encargado dual). El
+   *  onClick es onLogout en ambos casos: el caller decide qué hace. */
+  exitLabel?: 'logout' | 'back-to-management'
   /** Número de checklists APPCC pendientes hoy para este empleado */
   appccPendingCount?: number
 }
@@ -29,7 +34,7 @@ interface ModuleButton {
   badgeColor?: string
 }
 
-export default function HomeEmpleado({ employee, onNavigate, onLogout, appccPendingCount = 0 }: Props) {
+export default function HomeEmpleado({ employee, onNavigate, onLogout, exitLabel = 'logout', appccPendingCount = 0 }: Props) {
   const open = hasOpenShift(employee)
   const [showAppcc, setShowAppcc] = useState(false)
 
@@ -85,13 +90,24 @@ export default function HomeEmpleado({ employee, onNavigate, onLogout, appccPend
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             <NotificationBell employeeId={employee.id} />
-            <button
-              onClick={onLogout}
-              className="p-2 rounded-full bg-card border border-border-default text-text-secondary hover:text-text-primary transition-base"
-              aria-label="Salir"
-            >
-              <LogOut size={16} />
-            </button>
+            {exitLabel === 'back-to-management' ? (
+              <button
+                onClick={onLogout}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card border border-border-default text-xs font-medium text-text-secondary hover:text-text-primary transition-base"
+                aria-label="Volver a gestión"
+              >
+                <ArrowLeft size={14} />
+                Volver a gestión
+              </button>
+            ) : (
+              <button
+                onClick={onLogout}
+                className="p-2 rounded-full bg-card border border-border-default text-text-secondary hover:text-text-primary transition-base"
+                aria-label="Salir"
+              >
+                <LogOut size={16} />
+              </button>
+            )}
           </div>
         </div>
 
