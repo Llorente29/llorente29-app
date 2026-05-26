@@ -19,16 +19,19 @@
 //   clave (e.g. 'showSalaries' → 'show_salaries').
 //
 // REGLA DE PERMISOS (alineada con AppContext y BBDD):
-//   - admin global (isAdmin) → ve todo, ignora el diccionario.
-//   - admin de cuenta (role === 'admin') → ve todo dentro de su cuenta.
-//   - Caller con marcador __full_access en el dict → ve todo (cinturón
-//     redundante con los dos anteriores; permite que un usuario con set
-//     "full" sin ser admin tenga el mismo bypass).
+//   - admin de cuenta (roleInActiveAccount === 'admin') → ve todo dentro
+//     de su cuenta, ignora el diccionario.
+//   - Caller con marcador __full_access en el dict → ve todo (independiente
+//     del rol; permite que un usuario con set "full" tenga bypass aunque
+//     no sea admin formal).
 //   - Resto → consulta clave concreta en el diccionario.
 //
-// DEUDA B-8: `isAdmin` del context sigue siendo `!!adminEmail`. Cuando se
-// migre a `userProfile?.role === 'admin'`, este hook seguirá funcionando
-// porque ya considera `roleInActiveAccount` y `permissions.__full_access`.
+// IMPORTANTE — POR QUÉ NO USAMOS `isAdmin` DEL CONTEXT:
+// `AppContext.isAdmin` es hoy `!!adminEmail` (deuda B-8): mide "¿hay sesión
+// Supabase?", NO "¿el rol del user en su cuenta es admin?". Cualquier user
+// logueado (admin, manager, etc.) lo pone a true. Si este hook lo usara,
+// todo manager logueado pasaría como acceso total y el gating quedaría
+// neutralizado. La fuente de verdad granular del rol es `roleInActiveAccount`.
 
 import { useMemo } from 'react'
 import { useApp } from '../../../context/AppContext'
@@ -61,17 +64,19 @@ export interface UsePermissionsResult {
 }
 
 export function usePermissions(): UsePermissionsResult {
-  const { permissions, roleInActiveAccount, isAdmin } = useApp()
+  const { permissions, roleInActiveAccount } = useApp()
 
-  // isFullAccess: admin global, admin de cuenta o marcador __full_access
-  // emitido por el RPC. Los tres caminos son equivalentes para el bypass;
-  // el marcador permite cubrir el caso de un set "full" sin requerir rol admin.
+  // isFullAccess: el bypass viene del ROL REAL en la cuenta activa
+  // (roleInActiveAccount === 'admin') o del marcador __full_access que el
+  // RPC `get_effective_permissions` emite para sets con acceso total.
+  // NO usamos `isAdmin` del context: ver nota "POR QUÉ NO USAMOS isAdmin"
+  // arriba — equivale a "hay sesión" y trataría a cualquier manager como
+  // acceso total (deuda B-8).
   const isFullAccess = useMemo(
     () =>
-      isAdmin ||
       roleInActiveAccount === 'admin' ||
       permissions?.__full_access === true,
-    [isAdmin, roleInActiveAccount, permissions]
+    [roleInActiveAccount, permissions]
   )
 
   const hasPermission = (key: PermissionKey): boolean => {
