@@ -5220,6 +5220,18 @@ export type Database = {
         Args: { p_account_id: string; p_permission_key: string }
         Returns: boolean
       }
+      kitchen_recipe_breakdown: {
+        Args: { p_item_id: string }
+        Returns: {
+          child_item_id: string
+          child_name: string
+          line_cost: number
+          line_id: string
+          needs_review: boolean
+          quantity: number
+          unit_abbr: string
+        }[]
+      }
       kitchen_recompute_item: { Args: { p_item_id: string }; Returns: number }
       seed_appcc_for_account: {
         Args: { p_account_id: string }

@@ -34,6 +34,8 @@ import {
   addLine,
   updateLine,
   deleteLine,
+  getRecipeBreakdown,
+  type RecipeLineBreakdown,
 } from '@/modules/kitchen/services/recipeLineService'
 import { listUnits } from '@/modules/kitchen/services/kitchenUnitService'
 import type {
@@ -350,6 +352,7 @@ function RecipeDetailView({
   onChanged,
 }: RecipeDetailViewProps) {
   const [lines, setLines] = useState<RecipeLine[]>([])
+  const [breakdown, setBreakdown] = useState<RecipeLineBreakdown[]>([])
   const [linesLoading, setLinesLoading] = useState(true)
   const [linesError, setLinesError] = useState<string | null>(null)
   // Tick local para recargar líneas tras una mutación sin recargar el resto.
@@ -368,18 +371,43 @@ function RecipeDetailView({
     setLinesLoading(true)
     setLinesError(null)
 
-    listLinesByParent(recipe.id)
-      .then(data => { if (!cancelled) setLines(data) })
+    // Cargamos líneas y desglose en paralelo. El desglose puede fallar
+    // sin romper la tabla: si lo hace, registramos el error y seguimos
+    // sin coste por línea (las líneas se siguen mostrando).
+    Promise.all([
+      listLinesByParent(recipe.id),
+      getRecipeBreakdown(recipe.id).catch(err => {
+        console.error('getRecipeBreakdown error:', err)
+        return [] as RecipeLineBreakdown[]
+      }),
+    ])
+      .then(([linesData, breakdownData]) => {
+        if (cancelled) return
+        setLines(linesData)
+        setBreakdown(breakdownData)
+      })
       .catch((err: unknown) => {
         if (cancelled) return
         const msg = err instanceof Error ? err.message : 'Error desconocido'
         setLinesError(msg)
         setLines([])
+        setBreakdown([])
       })
       .finally(() => { if (!cancelled) setLinesLoading(false) })
 
     return () => { cancelled = true }
   }, [recipe.id, linesReloadTick])
+
+  const breakdownByLineId = useMemo(() => {
+    const m = new Map<string, RecipeLineBreakdown>()
+    breakdown.forEach(b => m.set(b.lineId, b))
+    return m
+  }, [breakdown])
+
+  const totalBreakdown = useMemo(
+    () => breakdown.reduce((acc, b) => acc + b.lineCost, 0),
+    [breakdown],
+  )
 
   const baseUnit = unitsById.get(recipe.baseUnitId)
 
@@ -537,6 +565,12 @@ function RecipeDetailView({
                     <th className="p-3 text-xs font-semibold text-text-secondary uppercase tracking-wide text-right">
                       Cantidad bruta
                     </th>
+                    <th className="p-3 text-xs font-semibold text-text-secondary uppercase tracking-wide text-right">
+                      Coste
+                    </th>
+                    <th className="p-3 text-xs font-semibold text-text-secondary uppercase tracking-wide text-right">
+                      %
+                    </th>
                     <th className="p-3 w-24 text-right" aria-label="Acciones" />
                   </tr>
                 </thead>
@@ -546,6 +580,11 @@ function RecipeDetailView({
                     const unit = unitsById.get(line.unitId)
                     const unitAbbr = unit?.abbreviation ?? '—'
                     const isDeleting = deletingLineId === line.id
+                    const bdEntry = breakdownByLineId.get(line.id)
+                    const isReview = bdEntry?.needsReview ?? false
+                    const pct = bdEntry && totalBreakdown > 0
+                      ? (bdEntry.lineCost / totalBreakdown) * 100
+                      : null
                     return (
                       <tr key={line.id} className="border-b border-border-default last:border-0">
                         <td className="p-3 text-text-primary">
@@ -563,6 +602,23 @@ function RecipeDetailView({
                           {line.quantityGross !== null
                             ? `${formatQty(line.quantityGross)} ${unitAbbr}`
                             : '—'}
+                        </td>
+                        <td className="p-3 text-right tabular-nums">
+                          {bdEntry ? (
+                            <span className={isReview ? 'text-danger' : 'text-text-primary'}>
+                              {formatEur(bdEntry.lineCost)}
+                              {isReview && (
+                                <span className="block text-[10px] uppercase tracking-wide text-danger">
+                                  sin coste
+                                </span>
+                              )}
+                            </span>
+                          ) : (
+                            <span className="text-text-secondary">—</span>
+                          )}
+                        </td>
+                        <td className="p-3 text-right tabular-nums text-text-secondary">
+                          {pct !== null ? `${pct.toFixed(1)}%` : '—'}
                         </td>
                         <td className="p-3 text-right">
                           <div className="inline-flex items-center gap-1">

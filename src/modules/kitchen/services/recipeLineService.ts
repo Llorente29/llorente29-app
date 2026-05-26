@@ -15,6 +15,16 @@ import type {
   RowRecipeLineUpdate,
 } from '../../../types/kitchen'
 
+export interface RecipeLineBreakdown {
+  lineId: string
+  childItemId: string
+  childName: string
+  quantity: number
+  unitAbbr: string
+  lineCost: number
+  needsReview: boolean
+}
+
 export function rowToRecipeLine(row: RowRecipeLine): RecipeLine {
   return {
     id: row.id,
@@ -87,6 +97,31 @@ export async function listLinesByParent(parentItemId: string): Promise<RecipeLin
     throw new Error(`Error listando líneas del plato ${parentItemId}: ${error.message}`)
   }
   return (data ?? []).map(rowToRecipeLine)
+}
+
+/**
+ * Desglose de coste por línea de un plato (RPC kitchen_recipe_breakdown).
+ * Una fila por línea con su coste calculado server-side (misma lógica de
+ * conversión que el total → las partes suman el total). El % lo calcula
+ * la pantalla. Devuelve [] si no hay líneas o no es recipe/dish.
+ */
+export async function getRecipeBreakdown(parentItemId: string): Promise<RecipeLineBreakdown[]> {
+  requireSupabase()
+  const { data, error } = await supabase!.rpc('kitchen_recipe_breakdown', {
+    p_item_id: parentItemId,
+  })
+  if (error) {
+    throw new Error(`Error obteniendo desglose del plato ${parentItemId}: ${error.message}`)
+  }
+  return (data ?? []).map((row) => ({
+    lineId: row.line_id,
+    childItemId: row.child_item_id,
+    childName: row.child_name,
+    quantity: row.quantity,
+    unitAbbr: row.unit_abbr,
+    lineCost: row.line_cost,
+    needsReview: row.needs_review,
+  }))
 }
 
 export async function addLine(input: RecipeLineInsert): Promise<RecipeLine> {
