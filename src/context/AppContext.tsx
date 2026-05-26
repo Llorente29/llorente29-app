@@ -126,6 +126,12 @@ interface AppContextType {
   syncing: boolean
   cloudEnabled: boolean
   lastSync: Date | null
+  // refreshStaff: fuerza un re-sync de empleados de la cuenta activa, reusando
+  //   syncFromCloudRef.current. Útil cuando una acción externa modifica BBDD
+  //   sin reflejarse en el state local (p.ej. grant_access, set_password) y
+  //   el caller necesita ver los cambios sin esperar al real-time channel.
+  //   No-op silencioso si !cloudEnabled o !activeAccountId.
+  refreshStaff: () => Promise<void>
   // Acciones que sincronizan con Supabase
   saveEmployee: (e: Employee) => Promise<void>
   removeEmployee: (id: string) => Promise<void>
@@ -821,6 +827,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [accounts, activeAccountId]
   )
 
+  // refreshStaff: dispara manualmente el sync de empleados de la cuenta activa.
+  // Reutiliza syncFromCloudRef.current (la misma función que el useEffect y la
+  // suscripción real-time), de modo que el state local queda consistente con
+  // lo que ya hace el ciclo automático.
+  const refreshStaff = useCallback(async () => {
+    if (!isSupabaseEnabled) return
+    if (!activeAccountId) return
+    await syncFromCloudRef.current(activeAccountId)
+  }, [activeAccountId])
+
   const roleInActiveAccount: UserProfileRole | null = userProfile?.role ?? null
 
   // ─── Configuración de gestoría por cuenta ──────────────────────────────
@@ -861,7 +877,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       templates, setTemplates, incidents, setIncidents, audits, setAudits,
       notifConfig, setNotifConfig, schedules, setSchedules,
       createEmployee, defaultSchedule: DEFAULT_SCHEDULE,
-      syncing, cloudEnabled: isSupabaseEnabled, lastSync,
+      syncing, cloudEnabled: isSupabaseEnabled, lastSync, refreshStaff,
       saveEmployee, removeEmployee, saveLocation, removeLocation, addClockEntry,
       currentEmployee, currentEmployeeId, setCurrentEmployeeId,
       isAdmin, adminEmail, authUserId, authResolved,
