@@ -42,6 +42,7 @@ interface EmployeeData {
   pin?: string;
   birthDate?: string;
   trialPeriodDays?: number;
+  role?: "worker" | "manager"; // C1: rol del user_profile. Por defecto "worker". NUNCA admin desde el alta.
 }
 
 interface Payload {
@@ -261,14 +262,23 @@ async function handleCreate(admin: any, payload: Payload, actorUserId: string, c
     return errorResponse(`Employee insert failed: ${empErr?.message || "unknown"}`, 500);
   }
 
-  // 5) Crear user_profile con role=worker y welcome+terms YA marcados (C1: sin /welcome).
+  // 5) Crear user_profile y welcome+terms YA marcados (C1: sin /welcome).
   //    El constraint user_profiles_welcome_requires_terms exige terms <= welcome.
+  //
+  //    SEGURIDAD — lista blanca estricta del rol: el alta SOLO puede crear
+  //    "worker" o "manager". Cualquier otro valor (incluido "admin" o undefined)
+  //    cae a "worker" por defecto. Esto cierra el riesgo de escalada a admin
+  //    desde el cliente: un admin existente puede crear encargados/trabajadores,
+  //    pero NUNCA otro admin a través de esta Edge Function. La creación de
+  //    admins se hace por otra vía (portería / SQL directo), fuera del alcance
+  //    de manage-employee.
+  const requestedRole = emp.role === "manager" ? "manager" : "worker";
   const nowIso = new Date().toISOString();
   const { error: profileInsertErr } = await admin.from("user_profiles").insert({
     user_id: authUserId,
     account_id: callerAccountId, // hereda la cuenta del admin que invoca (necesario para checkAccountStatus)
     employee_id: newEmployee.id,
-    role: "worker",
+    role: requestedRole,
     active: true,
     display_name: emp.name,
     terms_accepted_at: nowIso, // el manager acepta T&C en nombre del trabajador (R4)
@@ -293,6 +303,7 @@ async function handleCreate(admin: any, payload: Payload, actorUserId: string, c
       username,
       synthetic_email: syntheticEmail,
       model: "C1",
+      role: requestedRole,
     },
   });
 
