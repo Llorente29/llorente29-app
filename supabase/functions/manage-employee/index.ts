@@ -123,7 +123,7 @@ Deno.serve(async (req) => {
   const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
   const { data: callerProfile, error: profileErr } = await adminClient
     .from("user_profiles")
-    .select("role, active")
+    .select("role, active, account_id")
     .eq("user_id", callerUser.id)
     .eq("active", true)
     .maybeSingle();
@@ -144,7 +144,7 @@ Deno.serve(async (req) => {
   // 5) Routing por acción
   switch (payload.action) {
     case "create":
-      return await handleCreate(adminClient, payload, callerUser.id);
+      return await handleCreate(adminClient, payload, callerUser.id, callerProfile.account_id);
     case "deactivate":
       return await handleDeactivate(adminClient, payload, callerUser.id);
     case "reactivate":
@@ -168,11 +168,15 @@ Deno.serve(async (req) => {
 // identidad y reusarlo escondería un error del manager).
 // ────────────────────────────────────────
 // deno-lint-ignore no-explicit-any
-async function handleCreate(admin: any, payload: Payload, actorUserId: string): Promise<Response> {
+async function handleCreate(admin: any, payload: Payload, actorUserId: string, callerAccountId: string | null): Promise<Response> {
   if (!payload.employee) return errorResponse("Missing employee data", 400);
   const emp = payload.employee;
 
   if (!emp.name?.trim()) return errorResponse("El nombre del empleado es obligatorio", 400);
+
+  if (!callerAccountId) {
+    return errorResponse("El administrador no tiene cuenta asignada (estado inconsistente). No se puede crear el trabajador.", 500);
+  }
 
   // C1: validar username y password.
   const username = normalizeUsername(emp.username || "");
@@ -262,6 +266,7 @@ async function handleCreate(admin: any, payload: Payload, actorUserId: string): 
   const nowIso = new Date().toISOString();
   const { error: profileInsertErr } = await admin.from("user_profiles").insert({
     user_id: authUserId,
+    account_id: callerAccountId, // hereda la cuenta del admin que invoca (necesario para checkAccountStatus)
     employee_id: newEmployee.id,
     role: "worker",
     active: true,
