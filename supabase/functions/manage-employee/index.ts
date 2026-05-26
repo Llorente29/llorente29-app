@@ -17,7 +17,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-type Action = "create" | "deactivate" | "reactivate" | "delete_permanent";
+type Action = "create" | "deactivate" | "reactivate" | "delete_permanent" | "set_password";
 
 // Dominio sintético interno. NO necesita estar verificado en Resend: nunca se
 // envía correo a estas direcciones; son sólo el identificador en auth.users.
@@ -48,6 +48,7 @@ interface Payload {
   action: Action;
   employee?: EmployeeData;
   employeeId?: string;
+  password?: string;
 }
 
 // ────────────────────────────────────────
@@ -150,6 +151,8 @@ Deno.serve(async (req) => {
       return await handleReactivate(adminClient, payload, callerUser.id);
     case "delete_permanent":
       return await handleDeletePermanent(adminClient, payload, callerUser.id);
+    case "set_password":
+      return await handleSetPassword(adminClient, payload, callerUser.id);
     default:
       return errorResponse(`Unknown action: ${payload.action}`, 400);
   }
@@ -443,4 +446,50 @@ async function handleDeletePermanent(admin: any, payload: Payload, actorUserId: 
     employeeId: payload.employeeId,
     authUserDeleted: !!auth_user_id,
   });
+}
+
+// ────────────────────────────────────────
+// ACCIÓN: SET_PASSWORD (modelo C1)
+// El manager regenera la contraseña de un empleado-con-cuenta. NO requiere
+// conocer la antigua. Solo admins pueden invocar (gate ya aplicado arriba).
+// El trabajador NO puede cambiar su propia contraseña en V1 (D2 de §7.7).
+// ────────────────────────────────────────
+// deno-lint-ignore no-explicit-any
+async function handleSetPassword(admin: any, payload: Payload, actorUserId: string): Promise<Response> {
+  if (!payload.employeeId) return errorResponse("Missing employeeId", 400);
+  if (!payload.password || payload.password.length < 6) {
+    return errorResponse("La contraseña debe tener al menos 6 caracteres", 400);
+  }
+
+  // Resolver user_id del auth.user asociado al empleado vía user_profiles.
+  const { data: profile, error: profileErr } = await admin
+    .from("user_profiles")
+    .select("user_id")
+    .eq("employee_id", payload.employeeId)
+    .maybeSingle();
+
+  if (profileErr) {
+    return errorResponse(`Profile fetch error: ${profileErr.message}`, 500);
+  }
+  if (!profile?.user_id) {
+    return errorResponse("El empleado no tiene cuenta de acceso", 404);
+  }
+
+  // Actualizar password via service_role.
+  const { error: updateErr } = await admin.auth.admin.updateUserById(profile.user_id, {
+    password: payload.password,
+  });
+  if (updateErr) {
+    return errorResponse(`Auth password update failed: ${updateErr.message}`, 500);
+  }
+
+  // Audit log.
+  await admin.from("security_audit_log").insert({
+    actor_user_id: actorUserId,
+    target_user_id: profile.user_id,
+    action: "employee_password_reset",
+    details: { employee_id: payload.employeeId },
+  });
+
+  return jsonResponse({ ok: true, employeeId: payload.employeeId });
 }
