@@ -2,7 +2,7 @@
 
 > **Documento maestro único de memoria persistente del proyecto Folvy.**
 > Lectura obligatoria al inicio de cada sesión técnica.
-> **Última actualización: 25 de mayo de 2026 — Frente B (consolidación) + Fase B pasos B.5/B.6/B.7 cerrados.**
+> **Última actualización: 25/05/2026 (noche) — Fase B cerrada (E2E real verde); rescate de `manage-employee` versionado; frente "Acceso del trabajador / Portal" abierto como bloqueante de producción.**
 >
 > Este es el ÚNICO documento de contexto. `CONTEXTO_ESTADO.md` y `CONTEXTO_REGLAS.md`
 > quedaron retirados el 25/05/2026: estaban desincronizados (describían "Sesión 17"
@@ -36,75 +36,61 @@
 
 ## 1. ESTADO VIVO  ⟵ se regenera cada sesión
 
-### 1.1 — Dónde estamos HOY (25/05/2026)
+### 1.1 — Dónde estamos HOY (25/05/2026, cierre de sesión noche)
 
-Folvy V1 es un SaaS multi-tenant **en producción** en `app.folvy.app`. NO estamos en
-"Fase 0": los módulos Personal y APPCC están en producción y maduros, y el bloque
-**Comunicación (despachador multi-canal)** está en su **Fase B avanzada**.
+Folvy V1 es un SaaS multi-tenant **en producción** en `app.folvy.app`. Personal y APPCC
+maduros. El bloque **Comunicación (despachador multi-canal) está CERRADO**: la Fase B se
+completó hoy con la **primera prueba E2E real de extremo a extremo** (manager →
+SendMessageModal → dispatcher → accountEmailService → Edge Function `account-email` →
+Resend → buzón real), **verde por los dos canales** (email a Recibidos desde
+`no-reply@folvy.app` con `senderName`; notificación in-app en `employee_notifications`).
+Auditoría confirmada en `account_email_log` (`status=sent`, `resend_email_id` no nulo,
+`sender_user_id` = caller vía JWT). El dominio `folvy.app` está REALMENTE verificado en
+Resend (confirmado en vivo, no solo en config).
 
-- **Módulo Personal:** en producción. Auditoría T1-T8 completa. Export gestoría CSV,
-  config gestoría por cuenta, validación de cuadrante y alerta `rest_12h` cerradas.
-- **Módulo APPCC:** en producción, maduro. PDF de CAPA con fotos embebidas y
-  notificación de correctiva a managers cerradas.
-- **Comunicación / despachador:** Fase A completa (in_app real, email stub).
-  Fase B: B.1 (tabla `account_email_log`), B.2 (Edge Function `account-email`) y B.4
-  (deploy) cerradas y en producción.
+### 1.2 — Próximo paso inmediato: FRENTE "ACCESO DEL TRABAJADOR / PORTAL"  (ver §7.7)
 
-### 1.2 — Próximo paso inmediato
+Es ahora la **máxima prioridad** porque es **bloqueante de producción Llorente29**: hoy un
+trabajador NO puede entrar a la app. El portal (`src/pages/trabajador/`, 12 páginas) está
+construido (~80%) pero **sin cablear**: no hay caller de `TrabajadorApp`, el gate por rol
+no existe en `App.tsx`. Además el alta de empleados está **probablemente rota en producción**
+(`manage-employee` envía emails desde `foodint.es`, dominio que casi seguro NO está
+verificado en Resend — es el "Bug 3 de P6" sin resolver). Modelo de acceso DECIDIDO: **C1
+(usuario + contraseña prefijada, email sintético interno)**. Plan completo y decisiones en §7.7.
 
-**B.5, B.6 y B.7 CERRADOS** (sesión 25/05). Commits: B.5 `85e84aa`, B.6 `f1cab56`,
-B.7 `4b577c0`. Estado push: B.5 pusheado; **B.6 y B.7 en local SIN push** (rama main
-+2 sobre origin/main).
-- **B.5** `src/services/accountEmailService.ts` — wrapper best-effort sobre la Edge
-  Function `account-email`. Firma `sendAccountMessage(accountId, recipients, {title,
-  body, senderName?})` → `{ ok, code, sent?, failed?, error? }`. NO lee React: el
-  caller pasa el `activeAccountId`. Fail-closed si falta accountId/sesión.
-- **B.6** `src/services/dispatcherService.ts` — canal `email` REAL (stub eliminado);
-  llama a `accountEmailService.sendAccountMessage`. `accountId` ahora vive en
-  `DispatchEvent` (opción A: el evento ocurre en una cuenta; el compilador obliga).
-- **B.7** `src/components/personal/SendMessageModal.tsx` (nuevo) + botón "Enviar
-  mensaje" en el `EmployeeModal` de StaffPage (gated por `canManageEmployees &&
-  active && accountId`). Envía in_app+email por defecto, sin selector de canal.
-  Feedback honesto según los conteos reales del dispatcher. Permiso reusado:
-  `canManageEmployees` (sin migration nueva).
+**Frentes abiertos alternativos** (Julio elige):
+- **Diseño módulo Operaciones/Cocina** (escandallo). Decisión arquitectónica cara; diseño
+  en frío. NO arrancado (se aparcó hoy al detectar el bloqueante del portal).
+- Pre-producción Llorente29 (PITR, modelo de cobro, seguridad CEO).
 
-**SIGUIENTE: B.8 — push + PRUEBA E2E REAL en navegador.** Es la PRIMERA ejecución
-del camino feliz completo (manager → modal → empleado recibe in_app Y email →
-Resend → buzón real); NUNCA se ha ejecutado de punta a punta. Plan:
-1. Preparar un empleado de PRUEBA con email CONTROLADO (tuyo, que puedas abrir). NO
-   usar emails reales de producción. Resend es real, no hay staging; cada envío
-   cuenta contra el rate limit (50/h, 200/día por cuenta).
-2. Probar en dev server local (`npm run dev`, VITE_* apuntando al proyecto real) o
-   tras push en producción. Recomendado: local primero, red de seguridad antes de
-   cementar en origin.
-3. Verificar AMBOS canales: campana in-app del empleado + email en buzón.
-4. Limpiar el empleado de prueba al cerrar (verificar 0 filas).
-5. Tras validar: push de B.6+B.7 + commit de cierre de Fase B.
+### 1.3 — Estado del repo (al cierre 25/05 noche)
 
-**Frentes abiertos alternativos** (tras cerrar Comunicación):
-- Diseño del módulo **Operaciones/Cocina** (escandallo). Decisión arquitectónica cara;
-  diseño en frío antes de codificar.
-- **Folvy AI Capa 1** (asistente conversacional).
+- Repo: `Llorente29/llorente29-app`, branch `main`, `C:\dev\llorente29-app`.
+- `main` SINCRONIZADA con `origin/main`. Working tree limpio (salvo `.claude/`).
+- Commits de la sesión, ya pusheados:
+  - `f1cab56` (B.6), `4b577c0` (B.7), `4d63074` (docs) — empujados a origin al inicio de sesión.
+  - `a08b5f1` — **rescate de `manage-employee`** (Edge Function que estaba desplegada en
+    producción con 10 deploys pero SIN versionar; "bomba" desactivada). Solo `index.ts`;
+    falta el `deno.json` (añadir al tocar la función en C1).
+- Fase B (Comunicación): NO requirió commit de cierre nuevo — el código ya vivía en
+  f1cab56/4b577c0; la E2E solo generó datos en BBDD (ya limpiados, COMMIT verificado 0/0/0).
 
-### 1.3 — Estado del repo (al cierre de la última sesión de código, 22/05)
+### 1.4 — Estado de los frentes tocados hoy (C, D)
 
-- Repo: `Llorente29/llorente29-app`, branch `main`, working tree en `C:\dev\llorente29-app`.
-- Últimos commits relevantes: `0220a91` (cierre Comunicación B.2-B.4), `846b7b9`
-  (refactor seguridad account-email), `a8a4f7f` (Edge Function account-email B.2).
-- Working tree limpio (salvo `.claude/` sin trackear, config local del agente).
+- **D (docs):** `CLAUDE.md` raíz REVISADO y SANO (no fósil; coherente con CONTEXTO). El
+  resto de la auditoría de docs (legacy/, src/docs/ revuelto) queda como deuda cosmética
+  trivial, sin urgencia. Ver §7.6.
+- **C (deuda Personal):** INSPECCIONADO. Las 3 tablas legacy (`weekly_plans`,
+  `shift_assignments`, `shift_minimums`) están VACÍAS (0 filas) pero **el código las usa**:
+  `calendarService.ts` (las 3) y `AvisosSettingsPage.tsx` (directo a `shift_minimums`).
+  Conclusión: **la Fase 2.D (destino de AvisosSettingsPage) BLOQUEA la Fase 2.C** (no se
+  pueden renombrar/dropear mientras esas piezas las lean). 2.C no es ejecutable hasta
+  resolver 2.D. Ver §7.4.
 
-### 1.4 — Tests manuales pendientes en producción (acumulados)
+### 1.5 — Tests manuales pendientes en producción (acumulados, sin cambios)
 
-- **PDF CAPA con fotos**: incidencia con 2-3 fotos → correctiva → descargar PDF.
-  Verificar fotos visibles + captions + peso < 5MB.
-- **Notificación de correctiva APPCC**: aplicar correctiva como Pamela → otros
-  admins/managers reciben campana; Pamela NO se autonotifica.
-- **Bandeja del gestor**: Pamela (manager con `employee_id`) ve campana; Julio CEO
-  (platform admin sin `employee_id`) NO.
-- **Marcar leída persiste** tras F5 (Arreglo 1).
-- **Botón "Validar cuadrante"** en CalendarioPage: issues color-coded o "Sin avisos".
-- **Issue `rest_12h`**: turno noche día N + turno mañana día N+1 → issue rojo con cálculo
-  correcto de descanso.
+- PDF CAPA con fotos; notificación de correctiva APPCC; bandeja del gestor (Pamela ve
+  campana, Julio CEO no); marcar leída persiste; botón "Validar cuadrante"; issue `rest_12h`.
 
 ---
 
@@ -479,6 +465,80 @@ soft delete `UPDATE employees SET active = false`.**
   en el repo; el doc viejo lo marcaba erróneamente como "pendiente de subir").
 - **Notas de proceso:** mantener confirmación manual en cada `git commit`/`curl` (no "don't
   ask again"). Revisar piezas sensibles código-a-código antes de commitear.
+
+### 7.7 — FRENTE: Acceso del trabajador / Portal del empleado (BLOQUEANTE producción)
+
+**Resumen:** el portal del empleado existe pero no es usable de extremo a extremo. Sin
+esto, los trabajadores de Llorente29 no pueden entrar a la app → bloquea producción 7/09.
+
+**Qué está construido (✅):**
+- `src/pages/trabajador/` — 12 páginas: `TrabajadorApp.tsx` (orquestador, 209 líneas, sub-
+  páginas por `useState`, sin React Router), `LoginEmpleado.tsx`, `HomeEmpleado`,
+  `PortalEmpleado`, `FichajeEmpleado`, `MisFichajes`, `MiHorario`, `MisTurnos`,
+  `CambiosTurnoPage`, `MisChecklistsPage`, `MisDocumentos`, `MisVacaciones`.
+- `AppContext` ya expone `roleInActiveAccount` y `userProfile.employeeId` (string|null).
+  La línea 242 ya maneja `role === 'worker'` para permisos.
+- `manage-employee` (Edge Function, ahora versionada en a08b5f1) ya crea el empleado con
+  `role='worker'` + `employee_id`.
+
+**Qué falta / está roto (❌):**
+- **Gate de rol en `App.tsx` NO existe.** Hoy todo cae a `<Shell />` por defecto;
+  `App.tsx` ni menciona `role`. `TrabajadorApp` no tiene caller (ningún `<TrabajadorApp/>`
+  ni `import` en todo el repo). Zona protegida (regla 3): requiere permiso explícito.
+- **Alta de empleados probablemente ROTA en producción:** `manage-employee` envía welcome
+  desde `from: "Foodint <noreply@foodint.es>"` (branding viejo + dominio NO verificado en
+  Resend). Si `foodint.es` no está verificado, el trabajador no recibe acceso. = "Bug 3 P6".
+- **Mismatch magiclink vs recovery:** `manage-employee` emite `type:'magiclink'`,
+  `WelcomePage` espera `type:'recovery'`. El welcome puede romper aunque llegue el email.
+- **No existe pantalla de login por usuario** (solo login por email y el PIN-kiosko de
+  `LoginEmpleado`, que es para tablet compartida, NO login individual del trabajador).
+- Falta `manifest.json` separado de "Folvy Empleados" (solo hay uno, el de Manager).
+
+**Decisiones de diseño tomadas (sesión 25/05):**
+- **Modelo C1:** acceso por **usuario + contraseña prefijada**, con **email sintético
+  interno** (`{username}@trabajador.folvy.app` o similar) que el trabajador nunca ve.
+  Reutiliza auth real de Supabase (RLS intacta). Elegido sobre email-real (modelo A) y
+  sobre SMS, por menor fricción y cero infraestructura nueva. Confirmado contra
+  competencia (7shifts, Skello, Combo usan email/SMS; ninguno usa "usuario+pass sin email"
+  → C1 es diferenciador real).
+- **D1 — contraseña:** la elige el manager, con sugerencia autogenerada editable.
+- **D2 — el trabajador NO puede cambiar su contraseña en V1** (solo el manager la regenera).
+- **D3 — C1 ÚNICO en V1** (email real diferido a V1.1; el campo email del empleado deja de
+  ser la llave de acceso).
+- **Rol dual (encargado):** los accesos se SUMAN. Tiene `employee_id` → puede ver el Portal;
+  tiene `role` manager/admin → puede ver Gestión. El encargado tiene ambos. (Julio admin sin
+  `employee_id` → solo Gestión. Worker puro → solo Portal.) `TrabajadorApp.onExitMode` ya
+  anticipa esta dualidad (entrar/salir del modo trabajador sin logout).
+- **Q2 — el encargado aterriza en GESTIÓN por defecto**, con botón "Ver como trabajador"
+  (botón a ubicar en el Shell, no en App.tsx).
+
+**Implicación clave para C1:** hay que **reescribir el corazón de `manage-employee`** —
+email sintético en vez de real, fijar la contraseña elegida por el manager (no passwordless),
+marcar `welcome_completed_at` + `terms_accepted_at` en el alta (el constraint
+`user_profiles_welcome_requires_terms` EXIGE que si welcome != null, terms != null y
+terms <= welcome → hay que poner ambos), y eliminar el magic link (en C1 no hace falta: el
+trabajador entra con usuario+contraseña). C1 de paso resuelve los bugs de branding y de
+magiclink/recovery. DECISIÓN LEGAL PENDIENTE: ¿quién/cuándo acepta los T&C si el trabajador
+no pasa por pantalla de welcome? (probable: el manager acepta en su nombre al dar de alta).
+
+**Plan de construcción C1 (orden por dependencias):**
+1. Reescribir `manage-employee` para C1 (+ añadir `deno.json`). Verificar BBDD antes.
+2. Pantalla de login por usuario (traduce usuario → email sintético → `signInWithPassword`).
+3. Gate de rol en `App.tsx` (permiso explícito de Julio). No binario: rol+employee_id.
+4. E2E real del trabajador: alta → login como él → ve su portal → ficha. (Nunca ejecutado.)
+5. Pulido: convención de username/desambiguación, botón "Ver como trabajador" en Shell,
+   manifest PWA Empleados, gestión/regeneración de contraseña por el manager.
+
+**Deudas menores reveladas al explorar este frente (apuntar, arreglar en sesión dedicada):**
+- `create-account` y `manage-employee` usan `decodeFolvyClaims` SIN verificar firma del JWT
+  (patrón inferior al de `account-email`; mitigado por el gateway de Supabase, pero deuda).
+- `getFunctionUrl` en `employeeAuthService.ts` hace hack de internals del cliente Supabase
+  (`@ts-expect-error supabase.supabaseUrl`); debería usar `VITE_SUPABASE_URL` como
+  `accountEmailService`/`platformEmailService`.
+- `CreateEmployeeResult.magicLinkSent` — naming a alinear (será recovery/welcome, no magic).
+- `security_audit_log` — tabla a la que `manage-employee` escribe 4 veces, NO documentada en
+  §2. Auditar si está viva/duplicada con `platform_audit_log`.
+- `manage-employee` rescatada solo con `index.ts`; falta `deno.json` (añadir al tocarla).
 
 ---
 
