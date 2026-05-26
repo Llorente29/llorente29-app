@@ -24,8 +24,12 @@ import { useNavigate } from 'react-router-dom'
 import { Home, MapPin, Settings, Shield, LogOut, User } from 'lucide-react'
 import { getOrderedModules } from './moduleRegistry'
 import { usePlatformAdmin } from '@/platform/usePlatformAdmin'
+import { usePermissions } from '@/modules/multitenancy/hooks/usePermissions'
 import { signOut } from '@/services/authService'
 import NotificationBell from '@/components/NotificationBell'
+import { configuracionModule } from '@/modules/configuracion/module'
+import type { ModuleDefinition } from './types'
+import type { UserProfileRole } from '@/types/multitenancy'
 
 // Clave especial del Home general (no es un módulo, es del Shell).
 export const HOME_KEY = '__home__'
@@ -51,6 +55,26 @@ interface ShellTopBarProps {
   onEnterWorkerMode?: () => void
 }
 
+/**
+ * ¿Es visible un módulo para el user actual? Criterio: tiene al menos un
+ * item de sidebar que pasa los gates de permiso Y rol. Si el módulo no
+ * tiene items, devuelve false (no hay nada que mostrar). La lógica per-item
+ * es la misma que aplica ModuleSidebar.tsx al renderizar.
+ */
+function isModuleVisible(
+  module: ModuleDefinition,
+  hasPermission: (key: string) => boolean,
+  role: UserProfileRole | null,
+): boolean {
+  const items = module.sidebar?.items
+  if (!items || items.length === 0) return false
+  return items.some(item => {
+    const passesPermission = !item.requiredPermission || hasPermission(item.requiredPermission)
+    const passesRole = !item.requiredRole || role === item.requiredRole || role === 'admin'
+    return passesPermission && passesRole
+  })
+}
+
 export default function ShellTopBar({
   activeKey,
   onSelect,
@@ -64,6 +88,15 @@ export default function ShellTopBar({
   const modules = getOrderedModules()
   const navigate = useNavigate()
   const { isPlatformAdmin } = usePlatformAdmin()
+  const { hasPermission, role } = usePermissions()
+
+  // Pestañas: solo los módulos con al menos un item visible. "Inicio" queda
+  // fuera (es del Shell, no un módulo, y siempre se ve).
+  const visibleModules = modules.filter(m => isModuleVisible(m, hasPermission, role))
+  // Engranaje: solo si Configuración tiene al menos un item visible. Para un
+  // manager sin permisos ni rol admin, el engranaje desaparecerá tras tanda 2
+  // (cuando los items de Configuración declaren requiredPermission).
+  const configVisible = isModuleVisible(configuracionModule, hasPermission, role)
 
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement | null>(null)
@@ -117,7 +150,7 @@ export default function ShellTopBar({
           active={activeKey === HOME_KEY}
           onClick={() => onSelect(HOME_KEY)}
         />
-        {modules.map(m => {
+        {visibleModules.map(m => {
           const Icon = m.icon
           return (
             <TabButton
@@ -136,15 +169,17 @@ export default function ShellTopBar({
         <span className="inline-flex items-center" style={{ color: MUTED, fontSize: 14, gap: 5 }}>
           <MapPin size={16} /> {locationLabel}
         </span>
-        <button
-          type="button"
-          aria-label="Configuración"
-          onClick={onOpenSettings}
-          className="inline-flex items-center"
-          style={{ color: settingsActive ? CREAM : MUTED }}
-        >
-          <Settings size={19} />
-        </button>
+        {configVisible && (
+          <button
+            type="button"
+            aria-label="Configuración"
+            onClick={onOpenSettings}
+            className="inline-flex items-center"
+            style={{ color: settingsActive ? CREAM : MUTED }}
+          >
+            <Settings size={19} />
+          </button>
+        )}
         {currentEmployeeId && <NotificationBell employeeId={currentEmployeeId} />}
 
         {/* Avatar con menú desplegable */}

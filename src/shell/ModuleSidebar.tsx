@@ -26,15 +26,20 @@ interface ModuleSidebarProps {
 export default function ModuleSidebar({
   moduleName, sidebar, activeItemId, onSelectItem,
 }: ModuleSidebarProps) {
-  // Gating por permiso granular: un item con requiredPermission solo se
-  // muestra si hasPermission(clave) === true. Items sin requiredPermission
-  // pasan siempre (gating por rol queda como deuda futura: ya hay
-  // requiredRole en el contrato, pero aún no lo aplica nadie). Admin con
-  // isFullAccess pasa todos los filtros automáticamente (lo resuelve el hook).
-  const { hasPermission } = usePermissions()
-  const visibleItems = sidebar.items.filter(
-    item => !item.requiredPermission || hasPermission(item.requiredPermission)
-  )
+  // Gating por permiso granular Y por rol mínimo. Un item se muestra si
+  // pasa AMBOS filtros:
+  //   - Permiso: si declara requiredPermission, hasPermission(clave) === true.
+  //   - Rol: si declara requiredRole, roleInActiveAccount === requiredRole
+  //     (los admin de cuenta pasan siempre el filtro de rol).
+  // El `role` viene del propio hook usePermissions (que lo lee del context
+  // como `roleInActiveAccount`); NO usamos isAdmin del context — es la
+  // deuda B-8 que ya está documentada en usePermissions.
+  const { hasPermission, role } = usePermissions()
+  const visibleItems = sidebar.items.filter(item => {
+    const passesPermission = !item.requiredPermission || hasPermission(item.requiredPermission)
+    const passesRole = !item.requiredRole || role === item.requiredRole || role === 'admin'
+    return passesPermission && passesRole
+  })
 
   return (
     <aside
