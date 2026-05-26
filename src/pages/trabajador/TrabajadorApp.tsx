@@ -35,7 +35,15 @@ interface Props {
 }
 
 export default function TrabajadorApp({ employeeId, onExitMode }: Props) {
-  const { staff } = useApp()
+  const {
+    staff,
+    syncing,
+    lastSync,
+    accountsLoading,
+    authResolved,
+    activeAccountId,
+    cloudEnabled,
+  } = useApp()
   const [subPage, setSubPage] = useState<SubPage>('home')
   const [showBolsaHoras, setShowBolsaHoras] = useState(false)
   const [location, setLocation] = useState<Location | undefined>(undefined)
@@ -92,6 +100,29 @@ export default function TrabajadorApp({ employeeId, onExitMode }: Props) {
           <button onClick={onExitMode} className="px-4 py-2 rounded-lg text-text-on-accent text-sm bg-accent hover:bg-accent-hover transition-base">
             Salir
           </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Guarda de carga: solo afirmar "no existe el empleado" cuando ya hemos
+  // visto la BBDD al menos una vez para esta cuenta. Sin esto, el primer
+  // render tras login muestra "No tienes acceso" porque staff aún es [] o
+  // viene del cache global de localStorage.
+  const stillLoading =
+    !authResolved
+    || accountsLoading
+    || !activeAccountId
+    || (cloudEnabled && (syncing || lastSync === null))
+
+  if (!employee && stillLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-page">
+        <div className="text-center">
+          <p className="text-2xl font-display font-medium mb-2 text-accent">
+            Folvy
+          </p>
+          <p className="text-sm text-text-secondary">Cargando...</p>
         </div>
       </div>
     )
