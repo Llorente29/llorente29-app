@@ -17,7 +17,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-type Action = "create" | "deactivate" | "reactivate" | "delete_permanent" | "set_password";
+type Action = "create" | "deactivate" | "reactivate" | "delete_permanent" | "set_password" | "grant_access";
 
 // Dominio sintético interno. NO necesita estar verificado en Resend: nunca se
 // envía correo a estas direcciones; son sólo el identificador en auth.users.
@@ -50,6 +50,9 @@ interface Payload {
   employee?: EmployeeData;
   employeeId?: string;
   password?: string;
+  // Campos usados por la acción grant_access (dar acceso a un employee preexistente).
+  username?: string;
+  role?: "worker" | "manager";
 }
 
 // ────────────────────────────────────────
@@ -154,6 +157,8 @@ Deno.serve(async (req) => {
       return await handleDeletePermanent(adminClient, payload, callerUser.id);
     case "set_password":
       return await handleSetPassword(adminClient, payload, callerUser.id);
+    case "grant_access":
+      return await handleGrantAccess(adminClient, payload, callerUser.id, callerProfile.account_id);
     default:
       return errorResponse(`Unknown action: ${payload.action}`, 400);
   }
@@ -508,4 +513,178 @@ async function handleSetPassword(admin: any, payload: Payload, actorUserId: stri
   });
 
   return jsonResponse({ ok: true, employeeId: payload.employeeId });
+}
+
+// ────────────────────────────────────────
+// ACCIÓN: GRANT_ACCESS (modelo C1, Pieza 6 / encargado dual)
+// Da acceso a la app a un employee que YA existe (alta sin acceso → con acceso,
+// o ascenso de trabajador-kiosko a worker/manager con credenciales).
+//
+// Diferencias vs handleCreate:
+//   - El employee preexiste: NO se inserta en `employees`, solo se hace UPDATE
+//     de la columna `username` (que estaba NULL para empleados sin acceso).
+//   - Hay un chequeo cross-tenant explícito: la location del employee tiene que
+//     pertenecer a la account del admin que invoca (Opción A del CONTEXTO §5.3:
+//     pertenencia vía employees.location_id → locations.account_id).
+//   - Hay un chequeo de estado: si el employee ya tiene username o ya tiene
+//     user_profile, se rechaza (no se "regala" un segundo acceso).
+//   - SEGURIDAD: misma lista blanca del rol (worker | manager). Nunca admin.
+//
+// Acepto duplicación de lógica con handleCreate (la síntesis del email + la
+// creación del auth.user + el insert del user_profile son casi idénticos).
+// Refactor a helper compartido se difiere a sesión dedicada.
+// ────────────────────────────────────────
+// deno-lint-ignore no-explicit-any
+async function handleGrantAccess(admin: any, payload: Payload, actorUserId: string, callerAccountId: string | null): Promise<Response> {
+  // a) Validaciones de payload
+  if (!payload.employeeId) return errorResponse("Missing employeeId", 400);
+  if (!callerAccountId) {
+    return errorResponse("El administrador no tiene cuenta asignada (estado inconsistente). No se puede otorgar acceso.", 500);
+  }
+  const username = normalizeUsername(payload.username || "");
+  if (username.length < 3) {
+    return errorResponse("El usuario debe tener al menos 3 caracteres válidos (a-z, 0-9, . _)", 400);
+  }
+  if (!payload.password || payload.password.length < 6) {
+    return errorResponse("La contraseña debe tener al menos 6 caracteres", 400);
+  }
+
+  const syntheticEmail = syntheticEmailFor(username);
+
+  // b) Cargar el employee preexistente.
+  const { data: employee, error: empFetchErr } = await admin
+    .from("employees")
+    .select("id, name, username, location_id")
+    .eq("id", payload.employeeId)
+    .maybeSingle();
+
+  if (empFetchErr) return errorResponse(`Employee fetch error: ${empFetchErr.message}`, 500);
+  if (!employee) return errorResponse("El empleado no existe", 404);
+
+  // c) Cross-tenant: la location del employee tiene que pertenecer a la cuenta
+  //    del admin que invoca. Sin esto, un admin de cuenta A podría dar acceso
+  //    a un employee de cuenta B (escalada lateral).
+  if (!employee.location_id) {
+    return errorResponse("El empleado no tiene local asignado; no se puede verificar su cuenta.", 400);
+  }
+  const { data: loc, error: locErr } = await admin
+    .from("locations")
+    .select("account_id")
+    .eq("id", employee.location_id)
+    .maybeSingle();
+
+  if (locErr) return errorResponse(`Location fetch error: ${locErr.message}`, 500);
+  if (!loc || loc.account_id !== callerAccountId) {
+    return errorResponse("El empleado no pertenece a tu cuenta", 403);
+  }
+
+  // d) Estado: el employee NO debe tener ya username ni user_profile.
+  if (employee.username) {
+    return errorResponse("Este empleado ya tiene acceso a la app", 409);
+  }
+  const { data: existingProfile } = await admin
+    .from("user_profiles")
+    .select("id")
+    .eq("employee_id", employee.id)
+    .maybeSingle();
+  if (existingProfile) {
+    return errorResponse("Este empleado ya tiene acceso a la app", 409);
+  }
+
+  // e) Unicidad del username pedido (excluyendo el propio employee, defensa
+  //    en profundidad por si el caller envía un username que ya está libre).
+  const { data: existingByUsername } = await admin
+    .from("employees")
+    .select("id")
+    .eq("username", username)
+    .neq("id", employee.id)
+    .maybeSingle();
+
+  if (existingByUsername) {
+    return errorResponse(`El usuario "${username}" ya está en uso. Elige otro.`, 409);
+  }
+
+  // f) Huérfano en auth.users con el email sintético (consistencia).
+  const { data: existingUsers } = await admin.auth.admin.listUsers();
+  const existingAuth = existingUsers?.users?.find(
+    (u: { email?: string }) => u.email === syntheticEmail,
+  );
+  if (existingAuth) {
+    return errorResponse(
+      `Conflicto: ya existe una cuenta para el usuario "${username}". Contacta con soporte.`,
+      409,
+    );
+  }
+
+  // g) Crear el auth.user (mismo patrón que handleCreate).
+  const { data: newAuth, error: authErr } = await admin.auth.admin.createUser({
+    email: syntheticEmail,
+    password: payload.password,
+    email_confirm: true, // auto-confirma: no hay verificación de email en C1
+    user_metadata: { display_name: employee.name, login_username: username },
+  });
+
+  if (authErr || !newAuth?.user) {
+    return errorResponse(`Auth user creation failed: ${authErr?.message || "unknown"}`, 500);
+  }
+  const authUserId: string = newAuth.user.id;
+
+  // h) UPDATE del employee preexistente: setear su username.
+  const { error: empUpdateErr } = await admin
+    .from("employees")
+    .update({ username })
+    .eq("id", employee.id);
+
+  if (empUpdateErr) {
+    // Rollback: borrar el auth.user recién creado para no dejar huérfanos.
+    await admin.auth.admin.deleteUser(authUserId);
+    return errorResponse(`Employee update failed: ${empUpdateErr.message}`, 500);
+  }
+
+  // i) Lista blanca del rol — misma regla que handleCreate.
+  const requestedRole = payload.role === "manager" ? "manager" : "worker";
+
+  // j) INSERT user_profile. El constraint user_profiles_welcome_requires_terms
+  //    exige terms <= welcome; los marcamos a la vez.
+  const nowIso = new Date().toISOString();
+  const { error: profileInsertErr } = await admin.from("user_profiles").insert({
+    user_id: authUserId,
+    account_id: callerAccountId,
+    employee_id: employee.id,
+    role: requestedRole,
+    active: true,
+    display_name: employee.name,
+    terms_accepted_at: nowIso,
+    welcome_completed_at: nowIso,
+  });
+
+  if (profileInsertErr) {
+    // Rollback en cascada: revertir el username y borrar el auth.user. NO se
+    // borra el employee (preexistía antes de esta acción).
+    await admin.from("employees").update({ username: null }).eq("id", employee.id);
+    await admin.auth.admin.deleteUser(authUserId);
+    return errorResponse(`Profile insert failed: ${profileInsertErr.message}`, 500);
+  }
+
+  // k) Audit log.
+  await admin.from("security_audit_log").insert({
+    actor_user_id: actorUserId,
+    target_user_id: authUserId,
+    action: "employee_access_granted",
+    details: {
+      employee_id: employee.id,
+      username,
+      synthetic_email: syntheticEmail,
+      role: requestedRole,
+      model: "C1",
+    },
+  });
+
+  // l) Respuesta — el cliente muestra username + password al manager.
+  return jsonResponse({
+    ok: true,
+    employeeId: employee.id,
+    username,
+    role: requestedRole,
+  });
 }
