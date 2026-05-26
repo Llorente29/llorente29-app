@@ -17,11 +17,13 @@ import type { ModuleDefinition } from './types'
 import { personalModule } from '@/modules/personal/module'
 import { appccModule } from '@/modules/appcc/module'
 import { ventasModule } from '@/modules/ventas/module'
+import { kitchenModule } from '@/modules/kitchen/module'
 
 export const moduleRegistry: ModuleDefinition[] = [
   personalModule,     // G-8.4 (Folvy Team, topBarOrder 1)
   appccModule,        // G-3   (Folvy Safety, topBarOrder 2)
   ventasModule,       // G-8.4 (Folvy Sales, topBarOrder 3)
+  kitchenModule,      //       (Folvy Kitchen, topBarOrder 4)
 ]
 
 /** Devuelve los módulos ordenados por su posición en el TopBar. */
