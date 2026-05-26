@@ -62,14 +62,14 @@ export const appccModule: ModuleDefinition = {
   // como /:slug/appcc/<path>.
   sidebar: {
     items: [
-      { id: 'appcc_dashboard',       label: 'Dashboard',             icon: BarChart3,      path: '' },
-      { id: 'appcc_today',           label: 'Hoy',                   icon: Leaf,           path: 'hoy' },
-      { id: 'appcc_incidents',       label: 'Incidencias',           icon: AlertTriangle,  path: 'incidencias' },
-      { id: 'appcc_audits',          label: 'Auditorías',            icon: ClipboardCheck, path: 'auditorias' },
-      { id: 'appcc_audit_templates', label: 'Plantillas Auditoría',  icon: FolderOpen,     path: 'auditorias/plantillas', requiredRole: 'admin' },
-      { id: 'appcc_reports',         label: 'Informes',              icon: FileText,       path: 'informes' },
-      { id: 'appcc_templates',       label: 'Plantillas',            icon: FolderOpen,     path: 'plantillas' },
-      { id: 'appcc_onboarding',      label: 'Configurar',            icon: Settings,       path: 'onboarding', requiredRole: 'admin' },
+      { id: 'appcc_dashboard',       label: 'Dashboard',             icon: BarChart3,      path: '',                       requiredPermission: 'show_dashboard' },
+      { id: 'appcc_today',           label: 'Hoy',                   icon: Leaf,           path: 'hoy',                    requiredPermission: 'show_appcc_today' },
+      { id: 'appcc_incidents',       label: 'Incidencias',           icon: AlertTriangle,  path: 'incidencias',            requiredPermission: 'show_appcc_incidents' },
+      { id: 'appcc_audits',          label: 'Auditorías',            icon: ClipboardCheck, path: 'auditorias',             requiredRole: 'admin' },
+      { id: 'appcc_audit_templates', label: 'Plantillas Auditoría',  icon: FolderOpen,     path: 'auditorias/plantillas',  requiredRole: 'admin' },
+      { id: 'appcc_reports',         label: 'Informes',              icon: FileText,       path: 'informes',               requiredRole: 'admin' },
+      { id: 'appcc_templates',       label: 'Plantillas',            icon: FolderOpen,     path: 'plantillas',             requiredRole: 'admin' },
+      { id: 'appcc_onboarding',      label: 'Configurar',            icon: Settings,       path: 'onboarding',             requiredRole: 'admin' },
     ],
   },
 

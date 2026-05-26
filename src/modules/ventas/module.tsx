@@ -34,8 +34,8 @@ export const ventasModule: ModuleDefinition = {
 
   sidebar: {
     items: [
-      { id: 'ventas_analisis',   label: 'Análisis de ventas',  icon: BarChart3, path: '' },
-      { id: 'ventas_zonas',      label: 'Zonas de pedido',     icon: Bike,      path: 'zonas' },
+      { id: 'ventas_analisis',   label: 'Análisis de ventas',  icon: BarChart3, path: '',      requiredPermission: 'show_ventas_analisis' },
+      { id: 'ventas_zonas',      label: 'Zonas de pedido',     icon: Bike,      path: 'zonas', requiredPermission: 'show_zonas_pedido' },
     ],
   },
 

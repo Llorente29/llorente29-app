@@ -42,9 +42,9 @@ export const configuracionModule: ModuleDefinition = {
 
   sidebar: {
     items: [
-      { id: 'config_locales',  label: 'Locales',            icon: MapPin,  path: 'locales' },
-      { id: 'config_marcas',   label: 'Marcas',             icon: Tag,     path: 'marcas', requiredRole: 'admin' },
-      { id: 'config_avisos',   label: 'Avisos',             icon: Bell,    path: 'avisos' },
+      { id: 'config_locales',  label: 'Locales',            icon: MapPin,  path: 'locales',  requiredPermission: 'show_locations' },
+      { id: 'config_marcas',   label: 'Marcas',             icon: Tag,     path: 'marcas',   requiredRole: 'admin' },
+      { id: 'config_avisos',   label: 'Avisos',             icon: Bell,    path: 'avisos',   requiredPermission: 'show_tspoon_settings' },
       { id: 'config_usuarios', label: 'Usuarios y accesos', icon: UserCog, path: 'usuarios', requiredRole: 'admin' },
     ],
   },
