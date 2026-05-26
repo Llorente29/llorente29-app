@@ -2953,6 +2953,153 @@ export type Database = {
           },
         ]
       }
+      kitchen_cut_type: {
+        Row: {
+          account_id: string
+          archived_at: string | null
+          created_at: string
+          created_by: string | null
+          created_by_name: string | null
+          id: string
+          is_active: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kitchen_cut_type_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kitchen_settings: {
+        Row: {
+          account_id: string
+          created_at: string
+          created_by: string | null
+          created_by_name: string | null
+          currency: string
+          id: string
+          indirect_cost_pct_default: number
+          target_food_cost_pct: number | null
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          currency?: string
+          id?: string
+          indirect_cost_pct_default?: number
+          target_food_cost_pct?: number | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          currency?: string
+          id?: string
+          indirect_cost_pct_default?: number
+          target_food_cost_pct?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kitchen_settings_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: true
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kitchen_unit: {
+        Row: {
+          abbreviation: string
+          account_id: string | null
+          archived_at: string | null
+          created_at: string
+          created_by: string | null
+          created_by_name: string | null
+          dimension: string
+          factor_to_base: number
+          id: string
+          is_active: boolean
+          is_base: boolean
+          is_seed: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          abbreviation: string
+          account_id?: string | null
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          dimension: string
+          factor_to_base: number
+          id?: string
+          is_active?: boolean
+          is_base?: boolean
+          is_seed?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          abbreviation?: string
+          account_id?: string | null
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          dimension?: string
+          factor_to_base?: number
+          id?: string
+          is_active?: boolean
+          is_base?: boolean
+          is_seed?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kitchen_unit_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       location_planning: {
         Row: {
           id: string
@@ -3788,6 +3935,277 @@ export type Database = {
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recipe_item: {
+        Row: {
+          account_id: string
+          ai_confidence: number | null
+          alt_name: string | null
+          archived_at: string | null
+          base_unit_id: string
+          code: string | null
+          computed_cost: number | null
+          conservation_type: string | null
+          cook_time_minutes: number | null
+          cost_strategy: string
+          cost_updated_at: string | null
+          cost_window_days: number | null
+          created_at: string
+          created_by: string | null
+          created_by_name: string | null
+          fixed_cost: number | null
+          id: string
+          indirect_cost_pct: number | null
+          is_active: boolean
+          kitchen_photo_url: string | null
+          name: string
+          needs_review: boolean
+          notes: string | null
+          plating_notes: string | null
+          prep_time_minutes: number | null
+          procedure_text: string | null
+          service_temp_c: number | null
+          source: string
+          type: string
+          updated_at: string
+          yield_portions: number | null
+        }
+        Insert: {
+          account_id: string
+          ai_confidence?: number | null
+          alt_name?: string | null
+          archived_at?: string | null
+          base_unit_id: string
+          code?: string | null
+          computed_cost?: number | null
+          conservation_type?: string | null
+          cook_time_minutes?: number | null
+          cost_strategy?: string
+          cost_updated_at?: string | null
+          cost_window_days?: number | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          fixed_cost?: number | null
+          id?: string
+          indirect_cost_pct?: number | null
+          is_active?: boolean
+          kitchen_photo_url?: string | null
+          name: string
+          needs_review?: boolean
+          notes?: string | null
+          plating_notes?: string | null
+          prep_time_minutes?: number | null
+          procedure_text?: string | null
+          service_temp_c?: number | null
+          source?: string
+          type: string
+          updated_at?: string
+          yield_portions?: number | null
+        }
+        Update: {
+          account_id?: string
+          ai_confidence?: number | null
+          alt_name?: string | null
+          archived_at?: string | null
+          base_unit_id?: string
+          code?: string | null
+          computed_cost?: number | null
+          conservation_type?: string | null
+          cook_time_minutes?: number | null
+          cost_strategy?: string
+          cost_updated_at?: string | null
+          cost_window_days?: number | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          fixed_cost?: number | null
+          id?: string
+          indirect_cost_pct?: number | null
+          is_active?: boolean
+          kitchen_photo_url?: string | null
+          name?: string
+          needs_review?: boolean
+          notes?: string | null
+          plating_notes?: string | null
+          prep_time_minutes?: number | null
+          procedure_text?: string | null
+          service_temp_c?: number | null
+          source?: string
+          type?: string
+          updated_at?: string
+          yield_portions?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recipe_item_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recipe_item_base_unit_id_fkey"
+            columns: ["base_unit_id"]
+            isOneToOne: false
+            referencedRelation: "kitchen_unit"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recipe_item_unit_conversion: {
+        Row: {
+          account_id: string
+          ai_confidence: number | null
+          archived_at: string | null
+          created_at: string
+          created_by: string | null
+          created_by_name: string | null
+          from_unit_id: string
+          id: string
+          is_active: boolean
+          item_id: string
+          needs_review: boolean
+          qty_in_base: number
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          ai_confidence?: number | null
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          from_unit_id: string
+          id?: string
+          is_active?: boolean
+          item_id: string
+          needs_review?: boolean
+          qty_in_base: number
+          source?: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          ai_confidence?: number | null
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          from_unit_id?: string
+          id?: string
+          is_active?: boolean
+          item_id?: string
+          needs_review?: boolean
+          qty_in_base?: number
+          source?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recipe_item_unit_conversion_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recipe_item_unit_conversion_from_unit_id_fkey"
+            columns: ["from_unit_id"]
+            isOneToOne: false
+            referencedRelation: "kitchen_unit"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recipe_item_unit_conversion_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_item"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recipe_line: {
+        Row: {
+          account_id: string
+          child_item_id: string
+          comment: string | null
+          created_at: string
+          cut_type_id: string | null
+          id: string
+          parent_item_id: string
+          position: number
+          quantity_gross: number | null
+          quantity_net: number
+          unit_id: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          child_item_id: string
+          comment?: string | null
+          created_at?: string
+          cut_type_id?: string | null
+          id?: string
+          parent_item_id: string
+          position?: number
+          quantity_gross?: number | null
+          quantity_net: number
+          unit_id: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          child_item_id?: string
+          comment?: string | null
+          created_at?: string
+          cut_type_id?: string | null
+          id?: string
+          parent_item_id?: string
+          position?: number
+          quantity_gross?: number | null
+          quantity_net?: number
+          unit_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recipe_line_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recipe_line_child_item_id_fkey"
+            columns: ["child_item_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_item"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recipe_line_cut_type_id_fkey"
+            columns: ["cut_type_id"]
+            isOneToOne: false
+            referencedRelation: "kitchen_cut_type"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recipe_line_parent_item_id_fkey"
+            columns: ["parent_item_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_item"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recipe_line_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "kitchen_unit"
             referencedColumns: ["id"]
           },
         ]
@@ -4802,6 +5220,7 @@ export type Database = {
         Args: { p_account_id: string; p_permission_key: string }
         Returns: boolean
       }
+      kitchen_recompute_item: { Args: { p_item_id: string }; Returns: number }
       seed_appcc_for_account: {
         Args: { p_account_id: string }
         Returns: undefined
