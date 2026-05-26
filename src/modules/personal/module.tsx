@@ -57,17 +57,17 @@ export const personalModule: ModuleDefinition = {
 
   sidebar: {
     items: [
-      { id: 'personal_staff',       label: 'Empleados',       icon: Users,           path: '' },
-      { id: 'personal_ahora',       label: 'Ahora mismo',     icon: Activity,        path: 'ahora-mismo' },
-      { id: 'personal_horario',     label: 'Control horario', icon: Clock,           path: 'control-horario' },
-      { id: 'personal_kiosko',      label: 'Kiosko fichaje',  icon: Smartphone,      path: 'kiosko' },
-      { id: 'personal_solicitudes', label: 'Solicitudes',     icon: Inbox,           path: 'solicitudes' },
-      { id: 'personal_turnos',      label: 'Turnos abiertos', icon: Armchair,        path: 'turnos-abiertos' },
-      { id: 'personal_cambios',     label: 'Cambios de turno', icon: RefreshCw,      path: 'cambios' },
-      { id: 'personal_calendario',  label: 'Calendario',      icon: Calendar,        path: 'calendario' },
-      { id: 'personal_plantilla',   label: 'Plantilla turnos', icon: FolderOpen,     path: 'plantilla-turnos' },
-      { id: 'personal_informes',    label: 'Informes Gestoría', icon: FileText,      path: 'informes' },
-      { id: 'personal_bolsa',       label: 'Bolsa de horas',  icon: Wallet,          path: 'bolsa-horas' },
+      { id: 'personal_staff',       label: 'Empleados',         icon: Users,      path: '',                  requiredPermission: 'show_staff' },
+      { id: 'personal_ahora',       label: 'Ahora mismo',       icon: Activity,   path: 'ahora-mismo',       requiredPermission: 'show_ahora_mismo' },
+      { id: 'personal_horario',     label: 'Control horario',   icon: Clock,      path: 'control-horario',   requiredPermission: 'show_fichajes_global' },
+      { id: 'personal_kiosko',      label: 'Kiosko fichaje',    icon: Smartphone, path: 'kiosko',            requiredPermission: 'show_kiosko_fichaje' },
+      { id: 'personal_solicitudes', label: 'Solicitudes',       icon: Inbox,      path: 'solicitudes',       requiredPermission: 'show_solicitudes_pendientes' },
+      { id: 'personal_turnos',      label: 'Turnos abiertos',   icon: Armchair,   path: 'turnos-abiertos',   requiredPermission: 'show_turnos_abiertos' },
+      { id: 'personal_cambios',     label: 'Cambios de turno',  icon: RefreshCw,  path: 'cambios',           requiredPermission: 'show_cambios_pendientes' },
+      { id: 'personal_calendario',  label: 'Calendario',        icon: Calendar,   path: 'calendario',        requiredPermission: 'show_calendario' },
+      { id: 'personal_plantilla',   label: 'Plantilla turnos',  icon: FolderOpen, path: 'plantilla-turnos',  requiredPermission: 'show_plantilla_turnos' },
+      { id: 'personal_informes',    label: 'Informes Gestoría', icon: FileText,   path: 'informes',          requiredPermission: 'show_informes_personal' },
+      { id: 'personal_bolsa',       label: 'Bolsa de horas',    icon: Wallet,     path: 'bolsa-horas',       requiredPermission: 'show_bolsa_horas' },
     ],
   },
 

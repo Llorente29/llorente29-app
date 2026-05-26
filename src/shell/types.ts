@@ -37,6 +37,11 @@ export interface ModuleSidebarItem {
   path: string
   // Rol mínimo para ver este item (opcional).
   requiredRole?: ShellRole
+  // Clave de permiso (snake_case) requerida para ver el item. Si está
+  // presente, el item solo se renderiza si hasPermission(clave) === true
+  // (admin con isFullAccess bypasea automáticamente). Si está ausente, el
+  // item es público dentro del módulo (sin gating por permiso granular).
+  requiredPermission?: string
   // Sección/grupo opcional para agrupar items en la sidebar.
   section?: string
 }

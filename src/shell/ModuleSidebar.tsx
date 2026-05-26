@@ -11,6 +11,7 @@
 // Items a 0.9375rem (15px): cómodos para etiquetas de navegación.
 
 import type { ModuleSidebarDefinition } from './types'
+import { usePermissions } from '../modules/multitenancy/hooks/usePermissions'
 
 const SURFACE = 'var(--color-bg-page)'
 const BORDER = 'var(--color-border-default)'
@@ -25,6 +26,16 @@ interface ModuleSidebarProps {
 export default function ModuleSidebar({
   moduleName, sidebar, activeItemId, onSelectItem,
 }: ModuleSidebarProps) {
+  // Gating por permiso granular: un item con requiredPermission solo se
+  // muestra si hasPermission(clave) === true. Items sin requiredPermission
+  // pasan siempre (gating por rol queda como deuda futura: ya hay
+  // requiredRole en el contrato, pero aún no lo aplica nadie). Admin con
+  // isFullAccess pasa todos los filtros automáticamente (lo resuelve el hook).
+  const { hasPermission } = usePermissions()
+  const visibleItems = sidebar.items.filter(
+    item => !item.requiredPermission || hasPermission(item.requiredPermission)
+  )
+
   return (
     <aside
       className="shrink-0"
@@ -49,7 +60,7 @@ export default function ModuleSidebar({
       </p>
 
       <nav className="flex flex-col" style={{ gap: 2 }}>
-        {sidebar.items.map(item => {
+        {visibleItems.map(item => {
           const Icon = item.icon
           const active = item.id === activeItemId
           return (
