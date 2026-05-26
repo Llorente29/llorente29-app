@@ -12,12 +12,13 @@ import {
   deactivateEmployeeAccount,
   reactivateEmployeeAccount,
   deletePermanentEmployee,
+  setEmployeePassword,
 } from '../services/employeeAuthService'
 import { usePermissions } from '@/modules/multitenancy/hooks/usePermissions'
 import {
   BarChart3, Users, AlertTriangle, Search, LogOut, Trash2, RefreshCw,
   Camera, LogIn, Square, Mail, X, ShieldCheck, Calendar, Sun, Moon, Ban,
-  User, UserMinus, UserX, FileText,
+  User, UserMinus, UserX, FileText, Key,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -329,6 +330,9 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
   const [clockWarn, setClockWarn] = useState<{ type: 'blocked' | 'rounded' | 'real'; msg: string } | null>(null)
   const [showTerminationModal, setShowTerminationModal] = useState(false)
   const [showSendMessage, setShowSendMessage] = useState(false)
+  const [regeneratedPassword, setRegeneratedPassword] = useState<string | null>(null)
+  const [regenerating, setRegenerating] = useState(false)
+  const [copiedRegenerated, setCopiedRegenerated] = useState(false)
 
   const update = (field: keyof Employee, value: unknown) => setEmp(prev => ({ ...prev, [field]: value }))
 
@@ -904,6 +908,26 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
               </Button>
             )}
             {canManageEmployees && emp.active && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={regenerating}
+                onClick={async () => {
+                  setRegenerating(true)
+                  const nueva = generatePassword()
+                  const result = await setEmployeePassword(emp.id, nueva)
+                  setRegenerating(false)
+                  if (result.ok) {
+                    setRegeneratedPassword(nueva)
+                  } else {
+                    alert(`No se pudo regenerar la contraseña: ${result.error || 'desconocido'}`)
+                  }
+                }}
+              >
+                <Key size={14} /> {regenerating ? 'Regenerando…' : 'Regenerar contraseña'}
+              </Button>
+            )}
+            {canManageEmployees && emp.active && (
               <Button variant="outline" size="sm" onClick={() => setShowTerminationModal(true)}>
                 <LogOut size={14} /> Dar de baja
               </Button>
@@ -977,6 +1001,51 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
             senderName={senderName}
             onClose={() => setShowSendMessage(false)}
           />
+        )}
+        {regeneratedPassword !== null && (
+          <Modal
+            open={true}
+            onClose={() => { setRegeneratedPassword(null); setCopiedRegenerated(false) }}
+            title="Nueva contraseña"
+            size="md"
+          >
+            <div className="flex flex-col gap-4">
+              <Alert type="success">
+                Contraseña regenerada correctamente. Apunta esta contraseña y entrégasela al empleado:
+                <strong> no se volverá a mostrar</strong>.
+              </Alert>
+
+              <div className="rounded-lg border border-border-default p-4 bg-page">
+                <p className="text-xs text-text-secondary mb-1">Nueva contraseña</p>
+                <p className="font-mono text-base font-semibold">{regeneratedPassword}</p>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-border-default">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(regeneratedPassword)
+                      setCopiedRegenerated(true)
+                      setTimeout(() => setCopiedRegenerated(false), 2000)
+                    } catch {
+                      setCopiedRegenerated(false)
+                    }
+                  }}
+                >
+                  {copiedRegenerated ? 'Copiado ✓' : 'Copiar contraseña'}
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => { setRegeneratedPassword(null); setCopiedRegenerated(false) }}
+                >
+                  Cerrar
+                </Button>
+              </div>
+            </div>
+          </Modal>
         )}
       </div>
     </Modal>

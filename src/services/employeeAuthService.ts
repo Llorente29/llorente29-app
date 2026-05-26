@@ -185,6 +185,50 @@ export async function reactivateEmployeeAccount(
 }
 
 /**
+ * Regenera la contraseña de un trabajador C1.
+ * El username no cambia (la identidad de login es estable); solo se sobrescribe
+ * la password del auth.user asociado vía service_role.
+ *
+ * @param password  Nueva contraseña (mínimo 6 caracteres; el server re-valida).
+ */
+export async function setEmployeePassword(
+  employeeId: string,
+  password: string,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!supabase) return { ok: false, error: 'Supabase no disponible' }
+
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) return { ok: false, error: 'No hay sesión activa' }
+
+  const url = getFunctionUrl('manage-employee')
+  if (!url) return { ok: false, error: 'No se ha podido determinar la URL de la función' }
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        action: 'set_password',
+        employeeId,
+        password,
+      }),
+    })
+
+    const result = await response.json()
+    if (!response.ok || !result.ok) {
+      return { ok: false, error: result.error || `HTTP ${response.status}` }
+    }
+    return { ok: true }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Error desconocido'
+    return { ok: false, error: msg }
+  }
+}
+
+/**
  * ⚠️  ELIMINA PERMANENTEMENTE un empleado y todo su rastro.
  * - Borra employees + manager_locations + manager_permissions + user_profile + auth.user
  * - Es IRREVERSIBLE
