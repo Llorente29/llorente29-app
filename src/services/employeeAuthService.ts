@@ -1,13 +1,21 @@
 // src/services/employeeAuthService.ts
-// Servicio para gestionar empleados-con-cuenta vía Edge Function.
-// Solo usable por admins (la Edge Function verifica el rol del caller).
+// Servicio para gestionar empleados-con-cuenta vía Edge Function `manage-employee`.
+// Solo usable por admins (la Edge Function verifica el rol del caller server-side).
+//
+// MODELO C1 (sesión 25/05/2026): el alta crea el acceso del trabajador con
+// USUARIO + CONTRASEÑA prefijada (el manager las elige). NO hay email real de
+// login ni magic link: la Edge Function genera internamente un email sintético
+// {username}@empleado.folvy.app. El `email` aquí es OPCIONAL e informativo
+// (notificaciones futuras vía account-email), nunca la llave de acceso.
 
 import { supabase } from '../lib/supabase'
 import type { Employee } from '../types'
 
-interface CreateEmployeeInput {
+export interface CreateEmployeeInput {
   name: string
-  email: string
+  username: string // C1: identidad de login (sin @). Requerido.
+  password: string // C1: contraseña prefijada elegida por el manager. Requerido.
+  email?: string // OPCIONAL e informativo. NO es la llave de acceso.
   dni?: string
   phone?: string
   position?: string
@@ -24,11 +32,13 @@ interface CreateEmployeeInput {
   trialPeriodDays?: number
 }
 
-interface CreateEmployeeResult {
+export interface CreateEmployeeResult {
   ok: boolean
   employee?: Employee
   authUserId?: string
-  magicLinkSent?: boolean
+  /** Username canónico devuelto por el server (puede diferir del tecleado tras
+   *  normalización). El caller (StaffPage) lo muestra al manager para entregarlo. */
+  username?: string
   error?: string
 }
 
@@ -38,26 +48,27 @@ interface DeactivateResult {
   error?: string
 }
 
-// URL de la Edge Function (la calcula Supabase automáticamente)
+// URL de la Edge Function. Patrón limpio: lee VITE_SUPABASE_URL del entorno
+// (coherente con accountEmailService / platformEmailService). Antes accedía a
+// internals del cliente Supabase con @ts-expect-error; saldada esa deuda menor.
 function getFunctionUrl(name: string): string | null {
-  if (!supabase) return null
-  // @ts-expect-error: acceso a internals para extraer la URL del cliente
-  const url = supabase.supabaseUrl || (supabase as { url?: string }).url
-  if (!url) return null
-  return `${url}/functions/v1/${name}`
+  const base = import.meta.env.VITE_SUPABASE_URL as string | undefined
+  if (!base) return null
+  return `${base.replace(/\/$/, '')}/functions/v1/${name}`
 }
 
 /**
- * Crea un empleado con cuenta de auth + envío automático de Magic Link.
- * Solo accesible por admins (la Edge Function lo valida).
+ * Crea un empleado con cuenta de acceso (modelo C1: usuario + contraseña).
+ * Solo accesible por admins (la Edge Function lo valida server-side).
+ *
+ * @param data  Datos del empleado. `username` y `password` son requeridos; el
+ *              server normaliza el username y devuelve el canónico.
  */
 export async function createEmployeeWithAccount(
   data: CreateEmployeeInput,
-  sendMagicLink = true,
 ): Promise<CreateEmployeeResult> {
   if (!supabase) return { ok: false, error: 'Supabase no disponible' }
 
-  // Obtener token del admin actual
   const { data: { session } } = await supabase.auth.getSession()
   if (!session) return { ok: false, error: 'No hay sesión activa' }
 
@@ -74,7 +85,6 @@ export async function createEmployeeWithAccount(
       body: JSON.stringify({
         action: 'create',
         employee: data,
-        sendMagicLink,
       }),
     })
 
@@ -88,7 +98,7 @@ export async function createEmployeeWithAccount(
       ok: true,
       employee: result.employee,
       authUserId: result.authUserId,
-      magicLinkSent: result.magicLinkSent,
+      username: result.username,
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Error desconocido'
@@ -136,7 +146,8 @@ export async function deactivateEmployeeAccount(
 }
 
 /**
- * Reactiva un empleado dado de baja.
+ * Reactiva un empleado dado de baja. En C1 NO reenvía credenciales: el
+ * trabajador sigue accediendo con su usuario + contraseña existentes.
  */
 export async function reactivateEmployeeAccount(
   employeeId: string,
@@ -174,7 +185,7 @@ export async function reactivateEmployeeAccount(
 }
 
 /**
- * ⚠️ ELIMINA PERMANENTEMENTE un empleado y todo su rastro.
+ * ⚠️  ELIMINA PERMANENTEMENTE un empleado y todo su rastro.
  * - Borra employees + manager_locations + manager_permissions + user_profile + auth.user
  * - Es IRREVERSIBLE
  * - La UI debe confirmar 2 veces antes de llamar a esta función

@@ -1461,10 +1461,7 @@ interface NewEmployeeModalProps {
   locations: ReturnType<typeof useApp>['locations']
   onCancel: () => void
   onCreated: (employeeId: string) => void
-  // FIX P6 (17/05/2026): el handler recibe TODOS los datos del formulario,
-  // no solo locationId. Antes solo recibía locationId y se ignoraban name+pin
-  // → empleado creado con name='', PIN='', email=''. Bug detectado con
-  // Llorente29 antes de paso a producción.
+  // El path "sin acceso a la app" (solo kiosko/PIN). Firma SIN CAMBIOS.
   onCreateLocal: (data: {
     name: string
     locationId: string
@@ -1472,6 +1469,49 @@ interface NewEmployeeModalProps {
     pin?: string
   }) => Promise<string>
 }
+
+// ── Helpers C1 (sugerencia de credenciales) ───────────────────────────────────
+
+// Normaliza para username: minúsculas, sin tildes, solo [a-z0-9._].
+// Espejo (best-effort en cliente) de normalizeUsername del server; el server
+// tiene la última palabra y devuelve el canónico.
+function slugForUsername(raw: string): string {
+  return raw
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .replace(/[^a-z0-9._]/g, '')
+    .replace(/\.{2,}/g, '.')
+    .replace(/^[._]+|[._]+$/g, '')
+}
+
+// Sugiere username "nombre.local". Toma el primer token del nombre y un slug
+// corto del nombre del local. Si no hay local usable, cae a "nombre".
+function suggestUsername(name: string, locationName: string | undefined): string {
+  const first = slugForUsername(name.split(/\s+/)[0] || '')
+  const loc = slugForUsername((locationName || '').split(/\s+/)[0] || '')
+  if (!first) return ''
+  return loc ? `${first}.${loc}` : first
+}
+
+// Genera una contraseña legible: "Palabra-NNNN" con dígitos sin confusión.
+// Evita O/0/I/l/1 para facilitar el tecleo en móvil.
+function generatePassword(): string {
+  const words = [
+    'Mesa', 'Plato', 'Fuego', 'Sal', 'Pan', 'Vino', 'Cafe', 'Horno',
+    'Barra', 'Cocina', 'Turno', 'Hielo', 'Sopa', 'Brasa', 'Menu', 'Tapa',
+  ]
+  const digits = '23456789' // sin 0/1
+  const word = words[Math.floor(Math.random() * words.length)]
+  let suffix = ''
+  for (let i = 0; i < 4; i++) {
+    suffix += digits[Math.floor(Math.random() * digits.length)]
+  }
+  return `${word}-${suffix}`
+}
+
+type CreatedCredentials = { username: string; password: string }
 
 function NewEmployeeModal({ locations, onCancel, onCreated, onCreateLocal }: NewEmployeeModalProps) {
   const [name, setName] = useState('')
@@ -1482,150 +1522,281 @@ function NewEmployeeModal({ locations, onCancel, onCreated, onCreateLocal }: New
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  function toggleAdditional(locId: string) {
+  // C1: acceso a la app
+  const [withAppAccess, setWithAppAccess] = useState(true) // ON por defecto (R2)
+  const [username, setUsername] = useState('')
+  const [usernameEdited, setUsernameEdited] = useState(false) // si el manager lo tocó, no autorrellenar
+  const [password, setPassword] = useState(() => generatePassword())
+
+  // Tras crear con acceso: credenciales a mostrar (sustituye el form por la
+  // pantalla de "apunta estos datos"). Si es null, se muestra el formulario.
+  const [created, setCreated] = useState<CreatedCredentials | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  function toggleAdditional(id: string) {
     setAdditionalLocations(prev =>
-      prev.includes(locId) ? prev.filter(x => x !== locId) : [...prev, locId]
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id],
     )
+  }
+
+  // Sugerencia de username on-blur del nombre (R3), solo si el manager no lo editó.
+  function handleNameBlur() {
+    if (!withAppAccess || usernameEdited) return
+    const locName = locations.find(l => l.id === locationId)?.name
+    const suggestion = suggestUsername(name, locName)
+    if (suggestion) setUsername(suggestion)
   }
 
   async function handleSubmit() {
     setError(null)
+
     if (!name.trim()) {
-      setError('Falta el nombre')
+      setError('El nombre es obligatorio.')
       return
     }
     if (!locationId) {
-      setError('Selecciona un local')
+      setError('Selecciona un local.')
       return
     }
     if (pin && !/^\d{4}$/.test(pin)) {
-      setError('El PIN debe ser 4 dígitos')
+      setError('El PIN debe tener 4 dígitos.')
       return
     }
 
-    setSubmitting(true)
-    const allAssigned = [locationId, ...additionalLocations.filter(id => id !== locationId)]
+    const assigned = [locationId, ...additionalLocations.filter(id => id !== locationId)]
 
-    if (email.trim()) {
-      const result = await createEmployeeWithAccount({
-        name: name.trim(),
-        email: email.trim().toLowerCase(),
-        locationId,
-        assignedLocations: allAssigned,
-        pin: pin || undefined,
-      }, true)
-
-      setSubmitting(false)
-      if (!result.ok || !result.employee) {
-        setError(result.error || 'Error al crear empleado')
+    // ── Path A: empleado CON acceso a la app (C1) ──────────────────────────
+    if (withAppAccess) {
+      const cleanUsername = slugForUsername(username)
+      if (cleanUsername.length < 3) {
+        setError('El usuario debe tener al menos 3 caracteres válidos (a-z, 0-9, punto, guion bajo).')
         return
       }
-      onCreated(result.employee.id)
+      if (password.length < 6) {
+        setError('La contraseña debe tener al menos 6 caracteres.')
+        return
+      }
+
+      setSubmitting(true)
+      const result = await createEmployeeWithAccount({
+        name: name.trim(),
+        username: cleanUsername,
+        password,
+        email: email.trim() || undefined,
+        pin: pin || undefined,
+        locationId,
+        assignedLocations: assigned.length > 1 ? assigned : undefined,
+      })
+      setSubmitting(false)
+
+      if (!result.ok) {
+        setError(result.error || 'No se pudo crear el empleado.')
+        return
+      }
+
+      // Éxito: mostrar credenciales antes de cerrar. Usamos el username canónico
+      // que devuelve el server (puede diferir tras normalización).
+      setCreated({ username: result.username || cleanUsername, password })
+      // Avisar al padre del nuevo empleado para que refresque su lista, pero NO
+      // cerramos: el manager debe ver/copiar las credenciales primero.
+      if (result.employee?.id) onCreated(result.employee.id)
       return
     }
 
+    // ── Path B: empleado SIN acceso (solo kiosko/PIN). Sin cambios. ────────
+    setSubmitting(true)
     try {
-      // FIX P6: pasar todos los datos del formulario, no solo locationId
-      const empId = await onCreateLocal({
+      const newId = await onCreateLocal({
         name: name.trim(),
         locationId,
-        assignedLocations: allAssigned,
+        assignedLocations: assigned,
         pin: pin || undefined,
       })
-      setSubmitting(false)
-      onCreated(empId)
+      onCreated(newId)
     } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo crear el empleado.')
+    } finally {
       setSubmitting(false)
-      setError(e instanceof Error ? e.message : 'Error al crear empleado')
     }
   }
 
+  async function handleCopyCredentials() {
+    if (!created) return
+    const text = `Usuario: ${created.username}\nContraseña: ${created.password}`
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // Si el portapapeles falla, el manager puede copiar a mano; no es bloqueante.
+      setCopied(false)
+    }
+  }
+
+  // ── Pantalla de credenciales (tras crear con acceso) ───────────────────────
+  if (created) {
+    return (
+      <Modal open={true} onClose={onCancel} title="Acceso creado" size="md">
+        <div className="flex flex-col gap-4">
+          <Alert type="success">
+            Acceso creado correctamente. Apunta estos datos y entrégaselos al empleado:
+            la contraseña <strong>no se volverá a mostrar</strong>.
+          </Alert>
+
+          <div className="rounded-lg border border-border-default p-4 bg-page">
+            <div className="mb-3">
+              <p className="text-xs text-text-secondary mb-1">Usuario</p>
+              <p className="font-mono text-base font-semibold">{created.username}</p>
+            </div>
+            <div>
+              <p className="text-xs text-text-secondary mb-1">Contraseña</p>
+              <p className="font-mono text-base font-semibold">{created.password}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-border-default">
+            <Button variant="outline" size="sm" onClick={handleCopyCredentials}>
+              {copied ? 'Copiado ✓' : 'Copiar credenciales'}
+            </Button>
+            <Button variant="primary" size="sm" onClick={onCancel}>
+              Cerrar
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    )
+  }
+
+  // ── Formulario de alta ──────────────────────────────────────────────────────
   return (
-    <Modal open onClose={onCancel} title="Nuevo empleado">
-      <div className="space-y-4">
+    <Modal open={true} onClose={onCancel} title="Nuevo empleado" size="md">
+      <div className="flex flex-col gap-4">
         <div>
-          <Label>Nombre completo *</Label>
+          <Label>Nombre completo</Label>
           <Input
             value={name}
-            onChange={e => setName(e.target.value)}
-            placeholder="Ej: Pamela García"
             autoFocus
+            placeholder="Ej. Pamela Guzmán"
+            onChange={(e) => setName(e.target.value)}
+            onBlur={handleNameBlur}
+            disabled={submitting}
           />
         </div>
 
         <div>
-          <Label>Local principal *</Label>
-          <Select value={locationId} onChange={e => setLocationId(e.target.value)}>
-            {locations.map(l => (
-              <option key={l.id} value={l.id}>{l.name}</option>
+          <Label>Local principal</Label>
+          <Select
+            value={locationId}
+            onChange={(e) => setLocationId(e.target.value)}
+            disabled={submitting}
+          >
+            {locations.map(loc => (
+              <option key={loc.id} value={loc.id}>{loc.name}</option>
             ))}
           </Select>
         </div>
 
         {locations.length > 1 && (
           <div>
-            <Label>Locales adicionales (opcional)</Label>
-            <div className="space-y-1.5 mt-1">
-              {locations.filter(l => l.id !== locationId).map(l => (
-                <label
-                  key={l.id}
-                  className="flex items-center gap-2 px-3 py-2 rounded-md border border-border-default hover:border-accent cursor-pointer text-sm transition-base"
-                >
-                  <input
-                    type="checkbox"
-                    checked={additionalLocations.includes(l.id)}
-                    onChange={() => toggleAdditional(l.id)}
-                    className="accent-accent"
-                  />
-                  <span className="text-text-primary">{l.name}</span>
-                </label>
-              ))}
+            <Label>Locales adicionales</Label>
+            <div className="flex flex-col gap-1 mt-1">
+              {locations
+                .filter(loc => loc.id !== locationId)
+                .map(loc => (
+                  <label key={loc.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={additionalLocations.includes(loc.id)}
+                      onChange={() => toggleAdditional(loc.id)}
+                      disabled={submitting}
+                    />
+                    {loc.name}
+                  </label>
+                ))}
             </div>
-            <p className="text-xs text-text-secondary mt-1">
-              Marca otros locales donde también puede trabajar y fichar.
-            </p>
           </div>
         )}
 
         <div>
-          <Label>Email (opcional, recomendado)</Label>
+          <Label>PIN kiosko (4 dígitos, opcional)</Label>
           <Input
-            type="email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            placeholder="ej: pamela@email.com"
+            value={pin}
+            placeholder="0000"
+            maxLength={4}
+            onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+            disabled={submitting}
           />
-          <p className="text-xs text-text-secondary mt-1">
-            {email
-              ? 'Recibirá un enlace de acceso a la app por email.'
-              : 'Sin email solo podrá fichar en kiosko, no acceder a la app personal.'}
-          </p>
         </div>
 
         <div>
-          <Label>PIN (4 dígitos, opcional)</Label>
+          <Label>Email (opcional)</Label>
           <Input
-            type="text"
-            value={pin}
-            onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
-            placeholder="Ej: 1234"
-            maxLength={4}
+            type="email"
+            value={email}
+            placeholder="Para notificaciones (no es el acceso a la app)"
+            onChange={(e) => setEmail(e.target.value)}
+            disabled={submitting}
           />
-          <p className="text-xs text-text-secondary mt-1">
-            Necesario para fichar en el kiosko.
-          </p>
         </div>
 
-        {error && (
-          <Alert type="error">{error}</Alert>
+        {/* ── Toggle acceso a la app (C1) ─────────────────────────────── */}
+        <label className="flex items-center gap-2 text-sm cursor-pointer pt-2 border-t border-border-default">
+          <input
+            type="checkbox"
+            checked={withAppAccess}
+            onChange={(e) => setWithAppAccess(e.target.checked)}
+            disabled={submitting}
+          />
+          <span className="font-medium">Dar acceso a la app</span>
+        </label>
+
+        {withAppAccess ? (
+          <>
+            <div>
+              <Label>Usuario</Label>
+              <Input
+                value={username}
+                placeholder="pamela.alcala"
+                onChange={(e) => { setUsername(e.target.value); setUsernameEdited(true) }}
+                disabled={submitting}
+              />
+            </div>
+            <div>
+              <Label>Contraseña</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={submitting}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPassword(generatePassword())}
+                  disabled={submitting}
+                >
+                  Regenerar
+                </Button>
+              </div>
+              <p className="text-xs text-text-secondary mt-1">
+                El empleado entrará con este usuario y contraseña. La verás una vez al crear.
+              </p>
+            </div>
+          </>
+        ) : (
+          <p className="text-xs text-text-secondary">
+            Sin acceso a la app: el empleado solo podrá fichar en el kiosko con su PIN.
+          </p>
         )}
 
-        <div className="flex justify-end gap-2 pt-2">
-          <Button variant="outline" onClick={onCancel} disabled={submitting}>
+        {error && <Alert type="error">{error}</Alert>}
+
+        <div className="flex items-center justify-end gap-2 pt-2 border-t border-border-default">
+          <Button variant="outline" size="sm" onClick={onCancel} disabled={submitting}>
             Cancelar
           </Button>
-          <Button onClick={handleSubmit} disabled={submitting}>
-            {submitting ? 'Creando...' : email ? 'Crear y enviar acceso' : 'Crear empleado'}
+          <Button variant="primary" size="sm" onClick={handleSubmit} disabled={submitting}>
+            {submitting ? 'Creando…' : 'Crear empleado'}
           </Button>
         </div>
       </div>

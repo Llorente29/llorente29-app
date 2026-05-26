@@ -1,10 +1,15 @@
 // supabase/functions/manage-employee/index.ts
 // Edge Function: gestiona el ciclo de vida del empleado-con-cuenta.
-// Acciones: create, deactivate, reactivate.
+// Acciones: create, deactivate, reactivate, delete_permanent.
+//
+// MODELO C1 (sesión 25/05/2026): el trabajador accede con USUARIO + CONTRASEÑA
+// PREFIJADA. NO usa email real ni magic link. Internamente se crea un auth.user
+// con email SINTÉTICO {username}@empleado.folvy.app que el trabajador nunca ve.
+// El login traduce el username a ese email sintético antes de signInWithPassword.
 //
 // El frontend llama así (autenticado con sesión de admin):
 //   POST /functions/v1/manage-employee
-//   Body: { action: 'create', employee: {...} }
+//   Body create: { action: 'create', employee: { name, username, password, ... } }
 //
 // IMPORTANTE: solo admins pueden invocar esta función.
 // La verificación se hace consultando user_profiles del caller.
@@ -14,11 +19,17 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 
 type Action = "create" | "deactivate" | "reactivate" | "delete_permanent";
 
+// Dominio sintético interno. NO necesita estar verificado en Resend: nunca se
+// envía correo a estas direcciones; son sólo el identificador en auth.users.
+const SYNTHETIC_EMAIL_DOMAIN = "empleado.folvy.app";
+
 interface EmployeeData {
   name: string;
-  email: string;
+  username: string; // C1: identificador de login (sin @). Requerido en create.
+  password: string; // C1: contraseña prefijada elegida por el manager. Requerida en create.
   dni?: string;
   phone?: string;
+  email?: string; // OPCIONAL e informativo (notificaciones futuras). NO es la llave de acceso.
   position?: string;
   department?: string;
   contractType?: string;
@@ -37,8 +48,6 @@ interface Payload {
   action: Action;
   employee?: EmployeeData;
   employeeId?: string;
-  newEmail?: string;
-  sendMagicLink?: boolean; // si es create, enviar email automáticamente
 }
 
 // ────────────────────────────────────────
@@ -59,6 +68,27 @@ function jsonResponse(data: unknown, status = 200): Response {
 
 function errorResponse(message: string, status = 400): Response {
   return jsonResponse({ ok: false, error: message }, status);
+}
+
+// ────────────────────────────────────────
+// Username helpers (C1)
+// ────────────────────────────────────────
+
+// Normaliza un username: minúsculas, sin tildes/diacríticos, sólo [a-z0-9._].
+// El cliente DEBERÍA enviarlo ya normalizado; aquí re-normalizamos fail-safe.
+function normalizeUsername(raw: string): string {
+  return raw
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "") // quita diacríticos
+    .replace(/[^a-z0-9._]/g, "") // sólo letras, dígitos, punto, guion bajo
+    .replace(/\.{2,}/g, ".") // colapsa puntos repetidos
+    .replace(/^[._]+|[._]+$/g, ""); // sin separadores al inicio/fin
+}
+
+function syntheticEmailFor(username: string): string {
+  return `${username}@${SYNTHETIC_EMAIL_DOMAIN}`;
 }
 
 // ────────────────────────────────────────
@@ -88,7 +118,7 @@ Deno.serve(async (req) => {
   const { data: { user: callerUser }, error: callerErr } = await callerClient.auth.getUser();
   if (callerErr || !callerUser) return errorResponse("Invalid session", 401);
 
-  // 3) Verificar que el caller es admin
+  // 3) Verificar que el caller es admin (verificación real con service_role).
   const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
   const { data: callerProfile, error: profileErr } = await adminClient
     .from("user_profiles")
@@ -126,79 +156,75 @@ Deno.serve(async (req) => {
 });
 
 // ────────────────────────────────────────
-// ACCIÓN: CREATE
-// Crea empleado + auth.user + user_profile + envía Magic Link
-// IDEMPOTENTE: si ya existe auth.user con ese email, lo reutiliza.
-//              si ya existe user_profile vinculado, devuelve el employee existente.
+// ACCIÓN: CREATE (modelo C1)
+// Crea empleado + auth.user (email sintético + password prefijada) + user_profile.
+// El user_profile se marca welcome_completed_at + terms_accepted_at (el manager
+// acepta T&C en nombre del trabajador), de modo que App.tsx NO fuerza /welcome.
+// IDEMPOTENTE: si ya existe auth.user con el email sintético, se rechaza como
+// username duplicado (no se reutiliza silenciosamente: en C1 el username es la
+// identidad y reusarlo escondería un error del manager).
 // ────────────────────────────────────────
 // deno-lint-ignore no-explicit-any
 async function handleCreate(admin: any, payload: Payload, actorUserId: string): Promise<Response> {
   if (!payload.employee) return errorResponse("Missing employee data", 400);
   const emp = payload.employee;
 
-  if (!emp.name?.trim()) return errorResponse("Employee name is required", 400);
-  if (!emp.email?.trim() || !emp.email.includes("@")) {
-    return errorResponse("Valid email is required", 400);
+  if (!emp.name?.trim()) return errorResponse("El nombre del empleado es obligatorio", 400);
+
+  // C1: validar username y password.
+  const username = normalizeUsername(emp.username || "");
+  if (username.length < 3) {
+    return errorResponse("El usuario debe tener al menos 3 caracteres válidos (a-z, 0-9, . _)", 400);
+  }
+  if (!emp.password || emp.password.length < 6) {
+    return errorResponse("La contraseña debe tener al menos 6 caracteres", 400);
   }
 
-  const email = emp.email.trim().toLowerCase();
+  const syntheticEmail = syntheticEmailFor(username);
 
-  // 1) Comprobar que no existe ya un auth.user con ese email
-  const { data: existingUsers } = await admin.auth.admin.listUsers();
-  const existingAuth = existingUsers?.users?.find((u: { email?: string }) => u.email === email);
-
-  let authUserId: string;
-  let authWasCreated = false;
-
-  if (existingAuth) {
-    // Si ya existe, reutilizamos su id
-    authUserId = existingAuth.id;
-  } else {
-    // 2) Crear cuenta en auth.users
-    const { data: newAuth, error: authErr } = await admin.auth.admin.createUser({
-      email,
-      email_confirm: true, // auto-confirmar
-      user_metadata: { display_name: emp.name },
-    });
-
-    if (authErr || !newAuth?.user) {
-      return errorResponse(`Auth user creation failed: ${authErr?.message || "unknown"}`, 500);
-    }
-    authUserId = newAuth.user.id;
-    authWasCreated = true;
-  }
-
-  // 3) Verificar si ya hay un user_profile vinculado a este auth_user
-  const { data: existingProfile } = await admin
-    .from("user_profiles")
-    .select("id, employee_id, active")
-    .eq("user_id", authUserId)
+  // 1) Comprobar unicidad del username a nivel de tabla employees (índice único parcial).
+  const { data: existingByUsername } = await admin
+    .from("employees")
+    .select("id")
+    .eq("username", username)
     .maybeSingle();
 
-  if (existingProfile?.employee_id) {
-    // YA está vinculado a un empleado → devolver el empleado existente
-    const { data: existingEmployee } = await admin
-      .from("employees")
-      .select("*")
-      .eq("id", existingProfile.employee_id)
-      .maybeSingle();
-
-    if (existingEmployee) {
-      return jsonResponse({
-        ok: true,
-        employee: existingEmployee,
-        authUserId,
-        magicLinkSent: false,
-        message: "Empleado ya existía con esta cuenta. No se ha creado nada nuevo.",
-        alreadyExisted: true,
-      });
-    }
+  if (existingByUsername) {
+    return errorResponse(`El usuario "${username}" ya está en uso. Elige otro.`, 409);
   }
 
-  // 4) Crear empleado en tabla employees
+  // 2) Comprobar que no exista ya un auth.user con ese email sintético (consistencia).
+  const { data: existingUsers } = await admin.auth.admin.listUsers();
+  const existingAuth = existingUsers?.users?.find(
+    (u: { email?: string }) => u.email === syntheticEmail,
+  );
+  if (existingAuth) {
+    // No reutilizamos: en C1 el email sintético deriva del username, que ya hemos
+    // verificado libre en employees. Si llega aquí, hay un huérfano en auth → error claro.
+    return errorResponse(
+      `Conflicto: ya existe una cuenta para el usuario "${username}". Contacta con soporte.`,
+      409,
+    );
+  }
+
+  // 3) Crear cuenta en auth.users CON password prefijada y email sintético confirmado.
+  const { data: newAuth, error: authErr } = await admin.auth.admin.createUser({
+    email: syntheticEmail,
+    password: emp.password,
+    email_confirm: true, // auto-confirma: no hay verificación de email en C1
+    user_metadata: { display_name: emp.name, login_username: username },
+  });
+
+  if (authErr || !newAuth?.user) {
+    return errorResponse(`Auth user creation failed: ${authErr?.message || "unknown"}`, 500);
+  }
+  const authUserId: string = newAuth.user.id;
+
+  // 4) Crear empleado en tabla employees (incluye username; email REAL opcional/informativo).
   const employeeRow: Record<string, unknown> = {
     name: emp.name,
-    email,
+    username, // C1: identidad de login
+    email: emp.email?.trim().toLowerCase() || null, // informativo, NO llave de acceso
     dni: emp.dni || null,
     phone: emp.phone || null,
     position: emp.position || null,
@@ -223,101 +249,32 @@ async function handleCreate(admin: any, payload: Payload, actorUserId: string): 
     .single();
 
   if (empErr || !newEmployee) {
-    // Rollback: si creamos auth nuevo y falla employee, eliminar el auth para dejar BD limpia
-    if (authWasCreated) {
-      await admin.auth.admin.deleteUser(authUserId);
-    }
+    // Rollback: borrar el auth.user recién creado para no dejar huérfanos.
+    await admin.auth.admin.deleteUser(authUserId);
     return errorResponse(`Employee insert failed: ${empErr?.message || "unknown"}`, 500);
   }
 
-  // 5) Crear o actualizar user_profile
-  if (existingProfile) {
-    // El profile existía pero sin employee_id → actualizarlo para vincularlo al nuevo employee
-    const { error: profileUpdErr } = await admin
-      .from("user_profiles")
-      .update({
-        employee_id: newEmployee.id,
-        role: "worker",
-        active: true,
-        display_name: emp.name,
-      })
-      .eq("id", existingProfile.id);
+  // 5) Crear user_profile con role=worker y welcome+terms YA marcados (C1: sin /welcome).
+  //    El constraint user_profiles_welcome_requires_terms exige terms <= welcome.
+  const nowIso = new Date().toISOString();
+  const { error: profileInsertErr } = await admin.from("user_profiles").insert({
+    user_id: authUserId,
+    employee_id: newEmployee.id,
+    role: "worker",
+    active: true,
+    display_name: emp.name,
+    terms_accepted_at: nowIso, // el manager acepta T&C en nombre del trabajador (R4)
+    welcome_completed_at: nowIso, // sin pantalla de welcome en C1
+  });
 
-    if (profileUpdErr) {
-      return errorResponse(`Profile update failed: ${profileUpdErr.message}`, 500);
-    }
-  } else {
-    // No había profile → crearlo
-    const { error: profileInsertErr } = await admin.from("user_profiles").insert({
-      user_id: authUserId,
-      employee_id: newEmployee.id,
-      role: "worker",
-      active: true,
-      display_name: emp.name,
-    });
-
-    if (profileInsertErr) {
-      // Rollback employee si falla el profile
-      await admin.from("employees").delete().eq("id", newEmployee.id);
-      if (authWasCreated) {
-        await admin.auth.admin.deleteUser(authUserId);
-      }
-      return errorResponse(`Profile insert failed: ${profileInsertErr.message}`, 500);
-    }
+  if (profileInsertErr) {
+    // Rollback en cascada: borrar employee y auth.user.
+    await admin.from("employees").delete().eq("id", newEmployee.id);
+    await admin.auth.admin.deleteUser(authUserId);
+    return errorResponse(`Profile insert failed: ${profileInsertErr.message}`, 500);
   }
 
-  // 6) Enviar email de bienvenida (si se solicitó)
-  // Estrategia: generar el Magic Link con Supabase y enviarlo nosotros vía Resend API.
-  // Esto garantiza que pasa por nuestro SMTP profesional (Resend) y se ve en sus logs.
-  let magicLinkSent = false;
-  if (payload.sendMagicLink !== false) {
-    try {
-      // 6a) Generar el link sin enviarlo (Supabase devuelve la URL)
-      // Usamos siempre 'magiclink' (funciona para usuarios nuevos y existentes).
-      const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
-        type: "magiclink",
-        email,
-      });
-
-      if (linkErr || !linkData?.properties?.action_link) {
-        console.error("generateLink error:", linkErr?.message || "no action_link");
-      } else {
-        const actionLink = linkData.properties.action_link;
-
-        // 6b) Enviar email vía Resend API directamente
-        const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
-        if (!RESEND_API_KEY) {
-          console.error("RESEND_API_KEY not configured");
-        } else {
-          const emailHtml = buildWelcomeEmail(emp.name, actionLink);
-          const resendResp = await fetch("https://api.resend.com/emails", {
-            method: "POST",
-            headers: {
-              "Authorization": `Bearer ${RESEND_API_KEY}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              from: "Foodint <noreply@foodint.es>",
-              to: [email],
-              subject: "🍽️ Bienvenido a Foodint - Activa tu cuenta",
-              html: emailHtml,
-            }),
-          });
-
-          if (resendResp.ok) {
-            magicLinkSent = true;
-          } else {
-            const errorText = await resendResp.text();
-            console.error("Resend API error:", resendResp.status, errorText);
-          }
-        }
-      }
-    } catch (e) {
-      console.error("Email send exception:", e);
-    }
-  }
-
-  // 7) Audit log
+  // 6) Audit log.
   await admin.from("security_audit_log").insert({
     actor_user_id: actorUserId,
     target_user_id: authUserId,
@@ -325,30 +282,30 @@ async function handleCreate(admin: any, payload: Payload, actorUserId: string): 
     details: {
       employee_id: newEmployee.id,
       employee_name: emp.name,
-      email,
-      magic_link_sent: magicLinkSent,
-      auth_was_created: authWasCreated,
+      username,
+      synthetic_email: syntheticEmail,
+      model: "C1",
     },
   });
 
+  // NOTA: en C1 NO se envía email al trabajador. El manager recibe el usuario y la
+  // contraseña en la UI (StaffPage) para entregárselos en mano.
   return jsonResponse({
     ok: true,
     employee: newEmployee,
     authUserId,
-    magicLinkSent,
+    username, // el cliente lo muestra al manager
   });
 }
 
 // ────────────────────────────────────────
 // ACCIÓN: DEACTIVATE
-// Marca empleado y user_profile como inactivos.
-// NO borra el auth.user (queda en BD pero con profile inactivo no entra).
+// Marca empleado y user_profile como inactivos. NO borra el auth.user.
 // ────────────────────────────────────────
 // deno-lint-ignore no-explicit-any
 async function handleDeactivate(admin: any, payload: Payload, actorUserId: string): Promise<Response> {
   if (!payload.employeeId) return errorResponse("Missing employeeId", 400);
 
-  // 1) Marcar empleado inactivo
   const { error: empErr } = await admin
     .from("employees")
     .update({ active: false })
@@ -356,7 +313,6 @@ async function handleDeactivate(admin: any, payload: Payload, actorUserId: strin
 
   if (empErr) return errorResponse(`Employee update failed: ${empErr.message}`, 500);
 
-  // 2) Marcar user_profile inactivo (si existe)
   const { data: profile } = await admin
     .from("user_profiles")
     .select("user_id")
@@ -370,7 +326,6 @@ async function handleDeactivate(admin: any, payload: Payload, actorUserId: strin
       .eq("employee_id", payload.employeeId);
   }
 
-  // 3) Audit
   await admin.from("security_audit_log").insert({
     actor_user_id: actorUserId,
     target_user_id: profile?.user_id || null,
@@ -382,124 +337,57 @@ async function handleDeactivate(admin: any, payload: Payload, actorUserId: strin
 }
 
 // ────────────────────────────────────────
-// ACCIÓN: REACTIVATE
-// Reactiva empleado, user_profile y envía email avisando.
+// ACCIÓN: REACTIVATE (modelo C1)
+// Reactiva empleado y user_profile. NO envía email ni magic link (C1): el
+// trabajador sigue accediendo con su usuario + contraseña existentes. Si el
+// manager quiere darle una contraseña nueva, usará la regeneración de contraseña
+// (acción futura), no la reactivación.
 // ────────────────────────────────────────
 // deno-lint-ignore no-explicit-any
 async function handleReactivate(admin: any, payload: Payload, actorUserId: string): Promise<Response> {
   if (!payload.employeeId) return errorResponse("Missing employeeId", 400);
 
-  // 1) Reactivar empleado
-  const { data: updatedEmp, error: empErr } = await admin
+  const { error: empErr } = await admin
     .from("employees")
     .update({ active: true })
-    .eq("id", payload.employeeId)
-    .select()
-    .single();
+    .eq("id", payload.employeeId);
 
   if (empErr) return errorResponse(`Employee update failed: ${empErr.message}`, 500);
 
-  // 2) Reactivar user_profile
   await admin
     .from("user_profiles")
     .update({ active: true })
     .eq("employee_id", payload.employeeId);
 
-  // 3) Conseguir email y user_id para enviar mail
   const { data: profile } = await admin
     .from("user_profiles")
     .select("user_id")
     .eq("employee_id", payload.employeeId)
     .maybeSingle();
 
-  let emailSent = false;
-  let userEmail: string | undefined;
-
-  if (profile?.user_id) {
-    // Conseguir email del auth.users
-    const { data: userData } = await admin.auth.admin.getUserById(profile.user_id);
-    userEmail = userData?.user?.email;
-
-    if (userEmail && payload.sendMagicLink !== false) {
-      try {
-        // Generar Magic Link
-        const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
-          type: "magiclink",
-          email: userEmail,
-        });
-
-        if (linkErr || !linkData?.properties?.action_link) {
-          console.error("Reactivate generateLink error:", linkErr?.message || "no link");
-        } else {
-          const actionLink = linkData.properties.action_link;
-          const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
-
-          if (RESEND_API_KEY) {
-            const emailHtml = buildReactivationEmail(updatedEmp?.name || "compañero/a", actionLink);
-            const resendResp = await fetch("https://api.resend.com/emails", {
-              method: "POST",
-              headers: {
-                "Authorization": `Bearer ${RESEND_API_KEY}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                from: "Foodint <noreply@foodint.es>",
-                to: [userEmail],
-                subject: "🍽️ Tu cuenta de Foodint está reactivada",
-                html: emailHtml,
-              }),
-            });
-            emailSent = resendResp.ok;
-            if (!resendResp.ok) {
-              const errText = await resendResp.text();
-              console.error("Reactivate Resend error:", resendResp.status, errText);
-            }
-          }
-        }
-      } catch (e) {
-        console.error("Reactivate email exception:", e);
-      }
-    }
-  }
-
-  // 4) Audit log
   await admin.from("security_audit_log").insert({
     actor_user_id: actorUserId,
     target_user_id: profile?.user_id || null,
     action: "employee_reactivated",
-    details: {
-      employee_id: payload.employeeId,
-      email_sent: emailSent,
-      email: userEmail || null,
-    },
+    details: { employee_id: payload.employeeId },
   });
 
-  return jsonResponse({
-    ok: true,
-    employeeId: payload.employeeId,
-    emailSent,
-  });
+  return jsonResponse({ ok: true, employeeId: payload.employeeId });
 }
 
 // ────────────────────────────────────────
 // ACCIÓN: DELETE_PERMANENT
-// Elimina TODO el rastro del empleado:
-// - employees (mediante CASCADE borra clockEntries, vacations, docs, etc.)
-// - user_profiles
-// - manager_locations
-// - manager_permissions
-// - auth.users (libera el email)
-//
-// Es IRREVERSIBLE. La UI debe haber confirmado dos veces.
+// Elimina TODO el rastro del empleado (employees + CASCADE, user_profiles,
+// manager_locations, manager_permissions, auth.users). IRREVERSIBLE.
+// Sin cambios respecto al original salvo limpieza.
 // ────────────────────────────────────────
 // deno-lint-ignore no-explicit-any
 async function handleDeletePermanent(admin: any, payload: Payload, actorUserId: string): Promise<Response> {
   if (!payload.employeeId) return errorResponse("Missing employeeId", 400);
 
-  // 1) Obtener datos antes de borrar (para audit log)
   const { data: employee } = await admin
     .from("employees")
-    .select("name, email")
+    .select("name, username, email")
     .eq("id", payload.employeeId)
     .maybeSingle();
 
@@ -512,42 +400,19 @@ async function handleDeletePermanent(admin: any, payload: Payload, actorUserId: 
   const auth_user_id = profile?.user_id || null;
   const user_profile_id = profile?.id || null;
 
-  // 2) Borrar manager_permissions si existe (depende de user_profile_id)
   if (user_profile_id) {
-    await admin
-      .from("manager_permissions")
-      .delete()
-      .eq("user_profile_id", user_profile_id);
+    await admin.from("manager_permissions").delete().eq("user_profile_id", user_profile_id);
+    await admin.from("manager_locations").delete().eq("user_profile_id", user_profile_id);
+    await admin.from("user_profiles").delete().eq("id", user_profile_id);
   }
 
-  // 3) Borrar manager_locations si existe (depende de user_profile_id)
-  if (user_profile_id) {
-    await admin
-      .from("manager_locations")
-      .delete()
-      .eq("user_profile_id", user_profile_id);
-  }
-
-  // 4) Borrar user_profile si existe
-  if (user_profile_id) {
-    await admin
-      .from("user_profiles")
-      .delete()
-      .eq("id", user_profile_id);
-  }
-
-  // 5) Borrar empleado (con todo lo que depende de él vía CASCADE)
   const { error: empErr } = await admin
     .from("employees")
     .delete()
     .eq("id", payload.employeeId);
 
-  if (empErr) {
-    return errorResponse(`Employee delete failed: ${empErr.message}`, 500);
-  }
+  if (empErr) return errorResponse(`Employee delete failed: ${empErr.message}`, 500);
 
-  // 6) Borrar auth.users si existía y nadie más lo usa
-  // Verificar que no haya otro user_profile usándolo (no debería pero por si acaso)
   if (auth_user_id) {
     const { data: otherProfiles } = await admin
       .from("user_profiles")
@@ -556,16 +421,11 @@ async function handleDeletePermanent(admin: any, payload: Payload, actorUserId: 
       .limit(1);
 
     if (!otherProfiles || otherProfiles.length === 0) {
-      // Nadie más usa esa cuenta auth, la borramos
       const { error: authErr } = await admin.auth.admin.deleteUser(auth_user_id);
-      if (authErr) {
-        console.error("Auth delete error:", authErr);
-        // No fallar la operación entera; el empleado ya está borrado
-      }
+      if (authErr) console.error("Auth delete error:", authErr);
     }
   }
 
-  // 7) Audit log
   await admin.from("security_audit_log").insert({
     actor_user_id: actorUserId,
     target_user_id: auth_user_id,
@@ -573,7 +433,7 @@ async function handleDeletePermanent(admin: any, payload: Payload, actorUserId: 
     details: {
       employee_id: payload.employeeId,
       employee_name: employee?.name || null,
-      employee_email: employee?.email || null,
+      employee_username: employee?.username || null,
       auth_user_deleted: !!auth_user_id,
     },
   });
@@ -583,181 +443,4 @@ async function handleDeletePermanent(admin: any, payload: Payload, actorUserId: 
     employeeId: payload.employeeId,
     authUserDeleted: !!auth_user_id,
   });
-}
-
-// ────────────────────────────────────────
-// Plantilla de email de bienvenida (HTML con branding Foodint)
-// ────────────────────────────────────────
-function buildWelcomeEmail(employeeName: string, actionLink: string): string {
-  return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #F5E9D9;
-      margin: 0;
-      padding: 0;
-    }
-    .container {
-      max-width: 480px;
-      margin: 40px auto;
-      background: white;
-      border-radius: 12px;
-      overflow: hidden;
-      box-shadow: 0 4px 12px rgba(124, 26, 26, 0.1);
-    }
-    .header {
-      background: #7C1A1A;
-      color: white;
-      padding: 24px;
-      text-align: center;
-    }
-    .header h1 {
-      margin: 0;
-      font-family: Georgia, serif;
-      font-size: 32px;
-      letter-spacing: 1px;
-    }
-    .content {
-      padding: 32px 24px;
-    }
-    .content p {
-      color: #333;
-      line-height: 1.6;
-      margin: 0 0 16px 0;
-    }
-    .button {
-      display: inline-block;
-      background: #7C1A1A;
-      color: white !important;
-      padding: 14px 32px;
-      border-radius: 8px;
-      text-decoration: none;
-      font-weight: 600;
-      margin: 20px 0;
-    }
-    .footer {
-      background: #f9f4ec;
-      padding: 16px 24px;
-      text-align: center;
-      font-size: 12px;
-      color: #999;
-    }
-    .small {
-      font-size: 12px;
-      color: #999;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h1>Foodint</h1>
-    </div>
-    <div class="content">
-      <p>¡Hola ${employeeName}!</p>
-      <p>Te damos la bienvenida al equipo de Foodint. Pulsa el botón para activar tu cuenta y entrar a la app:</p>
-      <p style="text-align: center;">
-        <a href="${actionLink}" class="button">Entrar a Foodint</a>
-      </p>
-      <p class="small">Si tienes problemas con el botón, copia y pega este enlace en tu navegador:</p>
-      <p class="small" style="word-break: break-all;">${actionLink}</p>
-      <p class="small" style="margin-top: 24px;">Si no esperabas este email, ignóralo sin problema.</p>
-    </div>
-    <div class="footer">
-      Foodint · App del equipo
-    </div>
-  </div>
-</body>
-</html>`;
-}
-
-// ────────────────────────────────────────
-// Plantilla de email de REACTIVACIÓN
-// ────────────────────────────────────────
-function buildReactivationEmail(employeeName: string, actionLink: string): string {
-  return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #F5E9D9;
-      margin: 0;
-      padding: 0;
-    }
-    .container {
-      max-width: 480px;
-      margin: 40px auto;
-      background: white;
-      border-radius: 12px;
-      overflow: hidden;
-      box-shadow: 0 4px 12px rgba(124, 26, 26, 0.1);
-    }
-    .header {
-      background: #7C1A1A;
-      color: white;
-      padding: 24px;
-      text-align: center;
-    }
-    .header h1 {
-      margin: 0;
-      font-family: Georgia, serif;
-      font-size: 32px;
-      letter-spacing: 1px;
-    }
-    .content {
-      padding: 32px 24px;
-    }
-    .content p {
-      color: #333;
-      line-height: 1.6;
-      margin: 0 0 16px 0;
-    }
-    .button {
-      display: inline-block;
-      background: #7C1A1A;
-      color: white !important;
-      padding: 14px 32px;
-      border-radius: 8px;
-      text-decoration: none;
-      font-weight: 600;
-      margin: 20px 0;
-    }
-    .footer {
-      background: #f9f4ec;
-      padding: 16px 24px;
-      text-align: center;
-      font-size: 12px;
-      color: #999;
-    }
-    .small {
-      font-size: 12px;
-      color: #999;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h1>Foodint</h1>
-    </div>
-    <div class="content">
-      <p>¡Hola ${employeeName}!</p>
-      <p>Te damos la bienvenida de nuevo al equipo. Tu cuenta de Foodint ha sido <strong>reactivada</strong>.</p>
-      <p>Pulsa el botón para entrar a la app:</p>
-      <p style="text-align: center;">
-        <a href="${actionLink}" class="button">Entrar a Foodint</a>
-      </p>
-      <p class="small">Si no esperabas este email, contacta con tu administrador.</p>
-    </div>
-    <div class="footer">
-      Foodint · App del equipo
-    </div>
-  </div>
-</body>
-</html>`;
 }
