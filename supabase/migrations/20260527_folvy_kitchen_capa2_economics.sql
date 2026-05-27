@@ -2,14 +2,17 @@
 -- 20260527_folvy_kitchen_capa2_economics.sql
 -- Folvy Kitchen — Capa 2: economía de carta por marca × canal (menu_item_economics)
 -- Ramifica por brand.ownership_type:
---   'own'      → margen = price - coste - comisión_canal - delivery_fee
---                (comisión de plataforma vive en sales_channel.default_commission_pct)
+--   'own'      → margen = price - coste - comisión% (comisión de brand_channel
+--                con fallback a sales_channel; commission_fixed informativa,
+--                NO se resta al margen por plato: es coste por pedido)
 --   'licensed' → margen = revenue_share + reembolso_consumos - coste
---                (revenue_share sobre PVP sin IVA, del brand_licensing_agreement)
--- Fuente única de verdad. Solo lectura. delivery_fee = raíl 0 (frente futuro).
+-- Fuente única de verdad. Solo lectura. delivery_fee = raíl 0.
+-- NOTA: requiere DROP previo si ya existe (el RETURNS cambió al añadir commission_fixed).
 -- ============================================================================
 
 BEGIN;
+
+DROP FUNCTION IF EXISTS public.menu_item_economics(uuid);
 
 CREATE OR REPLACE FUNCTION public.menu_item_economics(p_brand_id uuid)
 RETURNS TABLE (
@@ -28,6 +31,7 @@ RETURNS TABLE (
   contribution_margin  numeric,
   commission_pct       numeric,
   commission_amount    numeric,
+  commission_fixed     numeric,
   delivery_fee         numeric,
   revenue_share_pct    numeric,
   revenue_share_amount numeric,
@@ -68,7 +72,8 @@ BEGIN
       mi.price             AS price,
       mi.vat_rate          AS vat_rate,
       mi.consumption_price AS consumption_price,
-      COALESCE(sc.default_commission_pct, 0) AS commission_pct,
+      COALESCE(bc.commission_pct, sc.default_commission_pct, 0) AS commission_pct,
+      COALESCE(bc.commission_fixed, 0) AS commission_fixed,
       bla.revenue_share_pct      AS revenue_share_pct,
       bla.reimburses_consumption AS reimburses_consumption,
       ks.target_food_cost_pct    AS target_food_cost_pct
@@ -76,6 +81,8 @@ BEGIN
     JOIN brand b          ON b.id = mi.brand_id
     JOIN sales_channel sc ON sc.id = mi.channel_id
     JOIN recipe_item ri   ON ri.id = mi.recipe_item_id
+    LEFT JOIN brand_channel bc
+           ON bc.brand_id = mi.brand_id AND bc.channel_id = mi.channel_id AND bc.is_active = true
     LEFT JOIN brand_licensing_agreement bla
            ON bla.brand_id = mi.brand_id AND bla.is_active = true
     LEFT JOIN kitchen_settings ks ON ks.account_id = mi.account_id
@@ -101,6 +108,7 @@ BEGIN
     CASE WHEN base.flow_type = 'own' THEN base.commission_pct END AS commission_pct,
     CASE WHEN base.flow_type = 'own'
          THEN ROUND(base.price * base.commission_pct / 100, 4) END AS commission_amount,
+    CASE WHEN base.flow_type = 'own' THEN base.commission_fixed END AS commission_fixed,
     CASE WHEN base.flow_type = 'own' THEN 0::numeric END AS delivery_fee,
     CASE WHEN base.flow_type = 'licensed' THEN base.revenue_share_pct END AS revenue_share_pct,
     CASE WHEN base.flow_type = 'licensed' AND base.revenue_share_pct IS NOT NULL
@@ -109,8 +117,7 @@ BEGIN
          THEN base.consumption_price END AS consumption_reimb,
     CASE
       WHEN base.flow_type = 'own' AND base.cost_available
-        THEN ROUND(base.price - base.cost
-                   - (base.price * base.commission_pct / 100) - 0, 4)
+        THEN ROUND(base.price - base.cost - (base.price * base.commission_pct / 100), 4)
       WHEN base.flow_type = 'licensed' AND base.cost_available AND base.revenue_share_pct IS NOT NULL
         THEN ROUND(
                (base.price * base.revenue_share_pct / 100)
@@ -120,8 +127,7 @@ BEGIN
     END AS net_margin,
     CASE
       WHEN base.flow_type = 'own' AND base.cost_available AND base.price > 0
-        THEN ROUND((base.price - base.cost
-                   - (base.price * base.commission_pct / 100)) / base.price * 100, 2)
+        THEN ROUND((base.price - base.cost - (base.price * base.commission_pct / 100)) / base.price * 100, 2)
     END AS net_margin_pct,
     base.target_food_cost_pct,
     CASE

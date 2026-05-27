@@ -457,6 +457,7 @@ export interface MenuItemEconomics {
   contributionMargin: number | null
   commissionPct: number | null
   commissionAmount: number | null
+  commissionFixed: number | null
   deliveryFee: number | null
   revenueSharePct: number | null
   revenueShareAmount: number | null

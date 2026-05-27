@@ -315,6 +315,7 @@ interface RowMenuItemEconomics {
   contribution_margin: number | null
   commission_pct: number | null
   commission_amount: number | null
+  commission_fixed: number | null
   delivery_fee: number | null
   revenue_share_pct: number | null
   revenue_share_amount: number | null
@@ -342,6 +343,7 @@ function rowToMenuItemEconomics(row: RowMenuItemEconomics): MenuItemEconomics {
     contributionMargin: row.contribution_margin,
     commissionPct: row.commission_pct,
     commissionAmount: row.commission_amount,
+    commissionFixed: row.commission_fixed,
     deliveryFee: row.delivery_fee,
     revenueSharePct: row.revenue_share_pct,
     revenueShareAmount: row.revenue_share_amount,
