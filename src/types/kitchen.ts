@@ -430,3 +430,39 @@ export interface BrandLicensingAgreementUpdate {
   isActive?: boolean
   archivedAt?: string | null
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// menu_item_economics (resultado de la función SQL homónima)
+// NO es una tabla: es la forma que devuelve la RPC. Ramifica por flowType:
+//   'own'      → food cost %, comisión de plataforma del canal
+//   'licensed' → revenue share + reembolso de consumos
+// Campos que no aplican a un flujo vienen null (honestidad del cálculo).
+// ─────────────────────────────────────────────────────────────────────
+export type MenuItemFlowType = 'own' | 'licensed'
+export type FoodCostStatus = 'under' | 'over' | 'no_target' | 'no_cost' | 'n_a'
+
+export interface MenuItemEconomics {
+  menuItemId: string
+  menuItemName: string
+  recipeItemId: string
+  channelId: string
+  channelName: string
+  flowType: MenuItemFlowType
+  cost: number | null
+  costAvailable: boolean
+  price: number
+  vatRate: number
+  priceWithVat: number
+  foodCostPct: number | null
+  contributionMargin: number | null
+  commissionPct: number | null
+  commissionAmount: number | null
+  deliveryFee: number | null
+  revenueSharePct: number | null
+  revenueShareAmount: number | null
+  consumptionReimb: number | null
+  netMargin: number | null
+  netMarginPct: number | null
+  targetFoodCostPct: number | null
+  foodCostStatus: FoodCostStatus
+}
