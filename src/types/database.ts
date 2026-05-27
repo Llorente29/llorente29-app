@@ -2240,6 +2240,66 @@ export type Database = {
           },
         ]
       }
+      brand_channel: {
+        Row: {
+          account_id: string
+          archived_at: string | null
+          brand_id: string
+          channel_id: string
+          commission_fixed: number | null
+          commission_pct: number | null
+          created_at: string
+          created_by: string | null
+          created_by_name: string | null
+          id: string
+          is_active: boolean
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          archived_at?: string | null
+          brand_id: string
+          channel_id: string
+          commission_fixed?: number | null
+          commission_pct?: number | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          id?: string
+          is_active?: boolean
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          archived_at?: string | null
+          brand_id?: string
+          channel_id?: string
+          commission_fixed?: number | null
+          commission_pct?: number | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          id?: string
+          is_active?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bc_brand_fk"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bc_channel_fk"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "sales_channel"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       brand_licensing_agreement: {
         Row: {
           account_id: string
@@ -3430,6 +3490,170 @@ export type Database = {
           },
         ]
       }
+      mapping_candidate: {
+        Row: {
+          created_at: string
+          id: string
+          proposal_id: string
+          rank: number
+          reason: string | null
+          score: number
+          target_id: string
+          target_label: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          proposal_id: string
+          rank: number
+          reason?: string | null
+          score: number
+          target_id: string
+          target_label: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          proposal_id?: string
+          rank?: number
+          reason?: string | null
+          score?: number
+          target_id?: string
+          target_label?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mapping_candidate_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "mapping_proposal"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mapping_decision: {
+        Row: {
+          account_id: string
+          action: string
+          chosen_target_id: string | null
+          created_at: string
+          decided_by: string | null
+          decided_by_name: string | null
+          id: string
+          note: string | null
+          proposal_id: string
+        }
+        Insert: {
+          account_id: string
+          action: string
+          chosen_target_id?: string | null
+          created_at?: string
+          decided_by?: string | null
+          decided_by_name?: string | null
+          id?: string
+          note?: string | null
+          proposal_id: string
+        }
+        Update: {
+          account_id?: string
+          action?: string
+          chosen_target_id?: string | null
+          created_at?: string
+          decided_by?: string | null
+          decided_by_name?: string | null
+          id?: string
+          note?: string | null
+          proposal_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mapping_decision_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mapping_decision_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "mapping_proposal"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mapping_proposal: {
+        Row: {
+          account_id: string
+          chosen_target_id: string | null
+          confidence: number | null
+          context_brand_id: string | null
+          created_at: string
+          engine_version: string | null
+          id: string
+          method: string
+          rationale: string | null
+          source_kind: string
+          source_normalized: string
+          source_ref: string | null
+          source_text: string
+          status: string
+          target_kind: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          chosen_target_id?: string | null
+          confidence?: number | null
+          context_brand_id?: string | null
+          created_at?: string
+          engine_version?: string | null
+          id?: string
+          method?: string
+          rationale?: string | null
+          source_kind: string
+          source_normalized: string
+          source_ref?: string | null
+          source_text: string
+          status?: string
+          target_kind: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          chosen_target_id?: string | null
+          confidence?: number | null
+          context_brand_id?: string | null
+          created_at?: string
+          engine_version?: string | null
+          id?: string
+          method?: string
+          rationale?: string | null
+          source_kind?: string
+          source_normalized?: string
+          source_ref?: string | null
+          source_text?: string
+          status?: string
+          target_kind?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mapping_proposal_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mapping_proposal_context_brand_id_fkey"
+            columns: ["context_brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       menu_item: {
         Row: {
           account_id: string
@@ -4371,6 +4595,172 @@ export type Database = {
             columns: ["unit_id"]
             isOneToOne: false
             referencedRelation: "kitchen_unit"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sale: {
+        Row: {
+          account_id: string
+          archived_at: string | null
+          brand_id: string | null
+          channel_id: string | null
+          created_at: string
+          created_by: string | null
+          created_by_name: string | null
+          delivery_cost: number | null
+          discount_amount: number | null
+          external_brand_text: string | null
+          external_channel_text: string | null
+          external_location_text: string | null
+          external_ref: string | null
+          id: string
+          is_active: boolean
+          location_id: string | null
+          paid: number | null
+          payment_method: string | null
+          raw_products: string | null
+          refund_amount: number | null
+          sold_at: string
+          source: string
+          total: number
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          archived_at?: string | null
+          brand_id?: string | null
+          channel_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          delivery_cost?: number | null
+          discount_amount?: number | null
+          external_brand_text?: string | null
+          external_channel_text?: string | null
+          external_location_text?: string | null
+          external_ref?: string | null
+          id?: string
+          is_active?: boolean
+          location_id?: string | null
+          paid?: number | null
+          payment_method?: string | null
+          raw_products?: string | null
+          refund_amount?: number | null
+          sold_at: string
+          source?: string
+          total?: number
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          archived_at?: string | null
+          brand_id?: string | null
+          channel_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          delivery_cost?: number | null
+          discount_amount?: number | null
+          external_brand_text?: string | null
+          external_channel_text?: string | null
+          external_location_text?: string | null
+          external_ref?: string | null
+          id?: string
+          is_active?: boolean
+          location_id?: string | null
+          paid?: number | null
+          payment_method?: string | null
+          raw_products?: string | null
+          refund_amount?: number | null
+          sold_at?: string
+          source?: string
+          total?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sale_brand_fk"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sale_channel_fk"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "sales_channel"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sale_location_fk"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sale_line: {
+        Row: {
+          account_id: string
+          created_at: string
+          id: string
+          map_confidence: number | null
+          map_needs_review: boolean
+          map_source: string
+          menu_item_id: string | null
+          product_name: string
+          quantity: number
+          raw_text: string
+          sale_id: string
+          unit_price: number | null
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          id?: string
+          map_confidence?: number | null
+          map_needs_review?: boolean
+          map_source?: string
+          menu_item_id?: string | null
+          product_name: string
+          quantity?: number
+          raw_text: string
+          sale_id: string
+          unit_price?: number | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          id?: string
+          map_confidence?: number | null
+          map_needs_review?: boolean
+          map_source?: string
+          menu_item_id?: string | null
+          product_name?: string
+          quantity?: number
+          raw_text?: string
+          sale_id?: string
+          unit_price?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sale_line_menu_item_fk"
+            columns: ["menu_item_id"]
+            isOneToOne: false
+            referencedRelation: "menu_item"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sale_line_sale_fk"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sale"
             referencedColumns: ["id"]
           },
         ]
@@ -5404,6 +5794,7 @@ export type Database = {
           channel_id: string
           channel_name: string
           commission_amount: number
+          commission_fixed: number
           commission_pct: number
           consumption_reimb: number
           contribution_margin: number
