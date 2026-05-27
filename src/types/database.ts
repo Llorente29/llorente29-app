@@ -2240,6 +2240,68 @@ export type Database = {
           },
         ]
       }
+      brand_licensing_agreement: {
+        Row: {
+          account_id: string
+          archived_at: string | null
+          brand_id: string
+          created_at: string
+          created_by: string | null
+          created_by_name: string | null
+          ends_on: string | null
+          id: string
+          is_active: boolean
+          notes: string | null
+          owner_name: string
+          reimburses_consumption: boolean
+          revenue_share_pct: number
+          starts_on: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          archived_at?: string | null
+          brand_id: string
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          ends_on?: string | null
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          owner_name: string
+          reimburses_consumption?: boolean
+          revenue_share_pct: number
+          starts_on?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          archived_at?: string | null
+          brand_id?: string
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          ends_on?: string | null
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          owner_name?: string
+          reimburses_consumption?: boolean
+          revenue_share_pct?: number
+          starts_on?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bla_brand_fk"
+            columns: ["brand_id"]
+            isOneToOne: true
+            referencedRelation: "brand"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       brand_location_availability: {
         Row: {
           account_id: string
@@ -3364,6 +3426,109 @@ export type Database = {
             columns: ["user_profile_id"]
             isOneToOne: true
             referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      menu_item: {
+        Row: {
+          account_id: string
+          ai_confidence: number | null
+          ai_suggested_price: number | null
+          archived_at: string | null
+          brand_id: string
+          category: string | null
+          channel_id: string
+          consumption_price: number | null
+          created_at: string
+          created_by: string | null
+          created_by_name: string | null
+          description: string | null
+          id: string
+          is_active: boolean
+          is_available: boolean
+          name: string
+          needs_review: boolean
+          photo_url: string | null
+          position: number
+          price: number
+          recipe_item_id: string
+          source: string
+          updated_at: string
+          vat_rate: number
+        }
+        Insert: {
+          account_id: string
+          ai_confidence?: number | null
+          ai_suggested_price?: number | null
+          archived_at?: string | null
+          brand_id: string
+          category?: string | null
+          channel_id: string
+          consumption_price?: number | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          is_available?: boolean
+          name: string
+          needs_review?: boolean
+          photo_url?: string | null
+          position?: number
+          price: number
+          recipe_item_id: string
+          source?: string
+          updated_at?: string
+          vat_rate?: number
+        }
+        Update: {
+          account_id?: string
+          ai_confidence?: number | null
+          ai_suggested_price?: number | null
+          archived_at?: string | null
+          brand_id?: string
+          category?: string | null
+          channel_id?: string
+          consumption_price?: number | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          is_available?: boolean
+          name?: string
+          needs_review?: boolean
+          photo_url?: string | null
+          position?: number
+          price?: number
+          recipe_item_id?: string
+          source?: string
+          updated_at?: string
+          vat_rate?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "menu_item_brand_fk"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "menu_item_channel_fk"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "sales_channel"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "menu_item_recipe_item_fk"
+            columns: ["recipe_item_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_item"
             referencedColumns: ["id"]
           },
         ]
@@ -5233,6 +5398,34 @@ export type Database = {
         }[]
       }
       kitchen_recompute_item: { Args: { p_item_id: string }; Returns: number }
+      menu_item_economics: {
+        Args: { p_brand_id: string }
+        Returns: {
+          channel_id: string
+          channel_name: string
+          commission_amount: number
+          commission_pct: number
+          consumption_reimb: number
+          contribution_margin: number
+          cost: number
+          cost_available: boolean
+          delivery_fee: number
+          flow_type: string
+          food_cost_pct: number
+          food_cost_status: string
+          menu_item_id: string
+          menu_item_name: string
+          net_margin: number
+          net_margin_pct: number
+          price: number
+          price_with_vat: number
+          recipe_item_id: string
+          revenue_share_amount: number
+          revenue_share_pct: number
+          target_food_cost_pct: number
+          vat_rate: number
+        }[]
+      }
       seed_appcc_for_account: {
         Args: { p_account_id: string }
         Returns: undefined

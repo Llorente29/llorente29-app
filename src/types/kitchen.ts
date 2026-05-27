@@ -7,8 +7,9 @@
 // Los servicios mapean Row (snake_case BBDD) ↔ dominio (camelCase) y
 // exponen SOLO los tipos de dominio al resto del frontend.
 //
-// Tablas cubiertas (6): kitchen_unit, kitchen_cut_type, recipe_item,
-// recipe_line, recipe_item_unit_conversion, kitchen_settings.
+// Tablas cubiertas (8): kitchen_unit, kitchen_cut_type, recipe_item,
+// recipe_line, recipe_item_unit_conversion, kitchen_settings, menu_item,
+// brand_licensing_agreement.
 
 import type { Database } from './database'
 
@@ -42,6 +43,14 @@ export type RowKitchenSettings        = Tables['kitchen_settings']['Row']
 export type RowKitchenSettingsInsert  = Tables['kitchen_settings']['Insert']
 export type RowKitchenSettingsUpdate  = Tables['kitchen_settings']['Update']
 
+export type RowMenuItem        = Tables['menu_item']['Row']
+export type RowMenuItemInsert  = Tables['menu_item']['Insert']
+export type RowMenuItemUpdate  = Tables['menu_item']['Update']
+
+export type RowBrandLicensingAgreement        = Tables['brand_licensing_agreement']['Row']
+export type RowBrandLicensingAgreementInsert  = Tables['brand_licensing_agreement']['Insert']
+export type RowBrandLicensingAgreementUpdate  = Tables['brand_licensing_agreement']['Update']
+
 // ─────────────────────────────────────────────────────────────────────
 // Uniones de literales (reflejan los CHECK constraints de la BBDD).
 // NO son enums (regla §6.2: verbatimModuleSyntax/erasableSyntaxOnly).
@@ -52,6 +61,10 @@ export type ConservationType = 'fridge' | 'freezer' | 'dry' | 'hot'
 export type UnitDimension    = 'weight' | 'volume' | 'unit'
 export type ItemSource       = 'manual' | 'ai_recipe' | 'ocr_invoice' | 'import'
 export type ConversionSource = 'manual' | 'ai_suggested' | 'import'
+
+// Unión nueva, NO reusar ItemSource: las fuentes de un ítem de carta
+// difieren de las de una receta (no hay ocr_invoice aquí).
+export type MenuItemSource = 'manual' | 'ai_suggested' | 'import'
 
 // ─────────────────────────────────────────────────────────────────────
 // kitchen_unit
@@ -304,4 +317,116 @@ export interface KitchenSettingsUpdate {
   indirectCostPctDefault?: number
   targetFoodCostPct?: number | null
   currency?: string
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// menu_item (Capa 2: ítem de carta por marca — aquí vive el PVP)
+// El precio se guarda SIN IVA (base imponible); con IVA se deriva.
+// Margen y food cost % NO viven aquí: los calcula la función SQL.
+// ─────────────────────────────────────────────────────────────────────
+export interface MenuItem {
+  id: string
+  accountId: string
+  brandId: string
+  channelId: string
+  recipeItemId: string
+  name: string
+  description: string | null
+  category: string | null
+  photoUrl: string | null
+  position: number
+  price: number
+  vatRate: number
+  consumptionPrice: number | null
+  isActive: boolean
+  isAvailable: boolean
+  archivedAt: string | null
+  createdAt: string
+  updatedAt: string
+  createdBy: string | null
+  createdByName: string | null
+  source: MenuItemSource
+  aiConfidence: number | null
+  needsReview: boolean
+  aiSuggestedPrice: number | null
+}
+export interface MenuItemInsert {
+  accountId: string
+  brandId: string
+  channelId: string
+  recipeItemId: string
+  name: string
+  price: number
+  description?: string | null
+  category?: string | null
+  photoUrl?: string | null
+  position?: number
+  vatRate?: number
+  consumptionPrice?: number | null
+  isAvailable?: boolean
+  source?: MenuItemSource
+  aiConfidence?: number | null
+  needsReview?: boolean
+  aiSuggestedPrice?: number | null
+  createdBy?: string | null
+  createdByName?: string | null
+}
+export interface MenuItemUpdate {
+  name?: string
+  description?: string | null
+  category?: string | null
+  photoUrl?: string | null
+  position?: number
+  price?: number
+  vatRate?: number
+  consumptionPrice?: number | null
+  isActive?: boolean
+  isAvailable?: boolean
+  archivedAt?: string | null
+  needsReview?: boolean
+  aiSuggestedPrice?: number | null
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// brand_licensing_agreement (Capa 2: acuerdo de cesión / host kitchen)
+// Tú cocinas la marca de un tercero y cobras revenue_share sobre PVP sin IVA.
+// ─────────────────────────────────────────────────────────────────────
+export interface BrandLicensingAgreement {
+  id: string
+  accountId: string
+  brandId: string
+  ownerName: string
+  revenueSharePct: number
+  reimbursesConsumption: boolean
+  startsOn: string | null
+  endsOn: string | null
+  notes: string | null
+  isActive: boolean
+  archivedAt: string | null
+  createdAt: string
+  updatedAt: string
+  createdBy: string | null
+  createdByName: string | null
+}
+export interface BrandLicensingAgreementInsert {
+  accountId: string
+  brandId: string
+  ownerName: string
+  revenueSharePct: number
+  reimbursesConsumption?: boolean
+  startsOn?: string | null
+  endsOn?: string | null
+  notes?: string | null
+  createdBy?: string | null
+  createdByName?: string | null
+}
+export interface BrandLicensingAgreementUpdate {
+  ownerName?: string
+  revenueSharePct?: number
+  reimbursesConsumption?: boolean
+  startsOn?: string | null
+  endsOn?: string | null
+  notes?: string | null
+  isActive?: boolean
+  archivedAt?: string | null
 }
