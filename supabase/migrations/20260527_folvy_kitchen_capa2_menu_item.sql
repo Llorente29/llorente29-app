@@ -1,8 +1,10 @@
 -- ============================================================================
 -- 20260527_folvy_kitchen_capa2_menu_item.sql
--- Folvy Kitchen — Capa 2: ítem de carta por marca (menu_item)
--- El PVP vive AQUÍ (nunca en recipe_item). Cuelga de brand y recipe_item.
--- Diferenciador: misma receta a N precios en N marcas virtuales.
+-- Folvy Kitchen — Capa 2: ítem de carta por marca Y canal (menu_item)
+-- El PVP vive AQUÍ (nunca en recipe_item), por marca × canal.
+-- Diferenciador: misma receta a N precios en N marcas × N canales.
+-- channel_id → sales_channel (aquí el canal define la comisión de plataforma).
+-- consumption_price → reembolso por ración del flujo cedido (marca licensed).
 -- ============================================================================
 
 BEGIN;
@@ -11,6 +13,7 @@ CREATE TABLE public.menu_item (
   id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   account_id         uuid NOT NULL,
   brand_id           uuid NOT NULL,
+  channel_id         uuid NOT NULL,
   recipe_item_id     uuid NOT NULL,
 
   name               text NOT NULL,
@@ -19,8 +22,9 @@ CREATE TABLE public.menu_item (
   photo_url          text,
   position           integer NOT NULL DEFAULT 0,
 
-  price              numeric NOT NULL,              -- PVP SIN IVA (base imponible)
-  vat_rate           numeric NOT NULL DEFAULT 10,   -- tipo IVA % por ítem
+  price              numeric NOT NULL,
+  vat_rate           numeric NOT NULL DEFAULT 10,
+  consumption_price  numeric,
 
   is_active          boolean NOT NULL DEFAULT true,
   is_available       boolean NOT NULL DEFAULT true,
@@ -38,11 +42,16 @@ CREATE TABLE public.menu_item (
 
   CONSTRAINT menu_item_brand_fk
     FOREIGN KEY (brand_id) REFERENCES public.brand (id) ON DELETE RESTRICT,
+  CONSTRAINT menu_item_channel_fk
+    FOREIGN KEY (channel_id) REFERENCES public.sales_channel (id) ON DELETE RESTRICT,
   CONSTRAINT menu_item_recipe_item_fk
     FOREIGN KEY (recipe_item_id) REFERENCES public.recipe_item (id) ON DELETE RESTRICT,
-  CONSTRAINT menu_item_brand_recipe_unique UNIQUE (brand_id, recipe_item_id),
+  CONSTRAINT menu_item_brand_channel_recipe_unique
+    UNIQUE (brand_id, channel_id, recipe_item_id),
   CONSTRAINT menu_item_price_positive    CHECK (price >= 0),
   CONSTRAINT menu_item_vat_rate_range    CHECK (vat_rate >= 0 AND vat_rate <= 100),
+  CONSTRAINT menu_item_consumption_positive
+    CHECK (consumption_price IS NULL OR consumption_price >= 0),
   CONSTRAINT menu_item_ai_suggested_positive
     CHECK (ai_suggested_price IS NULL OR ai_suggested_price >= 0),
   CONSTRAINT menu_item_source_valid
@@ -51,6 +60,7 @@ CREATE TABLE public.menu_item (
 
 CREATE INDEX idx_menu_item_account     ON public.menu_item (account_id);
 CREATE INDEX idx_menu_item_brand       ON public.menu_item (brand_id);
+CREATE INDEX idx_menu_item_channel     ON public.menu_item (channel_id);
 CREATE INDEX idx_menu_item_recipe_item ON public.menu_item (recipe_item_id);
 CREATE INDEX idx_menu_item_active      ON public.menu_item (account_id)
   WHERE archived_at IS NULL;
