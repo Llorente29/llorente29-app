@@ -5731,6 +5731,18 @@ export type Database = {
       appcc_mark_overdue: { Args: never; Returns: undefined }
       belongs_to_account: { Args: { p_account_id: string }; Returns: boolean }
       cleanup_auth_rate_limits: { Args: never; Returns: number }
+      confirm_mapping: {
+        Args: {
+          p_action: string
+          p_actor_name?: string
+          p_chosen_target?: string
+          p_note?: string
+          p_proposal_id: string
+        }
+        Returns: {
+          propagated_lines: number
+        }[]
+      }
       create_account_tx: {
         Args: {
           p_account_name: string
@@ -5821,6 +5833,7 @@ export type Database = {
         Args: { p_account_id: string }
         Returns: undefined
       }
+      unaccent: { Args: { "": string }; Returns: string }
     }
     Enums: {
       [_ in never]: never
