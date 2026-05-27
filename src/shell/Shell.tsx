@@ -23,6 +23,7 @@ import { configuracionModule } from '../modules/configuracion/module'
 import HomeGeneral from './home/HomeGeneral'
 import TrabajadorApp from '../pages/trabajador/TrabajadorApp'
 import { useApp } from '../context/AppContext'
+import { FolvyAIBubble } from '../modules/folvy-ai/components/FolvyAIBubble'
 
 // G-8.6 (opción C): el Shell vive en la RAÍZ, sin prefijo /shell ni slug.
 // Las URLs son /, /appcc/hoy, /configuracion/locales, etc. La cuenta activa
@@ -148,6 +149,8 @@ export default function Shell() {
           <HomeGeneral userName={userName} onOpenModule={goToKey} />
         </main>
       )}
+
+      <FolvyAIBubble />
     </div>
   )
 }
