@@ -38,6 +38,7 @@ import {
   type RecipeLineBreakdown,
 } from '@/modules/kitchen/services/recipeLineService'
 import { listUnits } from '@/modules/kitchen/services/kitchenUnitService'
+import { ReviewBanner } from '@/modules/kitchen/components/ReviewBanner'
 import type {
   RecipeItem,
   RecipeItemType,
@@ -194,16 +195,22 @@ export default function KitchenRecipePage() {
       )
     }
     return (
-      <RecipeDetailView
-        recipe={recipe}
-        accountId={activeAccountId!}
-        allItems={allItems}
-        itemsById={itemsById}
-        units={units}
-        unitsById={unitsById}
-        onBack={() => setSelectedRecipeId(null)}
-        onChanged={handleDetailChanged}
-      />
+      <>
+        <ReviewBanner
+          item={recipe}
+          onDismissed={() => setReloadTick(t => t + 1)}
+        />
+        <RecipeDetailView
+          recipe={recipe}
+          accountId={activeAccountId!}
+          allItems={allItems}
+          itemsById={itemsById}
+          units={units}
+          unitsById={unitsById}
+          onBack={() => setSelectedRecipeId(null)}
+          onChanged={handleDetailChanged}
+        />
+      </>
     )
   }
 

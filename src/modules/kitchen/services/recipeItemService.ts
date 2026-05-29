@@ -5,11 +5,13 @@
 // Recálculo automático integrado tras create/update (contrastado con mercado).
 
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
+import type { Json } from '../../../types/database'
 import type {
   RecipeItem,
   RecipeItemInsert,
   RecipeItemUpdate,
   RecipeItemType,
+  RecipeItemReviewNote,
   RowRecipeItem,
   RowRecipeItemInsert,
   RowRecipeItemUpdate,
@@ -42,6 +44,10 @@ export function rowToRecipeItem(row: RowRecipeItem): RecipeItem {
     source: row.source as RecipeItem['source'],
     aiConfidence: row.ai_confidence,
     needsReview: row.needs_review,
+    reviewNotes: (row.review_notes as unknown as RecipeItemReviewNote | null) ?? null,
+    reviewDismissedAt: row.review_dismissed_at,
+    reviewDismissedBy: row.review_dismissed_by,
+    reviewDismissedReason: row.review_dismissed_reason,
     isActive: row.is_active,
     archivedAt: row.archived_at,
     createdAt: row.created_at,
@@ -100,6 +106,12 @@ function recipeItemUpdateToRow(patch: RecipeItemUpdate): RowRecipeItemUpdate {
   if (patch.serviceTempC !== undefined) row.service_temp_c = patch.serviceTempC
   if (patch.notes !== undefined) row.notes = patch.notes
   if (patch.needsReview !== undefined) row.needs_review = patch.needsReview
+  if (patch.reviewNotes !== undefined) {
+    row.review_notes = (patch.reviewNotes as unknown as Json) ?? null
+  }
+  if (patch.reviewDismissedAt !== undefined) row.review_dismissed_at = patch.reviewDismissedAt
+  if (patch.reviewDismissedBy !== undefined) row.review_dismissed_by = patch.reviewDismissedBy
+  if (patch.reviewDismissedReason !== undefined) row.review_dismissed_reason = patch.reviewDismissedReason
   if (patch.isActive !== undefined) row.is_active = patch.isActive
   if (patch.archivedAt !== undefined) row.archived_at = patch.archivedAt
   return row
@@ -231,6 +243,33 @@ export async function updateRecipeItem(
   const updated = rowToRecipeItem(data)
   await tryRecompute(updated.id)
   return (await getRecipeItemById(updated.id)) ?? updated
+}
+
+// Descarta la incidencia needs_review de un item: registra autor, motivo y
+// fecha (auditable) y baja la bandera needs_review. Conserva review_notes
+// como traza histórica. El caller pasa actorId (regla de identidad operativa).
+export async function dismissReview(
+  id: string,
+  reason: string,
+  actorId: string | null
+): Promise<RecipeItem> {
+  requireSupabase()
+  const { data, error } = await supabase!
+    .from('recipe_item')
+    .update({
+      needs_review: false,
+      review_dismissed_at: new Date().toISOString(),
+      review_dismissed_by: actorId,
+      review_dismissed_reason: reason,
+    })
+    .eq('id', id)
+    .select('*')
+    .single()
+
+  if (error) {
+    throw new Error(`Error descartando incidencia del item ${id}: ${error.message}`)
+  }
+  return rowToRecipeItem(data)
 }
 
 export async function archiveRecipeItem(id: string): Promise<RecipeItem> {

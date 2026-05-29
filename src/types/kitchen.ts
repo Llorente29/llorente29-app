@@ -130,6 +130,27 @@ export interface KitchenCutTypeUpdate {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// review_notes (jsonb): diagnóstico estructurado de una incidencia.
+// Generado por el script de diagnóstico (S2-A) o por la app.
+// Claves en camelCase (el jsonb se guarda y lee directo, sin traducción).
+// ─────────────────────────────────────────────────────────────────────
+export type ReviewNoteKind = 'cost_suspect' | 'missing_recipe' | 'other'
+
+export interface RecipeItemReviewNote {
+  source: string
+  kind: ReviewNoteKind
+  diagnosedAt?: string | null
+  costFolvy?: number | null
+  costReference?: number | null
+  referenceSource?: string | null
+  deltaEur?: number | null
+  deltaPct?: number | null
+  sampleCount?: number | null
+  locations?: string[] | null
+  summary?: string | null
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // recipe_item (ingrediente / receta / herramienta / plato)
 // ─────────────────────────────────────────────────────────────────────
 export interface RecipeItem {
@@ -160,6 +181,10 @@ export interface RecipeItem {
   source: ItemSource
   aiConfidence: number | null
   needsReview: boolean
+  reviewNotes: RecipeItemReviewNote | null
+  reviewDismissedAt: string | null
+  reviewDismissedBy: string | null
+  reviewDismissedReason: string | null
   // estándar
   isActive: boolean
   archivedAt: string | null
@@ -213,6 +238,10 @@ export interface RecipeItemUpdate {
   serviceTempC?: number | null
   notes?: string | null
   needsReview?: boolean
+  reviewNotes?: RecipeItemReviewNote | null
+  reviewDismissedAt?: string | null
+  reviewDismissedBy?: string | null
+  reviewDismissedReason?: string | null
   isActive?: boolean
   archivedAt?: string | null
 }
