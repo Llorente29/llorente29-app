@@ -1,4 +1,4 @@
-node_modules/
+﻿node_modules/
 dist/
 .env
 .env.backup
@@ -6,14 +6,30 @@ dist/
 supabase/.temp/
 supabase/.branches/
 supabase/snippets/
-
 # OS
 .DS_Store
 Thumbs.db
-
 # Logs
 *.log
-
 # Test/build artifacts
 coverage/
 *.tsbuildinfo
+
+# --- Datos de cliente (NUNCA al repo) ---
+*.xlsx
+bills_*.json
+catalogo_*.json
+location_*.json
+tspoon_*.csv
+import_escandallos.sql
+import_escandallos_report.txt
+
+# --- Diagnósticos ad-hoc de raíz (regenerables) ---
+/diag-*.cjs
+
+# --- Config local de editor ---
+.claude/
+
+# --- Diagnósticos versionados SÍ entran (excepción) ---
+!data/diagnosis/
+!data/diagnosis/**
