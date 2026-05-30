@@ -1136,6 +1136,31 @@ de arrancar.
 
 Sección de estado — actualizada 30/05/2026. Mantener al día y COMMITEAR al cierre de cada tramo.
 
+14.10 — PASO 1 REAL de la próxima sesión (PRIORITARIO, antes que E3)
+
+PROBLEMA detectado al cerrar el 30/05: el cierre de sesión tardó ~1 hora. Inaceptable
+si se hacen 2-3 cierres/día. Causas: (1) CONTEXTO desincronizado que estalló al cerrar
+(reconciliar dos §14); (2) demasiadas rondas de elección A/B/C; (3) cierre paso-a-paso
+con Julio de intermediario en cada commit/push (~10 turnos). El cierre en sí son 3
+acciones / 5 min; el resto fue deuda y deliberación.
+
+OBJETIVO: cierre en ~5 min, no 60. Acciones (hacer ANTES de arrancar E3):
+
+1. Mejorar scripts/cierre-sesion.ps1 para que EJECUTE el cierre completo, no solo
+   verifique. Que de corrido: detecte ficheros del tramo, npm run build, git add
+   explícito, git commit (mensaje pasado como parámetro), git push — y solo se PARE si
+   algo falla, mostrando el problema concreto. Julio lanza UN comando -> "CIERRE OK" o
+   parada con causa. Convierte ~10 turnos en 1. Mantener los untracked de otra feature
+   fuera automáticamente.
+2. Regla nueva: el §14 del CONTEXTO se actualiza INCREMENTALMENTE al cerrar cada tramo
+   pequeño (no acumular todo para el cierre final). Así el cierre no descubre sorpresas
+   de desincronización.
+3. Claude entrega el bloque §14 YA RESUELTO (mejor opción, sin rondas A/B/C) en cuanto
+   se cierra el último tramo técnico. Julio solo revisa de un vistazo.
+
+Tras esto (y solo tras esto), seguir con E3 (capa de merma bruto/neto completa,
+Opción B; ver §14.9 y bloque E1/E3 al final de la sección 1).
+
 ---
 Documento actualizado: 28 de mayo de 2026 (noche) — DISEÑO COMPLETO V1 EDITOR DE ESCANDALLOS cerrado conceptualmente (8 decisiones de producto + 5 catálogos semilla + reconocimiento BBDD + diagnóstico real de 34 needs_review con CSV + 12 hallazgos competencia mundial integrados + diseño UX completo del lienzo y todas las pantallas + 3 prompts sistema modos IA + decisión Modificadores M1-M4 al 100% con confirmación operativa de Last.app). Próximo: saneamiento de commits + S1 (schema migration) + S2 (UI banner needs_review) + S_MODIFIERS (parsing histórico + actualizar conector). Detalle UX completo en documento maestro nuevo `folvy_v1_editor_escandallos_diseno.md`. Esta es la sesión más densa del proyecto hasta la fecha en términos de decisiones de diseño.
 Único documento de contexto. Próxima actualización: al cierre de la próxima sesión técnica (regenerar §1).
