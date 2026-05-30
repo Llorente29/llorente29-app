@@ -20,7 +20,14 @@ export interface RecipeLineBreakdown {
   childItemId: string
   childName: string
   quantity: number
+  // quantityNet: el NETO que va al plato (E3). El cocinero edita ESTE número.
+  quantityNet: number | null
   unitAbbr: string
+  // unitId: id de la unidad de la línea (para edición de unidad en E3).
+  unitId: string | null
+  // childDefaultWastePct: merma por defecto del INGREDIENTE hijo (recipe_item.default_waste_pct).
+  // NULL = desconocida (la IA puede sugerir). Se hereda; el override va por línea.
+  childDefaultWastePct: number | null
   lineCost: number
   // needsReview: la LÍNEA no se puede costear (falta conversión de unidad).
   needsReview: boolean
@@ -118,16 +125,24 @@ export async function getRecipeBreakdown(parentItemId: string): Promise<RecipeLi
     throw new Error(`Error obteniendo desglose del plato ${parentItemId}: ${error.message}`)
   }
   return (data ?? []).map((row) => {
-    // NOTA: child_needs_review se añadió a kitchen_recipe_breakdown el 30/05 y aún no
-    // está en los tipos autogenerados (src/types/database.ts). Cast acotado solo aquí.
+    // NOTA: quantity_net, unit_id y child_default_waste_pct (E3) + child_needs_review
+    // aún no están en los tipos autogenerados (src/types/database.ts). Cast acotado solo aquí.
     // TODO saneamiento: regenerar tipos de Supabase y quitar el cast.
-    const r = row as typeof row & { child_needs_review?: boolean }
+    const r = row as typeof row & {
+      quantity_net?: number | null
+      unit_id?: string | null
+      child_default_waste_pct?: number | null
+      child_needs_review?: boolean
+    }
     return {
       lineId: r.line_id,
       childItemId: r.child_item_id,
       childName: r.child_name,
       quantity: r.quantity,
+      quantityNet: r.quantity_net ?? null,
       unitAbbr: r.unit_abbr,
+      unitId: r.unit_id ?? null,
+      childDefaultWastePct: r.child_default_waste_pct ?? null,
       lineCost: r.line_cost,
       needsReview: r.needs_review,
       childNeedsReview: r.child_needs_review ?? false,

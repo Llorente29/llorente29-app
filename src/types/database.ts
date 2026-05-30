@@ -2188,6 +2188,70 @@ export type Database = {
           },
         ]
       }
+      article_supplier: {
+        Row: {
+          account_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          is_preferred: boolean
+          last_price: number | null
+          purchase_unit_id: string | null
+          recipe_item_id: string
+          supplier_code: string | null
+          supplier_id: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_preferred?: boolean
+          last_price?: number | null
+          purchase_unit_id?: string | null
+          recipe_item_id: string
+          supplier_code?: string | null
+          supplier_id: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_preferred?: boolean
+          last_price?: number | null
+          purchase_unit_id?: string | null
+          recipe_item_id?: string
+          supplier_code?: string | null
+          supplier_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "article_supplier_purchase_unit_id_fkey"
+            columns: ["purchase_unit_id"]
+            isOneToOne: false
+            referencedRelation: "kitchen_unit"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "article_supplier_recipe_item_id_fkey"
+            columns: ["recipe_item_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_item"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "article_supplier_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "supplier"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       auth_rate_limits: {
         Row: {
           attempts: number
@@ -3394,6 +3458,7 @@ export type Database = {
           audit_mode_default: string
           audit_shadow_min_samples: number
           audit_threshold_default: number
+          cost_strategy_default: string
           cost_window_days_default: number
           created_at: string
           created_by: string | null
@@ -3401,6 +3466,7 @@ export type Database = {
           currency: string
           id: string
           indirect_cost_pct_default: number
+          labor_target_pct: number | null
           max_recipe_depth_warning: number
           photo_retention_days: number
           price_rounding: string
@@ -3417,6 +3483,7 @@ export type Database = {
           audit_mode_default?: string
           audit_shadow_min_samples?: number
           audit_threshold_default?: number
+          cost_strategy_default?: string
           cost_window_days_default?: number
           created_at?: string
           created_by?: string | null
@@ -3424,6 +3491,7 @@ export type Database = {
           currency?: string
           id?: string
           indirect_cost_pct_default?: number
+          labor_target_pct?: number | null
           max_recipe_depth_warning?: number
           photo_retention_days?: number
           price_rounding?: string
@@ -3440,6 +3508,7 @@ export type Database = {
           audit_mode_default?: string
           audit_shadow_min_samples?: number
           audit_threshold_default?: number
+          cost_strategy_default?: string
           cost_window_days_default?: number
           created_at?: string
           created_by?: string | null
@@ -3447,6 +3516,7 @@ export type Database = {
           currency?: string
           id?: string
           indirect_cost_pct_default?: number
+          labor_target_pct?: number | null
           max_recipe_depth_warning?: number
           photo_retention_days?: number
           price_rounding?: string
@@ -4833,6 +4903,172 @@ export type Database = {
         }
         Relationships: []
       }
+      purchase: {
+        Row: {
+          account_id: string
+          ai_confidence: number | null
+          archived_at: string | null
+          created_at: string
+          created_by: string | null
+          created_by_name: string | null
+          document_date: string | null
+          document_number: string | null
+          id: string
+          is_active: boolean
+          location_id: string
+          needs_review: boolean
+          notes: string | null
+          raw_document_url: string | null
+          received_at: string | null
+          source: string
+          status: string
+          subtotal: number | null
+          supplier_id: string | null
+          tax: number | null
+          total: number | null
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          ai_confidence?: number | null
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          document_date?: string | null
+          document_number?: string | null
+          id?: string
+          is_active?: boolean
+          location_id: string
+          needs_review?: boolean
+          notes?: string | null
+          raw_document_url?: string | null
+          received_at?: string | null
+          source?: string
+          status?: string
+          subtotal?: number | null
+          supplier_id?: string | null
+          tax?: number | null
+          total?: number | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          ai_confidence?: number | null
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          document_date?: string | null
+          document_number?: string | null
+          id?: string
+          is_active?: boolean
+          location_id?: string
+          needs_review?: boolean
+          notes?: string | null
+          raw_document_url?: string | null
+          received_at?: string | null
+          source?: string
+          status?: string
+          subtotal?: number | null
+          supplier_id?: string | null
+          tax?: number | null
+          total?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "supplier"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      purchase_line: {
+        Row: {
+          account_id: string
+          created_at: string
+          id: string
+          line_total: number | null
+          map_confidence: number | null
+          map_needs_review: boolean
+          map_source: string | null
+          product_name: string | null
+          purchase_id: string
+          purchase_unit_id: string | null
+          quantity: number
+          raw_text: string | null
+          recipe_item_id: string | null
+          unit_price: number
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          id?: string
+          line_total?: number | null
+          map_confidence?: number | null
+          map_needs_review?: boolean
+          map_source?: string | null
+          product_name?: string | null
+          purchase_id: string
+          purchase_unit_id?: string | null
+          quantity: number
+          raw_text?: string | null
+          recipe_item_id?: string | null
+          unit_price: number
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          id?: string
+          line_total?: number | null
+          map_confidence?: number | null
+          map_needs_review?: boolean
+          map_source?: string | null
+          product_name?: string | null
+          purchase_id?: string
+          purchase_unit_id?: string | null
+          quantity?: number
+          raw_text?: string | null
+          recipe_item_id?: string | null
+          unit_price?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_line_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: false
+            referencedRelation: "purchase"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_line_purchase_unit_id_fkey"
+            columns: ["purchase_unit_id"]
+            isOneToOne: false
+            referencedRelation: "kitchen_unit"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_line_recipe_item_id_fkey"
+            columns: ["recipe_item_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_item"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       quotas: {
         Row: {
           account_id: string
@@ -4867,6 +5103,7 @@ export type Database = {
           account_id: string
           ai_confidence: number | null
           alt_name: string | null
+          alt_names: string[]
           archived_at: string | null
           base_unit_id: string
           category: string | null
@@ -4884,24 +5121,31 @@ export type Database = {
           created_by_name: string | null
           current_stock: number | null
           current_stock_unit_id: string | null
+          external_codes: Json
           family_id: string | null
           finishing_notes: string | null
           fixed_cost: number | null
+          folvy_code: string | null
           id: string
           indirect_cost_pct: number | null
           is_active: boolean
+          is_purchasable: boolean
+          is_sellable: boolean
           is_stockable: boolean
           kitchen_photo_url: string | null
           label_override: string | null
           label_simplified: boolean
           last_purchase_date: string | null
+          media: Json | null
           name: string
           needs_review: boolean
           notes: string | null
+          nutrition: Json | null
           plating_notes: string | null
           prep_notes: string | null
           prep_time_minutes: number | null
           procedure_text: string | null
+          purchase_unit_id: string | null
           recyclable_packaging: Json | null
           review_dismissed_at: string | null
           review_dismissed_by: string | null
@@ -4913,6 +5157,7 @@ export type Database = {
           shelf_life_days: number | null
           source: string
           steps_auto_split: boolean
+          stock_unit_id: string | null
           supplier_codes: Json | null
           supplier_name: string | null
           supplier_url: string | null
@@ -4924,6 +5169,7 @@ export type Database = {
           account_id: string
           ai_confidence?: number | null
           alt_name?: string | null
+          alt_names?: string[]
           archived_at?: string | null
           base_unit_id: string
           category?: string | null
@@ -4941,24 +5187,31 @@ export type Database = {
           created_by_name?: string | null
           current_stock?: number | null
           current_stock_unit_id?: string | null
+          external_codes?: Json
           family_id?: string | null
           finishing_notes?: string | null
           fixed_cost?: number | null
+          folvy_code?: string | null
           id?: string
           indirect_cost_pct?: number | null
           is_active?: boolean
+          is_purchasable?: boolean
+          is_sellable?: boolean
           is_stockable?: boolean
           kitchen_photo_url?: string | null
           label_override?: string | null
           label_simplified?: boolean
           last_purchase_date?: string | null
+          media?: Json | null
           name: string
           needs_review?: boolean
           notes?: string | null
+          nutrition?: Json | null
           plating_notes?: string | null
           prep_notes?: string | null
           prep_time_minutes?: number | null
           procedure_text?: string | null
+          purchase_unit_id?: string | null
           recyclable_packaging?: Json | null
           review_dismissed_at?: string | null
           review_dismissed_by?: string | null
@@ -4970,6 +5223,7 @@ export type Database = {
           shelf_life_days?: number | null
           source?: string
           steps_auto_split?: boolean
+          stock_unit_id?: string | null
           supplier_codes?: Json | null
           supplier_name?: string | null
           supplier_url?: string | null
@@ -4981,6 +5235,7 @@ export type Database = {
           account_id?: string
           ai_confidence?: number | null
           alt_name?: string | null
+          alt_names?: string[]
           archived_at?: string | null
           base_unit_id?: string
           category?: string | null
@@ -4998,24 +5253,31 @@ export type Database = {
           created_by_name?: string | null
           current_stock?: number | null
           current_stock_unit_id?: string | null
+          external_codes?: Json
           family_id?: string | null
           finishing_notes?: string | null
           fixed_cost?: number | null
+          folvy_code?: string | null
           id?: string
           indirect_cost_pct?: number | null
           is_active?: boolean
+          is_purchasable?: boolean
+          is_sellable?: boolean
           is_stockable?: boolean
           kitchen_photo_url?: string | null
           label_override?: string | null
           label_simplified?: boolean
           last_purchase_date?: string | null
+          media?: Json | null
           name?: string
           needs_review?: boolean
           notes?: string | null
+          nutrition?: Json | null
           plating_notes?: string | null
           prep_notes?: string | null
           prep_time_minutes?: number | null
           procedure_text?: string | null
+          purchase_unit_id?: string | null
           recyclable_packaging?: Json | null
           review_dismissed_at?: string | null
           review_dismissed_by?: string | null
@@ -5027,6 +5289,7 @@ export type Database = {
           shelf_life_days?: number | null
           source?: string
           steps_auto_split?: boolean
+          stock_unit_id?: string | null
           supplier_codes?: Json | null
           supplier_name?: string | null
           supplier_url?: string | null
@@ -5064,10 +5327,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "recipe_item_purchase_unit_id_fkey"
+            columns: ["purchase_unit_id"]
+            isOneToOne: false
+            referencedRelation: "kitchen_unit"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "recipe_item_review_dismissed_by_fkey"
             columns: ["review_dismissed_by"]
             isOneToOne: false
             referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recipe_item_stock_unit_id_fkey"
+            columns: ["stock_unit_id"]
+            isOneToOne: false
+            referencedRelation: "kitchen_unit"
             referencedColumns: ["id"]
           },
         ]
@@ -5195,6 +5472,63 @@ export type Database = {
           },
           {
             foreignKeyName: "recipe_item_allergen_recipe_item_id_fkey"
+            columns: ["recipe_item_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_item"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recipe_item_location_cost: {
+        Row: {
+          account_id: string
+          computed_at: string
+          cost_strategy: string
+          cost_window_days: number | null
+          created_at: string
+          id: string
+          location_id: string
+          recipe_item_id: string
+          source: string | null
+          unit_cost: number
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          computed_at?: string
+          cost_strategy?: string
+          cost_window_days?: number | null
+          created_at?: string
+          id?: string
+          location_id: string
+          recipe_item_id: string
+          source?: string | null
+          unit_cost: number
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          computed_at?: string
+          cost_strategy?: string
+          cost_window_days?: number | null
+          created_at?: string
+          id?: string
+          location_id?: string
+          recipe_item_id?: string
+          source?: string | null
+          unit_cost?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recipe_item_location_cost_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recipe_item_location_cost_recipe_item_id_fkey"
             columns: ["recipe_item_id"]
             isOneToOne: false
             referencedRelation: "recipe_item"
@@ -5362,6 +5696,52 @@ export type Database = {
             columns: ["recipe_item_id"]
             isOneToOne: false
             referencedRelation: "recipe_item"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recipe_item_step_line: {
+        Row: {
+          account_id: string
+          created_at: string
+          id: string
+          line_id: string
+          step_id: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          id?: string
+          line_id: string
+          step_id: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          id?: string
+          line_id?: string
+          step_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recipe_item_step_line_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recipe_item_step_line_line_id_fkey"
+            columns: ["line_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_line"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recipe_item_step_line_step_id_fkey"
+            columns: ["step_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_item_step"
             referencedColumns: ["id"]
           },
         ]
@@ -5727,6 +6107,7 @@ export type Database = {
           account_id: string
           created_at: string
           id: string
+          line_total: number | null
           map_confidence: number | null
           map_needs_review: boolean
           map_source: string
@@ -5742,6 +6123,7 @@ export type Database = {
           account_id: string
           created_at?: string
           id?: string
+          line_total?: number | null
           map_confidence?: number | null
           map_needs_review?: boolean
           map_source?: string
@@ -5757,6 +6139,7 @@ export type Database = {
           account_id?: string
           created_at?: string
           id?: string
+          line_total?: number | null
           map_confidence?: number | null
           map_needs_review?: boolean
           map_source?: string
@@ -6440,6 +6823,57 @@ export type Database = {
           },
         ]
       }
+      supplier: {
+        Row: {
+          account_id: string
+          address: string | null
+          archived_at: string | null
+          created_at: string
+          created_by: string | null
+          created_by_name: string | null
+          email: string | null
+          id: string
+          is_active: boolean
+          name: string
+          notes: string | null
+          phone: string | null
+          tax_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          address?: string | null
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          email?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          notes?: string | null
+          phone?: string | null
+          tax_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          address?: string | null
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          email?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          tax_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       tag: {
         Row: {
           account_id: string
@@ -6935,6 +7369,7 @@ export type Database = {
         Args: { p_account_id: string; p_admin_user_id: string }
         Returns: undefined
       }
+      folvy_code_prefix: { Args: { p_type: string }; Returns: string }
       force_close_long_impersonations: { Args: never; Returns: number }
       get_effective_permissions: {
         Args: { p_account_id: string }
@@ -6948,11 +7383,40 @@ export type Database = {
         Args: { p_recipe_item_id: string }
         Returns: Json
       }
+      kitchen_dishes_incomplete: {
+        Args: { p_account_id: string }
+        Returns: {
+          dish_id: string
+          has_incomplete: boolean
+        }[]
+      }
+      kitchen_raw_usage_counts: {
+        Args: { p_account_id: string }
+        Returns: {
+          child_item_id: string
+          usage_count: number
+        }[]
+      }
       kitchen_recipe_breakdown: {
         Args: { p_item_id: string }
         Returns: {
           child_item_id: string
           child_name: string
+          child_needs_review: boolean
+          line_cost: number
+          line_id: string
+          needs_review: boolean
+          quantity: number
+          quantity_net: number
+          unit_abbr: string
+        }[]
+      }
+      kitchen_recipe_cost_by_location: {
+        Args: { p_item_id: string; p_location_id: string }
+        Returns: {
+          child_item_id: string
+          child_name: string
+          cost_source: string
           line_cost: number
           line_id: string
           needs_review: boolean
@@ -6964,6 +7428,41 @@ export type Database = {
       kitchen_similar_dishes_for_ai: {
         Args: { p_n?: number; p_recipe_item_id: string }
         Returns: Json
+      }
+      location_economics: {
+        Args: { p_from?: string; p_location_id: string; p_to?: string }
+        Returns: {
+          employee_count: number
+          food_cost: number
+          food_cost_coverage_pct: number
+          food_cost_pct: number
+          is_estimate: boolean
+          labor_cost: number
+          labor_cost_pct: number
+          prime_cost: number
+          prime_cost_pct: number
+          revenue: number
+        }[]
+      }
+      location_labor_cost: {
+        Args: { p_from?: string; p_location_id: string; p_to?: string }
+        Returns: {
+          days_in_period: number
+          employee_count: number
+          is_estimate: boolean
+          labor_cost: number
+        }[]
+      }
+      materialize_recipe_session: {
+        Args: { p_session_id: string }
+        Returns: {
+          dish_name: string
+          lines_created: number
+          lines_skipped: number
+          new_articles_created: number
+          result_recipe_id: string
+          was_created: boolean
+        }[]
       }
       menu_item_economics: {
         Args: { p_brand_id: string }
@@ -6994,6 +7493,22 @@ export type Database = {
           vat_rate: number
         }[]
       }
+      menu_item_units_sold: {
+        Args: { p_brand_id: string; p_from?: string; p_to?: string }
+        Returns: {
+          first_sold_at: string
+          last_sold_at: string
+          lines_count: number
+          menu_item_id: string
+          revenue: number
+          units_sold: number
+        }[]
+      }
+      next_folvy_code: {
+        Args: { p_account_id: string; p_type: string }
+        Returns: string
+      }
+      normalize_ingredient_name: { Args: { p_text: string }; Returns: string }
       resolve_lastapp_line: {
         Args: {
           p_account_id: string
@@ -7006,6 +7521,55 @@ export type Database = {
           recipe_item_id: string
         }[]
       }
+      resolve_mapping_proposals: {
+        Args: {
+          p_fuzzy_min?: number
+          p_session_id: string
+          p_target_types?: string[]
+        }
+        Returns: {
+          auto_confirmed: number
+          needs_review: number
+          no_candidate: number
+          resolved: number
+        }[]
+      }
+      run_mapping:
+        | {
+            Args: {
+              p_account_id: string
+              p_code?: string
+              p_fuzzy_min?: number
+              p_limit?: number
+              p_text: string
+            }
+            Returns: {
+              confidence: number
+              folvy_code: string
+              match_type: string
+              name: string
+              recipe_item_id: string
+              semaphore: string
+            }[]
+          }
+        | {
+            Args: {
+              p_account_id: string
+              p_code?: string
+              p_fuzzy_min?: number
+              p_limit?: number
+              p_target_types?: string[]
+              p_text: string
+            }
+            Returns: {
+              confidence: number
+              folvy_code: string
+              match_type: string
+              name: string
+              recipe_item_id: string
+              semaphore: string
+            }[]
+          }
       seed_appcc_for_account: {
         Args: { p_account_id: string }
         Returns: undefined
@@ -7019,6 +7583,8 @@ export type Database = {
           vinculos_creados: number
         }[]
       }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
       unaccent: { Args: { "": string }; Returns: string }
     }
     Enums: {

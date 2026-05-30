@@ -15,7 +15,8 @@
 //    ingrediente (elegir otra unidad = E3). Crear ingrediente nuevo = E2b.
 //
 // Patrón: useActiveAccount() (cuenta), igual que KitchenItemsPage.
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { ChangeEvent } from 'react'
 import {
   ArrowLeft,
   ChefHat,
@@ -43,6 +44,7 @@ import {
   listRecipeItems,
   getRawUsageCounts,
   createRecipeItem,
+  updateRecipeItem,
   dismissReview,
 } from '@/modules/kitchen/services/recipeItemService'
 import {
@@ -58,6 +60,13 @@ import {
   getMenuItemEconomics,
 } from '@/modules/kitchen/services/menuItemService'
 import { listBrands } from '@/modules/multitenancy/services/brandsService'
+import { streamMessage } from '@/modules/folvy-ai/services/folvyAIService'
+import {
+  uploadDishPhoto,
+  getDishPhotoUrl,
+  deleteDishPhoto,
+} from '@/modules/kitchen/services/recipePhotoService'
+import RecipeStepsTab from '@/modules/kitchen/components/RecipeStepsTab'
 import type { RecipeItem, MenuItemEconomics, KitchenUnit } from '@/types/kitchen'
 import type { RecipeLineBreakdown } from '@/modules/kitchen/services/recipeLineService'
 
@@ -139,6 +148,26 @@ function formatQty(value: number): string {
   return new Intl.NumberFormat('es-ES', { maximumFractionDigits: 3 }).format(value)
 }
 
+// ── E3: merma bruto/neto ──
+// El cocinero edita el NETO (lo que va al plato). El bruto (lo que cuesta) se
+// deriva: bruto = neto / (1 - merma/100). El coste server-side sale del bruto.
+// merma 0 (o nula) → bruto = neto, comportamiento idéntico a E1.
+function grossFromNet(net: number, wastePct: number): number {
+  if (!Number.isFinite(wastePct) || wastePct <= 0 || wastePct >= 100) return net
+  return net / (1 - wastePct / 100)
+}
+
+// % de merma efectivo de una línea, deducido de lo que hay en BBDD (bruto y neto).
+// Si no hay datos suficientes, cae al default del ingrediente; si tampoco, 0.
+function effectiveWastePct(line: RecipeLineBreakdown): number {
+  const gross = line.quantity
+  const net = line.quantityNet
+  if (gross && net && gross > 0 && net > 0 && gross > net) {
+    return Math.round(((gross - net) / gross) * 1000) / 10
+  }
+  return line.childDefaultWastePct ?? 0
+}
+
 // Normaliza para buscar: minúsculas + sin acentos. "Plátano" → "platano".
 function normalize(text: string): string {
   return text
@@ -202,17 +231,37 @@ export default function RecipeEditorPage({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<EditorTab>('escandallo')
+  // E5 — foto del plato: input oculto, estado de subida, URL firmada resuelta
+  // (kitchen_photo_url guarda el PATH; la URL firmada se resuelve al renderizar).
+  const photoInputRef = useRef<HTMLInputElement | null>(null)
+  const [photoUploading, setPhotoUploading] = useState(false)
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null)
+  const [photoError, setPhotoError] = useState<string | null>(null)
+  // E5 visual — lightbox: al pulsar la miniatura, la foto se ve a tamaño completo.
+  const [photoLightbox, setPhotoLightbox] = useState(false)
   // Recarga del plato tras "dar por revisado" (baja la bandera needs_review).
   const [reloadTick, setReloadTick] = useState(0)
   const [dismissing, setDismissing] = useState(false)
 
-  // ── Edición inline (E1) ──
+  // ── Edición inline (E1 + E3) ──
+  // E1: editar cantidad. E3: el campo editable primario es el NETO (lo que va al
+  // plato); el bruto (lo que cuesta) se deriva con la merma. draftWaste = merma %
+  // que se está editando en el panel expandido de una línea.
   const [editingLineId, setEditingLineId] = useState<string | null>(null)
   const [draftQty, setDraftQty] = useState('')
   const [savingLineId, setSavingLineId] = useState<string | null>(null)
   const [editError, setEditError] = useState<string | null>(null)
   const [flashLineId, setFlashLineId] = useState<string | null>(null)
   const [flashHero, setFlashHero] = useState(false)
+  // E3 — merma por línea: qué línea tiene el panel de merma abierto + su draft.
+  const [wasteOpenLineId, setWasteOpenLineId] = useState<string | null>(null)
+  const [draftWaste, setDraftWaste] = useState('')
+  // E3 — sugerencia IA de merma: línea en curso de consulta + resultado por línea.
+  const [aiWasteLineId, setAiWasteLineId] = useState<string | null>(null)
+  const [aiWasteSuggestions, setAiWasteSuggestions] = useState<Record<string, number>>({})
+  const [aiWasteError, setAiWasteError] = useState<string | null>(null)
+  // E3 — botón global "Sugerir mermas con IA" (batch, 1 sola llamada).
+  const [aiBatchRunning, setAiBatchRunning] = useState(false)
 
   // ── Añadir ingrediente (E2a) ──
   const [addOpen, setAddOpen] = useState(false)
@@ -329,6 +378,28 @@ export default function RecipeEditorPage({
     }
   }, [accountsLoading, activeAccountId, recipeId, econReloadTick])
 
+  // E5 — resolver la URL firmada de la foto del plato a partir del path guardado.
+  // kitchen_photo_url guarda el storage path (bucket privado); la URL firmada
+  // caduca, así que se regenera al cargar/cambiar la foto.
+  useEffect(() => {
+    let cancelled = false
+    const stored = recipe?.kitchenPhotoUrl ?? null
+    if (!stored) {
+      setPhotoUrl(null)
+      return
+    }
+    getDishPhotoUrl(stored)
+      .then((url) => {
+        if (!cancelled) setPhotoUrl(url)
+      })
+      .catch(() => {
+        if (!cancelled) setPhotoUrl(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [recipe?.kitchenPhotoUrl])
+
   const totalCost = useMemo(
     () => lines.reduce((acc, l) => acc + (l.lineCost ?? 0), 0),
     [lines]
@@ -361,6 +432,45 @@ export default function RecipeEditorPage({
     () => reviewReasonText(recipe?.reviewNotes ?? null),
     [recipe?.reviewNotes],
   )
+
+  // ── E5: foto del plato ──
+  // Abre el selector de archivo (input oculto). El botón de la cabecera lo dispara.
+  function openPhotoPicker() {
+    setPhotoError(null)
+    photoInputRef.current?.click()
+  }
+
+  // Sube la foto elegida: comprime → sube a recipe-uploads → guarda el PATH en
+  // kitchen_photo_url → re-resuelve la URL firmada. Borra la foto anterior si la
+  // había (no deja huérfanos en el bucket). Optimista en el spinner, no en la img
+  // (esperamos al path real para no mostrar una preview que luego falle).
+  async function handlePhotoSelected(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    // Permitir volver a elegir el mismo archivo: limpiamos el value del input.
+    e.target.value = ''
+    if (!file || !recipe || !activeAccountId) return
+
+    setPhotoError(null)
+    setPhotoUploading(true)
+    const previousPath = recipe.kitchenPhotoUrl ?? null
+    try {
+      const path = await uploadDishPhoto(activeAccountId, recipe.id, file)
+      const updated = await updateRecipeItem(recipe.id, { kitchenPhotoUrl: path })
+      setRecipe(updated)
+      // Borrar la foto anterior del bucket (no fatal si falla).
+      if (previousPath && previousPath !== path) {
+        deleteDishPhoto(previousPath).catch(() => {
+          /* no fatal */
+        })
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'No se pudo subir la foto.'
+      setPhotoError(msg)
+      window.setTimeout(() => setPhotoError(null), 5000)
+    } finally {
+      setPhotoUploading(false)
+    }
+  }
 
   async function handleDismissReview() {
     if (!recipe || dismissing) return
@@ -453,7 +563,9 @@ export default function RecipeEditorPage({
   function startEdit(line: RecipeLineBreakdown) {
     setEditError(null)
     setEditingLineId(line.lineId)
-    setDraftQty(String(line.quantity).replace('.', ','))
+    // E3: se edita el NETO (lo que va al plato), no el bruto.
+    const net = line.quantityNet ?? line.quantity
+    setDraftQty(String(net).replace('.', ','))
   }
 
   function commitEdit(line: RecipeLineBreakdown) {
@@ -464,22 +576,30 @@ export default function RecipeEditorPage({
     const raw = draftQty.trim().replace(',', '.')
     setEditingLineId(null)
 
-    const num = Number(raw)
-    if (raw === '' || !Number.isFinite(num) || num < 0) {
+    const net = Number(raw)
+    if (raw === '' || !Number.isFinite(net) || net < 0) {
       setEditError(`Cantidad no válida para "${line.childName}". No se guardó.`)
       window.setTimeout(() => setEditError(null), 3000)
       return
     }
-    if (num === line.quantity) return
+    const prevNet = line.quantityNet ?? line.quantity
+    if (net === prevNet) return
+
+    // E3: el neto es lo que teclea Pamela; el bruto (lo que cuesta) se deriva
+    // con la merma efectiva de la línea. Se guardan AMBOS en una sola llamada.
+    const waste = effectiveWastePct(line)
+    const gross = grossFromNet(net, waste)
 
     const prevLines = lines
     setLines((prev) =>
-      prev.map((l) => (l.lineId === line.lineId ? { ...l, quantity: num } : l))
+      prev.map((l) =>
+        l.lineId === line.lineId ? { ...l, quantityNet: net, quantity: gross } : l
+      )
     )
     setSavingLineId(line.lineId)
     setEditError(null)
 
-    updateLine(line.lineId, { quantityGross: num })
+    updateLine(line.lineId, { quantityNet: net, quantityGross: gross })
       .then(() => getRecipeBreakdown(recipeId))
       .then((fresh) => {
         setLines(fresh)
@@ -493,6 +613,220 @@ export default function RecipeEditorPage({
         window.setTimeout(() => setEditError(null), 4000)
       })
       .finally(() => setSavingLineId(null))
+  }
+
+  // ── E3: editar la merma de una línea (override por receta) ──
+  // Cambia el % de merma de ESTA línea: recalcula el bruto desde el neto actual.
+  // No toca el default del ingrediente (recipe_item) — eso es dato compartido y
+  // se decide aparte. Aquí es un override local y reversible.
+  function openWaste(line: RecipeLineBreakdown) {
+    setEditError(null)
+    setWasteOpenLineId(line.lineId)
+    setDraftWaste(String(effectiveWastePct(line)).replace('.', ','))
+  }
+
+  function commitWaste(line: RecipeLineBreakdown) {
+    if (wasteOpenLineId !== line.lineId || !recipeId) {
+      setWasteOpenLineId(null)
+      return
+    }
+    const raw = draftWaste.trim().replace(',', '.')
+    setWasteOpenLineId(null)
+
+    const waste = Number(raw)
+    if (raw === '' || !Number.isFinite(waste) || waste < 0 || waste >= 100) {
+      setEditError(`Merma no válida para "${line.childName}" (0–99%). No se guardó.`)
+      window.setTimeout(() => setEditError(null), 3000)
+      return
+    }
+    const net = line.quantityNet ?? line.quantity
+    const gross = grossFromNet(net, waste)
+    if (gross === line.quantity) return
+
+    const prevLines = lines
+    setLines((prev) =>
+      prev.map((l) => (l.lineId === line.lineId ? { ...l, quantity: gross } : l))
+    )
+    setSavingLineId(line.lineId)
+    setEditError(null)
+
+    updateLine(line.lineId, { quantityNet: net, quantityGross: gross })
+      .then(() => getRecipeBreakdown(recipeId))
+      .then((fresh) => {
+        setLines(fresh)
+        triggerLatido(line.lineId)
+        setEconReloadTick((t) => t + 1)
+      })
+      .catch((err: unknown) => {
+        setLines(prevLines)
+        const msg = err instanceof Error ? err.message : 'Error al guardar la merma'
+        setEditError(msg)
+        window.setTimeout(() => setEditError(null), 4000)
+      })
+      .finally(() => setSavingLineId(null))
+  }
+
+  // ── E3: sugerencia de merma por IA (cimiento del proyecto) ──
+  // Cuando un ingrediente no tiene merma conocida, preguntamos a Folvy AI un %
+  // de merma de preparación típico. La IA SOLO sugiere: el número no se guarda
+  // hasta que Pamela lo aplica (constitución Folvy AI: "no escribe sin confirmar").
+  // El stream SSE se acumula y se extrae el primer número del texto final.
+  function suggestWasteAI(line: RecipeLineBreakdown) {
+    if (!activeAccountId || aiWasteLineId) return
+    setAiWasteError(null)
+    setAiWasteLineId(line.lineId)
+    let acc = ''
+    streamMessage(
+      {
+        accountId: activeAccountId,
+        surface: 'background',
+        message:
+          `¿Qué porcentaje de merma de preparación (limpieza, recorte, pelado) ` +
+          `tiene típicamente el ingrediente "${line.childName}" en una cocina ` +
+          `profesional? Responde SOLO con el número del porcentaje, sin texto ` +
+          `(ejemplo: 24). Si no procede merma, responde 0.`,
+        history: [],
+      },
+      (evt) => {
+        if (evt.type === 'text') {
+          acc += evt.content
+        } else if (evt.type === 'done' || evt.type === 'partial_end') {
+          const m = acc.match(/\d{1,3}(?:[.,]\d+)?/)
+          const val = m ? Number(m[0].replace(',', '.')) : NaN
+          if (Number.isFinite(val) && val >= 0 && val < 100) {
+            setAiWasteSuggestions((prev) => ({ ...prev, [line.lineId]: val }))
+          } else {
+            setAiWasteError('La IA no devolvió una merma clara. Introdúcela a mano.')
+            window.setTimeout(() => setAiWasteError(null), 4000)
+          }
+          setAiWasteLineId(null)
+        } else if (evt.type === 'error') {
+          setAiWasteError('No se pudo consultar a la IA. Introduce la merma a mano.')
+          window.setTimeout(() => setAiWasteError(null), 4000)
+          setAiWasteLineId(null)
+        }
+      },
+    ).catch(() => {
+      setAiWasteError('No se pudo consultar a la IA. Introduce la merma a mano.')
+      window.setTimeout(() => setAiWasteError(null), 4000)
+      setAiWasteLineId(null)
+    })
+  }
+
+  // Aplica la merma sugerida por la IA como override de la línea (no toca el
+  // ingrediente). Marca de facto el origen 'ia' al persistir bruto/neto.
+  function applyAiWaste(line: RecipeLineBreakdown, pct: number) {
+    if (!recipeId) return
+    const net = line.quantityNet ?? line.quantity
+    const gross = grossFromNet(net, pct)
+    const prevLines = lines
+    setLines((prev) =>
+      prev.map((l) => (l.lineId === line.lineId ? { ...l, quantity: gross } : l))
+    )
+    setSavingLineId(line.lineId)
+    setAiWasteSuggestions((prev) => {
+      const next = { ...prev }
+      delete next[line.lineId]
+      return next
+    })
+    // Guardar la merma aceptada como DEFAULT del ingrediente: se paga una vez a
+    // la IA y se hereda en todos los platos → el gasto IA tiende a cero. Es
+    // fail-safe: si falla el default, la línea igual queda bien (override local).
+    updateRecipeItem(line.childItemId, { defaultWastePct: pct }).catch((err: unknown) => {
+      console.error('No se pudo guardar la merma por defecto del ingrediente', err)
+    })
+    updateLine(line.lineId, { quantityNet: net, quantityGross: gross })
+      .then(() => getRecipeBreakdown(recipeId))
+      .then((fresh) => {
+        setLines(fresh)
+        triggerLatido(line.lineId)
+        setEconReloadTick((t) => t + 1)
+      })
+      .catch((err: unknown) => {
+        setLines(prevLines)
+        const msg = err instanceof Error ? err.message : 'Error al aplicar la merma'
+        setEditError(msg)
+        window.setTimeout(() => setEditError(null), 4000)
+      })
+      .finally(() => setSavingLineId(null))
+  }
+
+  // E3 — líneas SIN merma conocida (ni efectiva ni default del ingrediente).
+  // Son las únicas candidatas a sugerencia IA. Si está vacío, el botón global
+  // no se muestra: no hay nada que sugerir → no se puede gastar IA de más.
+  const linesWithoutWaste = useMemo(
+    () => lines.filter((l) => effectiveWastePct(l) === 0),
+    [lines]
+  )
+
+  // E3 — botón GLOBAL "Sugerir mermas con IA" (coste controlado por diseño):
+  //  · UNA sola llamada a folvy-ai para TODAS las líneas sin merma (no N llamadas).
+  //  · solo actúa sobre ingredientes sin merma conocida (no re-pregunta lo sabido).
+  //  · las sugerencias aparecen como chips; Pamela aplica las que quiera.
+  // El gasto IA es DECRECIENTE: cada ingrediente resuelto no se vuelve a consultar.
+  function suggestWasteBatchAI() {
+    if (!activeAccountId || aiBatchRunning) return
+    const targets = linesWithoutWaste
+    if (targets.length === 0) return
+    setAiWasteError(null)
+    setAiBatchRunning(true)
+
+    const names = targets.map((l) => l.childName)
+    let acc = ''
+    streamMessage(
+      {
+        accountId: activeAccountId,
+        surface: 'background',
+        message:
+          `Para cada uno de estos ingredientes, dame el porcentaje típico de merma ` +
+          `de preparación (limpieza, recorte, pelado) en una cocina profesional. ` +
+          `Responde SOLO un JSON array de objetos {"nombre","merma"} sin texto extra, ` +
+          `con la merma como número (0 si no procede). Ingredientes: ` +
+          JSON.stringify(names),
+        history: [],
+      },
+      (evt) => {
+        if (evt.type === 'text') {
+          acc += evt.content
+        } else if (evt.type === 'done' || evt.type === 'partial_end') {
+          try {
+            const m = acc.match(/\[[\s\S]*\]/)
+            const arr: Array<{ nombre?: string; merma?: number }> = m ? JSON.parse(m[0]) : []
+            const byName = new Map<string, number>()
+            for (const it of arr) {
+              if (typeof it.nombre === 'string' && typeof it.merma === 'number') {
+                byName.set(it.nombre.trim().toLowerCase(), it.merma)
+              }
+            }
+            const next: Record<string, number> = {}
+            for (const l of targets) {
+              const v = byName.get(l.childName.trim().toLowerCase())
+              if (v !== undefined && Number.isFinite(v) && v >= 0 && v < 100 && v > 0) {
+                next[l.lineId] = v
+              }
+            }
+            if (Object.keys(next).length === 0) {
+              setAiWasteError('La IA no devolvió mermas claras. Introdúcelas a mano.')
+              window.setTimeout(() => setAiWasteError(null), 4000)
+            } else {
+              setAiWasteSuggestions((prev) => ({ ...prev, ...next }))
+            }
+          } catch {
+            setAiWasteError('La IA no devolvió un formato válido. Introdúcelas a mano.')
+            window.setTimeout(() => setAiWasteError(null), 4000)
+          }
+          setAiBatchRunning(false)
+        } else if (evt.type === 'error') {
+          setAiWasteError('No se pudo consultar a la IA. Introduce las mermas a mano.')
+          window.setTimeout(() => setAiWasteError(null), 4000)
+          setAiBatchRunning(false)
+        }
+      },
+    ).catch(() => {
+      setAiWasteError('No se pudo consultar a la IA. Introduce las mermas a mano.')
+      window.setTimeout(() => setAiWasteError(null), 4000)
+      setAiBatchRunning(false)
+    })
   }
 
   function handleDelete(line: RecipeLineBreakdown) {
@@ -766,51 +1100,62 @@ export default function RecipeEditorPage({
       {backLink}
       <div className="bg-card rounded-xl border border-border-default overflow-hidden">
 
-        {/* ── Cabecera con foto del plato ── */}
-        <div className="relative h-[150px] bg-accent overflow-hidden">
-          {recipe.kitchenPhotoUrl ? (
-            <img
-              src={recipe.kitchenPhotoUrl}
-              alt={recipe.name}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center bg-terracota-bg">
-              <ChefHat className="w-10 h-10 text-terracota opacity-60" />
-            </div>
-          )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/5" />
+        {/* ── Cabecera compacta con vida: foto 96px + título + chips (E5 visual) ── */}
+        {/* Toque cálido (bg-terracota-bg) para no quedar plano; la foto grande va en su pestaña (G8). */}
+        <div className="flex items-center gap-4 p-4 md:p-5 bg-terracota-bg border-b border-border-default">
+          {/* Input de archivo oculto: cámara o galería en móvil. */}
+          <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handlePhotoSelected}
+          />
 
-          <button className="absolute top-3 left-3 inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-white/90 text-terracota font-medium hover:bg-white transition-colors">
-            <Camera className="w-3.5 h-3.5" />
-            {recipe.kitchenPhotoUrl ? 'Cambiar foto' : 'Añadir foto'}
+          {/* Foto del plato (96px). Clic -> lightbox a tamaño completo (o añadir si no hay). */}
+          <button
+            type="button"
+            onClick={() => (photoUrl ? setPhotoLightbox(true) : openPhotoPicker())}
+            disabled={photoUploading}
+            className="relative w-24 h-24 rounded-lg overflow-hidden border border-border-default bg-card flex items-center justify-center shrink-0 disabled:opacity-60"
+            aria-label={photoUrl ? 'Ver foto del plato' : 'Añadir foto del plato'}
+          >
+            {photoUploading ? (
+              <Loader2 className="w-7 h-7 text-terracota animate-spin" />
+            ) : photoUrl ? (
+              <img src={photoUrl} alt={recipe.name} className="w-full h-full object-cover" />
+            ) : (
+              <Camera className="w-8 h-8 text-terracota opacity-70" />
+            )}
           </button>
 
-          <div className="absolute top-3 right-3 flex gap-1.5">
-            {isAi && (
-              <span className="text-xs px-2.5 py-1 rounded-full bg-accent text-text-on-accent inline-flex items-center gap-1 font-medium">
-                <Sparkles className="w-3.5 h-3.5" />
-                IA
-              </span>
-            )}
-            {dishNeedsReview ? (
-              <span className="text-xs px-2.5 py-1 rounded-full bg-warning text-white inline-flex items-center gap-1 font-medium">
-                <AlertTriangle className="w-3.5 h-3.5" />
-                Revisar
-              </span>
-            ) : (
-              <span className="text-xs px-2.5 py-1 rounded-full bg-success text-white inline-flex items-center gap-1 font-medium">
-                <Check className="w-3.5 h-3.5" />
-                Validado
-              </span>
-            )}
-          </div>
-
-          <div className="absolute left-4 bottom-3 right-4">
-            <h1 className="text-[22px] font-display font-medium text-white leading-tight">
-              {recipe.name}
-            </h1>
-            <div className="text-[13px] text-white/85 mt-0.5 flex items-center gap-2">
+          {/* Título, tipo/código, chips y botón de foto. */}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-3">
+              <h1 className="text-[22px] font-display font-medium text-text-primary leading-tight">
+                {recipe.name}
+              </h1>
+              <div className="flex gap-1.5 shrink-0">
+                {isAi && (
+                  <span className="text-xs px-2.5 py-1 rounded-full bg-accent text-text-on-accent inline-flex items-center gap-1 font-medium">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    IA
+                  </span>
+                )}
+                {dishNeedsReview ? (
+                  <span className="text-xs px-2.5 py-1 rounded-full bg-warning text-white inline-flex items-center gap-1 font-medium">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    Revisar
+                  </span>
+                ) : (
+                  <span className="text-xs px-2.5 py-1 rounded-full bg-success text-white inline-flex items-center gap-1 font-medium">
+                    <Check className="w-3.5 h-3.5" />
+                    Validado
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="text-[13px] text-text-secondary mt-1 flex items-center gap-2">
               <span className="inline-flex items-center gap-1.5">
                 <ChefHat className="w-[15px] h-[15px]" />
                 {recipe.type === 'dish' ? 'Plato' : recipe.type}
@@ -820,6 +1165,22 @@ export default function RecipeEditorPage({
                   <span className="opacity-50">·</span>
                   <span className="font-mono opacity-85">{recipe.code}</span>
                 </>
+              )}
+            </div>
+            <div className="mt-2 flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={openPhotoPicker}
+                disabled={photoUploading}
+                className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-card text-terracota font-medium border border-terracota/30 hover:bg-terracota-bg disabled:opacity-60 transition-colors"
+              >
+                <Camera className="w-3.5 h-3.5" />
+                {photoUploading ? 'Subiendo…' : photoUrl ? 'Ver / cambiar foto' : 'Añadir foto'}
+              </button>
+              {photoError && (
+                <span className="px-2.5 py-1 rounded-md bg-danger text-white text-xs">
+                  {photoError}
+                </span>
               )}
             </div>
           </div>
@@ -885,7 +1246,25 @@ export default function RecipeEditorPage({
                 <span className="text-xs font-medium tracking-wide text-text-secondary uppercase">
                   Composición · {lines.length} ingredientes
                 </span>
-                <div className="flex gap-1">
+                <div className="flex items-center gap-1">
+                  {linesWithoutWaste.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={suggestWasteBatchAI}
+                      disabled={aiBatchRunning}
+                      title="Sugerir la merma de los ingredientes que no la tienen, con IA"
+                      className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md bg-terracota-bg text-terracota font-medium hover:bg-terracota/15 disabled:opacity-50 transition-colors mr-1"
+                    >
+                      {aiBatchRunning ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Sparkles className="w-3.5 h-3.5" />
+                      )}
+                      {aiBatchRunning
+                        ? 'Consultando IA…'
+                        : `Sugerir mermas con IA (${linesWithoutWaste.length})`}
+                    </button>
+                  )}
                   <button
                     title="Dictar por voz (próximamente)"
                     className="w-7 h-7 rounded-md bg-accent-bg text-text-secondary inline-flex items-center justify-center hover:text-text-primary transition-colors"
@@ -909,10 +1288,10 @@ export default function RecipeEditorPage({
                 </div>
               </div>
 
-              {/* Aviso de error de edición */}
-              {editError && (
+              {/* Aviso de error de edición / IA */}
+              {(editError || aiWasteError) && (
                 <div className="mb-2 px-2.5 py-1.5 rounded-md bg-danger-bg text-danger text-xs">
-                  {editError}
+                  {editError ?? aiWasteError}
                 </div>
               )}
 
@@ -930,11 +1309,17 @@ export default function RecipeEditorPage({
                         : 0
                     const editing = editingLineId === line.lineId
                     const saving = savingLineId === line.lineId
+                    const wasteOpen = wasteOpenLineId === line.lineId
+                    const waste = effectiveWastePct(line)
+                    const netQty = line.quantityNet ?? line.quantity
+                    const aiLoading = aiWasteLineId === line.lineId
+                    const aiSuggestion = aiWasteSuggestions[line.lineId]
                     return (
                       <div
                         key={line.lineId}
-                        className="group flex items-center gap-2.5 py-2 px-1.5 border-b border-border-default last:border-b-0"
+                        className="group border-b border-border-default last:border-b-0"
                       >
+                      <div className="flex items-center gap-2.5 py-2 px-1.5">
                         <span className="w-[30px] h-[30px] rounded-md bg-accent-bg inline-flex items-center justify-center flex-shrink-0">
                           <span
                             className={
@@ -944,7 +1329,7 @@ export default function RecipeEditorPage({
                           />
                         </span>
 
-                        {/* Cantidad (BRUTO EFECTIVO) editable inline + unidad */}
+                        {/* E3: NETO (lo que va al plato) editable inline + unidad */}
                         <div className="min-w-[78px] flex-shrink-0">
                           {editing ? (
                             <div className="flex items-center gap-1">
@@ -975,10 +1360,10 @@ export default function RecipeEditorPage({
                             <button
                               type="button"
                               onClick={() => startEdit(line)}
-                              title="Editar cantidad"
+                              title="Editar cantidad neta (lo que va al plato)"
                               className="font-mono text-sm text-text-primary text-left hover:bg-accent-bg rounded px-1 -ml-1 transition-colors"
                             >
-                              {formatQty(line.quantity)}{' '}
+                              {formatQty(netQty)}{' '}
                               <span className="text-text-secondary">{line.unitAbbr}</span>
                             </button>
                           )}
@@ -998,6 +1383,42 @@ export default function RecipeEditorPage({
                               no costeable
                             </span>
                           )}
+                          {/* E3: chip de merma. Si hay merma → mostrar y permitir override.
+                              Si no la hay → ofrecer sugerencia IA / añadir a mano. */}
+                          {waste > 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => openWaste(line)}
+                              title="Merma de esta línea (clic para ajustar)"
+                              className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-accent-bg text-text-secondary inline-flex items-center gap-1 align-middle hover:text-text-primary transition-colors"
+                            >
+                              ↘ merma {formatQty(waste)}%
+                            </button>
+                          ) : aiSuggestion !== undefined ? (
+                            <button
+                              type="button"
+                              onClick={() => applyAiWaste(line, aiSuggestion)}
+                              title="Aplicar la merma sugerida por la IA"
+                              className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-warning-bg text-warning inline-flex items-center gap-1 align-middle hover:opacity-80 transition-opacity"
+                            >
+                              <Sparkles className="w-3 h-3" />
+                              IA sugiere {formatQty(aiSuggestion)}% · aplicar
+                            </button>
+                          ) : aiLoading ? (
+                            <span className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-accent-bg text-text-secondary inline-flex items-center gap-1 align-middle">
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                              consultando IA…
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => openWaste(line)}
+                              title="Añadir merma a esta línea"
+                              className="ml-2 text-[11px] px-2 py-0.5 rounded-full border border-border-default text-text-secondary inline-flex items-center gap-1 align-middle opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-text-primary transition-all"
+                            >
+                              + merma
+                            </button>
+                          )}
                         </span>
 
                         <span className="w-[38px] h-1 rounded-full bg-accent-bg overflow-hidden flex-shrink-0">
@@ -1016,6 +1437,7 @@ export default function RecipeEditorPage({
                                 ? 'text-terracota font-medium'
                                 : 'text-text-secondary')
                           }
+                          title={waste > 0 ? `Coste sobre bruto ${formatQty(line.quantity)} ${line.unitAbbr}` : undefined}
                         >
                           {formatEur(line.lineCost)}
                         </span>
@@ -1029,6 +1451,52 @@ export default function RecipeEditorPage({
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
+                      </div>
+
+                      {/* E3: panel de merma expandido (override por receta) */}
+                      {wasteOpen && (
+                        <div className="flex items-center gap-2 pb-2.5 pl-[88px] pr-1.5 text-[13px] text-text-secondary">
+                          <span>Merma en esta receta:</span>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            autoFocus
+                            value={draftWaste}
+                            onChange={(e) => setDraftWaste(e.target.value)}
+                            onFocus={(e) => e.currentTarget.select()}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault()
+                                commitWaste(line)
+                              } else if (e.key === 'Escape') {
+                                e.preventDefault()
+                                setWasteOpenLineId(null)
+                              }
+                            }}
+                            onBlur={() => commitWaste(line)}
+                            className="w-[52px] px-1 py-0.5 font-mono text-sm text-text-primary bg-card border border-accent rounded focus:outline-none focus:ring-1 focus:ring-accent"
+                          />
+                          <span className="font-mono">%</span>
+                          <span className="text-text-secondary opacity-70">
+                            → el bruto efectivo y el coste se recalculan
+                          </span>
+                          {waste === 0 && (
+                            <button
+                              type="button"
+                              onClick={() => suggestWasteAI(line)}
+                              disabled={aiLoading}
+                              className="ml-auto inline-flex items-center gap-1 text-[12px] text-terracota hover:opacity-80 disabled:opacity-50 transition-opacity"
+                            >
+                              {aiLoading ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Sparkles className="w-3.5 h-3.5" />
+                              )}
+                              Sugerir con IA
+                            </button>
+                          )}
+                        </div>
+                      )}
                       </div>
                     )
                   })}
@@ -1419,6 +1887,8 @@ export default function RecipeEditorPage({
               )}
             </div>
           </div>
+        ) : activeTab === 'receta' ? (
+          <RecipeStepsTab recipeItemId={recipe.id} />
         ) : (
           <div className="p-4 md:p-5">
             <div className="text-sm text-text-secondary opacity-70 py-8 text-center">
@@ -1428,6 +1898,31 @@ export default function RecipeEditorPage({
         )}
 
       </div>
+
+      {/* ── Lightbox de la foto del plato (E5 visual) ── */}
+      {photoLightbox && photoUrl && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+          onClick={() => setPhotoLightbox(false)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <button
+            type="button"
+            onClick={() => setPhotoLightbox(false)}
+            className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/90 text-text-primary flex items-center justify-center hover:bg-white transition-colors"
+            aria-label="Cerrar"
+          >
+            <X className="w-5 h-5" />
+          </button>
+          <img
+            src={photoUrl}
+            alt={recipe.name}
+            className="max-w-full max-h-[90vh] object-contain rounded-lg"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   )
 }

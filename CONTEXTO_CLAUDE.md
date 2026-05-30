@@ -1161,6 +1161,55 @@ OBJETIVO: cierre en ~5 min, no 60. Acciones (hacer ANTES de arrancar E3):
 Tras esto (y solo tras esto), seguir con E3 (capa de merma bruto/neto completa,
 Opción B; ver §14.9 y bloque E1/E3 al final de la sección 1).
 
+14.11 - SESION 30/05 (tarde). Hecho:
+- cierre-sesion.ps1 -> ejecutor con -DryRun (commit c0a1ef2, ya pusheado).
+- E3 escandallos: columna recipe_item.default_waste_pct (NULL=desconocida,
+  0=sin merma, >0=conocida) + 9 mermas reales sembradas (Tomate 4, Lechuga 24,
+  Cilantro 20, Zanahoria 27.3, Parmesano 5, Albahaca 15, Pepinillos 10,
+  Jamon Dulce 4, Calabacin 4). Cebolla/Lima NULL a proposito (merma por corte).
+  kitchen_recipe_breakdown ampliada: +unit_id +child_default_waste_pct.
+  RecipeEditorPage: neto editable + chip merma + override por receta +
+  sugerencia IA (folvy-ai) + boton global "Sugerir mermas con IA" (1 llamada
+  batch, solo huecos, guarda default, se apaga solo, coste decreciente).
+- E5 foto plato: recipePhotoService.ts nuevo. Sube a recipe-uploads/
+  {accountId}/dishes/, comprime cliente 1200px, guarda PATH (no URL) en
+  kitchen_photo_url, URL firmada al render, borra anterior al cambiar.
+- Last.app webhook Fase 2 DESPLEGADO: escucha tab:closed (venta definitiva),
+  no llama API (products/bills embebidos), resuelve en memoria (logica
+  backfill: orgProductId->catalogProductId->nombre), inserta sale+sale_line
+  idempotente por external_ref=bill.id, valida token LASTAPP_WEBHOOK_TOKEN
+  (secret creado). --no-verify-jwt. Responde 200 siempre.
+
+PENDIENTE INMEDIATO (proxima sesion, primer punto):
+- E5 visual: la foto sube/persiste OK pero el encuadre recorta el plato
+  (h-150px + object-cover sobre foto 1:1). Decidir altura cabecera (simulador
+  se quedo a medias). Solo CSS en el render, no toca servicio.
+- Verificar webhook end-to-end: query sale source=lastapp,
+  map_source='webhook', created_at>16:50 (estaba vacio, esperando tab:closed
+  nuevo). 8 tab:closed del 30/05 (15:22-16:44) en log SIN procesar.
+
+DEUDA ABIERTA:
+- Regenerar src/types/database.ts (quita casts default_waste_pct +
+  child_needs_review).
+- resolve_lastapp_line fuera de control de versiones (reconstruir en migracion).
+- Reprocesar los 8 tab:closed de hoy desde el log.
+- Medidor coste IA por cuenta (prerequisito 2o cliente).
+- Seguridad webhook: token va en authorization fijo, firma HMAC null
+  (Last no firma). Token ya validado; revisar si pedir HMAC a Last.
+- Corregir 1.1.A: el "Pending" NO era la causa (integracion privada, segun
+  Last). El bug era de Last en eventos bill:*; tab:closed llega bien.
+- code-splitting bundle 2.3MB.
+
+COMMIT PENDIENTE (no bloquea, ficheros en disco y compilan):
+.\scripts\cierre-sesion.ps1 -Message "feat(kitchen): E3 merma+IA, E5 foto plato; feat(lastapp): webhook Fase 2 tab:closed" -Add @("src/modules/kitchen/services/recipePhotoService.ts")
+
+ROADMAP FIJADO: Bloque1 editor E4-E7 (E5 hecho, falta encuadre + E4/E6/E7) ->
+Bloque2 dashboards margen -> Bloque3 motor consumo (venta x escandallo) ->
+Bloque4 inventario teorico + formatos compra -> Bloque5 compras. G7 (foto->IA)
+tramo estrella. G3 modificadores tras Bloque2. Metodo: benchmark antes de
+disenar, paquete ficheros de entrada, BBDD primero, sin boton muerto, cierre
+incremental. Principio rector: golear en cada campo o deuda explicita.
+
 ---
 Documento actualizado: 28 de mayo de 2026 (noche) — DISEÑO COMPLETO V1 EDITOR DE ESCANDALLOS cerrado conceptualmente (8 decisiones de producto + 5 catálogos semilla + reconocimiento BBDD + diagnóstico real de 34 needs_review con CSV + 12 hallazgos competencia mundial integrados + diseño UX completo del lienzo y todas las pantallas + 3 prompts sistema modos IA + decisión Modificadores M1-M4 al 100% con confirmación operativa de Last.app). Próximo: saneamiento de commits + S1 (schema migration) + S2 (UI banner needs_review) + S_MODIFIERS (parsing histórico + actualizar conector). Detalle UX completo en documento maestro nuevo `folvy_v1_editor_escandallos_diseno.md`. Esta es la sesión más densa del proyecto hasta la fecha en términos de decisiones de diseño.
 Único documento de contexto. Próxima actualización: al cierre de la próxima sesión técnica (regenerar §1).

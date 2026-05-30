@@ -18,6 +18,11 @@
 //   - Familia / etiquetas / modos Tarjetas-Tabla / vistas guardadas / búsqueda
 //     semántica → tramos siguientes (familia/tags dependen del schema S1).
 //
+// FOTO (E5): kitchen_photo_url guarda el PATH de un bucket privado; la URL
+// servible se firma al render con getDishPhotoUrl(). La lista resuelve las
+// URLs firmadas en lote tras cargar los platos (igual criterio que el editor),
+// para que la miniatura muestre la foto real y no un path roto.
+//
 // Patrón de carga: useActiveAccount() + useEffect con flag `cancelled`,
 // igual que KitchenItemsPage.
 
@@ -33,6 +38,7 @@ import {
 } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { listRecipeItems, getDishesIncomplete } from '@/modules/kitchen/services/recipeItemService'
+import { getDishPhotoUrl } from '@/modules/kitchen/services/recipePhotoService'
 import type { RecipeItem } from '@/types/kitchen'
 import RecipeEditorPage from '@/modules/kitchen/pages/RecipeEditorPage'
 
@@ -125,6 +131,9 @@ export default function KitchenRecipesPage() {
   const [search, setSearch] = useState('')
   // null = vista lista; un id = vista detalle (editor de ese plato).
   const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(null)
+  // E5: URLs firmadas de las fotos (id del plato -> URL servible). El listado
+  // guarda el PATH en kitchen_photo_url; aquí lo firmamos para poder mostrarlo.
+  const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({})
 
   useEffect(() => {
     if (accountsLoading) return
@@ -168,6 +177,38 @@ export default function KitchenRecipesPage() {
       cancelled = true
     }
   }, [activeAccountId, accountsLoading])
+
+  // E5: resolver en lote las URLs firmadas de los platos que tienen foto.
+  // kitchen_photo_url es un PATH de bucket privado; sin firmar no es servible.
+  // Solo se firma para los platos CON foto, así que el coste es proporcional a
+  // las fotos existentes, no al total de platos. (Optimización futura: firma
+  // por lote con createSignedUrls; deuda menor anotada.)
+  useEffect(() => {
+    let cancelled = false
+    const withPhoto = items.filter((it) => it.kitchenPhotoUrl)
+    if (withPhoto.length === 0) {
+      setPhotoUrls({})
+      return
+    }
+    Promise.all(
+      withPhoto.map(async (it) => {
+        try {
+          const url = await getDishPhotoUrl(it.kitchenPhotoUrl as string)
+          return url ? ([it.id, url] as const) : null
+        } catch {
+          return null
+        }
+      }),
+    ).then((pairs) => {
+      if (cancelled) return
+      const map: Record<string, string> = {}
+      for (const p of pairs) if (p) map[p[0]] = p[1]
+      setPhotoUrls(map)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [items])
 
   // Búsqueda por palabras (tokens) en cliente, ignorando acentos. Coincide si
   // todas las palabras escritas aparecen en nombre / nombre alternativo / código
@@ -259,6 +300,7 @@ export default function KitchenRecipesPage() {
             const isAi =
               item.source === 'ai_recipe' || item.source === 'ocr_invoice'
             const updated = formatRelative(item.costUpdatedAt)
+            const photo = photoUrls[item.id]
 
             return (
               <div
@@ -266,11 +308,13 @@ export default function KitchenRecipesPage() {
                 onClick={() => setSelectedRecipeId(item.id)}
                 className="bg-card rounded-lg border border-border-default p-3 flex items-center gap-3 cursor-pointer hover:border-terracota hover:shadow-sm transition-base"
               >
-                {/* Foto / placeholder cálido */}
+                {/* Foto / placeholder cálido. La miniatura usa la URL firmada
+                    (photoUrls[id]); mientras se resuelve o si no hay foto,
+                    cae al recuadro cálido con el icono. */}
                 <span className="w-14 h-14 rounded-md overflow-hidden flex-shrink-0">
-                  {item.kitchenPhotoUrl ? (
+                  {photo ? (
                     <img
-                      src={item.kitchenPhotoUrl}
+                      src={photo}
                       alt={item.name}
                       className="w-full h-full object-cover"
                     />

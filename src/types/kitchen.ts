@@ -35,6 +35,14 @@ export type RowRecipeLine             = Tables['recipe_line']['Row']
 export type RowRecipeLineInsert       = Tables['recipe_line']['Insert']
 export type RowRecipeLineUpdate       = Tables['recipe_line']['Update']
 
+export type RowRecipeItemStep         = Tables['recipe_item_step']['Row']
+export type RowRecipeItemStepInsert   = Tables['recipe_item_step']['Insert']
+export type RowRecipeItemStepUpdate   = Tables['recipe_item_step']['Update']
+
+export type RowRecipeItemStepLine        = Tables['recipe_item_step_line']['Row']
+export type RowRecipeItemStepLineInsert  = Tables['recipe_item_step_line']['Insert']
+export type RowRecipeItemStepLineUpdate  = Tables['recipe_item_step_line']['Update']
+
 export type RowRecipeItemUnitConversion       = Tables['recipe_item_unit_conversion']['Row']
 export type RowRecipeItemUnitConversionInsert = Tables['recipe_item_unit_conversion']['Insert']
 export type RowRecipeItemUnitConversionUpdate = Tables['recipe_item_unit_conversion']['Update']
@@ -177,6 +185,7 @@ export interface RecipeItem {
   conservationType: ConservationType | null
   serviceTempC: number | null
   notes: string | null
+  defaultWastePct: number | null
   // nativo-IA
   source: ItemSource
   aiConfidence: number | null
@@ -237,6 +246,7 @@ export interface RecipeItemUpdate {
   conservationType?: ConservationType | null
   serviceTempC?: number | null
   notes?: string | null
+  defaultWastePct?: number | null
   needsReview?: boolean
   reviewNotes?: RecipeItemReviewNote | null
   reviewDismissedAt?: string | null
@@ -281,6 +291,46 @@ export interface RecipeLineUpdate {
   cutTypeId?: string | null
   comment?: string | null
   position?: number
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// recipe_item_step (un paso de elaboración de la receta) + el puente
+// recipe_item_step_line (qué líneas/ingredientes usa cada paso, N:N).
+// OJO: recipe_item_step NO tiene account_id (cuelga de recipe_item_id);
+// por eso RecipeItemStep/Insert NO llevan accountId (a diferencia de
+// RecipeLine). El puente recipe_item_step_line SÍ tiene account_id.
+// ─────────────────────────────────────────────────────────────────────
+export interface RecipeItemStep {
+  id: string
+  recipeItemId: string
+  position: number
+  kind: string
+  text: string
+  durationMin: number | null
+  temperatureC: number | null
+  photoUrl: string | null
+  createdAt: string
+  updatedAt: string
+  // lineIds: líneas del escandallo vinculadas a este paso (vía el puente).
+  // Lo resuelve el service al listar; no es una columna de recipe_item_step.
+  lineIds: string[]
+}
+export interface RecipeItemStepInsert {
+  recipeItemId: string
+  text: string
+  position?: number
+  kind?: string
+  durationMin?: number | null
+  temperatureC?: number | null
+  photoUrl?: string | null
+}
+export interface RecipeItemStepUpdate {
+  text?: string
+  position?: number
+  kind?: string
+  durationMin?: number | null
+  temperatureC?: number | null
+  photoUrl?: string | null
 }
 
 // ─────────────────────────────────────────────────────────────────────

@@ -41,6 +41,7 @@ export function rowToRecipeItem(row: RowRecipeItem): RecipeItem {
     conservationType: row.conservation_type as RecipeItem['conservationType'],
     serviceTempC: row.service_temp_c,
     notes: row.notes,
+    defaultWastePct: (row as typeof row & { default_waste_pct?: number | null }).default_waste_pct ?? null,
     source: row.source as RecipeItem['source'],
     aiConfidence: row.ai_confidence,
     needsReview: row.needs_review,
@@ -105,6 +106,9 @@ function recipeItemUpdateToRow(patch: RecipeItemUpdate): RowRecipeItemUpdate {
   if (patch.conservationType !== undefined) row.conservation_type = patch.conservationType
   if (patch.serviceTempC !== undefined) row.service_temp_c = patch.serviceTempC
   if (patch.notes !== undefined) row.notes = patch.notes
+  if (patch.defaultWastePct !== undefined) {
+    (row as typeof row & { default_waste_pct?: number | null }).default_waste_pct = patch.defaultWastePct
+  }
   if (patch.needsReview !== undefined) row.needs_review = patch.needsReview
   if (patch.reviewNotes !== undefined) {
     row.review_notes = (patch.reviewNotes as unknown as Json) ?? null
