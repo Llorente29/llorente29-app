@@ -9,10 +9,12 @@
 import { ChefHat, BookOpen, TrendingUp, Target } from 'lucide-react'
 import type { ModuleDefinition } from '@/shell/types'
 import KitchenItemsPage from '@/modules/kitchen/pages/KitchenItemsPage'
-// KitchenRecipePage (lienzo viejo) reemplazado por RecipeEditorPage (rediseño V1).
-// Se conserva en disco por si hay que revertir; import desactivado.
+// KitchenRecipePage (lienzo viejo) → reemplazado por RecipeEditorPage (rediseño V1).
+// El editor ahora se monta DENTRO de KitchenRecipesPage (lista + detalle por
+// estado), que es lo que cuelga de la ruta 'recetas'. KitchenRecipePage se
+// conserva en disco por si hay que revertir; import desactivado.
 // import KitchenRecipePage from '@/modules/kitchen/pages/KitchenRecipePage'
-import RecipeEditorPage from '@/modules/kitchen/pages/RecipeEditorPage'
+import KitchenRecipesPage from '@/modules/kitchen/pages/KitchenRecipesPage'
 import KitchenProfitabilityPage from '@/modules/kitchen/pages/KitchenProfitabilityPage'
 import KitchenMenuEngineeringPage from '@/modules/kitchen/pages/KitchenMenuEngineeringPage'
 export const kitchenModule: ModuleDefinition = {
@@ -28,7 +30,7 @@ export const kitchenModule: ModuleDefinition = {
   basePath: 'kitchen',
   routes: [
     { path: '',                  element: <KitchenItemsPage /> },
-    { path: 'recetas',           element: <RecipeEditorPage /> },
+    { path: 'recetas',           element: <KitchenRecipesPage /> },
     { path: 'rentabilidad',      element: <KitchenProfitabilityPage /> },
     { path: 'ingenieria-menus',  element: <KitchenMenuEngineeringPage /> },
   ],

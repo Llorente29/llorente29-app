@@ -4,13 +4,16 @@
 // Diseño según folvy_v1_editor_escandallos_diseno.md §5 + plantilla visual
 // fijada (cabecera con foto, 5 solapas, composición con coste vivo).
 //
-// TRAMO 1 (este): estructura + carga del plato + cabecera + solapas.
-// Las columnas (composición / panel económico) llegan en tramos siguientes.
+// El id del plato llega por prop `recipeId` desde el contenedor
+// KitchenRecipesPage (patrón LISTA + DETALLE por estado; las páginas kitchen
+// NO usan react-router con params). `onBack` vuelve a la lista. Ya no hay
+// FALLBACK_RECIPE_ID: si no llega id, el contenedor muestra la lista, no el
+// editor (este se renderiza siempre con un id real).
 //
-// Patrón: useApp() (actor) + useActiveAccount() (cuenta), igual que
-// KitchenItemsPage. El id del plato viene por la URL (useParams).
+// Patrón: useActiveAccount() (cuenta), igual que KitchenItemsPage.
 import { useEffect, useMemo, useState } from 'react'
 import {
+  ArrowLeft,
   ChefHat,
   Check,
   Sparkles,
@@ -34,11 +37,6 @@ import {
 import { listBrands } from '@/modules/multitenancy/services/brandsService'
 import type { RecipeItem, MenuItemEconomics } from '@/types/kitchen'
 import type { RecipeLineBreakdown } from '@/modules/kitchen/services/recipeLineService'
-
-// TEMPORAL: hasta cablear la navegación con :id, si no llega id por la URL
-// caemos al plato real de la Bacon Cheeseburger para poder ver la pantalla.
-// TODO: quitar este fallback al conectar la ruta recetas/:id.
-const FALLBACK_RECIPE_ID = '3e70b2f8-2ddc-4e31-8ce2-d7db2a68976e'
 
 type EditorTab = 'escandallo' | 'receta' | 'etiquetado' | 'historico' | 'mas'
 
@@ -94,13 +92,18 @@ function statusColor(status: string | null | undefined): string {
 type EconRow = MenuItemEconomics & { _brandId: string }
 
 interface RecipeEditorPageProps {
-  /** Id del plato a editar. Si no llega, se usa el fallback (temporal). */
+  /** Id del plato a editar. Lo inyecta el contenedor KitchenRecipesPage. */
   recipeId?: string
+  /** Vuelve a la lista de platos. Si no se pasa, no se muestra el botón Volver. */
+  onBack?: () => void
 }
 
-export default function RecipeEditorPage({ recipeId: recipeIdProp }: RecipeEditorPageProps = {}) {
+export default function RecipeEditorPage({
+  recipeId: recipeIdProp,
+  onBack,
+}: RecipeEditorPageProps = {}) {
   const { activeAccountId, accountsLoading } = useActiveAccount()
-  const recipeId = recipeIdProp ?? FALLBACK_RECIPE_ID
+  const recipeId = recipeIdProp
 
   const [recipe, setRecipe] = useState<RecipeItem | null>(null)
   const [lines, setLines] = useState<RecipeLineBreakdown[]>([])
@@ -246,27 +249,49 @@ export default function RecipeEditorPage({ recipeId: recipeIdProp }: RecipeEdito
     })
   }, [econByBrand])
 
+  // Botón "Volver al listado" (solo si el contenedor pasó onBack). Se reutiliza
+  // en los estados de carga/error/no-encontrado y en el render principal.
+  const backLink = onBack ? (
+    <button
+      type="button"
+      onClick={onBack}
+      className="inline-flex items-center gap-1.5 text-sm text-text-secondary hover:text-text-primary transition-base mb-3"
+    >
+      <ArrowLeft className="w-4 h-4" />
+      Volver al listado
+    </button>
+  ) : null
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64 text-text-secondary">
-        Cargando escandallo…
+      <div className="max-w-6xl mx-auto p-4 md:p-6">
+        {backLink}
+        <div className="flex items-center justify-center h-64 text-text-secondary">
+          Cargando escandallo…
+        </div>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="m-6 rounded-lg border border-danger/20 bg-danger-bg px-4 py-3 text-danger text-sm">
-        {error}
+      <div className="max-w-6xl mx-auto p-4 md:p-6">
+        {backLink}
+        <div className="rounded-lg border border-danger/20 bg-danger-bg px-4 py-3 text-danger text-sm">
+          {error}
+        </div>
       </div>
     )
   }
 
   if (!recipe) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 text-text-secondary gap-2">
-        <ChefHat className="w-8 h-8 opacity-40" />
-        <p>No se encontró el escandallo.</p>
+      <div className="max-w-6xl mx-auto p-4 md:p-6">
+        {backLink}
+        <div className="flex flex-col items-center justify-center h-64 text-text-secondary gap-2">
+          <ChefHat className="w-8 h-8 opacity-40" />
+          <p>No se encontró el escandallo.</p>
+        </div>
       </div>
     )
   }
@@ -274,7 +299,8 @@ export default function RecipeEditorPage({ recipeId: recipeIdProp }: RecipeEdito
   const isAi = recipe.source === 'ai_recipe' || recipe.source === 'ocr_invoice'
 
   return (
-    <div className="max-w-5xl mx-auto p-4 md:p-6">
+    <div className="max-w-6xl mx-auto p-4 md:p-6">
+      {backLink}
       <div className="bg-card rounded-xl border border-border-default overflow-hidden">
 
         {/* ── Cabecera con foto del plato ── */}
@@ -365,9 +391,9 @@ export default function RecipeEditorPage({ recipeId: recipeIdProp }: RecipeEdito
 
         {/* ── Contenido de la solapa activa ── */}
         {activeTab === 'escandallo' ? (
-          <div className="grid grid-cols-1 md:grid-cols-[1fr_236px]">
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px]">
             {/* Columna izquierda: composición */}
-            <div className="p-4 md:p-5 md:border-r border-border-default">
+            <div className="p-4 md:p-5 lg:border-r border-border-default">
               {/* Cabecera de la composición + acciones rápidas */}
               <div className="flex items-center justify-between mb-3">
                 <span className="text-xs font-medium tracking-wide text-text-secondary uppercase">
@@ -518,12 +544,12 @@ export default function RecipeEditorPage({ recipeId: recipeIdProp }: RecipeEdito
                               (collapsed ? '-rotate-90' : '')
                             }
                           />
-                          <span className="text-[11px] font-semibold tracking-wide uppercase text-white/90">
+                          <span className="text-[11px] font-semibold tracking-wide uppercase text-white/90 truncate min-w-0">
                             {name}
                           </span>
                           <span
                             className={
-                              'text-[9px] px-1.5 py-px rounded-full ' +
+                              'text-[9px] px-1.5 py-px rounded-full flex-shrink-0 ' +
                               (isLicensed
                                 ? 'bg-warning/30 text-warning-bg'
                                 : 'bg-success/30 text-success-bg')
@@ -555,7 +581,7 @@ export default function RecipeEditorPage({ recipeId: recipeIdProp }: RecipeEdito
                                   <span className="flex-1 min-w-0 text-[13px] text-white/85 truncate">
                                     {e.channelName}
                                   </span>
-                                  <span className="text-right leading-tight">
+                                  <span className="text-right leading-tight flex-shrink-0">
                                     {mainValue !== null && mainValue !== undefined ? (
                                       <span className={'block font-mono text-[13px] font-medium ' + mainColor}>
                                         {isLicensed ? `${formatPct(mainValue)} cesión` : formatPct(mainValue)}
