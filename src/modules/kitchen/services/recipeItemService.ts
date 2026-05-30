@@ -212,6 +212,31 @@ export async function getRawUsageCounts(accountId: string): Promise<Record<strin
   return map
 }
 
+/**
+ * Platos (type='dish') INCOMPLETOS: con algún ingrediente needs_review O alguna
+ * línea no costeable (unidad sin conversión). RPC kitchen_dishes_incomplete
+ * (server-side, guard de tenancy, con HAVING → solo devuelve los incompletos).
+ * Mismo criterio que kitchen_recipe_breakdown → coherencia editor/listado.
+ * Devuelve un Set de dish_id.
+ */
+export async function getDishesIncomplete(accountId: string): Promise<Set<string>> {
+  requireSupabase()
+  // Mismo cast acotado que getRawUsageCounts: la RPC aún no está en los tipos
+  // autogenerados. Llamar como member-access de `supabase!` (no a variable suelta).
+  const { data, error } = await (
+    supabase!.rpc as unknown as (
+      fn: string,
+      args: Record<string, unknown>,
+    ) => Promise<{ data: unknown; error: { message: string } | null }>
+  )('kitchen_dishes_incomplete', { p_account_id: accountId })
+
+  if (error) {
+    throw new Error(`Error obteniendo platos incompletos: ${error.message}`)
+  }
+  const rows = (data as { dish_id: string }[] | null) ?? []
+  return new Set(rows.map((r) => r.dish_id))
+}
+
 export async function recomputeRecipeItem(id: string): Promise<number> {
   requireSupabase()
   const { data, error } = await supabase!.rpc('kitchen_recompute_item', {
@@ -278,29 +303,47 @@ export async function updateRecipeItem(
 
 // Descarta la incidencia needs_review de un item: registra autor, motivo y
 // fecha (auditable) y baja la bandera needs_review. Conserva review_notes
-// como traza histórica. El caller pasa actorId (regla de identidad operativa).
+// como traza histórica.
+//
+// El actorId debe ser un user_profiles.id válido (hay FK). Algunos actores no
+// tienen perfil (cuenta de pruebas "Folvy Interno", procesos de sistema): en
+// ese caso la FK rechaza el id. Antes que bloquear el cierre por no poder
+// identificar al autor, registramos la acción con autor null (el cuándo y el
+// porqué se conservan igual). Por eso, si el primer intento falla por la FK de
+// review_dismissed_by, reintentamos con by = null.
 export async function dismissReview(
   id: string,
   reason: string,
   actorId: string | null
 ): Promise<RecipeItem> {
   requireSupabase()
-  const { data, error } = await supabase!
-    .from('recipe_item')
-    .update({
-      needs_review: false,
-      review_dismissed_at: new Date().toISOString(),
-      review_dismissed_by: actorId,
-      review_dismissed_reason: reason,
-    })
-    .eq('id', id)
-    .select('*')
-    .single()
+
+  async function attempt(by: string | null) {
+    return await supabase!
+      .from('recipe_item')
+      .update({
+        needs_review: false,
+        review_dismissed_at: new Date().toISOString(),
+        review_dismissed_by: by,
+        review_dismissed_reason: reason,
+      })
+      .eq('id', id)
+      .select('*')
+      .single()
+  }
+
+  let { data, error } = await attempt(actorId)
+
+  // Fallback: actor sin perfil válido → la FK review_dismissed_by lo rechaza.
+  // Reintentamos sin autor para no impedir el cierre de la incidencia.
+  if (error && actorId !== null && error.message.includes('review_dismissed_by')) {
+    ;({ data, error } = await attempt(null))
+  }
 
   if (error) {
     throw new Error(`Error descartando incidencia del item ${id}: ${error.message}`)
   }
-  return rowToRecipeItem(data)
+  return rowToRecipeItem(data!)
 }
 
 export async function archiveRecipeItem(id: string): Promise<RecipeItem> {

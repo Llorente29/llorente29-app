@@ -33,12 +33,17 @@ import {
   Bike,
   ShoppingBag,
   Trash2,
+  ShieldCheck,
+  Loader2,
 } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
+import { useApp } from '@/context/AppContext'
 import {
   getRecipeItemById,
   listRecipeItems,
   getRawUsageCounts,
+  createRecipeItem,
+  dismissReview,
 } from '@/modules/kitchen/services/recipeItemService'
 import {
   getRecipeBreakdown,
@@ -66,6 +71,13 @@ const TABS: { id: EditorTab; label: string }[] = [
   { id: 'mas', label: 'Más' },
 ]
 
+// Etiquetas de dimensión para agrupar el selector de unidad (E2b).
+const DIM_LABEL: Record<string, string> = {
+  weight: 'Peso',
+  volume: 'Volumen',
+  unit: 'Unidades',
+}
+
 function formatEur(value: number | null | undefined): string {
   if (value === null || value === undefined) return '—'
   return new Intl.NumberFormat('es-ES', {
@@ -74,6 +86,37 @@ function formatEur(value: number | null | undefined): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value)
+}
+
+// Construye el mensaje de "por qué revisar" SOLO desde campos estructurados
+// (kind + deltaPct), nunca desde summary ni referenceSource. Esto es deliberado:
+// la fuente de referencia (tspoon en esta migración) es un detalle de
+// implementación que NO debe aparecer en producto multi-cliente. El texto es
+// propio, consistente, y matizado por la magnitud de la desviación.
+function reviewReasonText(
+  note: { kind?: string | null; deltaPct?: number | null } | null,
+): string | null {
+  if (!note) return null
+  if (note.kind === 'cost_suspect') {
+    const pct = note.deltaPct
+    if (pct === null || pct === undefined) {
+      return 'El coste calculado parece no cuadrar. Conviene revisar la receta.'
+    }
+    const abs = Math.abs(pct)
+    const dir = pct < 0 ? 'por debajo' : 'por encima'
+    const magnitude = abs.toLocaleString('es-ES', { maximumFractionDigits: 1 })
+    if (abs >= 15) {
+      return `El coste calculado sale un ${magnitude}% ${dir} de lo esperado. Probablemente falte un ingrediente o una sub-receta sin modelar.`
+    }
+    if (abs >= 5) {
+      return `El coste calculado sale un ${magnitude}% ${dir} de lo esperado. Puede faltar gramaje o no estar contabilizada la merma.`
+    }
+    return `El coste calculado sale un ${magnitude}% ${dir} de lo esperado. Diferencia pequeña; conviene revisar los gramajes finos.`
+  }
+  if (note.kind === 'missing_recipe') {
+    return 'Este plato no tiene la receta completamente modelada. Conviene terminar el escandallo.'
+  }
+  return 'Este plato está marcado para revisar.'
 }
 
 // Coste por unidad base (puede ser muy pequeño, p. ej. €/g): hasta 4 decimales.
@@ -151,6 +194,7 @@ export default function RecipeEditorPage({
   onBack,
 }: RecipeEditorPageProps = {}) {
   const { activeAccountId, accountsLoading } = useActiveAccount()
+  const { userProfile, authUserId } = useApp()
   const recipeId = recipeIdProp
 
   const [recipe, setRecipe] = useState<RecipeItem | null>(null)
@@ -158,6 +202,9 @@ export default function RecipeEditorPage({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<EditorTab>('escandallo')
+  // Recarga del plato tras "dar por revisado" (baja la bandera needs_review).
+  const [reloadTick, setReloadTick] = useState(0)
+  const [dismissing, setDismissing] = useState(false)
 
   // ── Edición inline (E1) ──
   const [editingLineId, setEditingLineId] = useState<string | null>(null)
@@ -176,11 +223,18 @@ export default function RecipeEditorPage({
   const [addError, setAddError] = useState<string | null>(null)
   const [addableItems, setAddableItems] = useState<RecipeItem[]>([])
   const [unitsById, setUnitsById] = useState<Map<string, KitchenUnit>>(new Map())
+  const [units, setUnits] = useState<KitchenUnit[]>([])
   const [usageCounts, setUsageCounts] = useState<Record<string, number>>({})
   const [addDataLoaded, setAddDataLoaded] = useState(false)
   const [addDataLoading, setAddDataLoading] = useState(false)
   // Aviso si el orden por uso (RPC) falla: el alta sigue, pero ordenado alfabético.
   const [usageNotice, setUsageNotice] = useState<string | null>(null)
+  // ── Crear ingrediente nuevo al vuelo (E2b) ──
+  const [addCreating, setAddCreating] = useState(false)
+  const [createName, setCreateName] = useState('')
+  const [createUnitId, setCreateUnitId] = useState('')
+  const [createCost, setCreateCost] = useState('')
+  const [createSaving, setCreateSaving] = useState(false)
 
   // ── Economía (panel azul) ──
   const [economics, setEconomics] = useState<EconRow[]>([])
@@ -222,7 +276,7 @@ export default function RecipeEditorPage({
     return () => {
       cancelled = true
     }
-  }, [accountsLoading, activeAccountId, recipeId])
+  }, [accountsLoading, activeAccountId, recipeId, reloadTick])
 
   // Economía: marcas del plato + FC/margen por canal. Se re-dispara con
   // econReloadTick tras editar/añadir/borrar una línea (latido del FC).
@@ -285,6 +339,48 @@ export default function RecipeEditorPage({
     [lines]
   )
 
+  // Propagación de estado al plato (decisión Julio 30/05): un plato con CUALQUIER
+  // ingrediente sin terminar (childNeedsReview) o línea no costeable (needsReview)
+  // es un plato INCOMPLETO. Se combina con el needs_review propio del plato.
+  const dishHasIncompleteLine = useMemo(
+    () => lines.some((l) => l.childNeedsReview || l.needsReview),
+    [lines]
+  )
+  const dishNeedsReview = (recipe?.needsReview ?? false) || dishHasIncompleteLine
+
+  // ── Motivo de revisión (flag propio del plato) ──
+  // El plato puede estar marcado para revisar por su PROPIO needs_review
+  // (típicamente un diagnóstico de coste con review_notes). En ese caso
+  // mostramos un aviso accionable con el motivo construido desde campos
+  // estructurados (sin nombrar la fuente) y permitimos "dar por revisado".
+  // OJO: si el plato sale "Revisar" solo por una línea incompleta, eso NO se
+  // descarta aquí (se arregla terminando el ingrediente), así que el aviso y
+  // el botón solo aplican al flag propio (recipe.needsReview).
+  const ownNeedsReview = recipe?.needsReview ?? false
+  const reviewReason = useMemo(
+    () => reviewReasonText(recipe?.reviewNotes ?? null),
+    [recipe?.reviewNotes],
+  )
+
+  async function handleDismissReview() {
+    if (!recipe || dismissing) return
+    const ok = window.confirm(
+      `¿Marcar "${recipe.name}" como revisado? El aviso desaparecerá y el plato pasará a Validado. Quedará registrado quién y cuándo.`,
+    )
+    if (!ok) return
+    setDismissing(true)
+    setError(null)
+    try {
+      await dismissReview(recipe.id, 'Revisado manualmente desde el editor', authUserId ?? null)
+      setReloadTick((t) => t + 1)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error desconocido'
+      setError(msg)
+    } finally {
+      setDismissing(false)
+    }
+  }
+
   const econByBrand = useMemo(() => {
     const groups = new Map<string, { brandId: string; flowType: string; rows: EconRow[] }>()
     for (const r of economics) {
@@ -331,6 +427,17 @@ export default function RecipeEditorPage({
     })
     return sorted.slice(0, 8)
   }, [addableItems, addSearch, usageCounts])
+
+  // Unidades agrupadas por dimensión para el selector de "crear ingrediente" (E2b).
+  const unitsGrouped = useMemo(() => {
+    const groups = new Map<string, KitchenUnit[]>()
+    for (const u of units) {
+      const list = groups.get(u.dimension) ?? []
+      list.push(u)
+      groups.set(u.dimension, list)
+    }
+    return Array.from(groups.entries())
+  }, [units])
 
   // ── Handlers de latido / edición (E1) ──
 
@@ -431,6 +538,7 @@ export default function RecipeEditorPage({
     setAddPicked(null)
     setAddQty('')
     setAddError(null)
+    setAddCreating(false)
     if (addDataLoaded || addDataLoading || !activeAccountId) return
     const accountId = activeAccountId
     setAddDataLoading(true)
@@ -441,11 +549,12 @@ export default function RecipeEditorPage({
       listRecipeItems({ accountId, includeInactive: false }),
       listUnits({}),
     ])
-      .then(([items, units]) => {
+      .then(([items, unitList]) => {
         const addable = items.filter((it) => it.type === 'raw' || it.type === 'recipe')
         setAddableItems(addable)
+        setUnits(unitList)
         const m = new Map<string, KitchenUnit>()
-        units.forEach((u) => m.set(u.id, u))
+        unitList.forEach((u) => m.set(u.id, u))
         setUnitsById(m)
         setAddDataLoaded(true)
       })
@@ -471,6 +580,80 @@ export default function RecipeEditorPage({
     setAddPicked(null)
     setAddQty('')
     setAddError(null)
+    setAddCreating(false)
+    setCreateName('')
+    setCreateCost('')
+  }
+
+  // Abre el mini-formulario de "crear ingrediente nuevo" con el texto buscado.
+  function openCreate() {
+    // Unidad por defecto: gramo si existe, si no la primera disponible.
+    const gram = units.find((u) => u.abbreviation.toLowerCase() === 'g')
+    setCreateUnitId(gram ? gram.id : (units[0]?.id ?? ''))
+    setCreateName(addSearch.trim())
+    setCreateCost('')
+    setAddError(null)
+    setAddCreating(true)
+  }
+
+  function cancelCreate() {
+    setAddCreating(false)
+    setCreateName('')
+    setCreateCost('')
+    setAddError(null)
+  }
+
+  // Crea el raw nuevo (source='manual', needs_review=true) y lo deja seleccionado
+  // para que el usuario indique la cantidad (reutiliza el paso de cantidad de E2a).
+  function confirmCreate() {
+    if (!activeAccountId) return
+    const name = createName.trim()
+    if (name === '') {
+      setAddError('El nombre del ingrediente es obligatorio.')
+      return
+    }
+    if (!createUnitId) {
+      setAddError('Elige una unidad base.')
+      return
+    }
+    let cost: number | null = null
+    const rawCost = createCost.trim().replace(',', '.')
+    if (rawCost !== '') {
+      const n = Number(rawCost)
+      if (!Number.isFinite(n) || n < 0) {
+        setAddError('El coste debe ser un número ≥ 0 (déjalo vacío si no lo sabes).')
+        return
+      }
+      cost = n
+    }
+
+    setCreateSaving(true)
+    setAddError(null)
+    createRecipeItem({
+      accountId: activeAccountId,
+      type: 'raw',
+      name,
+      baseUnitId: createUnitId,
+      costStrategy: 'fixed',
+      fixedCost: cost,
+      source: 'manual',
+      needsReview: true,
+      createdBy: authUserId ?? null,
+      createdByName: userProfile?.displayName ?? null,
+    })
+      .then((created) => {
+        // Disponible para futuras búsquedas y seleccionado para indicar cantidad.
+        setAddableItems((prev) => [...prev, created])
+        setAddCreating(false)
+        setAddPicked(created)
+        setAddQty('')
+        setAddSearch('')
+      })
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : 'No se pudo crear el ingrediente'
+        setAddError(msg)
+      })
+      .finally(() => setCreateSaving(false))
   }
 
   function pickItem(item: RecipeItem) {
@@ -610,7 +793,7 @@ export default function RecipeEditorPage({
                 IA
               </span>
             )}
-            {recipe.needsReview ? (
+            {dishNeedsReview ? (
               <span className="text-xs px-2.5 py-1 rounded-full bg-warning text-white inline-flex items-center gap-1 font-medium">
                 <AlertTriangle className="w-3.5 h-3.5" />
                 Revisar
@@ -641,6 +824,34 @@ export default function RecipeEditorPage({
             </div>
           </div>
         </div>
+
+        {/* ── Aviso de revisión (solo flag propio del plato) ── */}
+        {ownNeedsReview && (
+          <div className="mx-[18px] mt-3 rounded-lg border border-warning/30 bg-warning-bg px-3.5 py-3 flex items-start gap-3">
+            <AlertTriangle className="w-4 h-4 text-warning mt-0.5 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-text-primary">
+                Marcado para revisar
+              </p>
+              <p className="text-[13px] text-text-secondary mt-0.5">
+                {reviewReason ?? 'Este plato está marcado para revisar.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleDismissReview}
+              disabled={dismissing}
+              className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium bg-success text-white hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base"
+            >
+              {dismissing ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <ShieldCheck className="w-3.5 h-3.5" />
+              )}
+              {dismissing ? 'Guardando...' : 'Dar por revisado'}
+            </button>
+          </div>
+        )}
 
         {/* ── Solapas ── */}
         <div className="flex gap-6 px-[18px] pt-3 border-b border-border-default text-sm">
@@ -728,7 +939,7 @@ export default function RecipeEditorPage({
                           <span
                             className={
                               'w-2.5 h-2.5 rounded-full ' +
-                              (line.needsReview ? 'bg-warning' : 'bg-terracota')
+                              ((line.needsReview || line.childNeedsReview) ? 'bg-warning' : 'bg-terracota')
                             }
                           />
                         </span>
@@ -775,10 +986,16 @@ export default function RecipeEditorPage({
 
                         <span className="flex-1 min-w-0 text-sm text-text-primary truncate">
                           {line.childName}
+                          {line.childNeedsReview && (
+                            <span className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-warning-bg text-warning inline-flex items-center gap-1 align-middle">
+                              <AlertTriangle className="w-3 h-3" />
+                              sin terminar
+                            </span>
+                          )}
                           {line.needsReview && (
                             <span className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-warning-bg text-warning inline-flex items-center gap-1 align-middle">
                               <AlertTriangle className="w-3 h-3" />
-                              revisar
+                              no costeable
                             </span>
                           )}
                         </span>
@@ -898,6 +1115,74 @@ export default function RecipeEditorPage({
                         )}
                       </div>
                     </div>
+                  ) : addCreating ? (
+                    // Crear ingrediente nuevo al vuelo (E2b)
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="w-[30px] h-[30px] rounded-md bg-card border border-terracota/30 inline-flex items-center justify-center flex-shrink-0">
+                          <Plus className="w-3.5 h-3.5 text-terracota" />
+                        </span>
+                        <span className="text-sm font-medium text-text-primary">
+                          Nuevo ingrediente
+                        </span>
+                        <button
+                          type="button"
+                          onClick={cancelCreate}
+                          title="Volver al buscador"
+                          className="ml-auto w-6 h-6 rounded inline-flex items-center justify-center text-text-secondary hover:text-text-primary hover:bg-card transition-colors"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <div className="flex flex-col gap-2 pl-[40px]">
+                        <input
+                          type="text"
+                          autoFocus
+                          value={createName}
+                          onChange={(e) => setCreateName(e.target.value)}
+                          placeholder="Nombre del ingrediente"
+                          className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+                        />
+                        <div className="flex gap-2">
+                          <select
+                            value={createUnitId}
+                            onChange={(e) => setCreateUnitId(e.target.value)}
+                            className="flex-1 px-2 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent"
+                          >
+                            {unitsGrouped.map(([dim, list]) => (
+                              <optgroup key={dim} label={DIM_LABEL[dim] ?? dim}>
+                                {list.map((u) => (
+                                  <option key={u.id} value={u.id}>
+                                    {u.name} ({u.abbreviation})
+                                  </option>
+                                ))}
+                              </optgroup>
+                            ))}
+                          </select>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={createCost}
+                            onChange={(e) => setCreateCost(e.target.value)}
+                            placeholder={`Coste €/${unitsById.get(createUnitId)?.abbreviation ?? ''}`}
+                            className="w-[130px] px-2 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+                          />
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] text-text-secondary leading-snug">
+                            Se marcará para revisar; completa coste y formato cuando puedas.
+                          </span>
+                          <button
+                            type="button"
+                            onClick={confirmCreate}
+                            disabled={createSaving || createName.trim() === ''}
+                            className="px-3 py-1.5 text-sm font-medium rounded-md bg-terracota text-white hover:bg-terracota-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                          >
+                            {createSaving ? 'Creando…' : 'Crear y continuar'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   ) : (
                     // Paso 1: buscador
                     <div>
@@ -934,9 +1219,21 @@ export default function RecipeEditorPage({
                             Cargando ingredientes…
                           </div>
                         ) : candidates.length === 0 ? (
-                          <div className="text-xs text-text-secondary px-1 py-2">
-                            Sin coincidencias
-                            {addSearch.trim() !== '' ? ` para «${addSearch.trim()}»` : ''}.
+                          <div className="px-1 py-2">
+                            <div className="text-xs text-text-secondary mb-2">
+                              Sin coincidencias
+                              {addSearch.trim() !== '' ? ` para «${addSearch.trim()}»` : ''}.
+                            </div>
+                            {addSearch.trim() !== '' && (
+                              <button
+                                type="button"
+                                onClick={openCreate}
+                                className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md bg-terracota text-white hover:bg-terracota-hover transition-colors"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                Crear «{addSearch.trim()}» como ingrediente nuevo
+                              </button>
+                            )}
                           </div>
                         ) : (
                           <div className="flex flex-col">
@@ -978,6 +1275,16 @@ export default function RecipeEditorPage({
                                 </button>
                               )
                             })}
+                            {addSearch.trim() !== '' && (
+                              <button
+                                type="button"
+                                onClick={openCreate}
+                                className="mt-1 flex items-center gap-1.5 px-1.5 py-1.5 rounded-md hover:bg-card text-left transition-colors text-xs font-medium text-terracota"
+                              >
+                                <Plus className="w-3.5 h-3.5 flex-shrink-0" />
+                                ¿No está? Crear «{addSearch.trim()}» como nuevo
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>

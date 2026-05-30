@@ -32,7 +32,7 @@ import {
   Soup,
 } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
-import { listRecipeItems } from '@/modules/kitchen/services/recipeItemService'
+import { listRecipeItems, getDishesIncomplete } from '@/modules/kitchen/services/recipeItemService'
 import type { RecipeItem } from '@/types/kitchen'
 import RecipeEditorPage from '@/modules/kitchen/pages/RecipeEditorPage'
 
@@ -87,17 +87,31 @@ function formatRelative(iso: string | null): string | null {
   return `hace ${m} mes${m > 1 ? 'es' : ''}`
 }
 
-// Estado del plato derivado de campos reales:
+// Estado del plato derivado de campos reales. Cuatro estados, para que
+// "Revisar" sea SEÑAL y no ruido (decisión Julio 30/05):
 //   sin_escandallo → no tiene coste computado (computedCost null).
-//   revisar        → tiene coste pero está marcado needsReview.
-//   validado       → tiene coste y no necesita revisión.
-type DishStatus = 'sin_escandallo' | 'revisar' | 'validado'
+//   revisar        → ALARMA REAL: coste sospechoso (reviewNotes cost_suspect)
+//                    o receta incompleta (ingrediente sin terminar / línea no
+//                    costeable, vía incompleteIds). Esto es lo accionable.
+//   sin_validar    → needs_review marcado pero SIN diagnóstico accionable
+//                    (bebidas, combos: el import marcó en bloque). Neutro, no
+//                    es alarma — pintar esto en rojo encendería 2/3 de la carta.
+//   validado       → tiene coste, sin sospecha y sin incompletos.
+type DishStatus = 'sin_escandallo' | 'revisar' | 'sin_validar' | 'validado'
 
-function dishStatus(item: RecipeItem): DishStatus {
+function dishStatus(item: RecipeItem, incompleteIds: Set<string>): DishStatus {
   if (item.computedCost === null || item.computedCost === undefined) {
     return 'sin_escandallo'
   }
-  if (item.needsReview) return 'revisar'
+  // Alarma real: coste diagnosticado como sospechoso O receta incompleta.
+  // OJO: review_notes se CONSERVA como traza histórica incluso tras "dar por
+  // revisado", así que el kind por sí solo no basta — solo cuenta si la
+  // incidencia sigue activa (needsReview true). Un plato con nota cost_suspect
+  // pero ya revisado (needsReview false) está validado, no en revisión.
+  const costSuspectActivo = item.needsReview && item.reviewNotes?.kind === 'cost_suspect'
+  if (costSuspectActivo || incompleteIds.has(item.id)) return 'revisar'
+  // Marcado para revisar pero sin diagnóstico accionable → neutro, no alarma.
+  if (item.needsReview) return 'sin_validar'
   return 'validado'
 }
 
@@ -105,6 +119,7 @@ export default function KitchenRecipesPage() {
   const { activeAccountId, accountsLoading } = useActiveAccount()
 
   const [items, setItems] = useState<RecipeItem[]>([])
+  const [incompleteIds, setIncompleteIds] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
@@ -135,6 +150,18 @@ export default function KitchenRecipesPage() {
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
+      })
+
+    // Propagación: platos con ingrediente sin terminar o línea no costeable.
+    // No bloquea la lista; si falla, se registra (no se silencia) y el listado
+    // sigue mostrando el needs_review propio de cada plato.
+    getDishesIncomplete(activeAccountId)
+      .then((set) => {
+        if (!cancelled) setIncompleteIds(set)
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        console.error('getDishesIncomplete falló:', err)
       })
 
     return () => {
@@ -228,7 +255,7 @@ export default function KitchenRecipesPage() {
       {!loading && !error && filtered.length > 0 && (
         <div className="space-y-2">
           {filtered.map((item) => {
-            const status = dishStatus(item)
+            const status = dishStatus(item, incompleteIds)
             const isAi =
               item.source === 'ai_recipe' || item.source === 'ocr_invoice'
             const updated = formatRelative(item.costUpdatedAt)
@@ -314,6 +341,11 @@ export default function KitchenRecipesPage() {
                         <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-warning-bg text-warning">
                           <AlertTriangle className="w-3 h-3" />
                           Revisar
+                        </span>
+                      ) : status === 'sin_validar' ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full text-text-secondary">
+                          <span className="w-2 h-2 rounded-full bg-border-default" />
+                          Sin validar
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-success-bg text-success">

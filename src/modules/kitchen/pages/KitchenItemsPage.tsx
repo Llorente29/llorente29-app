@@ -12,7 +12,7 @@
 // para activeAccountId. Estilo coherente con BrandsListView.
 
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, Soup, X, Archive } from 'lucide-react'
+import { Plus, Soup, X, Archive, AlertTriangle } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import {
@@ -195,6 +195,12 @@ export default function KitchenItemsPage() {
                         {item.altName && (
                           <span className="ml-2 text-xs text-text-secondary">
                             ({item.altName})
+                          </span>
+                        )}
+                        {item.needsReview && (
+                          <span className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-warning-bg text-warning inline-flex items-center gap-1 align-middle">
+                            <AlertTriangle className="w-3 h-3" />
+                            sin terminar
                           </span>
                         )}
                       </td>

@@ -22,7 +22,11 @@ export interface RecipeLineBreakdown {
   quantity: number
   unitAbbr: string
   lineCost: number
+  // needsReview: la LÍNEA no se puede costear (falta conversión de unidad).
   needsReview: boolean
+  // childNeedsReview: el INGREDIENTE hijo está sin terminar (recipe_item.needs_review).
+  // Son dos conceptos distintos y la UI los pinta con señales distintas.
+  childNeedsReview: boolean
 }
 
 export function rowToRecipeLine(row: RowRecipeLine): RecipeLine {
@@ -113,15 +117,22 @@ export async function getRecipeBreakdown(parentItemId: string): Promise<RecipeLi
   if (error) {
     throw new Error(`Error obteniendo desglose del plato ${parentItemId}: ${error.message}`)
   }
-  return (data ?? []).map((row) => ({
-    lineId: row.line_id,
-    childItemId: row.child_item_id,
-    childName: row.child_name,
-    quantity: row.quantity,
-    unitAbbr: row.unit_abbr,
-    lineCost: row.line_cost,
-    needsReview: row.needs_review,
-  }))
+  return (data ?? []).map((row) => {
+    // NOTA: child_needs_review se añadió a kitchen_recipe_breakdown el 30/05 y aún no
+    // está en los tipos autogenerados (src/types/database.ts). Cast acotado solo aquí.
+    // TODO saneamiento: regenerar tipos de Supabase y quitar el cast.
+    const r = row as typeof row & { child_needs_review?: boolean }
+    return {
+      lineId: r.line_id,
+      childItemId: r.child_item_id,
+      childName: r.child_name,
+      quantity: r.quantity,
+      unitAbbr: r.unit_abbr,
+      lineCost: r.line_cost,
+      needsReview: r.needs_review,
+      childNeedsReview: r.child_needs_review ?? false,
+    }
+  })
 }
 
 export async function addLine(input: RecipeLineInsert): Promise<RecipeLine> {
