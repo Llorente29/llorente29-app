@@ -1,14 +1,18 @@
 // src/modules/kitchen/pages/RecipeEditorPage.tsx
 //
 // Lienzo de edición de escandallo (rediseño V1). Reemplaza a KitchenRecipePage.
-// Diseño según folvy_v1_editor_escandallos_diseno.md §5 + plantilla visual
-// fijada (cabecera con foto, 5 solapas, composición con coste vivo).
+// Diseño según folvy_v1_editor_escandallos_diseno.md §5 + §13 (plan de tramos).
 //
 // El id del plato llega por prop `recipeId` desde el contenedor
 // KitchenRecipesPage (patrón LISTA + DETALLE por estado; las páginas kitchen
-// NO usan react-router con params). `onBack` vuelve a la lista. Ya no hay
-// FALLBACK_RECIPE_ID: si no llega id, el contenedor muestra la lista, no el
-// editor (este se renderiza siempre con un id real).
+// NO usan react-router con params). `onBack` vuelve a la lista.
+//
+// TRAMO E1 (este): edición inline de la cantidad (BRUTO EFECTIVO) con LATIDO del
+// coste + borrar línea con confirmación. La edición escribe en quantity_gross
+// (lo que cuesta y lo que se ve, ver §13.3). Al confirmar: update optimista →
+// updateLine → el servicio recalcula el coste del plato → recargamos el
+// breakdown → laten el coste héroe y el panel de FC por canal (econReloadTick).
+// Merma neto/bruto detallada = E3. Añadir ingrediente = E2 (➕ deshabilitado).
 //
 // Patrón: useActiveAccount() (cuenta), igual que KitchenItemsPage.
 import { useEffect, useMemo, useState } from 'react'
@@ -26,10 +30,15 @@ import {
   Store,
   Bike,
   ShoppingBag,
+  Trash2,
 } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { getRecipeItemById } from '@/modules/kitchen/services/recipeItemService'
-import { getRecipeBreakdown } from '@/modules/kitchen/services/recipeLineService'
+import {
+  getRecipeBreakdown,
+  updateLine,
+  deleteLine,
+} from '@/modules/kitchen/services/recipeLineService'
 import {
   listMenuItems,
   getMenuItemEconomics,
@@ -61,6 +70,11 @@ function formatEur(value: number | null | undefined): string {
 function formatPct(value: number | null | undefined): string {
   if (value === null || value === undefined) return '—'
   return `${value.toFixed(1).replace('.', ',')}%`
+}
+
+// Cantidad de línea para mostrar (sin moneda): "0,5", "85", "120".
+function formatQty(value: number): string {
+  return new Intl.NumberFormat('es-ES', { maximumFractionDigits: 3 }).format(value)
 }
 
 // Icono según el nombre del canal (heurística por palabras clave). Local/tienda
@@ -111,12 +125,24 @@ export default function RecipeEditorPage({
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<EditorTab>('escandallo')
 
+  // ── Edición inline (E1) ──
+  const [editingLineId, setEditingLineId] = useState<string | null>(null)
+  const [draftQty, setDraftQty] = useState('')
+  const [savingLineId, setSavingLineId] = useState<string | null>(null)
+  const [editError, setEditError] = useState<string | null>(null)
+  // Latido: resaltado breve del coste tras un cambio confirmado.
+  const [flashLineId, setFlashLineId] = useState<string | null>(null)
+  const [flashHero, setFlashHero] = useState(false)
+
   // Economía: filas (canal × marca) de este plato, cada una etiquetada con _brandId.
   const [economics, setEconomics] = useState<EconRow[]>([])
   const [brandNames, setBrandNames] = useState<Record<string, string>>({})
   const [econLoading, setEconLoading] = useState(false)
   // Marcas cuyo bloque está plegado (las cedidas arrancan plegadas).
   const [collapsedBrands, setCollapsedBrands] = useState<Record<string, boolean>>({})
+  // Tick para re-disparar la carga de economía tras editar una línea (el latido
+  // del FC por canal). No recarga el plato entero, solo la economía.
+  const [econReloadTick, setEconReloadTick] = useState(0)
 
   useEffect(() => {
     if (accountsLoading) return
@@ -157,6 +183,7 @@ export default function RecipeEditorPage({
   // la economía avanzada (FC, comisión, margen) de TODAS sus marcas. El panel
   // las agrupa en bloques colapsables (propias abiertas, cedidas plegadas).
   // menu_item_economics corre server-side (con sesión de usuario en la app).
+  // Se re-dispara con econReloadTick tras editar una línea (latido del FC).
   useEffect(() => {
     if (accountsLoading || !activeAccountId || !recipeId) return
     let cancelled = false
@@ -208,7 +235,7 @@ export default function RecipeEditorPage({
     return () => {
       cancelled = true
     }
-  }, [accountsLoading, activeAccountId, recipeId])
+  }, [accountsLoading, activeAccountId, recipeId, econReloadTick])
 
   // Coste total = suma de líneas del breakdown (las partes suman el total).
   const totalCost = useMemo(
@@ -248,6 +275,91 @@ export default function RecipeEditorPage({
       return next
     })
   }, [econByBrand])
+
+  // ── Handlers de edición inline (E1) ──
+
+  function triggerLatido(lineId?: string | null) {
+    setFlashHero(true)
+    if (lineId) setFlashLineId(lineId)
+    window.setTimeout(() => {
+      setFlashHero(false)
+      setFlashLineId(null)
+    }, 800)
+  }
+
+  function startEdit(line: RecipeLineBreakdown) {
+    setEditError(null)
+    setEditingLineId(line.lineId)
+    setDraftQty(String(line.quantity).replace('.', ','))
+  }
+
+  function commitEdit(line: RecipeLineBreakdown) {
+    // Si ya no estamos editando esta línea (p. ej. tras Esc), no hacemos nada.
+    if (editingLineId !== line.lineId || !recipeId) {
+      setEditingLineId(null)
+      return
+    }
+    const raw = draftQty.trim().replace(',', '.')
+    setEditingLineId(null)
+
+    const num = Number(raw)
+    if (raw === '' || !Number.isFinite(num) || num < 0) {
+      setEditError(`Cantidad no válida para "${line.childName}". No se guardó.`)
+      window.setTimeout(() => setEditError(null), 3000)
+      return
+    }
+    if (num === line.quantity) return // sin cambios
+
+    const prevLines = lines
+    // Optimista: mostramos el valor nuevo ya.
+    setLines((prev) =>
+      prev.map((l) => (l.lineId === line.lineId ? { ...l, quantity: num } : l))
+    )
+    setSavingLineId(line.lineId)
+    setEditError(null)
+
+    updateLine(line.lineId, { quantityGross: num })
+      .then(() => getRecipeBreakdown(recipeId))
+      .then((fresh) => {
+        setLines(fresh)
+        triggerLatido(line.lineId)
+        setEconReloadTick((t) => t + 1) // latido del FC por canal
+      })
+      .catch((err: unknown) => {
+        setLines(prevLines) // revertir
+        const msg = err instanceof Error ? err.message : 'Error al guardar la cantidad'
+        setEditError(msg)
+        window.setTimeout(() => setEditError(null), 4000)
+      })
+      .finally(() => setSavingLineId(null))
+  }
+
+  function handleDelete(line: RecipeLineBreakdown) {
+    if (!recipeId) return
+    const ok = window.confirm(
+      `¿Eliminar "${line.childName}" del escandallo? El coste se recalculará.`
+    )
+    if (!ok) return
+
+    const prevLines = lines
+    setSavingLineId(line.lineId)
+    setLines((prev) => prev.filter((l) => l.lineId !== line.lineId))
+
+    deleteLine(line.lineId)
+      .then(() => getRecipeBreakdown(recipeId))
+      .then((fresh) => {
+        setLines(fresh)
+        triggerLatido(null)
+        setEconReloadTick((t) => t + 1)
+      })
+      .catch((err: unknown) => {
+        setLines(prevLines) // revertir
+        const msg = err instanceof Error ? err.message : 'Error al eliminar la línea'
+        setEditError(msg)
+        window.setTimeout(() => setEditError(null), 4000)
+      })
+      .finally(() => setSavingLineId(null))
+  }
 
   // Botón "Volver al listado" (solo si el contenedor pasó onBack). Se reutiliza
   // en los estados de carga/error/no-encontrado y en el render principal.
@@ -401,25 +513,34 @@ export default function RecipeEditorPage({
                 </span>
                 <div className="flex gap-1">
                   <button
-                    title="Dictar por voz"
+                    title="Dictar por voz (próximamente)"
                     className="w-7 h-7 rounded-md bg-accent-bg text-text-secondary inline-flex items-center justify-center hover:text-text-primary transition-colors"
                   >
                     <Mic className="w-4 h-4" />
                   </button>
                   <button
-                    title="Pedir a Folvy"
+                    title="Pedir a Folvy (próximamente)"
                     className="w-7 h-7 rounded-md bg-accent-bg text-text-secondary inline-flex items-center justify-center hover:text-text-primary transition-colors"
                   >
                     <MessageCircle className="w-4 h-4" />
                   </button>
                   <button
-                    title="Añadir ingrediente"
-                    className="w-7 h-7 rounded-md bg-terracota text-white inline-flex items-center justify-center hover:bg-terracota-hover transition-colors"
+                    type="button"
+                    disabled
+                    title="Añadir ingrediente — próximamente (E2)"
+                    className="w-7 h-7 rounded-md bg-terracota/40 text-white inline-flex items-center justify-center cursor-not-allowed"
                   >
                     <Plus className="w-4 h-4" />
                   </button>
                 </div>
               </div>
+
+              {/* Aviso de error de edición (cantidad no válida / fallo al guardar) */}
+              {editError && (
+                <div className="mb-2 px-2.5 py-1.5 rounded-md bg-danger-bg text-danger text-xs">
+                  {editError}
+                </div>
+              )}
 
               {/* Lista de ingredientes */}
               {lines.length === 0 ? (
@@ -434,10 +555,12 @@ export default function RecipeEditorPage({
                       maxLineCost > 0
                         ? Math.round(((line.lineCost ?? 0) / maxLineCost) * 100)
                         : 0
+                    const editing = editingLineId === line.lineId
+                    const saving = savingLineId === line.lineId
                     return (
                       <div
                         key={line.lineId}
-                        className="flex items-center gap-2.5 py-2 px-1.5 border-b border-border-default last:border-b-0"
+                        className="group flex items-center gap-2.5 py-2 px-1.5 border-b border-border-default last:border-b-0"
                       >
                         {/* Avatar: punto de color (categoría) — placeholder hasta tener fotos/categoría */}
                         <span className="w-[30px] h-[30px] rounded-md bg-accent-bg inline-flex items-center justify-center flex-shrink-0">
@@ -449,10 +572,45 @@ export default function RecipeEditorPage({
                           />
                         </span>
 
-                        {/* Cantidad + unidad */}
-                        <span className="font-mono text-sm text-text-primary min-w-[58px]">
-                          {line.quantity} {line.unitAbbr}
-                        </span>
+                        {/* Cantidad (BRUTO EFECTIVO) editable inline + unidad */}
+                        <div className="min-w-[78px] flex-shrink-0">
+                          {editing ? (
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                autoFocus
+                                value={draftQty}
+                                onChange={(e) => setDraftQty(e.target.value)}
+                                onFocus={(e) => e.currentTarget.select()}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault()
+                                    commitEdit(line)
+                                  } else if (e.key === 'Escape') {
+                                    e.preventDefault()
+                                    setEditingLineId(null)
+                                  }
+                                }}
+                                onBlur={() => commitEdit(line)}
+                                className="w-[50px] px-1 py-0.5 font-mono text-sm text-text-primary bg-card border border-accent rounded focus:outline-none focus:ring-1 focus:ring-accent"
+                              />
+                              <span className="font-mono text-sm text-text-secondary">
+                                {line.unitAbbr}
+                              </span>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => startEdit(line)}
+                              title="Editar cantidad"
+                              className="font-mono text-sm text-text-primary text-left hover:bg-accent-bg rounded px-1 -ml-1 transition-colors"
+                            >
+                              {formatQty(line.quantity)}{' '}
+                              <span className="text-text-secondary">{line.unitAbbr}</span>
+                            </button>
+                          )}
+                        </div>
 
                         {/* Nombre (+ aviso si needs_review) */}
                         <span className="flex-1 min-w-0 text-sm text-text-primary truncate">
@@ -468,15 +626,35 @@ export default function RecipeEditorPage({
                         {/* Barra de peso del coste */}
                         <span className="w-[38px] h-1 rounded-full bg-accent-bg overflow-hidden flex-shrink-0">
                           <span
-                            className="block h-full bg-terracota"
+                            className="block h-full bg-terracota transition-all duration-base"
                             style={{ width: `${pct}%` }}
                           />
                         </span>
 
-                        {/* Coste de la línea */}
-                        <span className="font-mono text-sm text-text-secondary min-w-[52px] text-right">
+                        {/* Coste de la línea (late al confirmar; pulsa al guardar) */}
+                        <span
+                          className={
+                            'font-mono text-sm min-w-[52px] text-right transition-colors duration-base ' +
+                            (saving
+                              ? 'opacity-50 animate-pulse text-text-secondary'
+                              : flashLineId === line.lineId
+                                ? 'text-terracota font-medium'
+                                : 'text-text-secondary')
+                          }
+                        >
                           {formatEur(line.lineCost)}
                         </span>
+
+                        {/* Eliminar línea (aparece al pasar el ratón / foco) */}
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(line)}
+                          disabled={saving}
+                          title="Eliminar línea"
+                          className="ml-0.5 w-6 h-6 rounded inline-flex items-center justify-center text-text-secondary opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-danger hover:bg-danger-bg transition-all disabled:opacity-30"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     )
                   })}
@@ -490,9 +668,14 @@ export default function RecipeEditorPage({
                 Coste en vivo
               </div>
 
-              {/* Coste héroe */}
+              {/* Coste héroe (late al cambiar) */}
               <div className="text-xs text-white/60">Coste total</div>
-              <div className="font-mono font-medium text-white leading-tight text-[34px] transition-colors duration-slow">
+              <div
+                className={
+                  'font-mono font-medium text-white leading-tight text-[34px] origin-left transition-all duration-slow ' +
+                  (flashHero ? 'scale-110' : 'scale-100')
+                }
+              >
                 {formatEur(totalCost)}
               </div>
               <div className="text-xs text-white/55 mt-0.5">
