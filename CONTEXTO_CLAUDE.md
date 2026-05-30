@@ -993,31 +993,148 @@ visible divergiría del coste real.
 **Garantía:** B (merma completa) se ejecuta en E3 sí o sí. Queda escrita aquí para que
 ninguna sesión futura la pierda.
 
-14. ESTADO DE EJECUCIÓN DEL EDITOR — 30/05/2026 (qué llevamos construido)
+14. ESTADO DE CIERRE — Sesión 30/05/2026
 
-> Complementa al §13 (hoja de ruta). §13 dice QUÉ se va a construir; §14 dice QUÉ está YA construido y qué quedó decidido pero sin construir. REGLA DE CONTINUIDAD: este documento vive en el repo y se COMMITEA al cierre de cada tramo. folvy_v1_editor_escandallos_diseno.md NO está en el repo (vive en Project Knowledge/local) → diseño de detalle, no fuente de verdad operativa. DEUDA: meterlo a /docs y versionarlo.
+> Fuente de verdad del estado actual. La próxima sesión la lee primero (junto a §0).
+> Sustituye a la antigua "§14 ESTADO DE EJECUCIÓN" de la mañana (commit 7cba703):
+> donde solapaban, esta actualiza (lo que allí era PENDIENTE, aquí está HECHO).
+> Complementa a §13 (hoja de ruta: QUÉ se va a construir); §14 dice QUÉ está YA
+> construido. El histórico anterior (§1 en 28/05) está pendiente de regenerar y
+> arrastra sobre-escapado — sanearlo es un tramo aparte, no se toca al cerrar.
+> folvy_v1_editor_escandallos_diseno.md NO está en el repo (Project Knowledge/local);
+> DEUDA: meterlo a /docs y versionarlo.
 
-14.1 — Construido y desplegado (commits en origin/main)
-- Pantalla del editor: RecipeEditorPage.tsx (reemplaza KitchenRecipePage, que queda en disco sin uso). Cabecera con foto + 5 solapas (solo Escandallo construida), composición con barras de coste, panel económico azul multi-marca colapsable (FC/margen por canal, propias/cedidas). Backend de escandallos por FOTO (Edge Function extract-recipe, Opus visión) construido el 29/05.
-- L1 — Lista de platos: KitchenRecipesPage.tsx (NUEVO), contenedor LISTA+DETALLE por estado (selectedRecipeId). Ruta 'recetas' (module.tsx) monta este contenedor; el editor se monta dentro con onBack. Eliminado FALLBACK_RECIPE_ID. Tarjetas con foto/coste/estado/IA. Arreglo de layout del panel económico (lg:grid-cols-[minmax(0,1fr)_320px] + blindaje truncate/flex-shrink-0). Commit c80f097.
-- E1 — Editar cantidad inline (BRUTO EFECTIVO, Opción A de §13.3) + borrar línea con confirmación + LATIDO (coste héroe pulsa, línea en terracota, panel FC refresca vía econReloadTick). Update optimista con reversión. Commit 3aafe12.
-- E2a — Añadir ingrediente EXISTENTE: buscador inline ordenado por USO REAL (RPC kitchen_raw_usage_counts, "en N platos") + preview EXACTO de impacto en coste (unidad base, sin conversiones) + alta con latido. Búsqueda por TOKENS sin acentos en los DOS buscadores (lista de platos y buscador de alta): "milanesa pol" encuentra "Milanesa de Pollo". Commit 1dde910.
-- E2b — Crear ingrediente NUEVO al vuelo (sin coincidencia → "Crear «X»" / con coincidencias → "¿No está? Crear «X»"): mini-form inline (nombre + selector unidad base agrupado Peso/Volumen/Unidades + coste opcional) → createRecipeItem (raw, source='manual', needs_review=true, con autoría) → cae en el paso de cantidad de E2a. Construido y validado funcionalmente el 30/05. PENDIENTE DE COMMIT junto con la capa visual de needs_review (ver 14.3 punto 1).
+14.1 — Construido y desplegado en FASE A del editor (origin/main)
 
-14.2 — Cambios en BBDD aplicados el 30/05 (con COMMIT en Supabase)
-- kitchen_recipe_breakdown(uuid) MODIFICADA (DROP+CREATE, cambió firma de retorno): ahora devuelve quantity = BRUTO EFECTIVO COALESCE(quantity_gross, quantity_net) (lo que cuesta y lo que se edita) + NUEVA columna quantity_net (neto, para E3). Resuelve la divergencia descrita en §13.3 (antes mostraba neto pero costeaba con bruto). El motor de coste NO se tocó.
-- kitchen_raw_usage_counts(p_account_id uuid) NUEVA (SECURITY DEFINER + guard current_user_is_admin_or_manager_of): devuelve {child_item_id, usage_count} = nº de platos type='dish' distintos donde se usa cada ingrediente. Alimenta el orden "más usados" del buscador de alta (E2a). Conteos reales verificados (Envoltorio 54, Cebolla 36, Tomate 34, Servilletas 32…).
-- Hallazgo de implementación: al llamar un RPC no incluido en los tipos autogenerados de Supabase, castear PERO llamando como member-access de supabase! (no asignar a variable suelta) o se pierde el this del cliente y el RPC devuelve vacío sin lanzar error. Y no silenciar con .catch(()=>({})): un fallo mudo esconde el problema. DEUDA: regenerar tipos de Supabase y quitar el cast.
+- Pantalla del editor RecipeEditorPage.tsx (reemplaza KitchenRecipePage, en desuso):
+  cabecera con foto + 5 solapas (solo Escandallo construida), composición con barras
+  de coste, panel económico azul multi-marca colapsable (FC/margen por canal). Backend
+  de escandallo por FOTO (Edge Function extract-recipe, Opus visión) construido 29/05.
+- L1 lista de platos KitchenRecipesPage.tsx: contenedor LISTA+DETALLE por estado.
+  Ruta 'recetas' monta el contenedor; el editor se monta dentro con onBack.
+- E1 editar cantidad inline (BRUTO EFECTIVO, Opción A de §13.3) + borrar línea + LATIDO
+  (coste héroe pulsa, panel FC refresca vía econReloadTick). Optimista con reversión.
+- E2a añadir ingrediente EXISTENTE: buscador ordenado por USO REAL (kitchen_raw_usage_counts)
+  + preview exacto de impacto + búsqueda por TOKENS sin acentos en ambos buscadores
+  ("milanesa pol" -> "Milanesa de Pollo").
+- E2b crear ingrediente NUEVO al vuelo desde el buscador (sin coincidencia -> "Crear «X»";
+  con coincidencias -> "¿No está? Crear «X»"): mini-form (nombre + unidad base agrupada +
+  coste opcional) -> createRecipeItem(raw, source='manual', needs_review=true, con autoría).
+- CAPA needs_review COMPLETA (commit 13a7874, lo nuevo de esta sesión, validado en navegador):
+  * Editor: por línea, badges diferenciados "sin terminar" (ingrediente needs_review, vía
+    childNeedsReview) y "no costeable" (línea sin conversión). Propagación a cabecera:
+    el plato sale "Revisar" si él mismo o cualquier línea lo requiere. Banner de motivo de
+    revisión (flag propio del plato) con texto GENÉRICO desde campos (kind + deltaPct),
+    matizado por magnitud, SIN nombrar la fuente. Botón "Dar por revisado" (dismissReview).
+  * Lista de platos: semántica de 4 estados (ver 14.3).
+  * Lista de ingredientes (KitchenItemsPage): badge "sin terminar" en raws needs_review.
+  * recipeItemService.ts: getDishesIncomplete + dismissReview con fallback (ver 14.4).
+  * recipeLineService.ts: childNeedsReview propagado desde el breakdown.
 
-14.3 — Decisiones cerradas que AÚN NO están construidas (red de seguridad — NO PERDER)
-1. needs_review VISIBLE EN TODAS PARTES + PROPAGA AL PLATO (decisión Julio 30/05): un artículo con needs_review=true (creado por foto, albarán o a mano) debe verse marcado en CUALQUIER pantalla donde aparezca. Y un plato con CUALQUIER ingrediente needs_review es un plato INCOMPLETO → se marca "revisar" también el plato (propaga hacia arriba). Razón de Julio: "una deuda que se acumula y al final hace la empresa poco fiable". Estado de la capa visual: [HECHO] cabecera del editor (badge Validado/Revisar, pero refleja el needs_review del PLATO, no de sus ingredientes hijos). [PENDIENTE] línea del escandallo (hoy el punto ámbar refleja "línea no costeable" por falta de conversión, NO el needs_review del hijo; falta que kitchen_recipe_breakdown devuelva el needs_review del hijo y la línea lo muestre, distinguiendo "ingrediente sin terminar" de "línea no costeable"). [PENDIENTE] lista de Ingredientes (KitchenItemsPage no pinta needs_review). [PENDIENTE] lista de Platos (propagación). [PENDIENTE] buscador de alta (marcar candidatos needs_review). [PENDIENTE/BLOQUEADO] aviso ACTIVO al responsable: no existe el rol "responsable de catálogo" (deuda de roles); notificationsService.ts actual es solo empleados; mismo subsistema servirá para "artículo nuevo desde albarán". Hasta que exista el rol, el aviso queda preparado pero APAGADO (no fingir que avisa). SIGUIENTE TRAMO INMEDIATO: construir esta capa; cierra E2b de verdad.
-2. MERMA bruto/neto completa = E3 (Opción B de §13.3, COMPROMETIDA, no opcional).
-3. COMISIONES POR CANAL (revisar): hoy los 4 canales de un plato muestran FC y margen IDÉNTICOS (incl. Shop/local, que no debería llevar comisión de delivery) → las comisiones por canal NO están configuradas en la cuenta. Prerrequisito del latido predictivo G2.
+14.2 — Funciones SQL (en Supabase, COMMIT aplicado)
 
-14.4 — Commits de referencia (origin/main)
-5c70fc2 pantalla escandallo · c80f097 lista L1 + navegación + panel responsive · 3aafe12 E1 · 1dde910 E2a + arreglos (RPC this + búsqueda por tokens) · 7e301d2 docs §13 · (pendiente) E2b + capa needs_review.
+- kitchen_recipe_breakdown(uuid) — MODIFICADA dos veces el 30/05:
+  (a) E1/Opción A: devuelve quantity = BRUTO EFECTIVO COALESCE(quantity_gross, quantity_net)
+      (lo que cuesta y lo que se edita) + columna quantity_net (neto, reservado para E3).
+      Resuelve la divergencia de §13.3 (antes mostraba neto pero costeaba con bruto). Motor
+      de coste intacto.
+  (b) needs_review: añadida columna de retorno child_needs_review boolean (= needs_review del
+      ingrediente hijo, distinto del needs_review de línea que = línea no costeable).
+- kitchen_dishes_incomplete(p_account_id uuid) — NUEVA. SECURITY DEFINER + guard
+  current_user_is_admin_or_manager_of. Devuelve SOLO los platos incompletos (HAVING bool_or):
+  un plato es incompleto si alguna línea tiene ingrediente needs_review O es no costeable
+  (dimensiones distintas sin conversión en recipe_item_unit_conversion). Mismo criterio que
+  kitchen_recipe_breakdown -> coherencia editor/listado. CRÍTICO: la primera versión SIN
+  having devolvía TODOS los platos (true y false) y el cliente los metía todos en el Set ->
+  95 platos "Revisar" (bug resuelto). Devuelve 15 platos incompletos.
+- kitchen_raw_usage_counts(p_account_id uuid) — uso de cada ingrediente (nº de platos donde
+  aparece), alimenta el orden "más usados" del buscador de alta (E2a). Verificado (Envoltorio
+  54, Cebolla 36, Tomate 34…).
 
-Sección de estado de ejecución — actualizada 30/05/2026. Mantener al día y COMMITEAR al cierre de cada tramo.
+Hallazgo de implementación: al llamar un RPC no incluido en los tipos autogenerados, castear
+PERO llamando como member-access de supabase!.rpc (no asignar a variable suelta) o se pierde
+el this y el RPC devuelve vacío sin error. No silenciar con .catch(()=>({})). DEUDA:
+regenerar tipos de Supabase y quitar los 3 casts (getRawUsageCounts, getDishesIncomplete,
+child_needs_review en getRecipeBreakdown).
+
+14.3 — Modelo de 4 estados del listado (decisión Julio 30/05)
+
+"Revisar" debe ser SEÑAL, no ruido. Pintar todo needs_review en rojo encendería 145/215
+platos (Coca-Cola incluida). Estados:
+- validado (verde): tiene coste, sin sospecha activa, sin incompletos.
+- revisar (ámbar) = ALARMA REAL: reviewNotes.kind='cost_suspect' Y needsReview sigue true
+  (la nota se conserva como traza tras el dismiss, así que el kind por sí solo no basta),
+  O el plato está en getDishesIncomplete.
+- sin_validar (gris neutro): needsReview true sin diagnóstico accionable. Hoy no se ve (esos
+  platos no tienen coste -> caen en sin_escandallo); queda como red de seguridad.
+- sin_escandallo (gris): computed_cost null.
+Recuento real (215 dishes activos): 34 cost_suspect, 60 validados, 121 sin escandallo
+(incluye bebidas/combos sin coste). De 145 que habrían salido "Revisar" con la lógica vieja
+-> 34 con señal real.
+
+14.4 — Botón "Dar por revisado" + identidad operativa
+
+dismissReview(id, reason, actorId): baja needs_review, registra review_dismissed_at/by/reason
+(auditable), CONSERVA review_notes como traza. review_dismissed_by tiene FK a user_profiles.id.
+La cuenta de pruebas "Folvy Interno" (00000000-...-0001) NO tiene fila en user_profiles (es el
+id de cuenta/tenant, no de usuario) -> la FK rechazaba el UPDATE. Solución: dismissReview
+reintenta con autor null si la FK falla. En PRODUCCIÓN Julio (bde73591...) y Pamela
+(443422de...) SÍ tienen perfil -> review_dismissed_by se rellena bien. El fallback a null es la
+conducta correcta para actores sin perfil (pruebas, sistema), no un parche temporal.
+
+14.5 — Principios de producto NUEVOS (a respetar siempre)
+
+1. SIEMPRE la mejor opción. No plantear alternativas inferiores; proponer directamente la
+   correcta y explicar por qué.
+2. NO mostrar la fuente de referencia (tspoon) ni referenceSource en la UI. Es un detalle de
+   ESTA migración (Llorente29 venía de tspoon). Folvy es multi-cliente; los mensajes se
+   construyen desde campos estructurados.
+3. Los datos importados (sales, dishes, escandallos del 27-28/05) son ANDAMIAJE DE
+   CONFIGURACIÓN: reales pero ya desfasados, sirven para montar y validar. Antes de producción
+   se reemplazarán por una carga definitiva (manual o import más fiel). NO invertir esfuerzo en
+   sanear datos que van a desaparecer.
+
+14.6 — TRAMO PENDIENTE: 9 platos duplicados del import (NO tocar aún)
+
+9 nombres de plato tienen DOS filas recipe_item (source=manual 27/05 vacía + source=import
+28/05), y AMBAS tienen menu_item enlazados con ventas repartidas entre marcas distintas. NO es
+basura archivable simple: consolidarlo bien exige reapuntar menu_items preservando ventas.
+PERO, por el principio 14.5.3 (datos de configuración a reemplazar), NO merece cirugía fina
+ahora. Documentado para resolver/descartar cuando llegue la carga definitiva. Platos:
+Alitas Crispy Spicy, Double Smash Bacon Cheeseburger, Double Smash Cheeseburger, Falafel con
+salsa de yogur (3 unidades), La Smash Brothers, La Triple, Smash Bacon Cheeseburger, Smash
+Cheeseburger, Truffled Smash. (3 de ellos —Double Smash Cheeseburger, Smash Bacon, Smash
+Cheeseburger— tienen las dos filas SIN escandallo pero CON ventas: les falta montar la receta.)
+
+14.7 — Mejoras menores anotadas (no bloqueantes)
+
+- La lista de platos NO se auto-refresca al volver del editor: tras "dar por revisado" hace
+  falta F5 para ver el cambio en el listado. Mejora de UX pequeña.
+- Tipos Supabase sin regenerar -> 3 casts acotados (ver 14.2).
+- Bundle index > 500 KB (deuda conocida, code-splitting diferido).
+- Aviso ACTIVO al "responsable de catálogo": el rol no existe (deuda de roles);
+  notificationsService.ts actual es solo empleados. needs_review se marca pero no notifica.
+  Apagado a propósito, no fingir que avisa.
+- COMISIONES POR CANAL sin configurar: los 4 canales de un plato muestran FC/margen idénticos
+  (incl. Shop/local, que no debería llevar comisión de delivery). Prerrequisito del latido
+  predictivo G2.
+
+14.8 — Commits de referencia (origin/main)
+
+5c70fc2 pantalla escandallo · c80f097 lista L1 + navegación + panel responsive · 3aafe12 E1 ·
+1dde910 E2a (RPC this + búsqueda tokens) · 7e301d2 docs §13 · 7cba703 §14-ejecución + bruto/neto
+· 80b0a91 sistema de cierre · b39fde4 cierre.ps1 ASCII · b533db6 doc arranque ·
+13a7874 capa needs_review completa + E2b.
+
+14.9 — PASO 1 de la próxima sesión
+
+Leer esta §14 + §0 (REGLA CERO) + folvy_v1_editor_escandallos_diseno.md.
+Estado: FASE A del editor con E1, E2a, E2b y capa needs_review COMPLETAS.
+Siguiente tramo natural: E3 = capa de merma completa (bruto + neto + % merma acoplados, Opción
+B comprometida; ver bloque E1/E3 al final de la sección 1). Confirmar el orden con Julio antes
+de arrancar.
+
+Sección de estado — actualizada 30/05/2026. Mantener al día y COMMITEAR al cierre de cada tramo.
 
 ---
 Documento actualizado: 28 de mayo de 2026 (noche) — DISEÑO COMPLETO V1 EDITOR DE ESCANDALLOS cerrado conceptualmente (8 decisiones de producto + 5 catálogos semilla + reconocimiento BBDD + diagnóstico real de 34 needs_review con CSV + 12 hallazgos competencia mundial integrados + diseño UX completo del lienzo y todas las pantallas + 3 prompts sistema modos IA + decisión Modificadores M1-M4 al 100% con confirmación operativa de Last.app). Próximo: saneamiento de commits + S1 (schema migration) + S2 (UI banner needs_review) + S_MODIFIERS (parsing histórico + actualizar conector). Detalle UX completo en documento maestro nuevo `folvy_v1_editor_escandallos_diseno.md`. Esta es la sesión más densa del proyecto hasta la fecha en términos de decisiones de diseño.
