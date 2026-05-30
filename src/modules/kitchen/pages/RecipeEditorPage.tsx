@@ -4,15 +4,15 @@
 // Diseño según folvy_v1_editor_escandallos_diseno.md §5 + §13 (plan de tramos).
 //
 // El id del plato llega por prop `recipeId` desde el contenedor
-// KitchenRecipesPage (patrón LISTA + DETALLE por estado; las páginas kitchen
-// NO usan react-router con params). `onBack` vuelve a la lista.
+// KitchenRecipesPage (patrón LISTA + DETALLE por estado). `onBack` vuelve a la lista.
 //
-// TRAMO E1 (este): edición inline de la cantidad (BRUTO EFECTIVO) con LATIDO del
-// coste + borrar línea con confirmación. La edición escribe en quantity_gross
-// (lo que cuesta y lo que se ve, ver §13.3). Al confirmar: update optimista →
-// updateLine → el servicio recalcula el coste del plato → recargamos el
-// breakdown → laten el coste héroe y el panel de FC por canal (econReloadTick).
-// Merma neto/bruto detallada = E3. Añadir ingrediente = E2 (➕ deshabilitado).
+// TRAMOS:
+//  - E1: editar cantidad inline (bruto efectivo) con latido + borrar línea.
+//  - E2a (este): añadir ingrediente EXISTENTE con buscador inline ordenado por
+//    USO REAL en la cuenta (RPC kitchen_raw_usage_counts) + preview de impacto en
+//    coste antes de añadir (exacto: usamos la unidad base del ingrediente, sin
+//    conversiones) + alta con latido. La unidad de la línea = unidad base del
+//    ingrediente (elegir otra unidad = E3). Crear ingrediente nuevo = E2b.
 //
 // Patrón: useActiveAccount() (cuenta), igual que KitchenItemsPage.
 import { useEffect, useMemo, useState } from 'react'
@@ -27,24 +27,33 @@ import {
   Mic,
   MessageCircle,
   Plus,
+  Search,
+  X,
   Store,
   Bike,
   ShoppingBag,
   Trash2,
 } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
-import { getRecipeItemById } from '@/modules/kitchen/services/recipeItemService'
+import {
+  getRecipeItemById,
+  listRecipeItems,
+  getRawUsageCounts,
+} from '@/modules/kitchen/services/recipeItemService'
 import {
   getRecipeBreakdown,
   updateLine,
   deleteLine,
+  addLine,
+  listLinesByParent,
 } from '@/modules/kitchen/services/recipeLineService'
+import { listUnits } from '@/modules/kitchen/services/kitchenUnitService'
 import {
   listMenuItems,
   getMenuItemEconomics,
 } from '@/modules/kitchen/services/menuItemService'
 import { listBrands } from '@/modules/multitenancy/services/brandsService'
-import type { RecipeItem, MenuItemEconomics } from '@/types/kitchen'
+import type { RecipeItem, MenuItemEconomics, KitchenUnit } from '@/types/kitchen'
 import type { RecipeLineBreakdown } from '@/modules/kitchen/services/recipeLineService'
 
 type EditorTab = 'escandallo' | 'receta' | 'etiquetado' | 'historico' | 'mas'
@@ -67,6 +76,16 @@ function formatEur(value: number | null | undefined): string {
   }).format(value)
 }
 
+// Coste por unidad base (puede ser muy pequeño, p. ej. €/g): hasta 4 decimales.
+function formatEurPrecise(value: number): string {
+  return new Intl.NumberFormat('es-ES', {
+    style: 'currency',
+    currency: 'EUR',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 4,
+  }).format(value)
+}
+
 function formatPct(value: number | null | undefined): string {
   if (value === null || value === undefined) return '—'
   return `${value.toFixed(1).replace('.', ',')}%`
@@ -75,6 +94,26 @@ function formatPct(value: number | null | undefined): string {
 // Cantidad de línea para mostrar (sin moneda): "0,5", "85", "120".
 function formatQty(value: number): string {
   return new Intl.NumberFormat('es-ES', { maximumFractionDigits: 3 }).format(value)
+}
+
+// Normaliza para buscar: minúsculas + sin acentos. "Plátano" → "platano".
+function normalize(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+}
+
+// Búsqueda por PALABRAS (tokens), no por frase literal: todas las palabras del
+// texto deben aparecer en los campos (en cualquier orden). Ignora acentos.
+function matchesTokens(query: string, ...fields: (string | null | undefined)[]): boolean {
+  const tokens = normalize(query).split(/\s+/).filter((t) => t !== '')
+  if (tokens.length === 0) return true
+  const haystack = fields
+    .filter((f): f is string => !!f)
+    .map((f) => normalize(f))
+    .join(' ')
+  return tokens.every((tok) => haystack.includes(tok))
 }
 
 // Icono según el nombre del canal (heurística por palabras clave). Local/tienda
@@ -86,10 +125,7 @@ function channelIcon(name: string) {
   return ShoppingBag
 }
 
-// Color del semáforo según food_cost_status (valores reales de menu_item_economics):
-// 'under' = FC por debajo del objetivo (bien) → success
-// 'over'  = FC por encima del objetivo (mal)  → danger
-// 'n_a' (licensed) / 'no_cost' / 'no_target'  → neutro
+// Color del semáforo según food_cost_status (valores reales de menu_item_economics).
 function statusColor(status: string | null | undefined): string {
   switch (status) {
     case 'under':
@@ -101,8 +137,6 @@ function statusColor(status: string | null | undefined): string {
   }
 }
 
-// Fila de economía etiquetada con la marca a la que pertenece (la función
-// menu_item_economics no devuelve brandId, lo añadimos al cargarla por marca).
 type EconRow = MenuItemEconomics & { _brandId: string }
 
 interface RecipeEditorPageProps {
@@ -130,18 +164,29 @@ export default function RecipeEditorPage({
   const [draftQty, setDraftQty] = useState('')
   const [savingLineId, setSavingLineId] = useState<string | null>(null)
   const [editError, setEditError] = useState<string | null>(null)
-  // Latido: resaltado breve del coste tras un cambio confirmado.
   const [flashLineId, setFlashLineId] = useState<string | null>(null)
   const [flashHero, setFlashHero] = useState(false)
 
-  // Economía: filas (canal × marca) de este plato, cada una etiquetada con _brandId.
+  // ── Añadir ingrediente (E2a) ──
+  const [addOpen, setAddOpen] = useState(false)
+  const [addSearch, setAddSearch] = useState('')
+  const [addPicked, setAddPicked] = useState<RecipeItem | null>(null)
+  const [addQty, setAddQty] = useState('')
+  const [addSaving, setAddSaving] = useState(false)
+  const [addError, setAddError] = useState<string | null>(null)
+  const [addableItems, setAddableItems] = useState<RecipeItem[]>([])
+  const [unitsById, setUnitsById] = useState<Map<string, KitchenUnit>>(new Map())
+  const [usageCounts, setUsageCounts] = useState<Record<string, number>>({})
+  const [addDataLoaded, setAddDataLoaded] = useState(false)
+  const [addDataLoading, setAddDataLoading] = useState(false)
+  // Aviso si el orden por uso (RPC) falla: el alta sigue, pero ordenado alfabético.
+  const [usageNotice, setUsageNotice] = useState<string | null>(null)
+
+  // ── Economía (panel azul) ──
   const [economics, setEconomics] = useState<EconRow[]>([])
   const [brandNames, setBrandNames] = useState<Record<string, string>>({})
   const [econLoading, setEconLoading] = useState(false)
-  // Marcas cuyo bloque está plegado (las cedidas arrancan plegadas).
   const [collapsedBrands, setCollapsedBrands] = useState<Record<string, boolean>>({})
-  // Tick para re-disparar la carga de economía tras editar una línea (el latido
-  // del FC por canal). No recarga el plato entero, solo la economía.
   const [econReloadTick, setEconReloadTick] = useState(0)
 
   useEffect(() => {
@@ -179,11 +224,8 @@ export default function RecipeEditorPage({
     }
   }, [accountsLoading, activeAccountId, recipeId])
 
-  // Carga de economía: busca los menu_item de este plato (sus marcas) y carga
-  // la economía avanzada (FC, comisión, margen) de TODAS sus marcas. El panel
-  // las agrupa en bloques colapsables (propias abiertas, cedidas plegadas).
-  // menu_item_economics corre server-side (con sesión de usuario en la app).
-  // Se re-dispara con econReloadTick tras editar una línea (latido del FC).
+  // Economía: marcas del plato + FC/margen por canal. Se re-dispara con
+  // econReloadTick tras editar/añadir/borrar una línea (latido del FC).
   useEffect(() => {
     if (accountsLoading || !activeAccountId || !recipeId) return
     let cancelled = false
@@ -191,7 +233,6 @@ export default function RecipeEditorPage({
     listMenuItems({ accountId: activeAccountId })
       .then(async (allItems) => {
         if (cancelled) return
-        // Marcas donde está ESTE plato.
         const mine = allItems.filter((mi) => mi.recipeItemId === recipeId)
         const brands = Array.from(new Set(mine.map((mi) => mi.brandId)))
         if (brands.length === 0) {
@@ -199,7 +240,6 @@ export default function RecipeEditorPage({
           setBrandNames({})
           return
         }
-        // Nombres de marca (para los títulos de bloque).
         listBrands({ accountId: activeAccountId })
           .then((all) => {
             if (cancelled) return
@@ -208,10 +248,8 @@ export default function RecipeEditorPage({
             setBrandNames(map)
           })
           .catch(() => {
-            /* nombres cosméticos; si falla, se usa el id corto */
+            /* nombres cosméticos */
           })
-        // Economía de cada marca en paralelo; etiquetamos cada fila con su
-        // brandId (lo sabemos aquí, aunque la función no lo devuelva).
         const perBrand = await Promise.all(
           brands.map((b) =>
             getMenuItemEconomics(b)
@@ -237,19 +275,16 @@ export default function RecipeEditorPage({
     }
   }, [accountsLoading, activeAccountId, recipeId, econReloadTick])
 
-  // Coste total = suma de líneas del breakdown (las partes suman el total).
   const totalCost = useMemo(
     () => lines.reduce((acc, l) => acc + (l.lineCost ?? 0), 0),
     [lines]
   )
 
-  // Coste mayor de línea: referencia para el ancho de las barras de peso.
   const maxLineCost = useMemo(
     () => lines.reduce((max, l) => Math.max(max, l.lineCost ?? 0), 0),
     [lines]
   )
 
-  // Economía agrupada por marca, propias primero (es donde está el FC accionable).
   const econByBrand = useMemo(() => {
     const groups = new Map<string, { brandId: string; flowType: string; rows: EconRow[] }>()
     for (const r of economics) {
@@ -258,13 +293,11 @@ export default function RecipeEditorPage({
       else groups.set(r._brandId, { brandId: r._brandId, flowType: r.flowType, rows: [r] })
     }
     return Array.from(groups.values()).sort((a, b) => {
-      // own antes que licensed; dentro, por nombre de marca
       if (a.flowType !== b.flowType) return a.flowType === 'own' ? -1 : 1
       return (brandNames[a.brandId] ?? '').localeCompare(brandNames[b.brandId] ?? '')
     })
   }, [economics, brandNames])
 
-  // Al cargar la economía, las marcas cedidas arrancan plegadas; las propias abiertas.
   useEffect(() => {
     if (econByBrand.length === 0) return
     setCollapsedBrands((prev) => {
@@ -276,7 +309,30 @@ export default function RecipeEditorPage({
     })
   }, [econByBrand])
 
-  // ── Handlers de edición inline (E1) ──
+  // Ids de los ingredientes ya presentes en la receta (para marcar "ya en la receta").
+  const existingChildIds = useMemo(
+    () => new Set(lines.map((l) => l.childItemId)),
+    [lines]
+  )
+
+  // Candidatos del buscador: raws + preparaciones, filtrados por TOKENS (todas
+  // las palabras, en cualquier orden, sin acentos), ordenados por USO REAL, tope 8.
+  const candidates = useMemo(() => {
+    const q = addSearch.trim()
+    let items = addableItems
+    if (q !== '') {
+      items = items.filter((it) => matchesTokens(q, it.name, it.code))
+    }
+    const sorted = [...items].sort((a, b) => {
+      const ua = usageCounts[a.id] ?? 0
+      const ub = usageCounts[b.id] ?? 0
+      if (ub !== ua) return ub - ua
+      return a.name.localeCompare(b.name)
+    })
+    return sorted.slice(0, 8)
+  }, [addableItems, addSearch, usageCounts])
+
+  // ── Handlers de latido / edición (E1) ──
 
   function triggerLatido(lineId?: string | null) {
     setFlashHero(true)
@@ -294,7 +350,6 @@ export default function RecipeEditorPage({
   }
 
   function commitEdit(line: RecipeLineBreakdown) {
-    // Si ya no estamos editando esta línea (p. ej. tras Esc), no hacemos nada.
     if (editingLineId !== line.lineId || !recipeId) {
       setEditingLineId(null)
       return
@@ -308,10 +363,9 @@ export default function RecipeEditorPage({
       window.setTimeout(() => setEditError(null), 3000)
       return
     }
-    if (num === line.quantity) return // sin cambios
+    if (num === line.quantity) return
 
     const prevLines = lines
-    // Optimista: mostramos el valor nuevo ya.
     setLines((prev) =>
       prev.map((l) => (l.lineId === line.lineId ? { ...l, quantity: num } : l))
     )
@@ -323,10 +377,10 @@ export default function RecipeEditorPage({
       .then((fresh) => {
         setLines(fresh)
         triggerLatido(line.lineId)
-        setEconReloadTick((t) => t + 1) // latido del FC por canal
+        setEconReloadTick((t) => t + 1)
       })
       .catch((err: unknown) => {
-        setLines(prevLines) // revertir
+        setLines(prevLines)
         const msg = err instanceof Error ? err.message : 'Error al guardar la cantidad'
         setEditError(msg)
         window.setTimeout(() => setEditError(null), 4000)
@@ -353,7 +407,7 @@ export default function RecipeEditorPage({
         setEconReloadTick((t) => t + 1)
       })
       .catch((err: unknown) => {
-        setLines(prevLines) // revertir
+        setLines(prevLines)
         const msg = err instanceof Error ? err.message : 'Error al eliminar la línea'
         setEditError(msg)
         window.setTimeout(() => setEditError(null), 4000)
@@ -361,8 +415,122 @@ export default function RecipeEditorPage({
       .finally(() => setSavingLineId(null))
   }
 
-  // Botón "Volver al listado" (solo si el contenedor pasó onBack). Se reutiliza
-  // en los estados de carga/error/no-encontrado y en el render principal.
+  // ── Handlers de alta (E2a) ──
+
+  function costPerBase(item: RecipeItem): number {
+    return item.computedCost ?? item.fixedCost ?? 0
+  }
+
+  function baseUnitAbbr(item: RecipeItem): string {
+    return unitsById.get(item.baseUnitId)?.abbreviation ?? ''
+  }
+
+  function openAdd() {
+    setAddOpen(true)
+    setAddSearch('')
+    setAddPicked(null)
+    setAddQty('')
+    setAddError(null)
+    if (addDataLoaded || addDataLoading || !activeAccountId) return
+    const accountId = activeAccountId
+    setAddDataLoading(true)
+    setUsageNotice(null)
+
+    // Esencial para el alta: ingredientes + unidades.
+    Promise.all([
+      listRecipeItems({ accountId, includeInactive: false }),
+      listUnits({}),
+    ])
+      .then(([items, units]) => {
+        const addable = items.filter((it) => it.type === 'raw' || it.type === 'recipe')
+        setAddableItems(addable)
+        const m = new Map<string, KitchenUnit>()
+        units.forEach((u) => m.set(u.id, u))
+        setUnitsById(m)
+        setAddDataLoaded(true)
+      })
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : 'No se pudieron cargar los ingredientes'
+        setAddError(msg)
+      })
+      .finally(() => setAddDataLoading(false))
+
+    // Orden por uso real: NO bloquea el alta. Si falla, avisa (no se silencia)
+    // y el buscador queda ordenado alfabéticamente.
+    getRawUsageCounts(accountId)
+      .then((usage) => setUsageCounts(usage))
+      .catch((err: unknown) => {
+        console.error('getRawUsageCounts falló:', err)
+        setUsageNotice('No se pudo ordenar por uso (orden alfabético).')
+      })
+  }
+
+  function closeAdd() {
+    setAddOpen(false)
+    setAddSearch('')
+    setAddPicked(null)
+    setAddQty('')
+    setAddError(null)
+  }
+
+  function pickItem(item: RecipeItem) {
+    setAddPicked(item)
+    setAddQty('')
+    setAddError(null)
+  }
+
+  function confirmAdd() {
+    if (!addPicked || !recipeId || !activeAccountId) return
+    const raw = addQty.trim().replace(',', '.')
+    const num = Number(raw)
+    if (raw === '' || !Number.isFinite(num) || num <= 0) {
+      setAddError('Indica una cantidad válida (mayor que 0).')
+      return
+    }
+    const picked = addPicked
+    setAddSaving(true)
+    setAddError(null)
+
+    listLinesByParent(recipeId)
+      .then((existing) => {
+        const maxPos = existing.reduce((m, l) => Math.max(m, l.position ?? 0), 0)
+        return addLine({
+          accountId: activeAccountId,
+          parentItemId: recipeId,
+          childItemId: picked.id,
+          quantityNet: num,
+          quantityGross: num,
+          unitId: picked.baseUnitId,
+          position: maxPos + 1,
+        })
+      })
+      .then((created) =>
+        getRecipeBreakdown(recipeId).then((fresh) => ({ created, fresh }))
+      )
+      .then(({ created, fresh }) => {
+        setLines(fresh)
+        triggerLatido(created.id)
+        setEconReloadTick((t) => t + 1)
+        // Listo para añadir otro: volvemos al buscador.
+        setAddPicked(null)
+        setAddQty('')
+      })
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : 'No se pudo añadir el ingrediente'
+        setAddError(msg)
+      })
+      .finally(() => setAddSaving(false))
+  }
+
+  // Preview de impacto (exacto: unidad base → coste = coste/base × cantidad).
+  const previewNum = useMemo(() => {
+    const n = Number(addQty.trim().replace(',', '.'))
+    return Number.isFinite(n) ? n : 0
+  }, [addQty])
+  const previewLineCost = addPicked ? costPerBase(addPicked) * previewNum : 0
+  const previewValid = !!addPicked && previewNum > 0
+
+  // Botón "Volver al listado" (solo si el contenedor pasó onBack).
   const backLink = onBack ? (
     <button
       type="button"
@@ -424,21 +592,17 @@ export default function RecipeEditorPage({
               className="w-full h-full object-cover"
             />
           ) : (
-            // Placeholder cálido cuando el plato no tiene foto todavía
             <div className="w-full h-full flex items-center justify-center bg-terracota-bg">
               <ChefHat className="w-10 h-10 text-terracota opacity-60" />
             </div>
           )}
-          {/* Degradado para legibilidad del texto */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/5" />
 
-          {/* Botón cambiar foto */}
           <button className="absolute top-3 left-3 inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-white/90 text-terracota font-medium hover:bg-white transition-colors">
             <Camera className="w-3.5 h-3.5" />
             {recipe.kitchenPhotoUrl ? 'Cambiar foto' : 'Añadir foto'}
           </button>
 
-          {/* Badges de estado */}
           <div className="absolute top-3 right-3 flex gap-1.5">
             {isAi && (
               <span className="text-xs px-2.5 py-1 rounded-full bg-accent text-text-on-accent inline-flex items-center gap-1 font-medium">
@@ -459,7 +623,6 @@ export default function RecipeEditorPage({
             )}
           </div>
 
-          {/* Nombre + meta del plato */}
           <div className="absolute left-4 bottom-3 right-4">
             <h1 className="text-[22px] font-display font-medium text-white leading-tight">
               {recipe.name}
@@ -526,16 +689,16 @@ export default function RecipeEditorPage({
                   </button>
                   <button
                     type="button"
-                    disabled
-                    title="Añadir ingrediente — próximamente (E2)"
-                    className="w-7 h-7 rounded-md bg-terracota/40 text-white inline-flex items-center justify-center cursor-not-allowed"
+                    onClick={openAdd}
+                    title="Añadir ingrediente"
+                    className="w-7 h-7 rounded-md bg-terracota text-white inline-flex items-center justify-center hover:bg-terracota-hover transition-colors"
                   >
                     <Plus className="w-4 h-4" />
                   </button>
                 </div>
               </div>
 
-              {/* Aviso de error de edición (cantidad no válida / fallo al guardar) */}
+              {/* Aviso de error de edición */}
               {editError && (
                 <div className="mb-2 px-2.5 py-1.5 rounded-md bg-danger-bg text-danger text-xs">
                   {editError}
@@ -550,7 +713,6 @@ export default function RecipeEditorPage({
               ) : (
                 <div>
                   {lines.map((line) => {
-                    // Barra de peso de la línea sobre el coste mayor (referencia visual)
                     const pct =
                       maxLineCost > 0
                         ? Math.round(((line.lineCost ?? 0) / maxLineCost) * 100)
@@ -562,7 +724,6 @@ export default function RecipeEditorPage({
                         key={line.lineId}
                         className="group flex items-center gap-2.5 py-2 px-1.5 border-b border-border-default last:border-b-0"
                       >
-                        {/* Avatar: punto de color (categoría) — placeholder hasta tener fotos/categoría */}
                         <span className="w-[30px] h-[30px] rounded-md bg-accent-bg inline-flex items-center justify-center flex-shrink-0">
                           <span
                             className={
@@ -612,7 +773,6 @@ export default function RecipeEditorPage({
                           )}
                         </div>
 
-                        {/* Nombre (+ aviso si needs_review) */}
                         <span className="flex-1 min-w-0 text-sm text-text-primary truncate">
                           {line.childName}
                           {line.needsReview && (
@@ -623,7 +783,6 @@ export default function RecipeEditorPage({
                           )}
                         </span>
 
-                        {/* Barra de peso del coste */}
                         <span className="w-[38px] h-1 rounded-full bg-accent-bg overflow-hidden flex-shrink-0">
                           <span
                             className="block h-full bg-terracota transition-all duration-base"
@@ -631,7 +790,6 @@ export default function RecipeEditorPage({
                           />
                         </span>
 
-                        {/* Coste de la línea (late al confirmar; pulsa al guardar) */}
                         <span
                           className={
                             'font-mono text-sm min-w-[52px] text-right transition-colors duration-base ' +
@@ -645,7 +803,6 @@ export default function RecipeEditorPage({
                           {formatEur(line.lineCost)}
                         </span>
 
-                        {/* Eliminar línea (aparece al pasar el ratón / foco) */}
                         <button
                           type="button"
                           onClick={() => handleDelete(line)}
@@ -660,6 +817,174 @@ export default function RecipeEditorPage({
                   })}
                 </div>
               )}
+
+              {/* ── Alta de ingrediente (E2a) ── */}
+              {addOpen && (
+                <div className="mt-3 rounded-lg border border-terracota/40 bg-terracota-bg/50 p-2.5">
+                  {addError && (
+                    <div className="mb-2 px-2 py-1 rounded bg-danger-bg text-danger text-xs">
+                      {addError}
+                    </div>
+                  )}
+
+                  {addPicked ? (
+                    // Paso 2: cantidad + preview de impacto
+                    <div>
+                      <div className="flex items-center gap-2.5">
+                        <span className="w-[30px] h-[30px] rounded-md bg-card border border-terracota/30 inline-flex items-center justify-center flex-shrink-0">
+                          <span className="w-2.5 h-2.5 rounded-full bg-terracota" />
+                        </span>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            autoFocus
+                            value={addQty}
+                            onChange={(e) => setAddQty(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault()
+                                confirmAdd()
+                              } else if (e.key === 'Escape') {
+                                e.preventDefault()
+                                setAddPicked(null)
+                                setAddQty('')
+                              }
+                            }}
+                            placeholder="Cant."
+                            className="w-[58px] px-1.5 py-1 font-mono text-sm text-text-primary bg-card border border-accent rounded focus:outline-none focus:ring-1 focus:ring-accent"
+                          />
+                          <span className="font-mono text-sm text-text-secondary min-w-[24px]">
+                            {baseUnitAbbr(addPicked)}
+                          </span>
+                        </div>
+                        <span className="flex-1 min-w-0 text-sm text-text-primary truncate">
+                          {addPicked.name}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={confirmAdd}
+                          disabled={addSaving || !previewValid}
+                          className="px-3 py-1 text-sm font-medium rounded-md bg-terracota text-white hover:bg-terracota-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                        >
+                          {addSaving ? 'Añadiendo…' : 'Añadir'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAddPicked(null)
+                            setAddQty('')
+                          }}
+                          title="Elegir otro ingrediente"
+                          className="w-6 h-6 rounded inline-flex items-center justify-center text-text-secondary hover:text-text-primary hover:bg-card transition-colors flex-shrink-0"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      {/* Preview de impacto (exacto en €) */}
+                      <div className="mt-1.5 pl-[40px] text-xs text-text-secondary">
+                        {previewValid ? (
+                          <span>
+                            <span className="font-mono text-terracota font-medium">
+                              +{formatEur(previewLineCost)}
+                            </span>{' '}
+                            · el plato pasaría a{' '}
+                            <span className="font-mono text-text-primary font-medium">
+                              {formatEur(totalCost + previewLineCost)}
+                            </span>
+                          </span>
+                        ) : (
+                          <span className="opacity-70">Escribe la cantidad para ver el impacto.</span>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    // Paso 1: buscador
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <div className="relative flex-1">
+                          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-secondary pointer-events-none" />
+                          <input
+                            type="text"
+                            autoFocus
+                            value={addSearch}
+                            onChange={(e) => setAddSearch(e.target.value)}
+                            placeholder="Buscar ingrediente o preparación…"
+                            className="w-full pl-8 pr-2 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={closeAdd}
+                          title="Cerrar"
+                          className="w-7 h-7 rounded-md inline-flex items-center justify-center text-text-secondary hover:text-text-primary hover:bg-card transition-colors flex-shrink-0"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      <div className="mt-2">
+                        {usageNotice && (
+                          <div className="mb-1.5 px-1.5 text-[11px] text-warning">
+                            {usageNotice}
+                          </div>
+                        )}
+                        {addDataLoading ? (
+                          <div className="text-xs text-text-secondary px-1 py-2">
+                            Cargando ingredientes…
+                          </div>
+                        ) : candidates.length === 0 ? (
+                          <div className="text-xs text-text-secondary px-1 py-2">
+                            Sin coincidencias
+                            {addSearch.trim() !== '' ? ` para «${addSearch.trim()}»` : ''}.
+                          </div>
+                        ) : (
+                          <div className="flex flex-col">
+                            {addSearch.trim() === '' && (
+                              <div className="text-[10px] font-semibold tracking-wide uppercase text-text-secondary px-1.5 pb-1">
+                                Más usados en tus platos
+                              </div>
+                            )}
+                            {candidates.map((item) => {
+                              const used = usageCounts[item.id] ?? 0
+                              const already = existingChildIds.has(item.id)
+                              const cpb = costPerBase(item)
+                              const abbr = baseUnitAbbr(item)
+                              return (
+                                <button
+                                  key={item.id}
+                                  type="button"
+                                  onClick={() => pickItem(item)}
+                                  className="flex items-center gap-2 px-1.5 py-1.5 rounded-md hover:bg-card text-left transition-colors"
+                                >
+                                  <span className="flex-1 min-w-0">
+                                    <span className="block text-sm text-text-primary truncate">
+                                      {item.name}
+                                      {item.type === 'recipe' && (
+                                        <span className="text-text-secondary"> (preparación)</span>
+                                      )}
+                                    </span>
+                                    <span className="block text-[11px] text-text-secondary truncate font-mono">
+                                      {item.code ? `${item.code} · ` : ''}
+                                      {cpb > 0 ? `${formatEurPrecise(cpb)}/${abbr}` : 'sin coste'}
+                                      {already ? ' · ya en la receta' : ''}
+                                    </span>
+                                  </span>
+                                  {used > 0 && (
+                                    <span className="text-[11px] text-text-secondary flex-shrink-0">
+                                      en {used} plato{used !== 1 ? 's' : ''}
+                                    </span>
+                                  )}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Columna derecha: panel económico (azul Folvy) */}
@@ -668,7 +993,6 @@ export default function RecipeEditorPage({
                 Coste en vivo
               </div>
 
-              {/* Coste héroe (late al cambiar) */}
               <div className="text-xs text-white/60">Coste total</div>
               <div
                 className={
@@ -685,11 +1009,9 @@ export default function RecipeEditorPage({
 
               <div className="h-px bg-white/15 my-3.5" />
 
-              {/* Economía: FC + margen por canal (avanzado, vía menu_item_economics) */}
               {econLoading ? (
                 <div className="text-[11px] text-white/55">Calculando food cost…</div>
               ) : economics.length === 0 ? (
-                // Sin menu_item: este plato no está en ninguna carta todavía.
                 <div>
                   <div className="text-[11px] font-medium tracking-wide text-white/60 uppercase mb-2">
                     Food cost
@@ -711,7 +1033,6 @@ export default function RecipeEditorPage({
                     const name = brandNames[group.brandId] ?? `Marca ${group.brandId.slice(0, 6)}`
                     return (
                       <div key={group.brandId}>
-                        {/* Cabecera de marca (clic para plegar/desplegar) */}
                         <button
                           onClick={() =>
                             setCollapsedBrands((prev) => ({
@@ -747,7 +1068,6 @@ export default function RecipeEditorPage({
                           )}
                         </button>
 
-                        {/* Canales de la marca */}
                         {!collapsed && (
                           <div className="flex flex-col gap-2.5 pl-1">
                             {group.rows.map((e) => {

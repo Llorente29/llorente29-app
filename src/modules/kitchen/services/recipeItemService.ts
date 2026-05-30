@@ -181,6 +181,37 @@ export async function getRecipeItemById(id: string): Promise<RecipeItem | null> 
   return data ? rowToRecipeItem(data) : null
 }
 
+/**
+ * Conteo de uso de cada ingrediente: en cuántos PLATOS (type='dish') distintos de
+ * la cuenta aparece como línea. RPC kitchen_raw_usage_counts (server-side, con
+ * guard de tenancy). Se usa para ordenar el buscador de "añadir ingrediente"
+ * por lo más usado en la cocina real (E2a). Devuelve { child_item_id: count }.
+ */
+export async function getRawUsageCounts(accountId: string): Promise<Record<string, number>> {
+  requireSupabase()
+  // NOTA: kitchen_raw_usage_counts se creó el 30/05 y aún no está en los tipos
+  // autogenerados de Supabase (types/database.ts). Casteamos la llamada — pero
+  // OJO: hay que llamarla como member-access de `supabase!` (no asignarla a una
+  // variable suelta), o se pierde el `this` del cliente y el RPC devuelve vacío.
+  // TODO saneamiento: regenerar tipos de Supabase y quitar el cast.
+  const { data, error } = await (
+    supabase!.rpc as unknown as (
+      fn: string,
+      args: Record<string, unknown>,
+    ) => Promise<{ data: unknown; error: { message: string } | null }>
+  )('kitchen_raw_usage_counts', { p_account_id: accountId })
+
+  if (error) {
+    throw new Error(`Error obteniendo uso de ingredientes: ${error.message}`)
+  }
+  const rows = (data as { child_item_id: string; usage_count: number }[] | null) ?? []
+  const map: Record<string, number> = {}
+  for (const row of rows) {
+    map[row.child_item_id] = Number(row.usage_count)
+  }
+  return map
+}
+
 export async function recomputeRecipeItem(id: string): Promise<number> {
   requireSupabase()
   const { data, error } = await supabase!.rpc('kitchen_recompute_item', {

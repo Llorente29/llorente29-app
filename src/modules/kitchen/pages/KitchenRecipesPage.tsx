@@ -46,6 +46,28 @@ function formatEur(value: number | null | undefined): string {
   }).format(value)
 }
 
+// Normaliza para buscar: minúsculas + sin acentos/diacríticos.
+// "Plátano" → "platano", "Milanèsa" → "milanesa".
+function normalize(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+}
+
+// Búsqueda por PALABRAS (tokens), no por frase literal: el texto se parte en
+// palabras y TODAS deben aparecer en el campo objetivo (en cualquier orden).
+// Así "milanesa pol" encuentra "Milanesa de Pollo". Ignora acentos.
+function matchesTokens(query: string, ...fields: (string | null | undefined)[]): boolean {
+  const tokens = normalize(query).split(/\s+/).filter((t) => t !== '')
+  if (tokens.length === 0) return true
+  const haystack = fields
+    .filter((f): f is string => !!f)
+    .map((f) => normalize(f))
+    .join(' ')
+  return tokens.every((tok) => haystack.includes(tok))
+}
+
 // "Actualizado hace…" a partir de cost_updated_at. Devuelve null si no hay dato
 // (entonces simplemente no se muestra la línea).
 function formatRelative(iso: string | null): string | null {
@@ -120,17 +142,13 @@ export default function KitchenRecipesPage() {
     }
   }, [activeAccountId, accountsLoading])
 
-  // Búsqueda léxica en cliente (205 platos → instantáneo, sin recargar).
-  // Coincide por nombre, nombre alternativo o código.
+  // Búsqueda por palabras (tokens) en cliente, ignorando acentos. Coincide si
+  // todas las palabras escritas aparecen en nombre / nombre alternativo / código
+  // (en cualquier orden). "milanesa pol" → "Milanesa de Pollo".
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
+    const q = search.trim()
     if (q === '') return items
-    return items.filter((it) => {
-      const inName = it.name.toLowerCase().includes(q)
-      const inAlt = it.altName ? it.altName.toLowerCase().includes(q) : false
-      const inCode = it.code ? it.code.toLowerCase().includes(q) : false
-      return inName || inAlt || inCode
-    })
+    return items.filter((it) => matchesTokens(q, it.name, it.altName, it.code))
   }, [items, search])
 
   // ── Vista DETALLE: el editor del plato seleccionado ──
