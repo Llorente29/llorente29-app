@@ -485,6 +485,13 @@ Hoy SIN uso (estructura puesta para v1.1, cuando Folvy AI empiece a recordar voc
 Columnas: `id`, `account_id` (FK accounts), `user_id` (FK auth.users), `session_id` (text para agrupar turnos de una conversación), `surface` ('chat'|'aicard'|'background'|'opening'), `module` (text nullable), `message` (text, mensaje del usuario), `response` (text, respuesta del assistant), `tokens_in`, `tokens_out`, `duration_ms`, `tools_used` (text[]), `status` ('ok'|'error'|'partial'), `error_message` (text nullable), `created_at`.
 RLS: read = miembros del account; write = service-role (la Edge Function escribe vía service-role para tener visibilidad incluso si el JWT del usuario cambia entre tools).
 Base para métricas de coste por cuenta (§9.3 deuda 3: dashboard de uso + alertas).
+4.12 — Unidades base kitchen_unit (IDs reales, semilla GLOBAL account_id=null, verificados vs BBDD 30/05)
+Semilla global (account_id null) → listUnits({}) las trae para cualquier cuenta. Modelo: la base de cada dimensión se marca con is_base=true (NO existe columna base_unit_id; el baseUnitId del tipo cliente se deriva en el servicio). factor_to_base convierte a la unidad base de su dimensión.
+- Gramo `8fc3baae-04cc-4b2c-83cc-7fa0181e74e4` (`g`, weight, factor 1, **base**)
+- Kilogramo `2fb97155-28e7-4f1f-9776-101366467bc1` (`kg`, weight, factor 1000 → g)
+- Mililitro `953c626f-146b-484f-b3f5-47c42eeacc0e` (`ml`, volume, factor 1, **base**)
+- Litro `c4826b0d-73f1-4bd2-9f7f-fcf833f1b310` (`L`, volume, factor 1000 → ml)
+- Unidad `869711c3-eabd-4e95-92f2-555efaaba6b0` (`ud`, unit, factor 1, **base**)
 ---
 5. DECISIONES ARQUITECTÓNICAS CERRADAS
 5.1 — Sprint 1 (D1-D5, aprobadas 18-19/05 por Julio CEO)
@@ -914,7 +921,7 @@ Deuda implícita: Feedback de thumbs en mensajes sin persistencia. V1.1.
 `react-markdown ^10.1.0` versiones nuevas con breaking changes — gestionar con cuidado.
 Bundle principal supera 500KB gzipped — ver §10.5 deuda 2.
 **Añadido 28/05 noche**: `recipe_item.needs_review` existe en BBDD pero NO en ninguna migration del repo (drift confirmado por `git grep`). Migration retroactiva crítica en S1: `ALTER TABLE recipe_item ADD COLUMN IF NOT EXISTS needs_review boolean NOT NULL DEFAULT false`.
-## 13. PLAN DE CONSTRUCCIÓN DEL EDITOR (hoja de ruta viva) — añadido 30/05/2026
+13. PLAN DE CONSTRUCCIÓN DEL EDITOR (hoja de ruta viva) — añadido 30/05/2026
 
 > Anclado por petición explícita de Julio ("no quiero perder B, y si cambio de
 > conversación se pierden cosas"). El chat es volátil; esto no. Objetivo declarado:
@@ -922,7 +929,7 @@ Bundle principal supera 500KB gzipped — ver §10.5 deuda 2.
 > GOLEADA en este módulo. Cero deudas: ningún botón queda de adorno; cada tramo se
 > termina y se valida en build+navegador antes del siguiente.
 
-### 13.1 — FASE A: cimiento sólido (paridad + ventaja económica)
+13.1 — FASE A: cimiento sólido (paridad + ventaja económica)
 
 - **E1** · Editar cantidad inline + borrar línea + LATIDO (coste héroe y FC%/margen
   por canal pulsan en vivo al tocar un gramaje). ← tramo en curso 30/05.
@@ -937,7 +944,7 @@ Bundle principal supera 500KB gzipped — ver §10.5 deuda 2.
 - **E7** · line-clamp-2 en nombres largos + semáforos de completitud por línea
   (precio/medida, estilo Apicbase) + pulido final.
 
-### 13.2 — FASE B: la goleada (lo que NADIE tiene bien resuelto)
+13.2 — FASE B: la goleada (lo que NADIE tiene bien resuelto)
 
 - **G1** · IA CONVERSACIONAL EN EL LIENZO. Hablarle al escandallo abierto ("sube la carne
   a 90 g", "¿por qué está al 28% de FC?", "sustituto más barato del queso sin pasar de
@@ -962,7 +969,7 @@ FOTO→IA. La GOLEADA real sale de G1 (IA en lienzo) y G3 (modificadores fácile
 son refuerzos potentes; G6 es el barniz. E1-E7 es el CIMIENTO de la goleada, no una
 alternativa a ella: G1/G3/G4 no se pueden construir sobre un editor con botones muertos.
 
-### 13.3 — DECISIÓN A/B sobre la cantidad editable (CRÍTICA, 30/05) — NO PERDER
+13.3 — DECISIÓN A/B sobre la cantidad editable (CRÍTICA, 30/05) — NO PERDER
 
 **Hallazgo (leído de la BBDD, no supuesto):** las funciones `kitchen_recompute_item` y
 `kitchen_recipe_breakdown` calculan el coste con BRUTO: `COALESCE(quantity_gross,
@@ -984,6 +991,32 @@ visible divergiría del coste real.
 
 **Garantía:** B (merma completa) se ejecuta en E3 sí o sí. Queda escrita aquí para que
 ninguna sesión futura la pierda.
+
+14. ESTADO DE EJECUCIÓN DEL EDITOR — 30/05/2026 (qué llevamos construido)
+
+> Complementa al §13 (hoja de ruta). §13 dice QUÉ se va a construir; §14 dice QUÉ está YA construido y qué quedó decidido pero sin construir. REGLA DE CONTINUIDAD: este documento vive en el repo y se COMMITEA al cierre de cada tramo. folvy_v1_editor_escandallos_diseno.md NO está en el repo (vive en Project Knowledge/local) → diseño de detalle, no fuente de verdad operativa. DEUDA: meterlo a /docs y versionarlo.
+
+14.1 — Construido y desplegado (commits en origin/main)
+- Pantalla del editor: RecipeEditorPage.tsx (reemplaza KitchenRecipePage, que queda en disco sin uso). Cabecera con foto + 5 solapas (solo Escandallo construida), composición con barras de coste, panel económico azul multi-marca colapsable (FC/margen por canal, propias/cedidas). Backend de escandallos por FOTO (Edge Function extract-recipe, Opus visión) construido el 29/05.
+- L1 — Lista de platos: KitchenRecipesPage.tsx (NUEVO), contenedor LISTA+DETALLE por estado (selectedRecipeId). Ruta 'recetas' (module.tsx) monta este contenedor; el editor se monta dentro con onBack. Eliminado FALLBACK_RECIPE_ID. Tarjetas con foto/coste/estado/IA. Arreglo de layout del panel económico (lg:grid-cols-[minmax(0,1fr)_320px] + blindaje truncate/flex-shrink-0). Commit c80f097.
+- E1 — Editar cantidad inline (BRUTO EFECTIVO, Opción A de §13.3) + borrar línea con confirmación + LATIDO (coste héroe pulsa, línea en terracota, panel FC refresca vía econReloadTick). Update optimista con reversión. Commit 3aafe12.
+- E2a — Añadir ingrediente EXISTENTE: buscador inline ordenado por USO REAL (RPC kitchen_raw_usage_counts, "en N platos") + preview EXACTO de impacto en coste (unidad base, sin conversiones) + alta con latido. Búsqueda por TOKENS sin acentos en los DOS buscadores (lista de platos y buscador de alta): "milanesa pol" encuentra "Milanesa de Pollo". Commit 1dde910.
+- E2b — Crear ingrediente NUEVO al vuelo (sin coincidencia → "Crear «X»" / con coincidencias → "¿No está? Crear «X»"): mini-form inline (nombre + selector unidad base agrupado Peso/Volumen/Unidades + coste opcional) → createRecipeItem (raw, source='manual', needs_review=true, con autoría) → cae en el paso de cantidad de E2a. Construido y validado funcionalmente el 30/05. PENDIENTE DE COMMIT junto con la capa visual de needs_review (ver 14.3 punto 1).
+
+14.2 — Cambios en BBDD aplicados el 30/05 (con COMMIT en Supabase)
+- kitchen_recipe_breakdown(uuid) MODIFICADA (DROP+CREATE, cambió firma de retorno): ahora devuelve quantity = BRUTO EFECTIVO COALESCE(quantity_gross, quantity_net) (lo que cuesta y lo que se edita) + NUEVA columna quantity_net (neto, para E3). Resuelve la divergencia descrita en §13.3 (antes mostraba neto pero costeaba con bruto). El motor de coste NO se tocó.
+- kitchen_raw_usage_counts(p_account_id uuid) NUEVA (SECURITY DEFINER + guard current_user_is_admin_or_manager_of): devuelve {child_item_id, usage_count} = nº de platos type='dish' distintos donde se usa cada ingrediente. Alimenta el orden "más usados" del buscador de alta (E2a). Conteos reales verificados (Envoltorio 54, Cebolla 36, Tomate 34, Servilletas 32…).
+- Hallazgo de implementación: al llamar un RPC no incluido en los tipos autogenerados de Supabase, castear PERO llamando como member-access de supabase! (no asignar a variable suelta) o se pierde el this del cliente y el RPC devuelve vacío sin lanzar error. Y no silenciar con .catch(()=>({})): un fallo mudo esconde el problema. DEUDA: regenerar tipos de Supabase y quitar el cast.
+
+14.3 — Decisiones cerradas que AÚN NO están construidas (red de seguridad — NO PERDER)
+1. needs_review VISIBLE EN TODAS PARTES + PROPAGA AL PLATO (decisión Julio 30/05): un artículo con needs_review=true (creado por foto, albarán o a mano) debe verse marcado en CUALQUIER pantalla donde aparezca. Y un plato con CUALQUIER ingrediente needs_review es un plato INCOMPLETO → se marca "revisar" también el plato (propaga hacia arriba). Razón de Julio: "una deuda que se acumula y al final hace la empresa poco fiable". Estado de la capa visual: [HECHO] cabecera del editor (badge Validado/Revisar, pero refleja el needs_review del PLATO, no de sus ingredientes hijos). [PENDIENTE] línea del escandallo (hoy el punto ámbar refleja "línea no costeable" por falta de conversión, NO el needs_review del hijo; falta que kitchen_recipe_breakdown devuelva el needs_review del hijo y la línea lo muestre, distinguiendo "ingrediente sin terminar" de "línea no costeable"). [PENDIENTE] lista de Ingredientes (KitchenItemsPage no pinta needs_review). [PENDIENTE] lista de Platos (propagación). [PENDIENTE] buscador de alta (marcar candidatos needs_review). [PENDIENTE/BLOQUEADO] aviso ACTIVO al responsable: no existe el rol "responsable de catálogo" (deuda de roles); notificationsService.ts actual es solo empleados; mismo subsistema servirá para "artículo nuevo desde albarán". Hasta que exista el rol, el aviso queda preparado pero APAGADO (no fingir que avisa). SIGUIENTE TRAMO INMEDIATO: construir esta capa; cierra E2b de verdad.
+2. MERMA bruto/neto completa = E3 (Opción B de §13.3, COMPROMETIDA, no opcional).
+3. COMISIONES POR CANAL (revisar): hoy los 4 canales de un plato muestran FC y margen IDÉNTICOS (incl. Shop/local, que no debería llevar comisión de delivery) → las comisiones por canal NO están configuradas en la cuenta. Prerrequisito del latido predictivo G2.
+
+14.4 — Commits de referencia (origin/main)
+5c70fc2 pantalla escandallo · c80f097 lista L1 + navegación + panel responsive · 3aafe12 E1 · 1dde910 E2a + arreglos (RPC this + búsqueda por tokens) · 7e301d2 docs §13 · (pendiente) E2b + capa needs_review.
+
+Sección de estado de ejecución — actualizada 30/05/2026. Mantener al día y COMMITEAR al cierre de cada tramo.
 
 ---
 Documento actualizado: 28 de mayo de 2026 (noche) — DISEÑO COMPLETO V1 EDITOR DE ESCANDALLOS cerrado conceptualmente (8 decisiones de producto + 5 catálogos semilla + reconocimiento BBDD + diagnóstico real de 34 needs_review con CSV + 12 hallazgos competencia mundial integrados + diseño UX completo del lienzo y todas las pantallas + 3 prompts sistema modos IA + decisión Modificadores M1-M4 al 100% con confirmación operativa de Last.app). Próximo: saneamiento de commits + S1 (schema migration) + S2 (UI banner needs_review) + S_MODIFIERS (parsing histórico + actualizar conector). Detalle UX completo en documento maestro nuevo `folvy_v1_editor_escandallos_diseno.md`. Esta es la sesión más densa del proyecto hasta la fecha en términos de decisiones de diseño.
