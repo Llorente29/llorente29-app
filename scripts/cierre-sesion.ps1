@@ -1,17 +1,17 @@
-<#
-  cierre-sesion.ps1 — Sistema de cierre de sesión Folvy
-  ------------------------------------------------------
-  Verifica los 7 pasos de cierre (ver docs/CIERRE_SESION.md).
-  Uso, desde la raíz del repo:   .\scripts\cierre-sesion.ps1
-  Opcional:                      .\scripts\cierre-sesion.ps1 -SkipBuild   (solo si NO tocaste código)
-
-  Codigo de colores:
-    VERDE  = paso superado automaticamente.
-    AMBAR  = requiere tu confirmacion consciente (el script no puede saber tu intencion).
-    ROJO   = bloquea el cierre. Arreglalo y vuelve a pasar el script.
-
-  El script NO modifica nada del repo: solo lee, ejecuta build, y te pregunta.
-#>
+# cierre-sesion.ps1 - Sistema de cierre de sesion Folvy
+# ------------------------------------------------------
+# Verifica los 7 pasos de cierre (ver docs/CIERRE_SESION.md).
+# Uso, desde la raiz del repo:   .\scripts\cierre-sesion.ps1
+# Opcional:                      .\scripts\cierre-sesion.ps1 -SkipBuild   (solo si NO tocaste codigo)
+#
+# Codigo de colores:
+#   VERDE = paso superado automaticamente.
+#   AMBAR = requiere tu confirmacion consciente (el script no puede saber tu intencion).
+#   ROJO  = bloquea el cierre. Arreglalo y vuelve a pasar el script.
+#
+# El script NO modifica nada del repo: solo lee, ejecuta build, y te pregunta.
+# IMPORTANTE: este fichero es ASCII puro a proposito (sin tildes ni guiones largos),
+# para correr identico en cualquier consola Windows PowerShell 5.1.
 
 param(
   [switch]$SkipBuild
@@ -48,13 +48,13 @@ try {
   exit 1
 }
 
-Write-Host "=========================================" -ForegroundColor White
-Write-Host " CIERRE DE SESION FOLVY — 7 pasos" -ForegroundColor White
-Write-Host " Repo: $root" -ForegroundColor DarkGray
-Write-Host "=========================================" -ForegroundColor White
+Write-Host "========================================="  -ForegroundColor White
+Write-Host " CIERRE DE SESION FOLVY - 7 pasos"          -ForegroundColor White
+Write-Host " Repo: $root"                                -ForegroundColor DarkGray
+Write-Host "========================================="  -ForegroundColor White
 
 # ---------------------------------------------------------------------------
-# PASO 1 — Working tree limpio o pendientes anotados
+# PASO 1 - Working tree limpio o pendientes anotados
 # ---------------------------------------------------------------------------
 Write-Head 1 "Working tree limpio / pendientes anotados"
 $status = git status --porcelain
@@ -72,7 +72,7 @@ if ([string]::IsNullOrWhiteSpace($status)) {
 }
 
 # ---------------------------------------------------------------------------
-# PASO 2 — El build pasa
+# PASO 2 - El build pasa
 # ---------------------------------------------------------------------------
 Write-Head 2 "El build pasa (npm run build)"
 if ($SkipBuild) {
@@ -84,17 +84,24 @@ if ($SkipBuild) {
   }
 } else {
   Write-Host "  Ejecutando npm run build (puede tardar)..." -ForegroundColor DarkGray
-  npm run build *> "$env:TEMP\folvy_build.log"
-  if ($LASTEXITCODE -eq 0) {
+  $buildLog = Join-Path $env:TEMP "folvy_build.log"
+  # Robusto en PS 5.1: NO usar *> (vite escribe avisos por stderr y eso abortaria el
+  # script con ErrorActionPreference=Stop). Lanzamos via cmd y decidimos SOLO por exit code.
+  $prevEAP = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  cmd /c "npm run build > `"$buildLog`" 2>&1"
+  $buildExit = $LASTEXITCODE
+  $ErrorActionPreference = $prevEAP
+  if ($buildExit -eq 0) {
     Ok "Build limpio (exit 0)."
   } else {
-    [void]$fails.Add("Paso 2: el build FALLA. Revisa $env:TEMP\folvy_build.log. No se cierra con el build roto.")
-    Fail "El build falla. Log en $env:TEMP\folvy_build.log"
+    [void]$fails.Add("Paso 2: el build FALLA (exit $buildExit). Revisa $buildLog. No se cierra con el build roto.")
+    Fail "El build falla (exit $buildExit). Log en $buildLog"
   }
 }
 
 # ---------------------------------------------------------------------------
-# PASO 3 — Todo commiteado y con push a origin/main
+# PASO 3 - Todo commiteado y con push a origin/main
 # ---------------------------------------------------------------------------
 Write-Head 3 "Todo commiteado y con push a origin/main"
 git fetch origin main -q 2>$null
@@ -119,7 +126,7 @@ if ([string]::IsNullOrWhiteSpace($counts)) {
 }
 
 # ---------------------------------------------------------------------------
-# PASO 4 — CONTEXTO_CLAUDE.md actualizado y commiteado
+# PASO 4 - CONTEXTO_CLAUDE.md actualizado y commiteado
 # ---------------------------------------------------------------------------
 Write-Head 4 "CONTEXTO_CLAUDE.md actualizado y commiteado"
 $ctxFile = "CONTEXTO_CLAUDE.md"
@@ -149,7 +156,7 @@ if (-not (Test-Path $ctxFile)) {
 }
 
 # ---------------------------------------------------------------------------
-# PASO 5 — Cambios de BBDD reflejados en CONTEXTO
+# PASO 5 - Cambios de BBDD reflejados en CONTEXTO
 # ---------------------------------------------------------------------------
 Write-Head 5 "Cambios de BBDD reflejados en CONTEXTO"
 if (Confirm-Step "Hubo cambios de BBDD esta sesion (funciones SQL, schema, RPCs)?") {
@@ -166,7 +173,7 @@ if (Confirm-Step "Hubo cambios de BBDD esta sesion (funciones SQL, schema, RPCs)
 }
 
 # ---------------------------------------------------------------------------
-# PASO 6 — Sin corrupcion / sobre-escapado en los .md
+# PASO 6 - Sin corrupcion / sobre-escapado en los .md
 # ---------------------------------------------------------------------------
 Write-Head 6 "Sin corrupcion / sobre-escapado en los .md"
 $mdFiles = git ls-files '*.md'
@@ -194,7 +201,7 @@ if ($hits.Count -eq 0) {
 }
 
 # ---------------------------------------------------------------------------
-# PASO 7 — Prompt de arranque de la proxima sesion escrito
+# PASO 7 - Prompt de arranque de la proxima sesion escrito
 # ---------------------------------------------------------------------------
 Write-Head 7 "Prompt de arranque de la proxima sesion escrito"
 if (Confirm-Step "Esta escrito en CONTEXTO cual es el PASO 1 de la proxima sesion?") {
@@ -208,20 +215,20 @@ if (Confirm-Step "Esta escrito en CONTEXTO cual es el PASO 1 de la proxima sesio
 # VEREDICTO
 # ---------------------------------------------------------------------------
 Write-Host ""
-Write-Host "=========================================" -ForegroundColor White
+Write-Host "========================================="  -ForegroundColor White
 if ($fails.Count -eq 0) {
-  Write-Host " CIERRE OK — la sesion esta cerrada de verdad." -ForegroundColor Green
+  Write-Host " CIERRE OK - la sesion esta cerrada de verdad." -ForegroundColor Green
   if ($warns.Count -gt 0) {
     Write-Host " (con $($warns.Count) aviso(s) que revisaste):" -ForegroundColor Yellow
     $warns | ForEach-Object { Write-Host "   - $_" -ForegroundColor Yellow }
   }
   Write-Host " La proxima sesion arranca sin perdida." -ForegroundColor Green
-  Write-Host "=========================================" -ForegroundColor White
+  Write-Host "========================================="  -ForegroundColor White
   exit 0
 } else {
-  Write-Host " NO CERRAR — faltan $($fails.Count) cosa(s):" -ForegroundColor Red
+  Write-Host " NO CERRAR - faltan $($fails.Count) cosa(s):" -ForegroundColor Red
   $fails | ForEach-Object { Write-Host "   - $_" -ForegroundColor Red }
   Write-Host " Arreglalo y vuelve a pasar el script." -ForegroundColor Red
-  Write-Host "=========================================" -ForegroundColor White
+  Write-Host "========================================="  -ForegroundColor White
   exit 1
 }
