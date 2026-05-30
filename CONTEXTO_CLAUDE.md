@@ -914,6 +914,77 @@ Deuda implícita: Feedback de thumbs en mensajes sin persistencia. V1.1.
 `react-markdown ^10.1.0` versiones nuevas con breaking changes — gestionar con cuidado.
 Bundle principal supera 500KB gzipped — ver §10.5 deuda 2.
 **Añadido 28/05 noche**: `recipe_item.needs_review` existe en BBDD pero NO en ninguna migration del repo (drift confirmado por `git grep`). Migration retroactiva crítica en S1: `ALTER TABLE recipe_item ADD COLUMN IF NOT EXISTS needs_review boolean NOT NULL DEFAULT false`.
+## 13. PLAN DE CONSTRUCCIÓN DEL EDITOR (hoja de ruta viva) — añadido 30/05/2026
+
+> Anclado por petición explícita de Julio ("no quiero perder B, y si cambio de
+> conversación se pierden cosas"). El chat es volátil; esto no. Objetivo declarado:
+> NO solo igualar a la competencia (Apicbase, Meez, tSpoonLab, R365) sino GANAR POR
+> GOLEADA en este módulo. Cero deudas: ningún botón queda de adorno; cada tramo se
+> termina y se valida en build+navegador antes del siguiente.
+
+### 13.1 — FASE A: cimiento sólido (paridad + ventaja económica)
+
+- **E1** · Editar cantidad inline + borrar línea + LATIDO (coste héroe y FC%/margen
+  por canal pulsan en vivo al tocar un gramaje). ← tramo en curso 30/05.
+- **E2** · Añadir ingrediente con buscador inteligente (desambiguación proveedor/formato
+  estilo Apicbase) + crear raw nuevo al vuelo.
+- **E3** · Unidad editable + BRUTO/NETO + MERMA por línea (ver §13.3, la "Opción B").
+- **E4** · Arrastrar para reordenar líneas (recipe_line.position).
+- **E5** · Subir foto real del plato (Supabase Storage → kitchenPhotoUrl). Cablear el
+  botón de foto, hoy muerto. Aquí también se engancha la entrada FOTO→IA ya existente.
+- **E6** · Archivar plato (borrado lógico reversible vía archiveRecipeItem; NUNCA borrado
+  duro de un dish con menu_item/ventas). Esto es el "eliminar" hecho bien.
+- **E7** · line-clamp-2 en nombres largos + semáforos de completitud por línea
+  (precio/medida, estilo Apicbase) + pulido final.
+
+### 13.2 — FASE B: la goleada (lo que NADIE tiene bien resuelto)
+
+- **G1** · IA CONVERSACIONAL EN EL LIENZO. Hablarle al escandallo abierto ("sube la carne
+  a 90 g", "¿por qué está al 28% de FC?", "sustituto más barato del queso sin pasar de
+  25%") y verlo reconstruirse con el coste latiendo. EL GOLPE PRINCIPAL. Depende de E1-E2.
+  Prompts ya diseñados en §6.4 y §12.
+- **G2** · LATIDO PREDICTIVO. Umbral por canal + aviso "a pérdida en Glovo" mientras editas
+  + sugerencia de PVP que recupera el margen objetivo. Edición con consecuencia, no solo
+  reactiva.
+- **G3** · MODIFICADORES FÁCILES para cocinero no técnico, con coste/margen ponderado por
+  el MIX REAL vendido (bills / sale.raw_products). Depende de E1-E3. Supera a tSpoonLab/R365
+  (rígidos y técnicos). Deuda estratégica ya registrada en CONTEXTO §10.2.
+- **G4** · AUDITORÍA VISUAL EN PASE enganchada al plato (foto del emplatado → semáforo IA
+  contra referencia). Nadie lo tiene EN PLATO (Winnow lo hace en cubo de merma). Diseño en §7.
+- **G5** · SUB-RECETAS/PREPARACIONES con coste vivo encadenado (cambiar "Salsa Birria" sube
+  solo en los N platos que la usan). El modelo recipe_line (parent/child) ya lo soporta.
+- **G6** · BARNIZ CHEF: modo noche cocina (§9), vista pase a pantalla completa (§5.7), voz
+  manos libres.
+
+**Lectura honesta del competitivo (registrada para no engañarnos):** E1-E7 nos pone a la
+PAR en lo funcional y ya POR DELANTE en lo económico (latido multi-canal) y en la entrada
+FOTO→IA. La GOLEADA real sale de G1 (IA en lienzo) y G3 (modificadores fáciles); G2/G4/G5
+son refuerzos potentes; G6 es el barniz. E1-E7 es el CIMIENTO de la goleada, no una
+alternativa a ella: G1/G3/G4 no se pueden construir sobre un editor con botones muertos.
+
+### 13.3 — DECISIÓN A/B sobre la cantidad editable (CRÍTICA, 30/05) — NO PERDER
+
+**Hallazgo (leído de la BBDD, no supuesto):** las funciones `kitchen_recompute_item` y
+`kitchen_recipe_breakdown` calculan el coste con BRUTO: `COALESCE(quantity_gross,
+quantity_net)`. PERO `kitchen_recipe_breakdown` DEVUELVE EN PANTALLA EL NETO
+(`quantity := v_line.quantity_net`). Datos reales: 869 líneas, 860 con quantity_gross,
+134 con gross ≠ net (merma real). Es decir: hoy el cocinero VE el neto pero el coste sale
+del BRUTO → si E1 editara el neto, el coste no se movería (latido muerto) y el número
+visible divergiría del coste real.
+
+**Decisión tomada (Julio confirmó A, con B garantizada en E3):**
+- **E1 = Opción A:** el número editable es la CANTIDAD QUE CUESTA (bruto efectivo). Editar
+  escribe en `quantity_gross` (si no existía, lo crea). Lo que ves = lo que cuesta = lo que
+  editas. El latido funciona de verdad. Requiere ajustar `kitchen_recipe_breakdown` para que
+  devuelva el bruto efectivo (y deje el neto disponible para E3).
+- **E3 = Opción B (COMPROMETIDA, no opcional):** capa completa de merma — bruto + neto + %
+  merma acoplados (decidir el "ancla" al editar), con mockup propio y contraste Apicbase/Meez.
+  B NO es una versión mejor de A; A es el cimiento sobre el que B se construye bien. Saltarse
+  el orden daría una merma peor y un latido frágil.
+
+**Garantía:** B (merma completa) se ejecuta en E3 sí o sí. Queda escrita aquí para que
+ninguna sesión futura la pierda.
+
 ---
 Documento actualizado: 28 de mayo de 2026 (noche) — DISEÑO COMPLETO V1 EDITOR DE ESCANDALLOS cerrado conceptualmente (8 decisiones de producto + 5 catálogos semilla + reconocimiento BBDD + diagnóstico real de 34 needs_review con CSV + 12 hallazgos competencia mundial integrados + diseño UX completo del lienzo y todas las pantallas + 3 prompts sistema modos IA + decisión Modificadores M1-M4 al 100% con confirmación operativa de Last.app). Próximo: saneamiento de commits + S1 (schema migration) + S2 (UI banner needs_review) + S_MODIFIERS (parsing histórico + actualizar conector). Detalle UX completo en documento maestro nuevo `folvy_v1_editor_escandallos_diseno.md`. Esta es la sesión más densa del proyecto hasta la fecha en términos de decisiones de diseño.
 Único documento de contexto. Próxima actualización: al cierre de la próxima sesión técnica (regenerar §1).
