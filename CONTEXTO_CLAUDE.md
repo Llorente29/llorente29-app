@@ -1210,6 +1210,103 @@ tramo estrella. G3 modificadores tras Bloque2. Metodo: benchmark antes de
 disenar, paquete ficheros de entrada, BBDD primero, sin boton muerto, cierre
 incremental. Principio rector: golear en cada campo o deuda explicita.
 
+14.12 - SESION 30/05 (noche). COMMIT 18b24e5 pusheado (15 ficheros, 3624 ins).
+Front desplegado a produccion via push (Vercel app.folvy.app). Webhook ya
+estaba corregido en prod desde la tarde.
+
+HECHO:
+- E5 VISUAL CERRADO (funcional): cabecera del editor rehecha. Fuera la banda
+  hero de 150px (decapitaba foto 1:1). Ahora cabecera COMPACTA con vida: foto
+  96px (w-24 h-24) sobre bg-terracota-bg (toque calido), titulo + tipo/codigo +
+  chips (IA/Revisar/Validado) al lado y legibles sobre claro, boton visible
+  "Ver / cambiar foto", lightbox al pulsar la foto (estado photoLightbox, cierra
+  con X o clic fuera). Decision de criterio (experto): no hero permanente en
+  pantalla de costes (Apicbase pone la foto en pestana "Image" propia, no domina
+  el area de trabajo); ni miniatura muerta sobre blanco. Punto medio.
+- E5 ARREGLO LISTADO: KitchenRecipesPage mostraba la miniatura ROTA (hacia
+  <img src={path}> con el path crudo; el bucket es privado -> no servible). Bug
+  introducido por E5 (guardar PATH no URL). Arreglado: useEffect resuelve URLs
+  firmadas en lote (getDishPhotoUrl, misma fuente de verdad del bucket) solo
+  para platos con foto; estado photoUrls Record<id,url>.
+- DEUDA VISUAL anotada (Julio, decidida posponer): la banda de cabecera sigue
+  "sosa, sin alegria". NO retocar aislada -> hacerlo en la pasada de pulido de
+  plantilla (E7) o cuando se toque la plantilla por otra cosa.
+- LAST.APP webhook map_source: bug del CHECK constraint corregido (admitia
+  'pos' ademas de unmapped/manual/ai/fuzzy; la funcion escribia 'webhook' que
+  violaba el constraint). mapSourceFromVia(via): 'pos' (match id determinista),
+  'fuzzy' (nombre), 'unmapped'. VERIFICADO en prod: 2 ventas nuevas entraron
+  solas (Glovo 12,11; Uber 19,50), todas las lineas por_id. Julio decidio NO
+  recuperar los 13 tab:closed perdidos del rato del bug (datos inutiles). NO se
+  usaron API keys de Last/tspoon (innecesarias: el evento trae todo embebido).
+  reprocess-webhook-log.mjs commiteado pero NO usado.
+- E8 PASOS INTELIGENTES (tramo nuevo, absorbe E4). Diseno completo aprobado en
+  folvy_e8_pasos_inteligentes_diseno.md. Es GOLEADA real: benchmark verifica que
+  meez/Apicbase tienen los pasos como TEXTO MUERTO (no reconocen ingredientes,
+  no avisan faltantes, no ordenan por elaboracion). El sector premium converge
+  hacia "Cook Mode" con per-step ingredients = justo nuestro puente. Casi toda
+  la inteligencia es GRATIS (matching de texto local), no IA.
+  * E8.1 HECHO: tabla puente recipe_item_step_line (N:N paso<->linea). Cols:
+    id, account_id (FK accounts CASCADE), step_id (FK recipe_item_step CASCADE),
+    line_id (FK recipe_line CASCADE), created_at. UNIQUE(step_id,line_id).
+    3 indices. RLS = patron EXACTO de recipe_line (belongs_to_account select;
+    current_user_is_admin_or_manager_of insert/update/delete). 4 politicas. La
+    tabla puente lleva account_id propio (recipe_item_step NO tiene account_id,
+    cuelga de recipe_item_id) -> al insertar vinculo se aporta desde recipe_line.
+  * E8.2 HECHO: types:gen regenerado (recipe_item_step_line tipada, deuda de
+    database.ts SALDADA). Tipos en kitchen.ts: RecipeItemStep (+Insert/Update,
+    SIN accountId; campo calculado lineIds:string[]) + Row* del paso y del
+    puente. recipeStepService.ts nuevo: listStepsByRecipe (pasos+lineIds via
+    join al puente, no N+1), createStep, updateStep, deleteStep, reorderSteps
+    (reescribe position 0..n-1), setStepLines(stepId,lineIds,accountId)
+    (sincroniza puente, idempotente por UNIQUE). Patron calcado de
+    recipeLineService.
+  * E8.3 HECHO: solapa "Receta" del editor deja de ser placeholder. Componente
+    NUEVO RecipeStepsTab.tsx (la UI vive aqui, NO infla RecipeEditorPage; este
+    solo cambia 2 lineas: import + render de la solapa). CRUD de pasos: crear,
+    editar (texto/tiempo min/temp C, guarda onBlur), borrar (confirm inline),
+    reordenar (flechas up/down, cero dependencias). DOS MODOS: VER (lectura,
+    receta de corrido, mobile-first) y EDITAR (formularios). Por defecto: VER si
+    hay pasos, EDITAR si vacio. Verificado en prod con 7 pasos reales.
+
+PENDIENTE INMEDIATO (proxima sesion). ORDEN INNEGOCIABLE (Julio: que no se
+pierda manana). Julio elige cual de los dos primero al abrir:
+- R1 - RESPONSIVE DEL SHELL (PRIORITARIO). Capturas en movil/tablet (390-712px)
+  muestran que el contenido se sale por la derecha y el SIDEBAR (Folvy Kitchen:
+  Ingredientes/Recetas/Rentabilidad/Ingenieria) NO se colapsa. NO es de la
+  solapa Receta: es el LAYOUT GLOBAL (Shell) el que no es responsive. Regla de
+  Julio: toda la app debe verse en cualquier dispositivo (tablet = caso general
+  de cocina, no un cliente concreto). TOCA EL SHELL/LAYOUT -> requiere PERMISO
+  EXPLICITO de Julio (posible App.tsx, que NO se toca sin permiso). Diseno
+  propio: colapso del sidebar, boton hamburguesa, breakpoints, verificar pantalla
+  por pantalla. Pedir los ficheros de layout y verlos antes de tocar.
+- E8.4 - RESALTADO EN VIVO + VINCULO (pieza central, CERO IA). Al escribir el
+  texto del paso, matching de texto local (reusar normalize/matchesTokens de
+  KitchenRecipesPage) detecta los ingredientes del escandallo (childName de
+  RecipeLineBreakdown) y los resalta; al detectarlos crea/actualiza el vinculo
+  via setStepLines. El resaltado PROPONE, Pamela MANDA (vinculo editable, chip
+  con X). Esto LLENA el puente y desbloquea E8.5/E8.6.
+
+ORDEN E8 (tras E8.4): E8.5 aviso faltantes (gratis, comparar 2 listas) ->
+E8.6 orden-por-elaboracion del escandallo (absorbe E4: manual gana, luego
+elaboracion, luego coste) -> E8.7 foto por paso (recipe_item_step.photo_url ya
+existe; reusar recipePhotoService con subcarpeta {accountId}/steps/) -> E8.8
+borrador IA de pasos (UNA llamada al pulsar boton, guardada, nunca en bucle) ->
+G9 COOK MODE (slideshow servicio pantalla completa, un paso a la vez, timer por
+paso, ingredientes por paso) - va DESPUES de E8.4 para nacer con ingredientes
+por paso (no es deuda aparcada, es secuencia para no nacer cojo).
+
+DEUDA VIVA (30/05 noche):
+- ROTAR/REVOCAR: la service_role key y tokens que Julio pego en el chat hoy
+  (seguridad). Aun pendiente.
+- Barniz visual banda cabecera editor (con E7 / pulido plantilla).
+- Medidor coste IA por cuenta (prerequisito 2o cliente, HIGH).
+- code-splitting bundle ~2.4MB gzip 645KB (React.lazy).
+- AI provider abstraction (dependencia total de Anthropic).
+- processed=true del webhook = "handler corrio", no "inserto venta" (cosmetica).
+- resolve_lastapp_line fuera de control de versiones.
+
+DOCS NUEVOS: folvy_e8_pasos_inteligentes_diseno.md (diseno completo E8, aprobado).
+
 ---
 Documento actualizado: 28 de mayo de 2026 (noche) — DISEÑO COMPLETO V1 EDITOR DE ESCANDALLOS cerrado conceptualmente (8 decisiones de producto + 5 catálogos semilla + reconocimiento BBDD + diagnóstico real de 34 needs_review con CSV + 12 hallazgos competencia mundial integrados + diseño UX completo del lienzo y todas las pantallas + 3 prompts sistema modos IA + decisión Modificadores M1-M4 al 100% con confirmación operativa de Last.app). Próximo: saneamiento de commits + S1 (schema migration) + S2 (UI banner needs_review) + S_MODIFIERS (parsing histórico + actualizar conector). Detalle UX completo en documento maestro nuevo `folvy_v1_editor_escandallos_diseno.md`. Esta es la sesión más densa del proyecto hasta la fecha en términos de decisiones de diseño.
 Único documento de contexto. Próxima actualización: al cierre de la próxima sesión técnica (regenerar §1).
