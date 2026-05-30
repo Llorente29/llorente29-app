@@ -32,6 +32,7 @@ Marcar SIEMPRE el contexto operativo con prefijo explícito: 🖥️ PowerShell 
 NO insistir en cerrar la sesión. Julio decide cuándo. Recomendar cierre máximo UNA vez; si se rechaza, no se repite. Si Claude detecta riesgo o fatiga lo dice una vez con argumentos y para.
 Las preguntas con botones (`ask_user_input`) no le llegan bien a Julio en su cliente. Preguntar siempre en prosa.
 Al guiar paso a paso, Claude debe indicar SIEMPRE de forma explícita cada acción operativa: cuándo hacer COMMIT vs ROLLBACK, cuándo ejecutar npm run build, git grep, commit, push, o reiniciar el dev server. No asumir que el usuario ya las hizo; marcarlas él. Es responsabilidad de Claude.
+CIERRE DE SESIÓN (sistema obligatorio, creado 30/05): cuando Julio decida cerrar una sesión técnica, el cierre NO depende de la memoria de nadie — se ejecuta `.\scripts\cierre-sesion.ps1` y no se da por cerrada hasta que el script dé CIERRE OK (todo verde). Los 7 pasos y sus criterios están en docs/CIERRE_SESION.md. Esto NO contradice la regla de "no insistir en cerrar": Claude no fuerza el cierre; pero una vez Julio lo decide, el guion se cumple entero.
 ---
 1. ESTADO VIVO ⟵ se regenera cada sesión
 
