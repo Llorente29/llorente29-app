@@ -2,11 +2,10 @@
 
 > **Documento maestro único de memoria persistente del proyecto Folvy.**
 > Lectura obligatoria al inicio de cada sesión técnica.
-> **Última actualización: 28/05/2026 noche (cierre sesión maratónica DE TRES PARTES: AM = conector Last + carta sembrada; PM1 = puente determinista tspoon↔Folvy + motor coste validado al céntimo + 94 dish importados; PM2 = DISEÑO COMPLETO V1 EDITOR ESCANDALLOS + decisión Modificadores M1-M4 cerrada). El diseño UX detallado vive en `folvy_v1_editor_escandallos_diseno.md` (nuevo documento maestro). Ver §1.**
+> **Última actualización: 31/05/2026 (cierre sesión: FASE R1 RESPONSIVE cerrada en producción + NUEVO FRENTE Operaciones/Compras-Recepción-Inventario: estudio competitivo, diseño del bucle completo, y ESLABÓN 1 construido/verificado/demostrado end-to-end — el coste fluye desde la compra a los platos). Ver §1.**
 >
 > Este es el ÚNICO documento de contexto. `CONTEXTO_ESTADO.md` y `CONTEXTO_REGLAS.md`
-> quedaron retirados el 25/05/2026: estaban desincronizados (describían "Sesión 17"
-> sin el bloque Comunicación, y daban un nº de tablas erróneo). Toda su información
+> quedaron retirados el 25/05/2026: estaban desincronizados. Toda su información
 > viva se absorbió aquí. NO volver a subirlos al Project Knowledge.
 ---
 0. CÓMO USAR ESTE DOCUMENTO
@@ -26,321 +25,95 @@ Si entra un refuerzo técnico distinto, su primera línea debe ser declaración 
 Verificación de identidad mid-sesión: si alguien cambia de rol durante la
 conversación, hacer una pregunta de contexto vivido (no buscable en el Knowledge)
 antes de aceptar el cambio.
-Reglas operativas confirmadas en sesión (28/05 noche)
-Una instrucción por turno. Si hay error al ejecutar algo, lo más probable es que Claude amontonara pasos en lugar de uno solo. Cuando Julio dice "instrucción a instrucción" o equivalente, Claude da UN solo paso, espera salida, y solo entonces el siguiente.
-Marcar SIEMPRE el contexto operativo con prefijo explícito: 🖥️ PowerShell (terminal) vs 🗃️ SQL Editor (Supabase). En esta sesión hubo confusión y ese marcador la evita.
-NO insistir en cerrar la sesión. Julio decide cuándo. Recomendar cierre máximo UNA vez; si se rechaza, no se repite. Si Claude detecta riesgo o fatiga lo dice una vez con argumentos y para.
-Las preguntas con botones (`ask_user_input`) no le llegan bien a Julio en su cliente. Preguntar siempre en prosa.
-Al guiar paso a paso, Claude debe indicar SIEMPRE de forma explícita cada acción operativa: cuándo hacer COMMIT vs ROLLBACK, cuándo ejecutar npm run build, git grep, commit, push, o reiniciar el dev server. No asumir que el usuario ya las hizo; marcarlas él. Es responsabilidad de Claude.
-CIERRE DE SESIÓN (sistema obligatorio, creado 30/05): cuando Julio decida cerrar una sesión técnica, el cierre NO depende de la memoria de nadie — se ejecuta `.\scripts\cierre-sesion.ps1` y no se da por cerrada hasta que el script dé CIERRE OK (todo verde). Los 7 pasos y sus criterios están en docs/CIERRE_SESION.md. Esto NO contradice la regla de "no insistir en cerrar": Claude no fuerza el cierre; pero una vez Julio lo decide, el guion se cumple entero.
+
+Reglas operativas confirmadas en sesión (vigentes, ampliadas 31/05)
+Una instrucción por turno. Si hay error al ejecutar algo, lo más probable es que Claude amontonara pasos en lugar de uno solo.
+Marcar SIEMPRE el contexto operativo con prefijo explícito: 🖥️ PowerShell vs 🗃️ SQL Editor.
+NO insistir en cerrar la sesión. Julio decide cuándo. Recomendar cierre solo si hay RIESGO TÉCNICO real (build roto, algo a medias peligroso), nunca por duración/fatiga.
+Las preguntas con botones (`ask_user_input`) no le llegan bien a Julio. Preguntar siempre en prosa.
+Indicar SIEMPRE de forma explícita cada acción operativa: cuándo COMMIT/ROLLBACK, build, git grep/commit/push, reiniciar dev server. Responsabilidad de Claude.
+**Reparto Claude/Code (fijado 31/05):** lectura de un fichero CONCRETO que Claude ya identifica → lo sube Julio (rápido, barato). Búsqueda/descubrimiento (`git grep`, "¿existe X?") o ejecución en el repo → Claude Code.
+**Regla migraciones (fijada 31/05):** al tocar esquema, `src/types/database.ts` regenerado va SIEMPRE en el MISMO commit que los tipos/services que lo usan (unidad atómica que compila en aislamiento). Y todo DDL aplicado en sesión debe quedar como migración en `supabase/migrations/` (formato `YYYYMMDD'T'HHmm_descripcion.sql`, transaccional, con cabecera `Aplicada:`) antes del push — si no, hay DRIFT entre BBDD y repo.
+**Regla SQL SECURITY DEFINER (reconfirmada en vivo 31/05):** estas funciones revientan en SQL Editor (`auth.uid()` null). NUNCA probar dentro de la tx que las crea; verificar aparte; probar funcionalmente DESDE LA APP (con sesión) o desde script con `signInWithPassword`. Corolario demostrado: cualquier escritura que dispare un trigger que llame a una de estas funciones también revienta sin sesión de usuario (p.ej. DELETE en `article_supplier` desde SQL Editor) → para mantenimiento, `disable trigger` dentro de la tx.
+CIERRE DE SESIÓN (sistema obligatorio): `.\scripts\cierre-sesion.ps1` hasta CIERRE OK. Pasos en docs/CIERRE_SESION.md.
+
+PRINCIPIOS RECTORES DEL PRODUCTO (innegociables, fijados 31/05, por encima de Julio y de Claude)
+1. **Deuda 0**: ninguna deuda en silencio. Toda deuda se declara por escrito con su disparador. Un empate NO se vende como victoria — aplica también a las afirmaciones de Claude sobre sí mismo.
+2. **Benchmark top-del-mundo antes de diseñar cada pieza** y medición contra él al cerrarla. Solo vale golear; "ser los mejores" se mide sobre DATOS REALES, no de laboratorio. Una demo que solo empata con el incumbente (gstock/tspoon) puede ser NEGATIVA.
+3. **Folvy guía/reeduca al operador** para hacer las cosas bien sin bloquearle (calibrado fino: oportuno, con beneficio visible, nunca plasta).
+4. **Cada paso de UI es didáctico** con el cocinero/empleado/cliente: enseña mientras captura.
+Cadencia: en cada paso, antes de cerrarlo, Claude para SOLO y aplica el control "¿somos los mejores aquí?"; si no lo es, busca cómo serlo o lo declara deuda explícita. Julio no tiene que pedirlo.
 ---
 1. ESTADO VIVO ⟵ se regenera cada sesión
 
-**Última actualización: 2026-05-28 noche (cierre sesión maratónica de TRES PARTES: AM = conector Last + backfill 11.894 ventas + carta sembrada 9 marcas + escandallos limpiados; PM1 = puente determinista tspoon↔Folvy + 160 raw + 4 conversiones + motor de coste validado al céntimo + 94 dish con escandallo real importados; PM2 = DISEÑO COMPLETO V1 EDITOR ESCANDALLOS + decisión Modificadores M1-M4 cerrada conceptualmente)**
-
-### 1.1 — Dónde estamos HOY (28/05/2026, fin de noche)
-
-> **Logro de la sesión completa del día 28/05:**
-> - **AM**: conector Last desplegado, 11.894 ventas reales en BBDD, carta sembrada 9 marcas.
-> - **PM1**: puente determinista tspoon↔Folvy resuelto (plu sin prefijo `o.`), motor de coste
->   validado al céntimo en 3 platos, 160 raw importados + 4 conversiones + 5 raws migrados ml→g,
->   **94 dish con escandallo real importados** (860 recipe_line + 94 computed_cost, 60 al
->   céntimo, 34 needs_review). Folvy tiene por primera vez food cost REAL de Llorente29.
-> - **PM2 (este cierre)**: **DISEÑO COMPLETO V1 DEL EDITOR DE ESCANDALLOS cerrado** —
->   8 decisiones de producto, 5 catálogos semilla, reconocimiento de BBDD, diagnóstico real
->   de 34 needs_review con datos tspoon vía CSV diagnóstico generado, 12 hallazgos de
->   competencia mundial integrados, UX completo (lienzo + 5 solapas + vista lista + raws +
->   incidencias + 4 modos creación + auditoría visual + mobile + modo noche cocina),
->   3 prompts sistema de modos IA, **decisión completa de Modificadores M1-M4** con
->   confirmación operativa de Last.app. **DETALLE COMPLETO DEL DISEÑO UX EN
->   `folvy_v1_editor_escandallos_diseno.md` (nuevo documento maestro en Project Knowledge).**
-
-### 1.1.A — Conector Last.app (AM, sin cambios desde la sesión anterior)
-
-IDs reales (organización "FOODINT NUEVO" en Last.app):
-Organization Last: `31f13f35-be2e-4806-8be4-a7589c1cbf71`
-Locations (Last → Folvy location_id):
-Carabanchel (= Master tspoon): Last `5fa6d8b0-be52-4307-8848-0e52ba3ab0fa` / tspoon `323370622134624456293454805635388947917` → Folvy `a4f9c286-495f-49e9-bca1-88cb99ede6a7`
-Alcalá: Last `81519f20-487e-4c03-aeac-cb79e4832ee1` / tspoon `310777912922279025999369297421710030284` → Folvy `8a78366c-18cb-4ae2-9cf1-38e5d9a927c0`
-Pza Castilla: Last `a4a87b8d-649e-4571-9b6e-1f517109aed0` / tspoon `36962808316510204809751438072608159869` → Folvy `4c3d6c07-6cb8-4cf6-98b0-d3c3a53dc804`
-Canales Folvy (slug→id): Glovo `e9783d94`, Uber `07cbfd3c`, JustEat `dcf7d2c4`, Shop `3f144c83`.
-Unidades base kitchen_unit (IDs reales): Gramo `8fc3baae`, Kilogramo `2fb97155` (×1000), Mililitro `953c626f`, Litro `c4826b0d` (×1000), Unidad `869711c3`.
-
-API Last.app validada. Rate limit REAL: 1500 req/10min por token+entidad. Tablas mapeo SQL directo, migration repo OBSOLETA — pendiente actualizar. 3 Edge Functions desplegadas (`lastapp-sync-catalog`, `lastapp-webhook` fase 1, `lastapp-backfill-sales` abandonada por script local). Función SQL `resolve_lastapp_line` creada y validada. Webhook fase 2 BLOQUEADO por paso a Production de Last (correo enviado a support@last.app, esperando respuesta).
-
-### 1.1.B — Datos reales poblados (AM, sin cambios)
-
-Carta sembrada: 205 recipe_items dish + 820 menu_items + 205 vínculos. 9 marcas. Backfill: 11.894 ventas, 3 locations, 20.750 líneas, 99,3% mapeado (20.608 vinculadas), rango 17-nov-2025 → 28-may-2026. **Pendiente menor:** 3 días Alcalá con ≥100 bills (posible truncamiento): 2026-01-11, 01-17, 01-18 → reprocesar partiendo por horas.
-
-### 1.1.C — Módulo Escandallos: 94 dish importados (PM1, sin cambios desde la sesión anterior)
-
-Modelo BBDD 4 tablas validado. tspoon = competidor Y fuente de datos. Mapeo de sus 5 capas: Productos→raw, Herramientas→tool, Elaboraciones intermedias→recipe, Elaboraciones finales→dish, Agrupaciones→modificadores (RESUELTO conceptualmente PM2, ver §1.3).
-
-BASE LIMPIADA al inicio (COMMIT hecho): 75 recipe_line prueba + 30 raw inconsistentes + reset coste 9 dish prueba.
-
-IMPORT EJECUTADO Y CON COMMIT:
-- 160 raw (de Productos.xlsx) / 15 needs_review (9 sin coste + 5 unidad rara + 1 outlier "Azúcar 705€/Kg").
-- 4 conversiones Uni→base: Carne mixta 1 Uni=85g (confirmado), Solomillo pollo piri-piri 1 Uni=45g (confirmado), Rollitos Queso Feta 1 Uni=20g (needs_review), Falafel 1 Uni=25g (estimado, needs_review).
-- 5 raws migrados ml→g: Aceite Oliva Suave 0,4º, Mayonesa Hellmann's, Salsa Sweet Chilli, SALSA Yogur, Vinagre Vino Blanco.
-- Motor de coste validado al céntimo (3 platos): Doble Smash Cheeseburger −0.01%, Bocadillo Clásico +0.03%, Milanesa Pollo Clásica +0.04%.
-- 860 recipe_line + 94 computed_cost (60 cuadran al céntimo, 34 marcados needs_review).
-
-Hallazgos técnicos clave: bug del prefijo `o.` (los plu tspoon vienen con `o.310a889b-...`; los del map sin prefijo), bug índices Python vs JS (xlsx 0-indexed JS), bug coste sobre NETO vs BRUTO (corregido), bug ml vs g en salsas (corregido).
-
-### 1.1.D — Puente determinista tspoon↔Folvy (PM1, sin cambios)
-
-Script `scripts/tspoon-extract-puente.mjs`. Extracción: 3.112 filas, 3.060 con plu, repartidas: Alcalá 1.205, Pza Castilla 1.178, Carabanchel 729. Cruce 3 fuentes: 129 plu compartidos puente∩map (de 205 dish del map), tras casar component→escandallo: 94 dish con escandallo asignable.
-
-### 1.1.E — Reconocimiento de BBDD (PM2, datos REALES tras query directa)
-
-**Tablas Kitchen actuales:** `brand`, `kitchen_cut_type`, `kitchen_settings`, `kitchen_unit`, `menu_item`, `recipe_item`, `recipe_item_unit_conversion`, `recipe_line`.
-
-**`recipe_item`** mucho más completa de lo que el CONTEXTO viejo decía. Ya tiene: `type` (discriminador raw/preparation/dish), `procedure_text`, `plating_notes`, `kitchen_photo_url`, `prep_time_minutes`, `cook_time_minutes`, `yield_portions`, `conservation_type`, `service_temp_c`, `source` (con `'ai_recipe'`, `'ocr_invoice'`), `ai_confidence`, `needs_review`, `cost_window_days`, `indirect_cost_pct`.
-
-**`recipe_line`** elegante: `parent_item_id` + `child_item_id` (ambos `recipe_item.id`). Sub-recetas a nivel schema YA funcionan. Tiene `quantity_net` + `quantity_gross` (merma por línea ya implementada). `cut_type_id` FK ya existe.
-
-**`kitchen_cut_type`** existe pero **vacía**. Falta sembrar 16 cortes + ALTER añadiendo `template_id` y `icon`. Schema CREATE de `kitchen_cut_type_template` nuevo.
-
-**`kitchen_settings`** existe pero **vacía**. ALTER ampliando con ~12 columnas nuevas + UNIQUE constraint + INSERT semilla por cuenta activa.
-
-**`kitchen_unit`** ya sembrada (5 unidades globales). **No tocar.**
-
-**`recipe_item.needs_review`** **NO está en ninguna migration del repo** (drift confirmado). Existe en BBDD pero falta migration retroactiva. **Deuda crítica para S1.**
-
-**`type`** solo tiene 2 valores reales: `'dish'` (214) y `'raw'` (160). **No existe `type='preparation'` poblado**. Las preparaciones intermedias (Cochinita, Tinga, Birria, Salsa SBB) están camufladas como raws con `fixed_cost`. Migrarlas a `type='preparation'` con escandallo propio es el corazón del trabajo S2.
-
-**Tablas sales (verificación PM2):** `sale` (cabecera con `brand_id`, `channel_id`, `location_id`, `total`, `paid`, `discount_amount`, `delivery_cost`, `payment_method`, `raw_products jsonb`) y `sale_line` (13 columnas: `account_id`, `sale_id`, `raw_text`, `product_name`, `quantity`, `unit_price`, `menu_item_id`, `map_source`, `map_confidence`, `map_needs_review`). NO existe `bill_line` (confusión del CONTEXTO viejo).
-
-**`sale.raw_products jsonb` contiene JSON completo de Last.app** con modificadores estructurados (descubrimiento PM2 — habilitador del cierre de Modificadores M4).
-
-### 1.2 — DECISIONES DE PRODUCTO V1 EDITOR ESCANDALLOS (8 decisiones, PM2)
-
-**Decisión 1 — Auditoría visual con IA en V1:**
-- Activación **por plato individual**. Toggle en cada `recipe_item`.
-- Cadencia: C+D combinadas — encargado saca foto del "patrón del día" al abrir turno (D), y cualquier cocinero puede sacar fotos durante el servicio (C).
-- `match_score numeric(3,2)` 0.00-1.00. Threshold por plato, default 0.70.
-- Modo configurable: `'shadow'` / `'notify_manager'` / `'notify_cook'`. **Default al activar: `'shadow'` durante 14 capturas mínimas** antes de proponer threshold informado.
-- UX cocinero: foto captura + referencia + veredicto semáforo + issues específicos + "Pasar con motivo" (no bloquea).
-- UX encargado: dashboard con métricas día, calidad por plato con tendencia, alertas inteligentes, falso positivo entrenable.
-- Trazabilidad: cada captura guarda `ai_model`, `ai_cost_eur`, `ai_latency_ms`.
-- **Retención fotos: 180 días default, configurable por cuenta**.
-
-**Decisión 2 — Pasos estructurados (`recipe_item_step`):**
-- 4 tipos: `'prep'` / `'cooking'` / `'finishing'` / `'serving'`. `'serving'` cubre delivery.
-- Cada paso `duration_min int NULL` + `temperature_c numeric NULL`.
-- **Foto por paso desde V1**, columna `photo_url text NULL`, opcional siempre.
-- Migración de `procedure_text` existente: parsing inteligente + flag `recipe_item.steps_auto_split boolean` para banner UI "revisar al editar". `procedure_text` se conserva intacto.
-
-**Decisión 3 — Versionado histórico (`recipe_item_version`):**
-- Trigger automático en cambios significativos. **Máximo una versión por día**.
-- Botón manual **"marcar como hito"** con etiqueta nombrable.
-- **Snapshot completo** en `jsonb`. Storage barato, reconstrucción O(1).
-- Propagación a `menu_item`: silenciosa por defecto, **notificación al encargado si delta_pct > 10%** (threshold configurable `kitchen_settings.version_alert_pct`).
-- Cualquiera con permiso de edición puede generar versión.
-- V1 sin borradores. Schema `recipe_item_version.status` reservado para V1.1.
-
-**Decisión 4 — Familias (`dish_family_template` + `dish_family`):**
-- Template global + custom por cuenta con FK opcional.
-- Una sola familia por plato (`recipe_item.family_id`). Multi-pertenencia se cubre con tags.
-- **Semilla global: 48 familias** en 6 bloques.
-- Borrar familia custom = merge obligatorio. Con template_id solo se desactiva.
-
-**Decisión 5 — Etiquetas (`tag_template` + `tag`):**
-- Template global + custom. M2M con `recipe_item` vía `recipe_item_tag`.
-- **Semilla global: 26 etiquetas** en 5 grupos (dieta/restricciones, sabor/carácter, origen/calidad, comercial, operativa).
-- Operativas preparan conexión futura con `menu_item` para sugerir publicación por canal.
-
-**Decisión 6 — Modo conversacional:**
-- Panel lateral del lienzo (reemplaza panel económico temporalmente).
-- Estrategia **"borrador completo + iteración"** (patrón Cursor/v0).
-- Conocimiento de cuenta primero, mundo después, **avisar al improvisar**.
-- Conversación **persistente por plato** en `recipe_item_ai_session`.
-- Claude Haiku 4.5 por defecto, escalado automático a Sonnet/Opus por palabras clave.
-- Sin límites duros por usuario en V1.
-
-**Decisión 7 — Modo voz (entrada única dictada):**
-- Pipeline: Whisper-1 + Claude Haiku 4.5 estructurador.
-- **NO OpenAI Realtime API en V1**. Coherencia stack Anthropic. Anthropic está en camino.
-- 3 salvaguardas: abstracción proveedor IA, métricas `user_correction_count`/`user_abandoned`, UX que disimula latencia ~2-3 seg.
-- Idioma `es-ES` default, configurable.
-- Léxico custom: nombres de raws de la cuenta como `prompt` a Whisper.
-- **Voz crea Y edita en V1.**
-- Manejo errores: transcripción vacía/garbage → mostrar audio + opción reintentar o editar.
-
-**Decisión 8 — Sub-recetas clickables (UX):**
-- Schema ya soporta. Solo UX.
-- **B+C combinadas**: drawer/panel lateral al click + ctrl+click abre pestaña.
-- Subrayado punteado + icono ↗ solo en preparations/dishes.
-- Badge **"Usado en N platos"** en cabecera de cada preparation, con preview de impacto al editar.
-- Profundidad ilimitada en schema, advertencia UI a partir de 4 niveles, ciclos bloqueados por trigger.
-
-### 1.3 — DECISIÓN COMPLETA DE MODIFICADORES M1-M4 (PM2, cerrada conceptualmente)
-
-Decisión grande aparcada del CONTEXTO viejo §1.3, ahora cerrada.
-
-**M1 — Granularidad: Opción C (template + override).** Mismo patrón que familias/etiquetas/cortes/alérgenos. `modifier_template` global + `modifier` por cuenta con `template_id NULL` opcional + `recipe_item_modifier` por plato con override opcional. Coherencia interna gratuita. Permite benchmarks transversales si templates compartidos.
-
-**M2 — Relación con escandallo: 5 efectos posibles.**
-- `'omit'` (caso 1: quitar).
-- `'add_line'` (caso 2: añadir extra) — el modificador trae `modifier_line` propia.
-- `'replace_line'` (caso 3a: sustituir) — omite original + añade `modifier_line`.
-- `'multiply_qty'` (caso 3b: doblar) — multiplicador de cantidad en línea afectada.
-- `'choose_variant'` (caso 4: variante) — grupo `modifier_option` excluyentes con `price_delta_eur`.
-- `'none'` (caso 5: personalización gratis).
-
-Composabilidad: aplicación secuencial, último gana en conflicto. **Receta base nunca se toca. Modificador es capa.**
-
-**M3 — Pricing: cascada de 3 niveles + cargo absoluto + redondeo configurable.**
-Cascada:
-1. `recipe_item_modifier_pricing` (override final por plato × canal).
-2. `modifier.default_price_per_channel jsonb` (override de la cuenta).
-3. `modifier_template.default_price_per_channel jsonb` (default global).
-
-Cargo absoluto en €. `kitchen_settings.price_rounding` para reglas ('none' default, 'psychological_99', 'half_euro', 'whole_euro'). Visibilidad por canal: `recipe_item_modifier_pricing.is_visible boolean`.
-
-**M4 — Mix realmente vendido vía bills: VICTORIA OPERATIVA.**
-Verificado que **Last.app SÍ envía modificadores estructurados** en cada producto. Están en `sale.raw_products jsonb` con formato `{id, catalogModifierId, name, priceImpact (céntimos), quantity}`.
-
-Schema añadido:
-- `sale_line_modifier` (parseado del JSON: mapeo, `map_source` ('lastapp_structured'/'lastapp_text'/'manual'/'tpv_propio'), `map_confidence`, `map_needs_review`).
-- `lastapp_modifier_map` (catálogo paralelo a `lastapp_product_map`).
-- `sale_line.modifiers_extraction_status` (flag de calidad).
-
-**Decisión arquitectónica clave:** Folvy es la fuente de verdad de cómo se representan los modificadores en una venta. Conectores TPV externos adaptan. TPV propio (en roadmap) nace nativo.
-
-**Trabajo concreto que desbloquea:**
-1. Script Claude Code parsea `sale.raw_products` retroactivamente → 11.894 ventas históricas recuperadas con modificadores.
-2. Modificar `lastapp-backfill-sales` y `lastapp-webhook` para nuevas ventas.
-3. **AvT real Folvy (V2 estratégico)** queda con datos sobre los que construir.
-
-**Schema total nuevo de Modificadores (separado de S1):** `modifier_template`, `modifier`, `modifier_line`, `modifier_option`, `recipe_item_modifier`, `recipe_item_modifier_pricing`, `sale_line_modifier`, `lastapp_modifier_map`. Más `ALTER kitchen_settings.price_rounding` y `ALTER sale_line.modifiers_extraction_status`.
-
-### 1.4 — DEUDA ESTRATÉGICA: integración TPV bidireccional (dicho por Julio)
-
-2 fases: Fase 1 = Folvy LEE del TPV (HECHO). Fase 2 = Folvy PUBLICA catálogo+precios al TPV. Dirección del catálogo CONFIGURABLE POR MARCA (catalog_source 'folvy'|'pos'), no global. Llorente29 mixto: propias gestionables en Folvy, cedidas (Cloudtown) usan Last.app. **El conector es capa genérica multi-TPV. TPV propio en roadmap estratégico.**
-
-### 1.5 — 5 CATÁLOGOS SEMILLA DISEÑADOS (PM2)
-
-**Familias (48 entries):** aperitivo_snack, tapa_pincho, racion, entrante_frio/caliente, frito, sopa_crema, ensalada, bowl_caliente, pasta, arroz, pizza, burger, bocadillo, pita_kebab, burrito_wrap, taco_tortilla, milanesa_empanado, guiso_estofado, parrilla_brasa, pescado, marisco, wok_salteado, sushi_crudo, dumpling_bao, ramen_noodles, acompanamiento, salsa_dip, extra, pan, desayuno, tostada, bolleria, reposteria, postre, tarta, helado_sorbete, granizado, cafe, te_infusion, refresco, zumo_smoothie, cerveza, vino_copa/botella, vermut_aperitivo, coctel, sin_alcohol, combo_pack, menu_dia, menu_degustacion, menu_kids, preparacion, packaging, material.
-
-**Etiquetas (26 entries):** vegano, vegetariano, sin_gluten, sin_lactosa, sin_frutos_secos, halal, kosher, keto, bajo_calorias, picante, muy_picante, dulce, umami, km0, ecologico, artesano, premium, top_ventas, novedad, estacional, recomendado_chef, apto_compartir, delivery_friendly, solo_local, hora_punta_no.
-
-**Alérgenos UE 1169 (14):** gluten, crustaceans, eggs, fish, peanuts, soy, milk, nuts, celery, mustard, sesame, sulphites, lupin, molluscs. **4 estados:** `contains` / `may_contain_traces` / `does_not_contain` / `unknown`. Herencia: raws → plato automática, plus manuales con razón documentada.
-
-**Cortes (16):** whole, diced/small/large, sliced/thin, julienne, strips, chopped, minced, grated, laminated, cubed_meat, rounds, wedges, crumbled.
-
-**`kitchen_settings`** ~12 columnas nuevas + UNIQUE(account_id).
-
-### 1.6 — DIAGNÓSTICO REAL DE 34 NEEDS_REVIEW (PM2, via CSV diagnóstico)
-
-Script `scripts/diagnose-needs-review.mjs` ejecutado contra BBDD + `tspoon_puente_todos.csv`. Resultado guardado en `data/diagnosis/2026-05-28_needs_review_v1.csv` (versionado).
-
-**34 needs_review reales** con coste calculado y mapeo a tspoon disponible. Estadísticas:
-- 17 platos infravalorados >10%.
-- 13 platos un poco bajos (-3% a -10%).
-- 4 cuadran (-3% a +3%).
-- 0 platos sobrevalorados.
-- 0 sin referencia tspoon.
-- |delta_pct| media: 12,95%. Mediana: 9,86%.
-
-**Sesgo unidireccional confirmado**: Folvy infravalora sistemáticamente. Causa estructural, no ruido aleatorio. Tres grupos identificados:
-- **Birria/Cochinita/Tinga (5 platos):** delta -16% a -19%. Sub-recetas no modeladas. 5 raws-fantasma identificados (Aceite de Birria, Caldo de Birria, Carne de Birria, Falafel, Pulled Pork) que deberían ser `type='preparation'`.
-- **Falafel (6 platos):** delta -8% a -20%. Falafel como raw mal valorado (conversión 1 ud = 25g aproximada).
-- **Kebabs/Pitas/Gyros (10 platos):** delta -5% a -20%. Raws-fantasma con nombres distintos (Carne Gyros pollo/ternera).
-- **Anomalías extremas:** Rollitos de Queso Feta -55% (escandallo incompleto), Garlic Smash -33% (falta salsa).
-- **Otros 13 platos:** causa por determinar.
-
-**Decisión operativa CLAVE de Julio:** S2 ya **NO es "investigar y corregir 34 platos en BBDD"**. Es **"UI banner needs_review + script populador desde CSV + corrección manual de Pamela"**. Razones:
-- Pamela conoce datos que la IA nunca sabrá (peso real del rollito artesano, ingredientes exactos de salsa garlic, gramaje de mermas).
-- 34 platos × 2-3 min cada uno = 70-100 min de trabajo concentrado de Pamela. Una tarde.
-- **Sienta patrón permanente Folvy**: cada cliente nuevo va a tener escandallos imperfectos post-importación. La capacidad de "detectar, marcar visualmente y guiar al cocinero" es funcionalidad permanente.
-
-Schema añadido: `recipe_item.review_notes jsonb` (popula el script con diagnosis por plato) + `recipe_item.review_dismissed_at`/`by`/`reason` para descartar incidencias con auditoría.
-
-### 1.7 — 12 HALLAZGOS COMPETENCIA MUNDIAL INTEGRADOS (PM2)
-
-Escaneo serio de Galley, Apicbase, Crunchtime, MarketMan, Toast, R365, Backbar, Meez, app Chef iPhone, Paper Chef, Recipe Organizer, Winnow Vision, Choco+OpenAI, Notion/Linear.
-
-**Incluidos en V1 (cambios al schema):**
-1. **`recipe_item.short_code text UNIQUE`** — "Apic ID" expuesto al usuario (RAW-0042, PREP-0017, DSH-0094). Distingue raws con nombres parecidos.
-2. **Indicadores semafóricos de completitud** (4 puntos: precio / unidad / alérgenos / proveedor). `recipe_item.completeness jsonb`.
-3. **Trazas alérgeno 4 estados** (no 2): `contains`/`may_contain_traces`/`does_not_contain`/`unknown`.
-4. **Sub-recetas stockables**: `recipe_item.is_stockable boolean DEFAULT false`. Cierra bucle escandallo → inventario futuro.
-5. **Voz como asistente "sous-chef" general** (preguntar mientras cocina), no solo crear escandallos.
-6. **Hint visual editable explícito** (cursor texto al hover).
-7. **Fricción intencional en cambios high-stakes** (modal de confirmación al editar precio `menu_item`, no inline; gramaje sí inline).
-8. **OCR multi-formato** (foto + PDF + URL) confirmado V1. **Vídeo a V2.**
-
-**V1.1 (apuntados, no construir ahora):**
-9. Production Scheduler tipo Galley.
-10. Aprobación recetas role-based (corporate chef → management → unit chefs).
-11. OpenAI Realtime API para conversacional. Salvaguarda preparada.
-12. AvT (Actual vs Theoretical) tipo Crunchtime. V2 estratégico Folvy (§9.2).
-
-**Folvy V1 es objetivamente el mejor del mercado en 4 dimensiones:**
-- Entrada multi-modal con IA (foto+PDF+URL+voz+conversacional).
-- Latido económico (300ms anim de coste).
-- Auditoría visual en pase (Winnow lo hace en cubo, nadie en plato).
-- UX cocina (Vista cocina full screen + modo noche).
-
-### 1.8 — DISEÑO UX COMPLETO (PM2)
-
-**Cubierto en `folvy_v1_editor_escandallos_diseno.md`** (nuevo documento maestro):
-- Lienzo de edición con 5 solapas (Escandallo / Receta / Etiquetado / Histórico / Más con 7 vistas secundarias).
-- Vista lista principal (búsqueda semántica "burger 30%" funcional, vistas guardadas tipo Notion, filtros laterales reactivos, 3 modos visualización).
-- Catálogo raws/preparaciones/albaranes (edición masiva ciudadano de primera, drawer detalle con histórico, navegación bidireccional).
-- Pantalla incidencias (banner needs_review en lienzo + dashboard agrupado por causa con ROI tiempo estimado).
-- 4 modos creación (foto multi-formato + voz onda visual + conversacional con escandallo construyéndose en vivo + manual).
-- Auditoría visual en pase (UX cocinero tablet vertical + dashboard encargado con alertas inteligentes).
-- Panel conversacional sobre lienzo en edición (acciones [Aplicar]/[Solo mostrar]).
-- Modo noche cocina (azul oscuro, tipografía +20%, botones más grandes).
-- Comportamiento mobile completo (chips, bottom sheet, Vista cocina como estrella).
-- Comparador entre versiones V1.1.
-
-### 1.9 — 3 PROMPTS SISTEMA MODOS IA (PM2)
-
-Cerrados con justificación (texto literal completo en `folvy_v1_editor_escandallos_diseno.md` §12):
-- **Modo foto**: Claude Opus 4.7 visión, temp 0.2, JSON estructurado obligatorio, `account_raws` inyectado dinámicamente, 4 estados de match con `match_reason` siempre, error `not_a_recipe` como vía de salida limpia.
-- **Modo voz**: Whisper + Claude Haiku 4.5, preserva transcripción cruda intacta, correcciones explícitas con razón (no silenciosas).
-- **Modo conversacional**: Haiku con escalado automático por palabras clave, `current_dish_state` actualizado cada turno, `similar_dishes` precalculado, acciones discretas con `requires_confirmation: true` siempre, `preview` con cost before/after, redirección suave fuera de tema, no >2 preguntas por turno.
-
-Schema helper en S1: `kitchen_dish_state_for_ai(uuid)` y `kitchen_similar_dishes_for_ai(uuid, int)`.
-
-### 1.10 — Próximos pasos priorizados (actualizado PM2)
-
-1. **Saneamiento de commits** (DEUDA CRÍTICA pero NO bloqueante). Sesión propia con cabeza fresca. Plan: `.gitignore` para datos cliente (JSONs bills, catalogos, locations) y artefactos regenerables, 4 commits separados por frente (conector Last / motor coste / diagnóstico / docs), push revisado. Trabajo no commiteado SOBREVIVE en disco.
-
-2. **S1 — Schema migration completo V1 editor escandallos**. Próxima sesión técnica con cabeza fresca. SQL grande dividido en 4 bloques transaccionales A/B/C/D. Tiempo estimado 1.5-2 sesiones reales.
-
-3. **S2 — UI banner needs_review + script populador**. Construir el UI del banner en lienzo + dashboard de incidencias agrupado por causa + script Claude Code que lee `data/diagnosis/2026-05-28_needs_review_v1.csv` y popula `recipe_item.review_notes`. Luego Pamela corrige los 34 platos uno a uno (~70-100 min). ~0.5 sesión técnica.
-
-4. **S_MODIFIERS — schema + parsing histórico**. Sesión propia. Aplicar las 8 tablas de Modificadores. Script Claude Code parsea `sale.raw_products` retro y popula `sale_line_modifier`. Modificar `lastapp-backfill-sales` y `lastapp-webhook` para nuevas ventas. ~1.5 sesiones.
-
-5. **S3-S10 — UI completa del editor**: lienzo de edición → vista lista → catálogo raws → modos creación → auditoría visual → modo noche → mobile. Estimación: 8-10 sesiones técnicas distribuidas. Detalle UX en `folvy_v1_editor_escandallos_diseno.md`.
-
-6. **Formatos de compra** (la última decisión grande aparcada, conceptualmente similar a Modificadores). Sesión propia de diseño después de S1. Toca inventario, compras y escandallo a la vez.
-
-7. **Investigar los 110 dish sin escandallo en el cruce** (combos, variantes SBB, bebidas).
-
-8. **Módulo Sales/dashboards**: los datos ya están listos (94 platos coste real + 11.894 ventas mapeadas). Construir food cost % por dish/canal/marca.
-
-9. **Webhook fase 2** (bloqueado por paso a Production de Last — esperando respuesta a su correo).
-
-10. **3 días overflow Alcalá** (11/17/18 enero) — reprocesar por horas.
-
-11. **Producción Llorente29 objetivo: 7 sept 2026**. 14 semanas vista desde hoy.
+**Última actualización: 2026-05-31 (cierre sesión: R1 responsive en producción + frente Compras-Recepción-Inventario con eslabón 1 demostrado end-to-end)**
+
+### 1.1 — Dónde estamos HOY (31/05/2026)
+
+> **Logro de la sesión 31/05 (dos bloques):**
+> - **Bloque 1 — FASE R1 RESPONSIVE: CERRADA y en producción.** Shell de cliente responsive para móvil/tablet, verificado pantalla a pantalla a 390px. Commits R1.1–R1.4 en `main` (HEAD previo `c4b1f30`). Barra inferior móvil (Inicio·Safety·[IA héroe]·Sales·Kitchen), Team al overflow del avatar, breakpoint 768, tablas→tarjetas, rejillas→columna sticky. Escritorio (≥768px) intacto. Hallazgo: Meraki Pita 104 platos sin coste; Sales sin desarrollo. Cola comprometida tras R1: R2 voz IA, R3 home latido, R4 cámara→IA, R5 portal empleado.
+> - **Bloque 2 — NUEVO FRENTE Operaciones / Compras-Recepción-Inventario.** Ver 1.1.F.
+
+### 1.1.F — FRENTE COMPRAS-RECEPCIÓN-INVENTARIO (31/05, el grueso de la sesión)
+
+**Estudio competitivo** (`folvy_competidores_inventario_compras.md`, en knowledge + outputs): la merma valorada (consumo teórico vs real) es **table stakes de toda la categoría** (gstock, tspoon/tSpoonLab, Supy, MarketMan, haddock, SmartBar, MarginEdge la calculan). NO es diferenciador. La goleada de Folvy está en 3 ejes: (1) sistema conectado España-native (Team+Safety+Sales+Kitchen+Ops en uno; gstock/tspoon no tienen personal ni APPCC nativo), (2) fricción de arranque casi nula vía **foto→IA** + datos ya unidos, (3) modelado multi-marca/dark-kitchen. El golpe de demo = **foto→escandallo/albarán IA** (ataca el dolor nº1: dar de alta a mano). Benchmark de coste: R365 ofrece un SELECTOR de métodos (último/medio ponderado/ventana) — confirma el diseño de Folvy. El precio se origina en la RECEPCIÓN en Apicbase y gstock (convergencia).
+
+**El bucle (diseñado y aprobado):** Artículos+formatos (compra/stock/uso) → OC interna (+envío adapter WhatsApp, EDI diferido) → Recepción [contra OC o libre, la IA reeduca si falta OC] → Stock → Consumo teórico (ventas×escandallo, YA EXISTE) → Inventario físico → Varianza € → ↻ sugiere OC. No se puede partir; es circuito cerrado.
+
+**ESLABÓN 1 — CONSTRUIDO, VERIFICADO Y DEMOSTRADO END-TO-END:**
+- **Tabla `recipe_item_purchase_format`** (BBDD): árbol de empaquetado anidado por ingrediente (parent_format_id, qty_per_parent, qty_in_base=única verdad del coste >0, is_piece, is_weighted, source/ai_confidence/needs_review). Integridad del árbol por FK compuesta declarativa (padre del mismo ingrediente, sin trigger). RLS calcado de `recipe_item_unit_conversion`. "Caja"/"Bolsa" NO van a `kitchen_unit` (error de tspoon evitado).
+- **`article_supplier`**: +`purchase_format_id`, −`purchase_unit_id` (Opción A: proveedor vende UN nodo del árbol; estaba vacía, coste 0).
+- **`purchaseFormatService.ts`** (app): CRUD supplier/formato/article_supplier + `setupSimplePurchase` (autocrea nodo trivial) + dispara cascada. Blindaje de conversión: recibe `qty_in_base` ya en unidad base; NO inventa 1:1 (fallo de Apicbase evitado).
+- **`kitchen_recompute_raw_cost(item_id)`** (BBDD, función NUEVA, NO toca `kitchen_recompute_item`): coste del raw = `last_price / qty_in_base`. Selector de estrategia: `fixed` (manda lo tecleado, la compra no pisa) / `last_purchase` (activo) / `average_weighted` + `average_window` (DORMIDAS, caen a respaldo hasta que exista la recepción/purchase_line; nunca inventan). Si no hay precio utilizable → needs_review, conserva coste anterior.
+- **Trigger `trg_article_supplier_recompute_cost`** (BBDD): AFTER INSERT/DELETE/UPDATE OF last_price,purchase_format_id,is_preferred,is_active → dispara el recálculo del ingrediente. Eje A híbrido lado BBDD.
+- **`kitchen_ancestors_of(item_id)`** (BBDD): ancestros transitivos (mecánica copiada/girada de `recipe_line_prevent_cycle`, UNION corta ciclos, depth DESC).
+- **`costCascadeService.ts`** (app): `cascadeFromItem` (tras cambio de precio: recalcula solo ancestros, el trigger ya hizo el ingrediente) y `recomputeItemAndAncestors` (para cambios que NO pasan por el trigger: foto→IA/import/edición fixed). Fail-safe por ítem. Eje A híbrido lado app. Reutilizable por todo el sistema.
+- **`purchaseFormatService` conectado a `cascadeFromItem`** en setupSimplePurchase y updateArticleSupplier (solo si cambia lastPrice/purchaseFormatId).
+- **PRUEBA END-TO-END (sesión usuario real, RLS+guards activos):** Carne mixta picada (g, en 26 platos) → puesta en last_purchase → alta proveedor+formato(Caja, qty_in_base=5000)+precio(30€) vía script con signInWithPassword → trigger recalculó carne null→**0.006 €/g** → cascada recalculó **26/26 platos**. Hallazgo de negocio: los costes de los platos BAJARON → los costes tecleados a mano estaban inflados vs precio real de compra → VALIDA la tesis "el coste fluye desde la compra". Prueba revertida (limpieza con disable trigger). Datos actuales son DESECHABLES (carga de pruebas sin continuidad).
+
+**Decisiones de arquitectura cerradas:** propagación HÍBRIDA (recálculo del ingrediente en BBDD por trigger + cascada a platos orquestada por app + verificador pendiente + aviso didáctico de salto de precio pendiente); 4 estrategias de coste (`fixed`/`last_purchase`/`average_weighted`/`average_window`, ya existían en `kitchen.ts CostStrategy`) configurables por cuenta/ingrediente; FIFO-por-lote diferido (necesita trazabilidad de lotes).
+
+### 1.2 — ESTADO GIT (31/05)
+
+> **2 commits en local, SIN PUSH** (origin 2 detrás):
+> - `30de3a4` feat(kitchen): formatos de compra — tipos regenerados, dominio y service (árbol + proveedor/precio)
+> - `a7ec2b6` feat(kitchen): cascada de coste compra→plato + migración del esquema de compras
+> Migración `supabase/migrations/20260531T1330_folvy_kitchen_compras.sql` en el repo (cierra el drift de tabla+funciones+trigger).
+> R1 (R1.1–R1.4) ya estaba en `main` antes de esta tanda.
+> **NO HACER PUSH hasta cerrar `.gitignore`** (hay datos de cliente sin política en el working tree). Es lo PRIMERO de la próxima sesión.
+
+### 1.3 — DEUDA VIVA (por prioridad, 31/05)
+
+1. **[SEGURIDAD/CONFIRMADO EN VIVO] Guard `auth.uid()` + escrituras sin sesión:** cualquier escritura en `article_supplier` desde contexto sin sesión de usuario (SQL Editor hoy; **webhook de recepción `service_role` mañana**) revienta por el trigger → la función con guard lanza EXCEPTION. RESOLVER antes de construir la recepción por webhook.
+2. **`.gitignore` sin cerrar + 2 commits sin push** → cerrar `.gitignore` (datos cliente: JSON bills/catalogos/locations + artefactos) y hacer push. PRIMERO de la próxima sesión.
+3. **[SEGURIDAD ALTA, heredada]** rotar service_role key + tokens que se pegaron en chats; activar PITR Supabase.
+4. **Aviso didáctico de salto de precio** (sin construir): si el precio recibido salta >X% sobre histórico, avisar en vez de pisar en silencio.
+5. **Verificador de platos obsoletos** (sin construir): job que detecta plato cuyo cost_updated_at < cost_updated_at de algún hijo.
+6. **`average_weighted`/`average_window`** se completan cuando exista la recepción (hoy dormidas).
+7. **Default de ingrediente nuevo `fixed`→`last_purchase`** (decisión de producto de Julio: dirección confirmada, ejecutar cuando convenga). Los 161 ingredientes actuales son desechables → NO migrar/preservar.
+8. Code-splitting (~646KB gzip); abstracción proveedor IA; medidor coste IA por cuenta (prerequisito 2º cliente).
+
+### 1.4 — Próximos pasos priorizados (31/05)
+
+1. **`.gitignore` + push** (desbloquea todo el trabajo de hoy en remoto). Primero, cabeza fresca.
+2. **UI del alta de compras** (proveedor+formato+precio): el siguiente frente. Con el principio didáctico — el cocinero aprende el modelo de tres unidades mientras Folvy se lo rellena. La goleada real aquí es **foto→IA del albarán** (foto → artículo+formato+proveedor+precio+conversión sugeridos, con needs_review). Listón: "acierta con fotos reales malas", no "tiene la feature".
+3. **Resolver el checkpoint del guard** (deuda 1) antes de construir la recepción por webhook.
+4. **Siguientes eslabones del bucle:** OC interna (no existe tabla aún) → recepción (purchase/purchase_line ya existen vacías, soportan recepción libre) → con la recepción se activan `average_*` y se construye el verificador.
+5. **Pendientes heredados del editor de escandallos** (S1–S10, ver `folvy_v1_editor_escandallos_diseno.md`): schema migration V1, UI needs_review, modificadores, UI editor completa.
+6. **Módulo Sales/dashboards** (datos listos: coste real + 11.894 ventas mapeadas).
+7. **Webhook fase 2** (bloqueado por paso a Production de Last).
+8. **Producción Llorente29 objetivo: 7 sept 2026.**
 
 ### 1.11 — NOTA HISTÓRICA
 
-> **Lo del 27/05** (piloto Smash Brothers + 2.271 tickets CSV + 17 marcas + catálogo 493): fue un ENSAYO con datos a mano/CSV ruidosos. **Reemplazado el 28/05 AM** por datos reales de Last.app.
+> **27/05**: ensayo con CSV ruidosos. Reemplazado el 28/05 AM por datos reales de Last.app.
+> **28/05 AM**: conector Last, backfill 11.894 ventas, carta 9 marcas, 160 raw.
+> **28/05 PM1**: puente determinista, motor de coste validado al céntimo, 94 dish importados.
+> **28/05 PM2**: diseño UX completo V1 editor + Modificadores M1-M4 (detalle en `folvy_v1_editor_escandallos_diseno.md`).
+> **31/05 Bloque 1**: R1 responsive cerrada en producción.
+> **31/05 Bloque 2 (este cierre)**: frente Compras-Recepción-Inventario — estudio competitivo, diseño del bucle, ESLABÓN 1 (formatos de compra + coste que fluye desde la compra + cascada a platos) construido, verificado y DEMOSTRADO end-to-end con datos y sesión reales.
 >
-> **Lo del 28/05 AM (Parte 1):** conector Last desplegado, backfill 11.894 ventas, carta 9 marcas sembrada, 160 raw importados.
->
-> **Lo del 28/05 PM1 (Parte 2):** puente determinista resuelto, motor de coste validado al céntimo, 94 dish con escandallo real importados.
->
-> **Lo del 28/05 PM2 (Parte 3, este cierre):** DISEÑO UX COMPLETO V1 EDITOR + Modificadores M1-M4 cerrada conceptualmente. **Detalle UX en `folvy_v1_editor_escandallos_diseno.md`.**
->
-> **Lo NO superado por hoy:** el modelo de BBDD (4 tablas escandallo), las funciones SQL `kitchen_recompute_item` y `kitchen_recipe_breakdown` (§4.9 y §4.10), Folvy AI y Capa 2 económica.
+> **Lo NO superado por hoy:** modelo BBDD escandallo, `kitchen_recompute_item`/`kitchen_recipe_breakdown` (§4.9/§4.10), Folvy AI, Capa 2 económica, conector Last.app, 11.894 ventas, 94 dish con coste real.
 
 ---
 ---
