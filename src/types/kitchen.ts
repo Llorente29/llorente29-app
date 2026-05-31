@@ -392,6 +392,7 @@ export interface Supplier {
   email: string | null
   phone: string | null
   address: string | null
+  healthRegistryNo: string | null
   notes: string | null
   isActive: boolean
   archivedAt: string | null
@@ -407,6 +408,7 @@ export interface SupplierInsert {
   email?: string | null
   phone?: string | null
   address?: string | null
+  healthRegistryNo?: string | null
   notes?: string | null
   createdBy?: string | null
   createdByName?: string | null
@@ -417,6 +419,7 @@ export interface SupplierUpdate {
   email?: string | null
   phone?: string | null
   address?: string | null
+  healthRegistryNo?: string | null
   notes?: string | null
   isActive?: boolean
   archivedAt?: string | null

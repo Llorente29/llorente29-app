@@ -6924,6 +6924,7 @@ export type Database = {
           created_by: string | null
           created_by_name: string | null
           email: string | null
+          health_registry_no: string | null
           id: string
           is_active: boolean
           name: string
@@ -6940,6 +6941,7 @@ export type Database = {
           created_by?: string | null
           created_by_name?: string | null
           email?: string | null
+          health_registry_no?: string | null
           id?: string
           is_active?: boolean
           name: string
@@ -6956,6 +6958,7 @@ export type Database = {
           created_by?: string | null
           created_by_name?: string | null
           email?: string | null
+          health_registry_no?: string | null
           id?: string
           is_active?: boolean
           name?: string

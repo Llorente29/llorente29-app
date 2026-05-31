@@ -35,8 +35,10 @@ import type {
   RowArticleSupplier,
   RowArticleSupplierInsert,
   RowArticleSupplierUpdate,
+  CostStrategy,
 } from '../../../types/kitchen'
 import { cascadeFromItem } from './costCascadeService'
+import { updateRecipeItem } from './recipeItemService'
 
 function requireSupabase(): void {
   if (!isSupabaseEnabled || !supabase) {
@@ -56,6 +58,7 @@ export function rowToSupplier(row: RowSupplier): Supplier {
     email: row.email,
     phone: row.phone,
     address: row.address,
+    healthRegistryNo: row.health_registry_no,
     notes: row.notes,
     isActive: row.is_active,
     archivedAt: row.archived_at,
@@ -74,6 +77,7 @@ function supplierInsertToRow(input: SupplierInsert): RowSupplierInsert {
     email: input.email ?? null,
     phone: input.phone ?? null,
     address: input.address ?? null,
+    health_registry_no: input.healthRegistryNo ?? null,
     notes: input.notes ?? null,
     created_by: input.createdBy ?? null,
     created_by_name: input.createdByName ?? null,
@@ -87,6 +91,7 @@ function supplierUpdateToRow(patch: SupplierUpdate): RowSupplierUpdate {
   if (patch.email !== undefined) row.email = patch.email
   if (patch.phone !== undefined) row.phone = patch.phone
   if (patch.address !== undefined) row.address = patch.address
+  if (patch.healthRegistryNo !== undefined) row.health_registry_no = patch.healthRegistryNo
   if (patch.notes !== undefined) row.notes = patch.notes
   if (patch.isActive !== undefined) row.is_active = patch.isActive
   if (patch.archivedAt !== undefined) row.archived_at = patch.archivedAt
@@ -324,6 +329,80 @@ export async function updateArticleSupplier(
   return updated
 }
 
+export async function getSupplierById(id: string): Promise<Supplier | null> {
+  requireSupabase()
+  const { data, error } = await supabase!
+    .from('supplier').select('*').eq('id', id).maybeSingle()
+  if (error) throw new Error(`Error obteniendo proveedor ${id}: ${error.message}`)
+  return data ? rowToSupplier(data) : null
+}
+
+// Los vínculos activos (article_supplier) de un proveedor: los artículos que le
+// compras. La página cruza con recipe_item/formatos/unidades vía mapas (el
+// service no hace joins; mantiene el estilo plano).
+export async function listLinksBySupplier(supplierId: string): Promise<ArticleSupplier[]> {
+  requireSupabase()
+  const { data, error } = await supabase!
+    .from('article_supplier')
+    .select('*')
+    .eq('supplier_id', supplierId)
+    .eq('is_active', true)
+    .order('is_preferred', { ascending: false })
+  if (error) throw new Error(`Error listando artículos del proveedor ${supplierId}: ${error.message}`)
+  return (data ?? []).map(rowToArticleSupplier)
+}
+
+// Marca un proveedor como PRINCIPAL de un ingrediente de forma EXCLUSIVA:
+// desmarca al resto de proveedores activos del mismo ingrediente y marca el
+// elegido. El trigger de article_supplier recalcula el coste del ingrediente
+// (sale del preferido); luego propagamos a los platos. Resuelve la limitación
+// de updateArticleSupplier, que no cascadea al cambiar is_preferred.
+export async function setPreferredSupplier(
+  linkId: string,
+  recipeItemId: string,
+): Promise<void> {
+  requireSupabase()
+  const { error: e1 } = await supabase!
+    .from('article_supplier')
+    .update({ is_preferred: false })
+    .eq('recipe_item_id', recipeItemId)
+    .eq('is_active', true)
+    .neq('id', linkId)
+  if (e1) throw new Error(`Error desmarcando proveedores previos: ${e1.message}`)
+  const { error: e2 } = await supabase!
+    .from('article_supplier')
+    .update({ is_preferred: true })
+    .eq('id', linkId)
+  if (e2) throw new Error(`Error marcando proveedor principal: ${e2.message}`)
+  try {
+    await cascadeFromItem(recipeItemId)
+  } catch (e) {
+    console.error(`setPreferredSupplier: cascada de coste falló para ${recipeItemId}`, e)
+  }
+}
+
+// "Dejar de comprar este artículo a este proveedor": desactiva el vínculo
+// (is_active=false, no DELETE físico, convención del service). El trigger
+// recalcula el coste del ingrediente desde los proveedores que queden; luego
+// propagamos a los platos. Devuelve el recipe_item_id afectado.
+export async function unlinkSupplierFormat(linkId: string): Promise<string> {
+  requireSupabase()
+  const { data, error } = await supabase!
+    .from('article_supplier')
+    .update({ is_active: false })
+    .eq('id', linkId)
+    .select('*')
+    .single()
+  if (error) throw new Error(`Error quitando el vínculo ${linkId}: ${error.message}`)
+  const updated = rowToArticleSupplier(data)
+  try {
+    await cascadeFromItem(updated.recipeItemId)
+  } catch (e) {
+    console.error(`unlinkSupplierFormat: cascada de coste falló para ${updated.recipeItemId}`, e)
+  }
+  return updated.recipeItemId
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // Alta de alto nivel: proveedor vende un formato simple (opción A).
 // Autocrea el NODO TRIVIAL del árbol y lo enlaza al proveedor con su precio.
@@ -349,17 +428,34 @@ export interface SimplePurchaseSetup {
   needsReview?: boolean
   createdBy?: string | null
   createdByName?: string | null
+  // Estrategia de coste ACTUAL del ingrediente. Si es 'fixed', el service la
+  // pasa a 'last_purchase' antes del alta (la compra debe poder pisar el coste).
+  // Quien llama la pasa (la UI/foto→IA ya tiene el item cargado); el service no
+  // hace un SELECT extra para averiguarla.
+  priorCostStrategy?: CostStrategy
 }
 
 export interface SimplePurchaseResult {
   format: PurchaseFormat
   link: ArticleSupplier
+  ancestorsRecomputed: number
 }
 
 export async function setupSimplePurchase(
   setup: SimplePurchaseSetup
 ): Promise<SimplePurchaseResult> {
   requireSupabase()
+
+  // FLIP DE ESTRATEGIA (vive aquí para que lo hereden foto→IA/import):
+  // si el ingrediente cobra su coste de un valor fijo tecleado, la compra NO lo
+  // pisaría (precedencia 'fixed' en kitchen_recompute_raw_cost). Lo pasamos a
+  // 'last_purchase' ANTES de insertar el link, para que el trigger del link
+  // calcule el coste desde el precio. El fixed_cost queda como respaldo.
+  // Idempotente: si ya estaba en una estrategia de compra, no se toca.
+  if (setup.priorCostStrategy === 'fixed') {
+    await updateRecipeItem(setup.itemId, { costStrategy: 'last_purchase' })
+  }
+
   const format = await createPurchaseFormat({
     accountId: setup.accountId,
     itemId: setup.itemId,
@@ -371,22 +467,48 @@ export async function setupSimplePurchase(
     createdBy: setup.createdBy,
     createdByName: setup.createdByName,
   })
-  const link = await linkSupplierFormat({
-    accountId: setup.accountId,
-    recipeItemId: setup.itemId,
-    supplierId: setup.supplierId,
-    purchaseFormatId: format.id,
-    lastPrice: setup.lastPrice,
-    supplierCode: setup.supplierCode ?? null,
-    isPreferred: setup.isPreferred ?? false,
-  })
-  // El trigger ya recalculó el coste del ingrediente al insertar el precio.
-  // Propagamos a los platos/sub-recetas que lo usan. Fail-safe: si falla la
-  // cascada, el alta NO se revierte (el coste del ingrediente quedó bien).
+
+  // COMPENSACIÓN: si falla el enlace tras crear el formato, archivamos el
+  // formato recién creado para no dejar un nodo huérfano. (Archivar, no DELETE
+  // físico: convención del service y evita disparar el trigger SECURITY DEFINER.
+  // listFormatsByItem ya filtra archived_at IS NULL, así que desaparece de vista.)
+  let link: ArticleSupplier
   try {
-    await cascadeFromItem(setup.itemId)
+    link = await linkSupplierFormat({
+      accountId: setup.accountId,
+      recipeItemId: setup.itemId,
+      supplierId: setup.supplierId,
+      purchaseFormatId: format.id,
+      lastPrice: setup.lastPrice,
+      supplierCode: setup.supplierCode ?? null,
+      isPreferred: setup.isPreferred ?? false,
+    })
+  } catch (e) {
+    try {
+      await updatePurchaseFormat(format.id, {
+        isActive: false,
+        archivedAt: new Date().toISOString(),
+      })
+    } catch (cleanupErr) {
+      console.error(
+        `setupSimplePurchase: el enlace falló y además no se pudo archivar el formato huérfano ${format.id}`,
+        cleanupErr,
+      )
+    }
+    throw e
+  }
+
+  // El trigger ya recalculó el coste del ingrediente al insertar el precio.
+  // Propagamos a los platos/sub-recetas que lo usan y devolvemos cuántos se
+  // recalcularon (recuento real, no inventado). Fail-safe: si la cascada falla,
+  // el alta NO se revierte (el coste del ingrediente quedó bien); devolvemos 0.
+  let ancestorsRecomputed = 0
+  try {
+    const result = await cascadeFromItem(setup.itemId)
+    ancestorsRecomputed = result.ancestorsRecomputed
   } catch (e) {
     console.error(`setupSimplePurchase: cascada de coste falló para ${setup.itemId}`, e)
   }
-  return { format, link }
+
+  return { format, link, ancestorsRecomputed }
 }

@@ -6,7 +6,7 @@
 // V1 mínima: solo la página de Ingredientes (recipe_item type='raw').
 // El resto del modelo (recetas, sub-recetas, platos, conversiones,
 // settings, plantillas) llegará en sesiones siguientes.
-import { ChefHat, BookOpen, TrendingUp, Target } from 'lucide-react'
+import { ChefHat, BookOpen, TrendingUp, Target, Truck } from 'lucide-react'
 import type { ModuleDefinition } from '@/shell/types'
 import KitchenItemsPage from '@/modules/kitchen/pages/KitchenItemsPage'
 // KitchenRecipePage (lienzo viejo) → reemplazado por RecipeEditorPage (rediseño V1).
@@ -17,6 +17,7 @@ import KitchenItemsPage from '@/modules/kitchen/pages/KitchenItemsPage'
 import KitchenRecipesPage from '@/modules/kitchen/pages/KitchenRecipesPage'
 import KitchenProfitabilityPage from '@/modules/kitchen/pages/KitchenProfitabilityPage'
 import KitchenMenuEngineeringPage from '@/modules/kitchen/pages/KitchenMenuEngineeringPage'
+import SuppliersPage from '@/modules/kitchen/pages/SuppliersPage'
 export const kitchenModule: ModuleDefinition = {
   // Identidad
   id: 'kitchen',
@@ -30,6 +31,7 @@ export const kitchenModule: ModuleDefinition = {
   basePath: 'kitchen',
   routes: [
     { path: '',                  element: <KitchenItemsPage /> },
+    { path: 'proveedores',       element: <SuppliersPage /> },
     { path: 'recetas',           element: <KitchenRecipesPage /> },
     { path: 'rentabilidad',      element: <KitchenProfitabilityPage /> },
     { path: 'ingenieria-menus',  element: <KitchenMenuEngineeringPage /> },
@@ -38,6 +40,7 @@ export const kitchenModule: ModuleDefinition = {
   sidebar: {
     items: [
       { id: 'kitchen_items',         label: 'Ingredientes',        icon: ChefHat,    path: '' },
+      { id: 'kitchen_suppliers',     label: 'Proveedores',         icon: Truck,      path: 'proveedores',      requiredRole: 'manager' },
       { id: 'kitchen_recipes',       label: 'Recetas',             icon: BookOpen,   path: 'recetas',          requiredRole: 'manager' },
       { id: 'kitchen_profitability', label: 'Rentabilidad',        icon: TrendingUp, path: 'rentabilidad',     requiredRole: 'manager' },
       { id: 'kitchen_menu_eng',      label: 'Ingeniería de menús', icon: Target,     path: 'ingenieria-menus', requiredRole: 'manager' },
