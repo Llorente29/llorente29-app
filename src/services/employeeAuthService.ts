@@ -321,3 +321,60 @@ export async function deletePermanentEmployee(
     return { ok: false, error: msg }
   }
 }
+
+/**
+ * Genera un enlace mágico de acceso para un empleado-con-cuenta (modelo C1).
+ *
+ * NO envía correo: la Edge Function llama a admin.generateLink y DEVUELVE el
+ * enlace. El caller (StaffPage) lo convierte en QR / copiar-enlace para
+ * entregarlo por el canal que quiera (WhatsApp, SMS, en mano, email manual).
+ * El trabajador, al abrirlo, queda con sesión iniciada SIN teclear nada.
+ *
+ * El enlace es de un solo uso y caduca según la config de Auth de Supabase
+ * (OTP expiry). Reenviar acceso = volver a llamar esta función (el anterior
+ * queda invalidado al generarse uno nuevo o al expirar).
+ *
+ * Solo admins (la Edge Function valida el rol y la pertenencia cross-tenant).
+ *
+ * @param employeeId  Empleado destino. Debe tener acceso (username no nulo) y
+ *                     pertenecer a la cuenta del admin que invoca.
+ * @param redirectTo  Opcional. URL de aterrizaje tras verificar el enlace; debe
+ *                     estar en la allowlist de Redirect URLs de Supabase Auth.
+ *                     Sin él, Supabase redirige al SITE_URL por defecto.
+ */
+export async function generateAccessLink(
+  employeeId: string,
+  redirectTo?: string,
+): Promise<{ ok: boolean; tokenHash?: string; type?: string; error?: string }> {
+  if (!supabase) return { ok: false, error: 'Supabase no disponible' }
+
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) return { ok: false, error: 'No hay sesión activa' }
+
+  const url = getFunctionUrl('manage-employee')
+  if (!url) return { ok: false, error: 'No se ha podido determinar la URL de la función' }
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        action: 'generate_access_link',
+        employeeId,
+        ...(redirectTo ? { redirectTo } : {}),
+      }),
+    })
+
+    const result = await response.json()
+    if (!response.ok || !result.ok) {
+      return { ok: false, error: result.error || `HTTP ${response.status}` }
+    }
+    return { ok: true, tokenHash: result.tokenHash, type: result.type }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Error desconocido'
+    return { ok: false, error: msg }
+  }
+}

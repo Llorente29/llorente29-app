@@ -6,6 +6,7 @@ import DocumentosTab from '../components/personal/DocumentosTab'
 import VacacionesTab from '../components/personal/VacacionesTab'
 import FormacionesTab from '../components/personal/FormacionesTab'
 import SendMessageModal from '../components/personal/SendMessageModal'
+import AccesoTrabajadorPanel from '../components/personal/AccesoTrabajadorPanel'
 import InsightsPage from './InsightsPage'
 import {
   createEmployeeWithAccount,
@@ -935,6 +936,9 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
               </Button>
             )}
             {canManageEmployees && emp.active && (
+              <AccesoTrabajadorPanel employeeId={emp.id} employeeName={emp.name} />
+            )}
+            {canManageEmployees && emp.active && (
               <Button
                 variant="outline"
                 size="sm"
@@ -1798,7 +1802,7 @@ function suggestRoleByPosition(position: string | undefined): 'worker' | 'manage
   return 'worker'
 }
 
-type CreatedCredentials = { username: string; password: string }
+type CreatedCredentials = { username: string; password: string; employeeId: string }
 
 function NewEmployeeModal({ locations, onCancel, onCreated, onCreateLocal }: NewEmployeeModalProps) {
   const [name, setName] = useState('')
@@ -1885,7 +1889,7 @@ function NewEmployeeModal({ locations, onCancel, onCreated, onCreateLocal }: New
 
       // Éxito: mostrar credenciales antes de cerrar. Usamos el username canónico
       // que devuelve el server (puede diferir tras normalización).
-      setCreated({ username: result.username || cleanUsername, password })
+      setCreated({ username: result.username || cleanUsername, password, employeeId: result.employee?.id || '' })
       // Avisar al padre del nuevo empleado para que refresque su lista, pero NO
       // cerramos: el manager debe ver/copiar las credenciales primero.
       if (result.employee?.id) onCreated(result.employee.id)
@@ -1942,6 +1946,10 @@ function NewEmployeeModal({ locations, onCancel, onCreated, onCreateLocal }: New
               <p className="font-mono text-base font-semibold">{created.password}</p>
             </div>
           </div>
+
+          {created.employeeId && (
+            <AccesoTrabajadorPanel employeeId={created.employeeId} employeeName={name} />
+          )}
 
           <div className="flex items-center justify-end gap-2 pt-2 border-t border-border-default">
             <Button variant="outline" size="sm" onClick={handleCopyCredentials}>

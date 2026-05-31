@@ -17,7 +17,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-type Action = "create" | "deactivate" | "reactivate" | "delete_permanent" | "set_password" | "grant_access";
+type Action = "create" | "deactivate" | "reactivate" | "delete_permanent" | "set_password" | "grant_access" | "generate_access_link";
 
 // Dominio sintético interno. NO necesita estar verificado en Resend: nunca se
 // envía correo a estas direcciones; son sólo el identificador en auth.users.
@@ -53,6 +53,10 @@ interface Payload {
   // Campos usados por la acción grant_access (dar acceso a un employee preexistente).
   username?: string;
   role?: "worker" | "manager";
+  // Usado por generate_access_link: a dónde aterriza el trabajador tras verificar
+  // el enlace (pantalla de claim). Debe estar en la allowlist de Redirect URLs de
+  // Supabase Auth. Opcional: sin él, Supabase redirige al SITE_URL por defecto.
+  redirectTo?: string;
 }
 
 // ────────────────────────────────────────
@@ -159,6 +163,8 @@ Deno.serve(async (req) => {
       return await handleSetPassword(adminClient, payload, callerUser.id);
     case "grant_access":
       return await handleGrantAccess(adminClient, payload, callerUser.id, callerProfile.account_id);
+    case "generate_access_link":
+      return await handleGenerateAccessLink(adminClient, payload, callerUser.id, callerProfile.account_id);
     default:
       return errorResponse(`Unknown action: ${payload.action}`, 400);
   }
@@ -686,5 +692,96 @@ async function handleGrantAccess(admin: any, payload: Payload, actorUserId: stri
     employeeId: employee.id,
     username,
     role: requestedRole,
+  });
+}
+
+// ────────────────────────────────────────
+// ACCIÓN: GENERATE_ACCESS_LINK (modelo C1 — entrega cómoda del acceso)
+// Genera un enlace mágico de Supabase para el usuario sintético del empleado.
+// NO envía correo: admin.generateLink DEVUELVE el enlace; Folvy lo entrega como
+// quiera (QR / copiar-enlace para WhatsApp/SMS/email manual). El enlace es de un
+// solo uso y caduca según la config de Auth (OTP expiry). Reenviar = volver a
+// llamar aquí (el anterior queda invalidado al generarse uno nuevo / al expirar).
+// El trabajador, al abrirlo, queda con sesión iniciada SIN teclear nada.
+// Solo admins (gate aplicado arriba).
+// ────────────────────────────────────────
+// deno-lint-ignore no-explicit-any
+async function handleGenerateAccessLink(admin: any, payload: Payload, actorUserId: string, callerAccountId: string | null): Promise<Response> {
+  if (!payload.employeeId) return errorResponse("Missing employeeId", 400);
+
+  if (!callerAccountId) {
+    return errorResponse("El administrador no tiene cuenta asignada (estado inconsistente).", 500);
+  }
+
+  // 1) Cargar el empleado, su username (identidad de login C1) y su local.
+  const { data: employee, error: empErr } = await admin
+    .from("employees")
+    .select("id, name, username, location_id")
+    .eq("id", payload.employeeId)
+    .maybeSingle();
+
+  if (empErr) return errorResponse(`Employee fetch error: ${empErr.message}`, 500);
+  if (!employee) return errorResponse("El empleado no existe", 404);
+  if (!employee.username) {
+    return errorResponse("Este empleado no tiene acceso a la app. Dale acceso primero.", 409);
+  }
+
+  // 1-bis) Cross-tenant: el empleado tiene que pertenecer a la cuenta del admin
+  //        que invoca (mismo patrón que grant_access). Sin esto, un admin de la
+  //        cuenta A podría generar un enlace de acceso —que inicia sesión como el
+  //        trabajador— para un empleado de la cuenta B. Escalada entre inquilinos.
+  if (!employee.location_id) {
+    return errorResponse("El empleado no tiene local asignado; no se puede verificar su cuenta.", 400);
+  }
+  const { data: loc, error: locErr } = await admin
+    .from("locations")
+    .select("account_id")
+    .eq("id", employee.location_id)
+    .maybeSingle();
+
+  if (locErr) return errorResponse(`Location fetch error: ${locErr.message}`, 500);
+  if (!loc || loc.account_id !== callerAccountId) {
+    return errorResponse("El empleado no pertenece a tu cuenta", 403);
+  }
+
+  // 2) Confirmar que tiene cuenta (user_profile) — defensa en profundidad.
+  const { data: profile } = await admin
+    .from("user_profiles")
+    .select("user_id")
+    .eq("employee_id", employee.id)
+    .maybeSingle();
+
+  if (!profile?.user_id) {
+    return errorResponse("El empleado no tiene cuenta de acceso", 404);
+  }
+
+  // 3) Generar el enlace mágico del usuario sintético (sin enviar correo).
+  const syntheticEmail = syntheticEmailFor(employee.username);
+  const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
+    type: "magiclink",
+    email: syntheticEmail,
+  });
+
+  if (linkErr || !linkData?.properties?.hashed_token) {
+    return errorResponse(`Link generation failed: ${linkErr?.message || "unknown"}`, 500);
+  }
+
+  // 4) Audit log — NO registramos el enlace completo: es una credencial.
+  await admin.from("security_audit_log").insert({
+    actor_user_id: actorUserId,
+    target_user_id: profile.user_id,
+    action: "employee_access_link_generated",
+    details: { employee_id: employee.id, username: employee.username, model: "C1" },
+  });
+
+  // 5) Respuesta — devolvemos el token_hash (no el action_link de Supabase). El
+  //    cliente arma la URL de Folvy /acceso?token_hash=...&type=magiclink y la
+  //    pantalla de aterrizaje canjea el token con verifyOtp (compatible con el
+  //    flujo PKCE). El token_hash es credencial de un solo uso; no se audita.
+  return jsonResponse({
+    ok: true,
+    employeeId: employee.id,
+    tokenHash: linkData.properties.hashed_token,
+    type: "magiclink",
   });
 }

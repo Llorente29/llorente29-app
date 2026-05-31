@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import AuthRouter from './auth/AuthRouter'
 import WelcomePage from './pages/WelcomePage'
 import ResetPasswordConfirmPage from './pages/ResetPasswordConfirmPage'
+import AccesoClaimPage from './pages/AccesoClaimPage'
 import { useApp } from './context/AppContext'
 import { isPublicAuthRoute, isAdminRoute } from './routes'
 import { gate } from '@/platform/feature-gate/featureGateService'
@@ -72,6 +73,11 @@ export default function App() {
   //          - /login, /welcome, /reset-password → AuthRouter (respeta sesión).
   if (location.pathname === '/reset-password/confirm') {
     return <ResetPasswordConfirmPage />
+  }
+  // Aterrizaje del enlace de acceso del trabajador (Modelo C1). Ruta pública:
+  // canjea el token y establece sesión antes de cualquier gate.
+  if (location.pathname === '/acceso') {
+    return <AccesoClaimPage />
   }
   if (isPublicAuthRoute(location.pathname)) {
     return <AuthRouter />
