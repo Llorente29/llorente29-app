@@ -18,11 +18,18 @@
 //     Es la puerta lógica al portal de staff (antes solo accesible por URL).
 //   - "Cerrar sesión" → signOut() (deuda de logout en Shell, Sesión 14).
 // El estado de admin se resuelve dentro del propio TopBar (no toca Shell.tsx).
+//
+// R1.3a (responsive móvil): en < 768px el TopBar se vuelve MÍNIMO — se ocultan
+// las pestañas de módulos (viven en la barra inferior, ShellBottomNav) y la
+// etiqueta de local, y se aprietan paddings. Quedan wordmark + engranaje +
+// campana + avatar. Así desaparece la fila que empujaba el clúster derecho
+// fuera de pantalla. En >= 768px NO cambia nada (mismo TopBar de Sesión 14).
 
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Home, MapPin, Settings, Shield, LogOut, User } from 'lucide-react'
 import { getOrderedModules } from './moduleRegistry'
+import { useIsMobile } from './useIsMobile'
 import { usePlatformAdmin } from '@/platform/usePlatformAdmin'
 import { usePermissions } from '@/modules/multitenancy/hooks/usePermissions'
 import { signOut } from '@/services/authService'
@@ -87,6 +94,7 @@ export default function ShellTopBar({
 }: ShellTopBarProps) {
   const modules = getOrderedModules()
   const navigate = useNavigate()
+  const isMobile = useIsMobile()
   const { isPlatformAdmin } = usePlatformAdmin()
   const { hasPermission, role } = usePermissions()
 
@@ -128,7 +136,7 @@ export default function ShellTopBar({
   return (
     <header
       className="flex items-center shrink-0"
-      style={{ background: INK, height: 68, paddingLeft: 26, paddingRight: 26, gap: 34 }}
+      style={{ background: INK, height: 68, paddingLeft: isMobile ? 16 : 26, paddingRight: isMobile ? 16 : 26, gap: isMobile ? 0 : 34 }}
     >
       {/* Wordmark inline (isotipo + texto), proporciones de maqueta */}
       <div className="flex items-center shrink-0" style={{ gap: 11 }}>
@@ -142,33 +150,38 @@ export default function ShellTopBar({
         </span>
       </div>
 
-      {/* Pestañas: Inicio + módulos */}
-      <nav className="flex items-stretch self-stretch" style={{ gap: 4 }}>
-        <TabButton
-          label="Inicio"
-          icon={<Home size={18} />}
-          active={activeKey === HOME_KEY}
-          onClick={() => onSelect(HOME_KEY)}
-        />
-        {visibleModules.map(m => {
-          const Icon = m.icon
-          return (
-            <TabButton
-              key={m.id}
-              label={m.name}
-              icon={<Icon size={18} />}
-              active={activeKey === m.id}
-              onClick={() => onSelect(m.id)}
-            />
-          )
-        })}
-      </nav>
+      {/* Pestañas: Inicio + módulos. En móvil se ocultan: viven en la barra
+          inferior (ShellBottomNav). */}
+      {!isMobile && (
+        <nav className="flex items-stretch self-stretch" style={{ gap: 4 }}>
+          <TabButton
+            label="Inicio"
+            icon={<Home size={18} />}
+            active={activeKey === HOME_KEY}
+            onClick={() => onSelect(HOME_KEY)}
+          />
+          {visibleModules.map(m => {
+            const Icon = m.icon
+            return (
+              <TabButton
+                key={m.id}
+                label={m.name}
+                icon={<Icon size={18} />}
+                active={activeKey === m.id}
+                onClick={() => onSelect(m.id)}
+              />
+            )
+          })}
+        </nav>
+      )}
 
       {/* Lado derecho: local, notificaciones, avatar */}
       <div className="flex items-center shrink-0" style={{ marginLeft: 'auto', gap: 16 }}>
-        <span className="inline-flex items-center" style={{ color: MUTED, fontSize: 14, gap: 5 }}>
-          <MapPin size={16} /> {locationLabel}
-        </span>
+        {!isMobile && (
+          <span className="inline-flex items-center" style={{ color: MUTED, fontSize: 14, gap: 5 }}>
+            <MapPin size={16} /> {locationLabel}
+          </span>
+        )}
         {configVisible && (
           <button
             type="button"

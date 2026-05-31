@@ -10,10 +10,10 @@
 // Contrato calcado del ShellTopBar (activeKey + onSelect) para compartir la
 // misma lógica de navegación del Shell (goToKey) sin duplicarla.
 //
-// R1.2 es ADITIVO: aparece la barra, no se quita nada. Las pestañas del TopBar
-// y el ModuleSidebar siguen ahí (redundantes pero funcionales) hasta R1.3, que
-// minimiza el TopBar, convierte el sidebar en sub-pestañas (2º nivel) e inserta
-// la IA como héroe central de esta barra. Así ningún paso deja navegación rota.
+// R1.3a (fix de ajuste): las pestañas llevan minWidth:0 para que flex:1 las
+// encoja de verdad (sin esto, las etiquetas largas empujaban la fila fuera del
+// ancho y se perdía una pestaña). Etiquetas cortas sin el prefijo "Folvy" +
+// elipsis de seguridad → 5 pestañas entran holgadas hasta ~320px.
 
 import { useState } from 'react'
 import { Home, MoreHorizontal } from 'lucide-react'
@@ -48,6 +48,13 @@ interface NavEntry {
   Icon: IconType
 }
 
+// Etiqueta corta para la barra inferior: sin el prefijo de marca "Folvy " (a
+// 10.5px y 5 pestañas, "Team/Safety/Sales/Kitchen" entran holgadas y se leen
+// mejor que "Folvy Team"). El nombre completo se mantiene en el TopBar.
+function shortLabel(name: string): string {
+  return name.replace(/^Folvy\s+/i, '')
+}
+
 // Mirror EXACTO de la visibilidad por módulo del ShellTopBar (un módulo se ve
 // si tiene >=1 item que pasa permiso Y rol). Se replica aquí; en R1.3 se extrae
 // a un helper compartido cuando se toque el TopBar (se elimina el duplicado).
@@ -72,10 +79,10 @@ export default function ShellBottomNav({ activeKey, onSelect }: ShellBottomNavPr
   const visibleModules = getOrderedModules()
     .filter(m => isModuleVisible(m, hasPermission, role))
 
-  // Entradas: Inicio + módulos visibles.
+  // Entradas: Inicio + módulos visibles (etiqueta corta).
   const allEntries: NavEntry[] = [
     { key: HOME_KEY, label: 'Inicio', Icon: Home },
-    ...visibleModules.map(m => ({ key: m.id, label: m.name, Icon: m.icon })),
+    ...visibleModules.map(m => ({ key: m.id, label: shortLabel(m.name), Icon: m.icon })),
   ]
 
   // Si caben todas, se muestran. Si no, primeras (MAX_TABS - 1) + "Más".
@@ -187,14 +194,23 @@ function BottomTab({
       className="flex flex-col items-center justify-center transition-colors"
       style={{
         flex: 1,
+        minWidth: 0,            // clave: permite que flex:1 encoja de verdad
         gap: 3,
         height: 56,
+        padding: '0 2px',
         background: 'transparent',
         color: active ? 'var(--color-terracota)' : MUTED,
       }}
     >
       <Icon size={22} />
-      <span style={{ fontSize: 10.5, fontWeight: 500, lineHeight: 1 }}>{label}</span>
+      <span
+        style={{
+          fontSize: 10.5, fontWeight: 500, lineHeight: 1,
+          maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}
+      >
+        {label}
+      </span>
     </button>
   )
 }

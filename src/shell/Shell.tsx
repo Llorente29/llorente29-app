@@ -16,14 +16,18 @@
 //
 // R1.2 (responsive móvil): se añade ShellBottomNav, la barra de navegación
 //        inferior del 1er nivel (módulos), montada SOLO en móvil (useIsMobile).
-//        Es aditiva: no se quita ni el TopBar ni el ModuleSidebar (eso es R1.3).
-//        En escritorio (>= 768px) NO cambia nada: isMobile = false → la barra no
-//        se monta y el padding inferior del contenido es el de siempre.
+//
+// R1.3a (responsive móvil): en móvil, dentro de un módulo, el ModuleSidebar
+//        (208px fijo) se sustituye por MobileModuleTabs (tira deslizable del 2º
+//        nivel arriba) y el layout pasa a vertical (flex-col) para devolver el
+//        ancho a la pantalla. En escritorio (>= 768px) NO cambia nada: sigue el
+//        ModuleSidebar a la izquierda y el layout horizontal de Sesión 14.
 
 import { useState } from 'react'
 import { useNavigate, useLocation, Routes, Route } from 'react-router-dom'
 import ShellTopBar, { HOME_KEY } from './ShellTopBar'
 import ModuleSidebar from './ModuleSidebar'
+import MobileModuleTabs from './MobileModuleTabs'
 import ShellBottomNav from './ShellBottomNav'
 import { getModuleById, getModuleByBasePath } from './moduleRegistry'
 import { configuracionModule } from '../modules/configuracion/module'
@@ -43,14 +47,16 @@ export default function Shell() {
   const location = useLocation()
   const { userProfile } = useApp()
 
-  // R1.2: ¿viewport móvil? (< 768px, el breakpoint md de Tailwind). Decide si
-  // se monta la barra inferior y cuánto padding inferior necesita el contenido
-  // para no quedar tapado por ella. Fuente de verdad única: useIsMobile.
+  // R1.2/R1.3a: ¿viewport móvil? (< 768px, el breakpoint md de Tailwind).
+  // Decide barra inferior, sub-pestañas vs sidebar, paddings. Fuente de verdad
+  // única: useIsMobile.
   const isMobile = useIsMobile()
 
-  // Padding inferior del <main>: en móvil hay que dejar hueco para la barra
-  // fija (56px) + el safe-area (notch/indicador home, por viewport-fit=cover)
-  // + el aire de siempre. En escritorio, el de antes (24px).
+  // Paddings del <main>. En móvil: laterales más ajustados y, abajo, hueco para
+  // la barra fija (56px) + safe-area (notch/indicador home, por viewport-fit=
+  // cover). En escritorio: los de siempre (26 / 24 / 24).
+  const mainPadX = isMobile ? 16 : 26
+  const mainPadTop = isMobile ? 16 : 24
   const mainPaddingBottom = isMobile
     ? 'calc(56px + env(safe-area-inset-bottom) + 24px)'
     : 24
@@ -93,7 +99,8 @@ export default function Shell() {
     ? userName.trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase()
     : 'JG'
 
-  // Navega a una sección desde el TopBar. HOME_KEY → raíz; módulo → /:base.
+  // Navega a una sección desde el TopBar/barra inferior. HOME_KEY → raíz;
+  // módulo → /:base.
   function goToKey(key: string) {
     if (key === HOME_KEY) {
       navigate('/')
@@ -115,6 +122,14 @@ export default function Shell() {
     navigate(`/${activeModule.basePath}${suffix}`)
   }
 
+  // Selección de un item del 2º nivel (la usan ModuleSidebar en escritorio y
+  // MobileModuleTabs en móvil: misma lógica, un solo sitio).
+  function handleSelectItem(itemId: string) {
+    if (!activeModule) return
+    const item = activeModule.sidebar.items.find(i => i.id === itemId)
+    if (item) goToItemPath(item.path)
+  }
+
   // Si el encargado dual ha entrado en "Ver como trabajador", renderizamos
   // TrabajadorApp en lugar del layout normal. onExitMode SOLO vuelve a gestión:
   // NO cierra sesión (eso es competencia del menú de usuario del TopBar).
@@ -127,6 +142,19 @@ export default function Shell() {
       />
     )
   }
+
+  // Rutas reales del módulo activo. El <Routes> del Shell ve el pathname
+  // COMPLETO (no relativo), porque el Shell se monta fuera del <Routes> raíz de
+  // App.tsx. Por eso el path incluye el prefijo 'base/'. r.path es relativo al
+  // basePath. Se calcula una vez y se reutiliza en el layout móvil y escritorio.
+  const moduleRoutesEl = activeModule ? (
+    <Routes>
+      {activeModule.routes.map(r => {
+        const full = `${activeModule.basePath}/${r.path ?? ''}`.replace(/\/+$/, '')
+        return <Route key={r.path ?? 'index'} path={full} element={r.element} />
+      })}
+    </Routes>
+  ) : null
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'var(--color-bg-page)' }}>
@@ -141,31 +169,34 @@ export default function Shell() {
       />
 
       {activeModule ? (
-        <div className="flex-1 flex">
-          <ModuleSidebar
-            moduleName={activeModule.name}
-            sidebar={activeModule.sidebar}
-            activeItemId={activeItem?.id ?? ''}
-            onSelectItem={(itemId) => {
-              const item = activeModule.sidebar.items.find(i => i.id === itemId)
-              if (item) goToItemPath(item.path)
-            }}
-          />
-          <main className="flex-1" style={{ paddingLeft: 26, paddingRight: 26, paddingTop: 24, paddingBottom: mainPaddingBottom }}>
-            {/* G-8.2: rutas reales del módulo. El <Routes> del Shell ve el
-                pathname COMPLETO (no relativo), porque el Shell se monta fuera
-                del <Routes> raíz de App.tsx. Por eso el path incluye el prefijo
-                'shell/:base/'. r.path es relativo al basePath. */}
-            <Routes>
-              {activeModule.routes.map(r => {
-                const full = `${activeModule.basePath}/${r.path ?? ''}`.replace(/\/+$/, '')
-                return <Route key={r.path ?? 'index'} path={full} element={r.element} />
-              })}
-            </Routes>
-          </main>
-        </div>
+        isMobile ? (
+          // Móvil: sub-pestañas del 2º nivel arriba + contenido a ancho completo.
+          <div className="flex-1 flex flex-col">
+            <MobileModuleTabs
+              sidebar={activeModule.sidebar}
+              activeItemId={activeItem?.id ?? ''}
+              onSelectItem={handleSelectItem}
+            />
+            <main className="flex-1" style={{ paddingLeft: mainPadX, paddingRight: mainPadX, paddingTop: mainPadTop, paddingBottom: mainPaddingBottom }}>
+              {moduleRoutesEl}
+            </main>
+          </div>
+        ) : (
+          // Escritorio: sidebar a la izquierda + contenido (layout Sesión 14).
+          <div className="flex-1 flex">
+            <ModuleSidebar
+              moduleName={activeModule.name}
+              sidebar={activeModule.sidebar}
+              activeItemId={activeItem?.id ?? ''}
+              onSelectItem={handleSelectItem}
+            />
+            <main className="flex-1" style={{ paddingLeft: mainPadX, paddingRight: mainPadX, paddingTop: mainPadTop, paddingBottom: mainPaddingBottom }}>
+              {moduleRoutesEl}
+            </main>
+          </div>
+        )
       ) : (
-        <main className="flex-1" style={{ paddingLeft: 26, paddingRight: 26, paddingTop: 24, paddingBottom: mainPaddingBottom }}>
+        <main className="flex-1" style={{ paddingLeft: mainPadX, paddingRight: mainPadX, paddingTop: mainPadTop, paddingBottom: mainPaddingBottom }}>
           <HomeGeneral userName={userName} onOpenModule={goToKey} />
         </main>
       )}

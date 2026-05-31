@@ -19,9 +19,16 @@
 //
 // NAVEGACIÓN: onOpenModule cambia la pestaña activa del Shell (se pasa desde
 // Shell.tsx). El render del contenido del módulo es G-6.
+//
+// R1.3a (responsive móvil): las dos rejillas tenían columnas fijas (4 y 3), que
+// en móvil estrecho no se apilaban y desbordaban a lo ancho → scroll horizontal
+// que paneaba la barra inferior fija. Ahora, en móvil, las métricas pasan a 2
+// columnas y las tarjetas de módulo a 1 (apiladas). En escritorio (>= 768px) NO
+// cambia nada: siguen siendo 4 y 3 columnas (layout de Sesión 14).
 
 import { Banknote, Users, Inbox, Leaf, BarChart3 } from 'lucide-react'
 
+import { useIsMobile } from '../useIsMobile'
 import MetricCard from './widgets/MetricCard'
 import ModuleSummaryCard from './widgets/ModuleSummaryCard'
 
@@ -55,6 +62,11 @@ function todayLabel(): string {
 
 export default function HomeGeneral({ userName, onOpenModule }: HomeGeneralProps) {
   const saludo = userName ? `${greeting()}, ${userName}` : greeting()
+  const isMobile = useIsMobile()
+
+  // Columnas responsive: escritorio = 4 y 3 (Sesión 14); móvil = 2 y 1 (apilan).
+  const metricsColumns = isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)'
+  const modulesColumns = isMobile ? '1fr' : 'repeat(3, 1fr)'
 
   return (
     <div>
@@ -70,7 +82,7 @@ export default function HomeGeneral({ userName, onOpenModule }: HomeGeneralProps
 
       {/* 4 métricas transversales (MOCK) */}
       <div
-        style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 22 }}
+        style={{ display: 'grid', gridTemplateColumns: metricsColumns, gap: 12, marginBottom: 22 }}
       >
         <MetricCard label="Ventas hoy" value="3.840 €" icon={Banknote} subtitle="+12% vs ayer" subtitleTone="positive" />
         <MetricCard label="Trabajando ahora" value="12" icon={Users} subtitle="en 3 locales" />
@@ -79,7 +91,7 @@ export default function HomeGeneral({ userName, onOpenModule }: HomeGeneralProps
       </div>
 
       {/* 3 tarjetas-resumen por módulo (MOCK) */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: modulesColumns, gap: 12 }}>
         <ModuleSummaryCard
           title="Team"
           icon={Users}
