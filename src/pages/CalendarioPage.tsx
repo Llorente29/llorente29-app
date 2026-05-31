@@ -366,7 +366,7 @@ export default function CalendarioPage() {
           <table className="w-full text-sm">
             <thead className="bg-accent text-text-on-accent">
               <tr>
-                <th className="px-3 py-2 text-left">Turno</th>
+                <th className="px-3 py-2 text-left sticky left-0 z-20 bg-accent border-r border-white/15">Turno</th>
                 {DAYS.map(d => (
                   <th key={d} className="px-2 py-2 text-center w-32">
                     {DAY_LABELS_SHORT[d]}
@@ -384,7 +384,7 @@ export default function CalendarioPage() {
                 const tHours = shiftDurationHours(t.start_time, t.end_time)
                 return (
                   <tr key={t.id} className="border-b">
-                    <td className="px-3 py-2 align-top">
+                    <td className="px-3 py-2 align-top sticky left-0 z-10 bg-card border-r border-border-default">
                       <div className="font-medium">{t.label}</div>
                       <div className="text-xs text-text-secondary font-mono">
                         {t.start_time.slice(0, 5)} – {t.end_time.slice(0, 5)}

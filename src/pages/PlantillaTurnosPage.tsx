@@ -111,7 +111,7 @@ export default function PlantillaTurnosPage() {
         <table className="w-full text-sm">
           <thead className="bg-accent text-text-on-accent">
             <tr>
-              <th className="px-3 py-2 text-left">Etiqueta</th>
+              <th className="px-3 py-2 text-left sticky left-0 z-20 bg-accent border-r border-white/15">Etiqueta</th>
               <th className="px-3 py-2 text-center">Entrada</th>
               <th className="px-3 py-2 text-center">Salida</th>
               <th className="px-3 py-2 text-center">Horas</th>
@@ -220,8 +220,8 @@ function TemplateRow({
   }
 
   return (
-    <tr className="border-b border-border-default hover:bg-page transition-base">
-      <td className="px-3 py-2">
+    <tr className="border-b border-border-default hover:bg-page transition-base group">
+      <td className="px-3 py-2 sticky left-0 z-10 bg-card group-hover:bg-page border-r border-border-default">
         {editing ? (
           <input
             value={label}

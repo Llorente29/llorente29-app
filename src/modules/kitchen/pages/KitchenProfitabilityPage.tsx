@@ -9,11 +9,17 @@
 // cost primero: lo accionable arriba.
 //
 // La matriz de ingeniería de menús (popularidad × rentabilidad) es la Capa 2
-// y vive aparte: requiere el eje de unidades vendidas (sale_line).
+// y vive aparte (pestaña Ingeniería): requiere el eje de unidades vendidas.
+//
+// R1.4 (responsive móvil): en escritorio se mantiene la TABLA (Sesión 14); en
+// móvil (< 768px), donde una tabla de 6 columnas obliga a arrastrar, cada fila
+// se muestra como TARJETA apilada (nombre + chip de food cost + coste/PVP/margen
+// etiquetados), sin scroll horizontal. Misma data y mismo orden.
 
 import { useEffect, useMemo, useState } from 'react'
 import { TrendingUp, AlertTriangle, ChevronDown } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
+import { useIsMobile } from '@/shell/useIsMobile'
 import { listBrands } from '@/modules/multitenancy/services/brandsService'
 import { getMenuItemEconomics } from '@/modules/kitchen/services/menuItemService'
 import type { Brand } from '@/types/multitenancy'
@@ -83,6 +89,7 @@ const STATUS_SEVERITY: Record<FoodCostStatus, number> = {
 
 export default function KitchenProfitabilityPage() {
   const { activeAccountId } = useActiveAccount()
+  const isMobile = useIsMobile()
 
   const [brands, setBrands] = useState<Brand[]>([])
   const [selectedBrandId, setSelectedBrandId] = useState<string | null>(null)
@@ -229,17 +236,27 @@ export default function KitchenProfitabilityPage() {
         </div>
       )}
 
-      {/* Tabla */}
-      <div className="bg-card border border-border-default rounded-xl overflow-hidden">
-        {loadingRows ? (
-          <div className="p-8 text-center text-sm text-text-secondary">Cargando rentabilidad…</div>
-        ) : rows.length === 0 ? (
-          <div className="p-8 text-center text-sm text-text-secondary">
-            {selectedBrand
-              ? 'Esta marca no tiene platos en carta todavía.'
-              : 'Selecciona una marca para ver su rentabilidad.'}
-          </div>
-        ) : (
+      {/* Contenido: tarjetas en móvil, tabla en escritorio */}
+      {loadingRows ? (
+        <div className="bg-card border border-border-default rounded-xl p-8 text-center text-sm text-text-secondary">
+          Cargando rentabilidad…
+        </div>
+      ) : rows.length === 0 ? (
+        <div className="bg-card border border-border-default rounded-xl p-8 text-center text-sm text-text-secondary">
+          {selectedBrand
+            ? 'Esta marca no tiene platos en carta todavía.'
+            : 'Selecciona una marca para ver su rentabilidad.'}
+        </div>
+      ) : isMobile ? (
+        // ── Móvil: tarjetas apiladas (sin scroll horizontal) ──
+        <div className="space-y-2">
+          {sortedRows.map(r => (
+            <EconomicsCard key={`${r.menuItemId}-${r.channelId}`} r={r} />
+          ))}
+        </div>
+      ) : (
+        // ── Escritorio: tabla (layout Sesión 14) ──
+        <div className="bg-card border border-border-default rounded-xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm min-w-[700px]">
               <thead>
@@ -295,8 +312,8 @@ export default function KitchenProfitabilityPage() {
               </tbody>
             </table>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Pie con nota de incidencias */}
       {!loadingRows && kpis.noCost > 0 && (
@@ -308,6 +325,60 @@ export default function KitchenProfitabilityPage() {
           </p>
         </div>
       )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// EconomicsCard — fila como tarjeta (móvil)
+// ─────────────────────────────────────────────────────────────────────
+function EconomicsCard({ r }: { r: MenuItemEconomics }) {
+  return (
+    <div className="bg-card border border-border-default rounded-xl p-3">
+      {/* Cabecera: nombre + chip food cost */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-text-primary">{r.menuItemName}</span>
+            {r.flowType === 'licensed' && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent-bg text-text-secondary shrink-0">
+                cedida
+              </span>
+            )}
+          </div>
+          <div className="text-xs text-text-secondary mt-0.5">{r.channelName}</div>
+        </div>
+        <span
+          className={`shrink-0 inline-block px-2 py-0.5 rounded-full text-xs tabular-nums ${foodCostChipClasses(r.foodCostStatus)}`}
+          title={statusLabel(r.foodCostStatus)}
+        >
+          {formatPct(r.foodCostPct)}
+        </span>
+      </div>
+
+      {/* Métricas: coste / PVP / margen */}
+      <div className="grid grid-cols-3 gap-2 mt-3">
+        <Field label="Coste" value={r.costAvailable ? formatEur(r.cost) : '—'} />
+        <Field label="PVP" value={formatEur(r.priceWithVat)} />
+        <Field
+          label="Margen"
+          value={formatEur(r.netMargin)}
+          hint={r.netMarginPct !== null && r.netMarginPct !== undefined ? formatPct(r.netMarginPct) : undefined}
+          negative={r.netMargin !== null && r.netMargin < 0}
+        />
+      </div>
+    </div>
+  )
+}
+
+function Field({ label, value, hint, negative }: { label: string; value: string; hint?: string; negative?: boolean }) {
+  return (
+    <div>
+      <p className="text-[11px] text-text-secondary">{label}</p>
+      <p className={`text-sm tabular-nums ${negative ? 'text-danger' : 'text-text-primary'}`}>
+        {value}
+        {hint && <span className="ml-1 text-[11px] text-text-secondary">({hint})</span>}
+      </p>
     </div>
   )
 }
