@@ -626,9 +626,10 @@ function SupplierCreateModal({ accountId, actorId, actorName, onClose, onCreated
               type="button"
               onClick={() => setShowMore(true)}
               disabled={submitting}
-              className="text-xs font-medium text-accent hover:underline disabled:opacity-50"
+              className="w-full inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 transition-base disabled:opacity-50"
             >
-              + Añadir el resto de datos ahora
+              <Plus size={16} />
+              Añadir el resto de datos ahora
             </button>
           ) : (
             <div className="space-y-3 pt-1 border-t border-border-default">
