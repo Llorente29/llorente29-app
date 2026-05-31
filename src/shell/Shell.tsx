@@ -13,16 +13,24 @@
 //        TopBar y ModuleSidebar navegan con navigate(). Esto prepara el
 //        enchufado de páginas reales (G-8.2) y el cambio de default (G-8.6).
 //        Sigue tras la ruta /shell — NO es el render por defecto todavía.
+//
+// R1.2 (responsive móvil): se añade ShellBottomNav, la barra de navegación
+//        inferior del 1er nivel (módulos), montada SOLO en móvil (useIsMobile).
+//        Es aditiva: no se quita ni el TopBar ni el ModuleSidebar (eso es R1.3).
+//        En escritorio (>= 768px) NO cambia nada: isMobile = false → la barra no
+//        se monta y el padding inferior del contenido es el de siempre.
 
 import { useState } from 'react'
 import { useNavigate, useLocation, Routes, Route } from 'react-router-dom'
 import ShellTopBar, { HOME_KEY } from './ShellTopBar'
 import ModuleSidebar from './ModuleSidebar'
+import ShellBottomNav from './ShellBottomNav'
 import { getModuleById, getModuleByBasePath } from './moduleRegistry'
 import { configuracionModule } from '../modules/configuracion/module'
 import HomeGeneral from './home/HomeGeneral'
 import TrabajadorApp from '../pages/trabajador/TrabajadorApp'
 import { useApp } from '../context/AppContext'
+import { useIsMobile } from './useIsMobile'
 import { FolvyAIBubble } from '../modules/folvy-ai/components/FolvyAIBubble'
 
 // G-8.6 (opción C): el Shell vive en la RAÍZ, sin prefijo /shell ni slug.
@@ -34,6 +42,18 @@ export default function Shell() {
   const navigate = useNavigate()
   const location = useLocation()
   const { userProfile } = useApp()
+
+  // R1.2: ¿viewport móvil? (< 768px, el breakpoint md de Tailwind). Decide si
+  // se monta la barra inferior y cuánto padding inferior necesita el contenido
+  // para no quedar tapado por ella. Fuente de verdad única: useIsMobile.
+  const isMobile = useIsMobile()
+
+  // Padding inferior del <main>: en móvil hay que dejar hueco para la barra
+  // fija (56px) + el safe-area (notch/indicador home, por viewport-fit=cover)
+  // + el aire de siempre. En escritorio, el de antes (24px).
+  const mainPaddingBottom = isMobile
+    ? 'calc(56px + env(safe-area-inset-bottom) + 24px)'
+    : 24
 
   // Modo trabajador del encargado dual: alterna en el cliente entre Shell de
   // gestión y TrabajadorApp sin tocar App.tsx ni AppContext. Solo activable si
@@ -131,7 +151,7 @@ export default function Shell() {
               if (item) goToItemPath(item.path)
             }}
           />
-          <main className="flex-1" style={{ paddingLeft: 26, paddingRight: 26, paddingTop: 24, paddingBottom: 24 }}>
+          <main className="flex-1" style={{ paddingLeft: 26, paddingRight: 26, paddingTop: 24, paddingBottom: mainPaddingBottom }}>
             {/* G-8.2: rutas reales del módulo. El <Routes> del Shell ve el
                 pathname COMPLETO (no relativo), porque el Shell se monta fuera
                 del <Routes> raíz de App.tsx. Por eso el path incluye el prefijo
@@ -145,12 +165,17 @@ export default function Shell() {
           </main>
         </div>
       ) : (
-        <main className="flex-1" style={{ paddingLeft: 26, paddingRight: 26, paddingTop: 24, paddingBottom: 24 }}>
+        <main className="flex-1" style={{ paddingLeft: 26, paddingRight: 26, paddingTop: 24, paddingBottom: mainPaddingBottom }}>
           <HomeGeneral userName={userName} onOpenModule={goToKey} />
         </main>
       )}
 
       <FolvyAIBubble />
+
+      {/* R1.2: barra de navegación inferior, SOLO en móvil. En escritorio
+          isMobile es false y no se monta (cero cambios sobre el layout de
+          Sesión 14). Comparte activeKey + goToKey con el TopBar. */}
+      {isMobile && <ShellBottomNav activeKey={activeKey} onSelect={goToKey} />}
     </div>
   )
 }
