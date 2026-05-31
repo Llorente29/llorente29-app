@@ -13,6 +13,14 @@
 // - Botones Copy/Regenerate/👍/👎 en cada respuesta completa.
 // - Scroll inteligente con stickiness + botón "ir al fondo".
 // - Botón "Reintentar" cuando hay error retryable.
+//
+// R1.3b (responsive móvil): el componente pasa a ser CONTROLABLE de forma
+// opcional. Si recibe `open`/`onOpenChange` lo gobierna el padre (el Shell, que
+// abre el chat desde el héroe IA de la barra inferior); si NO los recibe,
+// funciona EXACTAMENTE igual que antes (estado interno, burbuja flotante).
+// `hideLauncher` esconde el botón flotante (en móvil lo sustituye el héroe de la
+// barra → adiós al solapamiento naranja); en ese modo el panel lleva su propia
+// X de cierre en la cabecera.
 
 import { useEffect, useRef, useState } from 'react';
 import { X, RotateCcw, RefreshCw, ChevronDown } from 'lucide-react';
@@ -34,9 +42,29 @@ const SUGGESTED_PROMPTS = [
 
 const STICKY_BOTTOM_THRESHOLD = 80;
 
-export function FolvyAIBubble() {
+interface FolvyAIBubbleProps {
+  // Control externo opcional del abierto/cerrado. Si se pasan, el padre manda
+  // (modo controlado); si no, el componente usa su estado interno (como antes).
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  // Esconde el botón flotante (en móvil lo abre el héroe de la barra inferior).
+  hideLauncher?: boolean;
+}
+
+export function FolvyAIBubble({ open: openProp, onOpenChange, hideLauncher = false }: FolvyAIBubbleProps = {}) {
   const { activeAccountId } = useApp();
-  const [open, setOpen] = useState(false);
+
+  // Abierto/cerrado controlable: si llega `open` por prop, manda el padre; si
+  // no, estado interno. setOpen acepta valor o updater (compat con setOpen(v=>!v)).
+  const [openState, setOpenState] = useState(false);
+  const isControlled = openProp !== undefined;
+  const open = isControlled ? openProp : openState;
+  const setOpen = (next: boolean | ((prev: boolean) => boolean)) => {
+    const value = typeof next === 'function' ? next(open) : next;
+    if (!isControlled) setOpenState(value);
+    onOpenChange?.(value);
+  };
+
   const [mounted, setMounted] = useState(false);
   const [hasGreeted, setHasGreeted] = useState(false);
   const [stickyToBottom, setStickyToBottom] = useState(true);
@@ -114,21 +142,25 @@ export function FolvyAIBubble() {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(v => !v)}
-        aria-label={open ? 'Cerrar Folvy AI' : 'Abrir Folvy AI'}
-        className={
-          'fixed bottom-6 right-6 z-40 rounded-full shadow-lg transition-all duration-base ' +
-          'min-h-touch min-w-touch flex items-center justify-center ' +
-          (open
-            ? 'bg-card border border-border-default text-text-primary hover:bg-page'
-            : 'bg-terracota hover:bg-terracota-hover')
-        }
-        style={{ width: 56, height: 56 }}
-      >
-        {open ? <X size={22} /> : <FolvyAIIsotype size={28} accentBg />}
-      </button>
+      {/* Botón flotante (launcher). Se esconde con hideLauncher (en móvil lo
+          sustituye el héroe de la barra inferior). */}
+      {!hideLauncher && (
+        <button
+          type="button"
+          onClick={() => setOpen(v => !v)}
+          aria-label={open ? 'Cerrar Folvy AI' : 'Abrir Folvy AI'}
+          className={
+            'fixed bottom-6 right-6 z-40 rounded-full shadow-lg transition-all duration-base ' +
+            'min-h-touch min-w-touch flex items-center justify-center ' +
+            (open
+              ? 'bg-card border border-border-default text-text-primary hover:bg-page'
+              : 'bg-terracota hover:bg-terracota-hover')
+          }
+          style={{ width: 56, height: 56 }}
+        >
+          {open ? <X size={22} /> : <FolvyAIIsotype size={28} accentBg />}
+        </button>
+      )}
 
       {open && (
         <div
@@ -154,17 +186,30 @@ export function FolvyAIBubble() {
                 </div>
               </div>
             </div>
-            {messages.length > 0 && !isStreaming && (
-              <button
-                type="button"
-                onClick={handleNewConversation}
-                aria-label="Nueva conversación"
-                title="Nueva conversación"
-                className="shrink-0 rounded-md p-1.5 text-text-secondary hover:text-text-primary hover:bg-page transition-colors duration-fast"
-              >
-                <RotateCcw size={16} />
-              </button>
-            )}
+            <div className="flex items-center gap-1 shrink-0">
+              {messages.length > 0 && !isStreaming && (
+                <button
+                  type="button"
+                  onClick={handleNewConversation}
+                  aria-label="Nueva conversación"
+                  title="Nueva conversación"
+                  className="rounded-md p-1.5 text-text-secondary hover:text-text-primary hover:bg-page transition-colors duration-fast"
+                >
+                  <RotateCcw size={16} />
+                </button>
+              )}
+              {/* En modo sin launcher (móvil) el panel necesita su propia X. */}
+              {hideLauncher && (
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  aria-label="Cerrar Folvy AI"
+                  className="rounded-md p-1.5 text-text-secondary hover:text-text-primary hover:bg-page transition-colors duration-fast"
+                >
+                  <X size={18} />
+                </button>
+              )}
+            </div>
           </div>
 
           <div

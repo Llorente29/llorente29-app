@@ -1,45 +1,39 @@
 // src/shell/ShellBottomNav.tsx
 //
-// R1.2 — Barra de navegación inferior (bottom tab bar) del Shell en MÓVIL.
+// R1.2/R1.3b — Barra de navegación inferior (bottom tab bar) del Shell en MÓVIL.
 //
 // Primer nivel de navegación (módulos) en una barra fija inferior, patrón
-// nativo de app/PWA: alcanzable con el pulgar, persistente y visible (mejor
-// descubribilidad que un menú escondido). Solo se monta en móvil: el Shell la
-// renderiza condicionalmente con useIsMobile; en escritorio no existe.
+// nativo de app/PWA: alcanzable con el pulgar, persistente y visible. Solo se
+// monta en móvil: el Shell la renderiza con useIsMobile; en escritorio no existe.
 //
-// Contrato calcado del ShellTopBar (activeKey + onSelect) para compartir la
-// misma lógica de navegación del Shell (goToKey) sin duplicarla.
-//
-// R1.3a (fix de ajuste): las pestañas llevan minWidth:0 para que flex:1 las
-// encoja de verdad (sin esto, las etiquetas largas empujaban la fila fuera del
-// ancho y se perdía una pestaña). Etiquetas cortas sin el prefijo "Folvy" +
-// elipsis de seguridad → 5 pestañas entran holgadas hasta ~320px.
+// R1.3b — IA COMO HÉROE CENTRAL (patrón Instagram: 2 pestañas + acción central
+// elevada + 2 pestañas). El héroe abre Folvy AI (onOpenAI). Los módulos del
+// overflow (ver shellMobileNav) se alcanzan desde el menú del avatar del TopBar.
+// El héroe usa el ISOTIPO de Folvy (círculo + arco terracota + punto) con un
+// latido ligerísimo (punto que late + halo tenue), respetando reduced-motion.
 
-import { useState } from 'react'
-import { Home, MoreHorizontal } from 'lucide-react'
+import { Home } from 'lucide-react'
 import { HOME_KEY } from './ShellTopBar'
 import { getOrderedModules } from './moduleRegistry'
+import { isMobileOverflowModule } from './shellMobileNav'
 import { usePermissions } from '@/modules/multitenancy/hooks/usePermissions'
 import type { ModuleDefinition } from './types'
 import type { UserProfileRole } from '@/types/multitenancy'
 
-// Tipo de icono = el mismo que declara cada módulo (ModuleDefinition.icon), así
-// los iconos lucide (Home, MoreHorizontal) y los de los módulos comparten tipo.
+// Tipo de icono = el mismo que declara cada módulo (ModuleDefinition.icon).
 type IconType = ModuleDefinition['icon']
 
-// Azul apagado del TopBar (no hay var CSS para él aún) — se mantiene idéntico
-// para que la barra inferior haga juego con la superior. INK y TERRACOTA sí
-// viven como vars en index.css y se usan vía var(). En R1.3, al tocar el
-// TopBar, se unifican los tokens en un helper compartido y se quita esta línea.
+// Azul apagado del TopBar (no hay var CSS para él aún) — hace juego con la barra
+// superior. INK y TERRACOTA viven como vars en index.css y se usan vía var().
 const MUTED = '#9FB3C8'
-
-// Tope cómodo de pestañas en una bottom bar (HIG iOS = 5). Inicio + 4 módulos
-// = 5 → entran justas. Si el registro crece, el resto se pliega en "Más".
-const MAX_TABS = 5
 
 interface ShellBottomNavProps {
   activeKey: string
   onSelect: (key: string) => void
+  // Abre Folvy AI (lo gobierna el Shell, que controla el panel del chat).
+  onOpenAI: () => void
+  // ¿El panel de IA está abierto? (para resaltar el héroe).
+  aiActive?: boolean
 }
 
 interface NavEntry {
@@ -48,16 +42,12 @@ interface NavEntry {
   Icon: IconType
 }
 
-// Etiqueta corta para la barra inferior: sin el prefijo de marca "Folvy " (a
-// 10.5px y 5 pestañas, "Team/Safety/Sales/Kitchen" entran holgadas y se leen
-// mejor que "Folvy Team"). El nombre completo se mantiene en el TopBar.
+// Etiqueta corta para la barra (sin el prefijo de marca "Folvy ").
 function shortLabel(name: string): string {
   return name.replace(/^Folvy\s+/i, '')
 }
 
-// Mirror EXACTO de la visibilidad por módulo del ShellTopBar (un módulo se ve
-// si tiene >=1 item que pasa permiso Y rol). Se replica aquí; en R1.3 se extrae
-// a un helper compartido cuando se toque el TopBar (se elimina el duplicado).
+// Mirror de la visibilidad por módulo del ShellTopBar (permiso + rol).
 function isModuleVisible(
   module: ModuleDefinition,
   hasPermission: (key: string) => boolean,
@@ -72,109 +62,104 @@ function isModuleVisible(
   })
 }
 
-export default function ShellBottomNav({ activeKey, onSelect }: ShellBottomNavProps) {
+export default function ShellBottomNav({ activeKey, onSelect, onOpenAI, aiActive = false }: ShellBottomNavProps) {
   const { hasPermission, role } = usePermissions()
-  const [moreOpen, setMoreOpen] = useState(false)
 
-  const visibleModules = getOrderedModules()
+  // Módulos visibles, EXCLUYENDO los del overflow (van al menú del avatar).
+  const barModules = getOrderedModules()
     .filter(m => isModuleVisible(m, hasPermission, role))
+    .filter(m => !isMobileOverflowModule(m.id))
 
-  // Entradas: Inicio + módulos visibles (etiqueta corta).
-  const allEntries: NavEntry[] = [
+  // Pestañas de la barra: Inicio + módulos de barra.
+  const entries: NavEntry[] = [
     { key: HOME_KEY, label: 'Inicio', Icon: Home },
-    ...visibleModules.map(m => ({ key: m.id, label: shortLabel(m.name), Icon: m.icon })),
+    ...barModules.map(m => ({ key: m.id, label: shortLabel(m.name), Icon: m.icon })),
   ]
 
-  // Si caben todas, se muestran. Si no, primeras (MAX_TABS - 1) + "Más".
-  const overflow = allEntries.length > MAX_TABS
-  const primary = overflow ? allEntries.slice(0, MAX_TABS - 1) : allEntries
-  const extra = overflow ? allEntries.slice(MAX_TABS - 1) : []
-
-  // "Más" se marca activo si la sección activa está dentro del overflow.
-  const moreActive = extra.some(e => e.key === activeKey)
-
-  function handleSelect(key: string) {
-    setMoreOpen(false)
-    onSelect(key)
-  }
+  // Partir 2+2 (o lo que haya) para dejar el héroe IA en el centro.
+  const mid = Math.ceil(entries.length / 2)
+  const left = entries.slice(0, mid)
+  const right = entries.slice(mid)
 
   return (
-    <>
-      {/* Hoja de "Más" (overflow): fondo translúcido + panel inferior. */}
-      {moreOpen && extra.length > 0 && (
-        <div
-          onClick={() => setMoreOpen(false)}
-          style={{
-            position: 'fixed', inset: 0, zIndex: 60,
-            background: 'rgba(12,10,9,0.35)',
-            display: 'flex', alignItems: 'flex-end',
-          }}
-        >
-          <div
-            onClick={e => e.stopPropagation()}
-            style={{
-              width: '100%',
-              background: 'var(--color-bg-card)',
-              borderTopLeftRadius: 16, borderTopRightRadius: 16,
-              padding: '0.5rem 0.5rem calc(0.5rem + env(safe-area-inset-bottom))',
-              boxShadow: '0 -8px 24px rgba(12,10,9,0.12)',
-            }}
-          >
-            {extra.map(e => {
-              const Icon = e.Icon
-              const active = e.key === activeKey
-              return (
-                <button
-                  key={e.key}
-                  type="button"
-                  onClick={() => handleSelect(e.key)}
-                  className="w-full flex items-center text-left"
-                  style={{
-                    gap: 12, padding: '0.875rem 0.75rem', borderRadius: 10,
-                    fontSize: '1rem',
-                    background: active ? 'var(--color-accent-bg)' : 'transparent',
-                    color: 'var(--color-text-primary)',
-                  }}
-                >
-                  <Icon size={20} />
-                  {e.label}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      )}
+    <nav
+      aria-label="Navegacion principal"
+      style={{
+        position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 40,
+        background: 'var(--color-accent)',
+        display: 'flex', alignItems: 'stretch',
+        height: 56,
+        paddingBottom: 'env(safe-area-inset-bottom)',
+        borderTop: '1px solid rgba(255,255,255,0.08)',
+      }}
+    >
+      {left.map(entry => (
+        <BottomTab
+          key={entry.key}
+          label={entry.label}
+          Icon={entry.Icon}
+          active={entry.key === activeKey}
+          onClick={() => onSelect(entry.key)}
+        />
+      ))}
 
-      <nav
-        aria-label="Navegacion principal"
+      <AIHero active={aiActive} onClick={onOpenAI} />
+
+      {right.map(entry => (
+        <BottomTab
+          key={entry.key}
+          label={entry.label}
+          Icon={entry.Icon}
+          active={entry.key === activeKey}
+          onClick={() => onSelect(entry.key)}
+        />
+      ))}
+    </nav>
+  )
+}
+
+// ─── Héroe IA central (isotipo Folvy elevado, con latido ligerísimo) ────────
+function AIHero({ active, onClick }: { active: boolean; onClick: () => void }) {
+  return (
+    <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <style>{`
+        @keyframes folvyHeroDot {
+          0%, 100% { transform: scale(1); opacity: 1; }
+          50%      { transform: scale(1.28); opacity: 0.6; }
+        }
+        @keyframes folvyHeroGlow {
+          0%, 100% { box-shadow: 0 4px 12px rgba(12,10,9,0.28), 0 0 0 0 rgba(214,116,66,0); }
+          50%      { box-shadow: 0 4px 12px rgba(12,10,9,0.28), 0 0 0 7px rgba(214,116,66,0.14); }
+        }
+        .folvy-hero-btn { animation: folvyHeroGlow 2.6s ease-in-out infinite; }
+        .folvy-hero-dot { transform-box: fill-box; transform-origin: center; animation: folvyHeroDot 1.8s ease-in-out infinite; }
+        @media (prefers-reduced-motion: reduce) {
+          .folvy-hero-btn, .folvy-hero-dot { animation: none; }
+        }
+      `}</style>
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label="Folvy AI"
+        aria-pressed={active}
+        className="folvy-hero-btn"
         style={{
-          position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 40,
+          width: 58, height: 58, borderRadius: 999,
           background: 'var(--color-accent)',
-          display: 'flex',
-          height: 56,
-          paddingBottom: 'env(safe-area-inset-bottom)',
-          borderTop: '1px solid rgba(255,255,255,0.08)',
+          border: `3px solid ${active ? 'var(--color-terracota)' : 'var(--color-bg-page)'}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          transform: 'translateY(-14px)',
+          cursor: 'pointer',
+          padding: 0,
         }}
       >
-        {primary.map(entry => (
-          <BottomTab
-            key={entry.key}
-            label={entry.label}
-            Icon={entry.Icon}
-            active={entry.key === activeKey}
-            onClick={() => handleSelect(entry.key)}
-          />
-        ))}
-        {overflow && (
-          <BottomTab
-            label="Mas"
-            Icon={MoreHorizontal}
-            active={moreActive || moreOpen}
-            onClick={() => setMoreOpen(o => !o)}
-          />
-        )}
-      </nav>
-    </>
+        <svg width="32" height="32" viewBox="0 0 100 100" aria-hidden="true">
+          <circle cx="50" cy="50" r="38" fill="none" stroke="#F5F4F0" strokeWidth="6" />
+          <path d="M 50 12 A 38 38 0 0 1 76.9 76.9" fill="none" stroke="#D67442" strokeWidth="10" strokeLinecap="round" />
+          <circle className="folvy-hero-dot" cx="50" cy="50" r="6" fill="#D67442" />
+        </svg>
+      </button>
+    </div>
   )
 }
 
@@ -194,7 +179,7 @@ function BottomTab({
       className="flex flex-col items-center justify-center transition-colors"
       style={{
         flex: 1,
-        minWidth: 0,            // clave: permite que flex:1 encoja de verdad
+        minWidth: 0,
         gap: 3,
         height: 56,
         padding: '0 2px',

@@ -10,26 +10,24 @@
 // para clavar el tamaño), pestañas 15px con aire.
 //
 // El logo se dibuja INLINE (isotipo SVG + texto) en vez de cargar un fichero
-// .svg, para controlar las proporciones al pixel y que coincidan con la
-// maqueta independientemente del viewBox de ningún fichero.
+// .svg, para controlar las proporciones al pixel y que coincidan con la maqueta.
 //
-// Sesión 16: el avatar es ahora un menú desplegable. Contiene:
-//   - "Administración" → /_admin/inicio (SOLO si usePlatformAdmin().isPlatformAdmin).
-//     Es la puerta lógica al portal de staff (antes solo accesible por URL).
-//   - "Cerrar sesión" → signOut() (deuda de logout en Shell, Sesión 14).
-// El estado de admin se resuelve dentro del propio TopBar (no toca Shell.tsx).
+// Sesión 16: el avatar es un menú desplegable (Administración / Cerrar sesión).
 //
-// R1.3a (responsive móvil): en < 768px el TopBar se vuelve MÍNIMO — se ocultan
-// las pestañas de módulos (viven en la barra inferior, ShellBottomNav) y la
-// etiqueta de local, y se aprietan paddings. Quedan wordmark + engranaje +
-// campana + avatar. Así desaparece la fila que empujaba el clúster derecho
-// fuera de pantalla. En >= 768px NO cambia nada (mismo TopBar de Sesión 14).
+// R1.3a (responsive móvil): en < 768px el TopBar es MÍNIMO — sin pestañas de
+// módulos (van a la barra inferior) ni etiqueta de local; quedan wordmark +
+// engranaje + campana + avatar.
+//
+// R1.3b: en móvil, los módulos del overflow (ver shellMobileNav; hoy Team) que
+// NO caben en la barra inferior se listan en el menú del avatar, para que sigan
+// teniendo acceso por toque.
 
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Home, MapPin, Settings, Shield, LogOut, User } from 'lucide-react'
 import { getOrderedModules } from './moduleRegistry'
 import { useIsMobile } from './useIsMobile'
+import { isMobileOverflowModule } from './shellMobileNav'
 import { usePlatformAdmin } from '@/platform/usePlatformAdmin'
 import { usePermissions } from '@/modules/multitenancy/hooks/usePermissions'
 import { signOut } from '@/services/authService'
@@ -64,9 +62,7 @@ interface ShellTopBarProps {
 
 /**
  * ¿Es visible un módulo para el user actual? Criterio: tiene al menos un
- * item de sidebar que pasa los gates de permiso Y rol. Si el módulo no
- * tiene items, devuelve false (no hay nada que mostrar). La lógica per-item
- * es la misma que aplica ModuleSidebar.tsx al renderizar.
+ * item de sidebar que pasa los gates de permiso Y rol.
  */
 function isModuleVisible(
   module: ModuleDefinition,
@@ -101,9 +97,10 @@ export default function ShellTopBar({
   // Pestañas: solo los módulos con al menos un item visible. "Inicio" queda
   // fuera (es del Shell, no un módulo, y siempre se ve).
   const visibleModules = modules.filter(m => isModuleVisible(m, hasPermission, role))
-  // Engranaje: solo si Configuración tiene al menos un item visible. Para un
-  // manager sin permisos ni rol admin, el engranaje desaparecerá tras tanda 2
-  // (cuando los items de Configuración declaren requiredPermission).
+  // R1.3b: en móvil, los módulos del overflow (Team) se listan en el menú del
+  // avatar (no caben en la barra inferior por el héroe IA central).
+  const overflowModules = isMobile ? visibleModules.filter(m => isMobileOverflowModule(m.id)) : []
+  // Engranaje: solo si Configuración tiene al menos un item visible.
   const configVisible = isModuleVisible(configuracionModule, hasPermission, role)
 
   const [menuOpen, setMenuOpen] = useState(false)
@@ -222,6 +219,27 @@ export default function ShellTopBar({
                 zIndex: 50,
               }}
             >
+              {/* R1.3b: módulos del overflow móvil (no caben en la barra). */}
+              {overflowModules.map(m => {
+                const Icon = m.icon
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    role="menuitem"
+                    onClick={() => { setMenuOpen(false); onSelect(m.id) }}
+                    className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left"
+                    style={{ color: 'var(--color-text-primary, #1a1a1a)' }}
+                  >
+                    <Icon size={16} style={{ color: INK }} />
+                    {m.name}
+                  </button>
+                )
+              })}
+              {overflowModules.length > 0 && (
+                <div style={{ borderTop: '1px solid var(--color-border, #eee)' }} />
+              )}
+
               {isPlatformAdmin && (
                 <button
                   type="button"
