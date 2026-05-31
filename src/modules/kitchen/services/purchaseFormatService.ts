@@ -36,6 +36,7 @@ import type {
   RowArticleSupplierInsert,
   RowArticleSupplierUpdate,
 } from '../../../types/kitchen'
+import { cascadeFromItem } from './costCascadeService'
 
 function requireSupabase(): void {
   if (!isSupabaseEnabled || !supabase) {
@@ -309,7 +310,18 @@ export async function updateArticleSupplier(
   const { data, error } = await supabase!
     .from('article_supplier').update(rowPatch).eq('id', id).select('*').single()
   if (error) throw new Error(`Error actualizando enlace ${id}: ${error.message}`)
-  return rowToArticleSupplier(data)
+  const updated = rowToArticleSupplier(data)
+  // Solo si cambió algo que afecta al coste (precio o formato de compra),
+  // propagamos a los platos/sub-recetas que usan el ingrediente. Fail-safe:
+  // un fallo de cascada no revierte la actualización del enlace.
+  if (patch.lastPrice !== undefined || patch.purchaseFormatId !== undefined) {
+    try {
+      await cascadeFromItem(updated.recipeItemId)
+    } catch (e) {
+      console.error(`updateArticleSupplier: cascada de coste falló para ${updated.recipeItemId}`, e)
+    }
+  }
+  return updated
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -368,5 +380,13 @@ export async function setupSimplePurchase(
     supplierCode: setup.supplierCode ?? null,
     isPreferred: setup.isPreferred ?? false,
   })
+  // El trigger ya recalculó el coste del ingrediente al insertar el precio.
+  // Propagamos a los platos/sub-recetas que lo usan. Fail-safe: si falla la
+  // cascada, el alta NO se revierte (el coste del ingrediente quedó bien).
+  try {
+    await cascadeFromItem(setup.itemId)
+  } catch (e) {
+    console.error(`setupSimplePurchase: cascada de coste falló para ${setup.itemId}`, e)
+  }
   return { format, link }
 }

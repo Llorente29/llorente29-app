@@ -7471,6 +7471,13 @@ export type Database = {
         Args: { p_account_id: string; p_permission_key: string }
         Returns: boolean
       }
+      kitchen_ancestors_of: {
+        Args: { p_item_id: string }
+        Returns: {
+          ancestor_id: string
+          depth: number
+        }[]
+      }
       kitchen_dish_state_for_ai: {
         Args: { p_recipe_item_id: string }
         Returns: Json
@@ -7517,6 +7524,10 @@ export type Database = {
         }[]
       }
       kitchen_recompute_item: { Args: { p_item_id: string }; Returns: number }
+      kitchen_recompute_raw_cost: {
+        Args: { p_item_id: string }
+        Returns: number
+      }
       kitchen_similar_dishes_for_ai: {
         Args: { p_n?: number; p_recipe_item_id: string }
         Returns: Json
