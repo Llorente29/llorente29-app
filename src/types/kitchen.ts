@@ -47,6 +47,18 @@ export type RowRecipeItemUnitConversion       = Tables['recipe_item_unit_convers
 export type RowRecipeItemUnitConversionInsert = Tables['recipe_item_unit_conversion']['Insert']
 export type RowRecipeItemUnitConversionUpdate = Tables['recipe_item_unit_conversion']['Update']
 
+export type RowSupplier              = Tables['supplier']['Row']
+export type RowSupplierInsert        = Tables['supplier']['Insert']
+export type RowSupplierUpdate        = Tables['supplier']['Update']
+
+export type RowArticleSupplier       = Tables['article_supplier']['Row']
+export type RowArticleSupplierInsert = Tables['article_supplier']['Insert']
+export type RowArticleSupplierUpdate = Tables['article_supplier']['Update']
+
+export type RowPurchaseFormat        = Tables['recipe_item_purchase_format']['Row']
+export type RowPurchaseFormatInsert  = Tables['recipe_item_purchase_format']['Insert']
+export type RowPurchaseFormatUpdate  = Tables['recipe_item_purchase_format']['Update']
+
 export type RowKitchenSettings        = Tables['kitchen_settings']['Row']
 export type RowKitchenSettingsInsert  = Tables['kitchen_settings']['Insert']
 export type RowKitchenSettingsUpdate  = Tables['kitchen_settings']['Update']
@@ -69,6 +81,7 @@ export type ConservationType = 'fridge' | 'freezer' | 'dry' | 'hot'
 export type UnitDimension    = 'weight' | 'volume' | 'unit'
 export type ItemSource       = 'manual' | 'ai_recipe' | 'ocr_invoice' | 'import'
 export type ConversionSource = 'manual' | 'ai_suggested' | 'import'
+export type PurchaseFormatSource = 'manual' | 'ai_suggested' | 'import'
 
 // Unión nueva, NO reusar ItemSource: las fuentes de un ítem de carta
 // difieren de las de una receta (no hay ocr_invoice aquí).
@@ -368,6 +381,129 @@ export interface RecipeItemUnitConversionUpdate {
   needsReview?: boolean
   isActive?: boolean
   archivedAt?: string | null
+}
+
+// ── supplier ──────────────────────────────────────────────────────────
+export interface Supplier {
+  id: string
+  accountId: string
+  name: string
+  taxId: string | null
+  email: string | null
+  phone: string | null
+  address: string | null
+  notes: string | null
+  isActive: boolean
+  archivedAt: string | null
+  createdAt: string
+  updatedAt: string
+  createdBy: string | null
+  createdByName: string | null
+}
+export interface SupplierInsert {
+  accountId: string
+  name: string
+  taxId?: string | null
+  email?: string | null
+  phone?: string | null
+  address?: string | null
+  notes?: string | null
+  createdBy?: string | null
+  createdByName?: string | null
+}
+export interface SupplierUpdate {
+  name?: string
+  taxId?: string | null
+  email?: string | null
+  phone?: string | null
+  address?: string | null
+  notes?: string | null
+  isActive?: boolean
+  archivedAt?: string | null
+}
+
+// ── recipe_item_purchase_format (el árbol de empaquetado) ─────────────
+// qtyInBase es la ÚNICA verdad numérica que consume el coste: cuánto vale
+// ESTE nodo en la unidad base del ingrediente (Caja=6000 g, Bolsa=1000 g).
+// parentFormatId arma el árbol (Caja→Bolsa); null = nodo raíz.
+export interface PurchaseFormat {
+  id: string
+  accountId: string
+  itemId: string
+  name: string
+  parentFormatId: string | null
+  qtyPerParent: number | null
+  qtyInBase: number
+  isPiece: boolean
+  isWeighted: boolean
+  source: PurchaseFormatSource
+  aiConfidence: number | null
+  needsReview: boolean
+  isActive: boolean
+  archivedAt: string | null
+  createdAt: string
+  updatedAt: string
+  createdBy: string | null
+  createdByName: string | null
+}
+export interface PurchaseFormatInsert {
+  accountId: string
+  itemId: string
+  name: string
+  qtyInBase: number
+  parentFormatId?: string | null
+  qtyPerParent?: number | null
+  isPiece?: boolean
+  isWeighted?: boolean
+  source?: PurchaseFormatSource
+  aiConfidence?: number | null
+  needsReview?: boolean
+  createdBy?: string | null
+  createdByName?: string | null
+}
+export interface PurchaseFormatUpdate {
+  name?: string
+  parentFormatId?: string | null
+  qtyPerParent?: number | null
+  qtyInBase?: number
+  isPiece?: boolean
+  isWeighted?: boolean
+  needsReview?: boolean
+  isActive?: boolean
+  archivedAt?: string | null
+}
+
+// ── article_supplier (proveedor ↔ formato que vende, con precio) ──────
+// purchaseFormatId apunta a UN nodo del árbol (opción A: un solo camino).
+// lastPrice es el precio pagado por ESE formato → coste base = precio / qtyInBase.
+export interface ArticleSupplier {
+  id: string
+  accountId: string
+  recipeItemId: string
+  supplierId: string
+  supplierCode: string | null
+  purchaseFormatId: string | null
+  lastPrice: number | null
+  isPreferred: boolean
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+}
+export interface ArticleSupplierInsert {
+  accountId: string
+  recipeItemId: string
+  supplierId: string
+  purchaseFormatId: string
+  supplierCode?: string | null
+  lastPrice?: number | null
+  isPreferred?: boolean
+}
+export interface ArticleSupplierUpdate {
+  supplierCode?: string | null
+  purchaseFormatId?: string | null
+  lastPrice?: number | null
+  isPreferred?: boolean
+  isActive?: boolean
 }
 
 // ─────────────────────────────────────────────────────────────────────

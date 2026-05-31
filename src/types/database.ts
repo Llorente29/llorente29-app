@@ -2196,7 +2196,7 @@ export type Database = {
           is_active: boolean
           is_preferred: boolean
           last_price: number | null
-          purchase_unit_id: string | null
+          purchase_format_id: string | null
           recipe_item_id: string
           supplier_code: string | null
           supplier_id: string
@@ -2209,7 +2209,7 @@ export type Database = {
           is_active?: boolean
           is_preferred?: boolean
           last_price?: number | null
-          purchase_unit_id?: string | null
+          purchase_format_id?: string | null
           recipe_item_id: string
           supplier_code?: string | null
           supplier_id: string
@@ -2222,7 +2222,7 @@ export type Database = {
           is_active?: boolean
           is_preferred?: boolean
           last_price?: number | null
-          purchase_unit_id?: string | null
+          purchase_format_id?: string | null
           recipe_item_id?: string
           supplier_code?: string | null
           supplier_id?: string
@@ -2230,10 +2230,10 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "article_supplier_purchase_unit_id_fkey"
-            columns: ["purchase_unit_id"]
+            foreignKeyName: "article_supplier_purchase_format_id_fkey"
+            columns: ["purchase_format_id"]
             isOneToOne: false
-            referencedRelation: "kitchen_unit"
+            referencedRelation: "recipe_item_purchase_format"
             referencedColumns: ["id"]
           },
           {
@@ -5650,6 +5650,98 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "user_profiles"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      recipe_item_purchase_format: {
+        Row: {
+          account_id: string
+          ai_confidence: number | null
+          archived_at: string | null
+          created_at: string
+          created_by: string | null
+          created_by_name: string | null
+          id: string
+          is_active: boolean
+          is_piece: boolean
+          is_weighted: boolean
+          item_id: string
+          name: string
+          needs_review: boolean
+          parent_format_id: string | null
+          qty_in_base: number
+          qty_per_parent: number | null
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          ai_confidence?: number | null
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          id?: string
+          is_active?: boolean
+          is_piece?: boolean
+          is_weighted?: boolean
+          item_id: string
+          name: string
+          needs_review?: boolean
+          parent_format_id?: string | null
+          qty_in_base: number
+          qty_per_parent?: number | null
+          source?: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          ai_confidence?: number | null
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          id?: string
+          is_active?: boolean
+          is_piece?: boolean
+          is_weighted?: boolean
+          item_id?: string
+          name?: string
+          needs_review?: boolean
+          parent_format_id?: string | null
+          qty_in_base?: number
+          qty_per_parent?: number | null
+          source?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recipe_item_purchase_format_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recipe_item_purchase_format_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_item"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recipe_item_purchase_format_parent_format_id_fkey"
+            columns: ["parent_format_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_item_purchase_format"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ripf_parent_same_item"
+            columns: ["parent_format_id", "item_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_item_purchase_format"
+            referencedColumns: ["id", "item_id"]
           },
         ]
       }
