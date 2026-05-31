@@ -30,6 +30,7 @@ import_escandallos_report.txt
 # --- Config local de editor ---
 .claude/
 
-# --- Diagnósticos versionados SÍ entran (excepción) ---
-!data/diagnosis/
-!data/diagnosis/**
+# Datos de diagnóstico / trabajo con datos reales de cliente — NUNCA versionar
+data/
+# Andamios de prueba de un solo uso
+scripts/test-*.mjs
