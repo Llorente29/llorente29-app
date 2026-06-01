@@ -1083,3 +1083,64 @@ DOCS NUEVOS: folvy_e8_pasos_inteligentes_diseno.md (diseno completo E8, aprobado
 ---
 Documento actualizado: 28 de mayo de 2026 (noche) — DISEÑO COMPLETO V1 EDITOR DE ESCANDALLOS cerrado conceptualmente (8 decisiones de producto + 5 catálogos semilla + reconocimiento BBDD + diagnóstico real de 34 needs_review con CSV + 12 hallazgos competencia mundial integrados + diseño UX completo del lienzo y todas las pantallas + 3 prompts sistema modos IA + decisión Modificadores M1-M4 al 100% con confirmación operativa de Last.app). Próximo: saneamiento de commits + S1 (schema migration) + S2 (UI banner needs_review) + S_MODIFIERS (parsing histórico + actualizar conector). Detalle UX completo en documento maestro nuevo `folvy_v1_editor_escandallos_diseno.md`. Esta es la sesión más densa del proyecto hasta la fecha en términos de decisiones de diseño.
 Único documento de contexto. Próxima actualización: al cierre de la próxima sesión técnica (regenerar §1).
+
+---
+
+## SESIÓN 01/06/2026 — Portal del trabajador: acceso por enlace/QR + reskin home + inicio adaptativo + Drawer
+
+Sesión de construcción real (no diseño). 4 commits, todos subidos a origin/main. Repo confirmado PRIVADO. Working tree limpio al cierre (sin nada a medias por primera vez en varias sesiones).
+
+### PIEZA 1 — Acceso del trabajador por enlace/QR, SIN email (commit 17ec37c)
+Objetivo de Julio (cumplido): el trabajador recibe su acceso por enlace/QR, sin depender de email, entra SIN teclear nada, y el encargado puede reenviarlo si lo pierde o cambia de móvil. Resuelve el bloqueo histórico "no sé entrar por no dejarlo bien al principio".
+- `manage-employee/index.ts`: acción nueva `generate_access_link` (solo admin, CON verificación cross-tenant vía `location_id -> account_id`, igual patrón que grant_access). Llama a `admin.generateLink({type:'magiclink'})` SIN enviar correo y devuelve `hashed_token` (campo `tokenHash` en la respuesta). El token no se audita (es credencial).
+- `employeeAuthService.generateAccessLink(employeeId)` (cliente).
+- `AccesoTrabajadorPanel.tsx` (NUEVO, en components/personal): arma `${origin}/acceso?token_hash=...&type=magiclink`, lo pinta como QR (lib `qrcode`) + copiar enlace + reenviar. Enganchado en StaffPage en DOS sitios: tarjeta de éxito del alta + ficha del empleado.
+- `AccesoClaimPage.tsx` (NUEVO, ruta pública `/acceso`): canjea con `verifyOtp({token_hash})` y navega a `/` (App.tsx enruta por rol).
+- `App.tsx`: ruta pública `/acceso` (con permiso explícito de Julio).
+
+### APRENDIZAJE CLAVE (acceso): magic link de servidor + PKCE
+El cliente Supabase está en `flowType: 'pkce'`. Un magic link generado en SERVIDOR no tiene `code_verifier` en el navegador del trabajador → el canje estándar (detectSessionInUrl/exchange) FALLA y la app cae al login (pide email). SOLUCIÓN: la Edge Function devuelve el `token_hash` (no el action_link), y la pantalla `/acceso` lo canjea con `verifyOtp({token_hash, type})`, que NO depende de PKCE. BONUS: este método evita tener que tocar la allowlist de Redirect URLs de Auth.
+
+### Decisiones de acceso (mercado + caso real)
+- Modelo C1 sigue por debajo (usuario+contraseña, email sintético `@empleado.folvy.app`). El enlace es la vía CÓMODA de entrega; la contraseña sigue siendo credencial duradera; reenviar = regenerar token (`set_password` ya existía).
+- Entrega MULTICANAL: QR para escanear + copiar-enlace para WhatsApp/SMS. EMAIL NO es canal (decisión de Julio: población de hostelería sin email o que no lo da).
+- Mercado consultado (Factorial, 7shifts): el estándar es invitación por enlace donde el empleado fija contraseña. Se DESCARTÓ "que el trabajador cree usuario/contraseña" (rompe para hostelería: sin email, contraseñas olvidadas) y "que elija su usuario" (colisiones + el username está incrustado en el email sintético C1). El enlace mágico es MÁS simple que el estándar.
+- PIN de kiosko intacto (vía rápida en dispositivo compartido del local; convive con el enlace al móvil personal).
+
+### PIEZA 2a — Reskin del home del trabajador (commit 085a192)
+`HomeEmpleado.tsx`: cabecera -> banda superior NAVY (`bg-accent`), saludo crema + nombre blanco Fraunces, campana y salir en círculos translúcidos. FUERA los gradientes (`from-emerald-*`, `from-accent`). Botones de módulo -> tarjetas planas (`bg-card` + borde) con icono en círculo de color (APPCC oliva, Mi Portal navy) + chevron. Sin tocar lógica/props/navegación.
+
+### PIEZA 2b — Inicio adaptativo + fichar de primera clase (commit 3ea5b84)
+El home "sigue el día del trabajador":
+- `HomeEmpleado.tsx`: bloque de fichaje bajo la banda. SIN jornada -> botón terracota grande "Fichar entrada". CON jornada abierta -> tarjeta "Jornada en curso" + CRONÓMETRO VIVO (setInterval 60s + cleanup; `openSince` derivado de la entrada abierta más reciente via clockEntries) + "Entrada a las HH:MM" + "Fichar salida". Quitado el aviso redundante de la banda.
+- `TrabajadorApp.tsx`: navegación home->fichar con estado `ficharOrigin: 'home'|'portal'`; el back del fichaje vuelve al origen correcto (preserva el flujo viejo portal->fichar->portal). `WorkerModule` ampliado a `'appcc'|'portal'|'fichar'`.
+- Verificado en app: estado "sin fichar" se ve correcto (un solo bloque). El estado "fichado/cronómetro" NO se pudo ver en vivo por tres protecciones legítimas que se interpusieron (permiso GPS denegado, geofencing 200m fuera de zona, ventana de turno "faltan 44 min"). El render del cronómetro es código simple typecheck-verde; se verá el primer fichaje real. NO es deuda.
+
+### DRAWER — ficha de proveedor en panel lateral (commit 42e8656)
+`Drawer.tsx` (NUEVO, primer componente UI compartido): panel lateral derecho, overlay, cierre X/Esc/clic-fuera, scroll interno, bloqueo body scroll, full-screen en móvil, NO toca el Shell. `SuppliersPage.tsx` usa el Drawer para la ficha (patrón primary-detail, estándar de mercado: PatternFly/Linear/Notion/Stripe). Julio lo APROBÓ visualmente. Cierra una deuda que arrastraba varias sesiones.
+
+### exitLabel "Volver a gestión" — NO era bug (deuda tachada)
+Pamela es MANAGER (encargada dual). Escanea el QR -> entra a Gestión (correcto por rol) -> desde ahí accede como trabajador -> ve "Volver a gestión". Flujo correcto confirmado por Julio. La "deuda exitLabel" era falsa alarma. Idea futura NO comprometida: conmutador Gestión <-> Trabajador para encargados duales.
+
+### Correcciones de suposiciones (verificadas contra código real)
+- Geolocalización/GPS del fichaje YA EXISTÍA (`FichajeEmpleado.tsx`: radio 200m `RADIUS_M`, auto-selección de local más cercano, distingue entrada/salida via `nextClockType`, detecta jornada abierta). El diseño previo que la daba por "construcción nueva" estaba MAL.
+- La MARCA del portal YA estaba aplicada (tokens reales); solo el home arrastraba gradientes.
+- El manual `src/docs/trabajador/01-app-trabajador.md` (10/05) estaba DESACTUALIZADO; no es fuente fiable, el código manda.
+
+### Git / repo
+- `.gitignore` YA existía y bien hecho (cubre `*.xlsx`, `bills_*.json`, `catalogo_*.json`, `location_*.json`, `tspoon_*.csv`, `data/`, imports SQL). Verificado con `git check-ignore` + revisión de ficheros pesados: NINGÚN dato de cliente trackeado. El "bloqueante .gitignore + push" de notas viejas estaba YA resuelto.
+- PUSH DESBLOQUEADO y hecho. Commits en origin/main: 17ec37c, 46adf56 (docs), 085a192, 3ea5b84, 42e8656. Local y remoto en sync.
+- Dependencia nueva: `qrcode` + `@types/qrcode` (entró limpia). La vulnerabilidad high de `npm audit` es de `xlsx` (SheetJS), PREEXISTENTE, no de qrcode.
+
+### Docs
+- `docs/folvy_portal_trabajador_diseno.md`: reescrito contra código real (Pieza 1 cerrada; geolocalización ya existía; marca ya aplicada; mensajería = bandeja de avisos no chat; biometría NO por AEPD).
+- `folvy_e8_pasos_inteligentes_diseno.md`: movido de raíz a `docs/`.
+
+### DEUDA VIVA al cierre de esta sesión
+- `.vite/` debería ir al `.gitignore` (caché regenerable que está trackeada).
+- `xlsx` (SheetJS): vulnerabilidad high preexistente (Prototype Pollution + ReDoS), sin fix upstream. Migrar/aislar.
+- Resto del portal del trabajador (no construido aún): navegación por bottom-tabs, bandeja de avisos (verificar lógica missed-punch antes), PWA instalable.
+- ROTAR/REVOCAR service_role key y tokens pegados en chats (seguridad; sigue pendiente de antes).
+- De antes, no tocado hoy: E8.4 (resaltado en vivo + vínculo), R1 (responsive del Shell), medidor coste IA por cuenta, code-splitting, AI provider abstraction.
+
+DOCS NUEVOS/ACTUALIZADOS esta sesión: docs/folvy_portal_trabajador_diseno.md (actualizado), docs/folvy_e8_pasos_inteligentes_diseno.md (movido).
