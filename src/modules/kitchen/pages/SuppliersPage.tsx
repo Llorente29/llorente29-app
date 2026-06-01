@@ -29,6 +29,7 @@ import {
   listLinksBySupplier,
 } from '@/modules/kitchen/services/purchaseFormatService'
 import SupplierItemsSection from '@/modules/kitchen/components/SupplierItemsSection'
+import Drawer from '@/components/Drawer'
 import type { Supplier } from '@/types/kitchen'
 
 function normalize(text: string): string {
@@ -111,20 +112,16 @@ export default function SuppliersPage() {
     setSelectedId(created.id)
   }
 
-  // ── Vista DETALLE ──
-  if (selectedId) {
-    return (
-      <SupplierDetail
-        supplierId={selectedId}
-        onBack={() => {
-          setSelectedId(null)
-          setReloadTick((t) => t + 1)
-        }}
-      />
-    )
+  const selectedName = selectedId
+    ? suppliers.find((s) => s.id === selectedId)?.name ?? 'Proveedor'
+    : ''
+
+  function closeDetail() {
+    setSelectedId(null)
+    setReloadTick((t) => t + 1)
   }
 
-  // ── Vista LISTA ──
+  // ── Vista LISTA (siempre montada; el detalle entra en un Drawer encima) ──
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -235,6 +232,10 @@ export default function SuppliersPage() {
           </div>
         </div>
       )}
+
+      <Drawer open={selectedId !== null} title={selectedName} onClose={closeDetail}>
+        {selectedId && <SupplierDetail supplierId={selectedId} onBack={closeDetail} />}
+      </Drawer>
 
       {createOpen && activeAccountId && (
         <SupplierCreateModal
@@ -369,17 +370,6 @@ function SupplierDetail({ supplierId, onBack }: SupplierDetailProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={onBack}
-          className="inline-flex items-center gap-1.5 text-sm text-text-secondary hover:text-text-primary transition-base"
-        >
-          <Truck size={16} />
-          Proveedores
-        </button>
-      </div>
-
       {loading && <div className="p-8 text-center text-sm text-text-secondary">Cargando proveedor…</div>}
 
       {!loading && error && (
@@ -389,9 +379,8 @@ function SupplierDetail({ supplierId, onBack }: SupplierDetailProps) {
       {!loading && !error && supplier && (
         <>
           <div className="rounded-lg border border-border-default bg-card">
-            <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border-default">
-              <h2 className="text-lg font-display font-medium text-text-primary">{supplier.name}</h2>
-              {!editing && (
+            {!editing && (
+              <div className="flex items-center justify-end px-4 pt-3">
                 <button
                   type="button"
                   onClick={openEdit}
@@ -400,8 +389,8 @@ function SupplierDetail({ supplierId, onBack }: SupplierDetailProps) {
                   <Pencil size={14} />
                   Editar
                 </button>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Aviso de ficha incompleta (modo ayuda, no bloquea) */}
             {!editing && incomplete && (
