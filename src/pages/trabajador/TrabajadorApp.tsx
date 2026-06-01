@@ -17,6 +17,8 @@ import MiBolsaHoras from '../../components/MiBolsaHoras'
 import MisTurnos from './MisTurnos'
 import CambiosTurnoPage from './CambiosTurnoPage'
 import MisChecklistsPage from './MisChecklistsPage'
+import BottomTabBar from '../../components/trabajador/BottomTabBar'
+import type { WorkerTab } from '../../components/trabajador/BottomTabBar'
 import ExecutionPage from '../../modules/appcc/pages/ExecutionPage'
 import { fetchAppSettings } from '../../services/appSettingsService'
 import { fetchLocations } from '../../services/supabaseSync'
@@ -249,18 +251,30 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
     )
   }
 
-  // Home: botones grandes de módulos
+  // Home: botones grandes de módulos + barra de navegación inferior.
+  // La barra solo se monta en destinos de primer nivel (aquí, el home). El
+  // padding inferior (pb-20) evita que la barra tape el contenido del home.
+  function goToTab(tab: WorkerTab) {
+    if (tab === 'inicio') setSubPage('home')
+    else if (tab === 'fichar') { setFicharOrigin('home'); setSubPage('fichar') }
+    else if (tab === 'tareas') setSubPage('appcc_list')
+    else if (tab === 'mas') setSubPage('portal')
+  }
+
   return (
-    <HomeEmpleado
-      employee={employee}
-      onNavigate={(mod: WorkerModule) => {
-        if (mod === 'appcc') setSubPage('appcc_list')
-        else if (mod === 'portal') setSubPage('portal')
-        else if (mod === 'fichar') { setFicharOrigin('home'); setSubPage('fichar') }
-      }}
-      onLogout={onExitMode}
-      exitLabel={exitLabel}
-      appccPendingCount={appccPendingCount}
-    />
+    <div className="pb-20">
+      <HomeEmpleado
+        employee={employee}
+        onNavigate={(mod: WorkerModule) => {
+          if (mod === 'appcc') setSubPage('appcc_list')
+          else if (mod === 'portal') setSubPage('portal')
+          else if (mod === 'fichar') { setFicharOrigin('home'); setSubPage('fichar') }
+        }}
+        onLogout={onExitMode}
+        exitLabel={exitLabel}
+        appccPendingCount={appccPendingCount}
+      />
+      <BottomTabBar active="inicio" onSelect={goToTab} showTareas={appccPendingCount >= 0} />
+    </div>
   )
 }
