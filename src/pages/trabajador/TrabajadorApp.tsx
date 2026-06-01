@@ -54,6 +54,8 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
   const [showBolsaHoras, setShowBolsaHoras] = useState(false)
   const [location, setLocation] = useState<Location | undefined>(undefined)
   const [currentExecutionId, setCurrentExecutionId] = useState<string | null>(null)
+  // Desde dónde se entró a fichar, para volver al sitio correcto (home o portal).
+  const [ficharOrigin, setFicharOrigin] = useState<'home' | 'portal'>('portal')
   const [appccPendingCount, setAppccPendingCount] = useState(0)
   // refreshAttempted: marca si ya hemos pedido un refresh para resolver el caso
   // del encargado dual que entra al modo trabajador desde el Shell sin haber
@@ -208,7 +210,7 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
   }
 
   // Portal: subpáginas
-  if (subPage === 'fichar') return <FichajeEmpleado employee={employee} onBack={() => setSubPage('portal')} />
+  if (subPage === 'fichar') return <FichajeEmpleado employee={employee} onBack={() => setSubPage(ficharOrigin)} />
   if (subPage === 'horario') return <MiHorario employee={employee} onBack={() => setSubPage('portal')} />
   if (subPage === 'fichajes') return <MisFichajes employee={employee} onBack={() => setSubPage('portal')} />
   if (subPage === 'documentos') return <MisDocumentos employee={employee} onBack={() => setSubPage('portal')} />
@@ -240,7 +242,7 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
     return (
       <PortalEmpleado
         employee={employee}
-        onNavigate={(p: PortalSubPage) => setSubPage(p)}
+        onNavigate={(p: PortalSubPage) => { if (p === 'fichar') setFicharOrigin('portal'); setSubPage(p) }}
         onBack={() => setSubPage('home')}
         showBolsaHoras={showBolsaHoras}
       />
@@ -254,6 +256,7 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
       onNavigate={(mod: WorkerModule) => {
         if (mod === 'appcc') setSubPage('appcc_list')
         else if (mod === 'portal') setSubPage('portal')
+        else if (mod === 'fichar') { setFicharOrigin('home'); setSubPage('fichar') }
       }}
       onLogout={onExitMode}
       exitLabel={exitLabel}

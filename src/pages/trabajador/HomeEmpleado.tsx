@@ -7,13 +7,13 @@
 // NO cambia lógica, props ni navegación: solo el aspecto.
 
 import { useEffect, useState } from 'react'
-import { Leaf, User, LogOut, AlertCircle, ArrowLeft, ChevronRight } from 'lucide-react'
+import { Leaf, User, LogOut, AlertCircle, ArrowLeft, ChevronRight, LogIn, Clock } from 'lucide-react'
 import type { Employee } from '../../types'
 import { hasOpenShift } from '../../services/fichajeKiosko'
 import NotificationBell from '../../components/NotificationBell'
 import { supabase } from '../../lib/supabase'
 
-export type WorkerModule = 'appcc' | 'portal'
+export type WorkerModule = 'appcc' | 'portal' | 'fichar'
 
 interface Props {
   employee: Employee
@@ -87,6 +87,33 @@ export default function HomeEmpleado({ employee, onNavigate, onLogout, exitLabel
   const now = new Date()
   const greeting = now.getHours() < 14 ? 'Buenos días' : now.getHours() < 21 ? 'Buenas tardes' : 'Buenas noches'
 
+  // Hora de inicio de la jornada abierta (la entrada más reciente sin salida).
+  const openSince: Date | null = open
+    ? (() => {
+        const entries = employee.clockEntries || []
+        const sorted = [...entries].sort((a, b) =>
+          new Date(b.datetime).getTime() - new Date(a.datetime).getTime(),
+        )
+        return sorted[0]?.type === 'entrada' ? new Date(sorted[0].datetime) : null
+      })()
+    : null
+
+  // Cronómetro vivo: re-render cada minuto mientras haya jornada abierta.
+  const [nowTick, setNowTick] = useState(() => Date.now())
+  useEffect(() => {
+    if (!openSince) return
+    const t = setInterval(() => setNowTick(Date.now()), 60_000)
+    return () => clearInterval(t)
+  }, [openSince])
+
+  function elapsedLabel(): string {
+    if (!openSince) return ''
+    const mins = Math.max(0, Math.floor((nowTick - openSince.getTime()) / 60_000))
+    const h = Math.floor(mins / 60)
+    const m = mins % 60
+    return h > 0 ? `${h}h ${m}m` : `${m}m`
+  }
+
   return (
     <div className="min-h-screen bg-page flex flex-col">
       {/* Banda superior navy (coherente con el Folvy de gestión) */}
@@ -119,11 +146,44 @@ export default function HomeEmpleado({ employee, onNavigate, onLogout, exitLabel
           </div>
         </div>
 
-        {open && (
-          <div className="mt-3 bg-white/10 rounded-xl px-3 py-2.5 flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-success animate-pulse" />
-            <span className="text-sm text-white font-medium">Tienes una jornada abierta</span>
+      </div>
+
+      {/* Bloque de fichaje de primera clase (adaptativo segun estado) */}
+      <div className="px-5 pt-4">
+        {open ? (
+          <div className="w-full rounded-2xl bg-card border border-border-default shadow-sm p-5">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-success animate-pulse" />
+              <span className="text-sm font-medium text-success">Jornada en curso</span>
+            </div>
+            <p className="font-display text-3xl text-text-primary mt-1.5 leading-none">
+              {elapsedLabel()}
+            </p>
+            {openSince && (
+              <p className="text-xs text-text-secondary mt-1 inline-flex items-center gap-1">
+                <Clock size={12} /> Entrada a las {openSince.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+              </p>
+            )}
+            <button
+              onClick={() => onNavigate('fichar')}
+              className="mt-4 w-full py-3.5 rounded-xl border border-terracota text-terracota bg-terracota-bg font-semibold inline-flex items-center justify-center gap-2 transition-base active:scale-[0.98] hover:bg-terracota hover:text-white"
+            >
+              <LogOut size={18} /> Fichar salida
+            </button>
           </div>
+        ) : (
+          <button
+            onClick={() => onNavigate('fichar')}
+            className="w-full rounded-2xl bg-terracota text-white shadow-sm p-5 flex items-center gap-4 text-left transition-base active:scale-[0.98] hover:bg-terracota-hover"
+          >
+            <span className="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+              <LogIn size={28} />
+            </span>
+            <span>
+              <span className="block font-display text-xl font-medium">Fichar entrada</span>
+              <span className="block text-sm text-white/85 mt-0.5">Toca para empezar tu jornada</span>
+            </span>
+          </button>
         )}
       </div>
 
