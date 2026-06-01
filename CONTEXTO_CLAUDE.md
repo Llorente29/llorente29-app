@@ -1144,3 +1144,36 @@ Pamela es MANAGER (encargada dual). Escanea el QR -> entra a Gestión (correcto 
 - De antes, no tocado hoy: E8.4 (resaltado en vivo + vínculo), R1 (responsive del Shell), medidor coste IA por cuenta, code-splitting, AI provider abstraction.
 
 DOCS NUEVOS/ACTUALIZADOS esta sesión: docs/folvy_portal_trabajador_diseno.md (actualizado), docs/folvy_e8_pasos_inteligentes_diseno.md (movido).
+
+---
+
+## SESIÓN 01/06/2026 (CIERRE) — Bottom-tab bar completa + seguridad cerrada
+
+Continuación de la sesión del portal del trabajador. Cierre de dos cosas que quedaban abiertas.
+
+### Bottom-tab bar del portal del trabajador — COMPLETA (Parte A + Parte B)
+Navegación móvil por pestañas, modelo HIG/Material sin compromisos. 4 destinos: **Inicio · Fichar · Tareas · Más**.
+- **Parte A (commit ff6ac68):** componente `src/components/trabajador/BottomTabBar.tsx` (NUEVO, barra inferior fija, max-w-md centrada, `safe-area-inset-bottom`, tab activo en navy, componente "tonto" que emite `onSelect`; prop `showTareas` para ocultar el tab). Montado en el home con `goToTab` + `pb-20`.
+- **Parte B (commit 08c0354):** la barra PERSISTE en los destinos de primer nivel.
+- **CONTRATO definitivo (regla única, sin casos especiales):** destino navegable = barra abajo + SIN flecha-atrás (Inicio, Tareas, Más); pantalla de foco = flecha-atrás + SIN barra (ejecutar checklist, subpáginas del portal, bolsa). Nunca conviven flecha y barra.
+- **Implementación limpia:** la flecha de `PortalEmpleado` y `MisChecklistsPage` solo se renderiza si reciben `onBack` (ahora opcional). El orquestador monta los destinos raíz SIN `onBack` (-> sin flecha, con barra) y los profundos CON `onBack` (-> flecha, sin barra). El contrato es el propio prop, sin flags ad-hoc.
+- **Fichar = tab de ACCIÓN** (no sección navegable): se abre a pantalla completa, con flecha para cancelar, sin barra; al terminar vuelve a Inicio (patrón cámara/compose de Instagram/WhatsApp). Por eso `FichajeEmpleado` NO se tocó.
+- `showAppccTab`: `TrabajadorApp` consulta `appcc_schedules` activos (mismo criterio que HomeEmpleado) para ocultar el tab "Tareas" si el local no tiene APPCC. Sustituye el provisional `appccPendingCount >= 0` del home.
+- Ficheros: `BottomTabBar.tsx` (nuevo), `TrabajadorApp.tsx`, `PortalEmpleado.tsx`, `MisChecklistsPage.tsx`. Verificado en app los 4 estados (Inicio/Tareas/Más con barra sin flecha; Fichar y subpáginas con flecha sin barra; pb-20 no tapa la lista larga del portal).
+- APRENDIZAJE: `appccPendingCount` (ejecuciones del día) y `showAppcc` (¿local tiene APPCC?) son señales DISTINTAS. Para ocultar el tab hay que usar `appcc_schedules`, no el contador.
+
+### Seguridad — service_role key ROTADA (deuda CERRADA)
+Julio rotó la service_role key. Verificado que las Edge Functions siguen funcionando con la nueva (el enlace de acceso de trabajador se sigue generando -> `manage-employee` coge la clave nueva del entorno automáticamente). No hay más tokens vivos por revocar. La deuda recurrente "ROTAR/REVOCAR service_role y tokens pegados en chats" queda CERRADA el 01/06.
+
+### .vite/ des-trackeado (commit d4d334f)
+`.vite/` (caché de Vite, regenerable) estaba trackeado -> añadido al `.gitignore` + `git rm -r --cached .vite` (14 ficheros fuera, ~71k líneas de caché; siguen en disco). Higiene de repo.
+
+### Estado git al cierre
+Todos los commits de la jornada subidos a origin/main: 17ec37c (acceso QR), 46adf56 (docs), 085a192 (reskin home), 3ea5b84 (adaptativo), 42e8656 (Drawer), 45e2007 (contexto 01/06), d4d334f (.vite/), ff6ac68 (bottom-bar A), 08c0354 (bottom-bar B). Local y remoto en sync. Working tree limpio.
+
+### DEUDA VIVA tras el cierre
+- `xlsx` (SheetJS) vulnerabilidad high preexistente sin fix upstream. Migrar/aislar.
+- Resto del portal: bandeja de avisos (verificar lógica missed-punch antes), PWA instalable.
+- De antes, no tocado: E8.4 (resaltado en vivo + vínculo, pieza central editor escandallos), R1 (responsive del Shell, PRIORITARIO), medidor coste IA por cuenta (HIGH, prerequisito 2º cliente), code-splitting, AI provider abstraction, 34 platos needs_review.
+
+NOTA DE MANTENIMIENTO DEL CONTEXTO: la copia de CONTEXTO_CLAUDE.md del proyecto (knowledge) puede ir por detrás del fichero real del repo. El fichero VERDADERO es `C:\dev\llorente29-app\CONTEXTO_CLAUDE.md` (versionado en git). Al regenerar, partir del repo, no de la copia del knowledge.
