@@ -1,9 +1,13 @@
 // src/pages/trabajador/HomeEmpleado.tsx
 // Pantalla de inicio del trabajador: botones grandes para cada módulo.
 // Diseño preparado para añadir más módulos (Stock, etc.)
+//
+// Reskin (Pieza 2): banda superior navy (coherente con el Folvy de gestión),
+// sin gradientes. Tarjetas de módulo planas en marca (card + icono de color).
+// NO cambia lógica, props ni navegación: solo el aspecto.
 
 import { useEffect, useState } from 'react'
-import { Leaf, User, LogOut, AlertCircle, ArrowLeft } from 'lucide-react'
+import { Leaf, User, LogOut, AlertCircle, ArrowLeft, ChevronRight } from 'lucide-react'
 import type { Employee } from '../../types'
 import { hasOpenShift } from '../../services/fichajeKiosko'
 import NotificationBell from '../../components/NotificationBell'
@@ -29,7 +33,9 @@ interface ModuleButton {
   icon: typeof Leaf
   title: string
   desc: string
-  accent: string
+  /** Color del icono y del fondo suave del círculo (clases Tailwind). */
+  iconColor: string
+  iconBg: string
   badge?: number
   badgeColor?: string
 }
@@ -61,7 +67,8 @@ export default function HomeEmpleado({ employee, onNavigate, onLogout, exitLabel
       desc: appccPendingCount > 0
         ? `${appccPendingCount} control${appccPendingCount > 1 ? 'es' : ''} pendiente${appccPendingCount > 1 ? 's' : ''}`
         : 'Controles del día',
-      accent: 'from-emerald-600 to-emerald-700',
+      iconColor: 'text-success',
+      iconBg: 'bg-success-bg',
       badge: appccPendingCount > 0 ? appccPendingCount : undefined,
       badgeColor: 'bg-danger',
     }] : []),
@@ -70,10 +77,11 @@ export default function HomeEmpleado({ employee, onNavigate, onLogout, exitLabel
       icon: User,
       title: 'Mi Portal',
       desc: 'Fichajes, horario, documentos, vacaciones',
-      accent: 'from-accent to-accent-hover',
+      iconColor: 'text-accent',
+      iconBg: 'bg-accent-bg',
     },
     // Preparado para más módulos:
-    // { id: 'stock', icon: Package, title: 'Stock', desc: 'Recuentos y recepciones', accent: '...' },
+    // { id: 'stock', icon: Package, title: 'Stock', desc: 'Recuentos y recepciones', iconColor: '...', iconBg: '...' },
   ]
 
   const now = new Date()
@@ -81,19 +89,19 @@ export default function HomeEmpleado({ employee, onNavigate, onLogout, exitLabel
 
   return (
     <div className="min-h-screen bg-page flex flex-col">
-      {/* Header */}
-      <div className="px-5 pt-6 pb-4">
+      {/* Banda superior navy (coherente con el Folvy de gestión) */}
+      <div className="bg-accent px-5 pt-6 pb-5">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <p className="text-sm text-text-secondary">{greeting}</p>
-            <p className="font-display text-2xl text-accent mt-0.5">{employee.name.split(' ')[0]}</p>
+            <p className="text-sm text-white/65">{greeting}</p>
+            <p className="font-display text-2xl text-white mt-0.5 truncate">{employee.name.split(' ')[0]}</p>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             <NotificationBell employeeId={employee.id} />
             {exitLabel === 'back-to-management' ? (
               <button
                 onClick={onLogout}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card border border-border-default text-xs font-medium text-text-secondary hover:text-text-primary transition-base"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 text-xs font-medium text-white hover:bg-white/20 transition-base"
                 aria-label="Volver a gestión"
               >
                 <ArrowLeft size={14} />
@@ -102,7 +110,7 @@ export default function HomeEmpleado({ employee, onNavigate, onLogout, exitLabel
             ) : (
               <button
                 onClick={onLogout}
-                className="p-2 rounded-full bg-card border border-border-default text-text-secondary hover:text-text-primary transition-base"
+                className="p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-base"
                 aria-label="Salir"
               >
                 <LogOut size={16} />
@@ -112,16 +120,16 @@ export default function HomeEmpleado({ employee, onNavigate, onLogout, exitLabel
         </div>
 
         {open && (
-          <div className="mt-3 bg-success-bg border border-success/30 rounded-xl px-3 py-2.5 flex items-center gap-2">
+          <div className="mt-3 bg-white/10 rounded-xl px-3 py-2.5 flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-success animate-pulse" />
-            <span className="text-sm text-success font-medium">Tienes una jornada abierta</span>
+            <span className="text-sm text-white font-medium">Tienes una jornada abierta</span>
           </div>
         )}
       </div>
 
       {/* Alerta APPCC grande cuando hay tareas pendientes */}
       {showAppcc && appccPendingCount > 0 && (
-        <div className="px-5 mb-2">
+        <div className="px-5 pt-4">
           <button
             onClick={() => onNavigate('appcc')}
             className="w-full p-4 rounded-xl bg-warning-bg border-2 border-warning/40 text-left transition-base active:scale-[0.98] hover:border-warning"
@@ -141,8 +149,8 @@ export default function HomeEmpleado({ employee, onNavigate, onLogout, exitLabel
         </div>
       )}
 
-      {/* Botones de módulos */}
-      <div className="flex-1 px-5 pb-8">
+      {/* Botones de módulos — tarjetas planas en marca */}
+      <div className="flex-1 px-5 pt-4 pb-8">
         <div className={`grid gap-4 ${modules.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
           {modules.map(mod => {
             const Icon = mod.icon
@@ -150,20 +158,19 @@ export default function HomeEmpleado({ employee, onNavigate, onLogout, exitLabel
               <button
                 key={mod.id}
                 onClick={() => onNavigate(mod.id)}
-                className={`relative flex flex-col items-center justify-center text-center p-6 rounded-2xl text-white shadow-lg hover:shadow-xl transition-base active:scale-95 min-h-[160px] overflow-hidden bg-gradient-to-br ${mod.accent}`}
+                className="relative flex flex-col items-start text-left p-5 rounded-2xl bg-card border border-border-default shadow-sm hover:shadow-md hover:border-accent transition-base active:scale-95 min-h-[160px] overflow-hidden"
               >
-                <div className="relative z-10 flex flex-col items-center gap-3">
-                  <div className="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center">
-                    <Icon size={28} strokeWidth={2} />
-                  </div>
-                  <div>
-                    <p className="text-lg font-bold">{mod.title}</p>
-                    <p className="text-xs opacity-80 mt-1">{mod.desc}</p>
-                  </div>
+                <div className={`w-14 h-14 rounded-full ${mod.iconBg} flex items-center justify-center`}>
+                  <Icon size={28} strokeWidth={2} className={mod.iconColor} />
                 </div>
+                <div className="mt-auto pt-4">
+                  <p className="text-lg font-bold text-text-primary">{mod.title}</p>
+                  <p className="text-xs text-text-secondary mt-1">{mod.desc}</p>
+                </div>
+                <ChevronRight size={18} className="absolute bottom-5 right-5 text-text-secondary" />
                 {/* Badge */}
                 {mod.badge && (
-                  <span className={`absolute top-3 right-3 min-w-[28px] h-7 px-2 ${mod.badgeColor ?? 'bg-danger'} rounded-full text-sm font-bold flex items-center justify-center z-10`}>
+                  <span className={`absolute top-4 right-4 min-w-[28px] h-7 px-2 ${mod.badgeColor ?? 'bg-danger'} text-white rounded-full text-sm font-bold flex items-center justify-center`}>
                     {mod.badge}
                   </span>
                 )}
