@@ -10,7 +10,7 @@ import type { AppccExecution } from '../../modules/appcc/types'
 
 interface Props {
   employee: Employee
-  onBack: () => void
+  onBack?: () => void
   onOpenExecution: (executionId: string) => void
 }
 
@@ -122,13 +122,15 @@ export default function MisChecklistsPage({ employee, onBack, onOpenExecution }:
       {/* Header */}
       <div className="px-4 pt-5 pb-4">
         <div className="flex items-center gap-3">
-          <button
-            onClick={onBack}
-            className="text-text-secondary w-9 h-9 rounded-full hover:bg-accent-bg flex items-center justify-center transition-base"
-            aria-label="Volver"
-          >
-            <ArrowLeft size={20} />
-          </button>
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="text-text-secondary w-9 h-9 rounded-full hover:bg-accent-bg flex items-center justify-center transition-base"
+              aria-label="Volver"
+            >
+              <ArrowLeft size={20} />
+            </button>
+          )}
           <div className="flex-1 min-w-0">
             <p className="text-xs text-text-secondary uppercase tracking-wide">APPCC</p>
             <p className="font-display text-xl text-accent">Controles de hoy</p>

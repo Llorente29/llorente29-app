@@ -59,6 +59,8 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
   // Desde dónde se entró a fichar, para volver al sitio correcto (home o portal).
   const [ficharOrigin, setFicharOrigin] = useState<'home' | 'portal'>('portal')
   const [appccPendingCount, setAppccPendingCount] = useState(0)
+  // ¿El local tiene APPCC configurado? Decide si se muestra el tab "Tareas".
+  const [showAppccTab, setShowAppccTab] = useState(false)
   // refreshAttempted: marca si ya hemos pedido un refresh para resolver el caso
   // del encargado dual que entra al modo trabajador desde el Shell sin haber
   // disparado el sync para esta cuenta todavía. Una sola oportunidad por montaje.
@@ -110,6 +112,21 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
       })
     return () => { cancel = true }
   }, [employee?.locationId, subPage])
+
+  // ¿El local tiene algún APPCC activo? (mismo criterio que HomeEmpleado)
+  useEffect(() => {
+    if (!supabase || !employee?.locationId) return
+    let cancel = false
+    supabase
+      .from('appcc_schedules')
+      .select('id', { count: 'exact', head: true })
+      .eq('location_id', employee.locationId)
+      .eq('is_active', true)
+      .then(({ count }) => {
+        if (!cancel) setShowAppccTab((count ?? 0) > 0)
+      })
+    return () => { cancel = true }
+  }, [employee?.locationId])
 
   // Refresh único bajo demanda: si llegamos aquí con employeeId pero sin
   // encontrar al empleado en staff, y el sync ya no está activo, puede ser
@@ -200,14 +217,17 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
     )
   }
 
-  // APPCC: lista de checklists del día
+  // APPCC lista (tab "Tareas"): destino de primer nivel. Sin flecha (se navega
+  // con los tabs); barra inferior persistente.
   if (subPage === 'appcc_list') {
     return (
-      <MisChecklistsPage
-        employee={employee}
-        onBack={() => setSubPage('home')}
-        onOpenExecution={(id) => { setCurrentExecutionId(id); setSubPage('appcc_execution') }}
-      />
+      <div className="pb-20">
+        <MisChecklistsPage
+          employee={employee}
+          onOpenExecution={(id) => { setCurrentExecutionId(id); setSubPage('appcc_execution') }}
+        />
+        <BottomTabBar active="tareas" onSelect={goToTab} showTareas={showAppccTab} />
+      </div>
     )
   }
 
@@ -239,15 +259,17 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
     )
   }
 
-  // Portal: menú de botones
+  // Portal (tab "Más"): destino de primer nivel. Sin flecha; barra persistente.
   if (subPage === 'portal') {
     return (
-      <PortalEmpleado
-        employee={employee}
-        onNavigate={(p: PortalSubPage) => { if (p === 'fichar') setFicharOrigin('portal'); setSubPage(p) }}
-        onBack={() => setSubPage('home')}
-        showBolsaHoras={showBolsaHoras}
-      />
+      <div className="pb-20">
+        <PortalEmpleado
+          employee={employee}
+          onNavigate={(p: PortalSubPage) => { if (p === 'fichar') setFicharOrigin('portal'); setSubPage(p) }}
+          showBolsaHoras={showBolsaHoras}
+        />
+        <BottomTabBar active="mas" onSelect={goToTab} showTareas={showAppccTab} />
+      </div>
     )
   }
 
@@ -274,7 +296,7 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
         exitLabel={exitLabel}
         appccPendingCount={appccPendingCount}
       />
-      <BottomTabBar active="inicio" onSelect={goToTab} showTareas={appccPendingCount >= 0} />
+      <BottomTabBar active="inicio" onSelect={goToTab} showTareas={showAppccTab} />
     </div>
   )
 }

@@ -15,7 +15,7 @@ export type PortalSubPage = 'fichar' | 'horario' | 'fichajes' | 'documentos' | '
 interface Props {
   employee: Employee
   onNavigate: (page: PortalSubPage) => void
-  onBack: () => void
+  onBack?: () => void
   showBolsaHoras?: boolean
 }
 
@@ -96,13 +96,15 @@ export default function PortalEmpleado({ employee, onNavigate, onBack, showBolsa
       {/* Header */}
       <div className="px-4 pt-5 pb-4">
         <div className="flex items-center gap-3">
-          <button
-            onClick={onBack}
-            className="text-text-secondary w-9 h-9 rounded-full hover:bg-accent-bg flex items-center justify-center transition-base"
-            aria-label="Volver"
-          >
-            <ArrowLeft size={20} />
-          </button>
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="text-text-secondary w-9 h-9 rounded-full hover:bg-accent-bg flex items-center justify-center transition-base"
+              aria-label="Volver"
+            >
+              <ArrowLeft size={20} />
+            </button>
+          )}
           <div className="flex-1 min-w-0">
             <p className="text-xs text-text-secondary uppercase tracking-wide">Mi Portal</p>
             <p className="font-display text-xl text-accent">{employee.name.split(' ')[0]}</p>
