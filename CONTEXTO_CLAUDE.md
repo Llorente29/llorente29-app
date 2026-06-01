@@ -1177,3 +1177,120 @@ Todos los commits de la jornada subidos a origin/main: 17ec37c (acceso QR), 46ad
 - De antes, no tocado: E8.4 (resaltado en vivo + vínculo, pieza central editor escandallos), R1 (responsive del Shell, PRIORITARIO), medidor coste IA por cuenta (HIGH, prerequisito 2º cliente), code-splitting, AI provider abstraction, 34 platos needs_review.
 
 NOTA DE MANTENIMIENTO DEL CONTEXTO: la copia de CONTEXTO_CLAUDE.md del proyecto (knowledge) puede ir por detrás del fichero real del repo. El fichero VERDADERO es `C:\dev\llorente29-app\CONTEXTO_CLAUDE.md` (versionado en git). Al regenerar, partir del repo, no de la copia del knowledge.
+---
+
+## SESIÓN 01/06/2026 (CIERRE 4) — R1 cerrado + SISTEMA DE DISEÑO de Folvy Kitchen
+
+Dos partes: (A) se cerró R1 responsive de verdad; (B) sesión larga de diseño que fija el
+lenguaje visual y de información de TODO el módulo Kitchen, con benchmark mundial.
+
+### A — R1 RESPONSIVE: CERRADO Y EN PRODUCCIÓN
+Quedaban dos defectos de contenido (el marco del Shell ya era responsive desde el 31/05):
+- `KitchenItemsPage.tsx`: la tabla de Ingredientes a <768px metía scroll horizontal y ocultaba
+  "Coste computado". Arreglo: `useIsMobile()` → en móvil **tarjetas apiladas** (patrón clonado de
+  `KitchenProfitabilityPage` R1.4), escritorio idéntico.
+- `RecipeEditorPage.tsx` (9 ediciones puntuales ancladas): nombre de línea **envuelve** en móvil
+  (no se aplasta), **barra decorativa de coste oculta** en móvil, **papelera y "+merma" visibles
+  en táctil** (no dependen de hover), **solapas con scroll horizontal** (Histórico/Más no se
+  cortan), **badge Validado/Revisar** no se corta (cabecera con flex-wrap + min-w-0).
+- Commit `b1f72cf` en `origin/main` (push hecho, `5bc27e1..b1f72cf`). `tsc -b` + Vite limpios.
+- ENCUADRE HONESTO (regla nº2): R1 = **paridad** (dejar de perder por desbordamiento), NO goleada.
+  La goleada va encima (editar en tablet donde meez solo deja ver, estados didácticos, Cook Mode G9).
+- Deuda cosmética menor: `pl-[88px]` del panel de merma queda algo metido en móvil estrecho.
+
+### B — SISTEMA DE DISEÑO Y BENCHMARK DEL MÓDULO KITCHEN
+
+**Doc nuevo:** `folvy_kitchen_benchmark_y_plan.md` (en outputs; subir a knowledge + docs/).
+Benchmark verificado el 01/06 en webs/docs oficiales de Apicbase, meez, R365, Galley + gstock/tspoon
+del proyecto. Tesis de goleada (resuelve la tensión del 16/05 "Cocina suficientemente buena"):
+NO se gana out-featureando a gstock en back-office clásico; se gana **cambiando el eje** — toda la
+categoría calcula coste TEÓRICO / varianza AvT; Folvy ya tiene **11.894 tickets reales + escandallo
+validado al céntimo + comisiones por marca×canal (Capa 2)** → vende **margen REAL por mezcla de
+ventas real, a nivel de modificador, por marca y canal**, con **fricción de arranque casi-cero**
+(foto→IA sobre datos ya unidos) y **honestidad** (no inventa costes). Plan en 8 fases K1–K8 con gate
+de benchmark por pieza. Table stake que HOY falta: **alérgenos + nutrición automáticos** (K6).
+
+**Análisis de tspoon (10 pantallas reales del incumbente de Llorente29):**
+- RESPETAR: el modelo mental español (Productos → Herramientas → Elaboraciones Intermedias →
+  Finales → Agrupaciones) y el idioma del operador. Validan la arquitectura de coste de Folvy:
+  "Cálculo del precio = Último precio de compra" (= `last_purchase`), conversión "1 Bote = 0,85 Kg"
+  (= `recipe_item_unit_conversion`), "Cálculo del coste = Del detalle".
+- SUPERAR: sobrecarga (15+ acordeones, formularios de edición de 20+ campos en modales gigantes),
+  estados vacíos desperdiciados (tutoriales de YouTube en el panel principal), listas planas.
+
+**SISTEMA DE DISEÑO FIJADO (patrón único, válido para TODO Kitchen):**
+1. **Shell**: top nav (Inicio/Team/Safety/Sales/Kitchen) + **sidebar izquierdo** del módulo
+   (Resumen/Ingredientes/Proveedores/Recetas/Rentabilidad/Ingeniería).
+2. **Hero cálido** (`bg-terracota-bg`) = identidad de la entidad: foto/icono + nombre (Fraunces) +
+   tipo + estado (Validado/Estrella) + acción.
+3. **Pestañas** = divulgación progresiva (Escandallo/Receta/Etiquetado/Histórico). Adiós a los
+   modales de 20 campos de tspoon: el alta serán 3 campos + foto→IA.
+4. **Dos columnas**: izquierda = el trabajo (composición / proveedores / artículos); **derecha =
+   PANEL NAVY "EN VIVO"** = verdad económica de la entidad, siempre en el mismo sitio. Es el SELLO
+   del módulo (viene del editor real ya en producción).
+   - Receta → coste total + food cost + distribución + margen real por canal (con semáforo).
+   - Artículo → coste por unidad base + estrategia + "usado en N platos" + última compra.
+   - Proveedor → compras del mes/año + último pedido + próxima entrega.
+5. **Honestidad** ("sin terminar"), **IA donde aporta** ("Sugerir mermas IA"), **didáctica**.
+
+**REGLA DE INTERACCIÓN (todo el módulo):** TODO es clicable → lleva a su sección ya filtrada.
+Ver un dato y profundizar a un clic (KPIs, filas, chips, segmentos de barra, marcas, canales).
+
+**ÁMBITO / FILTRADO (jerarquía de Julio):** selector **Negocio → Ubicaciones → Marcas** en la
+cabecera (Llorente29 → Alcalá/Pza Castilla/Carabanchel → Smash Brothers/Lobbers/Cloudtown). Scopea
+toda la app de forma consistente y persiste entre sesiones. Distinción clave a mostrar en UI:
+- COMPARTIDO del negocio (no cambia al filtrar por ubicación): definición de receta/escandallo,
+  catálogo de ingredientes, "recetas sin terminar", coste (salvo que el proveedor cobre distinto
+  por local).
+- POR UBICACIÓN/MARCA (sí cambia): ventas, margen real, food cost, ingeniería de menús.
+- PENDIENTE (golpe multi-local): vista "comparar ubicaciones" (los locales lado a lado, marcando
+  el que se desvía). Ningún incumbente español lo enseña bien.
+
+**FICHA DE RECETA — PATRÓN DEFINITIVO (validado por Julio):**
+- Hero cálido: foto + nombre + chips Estrella (con popularidad "1.240 uds/mes · +8%" que la gana)
+  + Validado.
+- Banner "Importar receta (foto/PDF)": una subida → la IA rellena **ingredientes (pestaña
+  Escandallo) Y pasos (pestaña Receta)**, todo como borrador `needs_review`. La IA PROPONE, el
+  cocinero MANDA.
+- Estado honesto arriba ("1 ingrediente sin coste → tu coste real podría ser mayor").
+- Izquierda: composición con **% de coste por línea**, top primero, "+N más" plegado, "sin
+  terminar" honesto, enlace "Receta · 7 pasos", alérgenos (recuperados, legal).
+- Derecha: **PANEL NAVY COSTE EN VIVO** = coste total + chip food cost (semáforo) + barra de
+  distribución del coste + MARGEN REAL POR CANAL (Local/Glovo/JustEat/Uber con € y % semaforizados)
+  + insight accionable ("Local rinde casi el doble que delivery — promociona retirada").
+
+**DASHBOARD DE KITCHEN ("Resumen", primer ítem del sidebar) — PATRÓN FIJADO:**
+- Barra de ámbito Negocio→Ubicaciones→Marcas + periodo.
+- Empuje didáctico arriba ("Empieza por aquí: 12 ingredientes sin coste...").
+- Tira navy de KPIs: food cost medio, margen medio, **margen del mes en €** (sobre ventas reales),
+  platos·ingredientes.
+- "Necesita tu atención" (el corazón): ingredientes sin coste, recetas sin terminar, platos sobre
+  food cost objetivo, subidas de precio (con nº de platos afectados = cascada visible), platos sin
+  alérgenos, sin foto. Ordenado por severidad. Cada fila → su lista filtrada.
+- Salud del food cost (verde/ámbar/rojo), ingeniería de menús (estrellas/puzzles/vacas/perros),
+  margen por canal, por marca (dark kitchen nativa), movimientos de precio 7 días.
+- **Lenguaje de color ÚNICO con leyenda**: verde=sano · ámbar=ajustado · rojo=pierde ·
+  azul=oportunidad. Mismo significado en todo el módulo.
+- Nota de ámbito (compartido vs por ubicación/marca).
+
+### DEUDA DE DISEÑO DECLARADA (autocrítica honesta, no esconder)
+- Las maquetas son a **680px (el visualizador), NO especificaciones**. El Kitchen real es pantalla
+  ancha con sidebar izquierdo; proporciones, ancho del panel navy y grid del dashboard hay que
+  **rehacerlos a los breakpoints reales**. El lenguaje vale; las medidas no se dan por buenas.
+- **Datos mock**: margen por canal, "Estrella", 18.400 €/mes, etc. son placeholder. NO anclarse:
+  el margen real por canal a nivel de modificador es **K7, pendiente**. Marcar mock agresivamente.
+- **Contraste en navy (modo oscuro)**: vigilar el texto secundario y los % de color sobre navy en
+  el build real con los tokens Folvy.
+- **Validar con usuario real (Pamela) con datos reales ANTES de más maquetas.** Una séptima
+  maqueta vale menos que ver si "entra por los ojos" a quien la va a usar. (Principio rector nº2:
+  se mide sobre datos reales, no de laboratorio.)
+- Posible exceso de densidad en el dashboard: si pesa, plegar los bloques inferiores (canal/marca/
+  precio) en un "ver más".
+
+### PENDIENTE DE DISEÑO (próximas pantallas)
+- Flujo **Importar receta → foto → IA** (ingredientes + pasos) — mayor golpe de comodidad.
+- **Lista de Recetas** (catálogo con foto + coste + margen + Estrella de un vistazo).
+- **Alta de ingrediente en 3 pasos** (matar el formulario gigante de tspoon).
+- Vista **comparar ubicaciones** del dashboard.
+
+DOCS NUEVOS: `folvy_kitchen_benchmark_y_plan.md` (benchmark + plan K1–K8 + sistema de diseño).
