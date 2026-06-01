@@ -12,11 +12,18 @@
 //
 // Patrón: useApp() para actor (userProfile/authUserId) + useActiveAccount()
 // para activeAccountId. Estilo coherente con KitchenRecipesPage.
+//
+// R1 (responsive móvil): en escritorio se mantiene la TABLA; en móvil (<768px),
+// donde una tabla de 4 columnas + chevron obliga a arrastrar y oculta "Coste
+// computado", cada fila se muestra como TARJETA apilada (nombre prominente +
+// chip "sin terminar" + unidad/coste fijo/coste computado etiquetados), sin
+// scroll horizontal. Mismo mecanismo y estilo que KitchenProfitabilityPage (R1.4).
 
 import { useEffect, useMemo, useState } from 'react'
 import { Plus, Soup, X, AlertTriangle, ChevronRight } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
+import { useIsMobile } from '@/shell/useIsMobile'
 import {
   listRecipeItems,
   createRecipeItem,
@@ -38,9 +45,14 @@ function formatEur(value: number | null): string {
   }).format(value)
 }
 
+function unitLabel(unit: KitchenUnit | undefined): string {
+  return unit ? `${unit.name} (${unit.abbreviation})` : '—'
+}
+
 export default function KitchenItemsPage() {
   const { userProfile, authUserId } = useApp()
   const { activeAccountId, accountsLoading } = useActiveAccount()
+  const isMobile = useIsMobile()
 
   const [items, setItems] = useState<RecipeItem[]>([])
   const [units, setUnits] = useState<KitchenUnit[]>([])
@@ -162,7 +174,25 @@ export default function KitchenItemsPage() {
         </div>
       )}
 
-      {!loading && !error && items.length > 0 && (
+      {/* ── Móvil: tarjetas apiladas (sin scroll horizontal) ── */}
+      {!loading && !error && items.length > 0 && isMobile && (
+        <div className="space-y-2">
+          {items.map(item => (
+            <IngredientCard
+              key={item.id}
+              item={item}
+              unit={unitsById.get(item.baseUnitId)}
+              onSelect={() => setSelectedItemId(item.id)}
+            />
+          ))}
+          <p className="px-1 pt-1 text-xs text-text-secondary">
+            {items.length} ingrediente{items.length === 1 ? '' : 's'}
+          </p>
+        </div>
+      )}
+
+      {/* ── Escritorio: tabla ── */}
+      {!loading && !error && items.length > 0 && !isMobile && (
         <div className="rounded-md bg-card border border-border-default overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -209,7 +239,7 @@ export default function KitchenItemsPage() {
                         )}
                       </td>
                       <td className="p-3 text-text-secondary">
-                        {unit ? `${unit.name} (${unit.abbreviation})` : '—'}
+                        {unitLabel(unit)}
                       </td>
                       <td className="p-3 text-right tabular-nums text-text-primary">
                         {formatEur(item.fixedCost)}
@@ -243,6 +273,69 @@ export default function KitchenItemsPage() {
           onCreated={handleCreated}
         />
       )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// IngredientCard — fila como tarjeta (móvil). Mismo lenguaje visual que
+// EconomicsCard de KitchenProfitabilityPage (R1.4): cabecera con nombre
+// prominente + chip de estado, y rejilla de campos etiquetados debajo.
+// La tarjeta entera es tappable → abre el detalle del ingrediente.
+// ─────────────────────────────────────────────────────────────────────
+function IngredientCard({
+  item,
+  unit,
+  onSelect,
+}: {
+  item: RecipeItem
+  unit: KitchenUnit | undefined
+  onSelect: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className="w-full text-left bg-card border border-border-default rounded-xl p-3 hover:bg-accent-bg transition-base"
+    >
+      {/* Cabecera: nombre + chip "sin terminar" + chevron */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex items-center flex-wrap gap-x-2 gap-y-1">
+            <span className="font-medium text-text-primary break-words">
+              {item.name}
+            </span>
+            {item.altName && (
+              <span className="text-xs text-text-secondary">
+                ({item.altName})
+              </span>
+            )}
+            {item.needsReview && (
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-warning-bg text-warning inline-flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3" />
+                sin terminar
+              </span>
+            )}
+          </div>
+        </div>
+        <ChevronRight className="w-4 h-4 shrink-0 text-text-secondary mt-0.5" />
+      </div>
+
+      {/* Campos etiquetados */}
+      <div className="grid grid-cols-3 gap-2 mt-3">
+        <ItemField label="Unidad base" value={unitLabel(unit)} />
+        <ItemField label="Coste fijo" value={formatEur(item.fixedCost)} />
+        <ItemField label="Coste computado" value={formatEur(item.computedCost)} />
+      </div>
+    </button>
+  )
+}
+
+function ItemField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[11px] text-text-secondary">{label}</p>
+      <p className="text-sm tabular-nums text-text-primary truncate">{value}</p>
     </div>
   )
 }

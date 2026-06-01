@@ -39,6 +39,7 @@ import {
 } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useApp } from '@/context/AppContext'
+import { useIsMobile } from '@/shell/useIsMobile'
 import {
   getRecipeItemById,
   listRecipeItems,
@@ -224,6 +225,7 @@ export default function RecipeEditorPage({
 }: RecipeEditorPageProps = {}) {
   const { activeAccountId, accountsLoading } = useActiveAccount()
   const { userProfile, authUserId } = useApp()
+  const isMobile = useIsMobile()
   const recipeId = recipeIdProp
 
   const [recipe, setRecipe] = useState<RecipeItem | null>(null)
@@ -1131,8 +1133,8 @@ export default function RecipeEditorPage({
 
           {/* Título, tipo/código, chips y botón de foto. */}
           <div className="min-w-0 flex-1">
-            <div className="flex items-start justify-between gap-3">
-              <h1 className="text-[22px] font-display font-medium text-text-primary leading-tight">
+            <div className="flex items-start justify-between gap-2 flex-wrap">
+              <h1 className="min-w-0 break-words text-[22px] font-display font-medium text-text-primary leading-tight">
                 {recipe.name}
               </h1>
               <div className="flex gap-1.5 shrink-0">
@@ -1215,7 +1217,7 @@ export default function RecipeEditorPage({
         )}
 
         {/* ── Solapas ── */}
-        <div className="flex gap-6 px-[18px] pt-3 border-b border-border-default text-sm">
+        <div className="flex gap-6 px-[18px] pt-3 border-b border-border-default text-sm overflow-x-auto">
           {TABS.map((tab) => {
             const active = tab.id === activeTab
             return (
@@ -1223,7 +1225,7 @@ export default function RecipeEditorPage({
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={
-                  'pb-3 transition-colors ' +
+                  'pb-3 shrink-0 whitespace-nowrap transition-colors ' +
                   (active
                     ? 'border-b-2 border-terracota text-text-primary font-medium'
                     : 'text-text-secondary hover:text-text-primary')
@@ -1369,7 +1371,7 @@ export default function RecipeEditorPage({
                           )}
                         </div>
 
-                        <span className="flex-1 min-w-0 text-sm text-text-primary truncate">
+                        <span className={'flex-1 min-w-0 text-sm text-text-primary ' + (isMobile ? 'break-words' : 'truncate')}>
                           {line.childName}
                           {line.childNeedsReview && (
                             <span className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-warning-bg text-warning inline-flex items-center gap-1 align-middle">
@@ -1414,19 +1416,21 @@ export default function RecipeEditorPage({
                               type="button"
                               onClick={() => openWaste(line)}
                               title="Añadir merma a esta línea"
-                              className="ml-2 text-[11px] px-2 py-0.5 rounded-full border border-border-default text-text-secondary inline-flex items-center gap-1 align-middle opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-text-primary transition-all"
+                              className={'ml-2 text-[11px] px-2 py-0.5 rounded-full border border-border-default text-text-secondary inline-flex items-center gap-1 align-middle ' + (isMobile ? 'opacity-100 ' : 'opacity-0 group-hover:opacity-100 focus:opacity-100 ') + 'hover:text-text-primary transition-all'}
                             >
                               + merma
                             </button>
                           )}
                         </span>
 
-                        <span className="w-[38px] h-1 rounded-full bg-accent-bg overflow-hidden flex-shrink-0">
-                          <span
-                            className="block h-full bg-terracota transition-all duration-base"
-                            style={{ width: `${pct}%` }}
-                          />
-                        </span>
+                        {!isMobile && (
+                          <span className="w-[38px] h-1 rounded-full bg-accent-bg overflow-hidden flex-shrink-0">
+                            <span
+                              className="block h-full bg-terracota transition-all duration-base"
+                              style={{ width: `${pct}%` }}
+                            />
+                          </span>
+                        )}
 
                         <span
                           className={
@@ -1447,7 +1451,7 @@ export default function RecipeEditorPage({
                           onClick={() => handleDelete(line)}
                           disabled={saving}
                           title="Eliminar línea"
-                          className="ml-0.5 w-6 h-6 rounded inline-flex items-center justify-center text-text-secondary opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-danger hover:bg-danger-bg transition-all disabled:opacity-30"
+                          className={'ml-0.5 w-6 h-6 rounded inline-flex items-center justify-center text-text-secondary ' + (isMobile ? 'opacity-100 ' : 'opacity-0 group-hover:opacity-100 focus:opacity-100 ') + 'hover:text-danger hover:bg-danger-bg transition-all disabled:opacity-30'}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
