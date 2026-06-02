@@ -15,7 +15,9 @@
 //
 // SEGURIDAD: las credenciales (appId/appSecret/token) NUNCA viajan en estos tipos en
 // claro. account_connector solo guarda `credentialsRef` (referencia a credenciales
-// cifradas fuera de la tabla). Los tipos lo reflejan: no hay campo de secreto en claro.
+// cifradas fuera de la tabla, en Vault). Los campos NO sensibles (store_ids,
+// auto_accept…) viven en `config` (jsonb). Los tipos lo reflejan: no hay campo de
+// secreto en claro.
 
 import type { Database } from './database'
 
@@ -133,6 +135,9 @@ export interface AccountConnector {
   brandId: string | null
   locationId: string | null
   credentialsRef: string | null
+  // Campos de configuración NO sensibles (store_ids, auto_accept, verify_signature…).
+  // Los secretos NO van aquí: se cifran en Vault y se referencian por credentialsRef.
+  config: Record<string, unknown> | null
   externalAccountId: string | null
   lastSyncAt: string | null
   lastError: string | null
@@ -155,6 +160,7 @@ export interface AccountConnectorInsert {
   brandId?: string | null
   locationId?: string | null
   credentialsRef?: string | null
+  config?: Record<string, unknown> | null
   externalAccountId?: string | null
   requestedBy?: string | null
   requestedAt?: string | null
@@ -167,6 +173,7 @@ export interface AccountConnectorUpdate {
   brandId?: string | null
   locationId?: string | null
   credentialsRef?: string | null
+  config?: Record<string, unknown> | null
   externalAccountId?: string | null
   lastSyncAt?: string | null
   lastError?: string | null

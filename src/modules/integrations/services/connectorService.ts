@@ -20,8 +20,10 @@
 // Convención de errores: todos los métodos LANZAN Error. Componentes en try/catch.
 // Identidad operativa (v17.1): el caller pasa createdBy/createdByName y requestedBy.
 //
-// SEGURIDAD: este service NO maneja credenciales en claro. La lógica de authorize/OAuth
-// y el cifrado de secretos vive en las Edge Functions de cada conector (I3+), no aquí.
+// SEGURIDAD: este service NO maneja credenciales en claro. El guardado de secretos
+// (cifrado en Vault) lo hace la Edge Function connector-credentials vía los wrappers
+// public.connector_secret_* (D2). Aquí solo se gestionan campos no sensibles (incluido
+// `config` jsonb) y el estado de la conexión.
 
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
 import type {
@@ -77,6 +79,7 @@ export function rowToAccountConnector(row: RowAccountConnector): AccountConnecto
     brandId: row.brand_id,
     locationId: row.location_id,
     credentialsRef: row.credentials_ref,
+    config: (row.config as Record<string, unknown> | null) ?? null,
     externalAccountId: row.external_account_id,
     lastSyncAt: row.last_sync_at,
     lastError: row.last_error,
@@ -104,6 +107,7 @@ function accountConnectorInsertToRow(
     brand_id: input.brandId ?? null,
     location_id: input.locationId ?? null,
     credentials_ref: input.credentialsRef ?? null,
+    config: (input.config ?? null) as RowAccountConnectorInsert['config'],
     external_account_id: input.externalAccountId ?? null,
     requested_by: input.requestedBy ?? null,
     requested_at: input.requestedAt ?? null,
@@ -121,6 +125,7 @@ function accountConnectorUpdateToRow(
   if (patch.brandId !== undefined) row.brand_id = patch.brandId
   if (patch.locationId !== undefined) row.location_id = patch.locationId
   if (patch.credentialsRef !== undefined) row.credentials_ref = patch.credentialsRef
+  if (patch.config !== undefined) row.config = patch.config as RowAccountConnectorUpdate['config']
   if (patch.externalAccountId !== undefined) row.external_account_id = patch.externalAccountId
   if (patch.lastSyncAt !== undefined) row.last_sync_at = patch.lastSyncAt
   if (patch.lastError !== undefined) row.last_error = patch.lastError
