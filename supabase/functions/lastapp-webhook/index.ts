@@ -50,6 +50,20 @@ function channelSlug(paymentType: string | null | undefined): string | null {
   return null;
 }
 
+// Mapea el `pickupType` que envía Last (cabecera del tab) al service_type de Folvy.
+// 'delivery'    = reparto de plataforma (Glovo/Uber con su flota)  -> 'platform_delivery'
+// 'ownDelivery' = reparto propio (lo reparte el partner)           -> 'own_delivery'
+// 'pickup'/'takeaway' = recogida en tienda                         -> 'pickup'
+// Cualquier otro valor o ausencia -> null (no se inventa el reparto).
+function mapServiceType(pickupType: string | null | undefined): string | null {
+  if (!pickupType) return null;
+  const t = pickupType.toLowerCase();
+  if (t === "delivery") return "platform_delivery";
+  if (t === "owndelivery") return "own_delivery";
+  if (t === "pickup" || t === "takeaway") return "pickup";
+  return null;
+}
+
 // ── Tipos mínimos del payload tab:closed que usamos ──
 interface LastProduct {
   name?: string;
@@ -73,6 +87,7 @@ interface LastTab {
   id?: string;
   locationId?: string;
   source?: string;
+  pickupType?: string | null;
   closeTime?: string;
   creationTime?: string;
   products?: LastProduct[];
@@ -282,6 +297,7 @@ async function ingestBill(
     total: typeof bill.total === "number" ? bill.total / 100 : 0,
     delivery_cost: typeof bill.deliveryFee === "number" ? bill.deliveryFee / 100 : null,
     discount_amount: typeof bill.discountTotal === "number" ? bill.discountTotal / 100 : null,
+    service_type: mapServiceType(tab.pickupType),
     raw_products: JSON.stringify(products),
     is_active: true,
   }).select("id").single();
