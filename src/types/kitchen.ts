@@ -71,6 +71,10 @@ export type RowBrandLicensingAgreement        = Tables['brand_licensing_agreemen
 export type RowBrandLicensingAgreementInsert  = Tables['brand_licensing_agreement']['Insert']
 export type RowBrandLicensingAgreementUpdate  = Tables['brand_licensing_agreement']['Update']
 
+export type RowBrandChannelRate        = Tables['brand_channel_rate']['Row']
+export type RowBrandChannelRateInsert  = Tables['brand_channel_rate']['Insert']
+export type RowBrandChannelRateUpdate  = Tables['brand_channel_rate']['Update']
+
 // ─────────────────────────────────────────────────────────────────────
 // Uniones de literales (reflejan los CHECK constraints de la BBDD).
 // NO son enums (regla §6.2: verbatimModuleSyntax/erasableSyntaxOnly).
@@ -78,6 +82,8 @@ export type RowBrandLicensingAgreementUpdate  = Tables['brand_licensing_agreemen
 export type RecipeItemType   = 'raw' | 'recipe' | 'tool' | 'dish'
 export type CostStrategy     = 'fixed' | 'last_purchase' | 'average_weighted' | 'average_window'
 export type ConservationType = 'fridge' | 'freezer' | 'dry' | 'hot'
+export type ServiceType      = 'platform_delivery' | 'own_delivery' | 'pickup'
+export type CommissionBase   = 'pvp_con_iva' | 'pvp_sin_iva'
 export type UnitDimension    = 'weight' | 'volume' | 'unit'
 export type ItemSource       = 'manual' | 'ai_recipe' | 'ocr_invoice' | 'import'
 export type ConversionSource = 'manual' | 'ai_suggested' | 'import'
@@ -645,6 +651,53 @@ export interface BrandLicensingAgreementUpdate {
   startsOn?: string | null
   endsOn?: string | null
   notes?: string | null
+  isActive?: boolean
+  archivedAt?: string | null
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// brand_channel_rate (Capa A / EP1: tarifa de comisión por marca×canal×reparto)
+// Cuelga de brand_channel. UNIQUE(brand_channel_id, service_type) → hasta 3 filas.
+// commission_base default 'pvp_con_iva' (P1: el % se aplica sobre PVP con IVA).
+// own_customer_fee / own_courier_cost solo aplican a service_type='own_delivery'.
+// ─────────────────────────────────────────────────────────────────────
+export interface BrandChannelRate {
+  id: string
+  accountId: string
+  brandChannelId: string
+  serviceType: ServiceType
+  commissionPct: number | null
+  commissionFixed: number | null
+  commissionBase: CommissionBase
+  ownCustomerFee: number | null
+  ownCourierCost: number | null
+  isActive: boolean
+  archivedAt: string | null
+  createdAt: string
+  updatedAt: string
+  createdBy: string | null
+  createdByName: string | null
+}
+export interface BrandChannelRateInsert {
+  accountId: string
+  brandChannelId: string
+  serviceType: ServiceType
+  commissionPct?: number | null
+  commissionFixed?: number | null
+  commissionBase?: CommissionBase
+  ownCustomerFee?: number | null
+  ownCourierCost?: number | null
+  isActive?: boolean
+  createdBy?: string | null
+  createdByName?: string | null
+}
+export interface BrandChannelRateUpdate {
+  serviceType?: ServiceType
+  commissionPct?: number | null
+  commissionFixed?: number | null
+  commissionBase?: CommissionBase
+  ownCustomerFee?: number | null
+  ownCourierCost?: number | null
   isActive?: boolean
   archivedAt?: string | null
 }
