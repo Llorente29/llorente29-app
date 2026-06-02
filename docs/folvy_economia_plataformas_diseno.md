@@ -1,182 +1,218 @@
 # Folvy — Economía de Plataformas de Delivery
-### Documento de diseño para aprobación · v1 · 01/06/2026
+### Documento de diseño para construir · v2 · 02/06/2026
 
-> **Estado:** diseño previo a construcción. NADA construido aún. Igual método que el
-> editor de escandallos: se aprueba el modelo sobre papel antes de tocar BBDD.
+> **Estado:** diseño CERRADO, listo para construir EP1. Sustituye a la v1 (01/06).
+> Las preguntas abiertas P1–P6 de la v1 quedaron resueltas o disueltas en la sesión
+> del 02/06 con factura + tickets reales. Ver §13.
 >
-> **Origen:** análisis de una factura real de Glovo (Meraki Pita, 01–15 may 2026,
-> PDF + Excel de 48 pedidos) cruzada al céntimo. Decisiones de Julio: (1) los **3
-> tipos de reparto** existen en Llorente29; (2) el **IVA va aparte y se compensa**
-> (soportado ↔ repercutido) → neutro para el margen, se registra para contabilidad.
+> **Origen y evidencia:** factura real de Glovo (Meraki Pita, 01–15 may 2026, PDF
+> Nº I170326000182175 + Excel de 48 pedidos `invoice-200342777943.XLSX`) cruzada al
+> céntimo, más un ticket de pedido flash real (Last ↔ Glovo, pedido `101663910592`).
 >
-> **Tesis de goleada:** nadie en el mercado une *margen teórico por plato* +
-> *economía real del canal desde la factura* + *la varianza entre ambos*. Los
-> agregadores (Deliverect, Otter) consolidan pedidos; la contabilidad concilia
-> cobros; las herramientas de menú (Apicbase, R365, meez) usan margen teórico. La
-> pieza que **conecta las tres** no existe. *(Afirmación a verificar con benchmark
-> web antes de cerrar el doc — ver §2.)*
+> **Método (igual que el editor de escandallos):** se aprueba el modelo sobre papel
+> antes de tocar BBDD. Al construir, los tipos exactos de columna y el cableado de la
+> RPC se verifican contra `information_schema` — **la BBDD manda sobre este doc**.
 
 ---
 
-## 0. Por qué esto importa (y por qué se paró a diseñar)
+## 0. Por qué esto importa (y qué se demostró)
 
-El dashboard de Kitchen enseñaba **81,2 % de margen idéntico en los 4 canales**. Es
-falso: Glovo/Uber/JustEat se llevan mucho más que un % plano. La causa raíz no es un
-bug de cálculo — es que **`brand_channel` está vacía** (no hay forma de cargar
-comisiones desde la app) y, sobre todo, que **la comisión de plataforma NO es un
-número plano**. Modelarla como un `%` único sería sembrar un mal dato en el corazón
-del producto (el margen real es EL diferenciador de Folvy).
+El dashboard de Kitchen enseñaba **81,2 % de margen idéntico en los 4 canales**. Causa
+raíz, ahora **probada en el código de la RPC**, no en teoría: `brand_channel` está vacía
+(0 filas) y los 4 canales tienen `default_commission_pct` a null, así que el
+`COALESCE(bc.commission_pct, sc.default_commission_pct, 0)` de `menu_item_economics`
+cae al **0** en todos → comisión 0 → mismo coste de receta → margen idéntico. No es un
+bug de cálculo: es el dato vacío.
 
-Este documento define cómo modelarlo bien, de una vez, para que cuando entren los
-datos definitivos de cada cliente el margen real salga solo y al céntimo.
+Y, sobre todo, la comisión de plataforma **no es un % plano**. Modelarla como un número
+único sería sembrar un mal dato en el corazón del producto. Este documento define cómo
+modelarlo bien para que, con los datos definitivos de cada cliente, el margen real salga
+solo.
 
----
-
-## 1. La anatomía real de una factura (evidencia, no teoría)
-
-Factura Glovo de Meraki Pita, 01–15 may 2026. Cruzando PDF ↔ Excel (cuadran al
-céntimo: Tasa de acceso 99,44 €, Recargo Prime 18,00 €, Productos 1.190,40 €):
-
-**Lo que Glovo se lleva NO es una sola cosa. Son DOS naturalezas distintas:**
-
-### 1.A — Costes por PEDIDO (varían pedido a pedido)
-| Concepto | En la factura | Naturaleza |
-|---|---|---|
-| Comisión sobre productos | 15 % (negociado) | % sobre PVP |
-| Servicio de entrega (transporte) | −3,00 € / −4,50 € por pedido | fijo por pedido, **variable** |
-| Recargo Glovo Prime | 0,75 € en pedidos Prime | fijo por pedido, condicional |
-| Promoción producto asumida por partner | en 8 de 48 pedidos | variable, cofinanciada |
-| Promoción oferta flash a cargo del partner | condicional | variable, cofinanciada |
-| Coste de incidencias | −32,27 € total | imprevisible |
-| Recargo por mínimo de pedido | condicional | condicional |
-
-### 1.B — Costes mensuales del CANAL (no por pedido)
-| Concepto | Importe | Naturaleza |
-|---|---|---|
-| Tasa de acceso a la plataforma | 99,44 € | mensual fijo |
-| Tarifa recurrente por usar la plataforma | 10,00 € | mensual fijo |
-| Tarifas de oferta flash | 162,07 € | mensual variable (marketing) |
-| **IVA 21 % sobre lo anterior** | 60,79 € | **neutro (se compensa)** |
-
-**Conclusión nº1:** el coste real de un canal = (componentes por pedido) +
-(componentes mensuales del canal). Mezclarlos es el error que comete todo el mundo.
-
-**Conclusión nº2 (la dura):** sólo una parte es **atribuible por plato** de forma
-determinista (la comisión %). El transporte, las promos y las incidencias son **por
-pedido** (dependen de la composición del pedido y del momento), y las tasas son **del
-canal**. Por eso el margen "real por plato" perfecto **no existe a priori** — sólo
-existe a posteriori, reconciliando contra la factura. Esto define las tres capas.
+**El número que justifica el producto (probado con la factura de mayo):**
+Productos 1.190,40 € → ingreso real a cuenta 686,06 €. Glovo se quedó con **~43,5 %**,
+no con el 15 % del titular negociado. *Ese gap es lo que ningún competidor enseña.*
 
 ---
 
-## 2. Benchmark (a verificar antes de cerrar)
+## 1. Anatomía real de una factura (evidencia, no teoría)
+
+Factura Glovo de Meraki Pita, 01–15 may 2026. PDF y Excel cuadran al céntimo:
+
+```
+Productos                                       1.190,40
+Servicio de entrega                               210,00
+Promoción producto asumida por partner            -48,06
+Coste de incidencias sobre productos              -32,27
+Promoción de oferta flash a cargo del Partner    -283,71
+  Subtotal liquidación                          1.036,36
+Tasas (con IVA): acceso 99,44 + flash 162,07
+  + Prime 18,00 + recurrente 10,00 + IVA 60,79    -350,30
+INGRESO A CUENTA COLABORADOR                       686,06   ✓
+```
+
+**Dos naturalezas distintas (no mezclar nunca):**
+
+- **Por PEDIDO** (varían pedido a pedido): comisión %, transporte (−3/−4,5 € variable),
+  Prime (condicional), promo de producto cofinanciada (8 de 48 pedidos), promo flash a
+  cargo del partner (condicional), incidencias.
+- **Mensual del CANAL**: tasa de acceso (99,44), tarifa recurrente (10,00), tarifas de
+  oferta flash (162,07), **+ IVA 21 % aparte** (60,79).
+
+**Conclusión:** coste real de un canal = (componentes por pedido) + (componentes
+mensuales). Solo una parte es atribuible por plato de forma determinista (la comisión %).
+El resto es por pedido o del canal → el margen "real por plato" perfecto **no existe a
+priori**; solo a posteriori, reconciliando contra la factura (Capa C).
+
+### 1.A — Lo que se demostró del flash (mecánica validada, NO al céntimo)
+
+- **Comisión por pedido normal = 50 % de Productos**; en pedido **flash = 70 %**
+  (35/35 normales exactos; el salto +20 % = la aportación extra del restaurante en
+  campaña flash). El 15 % nominal de la columna `Porcentaje de comisión` y la columna
+  mal-etiquetada `Tasa de acceso` (que suma 99,44 = la tasa mensual prorrateada) son
+  **ruido**: la cifra real de comisión-equivalente es esa relación 50/70.
+- **El 30 % al cliente, confirmado al céntimo** con el ticket real `101663910592`:
+  PVP 19,40 € → descuento flash −5,82 € = exactamente 19,40 × 0,30. Precio tras
+  descuento 13,58 € + envío 4,50 € = 18,08 € (lo que paga el cliente y liquida Glovo).
+- **Flash = solo clientes nuevos** (condición de la mecánica; relevante para el
+  simulador de ofertas, EP4).
+
+**DEUDA DECLARADA (no cerrada, y por qué no toca cerrarla ahora):** el flash NO se cuadró
+al último céntimo. El Excel por pedido de esta factura tiene `Tarifas de oferta flash` y
+`Promoción flash partner` **a 0 en las 48 filas**; los 162,07 / 283,71 solo viven en el
+agregado del PDF (los pedidos flash que los generaron están en otro periodo/Excel). La
+mecánica está validada, lo cual basta para modelar Capa B/C. Cuadrarlo al céntimo exige
+el Excel del periodo correcto, **pero** —por decisión de producto— los descuentos
+llegarán por **extracción de plataforma**, no por parser de Excel; invertir en un parser
+fino de flash sería deuda inútil. Prioridad: baja, solo si se necesita para EP2/EP3.
+
+---
+
+## 2. Benchmark (auditado el 02/06, sin vender empate como victoria)
 
 | Actor | Qué hace con la economía de canal |
 |---|---|
-| Deliverect / Otter | Agregan pedidos de varias plataformas en un POS; **no** modelan el coste real por plato ni reconcilian la factura contra el margen teórico. |
-| R365 / Restaurant365 | Contabilidad fuerte; concilia **cobros** (bank rec), pero no ata coste de plataforma a margen por plato. |
-| Apicbase / meez | Margen **teórico** por plato (food cost). No tocan la economía de plataforma. |
-| gstock / tspoon | Escandallo + food cost teórico. Sin economía de canal. |
-| Cuadernos/Excel del hostelero | Aquí vive hoy el problema: nadie le da una herramienta. |
+| Deliverect / Otter | Agregan pedidos multi-plataforma; Otter SÍ deja configurar comisiones y tarifas de marketplace por canal + marcas virtuales. **Configurar comisión por canal NO es diferenciador.** |
+| MarginEdge / Restaurant365 | Tienen AvT (Actual vs Theoretical), pero es de **uso de ingrediente** (merma, robo, porción) cruzando factura de proveedor + inventario. NO es economía de plataforma. |
+| Apicbase / meez / gstock / tspoon | Margen **teórico** por plato (food cost). No tocan la economía de canal. |
 
-> **La goleada** = ser el primero que une **margen teórico por plato (Capa A)** +
-> **P&L real del canal desde la factura (Capa B)** + **la varianza teórico↔real
-> (Capa C)**, en una herramienta que un cocinero entienda. **Acción pendiente:**
-> verificar esta afirmación con benchmark web (Deliverect, Otter, Flipdish, Nory,
-> Margin Edge) antes de venderla como goleada. Regla del proyecto: no se afirma
-> "nadie lo tiene" sin auditar.
-
----
-
-## 3. Los 3 tipos de reparto (decisión de Julio)
-
-La comisión cambia según **quién reparte**. Tres modos, comisión distinta:
-
-1. **Reparto de plataforma** (`platform_delivery`) — Glovo/Uber lleva con su flota.
-   Comisión **más alta** (usa su logística). Es el caso de la factura (15 %).
-2. **Reparto propio / marketplace** (`own_delivery`) — la plataforma es escaparate,
-   **tú repartes**. Comisión **menor** (no usas su flota).
-3. **Recogida / pickup** (`pickup`) — el cliente recoge en tienda. Comisión **mínima
-   o 0** (Shop/takeaway encaja aquí).
-
-**Implicación de modelo:** la comisión no es por (marca × canal), es por
-**(marca × canal × tipo de reparto)**. Una misma marca en Glovo puede tener 3 tarifas.
-
-> *Nota:* `sales_channel.channel_type` ('delivery'/'takeaway') es un atributo del
-> CANAL. El **tipo de reparto** es por TARIFA/pedido y es un concepto distinto — no
-> reutilizar `channel_type` para esto.
+**Verdicto honesto:**
+- **Capa A (configurar comisión) NO es goleada por sí sola** — Otter ya lo hace. Solo
+  gana cuando alimenta a la C.
+- **La combinación escandallo a nivel plato × comisión por canal Y tipo de reparto ×
+  reconciliación contra la factura de la PLATAFORMA** no aparece en el set auditado.
+  Su "AvT" es de cocina; el nuestro sería de **canal**.
+- **Regla de rigor:** se dice *"no está en el set que auditamos"*, NO *"nadie lo tiene"*
+  (ausencia de evidencia ≠ prueba de ausencia). Con eso, **Capa C es diferenciador
+  defendible.**
 
 ---
 
-## 4. El IVA (decisión de Julio: aparte y se compensa)
+## 3. Los 3 tipos de reparto
 
-- La comisión y las tasas llevan **IVA 21 %**, pero Llorente29 es sujeto pasivo: el
-  **IVA soportado** de esas facturas **se compensa** con el **IVA repercutido** de
-  sus ventas. → **El IVA es NEUTRO para el margen.**
-- **Decisión:** el cálculo de margen usa **importes SIN IVA** (base imponible).
-  El IVA **no resta** del margen.
-- Pero se **registra** el IVA en la Capa B (la factura lo tiene, y afecta a
-  tesorería: lo adelantas y lo recuperas). Separar "coste económico" (sin IVA, para
-  margen) de "flujo de caja" (con IVA, para tesorería) es parte de hacerlo bien.
-- **PVP:** `menu_item.price` ya se guarda SIN IVA (base imponible) + `vat_rate`. La
-  comisión % se aplica sobre el PVP **¿con o sin IVA?** → **pregunta abierta P1**
-  (las plataformas suelen calcular sobre el precio de cara al cliente, con IVA).
+La comisión y el flujo del dinero cambian según **quién reparte**:
 
----
+1. **Reparto de plataforma** (`platform_delivery`) — Glovo/Uber reparte con su flota.
+   Comisión más alta. El `delivery_fee` es **neutro** (la plataforma se lo queda).
+2. **Reparto propio / marketplace** (`own_delivery`) — la plataforma es escaparate, **tú
+   repartes**. Comisión menor. **El fee de envío NO es neutro** (ver §3.A).
+3. **Recogida / pickup** (`pickup`) — el cliente recoge. Comisión mínima o 0.
 
-## 5. El modelo en TRES CAPAS
+**Implicación de modelo:** la comisión es por **(marca × canal × tipo de reparto)**. Una
+misma marca en Glovo puede tener 3 tarifas distintas.
 
-### Capa A — Configuración de comisiones → **margen teórico por plato**
-**Qué es:** la tarifa negociada por (marca × canal × tipo de reparto). Lo único
-atribuible por plato de forma determinista. **Es lo que enciende el margen real del
-dashboard hoy.**
+> El **tipo de reparto se decide en el PEDIDO**, no en el plato ni en la tarifa. El dato
+> real viene de **Last.app** (`sale`, campo "Entrega gestionada por el Partner" =
+> `own_delivery`, confirmado en el ticket `101663910592`). Esto es lo que habilita la
+> vista ponderada por mix real (§5) sin pedirle nada al cocinero.
 
-**Qué incluye por tarifa:**
-- `commission_pct` (% sobre PVP).
-- `commission_fixed` (€ fijos por pedido, si los hay).
-- `service_type` (platform_delivery / own_delivery / pickup).
-- (IVA NO — neutro.)
+### 3.A — Reparto propio: el fee NO es neutro (corrige la v1)
 
-**Cómo entra en el margen (RPC `menu_item_economics`, que YA prevé estos campos):**
-La RPC ya devuelve `commission_pct`, `commission_amount`, `commission_fixed`,
-`delivery_fee`, `net_margin`… → fue diseñada anticipando esto. Sólo le falta **el
-dato** (la tarifa) y, posiblemente, **la dimensión de tipo de reparto**.
+La v1 decía "el `delivery_fee` es neutro, no lo metas para no doble-contar". **Falso para
+reparto propio.** Ahí hay DOS flujos:
 
-> Margen de contribución teórico por plato×canal×reparto =
-> `PVP_base − food_cost − (commission_pct × base_comisionable) − commission_fixed`
-> (el `delivery_fee` teórico se puede incluir como estimación media, marcándolo como
-> tal — ver Capa C para el real).
+- **INGRESO:** el cliente paga los gastos de envío (p.ej. 4,50 €) y **lo recibe
+  Llorente29** (visto en el ticket: "Gastos de envío 4,50 €", reparto propio).
+- **GASTO:** Llorente29 paga al repartidor (hoy **Catcher**) el precio pactado por pedido.
 
-### Capa B — Economía del canal → **P&L real desde la factura**
-**Qué es:** importar la factura/liquidación (PDF+Excel como la de Glovo) y registrar
-**todo** el coste real del canal en un periodo: comisiones reales, transporte real,
-Prime, promos cofinanciadas, incidencias, tasas mensuales, IVA. **No se reparte por
-plato** — es el P&L del canal.
+→ **Margen del reparto en propio = fee cobrado − coste del repartidor.** Puede ser
+positivo, neutro o **negativo**. Es neutro SOLO en reparto de plataforma. Hay que
+modelarlo, no ignorarlo.
 
-**Por qué es oro:** responde "¿cuánto me costó Glovo en mayo y en qué?" — tasas,
-marketing (ofertas flash), transporte, incidencias. Hoy nadie se lo dice al hostelero.
-
-**Cómo entra el dato:** importador de factura (foto/PDF/Excel → IA/parser →
-`channel_invoice` + `channel_invoice_line`). Encaja con K5 (foto→IA) del plan Kitchen.
-
-### Capa C — Reconciliación AvT (Actual vs Theoretical) → **la corona**
-**Qué es:** cruzar el margen TEÓRICO (Capa A × ventas reales de Last.app) contra el
-PAGO REAL (Capa B, la factura). La diferencia = **dónde se fuga el margen**:
-- "Tu margen teórico decía 1.190 € de productos; cobraste 686 €. El gap son 162 € de
-  ofertas flash + 199 € de transporte + 48 € de promos + 32 € de incidencias + tasas."
-- Es la varianza que convierte datos en **decisiones**: ¿las ofertas flash compensan?
-  ¿el transporte propio sale mejor que el de plataforma? ¿qué canal drena margen?
-
-> Capa C es **el diferenciador definitivo**. Capa A arregla el dashboard hoy; Capa B
-> da el P&L; Capa C es lo que **nadie tiene**.
+**Honestidad de dato:** el fee al cliente probablemente viene por pedido en Last
+(`delivery_cost`) → ese lado puede ser **real**. El coste de Catcher hoy no está en
+ningún sistema → será **valor configurado/estimado** ("Catcher ~X €/pedido en esta
+zona") y casi seguro **no es fijo** (varía por distancia/franja). En EP1 se modela como
+un valor configurable por marca×canal; el coste real por pedido es Capa C / EP4 cuando se
+integre Catcher como 4ª fuente. El margen de reparto propio se etiqueta **"coste de
+reparto estimado"** hasta entonces.
 
 ---
 
-## 6. Esquema de BBDD propuesto
+## 4. El IVA y la base de la comisión (P1 — RESUELTO)
 
-### 6.1 — Capa A: tarifas por tipo de reparto
-`brand_channel` (existe, vacía) hoy es (brand × channel) → un solo `commission_pct`.
-**Opción recomendada:** tabla de tarifas hija, una por tipo de reparto.
+- La comisión y las tasas llevan **IVA 21 %**, pero Llorente29 lo compensa (soportado ↔
+  repercutido) → **IVA neutro para el margen**. El cálculo de margen usa **bases SIN
+  IVA**. El IVA se **registra** en Capa B (afecta a tesorería).
+- **P1 — base de la comisión: PVP CON IVA.** Probado con dato real (doble evidencia):
+  - Ticket flash: descuento 30 % = 5,82 € sobre **19,40 € (PVP con IVA)**.
+  - Factura: la comisión-equivalente se aplica sobre `Productos`, que es el importe de
+    cara al cliente (con IVA).
+  - **Consecuencia para la RPC:** hoy aplica el % sobre `menu_item.price` (SIN IVA) →
+    **subestima la comisión**. Debe aplicarse sobre `price_with_vat`.
+
+---
+
+## 5. Un motor, tres vistas (decisión de producto, 02/06)
+
+Si se calcula bien el margen de **UN pedido** (PVP con IVA, su descuento, quién lo
+repartió, − food cost, − comisión, ± fee/coste de reparto), las tres vistas salen casi
+gratis del mismo motor:
+
+- **Vista A — Ponderada por mix real** *(por defecto, el diferenciador)*: media de los
+  pedidos del periodo según cómo se vendieron de verdad (mix de reparto sacado de
+  `sale`). "De tus pedidos de Glovo, el 60 % los repartió Glovo y el 40 % tú; tu margen
+  real medio es X." **Nadie del set auditado lo hace.**
+- **Vista B — Por tipo de reparto**: tres números ("si reparte Glovo X, si repartes tú Y,
+  si recogen Z"). Es lo que ya hace la competencia → empate; se mantiene como **opción de
+  visualización**, no como obra nueva.
+- **Vista por pedido**: "vendí este pedido, gané esto." El mismo cálculo aplicado a un
+  pedido.
+
+**Visión de Julio (recogida):** que **cada cliente elija su vista por defecto**. No son
+tres features: es un interruptor sobre un único motor.
+
+**Alcance EP1:** entrega el **motor del pedido** + **vista A** (enciende el dashboard).
+La vista por pedido, la B y el selector de vista por defecto son **continuación rápida**
+(baratas porque el motor ya está), **diseñadas desde ya** para encajar sin reescribir.
+
+---
+
+## 6. Modelo en TRES CAPAS
+
+### Capa A — Configuración → margen teórico por plato (EP1)
+La tarifa negociada por (marca × canal × tipo de reparto). Lo único atribuible por plato
+de forma determinista. **Enciende el margen del dashboard.** Todo % es **configurable,
+cero hardcode** (ni el 15 % de propias ni el % de cedidas).
+
+### Capa B — Economía del canal → P&L real desde la factura (EP2)
+Importar la factura/liquidación y registrar todo el coste real del canal en un periodo.
+No se reparte por plato — es el P&L del canal. Fuente futura preferente: **extracción de
+plataforma**, no parser de Excel.
+
+### Capa C — Reconciliación AvT → la corona (EP3)
+Cruzar margen TEÓRICO (Capa A × ventas reales) contra PAGO REAL (Capa B). La diferencia =
+dónde se fuga el margen. "Tu teórico decía 1.190 € de productos; cobraste 686 €. El gap
+son flash + transporte + promos + incidencias + tasas." Es el diferenciador definitivo.
+
+---
+
+## 7. Esquema de BBDD propuesto (verificar tipos contra `information_schema` al construir)
+
+### 7.1 — Capa A: tarifas por tipo de reparto (NUEVO)
+
+`brand_channel` se mantiene como **cabecera** (relación marca↔canal). Las tarifas cuelgan
+de ella, una por tipo de reparto:
 
 ```
 brand_channel_rate                         (NUEVO)
@@ -184,187 +220,148 @@ brand_channel_rate                         (NUEVO)
   account_id         uuid  (tenancy + RLS)
   brand_channel_id   uuid  → FK brand_channel(id) ON DELETE CASCADE
   service_type       text  CHECK in ('platform_delivery','own_delivery','pickup')
-  commission_pct     numeric        -- % sobre base comisionable
-  commission_fixed   numeric NULL   -- € por pedido, si aplica
-  commission_base    text   CHECK in ('pvp_con_iva','pvp_sin_iva')  -- ver P1
-  est_delivery_fee   numeric NULL   -- transporte medio estimado/pedido (teórico)
+  commission_pct     numeric          -- % sobre base comisionable (CONFIGURABLE)
+  commission_fixed   numeric NULL     -- € por pedido, si aplica (informativo)
+  commission_base    text  CHECK in ('pvp_con_iva','pvp_sin_iva')  -- default 'pvp_con_iva' (P1)
+  -- Reparto propio (§3.A) — solo relevante en service_type='own_delivery':
+  own_customer_fee   numeric NULL     -- fee cobrado al cliente (idealmente real desde Last)
+  own_courier_cost   numeric NULL     -- coste pactado del repartidor (Catcher), estimado
   is_active          boolean
   archived_at        timestamptz NULL
   created_at / updated_at / created_by / created_by_name
   UNIQUE (brand_channel_id, service_type)
 ```
 
-`brand_channel` se mantiene como cabecera (la relación marca↔canal existe y está
-activa); las tarifas cuelgan de ella por tipo de reparto. `sales_channel.default_
-commission_pct` (hoy null) sirve para **proponer** la tarifa al crear (menos fricción).
+`sales_channel.default_commission_pct` (hoy null en los 4 canales) sirve para **proponer**
+la tarifa al crear (menos fricción) — nunca para imponerla.
 
-### 6.2 — Capa B: facturas del canal
+### 7.2 — Cedidas: el acuerdo de licencia (existe, hacer editable)
+
+Las comisiones de plataforma en cedidas **las asume el dueño de la marca** (P2), NO
+Llorente29 → `brand_channel_rate` **no aplica a cedidas**. El ingreso de Llorente29 en una
+cedida se rige por `brand_licensing_agreement`:
+
 ```
-channel_invoice                            (NUEVO)
-  id                 uuid pk
-  account_id         uuid
-  brand_id           uuid NULL  → FK brand   (puede ser por marca o por cuenta)
-  channel_id         uuid       → FK sales_channel
-  invoice_number     text
-  period_from        date
-  period_to          date
-  issue_date         date
-  total_base         numeric    -- base imponible
-  total_vat          numeric    -- IVA (registrado, neutro para margen)
-  total_amount       numeric    -- con IVA
-  net_payout         numeric    -- ingreso a cuenta del colaborador
-  source             text  CHECK in ('manual','ocr_pdf','import_xlsx')
-  raw_ref            text NULL  -- ruta al fichero original
-  created_at / updated_at / created_by
-
-channel_invoice_line                       (NUEVO)
-  id                 uuid pk
-  account_id         uuid
-  invoice_id         uuid → FK channel_invoice(id) ON DELETE CASCADE
-  concept            text  -- 'comision' | 'transporte' | 'prime' | 'oferta_flash'
-                           --  | 'promo_producto' | 'incidencia' | 'tasa_acceso'
-                           --  | 'tarifa_recurrente' | 'min_pedido' | 'otro'
-  concept_kind       text  CHECK in ('per_order','monthly_fixed','marketing','incident')
-  amount_base        numeric
-  amount_vat         numeric NULL
-  external_order_id  text NULL  -- 'Código de Glovo' (enlaza con la venta real)
-  order_date         date NULL
-  meta               jsonb NULL -- columnas crudas del Excel sin perder nada
+brand_licensing_agreement (existe)
+  revenue_share_pct        numeric   -- % que cobra Llorente29 sobre VENTAS NETAS (sin IVA)
+                                      --   CONFIGURABLE por marca (Cloudtown hoy 25%, NO fijo)
+  reimburses_consumption   boolean   -- ¿reembolsa materiales?
+  consumption_price        ...       -- a qué precio se reembolsan (tarifado por el dueño)
 ```
 
-> `external_order_id` es la llave de oro: enlaza cada línea de factura con la venta
-> real de Last.app (`sale`) → permite la reconciliación de Capa C pedido a pedido.
+> Verificar al construir que la RPC lee `revenue_share_pct` como editable y que el
+> reembolso de materiales encaja en `consumption_price`.
 
-### 6.3 — Capa C: vista de reconciliación
-No es tabla nueva: es una **función/vista** que cruza:
-- ventas reales del periodo (`sale_line` × `menu_item_economics` = margen teórico),
-- contra `channel_invoice_line` (coste real),
-agrupado por canal × marca × periodo, devolviendo: margen teórico, coste real
-desglosado, varianza y % de fuga por concepto.
+### 7.3 — Capa B / C (EP2/EP3, no en EP1)
+
+`channel_invoice` + `channel_invoice_line` (con `external_order_id` como llave de oro para
+enlazar cada línea de factura con la venta real de `sale`). Capa C = vista/función que
+cruza venta real × teórico × factura. Detalle del esquema se cierra al abrir EP2.
 
 ---
 
-## 7. Encaje con lo que YA existe (no reinventar)
+## 8. Cambios en la RPC `menu_item_economics` (para EP1)
 
-- **`menu_item_economics` (RPC):** ya devuelve `commission_pct/amount/fixed`,
-  `delivery_fee`, `revenue_share_pct`, `net_margin`. Fue diseñada para esto. Cambio
-  necesario: que lea de `brand_channel_rate` por **tipo de reparto** (hoy asume uno).
-  → posible extensión de la RPC (SECURITY DEFINER: probar desde la app, no SQL Editor).
-- **`brand_channel`:** se conserva como cabecera; las tarifas van a la tabla hija.
-- **`sales_channel.default_commission_pct`:** se usa para proponer tarifa (hoy null →
-  habría que sembrar defaults orientativos por canal).
-- **`brand_licensing_agreement`:** ya cubre las cedidas (revenue share + reembolso de
-  consumos). Ver §8.
-- **Last.app (`sale`/`sale_line`):** la venta real; `external_order_id` la enlaza con
-  la línea de factura para la Capa C.
+La RPC YA devuelve `commission_pct/amount/fixed`, `delivery_fee`, `revenue_share_pct/
+amount`, `consumption_reimb`, `net_margin`… (fue diseñada anticipando esto). Cambios:
 
----
+1. **Base con IVA (P1):** `commission_amount` sobre `price_with_vat`, no sobre `price`.
+2. **Dimensión tipo de reparto:** leer tarifa de `brand_channel_rate` por `service_type`
+   (hoy asume una sola comisión por marca×canal).
+3. **Reparto propio (§3.A):** en `own_delivery`, sumar `own_customer_fee` y restar
+   `own_courier_cost` al margen (etiquetado "estimado" mientras Catcher no esté integrado).
+4. **Ponderación por mix real (vista A):** cruzar con `sale` para obtener el % real de
+   cada tipo de reparto en el periodo y devolver el margen ponderado.
+5. **Cedidas:** `revenue_share_pct` editable + reembolso de materiales; sin comisión de
+   plataforma (la asume el dueño).
 
-## 8. Caso de marcas cedidas (licensed) — "más simple pero con sus problemas"
-
-En las cedidas (p.ej. Cloudtown), tú **cocinas la marca de un tercero** y cobras
-`revenue_share_pct` sobre PVP (ya en `brand_licensing_agreement`). Preguntas a cerrar:
-- **P2:** ¿La comisión de la plataforma (Glovo) en una marca cedida la asume **el
-  dueño de la marca** o **tú**? Cambia quién paga la Capa A.
-- **P3:** El `revenue_share` ¿es sobre PVP **con o sin IVA**? ¿Antes o después de la
-  comisión de plataforma?
-- **P4:** `reimburses_consumption` — ¿el reembolso de consumos entra como ingreso que
-  compensa el food cost? ¿A qué precio (`menu_item.consumption_price`)?
-
-El margen de una cedida = `revenue_share` − food_cost (− comisión si la asumes tú) +
-reembolso de consumos. La RPC ya ramifica por `flow_type='licensed'`; sólo faltan
-estas respuestas para cuadrarlo.
+> SECURITY DEFINER: `auth.uid()` es null en el SQL Editor. **Probar SIEMPRE desde la app
+> con sesión**, nunca en el SQL Editor. Regenerar `src/types/database.ts` en el mismo
+> commit que toque esquema. Dejar el DDL como migración en `supabase/migrations/`.
 
 ---
 
 ## 9. UX (pantallas) — fiel al sistema de diseño de Kitchen
 
-1. **Comisiones por marca** (Capa A) — en la ficha de cada marca, una pestaña
-   "Canales": lista de canales activos, y por canal las 3 tarifas (reparto
-   plataforma / propio / recogida) con su % y fijo. Propone el default del canal.
-   Es lo que **rellena `brand_channel`/`brand_channel_rate` desde la app**.
-2. **Importar factura de canal** (Capa B) — subir PDF/Excel → parser/IA → previsualizar
-   líneas mapeadas a conceptos → confirmar (humano en el bucle, `needs_review`).
-   Encaja con K5 (foto→IA).
-3. **P&L del canal** (Capa B) — por canal×periodo: comisiones, transporte, marketing
-   (ofertas), incidencias, tasas. "Glovo te costó X este mes, repartido así."
-4. **Reconciliación / fuga de margen** (Capa C) — el panel navy "en vivo" del
-   diferenciador: teórico vs real, varianza por concepto, semáforo.
-5. **Gestión de ofertas hacia plataformas** (visión, §10).
+1. **Comisiones por marca (Capa A)** — en la ficha de marca, pestaña "Canales": por canal,
+   las tarifas por tipo de reparto (% + base + fee/coste de reparto propio). **Default del
+   canal que se hereda**; el cocinero solo sobrescribe la excepción ("Glovo: 15 %
+   heredado"). Ganar a Otter aquí = facilidad, no la feature.
+2. **Importar factura de canal (Capa B)** — subir/extraer → previsualizar líneas mapeadas
+   a conceptos → confirmar (humano en el bucle, `needs_review`).
+3. **P&L del canal (Capa B)** — por canal×periodo: comisiones, transporte, marketing,
+   incidencias, tasas.
+4. **Reconciliación / fuga de margen (Capa C)** — panel navy "en vivo" del diferenciador.
+5. **Selector de vista** (§5) — A ponderada / B por reparto / por pedido; defecto por
+   cliente.
 
-Todo con el lenguaje fijado: hero cálido, panel navy "en vivo", clicabilidad, lenguaje
-de color único, honestidad ("estimado" vs "real").
-
----
-
-## 10. Visión: gestión de ofertas hacia plataformas (futuro, no en este cierre)
-
-Lo que Julio apunta: que desde Folvy se puedan **gestionar las ofertas** hacia las
-plataformas y **conocer los costes de transporte**. Esto es el nivel más ambicioso:
-- **Simulador de oferta:** antes de lanzar un 2x1 en Glovo, Folvy predice su impacto
-  en margen real (Capa A + coste de promo cofinanciada). "Esta oferta te deja en
-  pérdidas en estos 4 platos."
-- **Coste de transporte por zona/pedido:** del histórico de facturas (Capa B), media
-  real de transporte por pedido y su tendencia.
-- **Publicación de ofertas al POS/plataforma:** escribir, no sólo leer (Fase 2 del
-  conector TPV bidireccional). Requiere API de cada plataforma — lejano.
-
-No entra en este cierre. Se diseña aquí para no perder la visión.
+Lenguaje fijado: hero cálido, panel navy "en vivo", color único, honestidad explícita
+("estimado con tu tarifa" / "coste de reparto estimado" vs "real").
 
 ---
 
-## 11. Plan de construcción por fases (cerrar bien, una capa cada vez)
+## 10. Visión (EP4, fuera de este cierre)
 
-- **EP1 — Capa A (cierra el margen del dashboard).** `brand_channel_rate` + RLS +
-  `brandChannelRateService` + pantalla "Canales" en la ficha de marca + extender la
-  RPC para leer tarifa por tipo de reparto. **Resultado medible:** el margen por canal
-  deja de ser idéntico; sale el real por marca×canal×reparto. Cierra el bug de hoy.
-- **EP2 — Capa B (P&L del canal).** `channel_invoice` + `channel_invoice_line` +
-  importador (manual primero; IA/parser después) + pantalla P&L. **Medible:** importar
-  la factura de mayo y que cuadre al céntimo con el PDF (99,44 / 18,00 / 1.190,40 ya
-  validados).
-- **EP3 — Capa C (reconciliación AvT).** Vista/función que cruza venta real × teórico
-  × factura → fuga de margen por concepto. **Medible:** explicar el gap 1.190 → 686 €.
-- **EP4 — Visión (simulador de ofertas, transporte, publicación).** Posterior.
+- **Simulador de ofertas:** antes de lanzar un flash (recordar: solo clientes nuevos),
+  predecir su impacto en margen real. "Esta oferta te deja en pérdidas en estos 4 platos."
+- **Coste de transporte real por zona/pedido** (integración Catcher como 4ª fuente).
+- **Publicación de ofertas al POS/plataforma** (Fase 2 del conector TPV bidireccional).
+- **Extracción de descuentos desde plataforma** (Glovo/Uber/JE) — vía preferente para los
+  descuentos que Last no desglosa; depende de qué API real exista (explorándose con
+  HubRise). No dar por viable hasta confirmar API.
 
-Cada fase: diseño aprobado → BBDD (transaccional, revisable) → service → UI → build →
-verificación en la app. Cero deuda colgando entre fases.
+---
+
+## 11. Plan de construcción
+
+- **EP1 — Capa A + motor + vista A.** `brand_channel_rate` + RLS + service + pantalla
+  "Canales" + RPC (base con IVA, tipo de reparto, reparto propio, ponderación por mix).
+  **Medible:** el margen por canal deja de ser idéntico; sale el real ponderado.
+- **EP2 — Capa B.** `channel_invoice(_line)` + importador (extracción > parser) + P&L.
+  **Medible:** la factura de mayo cuadra al céntimo (686,06 ya validado).
+- **EP3 — Capa C.** Reconciliación AvT → fuga por concepto. **Medible:** explicar el gap
+  1.190 → 686 €.
+- **EP4 — Visión.** Simulador, Catcher, publicación, extracción.
+
+Cada fase: diseño aprobado → BBDD (transaccional, revisable) → service → UI → build verde
+→ verificación en la app. Cero deuda colgando entre fases.
 
 ---
 
 ## 12. Riesgos y honestidad declarada
 
 - **Atribución por plato imposible al 100 %:** transporte/promos/incidencias son por
-  pedido, no por plato (lo prueban los datos: transporte −3/−4,5 € variable, promos en
-  8 de 48 pedidos). El margen teórico por plato es una **aproximación honesta**; el
-  real sólo existe reconciliando (Capa C). Hay que **etiquetar "estimado" vs "real"**
-  en toda la UI.
-- **Cada plataforma factura distinto:** Glovo ≠ Uber ≠ JustEat en formato y conceptos.
-  El modelo de `channel_invoice_line` con `concept` + `meta jsonb` lo absorbe, pero
-  cada importador (parser) es trabajo por plataforma.
-- **La RPC es SECURITY DEFINER:** no se prueba desde el SQL Editor (auth.uid() null,
-  ya lo vimos). Verificar siempre desde la app.
-- **Datos actuales desechables:** no cargar tarifas/facturas reales a mano ahora "para
-  ver"; construir la herramienta y cargar con los datos definitivos del cliente.
-- **Base del % (P1) sin cerrar:** con/sin IVA cambia el número. Hay que confirmarlo
-  con una plataforma antes de fijar `commission_base`.
+  pedido. El margen teórico por plato es **aproximación honesta**; el real solo existe
+  reconciliando (Capa C). Etiquetar "estimado" vs "real" en toda la UI.
+- **Comisión EP1 = la negociada**, no la realmente cobrada (esa relación 50/70 opaca solo
+  se cierra reconciliando contra factura, Capa C). El margen por pedido va como **"estimado
+  con tu tarifa"** hasta entonces.
+- **Coste de reparto propio = estimado** hasta integrar Catcher.
+- **Flash no cuadrado al céntimo** — deuda declarada §1.A; prioridad baja por la vía de
+  extracción.
+- **Cada plataforma factura distinto** (Glovo ≠ Uber ≠ JE) → cada importador/extractor es
+  trabajo por plataforma.
+- **Datos actuales desechables:** no cargar tarifas/facturas reales a mano "para ver";
+  construir la herramienta y cargar con datos definitivos.
 
 ---
 
-## 13. Preguntas abiertas para Julio (cerrarlas antes de EP1)
+## 13. Preguntas P1–P6 — estado tras la sesión 02/06
 
-- **P1 — Base de la comisión:** ¿Glovo/Uber/JustEat aplican el % sobre el PVP **con
-  IVA** o **sin IVA**?
-- **P2 — Cedidas:** ¿la comisión de plataforma en una marca cedida la asume el dueño
-  de la marca o Llorente29?
-- **P3 — Revenue share:** ¿sobre PVP con o sin IVA? ¿antes o después de la comisión?
-- **P4 — Reembolso de consumos:** ¿cómo entra en el margen y a qué precio?
-- **P5 — Tipos de reparto reales por plataforma:** ¿qué % aproximado tiene cada uno
-  (plataforma / propio / recogida) en Glovo, Uber, JustEat? (Para sembrar defaults.)
-- **P6 — Alcance del cierre:** ¿confirmamos EP1 (Capa A) como el cierre de ESTA tanda,
-  y EP2/EP3 como cierres posteriores?
+- **P1 — Base de la comisión:** ✅ **PVP CON IVA** (probado al céntimo).
+- **P2 — Cedidas:** ✅ las comisiones de plataforma las asume **el dueño de la marca**
+  (Cloudtown), no Llorente29. → `brand_channel_rate` no aplica a cedidas.
+- **P3 — Revenue share:** ✅ sobre **ventas netas SIN IVA** ("antes de impuestos", Julio).
+  El "antes/después de comisión" es irrelevante para Llorente29 porque no soporta la
+  comisión en cedidas. El % es **editable por marca** (Cloudtown hoy 25 %, NO fijo).
+- **P4 — Reembolso de consumos:** ✅ entra como ingreso que compensa el food cost, **al
+  precio tarifado por el dueño** (`consumption_price`). Verificar mapeo al construir.
+- **P5 — Mix de reparto por plataforma:** ✅ **disuelta** — no hace falta sembrar defaults;
+  el mix real se calcula desde `sale` (vista A).
+- **P6 — Alcance del cierre:** ✅ **EP1 = Capa A + motor + vista A.** EP2/EP3/EP4 después.
 
 ---
 
-*Documento vivo. Al aprobar, se versiona en `docs/` y se referencia en
-`CONTEXTO_CLAUDE.md`. Construcción: EP1 primero (cierra el margen del dashboard).*
+*Documento vivo. Versionar en `docs/` y referenciar en `CONTEXTO_CLAUDE.md` (§1).
+Construcción: EP1 primero. Antes de tocar esquema, verificar estado real vía
+`information_schema`.*
