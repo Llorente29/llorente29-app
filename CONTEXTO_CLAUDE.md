@@ -46,70 +46,77 @@ Cadencia: en cada paso, antes de cerrarlo, Claude para SOLO y aplica el control 
 ---
 1. ESTADO VIVO ⟵ se regenera cada sesión
 
-**Última actualización: 2026-06-02 (sesión TÉCNICA, posterior a la de marca/comunicaciones del mismo día). Frente económico y módulo de Integraciones. Detalle al final, §"SESIÓN 02/06 (TÉCNICA)".**
+**Última actualización: 2026-06-02 (sesión TÉCNICA + jornada de TARDE de decisión estratégica). DECISIÓN MAYOR: Folvy será INTEGRADOR DIRECTO de las plataformas de delivery (Glovo el primero). Detalle al final: §"SESIÓN 02/06 (TÉCNICA)" + §"SESIÓN 02/06 (TARDE — DECISIÓN INTEGRADOR DIRECTO)".**
 
 > **NOTA DE MANTENIMIENTO (vigente):** el fichero VERDADERO es `C:\dev\llorente29-app\CONTEXTO_CLAUDE.md` (versionado en git). La copia del knowledge puede ir por detrás. Al regenerar, partir SIEMPRE del repo.
 
 ### 1.0 — CORRECCIÓN DE DATO (vigente)
-El CEO es **Julio Gª Colón (García Colón)**, NO "Julio Gascón". Usar "Julio Gª Colón" en firmas, correos y documentos formales. Admin Google: `jgcolon@idasal.com`.
+El CEO es **Julio Gª Colón (García Colón)**, NO "Julio Gascón". Usar "Julio Gª Colón" en firmas, correos y documentos formales. Admin Google: `jgcolon@idasal.com`. Correo de partners/integraciones: `partners@folvy.app`.
 
-### 1.1 — Dónde estamos HOY (02/06, sesión técnica)
+### 1.0.bis — DECISIÓN ESTRATÉGICA MAYOR (02/06 tarde) — NO PERDER
+**Folvy dejará de depender de integradores intermediarios (Last.app, HubRise, etc.) y construirá su PROPIA capa de integración DIRECTA con las plataformas de delivery.** Razones de Julio (las cuatro, todas de peso):
+1. **Coste:** un cliente que use Folvy no puede sostener además un Last.app caro (525€/mes). El intermediario estrangula la propuesta de valor.
+2. **Concepto 360:** si los pedidos viven en un tercero y Folvy solo lee, Folvy nunca es el sistema central. Debe ser el centro.
+3. **Control del flujo de datos:** el dato de pedidos es la materia prima de TODO Folvy (escandallos, economía, AvT, ingeniería de menús). Quien controla el grifo controla Folvy. Inaceptable cederlo.
+4. **Fidelización estructural:** si Folvy ES la integración, el cliente no se puede ir sin romper su operación de delivery. Pegamento sin esfuerzo (experiencia propia de Julio: cambiar de integrador que funciona es casi imposible).
+**Conclusión:** ningún intermediario (HubRise, KitchenHub, Otter, Deliverect) resuelve el punto 3 — todos son terceros que controlan el grifo. Solo la conexión DIRECTA lo resuelve. Y se ha confirmado que es VIABLE (Glovo y Uber tienen programa de partners de integración con staging, sin cobrar por la API). **Prioridad nº1 ahora: conector Glovo directo** (48% de las ventas de Llorente29, y el agujero que ningún intermediario cubría en España).
 
-Sesión larga y muy productiva. Dos grandes frentes avanzados, ambos con piezas TERMINADAS y commiteadas (8 commits, todo en `origin/main`, `0 0`, build verde, working tree limpio). NADA a medias.
+### 1.1 — Dónde estamos HOY
 
-**FRENTE A — ECONOMÍA DE PLATAFORMAS / Capa A (EP1):**
-- **Diseño Capa A CERRADO** (doc `folvy_economia_plataformas_diseno.md` v2). Preguntas P1–P6 resueltas/disueltas. Commit `b8f42f2`.
-- **Tabla `brand_channel_rate`** (tarifas por marca×canal×tipo de reparto) + RLS calcada de `brand_channel` + migración + tipos. Commit `96655d4`.
-- **`brandChannelRateService`** + tipos de dominio en `kitchen.ts`. Commit `723a395`.
-- **Columna `sale.service_type`** (CHECK null|platform_delivery|own_delivery|pickup) + migración + tipos. Commit `bacbb70`.
-- **Webhook `lastapp-webhook` ampliado**: captura `pickupType` de Last → `service_type` (`mapServiceType`). **DESPLEGADO en Supabase** + commit `507d3bf`.
+**CONSTRUIDO Y EN PRODUCCIÓN (9 commits hoy en `origin/main`, `0 0`, build verde, working tree limpio):**
+- **EP1 (Economía de Plataformas Capa A):** doc v2 (`b8f42f2`), tabla `brand_channel_rate`+RLS+service (`96655d4`,`723a395`), columna `sale.service_type`+webhook desplegado capturando `pickupType` (`bacbb70`,`507d3bf`).
+- **Módulo de Integraciones (I1 completo):** doc v1 (`a277e37`), tablas `connector`+`account_connector`+RLS+seed Last.app/Catcher (`f11098d`), tipos+`connectorService` en módulo nuevo `src/modules/integrations/` (`28180ad`).
+- **CONTEXTO** regenerado (`fbbb0af`).
 
-**FRENTE B — MÓDULO DE INTEGRACIONES (I1 completo):**
-- **Diseño** (doc `folvy_integraciones_modulo_diseno.md` v1, benchmark Toast/Last/SaaS hecho). Commit `a277e37`.
-- **Tablas `connector`** (catálogo global) **+ `account_connector`** (conexión por cuenta, RLS calcada de `brand_channel`) + seed (Last.app + Catcher) + migración + tipos. Commit `f11098d`.
-- **`connectorService`** + `types/integrations.ts` (módulo nuevo `src/modules/integrations/`). Commit `28180ad`.
+**HALLAZGO que cambia prioridades:** Llorente29 hace **0% reparto propio** (dashboard: Uber 52%, Glovo 48%, JustEat 2%, reparto propio 0€). → El mix es 100% `platform_delivery`. La **RPC de EP1 puede cerrarse ENTERA y real AHORA** sin esperar a Catcher (el reparto propio, que necesita coste de Catcher, hoy no existe en este cliente).
 
-### 1.1.HALLAZGOS — Decisiones y descubrimientos clave de hoy (NO perder)
-- **P1 (base comisión) = PVP CON IVA**, probado al céntimo (flash Glovo 30% sobre 19,40 = 5,82; comisión sobre `Productos` con IVA). ⚠️ La RPC `menu_item_economics` HOY aplica el % sobre `price` (sin IVA) → **subestima la comisión de todos los platos propios**. Pendiente corregir en la RPC.
-- **P2 = en marcas cedidas las comisiones de plataforma las asume el DUEÑO de la marca**, no Llorente29. → `brand_channel_rate` NO aplica a cedidas.
-- **Cloudtown (cedida):** Llorente29 cobra **% sobre ventas netas sin IVA (hoy 25%, EDITABLE por marca) + reembolso de materiales** tarifados por el dueño. Antes se dijo 2% por error; es 25%. **Ningún % es fijo** (ni el 15% de propias ni el 25% de cedidas): todo configurable por marca×canal.
-- **`delivery_fee` NO es neutro en reparto propio** (corrige el doc v1): en `own_delivery` ingresas el fee del cliente y pagas al repartidor (Catcher) → margen reparto = fee − coste repartidor. Neutro SOLO en `platform_delivery`.
-- **El tipo de reparto venía en Last** (`pickupType`: `delivery`→platform, `ownDelivery`→own) y NO se capturaba. Ya se captura **desde hoy hacia delante**. Los **12.052 históricos NO tienen reparto** (export sin ese campo) → `con_service_type = 0` hoy; se poblará solo con ventas nuevas por webhook.
-- **CATCHER tiene API de partner con SANDBOX** (`staging-api.catcher.es`, doc pública leída). Endpoints: `authorize` (appId/appSecret, token 24h), `Order Create`, `Get Order Detail`, `Get Order Status`, `Get Driver Location`, **`Webhook - Orders`** y `Webhook - HD`. **El coste real del reparto = `transportPrice`** (dentro de `courier`, en el webhook de estado). Cruce venta↔reparto por **`externalId`**. `locationId` por local. **Credenciales en camino** (Julio las solicitó). Es un marketplace: el coste es por pedido y variable (no tarifa fija) → se lee de Catcher, no se estima.
-- **Módulo Integraciones — decisión de Julio ("c"):** modelo MIXTO configurable por integración. `connection_type` (oauth | credentials | request) + `managed_by` (client | superadmin | either). Self-service por defecto; gestión donde el proveedor lo exige (p.ej. Catcher = credentials/either).
+### 1.1.HALLAZGOS — Decisiones técnicas previas (vigentes)
+- **P1 (base comisión) = PVP CON IVA**, probado al céntimo. ⚠️ La RPC `menu_item_economics` HOY aplica el % sobre `price` (sin IVA) → subestima comisión de platos propios. Corregir en la RPC.
+- **P2 = en cedidas las comisiones de plataforma las asume el DUEÑO de la marca** (no Llorente29). `brand_channel_rate` NO aplica a cedidas.
+- **Cloudtown (cedida):** % sobre ventas netas sin IVA (hoy 25%, EDITABLE) + reembolso de materiales. Ningún % es fijo.
+- **`delivery_fee` NO neutro en reparto propio** (margen = fee − coste repartidor). Neutro SOLO en `platform_delivery`.
 
-### 1.2 — ESTADO GIT (02/06 técnica)
-`main == origin/main` (`0 0`), build verde, working tree limpio. 8 commits hoy: `b8f42f2`, `96655d4`, `723a395`, `bacbb70`, `507d3bf`, `f11098d`, `a277e37`, `28180ad`. Edge Function `lastapp-webhook` redeployada. Migraciones nuevas: `20260602T0000_brand_channel_rate.sql`, `20260602T0100_sale_service_type.sql`, `20260602T0200_integraciones_modulo_i1.sql`. Docs nuevos en `docs/`: economía v2 + integraciones v1 (subir al Knowledge).
+### 1.2 — INTEGRADORES: estado de la evaluación (02/06 tarde)
+- **Last.app (actual):** 525€/mes (3 locales × 175€, factura F202607978). Tiene Glovo+Uber+JustEat en España HOY. Problema: caro + intermediario + dueño del dato. **A sustituir por integración directa (no por otro intermediario).**
+- **HubRise:** middleware puro, white-label, barato (~105€/mes 3 locales + setup 450€ negociado con descuento 50% + cargo Glovo pendiente). **Incompatible con Last (sustituye, no añade). BLOQUEO: Glovo-España NO está activo en HubRise y es incierto** (Janaina no compromete fecha; el modelo económico de Glovo no le cierra). Correo enviado pidiendo abaratar setup + partner. Contacto: Janaina Wittner, partnerships. **Nunca serás 100% autónomo** (alta JustEat/Glovo la hace HubRise con la plataforma).
+- **KitchenHub:** modelo IDEAL (API marca blanca para revendedores, pay-per-location) pero **es USA — NO tiene Glovo ni JustEat ni ninguna plataforma europea.** Descartado para España hoy.
+- **Otter:** producto final (compite con Folvy), foco USA. Descartado.
+- **Deliverect:** tiene Glovo-España funcionando, pero compite con Folvy (suite propia) y es caro. Descartado por Julio.
+- **CONCLUSIÓN:** ningún intermediario cubre Glovo-España sin competir con Folvy o sin ceder el dato → refuerza ir DIRECTO.
 
-### 1.3 — DEUDA VIVA (por prioridad)
-**Frente económico:**
-1. **RPC `menu_item_economics` — PENDIENTE (corazón de EP1).** Diseño decidido (NO tocar a medias): (a) **una fila por plato** + columnas nuevas de desglose por reparto (no romper dashboard/ingeniería que esperan 1 fila/plato); (b) comisión sobre **`price_with_vat`** (P1); (c) dimensión `service_type` leyendo `brand_channel_rate`; (d) **ponderación por mix real** de `sale` con fallback honesto (sin mix → tarifa `platform_delivery`); (e) reparto propio = fee − coste Catcher. **BLOQUEO:** el coste real de `own_delivery` viene de Catcher → la RPC se hará COMPLETA cuando llegue la integración Catcher (no antes, para no hacerla dos veces). Verificar SIEMPRE desde la app (SECURITY DEFINER).
-2. **Pantalla "Canales"** (configurar `brand_channel_rate` por marca×canal×reparto). NO depende de Catcher → construible ya.
-3. **Verificar en vivo** que una venta nueva entra con `service_type` poblado (depende de que entre un pedido real).
+### 1.2.bis — GLOVO API DIRECTA (confirmada, prioridad nº1)
+- **Dos fuentes de doc:** (a) Appsmart/onlineservice.io (middleware oficial subcontratado por Glovo), (b) **API oficial `glovoapp.com` (OpenAPI 3.0, fichero `definition.yaml`, 6336 líneas) — esta es la buena.**
+- **Staging real:** `stageapi.glovoapp.com` / producción `api.glovoapp.com`.
+- **Acceso:** email a `partner.integrationseu@glovoapp.com` dando endpoints de webhook (dispatched=obligatorio, cancelled=opcional) + países. Te dan stage webhook + acceso Jira soporte + tienda staging. Modelo "POS Client / Plugin".
+- **Auth:** header `Authorization: <token>` (shared token único) entrante y saliente + opcional verificación firma `Glovo-Signature` (SHA256 RSA base64). Reintentos backoff máx 3 → procesar IDEMPOTENTE, deduplicar order_id.
+- **Endpoints recepción:** webhooks `Order Dispatched` + `Order Cancelled`.
+- **Ciclo de vida pedido:** `accept`, `ready_for_pickup`, `out_for_delivery`, `customer_picked_up`, `Update order status`, `Modify order products`, `Modify order price`.
+- **Menú (push bidireccional):** `Upload menu`, `Verify menu upload`, `Modify products`, `Modify attributes`, `Bulk update`, `Validate menu`, `Close temporarily` (saturación). Modelo: super_categories→categories→sections→products→attribute_groups→attributes. Límite 5 updates/día/tienda. Imágenes 1000×1000 JPG <1MB HTTPS.
+- **DATO PARA EP1 (mejor que Last):** el payload de pedido trae `order_type` (pickup=Glovo / delivery=propio) = service_type NATIVO; `detailed_fees` (DeliveryFee/ServiceFee/MinimumBasketSurcharge); `glovo_discounts` vs `restaurant_discounts` (SEPARA quién paga cada descuento); `products_total` vs `payment_total`. → Capa B/C servida en bandeja.
+- **LAAS (Logistics as a Service):** Glovo alquila sus repartidores (sandbox `laaspartners.testglovo.com`, ApiKey/ApiSecret). Alternativa/complemento a Catcher para reparto propio.
+- **AVISO:** no hay sandbox pleno para notificaciones — tiendas de test solo prueban menú; recepción de pedidos se valida activando una tienda REAL (no afecta actividad del restaurante).
 
-**Módulo Integraciones:**
-4. **I2 — Pantallas** (Tus integraciones + Marketplace + detalle + bandeja de solicitudes). Construible (NO depende de Catcher). ⚠️ Puede tocar navegación/sidebar → ver cómo se registran módulos antes; NO tocar `App.tsx` sin permiso.
-5. **I3 — Conector Catcher real** (Edge Function `catcher-webhook`, captura `transportPrice`, cruce por `externalId`). Espera credenciales.
-6. **D1–D4** del doc de integraciones (alcance por defecto, cifrado de credenciales, rol del cliente, catálogo sembrado vs panel).
+### 1.3 — DEUDA VIVA / FRENTES (por prioridad)
+1. **CONECTOR GLOVO DIRECTO (prioridad nº1).** Diseñar doc (benchmark mapeo Glovo↔recipe_item/menu_item) → G1 recepción pedidos (Edge Function `glovo-webhook`→`sale` con service_type/fees/descuentos) → G2 push menú → G3 ciclo de estados → G4 LAAS. Vive en el módulo de Integraciones (I1). Empezar por pedir acceso a `partner.integrationseu@glovoapp.com`.
+2. **RPC `menu_item_economics`** — AHORA cerrable entera y real (Llorente29 = 100% plataforma, 0% reparto propio). Decidido: 1 fila/plato + columnas reparto, comisión sobre `price_with_vat`, ponderación por mix con fallback. Verificar desde la app (SECURITY DEFINER).
+3. **I2 — pantallas del módulo de Integraciones** (Tus integraciones + Marketplace + detalle + bandeja solicitudes). ⚠️ Puede tocar sidebar/navegación → ver registro de módulos; NO tocar `App.tsx` sin permiso.
+4. **Pantalla "Canales"** (comisiones por marca×canal×reparto en `brand_channel_rate`).
+5. **Catcher** (I3 del módulo): conector `catcher-webhook`, captura `transportPrice`, cruce por `externalId`. Espera credenciales (en camino). Sandbox `staging-api.catcher.es` confirmado.
+6. **HubRise:** a la espera de respuesta de Janaina (abaratar setup + partner). Decisión: integrar/probar en cuenta test "Folvy" SIN tocar Llorente29; migrar solo si/cuando Glovo-España. **Pero con la decisión de integrador directo, HubRise pierde prioridad** (puede quedar como opción para clientes sin Glovo o como puente, no como núcleo).
+7. **Seguridad:** cifrado de credenciales (`credentials_ref`) Vault/secret — NUNCA en claro. Rotación service_role/webhook tokens.
+8. Code-splitting (~672KB gzip), abstracción proveedor IA, PITR, 34 platos needs_review.
 
-**Técnica/seguridad (heredada):**
-7. **Cifrado de credenciales** (`credentials_ref`): Supabase Vault o secret de Edge Function — NUNCA en claro. Enlaza con guard `auth.uid()` / escrituras service_role.
-8. Code-splitting (~672KB gzip), abstracción proveedor IA, PITR, `xlsx` vuln preexistente, 34 platos needs_review.
-
-**Notas técnicas nuevas:**
-9. **`npx supabase gen types` → usar SIEMPRE `--yes`.** Si npx pregunta, la pregunta se cuela en el fichero y el `>` lo deja roto. Verificar tras regenerar: tamaño grande + primera línea `export type Json =` + grep de la tabla nueva.
-10. **`lastapp_webhook_log` NO tiene `created_at`** (no ordenar por esa columna).
-11. **`source` de las ventas de Last = `'lastapp'`** (no `'pos'`). 12.052 ventas, 99,8% con channel_id, 99,7% con brand_id.
+**Notas técnicas:** `npx supabase gen types` → SIEMPRE `--yes`. `lastapp_webhook_log` sin `created_at`. `source` ventas Last = `'lastapp'`.
 
 ### 1.4 — Próximos pasos priorizados
-1. **Cuando lleguen credenciales Catcher:** integración Catcher (I3) → coste real reparto → **RPC completa** (plataforma + propio) de un tirón. Es la cadena que enciende el diferenciador.
-2. **Pantalla "Canales"** (EP, comisiones por marca×canal×reparto) — construible ya.
-3. **I2 — pantallas del módulo de Integraciones** — construible ya (ojo sidebar/App.tsx).
-4. Cerrar D1–D4 del doc de integraciones.
+1. **Conector Glovo directo** (frente mayor, prioridad nº1): pedir acceso API + diseñar doc + construir por fases. Resuelve los 4 problemas estratégicos de Julio.
+2. **RPC EP1** — cerrable ya (100% plataforma). Enciende el diferenciador.
+3. I2 pantallas Integraciones / pantalla Canales.
+4. Catcher (al llegar credenciales) + HubRise (al responder Janaina, prioridad rebajada).
 5. **Producción Llorente29 objetivo: 7 sept 2026.**
 
 ### 1.11 — NOTA HISTÓRICA
-> **27/05**: ensayo CSV ruidosos. **28/05**: conector Last + backfill 11.894 ventas + motor de coste validado al céntimo + UX V1 editor. **31/05**: R1 responsive (parcial) + Compras eslabón 1. **01/06**: portal del trabajador, R1 cerrado (`b1f72cf`), sistema de diseño Kitchen, dashboard Kitchen (`d8ea21d`), Economía de Plataformas descubierta y diseñada, seguridad cerrada (service_role rotada). **02/06 (marca)**: web pública folvy.app, correo @folvy.app (OVH MXPLAN 5), correo a HubRise, corrección nombre CEO. **02/06 (técnica, este cierre)**: EP1 (tabla+service+columna+webhook reparto), módulo Integraciones I1 completo (tablas+seed+service), Catcher API investigada (sandbox + transportPrice). 8 commits.
+> **27–28/05**: CSV, conector Last + backfill, motor de coste al céntimo. **31/05**: R1 responsive parcial, Compras. **01/06**: portal trabajador, dashboard Kitchen, Economía de Plataformas, seguridad. **02/06 (marca)**: web folvy.app, correo OVH, HubRise primer contacto, nombre CEO. **02/06 (técnica)**: EP1 + módulo Integraciones I1 + Catcher API. **02/06 (tarde)**: evaluación integradores (HubRise/KitchenHub/Otter/Deliverect), **DECISIÓN: Folvy integrador directo**, API Glovo confirmada (definition.yaml), API Catcher detalle.
 
 ---
 2. PROYECTO Y EQUIPO
@@ -1531,3 +1538,27 @@ DOCS NUEVOS (02/06, en outputs): `CIERRE_SESION_2026-06-02.md` (cierre autónomo
 - Integración = frente propio (como Last): Edge Function `catcher-webhook` + captura coste + cruce. Arranca al recibir credenciales.
 
 DOCS NUEVOS (02/06 técnica): `folvy_economia_plataformas_diseno.md` v2 (reescrito), `folvy_integraciones_modulo_diseno.md` v1.
+
+
+---
+
+## SESIÓN 02/06/2026 (TARDE — DECISIÓN INTEGRADOR DIRECTO)
+
+> Continuación de la jornada técnica. Foco: evaluación de integradores de delivery y decisión estratégica de arquitectura. NO se tocó código (salvo lo ya commiteado por la mañana). Trabajo de investigación, negociación y diseño estratégico. Resumen vivo en §1.0.bis, §1.2, §1.2.bis.
+
+### El problema que disparó todo
+Julio detectó que depender de Last.app (o de cualquier intermediario) es insostenible por 4 razones: coste (525€/mes estrangula la propuesta Folvy+cliente), pérdida del concepto 360, pérdida de control del flujo de datos (materia prima de todo Folvy), y que el integrador propio fideliza estructuralmente (cambiar de integrador que funciona es casi imposible). Ver §1.0.bis.
+
+### Evaluación de integradores (ver §1.2)
+Last.app (actual, caro, dueño del dato), HubRise (middleware puro, white-label, barato, pero Glovo-España incierto e incompatible con Last), KitchenHub (modelo ideal para revendedores pero USA, sin plataformas europeas), Otter (producto final que compite), Deliverect (tiene Glovo-España pero compite y caro). Conclusión: ningún intermediario resuelve el control del dato → ir DIRECTO.
+
+### HubRise — negociación (a la espera)
+Pricing: estándar 35€/local, dark kitchen por pedidos (3 locales de Llorente29 caen en tramo 35€ → ~105€/mes), partner desde 6ª cuenta (−28,6%), setup 25€/marca/plataforma/local. Negociado a 450€ (descuento agrupación 50%, primera marca gratis). Glovo-España sin fecha ni certeza. Correo enviado a Janaina (ES+EN) pidiendo: agrupación, hacer Folvy las configs (rechazado: alta JustEat/Glovo la hace HubRise), camino partner. NO hay sandbox (cuenta test "Folvy" en producción con cuota exenta).
+
+### Glovo API directa (ver §1.2.bis) — PRIORIDAD Nº1
+API oficial `glovoapp.com` (definition.yaml, OpenAPI 3.0). Staging `stageapi.glovoapp.com`. Acceso por email a partner.integrationseu@glovoapp.com. Auth por shared token + firma Glovo-Signature opcional. Recepción (Order Dispatched/Cancelled) + ciclo de vida completo (accept/ready/out_for_delivery/picked_up) + push de menú bidireccional + LAAS (repartidores de Glovo). El dato de pedido es MEJOR que Last para EP1 (order_type nativo, fees y descuentos desglosados y separados por pagador).
+
+### Plan conector Glovo (frente mayor próxima sesión)
+Diseñar doc primero (mapeo Glovo↔recipe_item/menu_item). Fases: G1 recepción (glovo-webhook→sale), G2 push menú, G3 ciclo estados, G4 LAAS. Vive en módulo Integraciones (I1 ya construido). Primer paso real: pedir acceso a Glovo por email.
+
+DATO CLAVE: Llorente29 = 0% reparto propio hoy → RPC EP1 cerrable entera ya (100% platform_delivery), sin esperar a Catcher.
