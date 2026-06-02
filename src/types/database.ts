@@ -1,4 +1,4 @@
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
@@ -2502,6 +2502,68 @@ export type Database = {
             columns: ["channel_id"]
             isOneToOne: false
             referencedRelation: "sales_channel"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      brand_channel_rate: {
+        Row: {
+          account_id: string
+          archived_at: string | null
+          brand_channel_id: string
+          commission_base: string
+          commission_fixed: number | null
+          commission_pct: number | null
+          created_at: string
+          created_by: string | null
+          created_by_name: string | null
+          id: string
+          is_active: boolean
+          own_courier_cost: number | null
+          own_customer_fee: number | null
+          service_type: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          archived_at?: string | null
+          brand_channel_id: string
+          commission_base?: string
+          commission_fixed?: number | null
+          commission_pct?: number | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          id?: string
+          is_active?: boolean
+          own_courier_cost?: number | null
+          own_customer_fee?: number | null
+          service_type: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          archived_at?: string | null
+          brand_channel_id?: string
+          commission_base?: string
+          commission_fixed?: number | null
+          commission_pct?: number | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          id?: string
+          is_active?: boolean
+          own_courier_cost?: number | null
+          own_customer_fee?: number | null
+          service_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_channel_rate_brand_channel_id_fkey"
+            columns: ["brand_channel_id"]
+            isOneToOne: false
+            referencedRelation: "brand_channel"
             referencedColumns: ["id"]
           },
         ]
