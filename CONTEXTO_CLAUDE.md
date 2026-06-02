@@ -2,7 +2,7 @@
 
 > **Documento maestro único de memoria persistente del proyecto Folvy.**
 > Lectura obligatoria al inicio de cada sesión técnica.
-> **Última actualización: 31/05/2026 (cierre sesión: FASE R1 RESPONSIVE cerrada en producción + NUEVO FRENTE Operaciones/Compras-Recepción-Inventario: estudio competitivo, diseño del bucle completo, y ESLABÓN 1 construido/verificado/demostrado end-to-end — el coste fluye desde la compra a los platos). Ver §1.**
+> **Última actualización: 02/06/2026.** Tras el 31/05 (R1 + frente Compras eslabón 1) se anexaron: **01/06** (jornada técnica intensa — portal del trabajador, R1 cerrado del todo, sistema de diseño Kitchen, **dashboard Kitchen construido sin commit**, y **Economía de Plataformas de Delivery descubierta y diseñada**) y **02/06** (marca/comunicaciones — web pública folvy.app, correo @folvy.app, contacto HubRise; corrección del nombre del CEO a Julio Gª Colón). Ver §1 (Estado Vivo) y las secciones "SESIÓN 01/06 (CIERRE 5)" y "SESIÓN 02/06" al final.
 >
 > Este es el ÚNICO documento de contexto. `CONTEXTO_ESTADO.md` y `CONTEXTO_REGLAS.md`
 > quedaron retirados el 25/05/2026: estaban desincronizados. Toda su información
@@ -46,62 +46,101 @@ Cadencia: en cada paso, antes de cerrarlo, Claude para SOLO y aplica el control 
 ---
 1. ESTADO VIVO ⟵ se regenera cada sesión
 
-**Última actualización: 2026-05-31 (cierre sesión: R1 responsive en producción + frente Compras-Recepción-Inventario con eslabón 1 demostrado end-to-end)**
+**Última actualización: 2026-06-02 (dos jornadas anexadas tras el 31/05: el 01/06 fue técnica intensa — portal del trabajador, R1 cerrado, dashboard Kitchen, y descubrimiento+diseño de Economía de Plataformas; el 02/06 fue de marca/comunicaciones — web pública folvy.app, correo @folvy.app, contacto HubRise. Detalle por sesión al final del documento, §"SESIÓN 01/06" y §"SESIÓN 02/06".)**
 
-### 1.1 — Dónde estamos HOY (31/05/2026)
+> **NOTA DE MANTENIMIENTO (vigente):** el fichero VERDADERO es `C:\dev\llorente29-app\CONTEXTO_CLAUDE.md` (versionado en git). La copia del knowledge puede ir por detrás. Al regenerar, partir SIEMPRE del repo.
 
-> **Logro de la sesión 31/05 (dos bloques):**
-> - **Bloque 1 — FASE R1 RESPONSIVE: CERRADA y en producción.** Shell de cliente responsive para móvil/tablet, verificado pantalla a pantalla a 390px. Commits R1.1–R1.4 en `main` (HEAD previo `c4b1f30`). Barra inferior móvil (Inicio·Safety·[IA héroe]·Sales·Kitchen), Team al overflow del avatar, breakpoint 768, tablas→tarjetas, rejillas→columna sticky. Escritorio (≥768px) intacto. Hallazgo: Meraki Pita 104 platos sin coste; Sales sin desarrollo. Cola comprometida tras R1: R2 voz IA, R3 home latido, R4 cámara→IA, R5 portal empleado.
-> - **Bloque 2 — NUEVO FRENTE Operaciones / Compras-Recepción-Inventario.** Ver 1.1.F.
+### 1.0 — CORRECCIÓN DE DATO (arrastrada desde el inicio, fijada 02/06)
+El CEO es **Julio Gª Colón (García Colón)**, NO "Julio Gascón". Era un error arrastrado. Usar "Julio Gª Colón" en firmas, correos y documentos formales. Admin Google: `jgcolon@idasal.com`. (Corregido también en §2.)
 
-### 1.1.F — FRENTE COMPRAS-RECEPCIÓN-INVENTARIO (31/05, el grueso de la sesión)
+### 1.1 — Dónde estamos HOY (02/06/2026)
 
-**Estudio competitivo** (`folvy_competidores_inventario_compras.md`, en knowledge + outputs): la merma valorada (consumo teórico vs real) es **table stakes de toda la categoría** (gstock, tspoon/tSpoonLab, Supy, MarketMan, haddock, SmartBar, MarginEdge la calculan). NO es diferenciador. La goleada de Folvy está en 3 ejes: (1) sistema conectado España-native (Team+Safety+Sales+Kitchen+Ops en uno; gstock/tspoon no tienen personal ni APPCC nativo), (2) fricción de arranque casi nula vía **foto→IA** + datos ya unidos, (3) modelado multi-marca/dark-kitchen. El golpe de demo = **foto→escandallo/albarán IA** (ataca el dolor nº1: dar de alta a mano). Benchmark de coste: R365 ofrece un SELECTOR de métodos (último/medio ponderado/ventana) — confirma el diseño de Folvy. El precio se origina en la RECEPCIÓN en Apicbase y gstock (convergencia).
+**Resumen de las dos últimas jornadas (lo que NO estaba registrado en el §1 del 31/05):**
 
-**El bucle (diseñado y aprobado):** Artículos+formatos (compra/stock/uso) → OC interna (+envío adapter WhatsApp, EDI diferido) → Recepción [contra OC o libre, la IA reeduca si falta OC] → Stock → Consumo teórico (ventas×escandallo, YA EXISTE) → Inventario físico → Varianza € → ↻ sugiere OC. No se puede partir; es circuito cerrado.
+> **01/06 — JORNADA TÉCNICA (toda en `origin/main` salvo el dashboard).** Cuatro frentes, todos detallados al final del documento:
+> 1. **Portal del trabajador** (acceso por enlace/QR sin email vía `verifyOtp({token_hash})` esquivando PKCE; reskin home en marca; inicio adaptativo con cronómetro; `Drawer.tsx` compartido; **bottom-tab bar completa** Inicio·Fichar·Tareas·Más). ~9 commits en origin/main.
+> 2. **R1 RESPONSIVE CERRADO de verdad** (commit `b1f72cf`): `KitchenItemsPage` tabla→tarjetas en móvil + 9 ediciones en `RecipeEditorPage`. R1 = paridad (dejar de perder por desbordamiento), NO goleada.
+> 3. **SISTEMA DE DISEÑO de Kitchen fijado** + benchmark mundial (Apicbase/meez/R365/Galley). Doc `folvy_kitchen_benchmark_y_plan.md`, plan K1–K8.
+> 4. **Dashboard "Resumen" de Kitchen construido (D1+D2)** — ver 1.1.DASH. **EN PROD LOCAL, SIN COMMIT.**
+> 5. **Economía de Plataformas de Delivery: descubierta y diseñada** — ver 1.1.EP. **El gran frente abierto.**
+>
+> **Seguridad cerrada el 01/06:** service_role key ROTADA y verificada. `.vite/` des-trackeado. (Las viejas deudas "rotar service_role" y ".gitignore + push" del §1 del 31/05 quedaron RESUELTAS — el `.gitignore` ya estaba bien hecho, push hecho.)
+>
+> **02/06 — JORNADA MARCA/COMUNICACIONES (no toca repo/BBDD).** Ver 1.1.WEB / 1.1.MAIL / 1.1.HUBRISE y el §"SESIÓN 02/06" al final.
 
-**ESLABÓN 1 — CONSTRUIDO, VERIFICADO Y DEMOSTRADO END-TO-END:**
-- **Tabla `recipe_item_purchase_format`** (BBDD): árbol de empaquetado anidado por ingrediente (parent_format_id, qty_per_parent, qty_in_base=única verdad del coste >0, is_piece, is_weighted, source/ai_confidence/needs_review). Integridad del árbol por FK compuesta declarativa (padre del mismo ingrediente, sin trigger). RLS calcado de `recipe_item_unit_conversion`. "Caja"/"Bolsa" NO van a `kitchen_unit` (error de tspoon evitado).
-- **`article_supplier`**: +`purchase_format_id`, −`purchase_unit_id` (Opción A: proveedor vende UN nodo del árbol; estaba vacía, coste 0).
-- **`purchaseFormatService.ts`** (app): CRUD supplier/formato/article_supplier + `setupSimplePurchase` (autocrea nodo trivial) + dispara cascada. Blindaje de conversión: recibe `qty_in_base` ya en unidad base; NO inventa 1:1 (fallo de Apicbase evitado).
-- **`kitchen_recompute_raw_cost(item_id)`** (BBDD, función NUEVA, NO toca `kitchen_recompute_item`): coste del raw = `last_price / qty_in_base`. Selector de estrategia: `fixed` (manda lo tecleado, la compra no pisa) / `last_purchase` (activo) / `average_weighted` + `average_window` (DORMIDAS, caen a respaldo hasta que exista la recepción/purchase_line; nunca inventan). Si no hay precio utilizable → needs_review, conserva coste anterior.
-- **Trigger `trg_article_supplier_recompute_cost`** (BBDD): AFTER INSERT/DELETE/UPDATE OF last_price,purchase_format_id,is_preferred,is_active → dispara el recálculo del ingrediente. Eje A híbrido lado BBDD.
-- **`kitchen_ancestors_of(item_id)`** (BBDD): ancestros transitivos (mecánica copiada/girada de `recipe_line_prevent_cycle`, UNION corta ciclos, depth DESC).
-- **`costCascadeService.ts`** (app): `cascadeFromItem` (tras cambio de precio: recalcula solo ancestros, el trigger ya hizo el ingrediente) y `recomputeItemAndAncestors` (para cambios que NO pasan por el trigger: foto→IA/import/edición fixed). Fail-safe por ítem. Eje A híbrido lado app. Reutilizable por todo el sistema.
-- **`purchaseFormatService` conectado a `cascadeFromItem`** en setupSimplePurchase y updateArticleSupplier (solo si cambia lastPrice/purchaseFormatId).
-- **PRUEBA END-TO-END (sesión usuario real, RLS+guards activos):** Carne mixta picada (g, en 26 platos) → puesta en last_purchase → alta proveedor+formato(Caja, qty_in_base=5000)+precio(30€) vía script con signInWithPassword → trigger recalculó carne null→**0.006 €/g** → cascada recalculó **26/26 platos**. Hallazgo de negocio: los costes de los platos BAJARON → los costes tecleados a mano estaban inflados vs precio real de compra → VALIDA la tesis "el coste fluye desde la compra". Prueba revertida (limpieza con disable trigger). Datos actuales son DESECHABLES (carga de pruebas sin continuidad).
+### 1.1.DASH — Dashboard "Resumen" de Kitchen (01/06, CONSTRUIDO, EN PROD LOCAL, SIN COMMIT)
+- **`kitchenDashboardService.ts`** (D1): agregador a nivel cuenta, SOLO LECTURA, reutiliza services reales (`menuEngineeringService`, `costCascadeService`, `recipeItemService`, `menuItemService`); no reinventa cálculo; declara honestamente lo que aún no tiene fuente.
+- **`KitchenDashboardPage.tsx`** + ítem en `module.tsx` (D2a/D2b): la página "Resumen", primer ítem del sidebar de Kitchen. Tira navy de KPIs + "Necesita tu atención" + salud food cost + ingeniería de menús + margen por canal/marca.
+- **Contrato de color** (todo Kitchen): navy de marca = token `accent` (#1E3A5F); verde=sano, ámbar=ajustado, rojo=pierde, azul=oportunidad.
+- **Diagnóstico K1 (cerrado):** el motor de coste está SANO. Los ~120 platos sin coste son **cáscaras vacías** (sin `recipe_line`), no un bug; `SUM(line_cost)=computed_cost` se mantiene. Los needs_review son datos desechables que se resuelven al cargar datos definitivos.
+- **Hallazgo del periodo:** las ventas van de **nov-2025 a may-2026**; junio (mes en curso) está vacío → el "margen del mes" salía 0 € por mirar el mes natural actual. Mapeo venta→`menu_item` >99% sano. Decisión pendiente: periodo por defecto del dashboard (ventana móvil en vez de mes natural).
+- **ESTADO GIT:** D1 no se commiteó (esperaba a D2 para un commit conjunto con sentido); luego la sesión saltó al descubrimiento del margen falso y la economía. **El dashboard quedó en prod local SIN COMMIT.** ⚠️ Verificar al retomar: ¿se commiteó después? Si no, es lo primero a consolidar.
 
-**Decisiones de arquitectura cerradas:** propagación HÍBRIDA (recálculo del ingrediente en BBDD por trigger + cascada a platos orquestada por app + verificador pendiente + aviso didáctico de salto de precio pendiente); 4 estrategias de coste (`fixed`/`last_purchase`/`average_weighted`/`average_window`, ya existían en `kitchen.ts CostStrategy`) configurables por cuenta/ingrediente; FIFO-por-lote diferido (necesita trazabilidad de lotes).
+### 1.1.EP — ECONOMÍA DE PLATAFORMAS DE DELIVERY (01/06, DESCUBIERTA Y DISEÑADA — gran frente abierto)
+**El disparador:** el dashboard mostraba **81,2% de margen IDÉNTICO en los 4 canales** = FALSO. Causa raíz (verificada en BBDD): (1) `brand_channel` **VACÍA** (0 filas, sin comisiones cargadas) → la RPC no tiene qué restar; (2) `menu_item`↔`recipe_item` sin enlazar en estos datos → coste "—". **Las RPC funcionan; falta el dato.** Julio rechazó "dejarlo honesto y ya" → exigió CERRAR el tema construyendo la herramienta, no metiendo datos desechables.
 
-### 1.2 — ESTADO GIT (31/05)
+**Análisis con factura REAL de Glovo** (Meraki Pita, 01–15 may 2026, PDF+Excel 48 pedidos, `invoice-200342777943.XLSX`), cruzada al céntimo (acceso 99,44€ / Prime 18€ / Productos 1.190,40€ cuadran). **La comisión NO es un % plano**; tiene DOS naturalezas:
+- **Por PEDIDO:** comisión %, transporte (−3/−4,5€ variable), Prime (0,75€), promos cofinanciadas (8 de 48), incidencias.
+- **Mensual del CANAL:** tasa de acceso, tarifa recurrente, ofertas flash, +IVA 21% aparte.
 
-> **2 commits en local, SIN PUSH** (origin 2 detrás):
-> - `30de3a4` feat(kitchen): formatos de compra — tipos regenerados, dominio y service (árbol + proveedor/precio)
-> - `a7ec2b6` feat(kitchen): cascada de coste compra→plato + migración del esquema de compras
-> Migración `supabase/migrations/20260531T1330_folvy_kitchen_compras.sql` en el repo (cierra el drift de tabla+funciones+trigger).
-> R1 (R1.1–R1.4) ya estaba en `main` antes de esta tanda.
-> **NO HACER PUSH hasta cerrar `.gitignore`** (hay datos de cliente sin política en el working tree). Es lo PRIMERO de la próxima sesión.
+**Mapa de fuentes DEFINITIVO (verificado contra `sale`/`raw_products` reales):**
+- Last.app YA trae por pedido: `total`, `paid`, `delivery_cost`, `discount_amount`, `refund_amount`, `raw_products` (JSON con price/fullPrice/finalPrice/discountAmount/promotionId/modifiers/combos).
+- Last NO trae: comisión de plataforma (fija → **Capa A, configurar**), comisión de oferta flash (deducible/calculable), Prime/tasas (factura mensual → **Capa B**), coste real de transporte propio (**Catcher**, 4ª integración logística).
+- Cruce confirmado: pedido `ca666b7e` `discount_amount`=6,54€ = Excel "promo producto" 6,54€; `delivery_cost`=4,5 = factura "Servicio de entrega −4,5".
 
-### 1.3 — DEUDA VIVA (por prioridad, 31/05)
+**FÓRMULAS DEMOSTRADAS con pedido real `101643741487` (portal Glovo):**
+- **Comisión = % × (PVP − descuento financiado por ti)**, NO sobre PVP bruto (2,29€ = 15% × 15,26€, donde 15,26 = 21,80 − 6,54). ⚠️ Esto corrige el cálculo del margen.
+- El `delivery_cost` que la plataforma cobra/abona es **NEUTRO** (te lo abonan); el coste real de reparto propio es Catcher. No confundir (evita doble conteo).
+- IVA de comisión (21%) se **compensa** (soportado↔repercutido) → FUERA del margen. Margen siempre sobre bases SIN IVA. Venta comida 10%, comisión 21% (tipos distintos, pero ambos van a la liquidación → neutro). Registrar IVA aparte para tesorería (Capa B).
+- Tipo de reparto está en el dato ("Entrega gestionada por el Partner" = propio).
+- Fórmula del margen del pedido (cuadra al céntimo): `Subtotal − descuento financiado − comisión − IVA comisión (+ envío que abonan)` = ganancias. (21,80 − 6,54 − 2,29 − 0,48 + 3,00 = 15,49 ✓.)
+- **OFERTA FLASH Glovo (regla del portal):** clientes nuevos/inactivos +60d; Glovo aplica su comisión normal (15%) DESPUÉS de quitar el 30% de descuento al cliente. ⚠️ **HILO A MEDIAS:** la factura de mayo NO tiene flash desglosado por pedido (solo agregado: 162,07€ tarifas + 283,71€ promo). Julio iba a subir OTRA factura CON flash (la última tiene 260,13€ tarifas flash + 472,23€ promo flash partner) y Claude iba a localizar los pedidos flash concretos para cerrar la mecánica al céntimo. **AQUÍ SE CORTÓ.**
 
-1. **[SEGURIDAD/CONFIRMADO EN VIVO] Guard `auth.uid()` + escrituras sin sesión:** cualquier escritura en `article_supplier` desde contexto sin sesión de usuario (SQL Editor hoy; **webhook de recepción `service_role` mañana**) revienta por el trigger → la función con guard lanza EXCEPTION. RESOLVER antes de construir la recepción por webhook.
-2. **`.gitignore` sin cerrar + 2 commits sin push** → cerrar `.gitignore` (datos cliente: JSON bills/catalogos/locations + artefactos) y hacer push. PRIMERO de la próxima sesión.
-3. **[SEGURIDAD ALTA, heredada]** rotar service_role key + tokens que se pegaron en chats; activar PITR Supabase.
-4. **Aviso didáctico de salto de precio** (sin construir): si el precio recibido salta >X% sobre histórico, avisar en vez de pisar en silencio.
-5. **Verificador de platos obsoletos** (sin construir): job que detecta plato cuyo cost_updated_at < cost_updated_at de algún hijo.
-6. **`average_weighted`/`average_window`** se completan cuando exista la recepción (hoy dormidas).
-7. **Default de ingrediente nuevo `fixed`→`last_purchase`** (decisión de producto de Julio: dirección confirmada, ejecutar cuando convenga). Los 161 ingredientes actuales son desechables → NO migrar/preservar.
-8. Code-splitting (~646KB gzip); abstracción proveedor IA; medidor coste IA por cuenta (prerequisito 2º cliente).
+**MODELO EN 3 CAPAS (documento `folvy_economia_plataformas_diseno.md`, v1, en outputs):**
+- **Capa A** = config de comisiones por **marca × canal × tipo de reparto** (`platform_delivery`/`own_delivery`/`pickup`) → tabla NUEVA `brand_channel_rate` (hija de `brand_channel`). **Enciende el margen real del dashboard.** La RPC `menu_item_economics` (SECURITY DEFINER) ya prevé los campos; falta el dato + la dimensión tipo_reparto.
+- **Capa B** = `channel_invoice` + `channel_invoice_line` (importar factura → P&L del canal: tasas, transporte, marketing, incidencias). `external_order_id` enlaza con `sale` para Capa C.
+- **Capa C** = reconciliación AvT (teórico × ventas reales vs factura real) → "dónde se fuga el margen". La corona; "nadie lo tiene" (a verificar con benchmark).
+- **Plan:** EP1 (Capa A) → EP2 (Capa B) → EP3 (Capa C) → EP4 (visión: simulador de ofertas, Catcher, publicar ofertas a plataformas = Fase 2 bidireccional).
+- **Preguntas abiertas P1–P6** (en el doc): base de la comisión con/sin IVA, cedidas, revenue share, reembolso de consumos, tipos de reparto por plataforma, alcance del cierre.
+- **Visión de Julio:** hacer las ofertas EN Folvy y publicarlas a las plataformas; conector multi-fuente (Glovo/Uber/JE/Catcher) que EXTRAE datos, en vez de configurar tarifas a mano (config manual = solo fallback).
 
-### 1.4 — Próximos pasos priorizados (31/05)
+### 1.1.WEB / 1.1.MAIL / 1.1.HUBRISE — Jornada 02/06 (marca/comunicaciones)
+- **Web pública folvy.app PUBLICADA y operativa:** 7 páginas EN/ES (index, margen-real, kitchen, compras-inventario, ia-equipo, auditoria-visual, plataforma). Repo **`Llorente29/folvy-landing`** (SEPARADO de `llorente29-app`), proyecto Vercel `folvy-landing`, `vercel.json` con `cleanUrls`. Bug del hero a medio animar arreglado. Cifras de escaparate (marketing, no extracción 1:1 de BBDD). Cabo suelto: **`www.folvy.app` da NXDOMAIN** (añadir subdominio+redirección en Vercel).
+- **Correo @folvy.app OPERATIVO:** vía **OVH MXPLAN 5** (~6€/año, 5 cuentas, Roundcube, DKIM). Buzones `hello@` y `partners@`. Google Workspace DESCARTADO (cuenta `jgcolon@idasal.com` es G Suite legacy free, no deja añadir dominio). Servidores OVH: SMTP `ssl0.ovh.net:465`, IMAP `:993`, POP3 `:995` (SSL). Pendiente: confirmar prueba real envío+recepción.
+- **Correo a HubRise ENVIADO** a `contact@hubrise.com` desde `partners@folvy.app` (inglés, firma Julio Gª Colón). Partner de marca blanca / conector multi-POS candidato (frente TPV bidireccional). Pregunta clave: convivencia Last.app+HubRise o, en su defecto, sandbox de pruebas. Esperando respuesta.
+- Detalle completo en el §"SESIÓN 02/06" al final + doc `CIERRE_SESION_2026-06-02.md` (outputs).
 
-1. **`.gitignore` + push** (desbloquea todo el trabajo de hoy en remoto). Primero, cabeza fresca.
-2. **UI del alta de compras** (proveedor+formato+precio): el siguiente frente. Con el principio didáctico — el cocinero aprende el modelo de tres unidades mientras Folvy se lo rellena. La goleada real aquí es **foto→IA del albarán** (foto → artículo+formato+proveedor+precio+conversión sugeridos, con needs_review). Listón: "acierta con fotos reales malas", no "tiene la feature".
-3. **Resolver el checkpoint del guard** (deuda 1) antes de construir la recepción por webhook.
-4. **Siguientes eslabones del bucle:** OC interna (no existe tabla aún) → recepción (purchase/purchase_line ya existen vacías, soportan recepción libre) → con la recepción se activan `average_*` y se construye el verificador.
-5. **Pendientes heredados del editor de escandallos** (S1–S10, ver `folvy_v1_editor_escandallos_diseno.md`): schema migration V1, UI needs_review, modificadores, UI editor completa.
-6. **Módulo Sales/dashboards** (datos listos: coste real + 11.894 ventas mapeadas).
-7. **Webhook fase 2** (bloqueado por paso a Production de Last).
+### 1.2 — ESTADO GIT (02/06)
+> **`llorente29-app`:** al cierre del 01/06 (CIERRE 4) todo el portal+R1+diseño estaba en `origin/main` (último commit de código `b1f72cf`; contexto en `45e2007` y posteriores). **EXCEPCIÓN:** el **dashboard de Kitchen (D1+D2) quedó EN PROD LOCAL SIN COMMIT** (ver 1.1.DASH). La economía de plataformas es DISEÑO en doc, sin código. ⚠️ Al retomar: confirmar si el dashboard se llegó a commitear; si no, consolidarlo.
+> **`folvy-landing`:** web publicada (8 ficheros en raíz), auto-deploy a folvy.app vía Vercel. OK.
+> Las deudas del 31/05 ".gitignore + push" y "rotar service_role" están RESUELTAS (01/06).
+
+### 1.3 — DEUDA VIVA (por prioridad, 02/06)
+**Frente Economía de Plataformas (nuevo, el grande):**
+1. **Hilo OFERTA FLASH a medias** — localizar pedidos flash en la factura que SÍ los tiene (260,13€/472,23€) y cerrar la mecánica al céntimo (¿el 15% se aplica sobre base ya descontada? confirmar con pedido real). Prerrequisito para fórmula exacta del margen flash.
+2. **Cerrar preguntas P1–P6** del doc de economía antes de construir EP1 (Capa A).
+3. **EP1 (Capa A)** = `brand_channel_rate` + RLS + service + pantalla "Canales" en ficha de marca + extender RPC `menu_item_economics` por tipo de reparto → enciende el margen real del dashboard.
+
+**App / técnica:**
+4. **Dashboard Kitchen SIN COMMIT** (ver 1.1.DASH) — verificar y consolidar.
+5. **[SEGURIDAD] Guard `auth.uid()` + escrituras sin sesión:** resolver antes de recepción por webhook (service_role).
+6. **Activar PITR Supabase** (la rotación de service_role ya está hecha).
+7. **Aviso didáctico de salto de precio** (sin construir); **verificador de platos obsoletos** (sin construir).
+8. **`average_weighted`/`average_window`** se completan cuando exista la recepción (hoy dormidas).
+9. **Default ingrediente nuevo `fixed`→`last_purchase`** (ejecutar cuando convenga; ingredientes actuales desechables).
+10. **E8.4** (resaltado en vivo + vínculo de pasos, pieza central editor), **medidor coste IA por cuenta** (HIGH, prerequisito 2º cliente), code-splitting (~646KB gzip), abstracción proveedor IA, **`xlsx`/SheetJS** vuln high preexistente, 34 platos needs_review.
+
+**Marca/comunicaciones (02/06):**
+11. `www.folvy.app` → NXDOMAIN (añadir en Vercel). Confirmar prueba real correo @folvy.app. Gestionar respuesta HubRise (foco P1: convivencia/sandbox). (Opcional) optimizar peso web (logos base64).
+
+### 1.4 — Próximos pasos priorizados (02/06)
+1. **Cerrar el hilo de la oferta flash** (factura con flash → pedidos concretos → mecánica al céntimo) y las preguntas P1–P6.
+2. **Verificar/consolidar el commit del dashboard** de Kitchen (1.1.DASH).
+3. **EP1 — Capa A** (comisiones por marca×canal×reparto): enciende el margen real del dashboard. El frente que de verdad mueve el diferenciador.
+4. **UI del alta de compras** + **foto→IA del albarán** (mayor golpe de comodidad del frente Compras; eslabón 1 ya demostrado).
+5. **Resolver el guard** antes de la recepción por webhook → siguientes eslabones (OC interna → recepción → activar `average_*` + verificador).
+6. **Pendientes editor de escandallos** (S1–S10) y **E8.4**.
+7. **Marca:** arreglar `www`, confirmar correo, gestionar HubRise.
 8. **Producción Llorente29 objetivo: 7 sept 2026.**
 
 ### 1.11 — NOTA HISTÓRICA
@@ -109,17 +148,19 @@ Cadencia: en cada paso, antes de cerrarlo, Claude para SOLO y aplica el control 
 > **27/05**: ensayo con CSV ruidosos. Reemplazado el 28/05 AM por datos reales de Last.app.
 > **28/05 AM**: conector Last, backfill 11.894 ventas, carta 9 marcas, 160 raw.
 > **28/05 PM1**: puente determinista, motor de coste validado al céntimo, 94 dish importados.
-> **28/05 PM2**: diseño UX completo V1 editor + Modificadores M1-M4 (detalle en `folvy_v1_editor_escandallos_diseno.md`).
-> **31/05 Bloque 1**: R1 responsive cerrada en producción.
-> **31/05 Bloque 2 (este cierre)**: frente Compras-Recepción-Inventario — estudio competitivo, diseño del bucle, ESLABÓN 1 (formatos de compra + coste que fluye desde la compra + cascada a platos) construido, verificado y DEMOSTRADO end-to-end con datos y sesión reales.
+> **28/05 PM2**: diseño UX completo V1 editor + Modificadores M1-M4.
+> **31/05 Bloque 1**: R1 responsive (parcial) en producción.
+> **31/05 Bloque 2**: frente Compras-Recepción-Inventario — eslabón 1 (formatos + coste que fluye + cascada) construido, verificado y demostrado end-to-end.
+> **01/06 (4 cierres)**: portal del trabajador (acceso QR, reskin, bottom-tab bar); R1 cerrado del todo (`b1f72cf`); sistema de diseño Kitchen + benchmark; **dashboard Kitchen construido (sin commit)**; **Economía de Plataformas descubierta y diseñada** (modelo 3 capas, fórmulas con factura real, hilo flash a medias). Seguridad cerrada (service_role rotada, .vite/ fuera).
+> **02/06 (este cierre)**: marca/comunicaciones — web pública folvy.app publicada (repo folvy-landing), correo @folvy.app operativo (OVH MXPLAN 5), correo a HubRise enviado. Corrección del nombre del CEO (Julio Gª Colón). La app no se tocó.
 >
-> **Lo NO superado por hoy:** modelo BBDD escandallo, `kitchen_recompute_item`/`kitchen_recipe_breakdown` (§4.9/§4.10), Folvy AI, Capa 2 económica, conector Last.app, 11.894 ventas, 94 dish con coste real.
+> **Lo NO superado:** modelo BBDD escandallo, `kitchen_recompute_item`/`kitchen_recipe_breakdown` (§4.9/§4.10), Folvy AI, conector Last.app, 11.894 ventas, 94 dish con coste real, eslabón 1 de Compras.
 
 ---
 ---
 2. PROYECTO Y EQUIPO
 Empresa: Foodint (rebrand en curso a Folvy SL).
-CEO: Julio Gascón Colón (`jgcolon@idasal.com`).
+CEO: Julio Gª Colón (García Colón) (`jgcolon@idasal.com`). [Corregido 02/06: era "Julio Gascón Colón", error arrastrado.]
 Refuerzo técnico: José (junior, autoridad delegada total cuando opera identificado).
 Producto: Folvy V1 — SaaS multi-tenant modular para hostelería.
 Cliente activo: Llorente29 (3 locales: Alcalá, Pza Castilla, Carabanchel + Pamela como
@@ -425,8 +466,8 @@ Catálogo de submódulos hardcodeado en `NuevaCuentaPage.tsx` (el alta); la edic
 lee de BBDD (`getCatalog()`). Migrar el alta.
 Nomenclatura `status` `trial` vs `trialing`: verificar que `create-account` no escribe
 `trialing` (el CHECK usa `trial`).
-Nombre CEO: `platform_admins.full_name` dice "Julio Gascón"; correcto "Julio G. Colón"
-(UPDATE 1 línea).
+Nombre CEO: `platform_admins.full_name` dice "Julio Gascón"; correcto **"Julio Gª Colón"**
+(García Colón). UPDATE de 1 línea pendiente en BBDD.
 Posible "Foodint" residual en `billing_plans.description` (no verificado).
 Slug en URL (al abrir raíz redirige a /folvy, sin resolver).
 7.4 — Personal (deudas menores)
@@ -1294,3 +1335,209 @@ toda la app de forma consistente y persiste entre sesiones. Distinción clave a 
 - Vista **comparar ubicaciones** del dashboard.
 
 DOCS NUEVOS: `folvy_kitchen_benchmark_y_plan.md` (benchmark + plan K1–K8 + sistema de diseño).
+---
+
+## SESIÓN 01/06/2026 (CIERRE 5) — Dashboard de Kitchen + ECONOMÍA DE PLATAFORMAS DE DELIVERY
+
+> Continuación tras el CIERRE 4. Dos frentes que NO quedaron registrados en su momento (recuperados
+> el 02/06 al revisar los transcripts): (A) el dashboard "Resumen" de Kitchen construido; (B) el
+> descubrimiento y diseño completo de la Economía de Plataformas de Delivery. El segundo es el frente
+> estratégico más grande abierto del proyecto.
+
+### A — DASHBOARD "RESUMEN" DE KITCHEN (construido, EN PROD LOCAL, SIN COMMIT)
+
+**D1 — `kitchenDashboardService.ts`:** agregador a nivel cuenta, SOLO LECTURA. Reutiliza los services
+reales (`menuEngineeringService`, `costCascadeService`, `recipeItemService`, `menuItemService`); NO
+reinventa el cálculo. Declara honestamente lo que aún no tiene fuente. `costCascadeService` es
+recálculo de coste, NO histórico de precios (confirmado al leer el fichero).
+
+**D2 (a/b) — `KitchenDashboardPage.tsx` + ítem en `module.tsx`:** la página "Resumen", primer ítem del
+sidebar de Kitchen. Tira navy de KPIs (food cost medio, margen medio, margen del mes €, platos·
+ingredientes) + "Necesita tu atención" + salud food cost + ingeniería de menús + margen por canal/marca.
+Construido sobre el sistema de diseño del CIERRE 4.
+
+**Contrato de color (todo Kitchen):** navy de marca = token **`accent`** (#1E3A5F). Verde=sano,
+ámbar=ajustado, rojo=pierde, azul=oportunidad. Leyenda única en todo el módulo.
+
+**Diagnóstico K1 (cerrado):** el motor de coste está SANO. Los ~120 platos sin coste son **cáscaras
+vacías** (sin `recipe_line`), NO un bug del motor; cero platos con líneas que den coste 0. El invariante
+`SUM(line_cost)=computed_cost` se mantiene. Los 144 needs_review / 120 sin coste son datos desechables
+que se resuelven solos al cargar los datos definitivos. No se tocó nada (rellenar a mano = tirar trabajo).
+
+**Hallazgo del periodo:** las ventas reales van de **nov-2025 a may-2026**; junio (mes en curso) está
+vacío → el KPI "margen del mes" salía 0 € por mirar el mes natural actual. El mapeo venta→`menu_item`
+es >99% sano (líneas sin `menu_item_id`: 6/38/36 frente a miles). La cadena venta→margen SÍ cierra;
+solo el periodo por defecto caía en un mes vacío. DECISIÓN PENDIENTE: periodo por defecto del dashboard
+(ventana móvil de 30 días en vez de mes natural).
+
+**⚠️ ESTADO GIT:** D1 NO se commiteó (criterio: un service sin consumidor no aporta valor verificable;
+mejor un commit que cierre unidad con sentido = service + página). Se iba a commitear D1+D2 juntos al
+ver el dashboard funcionando, pero la sesión saltó al descubrimiento del margen falso y la economía.
+**El dashboard quedó EN PROD LOCAL, SIN COMMIT.** Verificar al retomar si se consolidó después.
+
+### B — ECONOMÍA DE PLATAFORMAS DE DELIVERY (descubierta y diseñada — gran frente estratégico)
+
+**El disparador:** el dashboard mostraba **81,2% de margen IDÉNTICO en los 4 canales** = falso. Causa raíz
+verificada en BBDD: (1) `brand_channel` **VACÍA** (0 filas; `default_commission_pct` de `sales_channel`
+también null en los 4 canales Glovo/JustEat/Uber/Shop) → la RPC no tiene comisión que restar → margen
+bruto idéntico; (2) `menu_item`↔`recipe_item` sin enlazar en estos datos → coste "—". **Las RPC funcionan;
+falta el dato.** Julio rechazó la salida fácil ("dejarlo honesto y ya") y exigió CERRAR el tema
+construyendo la herramienta de gestión de comisiones, no metiendo datos desechables. Y advirtió: "una
+comisión marca-plataforma es mucho más que el 30%".
+
+**Análisis con FACTURA REAL de Glovo** (Meraki Pita, 01–15 may 2026; PDF + Excel `invoice-200342777943.XLSX`,
+48 pedidos), cruzada al céntimo (cuadran: tasa de acceso 99,44 € · recargo Prime 18,00 € · Productos
+1.190,40 €). **La comisión NO es un % plano.** Tiene DOS naturalezas que no se deben mezclar:
+- **Por PEDIDO** (varían pedido a pedido): comisión % sobre productos, servicio de entrega (−3,00/−4,50 €),
+  recargo Prime (0,75 € en pedidos Prime), promoción producto asumida por partner (en 8 de 48 pedidos),
+  promoción oferta flash a cargo del partner, coste de incidencias (−32,27 € total), recargo por mínimo.
+- **Mensual del CANAL** (no por pedido): tasa de acceso a plataforma (99,44 €), tarifa recurrente (10 €),
+  tarifas de oferta flash (162,07 €), + **IVA 21 % aparte** (60,79 €).
+
+**Mapa de fuentes DEFINITIVO (verificado contra `sale`/`raw_products` reales):**
+
+| Dato | Fuente | Cómo |
+|---|---|---|
+| Venta, PVP, productos, modificadores, combos | **Last** (`sale` + `raw_products`) | ya se lee |
+| Descuento/oferta por línea + concepto + promotionId | **Last** (`raw_products`) | ya está, hay que parsearlo |
+| Transporte cobrado al cliente | **Last** (`delivery_cost`) | ya está |
+| Incidencias/devoluciones | **Last** (`refund_amount`) | ya está |
+| **Comisión de plataforma (fija)** | **Capa A** (configurar) | el único config manual de verdad |
+| **Comisión oferta flash (Glovo)** | **Deducción/cálculo** | regla de plataforma, no dato a meter |
+| **Prime / tarifa de uso / acceso** | **Factura mensual (Capa B)** | importar |
+| **Coste real transporte propio** | **Catcher** (4ª integración) | integración futura, por distancia |
+
+Cruce confirmado entre fuentes: pedido `ca666b7e` → `discount_amount`=6,54 € en Last = "Promoción producto
+asumida por partner" 6,54 € en Excel; otro pedido `delivery_cost`=4,5 = "Servicio de entrega −4,5" en factura.
+
+**FÓRMULAS DEMOSTRADAS al céntimo con el pedido real `101643741487` (abierto en el portal de Glovo):**
+- Subtotal 21,80 € · envío +3,00 € · descuento financiado por ti −6,54 € · **comisión −2,29 €** · impuestos
+  −0,48 € · **ganancias 15,49 €** · método "Entrega gestionada por el Partner" (= reparto propio).
+- **Comisión = % × (PVP − descuento financiado por ti)**, NO sobre PVP bruto: 2,29 = 15% × 15,26, donde
+  15,26 = 21,80 − 6,54. ⚠️ CORRIGE el cálculo del margen — es regla general, no solo flash.
+- El envío que la plataforma cobra/abona es **NEUTRO** (te lo abonan): +3,00 € entra; tu coste real de
+  reparto propio es **Catcher**. No confundir (evita doble conteo).
+- "Impuestos −0,48 €" = IVA 21% de la comisión (0,48 = 21% × 2,29). El portal lo resta, pero **se compensa**
+  (soportado↔repercutido) → FUERA del margen real.
+- Cuadre: 21,80 − 6,54 − 2,29 − 0,48 + 3,00 = **15,49 €** ✓✓.
+
+**IVA (decisión de Julio):** el margen se calcula SIEMPRE sobre bases SIN IVA. Tipos que conviven: venta
+de comida 10% (tipo reducido hostelería, `menu_item.vat_rate` default 10), comisión/tasas de plataforma 21%.
+Repercutes al 10%, soportas al 21% — no se anulan al mismo tipo, pero ambos van a la liquidación y el neto
+se compensa en caja → para el MARGEN el IVA es neutro y desaparece; para TESORERÍA (Capa B) se registra por
+su tipo. Pregunta abierta P1: ¿la comisión % se aplica sobre PVP con o sin IVA?
+
+**OFERTA FLASH Glovo (regla del portal, parcialmente cerrada):** para clientes nuevos o inactivos +60 días;
+modelo coste-por-pedido; Glovo aplica su **comisión normal (15%) DESPUÉS de quitar el 30% de descuento al
+cliente**. ⚠️ **HILO A MEDIAS (aquí se cortó la sesión 01/06):** la factura de mayo NO tiene flash desglosado
+por pedido (columnas "Tarifas de oferta flash" y "Promoción flash a cargo del partner" a 0 en las 48 filas;
+solo aparecen agregadas en el PDF: 162,07 € + 283,71 €). Los 8 pedidos con promo de esa factura son
+"Promoción producto asumida por partner" (descuento cofinanciado normal, NO flash). Julio iba a subir OTRA
+factura que SÍ tiene flash desglosado (la última: 260,13 € tarifas flash + 472,23 € promo flash partner) y
+Claude iba a localizar los pedidos flash concretos (Código de Glovo) para cerrar la mecánica al céntimo
+cruzándolos con Last. **PENDIENTE: retomar con esa factura.**
+
+**MODELO EN 3 CAPAS** (documento de diseño `folvy_economia_plataformas_diseno.md`, v1, en outputs — subir a
+knowledge + docs/). Mismo método que el editor de escandallos: diseño aprobado antes de tocar BBDD.
+- **Capa A — config de comisiones → margen teórico por plato.** Tarifa por **(marca × canal × tipo de
+  reparto)**. Tabla NUEVA `brand_channel_rate` (hija de `brand_channel`): `service_type` CHECK
+  ('platform_delivery'|'own_delivery'|'pickup'), `commission_pct`, `commission_fixed`, `commission_base`
+  ('pvp_con_iva'|'pvp_sin_iva'), `est_delivery_fee`, RLS, UNIQUE(brand_channel_id, service_type).
+  `brand_channel` se mantiene como cabecera. **Es lo que ENCIENDE el margen real del dashboard hoy.** La RPC
+  `menu_item_economics` (SECURITY DEFINER) ya devuelve `commission_pct/amount/fixed`, `delivery_fee`,
+  `revenue_share_pct`, `net_margin` — fue diseñada para esto; solo le falta el dato y leer por tipo de reparto.
+- **Capa B — economía del canal → P&L real desde la factura.** Tablas NUEVAS `channel_invoice` +
+  `channel_invoice_line` (concept/concept_kind/amount_base/amount_vat/`external_order_id`/meta jsonb).
+  Importar la factura (manual → IA/parser). `external_order_id` = llave que enlaza con `sale` para Capa C.
+- **Capa C — reconciliación AvT (la corona).** Función/vista que cruza margen teórico (Capa A × ventas
+  reales) contra pago real (Capa B) → "dónde se fuga el margen" por concepto. "Nadie lo tiene" (a verificar
+  con benchmark web: Deliverect/Otter/Nory/MarginEdge — marcado como afirmación a auditar, no vendida como
+  goleada sin comprobar).
+- **Plan:** EP1 (Capa A) → EP2 (Capa B) → EP3 (Capa C) → EP4 (visión).
+- **Las cedidas (Cloudtown):** `brand_licensing_agreement` ya cubre revenue share + reembolso de consumos;
+  la RPC ya ramifica por `flow_type='licensed'`. Preguntas P2/P3/P4 abiertas (quién asume la comisión, base
+  del revenue share, cómo entra el reembolso de consumos).
+
+**VISIÓN (Julio, EP4, no en este cierre):** el envío propio depende de la distancia y lo hace **Catcher**;
+las ofertas son variables y compuestas (2x1, 30% en un plato, flash 50%=30% cliente+comisión Glovo). La
+forma realista NO es configurar tarifas a mano sino **conectarse y EXTRAER** de Glovo/Uber/JE/Catcher, y el
+gol definitivo es **hacer las ofertas EN Folvy y publicarlas a las plataformas** (Fase 2 bidireccional del
+conector TPV). La config manual (Capa A) queda como fallback. Esto reescribe la tesis: de "tabla de
+comisiones" a "conector de economía de plataformas + logística".
+
+**PREGUNTAS ABIERTAS P1–P6** (cerrar antes de construir EP1, en el doc): P1 base de comisión con/sin IVA ·
+P2 quién asume la comisión en cedidas · P3 revenue share sobre qué base · P4 reembolso de consumos · P5 tipos
+de reparto y % por plataforma · P6 alcance del cierre (¿EP1 solo?).
+
+DOCS NUEVOS: `folvy_economia_plataformas_diseno.md` (modelo 3 capas, v1).
+
+---
+
+## SESIÓN 02/06/2026 — Marca y comunicaciones (web pública + correo + HubRise). NO toca repo/BBDD.
+
+> Jornada NO técnica. Tres entregables cerrados + corrección del nombre del CEO. La app no se tocó:
+> sigue en el estado del 01/06 (dashboard sin commit, economía en diseño). Detalle autónomo en el doc
+> `CIERRE_SESION_2026-06-02.md` (outputs).
+
+### CORRECCIÓN DE DATO
+El CEO es **Julio Gª Colón (García Colón)**, no "Julio Gascón" (error arrastrado desde el inicio).
+Corregido en §2 y §1.0. Usar en firmas/correos/documentos formales.
+
+### 1 — WEB PÚBLICA folvy.app (PUBLICADA Y OPERATIVA)
+- 7 páginas HTML bilingües EN/ES, logos reales, mismo sistema de diseño (navy #1E3A5F / terracota #D67442 /
+  cream #F5F4F0, Fraunces + Plus Jakarta Sans): **index** (home, mercado partido, "Profundiza" con 5
+  tarjetas), **margen-real** (waterfall 81%→58%, economía por canal, 4 audiencias), **kitchen** ("del
+  albarán al margen", stepper, escandallo, matriz ingeniería), **compras-inventario** (Disponible +
+  Próximamente), **ia-equipo** ("un día con Pamela"), **auditoria-visual** (exclusivo: foto plato→IA→
+  semáforo), **plataforma** (roadmap).
+- **Repo `Llorente29/folvy-landing`** — SEPARADO de `llorente29-app`. 8 ficheros (7 .html + `vercel.json`)
+  en la raíz. **Proyecto Vercel `folvy-landing`** (Root raíz, Framework Other, auto-deploy). Dominio
+  `folvy.app` apex ya estaba ahí. `vercel.json`: `{"cleanUrls":true,"trailingSlash":false}` → sirve
+  `/kitchen`, `/margen-real`… sin `.html`. Enlaces internos sin `.html`.
+- BUG arreglado: hero a medio animar (título cortado/solapado) → fix global en las 7 páginas
+  `.phero .reveal,.hero .reveal{opacity:1!important;transform:none!important}`. Stepper kitchen a fondo claro.
+- Navegación arreglada: nav con dropdown "Producto ▾" (6 páginas) + hamburguesa móvil (#mobileMenu) +
+  "Profundiza" (5 tarjetas). Ninguna página huérfana.
+- **Cifras de escaparate** (MARKETING, defendibles, NO extracción 1:1 de BBDD): 312.000 €/mes (Alcalá 118k/
+  Pza Castilla 104k/Carabanchel 90k); canal Sala 96k/Glovo 82k/Uber 71k/JustEat 63k; ~16.800 pedidos, ticket
+  18,40 €; contribución 108.000 € (34,6%); FC medio 29,4%, margen 62%; margen real por canal Local 68/JustEat
+  52/Glovo 41/Uber 38; marca Smash 64/Lobbers 58/Cloudtown 44; waterfall 81% − 18 comisión − 4 promos − 1
+  packaging = 58%.
+- CABO SUELTO: **`www.folvy.app` → DNS_PROBE_FINISHED_NXDOMAIN** (subdominio www sin registro; `folvy.app` a
+  secas SÍ funciona). Arreglo: Vercel → folvy-landing → Settings → Domains → Add `www.folvy.app` → redirección
+  al apex. (Opcional) optimizar peso (logos base64 → archivos).
+
+### 2 — CORREO @folvy.app (OPERATIVO)
+- Dominio en **OVH**. El MX Plan gratuito solo hacía redirecciones. Google Workspace DESCARTADO: la cuenta
+  `jgcolon@idasal.com` es **G Suite legacy free** (edición antigua gratuita) → no deja añadir folvy.app ni
+  como dominio secundario ni alias, ni "Enviar como" SMTP externo por defecto. [Callejón sin salida: no repetir.]
+- SOLUCIÓN: contratado **OVH MXPLAN 5** (Activo 02/06, ~5 €+IVA = **6,05 €/AÑO**, 5 cuentas, webmail Roundcube,
+  DKIM). Buzones reales: **`hello@folvy.app`** y **`partners@folvy.app`** (contraseñas las tiene Julio).
+  `postmaster@folvy.app`→`jgcolon@idasal.com` se deja intacto.
+- Servidores OVH (Gmail/móvil): SMTP `ssl0.ovh.net:465 SSL` · IMAP `:993 SSL` · POP3 `:995 SSL` · usuario =
+  dirección completa.
+- Julio reportó "ya funciona" (envío). PENDIENTE: confirmar prueba real (enviar+recibir test) y, si quiere
+  todo en su bandeja de Gmail, terminar config (recibir POP3 / "Enviar como" SMTP).
+- NO confundir con Resend (§3): Resend con `no-reply@folvy.app` es el correo TRANSACCIONAL de la app; los
+  buzones `hello@`/`partners@` son correo humano/comercial. Conviven (MX del dominio en OVH, correcto para ambos).
+
+### 3 — CORREO A HUBRISE (ENVIADO)
+- HubRise (middleware FR, Sophia Antipolis): conecta TPV/online ordering/plataformas; programa de partners
+  marca blanca, modelo reventa (el partner crea/gestiona cuentas a nombre del cliente y factura con margen),
+  precio por local/mes + descuento volumen + tarifa multimarca. Candidato a capa multi-POS / catálogo-pedidos
+  de Folvy (frente TPV bidireccional Fase 2).
+- **Enviado a `contact@hubrise.com`** desde `partners@folvy.app`, en inglés, firma "Julio Gª Colón / Folvy —
+  folvy.app / partners@folvy.app". Sin llamada (Julio no conversa en inglés fluido; todo por email).
+- 4 puntos: (1) **LA CRÍTICA — convivencia/dual-running de la misma marca en Last.app + HubRise durante la
+  transición; y plan B: si no es posible en producción, ¿hay sandbox/entorno test?**; (2) modelo reventa marca
+  blanca; (3) precio 5/7/10 marcas/local; (4) cobertura España Glovo/Uber/JustEat ingesta + publicación.
+- PENDIENTE: esperar respuesta. Lo crítico a leer = la pregunta nº1 (de ello depende cómo migrar Llorente29
+  sin romper producción).
+
+### CONTEXTO ESTRATÉGICO (recordatorio TPV/integración)
+Integración TPV bidireccional en 2 fases: Fase 1 = Folvy LEE del TPV (Last.app webhook ya en producción);
+Fase 2 = Folvy PUBLICA catálogo+precios. Dirección del catálogo configurable por marca (`catalog_source`
+'folvy'|'pos'), no global. Llorente29 mixto: marcas propias en Folvy, cedidas (Cloudtown) en Last.app.
+Conector = capa genérica multi-POS; Last.app primer adaptador; HubRise candidato a segundo adaptador/capa.
+
+DOCS NUEVOS (02/06, en outputs): `CIERRE_SESION_2026-06-02.md` (cierre autónomo de la jornada).
