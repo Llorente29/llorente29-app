@@ -4,16 +4,20 @@
 // El operador ve qué integraciones puede activar (Glovo, Last.app, Catcher, …)
 // agrupadas por categoría, con el botón contextual según connection_type.
 //
-// Patrón de diseño: idéntico a las páginas de Kitchen (tokens de color, cabecera
-// con icono lucide, tarjetas rounded-xl border bg-card, estados loading/error).
+// REDISEÑO (visual): cada tarjeta muestra el LOGO real de la plataforma desde
+// connector.logoUrl (encuadrado en un contenedor blanco redondeado). Si no hay
+// logo o falla la carga, cae a un avatar con la inicial sobre el color de marca
+// (ConnectorAvatar). Así las tarjetas tienen identidad y calidez, nunca se ven
+// rotas. Inspirado en el marketplace de Last.app pero con la identidad de Folvy.
 //
-// Honestidad: esta primera entrega LISTA el catálogo real (connector) y permite
-// SOLICITAR un conector (status 'requested'). La configuración real con
-// credenciales (token de Glovo, etc.) se cablea al construir cada conector
-// (G1 para Glovo). Los botones reflejan eso sin prometer lo que aún no hace.
+// Patrón de diseño: tokens de color del sistema (sin hex salvo el color de marca
+// del fallback), cabecera con icono lucide, tarjetas rounded-xl border bg-card.
+//
+// Honestidad: LISTA el catálogo real (connector) y permite SOLICITAR (status
+// 'requested'). La activación con credenciales se cablea al construir cada conector.
 
 import { useEffect, useState } from 'react'
-import { Store, Plug, Loader2, Check } from 'lucide-react'
+import { Store, Loader2, Check } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useApp } from '@/context/AppContext'
 import {
@@ -21,6 +25,7 @@ import {
   listAccountConnectors,
   requestConnector,
 } from '@/modules/integrations/services/connectorService'
+import ConnectorAvatar from '@/modules/integrations/components/ConnectorAvatar'
 import type {
   Connector,
   AccountConnector,
@@ -82,7 +87,6 @@ export default function IntegrationsMarketplacePage() {
     return () => { cancelled = true }
   }, [activeAccountId])
 
-  // ¿Esta cuenta ya tiene una conexión (de cualquier estado) con este conector?
   function connectionFor(connectorId: string): AccountConnector | undefined {
     return connections.find(c => c.connectorId === connectorId)
   }
@@ -107,7 +111,7 @@ export default function IntegrationsMarketplacePage() {
     }
   }
 
-  // Agrupar conectores por categoría (orden estable por sort_order ya viene del service).
+  // Agrupar por categoría (orden estable por sort_order ya viene del service).
   const byCategory = new Map<ConnectorCategory, Connector[]>()
   for (const c of connectors) {
     const list = byCategory.get(c.category) ?? []
@@ -156,20 +160,20 @@ export default function IntegrationsMarketplacePage() {
                   return (
                     <div
                       key={connector.id}
-                      className="rounded-xl border border-border-default bg-card p-4 flex flex-col gap-3"
+                      className="rounded-xl border border-border-default bg-card p-4 flex flex-col gap-3 hover:shadow-sm transition-base"
                     >
-                      <div className="flex items-center gap-2">
-                        <span className="w-9 h-9 rounded-lg bg-page flex items-center justify-center shrink-0">
-                          <Plug size={18} className="text-accent" />
-                        </span>
+                      {/* Cabecera de tarjeta: logo + nombre + estado */}
+                      <div className="flex items-center gap-3">
+                        <ConnectorAvatar
+                          name={connector.name}
+                          code={connector.code}
+                          logoUrl={connector.logoUrl}
+                          size={48}
+                        />
                         <div className="min-w-0">
-                          <p className="text-sm font-medium text-text-primary truncate">{connector.name}</p>
-                          {isConnected && (
-                            <span className="text-[11px] text-success">Conectado</span>
-                          )}
-                          {isRequested && (
-                            <span className="text-[11px] text-warning">Solicitado</span>
-                          )}
+                          <p className="text-sm font-semibold text-text-primary truncate">{connector.name}</p>
+                          {isConnected && <span className="text-[11px] text-success">Conectado</span>}
+                          {isRequested && <span className="text-[11px] text-warning">Solicitado</span>}
                         </div>
                       </div>
 
@@ -205,7 +209,6 @@ export default function IntegrationsMarketplacePage() {
         </div>
       )}
 
-      {/* Honestidad: alcance de esta entrega */}
       <p className="text-xs text-text-secondary border-t border-border-default pt-3">
         El catálogo es real. La activación con credenciales (token de la plataforma, etc.)
         se completa al cablear cada conector. Solicitar una integración la deja pendiente de

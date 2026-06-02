@@ -2,14 +2,15 @@
 //
 // Índice de Folvy Connect: "Tus integraciones" — las conexiones de la cuenta
 // (account_connector) con su estado, cruzadas con el catálogo (connector) para
-// mostrar nombre/categoría.
+// mostrar nombre/logo.
 //
-// Patrón de diseño: idéntico a las páginas de Kitchen (tokens de color, cabecera
-// con icono lucide, tarjetas rounded-xl border bg-card, estados loading/error).
+// REDISEÑO (visual): cada conexión muestra el LOGO real de la plataforma
+// (ConnectorAvatar, con fallback a inicial+color de marca). Tokens del sistema,
+// cabecera con icono lucide, tarjetas rounded-xl border bg-card.
 //
-// Honestidad: esta primera entrega LISTA las conexiones reales y su estado. La
-// configuración/edición con credenciales y el pausar/reanudar se cablean al
-// construir cada conector. Si no hay conexiones, invita a ir al Marketplace.
+// Honestidad: LISTA las conexiones reales y su estado. La configuración/edición
+// con credenciales y el pausar/reanudar se cablean al construir cada conector.
+// Si no hay conexiones, invita a ir al Marketplace.
 
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -19,6 +20,7 @@ import {
   listConnectors,
   listAccountConnectors,
 } from '@/modules/integrations/services/connectorService'
+import ConnectorAvatar from '@/modules/integrations/components/ConnectorAvatar'
 import type {
   Connector,
   AccountConnector,
@@ -30,12 +32,12 @@ const STATUS_PRESENTATION: Record<
   AccountConnectorStatus,
   { label: string; tone: string; icon: React.ComponentType<{ size?: number; className?: string }> }
 > = {
-  available:  { label: 'Disponible',               tone: 'text-text-secondary', icon: Plug },
-  requested:  { label: 'Solicitada',               tone: 'text-warning',        icon: Clock },
-  connecting: { label: 'Conectando…',              tone: 'text-warning',        icon: Loader2 },
-  connected:  { label: 'Conectada',                tone: 'text-success',        icon: CheckCircle2 },
-  paused:     { label: 'En pausa',                 tone: 'text-text-secondary', icon: PauseCircle },
-  error:      { label: 'Error de conexión',        tone: 'text-danger',         icon: AlertTriangle },
+  available:  { label: 'Disponible',        tone: 'text-text-secondary', icon: Plug },
+  requested:  { label: 'Solicitada',        tone: 'text-warning',        icon: Clock },
+  connecting: { label: 'Conectando…',       tone: 'text-warning',        icon: Loader2 },
+  connected:  { label: 'Conectada',         tone: 'text-success',        icon: CheckCircle2 },
+  paused:     { label: 'En pausa',          tone: 'text-text-secondary', icon: PauseCircle },
+  error:      { label: 'Error de conexión', tone: 'text-danger',         icon: AlertTriangle },
 }
 
 export default function IntegrationsPage() {
@@ -70,7 +72,6 @@ export default function IntegrationsPage() {
     return () => { cancelled = true }
   }, [activeAccountId])
 
-  // Nombre del conector del catálogo para una conexión.
   function connectorOf(connectorId: string): Connector | undefined {
     return connectors.find(c => c.id === connectorId)
   }
@@ -133,9 +134,12 @@ export default function IntegrationsPage() {
                 key={conn.id}
                 className="flex items-center gap-3 p-4 rounded-xl border border-border-default bg-card"
               >
-                <span className="w-9 h-9 rounded-lg bg-page flex items-center justify-center shrink-0">
-                  <Plug size={18} className="text-accent" />
-                </span>
+                <ConnectorAvatar
+                  name={connector?.name ?? 'Conector'}
+                  code={connector?.code ?? ''}
+                  logoUrl={connector?.logoUrl ?? null}
+                  size={44}
+                />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-text-primary truncate">
                     {connector?.name ?? 'Conector'}
