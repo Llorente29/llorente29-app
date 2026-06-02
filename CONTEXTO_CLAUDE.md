@@ -46,77 +46,67 @@ Cadencia: en cada paso, antes de cerrarlo, Claude para SOLO y aplica el control 
 ---
 1. ESTADO VIVO ⟵ se regenera cada sesión
 
-**Última actualización: 2026-06-02 (sesión TÉCNICA + jornada de TARDE de decisión estratégica). DECISIÓN MAYOR: Folvy será INTEGRADOR DIRECTO de las plataformas de delivery (Glovo el primero). Detalle al final: §"SESIÓN 02/06 (TÉCNICA)" + §"SESIÓN 02/06 (TARDE — DECISIÓN INTEGRADOR DIRECTO)".**
+**Última actualización: 2026-06-02 (CIERRE de jornada completa). Hoy: decisión estratégica de INTEGRADOR DIRECTO + conector Glovo (diseñado, sembrado, ACCESO SOLICITADO a Glovo ticket INTSUPPO-1382) + módulo Folvy Connect TERMINADO (I2 pantallas + logos + D2 cifrado de credenciales con Vault, verificado end-to-end en producción). 23+ commits, build verde, 0 0, working tree limpio.**
 
-> **NOTA DE MANTENIMIENTO (vigente):** el fichero VERDADERO es `C:\dev\llorente29-app\CONTEXTO_CLAUDE.md` (versionado en git). La copia del knowledge puede ir por detrás. Al regenerar, partir SIEMPRE del repo.
+> **NOTA DE MANTENIMIENTO:** el fichero VERDADERO es `C:\dev\llorente29-app\CONTEXTO_CLAUDE.md` (git). Al regenerar, partir del repo.
 
 ### 1.0 — CORRECCIÓN DE DATO (vigente)
-El CEO es **Julio Gª Colón (García Colón)**, NO "Julio Gascón". Usar "Julio Gª Colón" en firmas, correos y documentos formales. Admin Google: `jgcolon@idasal.com`. Correo de partners/integraciones: `partners@folvy.app`.
+CEO: **Julio Gª Colón (García Colón)**, NO "Gascón". Admin Google: `jgcolon@idasal.com`. Correo partners/integraciones: `partners@folvy.app`.
 
-### 1.0.bis — DECISIÓN ESTRATÉGICA MAYOR (02/06 tarde) — NO PERDER
-**Folvy dejará de depender de integradores intermediarios (Last.app, HubRise, etc.) y construirá su PROPIA capa de integración DIRECTA con las plataformas de delivery.** Razones de Julio (las cuatro, todas de peso):
-1. **Coste:** un cliente que use Folvy no puede sostener además un Last.app caro (525€/mes). El intermediario estrangula la propuesta de valor.
-2. **Concepto 360:** si los pedidos viven en un tercero y Folvy solo lee, Folvy nunca es el sistema central. Debe ser el centro.
-3. **Control del flujo de datos:** el dato de pedidos es la materia prima de TODO Folvy (escandallos, economía, AvT, ingeniería de menús). Quien controla el grifo controla Folvy. Inaceptable cederlo.
-4. **Fidelización estructural:** si Folvy ES la integración, el cliente no se puede ir sin romper su operación de delivery. Pegamento sin esfuerzo (experiencia propia de Julio: cambiar de integrador que funciona es casi imposible).
-**Conclusión:** ningún intermediario (HubRise, KitchenHub, Otter, Deliverect) resuelve el punto 3 — todos son terceros que controlan el grifo. Solo la conexión DIRECTA lo resuelve. Y se ha confirmado que es VIABLE (Glovo y Uber tienen programa de partners de integración con staging, sin cobrar por la API). **Prioridad nº1 ahora: conector Glovo directo** (48% de las ventas de Llorente29, y el agujero que ningún intermediario cubría en España).
+### 1.0.bis — DECISIÓN ESTRATÉGICA MAYOR (02/06) — NO PERDER
+**Folvy es INTEGRADOR DIRECTO de las plataformas de delivery (Glovo primero), sin intermediarios.** Razones de Julio: (1) coste (Last 525€/mes estrangula la propuesta Folvy+cliente); (2) concepto 360 (Folvy es el centro); (3) control del flujo de datos (materia prima de todo Folvy — quien controla el grifo controla Folvy); (4) fidelización estructural (si Folvy ES la integración, el cliente no se va sin romper su operación). Ningún intermediario (HubRise/KitchenHub/Otter/Deliverect) resuelve el punto 3. Confirmado VIABLE: Glovo y Uber tienen programa de partners con staging, sin cobrar por la API.
 
-### 1.1 — Dónde estamos HOY
+### 1.1 — Dónde estamos HOY (estado construido)
 
-**CONSTRUIDO Y EN PRODUCCIÓN (9 commits hoy en `origin/main`, `0 0`, build verde, working tree limpio):**
-- **EP1 (Economía de Plataformas Capa A):** doc v2 (`b8f42f2`), tabla `brand_channel_rate`+RLS+service (`96655d4`,`723a395`), columna `sale.service_type`+webhook desplegado capturando `pickupType` (`bacbb70`,`507d3bf`).
-- **Módulo de Integraciones (I1 completo):** doc v1 (`a277e37`), tablas `connector`+`account_connector`+RLS+seed Last.app/Catcher (`f11098d`), tipos+`connectorService` en módulo nuevo `src/modules/integrations/` (`28180ad`).
-- **CONTEXTO** regenerado (`fbbb0af`).
+**MÓDULO DE INTEGRACIONES "Folvy Connect" — TERMINADO y en producción:**
+- **I1 (modelo):** tablas `connector` + `account_connector` + RLS + tipos + `connectorService`. Catálogo sembrado: glovo (sort 5), lastapp (10), catcher (20).
+- **I2 (pantallas):** módulo `src/modules/integrations/module.tsx` (id 'integrations', basePath 'integraciones', icono Cable, topBarOrder 5, gating manager) + línea en `moduleRegistry.ts` (SIN tocar App.tsx ni Shell — arquitectura modular: añadir módulo = añadir línea). Pantallas: `IntegrationsPage` (Tus integraciones), `IntegrationsMarketplacePage` (Marketplace, patrón lista+detalle), `ConnectorDetailPage` (configuración).
+- **Logos de marca:** bucket Storage `connector-logos` (público) con glovo/ubereats/justeat/catcher/lastapp.png (256×256, fondo blanco). `connector.logo_url` poblado (glovo/lastapp/catcher). Componente `ConnectorAvatar` (logo + fallback a inicial sobre color de marca). Procesados por Claude desde los originales de Julio.
+- **D2 (cifrado de credenciales con Vault) — COMPLETO y verificado end-to-end:**
+  - `account_connector.config jsonb` (campos NO sensibles: store_ids, auto_accept, verify_signature).
+  - Funciones wrapper `public.connector_secret_save/status/clear` + `connector_assert_manager` (SECURITY DEFINER, search_path public+vault, REVOKE a anon/authenticated, GRANT solo service_role). Migración `20260602T2200`.
+  - Edge Function `connector-credentials` (desplegada): valida JWT del usuario (saca user_id real), llama a los wrappers con service_role. Doble gating. Secreto NUNCA vuelve al front ni se loguea. Cada Edge Function necesita su `deno.json` con import map (`jsr:@supabase/supabase-js@^2`).
+  - `connectorCredentialsService.ts` (front, patrón functions.invoke tipado de accountsAdminService).
+  - **Verificado en prod:** save (token de prueba cifrado en `vault.secrets` como `connector:<uuid>`, solo referencia en `credentials_ref`), status, clear (borra el secreto de Vault de verdad → 0 secretos). Conexión de prueba borrada, todo limpio.
 
-**HALLAZGO que cambia prioridades:** Llorente29 hace **0% reparto propio** (dashboard: Uber 52%, Glovo 48%, JustEat 2%, reparto propio 0€). → El mix es 100% `platform_delivery`. La **RPC de EP1 puede cerrarse ENTERA y real AHORA** sin esperar a Catcher (el reparto propio, que necesita coste de Catcher, hoy no existe en este cliente).
+**CONECTOR GLOVO — preparado, esperando acceso de Glovo:**
+- Diseño completo (`docs/folvy_conector_glovo_diseno.md`) con 8 hallazgos de mercado y 5 decisiones cerradas (D1 modificadores tras G2; D2 cifrado Vault; D3 auto-aceptar por defecto configurable; D4 desglose a raw_products primero; D5 verificar firma Glovo-Signature desde G1).
+- Sembrado en catálogo (`connector` glovo, config_schema: shared_token/store_ids/auto_accept/verify_signature).
+- **ACCESO SOLICITADO:** email a `partner.integrationseu@glovoapp.com` enviado → Glovo creó **ticket INTSUPPO-1382** ("We're on it", en cola). Acceso vía Glovo Internal Service Desk (Jira). Plazo ref. 3-5 días lab.
+- API oficial: `definition.yaml` (OpenAPI 3.0). Stage `stageapi.glovoapp.com`. Auth: shared token + firma Glovo-Signature opcional. Webhooks dispatched/cancelled + ciclo de vida (accept/ready/out_for_delivery/picked_up) + push de menú + LAAS. Endpoint sólido decidido: `api.folvy.app/glovo/orders/*` (dominio propio, no Supabase directo — montar en G1).
+- Dato superior a Last para EP1: order_type nativo, detailed_fees, glovo_discounts vs restaurant_discounts separados.
 
-### 1.1.HALLAZGOS — Decisiones técnicas previas (vigentes)
-- **P1 (base comisión) = PVP CON IVA**, probado al céntimo. ⚠️ La RPC `menu_item_economics` HOY aplica el % sobre `price` (sin IVA) → subestima comisión de platos propios. Corregir en la RPC.
-- **P2 = en cedidas las comisiones de plataforma las asume el DUEÑO de la marca** (no Llorente29). `brand_channel_rate` NO aplica a cedidas.
-- **Cloudtown (cedida):** % sobre ventas netas sin IVA (hoy 25%, EDITABLE) + reembolso de materiales. Ningún % es fijo.
-- **`delivery_fee` NO neutro en reparto propio** (margen = fee − coste repartidor). Neutro SOLO en `platform_delivery`.
-
-### 1.2 — INTEGRADORES: estado de la evaluación (02/06 tarde)
-- **Last.app (actual):** 525€/mes (3 locales × 175€, factura F202607978). Tiene Glovo+Uber+JustEat en España HOY. Problema: caro + intermediario + dueño del dato. **A sustituir por integración directa (no por otro intermediario).**
-- **HubRise:** middleware puro, white-label, barato (~105€/mes 3 locales + setup 450€ negociado con descuento 50% + cargo Glovo pendiente). **Incompatible con Last (sustituye, no añade). BLOQUEO: Glovo-España NO está activo en HubRise y es incierto** (Janaina no compromete fecha; el modelo económico de Glovo no le cierra). Correo enviado pidiendo abaratar setup + partner. Contacto: Janaina Wittner, partnerships. **Nunca serás 100% autónomo** (alta JustEat/Glovo la hace HubRise con la plataforma).
-- **KitchenHub:** modelo IDEAL (API marca blanca para revendedores, pay-per-location) pero **es USA — NO tiene Glovo ni JustEat ni ninguna plataforma europea.** Descartado para España hoy.
-- **Otter:** producto final (compite con Folvy), foco USA. Descartado.
-- **Deliverect:** tiene Glovo-España funcionando, pero compite con Folvy (suite propia) y es caro. Descartado por Julio.
-- **CONCLUSIÓN:** ningún intermediario cubre Glovo-España sin competir con Folvy o sin ceder el dato → refuerza ir DIRECTO.
-
-### 1.2.bis — GLOVO API DIRECTA (confirmada, prioridad nº1)
-- **Dos fuentes de doc:** (a) Appsmart/onlineservice.io (middleware oficial subcontratado por Glovo), (b) **API oficial `glovoapp.com` (OpenAPI 3.0, fichero `definition.yaml`, 6336 líneas) — esta es la buena.**
-- **Staging real:** `stageapi.glovoapp.com` / producción `api.glovoapp.com`.
-- **Acceso:** email a `partner.integrationseu@glovoapp.com` dando endpoints de webhook (dispatched=obligatorio, cancelled=opcional) + países. Te dan stage webhook + acceso Jira soporte + tienda staging. Modelo "POS Client / Plugin".
-- **Auth:** header `Authorization: <token>` (shared token único) entrante y saliente + opcional verificación firma `Glovo-Signature` (SHA256 RSA base64). Reintentos backoff máx 3 → procesar IDEMPOTENTE, deduplicar order_id.
-- **Endpoints recepción:** webhooks `Order Dispatched` + `Order Cancelled`.
-- **Ciclo de vida pedido:** `accept`, `ready_for_pickup`, `out_for_delivery`, `customer_picked_up`, `Update order status`, `Modify order products`, `Modify order price`.
-- **Menú (push bidireccional):** `Upload menu`, `Verify menu upload`, `Modify products`, `Modify attributes`, `Bulk update`, `Validate menu`, `Close temporarily` (saturación). Modelo: super_categories→categories→sections→products→attribute_groups→attributes. Límite 5 updates/día/tienda. Imágenes 1000×1000 JPG <1MB HTTPS.
-- **DATO PARA EP1 (mejor que Last):** el payload de pedido trae `order_type` (pickup=Glovo / delivery=propio) = service_type NATIVO; `detailed_fees` (DeliveryFee/ServiceFee/MinimumBasketSurcharge); `glovo_discounts` vs `restaurant_discounts` (SEPARA quién paga cada descuento); `products_total` vs `payment_total`. → Capa B/C servida en bandeja.
-- **LAAS (Logistics as a Service):** Glovo alquila sus repartidores (sandbox `laaspartners.testglovo.com`, ApiKey/ApiSecret). Alternativa/complemento a Catcher para reparto propio.
-- **AVISO:** no hay sandbox pleno para notificaciones — tiendas de test solo prueban menú; recepción de pedidos se valida activando una tienda REAL (no afecta actividad del restaurante).
+### 1.2 — INTEGRADORES (evaluación cerrada)
+- **Last.app:** 525€/mes, tiene Glovo+Uber+JustEat-España hoy. A sustituir por integración directa.
+- **HubRise:** middleware white-label barato, pero Glovo-España incierto + sigue siendo intermediario. Rebajado a segunda fila (puente o clientes sin Glovo). Respuesta de Janaina ya recibida y registrada.
+- **KitchenHub** (USA, sin plataformas europeas), **Otter** (compite), **Deliverect** (compite + caro): descartados.
 
 ### 1.3 — DEUDA VIVA / FRENTES (por prioridad)
-1. **CONECTOR GLOVO DIRECTO (prioridad nº1).** Diseñar doc (benchmark mapeo Glovo↔recipe_item/menu_item) → G1 recepción pedidos (Edge Function `glovo-webhook`→`sale` con service_type/fees/descuentos) → G2 push menú → G3 ciclo de estados → G4 LAAS. Vive en el módulo de Integraciones (I1). Empezar por pedir acceso a `partner.integrationseu@glovoapp.com`.
-2. **RPC `menu_item_economics`** — AHORA cerrable entera y real (Llorente29 = 100% plataforma, 0% reparto propio). Decidido: 1 fila/plato + columnas reparto, comisión sobre `price_with_vat`, ponderación por mix con fallback. Verificar desde la app (SECURITY DEFINER).
-3. **I2 — pantallas del módulo de Integraciones** (Tus integraciones + Marketplace + detalle + bandeja solicitudes). ⚠️ Puede tocar sidebar/navegación → ver registro de módulos; NO tocar `App.tsx` sin permiso.
-4. **Pantalla "Canales"** (comisiones por marca×canal×reparto en `brand_channel_rate`).
-5. **Catcher** (I3 del módulo): conector `catcher-webhook`, captura `transportPrice`, cruce por `externalId`. Espera credenciales (en camino). Sandbox `staging-api.catcher.es` confirmado.
-6. **HubRise:** a la espera de respuesta de Janaina (abaratar setup + partner). Decisión: integrar/probar en cuenta test "Folvy" SIN tocar Llorente29; migrar solo si/cuando Glovo-España. **Pero con la decisión de integrador directo, HubRise pierde prioridad** (puede quedar como opción para clientes sin Glovo o como puente, no como núcleo).
-7. **Seguridad:** cifrado de credenciales (`credentials_ref`) Vault/secret — NUNCA en claro. Rotación service_role/webhook tokens.
-8. Code-splitting (~672KB gzip), abstracción proveedor IA, PITR, 34 platos needs_review.
+1. **CONECTOR GLOVO G1** (recepción real): BLOQUEADO esperando acceso al stage (ticket INTSUPPO-1382). Al llegar: Edge Function `glovo-webhook` → `sale` (service_type/fees/descuentos) → dedup por order_id → multi-tenant por store_id. + montar dominio `api.folvy.app/glovo/*`. + leer el secreto de Vault (vía D2) para verificar el token.
+2. **RPC `menu_item_economics`** — cerrable entera AHORA (Llorente29 = 100% platform_delivery, 0% reparto propio). Corregir: comisión sobre `price_with_vat` (hoy usa `price` sin IVA). 1 fila/plato (no romper kitchenDashboard/menuEngineering). Verificar desde la app (SECURITY DEFINER).
+3. **G2 push catálogo Glovo** (tras G1): mapear menu_item→árbol Glovo. H1 (tras upload, re-enviar disponibilidad) + H2 (IDs exactos en external_codes). Dependencia: modelo de MODIFICADORES (no existe aún).
+4. **Catcher I3**: Edge Function `catcher-webhook`, captura transportPrice, cruce externalId. Espera credenciales. Sandbox `staging-api.catcher.es`.
+5. **Bandeja de solicitudes superadmin** (conectores request/managed_by superadmin).
+6. **Pantalla "Canales"** (comisiones brand_channel_rate por marca×canal×reparto).
+7. **APUNTE menor (pulir en G1):** el desplegable `auto_accept` de ConnectorDetailPage muestra "Sí" por defecto pero guardó `false` en la prueba → alinear el valor visible inicial con el que se persiste.
+8. Seguridad: rotación service_role/webhook tokens. Code-splitting (~677KB gzip). 34 platos needs_review.
 
-**Notas técnicas:** `npx supabase gen types` → SIEMPRE `--yes`. `lastapp_webhook_log` sin `created_at`. `source` ventas Last = `'lastapp'`.
+### 1.3.HALLAZGOS técnicos (vigentes)
+- **Añadir módulo al Shell = añadir línea en `moduleRegistry.ts`** + crear su `module.tsx`. CERO cambios en App.tsx/Shell.tsx (arquitectura modular G-8).
+- **Edge Functions:** cada una necesita su `deno.json` con `{"imports":{"@supabase/supabase-js":"jsr:@supabase/supabase-js@^2"}}`. Deploy: `npx supabase functions deploy <nombre>` (CLI enlazado).
+- **`npx supabase gen types ... > database.ts`** en PowerShell genera UTF-16 → git lo ve binario y rompe build. Reconvertir a UTF-8 sin BOM: `[System.IO.File]::WriteAllText(path, (Get-Content -Raw path), (New-Object System.Text.UTF8Encoding $false))`. Y siempre `--yes`.
+- **Supabase Vault** (v0.3.1, activo): `vault.create_secret(secret,name,desc)` / `vault.update_secret(id,...)` / `vault.decrypted_secrets` (vista). NUNCA INSERT crudo en vault.secrets (se loguea). Acceso solo server-side (service_role) vía wrappers en `public`.
+- **Roles:** `user_profiles` (user_id, account_id, role, active). admin/manager = gestión. Gating de credenciales valida rol en el wrapper con p_user_id (no auth.uid(), porque la Edge Function corre con service_role).
+- **P1 (base comisión) = PVP CON IVA.** La RPC `menu_item_economics` HOY usa `price` (sin IVA) → corregir.
 
 ### 1.4 — Próximos pasos priorizados
-1. **Conector Glovo directo** (frente mayor, prioridad nº1): pedir acceso API + diseñar doc + construir por fases. Resuelve los 4 problemas estratégicos de Julio.
-2. **RPC EP1** — cerrable ya (100% plataforma). Enciende el diferenciador.
-3. I2 pantallas Integraciones / pantalla Canales.
-4. Catcher (al llegar credenciales) + HubRise (al responder Janaina, prioridad rebajada).
-5. **Producción Llorente29 objetivo: 7 sept 2026.**
+1. **Glovo G1** al recibir acceso (ticket INTSUPPO-1382). Es la prioridad nº1 en cuanto se desbloquee.
+2. **RPC EP1** — cerrable ya, enciende el diferenciador del margen real.
+3. Catcher I3 (al llegar credenciales). Pantalla Canales. Bandeja superadmin.
+4. **Producción Llorente29 objetivo: 7 sept 2026.**
 
 ### 1.11 — NOTA HISTÓRICA
-> **27–28/05**: CSV, conector Last + backfill, motor de coste al céntimo. **31/05**: R1 responsive parcial, Compras. **01/06**: portal trabajador, dashboard Kitchen, Economía de Plataformas, seguridad. **02/06 (marca)**: web folvy.app, correo OVH, HubRise primer contacto, nombre CEO. **02/06 (técnica)**: EP1 + módulo Integraciones I1 + Catcher API. **02/06 (tarde)**: evaluación integradores (HubRise/KitchenHub/Otter/Deliverect), **DECISIÓN: Folvy integrador directo**, API Glovo confirmada (definition.yaml), API Catcher detalle.
+> **02/06 (técnica AM):** EP1 + módulo Integraciones I1 + Catcher API. **02/06 (tarde):** evaluación integradores, DECISIÓN integrador directo, API Glovo (definition.yaml), correo Glovo enviado. **02/06 (noche/cierre):** módulo Folvy Connect I2 (pantallas) + logos de marca + seed Glovo + D2 completo (Vault + Edge Function connector-credentials + pantalla configuración, verificado end-to-end) + Glovo respondió (ticket INTSUPPO-1382 en cola).
 
 ---
 2. PROYECTO Y EQUIPO
@@ -1562,3 +1552,30 @@ API oficial `glovoapp.com` (definition.yaml, OpenAPI 3.0). Staging `stageapi.glo
 Diseñar doc primero (mapeo Glovo↔recipe_item/menu_item). Fases: G1 recepción (glovo-webhook→sale), G2 push menú, G3 ciclo estados, G4 LAAS. Vive en módulo Integraciones (I1 ya construido). Primer paso real: pedir acceso a Glovo por email.
 
 DATO CLAVE: Llorente29 = 0% reparto propio hoy → RPC EP1 cerrable entera ya (100% platform_delivery), sin esperar a Catcher.
+
+
+---
+
+## SESIÓN 02/06/2026 (NOCHE — CIERRE: Módulo Folvy Connect completo + D2 Vault)
+
+> Continuación de la jornada. Foco: terminar el módulo de Integraciones y avanzar el conector Glovo todo lo posible sin el acceso (que se solicitó y entró en cola: ticket INTSUPPO-1382). Resumen vivo en §1.1.
+
+### Lo construido (commits del tramo)
+- **Seed conector Glovo** en catálogo (`20260602T0300`).
+- **Módulo Folvy Connect (I2):** module.tsx + moduleRegistry (línea, sin tocar App.tsx) + IntegrationsPage + IntegrationsMarketplacePage. Verificado en producción (aparece en TopBar, lista los 3 conectores).
+- **Logos de marca:** bucket `connector-logos`, ConnectorAvatar (logo + fallback color/inicial). Logos procesados por Claude (256×256 fondo blanco) desde los originales de Julio. `connector.logo_url` poblado.
+- **D2 cifrado de credenciales (completo):**
+  - D2.1: columna `account_connector.config jsonb` + tipos regenerados.
+  - D2.2a: funciones wrapper Vault (`20260602T2200`), SECURITY DEFINER, solo service_role.
+  - D2.2b: Edge Function `connector-credentials` desplegada (valida JWT + wrappers, doble gating).
+  - D2.3: ConnectorDetailPage (formulario dinámico desde config_schema) + connectorCredentialsService + enganche en Marketplace.
+  - **Verificado end-to-end en prod:** save (token cifrado en Vault), status, clear (borra de Vault). Conexión de prueba creada y luego borrada → todo limpio (0 conexiones, 0 secretos).
+
+### Glovo respondió
+Email a partner.integrationseu@glovoapp.com → Glovo creó ticket **INTSUPPO-1382** vía su Internal Service Desk (Jira). "We're on it" (en cola). Esto desbloqueará G1 cuando entreguen credenciales de stage.
+
+### Aprendizajes técnicos del tramo
+Ver §1.3.HALLAZGOS: arquitectura modular del Shell (línea en registry), deno.json por Edge Function, gen types UTF-16→UTF-8, patrón Vault (wrappers en public, service_role, nunca INSERT crudo), gating de rol con p_user_id en el wrapper.
+
+### Pendiente declarado
+G1 Glovo (espera acceso), RPC EP1 (cerrable ya), Catcher I3 (espera credenciales), apunte del auto_accept por defecto, pantalla Canales, bandeja superadmin.
