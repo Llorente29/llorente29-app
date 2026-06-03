@@ -21,6 +21,7 @@ import {
   type PurchaseOrderStatus,
 } from '@/modules/supply/services/purchaseOrderService'
 import { listSuppliers } from '@/modules/kitchen/services/purchaseFormatService'
+import SupplyOrderDetailPage from '@/modules/supply/pages/SupplyOrderDetailPage'
 import type { Supplier } from '@/types/kitchen'
 
 const STATUS_LABEL: Record<PurchaseOrderStatus, string> = {
@@ -64,6 +65,7 @@ export default function SupplyOrdersPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [reloadTick, setReloadTick] = useState(0)
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null)
 
   useEffect(() => {
     if (accountsLoading) return
@@ -119,6 +121,19 @@ export default function SupplyOrdersPage() {
   function handleCreated() {
     setCreateOpen(false)
     setReloadTick(t => t + 1)
+  }
+
+  // ── Vista DETALLE: el pedido seleccionado ──
+  if (selectedOrderId) {
+    return (
+      <SupplyOrderDetailPage
+        orderId={selectedOrderId}
+        onBack={() => {
+          setSelectedOrderId(null)
+          setReloadTick(t => t + 1)
+        }}
+      />
+    )
   }
 
   return (
@@ -183,6 +198,7 @@ export default function SupplyOrdersPage() {
               <button
                 key={o.id}
                 type="button"
+                onClick={() => setSelectedOrderId(o.id)}
                 className="w-full text-left p-3 rounded-lg border border-border-default bg-card hover:border-accent/40 transition-base"
               >
                 <div className="flex items-center justify-between gap-2">
@@ -218,7 +234,7 @@ export default function SupplyOrdersPage() {
               </thead>
               <tbody>
                 {visibleOrders.map(o => (
-                  <tr key={o.id} className="border-t border-border-default hover:bg-page/50 cursor-pointer transition-base">
+                  <tr key={o.id} onClick={() => setSelectedOrderId(o.id)} className="border-t border-border-default hover:bg-page/50 cursor-pointer transition-base">
                     <td className="px-3 py-2 text-text-primary">{o.code ?? '—'}</td>
                     <td className="px-3 py-2 text-text-primary">{o.supplierId ? supplierNameById.get(o.supplierId) ?? '—' : '—'}</td>
                     <td className="px-3 py-2 text-text-secondary">{formatDate(o.orderDate)}</td>
