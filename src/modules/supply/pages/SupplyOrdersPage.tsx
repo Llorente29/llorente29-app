@@ -1,28 +1,27 @@
 // src/modules/supply/pages/SupplyOrdersPage.tsx
 //
-// Lista de PEDIDOS (purchase_order) del módulo Folvy Supply — C1 del ciclo de
-// compra. Patrón calcado de KitchenItemsPage: useApp() (actor) + useActiveAccount()
-// (cuenta activa) + useIsMobile(); estados load/error; tabla en escritorio,
-// tarjetas apiladas en móvil. Estilo con tokens del proyecto.
+// Lista de PEDIDOS (purchase_order) del módulo Folvy Supply. Tres vistas por
+// estado (patrón Kitchen, sin react-router):
+//   - lista (por defecto)
+//   - builder: "Nuevo pedido" → SupplyOrderBuilder (pedido sobre catálogo del proveedor)
+//   - detalle: pinchar una fila → SupplyOrderDetailPage
 //
-// C1 usable por sí solo: crear pedido a mano (alta mínima) + listar. El detalle
-// del pedido (líneas, enviar, recibir) llega en C1.x / C2. Los avisos IA
-// (sugerir cantidades, sobrepedido, proveedor preferente) se enchufan después.
+// Rediseño 03/06: el alta ya NO es un modal mínimo — es el builder sobre el
+// catálogo del proveedor (flujo A). Tabla en escritorio, tarjetas en móvil.
 
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, Truck, X, ChevronRight, Search } from 'lucide-react'
-import { useApp } from '@/context/AppContext'
+import { Plus, Truck, ChevronRight, Search } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useIsMobile } from '@/shell/useIsMobile'
 import {
   listPurchaseOrders,
-  createPurchaseOrder,
   type PurchaseOrder,
   type PurchaseOrderStatus,
 } from '@/modules/supply/services/purchaseOrderService'
 import { listSuppliers } from '@/modules/kitchen/services/purchaseFormatService'
-import SupplyOrderDetailPage from '@/modules/supply/pages/SupplyOrderDetailPage'
 import type { Supplier } from '@/types/kitchen'
+import SupplyOrderDetailPage from '@/modules/supply/pages/SupplyOrderDetailPage'
+import SupplyOrderBuilder from '@/modules/supply/pages/SupplyOrderBuilder'
 
 const STATUS_LABEL: Record<PurchaseOrderStatus, string> = {
   borrador: 'Borrador',
@@ -53,8 +52,9 @@ function formatEur(value: number | null): string {
   return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(value)
 }
 
+type View = 'list' | 'builder'
+
 export default function SupplyOrdersPage() {
-  const { userProfile, authUserId } = useApp()
   const { activeAccountId, accountsLoading } = useActiveAccount()
   const isMobile = useIsMobile()
 
@@ -62,43 +62,33 @@ export default function SupplyOrdersPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [createOpen, setCreateOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [reloadTick, setReloadTick] = useState(0)
+  const [view, setView] = useState<View>('list')
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null)
 
   useEffect(() => {
     if (accountsLoading) return
     if (!activeAccountId) {
-      setOrders([])
-      setSuppliers([])
-      setLoading(false)
-      return
+      setOrders([]); setSuppliers([]); setLoading(false); return
     }
-
     let cancelled = false
     setLoading(true)
     setError(null)
-
     Promise.all([
       listPurchaseOrders({ accountId: activeAccountId }),
       listSuppliers(activeAccountId),
     ])
       .then(([rows, sups]) => {
         if (cancelled) return
-        setOrders(rows)
-        setSuppliers(sups)
+        setOrders(rows); setSuppliers(sups)
       })
       .catch((err: unknown) => {
         if (cancelled) return
         setError(err instanceof Error ? err.message : 'Error desconocido')
-        setOrders([])
-        setSuppliers([])
+        setOrders([]); setSuppliers([])
       })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-
+      .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [activeAccountId, accountsLoading, reloadTick])
 
@@ -118,9 +108,18 @@ export default function SupplyOrdersPage() {
     })
   }, [orders, search, supplierNameById])
 
-  function handleCreated() {
-    setCreateOpen(false)
-    setReloadTick(t => t + 1)
+  // ── Vista BUILDER: nuevo pedido sobre el catálogo del proveedor ──
+  if (view === 'builder') {
+    return (
+      <SupplyOrderBuilder
+        onBack={() => setView('list')}
+        onSaved={(orderId) => {
+          setView('list')
+          setReloadTick(t => t + 1)
+          setSelectedOrderId(orderId)
+        }}
+      />
+    )
   }
 
   // ── Vista DETALLE: el pedido seleccionado ──
@@ -136,9 +135,9 @@ export default function SupplyOrdersPage() {
     )
   }
 
+  // ── Vista LISTA ──
   return (
     <div className="space-y-4">
-      {/* Cabecera */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-xl font-display font-medium text-text-primary">Pedidos</h2>
@@ -148,7 +147,7 @@ export default function SupplyOrdersPage() {
         </div>
         <button
           type="button"
-          onClick={() => setCreateOpen(true)}
+          onClick={() => setView('builder')}
           disabled={!activeAccountId}
           className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base"
         >
@@ -157,7 +156,6 @@ export default function SupplyOrdersPage() {
         </button>
       </div>
 
-      {/* Buscador */}
       {!loading && !error && orders.length > 0 && (
         <div className="relative max-w-sm">
           <Search size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-secondary" />
@@ -171,15 +169,11 @@ export default function SupplyOrdersPage() {
         </div>
       )}
 
-      {/* Estados */}
       {loading && <p className="text-sm text-text-secondary">Cargando pedidos…</p>}
       {error && (
-        <div className="p-3 rounded-md bg-danger-bg text-danger border border-danger/20 text-sm">
-          {error}
-        </div>
+        <div className="p-3 rounded-md bg-danger-bg text-danger border border-danger/20 text-sm">{error}</div>
       )}
 
-      {/* Vacío */}
       {!loading && !error && orders.length === 0 && (
         <div className="p-8 rounded-lg border border-dashed border-border-default text-center">
           <Truck size={28} className="mx-auto text-text-secondary mb-2" />
@@ -190,7 +184,6 @@ export default function SupplyOrdersPage() {
         </div>
       )}
 
-      {/* Lista — escritorio: tabla; móvil: tarjetas */}
       {!loading && !error && visibleOrders.length > 0 && (
         isMobile ? (
           <div className="space-y-2">
@@ -202,9 +195,7 @@ export default function SupplyOrdersPage() {
                 className="w-full text-left p-3 rounded-lg border border-border-default bg-card hover:border-accent/40 transition-base"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-medium text-text-primary truncate">
-                    {o.code ?? 'Pedido sin código'}
-                  </span>
+                  <span className="font-medium text-text-primary truncate">{o.code ?? 'Pedido sin código'}</span>
                   <span className={`shrink-0 text-[11px] px-1.5 py-0.5 rounded border ${STATUS_CLASS[o.status]}`}>
                     {STATUS_LABEL[o.status]}
                   </span>
@@ -253,17 +244,6 @@ export default function SupplyOrdersPage() {
           </div>
         )
       )}
-
-      {createOpen && activeAccountId && (
-        <OrderCreateModal
-          accountId={activeAccountId}
-          suppliers={suppliers}
-          actorId={userProfile?.id ?? authUserId ?? null}
-          actorName={userProfile?.displayName ?? null}
-          onClose={() => setCreateOpen(false)}
-          onCreated={handleCreated}
-        />
-      )}
     </div>
   )
 }
@@ -273,154 +253,6 @@ function Field({ label, value }: { label: string; value: string }) {
     <div className="min-w-0">
       <p className="text-[11px] text-text-secondary">{label}</p>
       <p className="text-sm text-text-primary truncate">{value}</p>
-    </div>
-  )
-}
-
-// ─────────────────────────────────────────────────────────────────────
-// Modal de alta mínima de pedido: proveedor + fecha esperada + nota.
-// Crea la cabecera en estado 'borrador', origin 'manual'. Las líneas se
-// añaden en el detalle (C1.x). Tras crear, recarga la lista.
-// ─────────────────────────────────────────────────────────────────────
-
-interface OrderCreateModalProps {
-  accountId: string
-  suppliers: Supplier[]
-  actorId: string | null
-  actorName: string | null
-  onClose: () => void
-  onCreated: () => void
-}
-
-function OrderCreateModal({
-  accountId, suppliers, actorId, actorName, onClose, onCreated,
-}: OrderCreateModalProps) {
-  const [supplierId, setSupplierId] = useState<string>('')
-  const [expectedDate, setExpectedDate] = useState<string>('')
-  const [notes, setNotes] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  async function handleSubmit() {
-    setSubmitting(true)
-    setError(null)
-    try {
-      await createPurchaseOrder({
-        accountId,
-        supplierId: supplierId || null,
-        expectedDate: expectedDate || null,
-        notes: notes.trim() || null,
-        status: 'borrador',
-        origin: 'manual',
-        createdBy: actorId,
-        createdByName: actorName,
-      })
-      onCreated()
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Error desconocido')
-      setSubmitting(false)
-    }
-  }
-
-  function onKeyDown(e: React.KeyboardEvent) {
-    if (e.key === 'Escape' && !submitting) onClose()
-  }
-
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="order-create-title"
-      onKeyDown={onKeyDown}
-      className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-0 sm:p-4"
-      onClick={onClose}
-    >
-      <div
-        className="bg-card w-full sm:max-w-md max-h-[95vh] sm:max-h-[90vh] rounded-t-xl sm:rounded-xl shadow-xl flex flex-col"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border-default">
-          <h3 id="order-create-title" className="text-base font-medium text-text-primary">
-            Nuevo pedido
-          </h3>
-          <button
-            type="button"
-            aria-label="Cerrar"
-            onClick={onClose}
-            disabled={submitting}
-            className="text-text-secondary hover:text-text-primary transition-base disabled:opacity-50"
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        <div className="px-4 py-4 space-y-3 overflow-y-auto">
-          <div>
-            <label className="block text-xs font-medium text-text-secondary mb-1">Proveedor</label>
-            <select
-              value={supplierId}
-              onChange={e => setSupplierId(e.target.value)}
-              disabled={submitting}
-              className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
-            >
-              <option value="">— Sin proveedor (lo eliges luego) —</option>
-              {suppliers.map(s => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-text-secondary mb-1">
-              Fecha de entrega esperada
-            </label>
-            <input
-              type="date"
-              value={expectedDate}
-              onChange={e => setExpectedDate(e.target.value)}
-              disabled={submitting}
-              className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-text-secondary mb-1">Nota (opcional)</label>
-            <textarea
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              disabled={submitting}
-              rows={2}
-              placeholder="Ej: entrega por la mañana"
-              className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50 resize-none"
-            />
-          </div>
-
-          {error && (
-            <div className="p-2 rounded-md bg-danger-bg text-danger border border-danger/20 text-xs">
-              {error}
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-border-default">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={submitting}
-            className="px-3 py-1.5 text-sm rounded-md text-text-secondary hover:bg-page transition-base disabled:opacity-50"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={submitting}
-            className="px-3 py-1.5 text-sm rounded-md font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base"
-          >
-            {submitting ? 'Creando…' : 'Crear pedido'}
-          </button>
-        </div>
-      </div>
     </div>
   )
 }
