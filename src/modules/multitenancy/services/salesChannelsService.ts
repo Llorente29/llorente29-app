@@ -18,6 +18,12 @@
 //   - No tiene logoUrl, notes, createdBy, createdByName (la tabla no los tiene)
 //   - channelType en vez de ownershipType (5 valores en vez de 2)
 //   - Tabla `sales_channel` (no `sales_channels`, sin la "s" final)
+//
+// NOTA DEUDA 0 (2026-06-03): la comisión NO vive en sales_channel. Se eliminó
+// sales_channel.default_commission_pct (era un fallback comodín que inventaba
+// comisión cuando no había tarifa configurada). La comisión vive ÚNICAMENTE
+// en brand_channel_rate, por marca×canal×tipo de servicio. Ver
+// brandChannelRateService.ts.
 
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
 import { slugify } from '../utils/slug'
@@ -44,7 +50,6 @@ export function rowToSalesChannel(row: RowSalesChannel): SalesChannel {
     name: row.name,
     slug: row.slug,
     channelType: row.channel_type as SalesChannelType,
-    defaultCommissionPct: row.default_commission_pct,
     color: row.color,
     isActive: row.is_active,
     archivedAt: row.archived_at,
@@ -61,7 +66,6 @@ function salesChannelInsertToRow(
     name: input.name,
     slug: input.slug,
     channel_type: input.channelType ?? 'other',
-    default_commission_pct: input.defaultCommissionPct ?? null,
     color: input.color ?? null,
     is_active: input.isActive ?? true,
   }
@@ -74,9 +78,6 @@ function salesChannelUpdateToRow(
   if (patch.name !== undefined) row.name = patch.name
   if (patch.slug !== undefined) row.slug = patch.slug
   if (patch.channelType !== undefined) row.channel_type = patch.channelType
-  if (patch.defaultCommissionPct !== undefined) {
-    row.default_commission_pct = patch.defaultCommissionPct
-  }
   if (patch.color !== undefined) row.color = patch.color
   if (patch.isActive !== undefined) row.is_active = patch.isActive
   if (patch.archivedAt !== undefined) row.archived_at = patch.archivedAt

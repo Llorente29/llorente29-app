@@ -2472,7 +2472,6 @@ export type Database = {
           account_id: string
           archived_at: string | null
           color: string | null
-          commission_pct: number | null
           created_at: string
           created_by: string | null
           created_by_name: string | null
@@ -2489,7 +2488,6 @@ export type Database = {
           account_id: string
           archived_at?: string | null
           color?: string | null
-          commission_pct?: number | null
           created_at?: string
           created_by?: string | null
           created_by_name?: string | null
@@ -2506,7 +2504,6 @@ export type Database = {
           account_id?: string
           archived_at?: string | null
           color?: string | null
-          commission_pct?: number | null
           created_at?: string
           created_by?: string | null
           created_by_name?: string | null
@@ -2542,8 +2539,6 @@ export type Database = {
           archived_at: string | null
           brand_id: string
           channel_id: string
-          commission_fixed: number | null
-          commission_pct: number | null
           created_at: string
           created_by: string | null
           created_by_name: string | null
@@ -2556,8 +2551,6 @@ export type Database = {
           archived_at?: string | null
           brand_id: string
           channel_id: string
-          commission_fixed?: number | null
-          commission_pct?: number | null
           created_at?: string
           created_by?: string | null
           created_by_name?: string | null
@@ -2570,8 +2563,6 @@ export type Database = {
           archived_at?: string | null
           brand_id?: string
           channel_id?: string
-          commission_fixed?: number | null
-          commission_pct?: number | null
           created_at?: string
           created_by?: string | null
           created_by_name?: string | null
@@ -6479,7 +6470,6 @@ export type Database = {
           channel_type: string
           color: string | null
           created_at: string
-          default_commission_pct: number | null
           id: string
           is_active: boolean
           name: string
@@ -6492,7 +6482,6 @@ export type Database = {
           channel_type?: string
           color?: string | null
           created_at?: string
-          default_commission_pct?: number | null
           id?: string
           is_active?: boolean
           name: string
@@ -6505,7 +6494,6 @@ export type Database = {
           channel_type?: string
           color?: string | null
           created_at?: string
-          default_commission_pct?: number | null
           id?: string
           is_active?: boolean
           name?: string
@@ -7641,6 +7629,27 @@ export type Database = {
           propagated_lines: number
         }[]
       }
+      connector_assert_manager: {
+        Args: { p_account_connector_id: string; p_user_id: string }
+        Returns: string
+      }
+      connector_secret_clear: {
+        Args: { p_account_connector_id: string; p_user_id: string }
+        Returns: undefined
+      }
+      connector_secret_save: {
+        Args: {
+          p_account_connector_id: string
+          p_config?: Json
+          p_secret_json: string
+          p_user_id: string
+        }
+        Returns: undefined
+      }
+      connector_secret_status: {
+        Args: { p_account_connector_id: string; p_user_id: string }
+        Returns: boolean
+      }
       create_account_tx: {
         Args: {
           p_account_name: string
@@ -7783,7 +7792,7 @@ export type Database = {
         }[]
       }
       menu_item_economics: {
-        Args: { p_brand_id: string }
+        Args: { p_brand_id: string; p_service_type?: string }
         Returns: {
           channel_id: string
           channel_name: string

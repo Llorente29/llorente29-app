@@ -10,8 +10,13 @@
 //   - Restaurar (si archivedAt)
 //
 // Campos editables:
-//   - name, slug, ownershipType, color, logoUrl, commissionPct, notes
+//   - name, slug, ownershipType, color, logoUrl, notes
 //   El servicio valida unicidad de slug, así que el error se muestra inline.
+//
+// NOTA DEUDA 0 (2026-06-03): se retiró el campo "Comisión %". La comisión no
+// vive en la marca (era residuo ignorado por la economía); vive por
+// marca×canal×tipo de servicio en brand_channel_rate, y se gestionará desde
+// la futura pantalla "Canales".
 
 import { useEffect, useState } from 'react'
 import { Edit2, X as XIcon, Archive, RotateCcw } from 'lucide-react'
@@ -39,7 +44,6 @@ interface FormState {
   ownershipType: BrandOwnershipType
   color: string
   logoUrl: string
-  commissionPct: string
   notes: string
 }
 
@@ -50,7 +54,6 @@ function brandToFormState(b: Brand): FormState {
     ownershipType: b.ownershipType,
     color: b.color ?? '',
     logoUrl: b.logoUrl ?? '',
-    commissionPct: b.commissionPct !== null ? String(b.commissionPct) : '',
     notes: b.notes ?? '',
   }
 }
@@ -104,18 +107,6 @@ export default function BrandDataTab({ brand, onBrandChange }: BrandDataTabProps
     const logoTrimmed = form.logoUrl.trim()
     const logoNext: string | null = logoTrimmed === '' ? null : logoTrimmed
     if (logoNext !== brand.logoUrl) patch.logoUrl = logoNext
-
-    const commissionTrimmed = form.commissionPct.trim()
-    let commissionNext: number | null = null
-    if (commissionTrimmed !== '') {
-      const parsed = Number(commissionTrimmed)
-      if (Number.isNaN(parsed) || parsed < 0 || parsed > 100) {
-        setError('La comisión debe ser un número entre 0 y 100.')
-        return
-      }
-      commissionNext = parsed
-    }
-    if (commissionNext !== brand.commissionPct) patch.commissionPct = commissionNext
 
     const notesTrimmed = form.notes.trim()
     const notesNext: string | null = notesTrimmed === '' ? null : notesTrimmed
@@ -341,29 +332,6 @@ export default function BrandDataTab({ brand, onBrandChange }: BrandDataTabProps
             </a>
           ) : (
             <p className="text-sm text-text-secondary">—</p>
-          )}
-        </Field>
-
-        <Field
-          label="Comisión %"
-          hint={editing ? 'Solo aplica si la marca es cedida. Rango 0-100.' : undefined}
-        >
-          {editing ? (
-            <input
-              type="number"
-              min="0"
-              max="100"
-              step="0.01"
-              value={form.commissionPct}
-              onChange={(e) => setForm({ ...form, commissionPct: e.target.value })}
-              disabled={submitting || form.ownershipType !== 'licensed'}
-              placeholder={form.ownershipType !== 'licensed' ? 'N/A en marcas propias' : '0.00'}
-              className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
-            />
-          ) : (
-            <p className="text-sm text-text-primary">
-              {brand.commissionPct !== null ? `${brand.commissionPct}%` : '—'}
-            </p>
           )}
         </Field>
 

@@ -19,6 +19,10 @@
 //   - actorId: string | null  → currentEmployee?.id ?? null
 //   - actorName: string       → currentEmployee?.name ?? (isAdmin ? adminEmail : 'Anónimo')
 //   El caller pasa estos valores; el service NO accede al context.
+//
+// NOTA DEUDA 0 (2026-06-03): la comisión NO vive en brand. Se eliminó
+// brand.commission_pct (era residuo ignorado por la economía). La comisión
+// vive ÚNICAMENTE en brand_channel_rate. Ver brandChannelRateService.ts.
 
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
 import { slugify } from '../utils/slug'
@@ -48,7 +52,6 @@ export function rowToBrand(row: RowBrand): Brand {
     ownershipType: row.ownership_type as BrandOwnershipType,
     color: row.color,
     logoUrl: row.logo_url,
-    commissionPct: row.commission_pct,
     notes: row.notes,
     isActive: row.is_active,
     archivedAt: row.archived_at,
@@ -67,7 +70,6 @@ function brandInsertToRow(input: BrandInsert): RowBrandInsert {
     ownership_type: input.ownershipType ?? 'own',
     color: input.color ?? null,
     logo_url: input.logoUrl ?? null,
-    commission_pct: input.commissionPct ?? null,
     notes: input.notes ?? null,
     is_active: input.isActive ?? true,
     created_by: input.createdBy ?? null,
@@ -82,7 +84,6 @@ function brandUpdateToRow(patch: BrandUpdate): RowBrandUpdate {
   if (patch.ownershipType !== undefined) row.ownership_type = patch.ownershipType
   if (patch.color !== undefined) row.color = patch.color
   if (patch.logoUrl !== undefined) row.logo_url = patch.logoUrl
-  if (patch.commissionPct !== undefined) row.commission_pct = patch.commissionPct
   if (patch.notes !== undefined) row.notes = patch.notes
   if (patch.isActive !== undefined) row.is_active = patch.isActive
   if (patch.archivedAt !== undefined) row.archived_at = patch.archivedAt

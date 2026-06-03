@@ -25,6 +25,12 @@
 // regeneras database.ts con `npm run types:gen` y, si añadiste columnas
 // nuevas, las añades aquí a mano. Es deliberado: ofrece el control total
 // sobre cómo se expone el dominio al resto de la app.
+//
+// NOTA DEUDA 0 (2026-06-03): la comisión NO vive aquí. Se eliminaron
+// brand.commissionPct y salesChannel.defaultCommissionPct: eran residuos de
+// un modelo anterior. La comisión vive ÚNICAMENTE en brand_channel_rate
+// (por marca×canal×tipo de servicio, con su commission_base). Ver
+// src/types/kitchen.ts (BrandChannelRate) y brandChannelRateService.ts.
 
 import type { Database } from './database'
 
@@ -107,8 +113,6 @@ export interface Brand {
   ownershipType: BrandOwnershipType
   color: string | null
   logoUrl: string | null
-  /** Solo aplica si ownershipType === 'licensed'. null en marcas propias. */
-  commissionPct: number | null
   notes: string | null
   isActive: boolean
   archivedAt: string | null
@@ -125,7 +129,6 @@ export interface BrandInsert {
   ownershipType?: BrandOwnershipType
   color?: string | null
   logoUrl?: string | null
-  commissionPct?: number | null
   notes?: string | null
   isActive?: boolean
   createdBy?: string | null
@@ -138,7 +141,6 @@ export interface BrandUpdate {
   ownershipType?: BrandOwnershipType
   color?: string | null
   logoUrl?: string | null
-  commissionPct?: number | null
   notes?: string | null
   isActive?: boolean
   archivedAt?: string | null
@@ -154,7 +156,6 @@ export interface SalesChannel {
   name: string
   slug: string
   channelType: SalesChannelType
-  defaultCommissionPct: number | null
   color: string | null
   isActive: boolean
   archivedAt: string | null
@@ -167,7 +168,6 @@ export interface SalesChannelInsert {
   name: string
   slug: string
   channelType?: SalesChannelType
-  defaultCommissionPct?: number | null
   color?: string | null
   isActive?: boolean
 }
@@ -176,7 +176,6 @@ export interface SalesChannelUpdate {
   name?: string
   slug?: string
   channelType?: SalesChannelType
-  defaultCommissionPct?: number | null
   color?: string | null
   isActive?: boolean
   archivedAt?: string | null
