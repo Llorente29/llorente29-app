@@ -46,7 +46,7 @@ Cadencia: en cada paso, antes de cerrarlo, Claude para SOLO y aplica el control 
 ---
 1. ESTADO VIVO ⟵ se regenera cada sesión
 
-**Última actualización: 2026-06-03 (continuación). Hoy: (a) RPC comisión a fuente única (4ab3788); (b) captura fiscal del webhook + CAÍDA SILENCIOSA resuelta (--no-verify-jwt, a7e6935); (c) MOTOR DE MARGEN afilado (§1.5); (d) VIGILANTE DE INGESTA capas 2+3 CONSTRUIDO y validado E2E (§1.6) — ping sintético cada 10 min + watchdog Healthchecks + canal de alarma system-alert por email; capa 1 (frescura por horario) = deuda enganchada al módulo de Horarios. Commits 6322cb2 (contexto) y c5dc9ad (monitor). Build verde, 0 0.**
+**Última actualización: 2026-06-03 (continuación 2). Hoy además: (e) FRENTE COSTE REAL / Artículos-Proveedores (§1.7) — RECON DE ÁREA reveló que TODO el cimiento ya estaba construido (modelo compras + 6 funciones + triggers + UI v1 + cascada a platos), no estaba verde sino VACÍO de datos; validado E2E en la app (Cebolla Morada → MAKRO Saco 5000g 8,50€ → 0,0017€/g → 36 platos recalculados solos); reconciliado coste de raw a UNA verdad (commit bc28560); nueva REGLA DE MÉTODO recon de área (memoria #18). Commits 27e093d (contexto monitor) y bc28560 (reconciliación). Build verde, 0 0.**
 
 > **NOTA DE MANTENIMIENTO:** el fichero VERDADERO es `C:\dev\llorente29-app\CONTEXTO_CLAUDE.md` (git). Al regenerar, partir del repo.
 
@@ -109,9 +109,10 @@ CEO: **Julio Gª Colón (García Colón)**, NO "Gascón". Admin Google: `jgcolon
 2. **Verificación en vivo** del primer pedido real post-fix (que entre con service_type/tax poblados).
 3. **Reproceso** de pedidos 28/05–03/06 desde `lastapp_webhook_log` con el function nuevo (los viejos tienen service_type/tax null; los del 01–03/06 puede que no llegaran — ver si Last reintenta/reenvía).
 4. **Módulo de HORARIOS del cliente** (NUEVO frente, prerrequisito de Capa 1 y de la decisión propio-vs-plataforma): variables por estudiar — por marca / por local, DÓNDE vive (¿brand o location? probablemente el horario base es del local y la marca acota dentro), festivos, excepciones, edición por el cliente. Al construirlo, CERRAR Capa 1 "sin excusas".
-5. **Motor de margen real** (§1.5): tramo grande. Requiere dato fiable (hecho) + integración Catcher/Jelp + pantalla Canales.
-6. **Glovo G1** al recibir acceso (ticket INTSUPPO-1382). Pantalla Canales. Bandeja superadmin. Apunte auto_accept.
-7. **Producción Llorente29 objetivo: 7 sept 2026.**
+5. **FRENTE COSTE REAL / Artículos-Proveedores (§1.7) — ABIERTO, cimiento validado.** Lo que queda: cargar datos (162 raws con proveedor+formato+precio; hoy solo 1), clasificar raws en familias (55 familias existen, 0 raws clasificados → con IA), IA factura→coste, catálogo estándar (plantillas ya sembradas), + mejoras UI (ver qué platos al cambiar coste; bug coste '–/g' cuando estrategia=fixed).
+6. **Motor de margen real** (§1.5): tramo grande. Requiere dato fiable (en marcha §1.7) + integración Catcher/Jelp + pantalla Canales.
+7. **Glovo G1** al recibir acceso (ticket INTSUPPO-1382). Pantalla Canales. Bandeja superadmin. Apunte auto_accept.
+8. **Producción Llorente29 objetivo: 7 sept 2026.**
 
 ### 1.5 — MOTOR DE MARGEN REAL (concepto afilado con Julio 03/06) — NO PERDER
 Tesis: el diferenciador de Folvy NO es la matriz de ingeniería de menús (eso lo copian todos: meez/Apicbase/R365 plotean Estrellas/Caballos/Puzzles/Perros sobre popularidad×rentabilidad). El diferenciador es el DATO que nadie tiene y QUÉ se hace con él. Folvy tiene la línea de ticket real, por canal, con promo y modificador, en vivo, y ES la tubería (integrador directo).
@@ -135,6 +136,28 @@ Qué pasó: el webhook de Last.app dejó de entregar ventas (cero desde el 01/06
 - **Secrets nuevos:** `CRON_SECRET`, `SYSTEM_ALERT_TO`, `HEALTHCHECKS_PING_URL` (CRON_SECRET inline en el cron job a propósito: baja sensibilidad, evita lectura de Vault que podría enmudecer el vigilante en silencio).
 - **DEUDA OBLIGATORIA — Capa 1 (frescura por horario):** PENDIENTE, cerrar "sin excusas" al construir el módulo de Horarios (§1.4 punto 4). Derivar ventanas del histórico de ventas es un PROXY que da falsas alarmas cuando el cliente cierra/libra/cambia temporada; fuente honesta = horario declarado. Por eso `service_windows` va vacío y Capa 1 no se construyó con el proxy. Multi-cliente: cada cuenta su horario (refuerza usar el módulo, no el proxy).
 **Datos diagnóstico (vigentes):** histórico hasta 27/05 = backfill de Excel (ruido en importes: descuento/total dudosos → FUERA del motor de margen; quizá válido solo para popularidad, a decidir). Webhook real desde 28/05 (created_at≈sold_at). El `raw_products` guarda SOLO el array de productos; el desglose económico (tax/taxableBase/deliveryFee/discountTotal/pickupType) llega en el payload del webhook y desde el 03/06 se captura entero. courier.name NO lo rellena Last (da igual: pickupType ya separa delivery vs ownDelivery).
+
+### 1.7 — FRENTE COSTE REAL / Artículos-Proveedores (03/06) — CIMIENTO YA CONSTRUIDO, FALTAN DATOS
+Objetivo del frente: que el coste de cada escandallo salga de PRECIO REAL de proveedor, no de `fixed_cost` andamiaje (pata 1 del motor de margen §1.5). El RECON DE ÁREA (memoria #18) reveló que el CONTEXTO iba MUY por detrás: casi todo el cimiento YA ESTABA, solo vacío de datos y sin clasificar. Lo verificado contra fuente primaria:
+
+**Modelo de datos (existe, completo y bien diseñado):**
+- `supplier` (name, tax_id, email, phone, address, notes, health_registry_no, is_active…).
+- `article_supplier` (recipe_item_id, supplier_id, supplier_code, last_price, is_preferred, purchase_format_id) = precio por proveedor en un formato.
+- `recipe_item_purchase_format` (name, parent_format_id, qty_per_parent, qty_in_base, is_piece, is_weighted, source, ai_confidence, needs_review…) = formatos ANIDADOS caja→bolsa→unidad; `qty_in_base` = puente al escandallo.
+- `purchase` + `purchase_line` (cabecera/líneas de compra; hoy vacías = aún no hay recepción real, por eso average_weighted cae a last_price).
+- `dish_family` (name, color, icon, position, template_id) + `recipe_item.family_id` + `recipe_item.category`; `tag`+`recipe_item_tag`; y PLANTILLAS `dish_family_template`/`tag_template` (= base del catálogo estándar de cliente nuevo).
+
+**Funciones del área (existían, NO estaban en CONTEXTO):** `kitchen_recompute_raw_cost` (costea raw desde proveedor+formato: last_price/qty_in_base, estrategias fixed/last_purchase/average_*; fallback honesto conserva coste + needs_review), `kitchen_recipe_breakdown`, `kitchen_recipe_cost_by_location` (¡coste por LOCAL!), `location_economics`, `materialize_recipe_session`, `kitchen_dish_state_for_ai`, `kitchen_similar_dishes_for_ai`, `run_mapping` (x2 — el CONTEXTO la daba "pendiente, la más diferenciadora": YA EXISTE). Triggers sanos: `trg_article_supplier_recompute_cost` (recostea raw al tocar proveedor), `recipe_line_prevent_cycle`, `set_folvy_code`, varios `set_updated_at`.
+
+**UI v1 (existe, reciente 31/05–01/06):** `pages/SuppliersPage.tsx`, `pages/KitchenItemsPage.tsx`, `pages/KitchenItemDetailPage.tsx`, `components/PurchaseSourcesSection.tsx`, `components/SupplierItemsSection.tsx`, `services/purchaseFormatService.ts` (482 líneas, maduro), `services/costCascadeService.ts` (la propagación a platos que el CONTEXTO daba pendiente: HECHA). Lenguaje de cocinero ("¿Cómo viene?/¿Cuánto trae?/¿Cuánto te cuesta?"), cálculo en vivo (latido).
+
+**RECONCILIACIÓN deuda 0 (commit bc28560):** se había duplicado la rama `last_purchase` en `kitchen_recompute_item` → dos verdades del coste. Corregido: `kitchen_recompute_item`, para raw/tool, DELEGA en `kitchen_recompute_raw_cost`. Una sola verdad. Lógica de recetas/dishes intacta. CHECK `recipe_item_cost_strategy_valid` = {fixed, last_purchase, average_weighted, average_window} (NO inventar 'purchase').
+
+**VALIDACIÓN E2E en la app (no en SQL Editor — el trigger usa guard de tenancy y auth.uid() es null allí):** Cebolla Morada (`33d794b6-...`, base g, antes fixed 0,00173€/g) → añadido MAKRO DISTRIBUCION MAYORISTA SA, formato "Saco" 5000 g, 8,50€ → coste pasó a **0,0017 €/g**, "Origen del coste: Desde la compra", y **"36 platos recalculados"** (cascada viva). Es el PRIMER dato real del frente (se deja, no se revierte).
+
+**Estado de datos (lo que de verdad falta):** 162 raws (147 con fixed_cost), 1 ya con compra real (Cebolla Morada en last_purchase), resto en fixed. supplier: MAKRO + 1 prueba. 55 familias sembradas, 0 raws clasificados. purchase/purchase_line vacías.
+
+**Plan del frente (recolocado sobre la verdad):** (1) cargar los 162 con proveedor+formato+precio — a mano es inviable → IA factura/albarán→coste (modelo trae source/ai_confidence/needs_review; benchmark: MarketMan/xtraCHEF hacen foto→OCR→casa→actualiza coste, pero SIN capa de revisión humana = nuestro hueco a ganar; ellos cobran escaneos caros, visión Anthropic = céntimos). (2) clasificar raws en familias con IA (revisable). (3) buscador por texto (útil ya) + filtro por familia (tras clasificar). (4) catálogo de ingredientes estándar español como semilla de cliente nuevo (las *_template ya existen) — diferenciador SMB que nadie ofrece. Mejoras UI pendientes: mostrar QUÉ platos se recalcularon al cambiar un coste (petición Julio); arreglar ficha que muestra "–/g" cuando computed_cost null pese a tener fixed_cost.
 
 ### 1.11 — NOTA HISTÓRICA
 > **02/06 (técnica AM):** EP1 + módulo Integraciones I1 + Catcher API. **02/06 (tarde):** evaluación integradores, DECISIÓN integrador directo, API Glovo (definition.yaml), correo Glovo enviado. **02/06 (noche/cierre):** módulo Folvy Connect I2 (pantallas) + logos de marca + seed Glovo + D2 completo (Vault + Edge Function connector-credentials + pantalla configuración, verificado end-to-end) + Glovo respondió (ticket INTSUPPO-1382 en cola).
