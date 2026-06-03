@@ -19,6 +19,7 @@ import { appccModule } from '@/modules/appcc/module'
 import { ventasModule } from '@/modules/ventas/module'
 import { kitchenModule } from '@/modules/kitchen/module'
 import { integrationsModule } from '@/modules/integrations/module'
+import { supplyModule } from '@/modules/supply/module'
 
 export const moduleRegistry: ModuleDefinition[] = [
   personalModule,     // G-8.4 (Folvy Team, topBarOrder 1)
@@ -26,6 +27,7 @@ export const moduleRegistry: ModuleDefinition[] = [
   ventasModule,       // G-8.4 (Folvy Sales, topBarOrder 3)
   kitchenModule,      //       (Folvy Kitchen, topBarOrder 4)
   integrationsModule, //       (Folvy Connect, topBarOrder 5)
+  supplyModule,       //       (Folvy Supply, topBarOrder 6) — aprovisionamiento / MRP II
 ]
 
 /** Devuelve los módulos ordenados por su posición en el TopBar. */
