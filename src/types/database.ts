@@ -3351,6 +3351,41 @@ export type Database = {
           },
         ]
       }
+      family_vat_default: {
+        Row: {
+          created_at: string
+          family_name: string
+          id: string
+          is_mixed: boolean
+          note: string | null
+          vat_category_id: string
+        }
+        Insert: {
+          created_at?: string
+          family_name: string
+          id?: string
+          is_mixed?: boolean
+          note?: string | null
+          vat_category_id: string
+        }
+        Update: {
+          created_at?: string
+          family_name?: string
+          id?: string
+          is_mixed?: boolean
+          note?: string | null
+          vat_category_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "family_vat_default_vat_category_id_fkey"
+            columns: ["vat_category_id"]
+            isOneToOne: false
+            referencedRelation: "vat_category"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       feature_flags: {
         Row: {
           account_id: string
@@ -5636,6 +5671,8 @@ export type Database = {
           supplier_url: string | null
           type: string
           updated_at: string
+          vat_category_id: string | null
+          vat_category_source: string | null
           yield_portions: number | null
         }
         Insert: {
@@ -5702,6 +5739,8 @@ export type Database = {
           supplier_url?: string | null
           type: string
           updated_at?: string
+          vat_category_id?: string | null
+          vat_category_source?: string | null
           yield_portions?: number | null
         }
         Update: {
@@ -5768,6 +5807,8 @@ export type Database = {
           supplier_url?: string | null
           type?: string
           updated_at?: string
+          vat_category_id?: string | null
+          vat_category_source?: string | null
           yield_portions?: number | null
         }
         Relationships: [
@@ -5818,6 +5859,13 @@ export type Database = {
             columns: ["stock_unit_id"]
             isOneToOne: false
             referencedRelation: "kitchen_unit"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recipe_item_vat_category_id_fkey"
+            columns: ["vat_category_id"]
+            isOneToOne: false
+            referencedRelation: "vat_category"
             referencedColumns: ["id"]
           },
         ]
@@ -7802,6 +7850,77 @@ export type Database = {
           },
         ]
       }
+      vat_category: {
+        Row: {
+          code: string
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          sort_order: number
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          sort_order?: number
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
+      vat_rate: {
+        Row: {
+          category_id: string
+          created_at: string
+          equivalence_surcharge: number
+          id: string
+          note: string | null
+          rate: number
+          valid_from: string
+          valid_to: string | null
+        }
+        Insert: {
+          category_id: string
+          created_at?: string
+          equivalence_surcharge?: number
+          id?: string
+          note?: string | null
+          rate: number
+          valid_from: string
+          valid_to?: string | null
+        }
+        Update: {
+          category_id?: string
+          created_at?: string
+          equivalence_surcharge?: number
+          id?: string
+          note?: string | null
+          rate?: number
+          valid_from?: string
+          valid_to?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vat_rate_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "vat_category"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       weekly_availability: {
         Row: {
           available: boolean
@@ -8114,7 +8233,15 @@ export type Database = {
         Args: { p_account_id: string; p_type: string }
         Returns: string
       }
+      next_purchase_order_code: {
+        Args: { p_account_id: string }
+        Returns: string
+      }
       normalize_ingredient_name: { Args: { p_text: string }; Returns: string }
+      propose_vat_category: {
+        Args: { p_recipe_item_id: string }
+        Returns: string
+      }
       resolve_lastapp_line: {
         Args: {
           p_account_id: string
@@ -8192,6 +8319,13 @@ export type Database = {
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       unaccent: { Args: { "": string }; Returns: string }
+      vat_rate_for: {
+        Args: { p_category_id: string; p_date: string }
+        Returns: {
+          equivalence_surcharge: number
+          rate: number
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
