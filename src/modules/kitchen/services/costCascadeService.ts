@@ -39,10 +39,46 @@ export async function getAncestorsOf(itemId: string): Promise<AncestorRef[]> {
   return (data ?? []).map((r) => ({ ancestorId: r.ancestor_id, depth: r.depth }))
 }
 
+// Plato/sub-receta efectivamente recalculado, con su nombre (para mostrarlo
+// al usuario: "estos son los platos que se movieron"). No es solo el conteo.
+export interface RecomputedAncestor {
+  id: string
+  name: string
+}
+
 export interface CascadeResult {
   itemId: string
   ancestorsRecomputed: number
+  // Lista de los ancestros recalculados con éxito, con nombre. Misma longitud
+  // que ancestorsRecomputed. Permite a la UI mostrar QUÉ platos se movieron,
+  // no solo cuántos. Si la resolución de nombres falla, queda [] (no rompe el
+  // conteo, que es la verdad mínima).
+  ancestors: RecomputedAncestor[]
   failures: { id: string; error: string }[]
+}
+
+// Resuelve nombres de recipe_item por IDs (una sola consulta). Devuelve un mapa
+// id→name. Tolerante: si falla, devuelve mapa vacío (la UI mostrará el conteo
+// igualmente). No aplica guard extra: RLS de recipe_item ya limita a la cuenta.
+async function resolveNames(ids: string[]): Promise<Map<string, string>> {
+  const map = new Map<string, string>()
+  if (ids.length === 0) return map
+  try {
+    const { data, error } = await supabase!
+      .from('recipe_item')
+      .select('id, name')
+      .in('id', ids)
+    if (error) {
+      console.error('costCascadeService: resolución de nombres falló', error.message)
+      return map
+    }
+    for (const r of data ?? []) {
+      map.set(r.id as string, (r.name as string) ?? '')
+    }
+  } catch (e) {
+    console.error('costCascadeService: resolución de nombres lanzó', e)
+  }
+  return map
 }
 
 // Recalcula los ANCESTROS de un ingrediente cuyo coste acaba de cambiar.
@@ -59,17 +95,29 @@ export async function cascadeFromItem(itemId: string): Promise<CascadeResult> {
   requireSupabase()
   const ancestors = await getAncestorsOf(itemId)
   const failures: { id: string; error: string }[] = []
-  let ok = 0
+  const okIds: string[] = []
   for (const a of ancestors) {
     try {
       await recomputeRecipeItem(a.ancestorId)
-      ok += 1
+      okIds.push(a.ancestorId)
     } catch (e) {
       failures.push({ id: a.ancestorId, error: e instanceof Error ? e.message : String(e) })
       console.error(`costCascadeService: recálculo del ancestro ${a.ancestorId} falló`, e)
     }
   }
-  return { itemId, ancestorsRecomputed: ok, failures }
+  // Resolvemos nombres SOLO de los recalculados con éxito, en orden hoja→raíz
+  // (el de getAncestorsOf). Una consulta; tolerante a fallo.
+  const names = await resolveNames(okIds)
+  const recomputed: RecomputedAncestor[] = okIds.map((id) => ({
+    id,
+    name: names.get(id) ?? 'Plato sin nombre',
+  }))
+  return {
+    itemId,
+    ancestorsRecomputed: recomputed.length,
+    ancestors: recomputed,
+    failures,
+  }
 }
 
 // Variante que recalcula PRIMERO el propio ítem y luego sus ancestros.

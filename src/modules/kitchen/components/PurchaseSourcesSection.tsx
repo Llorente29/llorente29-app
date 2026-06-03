@@ -28,7 +28,7 @@
 //  · Árbol de formatos anidado y foto→IA del albarán: fases siguientes.
 
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, Truck, Star, Check, AlertTriangle, Loader2, Pencil, Sparkles } from 'lucide-react'
+import { Plus, Truck, Star, Check, AlertTriangle, Loader2, Pencil, Sparkles, ChevronDown, ChevronRight } from 'lucide-react'
 import {
   listSuppliers,
   createSupplier,
@@ -37,6 +37,7 @@ import {
   setupSimplePurchase,
   updateArticleSupplier,
 } from '@/modules/kitchen/services/purchaseFormatService'
+import type { RecomputedAncestor } from '@/modules/kitchen/services/costCascadeService'
 import { convertToBase, unitCostFromFormat } from '@/modules/kitchen/lib/unitConversion'
 import type {
   RecipeItem,
@@ -108,6 +109,10 @@ export default function PurchaseSourcesSection({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [successNote, setSuccessNote] = useState<string | null>(null)
+  // Platos recalculados tras el último cambio de coste (para mostrar CUÁLES, no
+  // solo cuántos). Se rellena en handleAdd desde el resultado de la cascada.
+  const [recalculatedDishes, setRecalculatedDishes] = useState<RecomputedAncestor[]>([])
+  const [dishesOpen, setDishesOpen] = useState(false)
 
   // Formulario de alta.
   const [addOpen, setAddOpen] = useState(false)
@@ -275,6 +280,8 @@ export default function PurchaseSourcesSection({
 
       resetForm()
       setAddOpen(false)
+      setRecalculatedDishes(result.recalculatedDishes ?? [])
+      setDishesOpen(false)
       setSuccessNote(
         result.ancestorsRecomputed > 0
           ? `Coste actualizado. ${result.ancestorsRecomputed} plato${
@@ -352,11 +359,40 @@ export default function PurchaseSourcesSection({
           </div>
         )}
 
-        {/* Confirmación veraz tras un cambio de coste (recuento real) */}
+        {/* Confirmación veraz tras un cambio de coste (recuento real) + qué platos */}
         {!addOpen && successNote && (
-          <div className="flex items-center gap-1.5 text-xs text-success">
-            <Check className="w-3.5 h-3.5" />
-            {successNote}
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1.5 text-xs text-success">
+              <Check className="w-3.5 h-3.5 flex-shrink-0" />
+              <span>{successNote}</span>
+              {recalculatedDishes.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setDishesOpen((v) => !v)}
+                  className="inline-flex items-center gap-0.5 text-text-secondary hover:text-text-primary transition-base"
+                >
+                  {dishesOpen ? (
+                    <ChevronDown className="w-3.5 h-3.5" />
+                  ) : (
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  )}
+                  {dishesOpen ? 'ocultar' : 'ver platos'}
+                </button>
+              )}
+            </div>
+            {dishesOpen && recalculatedDishes.length > 0 && (
+              <ul className="ml-5 flex flex-wrap gap-1.5">
+                {recalculatedDishes.map((d) => (
+                  <li
+                    key={d.id}
+                    className="inline-flex items-center px-2 py-0.5 rounded-full bg-page border border-border-default text-xs text-text-secondary truncate max-w-[16rem]"
+                    title={d.name}
+                  >
+                    {d.name}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
 

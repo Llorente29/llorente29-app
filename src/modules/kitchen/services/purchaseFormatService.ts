@@ -37,7 +37,7 @@ import type {
   RowArticleSupplierUpdate,
   CostStrategy,
 } from '../../../types/kitchen'
-import { cascadeFromItem } from './costCascadeService'
+import { cascadeFromItem, type RecomputedAncestor } from './costCascadeService'
 import { updateRecipeItem } from './recipeItemService'
 
 function requireSupabase(): void {
@@ -439,6 +439,9 @@ export interface SimplePurchaseResult {
   format: PurchaseFormat
   link: ArticleSupplier
   ancestorsRecomputed: number
+  // Platos/sub-recetas efectivamente recalculados, con nombre. Misma longitud
+  // que ancestorsRecomputed. Permite a la UI mostrar QUÉ platos se movieron.
+  recalculatedDishes: RecomputedAncestor[]
 }
 
 export async function setupSimplePurchase(
@@ -503,12 +506,14 @@ export async function setupSimplePurchase(
   // recalcularon (recuento real, no inventado). Fail-safe: si la cascada falla,
   // el alta NO se revierte (el coste del ingrediente quedó bien); devolvemos 0.
   let ancestorsRecomputed = 0
+  let recalculatedDishes: RecomputedAncestor[] = []
   try {
     const result = await cascadeFromItem(setup.itemId)
     ancestorsRecomputed = result.ancestorsRecomputed
+    recalculatedDishes = result.ancestors
   } catch (e) {
     console.error(`setupSimplePurchase: cascada de coste falló para ${setup.itemId}`, e)
   }
 
-  return { format, link, ancestorsRecomputed }
+  return { format, link, ancestorsRecomputed, recalculatedDishes }
 }
