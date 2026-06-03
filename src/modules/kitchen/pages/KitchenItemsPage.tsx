@@ -20,7 +20,7 @@
 // scroll horizontal. Mismo mecanismo y estilo que KitchenProfitabilityPage (R1.4).
 
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, Soup, X, AlertTriangle, ChevronRight, Search, Sparkles, Tag } from 'lucide-react'
+import { Plus, Soup, X, AlertTriangle, ChevronRight, Search, Sparkles, Tag, FolderTree } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useIsMobile } from '@/shell/useIsMobile'
@@ -31,6 +31,7 @@ import {
 import { listUnits } from '@/modules/kitchen/services/kitchenUnitService'
 import KitchenItemDetailPage from '@/modules/kitchen/pages/KitchenItemDetailPage'
 import FamilyReviewPanel from '@/modules/kitchen/components/FamilyReviewPanel'
+import FamilyManagerPanel from '@/modules/kitchen/components/FamilyManagerPanel'
 import {
   listIngredientFamilies,
   getFamilyProposalSummary,
@@ -77,6 +78,7 @@ export default function KitchenItemsPage() {
   const [families, setFamilies] = useState<IngredientFamily[]>([])
   const [proposalSummary, setProposalSummary] = useState<ProposalSummary | null>(null)
   const [reviewOpen, setReviewOpen] = useState(false)
+  const [managerOpen, setManagerOpen] = useState(false)
   // Buscador y filtro por familia (3d).
   const [search, setSearch] = useState('')
   const [familyFilter, setFamilyFilter] = useState<string>(NO_FAMILY_FILTER)
@@ -244,6 +246,14 @@ export default function KitchenItemsPage() {
               <option key={f.id} value={f.id}>{f.name}</option>
             ))}
           </select>
+          <button
+            type="button"
+            onClick={() => setManagerOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm rounded-md border border-border-default text-text-secondary hover:text-text-primary hover:bg-page transition-base shrink-0"
+            title="Crear, renombrar o reordenar familias"
+          >
+            <FolderTree size={15} /> Familias
+          </button>
         </div>
       )}
 
@@ -379,6 +389,18 @@ export default function KitchenItemsPage() {
           onClose={() => setReviewOpen(false)}
           onApplied={() => {
             setReviewOpen(false)
+            setReloadTick(t => t + 1)
+          }}
+        />
+      )}
+
+      {/* Gestor de familias (crear/editar/archivar/reordenar) */}
+      {managerOpen && activeAccountId && (
+        <FamilyManagerPanel
+          accountId={activeAccountId}
+          onClose={() => setManagerOpen(false)}
+          onChanged={() => {
+            setManagerOpen(false)
             setReloadTick(t => t + 1)
           }}
         />
