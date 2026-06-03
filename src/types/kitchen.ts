@@ -187,6 +187,7 @@ export interface RecipeItem {
   name: string
   altName: string | null
   code: string | null
+  familyId: string | null
   baseUnitId: string
   costStrategy: CostStrategy
   costWindowDays: number | null
@@ -252,6 +253,7 @@ export interface RecipeItemUpdate {
   altName?: string | null
   code?: string | null
   baseUnitId?: string
+  familyId?: string | null
   costStrategy?: CostStrategy
   costWindowDays?: number | null
   fixedCost?: number | null

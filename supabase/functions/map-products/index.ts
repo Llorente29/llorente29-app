@@ -1,10 +1,13 @@
 // supabase/functions/map-products/index.ts
 //
 // MOTOR DE MAPEO IA — Edge Function.
-// Casa textos de una fuente (ventas) con destinos (menu_item) usando
-// vía exacta (barata) + IA semántica (Sonnet 4.6 por defecto, configurable
-// vía env MAPPING_MODEL). Escribe mapping_proposal + mapping_candidate.
-// NO toca sale_line: solo propone. La propagación la hace el service al confirmar.
+// Casa textos de una fuente con destinos. Dos modos (aditivos):
+//  A) sale_line -> menu_item   : casa nombre de venta con la carta (vía exacta + IA).
+//  B) recipe_item -> recipe_family : clasifica un ingrediente (raw) en su familia
+//     AECOC (paso 3b). Misma filosofía IA-propone-humano-aprueba: escribe
+//     mapping_proposal, NO toca recipe_item.family_id (lo hace el humano al aprobar).
+// Escribe mapping_proposal (+ mapping_candidate en modo A). IA semántica
+// (Sonnet 4.6 por defecto, configurable vía env MAPPING_MODEL).
 //
 // Auth: platform_admin (JWT) o service-role interna (x-internal-key).
 // Patrón calcado de send-email.
@@ -61,6 +64,168 @@ function normalize(s: string): string {
     .replace(/\s+/g, ' ');
 }
 
+// ── MODO B: clasificación de ingredientes (raw) en familias de ingrediente ──
+// Lee los raws SIN familia, manda los nombres + las 15 familias a la IA en UNA
+// llamada, y escribe una mapping_proposal por raw (recipe_item -> recipe_family).
+// NO escribe recipe_item.family_id: eso lo confirma el humano en la pantalla 3c.
+// Anti-invención: sin familia clara -> no_candidate (queda sin clasificar).
+async function classifyIngredients(
+  sb: ReturnType<typeof createClient>,
+  anthropicKey: string,
+  model: string,
+  accountId: string,
+  dryRun: boolean,
+): Promise<Response> {
+  // Familias de ingrediente (candidatos). Scope 'ingredient' (las de plato no entran).
+  const { data: families, error: famErr } = await sb
+    .from('recipe_family')
+    .select('id, name')
+    .eq('account_id', accountId)
+    .eq('scope', 'ingredient')
+    .eq('is_active', true)
+    .order('position');
+  if (famErr) {
+    console.error('[map-products/family] error familias:', famErr.message);
+    return jsonResponse(500, { error: 'Error leyendo familias de ingrediente' });
+  }
+  if (!families || families.length === 0) {
+    return jsonResponse(400, { error: 'No hay familias de ingrediente sembradas (scope=ingredient)' });
+  }
+
+  // Una TANDA por invocación (límite de 150s del gateway). El bucle de quien llama
+  // rellama hasta vaciar la cola. La "cola" = raws sin familia y SIN propuesta de
+  // familia todavía (en real, cada raw clasificado deja una mapping_proposal, así
+  // que la siguiente tanda no lo repite). En dry_run no escribe -> paginamos por
+  // offset para no repetir (quien llama incrementa offset).
+  const MAX_PER_RUN = 40;
+
+  // Raws ya con propuesta de familia (para excluirlos de la cola en modo real).
+  const { data: done, error: doneErr } = await sb
+    .from('mapping_proposal')
+    .select('source_ref')
+    .eq('account_id', accountId)
+    .eq('source_kind', 'recipe_item')
+    .eq('target_kind', 'recipe_family');
+  if (doneErr) {
+    console.error('[map-products/family] error propuestas previas:', doneErr.message);
+    return jsonResponse(500, { error: 'Error leyendo propuestas previas' });
+  }
+  const doneRefs = new Set((done ?? []).map((d: any) => d.source_ref as string));
+
+  // Raws SIN familia. Traemos un margen y filtramos en memoria los ya propuestos.
+  let rawQuery = sb
+    .from('recipe_item')
+    .select('id, name')
+    .eq('account_id', accountId)
+    .eq('type', 'raw')
+    .eq('is_active', true)
+    .is('family_id', null)
+    .order('name');
+  const { data: allRaws, error: rawErr } = await rawQuery;
+  if (rawErr) {
+    console.error('[map-products/family] error raws:', rawErr.message);
+    return jsonResponse(500, { error: 'Error leyendo ingredientes' });
+  }
+  // Cola: en real excluye los ya propuestos; en dry_run usa todos (no escribe).
+  const pending = (allRaws ?? []).filter((r: any) => dryRun || !doneRefs.has(r.id));
+  const remainingBefore = pending.length;
+  const raws = pending.slice(0, MAX_PER_RUN);  // solo esta tanda
+
+  const result = {
+    mode: 'recipe_item->recipe_family',
+    procesados: 0, auto_confirmados: 0, para_revisar: 0, sin_familia: 0,
+    restantes: 0, dry_run: dryRun,
+  };
+  if (!raws || raws.length === 0) {
+    return jsonResponse(200, { ...result, nota: 'No quedan ingredientes sin clasificar' });
+  }
+
+  const famList = families.map((f, i) => `${i + 1}. id=${f.id} | ${f.name}`).join('\n');
+  const famById = new Map(families.map((f) => [f.id as string, f.name as string]));
+
+  // UNA tanda (<= MAX_PER_RUN) por invocación, para no superar los 150s del gateway.
+  const itemsList = raws.map((r, i) => `${i + 1}. ref=${r.id} | ${r.name}`).join('\n');
+  const prompt =
+    `Eres un experto en aprovisionamiento de hostelería española. Clasifica cada ` +
+    `INGREDIENTE en UNA de las FAMILIAS dadas (estándar AECOC del gran consumo).\n\n` +
+    `FAMILIAS (elige por id):\n${famList}\n\n` +
+    `INGREDIENTES a clasificar:\n${itemsList}\n\n` +
+    `Devuelve SOLO un JSON (sin markdown, sin texto extra) con esta forma:\n` +
+    `{"items":[{"ref":"<ref del ingrediente>","family_id":"<id de familia o null>",` +
+    `"confidence":<0..1>,"reason":"<motivo breve en español>"}]}\n` +
+    `REGLAS: si el ingrediente no encaja claramente en ninguna familia, family_id null ` +
+    `y confidence 0 (NO lo fuerces). Un envase/bolsa/film va a "Envases y packaging"; ` +
+    `un producto de limpieza a "Droguería y limpieza". Clasifica los ${raws.length} ingredientes.`;
+
+  let parsedItems: { ref: string; family_id: string | null; confidence: number; reason: string }[] = [];
+  try {
+    const aiResp = await fetch(ANTHROPIC_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'x-api-key': anthropicKey,
+        'anthropic-version': ANTHROPIC_VERSION,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model, max_tokens: 4096,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+    if (!aiResp.ok) {
+      console.error('[map-products/family] IA HTTP', aiResp.status, await aiResp.text());
+      return jsonResponse(502, { error: 'Error del servicio de IA' });
+    }
+    const aiData = await aiResp.json();
+    const textOut = (aiData.content ?? [])
+      .filter((b: any) => b.type === 'text').map((b: any) => b.text).join('');
+    const clean = textOut.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(clean);
+    parsedItems = Array.isArray(parsed.items) ? parsed.items : [];
+  } catch (e) {
+    console.error('[map-products/family] error IA/parse:', String(e));
+    return jsonResponse(502, { error: 'Fallo llamando a la IA' });
+  }
+
+  const byRef = new Map(parsedItems.map((p) => [p.ref, p]));
+  for (const raw of raws) {
+    result.procesados++;
+    const p = byRef.get(raw.id as string);
+    const famId = p?.family_id && famById.has(p.family_id) ? p.family_id : null;
+    const conf = typeof p?.confidence === 'number' ? p!.confidence : 0;
+    const reason = p?.reason ?? '';
+
+    let status: string;
+    let chosen: string | null = famId;
+    if (famId && conf >= AUTO_THRESHOLD) { status = 'auto_confirmed'; result.auto_confirmados++; }
+    else if (famId && conf >= REVIEW_THRESHOLD) { status = 'needs_review'; result.para_revisar++; }
+    else { status = 'no_candidate'; chosen = null; result.sin_familia++; }
+
+    if (!dryRun) {
+      const { error: propErr } = await sb.from('mapping_proposal').insert({
+        account_id: accountId,
+        source_kind: 'recipe_item',
+        source_text: raw.name,
+        source_normalized: normalize(raw.name as string),
+        source_ref: raw.id,
+        target_kind: 'recipe_family',
+        status,
+        chosen_target_id: chosen,
+        confidence: conf,
+        method: 'ai',
+        rationale: reason,
+        engine_version: model,
+      });
+      if (propErr) console.error('[map-products/family] insert proposal:', propErr.message);
+    }
+  }
+
+  // Cuántos quedan tras esta tanda (en real: los que aún no tienen propuesta).
+  result.restantes = Math.max(0, remainingBefore - result.procesados);
+
+  console.log('[map-products/family] tanda:', JSON.stringify(result));
+  return jsonResponse(200, result);
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -96,8 +261,13 @@ Deno.serve(async (req) => {
   if (!account_id || !source_kind || !target_kind) {
     return jsonResponse(400, { error: 'Faltan account_id, source_kind o target_kind' });
   }
-  if (source_kind !== 'sale_line' || target_kind !== 'menu_item') {
-    return jsonResponse(400, { error: 'v1 solo soporta sale_line -> menu_item' });
+
+  const SALES_MODE = source_kind === 'sale_line' && target_kind === 'menu_item';
+  const FAMILY_MODE = source_kind === 'recipe_item' && target_kind === 'recipe_family';
+  if (!SALES_MODE && !FAMILY_MODE) {
+    return jsonResponse(400, {
+      error: 'Pares soportados: sale_line->menu_item | recipe_item->recipe_family',
+    });
   }
 
   const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
@@ -109,6 +279,12 @@ Deno.serve(async (req) => {
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
   const sb = createClient(supabaseUrl, serviceKey);
+
+  // ── MODO B: clasificar ingredientes (raws) en familias (paso 3b) ──
+  // Aislado en su propia función para no tocar el camino de ventas.
+  if (FAMILY_MODE) {
+    return await classifyIngredients(sb, anthropicKey, model, account_id, dryRun);
+  }
 
   const { data: lines, error: linesErr } = await sb
     .from('sale_line')
