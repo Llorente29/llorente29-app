@@ -25,7 +25,9 @@ export interface SupplierCatalogEntry {
   isPreferred: boolean           // proveedor preferente para este artículo
   purchaseFormatId: string | null
   formatName: string | null      // "Caja", "Garrafa", "Paquete"
-  formatQtyInBase: number | null // equivalencia a unidad base (25, 5, 0.125…)
+  formatQtyInBase: number | null // equivalencia en unidad base CRUDA (5000…)
+  baseUnitAbbr: string | null    // unidad base del artículo (g, ml, ud)
+  formatLabel: string | null     // formato legible: "Saco (5 kg)"
   // Stock de referencia: vacío hoy (no hay inventario); gancho para cuando exista.
   stockOnHand: number | null
 }
@@ -47,6 +49,38 @@ function from(table: string) {
 }
 
 /**
+ * Formato legible para el comprador: "Saco (5 kg)" en vez de "Saco (5000)".
+ * Convierte la cantidad en unidad base cruda a una unidad "pedible":
+ *   g  → kg cuando son ≥ 1000 g (5000 g → 5 kg)
+ *   ml → L  cuando son ≥ 1000 ml (10000 ml → 10 L)
+ * Si no hay equivalencia o unidad, devuelve solo el nombre del formato.
+ */
+function buildFormatLabel(
+  name: string | null,
+  qtyInBase: number | null,
+  baseAbbr: string | null,
+): string | null {
+  if (!name) return null
+  if (qtyInBase === null || baseAbbr === null) return name
+
+  let qty = qtyInBase
+  let unit = baseAbbr
+
+  // Escalado a unidad mayor cuando el número es grande (más "pedible").
+  if (baseAbbr === 'g' && qtyInBase >= 1000) {
+    qty = qtyInBase / 1000
+    unit = 'kg'
+  } else if (baseAbbr === 'ml' && qtyInBase >= 1000) {
+    qty = qtyInBase / 1000
+    unit = 'L'
+  }
+
+  // Formateo limpio (sin decimales sobrantes): 5 → "5", 2.5 → "2,5".
+  const qtyStr = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 3 }).format(qty)
+  return `${name} (${qtyStr} ${unit})`
+}
+
+/**
  * Catálogo de un proveedor: todos sus article_supplier activos, con artículo,
  * código, formato (nombre+equivalencia) y precio. Ordenado por nombre de artículo.
  */
@@ -63,7 +97,7 @@ export async function getSupplierCatalog(
       last_price,
       is_preferred,
       purchase_format_id,
-      recipe_item:recipe_item_id ( name ),
+      recipe_item:recipe_item_id ( name, kitchen_unit:base_unit_id ( abbreviation ) ),
       recipe_item_purchase_format:purchase_format_id ( name, qty_in_base )
     `)
     .eq('account_id', accountId)
@@ -74,7 +108,9 @@ export async function getSupplierCatalog(
 
   const rows = (data as Row[]) ?? []
   const entries: SupplierCatalogEntry[] = rows.map((r) => {
-    const item = (r.recipe_item ?? null) as { name?: string } | null
+    const item = (r.recipe_item ?? null) as
+      { name?: string; kitchen_unit?: { abbreviation?: string } | null } | null
+    const baseAbbr = item?.kitchen_unit?.abbreviation ?? null
     const fmt = (r.recipe_item_purchase_format ?? null) as
       { name?: string; qty_in_base?: number } | null
     return {
@@ -87,6 +123,8 @@ export async function getSupplierCatalog(
       purchaseFormatId: (r.purchase_format_id as string | null) ?? null,
       formatName: fmt?.name ?? null,
       formatQtyInBase: fmt?.qty_in_base ?? null,
+      baseUnitAbbr: baseAbbr,
+      formatLabel: buildFormatLabel(fmt?.name ?? null, fmt?.qty_in_base ?? null, baseAbbr),
       stockOnHand: null, // gancho inventario
     }
   })

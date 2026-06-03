@@ -48,7 +48,7 @@ export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuild
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [supplierId, setSupplierId] = useState<string>('')
   const [expectedDate, setExpectedDate] = useState<string>('')
-  const [sentBy, setSentBy] = useState<string>('')
+  const [sentBy, setSentBy] = useState<string>(userProfile?.displayName ?? '')
 
   const [catalog, setCatalog] = useState<SupplierCatalogEntry[]>([])
   const [draft, setDraft] = useState<Record<string, DraftLine>>({})
@@ -332,10 +332,7 @@ export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuild
                             />
                           </td>
                           <td className="px-3 py-2 text-text-primary">
-                            {e.formatName ?? '—'}
-                            {e.formatQtyInBase !== null && (
-                              <span className="text-text-tertiary"> ({e.formatQtyInBase})</span>
-                            )}
+                            {e.formatLabel ?? e.formatName ?? '—'}
                           </td>
                           <td className="px-3 py-2">
                             <input
