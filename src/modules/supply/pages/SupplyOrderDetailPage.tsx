@@ -14,7 +14,7 @@
 // se enchufan como capa posterior (norma IA en compras = copiloto).
 
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, Plus, Trash2, Check, Loader2, X, Send, Package } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Check, Loader2, X, Send, Package, FileText } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import {
   getPurchaseOrderById,
@@ -29,6 +29,7 @@ import {
 import { listRecipeItems } from '@/modules/kitchen/services/recipeItemService'
 import { listSuppliers } from '@/modules/kitchen/services/purchaseFormatService'
 import { listSupplyLocations, type SupplyLocation } from '@/modules/supply/services/supplierCatalogService'
+import { buildPurchaseOrderPdfData, generatePurchaseOrderPdf } from '@/modules/supply/services/purchaseOrderPdf'
 import type { Supplier } from '@/types/kitchen'
 import type { RecipeItem } from '@/types/kitchen'
 
@@ -70,6 +71,7 @@ export default function SupplyOrderDetailPage({ orderId, onBack }: SupplyOrderDe
 
   const [addOpen, setAddOpen] = useState(false)
   const [savingStatus, setSavingStatus] = useState(false)
+  const [generatingPdf, setGeneratingPdf] = useState(false)
   const [reloadTick, setReloadTick] = useState(0)
 
   useEffect(() => {
@@ -160,6 +162,28 @@ export default function SupplyOrderDetailPage({ orderId, onBack }: SupplyOrderDe
       setError(err instanceof Error ? err.message : 'No se pudo cambiar el estado.')
     } finally {
       setSavingStatus(false)
+    }
+  }
+
+  async function handleDownloadPdf() {
+    if (!order || !activeAccountId) return
+    setGeneratingPdf(true)
+    setError(null)
+    try {
+      const data = await buildPurchaseOrderPdfData(activeAccountId, order.id)
+      const { blob, filename } = generatePurchaseOrderPdf(data)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'No se pudo generar el PDF.')
+    } finally {
+      setGeneratingPdf(false)
     }
   }
 
@@ -284,7 +308,18 @@ export default function SupplyOrderDetailPage({ orderId, onBack }: SupplyOrderDe
           </div>
 
           {/* Acciones de ciclo */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {lines.length > 0 && (
+              <button
+                type="button"
+                onClick={handleDownloadPdf}
+                disabled={generatingPdf}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium border border-border-default bg-card hover:bg-page disabled:opacity-50 disabled:cursor-not-allowed transition-base"
+              >
+                {generatingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText size={15} />}
+                Descargar PDF
+              </button>
+            )}
             {order.status === 'borrador' && (
               <button
                 type="button"
