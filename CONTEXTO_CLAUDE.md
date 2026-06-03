@@ -46,7 +46,7 @@ Cadencia: en cada paso, antes de cerrarlo, Claude para SOLO y aplica el control 
 ---
 1. ESTADO VIVO ⟵ se regenera cada sesión
 
-**Última actualización: 2026-06-03 (CIERRE jornada). Hoy: (A) cerrada monitorización de ingesta capas 2+3; (B) FRENTE COSTE REAL arrancado y muy avanzado — descubierto que el cimiento (artículos/proveedores/formatos) YA estaba construido, validado coste real end-to-end, y CERRADO el sub-frente de FAMILIAS DE INGREDIENTE completo (clasificación IA + revisión + filtro + gestor CRUD con subfamilias); (C) hallazgo crítico de ARQUITECTURA DE CUENTAS. ~10 commits, build verde, 0 0, working tree limpio.**
+**Última actualización: 2026-06-03 (CIERRE jornada, 2ª regeneración). Hoy, además de familias y monitorización: GIRO ESTRATÉGICO MAYOR — el "paso 4 IA factura→coste" se reveló como la punta de un módulo mucho mayor: APROVISIONAMIENTO = MRP II DE CICLO CERRADO. Creado el mapa MRP II, decidido MÓDULO PROPIO (Folvy Supply), y construido + en producción el C1 (pedidos usable de extremo a extremo). ~16 commits, build verde, 0 0, working tree limpio.**
 
 > **NOTA DE MANTENIMIENTO:** el fichero VERDADERO es `C:\dev\llorente29-app\CONTEXTO_CLAUDE.md` (git). Al regenerar, partir del repo. La fuente de verdad técnica es la BBDD+repo, no este relato (los errores componen — regla recon de área 03/06).
 
@@ -62,57 +62,70 @@ CEO: **Julio Gª Colón (García Colón)**, NO "Gascón". Admin Google: `jgcolon
 ### 1.0.ter — DECISIÓN ESTRATÉGICA MAYOR (02/06) — NO PERDER
 **Folvy es INTEGRADOR DIRECTO de las plataformas de delivery (Glovo primero), sin intermediarios.** Razones: coste, concepto 360, control del flujo de datos, fidelización estructural. Confirmado viable (Glovo/Uber tienen partner program con staging gratis).
 
+### 1.0.quater — GIRO ESTRATÉGICO MAYOR (03/06) — APROVISIONAMIENTO = MRP II
+**El aprovisionamiento de Folvy NO es "un módulo de compras" — es MRP II DE CICLO CERRADO de hostelería** ("SAP/Oracle con UI moderna que un cocinero usa sin manual"). El hueco de mercado para GANAR: nadie en hostelería tiene la PLANIFICACIÓN (Apicbase/MarketMan/Toast se quedan en ejecución). El "paso 4 IA factura→coste" era solo la fase 8-9 de un ciclo de 13.
+- **Las 13 fases:** previsión demanda → plan maestro → explosión de necesidades (escandallo×ventas) → balance vs stock → capacidad → órdenes (auto/stock mínimo/plantilla/iniciativa) → aprobación → envío → recepción albarán (OCR) → factura + three-way match → inventario perpetuo → trazabilidad lote → AvT → cierre/márgenes. **El cierre realimenta la previsión** (ciclo cerrado).
+- **MÉTODO:** copiar conceptos estándar de ERP industriales/perecedero (reorden, stock seguridad, lead time, lote económico, BOM, three-way match; PAR levels, FEFO, lotes con caducidad, auto-86, transferencias entre locales) y TRADUCIR a lenguaje de cocina. NO inventar.
+- **PRINCIPIO RECTOR (construcción por capas):** cada capa = SISTEMA COMPLETO Y USABLE POR SÍ SOLO sin depender del MRP II, pero con los GANCHOS puestos desde el día 1 para enlazar después. Entrada manual que funciona sola; el MRP II se enchufa luego como fuente/consumidor sin reescribir. NO construir media tubería inútil.
+- **NORMA IA en compras:** la IA NO es solo OCR — es COPILOTO que guía al comprador y evita errores (pedido: cantidad por histórico, sobrepedido, proveedor preferente, duplicado; recepción: descuadres, caducidades; factura: variación de precio, three-way, errores). Lenguaje cocinero, anti-invención, confianza visible. "IA propone, humano decide".
+- **DECISIÓN navegación:** módulo PROPIO de primer nivel (confirmado por Apicbase: módulos hermanos sobre datos maestros centrales). **Folvy Kitchen = datos maestros** (ingredientes/recetas/proveedores/coste). **Folvy Supply = proceso** (pedir→recibir→facturar→inventario→previsión).
+- **DOCS:** `folvy_mrp_ii_mapa.md` + `.svg` (raíz repo, commit bf4f2a4) = mapa de las 13 fases con estado, insumos existentes y método. Mirarlo al decidir frentes de este módulo.
+
 ### 1.1 — Dónde estamos HOY (estado construido)
 
-**FRENTE COSTE REAL / Kitchen (03/06) — el cimiento YA estaba construido (no en el CONTEXTO previo):**
-- **Modelo de compras (existía):** `supplier`, `article_supplier` (recipe_item_id, supplier_id, last_price, is_preferred, purchase_format_id, supplier_code), `recipe_item_purchase_format` (anidado: parent_format_id, qty_per_parent, qty_in_base puente al escandallo, is_piece/is_weighted, source, ai_confidence, needs_review), `purchase`+`purchase_line` (vacías).
-- **Funciones (existían):** `kitchen_recompute_raw_cost` (costea raw desde proveedor+formato: last_price/qty_in_base; strategies fixed/last_purchase/average_*; fallback honesto conserva coste+needs_review) + trigger `trg_article_supplier_recompute_cost`. `kitchen_recompute_item` (raw/tool DELEGA en recompute_raw_cost — una sola verdad, reconciliado commit bc28560). Cascada `costCascadeService` VIVA (al cambiar coste de un raw, recalcula los platos que lo usan). `kitchen_ancestors_of`, `run_mapping` (x2 firmas: BUSCADOR de ingredientes texto→recipe_item, sirve al paso 4).
-- **UI (existía):** SuppliersPage, KitchenItemsPage, KitchenItemDetailPage, PurchaseSourcesSection, SupplierItemsSection, purchaseFormatService, costCascadeService.
-- **VALIDADO E2E hoy:** añadido proveedor MAKRO + formato "Saco" 5000g/8,50€ a Cebolla Morada → coste 0,0017€/g, "Desde la compra", 36 platos recalculados (cascada viva). El frente no estaba verde por construir, sino por POBLAR + mejoras UI.
-- **Pasos UI cerrados:** (1) bug "–/g" en ficha (effectiveCost = computedCost ?? fixedCost, commit 8ec5883); (2) ver QUÉ platos se recalculan, como chips (9d75f9b).
+**MÓDULO FOLVY SUPPLY — C1 PEDIDOS COMPLETO Y EN PRODUCCIÓN (03/06):**
+- **Modelo (migración 20260603T2000, commit a8bb5db):** `purchase_order` (account/location/supplier, code, order_date, expected_date, status [borrador|enviado|recibido_parcial|recibido|cerrado|cancelado], **origin [manual|template|par|mrp] = gancho MRP**, **source_need_ref = gancho MRP**, est_subtotal/est_total, currency) + `purchase_order_line` (recipe_item_id nullable, product_name, qty_ordered, purchase_unit_id, purchase_format_id, est_unit_price, est_line_total, position). RLS por cuenta.
+- **Módulo (commit 708ed82):** `src/modules/supply/` con `module.tsx` (id supply, "Folvy Supply", icono Truck, topBarOrder 6, gating manager, basePath supply), registrado en `moduleRegistry.ts`. Sin tocar App/Shell. `purchaseOrderService` (CRUD pedidos+líneas; casts laxos porque las tablas no estaban aún en database.ts — ya regeneradas). `SupplyOrdersPage` (lista+alta mínima, tabla escritorio/tarjetas móvil, buscador).
+- **Detalle (commit ddc47b8):** `SupplyOrderDetailPage` (patrón lista+detalle por estado `selectedOrderId`): cabecera + tabla de líneas (añadir/borrar ingrediente con cantidad/precio), total calculado y persistido en est_total, acción "marcar como enviado". USABLE de extremo a extremo. Verificado en prod (pedido a MAKRO en Folvy Interno).
+- **Ciclo restante:** C2 recepción (albarán + OCR → movimiento de entrada) y C3 factura (three-way + OCR + eslabón coste; el "paso 4" original) — PENDIENTES. A mano primero, IA/OCR encima.
 
-**SUB-FRENTE FAMILIAS DE INGREDIENTE — COMPLETO (03/06, en producción):**
-- **Modelo:** `dish_family` renombrada a **`recipe_family`** (1 sola dependencia, rename limpio) + columna `scope` ('dish'|'ingredient') + jerarquía `parent_family_id` (self-FK, 2 niveles, subfamilias) + `accounting_category`. Migraciones 20260603T1800 y T1900. recipe_item.family_id → recipe_family. recipe_family NO tiene updated_at.
-- **15 familias de ingrediente** alineadas con **AECOC CEP** (estándar español del gran consumo). Las 55 de plato intactas.
-- **Clasificación IA:** Edge Function `map-products` ampliada (aditiva) con modo `recipe_item→recipe_family` (función classifyIngredients, por TANDAS de 40 para no superar 150s del gateway). Patrón "IA propone (mapping_proposal) → humano aprueba (escribe family_id)". Lanzada sobre los 162: **106 auto_confirmed + 56 needs_review, 0 sin familia**. Reversible (no toca family_id hasta aprobar).
-- **UI:** `FamilyReviewPanel` (banner + panel revisión, aprobar bloque/individual, familia corregible), buscador + filtro por familia + chip en KitchenItemsPage, `FamilyManagerPanel` (gestor CRUD: crear raíz/subfamilia, renombrar, categoría contable, archivar con reasignación, reordenar con flechas). `ingredientFamilyService` (listar/árbol/CRUD/aprobar). Botón "Familias" en Ingredientes (config contextual).
-- Commits: 7d0a6a4 (3a modelo), e87de68 (3b+3c.1), 3d21eb9 (3c.2+3d), 2daae1b (G1 jerarquía), 479ecd3 (G2+G3 gestor).
+**FRENTE COSTE REAL / Kitchen — el cimiento YA estaba construido:**
+- **Modelo de compras:** `supplier`, `article_supplier` (recipe_item_id, supplier_id, last_price, is_preferred, purchase_format_id), `recipe_item_purchase_format` (anidado: qty_in_base puente al escandallo), `purchase`+`purchase_line` (factura suelta; se reusan en C3).
+- **Funciones:** `kitchen_recompute_raw_cost` (last_price/qty_in_base; strategies fixed/last_purchase/average_*) + trigger. `kitchen_recompute_item` DELEGA en recompute_raw_cost (commit bc28560). Cascada `costCascadeService` VIVA. `run_mapping` (BUSCADOR texto→recipe_item). **NO existe aún** función que escriba unit_price→last_price (el eslabón factura→coste = lo que C3 construye).
+- **UI:** SuppliersPage, KitchenItemsPage, KitchenItemDetailPage, PurchaseSourcesSection, purchaseFormatService (exporta `listSuppliers`/tipo `Supplier`), costCascadeService.
+- **VALIDADO E2E:** MAKRO + "Saco" 5000g/8,50€ a Cebolla Morada → 0,0017€/g, 36 platos recalculados. Pasos UI: bug "–/g" (8ec5883), chips platos recalculados (9d75f9b).
 
-**MONITORIZACIÓN DE INGESTA (capas 2+3) — cerrada al inicio de hoy:**
-- Tablas `ingestion_monitor_config` + `ingestion_monitor_state`. Edge Functions `system-alert` (email Resend, gating CRON_SECRET) e `ingestion-synthetic-ping` (capa 2 ping cada 10min al webhook + capa 3 check-in Healthchecks). pg_cron jobid 5. Deploy `--no-verify-jwt`. Commits c5dc9ad, 27e093d. Config corregida hoy → ahora apunta a `0000...0001` (cuenta real con ventas).
-- **Capa 1 (frescura por horario) = DEUDA**, enganchada al módulo de Horarios futuro.
+**SUB-FRENTE FAMILIAS DE INGREDIENTE — COMPLETO (en producción):**
+- **Modelo:** `dish_family`→**`recipe_family`** + `scope` ('dish'|'ingredient') + jerarquía `parent_family_id` (self-FK, 2 niveles) + `accounting_category`. Migraciones T1800/T1900. recipe_family NO tiene updated_at.
+- **15 familias de ingrediente** alineadas con **AECOC CEP**. Las 55 de plato intactas.
+- **Clasificación IA:** `map-products` ampliada (classifyIngredients, por TANDAS de 40). mapping_proposal → humano aprueba. Lanzada: **106 auto_confirmed + 56 needs_review, 0 sin familia**. Reversible.
+- **UI:** `FamilyReviewPanel`, buscador+filtro+chip, `FamilyManagerPanel` (CRUD jerárquico), `ingredientFamilyService`. Commits 7d0a6a4, e87de68, 3d21eb9, 2daae1b, 479ecd3.
 
-**Folvy Connect (delivery) — TERMINADO 02/06 (sin cambios hoy):** módulo Integraciones I1+I2, logos, D2 (cifrado Vault, Edge Function connector-credentials, verificado E2E). Conector Glovo sembrado, ACCESO SOLICITADO (ticket INTSUPPO-1382, en cola).
+**MONITORIZACIÓN DE INGESTA (capas 2+3) — cerrada:** `ingestion_monitor_config`+`_state`, Edge Functions `system-alert` e `ingestion-synthetic-ping`. pg_cron jobid 5. Deploy `--no-verify-jwt`. Commits c5dc9ad, 27e093d. Config → `0000...0001`. **Capa 1 (frescura por horario) = DEUDA** (módulo Horarios).
+
+**Folvy Connect — TERMINADO 02/06:** Integraciones I1+I2, logos, D2 (Vault, connector-credentials, E2E). Glovo sembrado, ACCESO SOLICITADO (ticket INTSUPPO-1382).
 
 ### 1.2 — INTEGRADORES (evaluación cerrada)
 Last.app (525€/mes, a sustituir), HubRise (segunda fila), KitchenHub/Otter/Deliverect (descartados). Folvy = integrador directo.
 
 ### 1.3 — DEUDA VIVA / FRENTES (por prioridad)
-1. **PASO 4 — IA FACTURA→COSTE** (frente coste, el más ambicioso, EN COLA): foto de albarán/factura → casar líneas con ingrediente (vía `run_mapping`, el buscador) → actualizar precio en article_supplier, con revisión humana. Reúsa patrón extract-recipe + map-products + run_mapping. Cierra el bucle del coste real.
-2. **Aplicar las clasificaciones de familia pendientes** (las propuestas siguen en mapping_proposal hasta pulsar "aplicar"; cerrar cuando se quiera).
-3. **CONECTOR GLOVO G1** (recepción real): BLOQUEADO esperando acceso al stage (ticket INTSUPPO-1382). Al llegar: Edge Function `glovo-webhook`→sale + dominio `api.folvy.app/glovo/*` + leer token de Vault (D2).
-4. **RPC `menu_item_economics`** (EP1): cerrable ya (Llorente29=100% platform_delivery). Corregir comisión sobre `price_with_vat` (hoy `price` sin IVA). Verificar desde la app.
-5. **Catcher I3** (espera credenciales). Pantalla "Canales" (brand_channel_rate). Bandeja superadmin.
-6. **Zona "Ajustes" en Kitchen** (DEUDA declarada): agrupar configuraciones (familias/unidades/formatos/coste/IA). Disparador: ≥3 configuraciones. Hoy solo familias.
-7. **Mejora declarada:** en lista de "platos recalculados", poder pinchar un plato y navegar a su ficha (cablear navegación ingrediente→plato en patrón lista+detalle de Kitchen).
-8. Seguridad: rotar service_role/webhook tokens. Code-splitting (~682KB gzip). 34 platos needs_review. Medidor coste IA por cuenta (prerequisito 2º cliente). Apunte auto_accept de ConnectorDetailPage.
+1. **SUPPLY C2 RECEPCIÓN:** modelo `goods_receipt`+líneas (qué llegó vs pedido) + OCR albarán + movimiento de entrada (gancho inventario). A mano primero.
+2. **SUPPLY C3 FACTURA + three-way + eslabón coste** (aquí vive el "paso 4"): OCR factura → casar líneas (run_mapping) → escribir unit_price en article_supplier.last_price → recompute. Validación por totales, cero falsos positivos. Casos límite: artículo/proveedor no existen (crear), three-way contra C1.
+3. **Resto del MRP II por capas** (mapa como destino): inventario perpetuo (el tronco), previsión, balance, órdenes auto. Cada capa usable sola.
+4. **Aplicar clasificaciones de familia pendientes** (en mapping_proposal hasta pulsar aplicar).
+5. **GLOVO G1:** BLOQUEADO (ticket INTSUPPO-1382). Al llegar: `glovo-webhook`→sale + `api.folvy.app/glovo/*` + token Vault.
+6. **RPC `menu_item_economics`** (EP1): cerrable ya. Corregir comisión sobre `price_with_vat`. Verificar desde la app.
+7. **Catcher I3** (credenciales). Pantalla "Canales". Bandeja superadmin.
+8. **Zona "Ajustes" Kitchen** (DEUDA): agrupar configuraciones. Disparador ≥3.
+9. **Mejora declarada:** en "platos recalculados", pinchar plato → su ficha.
+10. Seguridad: rotar service_role/webhook tokens (Last `247ef137-...`). Code-splitting (~687KB). 34 platos needs_review. Medidor coste IA por cuenta. Apunte auto_accept.
 
 ### 1.3.HALLAZGOS técnicos (vigentes)
-- **REGLA RECON DE ÁREA (03/06):** antes de diseñar/construir un frente, verificar fuente primaria (BBDD+repo): tablas ILIKE, columnas+constraints, FUNCIONES que tocan las tablas (pg_proc.prosrc ILIKE), TRIGGERS, git grep, conteos. NO fiarse del CONTEXTO. Los errores componen.
-- **Webhooks externos** (lastapp/futuros): deploy SIEMPRE `--no-verify-jwt`. **Funciones NO-webhook** (map-products, connector-credentials): deploy normal (necesitan el gateway JWT).
-- **Edge Functions IA:** patrón Anthropic montado (endpoint, `ANTHROPIC_API_KEY` en secrets, modelos `claude-opus-4-8` visión / `claude-sonnet-4-6` mapeo). Auth dual JWT usuario o `x-internal-key`=service-role. Límite gateway 150s → procesar por tandas.
-- **Sistema de mapeo unificado:** `mapping_proposal` (source_kind/target_kind texto libre, sin CHECK que los limite; CHECKs solo en method/status/confidence) + `mapping_candidate`. Patrón IA-propone-humano-aprueba para TODO Folvy (ventas, clasificación, factura→coste).
-- **`run_mapping`** = BUSCADOR de ingredientes (texto+código → recipe_item, por code/exacto/normalizado/fuzzy trgm). Sirve al PASO 4, no a clasificar familias.
-- **Coste:** SUM(line costs)=computed_cost siempre. Coste con cantidad GROUS (bruto). cost_strategy ∈ {fixed, last_purchase, average_weighted, average_window}.
-- **database.ts:** `npx supabase gen types ... --yes` + reconvertir UTF-8 sin BOM (PowerShell genera UTF-16). Regenerar tras cada cambio de esquema.
-- **SQL Editor:** auth.uid() null → no testear SECURITY DEFINER ahí. DDL sin BEGIN/COMMIT (el editor descarta el bloque con "Success" engañoso). Verificar con information_schema aparte.
-- **Token Last expuesto en chat (`247ef137-...`) + service-role:** ROTAR (deuda viva).
+- **RECON DE ÁREA:** verificar fuente primaria (BBDD+repo) antes de diseñar. **SQL Editor solo devuelve la salida de la ÚLTIMA consulta → una consulta por turno.**
+- **Módulo nuevo:** `src/modules/<id>/module.tsx` (ModuleDefinition) + línea en `moduleRegistry.ts`. Cero cambios App/Shell. Cuidado con el CASING de la carpeta en Windows (debe coincidir con el import; hoy falló Supply vs supply).
+- **Webhooks externos** deploy `--no-verify-jwt`. **NO-webhook** (map-products, connector-credentials) deploy normal.
+- **Edge Functions IA:** Anthropic (`claude-opus-4-8` visión / `claude-sonnet-4-6` mapeo). Auth dual JWT o `x-internal-key`. Gateway 150s → tandas.
+- **Mapeo:** `mapping_proposal` (source/target_kind libre; CHECKs solo en method/status/confidence). `run_mapping` = BUSCADOR de ingredientes (paso 4/C3, NO familias).
+- **Coste:** SUM(line costs)=computed_cost. Cantidad GROSS. cost_strategy ∈ {fixed, last_purchase, average_weighted, average_window}.
+- **database.ts:** `gen types --yes` + UTF-8 sin BOM. Regenerar tras cambios de esquema.
+- **SQL Editor:** auth.uid() null → no testear SECURITY DEFINER. DDL sin BEGIN/COMMIT. Verificar con information_schema aparte.
+- **`invoices`** = facturas de SUSCRIPCIÓN Stripe (otro dominio), NO de proveedor. Las de proveedor → `purchase`/`purchase_line` (C3).
 
 ### 1.4 — Próximos pasos priorizados
-1. **PASO 4 IA factura→coste** — cierra el frente del coste real (el bucle proveedor→precio→escandallo→plato).
-2. **Glovo G1** al recibir acceso (ticket INTSUPPO-1382).
-3. **RPC EP1** — cerrable ya, enciende el margen real.
-4. Catcher I3, Pantalla Canales, Bandeja superadmin.
+1. **SUPPLY C2 (recepción)** — siguiente capa del ciclo.
+2. **SUPPLY C3 (factura+three-way+eslabón coste)** — cierra el bucle del coste real (el "paso 4" en su sitio).
+3. **MRP II por capas** con el mapa como destino (inventario = el tronco).
+4. **Glovo G1** al recibir acceso. **RPC EP1** cerrable ya.
 5. **Producción Llorente29 objetivo: 7 sept 2026.**
 
 ### 1.11 — NOTA HISTÓRICA
