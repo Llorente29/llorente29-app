@@ -28,6 +28,7 @@ import {
 } from '@/modules/supply/services/purchaseOrderService'
 import { listRecipeItems } from '@/modules/kitchen/services/recipeItemService'
 import { listSuppliers } from '@/modules/kitchen/services/purchaseFormatService'
+import { listSupplyLocations, type SupplyLocation } from '@/modules/supply/services/supplierCatalogService'
 import type { Supplier } from '@/types/kitchen'
 import type { RecipeItem } from '@/types/kitchen'
 
@@ -62,6 +63,7 @@ export default function SupplyOrderDetailPage({ orderId, onBack }: SupplyOrderDe
   const [order, setOrder] = useState<PurchaseOrder | null>(null)
   const [lines, setLines] = useState<PurchaseOrderLine[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [locations, setLocations] = useState<SupplyLocation[]>([])
   const [ingredients, setIngredients] = useState<RecipeItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -80,8 +82,9 @@ export default function SupplyOrderDetailPage({ orderId, onBack }: SupplyOrderDe
       listPurchaseOrderLines(orderId),
       listSuppliers(activeAccountId),
       listRecipeItems({ accountId: activeAccountId, type: 'raw' }),
+      listSupplyLocations(activeAccountId),
     ])
-      .then(([ord, lns, sups, ings]) => {
+      .then(([ord, lns, sups, ings, locs]) => {
         if (cancelled) return
         if (!ord) {
           setError('Este pedido ya no existe.')
@@ -92,6 +95,7 @@ export default function SupplyOrderDetailPage({ orderId, onBack }: SupplyOrderDe
         setLines(lns)
         setSuppliers(sups)
         setIngredients(ings)
+        setLocations(locs)
       })
       .catch((err: unknown) => {
         if (cancelled) return
@@ -107,6 +111,11 @@ export default function SupplyOrderDetailPage({ orderId, onBack }: SupplyOrderDe
     if (!order?.supplierId) return '—'
     return suppliers.find(s => s.id === order.supplierId)?.name ?? '—'
   }, [order, suppliers])
+
+  const deliveryLocation = useMemo(() => {
+    if (!order?.locationId) return null
+    return locations.find(l => l.id === order.locationId) ?? null
+  }, [order, locations])
 
   const ingredientNameById = useMemo(() => {
     const m = new Map<string, string>()
@@ -188,13 +197,21 @@ export default function SupplyOrderDetailPage({ orderId, onBack }: SupplyOrderDe
             </div>
             <div className="px-4 py-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
               <Field label="Proveedor" value={supplierName} />
+              <Field label="Entrega en" value={deliveryLocation?.name ?? '—'} />
               <Field label="Fecha del pedido" value={formatDate(order.orderDate)} />
               <Field label="Entrega esperada" value={formatDate(order.expectedDate)} />
+            </div>
+            {(deliveryLocation?.address || order.notes) && (
+              <div className="px-4 pb-3 text-sm text-text-secondary space-y-0.5">
+                {deliveryLocation?.address && (
+                  <p>Dirección de entrega: {deliveryLocation.address}</p>
+                )}
+                {order.notes && <p>{order.notes}</p>}
+              </div>
+            )}
+            <div className="px-4 pb-3 flex justify-end">
               <Field label="Total estimado" value={formatEur(order.estTotal)} mono />
             </div>
-            {order.notes && (
-              <div className="px-4 pb-3 text-sm text-text-secondary">{order.notes}</div>
-            )}
           </div>
 
           {/* Líneas */}
