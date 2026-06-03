@@ -5329,36 +5329,42 @@ export type Database = {
       recipe_family: {
         Row: {
           account_id: string
+          accounting_category: string | null
           color: string | null
           created_at: string
           icon: string | null
           id: string
           is_active: boolean
           name: string
+          parent_family_id: string | null
           position: number
           scope: string
           template_id: string | null
         }
         Insert: {
           account_id: string
+          accounting_category?: string | null
           color?: string | null
           created_at?: string
           icon?: string | null
           id?: string
           is_active?: boolean
           name: string
+          parent_family_id?: string | null
           position?: number
           scope: string
           template_id?: string | null
         }
         Update: {
           account_id?: string
+          accounting_category?: string | null
           color?: string | null
           created_at?: string
           icon?: string | null
           id?: string
           is_active?: boolean
           name?: string
+          parent_family_id?: string | null
           position?: number
           scope?: string
           template_id?: string | null
@@ -5376,6 +5382,13 @@ export type Database = {
             columns: ["template_id"]
             isOneToOne: false
             referencedRelation: "dish_family_template"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recipe_family_parent_family_id_fkey"
+            columns: ["parent_family_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_family"
             referencedColumns: ["id"]
           },
         ]
