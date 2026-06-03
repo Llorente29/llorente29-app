@@ -46,7 +46,7 @@ Cadencia: en cada paso, antes de cerrarlo, Claude para SOLO y aplica el control 
 ---
 1. ESTADO VIVO ⟵ se regenera cada sesión
 
-**Última actualización: 2026-06-03. Hoy: (a) RPC menu_item_economics corregida a fuente única de comisión en brand_channel_rate (deuda 0, 3 columnas residuales eliminadas); (b) webhook Last.app — captura fiscal completa (tax/taxable_base) + se descubrió y resolvió una CAÍDA SILENCIOSA del webhook (verify_jwt reactivado por un deploy sin --no-verify-jwt → 401 del gateway → ninguna venta entró desde el 01/06, sin alarma); (c) concepto del MOTOR DE MARGEN REAL afilado con Julio (ver §1.5). Build verde, 0 0. Commits 4ab3788 (comisión) y a7e6935 (captura fiscal).**
+**Última actualización: 2026-06-03 (continuación). Hoy: (a) RPC comisión a fuente única (4ab3788); (b) captura fiscal del webhook + CAÍDA SILENCIOSA resuelta (--no-verify-jwt, a7e6935); (c) MOTOR DE MARGEN afilado (§1.5); (d) VIGILANTE DE INGESTA capas 2+3 CONSTRUIDO y validado E2E (§1.6) — ping sintético cada 10 min + watchdog Healthchecks + canal de alarma system-alert por email; capa 1 (frescura por horario) = deuda enganchada al módulo de Horarios. Commits 6322cb2 (contexto) y c5dc9ad (monitor). Build verde, 0 0.**
 
 > **NOTA DE MANTENIMIENTO:** el fichero VERDADERO es `C:\dev\llorente29-app\CONTEXTO_CLAUDE.md` (git). Al regenerar, partir del repo.
 
@@ -98,18 +98,19 @@ CEO: **Julio Gª Colón (García Colón)**, NO "Gascón". Admin Google: `jgcolon
 - **Añadir módulo al Shell = añadir línea en `moduleRegistry.ts`** + crear su `module.tsx`. CERO cambios en App.tsx/Shell.tsx (arquitectura modular G-8).
 - **Edge Functions:** cada una necesita su `deno.json` con `{"imports":{"@supabase/supabase-js":"jsr:@supabase/supabase-js@^2"}}`. Deploy: `npx supabase functions deploy <nombre>` (CLI enlazado).
 - **⚠️ REGLA CRÍTICA WEBHOOKS (03/06): los Edge Functions que reciben webhooks externos (lastapp-webhook, futuros glovo/catcher) SE DESPLIEGAN SIEMPRE con `--no-verify-jwt`.** Sin la flag, el deploy reactiva `verify_jwt` del gateway de Supabase → rechaza con `401 UNAUTHORIZED_INVALID_JWT_FORMAT` ANTES de ejecutar el código → corta TODA entrega del proveedor y EN SILENCIO (ni siquiera escribe en `lastapp_webhook_log`, porque el gateway corta antes que el código). La seguridad real la hace el token dentro del código (`LASTAPP_WEBHOOK_TOKEN`). Un deploy sin la flag tumbó el webhook el 03/06 y se perdieron pedidos del 01–03/06.
+- **⚠️ TRAMPA SQL EDITOR (BEGIN/COMMIT) (03/06): un bloque `BEGIN; … COMMIT;` pegado entero en el SQL Editor de Supabase puede DESCARTAR la transacción y NO aplicar los cambios, mostrando un "Success" ENGAÑOSO** (las tablas de monitorización no se crearon la 1ª vez por esto). Para puro DDL ejecutar SIN envoltorio (el editor ya es atómico por sentencia) y SIEMPRE VERIFICAR con information_schema justo después, sin fiarse del "Success". Coincide con §6.1.
 - **`npx supabase gen types ... > database.ts`** en PowerShell genera UTF-16 → git lo ve binario y rompe build. Reconvertir a UTF-8 sin BOM: `[System.IO.File]::WriteAllText(path, (Get-Content -Raw path), (New-Object System.Text.UTF8Encoding $false))`. Y siempre `--yes`.
 - **Supabase Vault** (v0.3.1, activo): `vault.create_secret(secret,name,desc)` / `vault.update_secret(id,...)` / `vault.decrypted_secrets` (vista). NUNCA INSERT crudo en vault.secrets (se loguea). Acceso solo server-side (service_role) vía wrappers en `public`.
 - **Roles:** `user_profiles` (user_id, account_id, role, active). admin/manager = gestión. Gating de credenciales valida rol en el wrapper con p_user_id (no auth.uid(), porque la Edge Function corre con service_role).
 - **P1 (base comisión) = PVP CON IVA.** La RPC `menu_item_economics` HOY usa `price` (sin IVA) → corregir.
 
 ### 1.4 — Próximos pasos priorizados
-1. **MONITORIZACIÓN / ALARMAS de ingesta** (NUEVO, prioridad alta tras el incidente 03/06): hoy una caída del webhook NO dispara ninguna alarma — se descubrió por casualidad. En producción con cliente esto es inaceptable. Diseñar vigilancia: "cuántos pedidos esperaba vs cuántos entraron", heartbeat del webhook, alerta si 0 ventas en X horas en horario operativo. Ver §1.6.
+1. **MONITORIZACIÓN de ingesta — capas 2+3 HECHAS (03/06, commit c5dc9ad).** Ver §1.6. Capa 1 (frescura por horario) = DEUDA OBLIGATORIA enganchada al módulo de Horarios.
 2. **Verificación en vivo** del primer pedido real post-fix (que entre con service_type/tax poblados).
-3. **Reproceso** de pedidos 28/05–03/06 desde `lastapp_webhook_log` con el function nuevo (los escritos con la versión vieja tienen service_type/tax null; los del 01–03/06 puede que no llegaran — ver si Last reintenta/reenvía).
-4. **Motor de margen real** (§1.5): tramo grande, diseño afilado pendiente de bajar a modelo. Requiere dato fiable (este tramo) + integración Catcher/Jelp + pantalla Canales.
-5. **Glovo G1** al recibir acceso (ticket INTSUPPO-1382).
-6. Pantalla Canales. Bandeja superadmin. Apunte auto_accept.
+3. **Reproceso** de pedidos 28/05–03/06 desde `lastapp_webhook_log` con el function nuevo (los viejos tienen service_type/tax null; los del 01–03/06 puede que no llegaran — ver si Last reintenta/reenvía).
+4. **Módulo de HORARIOS del cliente** (NUEVO frente, prerrequisito de Capa 1 y de la decisión propio-vs-plataforma): variables por estudiar — por marca / por local, DÓNDE vive (¿brand o location? probablemente el horario base es del local y la marca acota dentro), festivos, excepciones, edición por el cliente. Al construirlo, CERRAR Capa 1 "sin excusas".
+5. **Motor de margen real** (§1.5): tramo grande. Requiere dato fiable (hecho) + integración Catcher/Jelp + pantalla Canales.
+6. **Glovo G1** al recibir acceso (ticket INTSUPPO-1382). Pantalla Canales. Bandeja superadmin. Apunte auto_accept.
 7. **Producción Llorente29 objetivo: 7 sept 2026.**
 
 ### 1.5 — MOTOR DE MARGEN REAL (concepto afilado con Julio 03/06) — NO PERDER
@@ -124,9 +125,15 @@ De ahí, lo que golea:
 7. **Trazabilidad abrible:** cada cifra de margen se abre agregado→plato→pedido→cargo real de Catcher. La IA LEE ese desglose y lo explica en lenguaje de cocinero (anti-invención: no fabrica el número, traduce el que la BBDD calculó).
 Las tres patas del dato: coste receta + comisión real (config) + transporte real (Catcher/Jelp, integración pendiente). El cargo de envío al cliente es INGRESO y solo existe en reparto propio.
 
-### 1.6 — INCIDENTE 03/06 (caída silenciosa del webhook) + DEUDA DE MONITORIZACIÓN
-Qué pasó: el webhook de Last.app dejó de entregar ventas (cero desde el 01/06). Causa confirmada: el deploy reactivó `verify_jwt` del gateway → 401 antes del código → corte total y SIN log. Resuelto con redeploy `--no-verify-jwt` (ping → 200, log escrito). Ver regla en §1.3.HALLAZGOS.
-**LO IMPORTANTE (Julio): una inconsistencia tan grave no disparó ninguna alarma.** En producción con un cliente real esto es ruina (días de ventas sin registrar, food cost/márgenes/decisiones sobre datos incompletos, y nadie se entera). DEUDA DE MONITORIZACIÓN declarada, prioridad alta antes de producción (7 sept): heartbeat del webhook, alerta si 0 ventas en ventana operativa, contraste "esperado vs ingerido", y vigilancia de despliegues que puedan reactivar verify_jwt. Diseño pendiente.
+### 1.6 — INCIDENTE 03/06 (caída silenciosa) + VIGILANTE DE INGESTA (capas 2+3 CONSTRUIDAS)
+Qué pasó: el webhook de Last.app dejó de entregar ventas (cero desde el 01/06). Causa: el deploy reactivó `verify_jwt` del gateway → 401 antes del código → corte total y SIN log. Resuelto con redeploy `--no-verify-jwt`. Ver regla en §1.3.HALLAZGOS.
+**Respuesta (Julio): "una inconsistencia tan grave no disparó ninguna alarma; en producción es una ruina".** Benchmark (dead-man's-switch / heartbeat; pg_cron+pg_net nativos de Supabase Pro): vigilar la AUSENCIA exige un actor activo y defensa POR CAPAS. Diseño aprobado y CONSTRUIDO 03/06 (commit c5dc9ad):
+- **Capa 2 — ping sintético (HECHA):** Edge Function `ingestion-synthetic-ping` (deploy --no-verify-jwt). pg_cron job `ingestion-synthetic-ping` (jobid 5, `*/10 * * * *`) hace POST con token al `lastapp-webhook` y comprueba 200+ok:true. Si falla y fuera de cooldown (180 min) → email. Es la capa que caza el fallo de hoy aunque no fluya ni un pedido. Validada E2E (ping real ok; `?simulate=fail` dispara email; cooldown ok).
+- **Capa 3 — watchdog externo (HECHA):** la function hace check-in a Healthchecks.io (`HEALTHCHECKS_PING_URL` en secrets; check Period 10m/Grace 5m, email a jgcolon@idasal.com) en cada ejecución. Si cron/Supabase mueren, Healthchecks avisa = guardián del guardián.
+- **Canal de alarma (HECHO):** Edge Function `system-alert` (deploy --no-verify-jwt, gating `CRON_SECRET`) manda email vía Resend (de no-reply@folvy.app a SYSTEM_ALERT_TO=jgcolon@idasal.com), SEPARADO del correo de clientes. Reutilizable por Capa 1.
+- **Modelo:** tablas `ingestion_monitor_config` (por cuenta: enabled, timezone, service_windows jsonb, freshness_threshold_minutes, alert_cooldown_minutes) + `ingestion_monitor_state` (salud + antifuego). RLS: lectura admin/manager, escritura solo platform admin. Seed Llorente29 (`51ad1792-...`) enabled=true, service_windows VACÍO. Migración `20260603T1600_ingestion_monitor.sql`.
+- **Secrets nuevos:** `CRON_SECRET`, `SYSTEM_ALERT_TO`, `HEALTHCHECKS_PING_URL` (CRON_SECRET inline en el cron job a propósito: baja sensibilidad, evita lectura de Vault que podría enmudecer el vigilante en silencio).
+- **DEUDA OBLIGATORIA — Capa 1 (frescura por horario):** PENDIENTE, cerrar "sin excusas" al construir el módulo de Horarios (§1.4 punto 4). Derivar ventanas del histórico de ventas es un PROXY que da falsas alarmas cuando el cliente cierra/libra/cambia temporada; fuente honesta = horario declarado. Por eso `service_windows` va vacío y Capa 1 no se construyó con el proxy. Multi-cliente: cada cuenta su horario (refuerza usar el módulo, no el proxy).
 **Datos diagnóstico (vigentes):** histórico hasta 27/05 = backfill de Excel (ruido en importes: descuento/total dudosos → FUERA del motor de margen; quizá válido solo para popularidad, a decidir). Webhook real desde 28/05 (created_at≈sold_at). El `raw_products` guarda SOLO el array de productos; el desglose económico (tax/taxableBase/deliveryFee/discountTotal/pickupType) llega en el payload del webhook y desde el 03/06 se captura entero. courier.name NO lo rellena Last (da igual: pickupType ya separa delivery vs ownDelivery).
 
 ### 1.11 — NOTA HISTÓRICA
