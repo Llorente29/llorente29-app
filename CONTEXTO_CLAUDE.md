@@ -46,121 +46,77 @@ Cadencia: en cada paso, antes de cerrarlo, Claude para SOLO y aplica el control 
 ---
 1. ESTADO VIVO ⟵ se regenera cada sesión
 
-**Última actualización: 2026-06-03 (continuación 2). Hoy además: (e) FRENTE COSTE REAL / Artículos-Proveedores (§1.7) — RECON DE ÁREA reveló que TODO el cimiento ya estaba construido (modelo compras + 6 funciones + triggers + UI v1 + cascada a platos), no estaba verde sino VACÍO de datos; validado E2E en la app (Cebolla Morada → MAKRO Saco 5000g 8,50€ → 0,0017€/g → 36 platos recalculados solos); reconciliado coste de raw a UNA verdad (commit bc28560); nueva REGLA DE MÉTODO recon de área (memoria #18). Commits 27e093d (contexto monitor) y bc28560 (reconciliación). Build verde, 0 0.**
+**Última actualización: 2026-06-03 (CIERRE jornada). Hoy: (A) cerrada monitorización de ingesta capas 2+3; (B) FRENTE COSTE REAL arrancado y muy avanzado — descubierto que el cimiento (artículos/proveedores/formatos) YA estaba construido, validado coste real end-to-end, y CERRADO el sub-frente de FAMILIAS DE INGREDIENTE completo (clasificación IA + revisión + filtro + gestor CRUD con subfamilias); (C) hallazgo crítico de ARQUITECTURA DE CUENTAS. ~10 commits, build verde, 0 0, working tree limpio.**
 
-> **NOTA DE MANTENIMIENTO:** el fichero VERDADERO es `C:\dev\llorente29-app\CONTEXTO_CLAUDE.md` (git). Al regenerar, partir del repo.
+> **NOTA DE MANTENIMIENTO:** el fichero VERDADERO es `C:\dev\llorente29-app\CONTEXTO_CLAUDE.md` (git). Al regenerar, partir del repo. La fuente de verdad técnica es la BBDD+repo, no este relato (los errores componen — regla recon de área 03/06).
 
 ### 1.0 — CORRECCIÓN DE DATO (vigente)
-CEO: **Julio Gª Colón (García Colón)**, NO "Gascón". Admin Google: `jgcolon@idasal.com`. Correo partners/integraciones: `partners@folvy.app`.
+CEO: **Julio Gª Colón (García Colón)**, NO "Gascón". Admin Google: `jgcolon@idasal.com`. Correo partners/integraciones: `partners@folvy.app`. **Folvy es para TODA la hostelería, no solo dark kitchens.**
 
-### 1.0.bis — DECISIÓN ESTRATÉGICA MAYOR (02/06) — NO PERDER
-**Folvy es INTEGRADOR DIRECTO de las plataformas de delivery (Glovo primero), sin intermediarios.** Razones de Julio: (1) coste (Last 525€/mes estrangula la propuesta Folvy+cliente); (2) concepto 360 (Folvy es el centro); (3) control del flujo de datos (materia prima de todo Folvy — quien controla el grifo controla Folvy); (4) fidelización estructural (si Folvy ES la integración, el cliente no se va sin romper su operación). Ningún intermediario (HubRise/KitchenHub/Otter/Deliverect) resuelve el punto 3. Confirmado VIABLE: Glovo y Uber tienen programa de partners con staging, sin cobrar por la API.
+### 1.0.bis — ARQUITECTURA DE CUENTAS (03/06, CRÍTICO — NO CONFUNDIR)
+- **`Folvy Interno` (account_id `00000000-0000-0000-0000-000000000001`) = BANCO DE PRUEBAS.** Aquí vive TODO el trabajo real de desarrollo: 162 raws, 215 dishes, ~12K ventas, 55 familias de plato + 15 de ingrediente. **Para Kitchen/coste trabajar SIEMPRE aquí.**
+- **`Llorente29` (`51ad1792-6629-4ef7-833a-b57b09a86710`) = CLIENTE REAL, hoy VACÍO** (0 raws/dishes/ventas). Se poblará migrando desde Folvy Interno cuando esté listo.
+- **Futuro:** cuenta "cliente base" con semillas/plantillas para onboarding de clientes nuevos.
+- **REGLA:** verificar el `account_id` real con SELECT antes de sembrar/configurar. NO asumir Llorente29. (Hoy se corrigió el vigilante de ingesta y el seed de familias, que estaban por error en la cuenta vacía.)
 
-### 1.0.ter — CORRECCIÓN DE DATO MAYOR (03/06) — Llorente29 SÍ tiene reparto propio
-**El CONTEXTO decía "Llorente29 = 0% reparto propio". ES FALSO.** Realidad confirmada por Julio (03/06): en Llorente29 **toda venta de Glovo y Just Eat es REPARTO PROPIO**, gestionado vía **Catcher o Jelp**. **Solo Uber lo reparte Uber** (y es variable según decida el propietario). Implicación: el coste real de reparto (Catcher/Jelp) entra YA, no es estructura futura; y la decisión propio-vs-plataforma (§1.5) es operativa hoy. **Jelp** es proveedor nuevo (no estaba en el CONTEXTO) — su API/webhook aún sin estudiar, como Catcher.
+### 1.0.ter — DECISIÓN ESTRATÉGICA MAYOR (02/06) — NO PERDER
+**Folvy es INTEGRADOR DIRECTO de las plataformas de delivery (Glovo primero), sin intermediarios.** Razones: coste, concepto 360, control del flujo de datos, fidelización estructural. Confirmado viable (Glovo/Uber tienen partner program con staging gratis).
 
 ### 1.1 — Dónde estamos HOY (estado construido)
 
-**MÓDULO DE INTEGRACIONES "Folvy Connect" — TERMINADO y en producción:**
-- **I1 (modelo):** tablas `connector` + `account_connector` + RLS + tipos + `connectorService`. Catálogo sembrado: glovo (sort 5), lastapp (10), catcher (20).
-- **I2 (pantallas):** módulo `src/modules/integrations/module.tsx` (id 'integrations', basePath 'integraciones', icono Cable, topBarOrder 5, gating manager) + línea en `moduleRegistry.ts` (SIN tocar App.tsx ni Shell — arquitectura modular: añadir módulo = añadir línea). Pantallas: `IntegrationsPage` (Tus integraciones), `IntegrationsMarketplacePage` (Marketplace, patrón lista+detalle), `ConnectorDetailPage` (configuración).
-- **Logos de marca:** bucket Storage `connector-logos` (público) con glovo/ubereats/justeat/catcher/lastapp.png (256×256, fondo blanco). `connector.logo_url` poblado (glovo/lastapp/catcher). Componente `ConnectorAvatar` (logo + fallback a inicial sobre color de marca). Procesados por Claude desde los originales de Julio.
-- **D2 (cifrado de credenciales con Vault) — COMPLETO y verificado end-to-end:**
-  - `account_connector.config jsonb` (campos NO sensibles: store_ids, auto_accept, verify_signature).
-  - Funciones wrapper `public.connector_secret_save/status/clear` + `connector_assert_manager` (SECURITY DEFINER, search_path public+vault, REVOKE a anon/authenticated, GRANT solo service_role). Migración `20260602T2200`.
-  - Edge Function `connector-credentials` (desplegada): valida JWT del usuario (saca user_id real), llama a los wrappers con service_role. Doble gating. Secreto NUNCA vuelve al front ni se loguea. Cada Edge Function necesita su `deno.json` con import map (`jsr:@supabase/supabase-js@^2`).
-  - `connectorCredentialsService.ts` (front, patrón functions.invoke tipado de accountsAdminService).
-  - **Verificado en prod:** save (token de prueba cifrado en `vault.secrets` como `connector:<uuid>`, solo referencia en `credentials_ref`), status, clear (borra el secreto de Vault de verdad → 0 secretos). Conexión de prueba borrada, todo limpio.
+**FRENTE COSTE REAL / Kitchen (03/06) — el cimiento YA estaba construido (no en el CONTEXTO previo):**
+- **Modelo de compras (existía):** `supplier`, `article_supplier` (recipe_item_id, supplier_id, last_price, is_preferred, purchase_format_id, supplier_code), `recipe_item_purchase_format` (anidado: parent_format_id, qty_per_parent, qty_in_base puente al escandallo, is_piece/is_weighted, source, ai_confidence, needs_review), `purchase`+`purchase_line` (vacías).
+- **Funciones (existían):** `kitchen_recompute_raw_cost` (costea raw desde proveedor+formato: last_price/qty_in_base; strategies fixed/last_purchase/average_*; fallback honesto conserva coste+needs_review) + trigger `trg_article_supplier_recompute_cost`. `kitchen_recompute_item` (raw/tool DELEGA en recompute_raw_cost — una sola verdad, reconciliado commit bc28560). Cascada `costCascadeService` VIVA (al cambiar coste de un raw, recalcula los platos que lo usan). `kitchen_ancestors_of`, `run_mapping` (x2 firmas: BUSCADOR de ingredientes texto→recipe_item, sirve al paso 4).
+- **UI (existía):** SuppliersPage, KitchenItemsPage, KitchenItemDetailPage, PurchaseSourcesSection, SupplierItemsSection, purchaseFormatService, costCascadeService.
+- **VALIDADO E2E hoy:** añadido proveedor MAKRO + formato "Saco" 5000g/8,50€ a Cebolla Morada → coste 0,0017€/g, "Desde la compra", 36 platos recalculados (cascada viva). El frente no estaba verde por construir, sino por POBLAR + mejoras UI.
+- **Pasos UI cerrados:** (1) bug "–/g" en ficha (effectiveCost = computedCost ?? fixedCost, commit 8ec5883); (2) ver QUÉ platos se recalculan, como chips (9d75f9b).
 
-**CONECTOR GLOVO — preparado, esperando acceso de Glovo:**
-- Diseño completo (`docs/folvy_conector_glovo_diseno.md`) con 8 hallazgos de mercado y 5 decisiones cerradas (D1 modificadores tras G2; D2 cifrado Vault; D3 auto-aceptar por defecto configurable; D4 desglose a raw_products primero; D5 verificar firma Glovo-Signature desde G1).
-- Sembrado en catálogo (`connector` glovo, config_schema: shared_token/store_ids/auto_accept/verify_signature).
-- **ACCESO SOLICITADO:** email a `partner.integrationseu@glovoapp.com` enviado → Glovo creó **ticket INTSUPPO-1382** ("We're on it", en cola). Acceso vía Glovo Internal Service Desk (Jira). Plazo ref. 3-5 días lab.
-- API oficial: `definition.yaml` (OpenAPI 3.0). Stage `stageapi.glovoapp.com`. Auth: shared token + firma Glovo-Signature opcional. Webhooks dispatched/cancelled + ciclo de vida (accept/ready/out_for_delivery/picked_up) + push de menú + LAAS. Endpoint sólido decidido: `api.folvy.app/glovo/orders/*` (dominio propio, no Supabase directo — montar en G1).
-- Dato superior a Last para EP1: order_type nativo, detailed_fees, glovo_discounts vs restaurant_discounts separados.
+**SUB-FRENTE FAMILIAS DE INGREDIENTE — COMPLETO (03/06, en producción):**
+- **Modelo:** `dish_family` renombrada a **`recipe_family`** (1 sola dependencia, rename limpio) + columna `scope` ('dish'|'ingredient') + jerarquía `parent_family_id` (self-FK, 2 niveles, subfamilias) + `accounting_category`. Migraciones 20260603T1800 y T1900. recipe_item.family_id → recipe_family. recipe_family NO tiene updated_at.
+- **15 familias de ingrediente** alineadas con **AECOC CEP** (estándar español del gran consumo). Las 55 de plato intactas.
+- **Clasificación IA:** Edge Function `map-products` ampliada (aditiva) con modo `recipe_item→recipe_family` (función classifyIngredients, por TANDAS de 40 para no superar 150s del gateway). Patrón "IA propone (mapping_proposal) → humano aprueba (escribe family_id)". Lanzada sobre los 162: **106 auto_confirmed + 56 needs_review, 0 sin familia**. Reversible (no toca family_id hasta aprobar).
+- **UI:** `FamilyReviewPanel` (banner + panel revisión, aprobar bloque/individual, familia corregible), buscador + filtro por familia + chip en KitchenItemsPage, `FamilyManagerPanel` (gestor CRUD: crear raíz/subfamilia, renombrar, categoría contable, archivar con reasignación, reordenar con flechas). `ingredientFamilyService` (listar/árbol/CRUD/aprobar). Botón "Familias" en Ingredientes (config contextual).
+- Commits: 7d0a6a4 (3a modelo), e87de68 (3b+3c.1), 3d21eb9 (3c.2+3d), 2daae1b (G1 jerarquía), 479ecd3 (G2+G3 gestor).
+
+**MONITORIZACIÓN DE INGESTA (capas 2+3) — cerrada al inicio de hoy:**
+- Tablas `ingestion_monitor_config` + `ingestion_monitor_state`. Edge Functions `system-alert` (email Resend, gating CRON_SECRET) e `ingestion-synthetic-ping` (capa 2 ping cada 10min al webhook + capa 3 check-in Healthchecks). pg_cron jobid 5. Deploy `--no-verify-jwt`. Commits c5dc9ad, 27e093d. Config corregida hoy → ahora apunta a `0000...0001` (cuenta real con ventas).
+- **Capa 1 (frescura por horario) = DEUDA**, enganchada al módulo de Horarios futuro.
+
+**Folvy Connect (delivery) — TERMINADO 02/06 (sin cambios hoy):** módulo Integraciones I1+I2, logos, D2 (cifrado Vault, Edge Function connector-credentials, verificado E2E). Conector Glovo sembrado, ACCESO SOLICITADO (ticket INTSUPPO-1382, en cola).
 
 ### 1.2 — INTEGRADORES (evaluación cerrada)
-- **Last.app:** 525€/mes, tiene Glovo+Uber+JustEat-España hoy. A sustituir por integración directa.
-- **HubRise:** middleware white-label barato, pero Glovo-España incierto + sigue siendo intermediario. Rebajado a segunda fila (puente o clientes sin Glovo). Respuesta de Janaina ya recibida y registrada.
-- **KitchenHub** (USA, sin plataformas europeas), **Otter** (compite), **Deliverect** (compite + caro): descartados.
+Last.app (525€/mes, a sustituir), HubRise (segunda fila), KitchenHub/Otter/Deliverect (descartados). Folvy = integrador directo.
 
 ### 1.3 — DEUDA VIVA / FRENTES (por prioridad)
-1. **CONECTOR GLOVO G1** (recepción real): BLOQUEADO esperando acceso al stage (ticket INTSUPPO-1382). Al llegar: Edge Function `glovo-webhook` → `sale` (service_type/fees/descuentos) → dedup por order_id → multi-tenant por store_id. + montar dominio `api.folvy.app/glovo/*`. + leer el secreto de Vault (vía D2) para verificar el token.
-2. **RPC `menu_item_economics`** — HECHA el 03/06 (commit 4ab3788). Lee la comisión SOLO de `brand_channel_rate` por `service_type` (param `p_service_type` DEFAULT 'platform_delivery'), respeta `commission_base` (pvp_con_iva|pvp_sin_iva), NULL honesto sin tarifa. Eliminadas las 3 columnas residuales (brand.commission_pct, brand_channel.commission_pct/fixed, sales_channel.default_commission_pct) + sus mapeos front. Pendiente de feature (NO deuda): pantalla **Canales** (escritor de brand_channel_rate; el service brandChannelRateService.ts ya existe, falta UI). Hasta que exista, la economía muestra comisión/margen NULL (correcto).
-3. **G2 push catálogo Glovo** (tras G1): mapear menu_item→árbol Glovo. H1 (tras upload, re-enviar disponibilidad) + H2 (IDs exactos en external_codes). Dependencia: modelo de MODIFICADORES (no existe aún).
-4. **Catcher I3**: Edge Function `catcher-webhook`, captura transportPrice, cruce externalId. Espera credenciales. Sandbox `staging-api.catcher.es`.
-5. **Bandeja de solicitudes superadmin** (conectores request/managed_by superadmin).
-6. **Pantalla "Canales"** (comisiones brand_channel_rate por marca×canal×reparto).
-7. **APUNTE menor (pulir en G1):** el desplegable `auto_accept` de ConnectorDetailPage muestra "Sí" por defecto pero guardó `false` en la prueba → alinear el valor visible inicial con el que se persiste.
-8. Seguridad: rotación service_role/webhook tokens. Code-splitting (~677KB gzip). 34 platos needs_review.
+1. **PASO 4 — IA FACTURA→COSTE** (frente coste, el más ambicioso, EN COLA): foto de albarán/factura → casar líneas con ingrediente (vía `run_mapping`, el buscador) → actualizar precio en article_supplier, con revisión humana. Reúsa patrón extract-recipe + map-products + run_mapping. Cierra el bucle del coste real.
+2. **Aplicar las clasificaciones de familia pendientes** (las propuestas siguen en mapping_proposal hasta pulsar "aplicar"; cerrar cuando se quiera).
+3. **CONECTOR GLOVO G1** (recepción real): BLOQUEADO esperando acceso al stage (ticket INTSUPPO-1382). Al llegar: Edge Function `glovo-webhook`→sale + dominio `api.folvy.app/glovo/*` + leer token de Vault (D2).
+4. **RPC `menu_item_economics`** (EP1): cerrable ya (Llorente29=100% platform_delivery). Corregir comisión sobre `price_with_vat` (hoy `price` sin IVA). Verificar desde la app.
+5. **Catcher I3** (espera credenciales). Pantalla "Canales" (brand_channel_rate). Bandeja superadmin.
+6. **Zona "Ajustes" en Kitchen** (DEUDA declarada): agrupar configuraciones (familias/unidades/formatos/coste/IA). Disparador: ≥3 configuraciones. Hoy solo familias.
+7. **Mejora declarada:** en lista de "platos recalculados", poder pinchar un plato y navegar a su ficha (cablear navegación ingrediente→plato en patrón lista+detalle de Kitchen).
+8. Seguridad: rotar service_role/webhook tokens. Code-splitting (~682KB gzip). 34 platos needs_review. Medidor coste IA por cuenta (prerequisito 2º cliente). Apunte auto_accept de ConnectorDetailPage.
 
 ### 1.3.HALLAZGOS técnicos (vigentes)
-- **Añadir módulo al Shell = añadir línea en `moduleRegistry.ts`** + crear su `module.tsx`. CERO cambios en App.tsx/Shell.tsx (arquitectura modular G-8).
-- **Edge Functions:** cada una necesita su `deno.json` con `{"imports":{"@supabase/supabase-js":"jsr:@supabase/supabase-js@^2"}}`. Deploy: `npx supabase functions deploy <nombre>` (CLI enlazado).
-- **⚠️ REGLA CRÍTICA WEBHOOKS (03/06): los Edge Functions que reciben webhooks externos (lastapp-webhook, futuros glovo/catcher) SE DESPLIEGAN SIEMPRE con `--no-verify-jwt`.** Sin la flag, el deploy reactiva `verify_jwt` del gateway de Supabase → rechaza con `401 UNAUTHORIZED_INVALID_JWT_FORMAT` ANTES de ejecutar el código → corta TODA entrega del proveedor y EN SILENCIO (ni siquiera escribe en `lastapp_webhook_log`, porque el gateway corta antes que el código). La seguridad real la hace el token dentro del código (`LASTAPP_WEBHOOK_TOKEN`). Un deploy sin la flag tumbó el webhook el 03/06 y se perdieron pedidos del 01–03/06.
-- **⚠️ TRAMPA SQL EDITOR (BEGIN/COMMIT) (03/06): un bloque `BEGIN; … COMMIT;` pegado entero en el SQL Editor de Supabase puede DESCARTAR la transacción y NO aplicar los cambios, mostrando un "Success" ENGAÑOSO** (las tablas de monitorización no se crearon la 1ª vez por esto). Para puro DDL ejecutar SIN envoltorio (el editor ya es atómico por sentencia) y SIEMPRE VERIFICAR con information_schema justo después, sin fiarse del "Success". Coincide con §6.1.
-- **`npx supabase gen types ... > database.ts`** en PowerShell genera UTF-16 → git lo ve binario y rompe build. Reconvertir a UTF-8 sin BOM: `[System.IO.File]::WriteAllText(path, (Get-Content -Raw path), (New-Object System.Text.UTF8Encoding $false))`. Y siempre `--yes`.
-- **Supabase Vault** (v0.3.1, activo): `vault.create_secret(secret,name,desc)` / `vault.update_secret(id,...)` / `vault.decrypted_secrets` (vista). NUNCA INSERT crudo en vault.secrets (se loguea). Acceso solo server-side (service_role) vía wrappers en `public`.
-- **Roles:** `user_profiles` (user_id, account_id, role, active). admin/manager = gestión. Gating de credenciales valida rol en el wrapper con p_user_id (no auth.uid(), porque la Edge Function corre con service_role).
-- **P1 (base comisión) = PVP CON IVA.** La RPC `menu_item_economics` HOY usa `price` (sin IVA) → corregir.
+- **REGLA RECON DE ÁREA (03/06):** antes de diseñar/construir un frente, verificar fuente primaria (BBDD+repo): tablas ILIKE, columnas+constraints, FUNCIONES que tocan las tablas (pg_proc.prosrc ILIKE), TRIGGERS, git grep, conteos. NO fiarse del CONTEXTO. Los errores componen.
+- **Webhooks externos** (lastapp/futuros): deploy SIEMPRE `--no-verify-jwt`. **Funciones NO-webhook** (map-products, connector-credentials): deploy normal (necesitan el gateway JWT).
+- **Edge Functions IA:** patrón Anthropic montado (endpoint, `ANTHROPIC_API_KEY` en secrets, modelos `claude-opus-4-8` visión / `claude-sonnet-4-6` mapeo). Auth dual JWT usuario o `x-internal-key`=service-role. Límite gateway 150s → procesar por tandas.
+- **Sistema de mapeo unificado:** `mapping_proposal` (source_kind/target_kind texto libre, sin CHECK que los limite; CHECKs solo en method/status/confidence) + `mapping_candidate`. Patrón IA-propone-humano-aprueba para TODO Folvy (ventas, clasificación, factura→coste).
+- **`run_mapping`** = BUSCADOR de ingredientes (texto+código → recipe_item, por code/exacto/normalizado/fuzzy trgm). Sirve al PASO 4, no a clasificar familias.
+- **Coste:** SUM(line costs)=computed_cost siempre. Coste con cantidad GROUS (bruto). cost_strategy ∈ {fixed, last_purchase, average_weighted, average_window}.
+- **database.ts:** `npx supabase gen types ... --yes` + reconvertir UTF-8 sin BOM (PowerShell genera UTF-16). Regenerar tras cada cambio de esquema.
+- **SQL Editor:** auth.uid() null → no testear SECURITY DEFINER ahí. DDL sin BEGIN/COMMIT (el editor descarta el bloque con "Success" engañoso). Verificar con information_schema aparte.
+- **Token Last expuesto en chat (`247ef137-...`) + service-role:** ROTAR (deuda viva).
 
 ### 1.4 — Próximos pasos priorizados
-1. **MONITORIZACIÓN de ingesta — capas 2+3 HECHAS (03/06, commit c5dc9ad).** Ver §1.6. Capa 1 (frescura por horario) = DEUDA OBLIGATORIA enganchada al módulo de Horarios.
-2. **Verificación en vivo** del primer pedido real post-fix (que entre con service_type/tax poblados).
-3. **Reproceso** de pedidos 28/05–03/06 desde `lastapp_webhook_log` con el function nuevo (los viejos tienen service_type/tax null; los del 01–03/06 puede que no llegaran — ver si Last reintenta/reenvía).
-4. **Módulo de HORARIOS del cliente** (NUEVO frente, prerrequisito de Capa 1 y de la decisión propio-vs-plataforma): variables por estudiar — por marca / por local, DÓNDE vive (¿brand o location? probablemente el horario base es del local y la marca acota dentro), festivos, excepciones, edición por el cliente. Al construirlo, CERRAR Capa 1 "sin excusas".
-5. **FRENTE COSTE REAL / Artículos-Proveedores (§1.7) — ABIERTO, cimiento validado.** Lo que queda: cargar datos (162 raws con proveedor+formato+precio; hoy solo 1), clasificar raws en familias (55 familias existen, 0 raws clasificados → con IA), IA factura→coste, catálogo estándar (plantillas ya sembradas), + mejoras UI (ver qué platos al cambiar coste; bug coste '–/g' cuando estrategia=fixed).
-6. **Motor de margen real** (§1.5): tramo grande. Requiere dato fiable (en marcha §1.7) + integración Catcher/Jelp + pantalla Canales.
-7. **Glovo G1** al recibir acceso (ticket INTSUPPO-1382). Pantalla Canales. Bandeja superadmin. Apunte auto_accept.
-8. **Producción Llorente29 objetivo: 7 sept 2026.**
-
-### 1.5 — MOTOR DE MARGEN REAL (concepto afilado con Julio 03/06) — NO PERDER
-Tesis: el diferenciador de Folvy NO es la matriz de ingeniería de menús (eso lo copian todos: meez/Apicbase/R365 plotean Estrellas/Caballos/Puzzles/Perros sobre popularidad×rentabilidad). El diferenciador es el DATO que nadie tiene y QUÉ se hace con él. Folvy tiene la línea de ticket real, por canal, con promo y modificador, en vivo, y ES la tubería (integrador directo).
-De ahí, lo que golea:
-1. **Margen REALIZADO, no teórico.** Precio − coste receta − comisión real − transporte real − promo atribuida, a nivel de línea de ticket. Un plato "Estrella" de carta puede estar sangrando si el 70% se vendió con 2x1. Nadie lo ve porque nadie tiene la línea con la promo atribuida.
-2. **Decisión propio-vs-plataforma (clave, Julio).** Glovo cobra 30% si reparte Glovo, 15% si repartes tú. Si repartes tú: ahorras 15%·PVP de comisión Y te quedas el cargo de envío al cliente (3–4,5€, que con reparto de plataforma es de Glovo y desaparece de tu lado). **Límite de coste de reparto propio = 15%·PVP + cargo de envío al cliente.** Por debajo, conviene repartir tú; por encima, mejor que reparta la plataforma. Varía POR PEDIDO (PVP y coste Catcher/Jelp variables). KPI estrella: "X pedidos repartidos por ti superaron el límite → te costó N€ repartir cuando debías dejar a la plataforma". Imposible sin dato a nivel pedido + integración Catcher/Jelp.
-3. **Reparto del transporte entre platos:** el coste de transporte es POR PEDIDO; se guarda crudo a nivel `sale` (intocable, trazable). El reparto por plato (prorrateo por PVP facturado — Opción B) es una VISTA de análisis, no un dato escrito. Dos lentes: margen por PEDIDO (verdad pura) y por PLATO (prorrateado). Spread estimado-vs-real de transporte = alerta de oro.
-4. **Config por HERENCIA (clave, Julio — "si no, muere la primera semana"):** con 17 marcas × canales × cientos de artículos, configurar plato a plato es inviable. Comisión a nivel canal, objetivo food cost a nivel categoría, solo excepciones a nivel plato. 1000 artículos = 5 reglas. Cambias comisión de Glovo → tocas UNA regla → recalcula todo; con vigencia temporal el histórico queda intacto.
-5. **Vigencia temporal de tarifas** (recomendado deuda 0): sin "válida-desde/hasta", cambiar una comisión corrompe el cálculo histórico. `brand_channel_rate` hoy NO la tiene → decisión de modelo antes de construir.
-6. **Fees extensibles:** modelo de conceptos, no columnas fijas (Glovo puede añadir tasas nuevas).
-7. **Trazabilidad abrible:** cada cifra de margen se abre agregado→plato→pedido→cargo real de Catcher. La IA LEE ese desglose y lo explica en lenguaje de cocinero (anti-invención: no fabrica el número, traduce el que la BBDD calculó).
-Las tres patas del dato: coste receta + comisión real (config) + transporte real (Catcher/Jelp, integración pendiente). El cargo de envío al cliente es INGRESO y solo existe en reparto propio.
-
-### 1.6 — INCIDENTE 03/06 (caída silenciosa) + VIGILANTE DE INGESTA (capas 2+3 CONSTRUIDAS)
-Qué pasó: el webhook de Last.app dejó de entregar ventas (cero desde el 01/06). Causa: el deploy reactivó `verify_jwt` del gateway → 401 antes del código → corte total y SIN log. Resuelto con redeploy `--no-verify-jwt`. Ver regla en §1.3.HALLAZGOS.
-**Respuesta (Julio): "una inconsistencia tan grave no disparó ninguna alarma; en producción es una ruina".** Benchmark (dead-man's-switch / heartbeat; pg_cron+pg_net nativos de Supabase Pro): vigilar la AUSENCIA exige un actor activo y defensa POR CAPAS. Diseño aprobado y CONSTRUIDO 03/06 (commit c5dc9ad):
-- **Capa 2 — ping sintético (HECHA):** Edge Function `ingestion-synthetic-ping` (deploy --no-verify-jwt). pg_cron job `ingestion-synthetic-ping` (jobid 5, `*/10 * * * *`) hace POST con token al `lastapp-webhook` y comprueba 200+ok:true. Si falla y fuera de cooldown (180 min) → email. Es la capa que caza el fallo de hoy aunque no fluya ni un pedido. Validada E2E (ping real ok; `?simulate=fail` dispara email; cooldown ok).
-- **Capa 3 — watchdog externo (HECHA):** la function hace check-in a Healthchecks.io (`HEALTHCHECKS_PING_URL` en secrets; check Period 10m/Grace 5m, email a jgcolon@idasal.com) en cada ejecución. Si cron/Supabase mueren, Healthchecks avisa = guardián del guardián.
-- **Canal de alarma (HECHO):** Edge Function `system-alert` (deploy --no-verify-jwt, gating `CRON_SECRET`) manda email vía Resend (de no-reply@folvy.app a SYSTEM_ALERT_TO=jgcolon@idasal.com), SEPARADO del correo de clientes. Reutilizable por Capa 1.
-- **Modelo:** tablas `ingestion_monitor_config` (por cuenta: enabled, timezone, service_windows jsonb, freshness_threshold_minutes, alert_cooldown_minutes) + `ingestion_monitor_state` (salud + antifuego). RLS: lectura admin/manager, escritura solo platform admin. Seed Llorente29 (`51ad1792-...`) enabled=true, service_windows VACÍO. Migración `20260603T1600_ingestion_monitor.sql`.
-- **Secrets nuevos:** `CRON_SECRET`, `SYSTEM_ALERT_TO`, `HEALTHCHECKS_PING_URL` (CRON_SECRET inline en el cron job a propósito: baja sensibilidad, evita lectura de Vault que podría enmudecer el vigilante en silencio).
-- **DEUDA OBLIGATORIA — Capa 1 (frescura por horario):** PENDIENTE, cerrar "sin excusas" al construir el módulo de Horarios (§1.4 punto 4). Derivar ventanas del histórico de ventas es un PROXY que da falsas alarmas cuando el cliente cierra/libra/cambia temporada; fuente honesta = horario declarado. Por eso `service_windows` va vacío y Capa 1 no se construyó con el proxy. Multi-cliente: cada cuenta su horario (refuerza usar el módulo, no el proxy).
-**Datos diagnóstico (vigentes):** histórico hasta 27/05 = backfill de Excel (ruido en importes: descuento/total dudosos → FUERA del motor de margen; quizá válido solo para popularidad, a decidir). Webhook real desde 28/05 (created_at≈sold_at). El `raw_products` guarda SOLO el array de productos; el desglose económico (tax/taxableBase/deliveryFee/discountTotal/pickupType) llega en el payload del webhook y desde el 03/06 se captura entero. courier.name NO lo rellena Last (da igual: pickupType ya separa delivery vs ownDelivery).
-
-### 1.7 — FRENTE COSTE REAL / Artículos-Proveedores (03/06) — CIMIENTO YA CONSTRUIDO, FALTAN DATOS
-Objetivo del frente: que el coste de cada escandallo salga de PRECIO REAL de proveedor, no de `fixed_cost` andamiaje (pata 1 del motor de margen §1.5). El RECON DE ÁREA (memoria #18) reveló que el CONTEXTO iba MUY por detrás: casi todo el cimiento YA ESTABA, solo vacío de datos y sin clasificar. Lo verificado contra fuente primaria:
-
-**Modelo de datos (existe, completo y bien diseñado):**
-- `supplier` (name, tax_id, email, phone, address, notes, health_registry_no, is_active…).
-- `article_supplier` (recipe_item_id, supplier_id, supplier_code, last_price, is_preferred, purchase_format_id) = precio por proveedor en un formato.
-- `recipe_item_purchase_format` (name, parent_format_id, qty_per_parent, qty_in_base, is_piece, is_weighted, source, ai_confidence, needs_review…) = formatos ANIDADOS caja→bolsa→unidad; `qty_in_base` = puente al escandallo.
-- `purchase` + `purchase_line` (cabecera/líneas de compra; hoy vacías = aún no hay recepción real, por eso average_weighted cae a last_price).
-- `dish_family` (name, color, icon, position, template_id) + `recipe_item.family_id` + `recipe_item.category`; `tag`+`recipe_item_tag`; y PLANTILLAS `dish_family_template`/`tag_template` (= base del catálogo estándar de cliente nuevo).
-
-**Funciones del área (existían, NO estaban en CONTEXTO):** `kitchen_recompute_raw_cost` (costea raw desde proveedor+formato: last_price/qty_in_base, estrategias fixed/last_purchase/average_*; fallback honesto conserva coste + needs_review), `kitchen_recipe_breakdown`, `kitchen_recipe_cost_by_location` (¡coste por LOCAL!), `location_economics`, `materialize_recipe_session`, `kitchen_dish_state_for_ai`, `kitchen_similar_dishes_for_ai`, `run_mapping` (x2 — el CONTEXTO la daba "pendiente, la más diferenciadora": YA EXISTE). Triggers sanos: `trg_article_supplier_recompute_cost` (recostea raw al tocar proveedor), `recipe_line_prevent_cycle`, `set_folvy_code`, varios `set_updated_at`.
-
-**UI v1 (existe, reciente 31/05–01/06):** `pages/SuppliersPage.tsx`, `pages/KitchenItemsPage.tsx`, `pages/KitchenItemDetailPage.tsx`, `components/PurchaseSourcesSection.tsx`, `components/SupplierItemsSection.tsx`, `services/purchaseFormatService.ts` (482 líneas, maduro), `services/costCascadeService.ts` (la propagación a platos que el CONTEXTO daba pendiente: HECHA). Lenguaje de cocinero ("¿Cómo viene?/¿Cuánto trae?/¿Cuánto te cuesta?"), cálculo en vivo (latido).
-
-**RECONCILIACIÓN deuda 0 (commit bc28560):** se había duplicado la rama `last_purchase` en `kitchen_recompute_item` → dos verdades del coste. Corregido: `kitchen_recompute_item`, para raw/tool, DELEGA en `kitchen_recompute_raw_cost`. Una sola verdad. Lógica de recetas/dishes intacta. CHECK `recipe_item_cost_strategy_valid` = {fixed, last_purchase, average_weighted, average_window} (NO inventar 'purchase').
-
-**VALIDACIÓN E2E en la app (no en SQL Editor — el trigger usa guard de tenancy y auth.uid() es null allí):** Cebolla Morada (`33d794b6-...`, base g, antes fixed 0,00173€/g) → añadido MAKRO DISTRIBUCION MAYORISTA SA, formato "Saco" 5000 g, 8,50€ → coste pasó a **0,0017 €/g**, "Origen del coste: Desde la compra", y **"36 platos recalculados"** (cascada viva). Es el PRIMER dato real del frente (se deja, no se revierte).
-
-**Estado de datos (lo que de verdad falta):** 162 raws (147 con fixed_cost), 1 ya con compra real (Cebolla Morada en last_purchase), resto en fixed. supplier: MAKRO + 1 prueba. 55 familias sembradas, 0 raws clasificados. purchase/purchase_line vacías.
-
-**Plan del frente (recolocado sobre la verdad):** (1) cargar los 162 con proveedor+formato+precio — a mano es inviable → IA factura/albarán→coste (modelo trae source/ai_confidence/needs_review; benchmark: MarketMan/xtraCHEF hacen foto→OCR→casa→actualiza coste, pero SIN capa de revisión humana = nuestro hueco a ganar; ellos cobran escaneos caros, visión Anthropic = céntimos). (2) clasificar raws en familias con IA (revisable). (3) buscador por texto (útil ya) + filtro por familia (tras clasificar). (4) catálogo de ingredientes estándar español como semilla de cliente nuevo (las *_template ya existen) — diferenciador SMB que nadie ofrece. Mejoras UI pendientes: mostrar QUÉ platos se recalcularon al cambiar un coste (petición Julio); arreglar ficha que muestra "–/g" cuando computed_cost null pese a tener fixed_cost.
+1. **PASO 4 IA factura→coste** — cierra el frente del coste real (el bucle proveedor→precio→escandallo→plato).
+2. **Glovo G1** al recibir acceso (ticket INTSUPPO-1382).
+3. **RPC EP1** — cerrable ya, enciende el margen real.
+4. Catcher I3, Pantalla Canales, Bandeja superadmin.
+5. **Producción Llorente29 objetivo: 7 sept 2026.**
 
 ### 1.11 — NOTA HISTÓRICA
-> **02/06 (técnica AM):** EP1 + módulo Integraciones I1 + Catcher API. **02/06 (tarde):** evaluación integradores, DECISIÓN integrador directo, API Glovo (definition.yaml), correo Glovo enviado. **02/06 (noche/cierre):** módulo Folvy Connect I2 (pantallas) + logos de marca + seed Glovo + D2 completo (Vault + Edge Function connector-credentials + pantalla configuración, verificado end-to-end) + Glovo respondió (ticket INTSUPPO-1382 en cola).
+> **02/06:** integrador directo + Folvy Connect + D2 Vault + Glovo (ticket INTSUPPO-1382). **03/06 (AM):** monitorización ingesta capas 2+3. **03/06 (núcleo):** FRENTE COSTE REAL — recon (cimiento ya construido), reconciliación coste (bc28560), validación E2E, pasos 1-2 (8ec5883, 9d75f9b), sub-frente FAMILIAS completo (7d0a6a4, e87de68, 3d21eb9, 2daae1b, 479ecd3): clasificación IA (106 auto/56 revisar/0 sin), revisión, filtro, gestor CRUD con subfamilias AECOC. Hallazgo arquitectura de cuentas (Folvy Interno=pruebas / Llorente29=cliente vacío). Mapa global creado (7fad688).
 
 ---
 2. PROYECTO Y EQUIPO

@@ -1,14 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="660" viewBox="0 0 1040 660" font-family="Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-label="Folvy mapa global: estado por zona a 2026-06-03">
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="690" viewBox="0 0 1040 690" font-family="Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-label="Folvy mapa global: estado por zona a 2026-06-03">
   <defs>
     <marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
       <path d="M2 1L8 5L2 9" fill="none" stroke="#73726c" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
     </marker>
   </defs>
 
-  <rect x="0" y="0" width="1040" height="660" rx="16" fill="#faf9f5" stroke="#e2e0d8" stroke-width="1"/>
+  <rect x="0" y="0" width="1040" height="690" rx="16" fill="#faf9f5" stroke="#e2e0d8" stroke-width="1"/>
 
   <text x="30" y="34" font-size="20" font-weight="600" fill="#2c2c2a">Folvy — mapa global</text>
-  <text x="30" y="52" font-size="12" fill="#888780">estado por zona · 2026-06-03 · se regenera al cerrar cada avance</text>
+  <text x="30" y="52" font-size="12" fill="#888780">estado por zona · 2026-06-03 (coste real + familias) · se regenera al cerrar cada avance</text>
 
   <rect x="556" y="23" width="12" height="12" rx="3" fill="#e1f5ee" stroke="#1d9e75"/>
   <text x="573" y="33" font-size="12" fill="#444441">construido</text>
@@ -39,12 +39,12 @@
   <line x1="240" y1="138" x2="468" y2="128" stroke="#73726c" stroke-width="1.2" marker-end="url(#ar)"/>
   <line x1="670" y1="123" x2="798" y2="123" stroke="#73726c" stroke-width="1.2" marker-end="url(#ar)"/>
 
-  <rect x="20" y="174" width="1000" height="232" rx="12" fill="none" stroke="#d3d1c7" stroke-width="1" stroke-dasharray="4 4"/>
+  <rect x="20" y="174" width="1000" height="262" rx="12" fill="none" stroke="#d3d1c7" stroke-width="1" stroke-dasharray="4 4"/>
   <text x="36" y="194" font-size="13" font-weight="600" fill="#5f5e5a">Kitchen · torre del coste → margen</text>
 
-  <rect x="36" y="208" width="126" height="58" rx="8" fill="#faeeda" stroke="#ba7517"/>
-  <text x="99" y="232" font-size="12.5" font-weight="500" fill="#633806" text-anchor="middle">Proveedores</text>
-  <text x="99" y="249" font-size="11" fill="#854f0b" text-anchor="middle">UI v1 · datos vacíos</text>
+  <rect x="36" y="208" width="126" height="58" rx="8" fill="#e1f5ee" stroke="#1d9e75"/>
+  <text x="99" y="232" font-size="12.5" font-weight="500" fill="#085041" text-anchor="middle">Proveedores</text>
+  <text x="99" y="249" font-size="11" fill="#0f6e56" text-anchor="middle">validado · pocos datos</text>
 
   <rect x="176" y="208" width="126" height="58" rx="8" fill="#e1f5ee" stroke="#1d9e75"/>
   <text x="239" y="232" font-size="12.5" font-weight="500" fill="#085041" text-anchor="middle">Coste raw</text>
@@ -79,40 +79,45 @@
 
   <path d="M900 146 L900 178 L519 178 L519 206" fill="none" stroke="#b5b3a9" stroke-width="1.1" stroke-dasharray="3 3" marker-end="url(#ar)"/>
 
-  <text x="36" y="296" font-size="11.5" fill="#5f5e5a">Datos hoy: 1/162 raws con precio real de proveedor (Cebolla Morada → 0,0017€/g, 36 platos recalculados). Resto en fixed_cost (andamiaje).</text>
-  <text x="36" y="316" font-size="11.5" fill="#5f5e5a">Pendiente del frente: cargar los 162 (IA factura→coste) · clasificar en familias (55 existen, 0 raws) · catálogo estándar onboarding.</text>
-  <text x="36" y="336" font-size="11.5" fill="#993c1d">Para llegar al MARGEN faltan 2 patas más: comisión real (Pantalla Canales, pend.) y transporte real (Catcher/Jelp, pend.).</text>
-  <text x="36" y="356" font-size="11.5" fill="#5f5e5a">Cascada de coste a platos: VIVA. Coste por local: existe. run_mapping (mapeo IA): existe. Helpers IA de cocina: existen.</text>
-  <text x="36" y="382" font-size="11.5" font-style="italic" fill="#888780">El motor está; el combustible (datos reales de compra) es lo que falta. Esta zona NO está verde por construir, sino por poblar.</text>
+  <rect x="36" y="274" width="406" height="30" rx="8" fill="#e1f5ee" stroke="#1d9e75"/>
+  <text x="46" y="293" font-size="12" font-weight="500" fill="#085041">Familias de ingrediente</text>
+  <text x="432" y="293" font-size="10.5" fill="#0f6e56" text-anchor="end">NUEVO · IA 106/56/0 · gestor CRUD · subfamilias AECOC</text>
 
-  <rect x="20" y="418" width="1000" height="118" rx="12" fill="none" stroke="#d3d1c7" stroke-width="1" stroke-dasharray="4 4"/>
-  <text x="36" y="438" font-size="13" font-weight="600" fill="#5f5e5a">Transversales</text>
+  <text x="36" y="324" font-size="11.5" fill="#5f5e5a">Validado E2E: MAKRO + formato Saco 5000g/8,50€ → 0,0017€/g, 36 platos recalculados (cascada viva). Pocos raws con precio real aún.</text>
+  <text x="36" y="344" font-size="11.5" font-weight="500" fill="#185fa5">SIGUIENTE — PASO 4: IA factura→coste (foto albarán → run_mapping → precio, con revisión humana). Cierra el bucle del coste real.</text>
+  <text x="36" y="364" font-size="11.5" fill="#993c1d">Para el MARGEN faltan 2 patas: comisión real (Pantalla Canales, pend.) y transporte real (Catcher/Jelp, pend.).</text>
+  <text x="36" y="384" font-size="11.5" fill="#5f5e5a">Descubierto hoy (no estaba en CONTEXTO): cascada VIVA · coste por local · run_mapping (buscador, sirve al paso 4) · helpers IA.</text>
+  <text x="36" y="408" font-size="11.5" font-style="italic" fill="#888780">El motor está y validado; falta poblar precios (paso 4) y subir las capas altas (compras/inventario/AvT).</text>
 
-  <rect x="40" y="452" width="222" height="64" rx="8" fill="#faeeda" stroke="#ba7517"/>
-  <text x="151" y="475" font-size="13" font-weight="500" fill="#633806" text-anchor="middle">Folvy AI</text>
-  <text x="151" y="492" font-size="11" fill="#854f0b" text-anchor="middle">streaming + run_mapping</text>
-  <text x="151" y="507" font-size="11" fill="#854f0b" text-anchor="middle">+ helpers de cocina</text>
+  <rect x="20" y="448" width="1000" height="118" rx="12" fill="none" stroke="#d3d1c7" stroke-width="1" stroke-dasharray="4 4"/>
+  <text x="36" y="468" font-size="13" font-weight="600" fill="#5f5e5a">Transversales</text>
 
-  <rect x="282" y="452" width="232" height="64" rx="8" fill="#faeeda" stroke="#ba7517"/>
-  <text x="398" y="475" font-size="13" font-weight="500" fill="#633806" text-anchor="middle">Vigilante de ingesta</text>
-  <text x="398" y="492" font-size="11" fill="#854f0b" text-anchor="middle">capas 2+3 OK (ping+watchdog)</text>
-  <text x="398" y="507" font-size="11" fill="#854f0b" text-anchor="middle">capa 1 (horarios) = deuda</text>
+  <rect x="40" y="482" width="222" height="64" rx="8" fill="#faeeda" stroke="#ba7517"/>
+  <text x="151" y="505" font-size="13" font-weight="500" fill="#633806" text-anchor="middle">Folvy AI</text>
+  <text x="151" y="522" font-size="11" fill="#854f0b" text-anchor="middle">extract-recipe · map-products</text>
+  <text x="151" y="537" font-size="11" fill="#854f0b" text-anchor="middle">patrón Anthropic reutilizable</text>
 
-  <rect x="534" y="452" width="214" height="64" rx="8" fill="#e1f5ee" stroke="#1d9e75"/>
-  <text x="641" y="475" font-size="13" font-weight="500" fill="#085041" text-anchor="middle">Ingeniería de menús</text>
-  <text x="641" y="492" font-size="11" fill="#0f6e56" text-anchor="middle">menu_item_economics</text>
-  <text x="641" y="507" font-size="11" fill="#0f6e56" text-anchor="middle">comisión a fuente única</text>
+  <rect x="282" y="482" width="232" height="64" rx="8" fill="#faeeda" stroke="#ba7517"/>
+  <text x="398" y="505" font-size="13" font-weight="500" fill="#633806" text-anchor="middle">Vigilante de ingesta</text>
+  <text x="398" y="522" font-size="11" fill="#854f0b" text-anchor="middle">capas 2+3 OK · cuenta corregida</text>
+  <text x="398" y="537" font-size="11" fill="#854f0b" text-anchor="middle">capa 1 (horarios) = deuda</text>
 
-  <rect x="768" y="452" width="232" height="64" rx="8" fill="#e1f5ee" stroke="#1d9e75"/>
-  <text x="884" y="475" font-size="13" font-weight="500" fill="#085041" text-anchor="middle">Otros módulos</text>
-  <text x="884" y="492" font-size="11" fill="#0f6e56" text-anchor="middle">Team · Safety (APPCC)</text>
-  <text x="884" y="507" font-size="11" fill="#0f6e56" text-anchor="middle">Sales · Inicio adaptativo</text>
+  <rect x="534" y="482" width="214" height="64" rx="8" fill="#e1f5ee" stroke="#1d9e75"/>
+  <text x="641" y="505" font-size="13" font-weight="500" fill="#085041" text-anchor="middle">Ingeniería de menús</text>
+  <text x="641" y="522" font-size="11" fill="#0f6e56" text-anchor="middle">menu_item_economics</text>
+  <text x="641" y="537" font-size="11" fill="#0f6e56" text-anchor="middle">comisión a fuente única</text>
 
-  <rect x="20" y="548" width="1000" height="58" rx="12" fill="#e1f5ee" stroke="#1d9e75" stroke-dasharray="0"/>
-  <text x="36" y="572" font-size="13" font-weight="600" fill="#085041">Cimiento</text>
-  <text x="520" y="572" font-size="12.5" font-weight="500" fill="#085041" text-anchor="middle">Shell · Auth (PKCE) · Admin · Multi-tenant RLS · Folvy Connect (Vault)</text>
-  <text x="520" y="590" font-size="11" fill="#0f6e56" text-anchor="middle">construido y en producción</text>
+  <rect x="768" y="482" width="232" height="64" rx="8" fill="#e1f5ee" stroke="#1d9e75"/>
+  <text x="884" y="505" font-size="13" font-weight="500" fill="#085041" text-anchor="middle">Otros módulos</text>
+  <text x="884" y="522" font-size="11" fill="#0f6e56" text-anchor="middle">Team · Safety (APPCC)</text>
+  <text x="884" y="537" font-size="11" fill="#0f6e56" text-anchor="middle">Sales · Inicio adaptativo</text>
 
-  <text x="30" y="628" font-size="11.5" font-weight="500" fill="#5f5e5a">Pendientes mayores (frentes futuros):</text>
-  <text x="30" y="646" font-size="11.5" fill="#888780">Horarios del cliente (no existe; cierra capa 1 monitor + decisión propio-vs-plataforma) · Pantalla Canales · Transporte Catcher/Jelp · Catálogo estándar onboarding · Glovo G1 (bloqueado ticket INTSUPPO-1382)</text>
+  <rect x="20" y="578" width="1000" height="58" rx="12" fill="#e1f5ee" stroke="#1d9e75" stroke-dasharray="0"/>
+  <text x="36" y="602" font-size="13" font-weight="600" fill="#085041">Cimiento</text>
+  <text x="520" y="602" font-size="12.5" font-weight="500" fill="#085041" text-anchor="middle">Shell · Auth (PKCE) · Admin · Multi-tenant RLS · Folvy Connect (Vault)</text>
+  <text x="520" y="620" font-size="11" fill="#0f6e56" text-anchor="middle">construido y en producción</text>
+
+  <text x="30" y="658" font-size="11.5" font-weight="500" fill="#5f5e5a">Pendientes mayores: </text>
+  <text x="156" y="658" font-size="11.5" fill="#888780">Paso 4 (IA factura→coste) · Horarios (cierra capa 1 + propio-vs-plataforma) · Zona Ajustes Kitchen · Pantalla Canales · Catcher/Jelp · Glovo G1 (bloq.)</text>
+  <text x="30" y="678" font-size="11.5" fill="#993c1d">Cuentas: Folvy Interno (0000…0001) = banco de pruebas (todos los datos) · Llorente29 (51ad1792) = cliente real VACÍO (se poblará migrando).</text>
 </svg>
