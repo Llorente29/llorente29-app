@@ -35,6 +35,16 @@ function formatEur(value: number | null | undefined, maxDecimals = 5): string {
   }).format(value)
 }
 
+// Coste EFECTIVO del raw, igual que el motor en BBDD: COALESCE(computed_cost,
+// fixed_cost). Un raw en estrategia 'fixed' que nunca se recalculó tiene
+// computed_cost = null pero fixed_cost válido; mostrar solo computed_cost haría
+// que la ficha enseñara "—" mintiendo. Front y backend leen el coste igual.
+function effectiveCost(item: RecipeItem): number | null {
+  if (item.computedCost !== null && item.computedCost !== undefined) return item.computedCost
+  if (item.fixedCost !== null && item.fixedCost !== undefined) return item.fixedCost
+  return null
+}
+
 const DIM_LABEL: Record<string, string> = {
   weight: 'Peso',
   volume: 'Volumen',
@@ -224,7 +234,7 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
                 <div>
                   <div className="text-[11px] text-text-secondary">Coste actual</div>
                   <div className="text-text-primary font-mono">
-                    {formatEur(item.computedCost)}
+                    {formatEur(effectiveCost(item))}
                     {baseUnit ? ` / ${baseUnit.abbreviation}` : ''}
                   </div>
                 </div>
