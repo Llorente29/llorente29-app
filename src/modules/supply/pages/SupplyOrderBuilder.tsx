@@ -22,7 +22,9 @@ import { listSuppliers } from '@/modules/kitchen/services/purchaseFormatService'
 import type { Supplier } from '@/types/kitchen'
 import {
   getSupplierCatalog,
+  listSupplyLocations,
   type SupplierCatalogEntry,
+  type SupplyLocation,
 } from '@/modules/supply/services/supplierCatalogService'
 import {
   createPurchaseOrder,
@@ -47,6 +49,8 @@ export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuild
 
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [supplierId, setSupplierId] = useState<string>('')
+  const [locations, setLocations] = useState<SupplyLocation[]>([])
+  const [locationId, setLocationId] = useState<string>('')
   const [expectedDate, setExpectedDate] = useState<string>('')
   const [sentBy, setSentBy] = useState<string>(userProfile?.displayName ?? '')
 
@@ -64,9 +68,15 @@ export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuild
     if (accountsLoading || !activeAccountId) return
     let cancelled = false
     setLoadingSuppliers(true)
-    listSuppliers(activeAccountId)
-      .then((sups) => { if (!cancelled) setSuppliers(sups) })
-      .catch((err: unknown) => { if (!cancelled) setError(err instanceof Error ? err.message : 'Error cargando proveedores.') })
+    Promise.all([listSuppliers(activeAccountId), listSupplyLocations(activeAccountId)])
+      .then(([sups, locs]) => {
+        if (cancelled) return
+        setSuppliers(sups)
+        setLocations(locs)
+        // Si solo hay un local, lo preseleccionamos (caso single-local).
+        if (locs.length === 1) setLocationId(locs[0].id)
+      })
+      .catch((err: unknown) => { if (!cancelled) setError(err instanceof Error ? err.message : 'Error cargando datos.') })
       .finally(() => { if (!cancelled) setLoadingSuppliers(false) })
     return () => { cancelled = true }
   }, [activeAccountId, accountsLoading])
@@ -136,6 +146,11 @@ export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuild
       setError('Elige un proveedor.')
       return
     }
+    // La entrega del pedido sale del local: si la cuenta tiene locales, exige elegir uno.
+    if (locations.length > 0 && !locationId) {
+      setError('Elige el local de entrega.')
+      return
+    }
     if (filledCount === 0) {
       setError('Pon cantidad en al menos un artículo.')
       return
@@ -147,6 +162,7 @@ export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuild
       const order = await createPurchaseOrder({
         accountId: activeAccountId,
         supplierId,
+        locationId: locationId || null,
         expectedDate: expectedDate || null,
         status: 'borrador',
         origin: 'manual',
@@ -209,7 +225,21 @@ export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuild
       </div>
 
       {/* Datos del pedido */}
-      <div className="rounded-lg border border-border-default bg-card p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="rounded-lg border border-border-default bg-card p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div>
+          <label className="block text-xs font-medium text-text-secondary mb-1">Local (entrega)</label>
+          <select
+            value={locationId}
+            onChange={e => setLocationId(e.target.value)}
+            disabled={loadingSuppliers || saving}
+            className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+          >
+            <option value="">— Elige local —</option>
+            {locations.map(l => (
+              <option key={l.id} value={l.id}>{l.name}</option>
+            ))}
+          </select>
+        </div>
         <div>
           <label className="block text-xs font-medium text-text-secondary mb-1">Proveedor</label>
           <select

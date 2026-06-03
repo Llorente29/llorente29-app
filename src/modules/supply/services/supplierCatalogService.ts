@@ -133,3 +133,33 @@ export async function getSupplierCatalog(
   entries.sort((a, b) => a.itemName.localeCompare(b.itemName, 'es'))
   return entries
 }
+
+// ─── Locales de la cuenta (destino de entrega del pedido) ───
+// Arquitectura multi-local (decisión rectora 03/06): el pedido pertenece a un
+// local; la dirección de entrega del proveedor sale de aquí (locations.address).
+
+export interface SupplyLocation {
+  id: string
+  name: string
+  address: string | null
+  phone: string | null
+}
+
+/** Locales activos de la cuenta, ordenados por nombre. */
+export async function listSupplyLocations(accountId: string): Promise<SupplyLocation[]> {
+  requireSupabase()
+  const { data, error } = await from('locations')
+    .select('id, name, address, phone')
+    .eq('account_id', accountId)
+    .eq('active', true)
+    .order('name')
+
+  if (error) throw new Error(`Error cargando los locales: ${error.message}`)
+  const rows = (data as Row[]) ?? []
+  return rows.map((r) => ({
+    id: r.id as string,
+    name: (r.name as string) ?? '(sin nombre)',
+    address: (r.address as string | null) ?? null,
+    phone: (r.phone as string | null) ?? null,
+  }))
+}
