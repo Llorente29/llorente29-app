@@ -23,6 +23,7 @@ import {
 } from '@/modules/kitchen/services/recipeItemService'
 import { listUnits } from '@/modules/kitchen/services/kitchenUnitService'
 import PurchaseSourcesSection from '@/modules/kitchen/components/PurchaseSourcesSection'
+import ItemVatSelector from '@/modules/kitchen/components/ItemVatSelector'
 import type { RecipeItem, KitchenUnit } from '@/types/kitchen'
 
 function formatEur(value: number | null | undefined, maxDecimals = 5): string {
@@ -321,6 +322,9 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
             actorName={actorName}
             onChanged={refreshItem}
           />
+
+          {/* IVA del artículo (categoría fiscal + confirmar/cambiar) */}
+          <ItemVatSelector item={item} onChanged={refreshItem} />
 
           {/* Archivar */}
           <div className="pt-2">
