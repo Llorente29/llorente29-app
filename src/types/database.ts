@@ -5297,6 +5297,184 @@ export type Database = {
           },
         ]
       }
+      purchase_order: {
+        Row: {
+          account_id: string
+          archived_at: string | null
+          code: string | null
+          created_at: string
+          created_by: string | null
+          created_by_name: string | null
+          currency: string
+          est_subtotal: number | null
+          est_total: number | null
+          expected_date: string | null
+          id: string
+          is_active: boolean
+          location_id: string | null
+          notes: string | null
+          order_date: string
+          origin: string
+          source_need_ref: string | null
+          status: string
+          supplier_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          archived_at?: string | null
+          code?: string | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          currency?: string
+          est_subtotal?: number | null
+          est_total?: number | null
+          expected_date?: string | null
+          id?: string
+          is_active?: boolean
+          location_id?: string | null
+          notes?: string | null
+          order_date?: string
+          origin?: string
+          source_need_ref?: string | null
+          status?: string
+          supplier_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          archived_at?: string | null
+          code?: string | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          currency?: string
+          est_subtotal?: number | null
+          est_total?: number | null
+          expected_date?: string | null
+          id?: string
+          is_active?: boolean
+          location_id?: string | null
+          notes?: string | null
+          order_date?: string
+          origin?: string
+          source_need_ref?: string | null
+          status?: string
+          supplier_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_order_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "supplier"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      purchase_order_line: {
+        Row: {
+          account_id: string
+          created_at: string
+          est_line_total: number | null
+          est_unit_price: number | null
+          id: string
+          notes: string | null
+          position: number
+          product_name: string
+          purchase_format_id: string | null
+          purchase_order_id: string
+          purchase_unit_id: string | null
+          qty_ordered: number
+          recipe_item_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          est_line_total?: number | null
+          est_unit_price?: number | null
+          id?: string
+          notes?: string | null
+          position?: number
+          product_name: string
+          purchase_format_id?: string | null
+          purchase_order_id: string
+          purchase_unit_id?: string | null
+          qty_ordered: number
+          recipe_item_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          est_line_total?: number | null
+          est_unit_price?: number | null
+          id?: string
+          notes?: string | null
+          position?: number
+          product_name?: string
+          purchase_format_id?: string | null
+          purchase_order_id?: string
+          purchase_unit_id?: string | null
+          qty_ordered?: number
+          recipe_item_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_order_line_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_line_purchase_format_id_fkey"
+            columns: ["purchase_format_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_item_purchase_format"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_line_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_order"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_line_purchase_unit_id_fkey"
+            columns: ["purchase_unit_id"]
+            isOneToOne: false
+            referencedRelation: "kitchen_unit"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_line_recipe_item_id_fkey"
+            columns: ["recipe_item_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_item"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       quotas: {
         Row: {
           account_id: string
