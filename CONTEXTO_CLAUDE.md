@@ -46,7 +46,7 @@ Cadencia: en cada paso, antes de cerrarlo, Claude para SOLO y aplica el control 
 ---
 1. ESTADO VIVO ⟵ se regenera cada sesión
 
-**Última actualización: 2026-06-02 (CIERRE de jornada completa). Hoy: decisión estratégica de INTEGRADOR DIRECTO + conector Glovo (diseñado, sembrado, ACCESO SOLICITADO a Glovo ticket INTSUPPO-1382) + módulo Folvy Connect TERMINADO (I2 pantallas + logos + D2 cifrado de credenciales con Vault, verificado end-to-end en producción). 23+ commits, build verde, 0 0, working tree limpio.**
+**Última actualización: 2026-06-03. Hoy: (a) RPC menu_item_economics corregida a fuente única de comisión en brand_channel_rate (deuda 0, 3 columnas residuales eliminadas); (b) webhook Last.app — captura fiscal completa (tax/taxable_base) + se descubrió y resolvió una CAÍDA SILENCIOSA del webhook (verify_jwt reactivado por un deploy sin --no-verify-jwt → 401 del gateway → ninguna venta entró desde el 01/06, sin alarma); (c) concepto del MOTOR DE MARGEN REAL afilado con Julio (ver §1.5). Build verde, 0 0. Commits 4ab3788 (comisión) y a7e6935 (captura fiscal).**
 
 > **NOTA DE MANTENIMIENTO:** el fichero VERDADERO es `C:\dev\llorente29-app\CONTEXTO_CLAUDE.md` (git). Al regenerar, partir del repo.
 
@@ -55,6 +55,9 @@ CEO: **Julio Gª Colón (García Colón)**, NO "Gascón". Admin Google: `jgcolon
 
 ### 1.0.bis — DECISIÓN ESTRATÉGICA MAYOR (02/06) — NO PERDER
 **Folvy es INTEGRADOR DIRECTO de las plataformas de delivery (Glovo primero), sin intermediarios.** Razones de Julio: (1) coste (Last 525€/mes estrangula la propuesta Folvy+cliente); (2) concepto 360 (Folvy es el centro); (3) control del flujo de datos (materia prima de todo Folvy — quien controla el grifo controla Folvy); (4) fidelización estructural (si Folvy ES la integración, el cliente no se va sin romper su operación). Ningún intermediario (HubRise/KitchenHub/Otter/Deliverect) resuelve el punto 3. Confirmado VIABLE: Glovo y Uber tienen programa de partners con staging, sin cobrar por la API.
+
+### 1.0.ter — CORRECCIÓN DE DATO MAYOR (03/06) — Llorente29 SÍ tiene reparto propio
+**El CONTEXTO decía "Llorente29 = 0% reparto propio". ES FALSO.** Realidad confirmada por Julio (03/06): en Llorente29 **toda venta de Glovo y Just Eat es REPARTO PROPIO**, gestionado vía **Catcher o Jelp**. **Solo Uber lo reparte Uber** (y es variable según decida el propietario). Implicación: el coste real de reparto (Catcher/Jelp) entra YA, no es estructura futura; y la decisión propio-vs-plataforma (§1.5) es operativa hoy. **Jelp** es proveedor nuevo (no estaba en el CONTEXTO) — su API/webhook aún sin estudiar, como Catcher.
 
 ### 1.1 — Dónde estamos HOY (estado construido)
 
@@ -83,7 +86,7 @@ CEO: **Julio Gª Colón (García Colón)**, NO "Gascón". Admin Google: `jgcolon
 
 ### 1.3 — DEUDA VIVA / FRENTES (por prioridad)
 1. **CONECTOR GLOVO G1** (recepción real): BLOQUEADO esperando acceso al stage (ticket INTSUPPO-1382). Al llegar: Edge Function `glovo-webhook` → `sale` (service_type/fees/descuentos) → dedup por order_id → multi-tenant por store_id. + montar dominio `api.folvy.app/glovo/*`. + leer el secreto de Vault (vía D2) para verificar el token.
-2. **RPC `menu_item_economics`** — cerrable entera AHORA (Llorente29 = 100% platform_delivery, 0% reparto propio). Corregir: comisión sobre `price_with_vat` (hoy usa `price` sin IVA). 1 fila/plato (no romper kitchenDashboard/menuEngineering). Verificar desde la app (SECURITY DEFINER).
+2. **RPC `menu_item_economics`** — HECHA el 03/06 (commit 4ab3788). Lee la comisión SOLO de `brand_channel_rate` por `service_type` (param `p_service_type` DEFAULT 'platform_delivery'), respeta `commission_base` (pvp_con_iva|pvp_sin_iva), NULL honesto sin tarifa. Eliminadas las 3 columnas residuales (brand.commission_pct, brand_channel.commission_pct/fixed, sales_channel.default_commission_pct) + sus mapeos front. Pendiente de feature (NO deuda): pantalla **Canales** (escritor de brand_channel_rate; el service brandChannelRateService.ts ya existe, falta UI). Hasta que exista, la economía muestra comisión/margen NULL (correcto).
 3. **G2 push catálogo Glovo** (tras G1): mapear menu_item→árbol Glovo. H1 (tras upload, re-enviar disponibilidad) + H2 (IDs exactos en external_codes). Dependencia: modelo de MODIFICADORES (no existe aún).
 4. **Catcher I3**: Edge Function `catcher-webhook`, captura transportPrice, cruce externalId. Espera credenciales. Sandbox `staging-api.catcher.es`.
 5. **Bandeja de solicitudes superadmin** (conectores request/managed_by superadmin).
@@ -94,16 +97,37 @@ CEO: **Julio Gª Colón (García Colón)**, NO "Gascón". Admin Google: `jgcolon
 ### 1.3.HALLAZGOS técnicos (vigentes)
 - **Añadir módulo al Shell = añadir línea en `moduleRegistry.ts`** + crear su `module.tsx`. CERO cambios en App.tsx/Shell.tsx (arquitectura modular G-8).
 - **Edge Functions:** cada una necesita su `deno.json` con `{"imports":{"@supabase/supabase-js":"jsr:@supabase/supabase-js@^2"}}`. Deploy: `npx supabase functions deploy <nombre>` (CLI enlazado).
+- **⚠️ REGLA CRÍTICA WEBHOOKS (03/06): los Edge Functions que reciben webhooks externos (lastapp-webhook, futuros glovo/catcher) SE DESPLIEGAN SIEMPRE con `--no-verify-jwt`.** Sin la flag, el deploy reactiva `verify_jwt` del gateway de Supabase → rechaza con `401 UNAUTHORIZED_INVALID_JWT_FORMAT` ANTES de ejecutar el código → corta TODA entrega del proveedor y EN SILENCIO (ni siquiera escribe en `lastapp_webhook_log`, porque el gateway corta antes que el código). La seguridad real la hace el token dentro del código (`LASTAPP_WEBHOOK_TOKEN`). Un deploy sin la flag tumbó el webhook el 03/06 y se perdieron pedidos del 01–03/06.
 - **`npx supabase gen types ... > database.ts`** en PowerShell genera UTF-16 → git lo ve binario y rompe build. Reconvertir a UTF-8 sin BOM: `[System.IO.File]::WriteAllText(path, (Get-Content -Raw path), (New-Object System.Text.UTF8Encoding $false))`. Y siempre `--yes`.
 - **Supabase Vault** (v0.3.1, activo): `vault.create_secret(secret,name,desc)` / `vault.update_secret(id,...)` / `vault.decrypted_secrets` (vista). NUNCA INSERT crudo en vault.secrets (se loguea). Acceso solo server-side (service_role) vía wrappers en `public`.
 - **Roles:** `user_profiles` (user_id, account_id, role, active). admin/manager = gestión. Gating de credenciales valida rol en el wrapper con p_user_id (no auth.uid(), porque la Edge Function corre con service_role).
 - **P1 (base comisión) = PVP CON IVA.** La RPC `menu_item_economics` HOY usa `price` (sin IVA) → corregir.
 
 ### 1.4 — Próximos pasos priorizados
-1. **Glovo G1** al recibir acceso (ticket INTSUPPO-1382). Es la prioridad nº1 en cuanto se desbloquee.
-2. **RPC EP1** — cerrable ya, enciende el diferenciador del margen real.
-3. Catcher I3 (al llegar credenciales). Pantalla Canales. Bandeja superadmin.
-4. **Producción Llorente29 objetivo: 7 sept 2026.**
+1. **MONITORIZACIÓN / ALARMAS de ingesta** (NUEVO, prioridad alta tras el incidente 03/06): hoy una caída del webhook NO dispara ninguna alarma — se descubrió por casualidad. En producción con cliente esto es inaceptable. Diseñar vigilancia: "cuántos pedidos esperaba vs cuántos entraron", heartbeat del webhook, alerta si 0 ventas en X horas en horario operativo. Ver §1.6.
+2. **Verificación en vivo** del primer pedido real post-fix (que entre con service_type/tax poblados).
+3. **Reproceso** de pedidos 28/05–03/06 desde `lastapp_webhook_log` con el function nuevo (los escritos con la versión vieja tienen service_type/tax null; los del 01–03/06 puede que no llegaran — ver si Last reintenta/reenvía).
+4. **Motor de margen real** (§1.5): tramo grande, diseño afilado pendiente de bajar a modelo. Requiere dato fiable (este tramo) + integración Catcher/Jelp + pantalla Canales.
+5. **Glovo G1** al recibir acceso (ticket INTSUPPO-1382).
+6. Pantalla Canales. Bandeja superadmin. Apunte auto_accept.
+7. **Producción Llorente29 objetivo: 7 sept 2026.**
+
+### 1.5 — MOTOR DE MARGEN REAL (concepto afilado con Julio 03/06) — NO PERDER
+Tesis: el diferenciador de Folvy NO es la matriz de ingeniería de menús (eso lo copian todos: meez/Apicbase/R365 plotean Estrellas/Caballos/Puzzles/Perros sobre popularidad×rentabilidad). El diferenciador es el DATO que nadie tiene y QUÉ se hace con él. Folvy tiene la línea de ticket real, por canal, con promo y modificador, en vivo, y ES la tubería (integrador directo).
+De ahí, lo que golea:
+1. **Margen REALIZADO, no teórico.** Precio − coste receta − comisión real − transporte real − promo atribuida, a nivel de línea de ticket. Un plato "Estrella" de carta puede estar sangrando si el 70% se vendió con 2x1. Nadie lo ve porque nadie tiene la línea con la promo atribuida.
+2. **Decisión propio-vs-plataforma (clave, Julio).** Glovo cobra 30% si reparte Glovo, 15% si repartes tú. Si repartes tú: ahorras 15%·PVP de comisión Y te quedas el cargo de envío al cliente (3–4,5€, que con reparto de plataforma es de Glovo y desaparece de tu lado). **Límite de coste de reparto propio = 15%·PVP + cargo de envío al cliente.** Por debajo, conviene repartir tú; por encima, mejor que reparta la plataforma. Varía POR PEDIDO (PVP y coste Catcher/Jelp variables). KPI estrella: "X pedidos repartidos por ti superaron el límite → te costó N€ repartir cuando debías dejar a la plataforma". Imposible sin dato a nivel pedido + integración Catcher/Jelp.
+3. **Reparto del transporte entre platos:** el coste de transporte es POR PEDIDO; se guarda crudo a nivel `sale` (intocable, trazable). El reparto por plato (prorrateo por PVP facturado — Opción B) es una VISTA de análisis, no un dato escrito. Dos lentes: margen por PEDIDO (verdad pura) y por PLATO (prorrateado). Spread estimado-vs-real de transporte = alerta de oro.
+4. **Config por HERENCIA (clave, Julio — "si no, muere la primera semana"):** con 17 marcas × canales × cientos de artículos, configurar plato a plato es inviable. Comisión a nivel canal, objetivo food cost a nivel categoría, solo excepciones a nivel plato. 1000 artículos = 5 reglas. Cambias comisión de Glovo → tocas UNA regla → recalcula todo; con vigencia temporal el histórico queda intacto.
+5. **Vigencia temporal de tarifas** (recomendado deuda 0): sin "válida-desde/hasta", cambiar una comisión corrompe el cálculo histórico. `brand_channel_rate` hoy NO la tiene → decisión de modelo antes de construir.
+6. **Fees extensibles:** modelo de conceptos, no columnas fijas (Glovo puede añadir tasas nuevas).
+7. **Trazabilidad abrible:** cada cifra de margen se abre agregado→plato→pedido→cargo real de Catcher. La IA LEE ese desglose y lo explica en lenguaje de cocinero (anti-invención: no fabrica el número, traduce el que la BBDD calculó).
+Las tres patas del dato: coste receta + comisión real (config) + transporte real (Catcher/Jelp, integración pendiente). El cargo de envío al cliente es INGRESO y solo existe en reparto propio.
+
+### 1.6 — INCIDENTE 03/06 (caída silenciosa del webhook) + DEUDA DE MONITORIZACIÓN
+Qué pasó: el webhook de Last.app dejó de entregar ventas (cero desde el 01/06). Causa confirmada: el deploy reactivó `verify_jwt` del gateway → 401 antes del código → corte total y SIN log. Resuelto con redeploy `--no-verify-jwt` (ping → 200, log escrito). Ver regla en §1.3.HALLAZGOS.
+**LO IMPORTANTE (Julio): una inconsistencia tan grave no disparó ninguna alarma.** En producción con un cliente real esto es ruina (días de ventas sin registrar, food cost/márgenes/decisiones sobre datos incompletos, y nadie se entera). DEUDA DE MONITORIZACIÓN declarada, prioridad alta antes de producción (7 sept): heartbeat del webhook, alerta si 0 ventas en ventana operativa, contraste "esperado vs ingerido", y vigilancia de despliegues que puedan reactivar verify_jwt. Diseño pendiente.
+**Datos diagnóstico (vigentes):** histórico hasta 27/05 = backfill de Excel (ruido en importes: descuento/total dudosos → FUERA del motor de margen; quizá válido solo para popularidad, a decidir). Webhook real desde 28/05 (created_at≈sold_at). El `raw_products` guarda SOLO el array de productos; el desglose económico (tax/taxableBase/deliveryFee/discountTotal/pickupType) llega en el payload del webhook y desde el 03/06 se captura entero. courier.name NO lo rellena Last (da igual: pickupType ya separa delivery vs ownDelivery).
 
 ### 1.11 — NOTA HISTÓRICA
 > **02/06 (técnica AM):** EP1 + módulo Integraciones I1 + Catcher API. **02/06 (tarde):** evaluación integradores, DECISIÓN integrador directo, API Glovo (definition.yaml), correo Glovo enviado. **02/06 (noche/cierre):** módulo Folvy Connect I2 (pantallas) + logos de marca + seed Glovo + D2 completo (Vault + Edge Function connector-credentials + pantalla configuración, verificado end-to-end) + Glovo respondió (ticket INTSUPPO-1382 en cola).
