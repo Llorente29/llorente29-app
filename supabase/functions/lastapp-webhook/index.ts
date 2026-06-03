@@ -6,6 +6,9 @@
 // price) y bills[] (id, total, payments[].type) EMBEBIDOS, así que NO llamamos a
 // la API de Last: resolvemos en memoria e insertamos sale + sale_line.
 //
+// Captura económica del bill: total, deliveryFee (envío al cliente), discountTotal
+// (promos), tax y taxableBase (IVA y base imponible) + service_type del pickupType.
+//
 // La lógica de resolución (vía organizationProductId / catalogProductId / nombre,
 // con desambiguación por marca) y la inserción idempotente (external_ref = bill.id,
 // rollback manual de la sale si fallan sus líneas, céntimos/100) se PORTAN tal cual
@@ -78,6 +81,8 @@ interface LastBill {
   total?: number;
   deliveryFee?: number;
   discountTotal?: number;
+  tax?: number;          // IVA del pedido (céntimos) — Last.app
+  taxableBase?: number;  // Base imponible (céntimos) — Last.app
   creationTime?: string;
   finalizingTime?: string;
   deleted?: boolean;
@@ -297,6 +302,8 @@ async function ingestBill(
     total: typeof bill.total === "number" ? bill.total / 100 : 0,
     delivery_cost: typeof bill.deliveryFee === "number" ? bill.deliveryFee / 100 : null,
     discount_amount: typeof bill.discountTotal === "number" ? bill.discountTotal / 100 : null,
+    tax: typeof bill.tax === "number" ? bill.tax / 100 : null,
+    taxable_base: typeof bill.taxableBase === "number" ? bill.taxableBase / 100 : null,
     service_type: mapServiceType(tab.pickupType),
     raw_products: JSON.stringify(products),
     is_active: true,

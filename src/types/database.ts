@@ -6316,6 +6316,8 @@ export type Database = {
           service_type: string | null
           sold_at: string
           source: string
+          tax: number | null
+          taxable_base: number | null
           total: number
           updated_at: string
         }
@@ -6343,6 +6345,8 @@ export type Database = {
           service_type?: string | null
           sold_at: string
           source?: string
+          tax?: number | null
+          taxable_base?: number | null
           total?: number
           updated_at?: string
         }
@@ -6370,6 +6374,8 @@ export type Database = {
           service_type?: string | null
           sold_at?: string
           source?: string
+          tax?: number | null
+          taxable_base?: number | null
           total?: number
           updated_at?: string
         }
