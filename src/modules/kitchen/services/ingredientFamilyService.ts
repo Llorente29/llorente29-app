@@ -69,10 +69,7 @@ export async function listFamilyProposals(accountId: string): Promise<FamilyProp
   requireSupabase()
   const { data, error } = await supabase!
     .from('mapping_proposal')
-    .select(`
-      id, source_ref, source_text, chosen_target_id, confidence, status, rationale,
-      family:chosen_target_id ( name )
-    `)
+    .select('id, source_ref, source_text, chosen_target_id, confidence, status, rationale')
     .eq('account_id', accountId)
     .eq('source_kind', 'recipe_item')
     .eq('target_kind', 'recipe_family')
@@ -85,7 +82,7 @@ export async function listFamilyProposals(accountId: string): Promise<FamilyProp
     itemId: r.source_ref,
     itemName: r.source_text,
     proposedFamilyId: r.chosen_target_id ?? null,
-    proposedFamilyName: r.family?.name ?? null,
+    proposedFamilyName: null,  // se resuelve en el cliente con el mapa de familias
     confidence: r.confidence ?? null,
     status: r.status,
     rationale: r.rationale ?? null,

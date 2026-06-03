@@ -20,7 +20,7 @@
 // scroll horizontal. Mismo mecanismo y estilo que KitchenProfitabilityPage (R1.4).
 
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, Soup, X, AlertTriangle, ChevronRight } from 'lucide-react'
+import { Plus, Soup, X, AlertTriangle, ChevronRight, Search, Sparkles, Tag } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useIsMobile } from '@/shell/useIsMobile'
@@ -30,10 +30,20 @@ import {
 } from '@/modules/kitchen/services/recipeItemService'
 import { listUnits } from '@/modules/kitchen/services/kitchenUnitService'
 import KitchenItemDetailPage from '@/modules/kitchen/pages/KitchenItemDetailPage'
+import FamilyReviewPanel from '@/modules/kitchen/components/FamilyReviewPanel'
+import {
+  listIngredientFamilies,
+  getFamilyProposalSummary,
+  type IngredientFamily,
+  type ProposalSummary,
+} from '@/modules/kitchen/services/ingredientFamilyService'
 import type {
   RecipeItem,
   KitchenUnit,
 } from '@/types/kitchen'
+
+const NO_FAMILY_FILTER = '__all__'
+const UNCLASSIFIED = '__unclassified__'
 
 function formatEur(value: number | null): string {
   if (value === null || value === undefined) return '—'
@@ -63,6 +73,13 @@ export default function KitchenItemsPage() {
   // null = vista lista; un id = vista detalle del ingrediente.
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
   const [reloadTick, setReloadTick] = useState(0)
+  // Familias de ingrediente (para chip + filtro) y resumen de propuestas IA (banner).
+  const [families, setFamilies] = useState<IngredientFamily[]>([])
+  const [proposalSummary, setProposalSummary] = useState<ProposalSummary | null>(null)
+  const [reviewOpen, setReviewOpen] = useState(false)
+  // Buscador y filtro por familia (3d).
+  const [search, setSearch] = useState('')
+  const [familyFilter, setFamilyFilter] = useState<string>(NO_FAMILY_FILTER)
 
   useEffect(() => {
     if (accountsLoading) return
@@ -80,11 +97,15 @@ export default function KitchenItemsPage() {
     Promise.all([
       listRecipeItems({ accountId: activeAccountId, type: 'raw' }),
       listUnits(),
+      listIngredientFamilies(activeAccountId),
+      getFamilyProposalSummary(activeAccountId),
     ])
-      .then(([rows, allUnits]) => {
+      .then(([rows, allUnits, fams, summary]) => {
         if (cancelled) return
         setItems(rows)
         setUnits(allUnits)
+        setFamilies(fams)
+        setProposalSummary(summary)
       })
       .catch((err: unknown) => {
         if (cancelled) return
@@ -92,6 +113,8 @@ export default function KitchenItemsPage() {
         setError(msg)
         setItems([])
         setUnits([])
+        setFamilies([])
+        setProposalSummary(null)
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -106,6 +129,24 @@ export default function KitchenItemsPage() {
     units.forEach(u => m.set(u.id, u))
     return m
   }, [units])
+
+  // Mapa familyId → nombre, para el chip de familia en cada fila.
+  const familyNameById = useMemo(() => {
+    const m = new Map<string, string>()
+    families.forEach(f => m.set(f.id, f.name))
+    return m
+  }, [families])
+
+  // Lista filtrada por buscador (nombre) y por familia (3d). En cliente: rápido.
+  const visibleItems = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return items.filter(item => {
+      if (q !== '' && !item.name.toLowerCase().includes(q)) return false
+      if (familyFilter === NO_FAMILY_FILTER) return true
+      if (familyFilter === UNCLASSIFIED) return item.familyId === null
+      return item.familyId === familyFilter
+    })
+  }, [items, search, familyFilter])
 
   function handleCreated(created: RecipeItem) {
     setCreateOpen(false)
@@ -152,6 +193,60 @@ export default function KitchenItemsPage() {
         </button>
       </div>
 
+      {/* Banner: propuestas de familia generadas por IA, pendientes de aplicar */}
+      {!loading && !error && proposalSummary && proposalSummary.total > 0 && (
+        <div className="p-3 rounded-md bg-accent-bg border border-accent/20 flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-start gap-2 min-w-0">
+            <Sparkles size={18} className="text-accent shrink-0 mt-0.5" />
+            <p className="text-sm text-text-primary">
+              Folvy ha propuesto una familia para{' '}
+              <span className="font-medium">{proposalSummary.total} ingredientes</span>
+              {proposalSummary.auto > 0 && (
+                <span className="text-text-secondary"> · {proposalSummary.auto} con alta confianza</span>
+              )}
+              {proposalSummary.review > 0 && (
+                <span className="text-warning"> · {proposalSummary.review} para revisar</span>
+              )}
+              .
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setReviewOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 transition-base shrink-0"
+          >
+            Revisar y aplicar
+          </button>
+        </div>
+      )}
+
+      {/* Buscador + filtro por familia (3d) */}
+      {!loading && !error && items.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative flex-1 min-w-[12rem]">
+            <Search size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-secondary" />
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Buscar ingrediente…"
+              className="w-full pl-8 pr-2 py-2 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+            />
+          </div>
+          <select
+            value={familyFilter}
+            onChange={e => setFamilyFilter(e.target.value)}
+            className="px-2 py-2 text-sm border border-border-default rounded-md bg-page text-text-primary cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent"
+          >
+            <option value={NO_FAMILY_FILTER}>Todas las familias</option>
+            <option value={UNCLASSIFIED}>Sin clasificar</option>
+            {families.map(f => (
+              <option key={f.id} value={f.id}>{f.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {/* Estados */}
       {loading && (
         <div className="p-8 text-center text-sm text-text-secondary">
@@ -177,16 +272,17 @@ export default function KitchenItemsPage() {
       {/* ── Móvil: tarjetas apiladas (sin scroll horizontal) ── */}
       {!loading && !error && items.length > 0 && isMobile && (
         <div className="space-y-2">
-          {items.map(item => (
+          {visibleItems.map(item => (
             <IngredientCard
               key={item.id}
               item={item}
               unit={unitsById.get(item.baseUnitId)}
+              familyName={item.familyId ? familyNameById.get(item.familyId) ?? null : null}
               onSelect={() => setSelectedItemId(item.id)}
             />
           ))}
           <p className="px-1 pt-1 text-xs text-text-secondary">
-            {items.length} ingrediente{items.length === 1 ? '' : 's'}
+            {visibleItems.length} de {items.length} ingrediente{items.length === 1 ? '' : 's'}
           </p>
         </div>
       )}
@@ -202,6 +298,9 @@ export default function KitchenItemsPage() {
                     Ingrediente
                   </th>
                   <th className="p-3 text-xs font-semibold text-text-secondary uppercase tracking-wide">
+                    Familia
+                  </th>
+                  <th className="p-3 text-xs font-semibold text-text-secondary uppercase tracking-wide">
                     Unidad base
                   </th>
                   <th className="p-3 text-xs font-semibold text-text-secondary uppercase tracking-wide text-right">
@@ -214,8 +313,9 @@ export default function KitchenItemsPage() {
                 </tr>
               </thead>
               <tbody>
-                {items.map(item => {
+                {visibleItems.map(item => {
                   const unit = unitsById.get(item.baseUnitId)
+                  const famName = item.familyId ? familyNameById.get(item.familyId) ?? null : null
                   return (
                     <tr
                       key={item.id}
@@ -238,6 +338,16 @@ export default function KitchenItemsPage() {
                           </span>
                         )}
                       </td>
+                      <td className="p-3">
+                        {famName ? (
+                          <span className="text-[11px] px-2 py-0.5 rounded-full bg-page border border-border-default text-text-secondary inline-flex items-center gap-1">
+                            <Tag className="w-3 h-3" />
+                            {famName}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-text-secondary/60">—</span>
+                        )}
+                      </td>
                       <td className="p-3 text-text-secondary">
                         {unitLabel(unit)}
                       </td>
@@ -257,9 +367,21 @@ export default function KitchenItemsPage() {
             </table>
           </div>
           <div className="px-3 py-2 text-xs text-text-secondary border-t border-border-default bg-page">
-            {items.length} ingrediente{items.length === 1 ? '' : 's'}
+            {visibleItems.length} de {items.length} ingrediente{items.length === 1 ? '' : 's'}
           </div>
         </div>
+      )}
+
+      {/* Panel de revisión de familias propuestas por IA */}
+      {reviewOpen && activeAccountId && (
+        <FamilyReviewPanel
+          accountId={activeAccountId}
+          onClose={() => setReviewOpen(false)}
+          onApplied={() => {
+            setReviewOpen(false)
+            setReloadTick(t => t + 1)
+          }}
+        />
       )}
 
       {/* Modal de SOLO alta */}
@@ -286,10 +408,12 @@ export default function KitchenItemsPage() {
 function IngredientCard({
   item,
   unit,
+  familyName,
   onSelect,
 }: {
   item: RecipeItem
   unit: KitchenUnit | undefined
+  familyName: string | null
   onSelect: () => void
 }) {
   return (
@@ -314,6 +438,12 @@ function IngredientCard({
               <span className="text-[11px] px-2 py-0.5 rounded-full bg-warning-bg text-warning inline-flex items-center gap-1">
                 <AlertTriangle className="w-3 h-3" />
                 sin terminar
+              </span>
+            )}
+            {familyName && (
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-page border border-border-default text-text-secondary inline-flex items-center gap-1">
+                <Tag className="w-3 h-3" />
+                {familyName}
               </span>
             )}
           </div>
