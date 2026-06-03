@@ -2946,57 +2946,6 @@ export type Database = {
           },
         ]
       }
-      dish_family: {
-        Row: {
-          account_id: string
-          color: string | null
-          created_at: string
-          icon: string | null
-          id: string
-          is_active: boolean
-          name: string
-          position: number
-          template_id: string | null
-        }
-        Insert: {
-          account_id: string
-          color?: string | null
-          created_at?: string
-          icon?: string | null
-          id?: string
-          is_active?: boolean
-          name: string
-          position?: number
-          template_id?: string | null
-        }
-        Update: {
-          account_id?: string
-          color?: string | null
-          created_at?: string
-          icon?: string | null
-          id?: string
-          is_active?: boolean
-          name?: string
-          position?: number
-          template_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "dish_family_account_id_fkey"
-            columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "dish_family_template_id_fkey"
-            columns: ["template_id"]
-            isOneToOne: false
-            referencedRelation: "dish_family_template"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       dish_family_template: {
         Row: {
           code: string
@@ -3495,6 +3444,85 @@ export type Database = {
             foreignKeyName: "impersonation_sessions_target_account_id_fkey"
             columns: ["target_account_id"]
             isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ingestion_monitor_config: {
+        Row: {
+          account_id: string
+          alert_cooldown_minutes: number
+          created_at: string
+          enabled: boolean
+          freshness_threshold_minutes: number
+          service_windows: Json
+          timezone: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          alert_cooldown_minutes?: number
+          created_at?: string
+          enabled?: boolean
+          freshness_threshold_minutes?: number
+          service_windows?: Json
+          timezone?: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          alert_cooldown_minutes?: number
+          created_at?: string
+          enabled?: boolean
+          freshness_threshold_minutes?: number
+          service_windows?: Json
+          timezone?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ingestion_monitor_config_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: true
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ingestion_monitor_state: {
+        Row: {
+          account_id: string
+          last_alert_kind: string | null
+          last_alert_sent_at: string | null
+          last_sale_seen_at: string | null
+          last_synthetic_ping_at: string | null
+          last_synthetic_ping_ok: boolean | null
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          last_alert_kind?: string | null
+          last_alert_sent_at?: string | null
+          last_sale_seen_at?: string | null
+          last_synthetic_ping_at?: string | null
+          last_synthetic_ping_ok?: boolean | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          last_alert_kind?: string | null
+          last_alert_sent_at?: string | null
+          last_sale_seen_at?: string | null
+          last_synthetic_ping_at?: string | null
+          last_synthetic_ping_ok?: boolean | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ingestion_monitor_state_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: true
             referencedRelation: "accounts"
             referencedColumns: ["id"]
           },
@@ -5298,6 +5326,60 @@ export type Database = {
           },
         ]
       }
+      recipe_family: {
+        Row: {
+          account_id: string
+          color: string | null
+          created_at: string
+          icon: string | null
+          id: string
+          is_active: boolean
+          name: string
+          position: number
+          scope: string
+          template_id: string | null
+        }
+        Insert: {
+          account_id: string
+          color?: string | null
+          created_at?: string
+          icon?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          position?: number
+          scope: string
+          template_id?: string | null
+        }
+        Update: {
+          account_id?: string
+          color?: string | null
+          created_at?: string
+          icon?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          position?: number
+          scope?: string
+          template_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dish_family_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dish_family_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "dish_family_template"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       recipe_item: {
         Row: {
           account_id: string
@@ -5523,7 +5605,7 @@ export type Database = {
             foreignKeyName: "recipe_item_family_id_fkey"
             columns: ["family_id"]
             isOneToOne: false
-            referencedRelation: "dish_family"
+            referencedRelation: "recipe_family"
             referencedColumns: ["id"]
           },
           {
