@@ -638,6 +638,7 @@ export interface OcrAlbaranResult {
 }
 
 const RECEIPT_BUCKET = 'receipt-uploads'
+const RECEIPT_SIGNED_TTL = 3600
 
 function sanitizeFileName(name: string): string {
   // Quita rutas, acentos y caracteres problemáticos para la clave del objeto.
@@ -648,25 +649,88 @@ function sanitizeFileName(name: string): string {
     .slice(0, 120)
 }
 
+// Comprime una imagen en el navegador (mismo patrón que recipePhotoService /
+// APPCC: 1600px, calidad 0.72). Las fotos de albarán de móvil son densas y
+// conviene subirlas comprimidas (más rápido, menos coste de lectura). Para el
+// OCR interesa algo más de resolución que en una foto de plato (texto pequeño),
+// por eso 1600px en vez de 1200. Los PDF NO se comprimen (se suben tal cual).
+function compressImage(file: File, maxWidthPx = 1600, quality = 0.72): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      let w = img.width
+      let h = img.height
+      if (w > maxWidthPx) { h = Math.round(h * (maxWidthPx / w)); w = maxWidthPx }
+      const canvas = document.createElement('canvas')
+      canvas.width = w
+      canvas.height = h
+      const ctx = canvas.getContext('2d')
+      if (!ctx) { reject(new Error('No se pudo procesar la imagen (canvas).')); return }
+      ctx.drawImage(img, 0, 0, w, h)
+      canvas.toBlob(
+        (blob) => (blob ? resolve(blob) : reject(new Error('No se pudo comprimir la imagen.'))),
+        'image/jpeg', quality,
+      )
+    }
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('No se pudo cargar la imagen.')) }
+    img.src = url
+  })
+}
+
 /**
  * Sube uno o varios ficheros (foto/PDF) del albarán al bucket privado y
  * devuelve sus rutas. Todos van bajo una misma carpeta {accountId}/{uuid}/
  * para que ocr-albaran los trate como un único documento (multipágina).
+ * Las imágenes se comprimen en cliente; los PDF se suben sin tocar.
  */
 export async function uploadReceiptFiles(accountId: string, files: File[]): Promise<string[]> {
   requireSupabase()
   if (files.length === 0) return []
   const folder = (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}`)
   const paths: string[] = []
+  let i = 0
   for (const file of files) {
-    const path = `${accountId}/${folder}/${sanitizeFileName(file.name)}`
+    const isPdf = file.type === 'application/pdf'
+    let payload: Blob = file
+    let nameOut = sanitizeFileName(file.name)
+    let contentType = file.type || undefined
+    if (!isPdf && file.type.startsWith('image/')) {
+      payload = await compressImage(file)
+      contentType = 'image/jpeg'
+      // Normaliza el nombre a .jpg tras recomprimir (y antepone índice para el orden).
+      nameOut = `${String(i).padStart(2, '0')}-${nameOut.replace(/\.[^.]+$/, '')}.jpg`
+    } else {
+      nameOut = `${String(i).padStart(2, '0')}-${nameOut}`
+    }
+    const path = `${accountId}/${folder}/${nameOut}`
     const { error } = await supabase!.storage
       .from(RECEIPT_BUCKET)
-      .upload(path, file, { contentType: file.type || undefined, upsert: false })
+      .upload(path, payload, { contentType, upsert: false })
     if (error) throw new Error(`No se pudo subir ${file.name}: ${error.message}`)
     paths.push(path)
+    i++
   }
   return paths
+}
+
+/**
+ * URL firmada temporal para mostrar una foto/PDF del albarán (bucket privado).
+ * Devuelve null si falla (la UI mostrará un aviso). Clon de getDishPhotoUrl.
+ */
+export async function getReceiptFileUrl(path: string | null | undefined): Promise<string | null> {
+  if (!path) return null
+  if (path.startsWith('http://') || path.startsWith('https://')) return path
+  requireSupabase()
+  const { data, error } = await supabase!.storage
+    .from(RECEIPT_BUCKET)
+    .createSignedUrl(path, RECEIPT_SIGNED_TTL)
+  if (error) {
+    console.error('[goodsReceiptService] createSignedUrl error', error)
+    return null
+  }
+  return data?.signedUrl ?? null
 }
 
 /**
