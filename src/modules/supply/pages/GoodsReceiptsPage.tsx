@@ -9,8 +9,14 @@
 //
 // Acciones desde la fila:
 //   - borrador → Confirmar (postea al ledger)
-//   - confirmado → Anular (reverso) | Anular y corregir (reverso + reabrir
-//     borrador precargado con las líneas, para rehacerla cambiando lo que falló)
+//   - confirmado → Anular (reverso) | Anular y corregir
+//
+// "Anular y corregir": NO anula al pulsar. Abre el formulario precargado con las
+// líneas (lectura, sin tocar la base); la recepción original solo se anula al
+// CONFIRMAR la corregida (lógica en GoodsReceiptForm). Si sales sin confirmar,
+// la original sigue confirmada.
+//
+// El aviso (flash) se auto-cierra a los segundos (no obliga a teclear).
 
 import { useEffect, useMemo, useState } from 'react'
 import { Plus, PackageCheck, Search, Loader2, Check, RotateCcw, PencilLine } from 'lucide-react'
@@ -66,6 +72,13 @@ export default function GoodsReceiptsPage() {
 
   const [busyId, setBusyId] = useState<string | null>(null)
   const [flash, setFlash] = useState<string | null>(null)
+
+  // El aviso se auto-cierra a los 6 s (no obliga a teclear nada).
+  useEffect(() => {
+    if (!flash) return
+    const t = setTimeout(() => setFlash(null), 6000)
+    return () => clearTimeout(t)
+  }, [flash])
 
   useEffect(() => {
     if (accountsLoading) return
@@ -145,18 +158,19 @@ export default function GoodsReceiptsPage() {
     }
   }
 
-  // Anular y corregir: reverso + reabrir un borrador precargado con las líneas
-  // de la anulada (hereda proveedor, local, nº albarán y pedido ligado).
-  async function handleVoidAndCorrect(id: string) {
+  // Anular y corregir: NO anula aquí. Lee la recepción + líneas (sin tocar nada)
+  // y abre el formulario precargado. La original se anulará al CONFIRMAR la
+  // corregida (orden seguro, en GoodsReceiptForm).
+  async function handleCorrect(id: string) {
     setBusyId(id); setFlash(null); setError(null)
     try {
-      await voidReceipt(id)
       const [r, lines] = await Promise.all([
         getGoodsReceiptById(id),
         listGoodsReceiptLines(id),
       ])
-      if (!r) throw new Error('No se pudo recuperar la recepción anulada.')
+      if (!r) throw new Error('No se pudo recuperar la recepción.')
       const pf: ReceiptPrefill = {
+        sourceReceiptId: r.id,
         supplierId: r.supplierId ?? '',
         locationId: r.locationId,
         purchaseOrderId: r.purchaseOrderId,
@@ -173,8 +187,7 @@ export default function GoodsReceiptsPage() {
       setPrefill(pf)
       setView('form')
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'No se pudo anular y corregir.')
-      setReloadTick(t => t + 1)
+      setError(err instanceof Error ? err.message : 'No se pudo abrir la corrección.')
     } finally {
       setBusyId(null)
     }
@@ -263,7 +276,7 @@ export default function GoodsReceiptsPage() {
                   <CardField label="Nº albarán" value={r.supplierDocNumber ?? '—'} />
                 </div>
                 <div className="mt-2">
-                  <RowActions r={r} busy={busyId === r.id} onConfirm={handleConfirm} onVoid={handleVoid} onVoidAndCorrect={handleVoidAndCorrect} />
+                  <RowActions r={r} busy={busyId === r.id} onConfirm={handleConfirm} onVoid={handleVoid} onCorrect={handleCorrect} />
                 </div>
               </div>
             ))}
@@ -300,7 +313,7 @@ export default function GoodsReceiptsPage() {
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex justify-end">
-                        <RowActions r={r} busy={busyId === r.id} onConfirm={handleConfirm} onVoid={handleVoid} onVoidAndCorrect={handleVoidAndCorrect} />
+                        <RowActions r={r} busy={busyId === r.id} onConfirm={handleConfirm} onVoid={handleVoid} onCorrect={handleCorrect} />
                       </div>
                     </td>
                   </tr>
@@ -315,13 +328,13 @@ export default function GoodsReceiptsPage() {
 }
 
 function RowActions({
-  r, busy, onConfirm, onVoid, onVoidAndCorrect,
+  r, busy, onConfirm, onVoid, onCorrect,
 }: {
   r: GoodsReceipt
   busy: boolean
   onConfirm: (id: string) => void
   onVoid: (id: string) => void
-  onVoidAndCorrect: (id: string) => void
+  onCorrect: (id: string) => void
 }) {
   if (r.status === 'borrador') {
     return (
@@ -341,9 +354,7 @@ function RowActions({
       <div className="flex items-center gap-2">
         <button
           type="button"
-          onClick={() => {
-            if (window.confirm('¿Anular y corregir? Se revierte esta recepción y se reabre para rehacerla.')) onVoidAndCorrect(r.id)
-          }}
+          onClick={() => onCorrect(r.id)}
           disabled={busy}
           className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base"
         >

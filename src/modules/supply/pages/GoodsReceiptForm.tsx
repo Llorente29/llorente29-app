@@ -3,9 +3,12 @@
 // Formulario de RECEPCIÓN de albarán (C2). Un solo componente, TRES modos:
 //   · CONTRA PEDIDO (order != null): precarga las líneas del pedido con la
 //     cantidad pedida como "recibida" (editable). Comparativa pedido↔recibido.
-//   · CORREGIR (prefill != null): precarga las líneas de una recepción ANULADA
-//     para rehacerla cambiando solo lo que falló ("anular y corregir"). Hereda
-//     proveedor, local, nº de albarán y purchase_order_id de la anulada.
+//   · CORREGIR (prefill != null): precarga las líneas de una recepción para
+//     rehacerla cambiando solo lo que falló ("anular y corregir"). Hereda
+//     proveedor, local, nº de albarán y purchase_order_id de la original.
+//     IMPORTANTE: la original NO se anula al abrir; se anula SOLO al confirmar
+//     la corregida (orden seguro: 1º crear+confirmar la nueva, 2º anular la
+//     original). Si guardas borrador o sales, la original sigue CONFIRMADA.
 //   · CIEGO (order == null && prefill == null): eliges local + proveedor → su
 //     catálogo → cantidades. Para entregas sin pedido previo.
 //
@@ -13,13 +16,11 @@
 // conversión a base). Sin formato/equivalencia → la línea NO entra a stock
 // (anti-invención); se guarda como needs_review.
 //
-// "Guardar borrador" deja el albarán editable; "Guardar y confirmar" postea al
-// ledger (confirm_goods_receipt) y muestra el resultado.
-//
-// C2.2 (después): OCR de foto del albarán + create-on-scan (proveedor/artículo).
+// Tras "Guardar y confirmar", el formulario VUELVE SOLO (onSaved con mensaje);
+// el aviso se muestra como toast en la lista. No hay pantalla intermedia.
 
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, Search, Loader2, Check, Save, PackageCheck } from 'lucide-react'
+import { ArrowLeft, Search, Loader2, Check, Save } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import { listSuppliers } from '@/modules/kitchen/services/purchaseFormatService'
 import type { Supplier } from '@/types/kitchen'
@@ -38,11 +39,13 @@ import {
   createGoodsReceipt,
   createGoodsReceiptLine,
   confirmReceipt,
+  voidReceipt,
   qtyInBaseFromFormat,
 } from '@/modules/supply/services/goodsReceiptService'
 
-// Datos para reabrir una recepción anulada y corregirla.
+// Datos para reabrir una recepción y corregirla.
 export interface ReceiptPrefill {
+  sourceReceiptId: string            // recepción a anular AL confirmar la corregida
   supplierId: string
   locationId: string
   purchaseOrderId: string | null
@@ -106,7 +109,6 @@ export default function GoodsReceiptForm({ accountId, order, prefill, onBack, on
   const [loadingLines, setLoadingLines] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [done, setDone] = useState<string | null>(null)
 
   // El pedido al que se liga el albarán (contra-pedido o heredado al corregir).
   const linkedOrderId = order?.id ?? prefill?.purchaseOrderId ?? null
@@ -135,7 +137,6 @@ export default function GoodsReceiptForm({ accountId, order, prefill, onBack, on
     setError(null)
 
     async function build() {
-      // El catálogo del proveedor da formato (qty_in_base) y último precio.
       const catalog = await getSupplierCatalog(accountId, supplierId)
       const byFormat = new Map<string, SupplierCatalogEntry>()
       const byItem = new Map<string, SupplierCatalogEntry>()
@@ -147,7 +148,6 @@ export default function GoodsReceiptForm({ accountId, order, prefill, onBack, on
         (formatId && byFormat.get(formatId)) || (itemId ? byItem.get(itemId) : undefined)
 
       if (correcting && prefill) {
-        // Modo CORREGIR: líneas de la recepción anulada.
         const lines: DraftLine[] = prefill.lines.map((l, i) => {
           const cat = resolveFmt(l.purchaseFormatId, l.recipeItemId)
           return {
@@ -165,7 +165,6 @@ export default function GoodsReceiptForm({ accountId, order, prefill, onBack, on
         })
         if (!cancelled) setDraft(lines)
       } else if (againstOrder && order) {
-        // Modo CONTRA PEDIDO: precarga líneas del pedido.
         const poLines: PurchaseOrderLine[] = await listPurchaseOrderLines(order.id)
         const lines: DraftLine[] = poLines.map(l => {
           const cat = resolveFmt(l.purchaseFormatId, l.recipeItemId)
@@ -184,7 +183,6 @@ export default function GoodsReceiptForm({ accountId, order, prefill, onBack, on
         })
         if (!cancelled) setDraft(lines)
       } else {
-        // Modo CIEGO: una línea por entrada del catálogo (cantidad vacía).
         const lines: DraftLine[] = catalog.map(e => ({
           key: e.articleSupplierId,
           recipeItemId: e.recipeItemId,
@@ -281,40 +279,38 @@ export default function GoodsReceiptForm({ accountId, order, prefill, onBack, on
         })
       }
 
-      if (confirm) {
-        const res = await confirmReceipt(receipt.id)
-        const parts = [`${res.postedLines} línea(s) a stock`]
-        if (res.skippedLines > 0) parts.push(`${res.skippedLines} sin postear (revisar)`)
-        if (res.recalculatedItems > 0) parts.push(`coste actualizado en ${res.recalculatedItems} ingrediente(s)`)
-        setDone(`Recepción ${receipt.code ?? ''} confirmada: ${parts.join(' · ')}.`)
-      } else {
+      // Guardar borrador: en modo corregir, la original SIGUE confirmada (no se
+      // sustituye nada hasta confirmar la corregida).
+      if (!confirm) {
         onSaved(`Recepción ${receipt.code ?? ''} guardada como borrador.`)
+        return
       }
+
+      // Confirmar: postea al ledger.
+      const res = await confirmReceipt(receipt.id)
+
+      // Anular y corregir: orden seguro → solo tras confirmar OK la corregida,
+      // se anula la original. Si esto fallara, ambas quedarían confirmadas un
+      // instante (recuperable con un Anular normal); nunca al revés.
+      let voidNote = ''
+      if (correcting && prefill?.sourceReceiptId) {
+        try {
+          await voidReceipt(prefill.sourceReceiptId)
+          voidNote = ' · anterior anulada'
+        } catch (e) {
+          console.error('persist: corregida confirmada pero no se pudo anular la original', e)
+          voidNote = ' · OJO: anula la anterior a mano'
+        }
+      }
+
+      const parts = [`${res.postedLines} línea(s) a stock`]
+      if (res.skippedLines > 0) parts.push(`${res.skippedLines} sin postear (revisar)`)
+      if (res.recalculatedItems > 0) parts.push(`coste actualizado en ${res.recalculatedItems} ingrediente(s)`)
+      onSaved(`Recepción ${receipt.code ?? ''} confirmada: ${parts.join(' · ')}${voidNote}.`)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'No se pudo guardar la recepción.')
       setSaving(false)
     }
-  }
-
-  if (done) {
-    return (
-      <div className="space-y-4">
-        <div className="p-6 rounded-lg border border-success/20 bg-success-bg text-center">
-          <PackageCheck size={28} className="mx-auto text-success mb-2" />
-          <p className="text-sm font-medium text-text-primary">{done}</p>
-        </div>
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={() => onSaved(done)}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 transition-base"
-          >
-            <Check size={15} />
-            Volver a recepciones
-          </button>
-        </div>
-      </div>
-    )
   }
 
   const title = againstOrder
@@ -325,7 +321,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, onBack, on
   const subtitle = againstOrder
     ? 'Ajusta lo que ha llegado de verdad y confirma para que entre a stock.'
     : correcting
-      ? 'La recepción anterior se anuló. Corrige lo que falló y vuelve a confirmar.'
+      ? 'Corrige lo que falló y confirma. La recepción anterior se anulará solo al confirmar esta.'
       : 'Elige proveedor y local, pon lo recibido y confirma.'
 
   return (
@@ -335,7 +331,8 @@ export default function GoodsReceiptForm({ accountId, order, prefill, onBack, on
         <button
           type="button"
           onClick={onBack}
-          className="inline-flex items-center gap-1.5 text-sm text-text-secondary hover:text-text-primary transition-base"
+          disabled={saving}
+          className="inline-flex items-center gap-1.5 text-sm text-text-secondary hover:text-text-primary transition-base disabled:opacity-50"
         >
           <ArrowLeft size={16} />
           {againstOrder ? 'Pedido' : 'Recepciones'}
@@ -411,7 +408,6 @@ export default function GoodsReceiptForm({ accountId, order, prefill, onBack, on
       {/* Sin proveedor (modo ciego) */}
       {!supplierId && !loadingMeta && (
         <div className="p-8 rounded-lg border border-dashed border-border-default text-center">
-          <PackageCheck size={28} className="mx-auto text-text-secondary mb-2" />
           <p className="text-sm text-text-secondary">Elige un proveedor para ver su catálogo.</p>
         </div>
       )}
@@ -427,7 +423,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, onBack, on
                 {againstOrder
                   ? 'Este pedido no tiene líneas.'
                   : correcting
-                    ? 'La recepción anulada no tenía líneas.'
+                    ? 'La recepción a corregir no tenía líneas.'
                     : 'Este proveedor aún no tiene artículos en su catálogo.'}
               </p>
             </div>
@@ -453,7 +449,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, onBack, on
                       <th className="text-left font-medium px-3 py-2">Artículo</th>
                       <th className="text-left font-medium px-3 py-2">Formato</th>
                       {againstOrder && <th className="text-right font-medium px-3 py-2">Pedido</th>}
-                      <th className="text-center font-medium px-3 py-2" style={{ width: 90 }}>Recibido</th>
+                      <th className="text-center font-medium px-3 py-2" style={{ width: 110 }}>Recibido</th>
                       <th className="text-right font-medium px-3 py-2" style={{ width: 110 }}>€ / formato</th>
                       <th className="text-left font-medium px-3 py-2">Estado</th>
                     </tr>
@@ -479,13 +475,14 @@ export default function GoodsReceiptForm({ accountId, order, prefill, onBack, on
                             </td>
                           )}
                           <td className="px-3 py-2 text-center">
+                            {/* Celda de cantidad: destacada para que el usuario no dude dónde escribir. */}
                             <input
                               type="text" inputMode="decimal"
                               value={l.qty}
                               onChange={e => setQty(l.key, e.target.value)}
                               disabled={saving}
                               placeholder="0"
-                              className="w-16 px-2 py-1 text-sm text-center border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+                              className={`w-20 px-2 py-1.5 text-sm text-center font-medium rounded-md border bg-page text-text-primary focus:outline-none focus:ring-2 focus:ring-accent disabled:opacity-50 ${hasQty ? 'border-accent/50' : 'border-accent/30 bg-accent-bg/30'}`}
                             />
                           </td>
                           <td className="px-3 py-2 text-right">
