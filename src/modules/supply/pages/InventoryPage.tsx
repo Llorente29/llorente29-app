@@ -13,6 +13,8 @@ import {
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useApp } from '@/context/AppContext'
 import { listSupplyLocations, type SupplyLocation } from '@/modules/supply/services/supplierCatalogService'
+import { useOperativeLocation } from '@/modules/supply/hooks/useOperativeLocation'
+import OperativeLocationBanner from '@/modules/supply/components/OperativeLocationBanner'
 import {
   listStorageAreas,
   createStorageArea,
@@ -33,7 +35,8 @@ export default function InventoryPage() {
   const { userProfile, authUserId } = useApp()
 
   const [locations, setLocations] = useState<SupplyLocation[]>([])
-  const [locationId, setLocationId] = useState<string>('')
+  const op = useOperativeLocation()
+  const locationId = op.operativeLocationId ?? ''
   const [areas, setAreas] = useState<StorageArea[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -61,7 +64,6 @@ export default function InventoryPage() {
         const locs = await listSupplyLocations(activeAccountId)
         if (cancelled) return
         setLocations(locs)
-        if (locs.length > 0 && !locationId) setLocationId(locs[0].id)
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Error cargando locales.')
       }
@@ -85,7 +87,7 @@ export default function InventoryPage() {
       }
     })()
     return () => { cancelled = true }
-  }, [activeAccountId, locationId, reloadTick])
+  }, [activeAccountId, locationId, reloadTick])  // locationId viene del hook operativo
 
   // áreas raíz y subáreas (jerarquía opcional de 1 nivel)
   const rootAreas = useMemo(() => areas.filter(a => !a.parentId), [areas])
@@ -178,17 +180,15 @@ export default function InventoryPage() {
             Organiza las áreas de almacén de cada local. El conteo seguirá este orden físico (shelf-to-sheet).
           </p>
         </div>
-        {locations.length > 1 && (
-          <select value={locationId} onChange={e => setLocationId(e.target.value)}
-            className="px-3 py-2 text-sm border border-border-default rounded-md bg-card text-text-primary">
-            {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-          </select>
-        )}
       </div>
+
+      <OperativeLocationBanner op={op} locations={locations} />
 
       {flash && <div className="p-3 rounded-md bg-success-bg text-success border border-success/20 text-sm">{flash}</div>}
       {error && <div className="p-3 rounded-md bg-danger-bg text-danger border border-danger/20 text-sm">{error}</div>}
 
+      {!op.isResolved ? null : (
+      <>
       {/* Alta de área */}
       <div className="border border-border-default rounded-lg p-3 bg-card flex items-end gap-2 flex-wrap">
         <label className="block flex-1 min-w-[180px]">
@@ -226,6 +226,8 @@ export default function InventoryPage() {
             </div>
           ))}
         </div>
+      )}
+      </>
       )}
 
       {/* Modal asignador de artículos */}
