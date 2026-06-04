@@ -49,6 +49,7 @@ import {
   qtyInBaseFromFormat,
   matchReceiptLine,
   matchTypeLabel,
+  learnFromReceipt,
   type LineMatchCandidate,
 } from '@/modules/supply/services/goodsReceiptService'
 import LineMatchPicker from '@/modules/supply/pages/LineMatchPicker'
@@ -484,13 +485,15 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
           purchaseOrderLineId: l.poLineId,
           recipeItemId: l.recipeItemId,
           productName: l.productName,
+          rawText: l.rawText,
+          supplierCode: l.supplierCode,
           qtyReceived,
           purchaseFormatId: l.purchaseFormatId,
           qtyInBase,
           unitCost,
           lotCode: l.lotCode,          // hueco FEFO/APPCC
           expiryDate: l.expiryDate,
-          mapSource: l.recipeItemId ? 'manual' : 'unmapped',
+          mapSource: l.recipeItemId ? (l.matchType ?? 'manual') : 'unmapped',
           mapNeedsReview: unmapped,
           position: position++,
         })
@@ -503,6 +506,15 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
 
       const res = await confirmReceipt(receipt.id)
 
+      // C2.2.b.3 — aprendizaje: graba la memoria por proveedor (no es fatal si falla).
+      let learnNote = ''
+      try {
+        const learned = await learnFromReceipt(receipt.id)
+        if (learned > 0) learnNote = ` · memoria del proveedor actualizada (${learned})`
+      } catch (e) {
+        console.error('persist: confirmada OK pero el aprendizaje falló', e)
+      }
+
       // Anular y corregir: solo tras confirmar OK la corregida se anula la original.
       let voidNote = ''
       if (correcting && prefill?.sourceReceiptId) {
@@ -513,7 +525,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
       const parts = [`${res.postedLines} línea(s) a stock`]
       if (res.skippedLines > 0) parts.push(`${res.skippedLines} sin postear (revisar)`)
       if (res.recalculatedItems > 0) parts.push(`coste actualizado en ${res.recalculatedItems} ingrediente(s)`)
-      onSaved(`Recepción ${receipt.code ?? ''} confirmada: ${parts.join(' · ')}${voidNote}.`)
+      onSaved(`Recepción ${receipt.code ?? ''} confirmada: ${parts.join(' · ')}${learnNote}${voidNote}.`)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'No se pudo guardar la recepción.')
       setSaving(false)

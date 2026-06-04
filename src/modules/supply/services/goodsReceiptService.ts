@@ -114,6 +114,7 @@ export interface GoodsReceiptLineInsert {
   recipeItemId?: string | null
   productName: string
   rawText?: string | null
+  supplierCode?: string | null
   qtyReceived: number
   purchaseUnitId?: string | null
   purchaseFormatId?: string | null
@@ -277,6 +278,7 @@ function lineInsertToRow(input: GoodsReceiptLineInsert): Row {
     recipe_item_id: input.recipeItemId ?? null,
     product_name: input.productName,
     raw_text: input.rawText ?? null,
+    supplier_code: input.supplierCode ?? null,
     qty_received: input.qtyReceived,
     purchase_unit_id: input.purchaseUnitId ?? null,
     purchase_format_id: input.purchaseFormatId ?? null,
@@ -939,4 +941,15 @@ export function matchTypeLabel(mt: string): string {
     case 'fuzzy': return 'parecido'
     default: return mt
   }
+}
+
+// ── C2.2.b.3: aprendizaje al confirmar ──
+// Tras confirmar una recepción, graba la memoria por proveedor (article_supplier:
+// código + denominación + precio + formato). Devuelve cuántas relaciones aprendió.
+// SECURITY DEFINER server-side; se llama desde la app (tiene sesión).
+export async function learnFromReceipt(receiptId: string): Promise<number> {
+  requireSupabase()
+  const { data, error } = await supabase!.rpc('learn_from_receipt', { p_receipt_id: receiptId })
+  if (error) throw new Error(`Error guardando la memoria del proveedor: ${error.message}`)
+  return (data as number) ?? 0
 }

@@ -2290,6 +2290,7 @@ export type Database = {
           recipe_item_id: string
           supplier_code: string | null
           supplier_id: string
+          supplier_item_name: string | null
           updated_at: string
         }
         Insert: {
@@ -2303,6 +2304,7 @@ export type Database = {
           recipe_item_id: string
           supplier_code?: string | null
           supplier_id: string
+          supplier_item_name?: string | null
           updated_at?: string
         }
         Update: {
@@ -2316,6 +2318,7 @@ export type Database = {
           recipe_item_id?: string
           supplier_code?: string | null
           supplier_id?: string
+          supplier_item_name?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -3624,6 +3627,7 @@ export type Database = {
           qty_received: number
           raw_text: string | null
           recipe_item_id: string | null
+          supplier_code: string | null
           unit_cost: number | null
           updated_at: string
         }
@@ -3647,6 +3651,7 @@ export type Database = {
           qty_received: number
           raw_text?: string | null
           recipe_item_id?: string | null
+          supplier_code?: string | null
           unit_cost?: number | null
           updated_at?: string
         }
@@ -3670,6 +3675,7 @@ export type Database = {
           qty_received?: number
           raw_text?: string | null
           recipe_item_id?: string | null
+          supplier_code?: string | null
           unit_cost?: number | null
           updated_at?: string
         }
@@ -7924,6 +7930,50 @@ export type Database = {
         }
         Relationships: []
       }
+      supplier_alias: {
+        Row: {
+          account_id: string
+          created_at: string
+          created_by: string | null
+          delivered_by: string | null
+          emitter_nif: string | null
+          emitter_norm: string
+          id: string
+          supplier_id: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          created_by?: string | null
+          delivered_by?: string | null
+          emitter_nif?: string | null
+          emitter_norm: string
+          id?: string
+          supplier_id: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          created_by?: string | null
+          delivered_by?: string | null
+          emitter_nif?: string | null
+          emitter_norm?: string
+          id?: string
+          supplier_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_alias_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "supplier"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tag: {
         Row: {
           account_id: string
@@ -8589,6 +8639,7 @@ export type Database = {
         Args: { p_n?: number; p_recipe_item_id: string }
         Returns: Json
       }
+      learn_from_receipt: { Args: { p_receipt_id: string }; Returns: number }
       location_economics: {
         Args: { p_from?: string; p_location_id: string; p_to?: string }
         Returns: {
