@@ -3860,6 +3860,172 @@ export type Database = {
           },
         ]
       }
+      inventory_count: {
+        Row: {
+          account_id: string
+          approved_at: string | null
+          approved_by: string | null
+          approved_by_name: string | null
+          blind: boolean
+          closed_at: string | null
+          code: string | null
+          created_at: string
+          created_by: string | null
+          created_by_name: string | null
+          id: string
+          kind: string
+          location_id: string
+          notes: string | null
+          started_at: string | null
+          started_by: string | null
+          started_by_name: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          approved_at?: string | null
+          approved_by?: string | null
+          approved_by_name?: string | null
+          blind?: boolean
+          closed_at?: string | null
+          code?: string | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          id?: string
+          kind?: string
+          location_id: string
+          notes?: string | null
+          started_at?: string | null
+          started_by?: string | null
+          started_by_name?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          approved_at?: string | null
+          approved_by?: string | null
+          approved_by_name?: string | null
+          blind?: boolean
+          closed_at?: string | null
+          code?: string | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          id?: string
+          kind?: string
+          location_id?: string
+          notes?: string | null
+          started_at?: string | null
+          started_by?: string | null
+          started_by_name?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_count_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_count_line: {
+        Row: {
+          abc_class: string | null
+          account_id: string
+          counted_by: string | null
+          counted_by_name: string | null
+          counted_qty: number | null
+          created_at: string
+          id: string
+          inventory_count_id: string
+          position: number
+          reason_code: string | null
+          recipe_item_id: string
+          recount_of: string | null
+          storage_area_id: string | null
+          system_qty: number | null
+          variance_pct: number | null
+          variance_qty: number | null
+          variance_value: number | null
+          within_tolerance: boolean | null
+        }
+        Insert: {
+          abc_class?: string | null
+          account_id: string
+          counted_by?: string | null
+          counted_by_name?: string | null
+          counted_qty?: number | null
+          created_at?: string
+          id?: string
+          inventory_count_id: string
+          position?: number
+          reason_code?: string | null
+          recipe_item_id: string
+          recount_of?: string | null
+          storage_area_id?: string | null
+          system_qty?: number | null
+          variance_pct?: number | null
+          variance_qty?: number | null
+          variance_value?: number | null
+          within_tolerance?: boolean | null
+        }
+        Update: {
+          abc_class?: string | null
+          account_id?: string
+          counted_by?: string | null
+          counted_by_name?: string | null
+          counted_qty?: number | null
+          created_at?: string
+          id?: string
+          inventory_count_id?: string
+          position?: number
+          reason_code?: string | null
+          recipe_item_id?: string
+          recount_of?: string | null
+          storage_area_id?: string | null
+          system_qty?: number | null
+          variance_pct?: number | null
+          variance_qty?: number | null
+          variance_value?: number | null
+          within_tolerance?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_count_line_inventory_count_id_fkey"
+            columns: ["inventory_count_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_count"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_count_line_recipe_item_id_fkey"
+            columns: ["recipe_item_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_item"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_count_line_recount_of_fkey"
+            columns: ["recount_of"]
+            isOneToOne: false
+            referencedRelation: "inventory_count_line"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_count_line_storage_area_id_fkey"
+            columns: ["storage_area_id"]
+            isOneToOne: false
+            referencedRelation: "storage_area"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invoice_approval_rule: {
         Row: {
           account_id: string
@@ -6774,6 +6940,48 @@ export type Database = {
           },
         ]
       }
+      recipe_item_storage_area: {
+        Row: {
+          account_id: string
+          created_at: string
+          id: string
+          position: number
+          recipe_item_id: string
+          storage_area_id: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          id?: string
+          position?: number
+          recipe_item_id: string
+          storage_area_id: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          id?: string
+          position?: number
+          recipe_item_id?: string
+          storage_area_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recipe_item_storage_area_recipe_item_id_fkey"
+            columns: ["recipe_item_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_item"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recipe_item_storage_area_storage_area_id_fkey"
+            columns: ["storage_area_id"]
+            isOneToOne: false
+            referencedRelation: "storage_area"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       recipe_item_tag: {
         Row: {
           created_at: string
@@ -7772,6 +7980,53 @@ export type Database = {
           },
         ]
       }
+      storage_area: {
+        Row: {
+          account_id: string
+          active: boolean
+          created_at: string
+          created_by: string | null
+          created_by_name: string | null
+          id: string
+          location_id: string
+          name: string
+          position: number
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          active?: boolean
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          id?: string
+          location_id: string
+          name: string
+          position?: number
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          active?: boolean
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          id?: string
+          location_id?: string
+          name?: string
+          position?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "storage_area_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       submodules: {
         Row: {
           code: string
@@ -8274,6 +8529,9 @@ export type Database = {
           expiry_alert_days: number
           id: string
           price_alert_pct: number
+          tol_a_pct: number
+          tol_b_pct: number
+          tol_c_pct: number
           updated_at: string
         }
         Insert: {
@@ -8284,6 +8542,9 @@ export type Database = {
           expiry_alert_days?: number
           id?: string
           price_alert_pct?: number
+          tol_a_pct?: number
+          tol_b_pct?: number
+          tol_c_pct?: number
           updated_at?: string
         }
         Update: {
@@ -8294,6 +8555,9 @@ export type Database = {
           expiry_alert_days?: number
           id?: string
           price_alert_pct?: number
+          tol_a_pct?: number
+          tol_b_pct?: number
+          tol_c_pct?: number
           updated_at?: string
         }
         Relationships: []
@@ -9062,6 +9326,10 @@ export type Database = {
         Returns: string
       }
       next_goods_receipt_code: {
+        Args: { p_account_id: string }
+        Returns: string
+      }
+      next_inventory_count_code: {
         Args: { p_account_id: string }
         Returns: string
       }
