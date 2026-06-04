@@ -607,16 +607,17 @@ export default function GoodsReceiptForm({ accountId, order, prefill, onBack, on
   )
 }
 
-// Panel de resumen antes de confirmar. Aparece siempre. Si hay anomalía
-// (algo de más, o masa de líneas con pendiente sin tocar), exige confirmación
-// reforzada (estilo de aviso + texto explícito). "De menos" se informa, no frena.
-// Las líneas de más se listan con DETALLE: cuánto, contra pendiente y contra pedido.
+// Panel de repaso antes de confirmar. Aparece SIEMPRE, en lenguaje llano para
+// personal poco formado: sin contadores abstractos ("de más: 1"), sino frases
+// con NOMBRE de producto y cantidades. Si todo está bien → confirmación tranquila.
+// Si hay algo de más o productos pedidos sin meter → avisos claros + confirmación
+// reforzada. "De menos" se informa, no frena (te traen menos: es normal).
 function ReviewPanel({
   summary, saving, onCancel, onConfirm,
 }: {
   summary: {
     filled: number; aStock: number; sinMapear: number
-    coinciden: number; deMas: number; deMenos: number; sinTocar: number
+    coinciden: number; deMenos: number; deMas: number; sinTocar: number
     overLines: OverLine[]; untouchedLines: UntouchedLine[]
     hasReference: boolean; anomaly: boolean; masaSinTocar: boolean
   }
@@ -624,6 +625,7 @@ function ReviewPanel({
   onCancel: () => void
   onConfirm: () => void
 }) {
+  const productos = summary.aStock === 1 ? '1 producto' : `${summary.aStock} productos`
   return (
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-0 sm:p-4" onClick={onCancel}>
       <div className="bg-card w-full sm:max-w-lg max-h-[92vh] rounded-t-xl sm:rounded-xl shadow-xl flex flex-col" onClick={e => e.stopPropagation()}>
@@ -633,71 +635,57 @@ function ReviewPanel({
         </div>
 
         <div className="px-4 py-4 space-y-3 overflow-y-auto">
-          <div className="grid grid-cols-2 gap-2 text-sm">
-            <SumRow label="Entrarán a stock" value={summary.aStock} good />
-            {summary.sinMapear > 0 && <SumRow label="Sin mapear (no entran)" value={summary.sinMapear} warn />}
-            {summary.hasReference && <SumRow label="Coinciden con lo pendiente" value={summary.coinciden} good />}
-            {summary.hasReference && summary.deMenos > 0 && <SumRow label="De menos" value={summary.deMenos} />}
-            {summary.hasReference && summary.deMas > 0 && <SumRow label="De más" value={summary.deMas} warn />}
-            {summary.hasReference && summary.sinTocar > 0 && <SumRow label="Con pendiente, sin recibir" value={summary.sinTocar} warn={summary.masaSinTocar} />}
-          </div>
+          {/* Repaso en una frase */}
+          <p className="text-sm text-text-primary">
+            Vas a meter <span className="font-medium">{productos}</span> en el almacén.
+            {summary.sinMapear > 0 && (
+              <span className="text-text-secondary"> ({summary.sinMapear} sin reconocer no entrarán.)</span>
+            )}
+          </p>
 
-          {/* Detalle de líneas de más (lo accionable) */}
+          {/* Aviso: cuentas más de lo que faltaba */}
           {summary.overLines.length > 0 && (
-            <div className="rounded-md border border-warning/30 bg-warning-bg/50 overflow-hidden">
-              <p className="px-3 py-1.5 text-xs font-medium text-warning border-b border-warning/20">Recibes más de lo pendiente:</p>
-              <ul className="divide-y divide-warning/10">
+            <div className="rounded-md border border-warning/30 bg-warning-bg/50 p-3 space-y-2">
+              <p className="text-sm font-medium text-warning">Cuentas más de lo que faltaba:</p>
+              <ul className="space-y-1.5">
                 {summary.overLines.map((o, i) => (
-                  <li key={i} className="px-3 py-2 text-sm">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-text-primary font-medium">{o.name}</span>
-                      <span className="text-warning font-medium tabular-nums">+{o.overPending} sobre lo pendiente</span>
-                    </div>
-                    <div className="text-xs text-text-secondary mt-0.5">
-                      Recibes {o.received} · pendiente {o.pending}
-                      {o.ordered !== null && (
-                        <> · total quedaría {o.totalAfter}/{o.ordered} pedido
-                          {o.overOrdered !== null && o.overOrdered > 0 && (
-                            <span className="text-warning"> (+{o.overOrdered} sobre el pedido)</span>
-                          )}
-                        </>
-                      )}
-                    </div>
+                  <li key={i} className="text-sm text-text-primary">
+                    <span className="font-medium">{o.name}:</span> cuentas {o.received}, solo faltaban {o.pending}
+                    <span className="text-warning"> (te sobran {o.overPending})</span>.
+                    {o.ordered !== null && o.overOrdered !== null && o.overOrdered > 0 && (
+                      <span className="text-text-secondary"> Con esto tendrías {o.totalAfter} de un pedido de {o.ordered}.</span>
+                    )}
                   </li>
                 ))}
               </ul>
             </div>
           )}
 
-          {/* Detalle de líneas sin recibir (solo si la masa dispara el aviso) */}
+          {/* Aviso: productos pedidos que no has metido (solo si es mucho) */}
           {summary.masaSinTocar && summary.untouchedLines.length > 0 && (
-            <div className="rounded-md border border-warning/30 bg-warning-bg/50 overflow-hidden">
-              <p className="px-3 py-1.5 text-xs font-medium text-warning border-b border-warning/20">
-                Con pendiente y sin recibir ({summary.untouchedLines.length}):
+            <div className="rounded-md border border-warning/30 bg-warning-bg/50 p-3 space-y-1">
+              <p className="text-sm font-medium text-warning">No has puesto nada de:</p>
+              <p className="text-sm text-text-primary">
+                {summary.untouchedLines.map(u => u.name).join(', ')}.
               </p>
-              <ul className="px-3 py-2 text-xs text-text-secondary space-y-0.5 max-h-32 overflow-y-auto">
-                {summary.untouchedLines.map((u, i) => (
-                  <li key={i} className="flex items-center justify-between gap-2">
-                    <span>{u.name}</span>
-                    <span className="tabular-nums">pendiente {u.pending}</span>
-                  </li>
-                ))}
-              </ul>
+              <p className="text-xs text-text-secondary">Si no han llegado, está bien. Si llegaron, cuéntalos antes de confirmar.</p>
             </div>
           )}
 
-          {summary.anomaly && (
+          {/* Cierre del mensaje según haya o no aviso */}
+          {summary.anomaly ? (
             <p className="text-sm text-text-primary">Revisa que has contado bien antes de confirmar.</p>
-          )}
-          {!summary.anomaly && summary.deMenos > 0 && (
-            <p className="text-xs text-text-secondary">De menos es normal: el pedido quedará como recibido parcial.</p>
+          ) : summary.deMenos > 0 ? (
+            <p className="text-sm text-text-secondary">Has recibido menos de lo pedido. Es normal; el pedido quedará a medias.</p>
+          ) : (
+            <p className="text-sm text-success">Todo correcto.</p>
           )}
         </div>
 
         <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-border-default shrink-0">
           <button type="button" onClick={onCancel} disabled={saving}
             className="px-3 py-1.5 text-sm rounded-md text-text-secondary hover:bg-page transition-base disabled:opacity-50">
-            Volver a editar
+            Volver a contar
           </button>
           <button type="button" onClick={onConfirm} disabled={saving}
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md font-medium text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base ${summary.anomaly ? 'bg-warning' : 'bg-accent'}`}>
@@ -706,15 +694,6 @@ function ReviewPanel({
           </button>
         </div>
       </div>
-    </div>
-  )
-}
-
-function SumRow({ label, value, good, warn }: { label: string; value: number; good?: boolean; warn?: boolean }) {
-  return (
-    <div className="flex items-center justify-between px-2 py-1 rounded bg-page">
-      <span className="text-text-secondary">{label}</span>
-      <span className={`tabular-nums font-medium ${warn ? 'text-warning' : good ? 'text-success' : 'text-text-primary'}`}>{value}</span>
     </div>
   )
 }
