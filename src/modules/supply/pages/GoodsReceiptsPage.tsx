@@ -34,7 +34,7 @@ import {
 import { listSuppliers } from '@/modules/kitchen/services/purchaseFormatService'
 import { listSupplyLocations, type SupplyLocation } from '@/modules/supply/services/supplierCatalogService'
 import type { Supplier } from '@/types/kitchen'
-import GoodsReceiptForm, { type ReceiptPrefill } from '@/modules/supply/pages/GoodsReceiptForm'
+import GoodsReceiptForm, { type ReceiptPrefill, type OcrPrefill } from '@/modules/supply/pages/GoodsReceiptForm'
 import ReceiptScanPanel from '@/modules/supply/pages/ReceiptScanPanel'
 
 const STATUS_LABEL: Record<GoodsReceiptStatus, string> = {
@@ -70,6 +70,7 @@ export default function GoodsReceiptsPage() {
   const [reloadTick, setReloadTick] = useState(0)
   const [view, setView] = useState<View>('list')
   const [prefill, setPrefill] = useState<ReceiptPrefill | null>(null)
+  const [ocrPrefill, setOcrPrefill] = useState<OcrPrefill | null>(null)
 
   const [busyId, setBusyId] = useState<string | null>(null)
   const [flash, setFlash] = useState<string | null>(null)
@@ -200,18 +201,20 @@ export default function GoodsReceiptsPage() {
       <ReceiptScanPanel
         accountId={activeAccountId}
         onBack={() => { setView('list'); setReloadTick(t => t + 1) }}
+        onCreateReceipt={(ocr) => { setPrefill(null); setOcrPrefill(ocr); setView('form') }}
       />
     )
   }
 
-  // ── Vista FORM: nueva recepción ciega o corrección (prefill) ──
+  // ── Vista FORM: nueva recepción ciega, corrección (prefill) o propuesta OCR ──
   if (view === 'form' && activeAccountId) {
     return (
       <GoodsReceiptForm
         accountId={activeAccountId}
         prefill={prefill}
-        onBack={() => { setView('list'); setPrefill(null); setReloadTick(t => t + 1) }}
-        onSaved={(msg) => { setView('list'); setPrefill(null); if (msg) setFlash(msg); setReloadTick(t => t + 1) }}
+        ocrPrefill={ocrPrefill}
+        onBack={() => { setView(ocrPrefill ? 'scan' : 'list'); setPrefill(null); setOcrPrefill(null); setReloadTick(t => t + 1) }}
+        onSaved={(msg) => { setView('list'); setPrefill(null); setOcrPrefill(null); if (msg) setFlash(msg); setReloadTick(t => t + 1) }}
       />
     )
   }

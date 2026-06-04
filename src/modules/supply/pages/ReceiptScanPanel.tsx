@@ -21,11 +21,13 @@ import {
   ScanLine, CheckCircle2, AlertTriangle, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, Eye,
 } from 'lucide-react'
 import { useIsMobile } from '@/shell/useIsMobile'
-import { scanReceipt, getReceiptFileUrl, type OcrAlbaranResult } from '@/modules/supply/services/goodsReceiptService'
+import { scanReceipt, getReceiptFileUrl, resolveReceiptHeader, type OcrAlbaranResult } from '@/modules/supply/services/goodsReceiptService'
+import type { OcrPrefill } from '@/modules/supply/pages/GoodsReceiptForm'
 
 interface ReceiptScanPanelProps {
   accountId: string
   onBack: () => void
+  onCreateReceipt: (ocr: OcrPrefill) => void
 }
 
 function fmtMoney(n: number | null | undefined): string {
@@ -33,7 +35,7 @@ function fmtMoney(n: number | null | undefined): string {
   return n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-export default function ReceiptScanPanel({ accountId, onBack }: ReceiptScanPanelProps) {
+export default function ReceiptScanPanel({ accountId, onBack, onCreateReceipt }: ReceiptScanPanelProps) {
   const isMobile = useIsMobile()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
@@ -79,6 +81,38 @@ export default function ReceiptScanPanel({ accountId, onBack }: ReceiptScanPanel
   }
 
   function reset() { setResult(null); setFiles([]); setError(null); setPageUrls([]); setPage(0); setZoom(false) }
+
+  const [creating, setCreating] = useState(false)
+  async function handleCreate() {
+    if (!result) return
+    setCreating(true); setError(null)
+    try {
+      const header = await resolveReceiptHeader(accountId, result.document)
+      const ocr: OcrPrefill = {
+        aiSessionId: result.sessionId,
+        supplierId: header.supplierId,
+        deliveredBy: header.deliveredBy,
+        locationId: header.locationId,
+        supplierDocNumber: header.supplierDocNumber,
+        receiptDate: header.receiptDate,
+        rawDocumentUrl: result.filePaths[0] ?? null,
+        unmatchedSupplier: header.unmatchedSupplier,
+        unmatchedLocation: header.unmatchedLocation,
+        lines: result.lines.map(l => ({
+          recipeItemId: null,                 // casado en C2.2.b
+          productName: l.raw_text,
+          qty: l.quantity,
+          unitCost: l.unit_price_net,
+          lotCode: l.lot_code,
+          expiryDate: l.expiry_date,
+        })),
+      }
+      onCreateReceipt(ocr)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'No se pudo preparar la recepción.')
+      setCreating(false)
+    }
+  }
 
   const curUrl = pageUrls[page] ?? null
   const curIsPdf = (result?.filePaths[page] ?? '').toLowerCase().endsWith('.pdf')
@@ -248,10 +282,15 @@ export default function ReceiptScanPanel({ accountId, onBack }: ReceiptScanPanel
                 {result.aiLatencyMs ? ` · ${(result.aiLatencyMs / 1000).toFixed(1)}s` : ''}
               </p>
 
-              <div className="flex justify-end">
-                <button type="button" onClick={reset}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium border border-border-default bg-card hover:bg-page transition-base">
+              <div className="flex items-center justify-end gap-2">
+                <button type="button" onClick={reset} disabled={creating}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium border border-border-default bg-card hover:bg-page disabled:opacity-50 transition-base">
                   Escanear otro
+                </button>
+                <button type="button" onClick={handleCreate} disabled={creating || result.lines.length === 0}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base">
+                  {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowLeft size={15} className="rotate-180" />}
+                  Crear recepción desde esto
                 </button>
               </div>
             </div>

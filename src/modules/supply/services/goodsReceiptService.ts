@@ -37,6 +37,8 @@ export interface GoodsReceipt {
   receivedAt: string | null
   status: GoodsReceiptStatus
   source: GoodsReceiptSource
+  deliveredBy: string | null
+  aiSessionId: string | null
   rawDocumentUrl: string | null
   aiConfidence: number | null
   needsReview: boolean
@@ -83,6 +85,8 @@ export interface GoodsReceiptInsert {
   receivedAt?: string | null
   status?: GoodsReceiptStatus
   source?: GoodsReceiptSource
+  deliveredBy?: string | null
+  aiSessionId?: string | null
   rawDocumentUrl?: string | null
   aiConfidence?: number | null
   needsReview?: boolean
@@ -188,6 +192,8 @@ function rowToReceipt(row: Row): GoodsReceipt {
     receivedAt: (row.received_at as string | null) ?? null,
     status: row.status as GoodsReceiptStatus,
     source: row.source as GoodsReceiptSource,
+    deliveredBy: (row.delivered_by as string | null) ?? null,
+    aiSessionId: (row.ai_session_id as string | null) ?? null,
     rawDocumentUrl: (row.raw_document_url as string | null) ?? null,
     aiConfidence: (row.ai_confidence as number | null) ?? null,
     needsReview: Boolean(row.needs_review),
@@ -238,6 +244,8 @@ function receiptInsertToRow(input: GoodsReceiptInsert): Row {
     received_at: input.receivedAt ?? null,
     status: input.status ?? 'borrador',
     source: input.source ?? 'manual',
+    delivered_by: input.deliveredBy ?? null,
+    ai_session_id: input.aiSessionId ?? null,
     raw_document_url: input.rawDocumentUrl ?? null,
     ai_confidence: input.aiConfidence ?? null,
     needs_review: input.needsReview ?? false,
@@ -767,4 +775,113 @@ export async function runOcrAlbaran(accountId: string, filePaths: string[]): Pro
 export async function scanReceipt(accountId: string, files: File[]): Promise<OcrAlbaranResult> {
   const paths = await uploadReceiptFiles(accountId, files)
   return runOcrAlbaran(accountId, paths)
+}
+
+// ── C2.2.a-2: resolución de cabecera desde lo leído por el OCR ──
+//
+// Proveedor COMERCIAL ≠ quien entrega. Si bill_to difiere del emisor y parece
+// otra empresa (intermediario tipo Joan/Bidfood → Cloudtown), el proveedor es
+// bill_to y el emisor se guarda como "entregado por". Casado: por NIF del emisor
+// cuando NO hay intermediario (caso normal: Europastry, Makro), si no por nombre.
+// (Con intermediario no tenemos el NIF del comercial → casa por nombre; si no
+// existe, queda sin casar y se crea en b.)
+// Local: por DIRECCIÓN (los nombres del albarán no coinciden con los de Folvy),
+// si no por nombre.
+
+export interface ResolvedReceiptHeader {
+  supplierId: string            // '' si no casó
+  commercialSupplierName: string | null
+  deliveredBy: string | null    // emisor cuando difiere del comercial
+  locationId: string            // '' si no casó
+  supplierDocNumber: string | null
+  receiptDate: string           // YYYY-MM-DD (doc_date o hoy)
+  unmatchedSupplier: boolean
+  unmatchedLocation: boolean
+}
+
+function normText(s: string | null | undefined): string {
+  return (s ?? '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim()
+}
+function normNif(s: string | null | undefined): string {
+  return (s ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '')
+}
+// Firma de dirección: dígitos (nº/CP) + tokens de calle, para casar "Cañaveral 75"
+// del albarán con la dirección del local aunque el nombre no coincida.
+function addrSignature(s: string | null | undefined): string {
+  return normText(s).replace(/\b(calle|c|cl|avda|avenida|paseo|po|local|piso|bajo|nº|num|numero)\b/g, ' ')
+    .replace(/\s+/g, ' ').trim()
+}
+
+export async function resolveReceiptHeader(
+  accountId: string,
+  doc: OcrDocument,
+): Promise<ResolvedReceiptHeader> {
+  requireSupabase()
+
+  // Proveedor comercial vs emisor (intermediario).
+  const emitter = doc.supplier_name ?? null
+  const billTo = doc.bill_to_name ?? null
+  const hasIntermediary = !!(billTo && emitter && normText(billTo) !== normText(emitter))
+  const commercialName = hasIntermediary ? billTo : emitter
+  const deliveredBy = hasIntermediary ? emitter : null
+  // El NIF leído es el del EMISOR; solo sirve para casar si NO hay intermediario.
+  const commercialNif = hasIntermediary ? null : (doc.supplier_tax_id ?? null)
+
+  const { data: sups } = await from('supplier')
+    .select('id, name, tax_id')
+    .eq('account_id', accountId)
+    .eq('is_active', true)
+  const suppliers = (sups as Row[] | null) ?? []
+
+  let supplierId = ''
+  if (commercialNif) {
+    const nif = normNif(commercialNif)
+    const hit = suppliers.find(s => normNif(s.tax_id as string | null) === nif && nif.length > 0)
+    if (hit) supplierId = hit.id as string
+  }
+  if (!supplierId && commercialName) {
+    const n = normText(commercialName)
+    // Coincidencia por nombre: igualdad normalizada o contención (uno dentro del otro).
+    const hit = suppliers.find(s => {
+      const sn = normText(s.name as string)
+      return sn === n || (sn.length > 3 && (sn.includes(n) || n.includes(sn)))
+    })
+    if (hit) supplierId = hit.id as string
+  }
+
+  // Local por dirección, luego por nombre.
+  const { data: locs } = await from('locations')
+    .select('id, name, address')
+    .eq('account_id', accountId)
+  const locations = (locs as Row[] | null) ?? []
+
+  let locationId = ''
+  const shipSig = addrSignature(doc.ship_to)
+  if (shipSig) {
+    const hit = locations.find(l => {
+      const ls = addrSignature(l.address as string | null)
+      return ls.length > 2 && (shipSig.includes(ls) || ls.includes(shipSig))
+    })
+    if (hit) locationId = hit.id as string
+  }
+  if (!locationId && doc.ship_to) {
+    const n = normText(doc.ship_to)
+    const hit = locations.find(l => {
+      const ln = normText(l.name as string)
+      return ln.length > 3 && (n.includes(ln) || ln.includes(n))
+    })
+    if (hit) locationId = hit.id as string
+  }
+
+  return {
+    supplierId,
+    commercialSupplierName: commercialName,
+    deliveredBy,
+    locationId,
+    supplierDocNumber: doc.doc_number ?? null,
+    receiptDate: doc.doc_date ?? new Date().toISOString().slice(0, 10),
+    unmatchedSupplier: supplierId === '',
+    unmatchedLocation: locationId === '',
+  }
 }

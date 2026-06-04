@@ -66,10 +66,35 @@ export interface ReceiptPrefillLine {
   purchaseOrderLineId: string | null
 }
 
+// Propuesta OCR (C2.2.a-2): cabecera resuelta + líneas leídas del albarán.
+// El proveedor/local pueden venir sin casar ('') → el form los pide. Las líneas
+// llegan SIN artículo (recipeItemId null): el casado a artículos es C2.2.b.
+export interface OcrPrefill {
+  aiSessionId: string | null
+  supplierId: string            // '' si no casó
+  deliveredBy: string | null    // entregado por (Joan/Bidfood) cuando hay intermediario
+  locationId: string            // '' si no casó
+  supplierDocNumber: string | null
+  receiptDate: string | null
+  rawDocumentUrl: string | null
+  unmatchedSupplier: boolean
+  unmatchedLocation: boolean
+  lines: OcrPrefillLine[]
+}
+export interface OcrPrefillLine {
+  recipeItemId: string | null   // null en a-2 (casado en b)
+  productName: string           // raw_text leído
+  qty: number | null            // cantidad leída → celda precargada
+  unitCost: number | null       // precio neto leído
+  lotCode: string | null
+  expiryDate: string | null
+}
+
 interface GoodsReceiptFormProps {
   accountId: string
   order?: PurchaseOrder | null
   prefill?: ReceiptPrefill | null
+  ocrPrefill?: OcrPrefill | null
   onBack: () => void
   onSaved: (message?: string) => void
 }
@@ -112,18 +137,19 @@ interface UntouchedLine {
   pending: number
 }
 
-export default function GoodsReceiptForm({ accountId, order, prefill, onBack, onSaved }: GoodsReceiptFormProps) {
+export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill, onBack, onSaved }: GoodsReceiptFormProps) {
   const { userProfile, authUserId } = useApp()
   const againstOrder = !!order
   const correcting = !!prefill
-  const fixedHeader = againstOrder || correcting
+  const fromOcr = !!ocrPrefill
+  const fixedHeader = againstOrder || correcting   // en OCR la cabecera es editable (propuesta)
 
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [locations, setLocations] = useState<SupplyLocation[]>([])
-  const [supplierId, setSupplierId] = useState<string>(order?.supplierId ?? prefill?.supplierId ?? '')
-  const [locationId, setLocationId] = useState<string>(order?.locationId ?? prefill?.locationId ?? '')
-  const [receiptDate, setReceiptDate] = useState<string>(new Date().toISOString().slice(0, 10))
-  const [supplierDoc, setSupplierDoc] = useState<string>(prefill?.supplierDocNumber ?? '')
+  const [supplierId, setSupplierId] = useState<string>(order?.supplierId ?? prefill?.supplierId ?? ocrPrefill?.supplierId ?? '')
+  const [locationId, setLocationId] = useState<string>(order?.locationId ?? prefill?.locationId ?? ocrPrefill?.locationId ?? '')
+  const [receiptDate, setReceiptDate] = useState<string>(ocrPrefill?.receiptDate ?? new Date().toISOString().slice(0, 10))
+  const [supplierDoc, setSupplierDoc] = useState<string>(prefill?.supplierDocNumber ?? ocrPrefill?.supplierDocNumber ?? '')
 
   const [draft, setDraft] = useState<DraftLine[]>([])
   const [search, setSearch] = useState('')
@@ -151,7 +177,31 @@ export default function GoodsReceiptForm({ accountId, order, prefill, onBack, on
     return () => { cancelled = true }
   }, [accountId, fixedHeader])
 
+  // Modo OCR: las líneas vienen del albarán leído (no del catálogo) y no dependen
+  // del proveedor (que puede estar sin casar). Cantidad PRECARGADA con lo leído.
   useEffect(() => {
+    if (!fromOcr || !ocrPrefill) return
+    setLoadingLines(false)
+    setDraft(ocrPrefill.lines.map((l, i) => ({
+      key: `ocr-${i}`,
+      recipeItemId: l.recipeItemId,       // null en a-2 (casado en b)
+      productName: l.productName,
+      purchaseFormatId: null,
+      formatLabel: null,
+      formatQtyInBase: null,
+      qtyOrdered: null,
+      alreadyReceived: null,
+      pending: null,
+      qty: l.qty != null ? String(l.qty) : '',   // precargada (excepción consciente: el albarán ya tiene la cantidad)
+      unitCost: l.unitCost != null ? String(l.unitCost) : '',
+      poLineId: null,
+      lotCode: l.lotCode,
+      expiryDate: l.expiryDate,
+    })))
+  }, [fromOcr, ocrPrefill])
+
+  useEffect(() => {
+    if (fromOcr) return                   // en OCR las líneas las pone el efecto de arriba
     if (!supplierId) { setDraft([]); return }
     let cancelled = false
     setLoadingLines(true)
@@ -333,7 +383,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, onBack, on
   const locationName = useMemo(() => locations.find(l => l.id === locationId)?.name ?? '—', [locations, locationId])
 
   function startReview() {
-    if (!supplierId) { setError('Elige un proveedor.'); return }
+    if (!fromOcr && !supplierId) { setError('Elige un proveedor.'); return }
     if (!locationId) { setError('Elige el local de entrega.'); return }
     if (filled.length === 0) { setError('Pon cantidad recibida en al menos un artículo.'); return }
     setError(null)
@@ -341,15 +391,19 @@ export default function GoodsReceiptForm({ accountId, order, prefill, onBack, on
   }
 
   async function persist(confirm: boolean) {
+    if (!locationId) { setError('Elige el local de entrega.'); return }
     setSaving(true); setError(null)
     try {
       const receipt = await createGoodsReceipt({
-        accountId, locationId, supplierId,
+        accountId, locationId, supplierId: supplierId || null,
         purchaseOrderId: linkedOrderId,
         supplierDocNumber: supplierDoc.trim() || null,
         receiptDate,
         receivedAt: new Date().toISOString(),
-        source: 'manual',
+        source: fromOcr ? 'ocr' : 'manual',
+        deliveredBy: fromOcr ? (ocrPrefill?.deliveredBy ?? null) : null,
+        aiSessionId: fromOcr ? (ocrPrefill?.aiSessionId ?? null) : null,
+        rawDocumentUrl: fromOcr ? (ocrPrefill?.rawDocumentUrl ?? null) : null,
         createdBy: authUserId ?? null,
         createdByName: userProfile?.displayName ?? null,
       })
@@ -403,12 +457,14 @@ export default function GoodsReceiptForm({ accountId, order, prefill, onBack, on
     }
   }
 
-  const title = againstOrder ? `Recibir pedido ${order?.code ?? ''}` : correcting ? 'Corregir recepción' : 'Nueva recepción'
+  const title = againstOrder ? `Recibir pedido ${order?.code ?? ''}` : correcting ? 'Corregir recepción' : fromOcr ? 'Revisar recepción escaneada' : 'Nueva recepción'
   const subtitle = againstOrder
     ? 'Cuenta lo que ha llegado y escríbelo. Lo pedido y lo pendiente están a la derecha como referencia.'
     : correcting
       ? 'Corrige lo que falló y confirma. La recepción anterior se anulará solo al confirmar esta.'
-      : 'Cuenta lo que ha llegado y escríbelo. Al confirmar, entra a stock.'
+      : fromOcr
+        ? 'Esto leyó la IA del albarán. Revisa proveedor, local y cantidades, y guarda el borrador. Los artículos se casan en el siguiente paso.'
+        : 'Cuenta lo que ha llegado y escríbelo. Al confirmar, entra a stock.'
 
   return (
     <div className="space-y-4">
@@ -464,6 +520,14 @@ export default function GoodsReceiptForm({ accountId, order, prefill, onBack, on
       </div>
 
       {error && <div className="p-3 rounded-md bg-danger-bg text-danger border border-danger/20 text-sm">{error}</div>}
+
+      {fromOcr && (ocrPrefill?.unmatchedSupplier || ocrPrefill?.unmatchedLocation) && (
+        <div className="p-3 rounded-md bg-warning-bg text-warning border border-warning/20 text-sm">
+          {ocrPrefill?.unmatchedSupplier && <p>No he reconocido el proveedor del albarán. Elígelo arriba (o créalo en el siguiente paso).</p>}
+          {ocrPrefill?.unmatchedLocation && <p>No he reconocido el local de entrega. Elígelo arriba.</p>}
+          {ocrPrefill?.deliveredBy && <p className="text-text-secondary mt-0.5">Entregado por: {ocrPrefill.deliveredBy}.</p>}
+        </div>
+      )}
 
       {!supplierId && !loadingMeta && (
         <div className="p-8 rounded-lg border border-dashed border-border-default text-center">

@@ -3431,11 +3431,13 @@ export type Database = {
         Row: {
           account_id: string
           ai_confidence: number | null
+          ai_session_id: string | null
           archived_at: string | null
           code: string | null
           created_at: string
           created_by: string | null
           created_by_name: string | null
+          delivered_by: string | null
           id: string
           is_active: boolean
           location_id: string
@@ -3454,11 +3456,13 @@ export type Database = {
         Insert: {
           account_id: string
           ai_confidence?: number | null
+          ai_session_id?: string | null
           archived_at?: string | null
           code?: string | null
           created_at?: string
           created_by?: string | null
           created_by_name?: string | null
+          delivered_by?: string | null
           id?: string
           is_active?: boolean
           location_id: string
@@ -3477,11 +3481,13 @@ export type Database = {
         Update: {
           account_id?: string
           ai_confidence?: number | null
+          ai_session_id?: string | null
           archived_at?: string | null
           code?: string | null
           created_at?: string
           created_by?: string | null
           created_by_name?: string | null
+          delivered_by?: string | null
           id?: string
           is_active?: boolean
           location_id?: string
@@ -3503,6 +3509,13 @@ export type Database = {
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "goods_receipt_ai_session_id_fkey"
+            columns: ["ai_session_id"]
+            isOneToOne: false
+            referencedRelation: "goods_receipt_ai_session"
             referencedColumns: ["id"]
           },
           {
