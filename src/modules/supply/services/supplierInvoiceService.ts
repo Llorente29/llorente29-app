@@ -8,6 +8,7 @@
 // Patrón calcado de supplierCatalogService / goodsReceiptService.
 
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
+import type { OcrDocument, OcrLine } from '@/modules/supply/services/goodsReceiptService'
 
 function requireSupabase(): void {
   if (!isSupabaseEnabled || !supabase) {
@@ -242,4 +243,195 @@ export async function voidSupplierInvoice(id: string): Promise<void> {
     .update({ status: 'anulada', updated_at: new Date().toISOString() })
     .eq('id', id)
   if (error) throw new Error(`No se pudo anular la factura: ${error.message}`)
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// C3.2 — OCR de factura: resolver cabecera + sugerir albaranes + anti-duplicado.
+// Reutiliza el OCR de recepción (scanReceipt/ocr-albaran, que ya lee facturas).
+// ════════════════════════════════════════════════════════════════════════════
+
+
+function normNifLocal(v: string | null): string {
+  if (!v) return ''
+  return v.toUpperCase().replace(/[^A-Z0-9]/g, '')
+}
+function normTextLocal(v: string | null): string {
+  if (!v) return ''
+  return v.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
+export interface ResolvedInvoiceHeader {
+  supplierId: string            // '' si no casó
+  proposedSupplierName: string | null
+  proposedSupplierNif: string | null
+  locationId: string            // '' si no casó
+  invoiceNumber: string | null
+  invoiceDate: string           // YYYY-MM-DD (doc_date o hoy)
+  docKind: SupplierInvoiceDocKind
+  taxBaseTotal: number | null
+  taxTotal: number | null
+  grandTotal: number | null
+  unmatchedSupplier: boolean
+  suggestedReceiptIds: string[] // albaranes confirmados del proveedor SIN facturar
+}
+
+/** Albarán de un proveedor sin factura (no enlazado en supplier_invoice_receipt). */
+export interface UninvoicedReceipt {
+  id: string
+  code: string | null
+  receiptDate: string | null
+}
+
+/** Lista de albaranes confirmados de un proveedor que aún no están en ninguna factura. */
+export async function listUninvoicedReceipts(
+  accountId: string, supplierId: string,
+): Promise<UninvoicedReceipt[]> {
+  requireSupabase()
+  // Albaranes confirmados del proveedor.
+  const { data: recs, error: e1 } = await from('goods_receipt')
+    .select('id, code, receipt_date, status')
+    .eq('account_id', accountId)
+    .eq('supplier_id', supplierId)
+    .eq('status', 'confirmado')
+    .order('receipt_date', { ascending: false })
+  if (e1) { console.error('[supplierInvoiceService] listUninvoicedReceipts', e1); return [] }
+  const all = (recs as Row[] | null) ?? []
+  if (all.length === 0) return []
+  // Los ya enlazados a alguna factura.
+  const { data: linked } = await from('supplier_invoice_receipt')
+    .select('goods_receipt_id')
+    .in('goods_receipt_id', all.map(r => r.id as string))
+  const linkedSet = new Set(((linked as Row[] | null) ?? []).map(r => r.goods_receipt_id as string))
+  return all
+    .filter(r => !linkedSet.has(r.id as string))
+    .map(r => ({ id: r.id as string, code: (r.code as string | null) ?? null, receiptDate: (r.receipt_date as string | null) ?? null }))
+}
+
+/** Resuelve la cabecera de la factura desde el documento OCR (proveedor por NIF/nombre + albaranes sin facturar). */
+export async function resolveInvoiceHeader(
+  accountId: string, doc: OcrDocument,
+): Promise<ResolvedInvoiceHeader> {
+  requireSupabase()
+  const commercialName = doc.supplier_name ?? null
+  const commercialNif = doc.supplier_tax_id ?? null
+
+  // Proveedor por NIF, luego por nombre normalizado (mismo criterio que recepción).
+  const { data: sups } = await from('supplier')
+    .select('id, name, tax_id')
+    .eq('account_id', accountId)
+    .eq('is_active', true)
+  const suppliers = (sups as Row[] | null) ?? []
+  let supplierId = ''
+  const nif = normNifLocal(commercialNif)
+  if (nif.length > 0) {
+    const hit = suppliers.find(s => normNifLocal(s.tax_id as string | null) === nif)
+    if (hit) supplierId = hit.id as string
+  }
+  if (!supplierId && commercialName) {
+    const n = normTextLocal(commercialName)
+    const hit = suppliers.find(s => normTextLocal(s.name as string | null) === n)
+    if (hit) supplierId = hit.id as string
+  }
+
+  // Tipo de documento: si el OCR detecta nota de crédito/abono lo marca; por defecto factura.
+  const docKind: SupplierInvoiceDocKind = 'invoice'
+
+  // Albaranes sin facturar del proveedor (sugeridos para enlazar).
+  let suggestedReceiptIds: string[] = []
+  if (supplierId) {
+    const uninvoiced = await listUninvoicedReceipts(accountId, supplierId)
+    suggestedReceiptIds = uninvoiced.map(r => r.id)
+  }
+
+  return {
+    supplierId,
+    proposedSupplierName: commercialName,
+    proposedSupplierNif: commercialNif,
+    locationId: '',
+    invoiceNumber: doc.doc_number ?? null,
+    invoiceDate: doc.doc_date ?? new Date().toISOString().slice(0, 10),
+    docKind,
+    taxBaseTotal: doc.tax_base_total ?? null,
+    taxTotal: doc.tax_total ?? null,
+    grandTotal: doc.grand_total ?? null,
+    unmatchedSupplier: !supplierId,
+    suggestedReceiptIds,
+  }
+}
+
+/** ¿Ya existe una factura del mismo proveedor con el mismo nº (no anulada)? (anti-duplicado) */
+export interface DuplicateInvoiceHit { id: string; code: string | null; status: SupplierInvoiceStatus }
+export async function findDuplicateInvoice(
+  accountId: string, supplierId: string | null, invoiceNumber: string | null,
+): Promise<DuplicateInvoiceHit | null> {
+  if (!supplierId || !invoiceNumber || invoiceNumber.trim() === '') return null
+  requireSupabase()
+  const { data, error } = await from('supplier_invoice')
+    .select('id, code, status')
+    .eq('account_id', accountId)
+    .eq('supplier_id', supplierId)
+    .eq('invoice_number', invoiceNumber.trim())
+    .neq('status', 'anulada')
+    .limit(1)
+  if (error) { console.error('[supplierInvoiceService] findDuplicateInvoice', error); return null }
+  const rows = (data as Row[] | null) ?? []
+  if (rows.length === 0) return null
+  return { id: rows[0].id as string, code: (rows[0].code as string | null) ?? null, status: rows[0].status as SupplierInvoiceStatus }
+}
+
+/** Prefill OCR para el alta de factura (lo consume SupplierInvoicesPage). */
+export interface InvoiceOcrPrefill {
+  aiSessionId: string
+  supplierId: string
+  proposedSupplierName: string | null
+  proposedSupplierNif: string | null
+  unmatchedSupplier: boolean
+  invoiceNumber: string | null
+  invoiceDate: string
+  docKind: SupplierInvoiceDocKind
+  taxBaseTotal: number | null
+  taxTotal: number | null
+  grandTotal: number | null
+  rawDocumentUrl: string | null
+  suggestedReceiptIds: string[]
+  lines: {
+    rawText: string
+    supplierCode: string | null
+    qty: number | null
+    unitPrice: number | null
+    lineAmount: number | null
+    vatPct: number | null
+  }[]
+}
+
+/** Construye el prefill de factura a partir del resultado OCR + cabecera resuelta. */
+export function buildInvoiceOcrPrefill(
+  sessionId: string,
+  filePath: string | null,
+  header: ResolvedInvoiceHeader,
+  lines: OcrLine[],
+): InvoiceOcrPrefill {
+  return {
+    aiSessionId: sessionId,
+    supplierId: header.supplierId,
+    proposedSupplierName: header.proposedSupplierName,
+    proposedSupplierNif: header.proposedSupplierNif,
+    unmatchedSupplier: header.unmatchedSupplier,
+    invoiceNumber: header.invoiceNumber,
+    invoiceDate: header.invoiceDate,
+    docKind: header.docKind,
+    taxBaseTotal: header.taxBaseTotal,
+    taxTotal: header.taxTotal,
+    grandTotal: header.grandTotal,
+    rawDocumentUrl: filePath,
+    suggestedReceiptIds: header.suggestedReceiptIds,
+    lines: lines.map(l => ({
+      rawText: l.raw_text,
+      supplierCode: l.supplier_code,
+      qty: l.quantity,
+      unitPrice: l.unit_price_net,
+      lineAmount: l.line_amount,
+      vatPct: l.vat_pct,
+    })),
+  }
 }

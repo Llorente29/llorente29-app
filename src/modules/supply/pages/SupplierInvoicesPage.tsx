@@ -6,7 +6,7 @@
 // y verla en la lista. Patrón calcado de GoodsReceiptsPage.
 
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, FileText, Loader2, Trash2, X } from 'lucide-react'
+import { Plus, FileText, Loader2, Trash2, X, ScanLine } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import {
   listSupplierInvoices,
@@ -16,7 +16,9 @@ import {
   type SupplierInvoiceStatus,
   type SupplierInvoiceDocKind,
   type SupplierInvoiceLineInput,
+  type InvoiceOcrPrefill,
 } from '@/modules/supply/services/supplierInvoiceService'
+import InvoiceScanPanel from '@/modules/supply/pages/InvoiceScanPanel'
 import { listSuppliers } from '@/modules/kitchen/services/purchaseFormatService'
 import { listSupplyLocations, type SupplyLocation } from '@/modules/supply/services/supplierCatalogService'
 import { listGoodsReceipts, type GoodsReceipt } from '@/modules/supply/services/goodsReceiptService'
@@ -64,7 +66,11 @@ export default function SupplierInvoicesPage() {
   const [busyId, setBusyId] = useState<string | null>(null)
 
   // Alta manual
+  const [view, setView] = useState<'list' | 'scan'>('list')
   const [formOpen, setFormOpen] = useState(false)
+  const [ocrSessionId, setOcrSessionId] = useState<string | null>(null)
+  const [ocrRawUrl, setOcrRawUrl] = useState<string | null>(null)
+  const [ocrSource, setOcrSource] = useState<'manual' | 'ocr'>('manual')
   const [saving, setSaving] = useState(false)
   const [docKind, setDocKind] = useState<SupplierInvoiceDocKind>('invoice')
   const [supplierId, setSupplierId] = useState('')
@@ -102,10 +108,30 @@ export default function SupplierInvoicesPage() {
     [receipts, supplierId],
   )
 
+  function applyOcrPrefill(ocr: InvoiceOcrPrefill) {
+    setDocKind(ocr.docKind)
+    setSupplierId(ocr.supplierId || '')
+    setInvoiceNumber(ocr.invoiceNumber ?? '')
+    setInvoiceDate(ocr.invoiceDate ?? '')
+    setTaxBase(ocr.taxBaseTotal != null ? String(ocr.taxBaseTotal) : '')
+    setTaxTotal(ocr.taxTotal != null ? String(ocr.taxTotal) : '')
+    setGrandTotal(ocr.grandTotal != null ? String(ocr.grandTotal) : '')
+    setReceiptIds(ocr.suggestedReceiptIds ?? [])
+    setLines(ocr.lines.length > 0
+      ? ocr.lines.map((l, i) => ({ key: `ocr${i}`, rawText: l.rawText, supplierCode: l.supplierCode, qty: l.qty, unitPrice: l.unitPrice, lineAmount: l.lineAmount, vatPct: l.vatPct }))
+      : [{ key: 'l0' }])
+    setOcrSessionId(ocr.aiSessionId)
+    setOcrRawUrl(ocr.rawDocumentUrl)
+    setOcrSource('ocr')
+    setView('list')
+    setFormOpen(true)
+  }
+
   function resetForm() {
     setDocKind('invoice'); setSupplierId(''); setLocationId(''); setInvoiceNumber('')
     setInvoiceDate(''); setTaxBase(''); setTaxTotal(''); setGrandTotal(''); setNotes('')
     setReceiptIds([]); setLines([{ key: 'l0' }])
+    setOcrSessionId(null); setOcrRawUrl(null); setOcrSource('manual')
   }
 
   function num(s: string): number | null {
@@ -140,6 +166,9 @@ export default function SupplierInvoicesPage() {
         taxTotal: num(taxTotal),
         grandTotal: num(grandTotal),
         notes: notes || null,
+        source: ocrSource,
+        aiSessionId: ocrSessionId,
+        rawDocumentUrl: ocrRawUrl,
         lines: payloadLines,
         receiptIds,
       })
@@ -166,6 +195,16 @@ export default function SupplierInvoicesPage() {
     }
   }
 
+  if (view === 'scan' && activeAccountId) {
+    return (
+      <InvoiceScanPanel
+        accountId={activeAccountId}
+        onBack={() => setView('list')}
+        onCreateInvoice={applyOcrPrefill}
+      />
+    )
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -175,15 +214,26 @@ export default function SupplierInvoicesPage() {
             Registra la factura del proveedor. Cuadra contra lo recibido y confirma el coste.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => { resetForm(); setFormOpen(true) }}
-          disabled={!activeAccountId}
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 transition-base"
-        >
-          <Plus size={16} />
-          Nueva factura
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setView('scan')}
+            disabled={!activeAccountId}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium border border-border-default bg-card hover:bg-page disabled:opacity-50 transition-base"
+          >
+            <ScanLine size={16} />
+            Escanear factura
+          </button>
+          <button
+            type="button"
+            onClick={() => { resetForm(); setFormOpen(true) }}
+            disabled={!activeAccountId}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 transition-base"
+          >
+            <Plus size={16} />
+            Nueva factura
+          </button>
+        </div>
       </div>
 
       {flash && <div className="p-3 rounded-md bg-success-bg text-success border border-success/20 text-sm">{flash}</div>}
