@@ -8,13 +8,15 @@
 // La aprobación → ajuste en stock es 1.4 (aquí solo se cuenta y diagnostica).
 
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, Loader2, Check, AlertTriangle, Save } from 'lucide-react'
+import { ArrowLeft, Loader2, Check, AlertTriangle, Save, ShieldCheck } from 'lucide-react'
+import { useApp } from '@/context/AppContext'
 import {
   getInventoryCount,
   listCountLines,
   saveCountedQty,
   saveReasonCode,
   closeInventoryCount,
+  approveInventoryCount,
   REASON_CODES,
   type InventoryCount,
   type InventoryCountLine,
@@ -44,6 +46,12 @@ export default function InventoryCountSheet({
   const [summary, setSummary] = useState<InventoryCountSummary | null>(null)
   const [savingId, setSavingId] = useState<string | null>(null)
   const [reloadTick, setReloadTick] = useState(0)
+  const [approving, setApproving] = useState(false)
+  const [approved, setApproved] = useState<{ adjustments: number; itemsRecomputed: number } | null>(null)
+
+  const { userProfile, authUserId } = useApp()
+  const role = userProfile?.role ?? 'worker'
+  const canApprove = role === 'admin' || role === 'manager'
 
   useEffect(() => {
     let cancelled = false
@@ -118,6 +126,31 @@ export default function InventoryCountSheet({
 
   const countedCount = useMemo(() => lines.filter(l => l.countedQty !== null).length, [lines])
 
+  // Líneas fuera de tolerancia sin motivo (bloquean la aprobación).
+  const missingReasons = useMemo(
+    () => lines.filter(l => l.countedQty !== null && l.withinTolerance === false && !l.reasonCode).length,
+    [lines],
+  )
+  const isApproved = count?.status === 'aprobado'
+
+  async function handleApprove() {
+    if (missingReasons > 0) {
+      setError(`Hay ${missingReasons} línea(s) fuera de tolerancia sin motivo. Asígnalo antes de aprobar.`)
+      return
+    }
+    if (!window.confirm('¿Aprobar el conteo? Esto ajustará el stock real con las diferencias y no se puede deshacer.')) return
+    setApproving(true); setError(null)
+    try {
+      const res = await approveInventoryCount(countId, authUserId ?? null, userProfile?.displayName ?? null)
+      setApproved(res)
+      setReloadTick(t => t + 1)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo aprobar el conteo.')
+    } finally {
+      setApproving(false)
+    }
+  }
+
   if (loading) {
     return <div className="flex items-center gap-2 text-text-secondary text-sm p-6"><Loader2 size={16} className="animate-spin" /> Cargando conteo…</div>
   }
@@ -145,6 +178,13 @@ export default function InventoryCountSheet({
           <button type="button" onClick={handleClose} disabled={closing}
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 transition-base">
             {closing ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />} Cerrar conteo
+          </button>
+        )}
+        {isReview && !isApproved && canApprove && (
+          <button type="button" onClick={handleApprove} disabled={approving || missingReasons > 0}
+            title={missingReasons > 0 ? 'Asigna motivo a las líneas fuera de tolerancia' : undefined}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base">
+            {approving ? <Loader2 size={15} className="animate-spin" /> : <ShieldCheck size={15} />} Aprobar y ajustar stock
           </button>
         )}
       </div>
@@ -250,9 +290,19 @@ export default function InventoryCountSheet({
           <Save size={12} /> Se guarda solo a medida que cuentas. Puedes salir y volver.
         </p>
       )}
-      {isReview && summary === null && (
+      {approved && (
+        <div className="p-3 rounded-md bg-success-bg text-success border border-success/20 text-sm flex items-center gap-1.5">
+          <ShieldCheck size={15} /> Conteo aprobado. {approved.adjustments} ajuste(s) aplicado(s) al stock.
+        </div>
+      )}
+      {isReview && !isApproved && (
         <p className="text-xs text-text-tertiary flex items-center gap-1.5">
-          <AlertTriangle size={12} /> Conteo en revisión. La aprobación que ajusta el stock llegará en el siguiente paso.
+          <AlertTriangle size={12} />
+          {missingReasons > 0
+            ? `Faltan ${missingReasons} motivo(s) en líneas fuera de tolerancia para poder aprobar.`
+            : canApprove
+              ? 'Al aprobar, las diferencias se escriben como ajuste y corrigen el stock real.'
+              : 'Conteo en revisión. La aprobación que ajusta el stock la hace un responsable.'}
         </p>
       )}
     </div>

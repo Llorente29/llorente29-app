@@ -243,6 +243,35 @@ export async function voidInventoryCount(countId: string): Promise<void> {
   if (error) throw new Error(`No se pudo anular: ${error.message}`)
 }
 
+export interface ApplyCountResult {
+  adjustments: number
+  itemsRecomputed: number
+}
+
+/**
+ * Aprueba el conteo: escribe los ajustes en el ledger y recalcula el saldo.
+ * Cierra la capa 1 (el conteo deja de ser diagnóstico y corrige el stock real).
+ * Lanza error si hay líneas fuera de tolerancia sin motivo.
+ */
+export async function approveInventoryCount(
+  countId: string,
+  userId?: string | null,
+  userName?: string | null,
+): Promise<ApplyCountResult> {
+  requireSupabase()
+  const { data, error } = await supabase!.rpc('apply_inventory_count', {
+    p_count_id: countId,
+    p_user_id: userId ?? undefined,
+    p_user_name: userName ?? undefined,
+  })
+  if (error) throw new Error(error.message)
+  const r = (Array.isArray(data) ? data[0] : data) as Row | null
+  return {
+    adjustments: Number(r?.adjustments ?? 0),
+    itemsRecomputed: Number(r?.items_recomputed ?? 0),
+  }
+}
+
 export const REASON_CODES: { value: string; label: string }[] = [
   { value: 'merma', label: 'Merma' },
   { value: 'caducado', label: 'Caducado' },

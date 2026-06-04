@@ -9089,6 +9089,13 @@ export type Database = {
     }
     Functions: {
       appcc_mark_overdue: { Args: never; Returns: undefined }
+      apply_inventory_count: {
+        Args: { p_count_id: string; p_user_id?: string; p_user_name?: string }
+        Returns: {
+          adjustments: number
+          items_recomputed: number
+        }[]
+      }
       apply_invoice_costs: {
         Args: { p_invoice_id: string }
         Returns: {
