@@ -8,13 +8,21 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   Plus, Boxes, Loader2, X, PencilLine, ChevronUp, ChevronDown,
-  Search, MapPin, Archive,
+  Search, MapPin, Archive, ClipboardList, ChevronRight,
 } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useApp } from '@/context/AppContext'
 import { listSupplyLocations, type SupplyLocation } from '@/modules/supply/services/supplierCatalogService'
 import { useOperativeLocation } from '@/modules/supply/hooks/useOperativeLocation'
 import OperativeLocationBanner from '@/modules/supply/components/OperativeLocationBanner'
+import InventoryCountSheet from '@/modules/supply/components/InventoryCountSheet'
+import {
+  createInventoryCount,
+  buildInventoryCount,
+  listInventoryCounts,
+  type InventoryCount,
+  type InventoryCountKind,
+} from '@/modules/supply/services/inventoryCountService'
 import {
   listStorageAreas,
   createStorageArea,
@@ -50,6 +58,13 @@ export default function InventoryPage() {
 
   // asignador de artículos
   const [assignAreaId, setAssignAreaId] = useState<string | null>(null)
+
+  // navegación interna: áreas | conteos, y conteo abierto
+  const [tab, setTab] = useState<'areas' | 'counts'>('areas')
+  const [openCountId, setOpenCountId] = useState<string | null>(null)
+  const [counts, setCounts] = useState<InventoryCount[]>([])
+  const [countsLoading, setCountsLoading] = useState(false)
+  const [newCountOpen, setNewCountOpen] = useState(false)
 
   useEffect(() => {
     if (flash) { const t = setTimeout(() => setFlash(null), 3000); return () => clearTimeout(t) }
@@ -92,6 +107,24 @@ export default function InventoryPage() {
   // áreas raíz y subáreas (jerarquía opcional de 1 nivel)
   const rootAreas = useMemo(() => areas.filter(a => !a.parentId), [areas])
   const childrenOf = (id: string) => areas.filter(a => a.parentId === id)
+
+  // cargar conteos del local (al entrar en la pestaña o volver de un conteo)
+  useEffect(() => {
+    if (tab !== 'counts' || !activeAccountId || !locationId || openCountId) return
+    let cancelled = false
+    setCountsLoading(true)
+    ;(async () => {
+      try {
+        const cs = await listInventoryCounts(activeAccountId, locationId)
+        if (!cancelled) setCounts(cs)
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : 'Error cargando conteos.')
+      } finally {
+        if (!cancelled) setCountsLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [tab, activeAccountId, locationId, openCountId, reloadTick])
 
   async function handleCreate() {
     if (!activeAccountId || !locationId || !newAreaName.trim()) return
@@ -142,11 +175,49 @@ export default function InventoryPage() {
     catch (e) { setError(e instanceof Error ? e.message : 'No se pudo archivar.') }
   }
 
+  async function handleCreateCount(kind: InventoryCountKind, scope: 'areas' | 'full', areaIds: string[]) {
+    if (!activeAccountId || !locationId) return
+    setError(null)
+    try {
+      const countId = await createInventoryCount({
+        accountId: activeAccountId,
+        locationId,
+        kind,
+        blind: true,
+        createdBy: authUserId ?? null,
+        createdByName: userProfile?.displayName ?? null,
+      })
+      const n = await buildInventoryCount(countId, {
+        areaIds: scope === 'areas' ? areaIds : null,
+        full: scope === 'full',
+      })
+      setNewCountOpen(false)
+      if (n === 0) {
+        setError('No hay artículos en el alcance elegido. Asigna artículos a las áreas o usa "Todo el local".')
+        setReloadTick(t => t + 1)
+        return
+      }
+      setOpenCountId(countId)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo crear el conteo.')
+    }
+  }
+
   if (accountsLoading || loading) {
     return (
       <div className="flex items-center gap-2 text-text-secondary text-sm p-6">
         <Loader2 size={16} className="animate-spin" /> Cargando inventario…
       </div>
+    )
+  }
+
+  // Conteo abierto → hoja de conteo (blind / revisión)
+  if (openCountId) {
+    return (
+      <InventoryCountSheet
+        countId={openCountId}
+        onBack={() => { setOpenCountId(null); setReloadTick(t => t + 1) }}
+      />
     )
   }
 
@@ -189,6 +260,20 @@ export default function InventoryPage() {
 
       {!op.isResolved ? null : (
       <>
+      {/* Pestañas: Áreas | Conteos */}
+      <div className="flex items-center gap-1 border-b border-border-default">
+        <button type="button" onClick={() => setTab('areas')}
+          className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-base ${tab === 'areas' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>
+          <span className="inline-flex items-center gap-1.5"><Boxes size={15} /> Áreas</span>
+        </button>
+        <button type="button" onClick={() => setTab('counts')}
+          className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-base ${tab === 'counts' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>
+          <span className="inline-flex items-center gap-1.5"><ClipboardList size={15} /> Conteos</span>
+        </button>
+      </div>
+
+      {tab === 'areas' && (
+      <>
       {/* Alta de área */}
       <div className="border border-border-default rounded-lg p-3 bg-card flex items-end gap-2 flex-wrap">
         <label className="block flex-1 min-w-[180px]">
@@ -228,6 +313,26 @@ export default function InventoryPage() {
         </div>
       )}
       </>
+      )}
+
+      {tab === 'counts' && (
+        <CountsSection
+          counts={counts}
+          loading={countsLoading}
+          onOpen={(id) => setOpenCountId(id)}
+          onNew={() => setNewCountOpen(true)}
+        />
+      )}
+      </>
+      )}
+
+      {/* Modal nuevo conteo */}
+      {newCountOpen && (
+        <NewCountModal
+          areas={areas}
+          onClose={() => setNewCountOpen(false)}
+          onCreate={handleCreateCount}
+        />
       )}
 
       {/* Modal asignador de artículos */}
@@ -336,6 +441,153 @@ function AssignItemsModal({
               )
             })
           )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Sección de conteos del local ──
+function CountsSection({
+  counts, loading, onOpen, onNew,
+}: {
+  counts: InventoryCount[]
+  loading: boolean
+  onOpen: (id: string) => void
+  onNew: () => void
+}) {
+  const KIND_LABEL: Record<string, string> = { cycle: 'Cíclico', audit: 'Auditoría', full: 'Completo' }
+  const STATUS_LABEL: Record<string, string> = {
+    abierto: 'Abierto', contando: 'Contando', en_revision: 'En revisión', aprobado: 'Aprobado', anulado: 'Anulado',
+  }
+  const STATUS_CLASS: Record<string, string> = {
+    abierto: 'bg-page text-text-secondary border-border-default',
+    contando: 'bg-accent-bg text-accent border-accent/20',
+    en_revision: 'bg-warning-bg text-warning border-warning/20',
+    aprobado: 'bg-success-bg text-success border-success/20',
+    anulado: 'bg-danger-bg text-danger border-danger/20',
+  }
+  const fmt = (v: string | null) => v
+    ? new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(v))
+    : '—'
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-text-secondary">Conteos de este local. Cuenta a ciegas y revisa las diferencias.</p>
+        <button type="button" onClick={onNew}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 transition-base">
+          <Plus size={15} /> Nuevo conteo
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center gap-2 text-text-secondary text-sm p-4"><Loader2 size={15} className="animate-spin" /> Cargando…</div>
+      ) : counts.length === 0 ? (
+        <div className="text-center py-10 text-text-secondary text-sm border border-dashed border-border-default rounded-lg">
+          <ClipboardList size={28} className="mx-auto mb-2 text-text-tertiary" />
+          Aún no hay conteos. Crea el primero con "Nuevo conteo".
+        </div>
+      ) : (
+        <div className="border border-border-default rounded-lg overflow-hidden">
+          {counts.map(c => (
+            <button key={c.id} type="button" onClick={() => onOpen(c.id)}
+              className="w-full flex items-center gap-3 px-3 py-2.5 text-left border-t border-border-default first:border-t-0 hover:bg-page transition-base">
+              <span className="font-medium text-text-primary">{c.code ?? 'Conteo'}</span>
+              <span className="text-xs text-text-tertiary">{KIND_LABEL[c.kind] ?? c.kind}</span>
+              <span className="text-xs text-text-tertiary">· {c.lineCount ?? 0} líneas</span>
+              <span className="text-xs text-text-tertiary ml-auto">{fmt(c.createdAt)}</span>
+              <span className={`text-[11px] px-1.5 py-0.5 rounded border ${STATUS_CLASS[c.status]}`}>{STATUS_LABEL[c.status]}</span>
+              <ChevronRight size={16} className="text-text-tertiary" />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Modal: nuevo conteo (kind + alcance) ──
+function NewCountModal({
+  areas, onClose, onCreate,
+}: {
+  areas: StorageArea[]
+  onClose: () => void
+  onCreate: (kind: InventoryCountKind, scope: 'areas' | 'full', areaIds: string[]) => void
+}) {
+  const [kind, setKind] = useState<InventoryCountKind>('cycle')
+  const [scope, setScope] = useState<'areas' | 'full'>('areas')
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+
+  function toggleArea(id: string) {
+    setSelected(prev => {
+      const n = new Set(prev)
+      if (n.has(id)) n.delete(id); else n.add(id)
+      return n
+    })
+  }
+
+  const canCreate = scope === 'full' || selected.size > 0
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-start sm:items-center justify-center p-4 overflow-y-auto" role="dialog" aria-modal="true">
+      <div className="bg-card rounded-lg border border-border-default shadow-lg w-full max-w-md my-8">
+        <div className="px-5 py-3 border-b border-border-default flex items-center justify-between">
+          <h3 className="text-base font-medium text-text-primary">Nuevo conteo</h3>
+          <button type="button" onClick={onClose} className="text-text-tertiary hover:text-text-primary"><X size={18} /></button>
+        </div>
+        <div className="px-5 py-4 space-y-4">
+          <div>
+            <span className="block text-xs text-text-secondary mb-1.5">Tipo</span>
+            <div className="flex gap-2">
+              {([['cycle', 'Cíclico'], ['audit', 'Auditoría'], ['full', 'Completo']] as const).map(([k, label]) => (
+                <button key={k} type="button" onClick={() => setKind(k)}
+                  className={`px-3 py-1.5 text-sm rounded-md border transition-base ${kind === k ? 'bg-accent text-text-on-accent border-accent' : 'border-border-default text-text-secondary hover:bg-page'}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <span className="block text-xs text-text-secondary mb-1.5">Alcance</span>
+            <div className="flex gap-2 mb-2">
+              <button type="button" onClick={() => setScope('areas')}
+                className={`px-3 py-1.5 text-sm rounded-md border transition-base ${scope === 'areas' ? 'bg-accent text-text-on-accent border-accent' : 'border-border-default text-text-secondary hover:bg-page'}`}>
+                Por áreas
+              </button>
+              <button type="button" onClick={() => setScope('full')}
+                className={`px-3 py-1.5 text-sm rounded-md border transition-base ${scope === 'full' ? 'bg-accent text-text-on-accent border-accent' : 'border-border-default text-text-secondary hover:bg-page'}`}>
+                Todo el local
+              </button>
+            </div>
+            {scope === 'areas' && (
+              areas.length === 0 ? (
+                <p className="text-xs text-text-tertiary">No hay áreas. Crea áreas o usa "Todo el local".</p>
+              ) : (
+                <div className="border border-border-default rounded-md max-h-48 overflow-y-auto">
+                  {areas.map(a => (
+                    <button key={a.id} type="button" onClick={() => toggleArea(a.id)}
+                      className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left border-t border-border-default first:border-t-0 hover:bg-page transition-base ${selected.has(a.id) ? 'text-text-primary' : 'text-text-secondary'}`}>
+                      <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${selected.has(a.id) ? 'bg-accent border-accent' : 'border-border-default'}`}>
+                        {selected.has(a.id) && <span className="text-text-on-accent text-[10px]">✓</span>}
+                      </span>
+                      {a.parentId && <span className="text-text-tertiary">└</span>}
+                      {a.name}
+                    </button>
+                  ))}
+                </div>
+              )
+            )}
+          </div>
+        </div>
+        <div className="px-5 py-3 border-t border-border-default flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="px-3 py-2 text-sm rounded-md border border-border-default text-text-secondary hover:bg-page transition-base">Cancelar</button>
+          <button type="button" disabled={!canCreate}
+            onClick={() => onCreate(kind, scope, Array.from(selected))}
+            className="px-3 py-2 text-sm rounded-md font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 transition-base">
+            Crear y contar
+          </button>
         </div>
       </div>
     </div>

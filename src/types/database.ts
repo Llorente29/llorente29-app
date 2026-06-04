@@ -9102,7 +9102,22 @@ export type Database = {
         }[]
       }
       belongs_to_account: { Args: { p_account_id: string }; Returns: boolean }
+      build_inventory_count: {
+        Args: { p_area_ids?: string[]; p_count_id: string; p_full?: boolean }
+        Returns: number
+      }
       cleanup_auth_rate_limits: { Args: never; Returns: number }
+      close_inventory_count: {
+        Args: { p_count_id: string }
+        Returns: {
+          lines_counted: number
+          lines_ok: number
+          lines_out: number
+          lines_total: number
+          lines_uncounted: number
+          total_variance_value: number
+        }[]
+      }
       confirm_goods_receipt: {
         Args: { p_receipt_id: string }
         Returns: {
