@@ -1,26 +1,31 @@
 // src/modules/supply/pages/GoodsReceiptForm.tsx
 //
-// Formulario de RECEPCIÓN de albarán (C2). Un solo componente, TRES modos:
-//   · CONTRA PEDIDO (order != null): precarga las líneas del pedido con la
-//     cantidad pedida como "recibida" (editable). Comparativa pedido↔recibido.
-//   · CORREGIR (prefill != null): precarga las líneas de una recepción para
-//     rehacerla cambiando solo lo que falló ("anular y corregir"). Hereda
-//     proveedor, local, nº de albarán y purchase_order_id de la original.
-//     IMPORTANTE: la original NO se anula al abrir; se anula SOLO al confirmar
-//     la corregida (orden seguro: 1º crear+confirmar la nueva, 2º anular la
-//     original). Si guardas borrador o sales, la original sigue CONFIRMADA.
-//   · CIEGO (order == null && prefill == null): eliges local + proveedor → su
-//     catálogo → cantidades. Para entregas sin pedido previo.
+// Formulario de RECEPCIÓN de albarán (C2) — diseño ANTI-ERROR (blind receiving).
+// Tres modos: CONTRA PEDIDO (order), CORREGIR (prefill), CIEGO (ninguno).
 //
-// qty_in_base = qty_recibida × format.qty_in_base (el formato encierra la
-// conversión a base). Sin formato/equivalencia → la línea NO entra a stock
-// (anti-invención); se guarda como needs_review.
+// SEGURIDAD (evita el "confirmation bias"):
+//   · La celda "Recibido" NACE VACÍA SIEMPRE. Nunca se precarga lo pedido ni lo
+//     pendiente: el usuario teclea lo que CUENTA. Lo pedido / ya recibido /
+//     pendiente se muestran como REFERENCIA gris al lado, no en la casilla.
+//   · Botón "Rellenar con lo pendiente": acelerador OPT-IN para el caso "llegó
+//     todo lo que faltaba". No se salta el resumen.
+//   · RESUMEN antes de confirmar SIEMPRE (coinciden / de más / de menos / sin
+//     recibir). Segundo clic REFORZADO solo si hay anomalía (algo de más, o
+//     muchas líneas con pendiente dejadas sin tocar). "De menos" no frena (es
+//     normal: te traen menos). Lo no tocado = NO recibido, explícito.
 //
-// Tras "Guardar y confirmar", el formulario VUELVE SOLO (onSaved con mensaje);
-// el aviso se muestra como toast en la lista. No hay pantalla intermedia.
+// "Ya recibido" sale de listOrderLineReceived (recepciones confirmadas del
+// pedido); pendiente = max(0, pedido − ya recibido). En modo corregir se
+// excluye la recepción que se va a sustituir.
+//
+// HUECO FEFO/APPCC: cada línea ya transporta lotCode/expiryDate (se persisten);
+// los inputs visibles y el control APPCC de recepción llegan en su frente. Así
+// no se rehace la tabla cuando se enchufen.
+//
+// Tras confirmar, VUELVE SOLO (onSaved con mensaje); aviso como toast en lista.
 
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, Search, Loader2, Check, Save } from 'lucide-react'
+import { ArrowLeft, Search, Loader2, Check, Save, ListChecks, AlertTriangle } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import { listSuppliers } from '@/modules/kitchen/services/purchaseFormatService'
 import type { Supplier } from '@/types/kitchen'
@@ -40,12 +45,12 @@ import {
   createGoodsReceiptLine,
   confirmReceipt,
   voidReceipt,
+  listOrderLineReceived,
   qtyInBaseFromFormat,
 } from '@/modules/supply/services/goodsReceiptService'
 
-// Datos para reabrir una recepción y corregirla.
 export interface ReceiptPrefill {
-  sourceReceiptId: string            // recepción a anular AL confirmar la corregida
+  sourceReceiptId: string
   supplierId: string
   locationId: string
   purchaseOrderId: string | null
@@ -63,13 +68,12 @@ export interface ReceiptPrefillLine {
 
 interface GoodsReceiptFormProps {
   accountId: string
-  order?: PurchaseOrder | null         // si viene → modo CONTRA PEDIDO
-  prefill?: ReceiptPrefill | null      // si viene → modo CORREGIR
+  order?: PurchaseOrder | null
+  prefill?: ReceiptPrefill | null
   onBack: () => void
   onSaved: (message?: string) => void
 }
 
-// Línea editable en memoria.
 interface DraftLine {
   key: string
   recipeItemId: string | null
@@ -77,10 +81,14 @@ interface DraftLine {
   purchaseFormatId: string | null
   formatLabel: string | null
   formatQtyInBase: number | null
-  qtyOrdered: number | null   // solo en modo contra pedido (comparativa)
-  qty: string                 // recibido (editable)
-  unitCost: string            // € por formato (editable)
+  qtyOrdered: number | null    // referencia (modo con pedido)
+  alreadyReceived: number | null
+  pending: number | null       // max(0, pedido − ya recibido); null = sin referencia
+  qty: string                  // RECIBIDO — nace vacío SIEMPRE
+  unitCost: string
   poLineId: string | null
+  lotCode: string | null       // hueco FEFO/APPCC (se persiste; UI en su frente)
+  expiryDate: string | null
 }
 
 function parseNum(v: string): number | null {
@@ -93,7 +101,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, onBack, on
   const { userProfile, authUserId } = useApp()
   const againstOrder = !!order
   const correcting = !!prefill
-  const fixedHeader = againstOrder || correcting   // proveedor/local fijos (vienen del origen)
+  const fixedHeader = againstOrder || correcting
 
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [locations, setLocations] = useState<SupplyLocation[]>([])
@@ -109,11 +117,10 @@ export default function GoodsReceiptForm({ accountId, order, prefill, onBack, on
   const [loadingLines, setLoadingLines] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [reviewing, setReviewing] = useState(false)   // panel resumen pre-confirmación
 
-  // El pedido al que se liga el albarán (contra-pedido o heredado al corregir).
   const linkedOrderId = order?.id ?? prefill?.purchaseOrderId ?? null
 
-  // Cargar proveedores + locales (para selectores del modo ciego y nombres).
   useEffect(() => {
     let cancelled = false
     setLoadingMeta(true)
@@ -129,7 +136,6 @@ export default function GoodsReceiptForm({ accountId, order, prefill, onBack, on
     return () => { cancelled = true }
   }, [accountId, fixedHeader])
 
-  // Construir las líneas del borrador.
   useEffect(() => {
     if (!supplierId) { setDraft([]); return }
     let cancelled = false
@@ -147,9 +153,32 @@ export default function GoodsReceiptForm({ accountId, order, prefill, onBack, on
       const resolveFmt = (formatId: string | null, itemId: string | null) =>
         (formatId && byFormat.get(formatId)) || (itemId ? byItem.get(itemId) : undefined)
 
+      // Referencia pedido/ya recibido/pendiente (si hay pedido detrás).
+      const orderedByPoLine = new Map<string, number>()
+      const receivedByPoLine = new Map<string, number>()
+      const refOrderId = order?.id ?? prefill?.purchaseOrderId ?? null
+      if (refOrderId) {
+        const [poLines, received] = await Promise.all([
+          listPurchaseOrderLines(refOrderId),
+          listOrderLineReceived(refOrderId, correcting ? { excludeReceiptId: prefill!.sourceReceiptId } : undefined),
+        ])
+        poLines.forEach(l => orderedByPoLine.set(l.id, l.qtyOrdered))
+        received.forEach(r => receivedByPoLine.set(r.purchaseOrderLineId, r.receivedConfirmed))
+      }
+      const refFor = (poLineId: string | null) => {
+        if (!poLineId || !orderedByPoLine.has(poLineId)) {
+          return { qtyOrdered: null as number | null, already: null as number | null, pending: null as number | null }
+        }
+        const ordered = orderedByPoLine.get(poLineId)!
+        const already = receivedByPoLine.get(poLineId) ?? 0
+        return { qtyOrdered: ordered, already, pending: Math.max(0, ordered - already) }
+      }
+
+      let lines: DraftLine[]
       if (correcting && prefill) {
-        const lines: DraftLine[] = prefill.lines.map((l, i) => {
+        lines = prefill.lines.map((l, i) => {
           const cat = resolveFmt(l.purchaseFormatId, l.recipeItemId)
+          const ref = refFor(l.purchaseOrderLineId)
           return {
             key: `pf-${i}`,
             recipeItemId: l.recipeItemId,
@@ -157,17 +186,21 @@ export default function GoodsReceiptForm({ accountId, order, prefill, onBack, on
             purchaseFormatId: l.purchaseFormatId ?? cat?.purchaseFormatId ?? null,
             formatLabel: cat?.formatLabel ?? cat?.formatName ?? null,
             formatQtyInBase: cat?.formatQtyInBase ?? null,
-            qtyOrdered: null,
-            qty: String(l.qtyReceived),
+            qtyOrdered: ref.qtyOrdered,
+            alreadyReceived: ref.already,
+            pending: ref.pending,
+            qty: '',
             unitCost: l.unitCost != null ? String(l.unitCost) : (cat?.lastPrice != null ? String(cat.lastPrice) : ''),
             poLineId: l.purchaseOrderLineId,
+            lotCode: null,
+            expiryDate: null,
           }
         })
-        if (!cancelled) setDraft(lines)
       } else if (againstOrder && order) {
         const poLines: PurchaseOrderLine[] = await listPurchaseOrderLines(order.id)
-        const lines: DraftLine[] = poLines.map(l => {
+        lines = poLines.map(l => {
           const cat = resolveFmt(l.purchaseFormatId, l.recipeItemId)
+          const ref = refFor(l.id)
           return {
             key: l.id,
             recipeItemId: l.recipeItemId,
@@ -175,15 +208,18 @@ export default function GoodsReceiptForm({ accountId, order, prefill, onBack, on
             purchaseFormatId: l.purchaseFormatId ?? cat?.purchaseFormatId ?? null,
             formatLabel: cat?.formatLabel ?? cat?.formatName ?? null,
             formatQtyInBase: cat?.formatQtyInBase ?? null,
-            qtyOrdered: l.qtyOrdered,
-            qty: String(l.qtyOrdered),
+            qtyOrdered: ref.qtyOrdered,
+            alreadyReceived: ref.already,
+            pending: ref.pending,
+            qty: '',
             unitCost: l.estUnitPrice != null ? String(l.estUnitPrice) : (cat?.lastPrice != null ? String(cat.lastPrice) : ''),
             poLineId: l.id,
+            lotCode: null,
+            expiryDate: null,
           }
         })
-        if (!cancelled) setDraft(lines)
       } else {
-        const lines: DraftLine[] = catalog.map(e => ({
+        lines = catalog.map(e => ({
           key: e.articleSupplierId,
           recipeItemId: e.recipeItemId,
           productName: e.itemName,
@@ -191,12 +227,16 @@ export default function GoodsReceiptForm({ accountId, order, prefill, onBack, on
           formatLabel: e.formatLabel ?? e.formatName ?? null,
           formatQtyInBase: e.formatQtyInBase,
           qtyOrdered: null,
+          alreadyReceived: null,
+          pending: null,
           qty: '',
           unitCost: e.lastPrice != null ? String(e.lastPrice) : '',
           poLineId: null,
+          lotCode: null,
+          expiryDate: null,
         }))
-        if (!cancelled) setDraft(lines)
       }
+      if (!cancelled) setDraft(lines)
     }
 
     build()
@@ -211,6 +251,12 @@ export default function GoodsReceiptForm({ accountId, order, prefill, onBack, on
   function setCost(key: string, unitCost: string) {
     setDraft(d => d.map(l => l.key === key ? { ...l, unitCost } : l))
   }
+  // Acelerador opt-in: rellena Recibido con el pendiente (solo líneas con pendiente>0).
+  function fillWithPending() {
+    setDraft(d => d.map(l => (l.pending !== null && l.pending > 0) ? { ...l, qty: String(l.pending) } : l))
+  }
+
+  const hasReference = useMemo(() => draft.some(l => l.pending !== null), [draft])
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -222,32 +268,50 @@ export default function GoodsReceiptForm({ accountId, order, prefill, onBack, on
     () => draft.filter(l => { const n = parseNum(l.qty); return n !== null && n > 0 }),
     [draft],
   )
-
   const willPost = useMemo(
     () => filled.filter(l => l.recipeItemId && qtyInBaseFromFormat(parseNum(l.qty)!, l.formatQtyInBase) !== null).length,
     [filled],
   )
 
-  const supplierName = useMemo(
-    () => suppliers.find(s => s.id === supplierId)?.name ?? '—',
-    [suppliers, supplierId],
-  )
-  const locationName = useMemo(
-    () => locations.find(l => l.id === locationId)?.name ?? '—',
-    [locations, locationId],
-  )
+  // ── Resumen anti-error ──
+  const summary = useMemo(() => {
+    const linesWithPending = draft.filter(l => l.pending !== null && l.pending > 0)
+    let coinciden = 0, deMas = 0, deMenos = 0
+    for (const l of filled) {
+      if (l.pending === null) continue
+      const n = parseNum(l.qty)!
+      if (n > l.pending) deMas++
+      else if (l.pending > 0 && n < l.pending) deMenos++
+      else if (n === l.pending) coinciden++
+    }
+    const sinTocar = linesWithPending.filter(l => { const n = parseNum(l.qty); return n === null || n <= 0 }).length
+    const sinMapear = filled.length - willPost
+    // Anomalía = algo de más, o masa sin tocar (>30% de las líneas con pendiente y >3).
+    const masaSinTocar = sinTocar > 3 && linesWithPending.length > 0 && (sinTocar / linesWithPending.length) > 0.30
+    const anomaly = deMas > 0 || masaSinTocar
+    return {
+      filled: filled.length, aStock: willPost, sinMapear,
+      coinciden, deMas, deMenos, sinTocar,
+      hasReference, anomaly, masaSinTocar,
+    }
+  }, [draft, filled, willPost, hasReference])
 
-  async function persist(confirm: boolean) {
+  const supplierName = useMemo(() => suppliers.find(s => s.id === supplierId)?.name ?? '—', [suppliers, supplierId])
+  const locationName = useMemo(() => locations.find(l => l.id === locationId)?.name ?? '—', [locations, locationId])
+
+  function startReview() {
     if (!supplierId) { setError('Elige un proveedor.'); return }
     if (!locationId) { setError('Elige el local de entrega.'); return }
     if (filled.length === 0) { setError('Pon cantidad recibida en al menos un artículo.'); return }
+    setError(null)
+    setReviewing(true)
+  }
 
+  async function persist(confirm: boolean) {
     setSaving(true); setError(null)
     try {
       const receipt = await createGoodsReceipt({
-        accountId,
-        locationId,
-        supplierId,
+        accountId, locationId, supplierId,
         purchaseOrderId: linkedOrderId,
         supplierDocNumber: supplierDoc.trim() || null,
         receiptDate,
@@ -273,34 +337,26 @@ export default function GoodsReceiptForm({ accountId, order, prefill, onBack, on
           purchaseFormatId: l.purchaseFormatId,
           qtyInBase,
           unitCost,
+          lotCode: l.lotCode,          // hueco FEFO/APPCC
+          expiryDate: l.expiryDate,
           mapSource: l.recipeItemId ? 'manual' : 'unmapped',
           mapNeedsReview: unmapped,
           position: position++,
         })
       }
 
-      // Guardar borrador: en modo corregir, la original SIGUE confirmada (no se
-      // sustituye nada hasta confirmar la corregida).
       if (!confirm) {
         onSaved(`Recepción ${receipt.code ?? ''} guardada como borrador.`)
         return
       }
 
-      // Confirmar: postea al ledger.
       const res = await confirmReceipt(receipt.id)
 
-      // Anular y corregir: orden seguro → solo tras confirmar OK la corregida,
-      // se anula la original. Si esto fallara, ambas quedarían confirmadas un
-      // instante (recuperable con un Anular normal); nunca al revés.
+      // Anular y corregir: solo tras confirmar OK la corregida se anula la original.
       let voidNote = ''
       if (correcting && prefill?.sourceReceiptId) {
-        try {
-          await voidReceipt(prefill.sourceReceiptId)
-          voidNote = ' · anterior anulada'
-        } catch (e) {
-          console.error('persist: corregida confirmada pero no se pudo anular la original', e)
-          voidNote = ' · OJO: anula la anterior a mano'
-        }
+        try { await voidReceipt(prefill.sourceReceiptId); voidNote = ' · anterior anulada' }
+        catch (e) { console.error('persist: corregida OK pero no se pudo anular la original', e); voidNote = ' · OJO: anula la anterior a mano' }
       }
 
       const parts = [`${res.postedLines} línea(s) a stock`]
@@ -310,30 +366,22 @@ export default function GoodsReceiptForm({ accountId, order, prefill, onBack, on
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'No se pudo guardar la recepción.')
       setSaving(false)
+      setReviewing(false)
     }
   }
 
-  const title = againstOrder
-    ? `Recibir pedido ${order?.code ?? ''}`
-    : correcting
-      ? 'Corregir recepción'
-      : 'Nueva recepción'
+  const title = againstOrder ? `Recibir pedido ${order?.code ?? ''}` : correcting ? 'Corregir recepción' : 'Nueva recepción'
   const subtitle = againstOrder
-    ? 'Ajusta lo que ha llegado de verdad y confirma para que entre a stock.'
+    ? 'Cuenta lo que ha llegado y escríbelo. Lo pedido y lo pendiente están a la derecha como referencia.'
     : correcting
       ? 'Corrige lo que falló y confirma. La recepción anterior se anulará solo al confirmar esta.'
-      : 'Elige proveedor y local, pon lo recibido y confirma.'
+      : 'Cuenta lo que ha llegado y escríbelo. Al confirmar, entra a stock.'
 
   return (
     <div className="space-y-4">
-      {/* Cabecera */}
       <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={onBack}
-          disabled={saving}
-          className="inline-flex items-center gap-1.5 text-sm text-text-secondary hover:text-text-primary transition-base disabled:opacity-50"
-        >
+        <button type="button" onClick={onBack} disabled={saving}
+          className="inline-flex items-center gap-1.5 text-sm text-text-secondary hover:text-text-primary transition-base disabled:opacity-50">
           <ArrowLeft size={16} />
           {againstOrder ? 'Pedido' : 'Recepciones'}
         </button>
@@ -351,12 +399,8 @@ export default function GoodsReceiptForm({ accountId, order, prefill, onBack, on
           {fixedHeader ? (
             <p className="px-2 py-1.5 text-sm text-text-primary">{locationName}</p>
           ) : (
-            <select
-              value={locationId}
-              onChange={e => setLocationId(e.target.value)}
-              disabled={loadingMeta || saving}
-              className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
-            >
+            <select value={locationId} onChange={e => setLocationId(e.target.value)} disabled={loadingMeta || saving}
+              className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50">
               <option value="">— Elige local —</option>
               {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
             </select>
@@ -367,12 +411,8 @@ export default function GoodsReceiptForm({ accountId, order, prefill, onBack, on
           {fixedHeader ? (
             <p className="px-2 py-1.5 text-sm text-text-primary">{supplierName}</p>
           ) : (
-            <select
-              value={supplierId}
-              onChange={e => setSupplierId(e.target.value)}
-              disabled={loadingMeta || saving}
-              className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
-            >
+            <select value={supplierId} onChange={e => setSupplierId(e.target.value)} disabled={loadingMeta || saving}
+              className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50">
               <option value="">— Elige proveedor —</option>
               {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
@@ -380,39 +420,24 @@ export default function GoodsReceiptForm({ accountId, order, prefill, onBack, on
         </div>
         <div>
           <label className="block text-xs font-medium text-text-secondary mb-1">Fecha de recepción</label>
-          <input
-            type="date"
-            value={receiptDate}
-            onChange={e => setReceiptDate(e.target.value)}
-            disabled={saving}
-            className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
-          />
+          <input type="date" value={receiptDate} onChange={e => setReceiptDate(e.target.value)} disabled={saving}
+            className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50" />
         </div>
         <div>
           <label className="block text-xs font-medium text-text-secondary mb-1">Nº de albarán (proveedor)</label>
-          <input
-            type="text"
-            value={supplierDoc}
-            onChange={e => setSupplierDoc(e.target.value)}
-            disabled={saving}
-            placeholder="Opcional"
-            className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
-          />
+          <input type="text" value={supplierDoc} onChange={e => setSupplierDoc(e.target.value)} disabled={saving} placeholder="Opcional"
+            className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50" />
         </div>
       </div>
 
-      {error && (
-        <div className="p-3 rounded-md bg-danger-bg text-danger border border-danger/20 text-sm">{error}</div>
-      )}
+      {error && <div className="p-3 rounded-md bg-danger-bg text-danger border border-danger/20 text-sm">{error}</div>}
 
-      {/* Sin proveedor (modo ciego) */}
       {!supplierId && !loadingMeta && (
         <div className="p-8 rounded-lg border border-dashed border-border-default text-center">
           <p className="text-sm text-text-secondary">Elige un proveedor para ver su catálogo.</p>
         </div>
       )}
 
-      {/* Líneas */}
       {supplierId && (
         <>
           {loadingLines && <p className="text-sm text-text-secondary">Cargando líneas…</p>}
@@ -420,35 +445,38 @@ export default function GoodsReceiptForm({ accountId, order, prefill, onBack, on
           {!loadingLines && draft.length === 0 && (
             <div className="p-6 rounded-lg border border-dashed border-border-default text-center">
               <p className="text-sm text-text-secondary">
-                {againstOrder
-                  ? 'Este pedido no tiene líneas.'
-                  : correcting
-                    ? 'La recepción a corregir no tenía líneas.'
-                    : 'Este proveedor aún no tiene artículos en su catálogo.'}
+                {againstOrder ? 'Este pedido no tiene líneas.' : correcting ? 'La recepción a corregir no tenía líneas.' : 'Este proveedor aún no tiene artículos en su catálogo.'}
               </p>
             </div>
           )}
 
           {!loadingLines && draft.length > 0 && (
             <>
-              <div className="relative max-w-sm">
-                <Search size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-secondary" />
-                <input
-                  type="text"
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  placeholder="Buscar artículo"
-                  className="w-full pl-8 pr-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
-                />
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="relative max-w-sm flex-1 min-w-[200px]">
+                  <Search size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-secondary" />
+                  <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar artículo"
+                    className="w-full pl-8 pr-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent" />
+                </div>
+                {hasReference && (
+                  <button type="button" onClick={fillWithPending} disabled={saving}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm border border-border-default bg-card text-text-secondary hover:bg-page hover:text-text-primary disabled:opacity-50 transition-base"
+                    title="Rellena 'Recibido' con lo pendiente. Revísalo: solo si ha llegado todo lo que faltaba.">
+                    <ListChecks size={15} />
+                    Rellenar con lo pendiente
+                  </button>
+                )}
               </div>
 
               <div className="rounded-lg border border-border-default overflow-x-auto">
-                <table className="w-full text-sm" style={{ minWidth: 720 }}>
+                <table className="w-full text-sm" style={{ minWidth: hasReference ? 860 : 720 }}>
                   <thead className="bg-page text-text-secondary">
                     <tr>
                       <th className="text-left font-medium px-3 py-2">Artículo</th>
                       <th className="text-left font-medium px-3 py-2">Formato</th>
-                      {againstOrder && <th className="text-right font-medium px-3 py-2">Pedido</th>}
+                      {hasReference && <th className="text-right font-medium px-3 py-2">Pedido</th>}
+                      {hasReference && <th className="text-right font-medium px-3 py-2">Ya recibido</th>}
+                      {hasReference && <th className="text-right font-medium px-3 py-2">Pendiente</th>}
                       <th className="text-center font-medium px-3 py-2" style={{ width: 110 }}>Recibido</th>
                       <th className="text-right font-medium px-3 py-2" style={{ width: 110 }}>€ / formato</th>
                       <th className="text-left font-medium px-3 py-2">Estado</th>
@@ -459,50 +487,42 @@ export default function GoodsReceiptForm({ accountId, order, prefill, onBack, on
                       const qtyN = parseNum(l.qty)
                       const hasQty = qtyN !== null && qtyN > 0
                       const willEnter = hasQty && l.recipeItemId && qtyInBaseFromFormat(qtyN!, l.formatQtyInBase) !== null
+                      const complete = l.pending !== null && l.pending === 0
                       let cmp: { label: string; cls: string } | null = null
-                      if (againstOrder && l.qtyOrdered !== null && hasQty) {
-                        if (Math.abs(qtyN! - l.qtyOrdered) < 0.0001) cmp = { label: 'OK', cls: 'bg-success-bg text-success border-success/20' }
-                        else if (qtyN! < l.qtyOrdered) cmp = { label: 'Parcial', cls: 'bg-warning-bg text-warning border-warning/20' }
-                        else cmp = { label: 'De más', cls: 'bg-accent-bg text-accent border-accent/20' }
+                      if (l.pending !== null && hasQty) {
+                        if (qtyN! > l.pending) cmp = { label: 'De más', cls: 'bg-accent-bg text-accent border-accent/20' }
+                        else if (l.pending > 0 && qtyN! < l.pending) cmp = { label: 'Parcial', cls: 'bg-warning-bg text-warning border-warning/20' }
+                        else cmp = { label: 'OK', cls: 'bg-success-bg text-success border-success/20' }
                       }
                       return (
-                        <tr key={l.key} className="border-t border-border-default">
+                        <tr key={l.key} className={`border-t border-border-default ${complete && !hasQty ? 'opacity-60' : ''}`}>
                           <td className="px-3 py-2 text-text-primary">{l.productName}</td>
                           <td className="px-3 py-2 text-text-primary">{l.formatLabel ?? '—'}</td>
-                          {againstOrder && (
-                            <td className="px-3 py-2 text-right tabular-nums text-text-secondary">
-                              {l.qtyOrdered ?? '—'}
+                          {hasReference && <td className="px-3 py-2 text-right tabular-nums text-text-secondary">{l.qtyOrdered ?? '—'}</td>}
+                          {hasReference && <td className="px-3 py-2 text-right tabular-nums text-text-secondary">{l.alreadyReceived ?? '—'}</td>}
+                          {hasReference && (
+                            <td className="px-3 py-2 text-right tabular-nums font-medium text-text-primary">
+                              {l.pending === null ? '—' : l.pending}
                             </td>
                           )}
                           <td className="px-3 py-2 text-center">
-                            {/* Celda de cantidad: destacada para que el usuario no dude dónde escribir. */}
-                            <input
-                              type="text" inputMode="decimal"
-                              value={l.qty}
-                              onChange={e => setQty(l.key, e.target.value)}
-                              disabled={saving}
-                              placeholder="0"
-                              className={`w-20 px-2 py-1.5 text-sm text-center font-medium rounded-md border bg-page text-text-primary focus:outline-none focus:ring-2 focus:ring-accent disabled:opacity-50 ${hasQty ? 'border-accent/50' : 'border-accent/30 bg-accent-bg/30'}`}
-                            />
+                            <input type="text" inputMode="decimal" value={l.qty}
+                              onChange={e => setQty(l.key, e.target.value)} disabled={saving} placeholder="0"
+                              className={`w-20 px-2 py-1.5 text-sm text-center font-medium rounded-md border bg-page text-text-primary focus:outline-none focus:ring-2 focus:ring-accent disabled:opacity-50 ${hasQty ? 'border-accent/50' : 'border-accent/30 bg-accent-bg/30'}`} />
                           </td>
                           <td className="px-3 py-2 text-right">
-                            <input
-                              type="text" inputMode="decimal"
-                              value={l.unitCost}
-                              onChange={e => setCost(l.key, e.target.value)}
-                              disabled={saving}
-                              placeholder="—"
-                              className="w-24 px-2 py-1 text-sm text-right border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
-                            />
+                            <input type="text" inputMode="decimal" value={l.unitCost}
+                              onChange={e => setCost(l.key, e.target.value)} disabled={saving} placeholder="—"
+                              className="w-24 px-2 py-1 text-sm text-right border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50" />
                           </td>
                           <td className="px-3 py-2">
-                            {!hasQty ? (
+                            {complete && !hasQty ? (
+                              <span className="text-[10px] px-1 py-0.5 rounded bg-success-bg text-success border border-success/20">✓ completa</span>
+                            ) : !hasQty ? (
                               <span className="text-xs text-text-tertiary">—</span>
                             ) : (
                               <div className="flex items-center gap-1.5 flex-wrap">
-                                {cmp && (
-                                  <span className={`text-[10px] px-1 py-0.5 rounded border ${cmp.cls}`}>{cmp.label}</span>
-                                )}
+                                {cmp && <span className={`text-[10px] px-1 py-0.5 rounded border ${cmp.cls}`}>{cmp.label}</span>}
                                 {willEnter ? (
                                   <span className="text-[10px] px-1 py-0.5 rounded bg-success-bg text-success border border-success/20">a stock</span>
                                 ) : (
@@ -524,23 +544,15 @@ export default function GoodsReceiptForm({ accountId, order, prefill, onBack, on
                   {filled.length - willPost > 0 && ` · ${filled.length - willPost} sin mapear`}
                 </span>
                 <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => persist(false)}
-                    disabled={saving || filled.length === 0}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium border border-border-default bg-card hover:bg-page disabled:opacity-50 disabled:cursor-not-allowed transition-base"
-                  >
+                  <button type="button" onClick={() => persist(false)} disabled={saving || filled.length === 0}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium border border-border-default bg-card hover:bg-page disabled:opacity-50 disabled:cursor-not-allowed transition-base">
                     {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save size={15} />}
                     Guardar borrador
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => persist(true)}
-                    disabled={saving || filled.length === 0}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base"
-                  >
-                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check size={15} />}
-                    Guardar y confirmar
+                  <button type="button" onClick={startReview} disabled={saving || filled.length === 0}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base">
+                    <Check size={15} />
+                    Revisar y confirmar
                   </button>
                 </div>
               </div>
@@ -548,6 +560,86 @@ export default function GoodsReceiptForm({ accountId, order, prefill, onBack, on
           )}
         </>
       )}
+
+      {/* Resumen pre-confirmación (siempre) */}
+      {reviewing && (
+        <ReviewPanel
+          summary={summary}
+          saving={saving}
+          onCancel={() => { if (!saving) setReviewing(false) }}
+          onConfirm={() => persist(true)}
+        />
+      )}
+    </div>
+  )
+}
+
+// Panel de resumen antes de confirmar. Aparece siempre. Si hay anomalía
+// (algo de más, o masa de líneas con pendiente sin tocar), exige confirmación
+// reforzada (estilo de aviso + texto explícito). "De menos" se informa, no frena.
+function ReviewPanel({
+  summary, saving, onCancel, onConfirm,
+}: {
+  summary: {
+    filled: number; aStock: number; sinMapear: number
+    coinciden: number; deMas: number; deMenos: number; sinTocar: number
+    hasReference: boolean; anomaly: boolean; masaSinTocar: boolean
+  }
+  saving: boolean
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  return (
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-0 sm:p-4" onClick={onCancel}>
+      <div className="bg-card w-full sm:max-w-md rounded-t-xl sm:rounded-xl shadow-xl flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="px-4 py-3 border-b border-border-default flex items-center gap-2">
+          {summary.anomaly ? <AlertTriangle size={18} className="text-warning" /> : <ListChecks size={18} className="text-accent" />}
+          <h3 className="text-base font-medium text-text-primary">Antes de confirmar</h3>
+        </div>
+
+        <div className="px-4 py-4 space-y-3">
+          <div className="grid grid-cols-2 gap-2 text-sm">
+            <SumRow label="Entrarán a stock" value={summary.aStock} good />
+            {summary.sinMapear > 0 && <SumRow label="Sin mapear (no entran)" value={summary.sinMapear} warn />}
+            {summary.hasReference && <SumRow label="Coinciden con lo pendiente" value={summary.coinciden} good />}
+            {summary.hasReference && summary.deMenos > 0 && <SumRow label="De menos" value={summary.deMenos} />}
+            {summary.hasReference && summary.deMas > 0 && <SumRow label="De más" value={summary.deMas} warn />}
+            {summary.hasReference && summary.sinTocar > 0 && <SumRow label="Con pendiente, sin recibir" value={summary.sinTocar} warn={summary.masaSinTocar} />}
+          </div>
+
+          {summary.anomaly && (
+            <div className="p-3 rounded-md bg-warning-bg text-warning border border-warning/20 text-sm">
+              {summary.deMas > 0 && <p>Hay líneas con MÁS de lo pendiente. </p>}
+              {summary.masaSinTocar && <p>Muchas líneas con pendiente quedan sin recibir (= 0). </p>}
+              <p className="mt-1 text-text-primary">Revisa que has contado bien antes de confirmar.</p>
+            </div>
+          )}
+          {!summary.anomaly && summary.deMenos > 0 && (
+            <p className="text-xs text-text-secondary">De menos es normal: el pedido quedará como recibido parcial.</p>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-border-default">
+          <button type="button" onClick={onCancel} disabled={saving}
+            className="px-3 py-1.5 text-sm rounded-md text-text-secondary hover:bg-page transition-base disabled:opacity-50">
+            Volver a editar
+          </button>
+          <button type="button" onClick={onConfirm} disabled={saving}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md font-medium text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base ${summary.anomaly ? 'bg-warning' : 'bg-accent'}`}>
+            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check size={14} />}
+            {summary.anomaly ? 'He contado, confirmar' : 'Confirmar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SumRow({ label, value, good, warn }: { label: string; value: number; good?: boolean; warn?: boolean }) {
+  return (
+    <div className="flex items-center justify-between px-2 py-1 rounded bg-page">
+      <span className="text-text-secondary">{label}</span>
+      <span className={`tabular-nums font-medium ${warn ? 'text-warning' : good ? 'text-success' : 'text-text-primary'}`}>{value}</span>
     </div>
   )
 }

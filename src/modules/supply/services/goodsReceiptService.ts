@@ -318,6 +318,54 @@ export function qtyInBaseFromFormat(
   return qtyReceived * formatQtyInBase
 }
 
+// ── Recibido acumulado por línea de pedido (para la recepción anti-error) ──
+//
+// Suma qty_received de las recepciones CONFIRMADAS de un pedido, agrupada por
+// purchase_order_line_id. Permite mostrar "Ya recibido" y "Pendiente" como
+// REFERENCIA (la celda de recibido nace vacía; nunca se precarga). Mismas
+// unidades que qty_ordered (formato de la línea). No cuenta borradores ni
+// anuladas. excludeReceiptId descuenta una recepción concreta (al "anular y
+// corregir", para no contar la que se va a sustituir).
+export interface OrderLineReceived {
+  purchaseOrderLineId: string
+  receivedConfirmed: number
+}
+
+export async function listOrderLineReceived(
+  purchaseOrderId: string,
+  opts?: { excludeReceiptId?: string },
+): Promise<OrderLineReceived[]> {
+  requireSupabase()
+
+  // 1) Recepciones CONFIRMADAS de este pedido.
+  const { data: receipts, error: rErr } = await from('goods_receipt')
+    .select('id')
+    .eq('purchase_order_id', purchaseOrderId)
+    .eq('status', 'confirmado')
+  if (rErr) throw new Error(`Error calculando recibido del pedido: ${rErr.message}`)
+
+  let ids = ((receipts as Row[]) ?? []).map(r => r.id as string)
+  if (opts?.excludeReceiptId) ids = ids.filter(id => id !== opts.excludeReceiptId)
+  if (ids.length === 0) return []
+
+  // 2) Líneas de esas recepciones, agrupadas por línea de pedido.
+  const { data: lines, error: lErr } = await from('goods_receipt_line')
+    .select('purchase_order_line_id, qty_received')
+    .in('goods_receipt_id', ids)
+    .not('purchase_order_line_id', 'is', null)
+  if (lErr) throw new Error(`Error calculando recibido del pedido: ${lErr.message}`)
+
+  const acc = new Map<string, number>()
+  for (const row of (lines as Row[]) ?? []) {
+    const polId = row.purchase_order_line_id as string
+    acc.set(polId, (acc.get(polId) ?? 0) + (Number(row.qty_received) || 0))
+  }
+  return Array.from(acc.entries()).map(([purchaseOrderLineId, receivedConfirmed]) => ({
+    purchaseOrderLineId,
+    receivedConfirmed,
+  }))
+}
+
 // ── Recepciones (cabecera) ──
 export interface ListGoodsReceiptsOptions {
   accountId: string
