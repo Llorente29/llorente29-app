@@ -21,7 +21,7 @@ import {
   ScanLine, CheckCircle2, AlertTriangle, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, Eye,
 } from 'lucide-react'
 import { useIsMobile } from '@/shell/useIsMobile'
-import { scanReceipt, getReceiptFileUrl, resolveReceiptHeader, type OcrAlbaranResult } from '@/modules/supply/services/goodsReceiptService'
+import { scanReceipt, getReceiptFileUrl, resolveReceiptHeader, findDuplicateReceipt, type OcrAlbaranResult, type DuplicateReceiptHit } from '@/modules/supply/services/goodsReceiptService'
 import type { OcrPrefill } from '@/modules/supply/pages/GoodsReceiptForm'
 
 interface ReceiptScanPanelProps {
@@ -83,32 +83,47 @@ export default function ReceiptScanPanel({ accountId, onBack, onCreateReceipt }:
   function reset() { setResult(null); setFiles([]); setError(null); setPageUrls([]); setPage(0); setZoom(false) }
 
   const [creating, setCreating] = useState(false)
+  const [dupHit, setDupHit] = useState<DuplicateReceiptHit | null>(null)
+  const [pendingOcr, setPendingOcr] = useState<OcrPrefill | null>(null)
+
+  function buildOcrPrefill(header: Awaited<ReturnType<typeof resolveReceiptHeader>>): OcrPrefill {
+    return {
+      aiSessionId: result!.sessionId,
+      supplierId: header.supplierId,
+      proposedSupplierName: result!.document.supplier_name ?? null,
+      proposedSupplierNif: result!.document.supplier_tax_id ?? null,
+      deliveredBy: header.deliveredBy,
+      locationId: header.locationId,
+      supplierDocNumber: header.supplierDocNumber,
+      receiptDate: header.receiptDate,
+      rawDocumentUrl: result!.filePaths[0] ?? null,
+      unmatchedSupplier: header.unmatchedSupplier,
+      unmatchedLocation: header.unmatchedLocation,
+      lines: result!.lines.map(l => ({
+        recipeItemId: null,                 // casado en C2.2.b
+        productName: l.raw_text,
+        supplierCode: l.supplier_code,
+        qty: l.quantity,
+        unitCost: l.unit_price_net,
+        lotCode: l.lot_code,
+        expiryDate: l.expiry_date,
+      })),
+    }
+  }
+
   async function handleCreate() {
     if (!result) return
     setCreating(true); setError(null)
     try {
       const header = await resolveReceiptHeader(accountId, result.document)
-      const ocr: OcrPrefill = {
-        aiSessionId: result.sessionId,
-        supplierId: header.supplierId,
-        proposedSupplierName: result.document.supplier_name ?? null,
-        proposedSupplierNif: result.document.supplier_tax_id ?? null,
-        deliveredBy: header.deliveredBy,
-        locationId: header.locationId,
-        supplierDocNumber: header.supplierDocNumber,
-        receiptDate: header.receiptDate,
-        rawDocumentUrl: result.filePaths[0] ?? null,
-        unmatchedSupplier: header.unmatchedSupplier,
-        unmatchedLocation: header.unmatchedLocation,
-        lines: result.lines.map(l => ({
-          recipeItemId: null,                 // casado en C2.2.b
-          productName: l.raw_text,
-          supplierCode: l.supplier_code,
-          qty: l.quantity,
-          unitCost: l.unit_price_net,
-          lotCode: l.lot_code,
-          expiryDate: l.expiry_date,
-        })),
+      const ocr = buildOcrPrefill(header)
+      // C2.2.b.5 — anti-duplicado: ¿ya existe un albarán igual (proveedor + nº) no anulado?
+      const dup = await findDuplicateReceipt(accountId, header.supplierId || null, header.supplierDocNumber)
+      if (dup) {
+        setPendingOcr(ocr)
+        setDupHit(dup)
+        setCreating(false)
+        return
       }
       onCreateReceipt(ocr)
     } catch (err: unknown) {
@@ -325,6 +340,34 @@ export default function ReceiptScanPanel({ accountId, onBack, onCreateReceipt }:
             </div>
           )}
         </>
+      )}
+
+      {/* C2.2.b.5 — aviso de albarán duplicado */}
+      {dupHit && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+          <div className="bg-card rounded-lg border border-border-default shadow-lg w-full max-w-md p-5 space-y-3">
+            <div className="flex items-start gap-2">
+              <AlertTriangle size={18} className="text-warning mt-0.5 shrink-0" />
+              <div>
+                <h3 className="text-base font-medium text-text-primary">Puede que ya hayas recibido este albarán</h3>
+                <p className="text-sm text-text-secondary mt-1">
+                  Ya existe una recepción {dupHit.code ? <strong>{dupHit.code}</strong> : null} del mismo proveedor con el nº de albarán <strong>{result?.document.doc_number}</strong>
+                  {' '}({dupHit.status}, {new Date(dupHit.receiptDate).toLocaleDateString('es-ES')}). Si la creas otra vez, el stock entraría duplicado.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button type="button" onClick={() => { setDupHit(null); setPendingOcr(null) }}
+                className="px-3 py-2 rounded-md text-sm font-medium border border-border-default bg-card hover:bg-page transition-base">
+                Cancelar
+              </button>
+              <button type="button" onClick={() => { if (pendingOcr) onCreateReceipt(pendingOcr); setDupHit(null); setPendingOcr(null) }}
+                className="px-3 py-2 rounded-md text-sm font-medium bg-warning text-text-on-accent hover:opacity-90 transition-base">
+                Crear de todos modos
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

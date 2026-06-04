@@ -749,8 +749,12 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                                   albarán: {l.rawText}{l.supplierCode ? ` · cód. ${l.supplierCode}` : ''}
                                 </div>
                                 <button type="button" onClick={() => setPickerKey(l.key)} disabled={saving}
-                                  className="text-[11px] text-accent hover:underline disabled:opacity-50">
-                                  {l.recipeItemId ? 'Cambiar artículo' : 'Casar artículo'}
+                                  className={`inline-flex items-center gap-1 mt-0.5 px-2 py-1 rounded-md text-[11px] font-medium border transition-base disabled:opacity-50 ${
+                                    l.recipeItemId
+                                      ? 'border-border-default bg-card text-text-secondary hover:bg-page'
+                                      : 'border-accent bg-accent text-text-on-accent hover:opacity-90'
+                                  }`}>
+                                  {l.recipeItemId ? 'Cambiar artículo' : '➜ Casar artículo'}
                                   {lineMatch[l.key]?.loading ? ' · buscando…' : ''}
                                 </button>
                               </div>

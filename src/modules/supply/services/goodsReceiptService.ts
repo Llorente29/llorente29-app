@@ -1055,3 +1055,44 @@ export async function quickCreateSupplier(
     createdByName,
   })
 }
+
+// ── C2.2.b.5: detección de albarán duplicado ──
+// Busca una recepción NO anulada del mismo proveedor con el mismo nº de albarán.
+// Evita la doble entrada de stock (mismo albarán escaneado/recibido dos veces).
+// Solo detecta cuando hay proveedor y nº; sin nº (manuscritos) no puede avisar.
+export interface DuplicateReceiptHit {
+  id: string
+  code: string | null
+  status: GoodsReceiptStatus
+  receiptDate: string
+}
+
+export async function findDuplicateReceipt(
+  accountId: string,
+  supplierId: string | null,
+  supplierDocNumber: string | null,
+): Promise<DuplicateReceiptHit | null> {
+  if (!supplierId || !supplierDocNumber || supplierDocNumber.trim() === '') return null
+  requireSupabase()
+  const { data, error } = await from('goods_receipt')
+    .select('id, code, status, receipt_date')
+    .eq('account_id', accountId)
+    .eq('supplier_id', supplierId)
+    .eq('supplier_doc_number', supplierDocNumber.trim())
+    .neq('status', 'anulado')
+    .order('receipt_date', { ascending: false })
+    .limit(1)
+  if (error) {
+    console.error('[goodsReceiptService] findDuplicateReceipt', error)
+    return null
+  }
+  const rows = (data as Row[] | null) ?? []
+  if (rows.length === 0) return null
+  const r = rows[0]
+  return {
+    id: r.id as string,
+    code: (r.code as string | null) ?? null,
+    status: r.status as GoodsReceiptStatus,
+    receiptDate: r.receipt_date as string,
+  }
+}
