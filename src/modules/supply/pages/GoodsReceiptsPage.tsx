@@ -19,7 +19,7 @@
 // El aviso (flash) se auto-cierra a los segundos (no obliga a teclear).
 
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, PackageCheck, Search, Loader2, Check, RotateCcw, PencilLine } from 'lucide-react'
+import { Plus, PackageCheck, Search, Loader2, Check, RotateCcw, PencilLine, ScanLine } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useIsMobile } from '@/shell/useIsMobile'
 import {
@@ -35,6 +35,7 @@ import { listSuppliers } from '@/modules/kitchen/services/purchaseFormatService'
 import { listSupplyLocations, type SupplyLocation } from '@/modules/supply/services/supplierCatalogService'
 import type { Supplier } from '@/types/kitchen'
 import GoodsReceiptForm, { type ReceiptPrefill } from '@/modules/supply/pages/GoodsReceiptForm'
+import ReceiptScanPanel from '@/modules/supply/pages/ReceiptScanPanel'
 
 const STATUS_LABEL: Record<GoodsReceiptStatus, string> = {
   borrador: 'Borrador',
@@ -54,7 +55,7 @@ function formatDate(value: string | null): string {
     .format(new Date(value))
 }
 
-type View = 'list' | 'form'
+type View = 'list' | 'form' | 'scan'
 
 export default function GoodsReceiptsPage() {
   const { activeAccountId, accountsLoading } = useActiveAccount()
@@ -193,6 +194,16 @@ export default function GoodsReceiptsPage() {
     }
   }
 
+  // ── Vista SCAN: escanear albarán (OCR) ──
+  if (view === 'scan' && activeAccountId) {
+    return (
+      <ReceiptScanPanel
+        accountId={activeAccountId}
+        onBack={() => { setView('list'); setReloadTick(t => t + 1) }}
+      />
+    )
+  }
+
   // ── Vista FORM: nueva recepción ciega o corrección (prefill) ──
   if (view === 'form' && activeAccountId) {
     return (
@@ -215,15 +226,26 @@ export default function GoodsReceiptsPage() {
             Registra lo que llega del proveedor. Al confirmar, entra a stock.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => { setPrefill(null); setView('form') }}
-          disabled={!activeAccountId}
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base"
-        >
-          <Plus size={16} />
-          Nueva recepción
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setView('scan')}
+            disabled={!activeAccountId}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium border border-border-default bg-card hover:bg-page disabled:opacity-50 disabled:cursor-not-allowed transition-base"
+          >
+            <ScanLine size={16} />
+            Escanear albarán
+          </button>
+          <button
+            type="button"
+            onClick={() => { setPrefill(null); setView('form') }}
+            disabled={!activeAccountId}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base"
+          >
+            <Plus size={16} />
+            Nueva recepción
+          </button>
+        </div>
       </div>
 
       {flash && (

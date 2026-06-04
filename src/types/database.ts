@@ -3528,6 +3528,68 @@ export type Database = {
           },
         ]
       }
+      goods_receipt_ai_session: {
+        Row: {
+          account_id: string
+          ai_cost_eur: number | null
+          ai_latency_ms: number | null
+          ai_model: string | null
+          created_at: string
+          created_by: string | null
+          goods_receipt_id: string | null
+          id: string
+          input_files: Json | null
+          kind: string
+          parsed_result: Json | null
+          raw_response: Json | null
+          status: string
+          updated_at: string
+          validation: Json | null
+        }
+        Insert: {
+          account_id: string
+          ai_cost_eur?: number | null
+          ai_latency_ms?: number | null
+          ai_model?: string | null
+          created_at?: string
+          created_by?: string | null
+          goods_receipt_id?: string | null
+          id?: string
+          input_files?: Json | null
+          kind?: string
+          parsed_result?: Json | null
+          raw_response?: Json | null
+          status?: string
+          updated_at?: string
+          validation?: Json | null
+        }
+        Update: {
+          account_id?: string
+          ai_cost_eur?: number | null
+          ai_latency_ms?: number | null
+          ai_model?: string | null
+          created_at?: string
+          created_by?: string | null
+          goods_receipt_id?: string | null
+          id?: string
+          input_files?: Json | null
+          kind?: string
+          parsed_result?: Json | null
+          raw_response?: Json | null
+          status?: string
+          updated_at?: string
+          validation?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goods_receipt_ai_session_goods_receipt_id_fkey"
+            columns: ["goods_receipt_id"]
+            isOneToOne: false
+            referencedRelation: "goods_receipt"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       goods_receipt_line: {
         Row: {
           account_id: string
@@ -8609,6 +8671,10 @@ export type Database = {
       recompute_location_stock: {
         Args: { p_item_id: string; p_location_id: string }
         Returns: undefined
+      }
+      recompute_purchase_order_status: {
+        Args: { p_order_id: string }
+        Returns: string
       }
       resolve_lastapp_line: {
         Args: {

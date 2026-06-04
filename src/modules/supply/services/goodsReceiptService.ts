@@ -579,3 +579,128 @@ export async function listLocationStock(
     updatedAt: r.updated_at as string,
   }))
 }
+
+// ── C2.2 OCR de albarán: subida de fichero(s) + llamada a la Edge Function ──
+//
+// Flujo a-1: el usuario elige foto(s)/PDF → se suben al bucket privado
+// receipt-uploads/{accountId}/{carpeta}/... → se llama a ocr-albaran (visión) →
+// devuelve lo leído (cabecera + líneas) + validación por base imponible. NO
+// materializa recepción todavía (eso es a-2). La carpeta empieza por accountId
+// porque las políticas RLS del bucket lo exigen (foldername[1] = account_id).
+
+export interface OcrLine {
+  raw_text: string
+  supplier_code: string | null
+  quantity: number | null
+  unit: string | null
+  unit_price_net: number | null
+  discount_pct: number | null
+  line_amount: number | null
+  vat_pct: number | null
+  lot_code: string | null
+  expiry_date: string | null
+  note: string | null
+}
+
+export interface OcrDocument {
+  supplier_name: string | null
+  supplier_tax_id: string | null
+  doc_number: string | null
+  doc_date: string | null
+  doc_type: 'albaran' | 'factura' | 'albaran_factura' | null
+  ship_to: string | null
+  bill_to_name: string | null
+  handwritten: boolean
+  tax_base_total: number | null
+  tax_total: number | null
+  grand_total: number | null
+}
+
+export interface OcrValidation {
+  base_declared: number | null
+  lines_sum: number | null
+  diff_pct: number | null
+  cuadra: boolean | null
+  needs_review: boolean
+  reasons: string[]
+}
+
+export interface OcrAlbaranResult {
+  sessionId: string
+  status: string
+  document: OcrDocument
+  lines: OcrLine[]
+  confidence: number
+  validation: OcrValidation
+  filePaths: string[]
+  aiModel: string | null
+  aiLatencyMs: number | null
+}
+
+const RECEIPT_BUCKET = 'receipt-uploads'
+
+function sanitizeFileName(name: string): string {
+  // Quita rutas, acentos y caracteres problemáticos para la clave del objeto.
+  const base = name.split(/[\\/]/).pop() ?? 'archivo'
+  return base
+    .normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9._-]/g, '_')
+    .slice(0, 120)
+}
+
+/**
+ * Sube uno o varios ficheros (foto/PDF) del albarán al bucket privado y
+ * devuelve sus rutas. Todos van bajo una misma carpeta {accountId}/{uuid}/
+ * para que ocr-albaran los trate como un único documento (multipágina).
+ */
+export async function uploadReceiptFiles(accountId: string, files: File[]): Promise<string[]> {
+  requireSupabase()
+  if (files.length === 0) return []
+  const folder = (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}`)
+  const paths: string[] = []
+  for (const file of files) {
+    const path = `${accountId}/${folder}/${sanitizeFileName(file.name)}`
+    const { error } = await supabase!.storage
+      .from(RECEIPT_BUCKET)
+      .upload(path, file, { contentType: file.type || undefined, upsert: false })
+    if (error) throw new Error(`No se pudo subir ${file.name}: ${error.message}`)
+    paths.push(path)
+  }
+  return paths
+}
+
+/**
+ * Llama a la Edge Function ocr-albaran con las rutas ya subidas. El JWT del
+ * usuario lo adjunta supabase-js automáticamente (la función respeta RLS).
+ */
+export async function runOcrAlbaran(accountId: string, filePaths: string[]): Promise<OcrAlbaranResult> {
+  requireSupabase()
+  const { data, error } = await supabase!.functions.invoke('ocr-albaran', {
+    body: { account_id: accountId, file_paths: filePaths },
+  })
+  if (error) throw new Error(`Error leyendo el albarán: ${error.message}`)
+  const d = data as {
+    session_id: string; status: string
+    parsed: { document: OcrDocument; lines: OcrLine[]; confidence: number }
+    validation: OcrValidation; ai_model?: string | null; ai_latency_ms?: number | null
+  }
+  return {
+    sessionId: d.session_id,
+    status: d.status,
+    document: d.parsed.document,
+    lines: d.parsed.lines ?? [],
+    confidence: d.parsed.confidence,
+    validation: d.validation,
+    filePaths,
+    aiModel: d.ai_model ?? null,
+    aiLatencyMs: d.ai_latency_ms ?? null,
+  }
+}
+
+/**
+ * Conveniencia: sube y lee en un paso.
+ */
+export async function scanReceipt(accountId: string, files: File[]): Promise<OcrAlbaranResult> {
+  const paths = await uploadReceiptFiles(accountId, files)
+  return runOcrAlbaran(accountId, paths)
+}
