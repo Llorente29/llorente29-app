@@ -27,6 +27,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, Search, Loader2, Check, Save, ListChecks, AlertTriangle } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
+import { useOperativeLocation } from '@/modules/supply/hooks/useOperativeLocation'
+import OperativeLocationBanner from '@/modules/supply/components/OperativeLocationBanner'
 import { listSuppliers } from '@/modules/kitchen/services/purchaseFormatService'
 import type { Supplier } from '@/types/kitchen'
 import {
@@ -160,6 +162,7 @@ interface UntouchedLine {
 
 export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill, onBack, onSaved }: GoodsReceiptFormProps) {
   const { userProfile, authUserId } = useApp()
+  const op = useOperativeLocation()
   const againstOrder = !!order
   const correcting = !!prefill
   const fromOcr = !!ocrPrefill
@@ -169,6 +172,10 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
   const [locations, setLocations] = useState<SupplyLocation[]>([])
   const [supplierId, setSupplierId] = useState<string>(order?.supplierId ?? prefill?.supplierId ?? ocrPrefill?.supplierId ?? '')
   const [locationId, setLocationId] = useState<string>(order?.locationId ?? prefill?.locationId ?? ocrPrefill?.locationId ?? '')
+  // El local operativo (contexto) prevalece salvo que la cabecera venga fijada por un documento.
+  useEffect(() => {
+    if (!fixedHeader && op.operativeLocationId) setLocationId(op.operativeLocationId)
+  }, [op.operativeLocationId, fixedHeader])
   const [receiptDate, setReceiptDate] = useState<string>(ocrPrefill?.receiptDate ?? new Date().toISOString().slice(0, 10))
   const [supplierDoc, setSupplierDoc] = useState<string>(prefill?.supplierDocNumber ?? ocrPrefill?.supplierDocNumber ?? '')
 
@@ -245,7 +252,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
         if (cancelled) return
         setSuppliers(sups)
         setLocations(locs)
-        if (!fixedHeader && locs.length === 1) setLocationId(locs[0].id)
+        // el local operativo lo fija el hook; no se auto-selecciona el primero
       })
       .catch((err: unknown) => { if (!cancelled) setError(err instanceof Error ? err.message : 'Error cargando datos.') })
       .finally(() => { if (!cancelled) setLoadingMeta(false) })
@@ -503,14 +510,14 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
 
   function startReview() {
     if (!fromOcr && !supplierId) { setError('Elige un proveedor.'); return }
-    if (!locationId) { setError('Elige el local de entrega.'); return }
+    if (!locationId) { setError('No hay un local operativo definido. Revisa el aviso de local arriba.'); return }
     if (filled.length === 0) { setError('Pon cantidad recibida en al menos un artículo.'); return }
     setError(null)
     setReviewing(true)
   }
 
   async function persist(confirm: boolean) {
-    if (!locationId) { setError('Elige el local de entrega.'); return }
+    if (!locationId) { setError('No hay un local operativo definido. Revisa el aviso de local arriba.'); return }
     setSaving(true); setError(null)
     try {
       const receipt = await createGoodsReceipt({
@@ -617,19 +624,13 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
         <p className="text-sm text-text-secondary mt-0.5">{subtitle}</p>
       </div>
 
+      {!fixedHeader && <OperativeLocationBanner op={op} locations={locations} />}
+
       {/* Datos de la recepción */}
       <div className="rounded-lg border border-border-default bg-card p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <div>
           <label className="block text-xs font-medium text-text-secondary mb-1">Local (entrada)</label>
-          {fixedHeader ? (
-            <p className="px-2 py-1.5 text-sm text-text-primary">{locationName}</p>
-          ) : (
-            <select value={locationId} onChange={e => setLocationId(e.target.value)} disabled={loadingMeta || saving}
-              className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50">
-              <option value="">— Elige local —</option>
-              {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-            </select>
-          )}
+          <p className="px-2 py-1.5 text-sm text-text-primary">{locationName}</p>
         </div>
         <div>
           <label className="block text-xs font-medium text-text-secondary mb-1">Proveedor</label>

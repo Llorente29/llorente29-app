@@ -18,6 +18,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, Search, Loader2, Check, Truck } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
+import { useOperativeLocation } from '@/modules/supply/hooks/useOperativeLocation'
+import OperativeLocationBanner from '@/modules/supply/components/OperativeLocationBanner'
 import { listSuppliers } from '@/modules/kitchen/services/purchaseFormatService'
 import type { Supplier } from '@/types/kitchen'
 import {
@@ -50,7 +52,8 @@ export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuild
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [supplierId, setSupplierId] = useState<string>('')
   const [locations, setLocations] = useState<SupplyLocation[]>([])
-  const [locationId, setLocationId] = useState<string>('')
+  const op = useOperativeLocation()
+  const locationId = op.operativeLocationId ?? ''
   const [expectedDate, setExpectedDate] = useState<string>('')
   const [sentBy, setSentBy] = useState<string>(userProfile?.displayName ?? '')
 
@@ -74,7 +77,7 @@ export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuild
         setSuppliers(sups)
         setLocations(locs)
         // Si solo hay un local, lo preseleccionamos (caso single-local).
-        if (locs.length === 1) setLocationId(locs[0].id)
+        // el local operativo viene del hook, no se auto-selecciona aquí
       })
       .catch((err: unknown) => { if (!cancelled) setError(err instanceof Error ? err.message : 'Error cargando datos.') })
       .finally(() => { if (!cancelled) setLoadingSuppliers(false) })
@@ -146,9 +149,9 @@ export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuild
       setError('Elige un proveedor.')
       return
     }
-    // La entrega del pedido sale del local: si la cuenta tiene locales, exige elegir uno.
-    if (locations.length > 0 && !locationId) {
-      setError('Elige el local de entrega.')
+    // El local operativo debe estar resuelto (viene del contexto, no se elige a mano).
+    if (!op.isResolved || !locationId) {
+      setError('No hay un local operativo definido. Revisa el aviso de local arriba.')
       return
     }
     if (filledCount === 0) {
@@ -224,21 +227,15 @@ export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuild
         </p>
       </div>
 
+      <OperativeLocationBanner op={op} locations={locations} />
+
       {/* Datos del pedido */}
       <div className="rounded-lg border border-border-default bg-card p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <div>
           <label className="block text-xs font-medium text-text-secondary mb-1">Local (entrega)</label>
-          <select
-            value={locationId}
-            onChange={e => setLocationId(e.target.value)}
-            disabled={loadingSuppliers || saving}
-            className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
-          >
-            <option value="">— Elige local —</option>
-            {locations.map(l => (
-              <option key={l.id} value={l.id}>{l.name}</option>
-            ))}
-          </select>
+          <p className="px-2 py-1.5 text-sm text-text-primary">
+            {locations.find(l => l.id === locationId)?.name ?? '—'}
+          </p>
         </div>
         <div>
           <label className="block text-xs font-medium text-text-secondary mb-1">Proveedor</label>
