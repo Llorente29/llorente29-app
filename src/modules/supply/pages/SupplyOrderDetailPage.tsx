@@ -4,19 +4,17 @@
 // por estado, calcado de KitchenItemDetailPage: recibe orderId + onBack, no usa
 // react-router con params. La monta SupplyOrdersPage cuando hay un id seleccionado.
 //
-// Es el HOGAR del pedido: cabecera (proveedor · fechas · estado, editables) +
-// la tabla de LÍNEAS (qué ingredientes y cuántos, con precio estimado) + el
-// total. Acciones de ciclo: cambiar estado (borrador→enviado) y, cuando está
-// enviado, REGISTRAR RECEPCIÓN (C2): abre el formulario de recepción con el
-// pedido precargado (modo contra-pedido). El total se recalcula sumando las
-// líneas y se persiste en est_total.
+// Estado del pedido: AUTOMÁTICO por defecto. recibido/recibido_parcial los lleva
+// el sistema al confirmar/anular recepciones (recompute_purchase_order_status).
+// Manual SOLO como último recurso: enviar (humano manda el pedido), cancelar
+// (pendiente que no llega a nada, sin recepciones confirmadas) y cerrar
+// (recibido parcial que no se completará). La automatización nunca cancela ni
+// cierra: eso es decisión de negocio.
 //
-// C1.x a mano: el selector de ingrediente es un dropdown simple. Los avisos IA
-// (sugerir cantidad por histórico, precio desde last_price, proveedor preferente)
-// se enchufan como capa posterior (norma IA en compras = copiloto).
+// REGISTRAR RECEPCIÓN (C2): abre GoodsReceiptForm con el pedido precargado.
 
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, Plus, Trash2, Check, Loader2, X, Send, Package, PackageCheck, FileText } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Check, Loader2, X, Send, Package, PackageCheck, FileText, Ban, Lock } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import {
   getPurchaseOrderById,
@@ -28,6 +26,7 @@ import {
   type PurchaseOrderLine,
   type PurchaseOrderStatus,
 } from '@/modules/supply/services/purchaseOrderService'
+import { listGoodsReceipts } from '@/modules/supply/services/goodsReceiptService'
 import { listRecipeItems } from '@/modules/kitchen/services/recipeItemService'
 import { listSuppliers } from '@/modules/kitchen/services/purchaseFormatService'
 import { listSupplyLocations, type SupplyLocation } from '@/modules/supply/services/supplierCatalogService'
@@ -69,6 +68,7 @@ export default function SupplyOrderDetailPage({ orderId, onBack }: SupplyOrderDe
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [locations, setLocations] = useState<SupplyLocation[]>([])
   const [ingredients, setIngredients] = useState<RecipeItem[]>([])
+  const [hasConfirmedReceipts, setHasConfirmedReceipts] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -89,8 +89,9 @@ export default function SupplyOrderDetailPage({ orderId, onBack }: SupplyOrderDe
       listSuppliers(activeAccountId),
       listRecipeItems({ accountId: activeAccountId, type: 'raw' }),
       listSupplyLocations(activeAccountId),
+      listGoodsReceipts({ accountId: activeAccountId }),
     ])
-      .then(([ord, lns, sups, ings, locs]) => {
+      .then(([ord, lns, sups, ings, locs, receipts]) => {
         if (cancelled) return
         if (!ord) {
           setError('Este pedido ya no existe.')
@@ -102,6 +103,9 @@ export default function SupplyOrderDetailPage({ orderId, onBack }: SupplyOrderDe
         setSuppliers(sups)
         setIngredients(ings)
         setLocations(locs)
+        setHasConfirmedReceipts(
+          receipts.some(r => r.purchaseOrderId === orderId && r.status === 'confirmado'),
+        )
       })
       .catch((err: unknown) => {
         if (cancelled) return
@@ -129,13 +133,11 @@ export default function SupplyOrderDetailPage({ orderId, onBack }: SupplyOrderDe
     return m
   }, [ingredients])
 
-  // Total del pedido = suma de los totales de línea (estimados).
   const computedTotal = useMemo(
     () => lines.reduce((acc, l) => acc + (l.estLineTotal ?? 0), 0),
     [lines],
   )
 
-  // Persistir el total estimado cuando cambian las líneas (si difiere del guardado).
   useEffect(() => {
     if (!order) return
     if (loading) return
@@ -167,6 +169,20 @@ export default function SupplyOrderDetailPage({ orderId, onBack }: SupplyOrderDe
     } finally {
       setSavingStatus(false)
     }
+  }
+
+  // Manual de último recurso: cancelar (pendiente que no llega a nada) y
+  // cerrar (recibido parcial que no se completará). Terminales: la
+  // automatización del auto-estado nunca los pisa.
+  async function handleCancelOrder() {
+    if (!order) return
+    if (!window.confirm('¿Cancelar este pedido? No se podrá recibir y queda como cancelado.')) return
+    await handleChangeStatus('cancelado')
+  }
+  async function handleCloseOrder() {
+    if (!order) return
+    if (!window.confirm('¿Cerrar el pedido? Se marca como completado a falta de lo no recibido (no se completará el resto).')) return
+    await handleChangeStatus('cerrado')
   }
 
   async function handleDownloadPdf() {
@@ -358,6 +374,31 @@ export default function SupplyOrderDetailPage({ orderId, onBack }: SupplyOrderDe
                 Registrar recepción
               </button>
             )}
+
+            {/* Manual de último recurso */}
+            {(order.status === 'borrador' || order.status === 'enviado') && !hasConfirmedReceipts && (
+              <button
+                type="button"
+                onClick={handleCancelOrder}
+                disabled={savingStatus}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium border border-danger/30 text-danger bg-card hover:bg-danger-bg disabled:opacity-50 disabled:cursor-not-allowed transition-base"
+              >
+                <Ban size={15} />
+                Cancelar pedido
+              </button>
+            )}
+            {order.status === 'recibido_parcial' && (
+              <button
+                type="button"
+                onClick={handleCloseOrder}
+                disabled={savingStatus}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium border border-border-default text-text-secondary bg-card hover:bg-page disabled:opacity-50 disabled:cursor-not-allowed transition-base"
+                title="El pedido no se completará: ciérralo con lo recibido."
+              >
+                <Lock size={15} />
+                Cerrar (no se completará)
+              </button>
+            )}
           </div>
         </>
       )}
@@ -386,8 +427,6 @@ function Field({ label, value, mono }: { label: string; value: string; mono?: bo
 
 // ─────────────────────────────────────────────────────────────────────
 // Modal de añadir línea: elegir ingrediente + cantidad + precio estimado.
-// El total de línea = cantidad × precio. recipe_item_id se rellena con el
-// ingrediente elegido (product_name se copia de su nombre para traza).
 // ─────────────────────────────────────────────────────────────────────
 
 interface AddLineModalProps {

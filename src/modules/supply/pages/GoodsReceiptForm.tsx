@@ -1,23 +1,22 @@
 // src/modules/supply/pages/GoodsReceiptForm.tsx
 //
-// Formulario de RECEPCIÓN de albarán (C2.1). Un solo componente, dos modos:
+// Formulario de RECEPCIÓN de albarán (C2). Un solo componente, TRES modos:
 //   · CONTRA PEDIDO (order != null): precarga las líneas del pedido con la
-//     cantidad pedida como "recibida" (editable). Muestra la comparativa
-//     pedido↔recibido (OK / parcial / de más). Local y proveedor vienen del pedido.
-//   · CIEGO (order == null): eliges local + proveedor → su catálogo → cantidades
-//     (patrón SupplyOrderBuilder). Para entregas sin pedido previo.
+//     cantidad pedida como "recibida" (editable). Comparativa pedido↔recibido.
+//   · CORREGIR (prefill != null): precarga las líneas de una recepción ANULADA
+//     para rehacerla cambiando solo lo que falló ("anular y corregir"). Hereda
+//     proveedor, local, nº de albarán y purchase_order_id de la anulada.
+//   · CIEGO (order == null && prefill == null): eliges local + proveedor → su
+//     catálogo → cantidades. Para entregas sin pedido previo.
 //
 // qty_in_base = qty_recibida × format.qty_in_base (el formato encierra la
 // conversión a base). Sin formato/equivalencia → la línea NO entra a stock
 // (anti-invención); se guarda como needs_review.
 //
 // "Guardar borrador" deja el albarán editable; "Guardar y confirmar" postea al
-// ledger (confirm_goods_receipt) y muestra el resultado (a stock / sin postear /
-// coste actualizado → ripple al margen por marca/canal vía cascadeFromItem).
+// ledger (confirm_goods_receipt) y muestra el resultado.
 //
-// C2.2 (después, sobre esta misma UI): OCR de foto del albarán + create-on-scan
-// (crear proveedor/artículo si no existen). En manual, un artículo fuera del
-// catálogo queda "sin mapear" (no postea), sin inventar nada.
+// C2.2 (después): OCR de foto del albarán + create-on-scan (proveedor/artículo).
 
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, Search, Loader2, Check, Save, PackageCheck } from 'lucide-react'
@@ -42,9 +41,27 @@ import {
   qtyInBaseFromFormat,
 } from '@/modules/supply/services/goodsReceiptService'
 
+// Datos para reabrir una recepción anulada y corregirla.
+export interface ReceiptPrefill {
+  supplierId: string
+  locationId: string
+  purchaseOrderId: string | null
+  supplierDocNumber: string | null
+  lines: ReceiptPrefillLine[]
+}
+export interface ReceiptPrefillLine {
+  recipeItemId: string | null
+  productName: string
+  purchaseFormatId: string | null
+  qtyReceived: number
+  unitCost: number | null
+  purchaseOrderLineId: string | null
+}
+
 interface GoodsReceiptFormProps {
   accountId: string
   order?: PurchaseOrder | null         // si viene → modo CONTRA PEDIDO
+  prefill?: ReceiptPrefill | null      // si viene → modo CORREGIR
   onBack: () => void
   onSaved: (message?: string) => void
 }
@@ -69,16 +86,18 @@ function parseNum(v: string): number | null {
   return Number.isFinite(n) ? n : null
 }
 
-export default function GoodsReceiptForm({ accountId, order, onBack, onSaved }: GoodsReceiptFormProps) {
+export default function GoodsReceiptForm({ accountId, order, prefill, onBack, onSaved }: GoodsReceiptFormProps) {
   const { userProfile, authUserId } = useApp()
   const againstOrder = !!order
+  const correcting = !!prefill
+  const fixedHeader = againstOrder || correcting   // proveedor/local fijos (vienen del origen)
 
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [locations, setLocations] = useState<SupplyLocation[]>([])
-  const [supplierId, setSupplierId] = useState<string>(order?.supplierId ?? '')
-  const [locationId, setLocationId] = useState<string>(order?.locationId ?? '')
+  const [supplierId, setSupplierId] = useState<string>(order?.supplierId ?? prefill?.supplierId ?? '')
+  const [locationId, setLocationId] = useState<string>(order?.locationId ?? prefill?.locationId ?? '')
   const [receiptDate, setReceiptDate] = useState<string>(new Date().toISOString().slice(0, 10))
-  const [supplierDoc, setSupplierDoc] = useState<string>('')
+  const [supplierDoc, setSupplierDoc] = useState<string>(prefill?.supplierDocNumber ?? '')
 
   const [draft, setDraft] = useState<DraftLine[]>([])
   const [search, setSearch] = useState('')
@@ -89,7 +108,10 @@ export default function GoodsReceiptForm({ accountId, order, onBack, onSaved }: 
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState<string | null>(null)
 
-  // Cargar proveedores + locales (para los selectores del modo ciego y nombres).
+  // El pedido al que se liga el albarán (contra-pedido o heredado al corregir).
+  const linkedOrderId = order?.id ?? prefill?.purchaseOrderId ?? null
+
+  // Cargar proveedores + locales (para selectores del modo ciego y nombres).
   useEffect(() => {
     let cancelled = false
     setLoadingMeta(true)
@@ -98,12 +120,12 @@ export default function GoodsReceiptForm({ accountId, order, onBack, onSaved }: 
         if (cancelled) return
         setSuppliers(sups)
         setLocations(locs)
-        if (!againstOrder && locs.length === 1) setLocationId(locs[0].id)
+        if (!fixedHeader && locs.length === 1) setLocationId(locs[0].id)
       })
       .catch((err: unknown) => { if (!cancelled) setError(err instanceof Error ? err.message : 'Error cargando datos.') })
       .finally(() => { if (!cancelled) setLoadingMeta(false) })
     return () => { cancelled = true }
-  }, [accountId, againstOrder])
+  }, [accountId, fixedHeader])
 
   // Construir las líneas del borrador.
   useEffect(() => {
@@ -121,13 +143,32 @@ export default function GoodsReceiptForm({ accountId, order, onBack, onSaved }: 
         if (e.purchaseFormatId) byFormat.set(e.purchaseFormatId, e)
         byItem.set(e.recipeItemId, e)
       })
+      const resolveFmt = (formatId: string | null, itemId: string | null) =>
+        (formatId && byFormat.get(formatId)) || (itemId ? byItem.get(itemId) : undefined)
 
-      if (againstOrder && order) {
+      if (correcting && prefill) {
+        // Modo CORREGIR: líneas de la recepción anulada.
+        const lines: DraftLine[] = prefill.lines.map((l, i) => {
+          const cat = resolveFmt(l.purchaseFormatId, l.recipeItemId)
+          return {
+            key: `pf-${i}`,
+            recipeItemId: l.recipeItemId,
+            productName: l.productName,
+            purchaseFormatId: l.purchaseFormatId ?? cat?.purchaseFormatId ?? null,
+            formatLabel: cat?.formatLabel ?? cat?.formatName ?? null,
+            formatQtyInBase: cat?.formatQtyInBase ?? null,
+            qtyOrdered: null,
+            qty: String(l.qtyReceived),
+            unitCost: l.unitCost != null ? String(l.unitCost) : (cat?.lastPrice != null ? String(cat.lastPrice) : ''),
+            poLineId: l.purchaseOrderLineId,
+          }
+        })
+        if (!cancelled) setDraft(lines)
+      } else if (againstOrder && order) {
         // Modo CONTRA PEDIDO: precarga líneas del pedido.
         const poLines: PurchaseOrderLine[] = await listPurchaseOrderLines(order.id)
         const lines: DraftLine[] = poLines.map(l => {
-          const cat = (l.purchaseFormatId && byFormat.get(l.purchaseFormatId))
-            || (l.recipeItemId ? byItem.get(l.recipeItemId) : undefined)
+          const cat = resolveFmt(l.purchaseFormatId, l.recipeItemId)
           return {
             key: l.id,
             recipeItemId: l.recipeItemId,
@@ -136,7 +177,7 @@ export default function GoodsReceiptForm({ accountId, order, onBack, onSaved }: 
             formatLabel: cat?.formatLabel ?? cat?.formatName ?? null,
             formatQtyInBase: cat?.formatQtyInBase ?? null,
             qtyOrdered: l.qtyOrdered,
-            qty: String(l.qtyOrdered),                       // por defecto, lo pedido
+            qty: String(l.qtyOrdered),
             unitCost: l.estUnitPrice != null ? String(l.estUnitPrice) : (cat?.lastPrice != null ? String(cat.lastPrice) : ''),
             poLineId: l.id,
           }
@@ -164,7 +205,7 @@ export default function GoodsReceiptForm({ accountId, order, onBack, onSaved }: 
       .catch((err: unknown) => { if (!cancelled) { setError(err instanceof Error ? err.message : 'Error cargando líneas.'); setDraft([]) } })
       .finally(() => { if (!cancelled) setLoadingLines(false) })
     return () => { cancelled = true }
-  }, [accountId, supplierId, againstOrder, order])
+  }, [accountId, supplierId, againstOrder, order, correcting, prefill])
 
   function setQty(key: string, qty: string) {
     setDraft(d => d.map(l => l.key === key ? { ...l, qty } : l))
@@ -179,13 +220,11 @@ export default function GoodsReceiptForm({ accountId, order, onBack, onSaved }: 
     return draft.filter(l => l.productName.toLowerCase().includes(q))
   }, [draft, search])
 
-  // Líneas con cantidad > 0 (las que se guardarán).
   const filled = useMemo(
     () => draft.filter(l => { const n = parseNum(l.qty); return n !== null && n > 0 }),
     [draft],
   )
 
-  // Cuántas de las llenas entrarán a stock (mapeadas + con conversión).
   const willPost = useMemo(
     () => filled.filter(l => l.recipeItemId && qtyInBaseFromFormat(parseNum(l.qty)!, l.formatQtyInBase) !== null).length,
     [filled],
@@ -207,12 +246,11 @@ export default function GoodsReceiptForm({ accountId, order, onBack, onSaved }: 
 
     setSaving(true); setError(null)
     try {
-      // 1) Cabecera (borrador).
       const receipt = await createGoodsReceipt({
         accountId,
         locationId,
         supplierId,
-        purchaseOrderId: order?.id ?? null,
+        purchaseOrderId: linkedOrderId,
         supplierDocNumber: supplierDoc.trim() || null,
         receiptDate,
         receivedAt: new Date().toISOString(),
@@ -221,7 +259,6 @@ export default function GoodsReceiptForm({ accountId, order, onBack, onSaved }: 
         createdByName: userProfile?.displayName ?? null,
       })
 
-      // 2) Una línea por artículo con cantidad > 0.
       let position = 0
       for (const l of filled) {
         const qtyReceived = parseNum(l.qty)!
@@ -244,7 +281,6 @@ export default function GoodsReceiptForm({ accountId, order, onBack, onSaved }: 
         })
       }
 
-      // 3) Confirmar (postear al ledger) si se pidió.
       if (confirm) {
         const res = await confirmReceipt(receipt.id)
         const parts = [`${res.postedLines} línea(s) a stock`]
@@ -260,7 +296,6 @@ export default function GoodsReceiptForm({ accountId, order, onBack, onSaved }: 
     }
   }
 
-  // Pantalla de resultado tras confirmar.
   if (done) {
     return (
       <div className="space-y-4">
@@ -282,6 +317,17 @@ export default function GoodsReceiptForm({ accountId, order, onBack, onSaved }: 
     )
   }
 
+  const title = againstOrder
+    ? `Recibir pedido ${order?.code ?? ''}`
+    : correcting
+      ? 'Corregir recepción'
+      : 'Nueva recepción'
+  const subtitle = againstOrder
+    ? 'Ajusta lo que ha llegado de verdad y confirma para que entre a stock.'
+    : correcting
+      ? 'La recepción anterior se anuló. Corrige lo que falló y vuelve a confirmar.'
+      : 'Elige proveedor y local, pon lo recibido y confirma.'
+
   return (
     <div className="space-y-4">
       {/* Cabecera */}
@@ -297,21 +343,15 @@ export default function GoodsReceiptForm({ accountId, order, onBack, onSaved }: 
       </div>
 
       <div>
-        <h2 className="text-xl font-display font-medium text-text-primary">
-          {againstOrder ? `Recibir pedido ${order?.code ?? ''}` : 'Nueva recepción'}
-        </h2>
-        <p className="text-sm text-text-secondary mt-0.5">
-          {againstOrder
-            ? 'Ajusta lo que ha llegado de verdad y confirma para que entre a stock.'
-            : 'Elige proveedor y local, pon lo recibido y confirma.'}
-        </p>
+        <h2 className="text-xl font-display font-medium text-text-primary">{title}</h2>
+        <p className="text-sm text-text-secondary mt-0.5">{subtitle}</p>
       </div>
 
       {/* Datos de la recepción */}
       <div className="rounded-lg border border-border-default bg-card p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <div>
           <label className="block text-xs font-medium text-text-secondary mb-1">Local (entrada)</label>
-          {againstOrder ? (
+          {fixedHeader ? (
             <p className="px-2 py-1.5 text-sm text-text-primary">{locationName}</p>
           ) : (
             <select
@@ -327,7 +367,7 @@ export default function GoodsReceiptForm({ accountId, order, onBack, onSaved }: 
         </div>
         <div>
           <label className="block text-xs font-medium text-text-secondary mb-1">Proveedor</label>
-          {againstOrder ? (
+          {fixedHeader ? (
             <p className="px-2 py-1.5 text-sm text-text-primary">{supplierName}</p>
           ) : (
             <select
@@ -386,7 +426,9 @@ export default function GoodsReceiptForm({ accountId, order, onBack, onSaved }: 
               <p className="text-sm text-text-secondary">
                 {againstOrder
                   ? 'Este pedido no tiene líneas.'
-                  : 'Este proveedor aún no tiene artículos en su catálogo.'}
+                  : correcting
+                    ? 'La recepción anulada no tenía líneas.'
+                    : 'Este proveedor aún no tiene artículos en su catálogo.'}
               </p>
             </div>
           )}
@@ -421,7 +463,6 @@ export default function GoodsReceiptForm({ accountId, order, onBack, onSaved }: 
                       const qtyN = parseNum(l.qty)
                       const hasQty = qtyN !== null && qtyN > 0
                       const willEnter = hasQty && l.recipeItemId && qtyInBaseFromFormat(qtyN!, l.formatQtyInBase) !== null
-                      // Comparativa pedido↔recibido (modo contra pedido).
                       let cmp: { label: string; cls: string } | null = null
                       if (againstOrder && l.qtyOrdered !== null && hasQty) {
                         if (Math.abs(qtyN! - l.qtyOrdered) < 0.0001) cmp = { label: 'OK', cls: 'bg-success-bg text-success border-success/20' }
@@ -480,7 +521,6 @@ export default function GoodsReceiptForm({ accountId, order, onBack, onSaved }: 
                 </table>
               </div>
 
-              {/* Pie: resumen + guardar */}
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <span className="text-sm text-text-secondary">
                   {filled.length} con cantidad · {willPost} entrarán a stock

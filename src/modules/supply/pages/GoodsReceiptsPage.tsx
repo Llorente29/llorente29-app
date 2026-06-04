@@ -1,23 +1,25 @@
 // src/modules/supply/pages/GoodsReceiptsPage.tsx
 //
-// Lista de RECEPCIONES (goods_receipt) del módulo Folvy Supply. Patrón de vistas
-// por estado, calcado de SupplyOrdersPage (sin react-router):
+// Lista de RECEPCIONES (goods_receipt) del módulo Folvy Supply. Vistas por
+// estado (sin react-router):
 //   - list (por defecto)
-//   - form: "Nueva recepción" → GoodsReceiptForm en modo CIEGO (sin pedido)
+//   - form: "Nueva recepción" (ciega) o "Anular y corregir" (prefill)
 //
-// El alta contra un pedido concreto se hace desde el detalle del pedido
-// ("Registrar recepción"), que monta el mismo GoodsReceiptForm con el pedido.
+// El alta contra un pedido concreto se hace desde el detalle del pedido.
 //
-// Para C2.1, confirmar/anular se hacen desde la propia fila (sin pantalla de
-// detalle aparte): un borrador se confirma (postea al ledger), un confirmado se
-// anula (reverso). El resultado se muestra inline.
+// Acciones desde la fila:
+//   - borrador → Confirmar (postea al ledger)
+//   - confirmado → Anular (reverso) | Anular y corregir (reverso + reabrir
+//     borrador precargado con las líneas, para rehacerla cambiando lo que falló)
 
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, PackageCheck, Search, Loader2, Check, RotateCcw } from 'lucide-react'
+import { Plus, PackageCheck, Search, Loader2, Check, RotateCcw, PencilLine } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useIsMobile } from '@/shell/useIsMobile'
 import {
   listGoodsReceipts,
+  getGoodsReceiptById,
+  listGoodsReceiptLines,
   confirmReceipt,
   voidReceipt,
   type GoodsReceipt,
@@ -26,7 +28,7 @@ import {
 import { listSuppliers } from '@/modules/kitchen/services/purchaseFormatService'
 import { listSupplyLocations, type SupplyLocation } from '@/modules/supply/services/supplierCatalogService'
 import type { Supplier } from '@/types/kitchen'
-import GoodsReceiptForm from '@/modules/supply/pages/GoodsReceiptForm'
+import GoodsReceiptForm, { type ReceiptPrefill } from '@/modules/supply/pages/GoodsReceiptForm'
 
 const STATUS_LABEL: Record<GoodsReceiptStatus, string> = {
   borrador: 'Borrador',
@@ -60,8 +62,8 @@ export default function GoodsReceiptsPage() {
   const [search, setSearch] = useState('')
   const [reloadTick, setReloadTick] = useState(0)
   const [view, setView] = useState<View>('list')
+  const [prefill, setPrefill] = useState<ReceiptPrefill | null>(null)
 
-  // Acción en curso por fila (confirmar/anular) + feedback inline.
   const [busyId, setBusyId] = useState<string | null>(null)
   const [flash, setFlash] = useState<string | null>(null)
 
@@ -143,13 +145,49 @@ export default function GoodsReceiptsPage() {
     }
   }
 
-  // ── Vista FORM: nueva recepción ciega (sin pedido) ──
+  // Anular y corregir: reverso + reabrir un borrador precargado con las líneas
+  // de la anulada (hereda proveedor, local, nº albarán y pedido ligado).
+  async function handleVoidAndCorrect(id: string) {
+    setBusyId(id); setFlash(null); setError(null)
+    try {
+      await voidReceipt(id)
+      const [r, lines] = await Promise.all([
+        getGoodsReceiptById(id),
+        listGoodsReceiptLines(id),
+      ])
+      if (!r) throw new Error('No se pudo recuperar la recepción anulada.')
+      const pf: ReceiptPrefill = {
+        supplierId: r.supplierId ?? '',
+        locationId: r.locationId,
+        purchaseOrderId: r.purchaseOrderId,
+        supplierDocNumber: r.supplierDocNumber,
+        lines: lines.map(l => ({
+          recipeItemId: l.recipeItemId,
+          productName: l.productName,
+          purchaseFormatId: l.purchaseFormatId,
+          qtyReceived: l.qtyReceived,
+          unitCost: l.unitCost,
+          purchaseOrderLineId: l.purchaseOrderLineId,
+        })),
+      }
+      setPrefill(pf)
+      setView('form')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'No se pudo anular y corregir.')
+      setReloadTick(t => t + 1)
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  // ── Vista FORM: nueva recepción ciega o corrección (prefill) ──
   if (view === 'form' && activeAccountId) {
     return (
       <GoodsReceiptForm
         accountId={activeAccountId}
-        onBack={() => setView('list')}
-        onSaved={() => { setView('list'); setReloadTick(t => t + 1) }}
+        prefill={prefill}
+        onBack={() => { setView('list'); setPrefill(null); setReloadTick(t => t + 1) }}
+        onSaved={(msg) => { setView('list'); setPrefill(null); if (msg) setFlash(msg); setReloadTick(t => t + 1) }}
       />
     )
   }
@@ -166,7 +204,7 @@ export default function GoodsReceiptsPage() {
         </div>
         <button
           type="button"
-          onClick={() => setView('form')}
+          onClick={() => { setPrefill(null); setView('form') }}
           disabled={!activeAccountId}
           className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base"
         >
@@ -224,7 +262,9 @@ export default function GoodsReceiptsPage() {
                   <CardField label="Fecha" value={formatDate(r.receiptDate)} />
                   <CardField label="Nº albarán" value={r.supplierDocNumber ?? '—'} />
                 </div>
-                <RowActions r={r} busy={busyId === r.id} onConfirm={handleConfirm} onVoid={handleVoid} />
+                <div className="mt-2">
+                  <RowActions r={r} busy={busyId === r.id} onConfirm={handleConfirm} onVoid={handleVoid} onVoidAndCorrect={handleVoidAndCorrect} />
+                </div>
               </div>
             ))}
           </div>
@@ -260,7 +300,7 @@ export default function GoodsReceiptsPage() {
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex justify-end">
-                        <RowActions r={r} busy={busyId === r.id} onConfirm={handleConfirm} onVoid={handleVoid} />
+                        <RowActions r={r} busy={busyId === r.id} onConfirm={handleConfirm} onVoid={handleVoid} onVoidAndCorrect={handleVoidAndCorrect} />
                       </div>
                     </td>
                   </tr>
@@ -275,12 +315,13 @@ export default function GoodsReceiptsPage() {
 }
 
 function RowActions({
-  r, busy, onConfirm, onVoid,
+  r, busy, onConfirm, onVoid, onVoidAndCorrect,
 }: {
   r: GoodsReceipt
   busy: boolean
   onConfirm: (id: string) => void
   onVoid: (id: string) => void
+  onVoidAndCorrect: (id: string) => void
 }) {
   if (r.status === 'borrador') {
     return (
@@ -297,17 +338,30 @@ function RowActions({
   }
   if (r.status === 'confirmado') {
     return (
-      <button
-        type="button"
-        onClick={() => {
-          if (window.confirm('¿Anular esta recepción? Se revertirán sus movimientos de stock.')) onVoid(r.id)
-        }}
-        disabled={busy}
-        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm font-medium border border-border-default bg-card hover:bg-page disabled:opacity-50 disabled:cursor-not-allowed transition-base"
-      >
-        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw size={15} />}
-        Anular
-      </button>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            if (window.confirm('¿Anular y corregir? Se revierte esta recepción y se reabre para rehacerla.')) onVoidAndCorrect(r.id)
+          }}
+          disabled={busy}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base"
+        >
+          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <PencilLine size={15} />}
+          Anular y corregir
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            if (window.confirm('¿Anular esta recepción? Se revertirán sus movimientos de stock.')) onVoid(r.id)
+          }}
+          disabled={busy}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm font-medium border border-border-default bg-card hover:bg-page disabled:opacity-50 disabled:cursor-not-allowed transition-base"
+        >
+          <RotateCcw size={15} />
+          Anular
+        </button>
+      </div>
     )
   }
   return <span className="text-xs text-text-tertiary">—</span>
