@@ -6,7 +6,7 @@
 // y verla en la lista. Patrón calcado de GoodsReceiptsPage.
 
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, FileText, Loader2, Trash2, X, ScanLine, ArrowLeft, RefreshCw, CheckCircle2, AlertTriangle } from 'lucide-react'
+import { Plus, FileText, Loader2, Trash2, X, ScanLine, ArrowLeft, RefreshCw, CheckCircle2, AlertTriangle, Settings2 } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useApp } from '@/context/AppContext'
 import {
@@ -18,6 +18,10 @@ import {
   approveInvoice,
   markInvoiceDiscrepancy,
   matchResultLabel,
+  canApproveInvoice,
+  listApprovalRules,
+  createApprovalRule,
+  deleteApprovalRule,
   type SupplierInvoice,
   type SupplierInvoiceStatus,
   type SupplierInvoiceDocKind,
@@ -25,6 +29,8 @@ import {
   type SupplierInvoiceLine,
   type InvoiceMatchSummary,
   type CostImpactRow,
+  type CanApproveResult,
+  type InvoiceApprovalRule,
   type InvoiceOcrPrefill,
 } from '@/modules/supply/services/supplierInvoiceService'
 import InvoiceScanPanel from '@/modules/supply/pages/InvoiceScanPanel'
@@ -83,6 +89,10 @@ export default function SupplierInvoicesPage() {
   const [detailLoading, setDetailLoading] = useState(false)
   const [matchSummary, setMatchSummary] = useState<InvoiceMatchSummary | null>(null)
   const [costImpact, setCostImpact] = useState<CostImpactRow[] | null>(null)
+  const [canApprove, setCanApprove] = useState<CanApproveResult | null>(null)
+  // C3.5 — reglas de aprobación
+  const [rulesOpen, setRulesOpen] = useState(false)
+  const [rules, setRules] = useState<InvoiceApprovalRule[]>([])
   const [detailBusy, setDetailBusy] = useState(false)
   const [formOpen, setFormOpen] = useState(false)
   const [ocrSessionId, setOcrSessionId] = useState<string | null>(null)
@@ -212,11 +222,21 @@ export default function SupplierInvoicesPage() {
     }
   }
 
-  async function openDetail(id: string) {
-    setDetailId(id); setView('detail'); setDetailLoading(true); setMatchSummary(null); setCostImpact(null); setError(null)
+  async function openRules() {
+    if (!activeAccountId) return
+    try { setRules(await listApprovalRules(activeAccountId)) } catch { setRules([]) }
+    setRulesOpen(true)
+  }
+  async function reloadRules() {
+    if (!activeAccountId) return
+    try { setRules(await listApprovalRules(activeAccountId)) } catch { /* noop */ }
+  }
+
+  async function openDetail(id: string) {    setDetailId(id); setView('detail'); setDetailLoading(true); setMatchSummary(null); setCostImpact(null); setCanApprove(null); setError(null)
     try {
       const res = await getSupplierInvoiceById(id)
       if (res) { setDetailHead(res.invoice); setDetailLines(res.lines) }
+      try { setCanApprove(await canApproveInvoice(id)) } catch { setCanApprove(null) }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo abrir la factura.')
     } finally {
@@ -280,6 +300,7 @@ export default function SupplierInvoicesPage() {
         busy={detailBusy}
         summary={matchSummary}
         costImpact={costImpact}
+        canApprove={canApprove}
         error={error}
         onBack={() => { setView('list'); setDetailId(null); setDetailHead(null); setDetailLines([]); setMatchSummary(null) }}
         onRunMatch={handleRunMatch}
@@ -309,6 +330,15 @@ export default function SupplierInvoicesPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={openRules}
+            disabled={!activeAccountId}
+            title="Reglas de aprobación"
+            className="inline-flex items-center justify-center w-9 h-9 rounded-md border border-border-default bg-card hover:bg-page disabled:opacity-50 transition-base"
+          >
+            <Settings2 size={16} />
+          </button>
           <button
             type="button"
             onClick={() => setView('scan')}
@@ -507,6 +537,21 @@ export default function SupplierInvoicesPage() {
           </div>
         </div>
       )}
+
+      {/* C3.5 — modal de reglas de aprobación */}
+      {rulesOpen && (
+        <ApprovalRulesModal
+          accountId={activeAccountId ?? ''}
+          rules={rules}
+          suppliers={suppliers}
+          locations={locations}
+          createdBy={authUserId ?? null}
+          createdByName={userProfile?.displayName ?? null}
+          onClose={() => setRulesOpen(false)}
+          onChanged={reloadRules}
+          onError={(m) => setError(m)}
+        />
+      )}
     </div>
   )
 }
@@ -536,7 +581,7 @@ function MatchDetailText({ result, detail }: { result: string | null; detail: Re
 }
 
 function InvoiceDetail({
-  head, lines, loading, busy, summary, costImpact, error, onBack, onRunMatch, onApprove, onMarkDiscrepancy,
+  head, lines, loading, busy, summary, costImpact, canApprove, error, onBack, onRunMatch, onApprove, onMarkDiscrepancy,
 }: {
   head: SupplierInvoice | null
   lines: SupplierInvoiceLine[]
@@ -544,6 +589,7 @@ function InvoiceDetail({
   busy: boolean
   summary: InvoiceMatchSummary | null
   costImpact: CostImpactRow[] | null
+  canApprove: CanApproveResult | null
   error: string | null
   onBack: () => void
   onRunMatch: () => void
@@ -589,14 +635,24 @@ function InvoiceDetail({
                     className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium border border-warning/40 text-warning bg-warning-bg hover:opacity-90 disabled:opacity-50 transition-base">
                     <AlertTriangle size={15} /> Marcar discrepancia
                   </button>
-                  <button type="button" onClick={onApprove} disabled={busy}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 transition-base">
+                  <button type="button" onClick={onApprove} disabled={busy || (canApprove ? !canApprove.allowed : false)}
+                    title={canApprove && !canApprove.allowed ? (canApprove.requiredRole === 'admin' ? 'Requiere un administrador' : 'Sin permiso para aprobar') : undefined}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base">
                     <CheckCircle2 size={15} /> Aprobar
                   </button>
                 </>
               )}
             </div>
           </div>
+
+          {!approved && canApprove && !canApprove.allowed && (
+            <div className="p-2.5 rounded-md bg-page border border-border-default text-xs text-text-secondary flex items-center gap-1.5">
+              <AlertTriangle size={14} className="text-warning" />
+              {canApprove.requiredRole === 'admin'
+                ? 'Esta factura requiere la aprobación de un administrador.'
+                : 'No tienes permiso para aprobar facturas.'}
+            </div>
+          )}
 
           {/* Resumen del match */}
           {summary && (
@@ -701,6 +757,143 @@ function InvoiceDetail({
           </div>
         </>
       )}
+    </div>
+  )
+}
+
+// ── C3.5 — modal de reglas de aprobación ──
+function ApprovalRulesModal({
+  accountId, rules, suppliers, locations, createdBy, createdByName, onClose, onChanged, onError,
+}: {
+  accountId: string
+  rules: InvoiceApprovalRule[]
+  suppliers: Supplier[]
+  locations: SupplyLocation[]
+  createdBy: string | null
+  createdByName: string | null
+  onClose: () => void
+  onChanged: () => void
+  onError: (m: string) => void
+}) {
+  const [minA, setMinA] = useState('')
+  const [maxA, setMaxA] = useState('')
+  const [supId, setSupId] = useState('')
+  const [locId, setLocId] = useState('')
+  const [role, setRole] = useState<'admin' | 'manager'>('admin')
+  const [saving, setSaving] = useState(false)
+
+  function n(s: string): number | null {
+    const v = s.trim().replace(',', '.')
+    if (v === '') return null
+    const x = Number(v); return isNaN(x) ? null : x
+  }
+
+  async function add() {
+    if (!accountId) return
+    setSaving(true)
+    try {
+      await createApprovalRule({
+        accountId, minAmount: n(minA), maxAmount: n(maxA),
+        supplierId: supId || null, locationId: locId || null,
+        requiredRole: role, priority: 100, createdBy, createdByName,
+      })
+      setMinA(''); setMaxA(''); setSupId(''); setLocId(''); setRole('admin')
+      onChanged()
+    } catch (e) {
+      onError(e instanceof Error ? e.message : 'No se pudo crear la regla.')
+    } finally {
+      setSaving(false)
+    }
+  }
+  async function remove(id: string) {
+    try { await deleteApprovalRule(id); onChanged() }
+    catch (e) { onError(e instanceof Error ? e.message : 'No se pudo borrar.') }
+  }
+
+  function ruleText(r: InvoiceApprovalRule): string {
+    const parts: string[] = []
+    if (r.minAmount != null || r.maxAmount != null) {
+      if (r.minAmount != null && r.maxAmount != null) parts.push(`${r.minAmount}–${r.maxAmount} €`)
+      else if (r.minAmount != null) parts.push(`desde ${r.minAmount} €`)
+      else parts.push(`hasta ${r.maxAmount} €`)
+    }
+    if (r.supplierName) parts.push(r.supplierName)
+    const loc = locations.find(l => l.id === r.locationId)
+    if (loc) parts.push(loc.name)
+    const cond = parts.length > 0 ? parts.join(' · ') : 'cualquier factura'
+    return `${cond} → ${r.requiredRole === 'admin' ? 'solo admin' : 'manager o admin'}`
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-start sm:items-center justify-center p-4 overflow-y-auto" role="dialog" aria-modal="true">
+      <div className="bg-card rounded-lg border border-border-default shadow-lg w-full max-w-lg my-8">
+        <div className="px-5 py-3 border-b border-border-default flex items-center justify-between">
+          <h3 className="text-base font-medium text-text-primary">Reglas de aprobación</h3>
+          <button type="button" onClick={onClose} className="text-text-tertiary hover:text-text-primary"><X size={18} /></button>
+        </div>
+        <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
+          <p className="text-sm text-text-secondary">
+            Define quién puede aprobar según importe, proveedor o local. Sin reglas, cualquier manager o admin aprueba.
+          </p>
+
+          {rules.length > 0 ? (
+            <div className="space-y-1.5">
+              {rules.map(r => (
+                <div key={r.id} className="flex items-center gap-2 text-sm border border-border-default rounded-md px-3 py-2 bg-page">
+                  <span className="flex-1 text-text-primary">{ruleText(r)}</span>
+                  <button type="button" onClick={() => remove(r.id)} className="text-text-tertiary hover:text-danger"><Trash2 size={15} /></button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-text-tertiary italic">Sin reglas: cualquier manager o admin aprueba.</p>
+          )}
+
+          <div className="border-t border-border-default pt-3 space-y-2">
+            <p className="text-[11px] uppercase tracking-wide text-text-secondary">Añadir regla</p>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="block">
+                <span className="text-[11px] text-text-secondary">Importe desde (€)</span>
+                <input type="text" inputMode="decimal" value={minA} onChange={e => setMinA(e.target.value)} placeholder="sin límite"
+                  className="mt-0.5 w-full px-3 py-2 text-sm border border-border-default rounded-md bg-page text-text-primary" />
+              </label>
+              <label className="block">
+                <span className="text-[11px] text-text-secondary">Importe hasta (€)</span>
+                <input type="text" inputMode="decimal" value={maxA} onChange={e => setMaxA(e.target.value)} placeholder="sin límite"
+                  className="mt-0.5 w-full px-3 py-2 text-sm border border-border-default rounded-md bg-page text-text-primary" />
+              </label>
+              <label className="block">
+                <span className="text-[11px] text-text-secondary">Proveedor (opcional)</span>
+                <select value={supId} onChange={e => setSupId(e.target.value)}
+                  className="mt-0.5 w-full px-3 py-2 text-sm border border-border-default rounded-md bg-page text-text-primary">
+                  <option value="">Cualquiera</option>
+                  {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-[11px] text-text-secondary">Local (opcional)</span>
+                <select value={locId} onChange={e => setLocId(e.target.value)}
+                  className="mt-0.5 w-full px-3 py-2 text-sm border border-border-default rounded-md bg-page text-text-primary">
+                  <option value="">Cualquiera</option>
+                  {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                </select>
+              </label>
+              <label className="block col-span-2">
+                <span className="text-[11px] text-text-secondary">Requiere</span>
+                <select value={role} onChange={e => setRole(e.target.value as 'admin' | 'manager')}
+                  className="mt-0.5 w-full px-3 py-2 text-sm border border-border-default rounded-md bg-page text-text-primary">
+                  <option value="admin">Solo administrador</option>
+                  <option value="manager">Manager o administrador</option>
+                </select>
+              </label>
+            </div>
+            <button type="button" onClick={add} disabled={saving}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 transition-base">
+              {saving && <Loader2 size={14} className="animate-spin" />} Añadir regla
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

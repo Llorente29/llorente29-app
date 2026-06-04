@@ -3860,6 +3860,69 @@ export type Database = {
           },
         ]
       }
+      invoice_approval_rule: {
+        Row: {
+          account_id: string
+          active: boolean
+          created_at: string
+          created_by: string | null
+          created_by_name: string | null
+          id: string
+          location_id: string | null
+          max_amount: number | null
+          min_amount: number | null
+          priority: number
+          required_role: string
+          supplier_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          active?: boolean
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          id?: string
+          location_id?: string | null
+          max_amount?: number | null
+          min_amount?: number | null
+          priority?: number
+          required_role?: string
+          supplier_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          active?: boolean
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          id?: string
+          location_id?: string | null
+          max_amount?: number | null
+          min_amount?: number | null
+          priority?: number
+          required_role?: string
+          supplier_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_approval_rule_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_approval_rule_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "supplier"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invoices: {
         Row: {
           account_id: string
@@ -8823,6 +8886,10 @@ export type Database = {
         Returns: string
       }
       current_user_account_ids: { Args: never; Returns: string[] }
+      current_user_can_approve_invoice: {
+        Args: { p_invoice_id: string }
+        Returns: boolean
+      }
       current_user_has_platform_permission: {
         Args: { p_permission_flag: string }
         Returns: boolean
@@ -8851,6 +8918,7 @@ export type Database = {
         Args: { p_account_id: string; p_permission_key: string }
         Returns: boolean
       }
+      invoice_required_role: { Args: { p_invoice_id: string }; Returns: string }
       kitchen_ancestors_of: {
         Args: { p_item_id: string }
         Returns: {

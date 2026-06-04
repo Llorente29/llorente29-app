@@ -476,6 +476,13 @@ export async function approveInvoice(
   invoiceId: string, approvedBy: string | null, approvedByName: string | null,
 ): Promise<CostImpactRow[]> {
   requireSupabase()
+  // C3.5 — gating de aprobación: ¿el usuario actual puede aprobar esta factura?
+  const can = await canApproveInvoice(invoiceId)
+  if (!can.allowed) {
+    throw new Error(can.requiredRole === 'admin'
+      ? 'Esta factura requiere aprobación de un administrador.'
+      : 'No tienes permiso para aprobar facturas.')
+  }
   const { error } = await from('supplier_invoice')
     .update({
       status: 'aprobada',
@@ -537,4 +544,98 @@ export function matchResultLabel(r: string | null): { label: string; cls: string
     case 'sin_casar': return { label: 'Sin casar', cls: 'bg-page text-text-tertiary border-border-default' }
     default: return null
   }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// C3.5 — Enrutado de aprobación por reglas.
+// ════════════════════════════════════════════════════════════════════════════
+
+export interface CanApproveResult {
+  allowed: boolean
+  requiredRole: 'admin' | 'manager'
+}
+
+/** ¿Puede el usuario actual aprobar esta factura? + rol requerido (para el mensaje). */
+export async function canApproveInvoice(invoiceId: string): Promise<CanApproveResult> {
+  requireSupabase()
+  const [{ data: allowed, error: e1 }, { data: role, error: e2 }] = await Promise.all([
+    supabase!.rpc('current_user_can_approve_invoice', { p_invoice_id: invoiceId }),
+    supabase!.rpc('invoice_required_role', { p_invoice_id: invoiceId }),
+  ])
+  if (e1) console.error('[supplierInvoiceService] canApproveInvoice', e1)
+  if (e2) console.error('[supplierInvoiceService] invoice_required_role', e2)
+  return {
+    allowed: Boolean(allowed),
+    requiredRole: (role as 'admin' | 'manager') ?? 'manager',
+  }
+}
+
+export interface InvoiceApprovalRule {
+  id: string
+  minAmount: number | null
+  maxAmount: number | null
+  supplierId: string | null
+  supplierName: string | null
+  locationId: string | null
+  requiredRole: 'admin' | 'manager'
+  priority: number
+  active: boolean
+}
+
+export async function listApprovalRules(accountId: string): Promise<InvoiceApprovalRule[]> {
+  requireSupabase()
+  const { data, error } = await from('invoice_approval_rule')
+    .select('id, min_amount, max_amount, supplier_id, location_id, required_role, priority, active, supplier:supplier_id ( name )')
+    .eq('account_id', accountId)
+    .order('priority', { ascending: true })
+  if (error) throw new Error(`Error cargando reglas: ${error.message}`)
+  return ((data as Row[] | null) ?? []).map(r => {
+    const sup = (r.supplier ?? null) as { name?: string } | null
+    return {
+      id: r.id as string,
+      minAmount: (r.min_amount as number | null) ?? null,
+      maxAmount: (r.max_amount as number | null) ?? null,
+      supplierId: (r.supplier_id as string | null) ?? null,
+      supplierName: sup?.name ?? null,
+      locationId: (r.location_id as string | null) ?? null,
+      requiredRole: (r.required_role as 'admin' | 'manager') ?? 'manager',
+      priority: Number(r.priority ?? 100),
+      active: Boolean(r.active),
+    }
+  })
+}
+
+export interface CreateApprovalRuleInput {
+  accountId: string
+  minAmount: number | null
+  maxAmount: number | null
+  supplierId: string | null
+  locationId: string | null
+  requiredRole: 'admin' | 'manager'
+  priority: number
+  createdBy?: string | null
+  createdByName?: string | null
+}
+
+export async function createApprovalRule(input: CreateApprovalRuleInput): Promise<void> {
+  requireSupabase()
+  const { error } = await from('invoice_approval_rule').insert({
+    account_id: input.accountId,
+    min_amount: input.minAmount,
+    max_amount: input.maxAmount,
+    supplier_id: input.supplierId,
+    location_id: input.locationId,
+    required_role: input.requiredRole,
+    priority: input.priority,
+    active: true,
+    created_by: input.createdBy ?? null,
+    created_by_name: input.createdByName ?? null,
+  })
+  if (error) throw new Error(`No se pudo crear la regla: ${error.message}`)
+}
+
+export async function deleteApprovalRule(id: string): Promise<void> {
+  requireSupabase()
+  const { error } = await from('invoice_approval_rule').delete().eq('id', id)
+  if (error) throw new Error(`No se pudo borrar la regla: ${error.message}`)
 }
