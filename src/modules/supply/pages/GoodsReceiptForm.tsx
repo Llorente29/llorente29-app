@@ -97,6 +97,21 @@ function parseNum(v: string): number | null {
   return Number.isFinite(n) ? n : null
 }
 
+// Detalle de una línea recibida POR ENCIMA de lo pendiente (para el resumen).
+interface OverLine {
+  name: string
+  received: number
+  pending: number
+  overPending: number          // recibido − pendiente
+  totalAfter: number           // ya recibido + recibido ahora
+  ordered: number | null       // pedido total de la línea
+  overOrdered: number | null   // cuánto se pasa del pedido total (0 si no se pasa)
+}
+interface UntouchedLine {
+  name: string
+  pending: number
+}
+
 export default function GoodsReceiptForm({ accountId, order, prefill, onBack, onSaved }: GoodsReceiptFormProps) {
   const { userProfile, authUserId } = useApp()
   const againstOrder = !!order
@@ -274,24 +289,42 @@ export default function GoodsReceiptForm({ accountId, order, prefill, onBack, on
   )
 
   // ── Resumen anti-error ──
+  // Las líneas "de más" se listan con DETALLE (cuánto, contra lo pendiente y
+  // contra el pedido total) para que el aviso sea accionable, no genérico.
   const summary = useMemo(() => {
     const linesWithPending = draft.filter(l => l.pending !== null && l.pending > 0)
-    let coinciden = 0, deMas = 0, deMenos = 0
+    let coinciden = 0, deMenos = 0
+    const overLines: OverLine[] = []
     for (const l of filled) {
       if (l.pending === null) continue
       const n = parseNum(l.qty)!
-      if (n > l.pending) deMas++
-      else if (l.pending > 0 && n < l.pending) deMenos++
+      if (n > l.pending) {
+        const ordered = l.qtyOrdered
+        const already = l.alreadyReceived ?? 0
+        overLines.push({
+          name: l.productName,
+          received: n,
+          pending: l.pending,
+          overPending: n - l.pending,
+          totalAfter: already + n,
+          ordered,
+          overOrdered: ordered !== null ? Math.max(0, (already + n) - ordered) : null,
+        })
+      } else if (l.pending > 0 && n < l.pending) deMenos++
       else if (n === l.pending) coinciden++
     }
-    const sinTocar = linesWithPending.filter(l => { const n = parseNum(l.qty); return n === null || n <= 0 }).length
+    const untouchedLines = linesWithPending
+      .filter(l => { const n = parseNum(l.qty); return n === null || n <= 0 })
+      .map(l => ({ name: l.productName, pending: l.pending as number }))
+    const sinTocar = untouchedLines.length
     const sinMapear = filled.length - willPost
     // Anomalía = algo de más, o masa sin tocar (>30% de las líneas con pendiente y >3).
     const masaSinTocar = sinTocar > 3 && linesWithPending.length > 0 && (sinTocar / linesWithPending.length) > 0.30
-    const anomaly = deMas > 0 || masaSinTocar
+    const anomaly = overLines.length > 0 || masaSinTocar
     return {
       filled: filled.length, aStock: willPost, sinMapear,
-      coinciden, deMas, deMenos, sinTocar,
+      coinciden, deMenos, deMas: overLines.length, sinTocar,
+      overLines, untouchedLines,
       hasReference, anomaly, masaSinTocar,
     }
   }, [draft, filled, willPost, hasReference])
@@ -577,12 +610,14 @@ export default function GoodsReceiptForm({ accountId, order, prefill, onBack, on
 // Panel de resumen antes de confirmar. Aparece siempre. Si hay anomalía
 // (algo de más, o masa de líneas con pendiente sin tocar), exige confirmación
 // reforzada (estilo de aviso + texto explícito). "De menos" se informa, no frena.
+// Las líneas de más se listan con DETALLE: cuánto, contra pendiente y contra pedido.
 function ReviewPanel({
   summary, saving, onCancel, onConfirm,
 }: {
   summary: {
     filled: number; aStock: number; sinMapear: number
     coinciden: number; deMas: number; deMenos: number; sinTocar: number
+    overLines: OverLine[]; untouchedLines: UntouchedLine[]
     hasReference: boolean; anomaly: boolean; masaSinTocar: boolean
   }
   saving: boolean
@@ -591,13 +626,13 @@ function ReviewPanel({
 }) {
   return (
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-0 sm:p-4" onClick={onCancel}>
-      <div className="bg-card w-full sm:max-w-md rounded-t-xl sm:rounded-xl shadow-xl flex flex-col" onClick={e => e.stopPropagation()}>
-        <div className="px-4 py-3 border-b border-border-default flex items-center gap-2">
+      <div className="bg-card w-full sm:max-w-lg max-h-[92vh] rounded-t-xl sm:rounded-xl shadow-xl flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="px-4 py-3 border-b border-border-default flex items-center gap-2 shrink-0">
           {summary.anomaly ? <AlertTriangle size={18} className="text-warning" /> : <ListChecks size={18} className="text-accent" />}
           <h3 className="text-base font-medium text-text-primary">Antes de confirmar</h3>
         </div>
 
-        <div className="px-4 py-4 space-y-3">
+        <div className="px-4 py-4 space-y-3 overflow-y-auto">
           <div className="grid grid-cols-2 gap-2 text-sm">
             <SumRow label="Entrarán a stock" value={summary.aStock} good />
             {summary.sinMapear > 0 && <SumRow label="Sin mapear (no entran)" value={summary.sinMapear} warn />}
@@ -607,19 +642,59 @@ function ReviewPanel({
             {summary.hasReference && summary.sinTocar > 0 && <SumRow label="Con pendiente, sin recibir" value={summary.sinTocar} warn={summary.masaSinTocar} />}
           </div>
 
-          {summary.anomaly && (
-            <div className="p-3 rounded-md bg-warning-bg text-warning border border-warning/20 text-sm">
-              {summary.deMas > 0 && <p>Hay líneas con MÁS de lo pendiente. </p>}
-              {summary.masaSinTocar && <p>Muchas líneas con pendiente quedan sin recibir (= 0). </p>}
-              <p className="mt-1 text-text-primary">Revisa que has contado bien antes de confirmar.</p>
+          {/* Detalle de líneas de más (lo accionable) */}
+          {summary.overLines.length > 0 && (
+            <div className="rounded-md border border-warning/30 bg-warning-bg/50 overflow-hidden">
+              <p className="px-3 py-1.5 text-xs font-medium text-warning border-b border-warning/20">Recibes más de lo pendiente:</p>
+              <ul className="divide-y divide-warning/10">
+                {summary.overLines.map((o, i) => (
+                  <li key={i} className="px-3 py-2 text-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-text-primary font-medium">{o.name}</span>
+                      <span className="text-warning font-medium tabular-nums">+{o.overPending} sobre lo pendiente</span>
+                    </div>
+                    <div className="text-xs text-text-secondary mt-0.5">
+                      Recibes {o.received} · pendiente {o.pending}
+                      {o.ordered !== null && (
+                        <> · total quedaría {o.totalAfter}/{o.ordered} pedido
+                          {o.overOrdered !== null && o.overOrdered > 0 && (
+                            <span className="text-warning"> (+{o.overOrdered} sobre el pedido)</span>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
             </div>
+          )}
+
+          {/* Detalle de líneas sin recibir (solo si la masa dispara el aviso) */}
+          {summary.masaSinTocar && summary.untouchedLines.length > 0 && (
+            <div className="rounded-md border border-warning/30 bg-warning-bg/50 overflow-hidden">
+              <p className="px-3 py-1.5 text-xs font-medium text-warning border-b border-warning/20">
+                Con pendiente y sin recibir ({summary.untouchedLines.length}):
+              </p>
+              <ul className="px-3 py-2 text-xs text-text-secondary space-y-0.5 max-h-32 overflow-y-auto">
+                {summary.untouchedLines.map((u, i) => (
+                  <li key={i} className="flex items-center justify-between gap-2">
+                    <span>{u.name}</span>
+                    <span className="tabular-nums">pendiente {u.pending}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {summary.anomaly && (
+            <p className="text-sm text-text-primary">Revisa que has contado bien antes de confirmar.</p>
           )}
           {!summary.anomaly && summary.deMenos > 0 && (
             <p className="text-xs text-text-secondary">De menos es normal: el pedido quedará como recibido parcial.</p>
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-border-default">
+        <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-border-default shrink-0">
           <button type="button" onClick={onCancel} disabled={saving}
             className="px-3 py-1.5 text-sm rounded-md text-text-secondary hover:bg-page transition-base disabled:opacity-50">
             Volver a editar
