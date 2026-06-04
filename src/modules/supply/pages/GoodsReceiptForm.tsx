@@ -50,6 +50,7 @@ import {
   matchReceiptLine,
   matchTypeLabel,
   learnFromReceipt,
+  learnSupplierAlias,
   quickCreateSupplier,
   type LineMatchCandidate,
 } from '@/modules/supply/services/goodsReceiptService'
@@ -543,6 +544,12 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
         if (learned > 0) learnNote = ` · memoria del proveedor actualizada (${learned})`
       } catch (e) {
         console.error('persist: confirmada OK pero el aprendizaje falló', e)
+      }
+
+      // C2.2.b.4 — memoria de intermediario (emisor → comercial), si aplica.
+      if (fromOcr) {
+        try { await learnSupplierAlias(receipt.id) }
+        catch (e) { console.error('persist: confirmada OK pero el alias de intermediario falló', e) }
       }
 
       // Anular y corregir: solo tras confirmar OK la corregida se anula la original.

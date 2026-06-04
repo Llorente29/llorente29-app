@@ -8640,6 +8640,7 @@ export type Database = {
         Returns: Json
       }
       learn_from_receipt: { Args: { p_receipt_id: string }; Returns: number }
+      learn_supplier_alias: { Args: { p_receipt_id: string }; Returns: boolean }
       location_economics: {
         Args: { p_from?: string; p_location_id: string; p_to?: string }
         Returns: {

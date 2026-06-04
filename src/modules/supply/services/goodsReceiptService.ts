@@ -833,7 +833,7 @@ export async function resolveReceiptHeader(
   // bill_to queda guardado en la sesión IA para esa memoria.
   const commercialName = doc.supplier_name ?? null
   const commercialNif = doc.supplier_tax_id ?? null
-  const deliveredBy: string | null = null   // lo rellena la memoria de intermediario (b)
+  let deliveredBy: string | null = null   // lo rellena la memoria de intermediario (b.4)
 
   const { data: sups } = await from('supplier')
     .select('id, name, tax_id')
@@ -842,7 +842,26 @@ export async function resolveReceiptHeader(
   const suppliers = (sups as Row[] | null) ?? []
 
   let supplierId = ''
-  if (commercialNif) {
+
+  // C2.2.b.4 — memoria de intermediario: si el emisor del albarán ya tiene alias
+  // aprendido (Joan → Cloudtown), úsalo y rellena "entregado por".
+  if (commercialName) {
+    const emitNorm = normText(commercialName)
+    const { data: aliases } = await from('supplier_alias')
+      .select('supplier_id, delivered_by, emitter_norm, emitter_nif')
+      .eq('account_id', accountId)
+    const aliasRows = (aliases as Row[] | null) ?? []
+    const emitNif = normNif(commercialNif)
+    const hit = aliasRows.find(a =>
+      (a.emitter_norm as string) === emitNorm ||
+      (emitNif.length > 0 && normNif(a.emitter_nif as string | null) === emitNif),
+    )
+    if (hit && suppliers.some(s => s.id === hit.supplier_id)) {
+      supplierId = hit.supplier_id as string
+      deliveredBy = (hit.delivered_by as string | null) ?? commercialName
+    }
+  }
+  if (!supplierId && commercialNif) {
     const nif = normNif(commercialNif)
     if (nif.length > 0) {
       const hit = suppliers.find(s => normNif(s.tax_id as string | null) === nif)
@@ -957,6 +976,16 @@ export async function learnFromReceipt(receiptId: string): Promise<number> {
   const { data, error } = await supabase!.rpc('learn_from_receipt', { p_receipt_id: receiptId })
   if (error) throw new Error(`Error guardando la memoria del proveedor: ${error.message}`)
   return (data as number) ?? 0
+}
+
+// C2.2.b.4 — aprende el alias de intermediario (emisor → proveedor comercial)
+// desde la sesión OCR, si el emisor difiere del proveedor elegido. Devuelve true
+// si aprendió algo. SECURITY DEFINER server-side; se llama desde la app.
+export async function learnSupplierAlias(receiptId: string): Promise<boolean> {
+  requireSupabase()
+  const { data, error } = await supabase!.rpc('learn_supplier_alias', { p_receipt_id: receiptId })
+  if (error) throw new Error(`Error guardando la memoria de intermediario: ${error.message}`)
+  return Boolean(data)
 }
 
 // ── C2.2.b.2: create-on-scan (crear artículo / proveedor sin salir de la recepción) ──
