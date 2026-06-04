@@ -3427,6 +3427,222 @@ export type Database = {
           },
         ]
       }
+      goods_receipt: {
+        Row: {
+          account_id: string
+          ai_confidence: number | null
+          archived_at: string | null
+          code: string | null
+          created_at: string
+          created_by: string | null
+          created_by_name: string | null
+          id: string
+          is_active: boolean
+          location_id: string
+          needs_review: boolean
+          notes: string | null
+          purchase_order_id: string | null
+          raw_document_url: string | null
+          receipt_date: string
+          received_at: string | null
+          source: string
+          status: string
+          supplier_doc_number: string | null
+          supplier_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          ai_confidence?: number | null
+          archived_at?: string | null
+          code?: string | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          id?: string
+          is_active?: boolean
+          location_id: string
+          needs_review?: boolean
+          notes?: string | null
+          purchase_order_id?: string | null
+          raw_document_url?: string | null
+          receipt_date?: string
+          received_at?: string | null
+          source?: string
+          status?: string
+          supplier_doc_number?: string | null
+          supplier_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          ai_confidence?: number | null
+          archived_at?: string | null
+          code?: string | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          id?: string
+          is_active?: boolean
+          location_id?: string
+          needs_review?: boolean
+          notes?: string | null
+          purchase_order_id?: string | null
+          raw_document_url?: string | null
+          receipt_date?: string
+          received_at?: string | null
+          source?: string
+          status?: string
+          supplier_doc_number?: string | null
+          supplier_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goods_receipt_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "goods_receipt_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "goods_receipt_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_order"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "goods_receipt_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "supplier"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      goods_receipt_line: {
+        Row: {
+          account_id: string
+          created_at: string
+          expiry_date: string | null
+          goods_receipt_id: string
+          id: string
+          lot_code: string | null
+          map_confidence: number | null
+          map_needs_review: boolean
+          map_source: string | null
+          notes: string | null
+          position: number
+          product_name: string
+          purchase_format_id: string | null
+          purchase_order_line_id: string | null
+          purchase_unit_id: string | null
+          qty_in_base: number | null
+          qty_received: number
+          raw_text: string | null
+          recipe_item_id: string | null
+          unit_cost: number | null
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          expiry_date?: string | null
+          goods_receipt_id: string
+          id?: string
+          lot_code?: string | null
+          map_confidence?: number | null
+          map_needs_review?: boolean
+          map_source?: string | null
+          notes?: string | null
+          position?: number
+          product_name: string
+          purchase_format_id?: string | null
+          purchase_order_line_id?: string | null
+          purchase_unit_id?: string | null
+          qty_in_base?: number | null
+          qty_received: number
+          raw_text?: string | null
+          recipe_item_id?: string | null
+          unit_cost?: number | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          expiry_date?: string | null
+          goods_receipt_id?: string
+          id?: string
+          lot_code?: string | null
+          map_confidence?: number | null
+          map_needs_review?: boolean
+          map_source?: string | null
+          notes?: string | null
+          position?: number
+          product_name?: string
+          purchase_format_id?: string | null
+          purchase_order_line_id?: string | null
+          purchase_unit_id?: string | null
+          qty_in_base?: number | null
+          qty_received?: number
+          raw_text?: string | null
+          recipe_item_id?: string | null
+          unit_cost?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goods_receipt_line_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "goods_receipt_line_goods_receipt_id_fkey"
+            columns: ["goods_receipt_id"]
+            isOneToOne: false
+            referencedRelation: "goods_receipt"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "goods_receipt_line_purchase_format_id_fkey"
+            columns: ["purchase_format_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_item_purchase_format"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "goods_receipt_line_purchase_order_line_id_fkey"
+            columns: ["purchase_order_line_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_order_line"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "goods_receipt_line_purchase_unit_id_fkey"
+            columns: ["purchase_unit_id"]
+            isOneToOne: false
+            referencedRelation: "kitchen_unit"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "goods_receipt_line_recipe_item_id_fkey"
+            columns: ["recipe_item_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_item"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       impersonation_sessions: {
         Row: {
           actions_taken: Json
@@ -6057,6 +6273,61 @@ export type Database = {
           },
         ]
       }
+      recipe_item_location_stock: {
+        Row: {
+          account_id: string
+          avg_unit_cost: number | null
+          id: string
+          location_id: string
+          qty_on_hand: number
+          recipe_item_id: string
+          stock_value: number
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          avg_unit_cost?: number | null
+          id?: string
+          location_id: string
+          qty_on_hand?: number
+          recipe_item_id: string
+          stock_value?: number
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          avg_unit_cost?: number | null
+          id?: string
+          location_id?: string
+          qty_on_hand?: number
+          recipe_item_id?: string
+          stock_value?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recipe_item_location_stock_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recipe_item_location_stock_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recipe_item_location_stock_recipe_item_id_fkey"
+            columns: ["recipe_item_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_item"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       recipe_item_photo: {
         Row: {
           caption: string | null
@@ -7275,6 +7546,88 @@ export type Database = {
           },
         ]
       }
+      stock_movement: {
+        Row: {
+          account_id: string
+          cost_provisional: boolean
+          created_at: string
+          created_by: string | null
+          created_by_name: string | null
+          expiry_date: string | null
+          id: string
+          location_id: string
+          lot_code: string | null
+          movement_type: string
+          notes: string | null
+          occurred_at: string
+          qty_base: number
+          recipe_item_id: string
+          source_id: string | null
+          source_type: string
+          unit_cost: number | null
+        }
+        Insert: {
+          account_id: string
+          cost_provisional?: boolean
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          expiry_date?: string | null
+          id?: string
+          location_id: string
+          lot_code?: string | null
+          movement_type: string
+          notes?: string | null
+          occurred_at?: string
+          qty_base: number
+          recipe_item_id: string
+          source_id?: string | null
+          source_type: string
+          unit_cost?: number | null
+        }
+        Update: {
+          account_id?: string
+          cost_provisional?: boolean
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          expiry_date?: string | null
+          id?: string
+          location_id?: string
+          lot_code?: string | null
+          movement_type?: string
+          notes?: string | null
+          occurred_at?: string
+          qty_base?: number
+          recipe_item_id?: string
+          source_id?: string | null
+          source_type?: string
+          unit_cost?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_movement_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movement_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movement_recipe_item_id_fkey"
+            columns: ["recipe_item_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_item"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       submodules: {
         Row: {
           code: string
@@ -8015,6 +8368,13 @@ export type Database = {
       appcc_mark_overdue: { Args: never; Returns: undefined }
       belongs_to_account: { Args: { p_account_id: string }; Returns: boolean }
       cleanup_auth_rate_limits: { Args: never; Returns: number }
+      confirm_goods_receipt: {
+        Args: { p_receipt_id: string }
+        Returns: {
+          posted_lines: number
+          skipped_lines: number
+        }[]
+      }
       confirm_mapping: {
         Args: {
           p_action: string
@@ -8233,6 +8593,10 @@ export type Database = {
         Args: { p_account_id: string; p_type: string }
         Returns: string
       }
+      next_goods_receipt_code: {
+        Args: { p_account_id: string }
+        Returns: string
+      }
       next_purchase_order_code: {
         Args: { p_account_id: string }
         Returns: string
@@ -8241,6 +8605,10 @@ export type Database = {
       propose_vat_category: {
         Args: { p_recipe_item_id: string }
         Returns: string
+      }
+      recompute_location_stock: {
+        Args: { p_item_id: string; p_location_id: string }
+        Returns: undefined
       }
       resolve_lastapp_line: {
         Args: {
@@ -8326,6 +8694,7 @@ export type Database = {
           rate: number
         }[]
       }
+      void_goods_receipt: { Args: { p_receipt_id: string }; Returns: number }
     }
     Enums: {
       [_ in never]: never

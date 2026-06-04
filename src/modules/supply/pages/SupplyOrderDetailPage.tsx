@@ -6,15 +6,17 @@
 //
 // Es el HOGAR del pedido: cabecera (proveedor · fechas · estado, editables) +
 // la tabla de LÍNEAS (qué ingredientes y cuántos, con precio estimado) + el
-// total. Acciones de ciclo: cambiar estado (borrador→enviado). El total se
-// recalcula sumando las líneas y se persiste en est_total.
+// total. Acciones de ciclo: cambiar estado (borrador→enviado) y, cuando está
+// enviado, REGISTRAR RECEPCIÓN (C2): abre el formulario de recepción con el
+// pedido precargado (modo contra-pedido). El total se recalcula sumando las
+// líneas y se persiste en est_total.
 //
 // C1.x a mano: el selector de ingrediente es un dropdown simple. Los avisos IA
 // (sugerir cantidad por histórico, precio desde last_price, proveedor preferente)
 // se enchufan como capa posterior (norma IA en compras = copiloto).
 
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, Plus, Trash2, Check, Loader2, X, Send, Package, FileText } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Check, Loader2, X, Send, Package, PackageCheck, FileText } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import {
   getPurchaseOrderById,
@@ -30,6 +32,7 @@ import { listRecipeItems } from '@/modules/kitchen/services/recipeItemService'
 import { listSuppliers } from '@/modules/kitchen/services/purchaseFormatService'
 import { listSupplyLocations, type SupplyLocation } from '@/modules/supply/services/supplierCatalogService'
 import { buildPurchaseOrderPdfData, generatePurchaseOrderPdf } from '@/modules/supply/services/purchaseOrderPdf'
+import GoodsReceiptForm from '@/modules/supply/pages/GoodsReceiptForm'
 import type { Supplier } from '@/types/kitchen'
 import type { RecipeItem } from '@/types/kitchen'
 
@@ -73,6 +76,7 @@ export default function SupplyOrderDetailPage({ orderId, onBack }: SupplyOrderDe
   const [savingStatus, setSavingStatus] = useState(false)
   const [generatingPdf, setGeneratingPdf] = useState(false)
   const [reloadTick, setReloadTick] = useState(0)
+  const [receiving, setReceiving] = useState(false)
 
   useEffect(() => {
     if (!activeAccountId) return
@@ -185,6 +189,18 @@ export default function SupplyOrderDetailPage({ orderId, onBack }: SupplyOrderDe
     } finally {
       setGeneratingPdf(false)
     }
+  }
+
+  // ── Vista RECEPCIÓN: formulario contra este pedido ──
+  if (receiving && order && activeAccountId) {
+    return (
+      <GoodsReceiptForm
+        accountId={activeAccountId}
+        order={order}
+        onBack={() => setReceiving(false)}
+        onSaved={() => { setReceiving(false); setReloadTick(t => t + 1) }}
+      />
+    )
   }
 
   return (
@@ -332,10 +348,15 @@ export default function SupplyOrderDetailPage({ orderId, onBack }: SupplyOrderDe
                 Marcar como enviado
               </button>
             )}
-            {order.status === 'enviado' && (
-              <span className="text-sm text-text-secondary">
-                Pedido enviado. La recepción del albarán llegará en la siguiente fase.
-              </span>
+            {(order.status === 'enviado' || order.status === 'recibido_parcial') && (
+              <button
+                type="button"
+                onClick={() => setReceiving(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 transition-base"
+              >
+                <PackageCheck size={15} />
+                Registrar recepción
+              </button>
             )}
           </div>
         </>

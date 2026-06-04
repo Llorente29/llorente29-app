@@ -9,16 +9,17 @@
 // (ingredientes, recetas, proveedores, coste) que este módulo consume.
 //
 // Se construye por capas, cada una usable por sí sola:
-//   - C1 (ahora): Pedidos (purchase_order). Crear/listar pedidos a mano.
-//   - C2: Recepciones (albarán + OCR) → alimenta inventario.
+//   - C1: Pedidos (purchase_order). Crear/listar pedidos.
+//   - C2 (ahora): Recepciones (goods_receipt + libro mayor de stock) → inventario.
 //   - C3: Facturas (three-way match + OCR) → eslabón al coste.
 //   - Luego: Inventario, Previsión, Planificación.
 //
 // Gating: requiredRole 'manager' (el aprovisionamiento lo gestiona admin/manager).
 
-import { Truck, ClipboardList } from 'lucide-react'
+import { Truck, ClipboardList, PackageCheck } from 'lucide-react'
 import type { ModuleDefinition } from '@/shell/types'
 import SupplyOrdersPage from '@/modules/supply/pages/SupplyOrdersPage'
+import GoodsReceiptsPage from '@/modules/supply/pages/GoodsReceiptsPage'
 
 export const supplyModule: ModuleDefinition = {
   // Identidad
@@ -32,12 +33,14 @@ export const supplyModule: ModuleDefinition = {
   basePath: 'supply',
   routes: [
     { path: '', element: <SupplyOrdersPage /> },
+    { path: 'recepciones', element: <GoodsReceiptsPage /> },
   ],
   // Navegación interna del módulo (ModuleSidebar).
-  // C1 solo tiene Pedidos; al construir C2/C3 se añaden Recepciones, Facturas, etc.
+  // C2 añade Recepciones. Al construir C3 se añaden Facturas, etc.
   sidebar: {
     items: [
       { id: 'supply_orders', label: 'Pedidos', icon: ClipboardList, path: '' },
+      { id: 'supply_receipts', label: 'Recepciones', icon: PackageCheck, path: 'recepciones' },
     ],
   },
 }
