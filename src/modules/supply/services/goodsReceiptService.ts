@@ -1121,3 +1121,80 @@ export async function suggestItemAttributes(
   const d = data as { name: string | null; family_id: string | null; base_unit: ItemSuggestion['baseUnit']; confidence: number | null }
   return { name: d.name ?? null, familyId: d.family_id ?? null, baseUnit: d.base_unit ?? null, confidence: d.confidence ?? null }
 }
+
+// ── C2.2.c: ajustes de Supply + avisos copiloto (salto de precio, caducidad) ──
+
+export interface SupplySettings {
+  priceAlertPct: number      // umbral de salto de precio (±%)
+  expiryAlertDays: number    // días para avisar de caducidad próxima
+}
+const SUPPLY_SETTINGS_DEFAULTS: SupplySettings = { priceAlertPct: 15, expiryAlertDays: 3 }
+
+export async function getSupplySettings(accountId: string): Promise<SupplySettings> {
+  requireSupabase()
+  const { data, error } = await from('supply_settings')
+    .select('price_alert_pct, expiry_alert_days')
+    .eq('account_id', accountId)
+    .maybeSingle()
+  if (error || !data) return { ...SUPPLY_SETTINGS_DEFAULTS }   // sin fila → defaults de fábrica
+  return {
+    priceAlertPct: Number((data as Row).price_alert_pct ?? SUPPLY_SETTINGS_DEFAULTS.priceAlertPct),
+    expiryAlertDays: Number((data as Row).expiry_alert_days ?? SUPPLY_SETTINGS_DEFAULTS.expiryAlertDays),
+  }
+}
+
+export async function saveSupplySettings(
+  accountId: string, s: SupplySettings, createdBy: string | null, createdByName: string | null,
+): Promise<void> {
+  requireSupabase()
+  const { error } = await from('supply_settings')
+    .upsert({
+      account_id: accountId,
+      price_alert_pct: s.priceAlertPct,
+      expiry_alert_days: s.expiryAlertDays,
+      updated_at: new Date().toISOString(),
+      created_by: createdBy,
+      created_by_name: createdByName,
+    }, { onConflict: 'account_id' })
+  if (error) throw new Error(`No se pudieron guardar los ajustes: ${error.message}`)
+}
+
+// last_price por artículo de un proveedor (para el aviso de salto de precio).
+// Mapa recipe_item_id -> last_price. Una sola consulta por proveedor.
+export async function getSupplierLastPrices(
+  accountId: string, supplierId: string,
+): Promise<Record<string, number>> {
+  requireSupabase()
+  const { data, error } = await from('article_supplier')
+    .select('recipe_item_id, last_price')
+    .eq('account_id', accountId)
+    .eq('supplier_id', supplierId)
+  if (error) { console.error('[goodsReceiptService] getSupplierLastPrices', error); return {} }
+  const map: Record<string, number> = {}
+  for (const r of (data as Row[] | null) ?? []) {
+    if (r.last_price != null) map[r.recipe_item_id as string] = Number(r.last_price)
+  }
+  return map
+}
+
+// Aviso de precio para una línea (puro, testeable). null = sin aviso.
+export interface PriceAlert { pct: number; lastPrice: number; newPrice: number; direction: 'up' | 'down' }
+export function priceAlertFor(unitCost: number | null, lastPrice: number | null, thresholdPct: number): PriceAlert | null {
+  if (unitCost == null || lastPrice == null || lastPrice <= 0) return null
+  const pct = ((unitCost - lastPrice) / lastPrice) * 100
+  if (Math.abs(pct) <= thresholdPct) return null
+  return { pct: Math.round(pct), lastPrice, newPrice: unitCost, direction: pct >= 0 ? 'up' : 'down' }
+}
+
+// Aviso de caducidad para una línea (puro). null = sin aviso.
+export interface ExpiryAlert { kind: 'expired' | 'soon'; days: number }
+export function expiryAlertFor(expiryDate: string | null, alertDays: number, today = new Date()): ExpiryAlert | null {
+  if (!expiryDate) return null
+  const exp = new Date(expiryDate + 'T00:00:00')
+  if (isNaN(exp.getTime())) return null
+  const d0 = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  const days = Math.round((exp.getTime() - d0.getTime()) / 86400000)
+  if (days < 0) return { kind: 'expired', days }
+  if (days <= alertDays) return { kind: 'soon', days }
+  return null
+}

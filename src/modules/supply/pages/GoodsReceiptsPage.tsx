@@ -19,7 +19,7 @@
 // El aviso (flash) se auto-cierra a los segundos (no obliga a teclear).
 
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, PackageCheck, Search, Loader2, Check, RotateCcw, PencilLine, ScanLine } from 'lucide-react'
+import { Plus, PackageCheck, Search, Loader2, Check, RotateCcw, PencilLine, ScanLine, Settings2 } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useIsMobile } from '@/shell/useIsMobile'
 import {
@@ -30,6 +30,9 @@ import {
   voidReceipt,
   type GoodsReceipt,
   type GoodsReceiptStatus,
+  getSupplySettings,
+  saveSupplySettings,
+  type SupplySettings,
 } from '@/modules/supply/services/goodsReceiptService'
 import { listSuppliers } from '@/modules/kitchen/services/purchaseFormatService'
 import { listSupplyLocations, type SupplyLocation } from '@/modules/supply/services/supplierCatalogService'
@@ -71,6 +74,29 @@ export default function GoodsReceiptsPage() {
   const [view, setView] = useState<View>('list')
   const [prefill, setPrefill] = useState<ReceiptPrefill | null>(null)
   const [ocrPrefill, setOcrPrefill] = useState<OcrPrefill | null>(null)
+
+  // C2.2.c — ajustes de avisos (umbral precio %, días caducidad).
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settings, setSettings] = useState<SupplySettings>({ priceAlertPct: 15, expiryAlertDays: 3 })
+  const [savingSettings, setSavingSettings] = useState(false)
+  async function openSettings() {
+    if (!activeAccountId) return
+    try { setSettings(await getSupplySettings(activeAccountId)) } catch { /* defaults */ }
+    setSettingsOpen(true)
+  }
+  async function saveSettings() {
+    if (!activeAccountId) return
+    setSavingSettings(true)
+    try {
+      await saveSupplySettings(activeAccountId, settings, null, null)
+      setSettingsOpen(false)
+      setFlash('Ajustes de avisos guardados.')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudieron guardar los ajustes.')
+    } finally {
+      setSavingSettings(false)
+    }
+  }
 
   const [busyId, setBusyId] = useState<string | null>(null)
   const [flash, setFlash] = useState<string | null>(null)
@@ -232,6 +258,15 @@ export default function GoodsReceiptsPage() {
         <div className="flex items-center gap-2">
           <button
             type="button"
+            onClick={openSettings}
+            disabled={!activeAccountId}
+            title="Ajustes de avisos"
+            className="inline-flex items-center justify-center w-9 h-9 rounded-md border border-border-default bg-card hover:bg-page disabled:opacity-50 transition-base"
+          >
+            <Settings2 size={16} />
+          </button>
+          <button
+            type="button"
             onClick={() => setView('scan')}
             disabled={!activeAccountId}
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium border border-border-default bg-card hover:bg-page disabled:opacity-50 disabled:cursor-not-allowed transition-base"
@@ -347,6 +382,44 @@ export default function GoodsReceiptsPage() {
             </table>
           </div>
         )
+      )}
+
+      {/* C2.2.c — modal de ajustes de avisos */}
+      {settingsOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" role="dialog" aria-modal="true" onClick={() => !savingSettings && setSettingsOpen(false)}>
+          <div className="bg-card rounded-lg border border-border-default shadow-lg w-full max-w-md p-5 space-y-4" onClick={e => e.stopPropagation()}>
+            <div>
+              <h3 className="text-base font-medium text-text-primary">Ajustes de avisos</h3>
+              <p className="text-sm text-text-secondary mt-0.5">Cuándo avisar en la recepción. Afecta a todo el negocio.</p>
+            </div>
+            <label className="block">
+              <span className="text-sm text-text-primary">Avisar si el precio varía más de</span>
+              <div className="mt-1 flex items-center gap-2">
+                <input type="number" min={1} max={100} value={settings.priceAlertPct}
+                  onChange={e => setSettings(s => ({ ...s, priceAlertPct: Number(e.target.value) }))} disabled={savingSettings}
+                  className="w-24 px-3 py-2 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent" />
+                <span className="text-sm text-text-secondary">% respecto a la última compra</span>
+              </div>
+            </label>
+            <label className="block">
+              <span className="text-sm text-text-primary">Avisar de caducidad si quedan</span>
+              <div className="mt-1 flex items-center gap-2">
+                <input type="number" min={0} max={60} value={settings.expiryAlertDays}
+                  onChange={e => setSettings(s => ({ ...s, expiryAlertDays: Number(e.target.value) }))} disabled={savingSettings}
+                  className="w-24 px-3 py-2 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent" />
+                <span className="text-sm text-text-secondary">días o menos</span>
+              </div>
+            </label>
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button type="button" onClick={() => setSettingsOpen(false)} disabled={savingSettings}
+                className="px-3 py-2 rounded-md text-sm font-medium border border-border-default bg-card hover:bg-page disabled:opacity-50 transition-base">Cancelar</button>
+              <button type="button" onClick={saveSettings} disabled={savingSettings}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 transition-base">
+                {savingSettings && <Loader2 size={14} className="animate-spin" />} Guardar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

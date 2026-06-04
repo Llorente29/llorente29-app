@@ -52,7 +52,12 @@ import {
   learnFromReceipt,
   learnSupplierAlias,
   quickCreateSupplier,
+  getSupplySettings,
+  getSupplierLastPrices,
+  priceAlertFor,
+  expiryAlertFor,
   type LineMatchCandidate,
+  type SupplySettings,
 } from '@/modules/supply/services/goodsReceiptService'
 import LineMatchPicker from '@/modules/supply/pages/LineMatchPicker'
 
@@ -178,6 +183,17 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
 
   // C2.2.b.1 — casado por línea: candidatos de run_mapping por key + picker abierto.
   const [lineMatch, setLineMatch] = useState<Record<string, { loading: boolean; candidates: LineMatchCandidate[] }>>({})
+
+  // C2.2.c — ajustes de avisos + last_price por artículo del proveedor.
+  const [supplySettings, setSupplySettings] = useState<SupplySettings>({ priceAlertPct: 15, expiryAlertDays: 3 })
+  const [lastPrices, setLastPrices] = useState<Record<string, number>>({})
+  useEffect(() => {
+    getSupplySettings(accountId).then(setSupplySettings).catch(() => {})
+  }, [accountId])
+  useEffect(() => {
+    if (!supplierId) { setLastPrices({}); return }
+    getSupplierLastPrices(accountId, supplierId).then(setLastPrices).catch(() => setLastPrices({}))
+  }, [accountId, supplierId])
   const [pickerKey, setPickerKey] = useState<string | null>(null)
 
   function chooseMatch(key: string, recipeItemId: string, name: string, semaphore: 'green' | 'yellow' | null, matchType: string | null) {
@@ -464,6 +480,12 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
       .map(l => ({ name: l.productName, pending: l.pending as number }))
     const sinTocar = untouchedLines.length
     const sinMapear = filled.length - willPost
+    // C2.2.c — recuento de avisos para el resumen pre-confirmación.
+    let priceAlerts = 0, expiryAlerts = 0
+    for (const l of draft) {
+      if (l.recipeItemId && priceAlertFor(parseNum(l.unitCost), lastPrices[l.recipeItemId] ?? null, supplySettings.priceAlertPct)) priceAlerts++
+      if (expiryAlertFor(l.expiryDate, supplySettings.expiryAlertDays)) expiryAlerts++
+    }
     // Anomalía = algo de más, o masa sin tocar (>30% de las líneas con pendiente y >3).
     const masaSinTocar = sinTocar > 3 && linesWithPending.length > 0 && (sinTocar / linesWithPending.length) > 0.30
     const anomaly = overLines.length > 0 || masaSinTocar
@@ -471,9 +493,10 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
       filled: filled.length, aStock: willPost, sinMapear,
       coinciden, deMenos, deMas: overLines.length, sinTocar,
       overLines, untouchedLines,
+      priceAlerts, expiryAlerts,
       hasReference, anomaly, masaSinTocar,
     }
-  }, [draft, filled, willPost, hasReference])
+  }, [draft, filled, willPost, hasReference, lastPrices, supplySettings])
 
   const supplierName = useMemo(() => suppliers.find(s => s.id === supplierId)?.name ?? '—', [suppliers, supplierId])
   const locationName = useMemo(() => locations.find(l => l.id === locationId)?.name ?? '—', [locations, locationId])
@@ -731,6 +754,11 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                         else if (l.pending > 0 && qtyN! < l.pending) cmp = { label: 'Parcial', cls: 'bg-warning-bg text-warning border-warning/20' }
                         else cmp = { label: 'OK', cls: 'bg-success-bg text-success border-success/20' }
                       }
+                      // C2.2.c — avisos copiloto (informativos)
+                      const priceAlert = l.recipeItemId
+                        ? priceAlertFor(parseNum(l.unitCost), lastPrices[l.recipeItemId] ?? null, supplySettings.priceAlertPct)
+                        : null
+                      const expiryAlert = expiryAlertFor(l.expiryDate, supplySettings.expiryAlertDays)
                       return (
                         <tr key={l.key} className={`border-t border-border-default ${complete && !hasQty ? 'opacity-60' : ''}`}>
                           <td className="px-3 py-2 text-text-primary align-top">
@@ -792,6 +820,17 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                                   <span className="text-[10px] px-1 py-0.5 rounded bg-success-bg text-success border border-success/20">a stock</span>
                                 ) : (
                                   <span className="text-[10px] px-1 py-0.5 rounded bg-warning-bg text-warning border border-warning/20">sin mapear</span>
+                                )}
+                                {priceAlert && (
+                                  <span className="text-[10px] px-1 py-0.5 rounded bg-warning-bg text-warning border border-warning/20"
+                                    title={`Última compra: ${priceAlert.lastPrice.toFixed(2)} € → ahora ${priceAlert.newPrice.toFixed(2)} €`}>
+                                    {priceAlert.direction === 'up' ? '↑' : '↓'}{Math.abs(priceAlert.pct)}% precio
+                                  </span>
+                                )}
+                                {expiryAlert && (
+                                  <span className={`text-[10px] px-1 py-0.5 rounded border ${expiryAlert.kind === 'expired' ? 'bg-danger-bg text-danger border-danger/20' : 'bg-warning-bg text-warning border-warning/20'}`}>
+                                    {expiryAlert.kind === 'expired' ? 'caducado' : `caduca en ${expiryAlert.days}d`}
+                                  </span>
                                 )}
                               </div>
                             )}
@@ -870,6 +909,7 @@ function ReviewPanel({
     filled: number; aStock: number; sinMapear: number
     coinciden: number; deMenos: number; deMas: number; sinTocar: number
     overLines: OverLine[]; untouchedLines: UntouchedLine[]
+    priceAlerts: number; expiryAlerts: number
     hasReference: boolean; anomaly: boolean; masaSinTocar: boolean
   }
   saving: boolean
@@ -893,6 +933,14 @@ function ReviewPanel({
               <span className="text-text-secondary"> ({summary.sinMapear} sin reconocer no entrarán.)</span>
             )}
           </p>
+
+          {(summary.priceAlerts > 0 || summary.expiryAlerts > 0) && (
+            <div className="text-sm rounded-md bg-warning-bg text-warning border border-warning/20 px-3 py-2">
+              {summary.priceAlerts > 0 && <p>⚠ {summary.priceAlerts} artículo(s) con salto de precio respecto a la última compra.</p>}
+              {summary.expiryAlerts > 0 && <p>⚠ {summary.expiryAlerts} artículo(s) con caducidad vencida o próxima.</p>}
+              <p className="text-text-secondary text-xs mt-0.5">Revísalos en la lista; no impiden confirmar.</p>
+            </div>
+          )}
 
           {/* Aviso: cuentas más de lo que faltaba */}
           {summary.overLines.length > 0 && (
