@@ -6,16 +6,24 @@
 // y verla en la lista. Patrón calcado de GoodsReceiptsPage.
 
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, FileText, Loader2, Trash2, X, ScanLine } from 'lucide-react'
+import { Plus, FileText, Loader2, Trash2, X, ScanLine, ArrowLeft, RefreshCw, CheckCircle2, AlertTriangle } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
+import { useApp } from '@/context/AppContext'
 import {
   listSupplierInvoices,
   createSupplierInvoice,
   voidSupplierInvoice,
+  getSupplierInvoiceById,
+  runInvoiceMatch,
+  approveInvoice,
+  markInvoiceDiscrepancy,
+  matchResultLabel,
   type SupplierInvoice,
   type SupplierInvoiceStatus,
   type SupplierInvoiceDocKind,
   type SupplierInvoiceLineInput,
+  type SupplierInvoiceLine,
+  type InvoiceMatchSummary,
   type InvoiceOcrPrefill,
 } from '@/modules/supply/services/supplierInvoiceService'
 import InvoiceScanPanel from '@/modules/supply/pages/InvoiceScanPanel'
@@ -54,6 +62,7 @@ interface DraftLine extends SupplierInvoiceLineInput { key: string }
 
 export default function SupplierInvoicesPage() {
   const { activeAccountId, accountsLoading } = useActiveAccount()
+  const { userProfile, authUserId } = useApp()
 
   const [invoices, setInvoices] = useState<SupplierInvoice[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
@@ -66,7 +75,13 @@ export default function SupplierInvoicesPage() {
   const [busyId, setBusyId] = useState<string | null>(null)
 
   // Alta manual
-  const [view, setView] = useState<'list' | 'scan'>('list')
+  const [view, setView] = useState<'list' | 'scan' | 'detail'>('list')
+  const [detailId, setDetailId] = useState<string | null>(null)
+  const [detailLines, setDetailLines] = useState<SupplierInvoiceLine[]>([])
+  const [detailHead, setDetailHead] = useState<SupplierInvoice | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [matchSummary, setMatchSummary] = useState<InvoiceMatchSummary | null>(null)
+  const [detailBusy, setDetailBusy] = useState(false)
   const [formOpen, setFormOpen] = useState(false)
   const [ocrSessionId, setOcrSessionId] = useState<string | null>(null)
   const [ocrRawUrl, setOcrRawUrl] = useState<string | null>(null)
@@ -195,6 +210,81 @@ export default function SupplierInvoicesPage() {
     }
   }
 
+  async function openDetail(id: string) {
+    setDetailId(id); setView('detail'); setDetailLoading(true); setMatchSummary(null); setError(null)
+    try {
+      const res = await getSupplierInvoiceById(id)
+      if (res) { setDetailHead(res.invoice); setDetailLines(res.lines) }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo abrir la factura.')
+    } finally {
+      setDetailLoading(false)
+    }
+  }
+  async function refreshDetail() {
+    if (!detailId) return
+    const res = await getSupplierInvoiceById(detailId)
+    if (res) { setDetailHead(res.invoice); setDetailLines(res.lines) }
+  }
+  async function handleRunMatch() {
+    if (!detailId) return
+    setDetailBusy(true); setError(null)
+    try {
+      const sum = await runInvoiceMatch(detailId)
+      setMatchSummary(sum)
+      await refreshDetail()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo cuadrar la factura.')
+    } finally {
+      setDetailBusy(false)
+    }
+  }
+  async function handleApprove() {
+    if (!detailId) return
+    setDetailBusy(true); setError(null)
+    try {
+      await approveInvoice(detailId, authUserId ?? null, userProfile?.displayName ?? null)
+      setFlash('Factura aprobada.')
+      await refreshDetail()
+      setReloadTick(t => t + 1)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo aprobar.')
+    } finally {
+      setDetailBusy(false)
+    }
+  }
+  async function handleMarkDiscrepancy() {
+    if (!detailId) return
+    setDetailBusy(true); setError(null)
+    try {
+      await markInvoiceDiscrepancy(detailId)
+      setFlash('Factura marcada con discrepancias.')
+      await refreshDetail()
+      setReloadTick(t => t + 1)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo marcar.')
+    } finally {
+      setDetailBusy(false)
+    }
+  }
+
+  if (view === 'detail' && detailId) {
+    return (
+      <InvoiceDetail
+        head={detailHead}
+        lines={detailLines}
+        loading={detailLoading}
+        busy={detailBusy}
+        summary={matchSummary}
+        error={error}
+        onBack={() => { setView('list'); setDetailId(null); setDetailHead(null); setDetailLines([]); setMatchSummary(null) }}
+        onRunMatch={handleRunMatch}
+        onApprove={handleApprove}
+        onMarkDiscrepancy={handleMarkDiscrepancy}
+      />
+    )
+  }
+
   if (view === 'scan' && activeAccountId) {
     return (
       <InvoiceScanPanel
@@ -263,7 +353,7 @@ export default function SupplierInvoicesPage() {
             </thead>
             <tbody>
               {invoices.map(inv => (
-                <tr key={inv.id} className="border-t border-border-default">
+                <tr key={inv.id} className="border-t border-border-default hover:bg-page cursor-pointer" onClick={() => openDetail(inv.id)}>
                   <td className="px-3 py-2 font-medium text-text-primary">{inv.code ?? '—'}</td>
                   <td className="px-3 py-2 text-text-secondary">{inv.docKind === 'credit_note' ? 'Abono' : 'Factura'}</td>
                   <td className="px-3 py-2 text-text-secondary">{inv.invoiceNumber ?? '—'}</td>
@@ -275,7 +365,7 @@ export default function SupplierInvoicesPage() {
                   </td>
                   <td className="px-3 py-2 text-right">
                     {inv.status !== 'anulada' && inv.status !== 'pagada' && (
-                      <button type="button" onClick={() => handleVoid(inv.id)} disabled={busyId === inv.id}
+                      <button type="button" onClick={(e) => { e.stopPropagation(); handleVoid(inv.id) }} disabled={busyId === inv.id}
                         title="Anular" className="text-text-tertiary hover:text-danger disabled:opacity-50">
                         {busyId === inv.id ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
                       </button>
@@ -412,6 +502,161 @@ export default function SupplierInvoicesPage() {
             </div>
           </div>
         </div>
+      )}
+    </div>
+  )
+}
+
+// ── C3.3 — Pantalla de revisión / three-way match ──
+function fmtN(n: unknown): string {
+  if (n === null || n === undefined) return '—'
+  const num = Number(n)
+  return isNaN(num) ? String(n) : num.toLocaleString('es-ES', { maximumFractionDigits: 4 })
+}
+
+function MatchDetailText({ result, detail }: { result: string | null; detail: Record<string, unknown> | null }) {
+  if (!detail || !result) return null
+  if (result === 'diferencia_precio') {
+    return <span className="text-xs text-text-secondary">Facturado {fmtN(detail.invoiced_price)} € · albarán {fmtN(detail.receipt_cost)} € ({fmtN(detail.pct)}%)</span>
+  }
+  if (result === 'diferencia_cantidad') {
+    return <span className="text-xs text-text-secondary">Facturado {fmtN(detail.invoiced_qty)} · recibido {fmtN(detail.received_qty)}</span>
+  }
+  if (result === 'no_recibido') {
+    return <span className="text-xs text-text-secondary">Facturado {fmtN(detail.invoiced_qty)} · sin recepción</span>
+  }
+  if (result === 'iva_no_cuadra') {
+    return <span className="text-xs text-text-secondary">IVA factura {fmtN(detail.invoiced_vat)}% · esperado {fmtN(detail.expected_vat)}%</span>
+  }
+  return null
+}
+
+function InvoiceDetail({
+  head, lines, loading, busy, summary, error, onBack, onRunMatch, onApprove, onMarkDiscrepancy,
+}: {
+  head: SupplierInvoice | null
+  lines: SupplierInvoiceLine[]
+  loading: boolean
+  busy: boolean
+  summary: InvoiceMatchSummary | null
+  error: string | null
+  onBack: () => void
+  onRunMatch: () => void
+  onApprove: () => void
+  onMarkDiscrepancy: () => void
+}) {
+  const hasDiscrepancies = summary
+    ? (summary.diffPrice + summary.diffQty + summary.notReceived + summary.vatBad + summary.unmatched) > 0
+    : (head?.matchStatus === 'con_diferencias')
+  const approved = head?.status === 'aprobada'
+
+  return (
+    <div className="space-y-4">
+      <button type="button" onClick={onBack} className="text-text-secondary hover:text-text-primary inline-flex items-center gap-1 text-sm">
+        <ArrowLeft size={16} /> Volver a facturas
+      </button>
+
+      {error && <div className="p-3 rounded-md bg-danger-bg text-danger border border-danger/20 text-sm">{error}</div>}
+
+      {loading ? (
+        <div className="flex items-center gap-2 text-text-secondary text-sm"><Loader2 size={16} className="animate-spin" /> Cargando…</div>
+      ) : !head ? (
+        <p className="text-sm text-text-secondary">No se encontró la factura.</p>
+      ) : (
+        <>
+          <div className="flex items-start justify-between flex-wrap gap-3">
+            <div>
+              <h2 className="text-xl font-display font-medium text-text-primary">
+                {head.code ?? 'Factura'} {head.docKind === 'credit_note' ? '· Abono' : ''}
+              </h2>
+              <p className="text-sm text-text-secondary mt-0.5">
+                {head.supplierName ?? '—'} · nº {head.invoiceNumber ?? '—'} · {head.invoiceDate ?? '—'}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={onRunMatch} disabled={busy}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium border border-border-default bg-card hover:bg-page disabled:opacity-50 transition-base">
+                {busy ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />} Cuadrar (revisar)
+              </button>
+              {!approved && (
+                <>
+                  <button type="button" onClick={onMarkDiscrepancy} disabled={busy}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium border border-warning/40 text-warning bg-warning-bg hover:opacity-90 disabled:opacity-50 transition-base">
+                    <AlertTriangle size={15} /> Marcar discrepancia
+                  </button>
+                  <button type="button" onClick={onApprove} disabled={busy}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 transition-base">
+                    <CheckCircle2 size={15} /> Aprobar
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Resumen del match */}
+          {summary && (
+            <div className={`p-3 rounded-md border text-sm ${hasDiscrepancies ? 'bg-warning-bg text-warning border-warning/20' : 'bg-success-bg text-success border-success/20'}`}>
+              <div className="flex items-center gap-1.5 font-medium">
+                {hasDiscrepancies ? <AlertTriangle size={16} /> : <CheckCircle2 size={16} />}
+                {hasDiscrepancies ? 'Hay diferencias que revisar' : 'Todo cuadra'}
+              </div>
+              <p className="text-xs text-text-secondary mt-1">
+                {summary.ok} OK
+                {summary.diffPrice > 0 ? ` · ${summary.diffPrice} de precio` : ''}
+                {summary.diffQty > 0 ? ` · ${summary.diffQty} de cantidad` : ''}
+                {summary.notReceived > 0 ? ` · ${summary.notReceived} no recibido` : ''}
+                {summary.vatBad > 0 ? ` · ${summary.vatBad} de IVA` : ''}
+                {summary.unmatched > 0 ? ` · ${summary.unmatched} sin casar` : ''}
+              </p>
+            </div>
+          )}
+          {approved && (
+            <div className="p-3 rounded-md bg-success-bg text-success border border-success/20 text-sm flex items-center gap-1.5">
+              <CheckCircle2 size={16} /> Aprobada{head.matchStatus === 'con_diferencias' ? ' (con diferencias registradas)' : ''}.
+            </div>
+          )}
+
+          {/* Líneas con veredicto */}
+          <div className="border border-border-default rounded-lg overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-page text-text-secondary">
+                <tr>
+                  <th className="text-left font-medium px-3 py-2">Concepto</th>
+                  <th className="text-right font-medium px-3 py-2">Cant.</th>
+                  <th className="text-right font-medium px-3 py-2">Precio</th>
+                  <th className="text-right font-medium px-3 py-2">IVA</th>
+                  <th className="text-left font-medium px-3 py-2">Veredicto</th>
+                </tr>
+              </thead>
+              <tbody>
+                {lines.map(l => {
+                  const verdict = matchResultLabel(l.matchResult)
+                  return (
+                    <tr key={l.id} className="border-t border-border-default align-top">
+                      <td className="px-3 py-2 text-text-primary">
+                        {l.itemName ?? l.rawText ?? '—'}
+                        {l.supplierCode ? <span className="text-text-tertiary text-xs"> · {l.supplierCode}</span> : null}
+                      </td>
+                      <td className="px-3 py-2 text-right text-text-secondary">{fmtN(l.qty)}</td>
+                      <td className="px-3 py-2 text-right text-text-secondary">{fmtN(l.unitPrice)}</td>
+                      <td className="px-3 py-2 text-right text-text-secondary">{l.vatPct ?? '—'}%</td>
+                      <td className="px-3 py-2">
+                        {verdict ? (
+                          <div className="space-y-0.5">
+                            <span className={`text-[11px] px-1.5 py-0.5 rounded border ${verdict.cls}`}>{verdict.label}</span>
+                            <div><MatchDetailText result={l.matchResult} detail={l.matchDetail} /></div>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-text-tertiary">— sin revisar —</span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   )

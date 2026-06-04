@@ -69,6 +69,7 @@ export interface SupplierInvoiceLine extends SupplierInvoiceLineInput {
   id: string
   supplierInvoiceId: string
   matchResult: string | null
+  matchDetail: Record<string, unknown> | null
   itemName?: string | null
 }
 
@@ -142,7 +143,7 @@ export async function getSupplierInvoiceById(id: string): Promise<{
   if (!head) return null
 
   const { data: lineRows, error: e2 } = await from('supplier_invoice_line')
-    .select('id, supplier_invoice_id, recipe_item_id, raw_text, supplier_code, qty, unit_price, line_amount, vat_pct, vat_category_id, goods_receipt_line_id, match_result, position, recipe_item:recipe_item_id ( name )')
+    .select('id, supplier_invoice_id, recipe_item_id, raw_text, supplier_code, qty, unit_price, line_amount, vat_pct, vat_category_id, goods_receipt_line_id, match_result, match_detail, position, recipe_item:recipe_item_id ( name )')
     .eq('supplier_invoice_id', id)
     .order('position', { ascending: true })
   if (e2) throw new Error(`Error cargando líneas: ${e2.message}`)
@@ -168,6 +169,7 @@ export async function getSupplierInvoiceById(id: string): Promise<{
       goodsReceiptLineId: (r.goods_receipt_line_id as string | null) ?? null,
       position: (r.position as number | null) ?? null,
       matchResult: (r.match_result as string | null) ?? null,
+      matchDetail: (r.match_detail as Record<string, unknown> | null) ?? null,
       itemName: item?.name ?? null,
     }
   })
@@ -433,5 +435,77 @@ export function buildInvoiceOcrPrefill(
       lineAmount: l.line_amount,
       vatPct: l.vat_pct,
     })),
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// C3.3 — Three-way match: ejecutar el motor, aprobar, marcar discrepancia.
+// ════════════════════════════════════════════════════════════════════════════
+
+export interface InvoiceMatchSummary {
+  matchStatus: SupplierInvoiceMatchStatus
+  total: number
+  ok: number
+  diffPrice: number
+  diffQty: number
+  notReceived: number
+  vatBad: number
+  unmatched: number
+}
+
+/** Ejecuta el motor three-way (run_invoice_match). Escribe veredictos por línea + cabecera. */
+export async function runInvoiceMatch(invoiceId: string): Promise<InvoiceMatchSummary> {
+  requireSupabase()
+  const { data, error } = await supabase!.rpc('run_invoice_match', { p_invoice_id: invoiceId })
+  if (error) throw new Error(`Error al cuadrar la factura: ${error.message}`)
+  const r = (Array.isArray(data) ? data[0] : data) as Row | null
+  return {
+    matchStatus: (r?.match_status as SupplierInvoiceMatchStatus) ?? 'sin_match',
+    total: Number(r?.lines_total ?? 0),
+    ok: Number(r?.lines_ok ?? 0),
+    diffPrice: Number(r?.lines_diff_price ?? 0),
+    diffQty: Number(r?.lines_diff_qty ?? 0),
+    notReceived: Number(r?.lines_not_received ?? 0),
+    vatBad: Number(r?.lines_vat_bad ?? 0),
+    unmatched: Number(r?.lines_unmatched ?? 0),
+  }
+}
+
+/** Aprueba la factura (registra quién/cuándo — audit). El eslabón coste es C3.4. */
+export async function approveInvoice(
+  invoiceId: string, approvedBy: string | null, approvedByName: string | null,
+): Promise<void> {
+  requireSupabase()
+  const { error } = await from('supplier_invoice')
+    .update({
+      status: 'aprobada',
+      approved_at: new Date().toISOString(),
+      approved_by: approvedBy,
+      approved_by_name: approvedByName,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', invoiceId)
+  if (error) throw new Error(`No se pudo aprobar: ${error.message}`)
+}
+
+/** Marca la factura como con discrepancias (pendiente de reclamar al proveedor). */
+export async function markInvoiceDiscrepancy(invoiceId: string): Promise<void> {
+  requireSupabase()
+  const { error } = await from('supplier_invoice')
+    .update({ status: 'con_discrepancias', updated_at: new Date().toISOString() })
+    .eq('id', invoiceId)
+  if (error) throw new Error(`No se pudo marcar: ${error.message}`)
+}
+
+/** Etiqueta legible para un veredicto de línea. */
+export function matchResultLabel(r: string | null): { label: string; cls: string } | null {
+  switch (r) {
+    case 'ok': return { label: 'OK', cls: 'bg-success-bg text-success border-success/20' }
+    case 'diferencia_precio': return { label: 'Precio', cls: 'bg-warning-bg text-warning border-warning/20' }
+    case 'diferencia_cantidad': return { label: 'Cantidad', cls: 'bg-warning-bg text-warning border-warning/20' }
+    case 'no_recibido': return { label: 'No recibido', cls: 'bg-danger-bg text-danger border-danger/20' }
+    case 'iva_no_cuadra': return { label: 'IVA', cls: 'bg-warning-bg text-warning border-warning/20' }
+    case 'sin_casar': return { label: 'Sin casar', cls: 'bg-page text-text-tertiary border-border-default' }
+    default: return null
   }
 }

@@ -9031,6 +9031,19 @@ export type Database = {
           resolved: number
         }[]
       }
+      run_invoice_match: {
+        Args: { p_invoice_id: string }
+        Returns: {
+          lines_diff_price: number
+          lines_diff_qty: number
+          lines_not_received: number
+          lines_ok: number
+          lines_total: number
+          lines_unmatched: number
+          lines_vat_bad: number
+          match_status: string
+        }[]
+      }
       run_mapping:
         | {
             Args: {
