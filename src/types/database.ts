@@ -8752,6 +8752,18 @@ export type Database = {
     }
     Functions: {
       appcc_mark_overdue: { Args: never; Returns: undefined }
+      apply_invoice_costs: {
+        Args: { p_invoice_id: string }
+        Returns: {
+          item_name: string
+          new_cost: number
+          new_price: number
+          old_cost: number
+          old_price: number
+          pct: number
+          recipe_item_id: string
+        }[]
+      }
       belongs_to_account: { Args: { p_account_id: string }; Returns: boolean }
       cleanup_auth_rate_limits: { Args: never; Returns: number }
       confirm_goods_receipt: {

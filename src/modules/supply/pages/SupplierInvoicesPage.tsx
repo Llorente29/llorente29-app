@@ -24,6 +24,7 @@ import {
   type SupplierInvoiceLineInput,
   type SupplierInvoiceLine,
   type InvoiceMatchSummary,
+  type CostImpactRow,
   type InvoiceOcrPrefill,
 } from '@/modules/supply/services/supplierInvoiceService'
 import InvoiceScanPanel from '@/modules/supply/pages/InvoiceScanPanel'
@@ -81,6 +82,7 @@ export default function SupplierInvoicesPage() {
   const [detailHead, setDetailHead] = useState<SupplierInvoice | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [matchSummary, setMatchSummary] = useState<InvoiceMatchSummary | null>(null)
+  const [costImpact, setCostImpact] = useState<CostImpactRow[] | null>(null)
   const [detailBusy, setDetailBusy] = useState(false)
   const [formOpen, setFormOpen] = useState(false)
   const [ocrSessionId, setOcrSessionId] = useState<string | null>(null)
@@ -211,7 +213,7 @@ export default function SupplierInvoicesPage() {
   }
 
   async function openDetail(id: string) {
-    setDetailId(id); setView('detail'); setDetailLoading(true); setMatchSummary(null); setError(null)
+    setDetailId(id); setView('detail'); setDetailLoading(true); setMatchSummary(null); setCostImpact(null); setError(null)
     try {
       const res = await getSupplierInvoiceById(id)
       if (res) { setDetailHead(res.invoice); setDetailLines(res.lines) }
@@ -243,7 +245,8 @@ export default function SupplierInvoicesPage() {
     if (!detailId) return
     setDetailBusy(true); setError(null)
     try {
-      await approveInvoice(detailId, authUserId ?? null, userProfile?.displayName ?? null)
+      const impact = await approveInvoice(detailId, authUserId ?? null, userProfile?.displayName ?? null)
+      setCostImpact(impact)
       setFlash('Factura aprobada.')
       await refreshDetail()
       setReloadTick(t => t + 1)
@@ -276,6 +279,7 @@ export default function SupplierInvoicesPage() {
         loading={detailLoading}
         busy={detailBusy}
         summary={matchSummary}
+        costImpact={costImpact}
         error={error}
         onBack={() => { setView('list'); setDetailId(null); setDetailHead(null); setDetailLines([]); setMatchSummary(null) }}
         onRunMatch={handleRunMatch}
@@ -532,13 +536,14 @@ function MatchDetailText({ result, detail }: { result: string | null; detail: Re
 }
 
 function InvoiceDetail({
-  head, lines, loading, busy, summary, error, onBack, onRunMatch, onApprove, onMarkDiscrepancy,
+  head, lines, loading, busy, summary, costImpact, error, onBack, onRunMatch, onApprove, onMarkDiscrepancy,
 }: {
   head: SupplierInvoice | null
   lines: SupplierInvoiceLine[]
   loading: boolean
   busy: boolean
   summary: InvoiceMatchSummary | null
+  costImpact: CostImpactRow[] | null
   error: string | null
   onBack: () => void
   onRunMatch: () => void
@@ -613,6 +618,44 @@ function InvoiceDetail({
           {approved && (
             <div className="p-3 rounded-md bg-success-bg text-success border border-success/20 text-sm flex items-center gap-1.5">
               <CheckCircle2 size={16} /> Aprobada{head.matchStatus === 'con_diferencias' ? ' (con diferencias registradas)' : ''}.
+            </div>
+          )}
+
+          {/* C3.4 — impacto en coste tras aprobar */}
+          {costImpact && costImpact.length > 0 && (
+            <div className="border border-accent/30 rounded-lg overflow-hidden">
+              <div className="px-3 py-2 bg-accent-bg text-accent text-sm font-medium">
+                Impacto en coste · {costImpact.length} ingrediente{costImpact.length === 1 ? '' : 's'} actualizado{costImpact.length === 1 ? '' : 's'}
+              </div>
+              <table className="w-full text-sm">
+                <thead className="bg-page text-text-secondary">
+                  <tr>
+                    <th className="text-left font-medium px-3 py-2">Ingrediente</th>
+                    <th className="text-right font-medium px-3 py-2">Precio antes</th>
+                    <th className="text-right font-medium px-3 py-2">Precio factura</th>
+                    <th className="text-right font-medium px-3 py-2">Coste/ud antes</th>
+                    <th className="text-right font-medium px-3 py-2">Coste/ud después</th>
+                    <th className="text-right font-medium px-3 py-2">Δ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {costImpact.map(c => (
+                    <tr key={c.recipeItemId} className="border-t border-border-default">
+                      <td className="px-3 py-2 text-text-primary">{c.itemName ?? '—'}</td>
+                      <td className="px-3 py-2 text-right text-text-secondary">{fmtN(c.oldPrice)}</td>
+                      <td className="px-3 py-2 text-right text-text-primary">{fmtN(c.newPrice)}</td>
+                      <td className="px-3 py-2 text-right text-text-secondary">{fmtN(c.oldCost)}</td>
+                      <td className="px-3 py-2 text-right text-text-primary">{fmtN(c.newCost)}</td>
+                      <td className={`px-3 py-2 text-right font-medium ${c.pct == null ? 'text-text-tertiary' : c.pct > 0 ? 'text-danger' : c.pct < 0 ? 'text-success' : 'text-text-secondary'}`}>
+                        {c.pct == null ? '—' : `${c.pct > 0 ? '↑' : c.pct < 0 ? '↓' : ''}${Math.abs(c.pct)}%`}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="px-3 py-2 text-xs text-text-secondary bg-card border-t border-border-default">
+                El coste de estos ingredientes se ha recalculado y propagado a los platos que los usan.
+              </div>
             </div>
           )}
 

@@ -474,7 +474,7 @@ export async function runInvoiceMatch(invoiceId: string): Promise<InvoiceMatchSu
 /** Aprueba la factura (registra quién/cuándo — audit). El eslabón coste es C3.4. */
 export async function approveInvoice(
   invoiceId: string, approvedBy: string | null, approvedByName: string | null,
-): Promise<void> {
+): Promise<CostImpactRow[]> {
   requireSupabase()
   const { error } = await from('supplier_invoice')
     .update({
@@ -486,6 +486,35 @@ export async function approveInvoice(
     })
     .eq('id', invoiceId)
   if (error) throw new Error(`No se pudo aprobar: ${error.message}`)
+  // C3.4 — eslabón coste: aplica los precios facturados y devuelve el impacto.
+  return applyInvoiceCosts(invoiceId)
+}
+
+// ── C3.4 — eslabón coste + impacto en margen ──
+export interface CostImpactRow {
+  recipeItemId: string
+  itemName: string | null
+  oldCost: number | null
+  newCost: number | null
+  oldPrice: number | null
+  newPrice: number | null
+  pct: number | null
+}
+
+/** Aplica los precios de la factura al coste (last_price + recompute) y devuelve el impacto. */
+export async function applyInvoiceCosts(invoiceId: string): Promise<CostImpactRow[]> {
+  requireSupabase()
+  const { data, error } = await supabase!.rpc('apply_invoice_costs', { p_invoice_id: invoiceId })
+  if (error) throw new Error(`Error aplicando costes: ${error.message}`)
+  return ((data as Row[] | null) ?? []).map(r => ({
+    recipeItemId: r.recipe_item_id as string,
+    itemName: (r.item_name as string | null) ?? null,
+    oldCost: (r.old_cost as number | null) ?? null,
+    newCost: (r.new_cost as number | null) ?? null,
+    oldPrice: (r.old_price as number | null) ?? null,
+    newPrice: (r.new_price as number | null) ?? null,
+    pct: (r.pct as number | null) ?? null,
+  }))
 }
 
 /** Marca la factura como con discrepancias (pendiente de reclamar al proveedor). */
