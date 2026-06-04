@@ -12,6 +12,7 @@ import {
   matchTypeLabel,
   quickCreateRawItem,
   listSupplyFamilies,
+  suggestItemAttributes,
   BASE_UNITS,
   type LineMatchCandidate,
   type SupplyFamily,
@@ -49,10 +50,39 @@ export default function LineMatchPicker({
   const [creating, setCreating] = useState(false)
   const [createErr, setCreateErr] = useState<string | null>(null)
 
+  // C2.2.b.6 — sugerencia IA al abrir el alta (degrada limpio si falla).
+  const [suggesting, setSuggesting] = useState(false)
+  const [suggested, setSuggested] = useState<{ name: boolean; family: boolean; unit: boolean }>({ name: false, family: false, unit: false })
+
   useEffect(() => {
-    if (!createOpen || families.length > 0) return
-    listSupplyFamilies(accountId).then(setFamilies).catch(() => setFamilies([]))
-  }, [createOpen, accountId, families.length])
+    if (!createOpen) return
+    let cancelled = false
+    // Familias primero (las necesita la sugerencia y el selector).
+    listSupplyFamilies(accountId)
+      .then(fams => {
+        if (cancelled) return
+        setFamilies(fams)
+        setSuggesting(true)
+        return suggestItemAttributes(rawText, null, fams.map(f => ({ id: f.id, name: f.name })))
+      })
+      .then(sug => {
+        if (cancelled || !sug) return
+        setSuggested({
+          name: !!sug.name,
+          family: !!sug.familyId,
+          unit: !!sug.baseUnit,
+        })
+        if (sug.name) setNewName(sug.name)
+        if (sug.familyId) setNewFamily(sug.familyId)
+        if (sug.baseUnit) {
+          const u = BASE_UNITS.find(b => b.dimension === sug.baseUnit)
+          if (u) setNewUnit(u.id)
+        }
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setSuggesting(false) })
+    return () => { cancelled = true }
+  }, [createOpen, accountId, rawText])
 
   async function handleCreate() {
     if (!newName.trim()) { setCreateErr('Pon un nombre.'); return }
@@ -161,21 +191,27 @@ export default function LineMatchPicker({
               </button>
             ) : (
               <div className="space-y-2">
-                <p className="text-[11px] uppercase tracking-wide text-text-secondary">Nuevo artículo</p>
-                <input type="text" value={newName} onChange={e => setNewName(e.target.value)} disabled={creating}
-                  placeholder="Nombre del artículo"
-                  className="w-full px-3 py-2 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent" />
+                <p className="text-[11px] uppercase tracking-wide text-text-secondary flex items-center gap-1.5">
+                  Nuevo artículo
+                  {suggesting && <span className="inline-flex items-center gap-1 text-text-tertiary normal-case tracking-normal"><Loader2 size={11} className="animate-spin" /> sugiriendo…</span>}
+                </p>
+                <label className="block">
+                  <span className="text-[11px] text-text-secondary">Nombre {suggested.name && <span className="text-accent">✨ sugerido</span>}</span>
+                  <input type="text" value={newName} onChange={e => { setNewName(e.target.value); setSuggested(s => ({ ...s, name: false })) }} disabled={creating}
+                    placeholder="Nombre del artículo"
+                    className="mt-0.5 w-full px-3 py-2 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent" />
+                </label>
                 <div className="flex gap-2 flex-wrap">
                   <label className="flex flex-col text-[11px] text-text-secondary">
-                    Unidad base
-                    <select value={newUnit} onChange={e => setNewUnit(e.target.value)} disabled={creating}
+                    Unidad base {suggested.unit && <span className="text-accent">✨</span>}
+                    <select value={newUnit} onChange={e => { setNewUnit(e.target.value); setSuggested(s => ({ ...s, unit: false })) }} disabled={creating}
                       className="mt-0.5 px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent">
                       {BASE_UNITS.map(u => <option key={u.id} value={u.id}>{u.label}</option>)}
                     </select>
                   </label>
                   <label className="flex flex-col text-[11px] text-text-secondary flex-1 min-w-[180px]">
-                    Familia (opcional)
-                    <select value={newFamily} onChange={e => setNewFamily(e.target.value)} disabled={creating}
+                    Familia (opcional) {suggested.family && <span className="text-accent">✨</span>}
+                    <select value={newFamily} onChange={e => { setNewFamily(e.target.value); setSuggested(s => ({ ...s, family: false })) }} disabled={creating}
                       className="mt-0.5 px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent">
                       <option value="">— Sin familia —</option>
                       {families.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}

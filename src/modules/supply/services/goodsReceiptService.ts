@@ -1096,3 +1096,28 @@ export async function findDuplicateReceipt(
     receiptDate: r.receipt_date as string,
   }
 }
+
+// ── C2.2.b.6: copiloto de alta (la IA sugiere nombre/familia/unidad) ──
+export interface ItemSuggestion {
+  name: string | null
+  familyId: string | null
+  baseUnit: 'unit' | 'weight' | 'volume' | null
+  confidence: number | null
+}
+
+export async function suggestItemAttributes(
+  rawText: string,
+  supplierName: string | null,
+  families: { id: string; name: string }[],
+): Promise<ItemSuggestion | null> {
+  requireSupabase()
+  const { data, error } = await supabase!.functions.invoke('suggest-item', {
+    body: { raw_text: rawText, supplier_name: supplierName, families },
+  })
+  if (error) {
+    console.error('[goodsReceiptService] suggestItemAttributes', error)
+    return null   // degradación limpia: el alta sigue con defaults
+  }
+  const d = data as { name: string | null; family_id: string | null; base_unit: ItemSuggestion['baseUnit']; confidence: number | null }
+  return { name: d.name ?? null, familyId: d.family_id ?? null, baseUnit: d.base_unit ?? null, confidence: d.confidence ?? null }
+}
