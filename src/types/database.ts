@@ -7990,6 +7990,7 @@ export type Database = {
           id: string
           location_id: string
           name: string
+          parent_id: string | null
           position: number
           updated_at: string
         }
@@ -8002,6 +8003,7 @@ export type Database = {
           id?: string
           location_id: string
           name: string
+          parent_id?: string | null
           position?: number
           updated_at?: string
         }
@@ -8014,6 +8016,7 @@ export type Database = {
           id?: string
           location_id?: string
           name?: string
+          parent_id?: string | null
           position?: number
           updated_at?: string
         }
@@ -8023,6 +8026,13 @@ export type Database = {
             columns: ["location_id"]
             isOneToOne: false
             referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "storage_area_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "storage_area"
             referencedColumns: ["id"]
           },
         ]
