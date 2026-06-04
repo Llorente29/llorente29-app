@@ -73,6 +73,15 @@ CEO: **Julio Gª Colón (García Colón)**, NO "Gascón". Admin Google: `jgcolon
 
 ### 1.1 — Dónde estamos HOY (estado construido)
 
+**MÓDULO FOLVY SUPPLY — C2 RECEPCIÓN DE ALBARÁN + LIBRO MAYOR DE STOCK (04/06, EN PRODUCCIÓN, ciclo cerrado):**
+- **Estructura (migración 20260604T1000):** `goods_receipt` (cabecera: local NOT NULL, proveedor, pedido nullable=recepción ciega, code ALB-00001 correlativo, supplier_doc_number, status borrador/confirmado/anulado, source manual/ocr, needs_review), `goods_receipt_line` (qty_received, purchase_format_id, qty_in_base nullable, unit_cost, lot_code/expiry_date=ganchos FEFO, map_source/map_needs_review), `stock_movement` (EL LEDGER append-only: qty_base con signo, unit_cost SELLADO por movimiento, source polimórfico), `recipe_item_location_stock` (snapshot WAC: qty_on_hand, avg_unit_cost, stock_value).
+- **Valoración WAC perpetuo append-only:** valor = SUM(qty_base × unit_cost) con signo, reconstruible y exacto. LIFO descartado (ilegal ES). FEFO/lote NO se descartan (ganchos desde día 1). Escandallo (last_price) y WAC (inventario) = dos lentes deliberadas (AvT).
+- **Lógica ledger (migración 20260604T1200, SECURITY DEFINER, se prueban DESDE LA APP):** `confirm_goods_receipt` (postea entradas; ANTI-INVENCIÓN: solo líneas con item+qty_in_base resueltos; needs_review no postea; actualiza last_price→trigger recalcula raw), `void_goods_receipt` (reverso append-only), `recompute_location_stock` (snapshot). En el servicio, tras confirmar, `cascadeFromItem` propaga coste RAW→platos→menu_item_economics (margen).
+- **Auto-estado del pedido (migración 20260604T1400):** `recompute_purchase_order_status` se llama en confirm/void → el pedido pasa SOLO a recibido / recibido_parcial / enviado según recibido acumulado vs pedido. NO toca terminales (borrador/cancelado/cerrado). Manual de último recurso en el detalle: Cancelar (sin recepciones confirmadas) / Cerrar-no-se-completará (recibido_parcial).
+- **Anular y corregir:** en una recepción confirmada, además de Anular (reverso), Anular y corregir = abre un borrador precargado con sus líneas; la original se anula SOLO al confirmar la corregida (orden seguro: 1º crea+confirma nueva, 2º anula vieja). Hereda purchase_order_id.
+- **Recepción ANTI-ERROR (blind receiving, benchmark confirmation-bias):** la celda "Recibido" NACE VACÍA SIEMPRE (no precarga); Pedido/Ya recibido/Pendiente como referencia gris (pendiente = max(0, pedido−ya recibido), vía `listOrderLineReceived`). Botón "Rellenar con lo pendiente" opt-in. RESUMEN antes de confirmar SIEMPRE en lenguaje llano (frases con nombre de producto y cantidades, no contadores abstractos); 2º clic REFORZADO solo si anomalía (de más: detalla cuánto vs pendiente y vs pedido; o masa sin tocar >30% y >3 líneas). "De menos" se informa, no frena.
+- **UI:** módulo Supply con pestaña Recepciones (`GoodsReceiptsPage`; `GoodsReceiptForm` 3 modos contra-pedido/corregir/ciego; `SupplyOrderDetailPage` Registrar recepción + cancelar/cerrar). `goodsReceiptService.ts`. Commits f96d049 (C2.1), 02cb815 (cierre), 844c71c (fix anular-corregir+toast), fc74fa5 (anti-error), 97d25cf/9f4a09e (resumen detallado + lenguaje llano). PROBADO E2E.
+
 **MÓDULO FOLVY SUPPLY — PEDIDO REDISEÑADO Y COMPLETO (03/06, en producción):**
 - **Rediseño del pedido sobre el catálogo del proveedor** (commit 1e52bb5+): el pedido NO se teclea a mano — eliges proveedor → carga su catálogo (`article_supplier` → formato + last_price + supplier_code) → pones cantidades. `supplierCatalogService.getSupplierCatalog`. `SupplyOrderBuilder` (flujo A: proveedor→catálogo→guardar; solo filas con cantidad>0 entran). Precio del sistema (no a mano), no se muestra en el builder (sí en PDF).
 - **Formato legible** (3780532): "Saco (5 kg)" en vez de "Saco (5000)" — el catálogo trae la unidad base del artículo y escala g→kg, ml→L. "Enviado por" precargado con el usuario.
@@ -94,7 +103,7 @@ CEO: **Julio Gª Colón (García Colón)**, NO "Gascón". Admin Google: `jgcolon
 Last.app (525€/mes, a sustituir), HubRise (segunda fila), KitchenHub/Otter/Deliverect (descartados). Folvy = integrador directo.
 
 ### 1.3 — DEUDA VIVA / FRENTES (por prioridad)
-1. **MÓDULO SUPPLY — C2 RECEPCIÓN** (siguiente capa del ciclo): `goods_receipt`+líneas (qué llegó vs pedido) + OCR albarán + movimiento de entrada (gancho inventario). El INVENTARIO PERPETUO es el tronco del MRP II.
+1. **MÓDULO SUPPLY — C2 RECEPCIÓN: COMPLETO Y EN PRODUCCIÓN (04/06).** Ya NO es frente. Siguiente en Supply: **C2.2** (OCR foto albarán como propuesta a validar + create-on-scan proveedor/artículo + copiloto IA de avisos: recibido de más/menos, caducidades) sobre la misma UI. FRENTES NUEVOS anotados: **FEFO + trazabilidad de lote** (ganchos lot_code/expiry ya existen; al construir inventario/consumo); **APPCC en recepción** (control de recepción temperatura/estado/rechazo de línea; obligación legal; tras anti-error); **LOCAL ACTIVO de sesión** (DEUDA: el location_id operativo debe salir del contexto sesión/dispositivo, no de selector manual; contención: ninguna pantalla nueva añade selector manual; disparador: antes de producción).
 2. **SUPPLY — C3 FACTURA + three-way + eslabón coste** (aquí vive el "paso 4 OCR factura→coste"): OCR → casar líneas (run_mapping) → escribir last_price → recompute. + chequeo de IVA contra el motor fiscal (por fecha).
 3. **ENVÍO del pedido al proveedor: email (Resend) + WhatsApp** (lo más usado en hostelería ES; abrir wa.me con resumen). DECISIÓN: enviar de verdad marca el pedido como "enviado" (descargar PDF no). PENDIENTE.
 4. **AUTOINVENTARIO con IA** (IDEA OBLIGATORIA Julio, al construir inventario): cycle counting hostelero — contar 3-5 productos/día, la IA selecciona QUÉ (valor/riesgo/rotación/anomalías=ABC) y QUIÉN cuenta (no siempre el mismo/no su zona); diferencias se analizan y comunican solas. EXTENSIÓN: en productos de alto valor del escandallo, comparar contra escandallo (¿escandallo mal? ¿merma proceso? ¿robo?) y calcular EFECTO ECONÓMICO en €. Nadie en hostelería cierra este bucle. Requiere inventario perpetuo antes.
@@ -112,7 +121,7 @@ Last.app (525€/mes, a sustituir), HubRise (segunda fila), KitchenHub/Otter/Del
 - **Falta UI para editar el perfil propio** (nombre): hoy se corrigió "Gascón"→"Gª Colón" por SQL directo en `user_profiles.display_name`.
 
 ### 1.4 — Próximos pasos priorizados
-1. **SUPPLY C2 (recepción)** → **C3 (factura+coste)** — completan el ciclo de compra.
+1. **SUPPLY C2 (recepción): HECHO.** Siguiente en Supply: **C2.2 OCR albarán/factura → coste** (paso 4) y **C3 factura + three-way**, que completan el ciclo de compra.
 2. **INVENTARIO PERPETUO** (el tronco MRP II) → habilita autoinventario IA, To-Par, previsión.
 3. **Envío del pedido** (email/WhatsApp). **Reorientar web** a vender.
 4. **Glovo G1** al recibir acceso. **RPC EP1** cerrable.
@@ -1592,3 +1601,33 @@ Ver §1.3.HALLAZGOS: arquitectura modular del Shell (línea en registry), deno.j
 
 ### Pendiente declarado
 G1 Glovo (espera acceso), RPC EP1 (cerrable ya), Catcher I3 (espera credenciales), apunte del auto_accept por defecto, pantalla Canales, bandeja superadmin.
+
+## SESIÓN 04/06/2026 — Folvy Supply C2: recepción de albarán + libro mayor de stock (ciclo cerrado) + blindaje anti-error
+
+Sesión larga y muy productiva: se construyó y cerró C2 entero, con varias iteraciones de diseño guiadas por feedback de Julio.
+
+### LO CONSTRUIDO (todo en producción, cuenta Folvy Interno)
+- **C2.1 — estructura + ledger + UI base** (commit f96d049): 4 tablas (goods_receipt, goods_receipt_line, stock_movement=ledger, recipe_item_location_stock=snapshot WAC), RLS, correlativo ALB-. RPC confirm/void/recompute (SECURITY DEFINER, se prueban desde la app). WAC perpetuo append-only con coste sellado por movimiento. goodsReceiptService.ts (CRUD + qtyInBaseFromFormat + confirmReceipt con ripple cascadeFromItem RAW→platos→margen + voidReceipt + listLocationStock). UI: pestaña Recepciones, GoodsReceiptsPage, GoodsReceiptForm (contra-pedido/ciego), Registrar recepción en el detalle. Probado E2E (ALB-00001).
+- **Cierre C2** (commit 02cb815, migración 20260604T1400): auto-estado del pedido (recompute_purchase_order_status en confirm/void → recibido/recibido_parcial/enviado solo; no toca terminales). Anular y corregir. Cancelar/Cerrar manual de último recurso.
+- **Fix anular-y-corregir + UX** (commit 844c71c): BUG corregido — antes anulaba al pulsar aunque salieras sin guardar; ahora la original se anula SOLO al confirmar la corregida (orden seguro: 1º crea+confirma nueva, 2º anula vieja). Auto-volver con toast (fuera la pantalla de franja verde). Celda recibido destacada.
+- **Recepción ANTI-ERROR / blind receiving** (commit fc74fa5): feedback de Julio (precargar la cantidad pedida en Recibido es peligroso con 30 líneas = confirmation bias). Benchmark (Finale/DataDocks/eFulfillment): blind count estándar para alto valor/volumen; híbrido. DISEÑO: celda Recibido VACÍA siempre; Pedido/Ya recibido/Pendiente referencia gris (listOrderLineReceived); botón Rellenar con lo pendiente opt-in; resumen antes de confirmar siempre; 2º clic reforzado solo si anomalía.
+- **Resumen detallado + lenguaje llano** (commits 97d25cf, 9f4a09e): el contador 'De más: 1' confundía (se leía como 1 unidad). Panel reescrito en humano, con nombre de producto y cantidades: 'Cebolla Morada: cuentas 5, solo faltaban 2 (te sobran 3). Con esto tendrías 6 de un pedido de 3.' Sin contadores abstractos. De menos informa, no frena. Probado E2E.
+
+### DECISIONES CLAVE
+- Estado del pedido AUTOMÁTICO; manual (cancelar/cerrar) solo último recurso, terminal; la automatización nunca lo pisa.
+- 'De más' no bloquea recibir (recibido≥pedido=completa); si fuera problema se trata con avisos IA (C2.2), no alterando el auto-estado.
+- Recibido de más se mide y muestra contra lo pendiente Y contra el pedido total.
+- Lote/caducidad: la línea ya los transporta y se persisten (hueco FEFO/APPCC); inputs visibles y lógica en su frente (no media tubería).
+
+### FRENTES NUEVOS ANOTADOS (con disparador)
+- **C2.2** — OCR foto albarán como propuesta a validar + create-on-scan (proveedor/artículo no existentes → source='ocr', needs_review, no toca coste hasta resolver) + copiloto IA de avisos en recepción (de más/menos, caducidades). Sobre la misma UI.
+- **FEFO + trazabilidad de lote** — capturar lot_code/expiry al recibir → consumo por caducidad más próxima → trazabilidad para alertas sanitarias. Disparador: al construir inventario/consumo.
+- **APPCC en recepción** — control de recepción (temperatura, estado embalaje, caducidad, conformidad transporte); una incidencia puede rechazar la línea y deja traza en recepción y APPCC. Obligación legal. Disparador: tras anti-error.
+- **LOCAL ACTIVO de sesión** (DEUDA) — el location_id operativo debe salir del contexto sesión/dispositivo, no de un selector manual (en cocina = error seguro). Modelo de datos ya correcto; es solo UI. Contención: ninguna pantalla nueva añade selector manual de local. Disparador: antes de producción.
+
+### NOTA OPERATIVA
+- **ALB-00003 quedó ANULADO** por el bug viejo de anular-y-corregir (se anuló al pulsar, antes del fix). Si ese stock debía estar dentro, rehacer esa recepción.
+- **Higiene git:** los últimos push empaquetaron muchos objetos (cruft); al arrancar, revisar `git status` por si quedó algo sin trackear (incluida data confidencial Llorente29 JSON — saneamiento git ya pendiente, sesión dedicada).
+
+### MÉTODO REFORZADO
+- El anti-error nació de feedback de Julio + benchmark obligatorio ANTES de diseñar (confirmation bias / blind receiving). UI pensada para personal de cocina poco formado: frases con nombre de producto, no jerga ni contadores abstractos.
