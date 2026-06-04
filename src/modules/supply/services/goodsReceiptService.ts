@@ -819,14 +819,16 @@ export async function resolveReceiptHeader(
 ): Promise<ResolvedReceiptHeader> {
   requireSupabase()
 
-  // Proveedor comercial vs emisor (intermediario).
-  const emitter = doc.supplier_name ?? null
-  const billTo = doc.bill_to_name ?? null
-  const hasIntermediary = !!(billTo && emitter && normText(billTo) !== normText(emitter))
-  const commercialName = hasIntermediary ? billTo : emitter
-  const deliveredBy = hasIntermediary ? emitter : null
-  // El NIF leído es el del EMISOR; solo sirve para casar si NO hay intermediario.
-  const commercialNif = hasIntermediary ? null : (doc.supplier_tax_id ?? null)
+  // DECISIÓN (04/06): el proveedor es quien EMITE el albarán (Makro, Europastry,
+  // Joan…), casado por NIF → nombre. NO se adivina el intermediario desde bill_to
+  // (heurística frágil: confundía al cliente con un intermediario y descartaba el
+  // NIF). El caso Cloudtown (Joan entrega EN NOMBRE DE Cloudtown) se APRENDE en b:
+  // la 1ª vez se propone el emisor, el humano lo corrige a Cloudtown + "entregado
+  // por Joan", y se recuerda (memoria de intermediario por emisor → comercial).
+  // bill_to queda guardado en la sesión IA para esa memoria.
+  const commercialName = doc.supplier_name ?? null
+  const commercialNif = doc.supplier_tax_id ?? null
+  const deliveredBy: string | null = null   // lo rellena la memoria de intermediario (b)
 
   const { data: sups } = await from('supplier')
     .select('id, name, tax_id')
@@ -837,12 +839,13 @@ export async function resolveReceiptHeader(
   let supplierId = ''
   if (commercialNif) {
     const nif = normNif(commercialNif)
-    const hit = suppliers.find(s => normNif(s.tax_id as string | null) === nif && nif.length > 0)
-    if (hit) supplierId = hit.id as string
+    if (nif.length > 0) {
+      const hit = suppliers.find(s => normNif(s.tax_id as string | null) === nif)
+      if (hit) supplierId = hit.id as string
+    }
   }
   if (!supplierId && commercialName) {
     const n = normText(commercialName)
-    // Coincidencia por nombre: igualdad normalizada o contención (uno dentro del otro).
     const hit = suppliers.find(s => {
       const sn = normText(s.name as string)
       return sn === n || (sn.length > 3 && (sn.includes(n) || n.includes(sn)))

@@ -160,7 +160,11 @@ export default function ReceiptScanPanel({ accountId, onBack, onCreateReceipt }:
                   </button>
                 )}
                 <button type="button" onClick={() => fileInputRef.current?.click()} disabled={scanning}
-                  className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium border border-border-default bg-card hover:bg-page disabled:opacity-50 transition-base ${!isMobile ? 'bg-accent text-text-on-accent border-transparent hover:opacity-90' : ''}`}>
+                  className={
+                    isMobile
+                      ? 'inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium border border-border-default bg-card text-text-primary hover:bg-page disabled:opacity-50 transition-base'
+                      : 'inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 transition-base'
+                  }>
                   <Upload size={15} />
                   {isMobile ? 'Elegir archivo' : 'Elegir foto o PDF'}
                 </button>
