@@ -7974,6 +7974,234 @@ export type Database = {
           },
         ]
       }
+      supplier_invoice: {
+        Row: {
+          account_id: string
+          ai_session_id: string | null
+          approved_at: string | null
+          approved_by: string | null
+          approved_by_name: string | null
+          code: string | null
+          corrects_invoice_id: string | null
+          created_at: string
+          created_by: string | null
+          created_by_name: string | null
+          doc_kind: string
+          grand_total: number | null
+          id: string
+          invoice_date: string | null
+          invoice_number: string | null
+          location_id: string | null
+          match_status: string
+          needs_review: boolean
+          notes: string | null
+          raw_document_url: string | null
+          source: string
+          status: string
+          supplier_id: string | null
+          tax_base_total: number | null
+          tax_total: number | null
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          ai_session_id?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          approved_by_name?: string | null
+          code?: string | null
+          corrects_invoice_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          doc_kind?: string
+          grand_total?: number | null
+          id?: string
+          invoice_date?: string | null
+          invoice_number?: string | null
+          location_id?: string | null
+          match_status?: string
+          needs_review?: boolean
+          notes?: string | null
+          raw_document_url?: string | null
+          source?: string
+          status?: string
+          supplier_id?: string | null
+          tax_base_total?: number | null
+          tax_total?: number | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          ai_session_id?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          approved_by_name?: string | null
+          code?: string | null
+          corrects_invoice_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          doc_kind?: string
+          grand_total?: number | null
+          id?: string
+          invoice_date?: string | null
+          invoice_number?: string | null
+          location_id?: string | null
+          match_status?: string
+          needs_review?: boolean
+          notes?: string | null
+          raw_document_url?: string | null
+          source?: string
+          status?: string
+          supplier_id?: string | null
+          tax_base_total?: number | null
+          tax_total?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_invoice_corrects_invoice_id_fkey"
+            columns: ["corrects_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_invoice"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_invoice_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_invoice_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "supplier"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supplier_invoice_line: {
+        Row: {
+          created_at: string
+          goods_receipt_line_id: string | null
+          id: string
+          line_amount: number | null
+          map_needs_review: boolean
+          map_source: string | null
+          match_detail: Json | null
+          match_result: string | null
+          position: number | null
+          qty: number | null
+          raw_text: string | null
+          recipe_item_id: string | null
+          supplier_code: string | null
+          supplier_invoice_id: string
+          unit_price: number | null
+          vat_category_id: string | null
+          vat_pct: number | null
+        }
+        Insert: {
+          created_at?: string
+          goods_receipt_line_id?: string | null
+          id?: string
+          line_amount?: number | null
+          map_needs_review?: boolean
+          map_source?: string | null
+          match_detail?: Json | null
+          match_result?: string | null
+          position?: number | null
+          qty?: number | null
+          raw_text?: string | null
+          recipe_item_id?: string | null
+          supplier_code?: string | null
+          supplier_invoice_id: string
+          unit_price?: number | null
+          vat_category_id?: string | null
+          vat_pct?: number | null
+        }
+        Update: {
+          created_at?: string
+          goods_receipt_line_id?: string | null
+          id?: string
+          line_amount?: number | null
+          map_needs_review?: boolean
+          map_source?: string | null
+          match_detail?: Json | null
+          match_result?: string | null
+          position?: number | null
+          qty?: number | null
+          raw_text?: string | null
+          recipe_item_id?: string | null
+          supplier_code?: string | null
+          supplier_invoice_id?: string
+          unit_price?: number | null
+          vat_category_id?: string | null
+          vat_pct?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_invoice_line_goods_receipt_line_id_fkey"
+            columns: ["goods_receipt_line_id"]
+            isOneToOne: false
+            referencedRelation: "goods_receipt_line"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_invoice_line_recipe_item_id_fkey"
+            columns: ["recipe_item_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_item"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_invoice_line_supplier_invoice_id_fkey"
+            columns: ["supplier_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_invoice"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_invoice_line_vat_category_id_fkey"
+            columns: ["vat_category_id"]
+            isOneToOne: false
+            referencedRelation: "vat_category"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supplier_invoice_receipt: {
+        Row: {
+          goods_receipt_id: string
+          supplier_invoice_id: string
+        }
+        Insert: {
+          goods_receipt_id: string
+          supplier_invoice_id: string
+        }
+        Update: {
+          goods_receipt_id?: string
+          supplier_invoice_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_invoice_receipt_goods_receipt_id_fkey"
+            columns: ["goods_receipt_id"]
+            isOneToOne: false
+            referencedRelation: "goods_receipt"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_invoice_receipt_supplier_invoice_id_fkey"
+            columns: ["supplier_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_invoice"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       supply_settings: {
         Row: {
           account_id: string
@@ -8758,6 +8986,10 @@ export type Database = {
         Returns: string
       }
       next_purchase_order_code: {
+        Args: { p_account_id: string }
+        Returns: string
+      }
+      next_supplier_invoice_code: {
         Args: { p_account_id: string }
         Returns: string
       }
