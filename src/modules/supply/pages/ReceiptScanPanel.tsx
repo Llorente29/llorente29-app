@@ -91,6 +91,8 @@ export default function ReceiptScanPanel({ accountId, onBack, onCreateReceipt }:
       const ocr: OcrPrefill = {
         aiSessionId: result.sessionId,
         supplierId: header.supplierId,
+        proposedSupplierName: result.document.supplier_name ?? null,
+        proposedSupplierNif: result.document.supplier_tax_id ?? null,
         deliveredBy: header.deliveredBy,
         locationId: header.locationId,
         supplierDocNumber: header.supplierDocNumber,

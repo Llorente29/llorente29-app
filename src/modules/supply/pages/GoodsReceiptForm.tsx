@@ -50,6 +50,7 @@ import {
   matchReceiptLine,
   matchTypeLabel,
   learnFromReceipt,
+  quickCreateSupplier,
   type LineMatchCandidate,
 } from '@/modules/supply/services/goodsReceiptService'
 import LineMatchPicker from '@/modules/supply/pages/LineMatchPicker'
@@ -77,6 +78,8 @@ export interface ReceiptPrefillLine {
 export interface OcrPrefill {
   aiSessionId: string | null
   supplierId: string            // '' si no casó
+  proposedSupplierName: string | null   // emisor leído (para prerellenar el alta si no casa)
+  proposedSupplierNif: string | null
   deliveredBy: string | null    // entregado por (Joan/Bidfood) cuando hay intermediario
   locationId: string            // '' si no casó
   supplierDocNumber: string | null
@@ -186,6 +189,33 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
     setDraft(d => d.map(x => x.key === key
       ? { ...x, recipeItemId: null, matchedName: null, matchSemaphore: null, matchType: null }
       : x))
+  }
+
+  // C2.2.b.2 — alta de proveedor inline (cuando el OCR no casó proveedor).
+  const [supCreate, setSupCreate] = useState(false)
+  const [supName, setSupName] = useState('')
+  const [supNif, setSupNif] = useState('')
+  const [supSaving, setSupSaving] = useState(false)
+  useEffect(() => {
+    if (fromOcr && ocrPrefill?.unmatchedSupplier) {
+      setSupName(ocrPrefill.proposedSupplierName ?? '')
+      setSupNif(ocrPrefill.proposedSupplierNif ?? '')
+    }
+  }, [fromOcr, ocrPrefill])
+
+  async function createSupplierInline() {
+    if (!supName.trim()) { setError('El proveedor necesita un nombre.'); return }
+    setSupSaving(true); setError(null)
+    try {
+      const created = await quickCreateSupplier(accountId, supName, supNif || null, authUserId ?? null, userProfile?.displayName ?? null)
+      setSuppliers(s => [...s, created].sort((a, b) => a.name.localeCompare(b.name)))
+      setSupplierId(created.id)
+      setSupCreate(false)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'No se pudo crear el proveedor.')
+    } finally {
+      setSupSaving(false)
+    }
   }
 
   const linkedOrderId = order?.id ?? prefill?.purchaseOrderId ?? null
@@ -599,8 +629,35 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
 
       {fromOcr && (ocrPrefill?.unmatchedSupplier || ocrPrefill?.unmatchedLocation) && (
         <div className="p-3 rounded-md bg-warning-bg text-warning border border-warning/20 text-sm">
-          {ocrPrefill?.unmatchedSupplier && <p>No he reconocido el proveedor del albarán. Elígelo arriba (o créalo en el siguiente paso).</p>}
-          {ocrPrefill?.unmatchedLocation && <p>No he reconocido el local de entrega. Elígelo arriba.</p>}
+          {ocrPrefill?.unmatchedSupplier && !supplierId && (
+            <div>
+              <p>No he reconocido el proveedor del albarán. Elígelo arriba o créalo:</p>
+              {!supCreate ? (
+                <button type="button" onClick={() => setSupCreate(true)} disabled={saving}
+                  className="mt-1.5 text-accent hover:underline disabled:opacity-50">Crear proveedor</button>
+              ) : (
+                <div className="mt-2 flex items-end gap-2 flex-wrap text-text-primary">
+                  <label className="flex flex-col text-[11px] text-text-secondary">
+                    Nombre
+                    <input type="text" value={supName} onChange={e => setSupName(e.target.value)} disabled={supSaving}
+                      className="mt-0.5 w-56 px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent" />
+                  </label>
+                  <label className="flex flex-col text-[11px] text-text-secondary">
+                    CIF/NIF
+                    <input type="text" value={supNif} onChange={e => setSupNif(e.target.value)} disabled={supSaving}
+                      className="mt-0.5 w-40 px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent" />
+                  </label>
+                  <button type="button" onClick={createSupplierInline} disabled={supSaving}
+                    className="px-3 py-1.5 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50">
+                    {supSaving ? 'Creando…' : 'Crear'}
+                  </button>
+                  <button type="button" onClick={() => setSupCreate(false)} disabled={supSaving}
+                    className="px-2 py-1.5 rounded-md text-sm border border-border-default bg-card hover:bg-page disabled:opacity-50">Cancelar</button>
+                </div>
+              )}
+            </div>
+          )}
+          {ocrPrefill?.unmatchedLocation && <p className={ocrPrefill?.unmatchedSupplier ? 'mt-1' : ''}>No he reconocido el local de entrega. Elígelo arriba.</p>}
           {ocrPrefill?.deliveredBy && <p className="text-text-secondary mt-0.5">Entregado por: {ocrPrefill.deliveredBy}.</p>}
         </div>
       )}
@@ -778,6 +835,8 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
             supplierCode={line.supplierCode}
             candidates={lineMatch[pickerKey]?.candidates ?? []}
             currentRecipeItemId={line.recipeItemId}
+            createdBy={authUserId ?? null}
+            createdByName={userProfile?.displayName ?? null}
             onChoose={(itemId, name, semaphore, matchType) => chooseMatch(pickerKey, itemId, name, semaphore, matchType)}
             onClear={() => { clearMatch(pickerKey); setPickerKey(null) }}
             onClose={() => setPickerKey(null)}

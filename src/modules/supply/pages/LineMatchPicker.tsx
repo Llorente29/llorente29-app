@@ -6,9 +6,16 @@
 // (Crear artículo nuevo al vuelo = b.2; se añadirá aquí.)
 
 import { useEffect, useRef, useState } from 'react'
-import { X, Search, Check, Loader2 } from 'lucide-react'
+import { X, Search, Check, Loader2, Plus } from 'lucide-react'
 import { listRecipeItems } from '@/modules/kitchen/services/recipeItemService'
-import { matchTypeLabel, type LineMatchCandidate } from '@/modules/supply/services/goodsReceiptService'
+import {
+  matchTypeLabel,
+  quickCreateRawItem,
+  listSupplyFamilies,
+  BASE_UNITS,
+  type LineMatchCandidate,
+  type SupplyFamily,
+} from '@/modules/supply/services/goodsReceiptService'
 
 interface LineMatchPickerProps {
   accountId: string
@@ -16,6 +23,8 @@ interface LineMatchPickerProps {
   supplierCode: string | null
   candidates: LineMatchCandidate[]
   currentRecipeItemId: string | null
+  createdBy: string | null
+  createdByName: string | null
   onChoose: (recipeItemId: string, name: string, semaphore: 'green' | 'yellow' | null, matchType: string | null) => void
   onClear: () => void
   onClose: () => void
@@ -24,12 +33,38 @@ interface LineMatchPickerProps {
 interface SearchHit { id: string; name: string }
 
 export default function LineMatchPicker({
-  accountId, rawText, supplierCode, candidates, currentRecipeItemId, onChoose, onClear, onClose,
+  accountId, rawText, supplierCode, candidates, currentRecipeItemId, createdBy, createdByName, onChoose, onClear, onClose,
 }: LineMatchPickerProps) {
   const [search, setSearch] = useState('')
   const [hits, setHits] = useState<SearchHit[]>([])
   const [searching, setSearching] = useState(false)
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // C2.2.b.2 — alta de artículo nuevo (nombre prerelleno con el raw_text).
+  const [createOpen, setCreateOpen] = useState(false)
+  const [newName, setNewName] = useState(rawText)
+  const [newUnit, setNewUnit] = useState(BASE_UNITS[0].id)
+  const [newFamily, setNewFamily] = useState('')
+  const [families, setFamilies] = useState<SupplyFamily[]>([])
+  const [creating, setCreating] = useState(false)
+  const [createErr, setCreateErr] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!createOpen || families.length > 0) return
+    listSupplyFamilies(accountId).then(setFamilies).catch(() => setFamilies([]))
+  }, [createOpen, accountId, families.length])
+
+  async function handleCreate() {
+    if (!newName.trim()) { setCreateErr('Pon un nombre.'); return }
+    setCreating(true); setCreateErr(null)
+    try {
+      const item = await quickCreateRawItem(accountId, newName, newUnit, newFamily || null, createdBy, createdByName)
+      onChoose(item.id, item.name, 'green', 'created')
+    } catch (err: unknown) {
+      setCreateErr(err instanceof Error ? err.message : 'No se pudo crear el artículo.')
+      setCreating(false)
+    }
+  }
 
   useEffect(() => {
     if (search.trim().length < 2) { setHits([]); return }
@@ -100,7 +135,7 @@ export default function LineMatchPicker({
             </div>
             {searching && <p className="text-xs text-text-secondary mt-2 flex items-center gap-1.5"><Loader2 size={13} className="animate-spin" /> Buscando…</p>}
             {!searching && search.trim().length >= 2 && hits.length === 0 && (
-              <p className="text-xs text-text-secondary mt-2">Sin resultados. (Crear artículo nuevo llega en el siguiente paso.)</p>
+              <p className="text-xs text-text-secondary mt-2">Sin resultados.</p>
             )}
             {hits.length > 0 && (
               <ul className="mt-2 space-y-1 max-h-48 overflow-y-auto">
@@ -114,6 +149,50 @@ export default function LineMatchPicker({
                   </li>
                 ))}
               </ul>
+            )}
+          </div>
+
+          {/* Crear artículo nuevo (create-on-scan) */}
+          <div className="pt-1 border-t border-border-default">
+            {!createOpen ? (
+              <button type="button" onClick={() => { setNewName(rawText); setCreateOpen(true) }}
+                className="inline-flex items-center gap-1.5 text-sm text-accent hover:underline">
+                <Plus size={14} /> Crear artículo nuevo
+              </button>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-[11px] uppercase tracking-wide text-text-secondary">Nuevo artículo</p>
+                <input type="text" value={newName} onChange={e => setNewName(e.target.value)} disabled={creating}
+                  placeholder="Nombre del artículo"
+                  className="w-full px-3 py-2 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent" />
+                <div className="flex gap-2 flex-wrap">
+                  <label className="flex flex-col text-[11px] text-text-secondary">
+                    Unidad base
+                    <select value={newUnit} onChange={e => setNewUnit(e.target.value)} disabled={creating}
+                      className="mt-0.5 px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent">
+                      {BASE_UNITS.map(u => <option key={u.id} value={u.id}>{u.label}</option>)}
+                    </select>
+                  </label>
+                  <label className="flex flex-col text-[11px] text-text-secondary flex-1 min-w-[180px]">
+                    Familia (opcional)
+                    <select value={newFamily} onChange={e => setNewFamily(e.target.value)} disabled={creating}
+                      className="mt-0.5 px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent">
+                      <option value="">— Sin familia —</option>
+                      {families.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                    </select>
+                  </label>
+                </div>
+                {createErr && <p className="text-xs text-danger">{createErr}</p>}
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={handleCreate} disabled={creating}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50">
+                    {creating ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                    Crear y casar
+                  </button>
+                  <button type="button" onClick={() => setCreateOpen(false)} disabled={creating}
+                    className="px-3 py-2 rounded-md text-sm border border-border-default bg-card hover:bg-page disabled:opacity-50">Cancelar</button>
+                </div>
+              </div>
             )}
           </div>
         </div>

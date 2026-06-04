@@ -20,6 +20,9 @@
 
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
 import { cascadeFromItem } from '@/modules/kitchen/services/costCascadeService'
+import { createRecipeItem, updateRecipeItem } from '@/modules/kitchen/services/recipeItemService'
+import { createSupplier } from '@/modules/kitchen/services/purchaseFormatService'
+import type { Supplier } from '@/types/kitchen'
 
 // ── Tipos de dominio (camelCase) ──
 export type GoodsReceiptStatus = 'borrador' | 'confirmado' | 'anulado'
@@ -939,6 +942,8 @@ export function matchTypeLabel(mt: string): string {
     case 'name_exact': return 'por nombre'
     case 'name_normalized': return 'por nombre'
     case 'fuzzy': return 'parecido'
+    case 'manual': return 'elegido a mano'
+    case 'created': return 'nuevo'
     default: return mt
   }
 }
@@ -952,4 +957,72 @@ export async function learnFromReceipt(receiptId: string): Promise<number> {
   const { data, error } = await supabase!.rpc('learn_from_receipt', { p_receipt_id: receiptId })
   if (error) throw new Error(`Error guardando la memoria del proveedor: ${error.message}`)
   return (data as number) ?? 0
+}
+
+// ── C2.2.b.2: create-on-scan (crear artículo / proveedor sin salir de la recepción) ──
+
+// Unidades base globales (account_id null). El stock y el coste se llevan en la
+// unidad base; el humano elige según el artículo. IDs verificados en BBDD.
+export const BASE_UNITS: { id: string; label: string; dimension: 'unit' | 'volume' | 'weight' }[] = [
+  { id: '869711c3-eabd-4e95-92f2-555efaaba6b0', label: 'Unidad (ud)', dimension: 'unit' },
+  { id: '8fc3baae-04cc-4b2c-83cc-7fa0181e74e4', label: 'Gramo (g)', dimension: 'weight' },
+  { id: '953c626f-146b-484f-b3f5-47c42eeacc0e', label: 'Mililitro (ml)', dimension: 'volume' },
+]
+
+export interface SupplyFamily { id: string; name: string }
+
+export async function listSupplyFamilies(accountId: string): Promise<SupplyFamily[]> {
+  requireSupabase()
+  const { data, error } = await from('recipe_family')
+    .select('id, name')
+    .eq('account_id', accountId)
+    .order('name', { ascending: true })
+  if (error) throw new Error(`Error listando familias: ${error.message}`)
+  return ((data as Row[] | null) ?? []).map(r => ({ id: r.id as string, name: r.name as string }))
+}
+
+// Alta MÍNIMA de artículo desde el OCR: nombre + unidad base (+ familia opcional).
+// type='raw', source='ocr', needs_review=true (el resto se completa luego en Kitchen).
+export async function quickCreateRawItem(
+  accountId: string,
+  name: string,
+  baseUnitId: string,
+  familyId: string | null,
+  createdBy: string | null,
+  createdByName: string | null,
+): Promise<{ id: string; name: string }> {
+  requireSupabase()
+  const item = await createRecipeItem({
+    accountId,
+    type: 'raw',
+    name: name.trim(),
+    baseUnitId,
+    source: 'ocr_invoice',
+    needsReview: true,
+    createdBy,
+    createdByName,
+  })
+  if (familyId) {
+    try { await updateRecipeItem(item.id, { familyId }) }
+    catch (e) { console.error('quickCreateRawItem: no se pudo asignar familia', e) }
+  }
+  return { id: item.id, name: item.name }
+}
+
+// Alta de proveedor desde la cabecera (nombre + NIF).
+export async function quickCreateSupplier(
+  accountId: string,
+  name: string,
+  taxId: string | null,
+  createdBy: string | null,
+  createdByName: string | null,
+): Promise<Supplier> {
+  requireSupabase()
+  return await createSupplier({
+    accountId,
+    name: name.trim(),
+    taxId: taxId && taxId.trim() !== '' ? taxId.trim() : null,
+    createdBy,
+    createdByName,
+  })
 }
