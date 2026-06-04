@@ -3,7 +3,7 @@
 > **Qué es esto:** el destino completo del módulo de aprovisionamiento de Folvy, concebido como **MRP II de ciclo cerrado** de hostelería — un "SAP/Oracle con UI moderna que un cocinero usa sin manual". Es el plano del que cuelga cada pieza que se construya, para que ninguna se haga aislada y luego no encaje.
 > Diagrama: `folvy_mrp_ii_mapa.svg` (SVG versionable, no imagen binaria).
 
-**Creado:** 2026-06-03
+**Creado:** 2026-06-03 · **Actualizado:** 2026-06-04 (recepción C2 + OCR C2.2 completos; FACTURA C3 COMPLETA C3.1–C3.5). Ciclo de compra cerrado de punta a punta.
 
 ![Folvy MRP II](folvy_mrp_ii_mapa.svg)
 
@@ -30,8 +30,8 @@ El aprovisionamiento de Folvy **NO es "un módulo de compras"** — es **MRP II 
 ### Ejecución de compra (ciclo administrativo estándar PO→albarán→factura)
 6. **Generación de órdenes de compra** — *por construir.* Automática desde el balance (4), o por stock mínimo (PAR), plantilla de necesidades, o iniciativa. Agrupadas por proveedor preferente.
 7. **Aprobación + envío** — *por construir.* Gating por presupuesto/rol → envío al proveedor (email/PDF/API/EDI).
-8. **Recepción (albarán)** — *a medias / OCR pendiente.* Llega la mercancía → OCR lee el albarán → entra a stock. Modelo `purchase`/`purchase_line` existe pero sin ciclo.
-9. **Factura + three-way match** — *a medias.* PO ↔ albarán ↔ factura cuadran; discrepancias cazadas (pediste 10, llegaron 9, te cobran 10). El control que de verdad protege al restaurador.
+8. **Recepción (albarán)** — *CONSTRUIDA (04/06).* `goods_receipt` + líneas + libro mayor de stock (WAC perpetuo append-only); auto-estado del pedido; anti-error (blind receiving). **OCR de recepción C2.2 COMPLETO**: escanear (foto/PDF) → leer+validar por base imponible → materializar → casar con memoria por proveedor → crear artículo al vuelo (copiloto IA) → aprender → resolver intermediarios → anti-duplicado → avisos de precio/caducidad. Supera a xtraCHEF/MarketMan (memoria por proveedor + copiloto).
+9. **Factura + three-way match** — *COMPLETA (04/06; build verde, no probada en vivo aún).* PO ↔ albarán ↔ factura cuadran; discrepancias cazadas (pediste 10, llegaron 9, te cobran 10). El control que protege al restaurador. **C3.1–C3.5 HECHO:** modelo `supplier_invoice`+líneas+N:M+abonos+FAC- (C3.1); OCR de factura reutilizando ocr-albaran (C3.2); motor three-way `run_invoice_match` precio/cantidad/no-recibido/IVA contra motor fiscal por fecha (C3.3); eslabón coste `apply_invoice_costs` corrige last_price→recompute→cascada + impacto en margen (C3.4); enrutado de aprobación por reglas importe/proveedor/local→rol (C3.5). Benchmark R365: IGUALADO (OCR+3way+aprobación+audit+abonos) y SUPERADO con el eslabón al MARGEN del plato, que nadie tiene. PENDIENTE: probar en vivo.
 
 > **El flujo SIEMPRE es con pedido** (norma estándar en hostelería y cualquier sector). Los datos sueltos de Llorente29 (factura sin pedido) son caso de prueba, no el flujo principal. Casos límite a cubrir: artículo no existe → crear ingrediente; proveedor no existe → crear; sin pedido → validar por totales internos (excepción, no norma).
 
@@ -51,8 +51,8 @@ escandallos (BOM) · ~12K ventas (previsión) · ingredientes/proveedores/format
 ## Qué está vacío (por construir)
 inventario/stock perpetuo · movimientos de stock · lotes/caducidad (FEFO) · conteos · previsión (tabla) · plan maestro · balance · capacidad · órdenes de compra (PO) · recepción/albarán · mermas · almacenes.
 
-## El tronco (probable primera capa)
-**Inventario perpetuo (10) + el ciclo de compra que lo alimenta (6-9, donde encaja el OCR).** Sin inventario no hay balance (4), ni punto de reorden (5-6), ni AvT real (12), ni FEFO. Es la pieza de la que cuelga el ciclo cerrado. Decisión de por dónde empezar: pendiente.
+## El tronco (SIGUIENTE FRENTE)
+**Inventario perpetuo (10).** El ciclo de compra que lo alimenta (6-9) ya está: recepción (8) y factura (9) CONSTRUIDAS; órdenes/aprobación (6-7) parcial (pedido manual hecho, generación automática pendiente). La recepción ya escribe `stock_movement` + snapshot WAC. Falta el ciclo completo de inventario: conteos, mermas, caducidades, FEFO, consumo por ventas×escandallo. Sin inventario no hay balance (4), ni punto de reorden (5-6), ni AvT real (12). Es la pieza de la que cuelga el ciclo cerrado. **Es el siguiente frente.**
 
 ## Conceptos del benchmark a traducir (referencia)
 - **ERP industrial (SAP/Sage/Acumatica):** reorder point, safety stock, lead time, lot size / EOQ, BOM con scrap factor, backward scheduling, three-way match, purchase requisition (la propone MRP) ≠ purchase order (aprobada).
