@@ -888,3 +888,55 @@ export async function resolveReceiptHeader(
     unmatchedLocation: locationId === '',
   }
 }
+
+// ── C2.2.b.1: casado de línea de albarán con la memoria (run_mapping) ──
+//
+// Reutiliza la RPC run_mapping (cascada: código de proveedor → nombre exacto →
+// normalizado → difuso), filtrada a artículos (type='raw'). Devuelve candidatos
+// con confianza y semáforo. IA propone; el humano valida al confirmar.
+
+export interface LineMatchCandidate {
+  recipeItemId: string
+  name: string
+  folvyCode: string | null
+  confidence: number
+  matchType: 'code' | 'name_exact' | 'name_normalized' | 'fuzzy' | string
+  semaphore: 'green' | 'yellow'
+}
+
+export async function matchReceiptLine(
+  accountId: string,
+  rawText: string,
+  supplierCode: string | null,
+  limit = 5,
+): Promise<LineMatchCandidate[]> {
+  requireSupabase()
+  const { data, error } = await supabase!.rpc('run_mapping', {
+    p_account_id: accountId,
+    p_text: rawText,
+    p_code: supplierCode && supplierCode.trim() !== '' ? supplierCode.trim() : undefined,
+    p_limit: limit,
+    p_target_types: ['raw'],
+  })
+  if (error) throw new Error(`Error casando "${rawText}": ${error.message}`)
+  const rows = (data as Row[] | null) ?? []
+  return rows.map(r => ({
+    recipeItemId: r.recipe_item_id as string,
+    name: r.name as string,
+    folvyCode: (r.folvy_code as string | null) ?? null,
+    confidence: Number(r.confidence ?? 0),
+    matchType: (r.match_type as string) ?? 'fuzzy',
+    semaphore: (r.semaphore as 'green' | 'yellow') ?? 'yellow',
+  }))
+}
+
+// Etiqueta legible del tipo de casado, para la UI.
+export function matchTypeLabel(mt: string): string {
+  switch (mt) {
+    case 'code': return 'por código'
+    case 'name_exact': return 'por nombre'
+    case 'name_normalized': return 'por nombre'
+    case 'fuzzy': return 'parecido'
+    default: return mt
+  }
+}

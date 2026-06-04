@@ -47,7 +47,11 @@ import {
   voidReceipt,
   listOrderLineReceived,
   qtyInBaseFromFormat,
+  matchReceiptLine,
+  matchTypeLabel,
+  type LineMatchCandidate,
 } from '@/modules/supply/services/goodsReceiptService'
+import LineMatchPicker from '@/modules/supply/pages/LineMatchPicker'
 
 export interface ReceiptPrefill {
   sourceReceiptId: string
@@ -84,6 +88,7 @@ export interface OcrPrefill {
 export interface OcrPrefillLine {
   recipeItemId: string | null   // null en a-2 (casado en b)
   productName: string           // raw_text leído
+  supplierCode: string | null   // código del proveedor (ancla de casado por código)
   qty: number | null            // cantidad leída → celda precargada
   unitCost: number | null       // precio neto leído
   lotCode: string | null
@@ -114,6 +119,12 @@ interface DraftLine {
   poLineId: string | null
   lotCode: string | null       // hueco FEFO/APPCC (se persiste; UI en su frente)
   expiryDate: string | null
+  // C2.2.b — casado de línea de albarán (solo modo OCR)
+  rawText: string | null            // texto leído del albarán (referencia gris)
+  supplierCode: string | null       // código del proveedor (ancla de casado)
+  matchedName: string | null        // nombre del artículo casado (tu nombre)
+  matchSemaphore: 'green' | 'yellow' | null
+  matchType: string | null
 }
 
 function parseNum(v: string): number | null {
@@ -160,6 +171,22 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
   const [error, setError] = useState<string | null>(null)
   const [reviewing, setReviewing] = useState(false)   // panel resumen pre-confirmación
 
+  // C2.2.b.1 — casado por línea: candidatos de run_mapping por key + picker abierto.
+  const [lineMatch, setLineMatch] = useState<Record<string, { loading: boolean; candidates: LineMatchCandidate[] }>>({})
+  const [pickerKey, setPickerKey] = useState<string | null>(null)
+
+  function chooseMatch(key: string, recipeItemId: string, name: string, semaphore: 'green' | 'yellow' | null, matchType: string | null) {
+    setDraft(d => d.map(x => x.key === key
+      ? { ...x, recipeItemId, matchedName: name, matchSemaphore: semaphore, matchType }
+      : x))
+    setPickerKey(null)
+  }
+  function clearMatch(key: string) {
+    setDraft(d => d.map(x => x.key === key
+      ? { ...x, recipeItemId: null, matchedName: null, matchSemaphore: null, matchType: null }
+      : x))
+  }
+
   const linkedOrderId = order?.id ?? prefill?.purchaseOrderId ?? null
 
   useEffect(() => {
@@ -184,7 +211,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
     setLoadingLines(false)
     setDraft(ocrPrefill.lines.map((l, i) => ({
       key: `ocr-${i}`,
-      recipeItemId: l.recipeItemId,       // null en a-2 (casado en b)
+      recipeItemId: l.recipeItemId,       // null al entrar; lo pone el casado (b.1)
       productName: l.productName,
       purchaseFormatId: null,
       formatLabel: null,
@@ -197,8 +224,42 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
       poLineId: null,
       lotCode: l.lotCode,
       expiryDate: l.expiryDate,
+      rawText: l.productName,
+      supplierCode: l.supplierCode,
+      matchedName: null,
+      matchSemaphore: null,
+      matchType: null,
     })))
   }, [fromOcr, ocrPrefill])
+
+  // C2.2.b.1 — casado de líneas con la memoria (run_mapping). Por cada línea
+  // leída, busca candidatos; si hay un único verde, lo preselecciona (editable).
+  useEffect(() => {
+    if (!fromOcr || !ocrPrefill) return
+    let cancelled = false
+    ;(async () => {
+      for (let i = 0; i < ocrPrefill.lines.length; i++) {
+        const l = ocrPrefill.lines[i]
+        const key = `ocr-${i}`
+        setLineMatch(m => ({ ...m, [key]: { loading: true, candidates: [] } }))
+        try {
+          const cands = await matchReceiptLine(accountId, l.productName, l.supplierCode)
+          if (cancelled) return
+          setLineMatch(m => ({ ...m, [key]: { loading: false, candidates: cands } }))
+          const greens = cands.filter(c => c.semaphore === 'green')
+          if (greens.length === 1) {
+            const g = greens[0]
+            setDraft(d => d.map(x => x.key === key
+              ? { ...x, recipeItemId: g.recipeItemId, matchedName: g.name, matchSemaphore: g.semaphore, matchType: g.matchType }
+              : x))
+          }
+        } catch {
+          if (!cancelled) setLineMatch(m => ({ ...m, [key]: { loading: false, candidates: [] } }))
+        }
+      }
+    })()
+    return () => { cancelled = true }
+  }, [fromOcr, ocrPrefill, accountId])
 
   useEffect(() => {
     if (fromOcr) return                   // en OCR las líneas las pone el efecto de arriba
@@ -259,6 +320,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
             poLineId: l.purchaseOrderLineId,
             lotCode: null,
             expiryDate: null,
+            rawText: null, supplierCode: null, matchedName: null, matchSemaphore: null, matchType: null,
           }
         })
       } else if (againstOrder && order) {
@@ -281,6 +343,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
             poLineId: l.id,
             lotCode: null,
             expiryDate: null,
+            rawText: null, supplierCode: null, matchedName: null, matchSemaphore: null, matchType: null,
           }
         })
       } else {
@@ -299,6 +362,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
           poLineId: null,
           lotCode: null,
           expiryDate: null,
+          rawText: null, supplierCode: null, matchedName: null, matchSemaphore: null, matchType: null,
         }))
       }
       if (!cancelled) setDraft(lines)
@@ -593,8 +657,32 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                       }
                       return (
                         <tr key={l.key} className={`border-t border-border-default ${complete && !hasQty ? 'opacity-60' : ''}`}>
-                          <td className="px-3 py-2 text-text-primary">{l.productName}</td>
-                          <td className="px-3 py-2 text-text-primary">{l.formatLabel ?? '—'}</td>
+                          <td className="px-3 py-2 text-text-primary align-top">
+                            {fromOcr ? (
+                              <div className="space-y-1">
+                                {l.recipeItemId ? (
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className={`inline-block w-2 h-2 rounded-full ${l.matchSemaphore === 'green' ? 'bg-success' : 'bg-warning'}`} />
+                                    <span className="font-medium text-text-primary">{l.matchedName}</span>
+                                    {l.matchType && <span className="text-[10px] text-text-secondary">({matchTypeLabel(l.matchType)})</span>}
+                                  </div>
+                                ) : (
+                                  <span className="text-[11px] px-1.5 py-0.5 rounded bg-warning-bg text-warning border border-warning/20">sin casar</span>
+                                )}
+                                <div className="text-[11px] text-text-tertiary">
+                                  albarán: {l.rawText}{l.supplierCode ? ` · cód. ${l.supplierCode}` : ''}
+                                </div>
+                                <button type="button" onClick={() => setPickerKey(l.key)} disabled={saving}
+                                  className="text-[11px] text-accent hover:underline disabled:opacity-50">
+                                  {l.recipeItemId ? 'Cambiar artículo' : 'Casar artículo'}
+                                  {lineMatch[l.key]?.loading ? ' · buscando…' : ''}
+                                </button>
+                              </div>
+                            ) : (
+                              l.productName
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-text-primary align-top">{l.formatLabel ?? '—'}</td>
                           {hasReference && <td className="px-3 py-2 text-right tabular-nums text-text-secondary">{l.qtyOrdered ?? '—'}</td>}
                           {hasReference && <td className="px-3 py-2 text-right tabular-nums text-text-secondary">{l.alreadyReceived ?? '—'}</td>}
                           {hasReference && (
@@ -667,6 +755,23 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
           onConfirm={() => persist(true)}
         />
       )}
+
+      {pickerKey && (() => {
+        const line = draft.find(x => x.key === pickerKey)
+        if (!line) return null
+        return (
+          <LineMatchPicker
+            accountId={accountId}
+            rawText={line.rawText ?? line.productName}
+            supplierCode={line.supplierCode}
+            candidates={lineMatch[pickerKey]?.candidates ?? []}
+            currentRecipeItemId={line.recipeItemId}
+            onChoose={(itemId, name, semaphore, matchType) => chooseMatch(pickerKey, itemId, name, semaphore, matchType)}
+            onClear={() => { clearMatch(pickerKey); setPickerKey(null) }}
+            onClose={() => setPickerKey(null)}
+          />
+        )
+      })()}
     </div>
   )
 }

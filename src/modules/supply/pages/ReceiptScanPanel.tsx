@@ -101,6 +101,7 @@ export default function ReceiptScanPanel({ accountId, onBack, onCreateReceipt }:
         lines: result.lines.map(l => ({
           recipeItemId: null,                 // casado en C2.2.b
           productName: l.raw_text,
+          supplierCode: l.supplier_code,
           qty: l.quantity,
           unitCost: l.unit_price_net,
           lotCode: l.lot_code,
