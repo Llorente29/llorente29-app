@@ -2,7 +2,7 @@
 
 > **Documento maestro único de memoria persistente del proyecto Folvy.**
 > Lectura obligatoria al inicio de cada sesión técnica.
-> **Última actualización: 06/06/2026 (noche).** Sesión de diseño: **REDISEÑO EDITORIAL de la ficha de producto** (CatalogProductDetailPage v2 — foto hero full-width con lightbox, card elevada, Fraunces en títulos, JetBrains Mono en precios, barras de margen visuales por canal, channel badges con logos reales), **convención IVA incluido** en channel_rate/brand_channel_rate (etiquetas "(IVA incl.)" + VatBreakdown + own_customer_fee_vat_pct), **E2 cascada de margen** comparativa por canal en la ficha, **conectores delivery** (glovo/justeat/uber con logos en bucket público menu-photos) y **fix Fraunces** (.font-display en index.css). E1 verificado en vivo. Ver §1.1 para detalle. Antes (05/06) Catálogo de Marca Fase A, Ficha B1, Economía de Canal E1; (04/06) C3 factura/three-way, inventario perpetuo capa 1, saneamiento local operativo.
+> **Última actualización: 06/06/2026 (noche, 8ª regeneración).** Sesión maratón doble: (1) Rediseño editorial ficha producto, convención IVA incl., E2 cascada margen, conectores delivery, Fraunces fix, foto real. (2) **CATÁLOGO DE MARCA COMPLETO** — esquema Fase A (8 tablas nuevas + evolución menu_item/sale_line), importador Last.app API (151 prod/17 combos/9 marcas), **TABLA RASA** de datos de prueba, pantalla Menú en Kitchen, ficha B1 editorial con secciones apiladas. Modelo de comisiones de 3 clases investigado (no construido). Catcher = broker reparto propio. 15 commits, build verde, 0 0. Ver §1.1 para detalle.
 >
 > Este es el ÚNICO documento de contexto. `CONTEXTO_ESTADO.md` y `CONTEXTO_REGLAS.md`
 > quedaron retirados el 25/05/2026: estaban desincronizados. Toda su información
@@ -53,11 +53,12 @@ Cadencia: en cada paso, antes de cerrarlo, Claude para SOLO y aplica el control 
 ### 1.0 — CORRECCIÓN DE DATO (vigente)
 CEO: **Julio Gª Colón (García Colón)**, NO "Gascón". Admin Google: `jgcolon@idasal.com`. Correo partners/integraciones: `partners@folvy.app`. **Folvy es para TODA la hostelería, no solo dark kitchens.**
 
-### 1.0.bis — ARQUITECTURA DE CUENTAS (03/06, CRÍTICO — NO CONFUNDIR)
-- **`Folvy Interno` (account_id `00000000-0000-0000-0000-000000000001`) = BANCO DE PRUEBAS.** Aquí vive TODO el trabajo real de desarrollo: 162 raws, 215 dishes, ~12K ventas, 55 familias de plato + 15 de ingrediente. **Para Kitchen/coste trabajar SIEMPRE aquí.**
-- **`Llorente29` (`51ad1792-6629-4ef7-833a-b57b09a86710`) = CLIENTE REAL, hoy VACÍO** (0 raws/dishes/ventas). Se poblará migrando desde Folvy Interno cuando esté listo.
-- **Futuro:** cuenta "cliente base" con semillas/plantillas para onboarding de clientes nuevos.
-- **REGLA:** verificar el `account_id` real con SELECT antes de sembrar/configurar. NO asumir Llorente29. (Hoy se corrigió el vigilante de ingesta y el seed de familias, que estaban por error en la cuenta vacía.)
+### 1.0.bis — ARQUITECTURA DE CUENTAS (actualizado 06/06, CRÍTICO — NO CONFUNDIR)
+- **`Folvy Interno` (account_id `00000000-0000-0000-0000-000000000001`) = SIMULACIÓN CLIENTE NUEVO.**
+  **TABLA RASA ejecutada 06/06:** se borraron TODOS los datos de prueba (21.163 sale_lines, 12.137 sales, 852 menu_items, 377 recipe_items, 869 recipe_lines, 17 stock_movements, + 20 tablas satélite). Conservados: accounts, locations (3), sales_channel (4), brand (17), lastapp_catalog_product (439), lastapp_integration (1).
+  **Estado actual post-importación:** 168 menu_items (151 productos + 17 combos) importados limpios de Last.app API. 57 categorías, 43 modifier_groups, 160 modifier_options, 219 assignments, 43 combo_slots, 247 combo_slot_options. **TODOS con recipe_item_id = NULL** (sin escandallo, sin fantasmas). 0 recipe_items, 0 recipe_lines, 0 sales, 0 stock. Es el estado "cliente nuevo recién conectado": carta comercial completa, nada operativo.
+- **`Llorente29` (`51ad1792-6629-4ef7-833a-b57b09a86710`) = CLIENTE REAL, VACÍO.** Se poblará cuando la simulación del onboarding esté validada.
+- **REGLA:** verificar account_id con SELECT antes de cualquier operación. NO asumir.
 
 ### 1.0.ter — DECISIÓN ESTRATÉGICA MAYOR (02/06) — NO PERDER
 **Folvy es INTEGRADOR DIRECTO de las plataformas de delivery (Glovo primero), sin intermediarios.** Razones: coste, concepto 360, control del flujo de datos, fidelización estructural. Confirmado viable (Glovo/Uber tienen partner program con staging gratis).
@@ -159,6 +160,30 @@ Cadena completa del albarán escaneado: escanear (foto cámara directa en móvil
 - **Fraunces fix (06/06):** Google Fonts carga Fraunces, Tailwind mapea font-display, pero la clase se perdía por purge. Fix: regla manual `.font-display` en index.css usando var(--font-display). Permanente.
 - **Bucket menu-photos (06/06):** Bucket público en Supabase Storage para fotos de productos del catálogo. Primera foto: milanesa_clasica.jpeg.
 
+**CATÁLOGO DE MARCA — FASE A COMPLETA + IMPORTADOR + PANTALLA MENÚ + FICHA B1 (06/06, EN PRODUCCIÓN):**
+Bloque completo construido de cero en una sesión: esquema → importador → tabla rasa → importación real → UI.
+
+- **Esquema Fase A (commit 8716f9c, migración 20260605T0100):** 8 tablas nuevas (menu_category, menu_item_override con índice unique COALESCE location×channel, modifier_group, modifier_option, modifier_group_assignment, modifier_recipe_impact, combo_slot, combo_slot_option) + evolución menu_item (+product_type, +menu_category_id, +short_name, +kitchen_name) + evolución sale_line (+parent_sale_line_id, +line_type, +modifier_option_id, +combo_slot_id). 16 RLS policies patrón read/write. Commit 8716f9c.
+- **A6-schema (commit 47eb640, migración 20260605T0200):** channel_id → nullable, recipe_item_id → nullable, +external_id +external_source en 6 tablas de catálogo. 6 índices únicos parciales (external_source, external_id) para idempotencia. kitchen.ts alineado (channelId/recipeItemId nullable). database.ts regenerado.
+- **Importador lastapp-catalog-import (commit ae855fa):** Edge Function con auth dual (JWT platform admin o x-internal-key). 5 fases: locations→brands→catalogs.default (filtra vacíos + excluye "informes") → productos/combos en uso por marca → catálogo rico de organización → filtro cascada en-uso → resolve brand + upsert idempotente (external_id). Alias de marca (Dirty Burgers→Dirty Burger). Combo-componentes recuperados (Base Pollo/Cerdo/Ternera como productos en uso vía combo). is_active vs is_available (agotado entra). Desplegada --no-verify-jwt. Validada dry_run + ejecución real. Re-ejecutable sin duplicar.
+- **Tabla rasa (06/06):** borrado total de datos de prueba de Folvy Interno. Trigger trg_article_supplier_recompute_cost desactivado durante borrado. Ver §1.0.bis para estado resultante.
+- **Importación real (06/06):** 151 productos, 17 combos, 57 categorías, 43 modifier groups, 160 modifier options, 219 assignments, 43 combo slots, 247 combo slot options. 9 marcas importadas (Meraki Pita, Lobbers, Smash Brothers, Scandal Burgers, Bendito Burrito, Mila's Sandwiches, Milanesa House, The Urban Kebab, Dirty Burgers). 3 descartadas por vacías (Chivuos, Koreans, Tienda Pza Castilla). 1 sin resolver (FOODINT, pseudo-marca). 0 warnings. Verificada contra BBDD.
+- **Pantalla Menú KitchenMenuPage (commit 9ace0e7):** ruta 'menu' en Kitchen sidebar. Selector de marca, KPI cobertura escandallo (0% = onboarding), categorías + productos con estado escandallo, combos expandibles. brandCatalogService (lectura catálogo + modifiers).
+- **Ficha B1 CatalogProductDetailPage (commit 9b0abdf):** detalle de producto con secciones apiladas + índice sticky lateral (escritorio, evidencia Baymard — NO pestañas horizontales). Secciones: Datos (editable: nombre, precio, descripción) · Precios (placeholder) · Modificadores (read-only: grupos con opciones y price_impact) · Disponibilidad (placeholder) · Avanzado (placeholder). Patrón lista+detalle por estado (id+onBack). Rediseño editorial v2: foto hero full-width con lightbox, card elevada sobre foto (shadow-lg), Fraunces títulos, JetBrains Mono precios, brand chip flotante con lookup dinámico a tabla brand, channel badges con logos reales de connector (Glovo, JustEat, Uber) o pill color con icono Lucide como fallback, barras de margen visuales por canal (food cost / comisión / transporte / margen verde), 3 metric cards (PVP, Food Cost, Mejor Margen). Wrapper max-w-6xl (1152px). ESTÁNDAR VISUAL para fichas de detalle de Folvy.
+
+**MODELO DE COMISIONES (06/06, investigado, NO construido):**
+- Comisiones Llorente29 reales: Glovo 15% todo + reparto propio, JE 15% todo + reparto propio, Uber variable por marca y por tipo de reparto.
+- Modelo: comisión por defecto por CANAL que siembra todas las marcas + override por marca donde difiera. brand_channel_rate.brand_channel_id es NOT NULL → el defecto NO puede vivir ahí → necesita tabla channel_rate separada o ALTER. brand_channel (0 filas) sin poblar.
+- 3 clases de coste: A = % al plato (proporcional, fija PVP); B = fijo por pedido (diluir entre artículos reales por peso); C = reparto propio (own_customer_fee menos own_courier_cost).
+- Margen unitario del plato (Plano 1, para fijar PVP): PVP canal − coste escandallo − comisión %. Exacto, sin inventar. Esto es lo que va en la ficha del producto.
+- Margen real del pedido (Plano 2, a posteriori): diluir costes por pedido entre artículos del pedido real. Construible con sale (total, delivery_cost) + sale_line (line_total, weight). Mejora con Catcher (dato real de transporte por pedido).
+
+**CATCHER (06/06, investigado vía sandbox.catcher.delivery):**
+NO es agregador de pedidos tipo Deliverect, es BROKER DE REPARTO PROPIO (last-mile). Endpoints: Create Order, Update delivery price, Order Details/History, Driver Location, webhooks. Auth OAuth2. NO da comisión de plataforma. SÍ da coste real de transporte propio por pedido (own_courier_cost). Integración FUTURA con su API, NO bloquea comisiones (config manual base, Catcher enriquece).
+
+**CAPA 2 CONSUMO — RECON COMPLETO (06/06, diseño pendiente):**
+Cadena mapeada: sale_line → menu_item → recipe_item → recipe_line → raw. 99.3% sale_lines con menu_item, 100% menu_items con recipe_item_id. Explosión plana (todo raw, 0 sub-recetas). yield_portions sin usar (NULL/0 en los 95 platos que tenían escandallo). 7 patrones de modificadores identificados en ventas reales (choice, extras, removal, size, side, cross-sell, comment). Decisión: normalizar en ingesta (Opción B, estándar industria — el motor de consumo trabaja con datos normalizados, no parsea JSON del TPV).
+
 **Lo previo sigue vigente** (familias AECOC, monitorización ingesta 2+3, Folvy Connect/Glovo, motor coste real Kitchen, etc.) — ver historial más abajo.
 
 ### 1.2 — INTEGRADORES (evaluación cerrada)
@@ -189,13 +214,17 @@ Last.app (525€/mes, a sustituir), HubRise (segunda fila), KitchenHub/Otter/Del
 - **RPC con parámetros opcionales:** el tipo generado pone `string[] | undefined` (no `| null`) para args con DEFAULT → pasar `?? undefined`, no `?? null` (si no, TS2322).
 - **Falta UI para editar el perfil propio** (nombre): hoy se corrigió "Gascón"→"Gª Colón" por SQL directo en `user_profiles.display_name`.
 
-### 1.4 — Próximos pasos priorizados
-1. **VERIFICAR E1 en vivo** + **E2 cascada margen en ficha de producto** (sección Precios). brand_channel vacío → poblar para overrides.
-2. **SUPPLY C2/C3 verificar en vivo** (factura OCR, three-way, impacto coste). Inventario capa 1 verificar en vivo.
-3. **INVENTARIO CAPA 2 — CONSUMO** por ventas×escandallo → habilita AvT real, autoinventario IA, To-Par.
-4. **Envío del pedido** (email/WhatsApp). **Reorientar web** a vender.
-5. **Glovo G1** al recibir acceso. **Catálogo Fase B** (CRUD, drag&drop, push a canales).
-6. **Producción Llorente29 objetivo: 7 sept 2026.**
+### PENDIENTE (priorizado)
+1. **Comisiones por canal (B2)** — tabla channel_rate (defecto por canal) + UI de configuración en Ajustes Kitchen + poblar Glovo 15%, JE 15%, Uber variable. Desbloquea margen neto en ficha.
+2. **Llenar ficha B1.2–B1.5** — campos Datos (kitchen_name, dietéticos), fotos (subida a menu-photos), precios con overrides (location×channel), disponibilidad por canal (toggles).
+3. **Ingesta artículos + escandallos (onboarding cliente nuevo)** — artículos de compra vía: OCR facturas (medio construido), master artículos Folvy (nuevo), tecleo manual. Escandallos: cocinero enlaza artículos a productos. modifier_recipe_impact: conecta modifier al escandallo.
+4. **Motor de consumo Capa 2** — ventas × escandallo × modifiers → stock_movement. Prerequisitos: escandallos + modifiers normalizados en sale_line. Batch periódico para arrancar.
+5. **Probar en vivo C2.2/C3/Inventario** — construidos, nunca ejecutados. Post-tabla rasa requiere crear artículos + operar primero (alineado con P3).
+6. **Envío pedido al proveedor** — email (Resend) + WhatsApp (wa.me). No existe nada.
+7. **Horizontes:** Autoinventario IA (Capa 3, idea obligatoria Julio), dashboard menu engineering (Fase C), sync viva catalog:updated, reordenar drag&drop, push catálogo a canales, Catcher integración, master artículos Folvy (AECOC), fotos catálogo (investigar endpoint Last.app).
+- **Docs sin commitear:** 5 ficheros en docs/ (benchmark, catálogo diseño, investigación, importador diseño, pantalla diseño).
+- **Deuda heredada:** rotar tokens seguridad, www.folvy.app NXDOMAIN, responsive sidebar, guard ruta URL permisos.
+- **HITO: Producción Llorente29 objetivo 7 sept 2026.**
 
 ### 1.11 — NOTA HISTÓRICA
 > **02/06:** integrador directo + Folvy Connect + D2 Vault + Glovo (ticket INTSUPPO-1382). **03/06 (AM):** monitorización ingesta capas 2+3. **03/06 (núcleo):** FRENTE COSTE REAL — recon (cimiento ya construido), reconciliación coste (bc28560), validación E2E, pasos 1-2 (8ec5883, 9d75f9b), sub-frente FAMILIAS completo (7d0a6a4, e87de68, 3d21eb9, 2daae1b, 479ecd3): clasificación IA (106 auto/56 revisar/0 sin), revisión, filtro, gestor CRUD con subfamilias AECOC. Hallazgo arquitectura de cuentas (Folvy Interno=pruebas / Llorente29=cliente vacío). Mapa global creado (7fad688). **04/06 (maratón):** C3 factura/three-way (1325e38→349f003→bc96c68→55dea82→6b7bf42), documento Supply docx + mapas actualizados (8fe679e), INVENTARIO CAPA 1 completa (3ea7f0b modelo→191972f áreas→c6862cd conteo→f594279 ajuste), saneamiento LOCAL OPERATIVO (a89147a base+inventario→fcbc46c pedido+recepción). Migraciones 20260604T3400/3500/3600/3800. Incidente: gen types vació database.ts, recuperado por git checkout + método seguro. **05/06 (mañana):** Catálogo de Marca Fase A — esquema 8 tablas (8716f9c, 47eb640), importador Last.app `lastapp-catalog-import` 151 prod/17 combos/9 marcas (ae855fa), pantalla Menú KitchenMenuPage read-only con KPI cobertura (9ace0e7). **05/06 (tarde):** Ficha de producto B1 CatalogProductDetailPage con índice sticky + secciones apiladas Baymard (9b0abdf). Economía de canal E1 datos — channel_rate + menu_item_economics + migración 20260605T0300 (efd8f5e). E1 UI — KitchenSettingsPage zona Ajustes (6c52f54). Documento de diseño economía/canal/promos 10 fases (7a3b0db). Decisiones: Catcher=broker reparto, JELP=2º broker→multi-broker, margen 3 niveles, Ley Ómnibus + artículo-espejo, IVA heterogéneo.
@@ -1738,3 +1767,22 @@ Sesión larga y muy productiva: se construyó y cerró C2 entero, con varias ite
 - Conectores justeat + uber con logos (migración 20260606T0200, commit 6cd4018)
 - Fix Fraunces purge (commit 3546df2)
 - Foto real milanesa_clasica.jpeg en bucket menu-photos + lightbox
+
+### Sesión 06/06 (continuación — Catálogo de Marca completo)
+- Investigación Capa 2 Consumo: RECON completo cadena ventas→escandallo, 7 patrones de modifiers, decisión normalizar en ingesta
+- Benchmark 12 plataformas (Toast, R365, Crunchtime, MarketMan, Apicbase, Lightspeed, Deliverect, Otter, Supy, xtraCHEF, Craftable, meez)
+- 5 prototipos iterativos UX de modificadores con feedback de Julio
+- 3 documentos de investigación/diseño generados
+- OpenAPI Last.app analizado, llamadas reales a API (locations, brands, catalogs, org catalog)
+- Catálogo Fase A: 8 tablas nuevas + evolución menu_item/sale_line + 16 RLS + idempotencia external_id (commits 8716f9c, 47eb640)
+- Importador lastapp-catalog-import: Edge Function 5 fases, alias marca, combo-componentes, is_active vs is_available, 3 iteraciones fix (commit ae855fa)
+- TABLA RASA: borrado total datos de prueba Folvy Interno (21k sale_lines, 852 menu_items, 377 recipe_items, etc.)
+- Importación REAL: 151 productos + 17 combos + 9 marcas + 0 warnings, verificada en BBDD
+- Pantalla Menú KitchenMenuPage: selector marca, KPI cobertura, categorías, combos expandibles (commit 9ace0e7)
+- Ficha B1 CatalogProductDetailPage: secciones apiladas + índice sticky Baymard + datos editables + modifiers read-only (commit 9b0abdf)
+- Rediseño editorial v2: foto hero, card elevada, barras margen, channel badges logos, Fraunces, max-w-6xl
+- Investigación comisiones: 3 clases coste, Llorente29 real (Glovo/JE 15%, Uber variable), modelo defecto+override
+- Investigación Catcher: broker reparto propio (no agregador), sandbox.catcher.delivery
+- Análisis Glovo scrape: carta distinta por canal (precios, categorías, productos exclusivos, promos)
+- Investigación Otter: benchmark UX para gestión de catálogo (9 secciones, preview en vivo)
+- DECISIONES CLAVE: menú como punto de partida onboarding, unificación artículos entre marcas, marca=verdad+override por ubicación, channel_id nullable, recipe_item_id nullable, secciones apiladas (no tabs), is_active vs is_available
