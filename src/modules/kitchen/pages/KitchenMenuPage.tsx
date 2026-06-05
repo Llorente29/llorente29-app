@@ -24,6 +24,7 @@ import {
   type CatalogCombo,
 } from '@/modules/kitchen/services/brandCatalogService'
 import { getMenuItemEconomics } from '@/modules/kitchen/services/menuItemService'
+import CatalogProductDetailPage from '@/modules/kitchen/pages/CatalogProductDetailPage'
 import type { MenuItemEconomics } from '@/types/kitchen'
 
 function formatEur(value: number | null): string {
@@ -52,6 +53,7 @@ export default function KitchenMenuPage() {
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [expandedCombos, setExpandedCombos] = useState<Set<string>>(new Set())
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null)
 
   // Cargar marcas con catálogo
   useEffect(() => {
@@ -129,6 +131,24 @@ export default function KitchenMenuPage() {
       if (next.has(id)) next.delete(id); else next.add(id)
       return next
     })
+  }
+
+  // DETALLE de producto (patrón lista+detalle por estado). Al volver, recargamos
+  // el catálogo de la marca para reflejar cambios (precio, nombre editados).
+  function handleDetailBack() {
+    setSelectedProductId(null)
+    if (activeAccountId && selectedBrandId) {
+      listCategoriesWithProducts(activeAccountId, selectedBrandId).then(setCategories).catch(() => {})
+      listBrandsWithCatalog(activeAccountId).then(setBrands).catch(() => {})
+    }
+  }
+
+  if (selectedProductId) {
+    return (
+      <div className="p-4 sm:p-6 max-w-3xl mx-auto">
+        <CatalogProductDetailPage menuItemId={selectedProductId} onBack={handleDetailBack} />
+      </div>
+    )
   }
 
   if (accountsLoading || loadingBrands) {
@@ -232,7 +252,8 @@ export default function KitchenMenuPage() {
                   return (
                     <div
                       key={p.id}
-                      className={`flex items-center gap-3 px-4 py-3 ${idx < cat.products.length - 1 ? 'border-b border-gray-100' : ''}`}
+                      onClick={() => setSelectedProductId(p.id)}
+                      className={`flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 ${idx < cat.products.length - 1 ? 'border-b border-gray-100' : ''}`}
                     >
                       <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center text-gray-400 shrink-0">
                         {p.photoUrl

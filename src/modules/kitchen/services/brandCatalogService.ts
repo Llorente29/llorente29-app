@@ -285,3 +285,92 @@ export async function listCombos(
     slots: slotsByCombo.get(c.id as string) ?? [],
   }))
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// Detalle de producto: grupos de modificadores con sus opciones
+// ─────────────────────────────────────────────────────────────────────
+
+export interface CatalogModifierOption {
+  id: string
+  name: string
+  priceImpact: number
+  isDefault: boolean
+  recipeItemId: string | null
+}
+
+export interface CatalogModifierGroup {
+  id: string
+  name: string
+  groupType: string
+  minSelections: number
+  maxSelections: number
+  position: number
+  options: CatalogModifierOption[]
+}
+
+// Grupos de modificadores asignados a un producto, con sus opciones ordenadas.
+export async function getProductModifierGroups(
+  accountId: string,
+  menuItemId: string,
+): Promise<CatalogModifierGroup[]> {
+  requireSupabase()
+
+  // Asignaciones del producto -> grupos
+  const { data: asg, error: asgErr } = await supabase!
+    .from('modifier_group_assignment')
+    .select('modifier_group_id, position')
+    .eq('account_id', accountId)
+    .eq('menu_item_id', menuItemId)
+    .order('position', { ascending: true })
+  if (asgErr) throw new Error(`Error leyendo modificadores del producto: ${asgErr.message}`)
+
+  const groupIds = (asg ?? []).map((a) => a.modifier_group_id as string)
+  if (groupIds.length === 0) return []
+
+  // Grupos
+  const { data: groups, error: gErr } = await supabase!
+    .from('modifier_group')
+    .select('id, name, group_type, min_selections, max_selections, position')
+    .eq('account_id', accountId)
+    .in('id', groupIds)
+  if (gErr) throw new Error(`Error leyendo grupos: ${gErr.message}`)
+
+  // Opciones de esos grupos
+  const { data: opts, error: oErr } = await supabase!
+    .from('modifier_option')
+    .select('id, modifier_group_id, name, price_impact, is_default, recipe_item_id, position')
+    .eq('account_id', accountId)
+    .in('modifier_group_id', groupIds)
+    .order('position', { ascending: true })
+  if (oErr) throw new Error(`Error leyendo opciones: ${oErr.message}`)
+
+  const optsByGroup = new Map<string, CatalogModifierOption[]>()
+  for (const o of opts ?? []) {
+    const gid = o.modifier_group_id as string
+    const arr = optsByGroup.get(gid) ?? []
+    arr.push({
+      id: o.id as string,
+      name: o.name as string,
+      priceImpact: Number(o.price_impact ?? 0),
+      isDefault: o.is_default === true,
+      recipeItemId: (o.recipe_item_id as string) ?? null,
+    })
+    optsByGroup.set(gid, arr)
+  }
+
+  // Orden de grupos según la posición de la asignación
+  const posByGroup = new Map<string, number>()
+  for (const a of asg ?? []) posByGroup.set(a.modifier_group_id as string, Number(a.position ?? 0))
+
+  return (groups ?? [])
+    .map((g) => ({
+      id: g.id as string,
+      name: g.name as string,
+      groupType: (g.group_type as string) ?? 'choice',
+      minSelections: Number(g.min_selections ?? 0),
+      maxSelections: Number(g.max_selections ?? 1),
+      position: posByGroup.get(g.id as string) ?? Number(g.position ?? 0),
+      options: optsByGroup.get(g.id as string) ?? [],
+    }))
+    .sort((a, b) => a.position - b.position)
+}
