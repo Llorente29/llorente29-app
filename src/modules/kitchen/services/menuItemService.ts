@@ -61,6 +61,13 @@ export function rowToMenuItem(row: RowMenuItem): MenuItem {
     aiConfidence: row.ai_confidence,
     needsReview: row.needs_review,
     aiSuggestedPrice: row.ai_suggested_price,
+    kitchenName: row.kitchen_name ?? null,
+    shortName: row.short_name ?? null,
+    notesInternal: row.notes_internal ?? null,
+    targetFoodCostPct: row.target_food_cost_pct != null ? Number(row.target_food_cost_pct) : null,
+    tags: (row.tags as string[] | null) ?? [],
+    packagingDescription: row.packaging_description ?? null,
+    packagingCost: row.packaging_cost != null ? Number(row.packaging_cost) : null,
   }
 }
 
@@ -103,6 +110,13 @@ function menuItemUpdateToRow(patch: MenuItemUpdate): RowMenuItemUpdate {
   if (patch.archivedAt !== undefined) row.archived_at = patch.archivedAt
   if (patch.needsReview !== undefined) row.needs_review = patch.needsReview
   if (patch.aiSuggestedPrice !== undefined) row.ai_suggested_price = patch.aiSuggestedPrice
+  if (patch.kitchenName !== undefined) row.kitchen_name = patch.kitchenName
+  if (patch.shortName !== undefined) row.short_name = patch.shortName
+  if (patch.notesInternal !== undefined) row.notes_internal = patch.notesInternal
+  if (patch.targetFoodCostPct !== undefined) row.target_food_cost_pct = patch.targetFoodCostPct
+  if (patch.tags !== undefined) row.tags = patch.tags
+  if (patch.packagingDescription !== undefined) row.packaging_description = patch.packagingDescription
+  if (patch.packagingCost !== undefined) row.packaging_cost = patch.packagingCost
   return row
 }
 

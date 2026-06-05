@@ -5349,6 +5349,9 @@ export type Database = {
           menu_category_id: string | null
           name: string
           needs_review: boolean
+          notes_internal: string | null
+          packaging_cost: number | null
+          packaging_description: string | null
           photo_url: string | null
           position: number
           price: number
@@ -5356,6 +5359,8 @@ export type Database = {
           recipe_item_id: string | null
           short_name: string | null
           source: string
+          tags: string[] | null
+          target_food_cost_pct: number | null
           updated_at: string
           vat_rate: number
         }
@@ -5381,6 +5386,9 @@ export type Database = {
           menu_category_id?: string | null
           name: string
           needs_review?: boolean
+          notes_internal?: string | null
+          packaging_cost?: number | null
+          packaging_description?: string | null
           photo_url?: string | null
           position?: number
           price: number
@@ -5388,6 +5396,8 @@ export type Database = {
           recipe_item_id?: string | null
           short_name?: string | null
           source?: string
+          tags?: string[] | null
+          target_food_cost_pct?: number | null
           updated_at?: string
           vat_rate?: number
         }
@@ -5413,6 +5423,9 @@ export type Database = {
           menu_category_id?: string | null
           name?: string
           needs_review?: boolean
+          notes_internal?: string | null
+          packaging_cost?: number | null
+          packaging_description?: string | null
           photo_url?: string | null
           position?: number
           price?: number
@@ -5420,6 +5433,8 @@ export type Database = {
           recipe_item_id?: string | null
           short_name?: string | null
           source?: string
+          tags?: string[] | null
+          target_food_cost_pct?: number | null
           updated_at?: string
           vat_rate?: number
         }

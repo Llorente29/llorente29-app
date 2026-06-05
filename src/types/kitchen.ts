@@ -575,6 +575,13 @@ export interface MenuItem {
   aiConfidence: number | null
   needsReview: boolean
   aiSuggestedPrice: number | null
+  kitchenName: string | null
+  shortName: string | null
+  notesInternal: string | null
+  targetFoodCostPct: number | null
+  tags: string[]
+  packagingDescription: string | null
+  packagingCost: number | null
 }
 export interface MenuItemInsert {
   accountId: string
@@ -611,6 +618,13 @@ export interface MenuItemUpdate {
   archivedAt?: string | null
   needsReview?: boolean
   aiSuggestedPrice?: number | null
+  kitchenName?: string | null
+  shortName?: string | null
+  notesInternal?: string | null
+  targetFoodCostPct?: number | null
+  tags?: string[]
+  packagingDescription?: string | null
+  packagingCost?: number | null
 }
 
 // ─────────────────────────────────────────────────────────────────────
