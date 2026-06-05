@@ -2,7 +2,7 @@
 
 > **Documento maestro único de memoria persistente del proyecto Folvy.**
 > Lectura obligatoria al inicio de cada sesión técnica.
-> **Última actualización: 06/06/2026 (noche, 8ª regeneración).** Sesión maratón doble: (1) Rediseño editorial ficha producto, convención IVA incl., E2 cascada margen, conectores delivery, Fraunces fix, foto real. (2) **CATÁLOGO DE MARCA COMPLETO** — esquema Fase A (8 tablas nuevas + evolución menu_item/sale_line), importador Last.app API (151 prod/17 combos/9 marcas), **TABLA RASA** de datos de prueba, pantalla Menú en Kitchen, ficha B1 editorial con secciones apiladas. Modelo de comisiones de 3 clases investigado (no construido). Catcher = broker reparto propio. 15 commits, build verde, 0 0. Ver §1.1 para detalle.
+> **Última actualización: 07/06/2026 (madrugada, 9ª regeneración).** Sesión continuación: **Comisiones B2 en producción** (4 canales con datos reales de Llorente29), **benchmark ficha de producto** (8 plataformas, 10 dimensiones, documento de diseño), **ficha v2 construida** (12 secciones colapsables, menuPhotoService, 5 columnas nuevas: notes_internal, target_food_cost_pct, tags, packaging_description, packaging_cost). Maqueta v2 aprobada como referencia visual. 2 commits (f89541c, 2a4a1d9), build verde, 0 0.
 >
 > Este es el ÚNICO documento de contexto. `CONTEXTO_ESTADO.md` y `CONTEXTO_REGLAS.md`
 > quedaron retirados el 25/05/2026: estaban desincronizados. Toda su información
@@ -183,6 +183,30 @@ NO es agregador de pedidos tipo Deliverect, es BROKER DE REPARTO PROPIO (last-mi
 
 **CAPA 2 CONSUMO — RECON COMPLETO (06/06, diseño pendiente):**
 Cadena mapeada: sale_line → menu_item → recipe_item → recipe_line → raw. 99.3% sale_lines con menu_item, 100% menu_items con recipe_item_id. Explosión plana (todo raw, 0 sub-recetas). yield_portions sin usar (NULL/0 en los 95 platos que tenían escandallo). 7 patrones de modificadores identificados en ventas reales (choice, extras, removal, size, side, cross-sell, comment). Decisión: normalizar en ingesta (Opción B, estándar industria — el motor de consumo trabaja con datos normalizados, no parsea JSON del TPV).
+
+**COMISIONES B2 — EN PRODUCCIÓN (06/06):**
+Configuradas directamente desde la app (Ajustes Kitchen). channel_rate: 4 filas con datos reales de Llorente29:
+- Glovo: 15%, own_delivery, fija 0,90€, envío 4,50€, rider 6,00€
+- JustEat: 15%, own_delivery, fija 0,30€, envío 3,50€, rider 6,30€
+- Shop: 0%, own_delivery, envío 4,50€, rider 6,30€
+- Uber: 27%, platform_delivery, fija 0,80€
+Barras de margen en la ficha muestran márgenes reales: Shop 58.5% (mejor), Glovo 53.1%, JE 51.1%, Uber 40.1%.
+Pendiente: brand_channel_rate (overrides por marca) no configurado — Uber variable por marca queda como deuda menor.
+
+**FICHA DE PRODUCTO V2 — CONSTRUIDA (06/06, commit 2a4a1d9):**
+Benchmark de 8 plataformas (Apicbase, R365, meez, Supy, Otter, MarketMan, gstock, Crunchtime) → 10 dimensiones identificadas, ningún competidor las cubre todas juntas. Documento de diseño: docs/folvy_ficha_producto_benchmark_diseno.md. Maqueta interactiva v2 aprobada por Julio como referencia visual.
+CatalogProductDetailPage.tsx reescrito completo (898 líneas, +1060/−308):
+- CollapsibleSection reutilizable + helper Icon + AiButton + EmptyState
+- Top bar: ← Menú · marca + Exportar + "…"
+- Hero con galería lateral (2 thumbnails + botón "+" → uploadMenuPhoto → URL pública menu-photos)
+- Identity card: tags coloreados, estado escandallo (OK/Sin), botón IA "Mejorar descripción"
+- 12 secciones colapsables: Escandallo (resumen+enlace, no duplica editor), Economía (barras margen preservadas + target FC + stock para), Precios (tabla overrides), Modificadores (read-only preservado), Alérgenos (auto desde ingredientes, placeholder), Proveedores (resumen impacto), Ventas (empty state), Notas internas (editable inline), Packaging (editable inline), Marcas y ubicaciones (fetch real locations), Avanzado (kitchen_name/short_name editables, historial)
+- Guide box IA morada al final (CTA onboarding)
+- menuPhotoService.ts nuevo: compressImage + uploadMenuPhoto (bucket público) + deleteMenuPhoto
+- Migración 20260606T0100: 5 columnas nuevas (notes_internal, target_food_cost_pct, tags text[], packaging_description, packaging_cost)
+- Tipos + mappers extendidos en kitchen.ts + menuItemService.ts
+- database.ts regenerado (método seguro, 10306 líneas)
+- ⚠️ Tokens de color: Claude Code cambió tokens de marca (text-text-secondary, bg-card) a paleta Tailwind estándar (stone/green/amber/purple). Puede desentonar con el resto de la app. Pendiente de revisión visual.
 
 **Lo previo sigue vigente** (familias AECOC, monitorización ingesta 2+3, Folvy Connect/Glovo, motor coste real Kitchen, etc.) — ver historial más abajo.
 
@@ -1786,3 +1810,16 @@ Sesión larga y muy productiva: se construyó y cerró C2 entero, con varias ite
 - Análisis Glovo scrape: carta distinta por canal (precios, categorías, productos exclusivos, promos)
 - Investigación Otter: benchmark UX para gestión de catálogo (9 secciones, preview en vivo)
 - DECISIONES CLAVE: menú como punto de partida onboarding, unificación artículos entre marcas, marca=verdad+override por ubicación, channel_id nullable, recipe_item_id nullable, secciones apiladas (no tabs), is_active vs is_available
+
+### Sesión 06/06→07/06 (madrugada — Comisiones + Ficha v2)
+- CONTEXTO 8ª regeneración (commit f89541c): 5 bloques actualizados, §1.0.bis reescrito (simulación cliente nuevo post-tabla rasa), 4 bloques nuevos en §1.1 (Catálogo Fase A, Modelo comisiones, Catcher, Capa 2 Consumo), PENDIENTE reordenado, hito 7 sept reincorporado
+- Comisiones B2 configuradas en producción: 4 canales con datos reales (Glovo 15%, JE 15%, Shop 0%, Uber 27%), verificadas en BBDD
+- Benchmark ficha de producto: 8 plataformas (Apicbase, R365, meez, Supy, Otter, MarketMan, gstock, Crunchtime), 10 dimensiones mapeadas, documento de diseño generado
+- Maqueta v1 (10 dimensiones rellenas), repaso crítico de Julio, correcciones: escandallo=resumen, proveedores=impacto, IA contextual, galería fotos, target FC, stock, notas, tags, packaging
+- Maqueta v2 definitiva aprobada como referencia visual (12 secciones colapsables)
+- Migración 20260606T0100: 5 columnas nuevas en menu_item
+- menuPhotoService.ts: compressImage + upload bucket público + delete
+- Tipos + mappers extendidos: kitchenName, shortName, notesInternal, targetFoodCostPct, tags, packagingDescription, packagingCost
+- database.ts regenerado (método seguro, 10306 líneas)
+- CatalogProductDetailPage.tsx reescrito completo: 12 secciones, CollapsibleSection, hero galería, identity tags, guide IA, edición inline notas/packaging/kitchen_name
+- Commits: f89541c (CONTEXTO 8ª), 2a4a1d9 (ficha v2 completa)
