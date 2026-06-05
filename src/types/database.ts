@@ -2775,6 +2775,75 @@ export type Database = {
           },
         ]
       }
+      channel_rate: {
+        Row: {
+          account_id: string
+          archived_at: string | null
+          commission_base: string
+          commission_fixed: number | null
+          commission_pct: number | null
+          created_at: string
+          created_by: string | null
+          created_by_name: string | null
+          id: string
+          is_active: boolean
+          own_courier_cost: number | null
+          own_customer_fee: number | null
+          sales_channel_id: string
+          service_type: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          archived_at?: string | null
+          commission_base?: string
+          commission_fixed?: number | null
+          commission_pct?: number | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          id?: string
+          is_active?: boolean
+          own_courier_cost?: number | null
+          own_customer_fee?: number | null
+          sales_channel_id: string
+          service_type: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          archived_at?: string | null
+          commission_base?: string
+          commission_fixed?: number | null
+          commission_pct?: number | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          id?: string
+          is_active?: boolean
+          own_courier_cost?: number | null
+          own_customer_fee?: number | null
+          sales_channel_id?: string
+          service_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channel_rate_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_rate_sales_channel_id_fkey"
+            columns: ["sales_channel_id"]
+            isOneToOne: false
+            referencedRelation: "sales_channel"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clock_entries: {
         Row: {
           address: string | null
