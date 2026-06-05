@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Garantiza la utility font-display sin depender del purge de Tailwind.
+   Va DESPUÉS de @tailwind utilities para ganar por orden de fuente. */
+.font-display {
+  font-family: var(--font-display);
+}
+
 :root {
   --color-bg-page: #F5F4F0;
   --color-bg-card: #FFFFFF;
