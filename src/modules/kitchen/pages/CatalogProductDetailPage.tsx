@@ -375,141 +375,123 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
             </div>
           </div>
 
-          {/* PRECIOS — cascada de margen E2 */}
+          {/* PRECIOS — cascada de margen E2 (comparativa por canal) */}
           <div id="precios" ref={(el) => { sectionRefs.current['precios'] = el }} className="scroll-mt-4">
             <div className="rounded-lg border border-border-default bg-card">
               <div className="px-4 py-3 border-b border-border-default">
-                <h3 className="text-sm font-medium text-text-primary">Precios y margen</h3>
+                <h3 className="text-base font-medium text-text-primary">Precios y margen</h3>
               </div>
               <div className="px-4 py-4 space-y-4 text-sm">
                 {(() => {
                   const pvpSinIva = item.price ?? 0
                   const vatPct = item.vatRate ?? 0
                   const pvpConIva = Math.round(pvpSinIva * (1 + vatPct / 100) * 100) / 100
-                  const channelName = salesChannels.find(c => c.id === item.channelId)?.name
-                  const rate = channelRates.find(r => r.salesChannelId === item.channelId)
-                  const commissionBase = rate?.commissionBase ?? 'pvp_con_iva'
-                  const commissionBasis = commissionBase === 'pvp_sin_iva' ? pvpSinIva : pvpConIva
-                  const commissionPct = rate?.commissionPct ?? null
-                  const commissionAmount = commissionPct != null ? Math.round(commissionBasis * commissionPct / 100 * 100) / 100 : null
-                  const commissionFixedGross = rate?.commissionFixed ?? null
-                  const commissionFixedBase = baseFromGross(commissionFixedGross)
-                  const courierCostBase = baseFromGross(rate?.ownCourierCost ?? null)
-                  const customerFeeBase = baseFromGross(rate?.ownCustomerFee ?? null, rate?.ownCustomerFeeVatPct ?? 10)
                   const hasCost = recipeCost != null && recipeCost > 0
                   const foodCostPct = hasCost && pvpSinIva > 0 ? Math.round(recipeCost! / pvpSinIva * 10000) / 100 : null
-                  // Margen unitario = PVP sin IVA - food cost - comisión %
-                  const marginUnit = pvpSinIva - (hasCost ? recipeCost! : 0) - (commissionAmount ?? 0)
-                  const marginUnitPct = pvpSinIva > 0 ? Math.round(marginUnit / pvpSinIva * 10000) / 100 : null
-                  // Impacto por pedido (comisión fija + rider - ingreso envío)
-                  const orderImpact = -(commissionFixedBase ?? 0) - (courierCostBase ?? 0) + (customerFeeBase ?? 0)
-                  const hasOrderCosts = commissionFixedBase != null || courierCostBase != null || customerFeeBase != null
+                  const DEFAULT_ITEMS_PER_ORDER = 2
 
                   return (
                     <>
-                      {/* Precios */}
+                      {/* Bloque común: precio + escandallo */}
                       <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                        <div className="text-text-secondary text-[11px]">Precio base (sin IVA)</div>
-                        <div className="text-right font-mono text-text-primary">{formatEur(pvpSinIva)}</div>
-                        <div className="text-text-secondary text-[11px]">PVP cliente (IVA {vatPct}%)</div>
-                        <div className="text-right font-mono text-text-primary">{formatEur(pvpConIva)}</div>
+                        <div className="text-text-secondary text-sm">Precio base (sin IVA)</div>
+                        <div className="text-right font-mono text-sm text-text-primary">{formatEur(pvpSinIva)}</div>
+                        <div className="text-text-secondary text-sm">PVP cliente (IVA {vatPct}%)</div>
+                        <div className="text-right font-mono text-sm text-text-primary">{formatEur(pvpConIva)}</div>
+                        <div className="text-text-secondary text-sm">Escandallo (food cost)</div>
+                        {hasCost ? (
+                          <div className="text-right">
+                            <span className="font-mono text-sm text-warning">−{formatEur(recipeCost)}</span>
+                            <span className="text-xs text-text-secondary ml-1.5">{foodCostPct}%</span>
+                          </div>
+                        ) : (
+                          <div className="text-right text-sm text-text-secondary italic">
+                            {item.recipeItemId ? 'sin coste calculado' : 'sin vincular'}
+                          </div>
+                        )}
                       </div>
 
-                      <hr className="border-border-default" />
-
-                      {/* Costes unitarios */}
-                      <div>
-                        <div className="text-[11px] font-medium text-text-secondary mb-2">Costes unitarios</div>
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
-                          <div className="text-text-secondary text-[11px]">Escandallo (food cost)</div>
-                          {hasCost ? (
-                            <div className="text-right">
-                              <span className="font-mono text-warning">−{formatEur(recipeCost)}</span>
-                              <span className="text-[10px] text-text-secondary ml-1.5">{foodCostPct}%</span>
-                            </div>
-                          ) : (
-                            <div className="text-right text-[11px] text-text-secondary italic">
-                              {item.recipeItemId ? 'sin coste calculado' : 'sin vincular'}
-                            </div>
-                          )}
-
-                          {commissionPct != null && (
-                            <>
-                              <div className="text-text-secondary text-[11px]">
-                                Comisión {channelName ?? 'canal'} {commissionPct}%
-                              </div>
-                              <div className="text-right">
-                                <span className="font-mono text-warning">−{formatEur(commissionAmount)}</span>
-                                <span className="text-[10px] text-text-secondary ml-1.5">
-                                  sobre {commissionBase === 'pvp_sin_iva' ? 'PVP' : 'PVP+IVA'}
-                                </span>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      </div>
-
-                      <hr className="border-border-default" />
-
-                      {/* Margen unitario */}
-                      <div className="grid grid-cols-2 gap-x-4">
-                        <div className="text-text-primary text-xs font-medium">
-                          Margen unitario{!hasCost ? ' (sin food cost)' : ''}
-                        </div>
-                        <div className="text-right">
-                          <span className={`font-mono font-medium ${marginUnit >= 0 ? 'text-success' : 'text-danger'}`}>
-                            {formatEur(marginUnit)}
-                          </span>
-                          {marginUnitPct != null && (
-                            <span className="text-[10px] text-text-secondary ml-1.5">{marginUnitPct}%</span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Costes por pedido */}
-                      {hasOrderCosts && rate?.serviceType === 'own_delivery' && (
+                      {/* Comparativa por canal */}
+                      {salesChannels.length > 0 && (
                         <>
                           <hr className="border-border-default" />
-                          <div>
-                            <div className="text-[11px] font-medium text-text-secondary mb-2">Costes por pedido (base, sin IVA)</div>
-                            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
-                              {commissionFixedBase != null && (
-                                <>
-                                  <div className="text-text-secondary text-[11px]">Comisión fija</div>
-                                  <div className="text-right font-mono text-warning">−{formatEur(commissionFixedBase)}</div>
-                                </>
-                              )}
-                              {courierCostBase != null && (
-                                <>
-                                  <div className="text-text-secondary text-[11px]">Coste rider</div>
-                                  <div className="text-right font-mono text-warning">−{formatEur(courierCostBase)}</div>
-                                </>
-                              )}
-                              {customerFeeBase != null && (
-                                <>
-                                  <div className="text-text-secondary text-[11px]">Envío cobrado al cliente</div>
-                                  <div className="text-right font-mono text-success">+{formatEur(customerFeeBase)}</div>
-                                </>
-                              )}
-                              <div className="text-text-primary text-xs font-medium pt-1 border-t border-border-default">Impacto por pedido</div>
-                              <div className={`text-right font-mono font-medium pt-1 border-t border-border-default ${orderImpact >= 0 ? 'text-success' : 'text-danger'}`}>
-                                {orderImpact >= 0 ? '+' : ''}{formatEur(orderImpact)}
-                              </div>
-                            </div>
+                          <div className="text-xs font-medium text-text-secondary">Margen por canal</div>
+                          <div className="space-y-2">
+                            {salesChannels.map(ch => {
+                              const rate = channelRates.find(r => r.salesChannelId === ch.id)
+                              if (!rate) {
+                                return (
+                                  <div key={ch.id} className="flex items-center justify-between py-1.5 px-2 rounded bg-page">
+                                    <span className="text-sm text-text-primary font-medium">{ch.name}</span>
+                                    <span className="text-xs text-text-secondary italic">sin configurar</span>
+                                  </div>
+                                )
+                              }
+                              const commBase = rate.commissionBase === 'pvp_sin_iva' ? pvpSinIva : pvpConIva
+                              const commAmt = rate.commissionPct != null ? Math.round(commBase * rate.commissionPct / 100 * 100) / 100 : 0
+
+                              // Costes por pedido diluidos al artículo (estimación)
+                              const itemsPerOrder = DEFAULT_ITEMS_PER_ORDER
+                              const commFixedBase = baseFromGross(rate.commissionFixed)
+                              const courierBase = baseFromGross(rate.ownCourierCost)
+                              const custFeeBase = baseFromGross(rate.ownCustomerFee, rate.ownCustomerFeeVatPct ?? 10)
+                              const orderCostTotal = (commFixedBase ?? 0) + (courierBase ?? 0) - (custFeeBase ?? 0)
+                              const hasOrderCosts = rate.serviceType === 'own_delivery' && orderCostTotal !== 0
+                              const orderCostPerItem = hasOrderCosts ? Math.round(orderCostTotal / itemsPerOrder * 100) / 100 : 0
+
+                              // Margen total = PVP - food cost - comisión - coste canal diluido
+                              const margin = pvpSinIva - (hasCost ? recipeCost! : 0) - commAmt - orderCostPerItem
+                              const marginPct = pvpSinIva > 0 ? Math.round(margin / pvpSinIva * 10000) / 100 : null
+
+                              return (
+                                <div key={ch.id} className="py-2 px-2 rounded bg-page space-y-1">
+                                  {/* Línea principal: canal + margen */}
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      {ch.color && <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: ch.color }} />}
+                                      <span className="text-sm font-medium text-text-primary">{ch.name}</span>
+                                    </div>
+                                    <div className="text-right">
+                                      <span className={`font-mono text-sm font-medium ${margin >= 0 ? 'text-success' : 'text-danger'}`}>
+                                        {formatEur(margin)}
+                                      </span>
+                                      {marginPct != null && (
+                                        <span className="text-xs text-text-secondary ml-1">{marginPct}%</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  {/* Desglose */}
+                                  <div className="text-xs text-text-secondary space-y-0.5">
+                                    {rate.commissionPct != null && (
+                                      <div className="flex justify-between">
+                                        <span>Comisión {rate.commissionPct}% ({rate.commissionBase === 'pvp_sin_iva' ? 'PVP' : 'PVP+IVA'})</span>
+                                        <span className="font-mono text-sm">−{formatEur(commAmt)}</span>
+                                      </div>
+                                    )}
+                                    {hasOrderCosts && (
+                                      <div className="flex justify-between border-t border-dashed border-border-default pt-0.5">
+                                        <span>Costes de canal (~{itemsPerOrder} uds/pedido) ≈</span>
+                                        <span className="font-mono text-sm">−{formatEur(orderCostPerItem)}</span>
+                                      </div>
+                                    )}
+                                    {!hasCost && (
+                                      <div className="italic">sin food cost — vincula el escandallo</div>
+                                    )}
+                                  </div>
+                                </div>
+                              )
+                            })}
                           </div>
+                          {channelRates.some(r => r.serviceType === 'own_delivery') && (
+                            <p className="text-xs text-text-secondary mt-1">
+                              Los costes de canal (fija, rider, envío) se reparten entre los artículos del pedido.
+                              Hoy se estima a {DEFAULT_ITEMS_PER_ORDER} uds/pedido; con más ventas se calculará automáticamente.
+                            </p>
+                          )}
                         </>
                       )}
-
-                      {/* Nota cuando no hay comisión configurada */}
-                      {!rate && channelName && (
-                        <p className="text-[11px] text-text-secondary">
-                          No hay comisión configurada para {channelName}. Configúrala en Ajustes para ver el margen.
-                        </p>
-                      )}
-                      {!channelName && !item.channelId && (
-                        <p className="text-[11px] text-text-secondary">
-                          Este producto no tiene canal asignado.
-                        </p>
+                      {salesChannels.length === 0 && (
+                        <p className="text-xs text-text-secondary">No hay canales configurados.</p>
                       )}
                     </>
                   )
