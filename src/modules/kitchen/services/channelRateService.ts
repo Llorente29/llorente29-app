@@ -12,6 +12,24 @@
 
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
 
+// ─── IVA de servicios ───────────────────────────────────────────────────────
+// Comisión de plataforma, transporte, broker = tipo general (21% desde 2012).
+// Si el gobierno lo cambiase, mover a modelo versionado como vat_rate/vat_category.
+export const SERVICE_VAT_PCT = 21
+
+/** De bruto (IVA incl.) a base imponible. */
+export function baseFromGross(gross: number | null, vatPct: number = SERVICE_VAT_PCT): number | null {
+  if (gross === null || gross === undefined) return null
+  return Math.round((gross / (1 + vatPct / 100)) * 100) / 100
+}
+
+/** Cuota de IVA contenida en un importe bruto. */
+export function vatFromGross(gross: number | null, vatPct: number = SERVICE_VAT_PCT): number | null {
+  if (gross === null || gross === undefined) return null
+  const base = baseFromGross(gross, vatPct)!
+  return Math.round((gross - base) * 100) / 100
+}
+
 export type ServiceType = 'platform_delivery' | 'own_delivery' | 'pickup'
 export type CommissionBase = 'pvp_con_iva' | 'pvp_sin_iva'
 

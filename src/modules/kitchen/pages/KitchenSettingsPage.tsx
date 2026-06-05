@@ -16,6 +16,9 @@ import {
   listSalesChannels,
   listChannelRates,
   upsertChannelRate,
+  baseFromGross,
+  vatFromGross,
+  SERVICE_VAT_PCT,
   type SalesChannel,
   type ChannelRate,
   type ServiceType,
@@ -39,6 +42,20 @@ function fmtPct(v: number | null): string {
 function fmtEur(v: number | null): string {
   if (v === null || v === undefined) return '—'
   return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(v)
+}
+
+function VatBreakdown({ value }: { value: string }) {
+  const t = value.trim().replace(',', '.')
+  if (t === '') return null
+  const n = Number(t)
+  if (!Number.isFinite(n) || n === 0) return null
+  const base = baseFromGross(n)
+  const vat = vatFromGross(n)
+  return (
+    <p className="text-[10px] text-text-secondary mt-0.5 tabular-nums">
+      → Base {fmtEur(base)} + IVA {SERVICE_VAT_PCT}% ({fmtEur(vat)})
+    </p>
+  )
 }
 
 interface EditState {
@@ -176,7 +193,8 @@ export default function KitchenSettingsPage() {
           <p className="text-[12px] text-text-secondary mb-3">
             Esta es la comisión por defecto del canal: se aplica a todas las marcas que
             venden en él. Si una marca tiene una comisión distinta, se configurará como
-            excepción (próximamente).
+            excepción (próximamente). Los importes en euros se introducen IVA incluido (lo
+            que ves en tu factura); Folvy calcula la base para el margen.
           </p>
 
           {channels.length === 0 ? (
@@ -212,10 +230,10 @@ export default function KitchenSettingsPage() {
                         {existing.map((r) => (
                           <div key={r.id} className="text-xs text-text-secondary flex flex-wrap gap-x-4 gap-y-0.5">
                             <span className="text-text-primary">{SERVICE_TYPE_LABEL[r.serviceType]}</span>
-                            <span>comisión {fmtPct(r.commissionPct)}{r.commissionFixed ? ` + ${fmtEur(r.commissionFixed)}/pedido` : ''}</span>
+                            <span>comisión {fmtPct(r.commissionPct)}{r.commissionFixed ? ` + ${fmtEur(r.commissionFixed)}/pedido (base ${fmtEur(baseFromGross(r.commissionFixed))})` : ''}</span>
                             <span>sobre {COMMISSION_BASE_LABEL[r.commissionBase]}</span>
                             {r.serviceType === 'own_delivery' && (
-                              <span>rider {fmtEur(r.ownCourierCost)} · envío cliente {fmtEur(r.ownCustomerFee)}</span>
+                              <span>rider {fmtEur(r.ownCourierCost)} (base {fmtEur(baseFromGross(r.ownCourierCost))}) · envío cliente {fmtEur(r.ownCustomerFee)}</span>
                             )}
                           </div>
                         ))}
@@ -250,10 +268,11 @@ export default function KitchenSettingsPage() {
                               className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary" />
                           </div>
                           <div>
-                            <label className="block text-[11px] font-medium text-text-secondary mb-1">Comisión fija (€/pedido)</label>
+                            <label className="block text-[11px] font-medium text-text-secondary mb-1">Comisión fija (€/pedido, IVA incl.)</label>
                             <input type="text" inputMode="decimal" value={edit.commissionFixed}
                               onChange={(e) => setEdit({ ...edit, commissionFixed: e.target.value })} disabled={saving}
                               className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary" />
+                            <VatBreakdown value={edit.commissionFixed} />
                           </div>
                         </div>
 
@@ -270,16 +289,18 @@ export default function KitchenSettingsPage() {
                         {edit.serviceType === 'own_delivery' && (
                           <div className="grid grid-cols-2 gap-3">
                             <div>
-                              <label className="block text-[11px] font-medium text-text-secondary mb-1">Coste rider (€/pedido)</label>
+                              <label className="block text-[11px] font-medium text-text-secondary mb-1">Coste rider (€/pedido, IVA incl.)</label>
                               <input type="text" inputMode="decimal" value={edit.ownCourierCost}
                                 onChange={(e) => setEdit({ ...edit, ownCourierCost: e.target.value })} disabled={saving}
                                 className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary" />
+                              <VatBreakdown value={edit.ownCourierCost} />
                             </div>
                             <div>
-                              <label className="block text-[11px] font-medium text-text-secondary mb-1">Envío que paga el cliente (€)</label>
+                              <label className="block text-[11px] font-medium text-text-secondary mb-1">Envío que paga el cliente (€, IVA incl.)</label>
                               <input type="text" inputMode="decimal" value={edit.ownCustomerFee}
                                 onChange={(e) => setEdit({ ...edit, ownCustomerFee: e.target.value })} disabled={saving}
                                 className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary" />
+                              <VatBreakdown value={edit.ownCustomerFee} />
                             </div>
                           </div>
                         )}
