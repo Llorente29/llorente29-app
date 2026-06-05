@@ -2,7 +2,7 @@
 
 > **Documento maestro único de memoria persistente del proyecto Folvy.**
 > Lectura obligatoria al inicio de cada sesión técnica.
-> **Última actualización: 05/06/2026 (noche).** Sesión doble: **CATÁLOGO DE MARCA Fase A** completa (8 tablas + importador Last.app + pantalla Menú read-only), **FICHA DE PRODUCTO B1** (CatalogProductDetailPage con índice sticky + secciones apiladas), **ECONOMÍA DE CANAL E1** (channel_rate + menu_item_economics con fallback + KitchenSettingsPage), y **documento de diseño economía/canal/promos** (10 fases). Decisiones clave: Catcher=broker reparto propio (NO agregador), JELP=segundo broker→conector multi-broker, margen en 3 niveles, Ley Ómnibus (precio pegajoso, técnica artículo-espejo), IVA heterogéneo. Ver §1.1 para detalle. Antes (04/06) C3 factura/three-way, inventario perpetuo capa 1, saneamiento local operativo.
+> **Última actualización: 06/06/2026 (noche).** Sesión de diseño: **REDISEÑO EDITORIAL de la ficha de producto** (CatalogProductDetailPage v2 — foto hero full-width con lightbox, card elevada, Fraunces en títulos, JetBrains Mono en precios, barras de margen visuales por canal, channel badges con logos reales), **convención IVA incluido** en channel_rate/brand_channel_rate (etiquetas "(IVA incl.)" + VatBreakdown + own_customer_fee_vat_pct), **E2 cascada de margen** comparativa por canal en la ficha, **conectores delivery** (glovo/justeat/uber con logos en bucket público menu-photos) y **fix Fraunces** (.font-display en index.css). E1 verificado en vivo. Ver §1.1 para detalle. Antes (05/06) Catálogo de Marca Fase A, Ficha B1, Economía de Canal E1; (04/06) C3 factura/three-way, inventario perpetuo capa 1, saneamiento local operativo.
 >
 > Este es el ÚNICO documento de contexto. `CONTEXTO_ESTADO.md` y `CONTEXTO_REGLAS.md`
 > quedaron retirados el 25/05/2026: estaban desincronizados. Toda su información
@@ -46,7 +46,7 @@ Cadencia: en cada paso, antes de cerrarlo, Claude para SOLO y aplica el control 
 ---
 1. ESTADO VIVO ⟵ se regenera cada sesión
 
-**Última actualización: 2026-06-05 (CIERRE jornada, 6ª regeneración). Sesión doble: CATÁLOGO DE MARCA Fase A completa (8 tablas + importador Last.app catalogs.default + pantalla Menú KPI cobertura), FICHA DE PRODUCTO B1 (CatalogProductDetailPage índice sticky Baymard), ECONOMÍA DE CANAL E1 (channel_rate defecto + menu_item_economics fallback + KitchenSettingsPage zona Ajustes). Documento de diseño economía/canal/promos 10 fases. Decisiones: Catcher/JELP=brokers reparto propio multi-broker, margen 3 niveles, Ley Ómnibus, IVA heterogéneo. PENDIENTE: verificar E1 en vivo, E2 cascada margen en ficha, brand_channel vacío.**
+**Última actualización: 2026-06-06 (noche, 7ª regeneración). Sesión de diseño: rediseño editorial de CatalogProductDetailPage (v2 = ESTÁNDAR VISUAL de fichas de detalle Folvy), convención IVA incluido en canales (SERVICE_VAT_PCT=21 + own_customer_fee_vat_pct 10/21), E2 cascada de margen comparativa por canal en la ficha, conectores delivery con logos (glovo/justeat/uber, bucket público menu-photos), fix Fraunces (.font-display en index.css). HECHO esta sesión: ✅ verificar E1 en vivo (Glovo 15%, reparto propio, fija 0,9€, rider 6€, envío 4,5€), ✅ E2 cascada margen en ficha. PENDIENTE: brand_channel sigue VACÍO (overrides marca×canal, caso Uber variable); botón "Añadir foto" sin funcionalidad (upload a menu-photos + UPDATE photo_url); aplicar estándar editorial a otras fichas de detalle (ingredientes, proveedores, recetas); Shop sin conector ni logo (crear si se usa como canal real).**
 
 > **NOTA DE MANTENIMIENTO:** el fichero VERDADERO es `C:\dev\llorente29-app\CONTEXTO_CLAUDE.md` (git). La fuente de verdad técnica es la BBDD+repo, no este relato (regla recon de área). Migraciones SQL versionadas en `supabase/migrations/`.
 
@@ -150,7 +150,14 @@ Cadena completa del albarán escaneado: escanear (foto cámara directa en móvil
   - **Margen en 3 niveles:** (1) unitario para fijar PVP, (2) real por pedido a posteriori, (3) rentabilidad de canal por periodo. Ads NUNCA al coste unitario (inventar) → solo nivel 3. Promos: simulan para PVP, miden reales (sale.discount_amount) para margen.
   - **Ley Ómnibus (descubrimiento clave):** precio promocionado = mínimo de 30 días. Glovo ya bloquea promos ilegales. Precio "pegajoso" → empuja foco al margen = tesis Folvy. Técnica del artículo-espejo (Patatas Clásicas / Patatas Clásicas 1): mismo escandallo, dos menu_item, activar/desactivar por campaña. NADIE en el mercado cierra este bucle (verificado: MarginEdge/R365/Apicbase/Livelytics solo a posteriori).
   - **IVA heterogéneo (vigilar mucho):** comida 10%, bebida alcohólica/azucarada 21%, transporte 21%. Bases homogéneas, nunca mezclar base con total. Motor de IVA versionado por fecha ya existe.
-- **PENDIENTE E1:** verificar en vivo (arrancar app → Kitchen → Ajustes → configurar Glovo → abrir ficha producto Glovo y comprobar fallback margen). `brand_channel` sigue VACÍO — necesario para overrides por marca (caso Uber variable).
+- **E1 VERIFICADO EN VIVO (06/06):** ✅ Glovo 15%, reparto propio con comisión fija 0,9€, rider 6€, envío al cliente 4,5€; fallback de margen comprobado en la ficha. `brand_channel` sigue VACÍO — necesario para overrides por marca (caso Uber variable).
+
+**SESIÓN 06/06 — REDISEÑO EDITORIAL FICHA + CONVENCIÓN IVA INCLUIDO + LOGOS DE CANAL (en producción):**
+- **Ficha de producto (CatalogProductDetailPage) — REDISEÑO EDITORIAL v2 (06/06):** Layout "refined editorial": foto hero full-width con lightbox al clic, card elevada sobre la foto (shadow-lg), Fraunces en títulos, JetBrains Mono en precios, brand chip flotante sobre foto, brand name lookup dinámico. Tres métricas (PVP, Food Cost, Mejor Margen). Barras de margen visuales por canal (stacked horizontal bars: food cost / comisión / transporte / margen verde). Channel badges con logos reales de connector (Glovo, JustEat, Uber) o pill de color con icono Lucide como fallback. Wrapper max-w-6xl (1152px). Este diseño es el ESTÁNDAR VISUAL para fichas de detalle de Folvy.
+- **Convención IVA incluido en canales (06/06):** Todos los importes monetarios en channel_rate y brand_channel_rate se almacenan IVA incluido. UI etiqueta "(IVA incl.)" con descomposición base+IVA. SERVICE_VAT_PCT=21 en channelRateService.ts. IVA envío cliente configurable: own_customer_fee_vat_pct DEFAULT 10 (accesorio comida) o 21 (transporte independiente).
+- **Conectores delivery (06/06):** Registros en tabla connector para glovo, justeat, uber con logos en bucket público menu-photos/connector-logos. El channel badge cruza sales_channel.slug ↔ connector.code para mostrar logo real.
+- **Fraunces fix (06/06):** Google Fonts carga Fraunces, Tailwind mapea font-display, pero la clase se perdía por purge. Fix: regla manual `.font-display` en index.css usando var(--font-display). Permanente.
+- **Bucket menu-photos (06/06):** Bucket público en Supabase Storage para fotos de productos del catálogo. Primera foto: milanesa_clasica.jpeg.
 
 **Lo previo sigue vigente** (familias AECOC, monitorización ingesta 2+3, Folvy Connect/Glovo, motor coste real Kitchen, etc.) — ver historial más abajo.
 
@@ -1720,3 +1727,14 @@ Sesión larga y muy productiva: se construyó y cerró C2 entero, con varias ite
 ### PENDIENTE
 - Verificar E1 en vivo. E2 cascada margen en ficha. brand_channel vacío. Fotos catálogo (Last.app no las trae).
 - CONTEXTO_CLAUDE.md NO se actualizó al cierre de esta sesión → actualizado en la sesión del 06/06.
+
+### Sesión 06/06 (noche)
+- CONTEXTO_CLAUDE.md actualizado con sesión 05/06 (commit 75b7a5e)
+- E1 verificado en vivo (Glovo 15%, reparto propio, fija 0.9€, rider 6€, envío 4.5€)
+- Convención IVA incluido: etiquetas + VatBreakdown + own_customer_fee_vat_pct (commits accf161, 8722396, 42cfa37)
+- E2 cascada margen en ficha: comparativa por canal, costes diluidos por ticket medio (commits a1fffc4, 894b80e)
+- Rediseño editorial completo de CatalogProductDetailPage: foto hero, card elevada, barras margen, Fraunces, channel badges con logos (commit 6eda78b)
+- max-w-6xl en wrapper (KitchenMenuPage)
+- Conectores justeat + uber con logos (migración 20260606T0200, commit 6cd4018)
+- Fix Fraunces purge (commit 3546df2)
+- Foto real milanesa_clasica.jpeg en bucket menu-photos + lightbox
