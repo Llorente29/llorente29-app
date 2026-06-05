@@ -2605,6 +2605,7 @@ export type Database = {
           is_active: boolean
           own_courier_cost: number | null
           own_customer_fee: number | null
+          own_customer_fee_vat_pct: number
           service_type: string
           updated_at: string
         }
@@ -2622,6 +2623,7 @@ export type Database = {
           is_active?: boolean
           own_courier_cost?: number | null
           own_customer_fee?: number | null
+          own_customer_fee_vat_pct?: number
           service_type: string
           updated_at?: string
         }
@@ -2639,6 +2641,7 @@ export type Database = {
           is_active?: boolean
           own_courier_cost?: number | null
           own_customer_fee?: number | null
+          own_customer_fee_vat_pct?: number
           service_type?: string
           updated_at?: string
         }
@@ -2789,6 +2792,7 @@ export type Database = {
           is_active: boolean
           own_courier_cost: number | null
           own_customer_fee: number | null
+          own_customer_fee_vat_pct: number
           sales_channel_id: string
           service_type: string
           updated_at: string
@@ -2806,6 +2810,7 @@ export type Database = {
           is_active?: boolean
           own_courier_cost?: number | null
           own_customer_fee?: number | null
+          own_customer_fee_vat_pct?: number
           sales_channel_id: string
           service_type: string
           updated_at?: string
@@ -2823,6 +2828,7 @@ export type Database = {
           is_active?: boolean
           own_courier_cost?: number | null
           own_customer_fee?: number | null
+          own_customer_fee_vat_pct?: number
           sales_channel_id?: string
           service_type?: string
           updated_at?: string

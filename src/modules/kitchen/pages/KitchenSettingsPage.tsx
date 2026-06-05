@@ -44,16 +44,16 @@ function fmtEur(v: number | null): string {
   return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(v)
 }
 
-function VatBreakdown({ value }: { value: string }) {
+function VatBreakdown({ value, vatPct }: { value: string; vatPct?: number }) {
   const t = value.trim().replace(',', '.')
   if (t === '') return null
   const n = Number(t)
   if (!Number.isFinite(n) || n === 0) return null
-  const base = baseFromGross(n)
-  const vat = vatFromGross(n)
+  const base = baseFromGross(n, vatPct)
+  const vat = vatFromGross(n, vatPct)
   return (
     <p className="text-[10px] text-text-secondary mt-0.5 tabular-nums">
-      → Base {fmtEur(base)} + IVA {SERVICE_VAT_PCT}% ({fmtEur(vat)})
+      → Base {fmtEur(base)} + IVA {vatPct ?? SERVICE_VAT_PCT}% ({fmtEur(vat)})
     </p>
   )
 }
@@ -64,6 +64,7 @@ interface EditState {
   commissionFixed: string
   commissionBase: CommissionBase
   ownCustomerFee: string
+  ownCustomerFeeVatPct: string
   ownCourierCost: string
 }
 
@@ -113,6 +114,7 @@ export default function KitchenSettingsPage() {
       commissionFixed: r?.commissionFixed != null ? String(r.commissionFixed) : '',
       commissionBase: r?.commissionBase ?? 'pvp_con_iva',
       ownCustomerFee: r?.ownCustomerFee != null ? String(r.ownCustomerFee) : '',
+      ownCustomerFeeVatPct: r?.ownCustomerFeeVatPct != null ? String(r.ownCustomerFeeVatPct) : '10',
       ownCourierCost: r?.ownCourierCost != null ? String(r.ownCourierCost) : '',
     })
     setSaveError(null)
@@ -129,6 +131,7 @@ export default function KitchenSettingsPage() {
       commissionFixed: r?.commissionFixed != null ? String(r.commissionFixed) : '',
       commissionBase: r?.commissionBase ?? 'pvp_con_iva',
       ownCustomerFee: r?.ownCustomerFee != null ? String(r.ownCustomerFee) : '',
+      ownCustomerFeeVatPct: r?.ownCustomerFeeVatPct != null ? String(r.ownCustomerFeeVatPct) : '10',
       ownCourierCost: r?.ownCourierCost != null ? String(r.ownCourierCost) : '',
     }))
   }
@@ -153,6 +156,7 @@ export default function KitchenSettingsPage() {
         commissionFixed: num(edit.commissionFixed),
         commissionBase: edit.commissionBase,
         ownCustomerFee: num(edit.ownCustomerFee),
+        ownCustomerFeeVatPct: num(edit.ownCustomerFeeVatPct) ?? 10,
         ownCourierCost: num(edit.ownCourierCost),
       })
       setEditingChannelId(null)
@@ -300,7 +304,16 @@ export default function KitchenSettingsPage() {
                               <input type="text" inputMode="decimal" value={edit.ownCustomerFee}
                                 onChange={(e) => setEdit({ ...edit, ownCustomerFee: e.target.value })} disabled={saving}
                                 className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary" />
-                              <VatBreakdown value={edit.ownCustomerFee} />
+                              <div className="mt-1">
+                                <label className="block text-[10px] text-text-secondary mb-0.5">IVA del envío</label>
+                                <select value={edit.ownCustomerFeeVatPct}
+                                  onChange={(e) => setEdit({ ...edit, ownCustomerFeeVatPct: e.target.value })} disabled={saving}
+                                  className="w-full px-2 py-1 text-xs border border-border-default rounded-md bg-card text-text-primary">
+                                  <option value="10">10% (accesorio a comida)</option>
+                                  <option value="21">21% (transporte independiente)</option>
+                                </select>
+                              </div>
+                              <VatBreakdown value={edit.ownCustomerFee} vatPct={Number(edit.ownCustomerFeeVatPct) || 10} />
                             </div>
                           </div>
                         )}

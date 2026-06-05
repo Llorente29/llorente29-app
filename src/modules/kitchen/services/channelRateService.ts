@@ -50,6 +50,7 @@ export interface ChannelRate {
   commissionFixed: number | null
   commissionBase: CommissionBase
   ownCustomerFee: number | null
+  ownCustomerFeeVatPct: number
   ownCourierCost: number | null
   isActive: boolean
 }
@@ -62,6 +63,7 @@ export interface ChannelRateUpsert {
   commissionFixed: number | null
   commissionBase: CommissionBase
   ownCustomerFee: number | null
+  ownCustomerFeeVatPct: number
   ownCourierCost: number | null
 }
 
@@ -83,6 +85,7 @@ function rowToChannelRate(r: Record<string, unknown>): ChannelRate {
     commissionFixed: r.commission_fixed === null ? null : Number(r.commission_fixed),
     commissionBase: (r.commission_base as CommissionBase) ?? 'pvp_con_iva',
     ownCustomerFee: r.own_customer_fee === null ? null : Number(r.own_customer_fee),
+    ownCustomerFeeVatPct: Number(r.own_customer_fee_vat_pct ?? 10),
     ownCourierCost: r.own_courier_cost === null ? null : Number(r.own_courier_cost),
     isActive: r.is_active !== false,
   }
@@ -143,6 +146,7 @@ export async function upsertChannelRate(input: ChannelRateUpsert): Promise<Chann
     commission_fixed: input.commissionFixed,
     commission_base: input.commissionBase,
     own_customer_fee: input.ownCustomerFee,
+    own_customer_fee_vat_pct: input.ownCustomerFeeVatPct,
     own_courier_cost: input.ownCourierCost,
   }
 
