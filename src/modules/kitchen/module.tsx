@@ -2,7 +2,7 @@
 //
 // ModuleDefinition del módulo Folvy Kitchen (escandallo de cocina).
 // Sigue el patrón canónico de appcc/module.tsx.
-import { LayoutDashboard, ChefHat, BookOpen, TrendingUp, Target, Truck, UtensilsCrossed } from 'lucide-react'
+import { LayoutDashboard, ChefHat, BookOpen, TrendingUp, Target, Truck, UtensilsCrossed, SlidersHorizontal } from 'lucide-react'
 import type { ModuleDefinition } from '@/shell/types'
 import KitchenDashboardPage from '@/modules/kitchen/pages/KitchenDashboardPage'
 import KitchenItemsPage from '@/modules/kitchen/pages/KitchenItemsPage'
@@ -15,6 +15,7 @@ import KitchenMenuPage from '@/modules/kitchen/pages/KitchenMenuPage'
 import KitchenRecipesPage from '@/modules/kitchen/pages/KitchenRecipesPage'
 import KitchenProfitabilityPage from '@/modules/kitchen/pages/KitchenProfitabilityPage'
 import KitchenMenuEngineeringPage from '@/modules/kitchen/pages/KitchenMenuEngineeringPage'
+import KitchenSettingsPage from '@/modules/kitchen/pages/KitchenSettingsPage'
 import SuppliersPage from '@/modules/kitchen/pages/SuppliersPage'
 
 export const kitchenModule: ModuleDefinition = {
@@ -36,17 +37,19 @@ export const kitchenModule: ModuleDefinition = {
     { path: 'recetas',           element: <KitchenRecipesPage /> },
     { path: 'rentabilidad',      element: <KitchenProfitabilityPage /> },
     { path: 'ingenieria-menus',  element: <KitchenMenuEngineeringPage /> },
+    { path: 'ajustes',           element: <KitchenSettingsPage /> },
   ],
   // Navegación interna del módulo (ModuleSidebar).
   sidebar: {
     items: [
-      { id: 'kitchen_dashboard',     label: 'Resumen',             icon: LayoutDashboard,  path: 'resumen',          requiredRole: 'manager' },
-      { id: 'kitchen_menu',          label: 'Menú',                icon: UtensilsCrossed,  path: 'menu',             requiredRole: 'manager' },
-      { id: 'kitchen_items',         label: 'Ingredientes',        icon: ChefHat,          path: '' },
-      { id: 'kitchen_suppliers',     label: 'Proveedores',         icon: Truck,            path: 'proveedores',      requiredRole: 'manager' },
-      { id: 'kitchen_recipes',       label: 'Recetas',             icon: BookOpen,         path: 'recetas',          requiredRole: 'manager' },
-      { id: 'kitchen_profitability', label: 'Rentabilidad',        icon: TrendingUp,       path: 'rentabilidad',     requiredRole: 'manager' },
-      { id: 'kitchen_menu_eng',      label: 'Ingeniería de menús', icon: Target,           path: 'ingenieria-menus', requiredRole: 'manager' },
+      { id: 'kitchen_dashboard',     label: 'Resumen',             icon: LayoutDashboard,   path: 'resumen',          requiredRole: 'manager' },
+      { id: 'kitchen_menu',          label: 'Menú',                icon: UtensilsCrossed,   path: 'menu',             requiredRole: 'manager' },
+      { id: 'kitchen_items',         label: 'Ingredientes',        icon: ChefHat,           path: '' },
+      { id: 'kitchen_suppliers',     label: 'Proveedores',         icon: Truck,             path: 'proveedores',      requiredRole: 'manager' },
+      { id: 'kitchen_recipes',       label: 'Recetas',             icon: BookOpen,          path: 'recetas',          requiredRole: 'manager' },
+      { id: 'kitchen_profitability', label: 'Rentabilidad',        icon: TrendingUp,        path: 'rentabilidad',     requiredRole: 'manager' },
+      { id: 'kitchen_menu_eng',      label: 'Ingeniería de menús', icon: Target,            path: 'ingenieria-menus', requiredRole: 'manager' },
+      { id: 'kitchen_settings',      label: 'Ajustes',             icon: SlidersHorizontal, path: 'ajustes',          requiredRole: 'manager' },
     ],
   },
   // Eventos que el módulo publica (declarativo, sin emisores cableados aún).
