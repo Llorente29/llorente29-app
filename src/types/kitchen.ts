@@ -554,8 +554,8 @@ export interface MenuItem {
   id: string
   accountId: string
   brandId: string
-  channelId: string
-  recipeItemId: string
+  channelId: string | null
+  recipeItemId: string | null
   name: string
   description: string | null
   category: string | null

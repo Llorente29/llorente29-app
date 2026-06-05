@@ -2849,6 +2849,8 @@ export type Database = {
           account_id: string
           combo_item_id: string
           created_at: string
+          external_id: string | null
+          external_source: string | null
           id: string
           is_active: boolean
           max_selections: number
@@ -2861,6 +2863,8 @@ export type Database = {
           account_id: string
           combo_item_id: string
           created_at?: string
+          external_id?: string | null
+          external_source?: string | null
           id?: string
           is_active?: boolean
           max_selections?: number
@@ -2873,6 +2877,8 @@ export type Database = {
           account_id?: string
           combo_item_id?: string
           created_at?: string
+          external_id?: string | null
+          external_source?: string | null
           id?: string
           is_active?: boolean
           max_selections?: number
@@ -2903,6 +2909,8 @@ export type Database = {
           account_id: string
           combo_slot_id: string
           created_at: string
+          external_id: string | null
+          external_source: string | null
           id: string
           is_active: boolean
           is_default: boolean
@@ -2915,6 +2923,8 @@ export type Database = {
           account_id: string
           combo_slot_id: string
           created_at?: string
+          external_id?: string | null
+          external_source?: string | null
           id?: string
           is_active?: boolean
           is_default?: boolean
@@ -2927,6 +2937,8 @@ export type Database = {
           account_id?: string
           combo_slot_id?: string
           created_at?: string
+          external_id?: string | null
+          external_source?: string | null
           id?: string
           is_active?: boolean
           is_default?: boolean
@@ -5175,6 +5187,8 @@ export type Database = {
           brand_id: string
           created_at: string
           emoji: string | null
+          external_id: string | null
+          external_source: string | null
           id: string
           is_active: boolean
           name: string
@@ -5188,6 +5202,8 @@ export type Database = {
           brand_id: string
           created_at?: string
           emoji?: string | null
+          external_id?: string | null
+          external_source?: string | null
           id?: string
           is_active?: boolean
           name: string
@@ -5201,6 +5217,8 @@ export type Database = {
           brand_id?: string
           created_at?: string
           emoji?: string | null
+          external_id?: string | null
+          external_source?: string | null
           id?: string
           is_active?: boolean
           name?: string
@@ -5241,12 +5259,14 @@ export type Database = {
           archived_at: string | null
           brand_id: string
           category: string | null
-          channel_id: string
+          channel_id: string | null
           consumption_price: number | null
           created_at: string
           created_by: string | null
           created_by_name: string | null
           description: string | null
+          external_id: string | null
+          external_source: string | null
           id: string
           is_active: boolean
           is_available: boolean
@@ -5258,7 +5278,7 @@ export type Database = {
           position: number
           price: number
           product_type: string
-          recipe_item_id: string
+          recipe_item_id: string | null
           short_name: string | null
           source: string
           updated_at: string
@@ -5271,12 +5291,14 @@ export type Database = {
           archived_at?: string | null
           brand_id: string
           category?: string | null
-          channel_id: string
+          channel_id?: string | null
           consumption_price?: number | null
           created_at?: string
           created_by?: string | null
           created_by_name?: string | null
           description?: string | null
+          external_id?: string | null
+          external_source?: string | null
           id?: string
           is_active?: boolean
           is_available?: boolean
@@ -5288,7 +5310,7 @@ export type Database = {
           position?: number
           price: number
           product_type?: string
-          recipe_item_id: string
+          recipe_item_id?: string | null
           short_name?: string | null
           source?: string
           updated_at?: string
@@ -5301,12 +5323,14 @@ export type Database = {
           archived_at?: string | null
           brand_id?: string
           category?: string | null
-          channel_id?: string
+          channel_id?: string | null
           consumption_price?: number | null
           created_at?: string
           created_by?: string | null
           created_by_name?: string | null
           description?: string | null
+          external_id?: string | null
+          external_source?: string | null
           id?: string
           is_active?: boolean
           is_available?: boolean
@@ -5318,7 +5342,7 @@ export type Database = {
           position?: number
           price?: number
           product_type?: string
-          recipe_item_id?: string
+          recipe_item_id?: string | null
           short_name?: string | null
           source?: string
           updated_at?: string
@@ -5444,6 +5468,8 @@ export type Database = {
           allow_repetition: boolean
           brand_id: string
           created_at: string
+          external_id: string | null
+          external_source: string | null
           group_type: string
           id: string
           internal_name: string | null
@@ -5459,6 +5485,8 @@ export type Database = {
           allow_repetition?: boolean
           brand_id: string
           created_at?: string
+          external_id?: string | null
+          external_source?: string | null
           group_type?: string
           id?: string
           internal_name?: string | null
@@ -5474,6 +5502,8 @@ export type Database = {
           allow_repetition?: boolean
           brand_id?: string
           created_at?: string
+          external_id?: string | null
+          external_source?: string | null
           group_type?: string
           id?: string
           internal_name?: string | null
@@ -5554,6 +5584,8 @@ export type Database = {
         Row: {
           account_id: string
           created_at: string
+          external_id: string | null
+          external_source: string | null
           id: string
           is_active: boolean
           is_default: boolean
@@ -5567,6 +5599,8 @@ export type Database = {
         Insert: {
           account_id: string
           created_at?: string
+          external_id?: string | null
+          external_source?: string | null
           id?: string
           is_active?: boolean
           is_default?: boolean
@@ -5580,6 +5614,8 @@ export type Database = {
         Update: {
           account_id?: string
           created_at?: string
+          external_id?: string | null
+          external_source?: string | null
           id?: string
           is_active?: boolean
           is_default?: boolean
