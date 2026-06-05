@@ -2844,6 +2844,128 @@ export type Database = {
           },
         ]
       }
+      combo_slot: {
+        Row: {
+          account_id: string
+          combo_item_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          max_selections: number
+          min_selections: number
+          name: string
+          position: number
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          combo_item_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          max_selections?: number
+          min_selections?: number
+          name: string
+          position?: number
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          combo_item_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          max_selections?: number
+          min_selections?: number
+          name?: string
+          position?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "combo_slot_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "combo_slot_combo_item_id_fkey"
+            columns: ["combo_item_id"]
+            isOneToOne: false
+            referencedRelation: "menu_item"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      combo_slot_option: {
+        Row: {
+          account_id: string
+          combo_slot_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          is_default: boolean
+          menu_item_id: string | null
+          modifier_group_id: string | null
+          position: number
+          price_impact: number
+        }
+        Insert: {
+          account_id: string
+          combo_slot_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_default?: boolean
+          menu_item_id?: string | null
+          modifier_group_id?: string | null
+          position?: number
+          price_impact?: number
+        }
+        Update: {
+          account_id?: string
+          combo_slot_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_default?: boolean
+          menu_item_id?: string | null
+          modifier_group_id?: string | null
+          position?: number
+          price_impact?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "combo_slot_option_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "combo_slot_option_combo_slot_id_fkey"
+            columns: ["combo_slot_id"]
+            isOneToOne: false
+            referencedRelation: "combo_slot"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "combo_slot_option_menu_item_id_fkey"
+            columns: ["menu_item_id"]
+            isOneToOne: false
+            referencedRelation: "menu_item"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "combo_slot_option_modifier_group_id_fkey"
+            columns: ["modifier_group_id"]
+            isOneToOne: false
+            referencedRelation: "modifier_group"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       connector: {
         Row: {
           category: string
@@ -5047,6 +5169,70 @@ export type Database = {
           },
         ]
       }
+      menu_category: {
+        Row: {
+          account_id: string
+          brand_id: string
+          created_at: string
+          emoji: string | null
+          id: string
+          is_active: boolean
+          name: string
+          parent_id: string | null
+          position: number
+          slug: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          brand_id: string
+          created_at?: string
+          emoji?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          parent_id?: string | null
+          position?: number
+          slug?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          brand_id?: string
+          created_at?: string
+          emoji?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          parent_id?: string | null
+          position?: number
+          slug?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "menu_category_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "menu_category_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "menu_category_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "menu_category"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       menu_item: {
         Row: {
           account_id: string
@@ -5064,12 +5250,16 @@ export type Database = {
           id: string
           is_active: boolean
           is_available: boolean
+          kitchen_name: string | null
+          menu_category_id: string | null
           name: string
           needs_review: boolean
           photo_url: string | null
           position: number
           price: number
+          product_type: string
           recipe_item_id: string
+          short_name: string | null
           source: string
           updated_at: string
           vat_rate: number
@@ -5090,12 +5280,16 @@ export type Database = {
           id?: string
           is_active?: boolean
           is_available?: boolean
+          kitchen_name?: string | null
+          menu_category_id?: string | null
           name: string
           needs_review?: boolean
           photo_url?: string | null
           position?: number
           price: number
+          product_type?: string
           recipe_item_id: string
+          short_name?: string | null
           source?: string
           updated_at?: string
           vat_rate?: number
@@ -5116,12 +5310,16 @@ export type Database = {
           id?: string
           is_active?: boolean
           is_available?: boolean
+          kitchen_name?: string | null
+          menu_category_id?: string | null
           name?: string
           needs_review?: boolean
           photo_url?: string | null
           position?: number
           price?: number
+          product_type?: string
           recipe_item_id?: string
+          short_name?: string | null
           source?: string
           updated_at?: string
           vat_rate?: number
@@ -5142,10 +5340,341 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "menu_item_menu_category_id_fkey"
+            columns: ["menu_category_id"]
+            isOneToOne: false
+            referencedRelation: "menu_category"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "menu_item_recipe_item_fk"
             columns: ["recipe_item_id"]
             isOneToOne: false
             referencedRelation: "recipe_item"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      menu_item_override: {
+        Row: {
+          account_id: string
+          category_name: string | null
+          channel_id: string | null
+          created_at: string
+          description: string | null
+          external_id: string | null
+          id: string
+          is_available: boolean | null
+          location_id: string | null
+          menu_item_id: string
+          name: string | null
+          photo_url: string | null
+          price: number | null
+          short_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          category_name?: string | null
+          channel_id?: string | null
+          created_at?: string
+          description?: string | null
+          external_id?: string | null
+          id?: string
+          is_available?: boolean | null
+          location_id?: string | null
+          menu_item_id: string
+          name?: string | null
+          photo_url?: string | null
+          price?: number | null
+          short_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          category_name?: string | null
+          channel_id?: string | null
+          created_at?: string
+          description?: string | null
+          external_id?: string | null
+          id?: string
+          is_available?: boolean | null
+          location_id?: string | null
+          menu_item_id?: string
+          name?: string | null
+          photo_url?: string | null
+          price?: number | null
+          short_name?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "menu_item_override_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "menu_item_override_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "sales_channel"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "menu_item_override_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "menu_item_override_menu_item_id_fkey"
+            columns: ["menu_item_id"]
+            isOneToOne: false
+            referencedRelation: "menu_item"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      modifier_group: {
+        Row: {
+          account_id: string
+          allow_repetition: boolean
+          brand_id: string
+          created_at: string
+          group_type: string
+          id: string
+          internal_name: string | null
+          is_active: boolean
+          max_selections: number
+          min_selections: number
+          name: string
+          position: number
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          allow_repetition?: boolean
+          brand_id: string
+          created_at?: string
+          group_type?: string
+          id?: string
+          internal_name?: string | null
+          is_active?: boolean
+          max_selections?: number
+          min_selections?: number
+          name: string
+          position?: number
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          allow_repetition?: boolean
+          brand_id?: string
+          created_at?: string
+          group_type?: string
+          id?: string
+          internal_name?: string | null
+          is_active?: boolean
+          max_selections?: number
+          min_selections?: number
+          name?: string
+          position?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "modifier_group_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "modifier_group_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      modifier_group_assignment: {
+        Row: {
+          account_id: string
+          created_at: string
+          id: string
+          menu_item_id: string
+          modifier_group_id: string
+          position: number
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          id?: string
+          menu_item_id: string
+          modifier_group_id: string
+          position?: number
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          id?: string
+          menu_item_id?: string
+          modifier_group_id?: string
+          position?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "modifier_group_assignment_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "modifier_group_assignment_menu_item_id_fkey"
+            columns: ["menu_item_id"]
+            isOneToOne: false
+            referencedRelation: "menu_item"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "modifier_group_assignment_modifier_group_id_fkey"
+            columns: ["modifier_group_id"]
+            isOneToOne: false
+            referencedRelation: "modifier_group"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      modifier_option: {
+        Row: {
+          account_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          is_default: boolean
+          modifier_group_id: string
+          name: string
+          position: number
+          price_impact: number
+          recipe_item_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_default?: boolean
+          modifier_group_id: string
+          name: string
+          position?: number
+          price_impact?: number
+          recipe_item_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_default?: boolean
+          modifier_group_id?: string
+          name?: string
+          position?: number
+          price_impact?: number
+          recipe_item_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "modifier_option_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "modifier_option_modifier_group_id_fkey"
+            columns: ["modifier_group_id"]
+            isOneToOne: false
+            referencedRelation: "modifier_group"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "modifier_option_recipe_item_id_fkey"
+            columns: ["recipe_item_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_item"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      modifier_recipe_impact: {
+        Row: {
+          account_id: string
+          created_at: string
+          id: string
+          impact_type: string
+          modifier_option_id: string
+          quantity: number | null
+          target_recipe_item_id: string | null
+          unit_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          id?: string
+          impact_type: string
+          modifier_option_id: string
+          quantity?: number | null
+          target_recipe_item_id?: string | null
+          unit_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          id?: string
+          impact_type?: string
+          modifier_option_id?: string
+          quantity?: number | null
+          target_recipe_item_id?: string | null
+          unit_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "modifier_recipe_impact_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "modifier_recipe_impact_modifier_option_id_fkey"
+            columns: ["modifier_option_id"]
+            isOneToOne: false
+            referencedRelation: "modifier_option"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "modifier_recipe_impact_target_recipe_item_id_fkey"
+            columns: ["target_recipe_item_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_item"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "modifier_recipe_impact_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "kitchen_unit"
             referencedColumns: ["id"]
           },
         ]
@@ -7350,13 +7879,17 @@ export type Database = {
       sale_line: {
         Row: {
           account_id: string
+          combo_slot_id: string | null
           created_at: string
           id: string
           line_total: number | null
+          line_type: string
           map_confidence: number | null
           map_needs_review: boolean
           map_source: string
           menu_item_id: string | null
+          modifier_option_id: string | null
+          parent_sale_line_id: string | null
           product_name: string
           quantity: number
           raw_text: string
@@ -7366,13 +7899,17 @@ export type Database = {
         }
         Insert: {
           account_id: string
+          combo_slot_id?: string | null
           created_at?: string
           id?: string
           line_total?: number | null
+          line_type?: string
           map_confidence?: number | null
           map_needs_review?: boolean
           map_source?: string
           menu_item_id?: string | null
+          modifier_option_id?: string | null
+          parent_sale_line_id?: string | null
           product_name: string
           quantity?: number
           raw_text: string
@@ -7382,13 +7919,17 @@ export type Database = {
         }
         Update: {
           account_id?: string
+          combo_slot_id?: string | null
           created_at?: string
           id?: string
           line_total?: number | null
+          line_type?: string
           map_confidence?: number | null
           map_needs_review?: boolean
           map_source?: string
           menu_item_id?: string | null
+          modifier_option_id?: string | null
+          parent_sale_line_id?: string | null
           product_name?: string
           quantity?: number
           raw_text?: string
@@ -7398,10 +7939,31 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "sale_line_combo_slot_id_fkey"
+            columns: ["combo_slot_id"]
+            isOneToOne: false
+            referencedRelation: "combo_slot"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "sale_line_menu_item_fk"
             columns: ["menu_item_id"]
             isOneToOne: false
             referencedRelation: "menu_item"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sale_line_modifier_option_id_fkey"
+            columns: ["modifier_option_id"]
+            isOneToOne: false
+            referencedRelation: "modifier_option"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sale_line_parent_sale_line_id_fkey"
+            columns: ["parent_sale_line_id"]
+            isOneToOne: false
+            referencedRelation: "sale_line"
             referencedColumns: ["id"]
           },
           {
