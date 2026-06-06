@@ -4069,6 +4069,113 @@ export type Database = {
           },
         ]
       }
+      ingredient_template: {
+        Row: {
+          aliases: string[]
+          code: string
+          conservation_type: string | null
+          created_at: string
+          default_base_dimension: string | null
+          default_waste_pct: number | null
+          density_g_per_ml: number | null
+          family_code: string | null
+          gpc_brick_code: string | null
+          gtin: string | null
+          id: string
+          is_active: boolean
+          name_en: string | null
+          name_es: string
+          nutrition: Json | null
+          photo_url: string | null
+          position: number
+          published_at: string | null
+          shelf_life_days: number | null
+          source: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          aliases?: string[]
+          code: string
+          conservation_type?: string | null
+          created_at?: string
+          default_base_dimension?: string | null
+          default_waste_pct?: number | null
+          density_g_per_ml?: number | null
+          family_code?: string | null
+          gpc_brick_code?: string | null
+          gtin?: string | null
+          id?: string
+          is_active?: boolean
+          name_en?: string | null
+          name_es: string
+          nutrition?: Json | null
+          photo_url?: string | null
+          position?: number
+          published_at?: string | null
+          shelf_life_days?: number | null
+          source?: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          aliases?: string[]
+          code?: string
+          conservation_type?: string | null
+          created_at?: string
+          default_base_dimension?: string | null
+          default_waste_pct?: number | null
+          density_g_per_ml?: number | null
+          family_code?: string | null
+          gpc_brick_code?: string | null
+          gtin?: string | null
+          id?: string
+          is_active?: boolean
+          name_en?: string | null
+          name_es?: string
+          nutrition?: Json | null
+          photo_url?: string | null
+          position?: number
+          published_at?: string | null
+          shelf_life_days?: number | null
+          source?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      ingredient_template_allergen: {
+        Row: {
+          allergen_code: string
+          created_at: string
+          source: string
+          state: string
+          template_id: string
+        }
+        Insert: {
+          allergen_code: string
+          created_at?: string
+          source?: string
+          state?: string
+          template_id: string
+        }
+        Update: {
+          allergen_code?: string
+          created_at?: string
+          source?: string
+          state?: string
+          template_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ingredient_template_allergen_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "ingredient_template"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inventory_count: {
         Row: {
           account_id: string
@@ -6852,6 +6959,8 @@ export type Database = {
           supplier_codes: Json | null
           supplier_name: string | null
           supplier_url: string | null
+          template_code: string | null
+          template_version: number | null
           type: string
           updated_at: string
           vat_category_id: string | null
@@ -6922,6 +7031,8 @@ export type Database = {
           supplier_codes?: Json | null
           supplier_name?: string | null
           supplier_url?: string | null
+          template_code?: string | null
+          template_version?: number | null
           type: string
           updated_at?: string
           vat_category_id?: string | null
@@ -6992,6 +7103,8 @@ export type Database = {
           supplier_codes?: Json | null
           supplier_name?: string | null
           supplier_url?: string | null
+          template_code?: string | null
+          template_version?: number | null
           type?: string
           updated_at?: string
           vat_category_id?: string | null
