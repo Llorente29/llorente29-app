@@ -6810,6 +6810,7 @@ export type Database = {
           created_by_name: string | null
           current_stock: number | null
           current_stock_unit_id: string | null
+          default_waste_pct: number | null
           external_codes: Json
           family_id: string | null
           finishing_notes: string | null
@@ -6830,6 +6831,7 @@ export type Database = {
           needs_review: boolean
           notes: string | null
           nutrition: Json | null
+          origin: string | null
           plating_notes: string | null
           prep_notes: string | null
           prep_time_minutes: number | null
@@ -6878,6 +6880,7 @@ export type Database = {
           created_by_name?: string | null
           current_stock?: number | null
           current_stock_unit_id?: string | null
+          default_waste_pct?: number | null
           external_codes?: Json
           family_id?: string | null
           finishing_notes?: string | null
@@ -6898,6 +6901,7 @@ export type Database = {
           needs_review?: boolean
           notes?: string | null
           nutrition?: Json | null
+          origin?: string | null
           plating_notes?: string | null
           prep_notes?: string | null
           prep_time_minutes?: number | null
@@ -6946,6 +6950,7 @@ export type Database = {
           created_by_name?: string | null
           current_stock?: number | null
           current_stock_unit_id?: string | null
+          default_waste_pct?: number | null
           external_codes?: Json
           family_id?: string | null
           finishing_notes?: string | null
@@ -6966,6 +6971,7 @@ export type Database = {
           needs_review?: boolean
           notes?: string | null
           nutrition?: Json | null
+          origin?: string | null
           plating_notes?: string | null
           prep_notes?: string | null
           prep_time_minutes?: number | null

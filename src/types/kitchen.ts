@@ -206,6 +206,11 @@ export interface RecipeItem {
   serviceTempC: number | null
   notes: string | null
   defaultWastePct: number | null
+  // trazabilidad / temporada
+  seasonStart: string | null
+  seasonEnd: string | null
+  shelfLifeDays: number | null
+  origin: string | null
   // nativo-IA
   source: ItemSource
   aiConfidence: number | null
@@ -268,6 +273,10 @@ export interface RecipeItemUpdate {
   serviceTempC?: number | null
   notes?: string | null
   defaultWastePct?: number | null
+  seasonStart?: string | null
+  seasonEnd?: string | null
+  shelfLifeDays?: number | null
+  origin?: string | null
   needsReview?: boolean
   reviewNotes?: RecipeItemReviewNote | null
   reviewDismissedAt?: string | null

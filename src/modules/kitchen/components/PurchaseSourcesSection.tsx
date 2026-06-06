@@ -124,6 +124,7 @@ export default function PurchaseSourcesSection({
   const [directBase, setDirectBase] = useState('')
   const [price, setPrice] = useState('')
   const [isPreferred, setIsPreferred] = useState(false)
+  const [supplierCode, setSupplierCode] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
@@ -211,6 +212,7 @@ export default function PurchaseSourcesSection({
     setDirectBase('')
     setPrice('')
     setIsPreferred(false)
+    setSupplierCode('')
     setFormError(null)
   }
 
@@ -272,6 +274,7 @@ export default function PurchaseSourcesSection({
         qtyInBase: resolvedQtyInBase,
         supplierId: supId,
         lastPrice: priceNum,
+        supplierCode: supplierCode.trim() || null,
         isPreferred,
         priorCostStrategy: item.costStrategy,
         createdBy: actorId,
@@ -531,6 +534,24 @@ export default function PurchaseSourcesSection({
               />
             </div>
 
+            {/* Código del proveedor (opcional, ayuda al casado de OCR de factura) */}
+            <div>
+              <label className="block text-xs font-medium text-text-secondary mb-1">
+                Código del proveedor <span className="text-text-tertiary font-normal">(opcional)</span>
+              </label>
+              <input
+                type="text"
+                value={supplierCode}
+                onChange={(e) => setSupplierCode(e.target.value)}
+                disabled={submitting}
+                placeholder="La referencia con la que este proveedor llama al artículo"
+                className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+              />
+              <p className="text-[11px] text-text-secondary mt-1">
+                Facilita casar las líneas cuando llegue su factura o albarán.
+              </p>
+            </div>
+
             {/* Remate didáctico: coste por unidad base, idéntico al motor */}
             {previewUnitCost !== null && baseUnit && (
               <div className="rounded-md bg-accent-bg border border-accent/20 px-3 py-2 text-sm text-text-primary">
@@ -619,6 +640,7 @@ interface SourceRowProps {
 function SourceRow({ link, supplierName, format, baseAbbr, onSaved }: SourceRowProps) {
   const [editing, setEditing] = useState(false)
   const [val, setVal] = useState(link.lastPrice !== null ? String(link.lastPrice) : '')
+  const [codeVal, setCodeVal] = useState(link.supplierCode ?? '')
   const [saving, setSaving] = useState(false)
 
   const unitCost =
@@ -634,7 +656,7 @@ function SourceRow({ link, supplierName, format, baseAbbr, onSaved }: SourceRowP
     }
     setSaving(true)
     try {
-      await updateArticleSupplier(link.id, { lastPrice: n })
+      await updateArticleSupplier(link.id, { lastPrice: n, supplierCode: codeVal.trim() || null })
       setEditing(false)
       await onSaved()
     } finally {
@@ -664,6 +686,12 @@ function SourceRow({ link, supplierName, format, baseAbbr, onSaved }: SourceRowP
               </span>
             </>
           )}
+          {link.supplierCode && (
+            <>
+              {' · '}
+              <span>cód. {link.supplierCode}</span>
+            </>
+          )}
         </div>
       </div>
 
@@ -683,11 +711,24 @@ function SourceRow({ link, supplierName, format, baseAbbr, onSaved }: SourceRowP
               disabled={saving}
               className="w-20 px-2 py-1 text-sm border border-border-default rounded-md bg-card text-text-primary text-right focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
             />
+            <input
+              type="text"
+              value={codeVal}
+              onChange={(e) => setCodeVal(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void save()
+                if (e.key === 'Escape') setEditing(false)
+              }}
+              disabled={saving}
+              placeholder="cód."
+              title="Código del proveedor"
+              className="w-24 px-2 py-1 text-sm border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+            />
             <button
               type="button"
               onClick={() => void save()}
               disabled={saving}
-              aria-label="Guardar precio"
+              aria-label="Guardar precio y código"
               className="p-1 rounded-md text-success hover:bg-success-bg transition-base disabled:opacity-50"
             >
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
@@ -698,6 +739,7 @@ function SourceRow({ link, supplierName, format, baseAbbr, onSaved }: SourceRowP
             type="button"
             onClick={() => {
               setVal(link.lastPrice !== null ? String(link.lastPrice) : '')
+              setCodeVal(link.supplierCode ?? '')
               setEditing(true)
             }}
             className="inline-flex items-center gap-1.5 text-sm font-mono text-text-primary hover:text-accent transition-base"

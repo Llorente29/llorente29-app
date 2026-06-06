@@ -25,7 +25,7 @@ export function rowToRecipeItem(row: RowRecipeItem): RecipeItem {
     name: row.name,
     altName: row.alt_name,
     code: row.code,
-    familyId: (row as typeof row & { family_id?: string | null }).family_id ?? null,
+    familyId: row.family_id ?? null,
     baseUnitId: row.base_unit_id,
     costStrategy: row.cost_strategy as RecipeItem['costStrategy'],
     costWindowDays: row.cost_window_days,
@@ -42,7 +42,11 @@ export function rowToRecipeItem(row: RowRecipeItem): RecipeItem {
     conservationType: row.conservation_type as RecipeItem['conservationType'],
     serviceTempC: row.service_temp_c,
     notes: row.notes,
-    defaultWastePct: (row as typeof row & { default_waste_pct?: number | null }).default_waste_pct ?? null,
+    defaultWastePct: row.default_waste_pct ?? null,
+    seasonStart: row.season_start ?? null,
+    seasonEnd: row.season_end ?? null,
+    shelfLifeDays: row.shelf_life_days ?? null,
+    origin: row.origin ?? null,
     source: row.source as RecipeItem['source'],
     aiConfidence: row.ai_confidence,
     needsReview: row.needs_review,
@@ -94,9 +98,7 @@ function recipeItemUpdateToRow(patch: RecipeItemUpdate): RowRecipeItemUpdate {
   if (patch.altName !== undefined) row.alt_name = patch.altName
   if (patch.code !== undefined) row.code = patch.code
   if (patch.baseUnitId !== undefined) row.base_unit_id = patch.baseUnitId
-  if (patch.familyId !== undefined) {
-    (row as typeof row & { family_id?: string | null }).family_id = patch.familyId
-  }
+  if (patch.familyId !== undefined) row.family_id = patch.familyId
   if (patch.costStrategy !== undefined) row.cost_strategy = patch.costStrategy
   if (patch.costWindowDays !== undefined) row.cost_window_days = patch.costWindowDays
   if (patch.fixedCost !== undefined) row.fixed_cost = patch.fixedCost
@@ -110,9 +112,11 @@ function recipeItemUpdateToRow(patch: RecipeItemUpdate): RowRecipeItemUpdate {
   if (patch.conservationType !== undefined) row.conservation_type = patch.conservationType
   if (patch.serviceTempC !== undefined) row.service_temp_c = patch.serviceTempC
   if (patch.notes !== undefined) row.notes = patch.notes
-  if (patch.defaultWastePct !== undefined) {
-    (row as typeof row & { default_waste_pct?: number | null }).default_waste_pct = patch.defaultWastePct
-  }
+  if (patch.defaultWastePct !== undefined) row.default_waste_pct = patch.defaultWastePct
+  if (patch.seasonStart !== undefined) row.season_start = patch.seasonStart
+  if (patch.seasonEnd !== undefined) row.season_end = patch.seasonEnd
+  if (patch.shelfLifeDays !== undefined) row.shelf_life_days = patch.shelfLifeDays
+  if (patch.origin !== undefined) row.origin = patch.origin
   if (patch.needsReview !== undefined) row.needs_review = patch.needsReview
   if (patch.reviewNotes !== undefined) {
     row.review_notes = (patch.reviewNotes as unknown as Json) ?? null
