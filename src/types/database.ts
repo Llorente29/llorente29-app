@@ -6937,6 +6937,7 @@ export type Database = {
           label_simplified: boolean
           last_purchase_date: string | null
           media: Json | null
+          menu_tags: string[]
           name: string
           needs_review: boolean
           notes: string | null
@@ -7009,6 +7010,7 @@ export type Database = {
           label_simplified?: boolean
           last_purchase_date?: string | null
           media?: Json | null
+          menu_tags?: string[]
           name: string
           needs_review?: boolean
           notes?: string | null
@@ -7081,6 +7083,7 @@ export type Database = {
           label_simplified?: boolean
           last_purchase_date?: string | null
           media?: Json | null
+          menu_tags?: string[]
           name?: string
           needs_review?: boolean
           notes?: string | null

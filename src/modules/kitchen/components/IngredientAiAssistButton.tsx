@@ -41,6 +41,29 @@ const STATE_LABEL: Record<string, string> = {
   free: 'Libre',
 }
 
+// Etiquetas de menú: código -> texto visible.
+const MENU_TAG_LABEL: Record<string, string> = {
+  picante: 'Picante',
+  vegano: 'Vegano',
+  vegetariano: 'Vegetariano',
+  sin_gluten: 'Sin gluten',
+  sin_lactosa: 'Sin lactosa',
+  halal: 'Halal',
+  ecologico: 'Ecológico / Bio',
+}
+
+// Campos de nutrición (orden de la etiqueta UE) + etiqueta y unidad.
+const NUTRITION_FIELDS: { key: string; label: string; unit: string }[] = [
+  { key: 'energy_kcal', label: 'Energía', unit: 'kcal' },
+  { key: 'fat_g', label: 'Grasas', unit: 'g' },
+  { key: 'saturated_fat_g', label: '· saturadas', unit: 'g' },
+  { key: 'carbs_g', label: 'Hidratos', unit: 'g' },
+  { key: 'sugars_g', label: '· azúcares', unit: 'g' },
+  { key: 'fiber_g', label: 'Fibra', unit: 'g' },
+  { key: 'protein_g', label: 'Proteínas', unit: 'g' },
+  { key: 'salt_g', label: 'Sal', unit: 'g' },
+]
+
 function confidenceLabel(c: number | null): { text: string; cls: string } {
   if (c === null) return { text: 'Sin confianza', cls: 'text-text-secondary' }
   if (c >= 0.8) return { text: `Confianza alta (${Math.round(c * 100)}%)`, cls: 'text-success' }
@@ -59,6 +82,9 @@ export function IngredientAiAssistButton({ itemId, accountId, onApplied, classNa
   const [acceptAllergens, setAcceptAllergens] = useState<Set<string>>(new Set())
   const [acceptWaste, setAcceptWaste] = useState(false)
   const [acceptConservation, setAcceptConservation] = useState(false)
+  const [acceptNutrition, setAcceptNutrition] = useState(false)
+  const [acceptShelfLife, setAcceptShelfLife] = useState(false)
+  const [acceptTags, setAcceptTags] = useState<Set<string>>(new Set())
 
   async function handleOpen() {
     setOpen(true)
@@ -72,6 +98,9 @@ export function IngredientAiAssistButton({ itemId, accountId, onApplied, classNa
       setAcceptAllergens(new Set(res.proposal.allergens.map((a) => a.code)))
       setAcceptWaste(res.proposal.defaultWastePct !== null)
       setAcceptConservation(res.proposal.conservationType !== null)
+      setAcceptNutrition(res.proposal.nutrition !== null)
+      setAcceptShelfLife(res.proposal.shelfLifeDays !== null)
+      setAcceptTags(new Set(res.proposal.menuTags))
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error desconocido')
     } finally {
@@ -88,11 +117,23 @@ export function IngredientAiAssistButton({ itemId, accountId, onApplied, classNa
     })
   }
 
+  function toggleTag(tag: string) {
+    setAcceptTags((prev) => {
+      const next = new Set(prev)
+      if (next.has(tag)) next.delete(tag)
+      else next.add(tag)
+      return next
+    })
+  }
+
   const hasAnythingToApply =
     !!proposal &&
     (acceptAllergens.size > 0 ||
       (acceptWaste && proposal.defaultWastePct !== null) ||
-      (acceptConservation && proposal.conservationType !== null))
+      (acceptConservation && proposal.conservationType !== null) ||
+      (acceptNutrition && proposal.nutrition !== null) ||
+      (acceptShelfLife && proposal.shelfLifeDays !== null) ||
+      acceptTags.size > 0)
 
   async function handleApply() {
     if (!proposal) return
@@ -109,6 +150,15 @@ export function IngredientAiAssistButton({ itemId, accountId, onApplied, classNa
           : {}),
         ...(acceptConservation && proposal.conservationType !== null
           ? { conservationType: proposal.conservationType }
+          : {}),
+        ...(acceptShelfLife && proposal.shelfLifeDays !== null
+          ? { shelfLifeDays: proposal.shelfLifeDays }
+          : {}),
+        ...(acceptTags.size > 0
+          ? { menuTags: proposal.menuTags.filter((t) => acceptTags.has(t)) }
+          : {}),
+        ...(acceptNutrition && proposal.nutrition !== null
+          ? { nutrition: proposal.nutrition }
           : {}),
       })
       setOpen(false)
@@ -233,6 +283,78 @@ export function IngredientAiAssistButton({ itemId, accountId, onApplied, classNa
                         className="accent-accent"
                       />
                     </label>
+                  )}
+
+                  {/* Vida útil */}
+                  {proposal.shelfLifeDays !== null && (
+                    <label className="flex items-center justify-between gap-2 cursor-pointer">
+                      <span className="text-xs text-text-primary">
+                        Vida útil: <span className="font-medium">{proposal.shelfLifeDays} días</span>
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={acceptShelfLife}
+                        onChange={(e) => setAcceptShelfLife(e.target.checked)}
+                        className="accent-accent"
+                      />
+                    </label>
+                  )}
+
+                  {/* Etiquetas de menú */}
+                  {proposal.menuTags.length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium text-text-secondary mb-1.5">Etiquetas de menú</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {proposal.menuTags.map((tag) => {
+                          const sel = acceptTags.has(tag)
+                          return (
+                            <button
+                              key={tag}
+                              type="button"
+                              onClick={() => toggleTag(tag)}
+                              className={
+                                'text-[11px] px-2.5 py-1 rounded-full border transition-base flex items-center gap-1 ' +
+                                (sel
+                                  ? 'bg-accent-bg border-accent/40 text-text-primary'
+                                  : 'bg-page border-border-default text-text-secondary line-through')
+                              }
+                            >
+                              {sel && <Check className="w-3 h-3 text-accent" />}
+                              {MENU_TAG_LABEL[tag] ?? tag}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Nutrición */}
+                  {proposal.nutrition !== null && (
+                    <div>
+                      <label className="flex items-center justify-between gap-2 cursor-pointer mb-1.5">
+                        <span className="text-xs font-medium text-text-secondary">
+                          Nutrición <span className="font-normal">(por 100 g, orientativa)</span>
+                        </span>
+                        <input
+                          type="checkbox"
+                          checked={acceptNutrition}
+                          onChange={(e) => setAcceptNutrition(e.target.checked)}
+                          className="accent-accent"
+                        />
+                      </label>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[11px] text-text-primary bg-page rounded-md p-2">
+                        {NUTRITION_FIELDS.map(({ key, label, unit }) =>
+                          proposal.nutrition && proposal.nutrition[key] !== undefined ? (
+                            <div key={key} className="flex justify-between">
+                              <span className="text-text-secondary">{label}</span>
+                              <span className="font-medium">
+                                {proposal.nutrition[key]} {unit}
+                              </span>
+                            </div>
+                          ) : null,
+                        )}
+                      </div>
+                    </div>
                   )}
 
                   <p className="text-[11px] text-text-secondary">

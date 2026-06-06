@@ -39,9 +39,37 @@ import { uploadDishPhoto, getDishPhotoUrl, deleteDishPhoto } from '@/modules/kit
 import PurchaseSourcesSection from '@/modules/kitchen/components/PurchaseSourcesSection'
 import ItemVatSelector from '@/modules/kitchen/components/ItemVatSelector'
 import IngredientAiAssistButton from '@/modules/kitchen/components/IngredientAiAssistButton'
+import { getIngredientExtras } from '@/modules/kitchen/services/recipeAiService'
+import { listItemAllergens, saveItemAllergens } from '@/modules/kitchen/services/recipeItemAllergenService'
+import { EU_ALLERGENS, ALLERGEN_STATES, allergenLabel, allergenStateLabel, type AllergenCode, type AllergenState } from '@/modules/kitchen/lib/allergens'
+import { supabase } from '@/lib/supabase'
+import type { Database, Json } from '@/types/database'
 import type { RecipeItem, KitchenUnit, Supplier, ArticleSupplier, RecipeItemUpdate, ConservationType } from '@/types/kitchen'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
+
+// Etiquetas de menú: código -> texto visible.
+const MENU_TAG_LABEL: Record<string, string> = {
+  picante: 'Picante',
+  vegano: 'Vegano',
+  vegetariano: 'Vegetariano',
+  sin_gluten: 'Sin gluten',
+  sin_lactosa: 'Sin lactosa',
+  halal: 'Halal',
+  ecologico: 'Ecológico / Bio',
+}
+
+// Campos de nutrición (orden etiqueta UE) para mostrar recipe_item.nutrition.
+const NUTRITION_FIELDS: { key: string; label: string; unit: string }[] = [
+  { key: 'energy_kcal', label: 'Energía', unit: 'kcal' },
+  { key: 'fat_g', label: 'Grasas', unit: 'g' },
+  { key: 'saturated_fat_g', label: '· saturadas', unit: 'g' },
+  { key: 'carbs_g', label: 'Hidratos', unit: 'g' },
+  { key: 'sugars_g', label: '· azúcares', unit: 'g' },
+  { key: 'fiber_g', label: 'Fibra', unit: 'g' },
+  { key: 'protein_g', label: 'Proteínas', unit: 'g' },
+  { key: 'salt_g', label: 'Sal', unit: 'g' },
+]
 
 function formatEur(value: number | null | undefined, maxDecimals = 5): string {
   if (value === null || value === undefined || !Number.isFinite(value)) return '—'
@@ -194,11 +222,19 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
   const [fShelfLife, setFShelfLife] = useState('')
   const [fSeasonStart, setFSeasonStart] = useState('')
   const [fSeasonEnd, setFSeasonEnd] = useState('')
+  // Campos editables nuevos (alérgenos, nutrición, etiquetas de menú)
+  const [fAllergens, setFAllergens] = useState<Map<AllergenCode, AllergenState>>(new Map())
+  const [fNutrition, setFNutrition] = useState<Record<string, string>>({})
+  const [fMenuTags, setFMenuTags] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [archiving, setArchiving] = useState(false)
   // Disparador de recarga del item (tras aplicar el copiloto IA, etc.)
   const [reloadTick, setReloadTick] = useState(0)
+  // Datos cargados aparte del mapper de RecipeItem (para mostrar en la ficha).
+  const [nutritionData, setNutritionData] = useState<Record<string, number>>({})
+  const [menuTags, setMenuTags] = useState<string[]>([])
+  const [allergens, setAllergens] = useState<{ code: AllergenCode; state: AllergenState }[]>([])
 
   const actorId = authUserId ?? null
   const actorName = userProfile?.displayName ?? null
@@ -233,6 +269,23 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
       .catch(() => { if (!cancelled) setFamilies([]) })
     return () => { cancelled = true }
   }, [item?.accountId])
+
+  // ── Extras de la ficha: nutrición + etiquetas + alérgenos (recargable) ──
+  useEffect(() => {
+    if (!item) return
+    let cancelled = false
+    Promise.all([getIngredientExtras(item.id), listItemAllergens(item.id)])
+      .then(([x, allg]) => {
+        if (cancelled) return
+        setNutritionData(x.nutrition)
+        setMenuTags(x.menuTags)
+        setAllergens(allg.map((a) => ({ code: a.code, state: a.state })))
+      })
+      .catch(() => {
+        if (!cancelled) { setNutritionData({}); setMenuTags([]); setAllergens([]) }
+      })
+    return () => { cancelled = true }
+  }, [item?.id, reloadTick])
 
   // ── Uso en platos (RPC) ──
   useEffect(() => {
@@ -316,6 +369,19 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
     setFShelfLife(item.shelfLifeDays != null ? String(item.shelfLifeDays) : '')
     setFSeasonStart(dateInputValue(item.seasonStart))
     setFSeasonEnd(dateInputValue(item.seasonEnd))
+    // Alérgenos: del estado ya cargado.
+    setFAllergens(new Map(allergens.map((a) => [a.code, a.state])))
+    // Nutrición: a string para inputs (vacío si no hay valor).
+    setFNutrition(
+      Object.fromEntries(
+        NUTRITION_FIELDS.map(({ key }) => [
+          key,
+          nutritionData[key] != null ? String(nutritionData[key]) : '',
+        ]),
+      ),
+    )
+    // Etiquetas de menú.
+    setFMenuTags(new Set(menuTags))
     setFormError(null)
     setEditing(true)
   }
@@ -345,8 +411,33 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
     setFormError(null)
     try {
       await updateRecipeItem(item.id, patch)
+
+      // Alérgenos (lista final, reemplazo) vía su servicio.
+      const allergenList = Array.from(fAllergens.entries()).map(([code, state]) => ({ code, state }))
+      await saveItemAllergens(item.id, allergenList)
+
+      // Nutrición + etiquetas de menú: update directo tipado.
+      const nutritionObj: Record<string, number> = {}
+      for (const { key } of NUTRITION_FIELDS) {
+        const raw = (fNutrition[key] ?? '').trim().replace(',', '.')
+        if (raw !== '') {
+          const n = Number(raw)
+          if (Number.isFinite(n) && n >= 0) nutritionObj[key] = n
+        }
+      }
+      const directPatch: Database['public']['Tables']['recipe_item']['Update'] = {
+        nutrition: (Object.keys(nutritionObj).length > 0 ? nutritionObj : null) as Json,
+        menu_tags: Array.from(fMenuTags),
+      }
+      const { error: directErr } = await supabase!
+        .from('recipe_item')
+        .update(directPatch)
+        .eq('id', item.id)
+      if (directErr) throw new Error(directErr.message)
+
       setEditing(false)
       await refreshItem()
+      setReloadTick((t) => t + 1)
     } catch (err: unknown) {
       setFormError(err instanceof Error ? err.message : 'No se pudo guardar.')
     } finally {
@@ -429,6 +520,8 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
   const okUnidad = !!item.baseUnitId
   const okProveedor = links.length > 0
   const usable = okPrecio && okUnidad && okProveedor
+
+  const hasNutrition = NUTRITION_FIELDS.some((f) => nutritionData[f.key] != null)
   const checks: { label: string; ok: boolean }[] = [
     { label: 'Precio', ok: okPrecio },
     { label: 'Unidad', ok: okUnidad },
@@ -516,6 +609,92 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
               </div>
             </div>
 
+            {/* Alérgenos (editables) */}
+            <div className="space-y-3">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-text-secondary">Alérgenos</h3>
+              <p className="text-[11px] text-text-secondary -mt-1.5">Declaración por los 14 del Reglamento UE 1169. Marca el estado de cada uno.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {EU_ALLERGENS.map((a) => {
+                  const current = fAllergens.get(a.code)
+                  return (
+                    <div key={a.code} className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md border border-border-default bg-page">
+                      <span className="text-sm text-text-primary">{a.labelEs}</span>
+                      <select
+                        value={current ?? ''}
+                        disabled={saving}
+                        onChange={(e) => {
+                          const v = e.target.value
+                          setFAllergens((prev) => {
+                            const next = new Map(prev)
+                            if (v === '') next.delete(a.code)
+                            else next.set(a.code, v as AllergenState)
+                            return next
+                          })
+                        }}
+                        className="text-xs border border-border-default rounded-md bg-card text-text-primary px-1.5 py-1 cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent"
+                      >
+                        <option value="">No aplica</option>
+                        {ALLERGEN_STATES.map((s) => (
+                          <option key={s} value={s}>{allergenStateLabel(s)}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Nutrición (editable, por 100 g) */}
+            <div className="space-y-3">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-text-secondary">Nutrición (por 100 g)</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {NUTRITION_FIELDS.map(({ key, label, unit }) => (
+                  <Field key={key} label={`${label} (${unit})`}>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={fNutrition[key] ?? ''}
+                      disabled={saving}
+                      onChange={(e) => setFNutrition((prev) => ({ ...prev, [key]: e.target.value }))}
+                      className={INPUT_CLS}
+                    />
+                  </Field>
+                ))}
+              </div>
+            </div>
+
+            {/* Etiquetas de menú (editables) */}
+            <div className="space-y-3">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-text-secondary">Etiquetas de menú</h3>
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(MENU_TAG_LABEL).map(([code, label]) => {
+                  const sel = fMenuTags.has(code)
+                  return (
+                    <button
+                      key={code}
+                      type="button"
+                      disabled={saving}
+                      onClick={() => setFMenuTags((prev) => {
+                        const next = new Set(prev)
+                        if (next.has(code)) next.delete(code)
+                        else next.add(code)
+                        return next
+                      })}
+                      className={
+                        'text-xs px-3 py-1.5 rounded-full border transition-base flex items-center gap-1 ' +
+                        (sel
+                          ? 'bg-accent-bg border-accent/40 text-text-primary'
+                          : 'bg-page border-border-default text-text-secondary')
+                      }
+                    >
+                      {sel && <Check className="w-3 h-3 text-accent" />}
+                      {label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
             {formError && (<div className="p-2 rounded-md bg-danger-bg text-danger border border-danger/20 text-xs">{formError}</div>)}
 
             <div className="flex items-center justify-end gap-2 pt-1">
@@ -583,6 +762,15 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
                     <span>{item.conservationType ? CONSERVATION_LABEL[item.conservationType] ?? item.conservationType : 'Ingrediente'}</span>
                     {baseUnit && <><span className="text-border-default">·</span><span>base {baseUnit.abbreviation}</span></>}
                   </div>
+                  {menuTags.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {menuTags.map((tag) => (
+                        <span key={tag} className="text-[11px] px-2 py-0.5 rounded-full bg-accent-bg text-accent font-medium">
+                          {MENU_TAG_LABEL[tag] ?? tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <span className={`inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-medium ${usable ? 'bg-success-bg text-success' : 'bg-warning-bg text-warning'}`}>
@@ -654,12 +842,46 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
               </div>
             </CollapsibleSection>
 
-            <CollapsibleSection icon={<AlertTriangle size={16} />} title="Alérgenos" badge="Próximamente" badgeTone="neutral">
-              <p className="text-sm text-text-secondary">Declaración por los 14 del Reglamento UE 1169 (contiene / trazas / no contiene). Disponible cuando se active el servicio de alérgenos.</p>
+            <CollapsibleSection icon={<AlertTriangle size={16} />} title="Alérgenos" badge={allergens.length > 0 ? undefined : 'Sin declarar'} badgeTone="neutral" defaultOpen={allergens.length > 0}>
+              {allergens.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {allergens.map((a) => (
+                    <span
+                      key={a.code}
+                      className={
+                        'text-[11px] px-2.5 py-1 rounded-full font-medium ' +
+                        (a.state === 'free'
+                          ? 'bg-success-bg text-success'
+                          : a.state === 'may_contain'
+                            ? 'bg-warning-bg text-warning'
+                            : 'bg-danger-bg text-danger')
+                      }
+                    >
+                      {allergenLabel(a.code)} · {allergenStateLabel(a.state)}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-text-secondary">Sin alérgenos declarados. Edita la ficha o usa "Completar con IA" para añadirlos.</p>
+              )}
             </CollapsibleSection>
 
-            <CollapsibleSection icon={<Activity size={16} />} title="Nutrición" badge="Próximamente" badgeTone="neutral">
-              <p className="text-sm text-text-secondary">Información nutricional por 100 g. Pendiente de editor.</p>
+            <CollapsibleSection icon={<Activity size={16} />} title="Nutrición" badge={hasNutrition ? undefined : 'Próximamente'} badgeTone="neutral">
+              {hasNutrition ? (
+                <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm max-w-md">
+                  {NUTRITION_FIELDS.map(({ key, label, unit }) =>
+                    nutritionData[key] != null ? (
+                      <div key={key} className="flex justify-between border-b border-border-subtle py-0.5">
+                        <span className="text-text-secondary">{label}</span>
+                        <span className="text-text-primary font-medium">{nutritionData[key]} {unit}</span>
+                      </div>
+                    ) : null,
+                  )}
+                  <p className="col-span-2 text-[11px] text-text-secondary mt-1.5">Valores por 100 g · orientativos</p>
+                </div>
+              ) : (
+                <p className="text-sm text-text-secondary">Información nutricional por 100 g. Pendiente de editor.</p>
+              )}
             </CollapsibleSection>
 
             <CollapsibleSection icon={<Scissors size={16} />} title="Cortes y merma" badge="Próximamente" badgeTone="neutral">

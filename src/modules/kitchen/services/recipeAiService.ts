@@ -7,6 +7,7 @@
 
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
 import { updateRecipeItem } from './recipeItemService'
+import type { Database, Json } from '../../../types/database'
 import type { RecipeItem } from '../../../types/kitchen'
 import type { AllergenCode, AllergenState } from '../lib/allergens'
 
@@ -25,6 +26,9 @@ export interface EnrichProposal {
   allergens: EnrichAllergen[]
   defaultWastePct: number | null
   conservationType: string | null
+  shelfLifeDays: number | null
+  menuTags: string[]
+  nutrition: Record<string, number> | null
   confidence: number | null
 }
 
@@ -41,6 +45,9 @@ interface EnrichResponseRow {
     allergens: { code: string; state: string }[]
     default_waste_pct: number | null
     conservation_type: string | null
+    shelf_life_days: number | null
+    menu_tags: string[]
+    nutrition: Record<string, number> | null
     confidence: number | null
   }
   ai_model: string | null
@@ -76,6 +83,9 @@ export async function enrichIngredient(
       })),
       defaultWastePct: row.proposal.default_waste_pct,
       conservationType: row.proposal.conservation_type,
+      shelfLifeDays: row.proposal.shelf_life_days,
+      menuTags: row.proposal.menu_tags ?? [],
+      nutrition: row.proposal.nutrition ?? null,
       confidence: row.proposal.confidence,
     },
     aiModel: row.ai_model,
@@ -88,6 +98,9 @@ export interface EnrichDecisions {
   allergens?: EnrichAllergen[]
   defaultWastePct?: number | null
   conservationType?: string | null
+  shelfLifeDays?: number | null
+  menuTags?: string[]
+  nutrition?: Record<string, number> | null
 }
 
 /**
@@ -101,7 +114,7 @@ export async function applyEnrichment(
 ): Promise<RecipeItem | null> {
   requireSupabase()
 
-  // 1) Campos directos del recipe_item (merma, conservación).
+  // 1) Campos directos del recipe_item (merma, conservación, vida útil).
   const patch: Record<string, unknown> = {}
   if (decisions.defaultWastePct !== undefined) {
     patch.defaultWastePct = decisions.defaultWastePct
@@ -110,9 +123,31 @@ export async function applyEnrichment(
     patch.conservationType =
       decisions.conservationType as RecipeItem['conservationType']
   }
+  if (decisions.shelfLifeDays !== undefined) {
+    patch.shelfLifeDays = decisions.shelfLifeDays
+  }
   let updated: RecipeItem | null = null
   if (Object.keys(patch).length > 0) {
     updated = await updateRecipeItem(recipeItemId, patch)
+  }
+
+  // nutrition y menu_tags se escriben directo (updateRecipeItem no los mapea).
+  // Tipado con el Update del esquema para que Supabase lo acepte.
+  const directPatch: Database['public']['Tables']['recipe_item']['Update'] = {}
+  if (decisions.nutrition !== undefined && decisions.nutrition !== null) {
+    directPatch.nutrition = decisions.nutrition as Json
+  }
+  if (decisions.menuTags !== undefined) {
+    directPatch.menu_tags = decisions.menuTags
+  }
+  if (Object.keys(directPatch).length > 0) {
+    const { error } = await supabase!
+      .from('recipe_item')
+      .update(directPatch)
+      .eq('id', recipeItemId)
+    if (error) {
+      throw new Error(`Error guardando nutrición/etiquetas: ${error.message}`)
+    }
   }
 
   // 2) Alérgenos (satélite recipe_item_allergen). Upsert por (item, code).
@@ -133,4 +168,32 @@ export async function applyEnrichment(
   }
 
   return updated
+}
+
+/**
+ * Lee los "extras" jsonb/array de un recipe_item que el mapper de RecipeItem no
+ * lleva (nutrición + etiquetas de menú): la ficha los carga aparte para
+ * mostrarlos. Devuelve {} y [] si no hay nada guardado.
+ */
+export async function getIngredientExtras(
+  recipeItemId: string,
+): Promise<{ nutrition: Record<string, number>; menuTags: string[] }> {
+  requireSupabase()
+  const { data, error } = await supabase!
+    .from('recipe_item')
+    .select('nutrition, menu_tags')
+    .eq('id', recipeItemId)
+    .maybeSingle()
+  if (error) {
+    throw new Error(`Error leyendo extras del ingrediente: ${error.message}`)
+  }
+  const n = data?.nutrition
+  const nutrition =
+    n && typeof n === 'object' && !Array.isArray(n)
+      ? (n as Record<string, number>)
+      : {}
+  const menuTags = Array.isArray(data?.menu_tags)
+    ? (data!.menu_tags as string[])
+    : []
+  return { nutrition, menuTags }
 }

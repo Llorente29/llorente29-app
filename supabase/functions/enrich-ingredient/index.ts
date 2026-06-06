@@ -32,6 +32,10 @@ const ALLERGEN_CODES = [
 ];
 const ALLERGEN_STATES = ['contains', 'may_contain', 'free'];
 const CONSERVATION_TYPES = ['fridge', 'freezer', 'dry', 'hot'];
+// Etiquetas de menú válidas (set curado, no campos a medida).
+const MENU_TAGS = [
+  'picante', 'vegano', 'vegetariano', 'sin_gluten', 'sin_lactosa', 'halal', 'ecologico',
+];
 
 interface EnrichRequest {
   recipe_item_id: string;
@@ -42,6 +46,9 @@ interface ParsedEnrich {
   allergens: { code: string; state: string }[];
   default_waste_pct: number | null;
   conservation_type: string | null;
+  shelf_life_days: number | null;
+  menu_tags: string[];
+  nutrition: Record<string, number | null> | null;
   confidence: number;
 }
 
@@ -63,6 +70,18 @@ function buildPrompt(name: string, familyName: string | null): string {
     `  "allergens": [{"code": "<uno de la lista>", "state": "contains|may_contain"}],\n` +
     `  "default_waste_pct": <merma típica en cocina, 0 a 95, o null si no aplica/no se sabe>,\n` +
     `  "conservation_type": "<fridge|freezer|dry|hot, o null>",\n` +
+    `  "shelf_life_days": <vida útil orientativa en días del producto sin abrir/fresco, o null>,\n` +
+    `  "menu_tags": [<etiquetas de menú de la lista, las que apliquen>],\n` +
+    `  "nutrition": {\n` +
+    `    "energy_kcal": <kcal por 100 g o null>,\n` +
+    `    "fat_g": <g por 100 g o null>,\n` +
+    `    "saturated_fat_g": <g por 100 g o null>,\n` +
+    `    "carbs_g": <g por 100 g o null>,\n` +
+    `    "sugars_g": <g por 100 g o null>,\n` +
+    `    "fiber_g": <g por 100 g o null>,\n` +
+    `    "protein_g": <g por 100 g o null>,\n` +
+    `    "salt_g": <g por 100 g o null>\n` +
+    `  },\n` +
     `  "confidence": <0 a 1>\n` +
     `}\n\n` +
     `LISTA DE ALÉRGENOS VÁLIDOS (códigos UE, usa SOLO estos):\n` +
@@ -79,6 +98,19 @@ function buildPrompt(name: string, familyName: string | null): string {
     `  Si no estás razonablemente seguro, null. No inventes una cifra precisa.\n` +
     `- "conservation_type": cómo se guarda. Fresco perecedero -> fridge; congelado ->\n` +
     `  freezer; seco/ambiente (harina, sal, conservas) -> dry; servicio en caliente -> hot.\n` +
+    `- "shelf_life_days": vida útil ORIENTATIVA en días (aceite ~540, conserva ~730,\n` +
+    `  pescado fresco ~2, verdura ~7). Si no estás seguro, null.\n` +
+    `- "menu_tags": etiquetas de carta que apliquen al ingrediente, SOLO de esta lista:\n` +
+    `  picante, vegano, vegetariano, sin_gluten, sin_lactosa, halal, ecologico.\n` +
+    `  Inclúyelas cuando el ingrediente claramente lo cumple (tomate -> vegano,\n` +
+    `  vegetariano, sin_gluten, sin_lactosa; guindilla -> + picante; cerdo -> ninguna\n` +
+    `  de vegano/vegetariano/halal). NO marques 'ecologico' salvo que el nombre lo\n` +
+    `  indique. Ante la duda, no la incluyas. NUNCA una etiqueta fuera de la lista.\n` +
+    `- "nutrition": valores de referencia ORIENTATIVOS por 100 g del ingrediente\n` +
+    `  genérico (los típicos de tablas de composición). Son aproximados, no de\n` +
+    `  laboratorio. Si no estás razonablemente seguro de un valor, ese campo null.\n` +
+    `  Si el ingrediente no aporta nutrición relevante (agua, sal), pon los que\n` +
+    `  apliquen y el resto null.\n` +
     `- "confidence": tu confianza global en la propuesta.\n` +
     `- Responde ÚNICAMENTE el JSON.`
   );
@@ -198,13 +230,52 @@ Deno.serve(async (req) => {
   const conservation = CONSERVATION_TYPES.includes(parsed.conservation_type as string)
     ? parsed.conservation_type : null;
 
+  let shelfLife: number | null = null;
+  if (typeof parsed.shelf_life_days === 'number' &&
+      parsed.shelf_life_days >= 0 && parsed.shelf_life_days <= 3650) {
+    shelfLife = Math.round(parsed.shelf_life_days);
+  }
+
+  const menuTags = Array.isArray(parsed.menu_tags)
+    ? parsed.menu_tags
+        .filter((t) => MENU_TAGS.includes(t))
+        .filter((t, i, arr) => arr.indexOf(t) === i)
+    : [];
+
   const confidence = typeof parsed.confidence === 'number'
     ? Math.max(0, Math.min(1, parsed.confidence)) : null;
+
+  // Nutrición: solo claves conocidas, numéricas y en rango sano (por 100 g).
+  // energy hasta 900 kcal/100g (grasa pura ~900); el resto hasta 100 g/100g.
+  const NUTRITION_KEYS: Record<string, number> = {
+    energy_kcal: 900,
+    fat_g: 100,
+    saturated_fat_g: 100,
+    carbs_g: 100,
+    sugars_g: 100,
+    fiber_g: 100,
+    protein_g: 100,
+    salt_g: 100,
+  };
+  let nutrition: Record<string, number> | null = null;
+  if (parsed.nutrition && typeof parsed.nutrition === 'object') {
+    const clean: Record<string, number> = {};
+    for (const [key, max] of Object.entries(NUTRITION_KEYS)) {
+      const v = parsed.nutrition[key];
+      if (typeof v === 'number' && v >= 0 && v <= max) {
+        clean[key] = Math.round(v * 100) / 100;
+      }
+    }
+    if (Object.keys(clean).length > 0) nutrition = clean;
+  }
 
   const cleanProposal = {
     allergens,
     default_waste_pct: waste,
     conservation_type: conservation,
+    shelf_life_days: shelfLife,
+    menu_tags: menuTags,
+    nutrition,
     confidence,
   };
 
