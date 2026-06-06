@@ -92,6 +92,10 @@ export default function ReceiptScanPanel({ accountId, onBack, onCreateReceipt }:
       supplierId: header.supplierId,
       proposedSupplierName: result!.document.supplier_name ?? null,
       proposedSupplierNif: result!.document.supplier_tax_id ?? null,
+      proposedSupplierPhone: result!.document.supplier_phone ?? null,
+      proposedSupplierEmail: result!.document.supplier_email ?? null,
+      proposedSupplierAddress: result!.document.supplier_address ?? null,
+      proposedSupplierHealthRegistry: result!.document.supplier_health_registry ?? null,
       deliveredBy: header.deliveredBy,
       locationId: header.locationId,
       supplierDocNumber: header.supplierDocNumber,
@@ -107,6 +111,9 @@ export default function ReceiptScanPanel({ accountId, onBack, onCreateReceipt }:
         unitCost: l.unit_price_net,
         lotCode: l.lot_code,
         expiryDate: l.expiry_date,
+        formatName: l.format_name,
+        packSize: l.pack_size,
+        packUnit: l.pack_unit,
       })),
     }
   }

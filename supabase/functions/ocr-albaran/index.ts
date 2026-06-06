@@ -14,8 +14,17 @@
 //   · Detecta manuscrito y baja la confianza.
 //   · Valida por BASE IMPONIBLE, no por total con IVA.
 //
+// Tramo A (07/06) — recepción "0 errores en paso de datos":
+//   · Mejora 1: captura CONTACTO del proveedor (teléfono/email/dirección/registro
+//     sanitario) para volcar el proveedor completo, no solo nombre+CIF.
+//   · Mejora 3: por línea, una PISTA DE FORMATO de compra (format_name + contenido
+//     pack_size/pack_unit) leída del texto. La IA NO convierte a base (no conoce
+//     la unidad base del artículo, que puede no existir aún): solo propone lo que
+//     ve. El front, cuando ya sabe el artículo y su unidad base, calcula el
+//     qty_in_base y el humano confirma (anti-invención: si no cuadra, needs_review).
+//
 // Auth: usuario autenticado (JWT, respeta RLS) o llamada interna (x-internal-key).
-// Patrón calcado de extract-recipe.
+// Patrón calcado de extract-recipe. Deploy NORMAL (no es webhook externo).
 
 import { corsHeaders } from '../_shared/cors.ts';
 import { createClient } from '@supabase/supabase-js';
@@ -36,6 +45,10 @@ interface ParsedDoc {
   document: {
     supplier_name: string | null;
     supplier_tax_id: string | null;
+    supplier_phone: string | null;          // Mejora 1
+    supplier_email: string | null;          // Mejora 1
+    supplier_address: string | null;        // Mejora 1 (domicilio del PROVEEDOR, no el de entrega)
+    supplier_health_registry: string | null;// Mejora 1 (RGSEAA / nº registro sanitario)
     doc_number: string | null;
     doc_date: string | null;          // YYYY-MM-DD
     doc_type: 'albaran' | 'factura' | 'albaran_factura' | null;
@@ -58,6 +71,10 @@ interface ParsedDoc {
     lot_code: string | null;
     expiry_date: string | null;       // YYYY-MM-DD
     note: string | null;
+    // Mejora 3 — pista de FORMATO de compra (lo que la IA ve; sin convertir a base).
+    format_name: string | null;       // nombre de la unidad de compra: "Caja","Saco","Garrafa","Unidad"...
+    pack_size: number | null;         // contenido de UN formato (80 si "(80u)"; 5 si "Garrafa 5 L")
+    pack_unit: string | null;         // unidad del contenido: "ud"|"kg"|"g"|"l"|"ml"
   }[];
   confidence: number;                 // 0..1 global
 }
@@ -79,6 +96,10 @@ function buildPrompt(): string {
     `  "document": {\n` +
     `    "supplier_name": "<razón social del PROVEEDOR que emite, o null>",\n` +
     `    "supplier_tax_id": "<CIF/NIF del proveedor, o null>",\n` +
+    `    "supplier_phone": "<teléfono del proveedor si aparece, o null>",\n` +
+    `    "supplier_email": "<email del proveedor si aparece, o null>",\n` +
+    `    "supplier_address": "<domicilio FISCAL/SOCIAL del proveedor (NO el de entrega), o null>",\n` +
+    `    "supplier_health_registry": "<nº de registro sanitario / RGSEAA del proveedor si aparece, o null>",\n` +
     `    "doc_number": "<nº de albarán o factura, o null>",\n` +
     `    "doc_date": "<fecha del documento YYYY-MM-DD, o null>",\n` +
     `    "doc_type": "<albaran|factura|albaran_factura|null>",\n` +
@@ -101,7 +122,10 @@ function buildPrompt(): string {
     `      "vat_pct": <% de IVA de la línea si aparece, o null>,\n` +
     `      "lot_code": "<lote si aparece, o null>",\n` +
     `      "expiry_date": "<caducidad YYYY-MM-DD si aparece, o null>",\n` +
-    `      "note": "<cualquier coletilla relevante, o null>"\n` +
+    `      "note": "<cualquier coletilla relevante, o null>",\n` +
+    `      "format_name": "<nombre del FORMATO de compra de la línea: 'Caja','Saco','Garrafa','Bandeja','Estuche','Unidad','Kilogramo'... o null>",\n` +
+    `      "pack_size": <cuánto CONTIENE un formato como número (80 si pone '(80u)'; 5 si 'Garrafa 5 L'; 6 si 'Caja 6x1L'), o null>,\n` +
+    `      "pack_unit": "<unidad del contenido del formato: ud|kg|g|l|ml, o null>"\n` +
     `    }\n` +
     `  ],\n` +
     `  "confidence": <0 a 1: tu confianza GLOBAL en la lectura>\n` +
@@ -113,9 +137,18 @@ function buildPrompt(): string {
     `- "raw_text" es SOLO el nombre del artículo (sin el código de proveedor, que va en supplier_code).\n` +
     `- Distingue PROVEEDOR (emite) de CLIENTE (recibe/factura): supplier_* es siempre el proveedor.\n` +
     `- Captura lote y caducidad por línea si aparecen (suelen ir debajo o al lado de la línea).\n` +
+    `- FORMATO de compra (format_name/pack_size/pack_unit): describe la UNIDAD EN LA QUE SE COMPRA\n` +
+    `  y FACTURA la línea (la misma a la que se refieren "quantity" y "unit_price_net").\n` +
+    `    · Si la línea va por cajas/sacos/garrafas → format_name = ese envase ("Caja","Saco","Garrafa")\n` +
+    `      y pack_size/pack_unit = cuánto contiene UNO (del texto: "(80u)" → 80 "ud"; "5 L" → 5 "l";\n` +
+    `      "6x1L" → 6 "l"; "Saco 25 kg" → 25 "kg").\n` +
+    `    · Si la línea va por unidades sueltas/peso → format_name = "Unidad"/"Kilogramo"/"Litro" y\n` +
+    `      pack_size/pack_unit = 1 de esa unidad (1 "ud", 1 "kg", 1 "l").\n` +
+    `    · Si NO puedes deducir el contenido con seguridad, deja pack_size y/o pack_unit en null\n` +
+    `      (NO inventes la equivalencia; el humano la confirmará).\n` +
+    `- Las cantidades e importes son números decimales con punto (no "5,99" sino 5.99; no "5 kg" sino 5).\n` +
     `- Si el documento está MANUSCRITO o es poco legible: ponle handwritten=true, baja "confidence",\n` +
     `  y extrae solo lo que veas con seguridad (el resto null).\n` +
-    `- Las cantidades e importes son números decimales con punto (no "5,99" sino 5.99; no "5 kg" sino 5).\n` +
     `- Si no es un albarán/factura legible, devuelve {"document":{...con nulls...},"lines":[],"confidence":0}.\n` +
     `- Responde ÚNICAMENTE el JSON.`
   );

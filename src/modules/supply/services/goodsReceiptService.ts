@@ -20,7 +20,7 @@
 
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
 import { cascadeFromItem } from '@/modules/kitchen/services/costCascadeService'
-import { createRecipeItem, updateRecipeItem } from '@/modules/kitchen/services/recipeItemService'
+import { createRecipeItem, updateRecipeItem, recomputeRecipeItem } from '@/modules/kitchen/services/recipeItemService'
 import { createSupplier } from '@/modules/kitchen/services/purchaseFormatService'
 import type { Supplier } from '@/types/kitchen'
 
@@ -331,6 +331,92 @@ export function qtyInBaseFromFormat(
   return qtyReceived * formatQtyInBase
 }
 
+// ── Tramo A: capturar el FORMATO de compra desde la pista del OCR ──
+//
+// El eslabón que faltaba: sin formato no hay qty_in_base → la línea no postea ni
+// fluye el coste. Estas piezas permiten proponer el formato (la IA propone del
+// texto del albarán, el humano confirma) y convertirlo a la unidad base del
+// artículo SIN INVENTAR (si la dimensión no cuadra → null → needs_review).
+
+export interface BaseUnitInfo {
+  id: string
+  abbr: string
+  dimension: 'weight' | 'volume' | 'unit'
+  factorToBase: number   // factor de ESTA unidad base a la base canónica de su dimensión (g/ml/ud → 1)
+}
+
+// Unidad base (dimensión + factor) de un artículo, vía kitchen_unit. Lectura
+// ligera: al casar un artículo EXISTENTE, permite proponer la equivalencia del
+// formato automáticamente (el front la cachea por artículo).
+export async function getItemBaseUnit(itemId: string): Promise<BaseUnitInfo | null> {
+  requireSupabase()
+  const { data, error } = await from('recipe_item')
+    .select('base_unit_id, kitchen_unit:base_unit_id ( id, abbreviation, dimension, factor_to_base )')
+    .eq('id', itemId)
+    .maybeSingle()
+  if (error) { console.error('[goodsReceiptService] getItemBaseUnit', error); return null }
+  const ku = ((data as Row | null)?.kitchen_unit ?? null) as
+    { id?: string; abbreviation?: string; dimension?: string; factor_to_base?: number } | null
+  if (!ku || !ku.id || !ku.dimension) return null
+  return {
+    id: ku.id,
+    abbr: ku.abbreviation ?? '',
+    dimension: ku.dimension as BaseUnitInfo['dimension'],
+    factorToBase: Number(ku.factor_to_base ?? 1),
+  }
+}
+
+// Factor de una unidad de empaque (lo que escribe el albarán: "kg", "L", "ud"…)
+// a la base CANÓNICA de su dimensión (peso→g, volumen→ml, unidad→ud).
+// null si la unidad no se reconoce (no se adivina).
+function packUnitToCanonical(
+  packUnit: string | null,
+): { dimension: 'weight' | 'volume' | 'unit'; factor: number } | null {
+  if (!packUnit) return null
+  const u = packUnit.trim().toLowerCase().replace(/\.$/, '')
+  switch (u) {
+    case 'ud': case 'u': case 'uds': case 'unid': case 'unidad': case 'unidades':
+    case 'pieza': case 'piezas': case 'pza': case 'pzas':
+      return { dimension: 'unit', factor: 1 }
+    case 'g': case 'gr': case 'grs': case 'gramo': case 'gramos':
+      return { dimension: 'weight', factor: 1 }
+    case 'kg': case 'kgs': case 'kilo': case 'kilos': case 'kilogramo': case 'kilogramos':
+      return { dimension: 'weight', factor: 1000 }
+    case 'mg':
+      return { dimension: 'weight', factor: 0.001 }
+    case 'ml': case 'mililitro': case 'mililitros': case 'cc':
+      return { dimension: 'volume', factor: 1 }
+    case 'cl': case 'centilitro': case 'centilitros':
+      return { dimension: 'volume', factor: 10 }
+    case 'l': case 'lt': case 'lts': case 'litro': case 'litros':
+      return { dimension: 'volume', factor: 1000 }
+    default:
+      return null
+  }
+}
+
+// PURO (testeable): cuánto vale UN formato en la unidad base del artículo, a
+// partir de la pista del OCR (pack_size + pack_unit) y la unidad base del
+// artículo. Devuelve null si no se puede convertir SIN INVENTAR:
+//   · sin contenido (pack_size null/≤0),
+//   · unidad de empaque desconocida,
+//   · dimensión incompatible (caja de 12 ud contra base en gramos: haría falta
+//     el peso por pieza → la línea queda needs_review y el humano lo teclea).
+export function formatQtyInBaseFromPack(
+  packSize: number | null,
+  packUnit: string | null,
+  base: BaseUnitInfo | null,
+): number | null {
+  if (packSize === null || !Number.isFinite(packSize) || packSize <= 0) return null
+  if (!base) return null
+  const canon = packUnitToCanonical(packUnit)
+  if (!canon) return null
+  if (canon.dimension !== base.dimension) return null   // dimensión incompatible → no inventar
+  const inCanonical = packSize * canon.factor            // valor en g/ml/ud
+  const factor = base.factorToBase > 0 ? base.factorToBase : 1
+  return inCanonical / factor                            // valor en la base del artículo
+}
+
 // ── Recibido acumulado por línea de pedido (para la recepción anti-error) ──
 //
 // Suma qty_received de las recepciones CONFIRMADAS de un pedido, agrupada por
@@ -613,11 +699,19 @@ export interface OcrLine {
   lot_code: string | null
   expiry_date: string | null
   note: string | null
+  // Tramo A — pista de FORMATO leída del albarán (la IA propone; no convierte a base).
+  format_name: string | null
+  pack_size: number | null
+  pack_unit: string | null
 }
 
 export interface OcrDocument {
   supplier_name: string | null
   supplier_tax_id: string | null
+  supplier_phone: string | null
+  supplier_email: string | null
+  supplier_address: string | null
+  supplier_health_registry: string | null
   doc_number: string | null
   doc_date: string | null
   doc_type: 'albaran' | 'factura' | 'albaran_factura' | null
@@ -1027,6 +1121,10 @@ export async function quickCreateRawItem(
     name: name.trim(),
     baseUnitId,
     source: 'ocr_invoice',
+    // Un artículo nacido de un albarán cuesta por su COMPRA, no por un fijo: nace
+    // 'last_purchase' para que el precio recibido pise el coste (sin el flip de
+    // 'fixed' no fluiría → era el segundo culpable del 0,00 €).
+    costStrategy: 'last_purchase',
     needsReview: true,
     createdBy,
     createdByName,
@@ -1038,22 +1136,64 @@ export async function quickCreateRawItem(
   return { id: item.id, name: item.name }
 }
 
-// Alta de proveedor desde la cabecera (nombre + NIF).
+// Alta de proveedor desde la cabecera del albarán. Mejora 1: vuelca TODO lo que
+// el OCR leyó (no solo nombre+NIF) — teléfono/email/dirección/registro sanitario.
+export interface SupplierContact {
+  email?: string | null
+  phone?: string | null
+  address?: string | null
+  healthRegistryNo?: string | null
+}
+
 export async function quickCreateSupplier(
   accountId: string,
   name: string,
   taxId: string | null,
+  contact: SupplierContact | null,
   createdBy: string | null,
   createdByName: string | null,
 ): Promise<Supplier> {
   requireSupabase()
+  const clean = (v: string | null | undefined) => {
+    const t = (v ?? '').trim()
+    return t === '' ? null : t
+  }
   return await createSupplier({
     accountId,
     name: name.trim(),
-    taxId: taxId && taxId.trim() !== '' ? taxId.trim() : null,
+    taxId: clean(taxId),
+    email: clean(contact?.email),
+    phone: clean(contact?.phone),
+    address: clean(contact?.address),
+    healthRegistryNo: clean(contact?.healthRegistryNo),
     createdBy,
     createdByName,
   })
+}
+
+// Flip de estrategia de coste (Tramo A): los artículos que cobran su coste de un
+// valor FIJO no dejan que la compra lo pise (precedencia 'fixed' en el motor).
+// Antes de confirmar una recepción con precio, pasamos a 'last_purchase' los que
+// estén en 'fixed' (el fixed_cost queda de respaldo) y recalculamos su coste.
+// Idempotente: lo que ya está en una estrategia de compra no se toca. Los
+// artículos nuevos de OCR ya nacen 'last_purchase', así que esto solo afecta a
+// artículos EXISTENTES que cases. Una escritura por lote + recálculo de los flipados.
+export async function ensureLastPurchaseStrategy(itemIds: string[]): Promise<number> {
+  requireSupabase()
+  const ids = Array.from(new Set(itemIds.filter(Boolean)))
+  if (ids.length === 0) return 0
+  const { data, error } = await from('recipe_item')
+    .update({ cost_strategy: 'last_purchase', updated_at: new Date().toISOString() })
+    .in('id', ids)
+    .eq('cost_strategy', 'fixed')
+    .select('id')
+  if (error) throw new Error(`No se pudo ajustar la estrategia de coste: ${error.message}`)
+  const flipped = ((data as Row[] | null) ?? []).map(r => r.id as string)
+  for (const id of flipped) {
+    try { await recomputeRecipeItem(id) }
+    catch (e) { console.error(`ensureLastPurchaseStrategy: recálculo falló para ${id}`, e) }
+  }
+  return flipped.length
 }
 
 // ── C2.2.b.5: detección de albarán duplicado ──

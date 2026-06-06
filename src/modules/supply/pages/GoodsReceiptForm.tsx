@@ -24,12 +24,12 @@
 //
 // Tras confirmar, VUELVE SOLO (onSaved con mensaje); aviso como toast en lista.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, Search, Loader2, Check, Save, ListChecks, AlertTriangle } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import { useOperativeLocation } from '@/modules/supply/hooks/useOperativeLocation'
 import OperativeLocationBanner from '@/modules/supply/components/OperativeLocationBanner'
-import { listSuppliers } from '@/modules/kitchen/services/purchaseFormatService'
+import { listSuppliers, createPurchaseFormat } from '@/modules/kitchen/services/purchaseFormatService'
 import type { Supplier } from '@/types/kitchen'
 import {
   getSupplierCatalog,
@@ -54,12 +54,16 @@ import {
   learnFromReceipt,
   learnSupplierAlias,
   quickCreateSupplier,
+  getItemBaseUnit,
+  ensureLastPurchaseStrategy,
+  formatQtyInBaseFromPack,
   getSupplySettings,
   getSupplierLastPrices,
   priceAlertFor,
   expiryAlertFor,
   type LineMatchCandidate,
   type SupplySettings,
+  type BaseUnitInfo,
 } from '@/modules/supply/services/goodsReceiptService'
 import LineMatchPicker from '@/modules/supply/pages/LineMatchPicker'
 
@@ -88,6 +92,10 @@ export interface OcrPrefill {
   supplierId: string            // '' si no casó
   proposedSupplierName: string | null   // emisor leído (para prerellenar el alta si no casa)
   proposedSupplierNif: string | null
+  proposedSupplierPhone: string | null  // Mejora 1: contacto leído del albarán
+  proposedSupplierEmail: string | null
+  proposedSupplierAddress: string | null
+  proposedSupplierHealthRegistry: string | null
   deliveredBy: string | null    // entregado por (Joan/Bidfood) cuando hay intermediario
   locationId: string            // '' si no casó
   supplierDocNumber: string | null
@@ -105,6 +113,10 @@ export interface OcrPrefillLine {
   unitCost: number | null       // precio neto leído
   lotCode: string | null
   expiryDate: string | null
+  // Mejora 3: pista de FORMATO leída (la IA propone; el front convierte a base).
+  formatName: string | null
+  packSize: number | null
+  packUnit: string | null
 }
 
 interface GoodsReceiptFormProps {
@@ -137,12 +149,39 @@ interface DraftLine {
   matchedName: string | null        // nombre del artículo casado (tu nombre)
   matchSemaphore: 'green' | 'yellow' | null
   matchType: string | null
+  // Tramo A — captura de formato (solo OCR; opcionales: los caminos no-OCR no los usan)
+  formatName?: string | null        // nombre del formato a crear/heredar ("Caja")
+  packSize?: number | null          // pista IA: contenido de un formato
+  packUnit?: string | null          // pista IA: unidad del contenido
+  baseUnit?: BaseUnitInfo | null    // unidad base del artículo (para convertir)
+  formatSuggested?: boolean         // el formato lo propuso la IA (✨)
+  formatTouched?: boolean           // el humano editó el formato → no autollenar
 }
 
 function parseNum(v: string): number | null {
   if (v.trim() === '') return null
   const n = Number(v.replace(',', '.'))
   return Number.isFinite(n) ? n : null
+}
+
+// Nombre de formato por defecto cuando la IA no propuso uno (el humano puede editarlo).
+function defaultFormatName(_packUnit: string | null, base: BaseUnitInfo | null): string {
+  switch (base?.dimension) {
+    case 'weight': return 'Kilogramo'
+    case 'volume': return 'Litro'
+    case 'unit': return 'Unidad'
+    default: return 'Formato'
+  }
+}
+
+// Etiqueta legible de la equivalencia: "80 ud", "5 kg", "10 L" (escala g→kg, ml→L).
+function formatBaseQty(qty: number, abbr: string): string {
+  let q = qty
+  let u = abbr
+  if (abbr === 'g' && qty >= 1000) { q = qty / 1000; u = 'kg' }
+  else if (abbr === 'ml' && qty >= 1000) { q = qty / 1000; u = 'L' }
+  const s = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 3 }).format(q)
+  return `${s} ${u}`
 }
 
 // Detalle de una línea recibida POR ENCIMA de lo pendiente (para el resumen).
@@ -205,25 +244,130 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
 
   function chooseMatch(key: string, recipeItemId: string, name: string, semaphore: 'green' | 'yellow' | null, matchType: string | null) {
     setDraft(d => d.map(x => x.key === key
-      ? { ...x, recipeItemId, matchedName: name, matchSemaphore: semaphore, matchType }
+      ? { ...x, recipeItemId, matchedName: name, matchSemaphore: semaphore, matchType,
+          // reinicia el formato: lo resolverá el efecto para el artículo recién casado
+          purchaseFormatId: null, formatLabel: null, formatQtyInBase: null,
+          baseUnit: null, formatSuggested: false, formatTouched: false }
       : x))
     setPickerKey(null)
   }
   function clearMatch(key: string) {
     setDraft(d => d.map(x => x.key === key
-      ? { ...x, recipeItemId: null, matchedName: null, matchSemaphore: null, matchType: null }
+      ? { ...x, recipeItemId: null, matchedName: null, matchSemaphore: null, matchType: null,
+          purchaseFormatId: null, formatLabel: null, formatQtyInBase: null,
+          baseUnit: null, formatSuggested: false, formatTouched: false }
       : x))
   }
+
+  // ── Tramo A: captura de formato (solo OCR) ──
+  // Catálogo del proveedor (para HEREDAR el formato si el artículo ya lo tiene
+  // con él) + caché de unidad base por artículo + ref al draft para el efecto async.
+  const [catalogByItem, setCatalogByItem] = useState<Map<string, SupplierCatalogEntry>>(new Map())
+  const baseUnitCache = useRef<Map<string, BaseUnitInfo | null>>(new Map())
+  const draftRef = useRef<DraftLine[]>([])
+  useEffect(() => { draftRef.current = draft }, [draft])
+
+  useEffect(() => {
+    if (!fromOcr || !supplierId) { setCatalogByItem(new Map()); return }
+    let cancelled = false
+    getSupplierCatalog(accountId, supplierId)
+      .then(entries => {
+        if (cancelled) return
+        const m = new Map<string, SupplierCatalogEntry>()
+        entries.forEach(e => m.set(e.recipeItemId, e))
+        setCatalogByItem(m)
+      })
+      .catch(() => { if (!cancelled) setCatalogByItem(new Map()) })
+    return () => { cancelled = true }
+  }, [fromOcr, accountId, supplierId])
+
+  function setFormatName(key: string, name: string) {
+    setDraft(d => d.map(l => {
+      if (l.key !== key) return l
+      const label = (l.formatQtyInBase !== null && l.baseUnit)
+        ? `${name.trim() || 'Formato'} (${formatBaseQty(l.formatQtyInBase, l.baseUnit.abbr)})`
+        : l.formatLabel
+      return { ...l, formatName: name, formatTouched: true, formatSuggested: false, purchaseFormatId: null, formatLabel: label }
+    }))
+  }
+  function setFormatQty(key: string, value: string) {
+    const n = parseNum(value)
+    setDraft(d => d.map(l => {
+      if (l.key !== key) return l
+      const label = (n !== null && l.baseUnit)
+        ? `${(l.formatName ?? '').trim() || 'Formato'} (${formatBaseQty(n, l.baseUnit.abbr)})`
+        : null
+      return { ...l, formatQtyInBase: n, formatTouched: true, formatSuggested: false, purchaseFormatId: null, formatLabel: label }
+    }))
+  }
+
+  // Resuelve unidad base + formato de cada línea OCR casada: HEREDA el formato que
+  // el artículo ya tenga con este proveedor; si no, PROPONE desde la pista del OCR
+  // (sin inventar: si la dimensión no cuadra, deja la equivalencia vacía y el humano
+  // la teclea). No pisa lo que el humano haya tocado (formatTouched). Se dispara al
+  // cambiar el conjunto de artículos casados, el proveedor o el catálogo.
+  const matchSignature = useMemo(
+    () => draft.map(l => `${l.key}:${l.recipeItemId ?? ''}:${l.formatTouched ? 't' : ''}`).join('|'),
+    [draft],
+  )
+  useEffect(() => {
+    if (!fromOcr) return
+    let cancelled = false
+    ;(async () => {
+      const todo = draftRef.current.filter(l => l.recipeItemId && !l.formatTouched)
+      for (const line of todo) {
+        const itemId = line.recipeItemId as string
+        let base = line.baseUnit ?? baseUnitCache.current.get(itemId) ?? null
+        if (!base) {
+          base = await getItemBaseUnit(itemId)
+          if (cancelled) return
+          baseUnitCache.current.set(itemId, base)
+        }
+        const existing = catalogByItem.get(itemId)
+        let purchaseFormatId: string | null = null
+        let formatName: string | null = line.formatName ?? null
+        let formatQtyInBase: number | null = null
+        let suggested = false
+        if (existing && existing.purchaseFormatId && existing.formatQtyInBase) {
+          purchaseFormatId = existing.purchaseFormatId
+          formatName = existing.formatName ?? formatName
+          formatQtyInBase = existing.formatQtyInBase
+        } else {
+          formatQtyInBase = formatQtyInBaseFromPack(line.packSize ?? null, line.packUnit ?? null, base)
+          if (!formatName) formatName = defaultFormatName(line.packUnit ?? null, base)
+          suggested = formatQtyInBase !== null
+        }
+        const label = (formatQtyInBase !== null && base)
+          ? `${(formatName ?? '').trim() || 'Formato'} (${formatBaseQty(formatQtyInBase, base.abbr)})`
+          : null
+        setDraft(d => d.map(x => {
+          if (x.key !== line.key || x.formatTouched) return x
+          if (x.baseUnit === base && x.purchaseFormatId === purchaseFormatId
+              && x.formatQtyInBase === formatQtyInBase && x.formatName === formatName) return x
+          return { ...x, baseUnit: base, purchaseFormatId, formatName, formatQtyInBase, formatLabel: label, formatSuggested: suggested }
+        }))
+      }
+    })()
+    return () => { cancelled = true }
+  }, [fromOcr, matchSignature, supplierId, catalogByItem])
 
   // C2.2.b.2 — alta de proveedor inline (cuando el OCR no casó proveedor).
   const [supCreate, setSupCreate] = useState(false)
   const [supName, setSupName] = useState('')
   const [supNif, setSupNif] = useState('')
+  const [supPhone, setSupPhone] = useState('')      // Mejora 1
+  const [supEmail, setSupEmail] = useState('')
+  const [supAddress, setSupAddress] = useState('')
+  const [supHealth, setSupHealth] = useState('')
   const [supSaving, setSupSaving] = useState(false)
   useEffect(() => {
     if (fromOcr && ocrPrefill?.unmatchedSupplier) {
       setSupName(ocrPrefill.proposedSupplierName ?? '')
       setSupNif(ocrPrefill.proposedSupplierNif ?? '')
+      setSupPhone(ocrPrefill.proposedSupplierPhone ?? '')
+      setSupEmail(ocrPrefill.proposedSupplierEmail ?? '')
+      setSupAddress(ocrPrefill.proposedSupplierAddress ?? '')
+      setSupHealth(ocrPrefill.proposedSupplierHealthRegistry ?? '')
     }
   }, [fromOcr, ocrPrefill])
 
@@ -231,7 +375,11 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
     if (!supName.trim()) { setError('El proveedor necesita un nombre.'); return }
     setSupSaving(true); setError(null)
     try {
-      const created = await quickCreateSupplier(accountId, supName, supNif || null, authUserId ?? null, userProfile?.displayName ?? null)
+      const created = await quickCreateSupplier(
+        accountId, supName, supNif || null,
+        { phone: supPhone, email: supEmail, address: supAddress, healthRegistryNo: supHealth },
+        authUserId ?? null, userProfile?.displayName ?? null,
+      )
       setSuppliers(s => [...s, created].sort((a, b) => a.name.localeCompare(b.name)))
       setSupplierId(created.id)
       setSupCreate(false)
@@ -284,6 +432,13 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
       matchedName: null,
       matchSemaphore: null,
       matchType: null,
+      // Tramo A — pista de formato (se resuelve a equivalencia al casar el artículo).
+      formatName: l.formatName,
+      packSize: l.packSize,
+      packUnit: l.packUnit,
+      baseUnit: null,
+      formatSuggested: false,
+      formatTouched: false,
     })))
   }, [fromOcr, ocrPrefill])
 
@@ -535,11 +690,34 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
       })
 
       let position = 0
+      const postingItemIds: string[] = []
       for (const l of filled) {
         const qtyReceived = parseNum(l.qty)!
         const unitCost = parseNum(l.unitCost)
+        // Tramo A — crea el NODO de formato si la línea trae equivalencia pero aún no
+        // tiene id (formato nuevo/propuesto por la IA). Si ya tiene purchaseFormatId
+        // (heredado del proveedor o del catálogo en otros modos), se reutiliza. Sin
+        // equivalencia → sin formato → la línea no postea (anti-invención).
+        let purchaseFormatId = l.purchaseFormatId
+        if (l.recipeItemId && !purchaseFormatId && l.formatQtyInBase != null && l.formatQtyInBase > 0) {
+          try {
+            const fmt = await createPurchaseFormat({
+              accountId,
+              itemId: l.recipeItemId,
+              name: (l.formatName ?? '').trim() || 'Formato',
+              qtyInBase: l.formatQtyInBase,
+              source: 'ai_suggested',
+              aiConfidence: l.formatSuggested ? 0.8 : null,
+              needsReview: false,
+            })
+            purchaseFormatId = fmt.id
+          } catch (e) {
+            console.error('persist: no se pudo crear el formato de compra', e)
+          }
+        }
         const qtyInBase = qtyInBaseFromFormat(qtyReceived, l.formatQtyInBase)
         const unmapped = !l.recipeItemId || qtyInBase === null
+        if (!unmapped && l.recipeItemId) postingItemIds.push(l.recipeItemId)
         await createGoodsReceiptLine({
           accountId,
           goodsReceiptId: receipt.id,
@@ -549,7 +727,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
           rawText: l.rawText,
           supplierCode: l.supplierCode,
           qtyReceived,
-          purchaseFormatId: l.purchaseFormatId,
+          purchaseFormatId,
           qtyInBase,
           unitCost,
           lotCode: l.lotCode,          // hueco FEFO/APPCC
@@ -563,6 +741,14 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
       if (!confirm) {
         onSaved(`Recepción ${receipt.code ?? ''} guardada como borrador.`)
         return
+      }
+
+      // Tramo A — flip de estrategia ANTES de confirmar: los artículos que estaban
+      // en 'fixed' pasan a 'last_purchase' para que el precio recibido pise el coste
+      // (los nuevos de OCR ya nacen 'last_purchase'). No es fatal si falla.
+      if (postingItemIds.length > 0) {
+        try { await ensureLastPurchaseStrategy(postingItemIds) }
+        catch (e) { console.error('persist: no se pudo ajustar la estrategia de coste', e) }
       }
 
       const res = await confirmReceipt(receipt.id)
@@ -606,7 +792,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
     : correcting
       ? 'Corrige lo que falló y confirma. La recepción anterior se anulará solo al confirmar esta.'
       : fromOcr
-        ? 'Esto leyó la IA del albarán. Revisa proveedor, local y cantidades, y guarda el borrador. Los artículos se casan en el siguiente paso.'
+        ? 'Esto leyó la IA del albarán. Revisa proveedor, local, cantidades y el formato de cada línea; al confirmar, entra a stock con su coste.'
         : 'Cuenta lo que ha llegado y escríbelo. Al confirmar, entra a stock.'
 
   return (
@@ -676,6 +862,26 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                   <label className="flex flex-col text-[11px] text-text-secondary">
                     CIF/NIF
                     <input type="text" value={supNif} onChange={e => setSupNif(e.target.value)} disabled={supSaving}
+                      className="mt-0.5 w-40 px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent" />
+                  </label>
+                  <label className="flex flex-col text-[11px] text-text-secondary">
+                    Teléfono
+                    <input type="text" value={supPhone} onChange={e => setSupPhone(e.target.value)} disabled={supSaving}
+                      className="mt-0.5 w-36 px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent" />
+                  </label>
+                  <label className="flex flex-col text-[11px] text-text-secondary">
+                    Email
+                    <input type="text" value={supEmail} onChange={e => setSupEmail(e.target.value)} disabled={supSaving}
+                      className="mt-0.5 w-52 px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent" />
+                  </label>
+                  <label className="flex flex-col text-[11px] text-text-secondary flex-1 min-w-[220px]">
+                    Dirección
+                    <input type="text" value={supAddress} onChange={e => setSupAddress(e.target.value)} disabled={supSaving}
+                      className="mt-0.5 w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent" />
+                  </label>
+                  <label className="flex flex-col text-[11px] text-text-secondary">
+                    Reg. sanitario
+                    <input type="text" value={supHealth} onChange={e => setSupHealth(e.target.value)} disabled={supSaving}
                       className="mt-0.5 w-40 px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent" />
                   </label>
                   <button type="button" onClick={createSupplierInline} disabled={supSaving}
@@ -791,7 +997,34 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                               l.productName
                             )}
                           </td>
-                          <td className="px-3 py-2 text-text-primary align-top">{l.formatLabel ?? '—'}</td>
+                          <td className="px-3 py-2 text-text-primary align-top">
+                            {!fromOcr ? (
+                              l.formatLabel ?? '—'
+                            ) : !l.recipeItemId ? (
+                              <span className="text-[11px] text-text-tertiary">casa el artículo primero</span>
+                            ) : (
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-1">
+                                  <input type="text" value={l.formatName ?? ''} onChange={e => setFormatName(l.key, e.target.value)} disabled={saving}
+                                    placeholder="Formato"
+                                    className="w-24 px-1.5 py-1 text-xs border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50" />
+                                  <span className="text-[11px] text-text-secondary">=</span>
+                                  <input type="text" inputMode="decimal"
+                                    value={l.formatQtyInBase != null ? String(l.formatQtyInBase) : ''}
+                                    onChange={e => setFormatQty(l.key, e.target.value)} disabled={saving} placeholder="?"
+                                    className={`w-16 px-1.5 py-1 text-xs text-right rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50 border ${l.formatQtyInBase == null ? 'border-warning/60 bg-warning-bg/30' : 'border-border-default'}`} />
+                                  <span className="text-[11px] text-text-secondary">{l.baseUnit?.abbr ?? ''}</span>
+                                  {l.formatSuggested && <span className="text-[10px] text-accent" title="Propuesto por la IA">✨</span>}
+                                </div>
+                                {l.formatQtyInBase == null && (
+                                  <p className="text-[10px] text-warning">¿Cuánto contiene un {(l.formatName ?? '').trim() || 'formato'}? (en {l.baseUnit?.abbr ?? 'base'})</p>
+                                )}
+                                {l.purchaseFormatId && !l.formatTouched && (
+                                  <p className="text-[10px] text-text-tertiary">formato que ya tenías con este proveedor</p>
+                                )}
+                              </div>
+                            )}
+                          </td>
                           {hasReference && <td className="px-3 py-2 text-right tabular-nums text-text-secondary">{l.qtyOrdered ?? '—'}</td>}
                           {hasReference && <td className="px-3 py-2 text-right tabular-nums text-text-secondary">{l.alreadyReceived ?? '—'}</td>}
                           {hasReference && (
