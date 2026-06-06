@@ -6831,6 +6831,7 @@ export type Database = {
         Row: {
           account_id: string
           accounting_category: string | null
+          code: string | null
           color: string | null
           created_at: string
           icon: string | null
@@ -6845,6 +6846,7 @@ export type Database = {
         Insert: {
           account_id: string
           accounting_category?: string | null
+          code?: string | null
           color?: string | null
           created_at?: string
           icon?: string | null
@@ -6859,6 +6861,7 @@ export type Database = {
         Update: {
           account_id?: string
           accounting_category?: string | null
+          code?: string | null
           color?: string | null
           created_at?: string
           icon?: string | null
