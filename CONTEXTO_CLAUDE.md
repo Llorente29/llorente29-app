@@ -2,7 +2,7 @@
 
 > **Documento maestro único de memoria persistente del proyecto Folvy.**
 > Lectura obligatoria al inicio de cada sesión técnica.
-> **Última actualización: 07/06/2026 (madrugada, 9ª regeneración).** Sesión continuación: **Comisiones B2 en producción** (4 canales con datos reales de Llorente29), **benchmark ficha de producto** (8 plataformas, 10 dimensiones, documento de diseño), **ficha v2 construida** (12 secciones colapsables, menuPhotoService, 5 columnas nuevas: notes_internal, target_food_cost_pct, tags, packaging_description, packaging_cost). Maqueta v2 aprobada como referencia visual. 2 commits (f89541c, 2a4a1d9), build verde, 0 0.
+> **Última actualización: 07/06/2026 (8ª regeneración).** Sesión: **frente FICHA DE INGREDIENTE cerrado** (master global T1 + adopción al vuelo + copiloto IA de ficha que propone alérgenos/merma/conservación/vida útil/etiquetas-menú/nutrición + edición manual completa de todo, IA propone-humano confirma). **Localizado el hueco de RECEPCIÓN**: OCR funciona y crea proveedor+artículo+article_supplier con precio, pero NO captura el FORMATO de compra → no postea a stock ni fluye el coste (ver §1.9). Commits `38ffcad`, `4589253`, `1892392`. Build verde, 0 0.
 >
 > Este es el ÚNICO documento de contexto. `CONTEXTO_ESTADO.md` y `CONTEXTO_REGLAS.md`
 > quedaron retirados el 25/05/2026: estaban desincronizados. Toda su información
@@ -46,9 +46,42 @@ Cadencia: en cada paso, antes de cerrarlo, Claude para SOLO y aplica el control 
 ---
 1. ESTADO VIVO ⟵ se regenera cada sesión
 
-**Última actualización: 2026-06-06 (noche, 7ª regeneración). Sesión de diseño: rediseño editorial de CatalogProductDetailPage (v2 = ESTÁNDAR VISUAL de fichas de detalle Folvy), convención IVA incluido en canales (SERVICE_VAT_PCT=21 + own_customer_fee_vat_pct 10/21), E2 cascada de margen comparativa por canal en la ficha, conectores delivery con logos (glovo/justeat/uber, bucket público menu-photos), fix Fraunces (.font-display en index.css). HECHO esta sesión: ✅ verificar E1 en vivo (Glovo 15%, reparto propio, fija 0,9€, rider 6€, envío 4,5€), ✅ E2 cascada margen en ficha. PENDIENTE: brand_channel sigue VACÍO (overrides marca×canal, caso Uber variable); botón "Añadir foto" sin funcionalidad (upload a menu-photos + UPDATE photo_url); aplicar estándar editorial a otras fichas de detalle (ingredientes, proveedores, recetas); Shop sin conector ni logo (crear si se usa como canal real).**
+**Última actualización: 2026-06-07 (8ª regeneración). Sesión: FRENTE FICHA DE INGREDIENTE CERRADO + COPILOTO IA DE FICHA + localización del hueco de RECEPCIÓN. Todo en producción, build verde, rev-list 0.**
+
+HECHO Y COMMITEADO esta sesión:
+- **Master global de ingredientes T1** (commits previos `ae6a578`, `2993e83`, `9878b24`, `853e03e`): tabla `ingredient_template` GLOBAL (sin account_id; precio+proveedores SIEMPRE por cuenta, NUNCA al master) + satélite `ingredient_template_allergen` + `recipe_family.code` (slugs inglés-neutro) + siembra 56 ingredientes esenciales (USDA dominio público + IA). `src/modules/kitchen/lib/allergens.ts` = fuente única de los 14 alérgenos UE (código estable EN-neutro, label por idioma).
+- **T1b adopción al vuelo** (`38ffcad`): al teclear nombre en "Nuevo ingrediente", busca en master (debounce, "Catálogo Folvy") y adopta (materializa recipe_item: unidad base por dimensión, alérgenos copiados, needs_review, traza template_code/version, source='template_global'). Anti-duplicado por nombre. `ingredientAdoptionService.ts` + migración source CHECK +template_global.
+- **Copiloto IA de ficha v1** (`38ffcad` + `4589253`): Edge Function `enrich-ingredient` (modelo `claude-haiku-4-5-20251001`, patrón clonado de suggest-item/extract-recipe, sesión en `recipe_item_ai_session` kind='enrich', saneamiento anti-invención). Propone alérgenos / merma / conservación / vida útil / etiquetas de menú / nutrición (8 campos UE por 100g). Botón "Completar con IA" en la ficha → previsualización con confianza → aceptar/rechazar POR CAMPO → aplica. `recipeAiService.ts` + `IngredientAiAssistButton.tsx`.
+- **Ficha de ingrediente COMPLETA y EDITABLE** (`4589253`): edición manual de TODO, incluido lo que rellena la IA (alérgenos los 14 con estado contiene/trazas/libre vía `recipeItemAllergenService.ts`; nutrición 8 campos; etiquetas menú 7 chips: picante/vegano/vegetariano/sin_gluten/sin_lactosa/halal/ecologico). Sección Alérgenos operativa (ya no "Próximamente"). Migración `recipe_item.menu_tags text[]`. Lectores aparte del mapper: `getIngredientExtras` (nutrition+menu_tags), `listItemAllergens`. Filosofía: IA propone, humano confirma, todo editable.
+- **Saneamiento**: descartada filtración real (service_role solo se MENCIONÓ, nunca pegada; no está en repo/front/.env — solo comentarios y la anon key, que es pública). Higiene: `.env`/`.env.backup` dejados de versionar (`1892392`). NO se rotó nada (no hacía falta). Limpieza de 8 recepciones cascarón (residuo de la tabla rasa) en Folvy Interno.
+
+DESCUBIERTO HOY — RECEPCIÓN POR OCR FUNCIONA PERO NO CIERRA EL CICLO (frente prioritario):
+Módulo Supply completo y en uso: Pedidos · Recepciones · Facturas · Inventario. Probado con albarán real de EUROPASTRY (foto): OCR leyó al 93%, validó totales (líneas 151,28 = base imponible), reconoció proveedor inexistente → creado, casó 2 artículos nuevos (Bollo cocido, Pan Hamburguesa), confirmó ALB-00001. PERO: **"0 líneas a stock · 2 sin postear"**. Los artículos quedaron `source='ocr_invoice'`, `fixed_cost=NULL`, `needs_review=true`, "sin terminar", coste 0,00€. `article_supplier` SÍ se creó CON precio (11,54€ / 29,17€) pero **"Sin formato"**. CAUSA RAÍZ: el flujo NO captura el FORMATO DE COMPRA (caja de 26u / 80u) → sin formato no hay conversión caja→unidad → no postea a stock ni fluye el coste. Tabla `recipe_item_purchase_format` (item_id, parent_format_id, qty_per_parent, qty_in_base, is_piece/is_weighted, source/ai_confidence/needs_review) YA EXISTE y está lista; solo no se rellena. `recipe_item_unit_conversion` también existe.
+
+PENDIENTE — ver §1.9 FRENTES para el detalle del siguiente gran paso (recepción "0 errores en paso de datos").**
 
 > **NOTA DE MANTENIMIENTO:** el fichero VERDADERO es `C:\dev\llorente29-app\CONTEXTO_CLAUDE.md` (git). La fuente de verdad técnica es la BBDD+repo, no este relato (regla recon de área). Migraciones SQL versionadas en `supabase/migrations/`.
+
+### 1.9 — FRENTE PRIORITARIO: RECEPCIÓN "0 ERRORES EN PASO DE DATOS" (visión Julio, 07/06)
+**Objetivo (Julio):** que subir un albarán deje proveedor + artículos + formato + coste + stock montados con confirmación, sin reteclear. Cero errores en el paso de datos. Vida fácil a quien recepciona. Pendientes nulos o mínimos.
+
+**Tres mejoras a construir (cierran el ciclo recepción→coste→stock):**
+1. **Proveedor completo desde albarán:** el OCR ya lee CIF, dirección, nº doc, etc.; al crear el proveedor hoy solo vuelca nombre+CIF. Debe trasladar TODO lo leído (teléfono/email/dirección/registro sanitario que tenga).
+2. **Artículo nuevo → abrir SU ficha completa para terminarlo + volver a la recepción:** al casar/crear un artículo nuevo desde el albarán, abrir la ficha de ingrediente (familia/alérgenos/FORMATO/copiloto IA "Completar con IA" — ya construida esta sesión), el usuario remata lo que pueda con apoyo IA, y al guardar VUELVE a la recepción donde estaba, SIN perder progreso. UX a cuidar: facilitar terminar SIN OBLIGAR (puede rellenar a fondo o lo mínimo y seguir, p.ej. en plena descarga de mercancía). Así el artículo no nace cáscara.
+3. **Capturar el FORMATO DE COMPRA (el eslabón que falta):** la IA lo propone del texto del albarán ("(26u)", "(80u)"); el cocinero confirma. Escribe `recipe_item_purchase_format` (qty_per_parent, qty_in_base, parent_format_id, is_piece/is_weighted) + conversión en `recipe_item_unit_conversion` + completa `article_supplier` con el formato. ENTONCES: coste fluye al ingrediente (deja de ser 0,00€/sin terminar) y la recepción POSTEA a stock.
+
+**Riesgo a cubrir (Julio):** artículo "medio creado" (needs_review=true, coste 0) NO debe falsear escandallos. La UI lo marca "Incompleto"/"sin terminar" (bien) pero verificar/añadir aviso si se usa en una receta sin coste (no debe contar como 0€ y falsear el coste del plato).
+
+**Cómo retomar (orden):** (1) RECON fino del flujo de recepción actual — cómo crea proveedor y `article_supplier`, cómo es el modal "Casar/Crear artículo" (ficheros: `src/modules/supply/pages/ReceiptScanPanel.tsx`, `GoodsReceiptForm.tsx`, `LineMatchPicker.tsx`, `goodsReceiptService.ts`; Edge Function `ocr-albaran`). (2) Diseñar las 3 mejoras. (3) Construir. (4) Reprobar con el MISMO albarán de Europastry hasta que postee a stock con coste correcto. Es frente de VARIAS sesiones; no parche.
+
+### 1.9.bis — DEUDAS UX MENORES DETECTADAS (07/06, anotadas, no urgentes)
+- **Indicador de cuenta activa en cabecera:** hoy no se ve en qué cuenta (Folvy Interno vs Llorente29) estás; el selector de arriba es de LOCAL, no de cuenta. Se distingue solo por contenido o por SQL. Riesgo de operar en la cuenta equivocada. Añadir nombre de cuenta activa visible en cabecera. (Julio lo pidió varias veces; quedó como deuda.)
+- **Vista de detalle de recepción en SOLO LECTURA:** una recepción confirmada solo se abre vía "Anular y corregir" (acción destructiva) para verla. Debe poder consultarse en lectura sin riesgo; "Anular y corregir" pasa a ser acción DENTRO del detalle, no la única puerta.
+
+### 1.9.ter — DEUDA TÉCNICA IA (07/06)
+Las otras Edge Functions de IA (`folvy-ai`, `extract-recipe`, `suggest-item`) tienen default `claude-opus-4-8`, que la clave podría no soportar. Además: la cuenta Anthropic CON SALDO es la org "Default" y se creó una clave nueva ahí (10 US$ cargados), actualizada en el secreto `ANTHROPIC_API_KEY` de Supabase. Al usar esas funciones, alinear su modelo al que ya funciona (`claude-haiku-4-5-20251001` para tareas de texto simples). La API Anthropic es de pago por consumo (tokens); Haiku = céntimos. Coste medido por sesión en `recipe_item_ai_session.ai_cost_eur`.
+
+
 
 ### 1.0 — CORRECCIÓN DE DATO (vigente)
 CEO: **Julio Gª Colón (García Colón)**, NO "Gascón". Admin Google: `jgcolon@idasal.com`. Correo partners/integraciones: `partners@folvy.app`. **Folvy es para TODA la hostelería, no solo dark kitchens.**
