@@ -19,8 +19,8 @@
 // chip "sin terminar" + unidad/coste fijo/coste computado etiquetados), sin
 // scroll horizontal. Mismo mecanismo y estilo que KitchenProfitabilityPage (R1.4).
 
-import { useEffect, useMemo, useState } from 'react'
-import { Plus, Soup, X, AlertTriangle, ChevronRight, Search, Sparkles, Tag, FolderTree } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Plus, Soup, X, AlertTriangle, ChevronRight, Search, Sparkles, Tag, FolderTree, BookMarked, Check } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useIsMobile } from '@/shell/useIsMobile'
@@ -28,6 +28,8 @@ import {
   listRecipeItems,
   createRecipeItem,
 } from '@/modules/kitchen/services/recipeItemService'
+import { searchTemplates, type IngredientTemplate } from '@/modules/kitchen/services/ingredientTemplateService'
+import { adoptFromTemplate } from '@/modules/kitchen/services/ingredientAdoptionService'
 import { listUnits } from '@/modules/kitchen/services/kitchenUnitService'
 import KitchenItemDetailPage from '@/modules/kitchen/pages/KitchenItemDetailPage'
 import FamilyReviewPanel from '@/modules/kitchen/components/FamilyReviewPanel'
@@ -156,6 +158,14 @@ export default function KitchenItemsPage() {
     // Salto al detalle del ingrediente recién creado: la siguiente acción natural
     // es decirle a Folvy de quién se compra (y ver el coste fluir).
     setSelectedItemId(created.id)
+  }
+
+  // El buscador del modal puede resolver a un ingrediente que YA EXISTE en la
+  // cuenta (adoptado antes o creado a mano): en ese caso no se crea nada, se
+  // abre el existente. Anti-duplicado a nivel de UX.
+  function handleOpenExisting(itemId: string) {
+    setCreateOpen(false)
+    setSelectedItemId(itemId)
   }
 
   // ── Vista DETALLE: el ingrediente seleccionado ──
@@ -411,10 +421,12 @@ export default function KitchenItemsPage() {
         <IngredientCreateModal
           accountId={activeAccountId!}
           units={units}
+          existingItems={items}
           actorId={authUserId ?? null}
           actorName={userProfile?.displayName ?? null}
           onClose={() => setCreateOpen(false)}
           onCreated={handleCreated}
+          onOpenExisting={handleOpenExisting}
         />
       )}
     </div>
@@ -501,25 +513,91 @@ function ItemField({ label, value }: { label: string; value: string }) {
 interface IngredientCreateModalProps {
   accountId: string
   units: KitchenUnit[]
+  existingItems: RecipeItem[]
   actorId: string | null
   actorName: string | null
   onClose: () => void
   onCreated: (created: RecipeItem) => void
+  onOpenExisting: (itemId: string) => void
 }
 
 function IngredientCreateModal({
   accountId,
   units,
+  existingItems,
   actorId,
   actorName,
   onClose,
   onCreated,
+  onOpenExisting,
 }: IngredientCreateModalProps) {
   const [name, setName] = useState('')
   const [baseUnitId, setBaseUnitId] = useState<string>(units[0]?.id ?? '')
   const [fixedCost, setFixedCost] = useState<string>('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // ── Buscador del MASTER (adopción al vuelo) ──
+  // Al teclear el nombre, se busca en el catálogo global de Folvy. Cada
+  // resultado se etiqueta y el cocinero puede ADOPTARLO (se materializa en su
+  // cuenta) en vez de teclearlo desde cero. Si no elige nada, crea manual.
+  const [templates, setTemplates] = useState<IngredientTemplate[]>([])
+  const [searching, setSearching] = useState(false)
+  const [adoptingCode, setAdoptingCode] = useState<string | null>(null)
+  // Mapa nombre-normalizado → item existente de la cuenta (anti-duplicado UX).
+  const existingByName = useMemo(() => {
+    const m = new Map<string, RecipeItem>()
+    existingItems.forEach(it => m.set(it.name.trim().toLowerCase(), it))
+    return m
+  }, [existingItems])
+
+  // Debounce de la búsqueda en el master (no en cada tecla).
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    const q = name.trim()
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    if (q.length < 2) {
+      setTemplates([])
+      setSearching(false)
+      return
+    }
+    setSearching(true)
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const results = await searchTemplates(q, 8)
+        setTemplates(results)
+      } catch {
+        setTemplates([])
+      } finally {
+        setSearching(false)
+      }
+    }, 280)
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
+  }, [name])
+
+  // ¿El nombre tecleado coincide EXACTO con un ingrediente que ya tienes?
+  const exactExisting = existingByName.get(name.trim().toLowerCase()) ?? null
+
+  async function handleAdopt(tpl: IngredientTemplate) {
+    setAdoptingCode(tpl.code)
+    setError(null)
+    try {
+      const { item } = await adoptFromTemplate({
+        templateId: tpl.id,
+        accountId,
+        actorId,
+        actorName,
+      })
+      // Tanto si se materializó como si ya existía, abrimos su detalle.
+      onCreated(item)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error desconocido'
+      setError(msg)
+      setAdoptingCode(null)
+    }
+  }
 
   async function handleSubmit() {
     const trimmed = name.trim()
@@ -623,6 +701,59 @@ function IngredientCreateModal({
               placeholder="Ej: Aceite de oliva virgen extra"
               className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
             />
+
+            {/* Aviso anti-duplicado: el nombre coincide EXACTO con uno que ya tienes */}
+            {exactExisting && (
+              <button
+                type="button"
+                onClick={() => onOpenExisting(exactExisting.id)}
+                className="mt-2 w-full text-left p-2 rounded-md bg-warning-bg border border-warning/30 text-xs text-text-primary hover:bg-warning-bg/70 transition-base flex items-center gap-2"
+              >
+                <AlertTriangle className="w-3.5 h-3.5 text-warning shrink-0" />
+                <span>
+                  Ya tienes <span className="font-medium">{exactExisting.name}</span>. Pulsa para abrirlo en vez de crear otro.
+                </span>
+              </button>
+            )}
+
+            {/* Sugerencias del catálogo Folvy (master) */}
+            {!exactExisting && (searching || templates.length > 0) && (
+              <div className="mt-2 rounded-md border border-border-default bg-card overflow-hidden">
+                <div className="px-2.5 py-1.5 text-[11px] font-medium text-text-secondary bg-page border-b border-border-default flex items-center gap-1.5">
+                  <BookMarked className="w-3 h-3" />
+                  Catálogo Folvy
+                  {searching && <span className="text-text-secondary/60">· buscando…</span>}
+                </div>
+                {templates.map(tpl => {
+                  const existing = existingByName.get(tpl.nameEs.trim().toLowerCase())
+                  const isAdopting = adoptingCode === tpl.code
+                  return (
+                    <button
+                      key={tpl.id}
+                      type="button"
+                      disabled={isAdopting || submitting}
+                      onClick={() => existing ? onOpenExisting(existing.id) : handleAdopt(tpl)}
+                      className="w-full text-left px-2.5 py-2 flex items-center justify-between gap-2 hover:bg-accent-bg transition-base border-b border-border-default last:border-0 disabled:opacity-60"
+                    >
+                      <span className="min-w-0">
+                        <span className="text-sm text-text-primary">{tpl.nameEs}</span>
+                        {existing && (
+                          <span className="ml-2 text-[11px] text-success inline-flex items-center gap-0.5">
+                            <Check className="w-3 h-3" /> ya lo tienes
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-[11px] text-accent shrink-0">
+                        {isAdopting ? 'Añadiendo…' : existing ? 'Abrir' : 'Usar'}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+            <p className="text-[11px] text-text-secondary mt-1">
+              Si está en el catálogo Folvy, elígelo y se rellena solo. Si no, escríbelo y créalo abajo.
+            </p>
           </div>
 
           <div>

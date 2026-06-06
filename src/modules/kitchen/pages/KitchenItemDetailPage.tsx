@@ -38,6 +38,7 @@ import {
 import { uploadDishPhoto, getDishPhotoUrl, deleteDishPhoto } from '@/modules/kitchen/services/recipePhotoService'
 import PurchaseSourcesSection from '@/modules/kitchen/components/PurchaseSourcesSection'
 import ItemVatSelector from '@/modules/kitchen/components/ItemVatSelector'
+import IngredientAiAssistButton from '@/modules/kitchen/components/IngredientAiAssistButton'
 import type { RecipeItem, KitchenUnit, Supplier, ArticleSupplier, RecipeItemUpdate, ConservationType } from '@/types/kitchen'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -196,6 +197,8 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [archiving, setArchiving] = useState(false)
+  // Disparador de recarga del item (tras aplicar el copiloto IA, etc.)
+  const [reloadTick, setReloadTick] = useState(0)
 
   const actorId = authUserId ?? null
   const actorName = userProfile?.displayName ?? null
@@ -219,7 +222,7 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
       })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [itemId])
+  }, [itemId, reloadTick])
 
   // ── Familias de la cuenta (para mostrar nombre + selector) ──
   useEffect(() => {
@@ -586,6 +589,11 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
                     {usable ? <Check size={12} /> : <AlertTriangle size={12} />}
                     {usable ? 'Utilizable' : 'Incompleto'}
                   </span>
+                  <IngredientAiAssistButton
+                    itemId={item.id}
+                    accountId={item.accountId}
+                    onApplied={() => setReloadTick(t => t + 1)}
+                  />
                   <button type="button" onClick={openEdit} aria-label="Editar" className="p-1.5 rounded-md text-text-secondary hover:text-accent hover:bg-page transition-base"><Pencil size={15} /></button>
                 </div>
               </div>
