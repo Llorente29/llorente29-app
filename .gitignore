@@ -37,3 +37,7 @@ scripts/test-*.mjs
 
 # Cache de Vite (regenerable, no versionar)
 .vite/
+
+.env
+.env.*
+!.env.example
