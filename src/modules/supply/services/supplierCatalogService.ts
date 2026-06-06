@@ -21,6 +21,7 @@ export interface SupplierCatalogEntry {
   recipeItemId: string           // el ingrediente
   itemName: string               // nombre del artículo
   supplierCode: string | null    // código del proveedor (213634…)
+  supplierItemName: string | null // descripción del proveedor ("QUESO GOUDA LONCH.BOCAT.FS 1K")
   lastPrice: number | null       // último precio conocido (€ por formato)
   isPreferred: boolean           // proveedor preferente para este artículo
   purchaseFormatId: string | null
@@ -54,14 +55,30 @@ function from(table: string) {
  *   g  → kg cuando son ≥ 1000 g (5000 g → 5 kg)
  *   ml → L  cuando son ≥ 1000 ml (10000 ml → 10 L)
  * Si no hay equivalencia o unidad, devuelve solo el nombre del formato.
+ *
+ * Naming (07/06): si el "nombre" del formato es en realidad una UNIDAD (granel:
+ * "Kilogramo", "Litro", "Unidad"…), NO se antepone — quedaría "Kilogramo (1,5 kg)",
+ * que es un sinsentido. En ese caso se muestra solo la medida ("1,5 kg"). Cuando
+ * hay envase real ("Caja", "Saco", "Bolsa"), sí: "Caja (6 kg)".
  */
+function isUnitWord(name: string): boolean {
+  const n = name.trim().toLowerCase()
+  return [
+    'kilogramo', 'kilogramos', 'kilo', 'kilos', 'kg',
+    'gramo', 'gramos', 'g', 'gr',
+    'litro', 'litros', 'l', 'lt',
+    'mililitro', 'mililitros', 'ml', 'cc',
+    'unidad', 'unidades', 'ud', 'uds', 'u', 'pieza', 'piezas',
+  ].includes(n)
+}
+
 function buildFormatLabel(
   name: string | null,
   qtyInBase: number | null,
   baseAbbr: string | null,
 ): string | null {
   if (!name) return null
-  if (qtyInBase === null || baseAbbr === null) return name
+  if (qtyInBase === null || baseAbbr === null) return isUnitWord(name) ? null : name
 
   let qty = qtyInBase
   let unit = baseAbbr
@@ -77,7 +94,10 @@ function buildFormatLabel(
 
   // Formateo limpio (sin decimales sobrantes): 5 → "5", 2.5 → "2,5".
   const qtyStr = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 3 }).format(qty)
-  return `${name} (${qtyStr} ${unit})`
+  const measure = `${qtyStr} ${unit}`
+
+  // Granel (el nombre es una unidad) → solo la medida. Con envase → "Envase (medida)".
+  return isUnitWord(name) ? measure : `${name} (${measure})`
 }
 
 /**
@@ -94,6 +114,7 @@ export async function getSupplierCatalog(
       id,
       recipe_item_id,
       supplier_code,
+      supplier_item_name,
       last_price,
       is_preferred,
       purchase_format_id,
@@ -118,6 +139,7 @@ export async function getSupplierCatalog(
       recipeItemId: r.recipe_item_id as string,
       itemName: item?.name ?? '(sin nombre)',
       supplierCode: (r.supplier_code as string | null) ?? null,
+      supplierItemName: (r.supplier_item_name as string | null) ?? null,
       lastPrice: (r.last_price as number | null) ?? null,
       isPreferred: Boolean(r.is_preferred),
       purchaseFormatId: (r.purchase_format_id as string | null) ?? null,
