@@ -4,16 +4,22 @@
 // Patrón LISTA + DETALLE por estado: recibe menuItemId + onBack. La monta
 // KitchenMenuPage.
 //
-// FICHA v2 (06/06): hero con foto + thumbnails, identity card editable, y 11
-// secciones colapsables (CollapsibleSection). Preserva la lógica E2 (economía
-// por canal con barras de margen) y los modificadores read-only. Estándar
-// visual de fichas de detalle de Folvy.
+// FICHA v2 (06/06): hero con foto + identity card editable, y 11 secciones
+// colapsables (CollapsibleSection). Preserva la lógica E2 (economía por canal
+// con barras de margen) y los modificadores read-only. Estándar visual de
+// fichas de detalle de Folvy.
+//
+// FOTO v2.1 (07/06): UNA sola foto (menu_item.photo_url). Eliminados los dos
+// thumbnails decorativos muertos. Acciones cómodas sobre el hero: Añadir /
+// Cambiar / Eliminar (con confirmación inline). Cambiar foto limpia la
+// anterior del bucket para no dejar huérfanas.
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   AlertTriangle, ArrowLeft, BarChart3, Bike, Camera, Check, ChefHat, ChevronDown,
-  Download, Link2, Loader2, MapPin, MoreHorizontal, Package, Pencil, Settings2,
-  SlidersHorizontal, ShoppingBag, Sparkles, StickyNote, Store, Tag, TrendingUp, X,
+  Download, ImagePlus, Link2, Loader2, MapPin, MoreHorizontal, Package, Pencil,
+  Settings2, SlidersHorizontal, ShoppingBag, Sparkles, StickyNote, Store, Tag,
+  Trash2, TrendingUp, X,
 } from 'lucide-react'
 import { getMenuItemById, updateMenuItem } from '@/modules/kitchen/services/menuItemService'
 import {
@@ -27,7 +33,7 @@ import {
   type ChannelRate,
   type SalesChannel as SalesChannelType,
 } from '@/modules/kitchen/services/channelRateService'
-import { uploadMenuPhoto } from '@/modules/kitchen/services/menuPhotoService'
+import { uploadMenuPhoto, deleteMenuPhoto } from '@/modules/kitchen/services/menuPhotoService'
 import { supabase } from '@/lib/supabase'
 import type { MenuItem, MenuItemUpdate } from '@/types/kitchen'
 
@@ -159,9 +165,12 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
-  // Foto
+  // Foto (una sola: menu_item.photo_url)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [photoUploading, setPhotoUploading] = useState(false)
+  const [photoDeleting, setPhotoDeleting] = useState(false)
+  const [photoConfirmDelete, setPhotoConfirmDelete] = useState(false)
+  const [photoError, setPhotoError] = useState<string | null>(null)
   const [lightboxOpen, setLightboxOpen] = useState(false)
 
   // Edición inline (notas, packaging, avanzado)
@@ -310,15 +319,41 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
     const file = e.target.files?.[0]
     if (!file || !item) return
     setPhotoUploading(true)
+    setPhotoError(null)
+    const prevUrl = item.photoUrl
     try {
       const url = await uploadMenuPhoto(item.accountId, item.id, file)
       await updateMenuItem(item.id, { photoUrl: url })
+      // Limpia la foto anterior del bucket para no dejar huérfanas (best-effort).
+      if (prevUrl && prevUrl !== url) {
+        try { await deleteMenuPhoto(prevUrl) } catch { /* no bloquea el cambio */ }
+      }
       await refreshItem()
     } catch (err: unknown) {
       console.error('CatalogProductDetailPage: subida de foto falló', err)
+      setPhotoError(err instanceof Error ? err.message : 'No se pudo subir la foto.')
     } finally {
       setPhotoUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  async function onPhotoDelete() {
+    if (!item || !item.photoUrl) return
+    setPhotoDeleting(true)
+    setPhotoError(null)
+    const url = item.photoUrl
+    try {
+      await updateMenuItem(item.id, { photoUrl: null })
+      // Borra el objeto del bucket (best-effort: si falla, el item ya no lo referencia).
+      try { await deleteMenuPhoto(url) } catch { /* no bloquea */ }
+      await refreshItem()
+    } catch (err: unknown) {
+      console.error('CatalogProductDetailPage: borrado de foto falló', err)
+      setPhotoError(err instanceof Error ? err.message : 'No se pudo eliminar la foto.')
+    } finally {
+      setPhotoDeleting(false)
+      setPhotoConfirmDelete(false)
     }
   }
 
@@ -427,41 +462,89 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
         </div>
       </div>
 
+      {/* Aviso de error de foto (subida/borrado) */}
+      {photoError && (
+        <div className="mb-3 p-2.5 rounded-lg bg-red-50 text-red-700 border border-red-200 text-xs flex items-center justify-between gap-3">
+          <span>{photoError}</span>
+          <button onClick={() => setPhotoError(null)} className="text-red-500 hover:text-red-700 shrink-0" aria-label="Cerrar aviso">
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       {/* ── HERO + IDENTITY CARD ── */}
       <div className="mb-2.5">
-        <div className="flex gap-2.5 -mb-16 relative z-0">
-          {/* Foto principal */}
-          <div className="relative flex-1 h-72 rounded-[14px] overflow-hidden">
+        <div className="-mb-16 relative z-0">
+          {/* Foto principal (única) */}
+          <div className="relative h-72 rounded-[14px] overflow-hidden">
             {item.photoUrl ? (
               <img src={item.photoUrl} alt={item.name} className="w-full h-full object-cover cursor-zoom-in" onClick={() => setLightboxOpen(true)} />
             ) : (
-              <div className="w-full h-full bg-gradient-to-br from-[#D4B896] via-[#B89B78] to-[#8B7355] flex items-center justify-center">
-                <Camera size={48} className="text-white/25" />
+              <div className="w-full h-full bg-gradient-to-br from-[#D4B896] via-[#B89B78] to-[#8B7355] flex flex-col items-center justify-center gap-3">
+                <Camera size={44} className="text-white/30" />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={photoUploading}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-white/90 text-stone-800 hover:bg-white shadow-md transition-colors disabled:opacity-50"
+                >
+                  {photoUploading ? <Loader2 size={15} className="animate-spin" /> : <ImagePlus size={15} />}
+                  {photoUploading ? 'Subiendo…' : 'Añadir foto'}
+                </button>
               </div>
             )}
             <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-black/35 to-transparent pointer-events-none" />
+
+            {/* Badge de marca (arriba izquierda) */}
             <div className="absolute top-4 left-4 bg-white/95 backdrop-blur-md px-4 py-2 rounded-xl shadow-md flex items-center gap-2">
               <span className="w-6 h-6 rounded-md bg-[#D67442] flex items-center justify-center text-white text-[10px] font-bold">
                 {(brandName || item.category || 'P').charAt(0)}
               </span>
               <span className="text-sm font-medium text-stone-800">{brandName || item.category || 'Producto'}</span>
             </div>
-          </div>
-          {/* Columna de thumbnails (80px) */}
-          <div className="w-20 flex flex-col gap-2.5 h-72">
-            <div className="flex-1 rounded-[10px] bg-stone-100 border border-stone-200 flex items-center justify-center text-stone-300">
-              <Camera size={18} />
-            </div>
-            <div className="flex-1 rounded-[10px] bg-stone-100 border border-stone-200 flex items-center justify-center text-stone-300">
-              <Camera size={18} />
-            </div>
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={photoUploading}
-              className="flex-1 rounded-[10px] border-2 border-dashed border-stone-300 flex items-center justify-center text-stone-400 hover:border-[#D67442] hover:text-[#D67442] transition-colors disabled:opacity-50"
-            >
-              {photoUploading ? <Loader2 size={18} className="animate-spin" /> : <span className="text-2xl leading-none">+</span>}
-            </button>
+
+            {/* Acciones de foto (arriba derecha) — solo cuando hay foto */}
+            {item.photoUrl && (
+              <div className="absolute top-4 right-4 flex items-center gap-2">
+                {!photoConfirmDelete ? (
+                  <>
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={photoUploading || photoDeleting}
+                      className="inline-flex items-center gap-1.5 bg-white/95 backdrop-blur-md px-3 py-2 rounded-xl shadow-md text-sm font-medium text-stone-700 hover:bg-white transition-colors disabled:opacity-50"
+                    >
+                      {photoUploading ? <Loader2 size={14} className="animate-spin" /> : <ImagePlus size={14} />}
+                      {photoUploading ? 'Subiendo…' : 'Cambiar'}
+                    </button>
+                    <button
+                      onClick={() => setPhotoConfirmDelete(true)}
+                      disabled={photoUploading || photoDeleting}
+                      aria-label="Eliminar foto"
+                      className="inline-flex items-center justify-center w-9 h-9 bg-white/95 backdrop-blur-md rounded-xl shadow-md text-stone-600 hover:bg-white hover:text-[#A32D2D] transition-colors disabled:opacity-50"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </>
+                ) : (
+                  <div className="flex items-center gap-2 bg-white/95 backdrop-blur-md px-3 py-2 rounded-xl shadow-md">
+                    <span className="text-sm font-medium text-stone-700">¿Eliminar foto?</span>
+                    <button
+                      onClick={onPhotoDelete}
+                      disabled={photoDeleting}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-[#A32D2D] text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
+                    >
+                      {photoDeleting ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Sí
+                    </button>
+                    <button
+                      onClick={() => setPhotoConfirmDelete(false)}
+                      disabled={photoDeleting}
+                      className="px-2.5 py-1 rounded-lg text-xs font-medium text-stone-500 hover:bg-stone-100 disabled:opacity-50 transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
