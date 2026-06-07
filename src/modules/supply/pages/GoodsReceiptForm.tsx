@@ -35,6 +35,7 @@ import {
   getSupplierCatalog,
   listSupplyLocations,
   type SupplierCatalogEntry,
+  type SupplierFormatOption,
   type SupplyLocation,
 } from '@/modules/supply/services/supplierCatalogService'
 import {
@@ -111,6 +112,7 @@ export interface OcrPrefillLine {
   supplierCode: string | null   // código del proveedor (ancla de casado por código)
   qty: number | null            // cantidad leída → celda precargada
   unitCost: number | null       // precio neto leído
+  lineAmount: number | null     // importe neto de línea (dato duro p/ aviso de precio)
   lotCode: string | null
   expiryDate: string | null
   // Mejora 3: pista de FORMATO leída (la IA propone; el front convierte a base).
@@ -140,6 +142,7 @@ interface DraftLine {
   pending: number | null       // max(0, pedido − ya recibido); null = sin referencia
   qty: string                  // RECIBIDO — nace vacío SIEMPRE
   unitCost: string
+  lineAmount?: number | null   // importe de línea del albarán (OCR), dato duro p/ aviso de precio
   poLineId: string | null
   lotCode: string | null       // hueco FEFO/APPCC (se persiste; UI en su frente)
   expiryDate: string | null
@@ -156,6 +159,7 @@ interface DraftLine {
   baseUnit?: BaseUnitInfo | null    // unidad base del artículo (para convertir)
   formatSuggested?: boolean         // el formato lo propuso la IA (✨)
   formatTouched?: boolean           // el humano editó el formato → no autollenar
+  formatOptions?: SupplierFormatOption[]  // todos los formatos del artículo (elegir bote/caja)
 }
 
 function parseNum(v: string): number | null {
@@ -172,6 +176,44 @@ function defaultFormatName(_packUnit: string | null, base: BaseUnitInfo | null):
     case 'unit': return 'Unidad'
     default: return 'Formato'
   }
+}
+
+// Elige, entre los formatos del artículo, el que mejor casa con la línea del albarán.
+// Estrategia (IA propone, humano decide): (1) si el nombre del formato del albarán
+// (packUnit/formatName) coincide con el nombre de un formato → ese; (2) si no, el que
+// más se acerque a packSize (contenido leído); (3) si nada casa → el preferente (1er
+// elemento, ya viene ordenado por tamaño asc) y se marca como "a revisar el formato".
+// Devuelve { option, confident }: confident=false ⇒ pintar semáforo ámbar de formato.
+function pickFormatForLine(
+  formats: SupplierFormatOption[],
+  packUnit: string | null,
+  packSize: number | null,
+  preferredId: string | null,
+): { option: SupplierFormatOption | null; confident: boolean } {
+  if (!formats || formats.length === 0) return { option: null, confident: false }
+  const norm = (s: string | null) => (s ?? '').trim().toLowerCase()
+  // (1) match por nombre de unidad del albarán
+  if (packUnit) {
+    const byName = formats.find(f => norm(f.name) === norm(packUnit))
+    if (byName) return { option: byName, confident: true }
+  }
+  // (2) match por contenido aproximado (packSize en unidad base)
+  if (packSize != null && packSize > 0) {
+    let best: SupplierFormatOption | null = null
+    let bestDiff = Infinity
+    for (const f of formats) {
+      if (f.qtyInBase == null) continue
+      const diff = Math.abs(f.qtyInBase - packSize)
+      if (diff < bestDiff) { bestDiff = diff; best = f }
+    }
+    // aceptamos si el mejor está a ≤2% del contenido leído
+    if (best && best.qtyInBase && Math.abs(best.qtyInBase - packSize) / best.qtyInBase <= 0.02) {
+      return { option: best, confident: true }
+    }
+  }
+  // (3) sin certeza → preferente (o el de menor tamaño) y marcar a revisar
+  const pref = (preferredId && formats.find(f => f.id === preferredId)) || formats[0]
+  return { option: pref, confident: false }
 }
 
 // Etiqueta legible de la equivalencia: "80 ud", "5 kg", "10 L" (escala g→kg, ml→L).
@@ -300,6 +342,19 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
       return { ...l, formatQtyInBase: n, formatTouched: true, formatSuggested: false, purchaseFormatId: null, formatLabel: label }
     }))
   }
+  // Elegir uno de los formatos existentes del artículo (bote/caja). Fija id+nombre+qty
+  // de golpe y marca formatTouched (el humano decidió) → no lo pisa el efecto de herencia.
+  function selectFormatOption(key: string, formatId: string) {
+    setDraft(d => d.map(l => {
+      if (l.key !== key) return l
+      const opt = (l.formatOptions ?? []).find(f => f.id === formatId)
+      if (!opt) return l
+      const label = (opt.qtyInBase != null && l.baseUnit)
+        ? `${(opt.name ?? 'Formato')} (${formatBaseQty(opt.qtyInBase, l.baseUnit.abbr)})`
+        : (opt.label ?? opt.name ?? null)
+      return { ...l, purchaseFormatId: opt.id, formatName: opt.name, formatQtyInBase: opt.qtyInBase, formatLabel: label, formatTouched: true, formatSuggested: false }
+    }))
+  }
 
   // Resuelve unidad base + formato de cada línea OCR casada: HEREDA el formato que
   // el artículo ya tenga con este proveedor; si no, PROPONE desde la pista del OCR
@@ -324,11 +379,23 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
           baseUnitCache.current.set(itemId, base)
         }
         const existing = catalogByItem.get(itemId)
+        const options = existing?.formats ?? []
         let purchaseFormatId: string | null = null
         let formatName: string | null = line.formatName ?? null
         let formatQtyInBase: number | null = null
         let suggested = false
-        if (existing && existing.purchaseFormatId && existing.formatQtyInBase) {
+        if (options.length > 0) {
+          // varios formatos posibles: elige el que casa con la unidad/cantidad del albarán
+          const { option, confident } = pickFormatForLine(
+            options, line.packUnit ?? null, line.packSize ?? null, existing?.purchaseFormatId ?? null,
+          )
+          if (option) {
+            purchaseFormatId = option.id
+            formatName = option.name ?? formatName
+            formatQtyInBase = option.qtyInBase
+            suggested = !confident   // si no hay certeza, queda como "propuesto" (✨/ámbar)
+          }
+        } else if (existing && existing.purchaseFormatId && existing.formatQtyInBase) {
           purchaseFormatId = existing.purchaseFormatId
           formatName = existing.formatName ?? formatName
           formatQtyInBase = existing.formatQtyInBase
@@ -344,7 +411,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
           if (x.key !== line.key || x.formatTouched) return x
           if (x.baseUnit === base && x.purchaseFormatId === purchaseFormatId
               && x.formatQtyInBase === formatQtyInBase && x.formatName === formatName) return x
-          return { ...x, baseUnit: base, purchaseFormatId, formatName, formatQtyInBase, formatLabel: label, formatSuggested: suggested }
+          return { ...x, baseUnit: base, purchaseFormatId, formatName, formatQtyInBase, formatLabel: label, formatSuggested: suggested, formatOptions: options }
         }))
       }
     })()
@@ -424,6 +491,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
       pending: null,
       qty: l.qty != null ? String(l.qty) : '',   // precargada (excepción consciente: el albarán ya tiene la cantidad)
       unitCost: l.unitCost != null ? String(l.unitCost) : '',
+      lineAmount: l.lineAmount ?? null,
       poLineId: null,
       lotCode: l.lotCode,
       expiryDate: l.expiryDate,
@@ -645,7 +713,14 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
     // C2.2.c — recuento de avisos para el resumen pre-confirmación.
     let priceAlerts = 0, expiryAlerts = 0
     for (const l of draft) {
-      if (l.recipeItemId && priceAlertFor(parseNum(l.unitCost), lastPrices[l.recipeItemId] ?? null, supplySettings.priceAlertPct)) priceAlerts++
+      if (l.recipeItemId && priceAlertFor({
+        lineAmount: l.lineAmount ?? null,
+        unitCost: parseNum(l.unitCost),
+        qtyReceived: parseNum(l.qty),
+        formatQtyInBase: l.formatQtyInBase,
+        lastPrice: lastPrices[l.recipeItemId] ?? null,
+        thresholdPct: supplySettings.priceAlertPct,
+      })) priceAlerts++
       if (expiryAlertFor(l.expiryDate, supplySettings.expiryAlertDays)) expiryAlerts++
     }
     // Anomalía = algo de más, o masa sin tocar (>30% de las líneas con pendiente y >3).
@@ -963,7 +1038,14 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                       }
                       // C2.2.c — avisos copiloto (informativos)
                       const priceAlert = l.recipeItemId
-                        ? priceAlertFor(parseNum(l.unitCost), lastPrices[l.recipeItemId] ?? null, supplySettings.priceAlertPct)
+                        ? priceAlertFor({
+                            lineAmount: l.lineAmount ?? null,
+                            unitCost: parseNum(l.unitCost),
+                            qtyReceived: qtyN,
+                            formatQtyInBase: l.formatQtyInBase,
+                            lastPrice: lastPrices[l.recipeItemId] ?? null,
+                            thresholdPct: supplySettings.priceAlertPct,
+                          })
                         : null
                       const expiryAlert = expiryAlertFor(l.expiryDate, supplySettings.expiryAlertDays)
                       return (
@@ -1004,6 +1086,19 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                               <span className="text-[11px] text-text-tertiary">casa el artículo primero</span>
                             ) : (
                               <div className="space-y-1">
+                                {(l.formatOptions?.length ?? 0) > 1 && (
+                                  <select
+                                    value={l.purchaseFormatId ?? ''}
+                                    onChange={e => selectFormatOption(l.key, e.target.value)}
+                                    disabled={saving}
+                                    className="w-full px-1.5 py-1 text-xs border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50 mb-1"
+                                  >
+                                    <option value="">Elige formato…</option>
+                                    {l.formatOptions!.map(opt => (
+                                      <option key={opt.id} value={opt.id}>{opt.label ?? opt.name ?? 'Formato'}</option>
+                                    ))}
+                                  </select>
+                                )}
                                 <div className="flex items-center gap-1">
                                   <input type="text" value={l.formatName ?? ''} onChange={e => setFormatName(l.key, e.target.value)} disabled={saving}
                                     placeholder="Formato"
@@ -1014,12 +1109,15 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                                     onChange={e => setFormatQty(l.key, e.target.value)} disabled={saving} placeholder="?"
                                     className={`w-16 px-1.5 py-1 text-xs text-right rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50 border ${l.formatQtyInBase == null ? 'border-warning/60 bg-warning-bg/30' : 'border-border-default'}`} />
                                   <span className="text-[11px] text-text-secondary">{l.baseUnit?.abbr ?? ''}</span>
-                                  {l.formatSuggested && <span className="text-[10px] text-accent" title="Propuesto por la IA">✨</span>}
+                                  {l.formatSuggested && <span className="text-[10px] text-accent" title="Propuesto por la IA — confírmalo">✨</span>}
                                 </div>
+                                {l.formatSuggested && (l.formatOptions?.length ?? 0) > 1 && (
+                                  <p className="text-[10px] text-warning">Confirma el formato: el albarán no indicaba cuál con certeza.</p>
+                                )}
                                 {l.formatQtyInBase == null && (
                                   <p className="text-[10px] text-warning">¿Cuánto contiene un {(l.formatName ?? '').trim() || 'formato'}? (en {l.baseUnit?.abbr ?? 'base'})</p>
                                 )}
-                                {l.purchaseFormatId && !l.formatTouched && (
+                                {l.purchaseFormatId && !l.formatTouched && !l.formatSuggested && (
                                   <p className="text-[10px] text-text-tertiary">formato que ya tenías con este proveedor</p>
                                 )}
                               </div>

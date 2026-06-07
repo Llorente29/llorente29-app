@@ -29,8 +29,20 @@ export interface SupplierCatalogEntry {
   formatQtyInBase: number | null // equivalencia en unidad base CRUDA (5000…)
   baseUnitAbbr: string | null    // unidad base del artículo (g, ml, ud)
   formatLabel: string | null     // formato legible: "Saco (5 kg)"
+  // TODOS los formatos del artículo (no solo el preferente). Permite a la recepción
+  // elegir el formato que coincide con la unidad del albarán (bote vs caja). El
+  // preferente sigue expuesto arriba (purchaseFormatId/formatName/formatQtyInBase).
+  formats: SupplierFormatOption[]
   // Stock de referencia: vacío hoy (no hay inventario); gancho para cuando exista.
   stockOnHand: number | null
+}
+
+export interface SupplierFormatOption {
+  id: string
+  name: string | null
+  qtyInBase: number | null
+  parentFormatId: string | null   // si !=null, es un formato anidado (hijo de una caja)
+  label: string | null            // legible: "Caja (2,4 kg)" / "Bote (200 g)"
 }
 
 function requireSupabase(): void {
@@ -128,6 +140,43 @@ export async function getSupplierCatalog(
   if (error) throw new Error(`Error cargando el catálogo del proveedor: ${error.message}`)
 
   const rows = (data as Row[]) ?? []
+
+  // Segunda consulta: TODOS los formatos de los artículos implicados (no solo el
+  // preferente). Permite a la recepción elegir bote vs caja según el albarán.
+  const itemIds = Array.from(new Set(rows.map((r) => r.recipe_item_id as string)))
+  const formatsByItem = new Map<string, SupplierFormatOption[]>()
+  if (itemIds.length) {
+    const { data: fmts, error: ef } = await from('recipe_item_purchase_format')
+      .select('id, item_id, name, qty_in_base, parent_format_id')
+      .eq('account_id', accountId)
+      .in('item_id', itemIds)
+    if (ef) throw new Error(`Error cargando los formatos: ${ef.message}`)
+    // necesitamos la unidad base de cada artículo para la etiqueta legible
+    const baseByItem = new Map<string, string | null>()
+    for (const r of rows) {
+      const item = (r.recipe_item ?? null) as { kitchen_unit?: { abbreviation?: string } | null } | null
+      baseByItem.set(r.recipe_item_id as string, item?.kitchen_unit?.abbreviation ?? null)
+    }
+    for (const f of (fmts as Row[] | null) ?? []) {
+      const itemId = f.item_id as string
+      const abbr = baseByItem.get(itemId) ?? null
+      const opt: SupplierFormatOption = {
+        id: f.id as string,
+        name: (f.name as string | null) ?? null,
+        qtyInBase: (f.qty_in_base as number | null) ?? null,
+        parentFormatId: (f.parent_format_id as string | null) ?? null,
+        label: buildFormatLabel((f.name as string | null) ?? null, (f.qty_in_base as number | null) ?? null, abbr),
+      }
+      const arr = formatsByItem.get(itemId) ?? []
+      arr.push(opt)
+      formatsByItem.set(itemId, arr)
+    }
+    // orden por tamaño ascendente (bote antes que caja) para que el selector sea predecible
+    for (const arr of formatsByItem.values()) {
+      arr.sort((a, b) => (a.qtyInBase ?? 0) - (b.qtyInBase ?? 0))
+    }
+  }
+
   const entries: SupplierCatalogEntry[] = rows.map((r) => {
     const item = (r.recipe_item ?? null) as
       { name?: string; kitchen_unit?: { abbreviation?: string } | null } | null
@@ -147,6 +196,7 @@ export async function getSupplierCatalog(
       formatQtyInBase: fmt?.qty_in_base ?? null,
       baseUnitAbbr: baseAbbr,
       formatLabel: buildFormatLabel(fmt?.name ?? null, fmt?.qty_in_base ?? null, baseAbbr),
+      formats: formatsByItem.get(r.recipe_item_id as string) ?? [],
       stockOnHand: null, // gancho inventario
     }
   })

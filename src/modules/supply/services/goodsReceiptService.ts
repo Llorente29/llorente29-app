@@ -1319,11 +1319,59 @@ export async function getSupplierLastPrices(
 
 // Aviso de precio para una línea (puro, testeable). null = sin aviso.
 export interface PriceAlert { pct: number; lastPrice: number; newPrice: number; direction: 'up' | 'down' }
-export function priceAlertFor(unitCost: number | null, lastPrice: number | null, thresholdPct: number): PriceAlert | null {
-  if (unitCost == null || lastPrice == null || lastPrice <= 0) return null
-  const pct = ((unitCost - lastPrice) / lastPrice) * 100
-  if (Math.abs(pct) <= thresholdPct) return null
-  return { pct: Math.round(pct), lastPrice, newPrice: unitCost, direction: pct >= 0 ? 'up' : 'down' }
+
+/**
+ * Aviso de variación de precio — compara SIEMPRE en €/unidad-base (€/g, €/ml, €/ud),
+ * el único invariante (el formato/empaquetado no lo es). Filosofía Folvy: cero falsos
+ * positivos → si falta cualquier dato para normalizar con certeza, NO hay aviso.
+ *
+ * Entradas:
+ *  - lineAmount      : importe NETO de la línea del albarán (dato duro del OCR). Preferido.
+ *  - unitCost        : precio por unidad del albarán (respaldo si no hay lineAmount).
+ *  - qtyReceived     : cantidad recibida EN EL FORMATO seleccionado (p.ej. 2 cajas).
+ *  - formatQtyInBase : cuántas unidades base tiene ese formato (caja = 2400 g).
+ *  - lastPrice       : último precio conocido, EN €/formato (€/caja).
+ *  - thresholdPct    : umbral de aviso (p.ej. 15).
+ *
+ * Compara:  €/base del albarán   vs   €/base esperado (lastPrice / formatQtyInBase).
+ *   €/base albarán = lineAmount / (qtyReceived * formatQtyInBase)   [preferido]
+ *                  = unitCost   / formatQtyInBase                   [respaldo, si unitCost es €/formato]
+ */
+export function priceAlertFor(args: {
+  lineAmount?: number | null
+  unitCost?: number | null
+  qtyReceived?: number | null
+  formatQtyInBase: number | null
+  lastPrice: number | null
+  thresholdPct: number
+}): PriceAlert | null {
+  const { lineAmount, qtyReceived, formatQtyInBase, lastPrice, thresholdPct } = args
+
+  // Sin formato o sin precio de referencia válido → no se puede comparar con certeza.
+  if (formatQtyInBase == null || formatQtyInBase <= 0) return null
+  if (lastPrice == null || lastPrice <= 0) return null
+
+  // €/base esperado, a partir del último precio por formato.
+  const expectedPerBase = lastPrice / formatQtyInBase
+
+  // €/base del albarán: preferimos el importe de línea (dato duro). Si no, usamos
+  // unitCost ASUMIENDO que es €/formato (no €/unidad-suelta): solo el OCR sabe la
+  // unidad real, y ante la duda no inventamos → si no hay lineAmount fiable, sin aviso.
+  let actualPerBase: number | null = null
+  if (lineAmount != null && lineAmount > 0 && qtyReceived != null && qtyReceived > 0) {
+    const basesTotal = qtyReceived * formatQtyInBase
+    if (basesTotal > 0) actualPerBase = lineAmount / basesTotal
+  }
+  if (actualPerBase == null) return null  // sin dato duro → cero falsos positivos
+
+  const pct = ((actualPerBase - expectedPerBase) / expectedPerBase) * 100
+  if (!Number.isFinite(pct) || Math.abs(pct) <= thresholdPct) return null
+  return {
+    pct: Math.round(pct),
+    lastPrice: expectedPerBase,
+    newPrice: actualPerBase,
+    direction: pct >= 0 ? 'up' : 'down',
+  }
 }
 
 // Aviso de caducidad para una línea (puro). null = sin aviso.

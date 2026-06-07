@@ -109,6 +109,7 @@ export default function ReceiptScanPanel({ accountId, onBack, onCreateReceipt }:
         supplierCode: l.supplier_code,
         qty: l.quantity,
         unitCost: l.unit_price_net,
+        lineAmount: l.line_amount,           // importe NETO de línea (dato duro p/ aviso de precio)
         lotCode: l.lot_code,
         expiryDate: l.expiry_date,
         formatName: l.format_name,
