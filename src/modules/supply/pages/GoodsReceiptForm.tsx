@@ -114,6 +114,7 @@ export interface OcrPrefillLine {
   unitCost: number | null       // precio neto leído
   lineAmount: number | null     // importe neto de línea (dato duro p/ aviso de precio)
   albaranUnit?: string | null   // unidad de la cantidad del albarán (ud/caja/kg…) p/ conversión a formato
+  packages?: number | null      // nº de bultos físicos del albarán (referencia)
   lotCode: string | null
   expiryDate: string | null
   // Mejora 3: pista de FORMATO leída (la IA propone; el front convierte a base).

@@ -63,6 +63,7 @@ interface ParsedDoc {
     raw_text: string;
     supplier_code: string | null;
     quantity: number | null;
+    packages: number | null;          // nº de bultos/cajas físicas (columna CAJAS/BULTOS si existe)
     unit: string | null;
     unit_price_net: number | null;    // precio NETO por unidad (tras descuento)
     discount_pct: number | null;
@@ -115,6 +116,7 @@ function buildPrompt(): string {
     `      "raw_text": "<nombre del artículo TAL CUAL, sin el código>",\n` +
     `      "supplier_code": "<código de artículo del proveedor si aparece, o null>",\n` +
     `      "quantity": <cantidad servida/entregada como número, o null>,\n` +
+    `      "packages": <nº de BULTOS/CAJAS físicas si hay una columna aparte (CAJAS, BULTOS, Nº CAJAS), o null>,\n` +
     `      "unit": "<ud|caja|kg|l|saco|bandeja u otra, o null>",\n` +
     `      "unit_price_net": <precio por unidad YA con el descuento aplicado, o null>,\n` +
     `      "discount_pct": <% de descuento de la línea si aparece, o null>,\n` +
@@ -147,6 +149,13 @@ function buildPrompt(): string {
     `    · Si NO puedes deducir el contenido con seguridad, deja pack_size y/o pack_unit en null\n` +
     `      (NO inventes la equivalencia; el humano la confirmará).\n` +
     `- Las cantidades e importes son números decimales con punto (no "5,99" sino 5.99; no "5 kg" sino 5).\n` +
+    `- DOS COLUMNAS DE CANTIDAD: algunos albaranes traen una columna de BULTOS (CAJAS, BULTOS, Nº CAJAS)\n` +
+    `  separada de la cantidad FACTURABLE (CANTIDAD, UDS, KG). En ese caso:\n` +
+    `    · "packages" = los BULTOS físicos (la columna CAJAS/BULTOS).\n` +
+    `    · "quantity" = la cantidad FACTURABLE, la que multiplicada por "unit_price_net" da "line_amount"\n` +
+    `      (verifícalo: quantity × unit_price_net ≈ line_amount). Esa es la que va en "quantity".\n` +
+    `    · Si SOLO hay una columna de cantidad, ponla en "quantity" y deja "packages" en null.\n` +
+    `    · NO inventes "packages": si no hay columna de bultos separada, es null.\n` +
     `- Si el documento está MANUSCRITO o es poco legible: ponle handwritten=true, baja "confidence",\n` +
     `  y extrae solo lo que veas con seguridad (el resto null).\n` +
     `- Si no es un albarán/factura legible, devuelve {"document":{...con nulls...},"lines":[],"confidence":0}.\n` +

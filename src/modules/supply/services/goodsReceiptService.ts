@@ -691,6 +691,7 @@ export interface OcrLine {
   raw_text: string
   supplier_code: string | null
   quantity: number | null
+  packages: number | null         // nº de bultos/cajas físicas (columna CAJAS/BULTOS si existe)
   unit: string | null
   unit_price_net: number | null
   discount_pct: number | null
