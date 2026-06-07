@@ -41,3 +41,9 @@ scripts/test-*.mjs
 .env
 .env.*
 !.env.example
+
+# Artefactos de extraccion tspoon (datos confidenciales Llorente29, no versionar)
+tspoon_*.json
+tspoon_*.txt
+regenerar_formatos.sql
+regenerar_formatos_informe.txt
