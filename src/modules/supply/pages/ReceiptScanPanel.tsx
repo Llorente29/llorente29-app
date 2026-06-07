@@ -108,6 +108,7 @@ export default function ReceiptScanPanel({ accountId, onBack, onCreateReceipt }:
         productName: l.raw_text,
         supplierCode: l.supplier_code,
         qty: l.quantity,
+        albaranUnit: l.unit,                 // unidad de la cantidad del albarán (ud/caja/kg…) → conversión a formato
         unitCost: l.unit_price_net,
         lineAmount: l.line_amount,           // importe NETO de línea (dato duro p/ aviso de precio)
         lotCode: l.lot_code,

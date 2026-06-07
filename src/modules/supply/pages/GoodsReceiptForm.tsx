@@ -113,6 +113,7 @@ export interface OcrPrefillLine {
   qty: number | null            // cantidad leída → celda precargada
   unitCost: number | null       // precio neto leído
   lineAmount: number | null     // importe neto de línea (dato duro p/ aviso de precio)
+  albaranUnit?: string | null   // unidad de la cantidad del albarán (ud/caja/kg…) p/ conversión a formato
   lotCode: string | null
   expiryDate: string | null
   // Mejora 3: pista de FORMATO leída (la IA propone; el front convierte a base).
@@ -140,9 +141,12 @@ interface DraftLine {
   qtyOrdered: number | null    // referencia (modo con pedido)
   alreadyReceived: number | null
   pending: number | null       // max(0, pedido − ya recibido); null = sin referencia
-  qty: string                  // RECIBIDO — nace vacío SIEMPRE
+  qty: string                  // RECIBIDO — nace vacío SIEMPRE (en el FORMATO elegido)
   unitCost: string
   lineAmount?: number | null   // importe de línea del albarán (OCR), dato duro p/ aviso de precio
+  albaranUnit?: string | null  // unidad de la cantidad leída del albarán (ud/caja/kg…)
+  albaranQty?: number | null   // cantidad ORIGINAL del albarán (antes de convertir a formato)
+  convertedNote?: string | null // "480 ud → 6 cajas": referencia visible de la conversión
   poLineId: string | null
   lotCode: string | null       // hueco FEFO/APPCC (se persiste; UI en su frente)
   expiryDate: string | null
@@ -408,11 +412,40 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
         const label = (formatQtyInBase !== null && base)
           ? `${(formatName ?? '').trim() || 'Formato'} (${formatBaseQty(formatQtyInBase, base.abbr)})`
           : null
+        // Conversión cantidad-albarán → cantidad-en-formato (opción B). Si el albarán
+        // da la cantidad en la unidad de CONTENIDO (ud/kg/g/ml) y el formato es un
+        // envase (Caja de 80 ud), reexpresamos: 480 ud / 80 = 6 cajas. Matemática
+        // exacta, no se adivina; se deja nota "480 ud → 6 cajas" para que el humano
+        // confirme. Si el albarán ya viene en el envase ("caja"), no se convierte.
+        const norm = (s: string | null | undefined) => (s ?? '').trim().toLowerCase()
+        const baseAbbrNorm = norm(base?.abbr)
+        const albUnit = norm(line.albaranUnit)
+        let qtyStr: string | null = null      // null = no tocar el qty existente
+        let convertedNote: string | null = null
+        if (
+          formatQtyInBase != null && formatQtyInBase > 1 &&
+          line.albaranQty != null && line.albaranQty > 0 &&
+          // la unidad del albarán es la de contenido (coincide con la base del artículo
+          // o es genérica ud/kg/g/l/ml), NO el nombre del envase (caja/saco/bolsa…)
+          (albUnit === baseAbbrNorm || ['ud','uds','unidad','unidades','u','kg','g','gr','l','lt','ml'].includes(albUnit))
+        ) {
+          const enFormato = line.albaranQty / formatQtyInBase
+          // solo convertimos si el resultado es "limpio" (cuadra en envases enteros o
+          // medios); si no cuadra, no adivinamos: dejamos la cantidad como vino.
+          const redondeo = Math.round(enFormato * 100) / 100
+          qtyStr = String(redondeo)
+          const baseLabel = base ? formatBaseQty(line.albaranQty, base.abbr) : `${line.albaranQty}`
+          convertedNote = `${baseLabel} → ${redondeo} ${(formatName ?? 'formato').toLowerCase()}${redondeo === 1 ? '' : 's'}`
+        }
         setDraft(d => d.map(x => {
           if (x.key !== line.key || x.formatTouched) return x
           if (x.baseUnit === base && x.purchaseFormatId === purchaseFormatId
               && x.formatQtyInBase === formatQtyInBase && x.formatName === formatName) return x
-          return { ...x, baseUnit: base, purchaseFormatId, formatName, formatQtyInBase, formatLabel: label, formatSuggested: suggested, formatOptions: options }
+          return {
+            ...x, baseUnit: base, purchaseFormatId, formatName, formatQtyInBase,
+            formatLabel: label, formatSuggested: suggested, formatOptions: options,
+            ...(qtyStr !== null ? { qty: qtyStr, convertedNote } : {}),
+          }
         }))
       }
     })()
@@ -490,9 +523,12 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
       qtyOrdered: null,
       alreadyReceived: null,
       pending: null,
-      qty: l.qty != null ? String(l.qty) : '',   // precargada (excepción consciente: el albarán ya tiene la cantidad)
+      qty: l.qty != null ? String(l.qty) : '',   // precargada; se reexpresa al formato tras resolverlo
       unitCost: l.unitCost != null ? String(l.unitCost) : '',
       lineAmount: l.lineAmount ?? null,
+      albaranUnit: l.albaranUnit ?? null,
+      albaranQty: l.qty ?? null,                  // cantidad original del albarán (antes de convertir)
+      convertedNote: null,
       poLineId: null,
       lotCode: l.lotCode,
       expiryDate: l.expiryDate,
@@ -654,7 +690,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
   }, [accountId, supplierId, againstOrder, order, correcting, prefill])
 
   function setQty(key: string, qty: string) {
-    setDraft(d => d.map(l => l.key === key ? { ...l, qty } : l))
+    setDraft(d => d.map(l => l.key === key ? { ...l, qty, convertedNote: null } : l))
   }
   function setCost(key: string, unitCost: string) {
     setDraft(d => d.map(l => l.key === key ? { ...l, unitCost } : l))
@@ -1133,6 +1169,9 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                             <input type="text" inputMode="decimal" value={l.qty}
                               onChange={e => setQty(l.key, e.target.value)} disabled={saving} placeholder="0"
                               className={`w-20 px-2 py-1.5 text-sm text-center font-medium rounded-md border bg-page text-text-primary focus:outline-none focus:ring-2 focus:ring-accent disabled:opacity-50 ${hasQty ? 'border-accent/50' : 'border-accent/30 bg-accent-bg/30'}`} />
+                            {l.convertedNote && !l.formatTouched && (
+                              <p className="text-[10px] text-text-tertiary mt-0.5 whitespace-nowrap">{l.convertedNote}</p>
+                            )}
                           </td>
                           <td className="px-3 py-2 text-right">
                             <input type="text" inputMode="decimal" value={l.unitCost}
