@@ -231,6 +231,36 @@ function formatBaseQty(qty: number, abbr: string): string {
   return `${s} ${u}`
 }
 
+// Reescala el COSTE por formato cuando cambia el contenido del formato, manteniendo
+// constante el €/unidad-base (cálculo MATEMÁTICO, decisión de Julio): el €/base se
+// deriva del par anterior (coste ÷ contenido anterior) o de un €/base de referencia
+// del proveedor si se pasa; el coste nuevo = €/base × contenido nuevo.
+// Ej.: bote 200 g a 2,03 € → 0,01015 €/g → caja 1.200 g = 12,18 €.
+// Los descuentos por volumen NO se modelan aquí (se tratan en el aviso de precio /
+// precio pactado). Devuelve '' si no hay base de cálculo fiable (no inventa).
+function rescaleCostToFormat(
+  prevCost: number | null,
+  prevQtyInBase: number | null,
+  nextQtyInBase: number | null,
+  refPerBase: number | null,   // €/base de referencia del proveedor (formatPrices), si se conoce
+): string {
+  if (nextQtyInBase === null || !Number.isFinite(nextQtyInBase) || nextQtyInBase <= 0) return ''
+  // €/base: PRIMERO el implícito de la propia línea (escalado matemático que pidió
+  // Julio: 1 €/ud → caja de 10 = 10 €). Solo si la línea no tiene precio aún, caemos
+  // al €/base de referencia del proveedor. Los descuentos por volumen NO entran aquí.
+  let perBase: number | null = null
+  if (prevCost !== null && Number.isFinite(prevCost) && prevCost > 0
+      && prevQtyInBase !== null && Number.isFinite(prevQtyInBase) && prevQtyInBase > 0) {
+    perBase = prevCost / prevQtyInBase
+  } else if (refPerBase !== null && Number.isFinite(refPerBase) && refPerBase > 0) {
+    perBase = refPerBase
+  }
+  if (perBase === null) return ''   // sin ancla → vaciar, que el humano lo ponga
+  const next = perBase * nextQtyInBase
+  // Redondeo a céntimo para el campo editable (el cálculo fino de stock es server-side).
+  return String(Math.round(next * 100) / 100)
+}
+
 // Detalle de una línea recibida POR ENCIMA de lo pendiente (para el resumen).
 interface OverLine {
   name: string
@@ -244,6 +274,20 @@ interface OverLine {
 interface UntouchedLine {
   name: string
   pending: number
+}
+// Línea que SÍ entra al almacén (desglose "qué entra exacto" del pre-confirmar).
+// qtyInBase = lo que se posteará al stock, en la unidad base del artículo.
+interface EnterLine {
+  name: string
+  qtyInBase: number
+  baseAbbr: string | null      // unidad base del artículo (g/ml/ud) para mostrar la cantidad de almacén
+  convertedNote: string | null // doble columna "480 ud → 6 cajas" (referencia de compra, si existe)
+  unitCost: number | null      // coste por unidad de formato del albarán (referencia)
+}
+// Línea que NO entra y por qué (sin contador abstracto: nombre + motivo).
+interface NotEnterLine {
+  name: string
+  reason: 'sin reconocer' | 'sin formato'   // sin artículo casado / sin formato→base resuelto
 }
 
 export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill, onBack, onSaved }: GoodsReceiptFormProps) {
@@ -345,7 +389,9 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
       const label = (n !== null && l.baseUnit)
         ? `${(l.formatName ?? '').trim() || 'Formato'} (${formatBaseQty(n, l.baseUnit.abbr)})`
         : null
-      return { ...l, formatQtyInBase: n, formatTouched: true, formatSuggested: false, purchaseFormatId: null, formatLabel: label }
+      // El coste escala con el nuevo contenido tecleado (€/base constante).
+      const newCost = rescaleCostToFormat(parseNum(l.unitCost), l.formatQtyInBase, n, l.purchaseFormatId ? (formatPrices[l.purchaseFormatId] ?? null) : null)
+      return { ...l, formatQtyInBase: n, unitCost: newCost, formatTouched: true, formatSuggested: false, purchaseFormatId: null, formatLabel: label }
     }))
   }
   // Elegir uno de los formatos existentes del artículo (bote/caja). Fija id+nombre+qty
@@ -358,7 +404,9 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
       const label = (opt.qtyInBase != null && l.baseUnit)
         ? `${(opt.name ?? 'Formato')} (${formatBaseQty(opt.qtyInBase, l.baseUnit.abbr)})`
         : (opt.label ?? opt.name ?? null)
-      return { ...l, purchaseFormatId: opt.id, formatName: opt.name, formatQtyInBase: opt.qtyInBase, formatLabel: label, formatTouched: true, formatSuggested: false }
+      // El coste escala con el contenido del nuevo formato (€/base constante).
+      const newCost = rescaleCostToFormat(parseNum(l.unitCost), l.formatQtyInBase, opt.qtyInBase ?? null, formatPrices[opt.id] ?? null)
+      return { ...l, purchaseFormatId: opt.id, formatName: opt.name, formatQtyInBase: opt.qtyInBase, formatLabel: label, unitCost: newCost, formatTouched: true, formatSuggested: false }
     }))
   }
 
@@ -771,6 +819,31 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
       })) priceAlerts++
       if (expiryAlertFor(l.expiryDate, supplySettings.expiryAlertDays)) expiryAlerts++
     }
+    // ── Desglose EXACTO de "qué entra al almacén" (deuda Julio 7/06) ──
+    // Misma regla que confirm_goods_receipt: una línea entra si tiene artículo
+    // casado Y qty_in_base resoluble. Aquí se muestra ANTES de confirmar, línea a
+    // línea, en la unidad de almacén — no un recuento agregado.
+    const enterLines: EnterLine[] = []
+    const notEnterLines: NotEnterLine[] = []
+    for (const l of filled) {
+      const n = parseNum(l.qty)!
+      const qib = qtyInBaseFromFormat(n, l.formatQtyInBase)
+      if (l.recipeItemId && qib !== null) {
+        enterLines.push({
+          name: l.productName,
+          qtyInBase: qib,
+          baseAbbr: l.baseUnit?.abbr ?? null,
+          convertedNote: l.convertedNote ?? null,
+          unitCost: parseNum(l.unitCost),
+        })
+      } else {
+        notEnterLines.push({
+          name: l.productName,
+          reason: !l.recipeItemId ? 'sin reconocer' : 'sin formato',
+        })
+      }
+    }
+
     // Anomalía = algo de más, o masa sin tocar (>30% de las líneas con pendiente y >3).
     const masaSinTocar = sinTocar > 3 && linesWithPending.length > 0 && (sinTocar / linesWithPending.length) > 0.30
     const anomaly = overLines.length > 0 || masaSinTocar
@@ -778,6 +851,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
       filled: filled.length, aStock: willPost, sinMapear,
       coinciden, deMenos, deMas: overLines.length, sinTocar,
       overLines, untouchedLines,
+      enterLines, notEnterLines,
       priceAlerts, expiryAlerts,
       hasReference, anomaly, masaSinTocar,
     }
@@ -1067,7 +1141,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                       {hasReference && <th className="text-right font-medium px-3 py-2">Pedido</th>}
                       {hasReference && <th className="text-right font-medium px-3 py-2">Ya recibido</th>}
                       {hasReference && <th className="text-right font-medium px-3 py-2">Pendiente</th>}
-                      <th className="text-center font-medium px-3 py-2" style={{ width: 110 }}>Recibido</th>
+                      <th className="text-center font-medium px-3 py-2" style={{ width: 110 }}>Recibido<span className="block text-[10px] font-normal text-text-tertiary">en su formato</span></th>
                       <th className="text-right font-medium px-3 py-2" style={{ width: 110 }}>€ / formato</th>
                       <th className="text-left font-medium px-3 py-2">Estado</th>
                     </tr>
@@ -1181,9 +1255,22 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                             <input type="text" inputMode="decimal" value={l.qty}
                               onChange={e => setQty(l.key, e.target.value)} disabled={saving} placeholder="0"
                               className={`w-20 px-2 py-1.5 text-sm text-center font-medium rounded-md border bg-page text-text-primary focus:outline-none focus:ring-2 focus:ring-accent disabled:opacity-50 ${hasQty ? 'border-accent/50' : 'border-accent/30 bg-accent-bg/30'}`} />
-                            {l.convertedNote && !l.formatTouched && (
-                              <p className="text-[10px] text-text-tertiary mt-0.5 whitespace-nowrap">{l.convertedNote}</p>
-                            )}
+                            {(() => {
+                              const qn = parseNum(l.qty)
+                              if (qn === null || qn <= 0) return null
+                              const unidad = l.formatLabel ?? l.formatName ?? null
+                              // Sin formato elegido: no debe teclear a ciegas.
+                              if (!unidad) return <p className="text-[10px] text-warning mt-0.5 whitespace-nowrap">elige formato ↑</p>
+                              const enAlmacen = qtyInBaseFromFormat(qn, l.formatQtyInBase)
+                              return (
+                                <div className="mt-0.5 leading-tight">
+                                  <p className="text-[10px] text-text-secondary whitespace-nowrap">{qn} × {unidad}</p>
+                                  {enAlmacen !== null && l.baseUnit && (
+                                    <p className="text-[10px] text-text-tertiary whitespace-nowrap">= {formatBaseQty(enAlmacen, l.baseUnit.abbr)} al almacén</p>
+                                  )}
+                                </div>
+                              )
+                            })()}
                           </td>
                           <td className="px-3 py-2 text-right">
                             <input type="text" inputMode="decimal" value={l.unitCost}
@@ -1291,6 +1378,7 @@ function ReviewPanel({
     filled: number; aStock: number; sinMapear: number
     coinciden: number; deMenos: number; deMas: number; sinTocar: number
     overLines: OverLine[]; untouchedLines: UntouchedLine[]
+    enterLines: EnterLine[]; notEnterLines: NotEnterLine[]
     priceAlerts: number; expiryAlerts: number
     hasReference: boolean; anomaly: boolean; masaSinTocar: boolean
   }
@@ -1308,13 +1396,47 @@ function ReviewPanel({
         </div>
 
         <div className="px-4 py-4 space-y-3 overflow-y-auto">
-          {/* Repaso en una frase */}
-          <p className="text-sm text-text-primary">
-            Vas a meter <span className="font-medium">{productos}</span> en el almacén.
-            {summary.sinMapear > 0 && (
-              <span className="text-text-secondary"> ({summary.sinMapear} sin reconocer no entrarán.)</span>
+          {/* Qué entra EXACTAMENTE al almacén (línea a línea, en unidad de almacén) */}
+          <div className="space-y-2">
+            <p className="text-sm text-text-primary">
+              Vas a meter <span className="font-medium">{productos}</span> en el almacén:
+            </p>
+
+            {summary.enterLines.length > 0 && (
+              <ul className="space-y-1 rounded-md border border-success/30 bg-success/5 p-2.5">
+                {summary.enterLines.map((e, i) => (
+                  <li key={i} className="text-sm text-text-primary flex items-baseline gap-1.5">
+                    <Check size={13} className="text-success shrink-0 translate-y-0.5" />
+                    <span>
+                      <span className="font-medium">{e.name}:</span>{' '}
+                      {e.baseAbbr ? formatBaseQty(e.qtyInBase, e.baseAbbr) : e.qtyInBase}
+                      {e.convertedNote && <span className="text-text-secondary"> · {e.convertedNote}</span>}
+                      {e.unitCost !== null && (
+                        <span className="text-text-secondary">
+                          {' '}· {e.unitCost.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                        </span>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             )}
-          </p>
+
+            {summary.notEnterLines.length > 0 && (
+              <div className="rounded-md border border-border-default bg-page p-2.5 space-y-1">
+                <p className="text-sm font-medium text-text-secondary">
+                  No entran al almacén ({summary.notEnterLines.length}):
+                </p>
+                <ul className="space-y-0.5">
+                  {summary.notEnterLines.map((ne, i) => (
+                    <li key={i} className="text-sm text-text-secondary">
+                      {ne.name} <span className="text-xs">— {ne.reason === 'sin reconocer' ? 'sin reconocer (cásalo a un artículo)' : 'sin formato (ponle el formato de compra)'}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
 
           {(summary.priceAlerts > 0 || summary.expiryAlerts > 0) && (
             <div className="text-sm rounded-md bg-warning-bg text-warning border border-warning/20 px-3 py-2">
