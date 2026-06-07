@@ -59,7 +59,7 @@ import {
   ensureLastPurchaseStrategy,
   formatQtyInBaseFromPack,
   getSupplySettings,
-  getSupplierLastPrices,
+  getSupplierFormatPrices,
   priceAlertFor,
   expiryAlertFor,
   type LineMatchCandidate,
@@ -274,13 +274,14 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
 
   // C2.2.c — ajustes de avisos + last_price por artículo del proveedor.
   const [supplySettings, setSupplySettings] = useState<SupplySettings>({ priceAlertPct: 15, expiryAlertDays: 3 })
-  const [lastPrices, setLastPrices] = useState<Record<string, number>>({})
+  // €/unidad-base por formato (deriva caja→bote vía SQL). Clave del aviso de precio.
+  const [formatPrices, setFormatPrices] = useState<Record<string, number>>({})
   useEffect(() => {
     getSupplySettings(accountId).then(setSupplySettings).catch(() => {})
   }, [accountId])
   useEffect(() => {
-    if (!supplierId) { setLastPrices({}); return }
-    getSupplierLastPrices(accountId, supplierId).then(setLastPrices).catch(() => setLastPrices({}))
+    if (!supplierId) { setFormatPrices({}); return }
+    getSupplierFormatPrices(accountId, supplierId).then(setFormatPrices).catch(() => setFormatPrices({}))
   }, [accountId, supplierId])
   const [pickerKey, setPickerKey] = useState<string | null>(null)
 
@@ -715,10 +716,9 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
     for (const l of draft) {
       if (l.recipeItemId && priceAlertFor({
         lineAmount: l.lineAmount ?? null,
-        unitCost: parseNum(l.unitCost),
         qtyReceived: parseNum(l.qty),
         formatQtyInBase: l.formatQtyInBase,
-        lastPrice: lastPrices[l.recipeItemId] ?? null,
+        expectedPerBase: l.purchaseFormatId ? (formatPrices[l.purchaseFormatId] ?? null) : null,
         thresholdPct: supplySettings.priceAlertPct,
       })) priceAlerts++
       if (expiryAlertFor(l.expiryDate, supplySettings.expiryAlertDays)) expiryAlerts++
@@ -733,7 +733,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
       priceAlerts, expiryAlerts,
       hasReference, anomaly, masaSinTocar,
     }
-  }, [draft, filled, willPost, hasReference, lastPrices, supplySettings])
+  }, [draft, filled, willPost, hasReference, formatPrices, supplySettings])
 
   const supplierName = useMemo(() => suppliers.find(s => s.id === supplierId)?.name ?? '—', [suppliers, supplierId])
   const locationName = useMemo(() => locations.find(l => l.id === locationId)?.name ?? '—', [locations, locationId])
@@ -1040,10 +1040,9 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                       const priceAlert = l.recipeItemId
                         ? priceAlertFor({
                             lineAmount: l.lineAmount ?? null,
-                            unitCost: parseNum(l.unitCost),
                             qtyReceived: qtyN,
                             formatQtyInBase: l.formatQtyInBase,
-                            lastPrice: lastPrices[l.recipeItemId] ?? null,
+                            expectedPerBase: l.purchaseFormatId ? (formatPrices[l.purchaseFormatId] ?? null) : null,
                             thresholdPct: supplySettings.priceAlertPct,
                           })
                         : null

@@ -10019,6 +10019,10 @@ export type Database = {
       }
       folvy_code_prefix: { Args: { p_type: string }; Returns: string }
       force_close_long_impersonations: { Args: never; Returns: number }
+      format_price_per_base: {
+        Args: { p_format_id: string; p_supplier_id: string }
+        Returns: number
+      }
       get_effective_permissions: {
         Args: { p_account_id: string }
         Returns: Json
@@ -10288,6 +10292,13 @@ export type Database = {
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      supplier_format_prices: {
+        Args: { p_account_id: string; p_supplier_id: string }
+        Returns: {
+          eur_per_base: number
+          format_id: string
+        }[]
+      }
       unaccent: { Args: { "": string }; Returns: string }
       vat_rate_for: {
         Args: { p_category_id: string; p_date: string }

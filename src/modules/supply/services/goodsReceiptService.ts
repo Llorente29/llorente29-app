@@ -1317,52 +1317,65 @@ export async function getSupplierLastPrices(
   return map
 }
 
+/**
+ * Precio por UNIDAD BASE (€/g, €/ml, €/ud) de TODOS los formatos que ese proveedor
+ * puede surtir. El precio vive en el formato de compra (la caja); los sub-envases
+ * derivan (lo resuelve la función SQL supplier_format_prices). Devuelve un mapa
+ * format_id → €/base. Los formatos sin precio NO aparecen → "sin dato" → sin aviso.
+ */
+export async function getSupplierFormatPrices(
+  accountId: string, supplierId: string,
+): Promise<Record<string, number>> {
+  requireSupabase()
+  const { data, error } = await supabase!.rpc('supplier_format_prices', {
+    p_account_id: accountId,
+    p_supplier_id: supplierId,
+  })
+  if (error) { console.error('[goodsReceiptService] getSupplierFormatPrices', error); return {} }
+  const map: Record<string, number> = {}
+  for (const r of (data as { format_id: string; eur_per_base: number }[] | null) ?? []) {
+    if (r.eur_per_base != null) map[r.format_id] = Number(r.eur_per_base)
+  }
+  return map
+}
+
 // Aviso de precio para una línea (puro, testeable). null = sin aviso.
 export interface PriceAlert { pct: number; lastPrice: number; newPrice: number; direction: 'up' | 'down' }
 
 /**
  * Aviso de variación de precio — compara SIEMPRE en €/unidad-base (€/g, €/ml, €/ud),
- * el único invariante (el formato/empaquetado no lo es). Filosofía Folvy: cero falsos
- * positivos → si falta cualquier dato para normalizar con certeza, NO hay aviso.
+ * el único invariante. Filosofía Folvy: cero falsos positivos → si falta cualquier
+ * dato para comparar con certeza, NO hay aviso.
  *
  * Entradas:
- *  - lineAmount      : importe NETO de la línea del albarán (dato duro del OCR). Preferido.
- *  - unitCost        : precio por unidad del albarán (respaldo si no hay lineAmount).
- *  - qtyReceived     : cantidad recibida EN EL FORMATO seleccionado (p.ej. 2 cajas).
- *  - formatQtyInBase : cuántas unidades base tiene ese formato (caja = 2400 g).
- *  - lastPrice       : último precio conocido, EN €/formato (€/caja).
+ *  - lineAmount      : importe NETO de la línea del albarán (dato duro del OCR).
+ *  - qtyReceived     : cantidad recibida EN EL FORMATO seleccionado.
+ *  - formatQtyInBase : unidades base que tiene ese formato (caja = 2400 g).
+ *  - expectedPerBase : €/base esperado para ESE formato y proveedor (lo deriva la
+ *                      función SQL supplier_format_prices, navegando la jerarquía
+ *                      caja→bote). null = sin precio de referencia → sin aviso.
  *  - thresholdPct    : umbral de aviso (p.ej. 15).
  *
- * Compara:  €/base del albarán   vs   €/base esperado (lastPrice / formatQtyInBase).
- *   €/base albarán = lineAmount / (qtyReceived * formatQtyInBase)   [preferido]
- *                  = unitCost   / formatQtyInBase                   [respaldo, si unitCost es €/formato]
+ * €/base del albarán = lineAmount / (qtyReceived * formatQtyInBase).
  */
 export function priceAlertFor(args: {
   lineAmount?: number | null
-  unitCost?: number | null
   qtyReceived?: number | null
   formatQtyInBase: number | null
-  lastPrice: number | null
+  expectedPerBase: number | null
   thresholdPct: number
 }): PriceAlert | null {
-  const { lineAmount, qtyReceived, formatQtyInBase, lastPrice, thresholdPct } = args
+  const { lineAmount, qtyReceived, formatQtyInBase, expectedPerBase, thresholdPct } = args
 
-  // Sin formato o sin precio de referencia válido → no se puede comparar con certeza.
+  // Sin precio de referencia derivado, o sin formato → no se puede comparar.
+  if (expectedPerBase == null || expectedPerBase <= 0) return null
   if (formatQtyInBase == null || formatQtyInBase <= 0) return null
-  if (lastPrice == null || lastPrice <= 0) return null
 
-  // €/base esperado, a partir del último precio por formato.
-  const expectedPerBase = lastPrice / formatQtyInBase
-
-  // €/base del albarán: preferimos el importe de línea (dato duro). Si no, usamos
-  // unitCost ASUMIENDO que es €/formato (no €/unidad-suelta): solo el OCR sabe la
-  // unidad real, y ante la duda no inventamos → si no hay lineAmount fiable, sin aviso.
-  let actualPerBase: number | null = null
-  if (lineAmount != null && lineAmount > 0 && qtyReceived != null && qtyReceived > 0) {
-    const basesTotal = qtyReceived * formatQtyInBase
-    if (basesTotal > 0) actualPerBase = lineAmount / basesTotal
-  }
-  if (actualPerBase == null) return null  // sin dato duro → cero falsos positivos
+  // €/base del albarán a partir del importe de línea (dato duro). Sin él, sin aviso.
+  if (lineAmount == null || lineAmount <= 0 || qtyReceived == null || qtyReceived <= 0) return null
+  const basesTotal = qtyReceived * formatQtyInBase
+  if (basesTotal <= 0) return null
+  const actualPerBase = lineAmount / basesTotal
 
   const pct = ((actualPerBase - expectedPerBase) / expectedPerBase) * 100
   if (!Number.isFinite(pct) || Math.abs(pct) <= thresholdPct) return null
