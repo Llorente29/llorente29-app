@@ -412,30 +412,41 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
         const label = (formatQtyInBase !== null && base)
           ? `${(formatName ?? '').trim() || 'Formato'} (${formatBaseQty(formatQtyInBase, base.abbr)})`
           : null
-        // Conversión cantidad-albarán → cantidad-en-formato (opción B). Si el albarán
-        // da la cantidad en la unidad de CONTENIDO (ud/kg/g/ml) y el formato es un
-        // envase (Caja de 80 ud), reexpresamos: 480 ud / 80 = 6 cajas. Matemática
-        // exacta, no se adivina; se deja nota "480 ud → 6 cajas" para que el humano
-        // confirme. Si el albarán ya viene en el envase ("caja"), no se convierte.
+        // Conversión cantidad-albarán → cantidad-en-formato (opción B). Reexpresa
+        // "480 ud" a "6 cajas" SOLO cuando es seguro; ante la duda NO convierte (la
+        // cantidad ya está en el formato). Cero falsos positivos.
+        //
+        // Reglas (todas deben cumplirse):
+        //  (1) la unidad del albarán coincide EXACTAMENTE con la unidad base del
+        //      artículo (g↔g, ml↔ml, ud↔ud-de-pieza). "ud" NO casa con base en g/ml:
+        //      "12 ud" de un artículo medido en gramos = 12 piezas/bolsas, no 12 g.
+        //  (2) el formato contiene > 1 base (es un envase, no la unidad suelta).
+        //  (3) el resultado es ≥ 1 (recibir 0,01 de un formato = señal de error → no).
+        //  (4) la división es limpia: cuadra en envases ~enteros (tolerancia 2%).
         const norm = (s: string | null | undefined) => (s ?? '').trim().toLowerCase()
         const baseAbbrNorm = norm(base?.abbr)
         const albUnit = norm(line.albaranUnit)
+        // sinónimos de la MISMA unidad base (no mezclamos dimensiones)
+        const sameAsBase =
+          albUnit === baseAbbrNorm ||
+          (baseAbbrNorm === 'g'  && ['g','gr','gramo','gramos'].includes(albUnit)) ||
+          (baseAbbrNorm === 'ml' && ['ml','mililitro','mililitros'].includes(albUnit)) ||
+          (baseAbbrNorm === 'ud' && ['ud','uds','u','unidad','unidades'].includes(albUnit))
         let qtyStr: string | null = null      // null = no tocar el qty existente
         let convertedNote: string | null = null
         if (
+          sameAsBase &&
           formatQtyInBase != null && formatQtyInBase > 1 &&
-          line.albaranQty != null && line.albaranQty > 0 &&
-          // la unidad del albarán es la de contenido (coincide con la base del artículo
-          // o es genérica ud/kg/g/l/ml), NO el nombre del envase (caja/saco/bolsa…)
-          (albUnit === baseAbbrNorm || ['ud','uds','unidad','unidades','u','kg','g','gr','l','lt','ml'].includes(albUnit))
+          line.albaranQty != null && line.albaranQty > 0
         ) {
           const enFormato = line.albaranQty / formatQtyInBase
-          // solo convertimos si el resultado es "limpio" (cuadra en envases enteros o
-          // medios); si no cuadra, no adivinamos: dejamos la cantidad como vino.
-          const redondeo = Math.round(enFormato * 100) / 100
-          qtyStr = String(redondeo)
-          const baseLabel = base ? formatBaseQty(line.albaranQty, base.abbr) : `${line.albaranQty}`
-          convertedNote = `${baseLabel} → ${redondeo} ${(formatName ?? 'formato').toLowerCase()}${redondeo === 1 ? '' : 's'}`
+          const redondeo = Math.round(enFormato)
+          const limpio = redondeo >= 1 && Math.abs(enFormato - redondeo) / redondeo <= 0.02
+          if (limpio) {
+            qtyStr = String(redondeo)
+            const baseLabel = base ? formatBaseQty(line.albaranQty, base.abbr) : `${line.albaranQty}`
+            convertedNote = `${baseLabel} → ${redondeo} ${(formatName ?? 'formato').toLowerCase()}${redondeo === 1 ? '' : 's'}`
+          }
         }
         setDraft(d => d.map(x => {
           if (x.key !== line.key || x.formatTouched) return x
