@@ -22,7 +22,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   SlidersHorizontal, Loader2, CircleCheck, Sparkles, Plus, Minus,
-  RefreshCw, X, Pencil,
+  RefreshCw, X, Pencil, AlertTriangle, Search,
 } from 'lucide-react'
 import {
   listOptionsByRecipe,
@@ -33,7 +33,7 @@ import {
   type OptionWithImpact,
   type ImpactType,
 } from '@/modules/kitchen/services/modifierImpactService'
-import { listRecipeItems } from '@/modules/kitchen/services/recipeItemService'
+import { listRecipeItems, createRecipeItem } from '@/modules/kitchen/services/recipeItemService'
 import { listUnits } from '@/modules/kitchen/services/kitchenUnitService'
 
 interface ModifierImpactsTabProps {
@@ -43,7 +43,7 @@ interface ModifierImpactsTabProps {
   // Catálogo para los selectores del modo "Ajustar": ingredientes (recipe_item raw/recipe)
   // y unidades. Los aporta el editor (ya los tiene cargados). Si no se pasan, el modo
   // ajustar muestra solo cantidad sobre el ingrediente ya propuesto.
-  ingredients?: { id: string; name: string }[]
+  ingredients?: { id: string; name: string; needsReview?: boolean }[]
   units?: { id: string; label: string }[]
 }
 
@@ -59,32 +59,40 @@ export default function ModifierImpactsTab({
 
   // Ingredientes y unidades para el editor "Ajustar". Si el contenedor no los
   // pasa, la pestaña los carga sola (autónoma, no depende del estado del editor).
-  const [ingredients, setIngredients] = useState<{ id: string; name: string }[]>(ingredientsProp ?? [])
+  const [ingredients, setIngredients] = useState<{ id: string; name: string; needsReview?: boolean }[]>(ingredientsProp ?? [])
   const [units, setUnits] = useState<{ id: string; label: string }[]>(unitsProp ?? [])
+  const [unitGramId, setUnitGramId] = useState<string | null>(null)
+
+  async function loadIngredients() {
+    try {
+      const rows = await listRecipeItems({ accountId, includeInactive: false })
+      setIngredients(
+        rows
+          .filter((r) => r.type === 'raw' || r.type === 'recipe')
+          .map((r) => ({ id: r.id, name: r.name, needsReview: r.needsReview })),
+      )
+    } catch { /* el selector quedará vacío; no bloquea la pestaña */ }
+  }
 
   useEffect(() => {
     if (ingredientsProp && ingredientsProp.length > 0) { setIngredients(ingredientsProp); return }
     let cancelled = false
-    listRecipeItems({ accountId, includeInactive: false })
-      .then((rows) => {
-        if (cancelled) return
-        setIngredients(
-          rows
-            .filter((r) => r.type === 'raw' || r.type === 'recipe')
-            .map((r) => ({ id: r.id, name: r.name })),
-        )
-      })
-      .catch(() => { /* el selector quedará vacío; no bloquea la pestaña */ })
+    loadIngredients().finally(() => { if (cancelled) return })
     return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountId, ingredientsProp])
 
   useEffect(() => {
-    if (unitsProp && unitsProp.length > 0) { setUnits(unitsProp); return }
     let cancelled = false
     listUnits({})
       .then((rows) => {
         if (cancelled) return
-        setUnits(rows.map((u) => ({ id: u.id, label: u.abbreviation })))
+        if (!unitsProp || unitsProp.length === 0) {
+          setUnits(rows.map((u) => ({ id: u.id, label: u.abbreviation })))
+        }
+        // Unidad gramo, para crear ingredientes al vuelo (base por defecto).
+        const g = rows.find((u) => u.abbreviation?.toLowerCase() === 'g')
+        if (g) setUnitGramId(g.id)
       })
       .catch(() => { /* el selector de unidad quedará vacío; no bloquea */ })
     return () => { cancelled = true }
@@ -193,6 +201,33 @@ export default function ModifierImpactsTab({
     }
   }
 
+  // Crea un ingrediente al vuelo (modo Ajustar, cuando el que falta no existe).
+  // Nace SIN coste y marcado needs_review: queda DECLARADAMENTE incompleto y el
+  // aviso se propaga a su ficha, a las listas y al plato por el sistema que ya
+  // existe (getDishesIncomplete). Devuelve el id creado, o null si falla.
+  async function handleCreateIngredient(name: string): Promise<{ id: string; name: string } | null> {
+    if (!unitGramId) {
+      setError('No se pudo crear: falta la unidad base (gramo). Revisa las unidades de cocina.')
+      return null
+    }
+    try {
+      const created = await createRecipeItem({
+        accountId,
+        type: 'raw',
+        name: name.trim(),
+        baseUnitId: unitGramId,
+        source: 'manual',
+        needsReview: true,
+        createdByName: actorName,
+      })
+      await loadIngredients()
+      return { id: created.id, name: created.name }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo crear el ingrediente')
+      return null
+    }
+  }
+
   if (loading) {
     return (
       <div className="p-4 md:p-5">
@@ -261,6 +296,7 @@ export default function ModifierImpactsTab({
                   onEdit={() => setEditingId(o.optionId)}
                   onCancelEdit={() => setEditingId(null)}
                   onSaveManual={(draft) => handleSaveManual(o, draft)}
+                  onCreateIngredient={handleCreateIngredient}
                 />
               ))}
             </div>
@@ -277,18 +313,19 @@ interface OptionCardProps {
   option: OptionWithImpact
   busy: boolean
   editing: boolean
-  ingredients: { id: string; name: string }[]
+  ingredients: { id: string; name: string; needsReview?: boolean }[]
   units: { id: string; label: string }[]
   onConfirm: () => void
   onReject: () => void
   onEdit: () => void
   onCancelEdit: () => void
   onSaveManual: (draft: { impactType: ImpactType; targetRecipeItemId: string | null; quantity: number | null; unitId: string | null }) => void
+  onCreateIngredient: (name: string) => Promise<{ id: string; name: string } | null>
 }
 
 function OptionCard({
   option: o, busy, editing, ingredients, units,
-  onConfirm, onReject, onEdit, onCancelEdit, onSaveManual,
+  onConfirm, onReject, onEdit, onCancelEdit, onSaveManual, onCreateIngredient,
 }: OptionCardProps) {
   const status = o.impact?.status ?? 'none'
   const isProposed = status === 'proposed'
@@ -387,6 +424,7 @@ function OptionCard({
           busy={busy}
           onCancel={onCancelEdit}
           onSave={() => onSaveManual(draft)}
+          onCreateIngredient={onCreateIngredient}
         />
       )}
     </div>
@@ -396,12 +434,21 @@ function OptionCard({
 // Resumen legible del impacto (sin jerga técnica).
 function ImpactSummary({
   impact, ingredients,
-}: { impact: OptionWithImpact['impact']; ingredients: { id: string; name: string }[] }) {
+}: { impact: OptionWithImpact['impact']; ingredients: { id: string; name: string; needsReview?: boolean }[] }) {
   if (!impact) {
     return <p className="text-xs text-text-secondary italic">Sin definir — el coste de esta opción aún no se calcula.</p>
   }
-  const ingName = (id: string | null) =>
-    id ? (ingredients.find((i) => i.id === id)?.name ?? 'ingrediente') : 'ingrediente'
+  const ing = (id: string | null) => (id ? ingredients.find((i) => i.id === id) : undefined)
+  const ingName = (id: string | null) => ing(id)?.name ?? 'ingrediente'
+  const incomplete = (id: string | null) => !!ing(id)?.needsReview
+
+  // Aviso si el ingrediente del impacto está sin terminar (creado al vuelo sin coste).
+  const warn = (id: string | null) =>
+    incomplete(id) ? (
+      <span className="inline-flex items-center gap-1 text-xs text-warning">
+        <AlertTriangle className="w-3 h-3" />sin terminar — su coste aún no cuenta
+      </span>
+    ) : null
 
   if (impact.impactType === 'add_item' || impact.impactType === 'bundle') {
     return (
@@ -410,15 +457,19 @@ function ImpactSummary({
           <Plus className="w-3 h-3" />{ingName(impact.targetRecipeItemId)}
           {impact.quantity != null && ` · ${impact.quantity}`}
         </span>
+        {warn(impact.targetRecipeItemId)}
       </div>
     )
   }
   if (impact.impactType === 'remove_item') {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-danger/15 text-danger text-xs">
-        <Minus className="w-3 h-3" />{ingName(impact.targetRecipeItemId)}
-        {impact.quantity != null && ` · ${impact.quantity}`}
-      </span>
+      <div className="flex items-center gap-2 text-sm flex-wrap">
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-danger/15 text-danger text-xs">
+          <Minus className="w-3 h-3" />{ingName(impact.targetRecipeItemId)}
+          {impact.quantity != null && ` · ${impact.quantity}`}
+        </span>
+        {warn(impact.targetRecipeItemId)}
+      </div>
     )
   }
   if (impact.impactType === 'replace_item') {
@@ -429,6 +480,7 @@ function ImpactSummary({
           {impact.quantity != null && ` · ${impact.quantity}`}
         </span>
         <span className="text-xs text-text-secondary">(sustituye al ingrediente base)</span>
+        {warn(impact.targetRecipeItemId)}
       </div>
     )
   }
@@ -444,18 +496,40 @@ function ImpactSummary({
 
 // Editor del impacto (modo Ajustar).
 function ImpactEditor({
-  draft, setDraft, ingredients, units, busy, onCancel, onSave,
+  draft, setDraft, ingredients, units, busy, onCancel, onSave, onCreateIngredient,
 }: {
   draft: { impactType: ImpactType; targetRecipeItemId: string | null; quantity: number | null; unitId: string | null }
   setDraft: (d: typeof draft) => void
-  ingredients: { id: string; name: string }[]
+  ingredients: { id: string; name: string; needsReview?: boolean }[]
   units: { id: string; label: string }[]
   busy: boolean
   onCancel: () => void
   onSave: () => void
+  onCreateIngredient: (name: string) => Promise<{ id: string; name: string } | null>
 }) {
   const needsIngredient = draft.impactType !== 'multiply' && draft.impactType !== 'none'
   const needsQty = draft.impactType !== 'none'
+
+  const [search, setSearch] = useState('')
+  const [creating, setCreating] = useState(false)
+  const picked = ingredients.find((i) => i.id === draft.targetRecipeItemId)
+
+  const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  const matches = search.trim() === ''
+    ? ingredients.slice(0, 8)
+    : ingredients.filter((i) => norm(i.name).includes(norm(search))).slice(0, 8)
+  const exactExists = ingredients.some((i) => norm(i.name) === norm(search.trim()))
+
+  async function handleCreate() {
+    if (search.trim() === '') return
+    setCreating(true)
+    const created = await onCreateIngredient(search.trim())
+    setCreating(false)
+    if (created) {
+      setDraft({ ...draft, targetRecipeItemId: created.id })
+      setSearch('')
+    }
+  }
 
   return (
     <div className="space-y-2.5 pt-1">
@@ -476,17 +550,69 @@ function ImpactEditor({
       </div>
 
       {needsIngredient && (
-        <div className="flex items-center gap-2 flex-wrap">
-          <select
-            value={draft.targetRecipeItemId ?? ''}
-            onChange={(e) => setDraft({ ...draft, targetRecipeItemId: e.target.value || null })}
-            className="flex-1 min-w-[160px] px-2 py-1 text-sm border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
-          >
-            <option value="">— elige ingrediente —</option>
-            {ingredients.map((i) => (
-              <option key={i.id} value={i.id}>{i.name}</option>
-            ))}
-          </select>
+        <div>
+          {picked ? (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-accent-bg text-sm text-text-primary">
+                {picked.name}
+                {picked.needsReview && (
+                  <span className="inline-flex items-center gap-0.5 text-xs text-warning">
+                    <AlertTriangle className="w-3 h-3" />sin terminar
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setDraft({ ...draft, targetRecipeItemId: null })}
+                  className="text-text-secondary hover:text-danger"
+                  aria-label="Quitar ingrediente"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </span>
+            </div>
+          ) : (
+            <div>
+              <div className="flex items-center gap-1.5 px-2 py-1 border border-border-default rounded-md bg-card">
+                <Search className="w-3.5 h-3.5 text-text-secondary shrink-0" />
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="busca el ingrediente…"
+                  className="flex-1 min-w-0 text-sm bg-transparent text-text-primary focus:outline-none"
+                />
+              </div>
+              {(matches.length > 0 || search.trim() !== '') && (
+                <div className="mt-1 border border-border-default rounded-md bg-card divide-y divide-border-default max-h-48 overflow-auto">
+                  {matches.map((i) => (
+                    <button
+                      key={i.id}
+                      type="button"
+                      onClick={() => { setDraft({ ...draft, targetRecipeItemId: i.id }); setSearch('') }}
+                      className="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 text-left text-sm hover:bg-accent-bg transition-colors"
+                    >
+                      <span className="truncate">{i.name}</span>
+                      {i.needsReview && <AlertTriangle className="w-3 h-3 text-warning shrink-0" />}
+                    </button>
+                  ))}
+                  {search.trim() !== '' && !exactExists && (
+                    <button
+                      type="button"
+                      onClick={handleCreate}
+                      disabled={creating}
+                      className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-left text-xs font-medium text-terracota hover:bg-terracota-bg disabled:opacity-60 transition-colors"
+                    >
+                      {creating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                      ¿No está? Crear «{search.trim()}» como nuevo
+                    </button>
+                  )}
+                </div>
+              )}
+              <p className="mt-1 text-[11px] text-text-secondary">
+                Si lo creas aquí, nace sin coste y marcado «sin terminar» hasta que completes su ficha.
+              </p>
+            </div>
+          )}
         </div>
       )}
 
