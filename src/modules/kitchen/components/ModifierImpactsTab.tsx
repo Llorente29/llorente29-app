@@ -22,7 +22,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   SlidersHorizontal, Loader2, CircleCheck, Sparkles, Plus, Minus,
-  RefreshCw, X, Pencil, AlertTriangle, Search,
+  RefreshCw, X, Pencil, AlertTriangle, Search, Wand2,
 } from 'lucide-react'
 import {
   listOptionsByRecipe,
@@ -30,6 +30,7 @@ import {
   confirmImpact,
   rejectImpact,
   recomputeAffectedSales,
+  requestAIProposals,
   type OptionWithImpact,
   type ImpactType,
 } from '@/modules/kitchen/services/modifierImpactService'
@@ -56,6 +57,9 @@ export default function ModifierImpactsTab({
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
+  // Sugerencia IA (Nivel 2): en curso + mensaje de resultado de la última pasada.
+  const [aiRunning, setAiRunning] = useState(false)
+  const [aiResult, setAiResult] = useState<string | null>(null)
 
   // Ingredientes y unidades para el editor "Ajustar". Si el contenedor no los
   // pasa, la pestaña los carga sola (autónoma, no depende del estado del editor).
@@ -228,6 +232,27 @@ export default function ModifierImpactsTab({
     }
   }
 
+  // Pide a la IA que proponga impactos para las opciones sin definir de este plato.
+  async function handleSuggestAI() {
+    setAiRunning(true)
+    setAiResult(null)
+    setError(null)
+    try {
+      const r = await requestAIProposals(accountId, recipeItemId)
+      const nuevas = r.propuestos + r.aprendidos
+      if (nuevas === 0) {
+        setAiResult('La IA no encontró nada claro que proponer. Define los que falten a mano.')
+      } else {
+        setAiResult(`La IA propuso ${nuevas} ${nuevas === 1 ? 'modificador' : 'modificadores'}. Revísalos y confirma.`)
+      }
+      await reload()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo pedir propuestas a la IA')
+    } finally {
+      setAiRunning(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="p-4 md:p-5">
@@ -266,6 +291,26 @@ export default function ModifierImpactsTab({
           <span className="text-text-secondary">· {coverage.pct}% cobertura</span>
         </div>
       </div>
+
+      {/* Sugerir con IA: solo si hay algo por revisar (si todo confirmado, no aporta). */}
+      {coverage.pending > 0 && (
+        <button
+          type="button"
+          onClick={handleSuggestAI}
+          disabled={aiRunning}
+          className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 mb-3 rounded-md border border-border-default text-terracota hover:bg-terracota-bg disabled:opacity-60 transition-base"
+        >
+          {aiRunning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
+          {aiRunning ? 'Folvy está pensando…' : 'Sugerir con IA'}
+        </button>
+      )}
+
+      {aiResult && (
+        <div className="mb-3 flex items-start gap-2 text-xs text-text-secondary bg-accent-bg rounded-md px-3 py-2">
+          <Sparkles className="w-3.5 h-3.5 text-terracota mt-0.5 shrink-0" />
+          <span>{aiResult}</span>
+        </div>
+      )}
 
       {error && (
         <div className="mb-3 text-sm text-danger bg-danger/10 border border-danger/30 rounded-md px-3 py-2">

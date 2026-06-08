@@ -411,3 +411,51 @@ export async function recomputeAffectedSales(
   }
   return recomputed
 }
+
+export interface AIProposalResult {
+  procesados: number
+  propuestos: number
+  aprendidos: number
+  sin_propuesta: number
+}
+
+/**
+ * Pide a la IA que proponga impactos para las opciones sin definir de un plato
+ * (Nivel 2). Llama a la Edge propose-modifier-impacts con el token del usuario.
+ * Las propuestas se escriben como status='proposed' (no tocan el coste). El
+ * llamador recarga la pestaña para mostrarlas.
+ *
+ * Patrón de invocación calcado de folvyAIService: getSession -> access_token ->
+ * fetch al endpoint con Bearer. Aquí la respuesta es un JSON único (sin SSE).
+ */
+export async function requestAIProposals(
+  accountId: string,
+  recipeItemId: string,
+): Promise<AIProposalResult> {
+  requireSupabase()
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
+  const { data: sessionData, error: sessionErr } = await supabase!.auth.getSession()
+  if (sessionErr) throw new Error(`Error obteniendo sesión: ${sessionErr.message}`)
+  const accessToken = sessionData.session?.access_token
+  if (!accessToken) throw new Error('No hay sesión activa')
+
+  const resp = await fetch(`${supabaseUrl}/functions/v1/propose-modifier-impacts`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ account_id: accountId, recipe_item_id: recipeItemId }),
+  })
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => '')
+    throw new Error(`Error pidiendo propuestas a la IA (HTTP ${resp.status}): ${text || resp.statusText}`)
+  }
+  const data = await resp.json()
+  return {
+    procesados: data.procesados ?? 0,
+    propuestos: data.propuestos ?? 0,
+    aprendidos: data.aprendidos ?? 0,
+    sin_propuesta: data.sin_propuesta ?? 0,
+  }
+}
