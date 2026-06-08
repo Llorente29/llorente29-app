@@ -210,6 +210,44 @@ export async function listOptionsWithImpacts(
 }
 
 /**
+ * Igual que listOptionsWithImpacts pero partiendo del PLATO (recipe_item), que es
+ * con lo que trabaja el editor de receta. Un recipe puede tener varios menu_item
+ * (uno por marca); se agregan sus opciones deduplicando por optionId (un grupo
+ * compartido entre marcas no se muestra dos veces).
+ */
+export async function listOptionsByRecipe(
+  recipeItemId: string,
+  accountId: string,
+): Promise<OptionWithImpact[]> {
+  requireSupabase()
+
+  const { data: menuRows, error: menuErr } = await supabase!
+    .from('menu_item')
+    .select('id')
+    .eq('account_id', accountId)
+    .eq('recipe_item_id', recipeItemId)
+    .is('archived_at', null)
+  if (menuErr) {
+    throw new Error(`Error resolviendo menu_item del plato ${recipeItemId}: ${menuErr.message}`)
+  }
+  const menuIds = (menuRows ?? []).map((m) => m.id)
+  if (menuIds.length === 0) return []
+
+  // Reutiliza listOptionsWithImpacts por cada menu_item y deduplica por optionId.
+  const all = await Promise.all(menuIds.map((id) => listOptionsWithImpacts(id)))
+  const seen = new Set<string>()
+  const merged: OptionWithImpact[] = []
+  for (const list of all) {
+    for (const o of list) {
+      if (seen.has(o.optionId)) continue
+      seen.add(o.optionId)
+      merged.push(o)
+    }
+  }
+  return merged
+}
+
+/**
  * Cobertura de impacto de un plato: cuántas opciones tienen impacto confirmado
  * frente a las pendientes (proposed o sin impacto). Alimenta el contador
  * "conocidos · por revisar · cobertura".

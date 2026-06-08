@@ -68,14 +68,16 @@ import {
   deleteDishPhoto,
 } from '@/modules/kitchen/services/recipePhotoService'
 import RecipeStepsTab from '@/modules/kitchen/components/RecipeStepsTab'
+import ModifierImpactsTab from '@/modules/kitchen/components/ModifierImpactsTab'
 import type { RecipeItem, MenuItemEconomics, KitchenUnit } from '@/types/kitchen'
 import type { RecipeLineBreakdown } from '@/modules/kitchen/services/recipeLineService'
 
-type EditorTab = 'escandallo' | 'receta' | 'etiquetado' | 'historico' | 'mas'
+type EditorTab = 'escandallo' | 'receta' | 'modificadores' | 'etiquetado' | 'historico' | 'mas'
 
 const TABS: { id: EditorTab; label: string }[] = [
   { id: 'escandallo', label: 'Escandallo' },
   { id: 'receta', label: 'Receta' },
+  { id: 'modificadores', label: 'Modificadores' },
   { id: 'etiquetado', label: 'Etiquetado' },
   { id: 'historico', label: 'Histórico' },
   { id: 'mas', label: 'Más' },
@@ -1893,6 +1895,12 @@ export default function RecipeEditorPage({
           </div>
         ) : activeTab === 'receta' ? (
           <RecipeStepsTab recipeItemId={recipe.id} />
+        ) : activeTab === 'modificadores' ? (
+          <ModifierImpactsTab
+            recipeItemId={recipe.id}
+            accountId={activeAccountId ?? ''}
+            actorName={userProfile?.displayName ?? 'Usuario'}
+          />
         ) : (
           <div className="p-4 md:p-5">
             <div className="text-sm text-text-secondary opacity-70 py-8 text-center">
