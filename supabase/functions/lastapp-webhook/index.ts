@@ -1,37 +1,37 @@
 // supabase/functions/lastapp-webhook/index.ts
-// FASE 2: receptor de webhooks de Last.app que INGIERE ventas.
 //
-// Escucha el evento `tab:closed` (cuenta cerrada = venta definitiva). El payload
-// trae la tab completa con products[] (organizationProductId, name, quantity,
-// price) y bills[] (id, total, payments[].type) EMBEBIDOS, así que NO llamamos a
-// la API de Last: resolvemos en memoria e insertamos sale + sale_line.
+// FRONTERA de ingesta de Last.app (principio de frontera única).
+// ============================================================================
+// Escucha `tab:closed` (cuenta cerrada = venta definitiva). Su trabajo es de
+// FRONTERA, no de motor:
+//   1) valida el token de Last.app (autorización en la entrada)
+//   2) resuelve la CABECERA de la venta (marca, canal, local, economía) e inserta
+//      la `sale` cruda (con raw_products embebido)
+//   3) DELEGA la construcción de las líneas al MOTOR: adapt_lastapp_order(sale)
+//      descompone raw_products en la jerarquía canónica (product/modifier/combo_item),
+//      y compute_sale_line_cost calcula el coste de cada línea producto.
 //
-// Captura económica del bill: total, deliveryFee (envío al cliente), discountTotal
-// (promos), tax y taxableBase (IVA y base imponible) + service_type del pickupType.
+// La frontera NO casa líneas ni escribe sale_line. Eso es trabajo del adaptador
+// (única forma de poblar líneas, compartida con el backfill). Añadir otro TPV =
+// otra frontera (su webhook + su token) + su adaptador; el motor no se toca.
 //
-// La lógica de resolución (vía organizationProductId / catalogProductId / nombre,
-// con desambiguación por marca) y la inserción idempotente (external_ref = bill.id,
-// rollback manual de la sale si fallan sus líneas, céntimos/100) se PORTAN tal cual
-// desde scripts/backfill-sales.mjs — misma verdad, no se reimplementa.
+// El motor (adapt_lastapp_order, compute_sale_line_cost) es MOTOR PURO sin guard
+// de usuario: confía en que esta frontera ya autorizó (token validado). Por eso
+// se invoca con service_role sin problema (migración 20260608T2800).
 //
-// map_source refleja el METODO de resolución de la línea (no el canal):
-//   'pos'      -> resuelta por ID determinista (organizationProductId / catálogo)
-//   'fuzzy'    -> resuelta por nombre
-//   'unmapped' -> no resuelta
-// (valores permitidos por el CHECK sale_line_map_source_valid:
-//  unmapped, manual, ai, fuzzy, pos).
+// Idempotencia: external_ref = bill.id (no duplica). El adaptador es idempotente
+// por venta (borra y reconstruye sus líneas, respeta 'manual'/ignored/delisted).
 //
-// Otros eventos (bill:created, bill:deleted, etc.) se siguen registrando en
-// lastapp_webhook_log (compatibilidad con la Fase 1) y se responde 200.
+// SEGURIDAD: Last NO firma; manda un `authorization` fijo. Validamos contra
+// LASTAPP_WEBHOOK_TOKEN. Sin token válido -> 401.
 //
-// SEGURIDAD: Last NO firma los webhooks (x-last-signature llega null) y manda un
-// header `authorization` fijo. Validamos ese token contra el secret
-// LASTAPP_WEBHOOK_TOKEN antes de procesar. Sin token válido -> 401.
+// DEPLOY: SIEMPRE con --no-verify-jwt (webhook externo; sin el flag el gateway
+// corta con 401 antes de ejecutar y la ingesta falla en silencio).
 
 import { corsHeaders } from "../_shared/cors.ts";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-// ── Helpers de normalización / canal (idénticos al backfill) ──
+// ── Normalización (idéntica al adaptador y al catálogo) ──
 function normalize(s: string | null | undefined): string {
   if (!s) return "";
   return s
@@ -53,11 +53,6 @@ function channelSlug(paymentType: string | null | undefined): string | null {
   return null;
 }
 
-// Mapea el `pickupType` que envía Last (cabecera del tab) al service_type de Folvy.
-// 'delivery'    = reparto de plataforma (Glovo/Uber con su flota)  -> 'platform_delivery'
-// 'ownDelivery' = reparto propio (lo reparte el partner)           -> 'own_delivery'
-// 'pickup'/'takeaway' = recogida en tienda                         -> 'pickup'
-// Cualquier otro valor o ausencia -> null (no se inventa el reparto).
 function mapServiceType(pickupType: string | null | undefined): string | null {
   if (!pickupType) return null;
   const t = pickupType.toLowerCase();
@@ -67,7 +62,7 @@ function mapServiceType(pickupType: string | null | undefined): string | null {
   return null;
 }
 
-// ── Tipos mínimos del payload tab:closed que usamos ──
+// ── Tipos mínimos del payload ──
 interface LastProduct {
   name?: string;
   quantity?: number;
@@ -77,38 +72,21 @@ interface LastProduct {
 }
 interface LastPayment { type?: string | null }
 interface LastBill {
-  id?: string;
-  total?: number;
-  deliveryFee?: number;
-  discountTotal?: number;
-  tax?: number;          // IVA del pedido (céntimos) — Last.app
-  taxableBase?: number;  // Base imponible (céntimos) — Last.app
-  creationTime?: string;
-  finalizingTime?: string;
-  deleted?: boolean;
-  payments?: LastPayment[];
+  id?: string; total?: number; deliveryFee?: number; discountTotal?: number;
+  tax?: number; taxableBase?: number; creationTime?: string; finalizingTime?: string;
+  deleted?: boolean; payments?: LastPayment[];
 }
 interface LastTab {
-  id?: string;
-  locationId?: string;
-  source?: string;
-  pickupType?: string | null;
-  closeTime?: string;
-  creationTime?: string;
-  products?: LastProduct[];
-  bills?: LastBill[];
+  id?: string; locationId?: string; source?: string; pickupType?: string | null;
+  closeTime?: string; creationTime?: string; products?: LastProduct[]; bills?: LastBill[];
 }
 
-// ── Caches en memoria (mismas tablas que loadCaches del backfill) ──
-interface Caches {
-  catalogByCatProd: Map<string, { organization_product_id: string; lastapp_brand_name: string | null }>;
-  recipeByOrgProd: Map<string, string>;
-  // Clave por MARCA (no canal): menu_item = verdad de marca; el canal vive en la venta
-  // y modula economía, no elige el plato. (xtraCHEF/Apicbase: consumo canal-agnóstico.)
-  menuItemsByBrandRecipe: Map<string, { menu_item_id: string; brand_id: string }[]>;
-  menuItemsByBrandName: Map<string, { menu_item_id: string; brand_id: string }[]>;
-  channelBySlug: Map<string, string>;
+// ── Caché mínima: SOLO lo que la frontera necesita para la CABECERA de la venta ──
+// (marca del ticket, canal, local). La resolución de LÍNEAS ya NO es de la frontera.
+interface HeaderCaches {
+  catalogByCatProd: Map<string, { lastapp_brand_name: string | null }>;
   brandByName: Map<string, string>;
+  channelBySlug: Map<string, string>;
   folvyLocationId: string | null;
 }
 
@@ -130,53 +108,16 @@ async function loadAllPaged(
   return out;
 }
 
-async function loadCaches(sb: SupabaseClient, accountId: string, lastLocationId: string): Promise<Caches> {
+async function loadHeaderCaches(sb: SupabaseClient, accountId: string, lastLocationId: string): Promise<HeaderCaches> {
   const catalog = await loadAllPaged(sb, "lastapp_catalog_product",
-    "catalog_product_id, organization_product_id, lastapp_brand_name", "account_id", accountId);
-  const catalogByCatProd = new Map<string, { organization_product_id: string; lastapp_brand_name: string | null }>();
+    "catalog_product_id, lastapp_brand_name", "account_id", accountId);
+  const catalogByCatProd = new Map<string, { lastapp_brand_name: string | null }>();
   for (const r of catalog) {
     if (r.catalog_product_id) {
       catalogByCatProd.set(r.catalog_product_id as string, {
-        organization_product_id: r.organization_product_id as string,
         lastapp_brand_name: (r.lastapp_brand_name as string | null) ?? null,
       });
     }
-  }
-
-  const productMap = await loadAllPaged(sb, "lastapp_product_map",
-    "organization_product_id, recipe_item_id", "account_id", accountId);
-  const recipeByOrgProd = new Map<string, string>();
-  for (const r of productMap) {
-    if (r.organization_product_id && r.recipe_item_id) {
-      recipeByOrgProd.set(r.organization_product_id as string, r.recipe_item_id as string);
-    }
-  }
-
-  const menuItems = await loadAllPaged(sb, "menu_item",
-    "id, brand_id, recipe_item_id, name, archived_at", "account_id", accountId);
-  const menuItemsByBrandRecipe = new Map<string, { menu_item_id: string; brand_id: string }[]>();
-  const menuItemsByBrandName = new Map<string, { menu_item_id: string; brand_id: string }[]>();
-  for (const m of menuItems) {
-    if (m.archived_at) continue;
-    if (!m.brand_id) continue;            // canal ya NO es necesario: clave por marca+receta
-    if (m.recipe_item_id) {
-      const k = `${m.brand_id}|${m.recipe_item_id}`;
-      if (!menuItemsByBrandRecipe.has(k)) menuItemsByBrandRecipe.set(k, []);
-      menuItemsByBrandRecipe.get(k)!.push({ menu_item_id: m.id as string, brand_id: m.brand_id as string });
-    }
-    const nk = normalize(m.name as string);
-    if (nk) {
-      const k = `${m.brand_id}|${nk}`;
-      if (!menuItemsByBrandName.has(k)) menuItemsByBrandName.set(k, []);
-      menuItemsByBrandName.get(k)!.push({ menu_item_id: m.id as string, brand_id: m.brand_id as string });
-    }
-  }
-
-  const channels = await loadAllPaged(sb, "sales_channel", "id, slug, is_active", "account_id", accountId);
-  const channelBySlug = new Map<string, string>();
-  for (const c of channels) {
-    if (c.is_active === false) continue;
-    if (c.slug) channelBySlug.set((c.slug as string).toLowerCase(), c.id as string);
   }
 
   const brands = await loadAllPaged(sb, "brand", "id, name, is_active", "account_id", accountId);
@@ -190,123 +131,58 @@ async function loadCaches(sb: SupabaseClient, accountId: string, lastLocationId:
   const dirtyBurgerId = brandByName.get(normalize("Dirty Burger"));
   if (dirtyBurgerId) brandByName.set(normalize("Dirty Burgers"), dirtyBurgerId);
 
+  const channels = await loadAllPaged(sb, "sales_channel", "id, slug, is_active", "account_id", accountId);
+  const channelBySlug = new Map<string, string>();
+  for (const c of channels) {
+    if (c.is_active === false) continue;
+    if (c.slug) channelBySlug.set((c.slug as string).toLowerCase(), c.id as string);
+  }
+
   const { data: locMap, error: locErr } = await sb.from("lastapp_location_map")
     .select("location_id").eq("account_id", accountId)
     .eq("lastapp_location_id", lastLocationId).maybeSingle();
   if (locErr) throw new Error(`lastapp_location_map: ${locErr.message}`);
   const folvyLocationId = (locMap?.location_id as string | undefined) ?? null;
 
-  return {
-    catalogByCatProd, recipeByOrgProd, menuItemsByBrandRecipe,
-    menuItemsByBrandName, channelBySlug, brandByName, folvyLocationId,
-  };
+  return { catalogByCatProd, brandByName, channelBySlug, folvyLocationId };
 }
 
-// ── Resolución de una línea ──
-// Modelo nuevo (Fase A): menu_item = verdad de MARCA (channel_id NULL); el canal vive
-// en la venta y modula economía, no elige el plato. La MARCA es la autoridad del casado
-// y se obtiene del catálogo de Last (catalogProductId es único por marca, aunque el mismo
-// plato exista en varias marcas). Sin marca resuelta NO se casa (anti-invención).
-// Razón del no-casado (alimenta sale_line.unmapped_reason; NULL si casa).
-type UnmappedReason = "no_brand" | "no_recipe" | "no_menu_item" | "ambiguous" | null;
-interface ResolveResult { menuItemId: string | null; brandId: string | null; via: string | null; reason: UnmappedReason }
-
-function resolveLine(product: LastProduct, caches: Caches): ResolveResult {
-  const catEntry = product.catalogProductId
-    ? caches.catalogByCatProd.get(product.catalogProductId) ?? null
-    : null;
-
-  // MARCA (autoridad): catalogProductId -> lastapp_brand_name -> brand.
-  const brandId = catEntry
-    ? (caches.brandByName.get(normalize(catEntry.lastapp_brand_name)) ?? null)
-    : null;
-  // Sin marca no se puede desambiguar (mismo plato en varias marcas) -> unmapped honesto.
-  if (!brandId) return { menuItemId: null, brandId: null, via: null, reason: "no_brand" };
-
-  // --- Vía 1: por ID. organizationProductId (directo o vía catálogo) -> receta -> plato de la marca. ---
-  const orgProdId = product.organizationProductId ?? catEntry?.organization_product_id ?? null;
-  const recipeId = orgProdId ? (caches.recipeByOrgProd.get(orgProdId) ?? null) : null;
-  if (recipeId) {
-    const cands = caches.menuItemsByBrandRecipe.get(`${brandId}|${recipeId}`);
-    // marca|receta es único (0 colisiones verificadas) -> 1 candidato = match determinista.
-    if (cands && cands.length === 1) {
-      return { menuItemId: cands[0].menu_item_id, brandId, via: "id", reason: null };
-    }
-    if (cands && cands.length > 1) {
-      // >1: ambiguo. No adivinamos; lo dejamos marcado para revisión humana.
-      return { menuItemId: null, brandId, via: null, reason: "ambiguous" };
-    }
-    // receta OK pero sin menu_item en esta marca -> intentamos por nombre; si no, no_menu_item.
+// Marca del TICKET: la del primer producto cuyo catalogProductId resuelve a una marca.
+// (El catalogProductId es único por marca; un ticket es de una sola marca.) El adaptador
+// usará esta brand_id para resolver el menu_item de cada producto.
+function resolveSaleBrand(products: LastProduct[], caches: HeaderCaches): string | null {
+  for (const p of products) {
+    if (!p.catalogProductId) continue;
+    const cat = caches.catalogByCatProd.get(p.catalogProductId);
+    if (!cat) continue;
+    const brandId = caches.brandByName.get(normalize(cat.lastapp_brand_name));
+    if (brandId) return brandId;
   }
-
-  // --- Vía 2: por nombre DENTRO de la marca. ---
-  const nameKey = normalize(product.name ?? "");
-  if (nameKey) {
-    const nameCands = caches.menuItemsByBrandName.get(`${brandId}|${nameKey}`);
-    if (nameCands && nameCands.length === 1) {
-      return { menuItemId: nameCands[0].menu_item_id, brandId, via: "name", reason: null };
-    }
-    if (nameCands && nameCands.length > 1) {
-      return { menuItemId: null, brandId, via: null, reason: "ambiguous" };
-    }
-  }
-
-  // Marca conocida, pero el plato no casó. Distinguimos el porqué:
-  //   - había receta (pero sin menu_item en la carta de la marca) -> no_menu_item
-  //   - no había receta (organizationProductId sin mapear)        -> no_recipe
-  const reason: UnmappedReason = recipeId ? "no_menu_item" : "no_recipe";
-  return { menuItemId: null, brandId, via: null, reason };
+  return null;
 }
 
-// map_source válido según la vía de resolución (CHECK: unmapped|manual|ai|fuzzy|pos).
-//   'id'   -> 'pos'   (match determinista por TPV)
-//   'name' -> 'fuzzy' (match por nombre)
-//   null   -> 'unmapped'
-function mapSourceFromVia(via: string | null): "pos" | "fuzzy" | "unmapped" {
-  if (via === "id") return "pos";
-  if (via === "name") return "fuzzy";
-  return "unmapped";
-}
-
-// ── Inserción idempotente de un bill como sale + sale_line ──
+// ── Ingesta de un bill: inserta la sale y DELEGA las líneas al adaptador ──
 async function ingestBill(
-  sb: SupabaseClient, accountId: string, bill: LastBill, tab: LastTab, caches: Caches,
-): Promise<{ written: boolean; reason?: string }> {
+  sb: SupabaseClient, accountId: string, bill: LastBill, tab: LastTab, caches: HeaderCaches,
+): Promise<{ written: boolean; reason?: string; lines?: number }> {
   const billId = bill.id;
   if (!billId) return { written: false, reason: "no bill id" };
   if (bill.deleted === true) return { written: false, reason: "bill deleted" };
 
-  // Idempotencia: misma clave que el backfill (external_ref = bill.id) -> nunca duplica.
+  // Idempotencia.
   const { data: exists, error: exErr } = await sb.from("sale").select("id")
     .eq("account_id", accountId).eq("source", "lastapp")
     .eq("external_ref", String(billId)).limit(1).maybeSingle();
   if (exErr) throw new Error(`exists check ${billId}: ${exErr.message}`);
   if (exists) return { written: false, reason: "already exists" };
 
-  // Canal: por payments[].type del bill (igual que el backfill). El producto de
-  // la tab vive en tab.products[]; el bill referencia el mismo conjunto.
   const payType = bill.payments?.[0]?.type ?? tab.source ?? null;
   const slug = channelSlug(payType);
   const channelId = slug ? (caches.channelBySlug.get(slug) ?? null) : null;
   const products = Array.isArray(tab.products) ? tab.products : [];
+  const saleBrandId = resolveSaleBrand(products, caches);
 
-  const resolvedLines: Record<string, unknown>[] = [];
-  let saleBrandId: string | null = null;
-  for (const p of products) {
-    const r = resolveLine(p, caches);
-    if (r.brandId && !saleBrandId) saleBrandId = r.brandId;
-    resolvedLines.push({
-      raw_text: p.name ?? "",
-      product_name: p.name ?? "",
-      quantity: typeof p.quantity === "number" ? p.quantity : 1,
-      unit_price: typeof p.price === "number" ? p.price / 100 : null,
-      menu_item_id: r.menuItemId,
-      map_source: mapSourceFromVia(r.via),
-      map_needs_review: r.menuItemId ? false : true,
-      unmapped_reason: r.menuItemId ? null : r.reason,
-    });
-  }
-
+  // 1) Insertar la SALE (cabecera + economía + raw_products). SIN líneas.
   const { data: saleRow, error: saleErr } = await sb.from("sale").insert({
     account_id: accountId,
     source: "lastapp",
@@ -327,19 +203,30 @@ async function ingestBill(
   }).select("id").single();
   if (saleErr || !saleRow) throw new Error(`sale insert ${billId}: ${saleErr?.message ?? "unknown"}`);
 
-  if (resolvedLines.length > 0) {
-    const lineRows = resolvedLines.map((l) => ({ ...l, account_id: accountId, sale_id: saleRow.id }));
-    const { error: lineErr } = await sb.from("sale_line").insert(lineRows);
-    if (lineErr) {
-      const { error: delErr } = await sb.from("sale").delete().eq("id", saleRow.id);
-      const note = delErr ? ` (rollback falló: ${delErr.message})` : "";
-      throw new Error(`sale_line insert ${billId}: ${lineErr.message}${note}`);
+  // 2) DELEGAR al MOTOR: el adaptador descompone raw_products en la jerarquía canónica.
+  const { error: adaptErr } = await sb.rpc("adapt_lastapp_order", { p_sale_id: saleRow.id });
+  if (adaptErr) {
+    // Rollback de la sale: si no podemos poblar líneas, no dejamos una venta huérfana.
+    await sb.from("sale").delete().eq("id", saleRow.id);
+    throw new Error(`adapt_lastapp_order ${billId}: ${adaptErr.message}`);
+  }
+
+  // 3) Calcular el coste de cada línea PRODUCTO (el coste se agrega en el padre).
+  const { data: prodLines, error: plErr } = await sb.from("sale_line")
+    .select("id").eq("sale_id", saleRow.id).eq("line_type", "product");
+  if (plErr) {
+    console.error(`coste: no pude listar líneas product de ${billId}: ${plErr.message}`);
+  } else {
+    for (const l of prodLines ?? []) {
+      const { error: cErr } = await sb.rpc("compute_sale_line_cost", { p_sale_line_id: (l as { id: string }).id });
+      if (cErr) console.error(`compute_sale_line_cost ${(l as { id: string }).id}: ${cErr.message}`);
     }
   }
-  return { written: true };
+
+  return { written: true, lines: (prodLines ?? []).length };
 }
 
-// ── Entrada HTTP ──
+// ── Entrada HTTP (la frontera) ──
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -348,9 +235,7 @@ Deno.serve(async (req: Request) => {
   const headers: Record<string, string> = {};
   for (const [k, v] of req.headers.entries()) headers[k] = v;
 
-  // SEGURIDAD: validar el token fijo que manda Last en `authorization`.
-  // Si LASTAPP_WEBHOOK_TOKEN no está configurado, NO bloqueamos (modo
-  // compatibilidad), pero lo dejamos avisado en el log.
+  // AUTORIZACIÓN EN LA FRONTERA: token fijo de Last.app.
   const expected = Deno.env.get("LASTAPP_WEBHOOK_TOKEN") ?? "";
   const got = headers["authorization"] ?? "";
   if (expected && got !== expected) {
@@ -378,22 +263,20 @@ Deno.serve(async (req: Request) => {
   let processedOk = false;
   let processError: string | null = null;
 
-  // Solo tab:closed ingiere ventas. El resto se registra (compat Fase 1).
   if (eventType === "tab:closed") {
-    note = "fase2-tab-closed";
+    note = "frontera-tab-closed";
     try {
       const tab = (payload?.data ?? {}) as LastTab;
       const lastLocationId = tab.locationId ?? null;
       if (!lastLocationId) throw new Error("tab:closed sin locationId");
 
-      // account_id de la cuenta dueña de esta last-location (vía mapa).
       const { data: locRow, error: locErr } = await sb.from("lastapp_location_map")
         .select("account_id").eq("lastapp_location_id", lastLocationId).maybeSingle();
       if (locErr) throw new Error(`lastapp_location_map: ${locErr.message}`);
       const accountId = (locRow?.account_id as string | undefined) ?? null;
       if (!accountId) throw new Error(`location ${lastLocationId} no mapeada a ninguna cuenta`);
 
-      const caches = await loadCaches(sb, accountId, lastLocationId);
+      const caches = await loadHeaderCaches(sb, accountId, lastLocationId);
       const bills = Array.isArray(tab.bills) ? tab.bills : [];
       for (const bill of bills) {
         await ingestBill(sb, accountId, bill, tab, caches);
@@ -405,21 +288,14 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  // Log SIEMPRE (auditoría): payload crudo + resultado del procesado.
+  // Log SIEMPRE (auditoría).
   try {
-    await sb.from("lastapp_webhook_log").insert({
-      headers,
-      payload,
-      note,
-      processed: processedOk,
-    });
+    await sb.from("lastapp_webhook_log").insert({ headers, payload, note, processed: processedOk });
   } catch (e) {
     console.error("log insert error", e);
   }
 
-  // Responder 200 SIEMPRE para que Last considere el evento entregado, incluso
-  // si nuestro procesado falló (lo reintentaremos desde el log, no que Last
-  // reenvíe en bucle). Si quisiéramos que Last reintente, devolveríamos 5xx.
+  // 200 SIEMPRE (Last considera entregado; reprocesamos desde el log si algo falló).
   return new Response(JSON.stringify({ ok: true, event: eventType, processed: processedOk, error: processError }), {
     status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
