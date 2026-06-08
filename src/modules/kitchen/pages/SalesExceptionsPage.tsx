@@ -25,6 +25,7 @@ import {
   suggestMatch,
   resolveUnmapped,
   classifyUnmappedProduct,
+  listCostlessSoldProducts,
   type SalesReliability,
   type BlindGroup,
   type BlindProduct,
@@ -32,6 +33,7 @@ import {
   type MatchSuggestion,
   type ResolveAction,
   type ClassifyAction,
+  type CostlessProduct,
 } from '@/modules/kitchen/services/salesReliabilityService'
 
 type BusyTag = ResolveAction | 'classify-resale' | 'classify-dish' | 'classify-combo'
@@ -79,14 +81,15 @@ interface Props {
 export default function SalesExceptionsPage({ accountId, onBack }: Props) {
   const [signal, setSignal] = useState<SalesReliability | null>(null)
   const [groups, setGroups] = useState<BlindGroup[]>([])
+  const [costless, setCostless] = useState<CostlessProduct[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   function reload() {
     setLoading(true)
     setError(null)
-    Promise.all([getReliability(accountId), listBlindLines(accountId)])
-      .then(([sig, grp]) => { setSignal(sig); setGroups(grp) })
+    Promise.all([getReliability(accountId), listBlindLines(accountId), listCostlessSoldProducts(accountId)])
+      .then(([sig, grp, cl]) => { setSignal(sig); setGroups(grp); setCostless(cl) })
       .catch((e) => setError(String(e.message ?? e)))
       .finally(() => setLoading(false))
   }
@@ -95,8 +98,8 @@ export default function SalesExceptionsPage({ accountId, onBack }: Props) {
     let cancelled = false
     setLoading(true)
     setError(null)
-    Promise.all([getReliability(accountId), listBlindLines(accountId)])
-      .then(([sig, grp]) => { if (!cancelled) { setSignal(sig); setGroups(grp) } })
+    Promise.all([getReliability(accountId), listBlindLines(accountId), listCostlessSoldProducts(accountId)])
+      .then(([sig, grp, cl]) => { if (!cancelled) { setSignal(sig); setGroups(grp); setCostless(cl) } })
       .catch((e) => { if (!cancelled) setError(String(e.message ?? e)) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
@@ -136,6 +139,33 @@ export default function SalesExceptionsPage({ accountId, onBack }: Props) {
               {groups.map((g) => (
                 <ReasonGroup key={g.reason} group={g} accountId={accountId} onResolved={reload} />
               ))}
+            </div>
+          )}
+
+          {/* Casado pero SIN COSTE: productos vendidos cuyo food cost es desconocido.
+              Ya casaron (no son ciegos), pero su recipe_item no tiene coste. */}
+          {costless.length > 0 && (
+            <div className="mt-8">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="w-2 h-2 rounded-full bg-orange-500" />
+                <span className="text-sm font-medium text-gray-900">
+                  Casado pero sin coste · {costless.length}
+                </span>
+                <span className="text-xs text-gray-500">
+                  {formatEur(costless.reduce((s, p) => s + p.importe, 0))} de food cost desconocido
+                </span>
+              </div>
+              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                {costless.map((p, idx) => (
+                  <CostlessRow
+                    key={p.recipeItemId}
+                    product={p}
+                    accountId={accountId}
+                    isLast={idx === costless.length - 1}
+                    onResolved={reload}
+                  />
+                ))}
+              </div>
             </div>
           )}
         </>
@@ -487,6 +517,93 @@ function BlindRow({
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+function CostlessRow({
+  product, accountId, isLast, onResolved,
+}: {
+  product: CostlessProduct; accountId: string; isLast: boolean; onResolved: () => void
+}) {
+  const [busy, setBusy] = useState<'resale' | 'dish' | 'combo' | null>(null)
+  const [rowError, setRowError] = useState<string | null>(null)
+  const [msg, setMsg] = useState<string | null>(null)
+
+  function doClassify(action: ClassifyAction) {
+    if (busy) return
+    setBusy(action)
+    setRowError(null)
+    classifyUnmappedProduct(accountId, product.productName, action, null)
+      .then((res) => {
+        if (res.resultado === 'resale_linked') {
+          setMsg('Convertido a reventa. Queda pendiente de coste: lo rellenará la factura, o ponlo a mano en la ficha.')
+          setTimeout(onResolved, 1800)
+        } else if (res.resultado === 'is_dish') {
+          setMsg('Marcado como plato. Crea su escandallo en Recetas; al recompute, dejará de estar sin coste.')
+          setBusy(null)
+        } else {
+          setMsg('Marcado como combo (pendiente del módulo de combos y modificadores).')
+          setBusy(null)
+        }
+      })
+      .catch((e) => { setRowError(String(e.message ?? e)); setBusy(null) })
+  }
+
+  return (
+    <div className={`px-4 py-3 ${isLast ? '' : 'border-b border-gray-100'}`}>
+      <div className="flex items-start gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="font-medium text-gray-900 text-sm">{product.productName}</div>
+          <div className="text-xs text-gray-500 mt-0.5 inline-flex items-center gap-1">
+            <ReceiptText className="w-3 h-3" />
+            {product.ventas} venta{product.ventas !== 1 ? 's' : ''}
+            {' · '}
+            {product.hasRecipeLines ? 'escandallo a medias' : 'sin escandallo'}
+          </div>
+        </div>
+        <div className="text-sm font-medium text-gray-900 shrink-0">{formatEur(product.importe)}</div>
+      </div>
+
+      {/* Pista de tipo (no decide) */}
+      <div className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 mt-2 ${
+        looksLikeResale(product.productName) ? 'bg-blue-50' : 'bg-gray-50'
+      }`}>
+        {looksLikeResale(product.productName)
+          ? <GlassWater className="w-3.5 h-3.5 text-blue-600" />
+          : <ChefHat className="w-3.5 h-3.5 text-gray-500" />}
+        <span className={`text-xs ${looksLikeResale(product.productName) ? 'text-blue-700' : 'text-gray-600'}`}>
+          {looksLikeResale(product.productName) ? '¿Es una bebida o artículo de reventa?' : '¿Es un plato? Crea su escandallo'}
+        </span>
+      </div>
+
+      {rowError && (
+        <div className="p-2 rounded-lg bg-red-50 text-red-700 text-xs mt-2">{rowError}</div>
+      )}
+
+      <div className="flex flex-wrap gap-2 mt-2">
+        <ActionButton
+          icon={busy === 'dish' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ChefHat className="w-3.5 h-3.5" />}
+          label={product.hasRecipeLines ? 'Completar escandallo' : 'Es un plato (crear escandallo)'}
+          onClick={() => doClassify('dish')}
+          disabled={busy !== null}
+        />
+        <ActionButton
+          icon={busy === 'resale' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <GlassWater className="w-3.5 h-3.5" />}
+          label="Es reventa"
+          onClick={() => doClassify('resale')}
+          disabled={busy !== null}
+        />
+        <ActionButton
+          icon={<Package className="w-3.5 h-3.5" />}
+          label="Es un combo"
+          onClick={() => doClassify('combo')}
+          disabled={busy !== null}
+          subtle
+        />
+      </div>
+
+      {msg && <p className="text-xs text-green-700 mt-2">{msg}</p>}
     </div>
   )
 }

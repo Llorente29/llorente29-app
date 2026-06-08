@@ -10115,6 +10115,18 @@ export type Database = {
       }
       learn_from_receipt: { Args: { p_receipt_id: string }; Returns: number }
       learn_supplier_alias: { Args: { p_receipt_id: string }; Returns: boolean }
+      list_costless_sold_products: {
+        Args: { p_account_id: string; p_from?: string; p_to?: string }
+        Returns: {
+          has_recipe_lines: boolean
+          importe: number
+          is_purchasable: boolean
+          product_name: string
+          recipe_item_id: string
+          recipe_type: string
+          ventas: number
+        }[]
+      }
       location_economics: {
         Args: { p_from?: string; p_location_id: string; p_to?: string }
         Returns: {
@@ -10323,12 +10335,15 @@ export type Database = {
       sales_mapping_reliability: {
         Args: { p_account_id: string; p_from?: string; p_to?: string }
         Returns: {
+          casado_sin_coste_eur: number
+          casado_sin_coste_lineas: number
           ciego_calculable_eur: number
           ciego_calculable_lineas: number
           ciego_desconocido_eur: number
           ciego_desconocido_lineas: number
           ciego_otros_eur: number
           ciego_otros_lineas: number
+          cost_coverage_pct: number
           lineas_casadas: number
           lineas_total: number
           reliability_pct: number

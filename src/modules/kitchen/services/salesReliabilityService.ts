@@ -461,3 +461,57 @@ export async function suggestMatch(
     semaphore: (r.semaphore as 'green' | 'yellow') ?? 'yellow',
   }))
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// Productos vendidos SIN coste (grupo "casado sin coste" en excepciones)
+// ─────────────────────────────────────────────────────────────────────
+
+export interface CostlessProduct {
+  recipeItemId: string
+  productName: string
+  recipeType: string
+  hasRecipeLines: boolean
+  isPurchasable: boolean
+  ventas: number
+  importe: number
+}
+
+interface RowCostless {
+  recipe_item_id: string
+  product_name: string
+  recipe_type: string
+  has_recipe_lines: boolean
+  is_purchasable: boolean
+  ventas: number
+  importe: number
+}
+
+/**
+ * Lista los productos VENDIDOS cuyo recipe_item no tiene coste (food cost desconocido),
+ * ordenados por dinero vendido. Es el grifo de la señal "casado pero sin coste": lo que
+ * se mide ahora se puede resolver. La RPC list_costless_sold_products solo trae ventas
+ * directas, así que los modificadores (anidados) no aparecen aquí.
+ */
+export async function listCostlessSoldProducts(
+  accountId: string,
+  from?: string,
+  to?: string,
+): Promise<CostlessProduct[]> {
+  requireSupabase()
+  const range = from && to ? { from, to } : defaultRange()
+  const { data, error } = await supabase!.rpc('list_costless_sold_products', {
+    p_account_id: accountId,
+    p_from: range.from,
+    p_to: range.to,
+  })
+  if (error) throw new Error(`Error listando productos sin coste: ${error.message}`)
+  return ((data ?? []) as RowCostless[]).map((r) => ({
+    recipeItemId: r.recipe_item_id,
+    productName: r.product_name,
+    recipeType: r.recipe_type,
+    hasRecipeLines: Boolean(r.has_recipe_lines),
+    isPurchasable: Boolean(r.is_purchasable),
+    ventas: Number(r.ventas ?? 0),
+    importe: Number(r.importe ?? 0),
+  }))
+}
