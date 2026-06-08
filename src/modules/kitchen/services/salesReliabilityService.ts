@@ -35,6 +35,10 @@ export interface SalesReliability {
   ciegoCalculableLineas: number
   ciegoOtrosEur: number
   ciegoOtrosLineas: number
+  // casado pero SIN COSTE: dinero vendido y casado cuyo food cost es desconocido
+  casadoSinCosteEur: number
+  casadoSinCosteLineas: number
+  costCoveragePct: number | null   // % del casado que SÍ tiene coste conocido
 }
 
 export type BlindReason = 'no_recipe' | 'no_menu_item' | 'no_brand' | 'ambiguous' | 'otros'
@@ -116,6 +120,9 @@ interface RowReliability {
   ciego_calculable_lineas: number
   ciego_otros_eur: number
   ciego_otros_lineas: number
+  casado_sin_coste_eur: number
+  casado_sin_coste_lineas: number
+  cost_coverage_pct: number | null
 }
 
 function rowToReliability(r: RowReliability): SalesReliability {
@@ -134,6 +141,10 @@ function rowToReliability(r: RowReliability): SalesReliability {
     ciegoCalculableLineas: Number(r.ciego_calculable_lineas ?? 0),
     ciegoOtrosEur: Number(r.ciego_otros_eur ?? 0),
     ciegoOtrosLineas: Number(r.ciego_otros_lineas ?? 0),
+    casadoSinCosteEur: Number(r.casado_sin_coste_eur ?? 0),
+    casadoSinCosteLineas: Number(r.casado_sin_coste_lineas ?? 0),
+    costCoveragePct: r.cost_coverage_pct === null || r.cost_coverage_pct === undefined
+      ? null : Number(r.cost_coverage_pct),
   }
 }
 
@@ -168,6 +179,7 @@ export async function getReliability(
       ciegoDesconocidoEur: 0, ciegoDesconocidoLineas: 0,
       ciegoCalculableEur: 0, ciegoCalculableLineas: 0,
       ciegoOtrosEur: 0, ciegoOtrosLineas: 0,
+      casadoSinCosteEur: 0, casadoSinCosteLineas: 0, costCoveragePct: null,
     }
   }
   return rowToReliability(row)
@@ -367,6 +379,57 @@ export async function resolveUnmapped(
     recipeItemId: row.recipe_item_id ?? null,
     brandId: row.brand_id ?? null,
     lineasAfectadas: Number(row.lineas_afectadas ?? 0),
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Clasificación de un producto ciego (Capa 1, frente "modelo de producto")
+// ─────────────────────────────────────────────────────────────────────
+
+export type ClassifyAction = 'resale' | 'dish' | 'combo'
+
+export interface ClassifyResult {
+  resultado: 'resale_linked' | 'is_dish' | 'is_combo'
+  recipeItemId: string | null
+  marcasCreadas: number
+  lineasCasadas: number
+}
+
+interface RowClassify {
+  resultado: string
+  recipe_item_id: string | null
+  marcas_creadas: number
+  lineas_casadas: number
+}
+
+/**
+ * Clasifica un producto ciego (no_recipe). 'resale' (artículo de reventa: convierte
+ * a raw vendible con coste de compra y propaga a todas las marcas) | 'dish' (es un
+ * plato: devuelve el recipe_item_id para ir al editor de escandallo) | 'combo'
+ * (declara para el frente de combos). La lógica vive en la RPC classify_unmapped_product.
+ * Para 'resale' se puede pasar unitCost (coste de compra por unidad base) opcional.
+ */
+export async function classifyUnmappedProduct(
+  accountId: string,
+  productName: string,
+  action: ClassifyAction,
+  unitCost?: number | null,
+): Promise<ClassifyResult> {
+  requireSupabase()
+  const { data, error } = await supabase!.rpc('classify_unmapped_product', {
+    p_account_id: accountId,
+    p_product_name: productName,
+    p_action: action,
+    p_unit_cost: unitCost ?? undefined,
+  })
+  if (error) throw new Error(error.message)
+  const row = (Array.isArray(data) ? data[0] : data) as RowClassify | undefined
+  if (!row) throw new Error('La clasificación no devolvió resultado.')
+  return {
+    resultado: row.resultado as ClassifyResult['resultado'],
+    recipeItemId: row.recipe_item_id ?? null,
+    marcasCreadas: Number(row.marcas_creadas ?? 0),
+    lineasCasadas: Number(row.lineas_casadas ?? 0),
   }
 }
 

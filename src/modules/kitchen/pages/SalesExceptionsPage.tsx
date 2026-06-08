@@ -1,34 +1,40 @@
 // src/modules/kitchen/pages/SalesExceptionsPage.tsx
 //
-// Pantalla de excepciones del casado de ventas (Entrega B: con acciones).
-// Se entra desde KitchenMenuPage (patrón lista+detalle por estado). Muestra:
+// Pantalla de excepciones del casado de ventas (Entrega B + capa 1 del modelo de
+// producto). Se entra desde KitchenMenuPage. Muestra:
 //   - la señal de fiabilidad (verde/ámbar/rojo) + los importes,
 //   - dos cajas de dinero ciego (desconocido vs calculable),
 //   - las líneas sin casar agrupadas por razón, con tickets y sugerencia de IA,
-//   - acciones: Vincular a plato (no_menu_item → crea menu_item + recasa),
-//     Ignorar, Descatalogar (escriben estado deliberado).
+//   - acciones por razón:
+//       no_menu_item (tiene recipe_item, dish con cascarón): Es reventa / Es un plato
+//       no_recipe (sin recipe_item): Es un plato / Es un combo
+//       todas: Ignorar / Descatalogar
 //
-// Las acciones llaman a resolveUnmapped (RPC resolve_unmapped_sales). 'link' solo
-// aplica a no_menu_item; en no_recipe (a menudo combos) la RPC rechaza con mensaje
-// claro y aquí solo se ofrece ignorar/descatalogar. Al resolver, se recarga todo.
+// REVENTA sin coste = vía principal: convierte a raw vendible, propaga a todas las
+// marcas, recasa, y queda PENDIENTE DE COSTE (la factura/OCR lo rellena). El coste a
+// mano es la excepción (corromper el food cost con un número a ojo es peor que NULL).
 
 import { useEffect, useState } from 'react'
 import {
   ArrowLeft, ChevronDown, ChevronRight, Sparkles, ReceiptText,
-  HelpCircle, Calculator, EyeOff, Archive, Loader2,
+  HelpCircle, Calculator, EyeOff, Archive, Loader2, GlassWater, ChefHat, Package,
 } from 'lucide-react'
 import {
   getReliability,
   listBlindLines,
   suggestMatch,
   resolveUnmapped,
+  classifyUnmappedProduct,
   type SalesReliability,
   type BlindGroup,
   type BlindProduct,
   type BlindReason,
   type MatchSuggestion,
   type ResolveAction,
+  type ClassifyAction,
 } from '@/modules/kitchen/services/salesReliabilityService'
+
+type BusyTag = ResolveAction | 'classify-resale' | 'classify-dish' | 'classify-combo'
 
 function formatEur(value: number | null): string {
   if (value === null || value === undefined) return '—'
@@ -41,6 +47,12 @@ function formatEur(value: number | null): string {
 function formatDate(iso: string | null): string {
   if (!iso) return '—'
   return new Date(iso).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })
+}
+
+// Heurística de SUGERENCIA (no decide): ¿este nombre parece bebida/reventa?
+const RESALE_HINT = /(agua|coca|cola|fanta|sprite|mahou|cerveza|beer|refresco|nestea|aquarius|red bull|monster|zumo|vino|tinto|sidra|tonica|seven up|7up|pepsi|aquabona|bezoya|font vella|san pellegrino|perrier|schweppes)/i
+function looksLikeResale(name: string): boolean {
+  return RESALE_HINT.test(name)
 }
 
 const REASON_LABEL: Record<BlindReason, string> = {
@@ -187,6 +199,28 @@ function SignalCard({ signal }: { signal: SalesReliability }) {
           <p className="text-xs text-gray-500 mt-0.5">tiene receta, falta plato en carta</p>
         </div>
       </div>
+
+      {/* Casado pero SIN COSTE: dinero vendido cuyo food cost es desconocido.
+          Distinto del dinero ciego (este SÍ casó), pero igual de peligroso: infla la
+          fiabilidad sin que el margen sea real. */}
+      {signal.casadoSinCosteEur > 0 && (
+        <div className="rounded-lg bg-orange-50 border border-orange-200 p-3 mt-3">
+          <div className="flex items-center gap-1.5 mb-1">
+            <HelpCircle className="w-4 h-4 text-orange-600" />
+            <span className="text-xs font-medium text-orange-700">casado pero sin coste</span>
+          </div>
+          <p className="text-base font-semibold text-orange-700">
+            {formatEur(signal.casadoSinCosteEur)} · {signal.casadoSinCosteLineas} líneas
+          </p>
+          <p className="text-xs text-gray-500 mt-0.5">
+            vendido y casado, pero el artículo no tiene coste → su food cost es desconocido.
+            {signal.costCoveragePct !== null && (
+              <> Solo el <strong>{signal.costCoveragePct.toFixed(0)}%</strong> del dinero casado tiene coste conocido.</>
+            )}
+            {' '}Se rellena con las facturas de compra, o a mano en la ficha del artículo.
+          </p>
+        </div>
+      )}
     </>
   )
 }
@@ -233,12 +267,13 @@ function BlindRow({
   const [open, setOpen] = useState(false)
   const [suggestions, setSuggestions] = useState<MatchSuggestion[] | null>(null)
   const [suggestLoading, setSuggestLoading] = useState(false)
-  const [busy, setBusy] = useState<ResolveAction | null>(null)
+  const [busy, setBusy] = useState<BusyTag | null>(null)
   const [rowError, setRowError] = useState<string | null>(null)
+  const [showCostInput, setShowCostInput] = useState(false)
+  const [costInput, setCostInput] = useState('')
+  const [classifyMsg, setClassifyMsg] = useState<string | null>(null)
 
   const canSuggest = product.reason === 'no_menu_item' || product.reason === 'no_recipe'
-  // 'link' (crear plato en carta) retirado de la UI: el modelo de producto aun no
-  // resuelve la propagacion multi-marca ni los articulos de reventa/bebida. Frente propio.
 
   function loadSuggestions() {
     if (!canSuggest || suggestions !== null || suggestLoading) return
@@ -260,7 +295,31 @@ function BlindRow({
     setBusy(action)
     setRowError(null)
     resolveUnmapped(accountId, product.productName, action)
-      .then(() => { onResolved() })   // recarga señal + lista; esta fila desaparece
+      .then(() => { onResolved() })
+      .catch((e) => { setRowError(String(e.message ?? e)); setBusy(null) })
+  }
+
+  function doClassify(action: ClassifyAction, unitCost: number | null, tag: BusyTag) {
+    if (busy) return
+    setBusy(tag)
+    setRowError(null)
+    classifyUnmappedProduct(accountId, product.productName, action, unitCost)
+      .then((res) => {
+        if (res.resultado === 'resale_linked') {
+          if (unitCost == null) {
+            setClassifyMsg('Convertido a reventa y casado. Queda PENDIENTE DE COSTE: se rellenará con la próxima factura, o ponlo a mano en la ficha del artículo.')
+            setTimeout(onResolved, 1800)
+          } else {
+            onResolved()
+          }
+        } else if (res.resultado === 'is_dish') {
+          setClassifyMsg('Marcado como plato. Crea su escandallo en Recetas; al recasar, casará solo.')
+          setBusy(null)
+        } else {
+          setClassifyMsg('Marcado como combo (pendiente del módulo de combos).')
+          setBusy(null)
+        }
+      })
       .catch((e) => { setRowError(String(e.message ?? e)); setBusy(null) })
   }
 
@@ -282,7 +341,7 @@ function BlindRow({
 
       {open && (
         <div className="px-4 pb-3 pl-11 space-y-3">
-          {/* Sugerencia de IA */}
+          {/* Sugerencia de escandallo parecido (IA) */}
           {canSuggest && (
             <div>
               {suggestLoading ? (
@@ -294,8 +353,6 @@ function BlindRow({
                     Parecido a “{top.name}” · confianza {Math.round(top.confidence * 100)} %
                   </span>
                 </div>
-              ) : suggestions !== null ? (
-                <p className="text-xs text-gray-400">Sin escandallo parecido. Habrá que crearlo.</p>
               ) : null}
             </div>
           )}
@@ -320,7 +377,94 @@ function BlindRow({
             <div className="p-2 rounded-lg bg-red-50 text-red-700 text-xs">{rowError}</div>
           )}
 
-          {/* Acciones */}
+          {/* Sugerencia de tipo (no decide) — pista visible */}
+          {canSuggest && (
+            <div className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 ${
+              looksLikeResale(product.productName) ? 'bg-blue-50' : 'bg-gray-50'
+            }`}>
+              {looksLikeResale(product.productName)
+                ? <GlassWater className="w-3.5 h-3.5 text-blue-600" />
+                : <ChefHat className="w-3.5 h-3.5 text-gray-500" />}
+              <span className={`text-xs ${looksLikeResale(product.productName) ? 'text-blue-700' : 'text-gray-600'}`}>
+                {looksLikeResale(product.productName) ? '¿Es una bebida o artículo de reventa?' : '¿Es un plato?'}
+              </span>
+            </div>
+          )}
+
+          {/* Clasificación */}
+          <div className="flex flex-wrap gap-2">
+            {product.reason === 'no_menu_item' && (
+              <>
+                <ActionButton
+                  icon={busy === 'classify-resale' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <GlassWater className="w-3.5 h-3.5" />}
+                  label="Es reventa (bebida, etc.)"
+                  onClick={() => doClassify('resale', null, 'classify-resale')}
+                  disabled={busy !== null}
+                  primary
+                />
+                <ActionButton
+                  icon={busy === 'classify-dish' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ChefHat className="w-3.5 h-3.5" />}
+                  label="Es un plato (crear escandallo)"
+                  onClick={() => doClassify('dish', null, 'classify-dish')}
+                  disabled={busy !== null}
+                />
+              </>
+            )}
+            {product.reason === 'no_recipe' && (
+              <>
+                <ActionButton
+                  icon={busy === 'classify-dish' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ChefHat className="w-3.5 h-3.5" />}
+                  label="Es un plato (crear escandallo)"
+                  onClick={() => doClassify('dish', null, 'classify-dish')}
+                  disabled={busy !== null}
+                />
+                <ActionButton
+                  icon={<Package className="w-3.5 h-3.5" />}
+                  label="Es un combo"
+                  onClick={() => doClassify('combo', null, 'classify-combo')}
+                  disabled={busy !== null}
+                  subtle
+                />
+              </>
+            )}
+          </div>
+
+          {/* Reventa: el coste NO se teclea a ojo (corrompe el food cost). La vía
+              principal es sin coste; la factura/albarán lo rellena vía OCR. El campo
+              manual es la excepción para cuando se conoce el coste exacto. */}
+          {product.reason === 'no_menu_item' && (
+            showCostInput ? (
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs text-gray-600">Coste de compra exacto (€/ud):</span>
+                <input
+                  type="number" step="0.01" min="0"
+                  value={costInput}
+                  onChange={(e) => setCostInput(e.target.value)}
+                  className="w-28 border border-gray-300 rounded-lg px-2 py-1 text-xs"
+                />
+                <ActionButton
+                  icon={busy === 'classify-resale' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <GlassWater className="w-3.5 h-3.5" />}
+                  label="Reventa con este coste"
+                  onClick={() => doClassify('resale', costInput.trim() === '' ? null : Number(costInput), 'classify-resale')}
+                  disabled={busy !== null || costInput.trim() === ''}
+                  primary
+                />
+                <button
+                  onClick={() => { setShowCostInput(false); setCostInput('') }}
+                  disabled={busy !== null}
+                  className="text-xs text-gray-500 hover:text-gray-800"
+                >cancelar</button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowCostInput(true)}
+                disabled={busy !== null}
+                className="text-xs text-gray-400 hover:text-gray-700 underline"
+              >ya sé el coste exacto de compra</button>
+            )
+          )}
+
+          {/* Acciones comunes */}
           <div className="flex flex-wrap gap-2 pt-1">
             <ActionButton
               icon={busy === 'ignore' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <EyeOff className="w-3.5 h-3.5" />}
@@ -337,11 +481,10 @@ function BlindRow({
               subtle
             />
           </div>
-          <p className="text-xs text-gray-400">
-            La vinculación automática a la carta está en rediseño (un mismo producto se vende en
-            varias marcas, y las bebidas/reventa no llevan escandallo). Por ahora puedes ignorar o
-            descatalogar lo que no quieras costear.
-          </p>
+
+          {classifyMsg && (
+            <p className="text-xs text-green-700">{classifyMsg}</p>
+          )}
         </div>
       )}
     </div>

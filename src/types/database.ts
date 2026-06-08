@@ -9932,6 +9932,20 @@ export type Database = {
         Args: { p_area_ids?: string[]; p_count_id: string; p_full?: boolean }
         Returns: number
       }
+      classify_unmapped_product: {
+        Args: {
+          p_account_id: string
+          p_action: string
+          p_product_name: string
+          p_unit_cost?: number
+        }
+        Returns: {
+          lineas_casadas: number
+          marcas_creadas: number
+          recipe_item_id: string
+          resultado: string
+        }[]
+      }
       cleanup_auth_rate_limits: { Args: never; Returns: number }
       close_inventory_count: {
         Args: { p_count_id: string }

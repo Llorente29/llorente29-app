@@ -433,6 +433,8 @@ function ReliabilityBanner({ signal, onOpen }: { signal: SalesReliability; onOpe
     : 'bg-red-50 border-red-200'
 
   const ciegoLineas = signal.lineasTotal - signal.lineasCasadas
+  // Aviso de coste: parte del dinero casado puede no tener coste (food cost desconocido).
+  const hayCosteCiego = signal.casadoSinCosteEur > 0
 
   return (
     <div className={`rounded-xl border p-3 mb-5 flex items-center gap-3 flex-wrap ${cardBg}`}>
@@ -449,6 +451,16 @@ function ReliabilityBanner({ signal, onOpen }: { signal: SalesReliability; onOpe
             </span>
           )}
         </div>
+        {hayCosteCiego && (
+          <div className="flex items-center gap-2 flex-wrap mt-1">
+            <span className="text-xs font-medium text-orange-700">
+              ⚠ Coste conocido {signal.costCoveragePct === null ? '—' : `${signal.costCoveragePct.toFixed(0)} %`}
+            </span>
+            <span className="text-xs text-gray-500">
+              · {formatEur(signal.casadoSinCosteEur)} vendido sin coste ({signal.casadoSinCosteLineas} líneas)
+            </span>
+          </div>
+        )}
       </div>
       <button
         onClick={onOpen}
