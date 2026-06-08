@@ -5853,33 +5853,54 @@ export type Database = {
       modifier_recipe_impact: {
         Row: {
           account_id: string
+          confidence: number | null
+          confirmed_at: string | null
+          confirmed_by: string | null
+          confirmed_by_name: string | null
           created_at: string
           id: string
           impact_type: string
           modifier_option_id: string
           quantity: number | null
+          rationale: string | null
+          source: string
+          status: string
           target_recipe_item_id: string | null
           unit_id: string | null
           updated_at: string
         }
         Insert: {
           account_id: string
+          confidence?: number | null
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          confirmed_by_name?: string | null
           created_at?: string
           id?: string
           impact_type: string
           modifier_option_id: string
           quantity?: number | null
+          rationale?: string | null
+          source?: string
+          status?: string
           target_recipe_item_id?: string | null
           unit_id?: string | null
           updated_at?: string
         }
         Update: {
           account_id?: string
+          confidence?: number | null
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          confirmed_by_name?: string | null
           created_at?: string
           id?: string
           impact_type?: string
           modifier_option_id?: string
           quantity?: number | null
+          rationale?: string | null
+          source?: string
+          status?: string
           target_recipe_item_id?: string | null
           unit_id?: string | null
           updated_at?: string
@@ -8134,6 +8155,8 @@ export type Database = {
         Row: {
           account_id: string
           combo_slot_id: string | null
+          computed_cost: number | null
+          cost_computed_at: string | null
           created_at: string
           id: string
           line_total: number | null
@@ -8155,6 +8178,8 @@ export type Database = {
         Insert: {
           account_id: string
           combo_slot_id?: string | null
+          computed_cost?: number | null
+          cost_computed_at?: string | null
           created_at?: string
           id?: string
           line_total?: number | null
@@ -8176,6 +8201,8 @@ export type Database = {
         Update: {
           account_id?: string
           combo_slot_id?: string | null
+          computed_cost?: number | null
+          cost_computed_at?: string | null
           created_at?: string
           id?: string
           line_total?: number | null
@@ -9907,6 +9934,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _impact_cost: {
+        Args: {
+          p_quantity: number
+          p_target_item_id: string
+          p_unit_id: string
+        }
+        Returns: number
+      }
+      adapt_lastapp_order: { Args: { p_sale_id: string }; Returns: number }
       appcc_mark_overdue: { Args: never; Returns: undefined }
       apply_inventory_count: {
         Args: { p_count_id: string; p_user_id?: string; p_user_name?: string }
@@ -9957,6 +9993,10 @@ export type Database = {
           lines_uncounted: number
           total_variance_value: number
         }[]
+      }
+      compute_sale_line_cost: {
+        Args: { p_sale_line_id: string }
+        Returns: number
       }
       confirm_goods_receipt: {
         Args: { p_receipt_id: string }
