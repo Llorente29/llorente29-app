@@ -4,8 +4,9 @@
 // el cliente ve su menú importado (de Last.app), navegable por marca, y desde
 // aquí arranca los escandallos. v1 READ-ONLY.
 //
-// Estructura: selector de marca + KPI de cobertura de escandallo + categorías
-// con productos (estado de escandallo por fila) + sección de combos expandibles.
+// Estructura: selector de marca + KPI de cobertura de escandallo + señal de
+// fiabilidad del casado (con acceso a excepciones) + categorías con productos
+// (estado de escandallo por fila) + sección de combos expandibles.
 //
 // La economía (coste/margen/FC%) se cruza desde getMenuItemEconomics: si un
 // producto tiene escandallo, mostramos sus métricas; si no, el botón de crear.
@@ -13,7 +14,7 @@
 // Patrón: useApp() + useActiveAccount() + useIsMobile(), igual que KitchenItemsPage.
 
 import { useEffect, useMemo, useState } from 'react'
-import { Search, ChevronDown, ChevronRight, CircleDashed, CheckCircle2, AlertTriangle, UtensilsCrossed, Package } from 'lucide-react'
+import { Search, ChevronDown, ChevronRight, CircleDashed, CheckCircle2, AlertTriangle, UtensilsCrossed, Package, Link2Off } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import {
   listBrandsWithCatalog,
@@ -24,7 +25,9 @@ import {
   type CatalogCombo,
 } from '@/modules/kitchen/services/brandCatalogService'
 import { getMenuItemEconomics } from '@/modules/kitchen/services/menuItemService'
+import { getReliability, type SalesReliability } from '@/modules/kitchen/services/salesReliabilityService'
 import CatalogProductDetailPage from '@/modules/kitchen/pages/CatalogProductDetailPage'
+import SalesExceptionsPage from '@/modules/kitchen/pages/SalesExceptionsPage'
 import type { MenuItemEconomics } from '@/types/kitchen'
 
 function formatEur(value: number | null): string {
@@ -48,12 +51,14 @@ export default function KitchenMenuPage() {
   const [categories, setCategories] = useState<CatalogCategory[]>([])
   const [combos, setCombos] = useState<CatalogCombo[]>([])
   const [economics, setEconomics] = useState<Map<string, MenuItemEconomics>>(new Map())
+  const [reliability, setReliability] = useState<SalesReliability | null>(null)
   const [loadingBrands, setLoadingBrands] = useState(true)
   const [loadingCatalog, setLoadingCatalog] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [expandedCombos, setExpandedCombos] = useState<Set<string>>(new Set())
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null)
+  const [showExceptions, setShowExceptions] = useState(false)
 
   // Cargar marcas con catálogo
   useEffect(() => {
@@ -71,6 +76,17 @@ export default function KitchenMenuPage() {
       .finally(() => { if (!cancelled) setLoadingBrands(false) })
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeAccountId, accountsLoading])
+
+  // Señal de fiabilidad del casado (por cuenta). Independiente de la marca; no
+  // bloquea la carga del catálogo (best-effort, degrada en silencio).
+  useEffect(() => {
+    if (accountsLoading || !activeAccountId) return
+    let cancelled = false
+    getReliability(activeAccountId)
+      .then((r) => { if (!cancelled) setReliability(r) })
+      .catch(() => { if (!cancelled) setReliability(null) })
+    return () => { cancelled = true }
   }, [activeAccountId, accountsLoading])
 
   // Cargar catálogo de la marca seleccionada
@@ -143,12 +159,25 @@ export default function KitchenMenuPage() {
     }
   }
 
+  // EXCEPCIONES del casado (misma mecánica lista+detalle). Al volver, refrescamos
+  // la señal por si algo cambió.
+  function handleExceptionsBack() {
+    setShowExceptions(false)
+    if (activeAccountId) {
+      getReliability(activeAccountId).then(setReliability).catch(() => {})
+    }
+  }
+
   if (selectedProductId) {
     return (
       <div className="p-4 sm:p-6 max-w-6xl mx-auto">
         <CatalogProductDetailPage menuItemId={selectedProductId} onBack={handleDetailBack} />
       </div>
     )
+  }
+
+  if (showExceptions && activeAccountId) {
+    return <SalesExceptionsPage accountId={activeAccountId} onBack={handleExceptionsBack} />
   }
 
   if (accountsLoading || loadingBrands) {
@@ -168,6 +197,16 @@ export default function KitchenMenuPage() {
 
   return (
     <div className="p-4 sm:p-6 max-w-5xl mx-auto">
+      {/* Señal de fiabilidad del casado — DE TODA LA CUENTA (no de la marca seleccionada).
+          Va arriba del todo, separada del bloque de marca, para que no se lea como
+          una métrica de la marca elegida. */}
+      {reliability && reliability.lineasTotal > 0 && (
+        <ReliabilityBanner
+          signal={reliability}
+          onOpen={() => setShowExceptions(true)}
+        />
+      )}
+
       {/* Cabecera: selector de marca */}
       <div className="flex items-center gap-3 mb-4 flex-wrap">
         <h1 className="text-2xl font-semibold text-gray-900">Menú</h1>
@@ -375,6 +414,48 @@ function KpiCard({ label, value, tone }: { label: string; value: string; tone?: 
     <div className="bg-gray-50 rounded-lg p-3">
       <div className="text-xs text-gray-500">{label}</div>
       <div className={`text-2xl font-semibold ${valueColor}`}>{value}</div>
+    </div>
+  )
+}
+
+function ReliabilityBanner({ signal, onOpen }: { signal: SalesReliability; onOpen: () => void }) {
+  const dot =
+    signal.status === 'verde' ? 'bg-green-500'
+    : signal.status === 'ambar' ? 'bg-amber-500'
+    : 'bg-red-500'
+  const valueColor =
+    signal.status === 'verde' ? 'text-green-700'
+    : signal.status === 'ambar' ? 'text-amber-700'
+    : 'text-red-700'
+  const cardBg =
+    signal.status === 'verde' ? 'bg-green-50 border-green-200'
+    : signal.status === 'ambar' ? 'bg-amber-50 border-amber-200'
+    : 'bg-red-50 border-red-200'
+
+  const ciegoLineas = signal.lineasTotal - signal.lineasCasadas
+
+  return (
+    <div className={`rounded-xl border p-3 mb-5 flex items-center gap-3 flex-wrap ${cardBg}`}>
+      <span className={`w-2.5 h-2.5 rounded-full ${dot} shrink-0`} />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Link2Off className="w-4 h-4 text-gray-500" />
+          <span className={`text-sm font-medium ${valueColor}`}>
+            Casado de ventas · todas las marcas {signal.reliabilityPct === null ? '' : `${signal.reliabilityPct.toFixed(1)} %`} fiable
+          </span>
+          {ciegoLineas > 0 && (
+            <span className="text-xs text-gray-500">
+              · {formatEur(signal.revenueSinCasar)} en {ciegoLineas} líneas sin casar
+            </span>
+          )}
+        </div>
+      </div>
+      <button
+        onClick={onOpen}
+        className="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 shrink-0"
+      >
+        Ver excepciones
+      </button>
     </div>
   )
 }
