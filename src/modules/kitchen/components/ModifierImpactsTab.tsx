@@ -31,8 +31,10 @@ import {
   rejectImpact,
   recomputeAffectedSales,
   requestAIProposals,
+  previewImpactCost,
   type OptionWithImpact,
   type ImpactType,
+  type ImpactCostPreview,
 } from '@/modules/kitchen/services/modifierImpactService'
 import { listRecipeItems, createRecipeItem } from '@/modules/kitchen/services/recipeItemService'
 import { listUnits } from '@/modules/kitchen/services/kitchenUnitService'
@@ -332,6 +334,7 @@ export default function ModifierImpactsTab({
                 <OptionCard
                   key={o.optionId}
                   option={o}
+                  recipeItemId={recipeItemId}
                   busy={busyId === o.optionId}
                   editing={editingId === o.optionId}
                   ingredients={ingredients}
@@ -356,6 +359,7 @@ export default function ModifierImpactsTab({
 
 interface OptionCardProps {
   option: OptionWithImpact
+  recipeItemId: string
   busy: boolean
   editing: boolean
   ingredients: { id: string; name: string; needsReview?: boolean }[]
@@ -369,7 +373,7 @@ interface OptionCardProps {
 }
 
 function OptionCard({
-  option: o, busy, editing, ingredients, units,
+  option: o, recipeItemId, busy, editing, ingredients, units,
   onConfirm, onReject, onEdit, onCancelEdit, onSaveManual, onCreateIngredient,
 }: OptionCardProps) {
   const status = o.impact?.status ?? 'none'
@@ -464,6 +468,7 @@ function OptionCard({
         <ImpactEditor
           draft={draft}
           setDraft={setDraft}
+          recipeItemId={recipeItemId}
           ingredients={ingredients}
           units={units}
           busy={busy}
@@ -541,10 +546,11 @@ function ImpactSummary({
 
 // Editor del impacto (modo Ajustar).
 function ImpactEditor({
-  draft, setDraft, ingredients, units, busy, onCancel, onSave, onCreateIngredient,
+  draft, setDraft, recipeItemId, ingredients, units, busy, onCancel, onSave, onCreateIngredient,
 }: {
   draft: { impactType: ImpactType; targetRecipeItemId: string | null; quantity: number | null; unitId: string | null }
   setDraft: (d: typeof draft) => void
+  recipeItemId: string
   ingredients: { id: string; name: string; needsReview?: boolean }[]
   units: { id: string; label: string }[]
   busy: boolean
@@ -559,11 +565,37 @@ function ImpactEditor({
   const [creating, setCreating] = useState(false)
   const picked = ingredients.find((i) => i.id === draft.targetRecipeItemId)
 
-  const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-  const matches = search.trim() === ''
-    ? ingredients.slice(0, 8)
-    : ingredients.filter((i) => norm(i.name).includes(norm(search))).slice(0, 8)
-  const exactExists = ingredients.some((i) => norm(i.name) === norm(search.trim()))
+  // ── Latido de coste en vivo ──
+  // Al cambiar el draft, pide el preview server-side (misma lógica que el guardado).
+  // Debounce 350ms para no llamar en cada tecla. Server-side = coincide con lo que
+  // se guardará al confirmar (no calculamos coste en el cliente).
+  const [preview, setPreview] = useState<ImpactCostPreview | null>(null)
+  const [previewing, setPreviewing] = useState(false)
+
+  useEffect(() => {
+    // Solo tiene sentido si el impacto está "completo" para calcular.
+    const ready =
+      (draft.impactType === 'multiply' && draft.quantity != null) ||
+      (draft.impactType === 'none') ||
+      (needsIngredient && draft.targetRecipeItemId != null && draft.quantity != null)
+    if (!ready) { setPreview(null); return }
+
+    let cancelled = false
+    setPreviewing(true)
+    const t = setTimeout(() => {
+      previewImpactCost({
+        recipeItemId,
+        impactType: draft.impactType,
+        targetRecipeItemId: draft.targetRecipeItemId,
+        quantity: draft.quantity,
+        unitId: draft.unitId,
+      })
+        .then((p) => { if (!cancelled) setPreview(p) })
+        .catch(() => { if (!cancelled) setPreview(null) })
+        .finally(() => { if (!cancelled) setPreviewing(false) })
+    }, 350)
+    return () => { cancelled = true; clearTimeout(t) }
+  }, [recipeItemId, draft.impactType, draft.targetRecipeItemId, draft.quantity, draft.unitId, needsIngredient])
 
   async function handleCreate() {
     if (search.trim() === '') return
@@ -575,6 +607,12 @@ function ImpactEditor({
       setSearch('')
     }
   }
+
+  const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  const matches = search.trim() === ''
+    ? ingredients.slice(0, 8)
+    : ingredients.filter((i) => norm(i.name).includes(norm(search))).slice(0, 8)
+  const exactExists = ingredients.some((i) => norm(i.name) === norm(search.trim()))
 
   return (
     <div className="space-y-2.5 pt-1">
@@ -684,6 +722,35 @@ function ImpactEditor({
               ))}
             </select>
           )}
+        </div>
+      )}
+
+      {/* Latido: coste en vivo (server-side, coincide con lo que se guardará) */}
+      {preview && preview.totalCost != null && (
+        <div className="flex items-center gap-2 flex-wrap text-sm px-2.5 py-2 rounded-md bg-accent text-white">
+          <span className="text-[11px] uppercase tracking-wide text-white/60">Coste del plato</span>
+          {preview.baseCost != null && (
+            <span className="font-mono text-white/70">
+              {preview.baseCost.toFixed(2)} €
+            </span>
+          )}
+          {preview.delta != null && preview.delta !== 0 && (
+            <>
+              <span className="text-white/50">{preview.delta > 0 ? '+' : '−'}</span>
+              <span className="font-mono text-white/70">{Math.abs(preview.delta).toFixed(2)} €</span>
+              <span className="text-white/40">=</span>
+            </>
+          )}
+          <span className="font-mono font-medium text-[16px] text-white">
+            {preview.totalCost.toFixed(2)} €
+          </span>
+          {previewing && <Loader2 className="w-3 h-3 animate-spin text-white/50" />}
+        </div>
+      )}
+      {preview && preview.totalCost == null && (
+        <div className="flex items-center gap-1.5 text-xs text-warning px-1">
+          <AlertTriangle className="w-3.5 h-3.5" />
+          El plato o el ingrediente no tienen coste todavía — no puedo calcular el latido.
         </div>
       )}
 

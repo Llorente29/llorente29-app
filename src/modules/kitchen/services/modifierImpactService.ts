@@ -419,6 +419,45 @@ export interface AIProposalResult {
   sin_propuesta: number
 }
 
+export interface ImpactCostPreview {
+  baseCost: number | null
+  delta: number | null
+  totalCost: number | null
+}
+
+/**
+ * Preview de coste en vivo (el "latido"): dado un plato y un impacto hipotético,
+ * devuelve coste base, delta y total SIN guardar nada. Reutiliza la RPC
+ * preview_modifier_impact_cost, que a su vez usa _impact_cost (misma lógica que el
+ * motor que guarda) → el preview coincide con lo que se guardará al confirmar.
+ */
+export async function previewImpactCost(input: {
+  recipeItemId: string
+  impactType: ImpactType
+  targetRecipeItemId: string | null
+  quantity: number | null
+  unitId: string | null
+}): Promise<ImpactCostPreview> {
+  requireSupabase()
+  const { data, error } = await supabase!.rpc('preview_modifier_impact_cost', {
+    p_recipe_item_id: input.recipeItemId,
+    p_impact_type: input.impactType,
+    // La función SQL acepta NULL en estos args (multiply/none no llevan ingrediente/
+    // unidad), pero el tipo generado los marca requeridos. Casteamos: el valor real
+    // puede ser null y la RPC lo maneja.
+    p_target_recipe_item_id: input.targetRecipeItemId as string,
+    p_quantity: input.quantity as number,
+    p_unit_id: input.unitId as string,
+  })
+  if (error) throw new Error(`Error calculando preview de coste: ${error.message}`)
+  const row = Array.isArray(data) ? data[0] : data
+  return {
+    baseCost: row?.base_cost ?? null,
+    delta: row?.delta ?? null,
+    totalCost: row?.total_cost ?? null,
+  }
+}
+
 /**
  * Pide a la IA que proponga impactos para las opciones sin definir de un plato
  * (Nivel 2). Llama a la Edge propose-modifier-impacts con el token del usuario.

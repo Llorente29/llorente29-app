@@ -10263,6 +10263,20 @@ export type Database = {
         Returns: string
       }
       normalize_ingredient_name: { Args: { p_text: string }; Returns: string }
+      preview_modifier_impact_cost: {
+        Args: {
+          p_impact_type: string
+          p_quantity: number
+          p_recipe_item_id: string
+          p_target_recipe_item_id: string
+          p_unit_id: string
+        }
+        Returns: {
+          base_cost: number
+          delta: number
+          total_cost: number
+        }[]
+      }
       propose_vat_category: {
         Args: { p_recipe_item_id: string }
         Returns: string
