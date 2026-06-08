@@ -10247,6 +10247,16 @@ export type Database = {
           resolved: number
         }[]
       }
+      resolve_unmapped_sales: {
+        Args: { p_account_id: string; p_action: string; p_product_name: string }
+        Returns: {
+          brand_id: string
+          lineas_afectadas: number
+          menu_item_id: string
+          recipe_item_id: string
+          resultado: string
+        }[]
+      }
       run_invoice_match: {
         Args: { p_invoice_id: string }
         Returns: {

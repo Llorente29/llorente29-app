@@ -1,30 +1,33 @@
 // src/modules/kitchen/pages/SalesExceptionsPage.tsx
 //
-// Pantalla de excepciones del casado de ventas (Entrega A: SOLO LECTURA).
-// Se entra desde KitchenMenuPage (patrón lista+detalle por estado, como
-// CatalogProductDetailPage). Muestra:
+// Pantalla de excepciones del casado de ventas (Entrega B: con acciones).
+// Se entra desde KitchenMenuPage (patrón lista+detalle por estado). Muestra:
 //   - la señal de fiabilidad (verde/ámbar/rojo) + los importes,
 //   - dos cajas de dinero ciego (desconocido vs calculable),
-//   - las líneas sin casar agrupadas por razón, con tickets y sugerencia de IA.
+//   - las líneas sin casar agrupadas por razón, con tickets y sugerencia de IA,
+//   - acciones: Vincular a plato (no_menu_item → crea menu_item + recasa),
+//     Ignorar, Descatalogar (escriben estado deliberado).
 //
-// Las ACCIONES de resolver (crear plato / escandallo / ignorar / descatalogar)
-// llegan en la Entrega B. Aquí los botones se muestran deshabilitados con
-// "próximamente" honesto, para no fingir una capacidad que aún no existe.
+// Las acciones llaman a resolveUnmapped (RPC resolve_unmapped_sales). 'link' solo
+// aplica a no_menu_item; en no_recipe (a menudo combos) la RPC rechaza con mensaje
+// claro y aquí solo se ofrece ignorar/descatalogar. Al resolver, se recarga todo.
 
 import { useEffect, useState } from 'react'
 import {
   ArrowLeft, ChevronDown, ChevronRight, Sparkles, ReceiptText,
-  HelpCircle, Calculator, Link2, Plus, EyeOff, Archive,
+  HelpCircle, Calculator, EyeOff, Archive, Loader2,
 } from 'lucide-react'
 import {
   getReliability,
   listBlindLines,
   suggestMatch,
+  resolveUnmapped,
   type SalesReliability,
   type BlindGroup,
   type BlindProduct,
   type BlindReason,
   type MatchSuggestion,
+  type ResolveAction,
 } from '@/modules/kitchen/services/salesReliabilityService'
 
 function formatEur(value: number | null): string {
@@ -67,16 +70,21 @@ export default function SalesExceptionsPage({ accountId, onBack }: Props) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  function reload() {
+    setLoading(true)
+    setError(null)
+    Promise.all([getReliability(accountId), listBlindLines(accountId)])
+      .then(([sig, grp]) => { setSignal(sig); setGroups(grp) })
+      .catch((e) => setError(String(e.message ?? e)))
+      .finally(() => setLoading(false))
+  }
+
   useEffect(() => {
     let cancelled = false
     setLoading(true)
     setError(null)
     Promise.all([getReliability(accountId), listBlindLines(accountId)])
-      .then(([sig, grp]) => {
-        if (cancelled) return
-        setSignal(sig)
-        setGroups(grp)
-      })
+      .then(([sig, grp]) => { if (!cancelled) { setSignal(sig); setGroups(grp) } })
       .catch((e) => { if (!cancelled) setError(String(e.message ?? e)) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
@@ -114,7 +122,7 @@ export default function SalesExceptionsPage({ accountId, onBack }: Props) {
           ) : (
             <div className="mt-6 space-y-6">
               {groups.map((g) => (
-                <ReasonGroup key={g.reason} group={g} accountId={accountId} />
+                <ReasonGroup key={g.reason} group={g} accountId={accountId} onResolved={reload} />
               ))}
             </div>
           )}
@@ -192,7 +200,7 @@ function MiniStat({ label, value, valueClass }: { label: string; value: string; 
   )
 }
 
-function ReasonGroup({ group, accountId }: { group: BlindGroup; accountId: string }) {
+function ReasonGroup({ group, accountId, onResolved }: { group: BlindGroup; accountId: string; onResolved: () => void }) {
   return (
     <div>
       <div className="flex items-center gap-2 mb-2">
@@ -209,6 +217,7 @@ function ReasonGroup({ group, accountId }: { group: BlindGroup; accountId: strin
             product={p}
             accountId={accountId}
             isLast={idx === group.products.length - 1}
+            onResolved={onResolved}
           />
         ))}
       </div>
@@ -216,14 +225,20 @@ function ReasonGroup({ group, accountId }: { group: BlindGroup; accountId: strin
   )
 }
 
-function BlindRow({ product, accountId, isLast }: { product: BlindProduct; accountId: string; isLast: boolean }) {
+function BlindRow({
+  product, accountId, isLast, onResolved,
+}: {
+  product: BlindProduct; accountId: string; isLast: boolean; onResolved: () => void
+}) {
   const [open, setOpen] = useState(false)
   const [suggestions, setSuggestions] = useState<MatchSuggestion[] | null>(null)
   const [suggestLoading, setSuggestLoading] = useState(false)
+  const [busy, setBusy] = useState<ResolveAction | null>(null)
+  const [rowError, setRowError] = useState<string | null>(null)
 
-  // La sugerencia de IA solo aplica a 'no_menu_item' (tiene receta, hay a qué
-  // parecerse) y 'no_recipe' (puede parecerse a un escandallo existente).
   const canSuggest = product.reason === 'no_menu_item' || product.reason === 'no_recipe'
+  // 'link' (crear plato en carta) retirado de la UI: el modelo de producto aun no
+  // resuelve la propagacion multi-marca ni los articulos de reventa/bebida. Frente propio.
 
   function loadSuggestions() {
     if (!canSuggest || suggestions !== null || suggestLoading) return
@@ -238,6 +253,15 @@ function BlindRow({ product, accountId, isLast }: { product: BlindProduct; accou
     const next = !open
     setOpen(next)
     if (next) loadSuggestions()
+  }
+
+  function doResolve(action: ResolveAction) {
+    if (busy) return
+    setBusy(action)
+    setRowError(null)
+    resolveUnmapped(accountId, product.productName, action)
+      .then(() => { onResolved() })   // recarga señal + lista; esta fila desaparece
+      .catch((e) => { setRowError(String(e.message ?? e)); setBusy(null) })
   }
 
   const top = suggestions && suggestions.length > 0 ? suggestions[0] : null
@@ -292,32 +316,52 @@ function BlindRow({ product, accountId, isLast }: { product: BlindProduct; accou
             </div>
           </div>
 
-          {/* Acciones (Entrega B): visibles pero deshabilitadas, "próximamente" honesto */}
+          {rowError && (
+            <div className="p-2 rounded-lg bg-red-50 text-red-700 text-xs">{rowError}</div>
+          )}
+
+          {/* Acciones */}
           <div className="flex flex-wrap gap-2 pt-1">
-            {product.reason === 'no_menu_item' ? (
-              <ActionButton icon={<Link2 className="w-3.5 h-3.5" />} label="Vincular a plato" />
-            ) : (
-              <ActionButton icon={<Plus className="w-3.5 h-3.5" />} label="Crear escandallo" />
-            )}
-            <ActionButton icon={<EyeOff className="w-3.5 h-3.5" />} label="Ignorar" subtle />
-            <ActionButton icon={<Archive className="w-3.5 h-3.5" />} label="Descatalogar" subtle />
+            <ActionButton
+              icon={busy === 'ignore' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <EyeOff className="w-3.5 h-3.5" />}
+              label="Ignorar"
+              onClick={() => doResolve('ignore')}
+              disabled={busy !== null}
+              subtle
+            />
+            <ActionButton
+              icon={busy === 'delist' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Archive className="w-3.5 h-3.5" />}
+              label="Descatalogar"
+              onClick={() => doResolve('delist')}
+              disabled={busy !== null}
+              subtle
+            />
           </div>
-          <p className="text-xs text-gray-400">Las acciones de resolver llegan en la próxima entrega.</p>
+          <p className="text-xs text-gray-400">
+            La vinculación automática a la carta está en rediseño (un mismo producto se vende en
+            varias marcas, y las bebidas/reventa no llevan escandallo). Por ahora puedes ignorar o
+            descatalogar lo que no quieras costear.
+          </p>
         </div>
       )}
     </div>
   )
 }
 
-function ActionButton({ icon, label, subtle }: { icon: React.ReactNode; label: string; subtle?: boolean }) {
+function ActionButton({
+  icon, label, onClick, disabled, primary, subtle,
+}: {
+  icon: React.ReactNode; label: string; onClick?: () => void; disabled?: boolean; primary?: boolean; subtle?: boolean
+}) {
+  const base = 'inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors'
+  const tone = primary
+    ? 'border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100'
+    : subtle
+      ? 'border-gray-200 text-gray-500 hover:bg-gray-50'
+      : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+  const dis = disabled ? 'opacity-50 cursor-not-allowed' : ''
   return (
-    <button
-      disabled
-      title="Próximamente"
-      className={`inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border cursor-not-allowed opacity-60 ${
-        subtle ? 'border-gray-200 text-gray-500' : 'border-gray-300 text-gray-700'
-      }`}
-    >
+    <button onClick={onClick} disabled={disabled} className={`${base} ${tone} ${dis}`}>
       {icon} {label}
     </button>
   )

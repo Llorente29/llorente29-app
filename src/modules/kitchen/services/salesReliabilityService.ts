@@ -319,6 +319,57 @@ interface RowRunMapping {
   semaphore: string
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// Acciones de resolución (Entrega B): link / ignore / delist
+// ─────────────────────────────────────────────────────────────────────
+
+export type ResolveAction = 'link' | 'ignore' | 'delist'
+
+export interface ResolveResult {
+  resultado: 'linked' | 'ignored' | 'delisted'
+  menuItemId: string | null
+  recipeItemId: string | null
+  brandId: string | null
+  lineasAfectadas: number
+}
+
+interface RowResolve {
+  resultado: string
+  menu_item_id: string | null
+  recipe_item_id: string | null
+  brand_id: string | null
+  lineas_afectadas: number
+}
+
+/**
+ * Resuelve un producto ciego. 'link' (solo no_menu_item: crea el plato en carta
+ * y recasa) | 'ignore' | 'delist'. La lógica de resolución vive en la RPC
+ * resolve_unmapped_sales (reusa la cadena del recast, no la duplica). La RPC lanza
+ * EXCEPTION si el producto es combo o no tiene receta (link): se propaga como Error.
+ */
+export async function resolveUnmapped(
+  accountId: string,
+  productName: string,
+  action: ResolveAction,
+): Promise<ResolveResult> {
+  requireSupabase()
+  const { data, error } = await supabase!.rpc('resolve_unmapped_sales', {
+    p_account_id: accountId,
+    p_product_name: productName,
+    p_action: action,
+  })
+  if (error) throw new Error(error.message)
+  const row = (Array.isArray(data) ? data[0] : data) as RowResolve | undefined
+  if (!row) throw new Error('La acción no devolvió resultado.')
+  return {
+    resultado: row.resultado as ResolveResult['resultado'],
+    menuItemId: row.menu_item_id ?? null,
+    recipeItemId: row.recipe_item_id ?? null,
+    brandId: row.brand_id ?? null,
+    lineasAfectadas: Number(row.lineas_afectadas ?? 0),
+  }
+}
+
 /**
  * Sugerencia de IA: a qué escandallo (recipe_item) se parece un producto ciego,
  * por nombre, con confianza + semáforo. Envuelve la RPC run_mapping (la misma que
