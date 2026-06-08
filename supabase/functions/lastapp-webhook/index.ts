@@ -103,8 +103,10 @@ interface LastTab {
 interface Caches {
   catalogByCatProd: Map<string, { organization_product_id: string; lastapp_brand_name: string | null }>;
   recipeByOrgProd: Map<string, string>;
-  menuItemsByChannelRecipe: Map<string, { menu_item_id: string; brand_id: string }[]>;
-  menuItemsByChannelName: Map<string, { menu_item_id: string; brand_id: string }[]>;
+  // Clave por MARCA (no canal): menu_item = verdad de marca; el canal vive en la venta
+  // y modula economía, no elige el plato. (xtraCHEF/Apicbase: consumo canal-agnóstico.)
+  menuItemsByBrandRecipe: Map<string, { menu_item_id: string; brand_id: string }[]>;
+  menuItemsByBrandName: Map<string, { menu_item_id: string; brand_id: string }[]>;
   channelBySlug: Map<string, string>;
   brandByName: Map<string, string>;
   folvyLocationId: string | null;
@@ -151,22 +153,22 @@ async function loadCaches(sb: SupabaseClient, accountId: string, lastLocationId:
   }
 
   const menuItems = await loadAllPaged(sb, "menu_item",
-    "id, brand_id, channel_id, recipe_item_id, name, archived_at", "account_id", accountId);
-  const menuItemsByChannelRecipe = new Map<string, { menu_item_id: string; brand_id: string }[]>();
-  const menuItemsByChannelName = new Map<string, { menu_item_id: string; brand_id: string }[]>();
+    "id, brand_id, recipe_item_id, name, archived_at", "account_id", accountId);
+  const menuItemsByBrandRecipe = new Map<string, { menu_item_id: string; brand_id: string }[]>();
+  const menuItemsByBrandName = new Map<string, { menu_item_id: string; brand_id: string }[]>();
   for (const m of menuItems) {
     if (m.archived_at) continue;
-    if (!m.brand_id || !m.channel_id) continue;
+    if (!m.brand_id) continue;            // canal ya NO es necesario: clave por marca+receta
     if (m.recipe_item_id) {
-      const k = `${m.channel_id}|${m.recipe_item_id}`;
-      if (!menuItemsByChannelRecipe.has(k)) menuItemsByChannelRecipe.set(k, []);
-      menuItemsByChannelRecipe.get(k)!.push({ menu_item_id: m.id as string, brand_id: m.brand_id as string });
+      const k = `${m.brand_id}|${m.recipe_item_id}`;
+      if (!menuItemsByBrandRecipe.has(k)) menuItemsByBrandRecipe.set(k, []);
+      menuItemsByBrandRecipe.get(k)!.push({ menu_item_id: m.id as string, brand_id: m.brand_id as string });
     }
     const nk = normalize(m.name as string);
     if (nk) {
-      const k = `${m.channel_id}|${nk}`;
-      if (!menuItemsByChannelName.has(k)) menuItemsByChannelName.set(k, []);
-      menuItemsByChannelName.get(k)!.push({ menu_item_id: m.id as string, brand_id: m.brand_id as string });
+      const k = `${m.brand_id}|${nk}`;
+      if (!menuItemsByBrandName.has(k)) menuItemsByBrandName.set(k, []);
+      menuItemsByBrandName.get(k)!.push({ menu_item_id: m.id as string, brand_id: m.brand_id as string });
     }
   }
 
@@ -195,51 +197,65 @@ async function loadCaches(sb: SupabaseClient, accountId: string, lastLocationId:
   const folvyLocationId = (locMap?.location_id as string | undefined) ?? null;
 
   return {
-    catalogByCatProd, recipeByOrgProd, menuItemsByChannelRecipe,
-    menuItemsByChannelName, channelBySlug, brandByName, folvyLocationId,
+    catalogByCatProd, recipeByOrgProd, menuItemsByBrandRecipe,
+    menuItemsByBrandName, channelBySlug, brandByName, folvyLocationId,
   };
 }
 
-// ── Resolución de una línea (lógica del backfill + atajo por organizationProductId) ──
-interface ResolveResult { menuItemId: string | null; brandId: string | null; via: string | null }
+// ── Resolución de una línea ──
+// Modelo nuevo (Fase A): menu_item = verdad de MARCA (channel_id NULL); el canal vive
+// en la venta y modula economía, no elige el plato. La MARCA es la autoridad del casado
+// y se obtiene del catálogo de Last (catalogProductId es único por marca, aunque el mismo
+// plato exista en varias marcas). Sin marca resuelta NO se casa (anti-invención).
+// Razón del no-casado (alimenta sale_line.unmapped_reason; NULL si casa).
+type UnmappedReason = "no_brand" | "no_recipe" | "no_menu_item" | "ambiguous" | null;
+interface ResolveResult { menuItemId: string | null; brandId: string | null; via: string | null; reason: UnmappedReason }
 
-function resolveLine(product: LastProduct, channelId: string | null, caches: Caches): ResolveResult {
-  if (!channelId) return { menuItemId: null, brandId: null, via: null };
-
+function resolveLine(product: LastProduct, caches: Caches): ResolveResult {
   const catEntry = product.catalogProductId
     ? caches.catalogByCatProd.get(product.catalogProductId) ?? null
     : null;
 
-  // --- Vía 1: por ID. El webhook trae organizationProductId DIRECTO (atajo);
-  //     si no, caemos al catalogProductId -> organization_product_id como el backfill. ---
+  // MARCA (autoridad): catalogProductId -> lastapp_brand_name -> brand.
+  const brandId = catEntry
+    ? (caches.brandByName.get(normalize(catEntry.lastapp_brand_name)) ?? null)
+    : null;
+  // Sin marca no se puede desambiguar (mismo plato en varias marcas) -> unmapped honesto.
+  if (!brandId) return { menuItemId: null, brandId: null, via: null, reason: "no_brand" };
+
+  // --- Vía 1: por ID. organizationProductId (directo o vía catálogo) -> receta -> plato de la marca. ---
   const orgProdId = product.organizationProductId ?? catEntry?.organization_product_id ?? null;
-  if (orgProdId) {
-    const recipeId = caches.recipeByOrgProd.get(orgProdId);
-    if (recipeId) {
-      const candidates = caches.menuItemsByChannelRecipe.get(`${channelId}|${recipeId}`);
-      if (candidates && candidates.length === 1) {
-        return { menuItemId: candidates[0].menu_item_id, brandId: candidates[0].brand_id, via: "id" };
-      }
-      if (candidates && candidates.length > 1) {
-        const brandIdFromName = caches.brandByName.get(normalize(catEntry?.lastapp_brand_name));
-        const match = brandIdFromName ? candidates.find((c) => c.brand_id === brandIdFromName) : null;
-        if (match) return { menuItemId: match.menu_item_id, brandId: match.brand_id, via: "id" };
-      }
+  const recipeId = orgProdId ? (caches.recipeByOrgProd.get(orgProdId) ?? null) : null;
+  if (recipeId) {
+    const cands = caches.menuItemsByBrandRecipe.get(`${brandId}|${recipeId}`);
+    // marca|receta es único (0 colisiones verificadas) -> 1 candidato = match determinista.
+    if (cands && cands.length === 1) {
+      return { menuItemId: cands[0].menu_item_id, brandId, via: "id", reason: null };
+    }
+    if (cands && cands.length > 1) {
+      // >1: ambiguo. No adivinamos; lo dejamos marcado para revisión humana.
+      return { menuItemId: null, brandId, via: null, reason: "ambiguous" };
+    }
+    // receta OK pero sin menu_item en esta marca -> intentamos por nombre; si no, no_menu_item.
+  }
+
+  // --- Vía 2: por nombre DENTRO de la marca. ---
+  const nameKey = normalize(product.name ?? "");
+  if (nameKey) {
+    const nameCands = caches.menuItemsByBrandName.get(`${brandId}|${nameKey}`);
+    if (nameCands && nameCands.length === 1) {
+      return { menuItemId: nameCands[0].menu_item_id, brandId, via: "name", reason: null };
+    }
+    if (nameCands && nameCands.length > 1) {
+      return { menuItemId: null, brandId, via: null, reason: "ambiguous" };
     }
   }
 
-  // --- Vía 2: fallback por nombre ---
-  const nameKey = normalize(product.name ?? "");
-  if (!nameKey) return { menuItemId: null, brandId: null, via: null };
-  const nameCands = caches.menuItemsByChannelName.get(`${channelId}|${nameKey}`);
-  if (!nameCands || nameCands.length === 0) return { menuItemId: null, brandId: null, via: null };
-  if (nameCands.length === 1) {
-    return { menuItemId: nameCands[0].menu_item_id, brandId: nameCands[0].brand_id, via: "name" };
-  }
-  const brandIdFromName = catEntry ? caches.brandByName.get(normalize(catEntry.lastapp_brand_name)) : null;
-  const match = brandIdFromName ? nameCands.find((c) => c.brand_id === brandIdFromName) : null;
-  if (match) return { menuItemId: match.menu_item_id, brandId: match.brand_id, via: "name" };
-  return { menuItemId: null, brandId: null, via: null };
+  // Marca conocida, pero el plato no casó. Distinguimos el porqué:
+  //   - había receta (pero sin menu_item en la carta de la marca) -> no_menu_item
+  //   - no había receta (organizationProductId sin mapear)        -> no_recipe
+  const reason: UnmappedReason = recipeId ? "no_menu_item" : "no_recipe";
+  return { menuItemId: null, brandId, via: null, reason };
 }
 
 // map_source válido según la vía de resolución (CHECK: unmapped|manual|ai|fuzzy|pos).
@@ -277,7 +293,7 @@ async function ingestBill(
   const resolvedLines: Record<string, unknown>[] = [];
   let saleBrandId: string | null = null;
   for (const p of products) {
-    const r = resolveLine(p, channelId, caches);
+    const r = resolveLine(p, caches);
     if (r.brandId && !saleBrandId) saleBrandId = r.brandId;
     resolvedLines.push({
       raw_text: p.name ?? "",
@@ -287,6 +303,7 @@ async function ingestBill(
       menu_item_id: r.menuItemId,
       map_source: mapSourceFromVia(r.via),
       map_needs_review: r.menuItemId ? false : true,
+      unmapped_reason: r.menuItemId ? null : r.reason,
     });
   }
 

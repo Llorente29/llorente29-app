@@ -4575,6 +4575,7 @@ export type Database = {
           max_recipe_depth_warning: number
           photo_retention_days: number
           price_rounding: string
+          reliability_min_pct: number
           target_food_cost_pct: number | null
           transcription_language: string
           updated_at: string
@@ -4600,6 +4601,7 @@ export type Database = {
           max_recipe_depth_warning?: number
           photo_retention_days?: number
           price_rounding?: string
+          reliability_min_pct?: number
           target_food_cost_pct?: number | null
           transcription_language?: string
           updated_at?: string
@@ -4625,6 +4627,7 @@ export type Database = {
           max_recipe_depth_warning?: number
           photo_retention_days?: number
           price_rounding?: string
+          reliability_min_pct?: number
           target_food_cost_pct?: number | null
           transcription_language?: string
           updated_at?: string
@@ -8146,6 +8149,7 @@ export type Database = {
           raw_text: string
           sale_id: string
           unit_price: number | null
+          unmapped_reason: string | null
           updated_at: string
         }
         Insert: {
@@ -8166,6 +8170,7 @@ export type Database = {
           raw_text: string
           sale_id: string
           unit_price?: number | null
+          unmapped_reason?: string | null
           updated_at?: string
         }
         Update: {
@@ -8186,6 +8191,7 @@ export type Database = {
           raw_text?: string
           sale_id?: string
           unit_price?: number | null
+          unmapped_reason?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -10195,6 +10201,19 @@ export type Database = {
         Args: { p_recipe_item_id: string }
         Returns: string
       }
+      recast_lastapp_sales: {
+        Args: { p_account_id: string }
+        Returns: {
+          lineas_ambiguous: number
+          lineas_casadas: number
+          lineas_no_brand: number
+          lineas_no_menu_item: number
+          lineas_no_recipe: number
+          lineas_respetadas: number
+          lineas_total: number
+          ventas_procesadas: number
+        }[]
+      }
       recompute_location_stock: {
         Args: { p_item_id: string; p_location_id: string }
         Returns: undefined
@@ -10277,6 +10296,25 @@ export type Database = {
               semaphore: string
             }[]
           }
+      sales_mapping_reliability: {
+        Args: { p_account_id: string; p_from?: string; p_to?: string }
+        Returns: {
+          ciego_calculable_eur: number
+          ciego_calculable_lineas: number
+          ciego_desconocido_eur: number
+          ciego_desconocido_lineas: number
+          ciego_otros_eur: number
+          ciego_otros_lineas: number
+          lineas_casadas: number
+          lineas_total: number
+          reliability_pct: number
+          revenue_casado: number
+          revenue_sin_casar: number
+          revenue_total: number
+          status: string
+          threshold_pct: number
+        }[]
+      }
       seed_appcc_for_account: {
         Args: { p_account_id: string }
         Returns: undefined
