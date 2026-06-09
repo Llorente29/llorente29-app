@@ -9,7 +9,10 @@
 //      la `sale` cruda (con raw_products embebido)
 //   3) DELEGA la construcción de las líneas al MOTOR: adapt_lastapp_order(sale)
 //      descompone raw_products en la jerarquía canónica (product/modifier/combo_item),
-//      y compute_sale_line_cost calcula el coste de cada línea producto.
+//      compute_sale_line_cost calcula el coste de cada línea producto, y
+//      compute_sale_line_consumption descuenta el escandallo del stock (consumo
+//      teórico = ventas × receta; base del AvT). Coste SIEMPRE antes que consumo:
+//      el consumo solo escribe si la línea ya tiene computed_cost.
 //
 // La frontera NO casa líneas ni escribe sale_line. Eso es trabajo del adaptador
 // (única forma de poblar líneas, compartida con el backfill). Añadir otro TPV =
@@ -220,6 +223,18 @@ async function ingestBill(
     for (const l of prodLines ?? []) {
       const { error: cErr } = await sb.rpc("compute_sale_line_cost", { p_sale_line_id: (l as { id: string }).id });
       if (cErr) console.error(`compute_sale_line_cost ${(l as { id: string }).id}: ${cErr.message}`);
+    }
+  }
+
+  // 4) Descontar el CONSUMO TEÓRICO de cada línea PRODUCTO (ventas × escandallo).
+  //    SIEMPRE después del coste (solo descuenta si la línea tiene computed_cost).
+  //    Motor puro e idempotente. RESILIENTE: si una línea falla, log y sigue; NUNCA
+  //    tumba la ingesta (la venta y su coste ya están dentro; el consumo es
+  //    recuperable con el botón "Recalcular consumo").
+  if (!plErr) {
+    for (const l of prodLines ?? []) {
+      const { error: kErr } = await sb.rpc("compute_sale_line_consumption", { p_sale_line_id: (l as { id: string }).id });
+      if (kErr) console.error(`compute_sale_line_consumption ${(l as { id: string }).id}: ${kErr.message}`);
     }
   }
 

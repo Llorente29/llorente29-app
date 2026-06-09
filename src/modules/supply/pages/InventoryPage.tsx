@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   Plus, Boxes, Loader2, X, PencilLine, ChevronUp, ChevronDown,
   Search, MapPin, Archive, ClipboardList, ChevronRight,
+  TrendingDown, RefreshCw,
 } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useApp } from '@/context/AppContext'
@@ -23,6 +24,11 @@ import {
   type InventoryCount,
   type InventoryCountKind,
 } from '@/modules/supply/services/inventoryCountService'
+import {
+  recomputeConsumption,
+  listConsumptionByRaw,
+  type ConsumptionByRaw,
+} from '@/modules/supply/services/consumptionService'
 import {
   listStorageAreas,
   createStorageArea,
@@ -59,8 +65,8 @@ export default function InventoryPage() {
   // asignador de artículos
   const [assignAreaId, setAssignAreaId] = useState<string | null>(null)
 
-  // navegación interna: áreas | conteos, y conteo abierto
-  const [tab, setTab] = useState<'areas' | 'counts'>('areas')
+  // navegación interna: áreas | conteos | consumo, y conteo abierto
+  const [tab, setTab] = useState<'areas' | 'counts' | 'consumption'>('areas')
   const [openCountId, setOpenCountId] = useState<string | null>(null)
   const [counts, setCounts] = useState<InventoryCount[]>([])
   const [countsLoading, setCountsLoading] = useState(false)
@@ -270,6 +276,10 @@ export default function InventoryPage() {
           className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-base ${tab === 'counts' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>
           <span className="inline-flex items-center gap-1.5"><ClipboardList size={15} /> Conteos</span>
         </button>
+        <button type="button" onClick={() => setTab('consumption')}
+          className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-base ${tab === 'consumption' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>
+          <span className="inline-flex items-center gap-1.5"><TrendingDown size={15} /> Consumo</span>
+        </button>
       </div>
 
       {tab === 'areas' && (
@@ -321,6 +331,15 @@ export default function InventoryPage() {
           loading={countsLoading}
           onOpen={(id) => setOpenCountId(id)}
           onNew={() => setNewCountOpen(true)}
+        />
+      )}
+
+      {tab === 'consumption' && activeAccountId && (
+        <ConsumptionSection
+          accountId={activeAccountId}
+          locationId={locationId}
+          onError={(m) => setError(m)}
+          onFlash={(m) => setFlash(m)}
         />
       )}
       </>
@@ -590,6 +609,145 @@ function NewCountModal({
           </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ── Sección de consumo teórico del local (capa 2) ──
+// Muestra, para un rango y el local operativo, cuánto se consumió de cada
+// ingrediente según ventas × escandallo (cantidad base + € + nº de ventas),
+// ordenado por € desc. El botón recalcula el histórico del rango (frontera con
+// guard). Legible desde el minuto cero: no necesita inventario inicial.
+type RangeKey = 'today' | '7d' | '30d' | 'month' | 'all'
+
+function rangeFor(key: RangeKey): { from: string | null; to: string | null; label: string } {
+  const now = new Date()
+  const startOfDay = (d: Date) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x }
+  const iso = (d: Date) => d.toISOString()
+  const tomorrow = startOfDay(new Date(now.getTime() + 86400000))
+  switch (key) {
+    case 'today': return { from: iso(startOfDay(now)), to: iso(tomorrow), label: 'Hoy' }
+    case '7d':    return { from: iso(startOfDay(new Date(now.getTime() - 6 * 86400000))), to: iso(tomorrow), label: 'Últimos 7 días' }
+    case '30d':   return { from: iso(startOfDay(new Date(now.getTime() - 29 * 86400000))), to: iso(tomorrow), label: 'Últimos 30 días' }
+    case 'month': return { from: iso(new Date(now.getFullYear(), now.getMonth(), 1)), to: iso(tomorrow), label: 'Mes actual' }
+    case 'all':   return { from: null, to: null, label: 'Todo el histórico' }
+  }
+}
+
+function ConsumptionSection({
+  accountId, locationId, onError, onFlash,
+}: {
+  accountId: string
+  locationId: string
+  onError: (m: string) => void
+  onFlash: (m: string) => void
+}) {
+  const [rangeKey, setRangeKey] = useState<RangeKey>('30d')
+  const [rows, setRows] = useState<ConsumptionByRaw[]>([])
+  const [loading, setLoading] = useState(false)
+  const [recomputing, setRecomputing] = useState(false)
+  const [reloadTick, setReloadTick] = useState(0)
+
+  const range = useMemo(() => rangeFor(rangeKey), [rangeKey])
+
+  useEffect(() => {
+    if (!accountId || !locationId) { setRows([]); return }
+    let cancelled = false
+    setLoading(true)
+    ;(async () => {
+      try {
+        const data = await listConsumptionByRaw({
+          accountId, locationId, from: range.from, to: range.to,
+        })
+        if (!cancelled) setRows(data)
+      } catch (e) {
+        if (!cancelled) onError(e instanceof Error ? e.message : 'Error cargando el consumo.')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [accountId, locationId, range.from, range.to, reloadTick]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleRecompute() {
+    if (!accountId) return
+    setRecomputing(true); onError('')
+    try {
+      // Recalcula el rango visible (sin rango = todo el histórico).
+      const res = await recomputeConsumption({ accountId, from: range.from, to: range.to })
+      onFlash(`Consumo recalculado: ${res.linesProcessed} líneas, ${res.movementsWritten} movimientos.`)
+      setReloadTick(t => t + 1)
+    } catch (e) {
+      onError(e instanceof Error ? e.message : 'No se pudo recalcular el consumo.')
+    } finally {
+      setRecomputing(false)
+    }
+  }
+
+  const totalEur = useMemo(() => rows.reduce((s, r) => s + r.valueEur, 0), [rows])
+  const fmtEur = (v: number) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(v)
+  const fmtQty = (v: number) => new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 }).format(v)
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <p className="text-sm text-text-secondary">
+          Consumo teórico (ventas × escandallo) de este local. Lo que tus ventas dicen que se gastó.
+        </p>
+        <button type="button" onClick={handleRecompute} disabled={recomputing}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 transition-base">
+          {recomputing ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />} Recalcular consumo
+        </button>
+      </div>
+
+      {/* Selector de rango */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {([['today', 'Hoy'], ['7d', '7 días'], ['30d', '30 días'], ['month', 'Mes actual'], ['all', 'Todo']] as const).map(([k, label]) => (
+          <button key={k} type="button" onClick={() => setRangeKey(k)}
+            className={`px-2.5 py-1 text-xs rounded-md border transition-base ${rangeKey === k ? 'bg-accent text-text-on-accent border-accent' : 'border-border-default text-text-secondary hover:bg-page'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="flex items-center gap-2 text-text-secondary text-sm p-4"><Loader2 size={15} className="animate-spin" /> Cargando…</div>
+      ) : rows.length === 0 ? (
+        <div className="text-center py-10 text-text-secondary text-sm border border-dashed border-border-default rounded-lg">
+          <TrendingDown size={28} className="mx-auto mb-2 text-text-tertiary" />
+          Sin consumo en este periodo. Si acabas de conectar las ventas, pulsa "Recalcular consumo".
+        </div>
+      ) : (
+        <div className="border border-border-default rounded-lg overflow-hidden">
+          <div className="flex items-center gap-3 px-3 py-2 bg-page text-[11px] uppercase tracking-wide text-text-tertiary border-b border-border-default">
+            <span className="flex-1">Ingrediente</span>
+            <span className="w-28 text-right">Consumido</span>
+            <span className="w-20 text-right">Ventas</span>
+            <span className="w-24 text-right">Coste</span>
+          </div>
+          {rows.map(r => (
+            <div key={r.recipeItemId} className="flex items-center gap-3 px-3 py-2.5 border-t border-border-default first:border-t-0">
+              <span className="flex-1 text-text-primary">{r.itemName}</span>
+              <span className="w-28 text-right text-text-secondary tabular-nums">
+                {fmtQty(r.qtyBase)}{r.unitAbbr ? ` ${r.unitAbbr}` : ''}
+              </span>
+              <span className="w-20 text-right text-text-tertiary tabular-nums">{r.salesCount}</span>
+              <span className="w-24 text-right text-text-primary font-medium tabular-nums">{fmtEur(r.valueEur)}</span>
+            </div>
+          ))}
+          <div className="flex items-center gap-3 px-3 py-2.5 border-t-2 border-border-default bg-page">
+            <span className="flex-1 text-sm font-medium text-text-primary">{rows.length} ingrediente{rows.length === 1 ? '' : 's'}</span>
+            <span className="w-28" />
+            <span className="w-20" />
+            <span className="w-24 text-right text-text-primary font-semibold tabular-nums">{fmtEur(totalEur)}</span>
+          </div>
+        </div>
+      )}
+
+      <p className="text-xs text-text-tertiary">
+        El consumo es teórico (lo que el escandallo dice que deberías haber gastado). Cuando hagas un
+        conteo real, la diferencia contra esto es tu merma — el AvT.
+      </p>
     </div>
   )
 }

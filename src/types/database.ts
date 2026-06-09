@@ -9942,6 +9942,21 @@ export type Database = {
         }
         Returns: number
       }
+      _qty_in_base: {
+        Args: {
+          p_quantity: number
+          p_target_item_id: string
+          p_unit_id: string
+        }
+        Returns: number
+      }
+      _sale_line_raw_consumption: {
+        Args: { p_sale_line_id: string }
+        Returns: {
+          qty_base: number
+          raw_item_id: string
+        }[]
+      }
       adapt_lastapp_order: { Args: { p_sale_id: string }; Returns: number }
       appcc_mark_overdue: { Args: never; Returns: undefined }
       apply_inventory_count: {
@@ -9993,6 +10008,10 @@ export type Database = {
           lines_uncounted: number
           total_variance_value: number
         }[]
+      }
+      compute_sale_line_consumption: {
+        Args: { p_sale_line_id: string }
+        Returns: number
       }
       compute_sale_line_cost: {
         Args: { p_sale_line_id: string }
@@ -10076,6 +10095,13 @@ export type Database = {
       delete_account_tx: {
         Args: { p_account_id: string; p_admin_user_id: string }
         Returns: undefined
+      }
+      explode_recipe_to_raws: {
+        Args: { p_item_id: string; p_multiplier: number }
+        Returns: {
+          qty_base: number
+          raw_item_id: string
+        }[]
       }
       folvy_code_prefix: { Args: { p_type: string }; Returns: string }
       force_close_long_impersonations: { Args: never; Returns: number }
@@ -10298,9 +10324,20 @@ export type Database = {
         Args: { p_item_id: string; p_location_id: string }
         Returns: undefined
       }
+      recompute_location_stock_core: {
+        Args: { p_item_id: string; p_location_id: string }
+        Returns: undefined
+      }
       recompute_purchase_order_status: {
         Args: { p_order_id: string }
         Returns: string
+      }
+      recompute_sales_consumption: {
+        Args: { p_account_id: string; p_from?: string; p_to?: string }
+        Returns: {
+          lines_processed: number
+          movements_written: number
+        }[]
       }
       resolve_lastapp_line: {
         Args: {
