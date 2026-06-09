@@ -334,6 +334,8 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
     getSupplierFormatPrices(accountId, supplierId).then(setFormatPrices).catch(() => setFormatPrices({}))
   }, [accountId, supplierId])
   const [pickerKey, setPickerKey] = useState<string | null>(null)
+  // Motivo del descuadre por línea (clave de DraftLine → motivo). Se vuelca a discrepancy_reason.
+  const [discrepancyReasons, setDiscrepancyReasons] = useState<Record<string, string>>({})
 
   function chooseMatch(key: string, recipeItemId: string, name: string, semaphore: 'green' | 'yellow' | null, matchType: string | null) {
     setDraft(d => d.map(x => x.key === key
@@ -845,6 +847,22 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
 
     // Anomalía = algo de más, o masa sin tocar (>30% de las líneas con pendiente y >3).
     const masaSinTocar = sinTocar > 3 && linesWithPending.length > 0 && (sinTocar / linesWithPending.length) > 0.30
+    // Líneas que piden MOTIVO del descuadre: de más / de menos (vs pedido) o
+    // importe que no cuadra con el albarán (eje €, limpio). No bloquean.
+    const flagLines: { key: string; name: string; why: string }[] = []
+    for (const l of filled) {
+      const n = parseNum(l.qty)
+      if (n === null || n <= 0) continue
+      const why: string[] = []
+      if (l.pending !== null && n > l.pending) why.push('de más')
+      else if (l.pending !== null && l.pending > 0 && n < l.pending) why.push('de menos')
+      const cN = parseNum(l.unitCost)
+      if (cN !== null && l.lineAmount != null && l.lineAmount > 0) {
+        const rec = n * cN
+        if (Math.abs(rec - l.lineAmount) > 0.01 && Math.abs(rec - l.lineAmount) / l.lineAmount > 0.005) why.push('importe no cuadra con el albarán')
+      }
+      if (why.length > 0) flagLines.push({ key: l.key, name: l.productName, why: why.join(' · ') })
+    }
     const anomaly = overLines.length > 0 || masaSinTocar
     return {
       filled: filled.length, aStock: willPost, sinMapear,
@@ -853,6 +871,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
       enterLines, notEnterLines,
       priceAlerts, expiryAlerts,
       hasReference, anomaly, masaSinTocar,
+      flagLines,
     }
   }, [draft, filled, willPost, hasReference, formatPrices, supplySettings])
 
@@ -930,6 +949,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
           expiryDate: l.expiryDate,
           docQty: l.albaranQty ?? null,        // lo que el albarán DICE (cantidad) — ancla del cuadre
           docAmount: l.lineAmount ?? null,     // lo que el albarán DICE (importe)
+          discrepancyReason: discrepancyReasons[l.key] ?? null,  // motivo del descuadre (panel de repaso)
           mapSource: l.recipeItemId ? (l.matchType ?? 'manual') : 'unmapped',
           mapNeedsReview: unmapped,
           position: position++,
@@ -1397,6 +1417,8 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
           saving={saving}
           onCancel={() => { if (!saving) setReviewing(false) }}
           onConfirm={() => persist(true)}
+          reasons={discrepancyReasons}
+          onReason={(key, reason) => setDiscrepancyReasons(r => ({ ...r, [key]: reason }))}
         />
       )}
 
@@ -1428,7 +1450,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
 // Si hay algo de más o productos pedidos sin meter → avisos claros + confirmación
 // reforzada. "De menos" se informa, no frena (te traen menos: es normal).
 function ReviewPanel({
-  summary, saving, onCancel, onConfirm,
+  summary, saving, onCancel, onConfirm, reasons, onReason,
 }: {
   summary: {
     filled: number; aStock: number; sinMapear: number
@@ -1436,11 +1458,14 @@ function ReviewPanel({
     overLines: OverLine[]; untouchedLines: UntouchedLine[]
     enterLines: EnterLine[]; notEnterLines: NotEnterLine[]
     priceAlerts: number; expiryAlerts: number
+    flagLines: { key: string; name: string; why: string }[]
     hasReference: boolean; anomaly: boolean; masaSinTocar: boolean
   }
   saving: boolean
   onCancel: () => void
   onConfirm: () => void
+  reasons: Record<string, string>
+  onReason: (key: string, reason: string) => void
 }) {
   const productos = summary.aStock === 1 ? '1 producto' : `${summary.aStock} productos`
   return (
@@ -1528,6 +1553,33 @@ function ReviewPanel({
                 {summary.untouchedLines.map(u => u.name).join(', ')}.
               </p>
               <p className="text-xs text-text-secondary">Si no han llegado, está bien. Si llegaron, cuéntalos antes de confirmar.</p>
+            </div>
+          )}
+
+          {/* Motivo de las diferencias (responsabilidad, no bloquea) */}
+          {summary.flagLines.length > 0 && (
+            <div className="rounded-md border border-border-default bg-page p-3 space-y-2">
+              <p className="text-sm font-medium text-text-secondary">
+                Motivo de las diferencias <span className="text-xs font-normal text-text-tertiary">(opcional, queda registrado)</span>
+              </p>
+              <ul className="space-y-2">
+                {summary.flagLines.map(f => (
+                  <li key={f.key} className="text-sm">
+                    <span className="font-medium text-text-primary">{f.name}</span>{' '}
+                    <span className="text-xs text-text-secondary">— {f.why}</span>
+                    <select value={reasons[f.key] ?? ''} onChange={e => onReason(f.key, e.target.value)} disabled={saving}
+                      className="mt-1 block w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50">
+                      <option value="">Sin especificar</option>
+                      <option value="faltó">Faltó</option>
+                      <option value="llegó de más">Llegó de más</option>
+                      <option value="roto / mal estado">Roto / mal estado</option>
+                      <option value="caducidad corta">Caducidad corta</option>
+                      <option value="ya hablado con el proveedor">Ya hablado con el proveedor</option>
+                      <option value="otro">Otro</option>
+                    </select>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 
