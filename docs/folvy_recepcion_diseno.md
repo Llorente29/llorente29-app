@@ -1,85 +1,84 @@
-# Folvy — Diseño del frente «Recepción usable y fiable»
+# Folvy — Diseño del frente «Recepción usable y fiable» (v2 — espejo del albarán)
 
-> **Fecha:** 09/06/2026. **Estado: DISEÑO APROBADO por Julio.** Benchmark previo en `docs/folvy_recepcion_benchmark.md`.
-> Ritual cumplido: RECON (BBDD+repo) → benchmark del mejor → diseño golear aprobado → (construir por tramos).
-
----
-
-## 0. Decisiones aprobadas (09/06)
-
-1. **Los tres huecos** del benchmark: (1) calcar el formato del albarán + contar en cualquier capa; (2) foto del albarán visible al editar; (3) cantidad + € visibles con avisos de responsabilidad a dos ejes.
-2. **Dos columnas nuevas** en `goods_receipt_line`: `doc_qty` y `doc_amount` (lo que el albarán DECLARA por línea). Único cambio de modelo del frente.
-3. **`qty_in_base` server-side** dentro de este frente (cierra la deuda: hoy la conversión es cliente y `confirm_goods_receipt` se fía del navegador).
-4. **Referencia cuando el albarán NO está valorado:** el eje € cuadra contra el **esperado del pedido**; si es compra directa sin pedido pero el albarán trae total, contra el total del albarán. La cantidad siempre se comprueba por línea. *(Reversible si Julio lo prefiere de otra forma.)*
+> **Fecha:** 09/06/2026. **DISEÑO APROBADO** (validado con maquetas interactivas).
+> **v2 REEMPLAZA al v1**: fuera el constructor de formato anidado en el muelle; entra el ESPEJO DEL ALBARÁN.
+> Benchmark en `docs/folvy_recepcion_benchmark.md`. Ritual: RECON → benchmark → diseño golear aprobado → construir por tramos.
 
 ---
 
-## 1. Lo que YA existe (RECON 09/06 — no reconstruir)
+## 0. Giro de diseño (por qué v2)
 
-- **Árbol de formatos** `recipe_item_purchase_format`: `parent_format_id` + `qty_per_parent` + **`qty_in_base` cacheado por nodo** (la Caja sabe que son 6 Kg, la Bolsa 2 Kg). N capas, ya en el modelo.
-- **Conversión O(1)**: `qtyInBaseFromFormat(qtyReceived, nodo.qty_in_base)` = multiplicación; lee UN nodo, no recorre el árbol. → "contar en cualquier capa" = elegir el nodo y multiplicar.
-- **`setupSimplePurchase`**: alta del caso plano ("saco 25 kg") = nodo trivial + enlace a proveedor + precio + cascada de coste. Blindaje anti-invención: el service exige `qty_in_base` ya calculado, no inventa conversiones 1:1.
-- **`article_supplier.purchase_format_id`**: el formato vive por artículo×proveedor. `learn_from_receipt` ya lo aprende al confirmar (código + denominación + precio + formato).
-- **OCR** (`OcrLine`): ya extrae del albarán `quantity`, `line_amount` (importe), `unit_price_net`, `packages` (bultos) y la pista de formato (`format_name`/`pack_size`/`pack_unit`). `OcrDocument` trae `grand_total`/`tax_base_total`. `OcrValidation` ya cuadra Σlíneas vs total del documento.
-- **`formatQtyInBaseFromPack`**: convierte la pista del OCR a base SIN inventar (dimensión incompatible → null → needs_review).
-- **Foto del albarán**: ya se sube (`goods_receipt.rawDocumentUrl`, bucket `receipt-uploads`, URL firmada TTL 1h).
-- **Anti-error / blind receiving**: celda «Recibido» nace vacía; pedido/pendiente = referencia gris; resumen en humano antes de confirmar.
+El v1 hacía que el cocinero **modelara** el formato (árbol Caja→Bolsa→Kg) en el muelle. Con la maqueta delante, Julio: *"no lo veo claro… quisiera ver en la recepción lo mismo que veo en el albarán"*. Es la dirección correcta y más simple:
 
-**El gap real:** el albarán declara cantidad e importe por línea (`OcrLine.quantity`/`line_amount`), pero **NO se persisten** en `goods_receipt_line` (solo se guarda lo contado: `qty_received`/`qty_in_base`/`unit_cost`). Sin persistirlos, el cuadre a dos ejes no tiene contra qué comparar al confirmar.
+- La recepción es el **ESPEJO del albarán**: el trabajador ve y confirma lo que pone el papel.
+- La conversión a stock (kg) es **trabajo silencioso de Folvy**, no del cocinero.
+- El **desglose de formato NO vive en el muelle** (si alguna vez hace falta el árbol, vive en la ficha del artículo / catálogo del proveedor).
 
 ---
 
-## 2. Diseño por hueco
+## 1. Principios del espejo (innegociables del frente)
 
-### Hueco 1 — Calcar el albarán + contar en cualquier capa (GOL limpio)
-- **Mini-constructor anidado en la línea** ("Crear formato como viene en el albarán"): *Caja contiene 3 Bolsa · Bolsa contiene 1 Kg*. Calcula `qty_in_base` **subiendo la cadena** (Caja = 3 × Bolsa.qtyInBase) antes de insertar (el service no inventa). Guarda los nodos en el árbol con `source`/`needs_review`.
-- **Helper nuevo `setupNestedPurchase`** (hermano de `setupSimplePurchase`): crea la cadena de nodos + enlaza el nodo de compra a `article_supplier` con precio → **recordado por artículo×proveedor**, ofrecido el primero la próxima vez.
-- **Selector de la línea**: muestra solo los nodos de ESE artículo (Caja/Bolsa/Kg), nunca el catálogo global de 38 unidades (el ruido de tspoon). Eliges en qué capa contaste → `qty_received × nodo.qty_in_base`.
-- **Bucle OCR**: OCR desglosa → propone formato (needs_review). OCR no puede → el cocinero lo calca → enseña a reconocer esa redacción del proveedor la próxima vez.
-
-### Hueco 2 — Foto del albarán visible al editar (el visor empata; el momento golea)
-- **Panel lateral** con la imagen/PDF del albarán (ya subido) mientras se corrigen las líneas; en **móvil**, toggle accesible (no el icono escondido de hoy).
-- Honestidad: el visor en sí solo EMPATA con xtraCHEF/MarketMan (ellos lo enseñan en oficina). El GOL es tenerlo **en el muelle, en móvil, junto al conteo ciego** — el momento, no la foto.
-
-### Hueco 3 — Cantidad + € visibles, avisos de responsabilidad a dos ejes (GOL)
-- **Persistir** `doc_qty` + `doc_amount` (del OCR o a mano).
-- **La línea muestra claro**: cantidad contada (en la capa elegida + "= X base") y € de línea (cantidad × coste), con la **referencia** al lado (albarán si valorado; si no, esperado del pedido).
-- **Cuadre a dos ejes** (cantidad y €) contra la referencia. Anomalía → **aviso de responsabilidad graduado** (no bloqueo duro).
-- **ANTI-FATIGA (crítico — el dolor original "del 3º-4º ya ni miraba"):** (1) avisos solo ante anomalía real, no en cada línea; (2) acto deliberado con causa (faltó/sobró/precio), no un OK pasivo; (3) lenguaje humano con nombre de producto. Si se vuelve click-through, recrea el problema que abrió el frente.
-- El cuadre del total (Σlíneas vs total del documento) ya lo da `OcrValidation` → reutilizar para "si no valorado, contra el total".
+- La línea muestra cada renglón **TAL CUAL el albarán**: descripción literal, cantidad, unidad, importe.
+- **Recibido a ciegas**: el campo "recibido" nace **VACÍO**; la cantidad del albarán queda **en gris al lado** como referencia. (Anti sesgo de confirmación. Gol vs tspoon, que precarga y tiene "marcar todo como recibido".)
+- **Diferencias en ROJO y muy visibles** (borde + texto rojo en mayúscula), **solo ante diferencia real**; si cuadra, en silencio (anti-fatiga — el dolor original "del 3º-4º ya ni miraba").
+- **Conversión a stock silenciosa**: "→ a stock: X kg" lo pone Folvy. Si no lo sabe → "pendiente de formato (lo resuelve la oficina)", **sin frenar al trabajador**.
+- **Ajustar para cuadrar con el albarán**: cuando el formato guardado no cuadra con lo que dice el papel, un **toque** lo corrige *tal como lo escribe el albarán* ("N ud × M unidad = total"), **NO un árbol**, y **se recuerda** por artículo×proveedor.
+- **Recepción contra pedido**: el pedido es una **tercera referencia** (pediste ↔ albarán ↔ recibido).
 
 ---
 
-## 3. Cambio de esquema (único del frente)
+## 2. Qué muestra y hace la línea (Tramo 2)
 
-- `goods_receipt_line.doc_qty` (numeric, null) — cantidad declarada por el albarán en esa línea.
-- `goods_receipt_line.doc_amount` (numeric, null) — importe declarado por el albarán en esa línea (si valorado).
-- **`qty_in_base` server-side**: función SQL que calcula `qty_received × format.qty_in_base` dentro de `confirm_goods_receipt` (o helper invocado por él), para que el confirm NO se fíe del valor del navegador. RECON de la fuente viva de `confirm_goods_receipt` (pg_proc) antes de tocar.
-- Regenerar `src/types/database.ts` (método seguro: a `database.new.ts`, verificar líneas/sin error, mover, UTF-8 sin BOM) en el MISMO commit que los tipos/services.
-
----
-
-## 4. Plan de construcción por tramos (orden por dependencia)
-
-- **Tramo 1 — Cimiento (BBDD + tipos):** migración con `doc_qty`/`doc_amount` + función server-side de `qty_in_base` + endurecer `confirm_goods_receipt` para que la calcule él. Regenerar `database.ts`. *(Empieza con RECON de `confirm_goods_receipt` vivo.)*
-- **Tramo 2 — Hueco 1:** `setupNestedPurchase` + mini-constructor anidado en la línea + selector de capa por artículo. (purchaseFormatService.ts, GoodsReceiptForm.tsx, componente nuevo.)
-- **Tramo 3 — Hueco 3:** cablear `doc_qty`/`doc_amount` (OCR + entrada manual) + cantidad/€ visibles + referencia + avisos de responsabilidad a dos ejes anti-fatiga. (GoodsReceiptForm.tsx, goodsReceiptService.ts, panel de resumen.)
-- **Tramo 4 — Hueco 2:** visor de foto lateral (desktop) + toggle móvil, ligado a `rawDocumentUrl`. (GoodsReceiptForm.tsx, componente visor.)
-
-Orden: el esquema es cimiento; el formato (hueco 1) antes que el cuadre (hueco 3) porque el € de línea depende de la capa/formato; la foto (hueco 2) al final por ser la menos acoplada (puede subir si Julio lo prefiere).
+- **Descripción literal** del albarán (`raw_text`).
+- **Referencia del albarán** (gris): `albarán: {doc_qty} {ud} · {doc_amount} €`.
+- **Referencia del pedido** (gris, si hay pedido): `pediste: {qty_ordered}`.
+- **Recibido**: campo **vacío**. Al escribir → **cuadre a dos ejes**: cantidad vs `doc_qty`, e importe (recibido × precio) vs `doc_amount` cuando el albarán está **valorado**; si no está valorado, el € se cuadra **contra el total** (decisión 09/06). Diferencia en cualquiera → **ROJO prominente**.
+- **→ a stock: X kg** (conversión silenciosa). Si Folvy no la sabe, o **no cuadra con el albarán**, el enlace **"ajustar"** se **resalta** (si cuadra, "ajustar" sigue disponible pero discreto).
+- **Ajustar (un toque)**: `1 {formato} = [N] ud × [M] [unidad] = total`, **prefijado con lo que leyó el OCR** del texto ("3 UD DE 2 KG"); al guardar fija el formato (`qty_in_base = N×M` en la base del artículo, sin inventar) y **se recuerda** para el proveedor. Reutiliza `createPurchaseFormat`/`updatePurchaseFormat` + `learn_from_receipt` (NO `setupNestedPurchase`).
+- **Lote / caducidad visibles** (capturar + mostrar; el OCR ya los lee y la línea ya tiene los campos). La lógica **FEFO/APPCC va a su frente**.
+- **Aviso de precio**: si valorado y €/ud **sube** sobre umbral vs `last_price` → aviso discreto en la línea (`priceAlertFor` ya existe).
+- **Foto del albarán al lado + zoom** (lightbox reutilizado de fichas de plato).
+- **Al guardar, si hay rojo**: pedir **MOTIVO** → *faltó · llegó de más · roto / mal estado · caducidad corta · ya hablado con el proveedor · otro (con nota)* → **batería de confirmación de responsabilidad** (no bloqueo duro). Se registra.
 
 ---
 
-## 5. Veredicto golea/empata (deuda 0)
+## 3. Esquema (Tramo 2)
 
-- **Hueco 1:** GOL limpio (anidado + inline + recordado por proveedor; nadie lo hace).
-- **Hueco 2:** visor = EMPATE con los líderes; GOL solo por el momento (muelle/móvil/conteo ciego).
-- **Hueco 3:** GOL (dos ejes + por línea + lenguaje cocina); xtraCHEF solo controla el € total del documento. El riesgo a vencer es la fatiga de avisos — resuelto por diseño anti-fatiga.
-- **Diferenciador real:** unificar recepción operativa + control de factura en un solo momento, en el muelle, por el trabajador, en lenguaje de cocinero.
+- `doc_qty` / `doc_amount`: ya creados (Tramo 1). **Cablear** en `goodsReceiptService.ts` (insert + mappers) y poblar desde el OCR / a mano.
+- **NUEVO**: `goods_receipt_line.discrepancy_reason` (text, null) — el motivo del descuadre al guardar.
+- El "ajustar" **no necesita función de servicio nueva**: nodo de formato plano (`qty_in_base = N×M`) vía `createPurchaseFormat`, recordado por `learn_from_receipt` (ya hace upsert en `article_supplier` por artículo×proveedor con el formato).
 
 ---
 
-## 6. Microdecisiones resueltas / abiertas
+## 4. Lo que se DESCARTA de v1 (deuda 0: no se queda a medias)
 
-- **Resuelta:** referencia cuando no valorado = esperado del pedido (reversible).
-- **Abierta menor (en construcción):** copy exacto de los avisos de responsabilidad; orden del tramo 2 (foto) si Julio quiere verla antes.
+- **Constructor de formato anidado en el muelle** (`NestedFormatBuilder`, `setupNestedPurchase`): descartado. El desglose en árbol, si alguna vez hace falta, vive en la **ficha del artículo / catálogo del proveedor**, fuera de la recepción.
+
+---
+
+## 5. Plan por tramos (v2)
+
+- **Tramo 1 — HECHO** (commit 5230ff4): `doc_qty`/`doc_amount` + `qty_in_base` server-side en `confirm_goods_receipt`.
+- **Tramo 2 — AHORA: el ESPEJO completo.** Recibido a ciegas; referencias albarán + pedido; diferencias en rojo prominentes; ajustar-un-toque (siempre disponible, resaltado al detectar desajuste); foto + zoom; aviso de precio; lote/caducidad visibles; motivo + confirmación de responsabilidad al guardar. + columna `discrepancy_reason`.
+- **Tramo 3 — Detección de pedido (b)** desde escaneo suelto ("esto parece PED-00012, ¿lo vinculo?") + cuadre fino a tres ejes.
+- **Frentes APARTE (declarados, NO en este frente):** FEFO + trazabilidad de lote; APPCC en recepción (temperatura/rechazo de línea); recepción desde el **portal del trabajador** (móvil, permisos, circuito de validación).
+
+---
+
+## 6. Veredicto golea/empata (deuda 0)
+
+- **Espejo + recibido a ciegas + rojo prominente** = GOL vs tspoon (precarga y "marcar todo como recibido" = sesgo de fábrica).
+- **Ajustar-para-cuadrar-con-el-albarán + se recuerda** = GOL (nadie deja calcar el papel y aprender por proveedor).
+- **Cuadre a dos/tres ejes con motivo** = más que xtraCHEF (un eje, total del documento, en oficina).
+- **Foto al lado en el muelle** (no en oficina) = GOL vs líderes.
+- **Conversión a stock silenciosa + pendiente-oficina si no se sabe** = no frena al trabajador (lo que rompía tspoon).
+
+---
+
+## 7. Decisiones registradas (09/06)
+
+- Caducidad/lote: **capturar + mostrar ahora** (now-or-never, legal); lógica FEFO/APPCC luego.
+- Recepción contra pedido: **referencia (a) ahora**; **detección (b) en Tramo 3**.
+- Ajustar: **siempre disponible discreto, resaltado cuando Folvy detecta desajuste**.
+- Motivos: lista cerrada (arriba) + "otro (con nota)".
+- Referencia del € cuando el albarán no está valorado: **contra el total** (reversible).

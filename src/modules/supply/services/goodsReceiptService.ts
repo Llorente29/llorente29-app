@@ -69,6 +69,9 @@ export interface GoodsReceiptLine {
   unitCost: number | null
   lotCode: string | null
   expiryDate: string | null
+  docQty: number | null
+  docAmount: number | null
+  discrepancyReason: string | null
   mapSource: string | null
   mapConfidence: number | null
   mapNeedsReview: boolean
@@ -128,6 +131,9 @@ export interface GoodsReceiptLineInsert {
   mapSource?: string | null
   mapConfidence?: number | null
   mapNeedsReview?: boolean
+  docQty?: number | null
+  docAmount?: number | null
+  discrepancyReason?: string | null
   position?: number
   notes?: string | null
 }
@@ -145,6 +151,9 @@ export interface GoodsReceiptLineUpdate {
   mapSource?: string | null
   mapConfidence?: number | null
   mapNeedsReview?: boolean
+  docQty?: number | null
+  docAmount?: number | null
+  discrepancyReason?: string | null
   position?: number
   notes?: string | null
 }
@@ -227,6 +236,9 @@ function rowToReceiptLine(row: Row): GoodsReceiptLine {
     unitCost: row.unit_cost === null || row.unit_cost === undefined ? null : Number(row.unit_cost),
     lotCode: (row.lot_code as string | null) ?? null,
     expiryDate: (row.expiry_date as string | null) ?? null,
+    docQty: row.doc_qty === null || row.doc_qty === undefined ? null : Number(row.doc_qty),
+    docAmount: row.doc_amount === null || row.doc_amount === undefined ? null : Number(row.doc_amount),
+    discrepancyReason: (row.discrepancy_reason as string | null) ?? null,
     mapSource: (row.map_source as string | null) ?? null,
     mapConfidence: (row.map_confidence as number | null) ?? null,
     mapNeedsReview: Boolean(row.map_needs_review),
@@ -289,6 +301,9 @@ function lineInsertToRow(input: GoodsReceiptLineInsert): Row {
     unit_cost: input.unitCost ?? null,
     lot_code: input.lotCode ?? null,
     expiry_date: input.expiryDate ?? null,
+    doc_qty: input.docQty ?? null,
+    doc_amount: input.docAmount ?? null,
+    discrepancy_reason: input.discrepancyReason ?? null,
     map_source: input.mapSource ?? null,
     map_confidence: input.mapConfidence ?? null,
     map_needs_review: input.mapNeedsReview ?? false,
@@ -308,6 +323,9 @@ function lineUpdateToRow(patch: GoodsReceiptLineUpdate): Row {
   if (patch.unitCost !== undefined) row.unit_cost = patch.unitCost
   if (patch.lotCode !== undefined) row.lot_code = patch.lotCode
   if (patch.expiryDate !== undefined) row.expiry_date = patch.expiryDate
+  if (patch.docQty !== undefined) row.doc_qty = patch.docQty
+  if (patch.docAmount !== undefined) row.doc_amount = patch.docAmount
+  if (patch.discrepancyReason !== undefined) row.discrepancy_reason = patch.discrepancyReason
   if (patch.mapSource !== undefined) row.map_source = patch.mapSource
   if (patch.mapConfidence !== undefined) row.map_confidence = patch.mapConfidence
   if (patch.mapNeedsReview !== undefined) row.map_needs_review = patch.mapNeedsReview

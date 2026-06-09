@@ -3819,6 +3819,7 @@ export type Database = {
         Row: {
           account_id: string
           created_at: string
+          discrepancy_reason: string | null
           doc_amount: number | null
           doc_qty: number | null
           expiry_date: string | null
@@ -3845,6 +3846,7 @@ export type Database = {
         Insert: {
           account_id: string
           created_at?: string
+          discrepancy_reason?: string | null
           doc_amount?: number | null
           doc_qty?: number | null
           expiry_date?: string | null
@@ -3871,6 +3873,7 @@ export type Database = {
         Update: {
           account_id?: string
           created_at?: string
+          discrepancy_reason?: string | null
           doc_amount?: number | null
           doc_qty?: number | null
           expiry_date?: string | null
