@@ -25,7 +25,7 @@
 // Tras confirmar, VUELVE SOLO (onSaved con mensaje); aviso como toast en lista.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, Search, Loader2, Check, Save, ListChecks, AlertTriangle, Pencil } from 'lucide-react'
+import { ArrowLeft, Search, Loader2, Check, Save, ListChecks, AlertTriangle, Pencil, Box, ArrowRight } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import { useOperativeLocation } from '@/modules/supply/hooks/useOperativeLocation'
 import OperativeLocationBanner from '@/modules/supply/components/OperativeLocationBanner'
@@ -1267,8 +1267,8 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
               </div>
 
               {/* ESPEJO DEL ALBARÁN: tarjetas a la izquierda, foto del albarán al lado (disposición A) */}
-              <div className={fromOcr && ocrPrefill?.rawDocumentUrl ? 'grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-4 items-start' : ''}>
-                <div className="space-y-2 order-2 lg:order-1 min-w-0">
+              <div className={fromOcr && ocrPrefill?.rawDocumentUrl ? 'grid grid-cols-1 lg:grid-cols-[420px_minmax(0,1fr)] gap-4 items-start' : ''}>
+                <div className="space-y-2 order-1 lg:order-2 min-w-0">
                   {visible.map(l => {
                     const qtyN = parseNum(l.qty)
                     const hasQty = qtyN !== null && qtyN > 0
@@ -1335,7 +1335,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                                 {l.recipeItemId ? (
                                   <div className="flex items-center gap-1.5 flex-wrap">
                                     <span className={`inline-block w-2 h-2 rounded-full ${l.matchSemaphore === 'green' ? 'bg-success' : 'bg-warning'}`} />
-                                    <span className="font-medium text-text-primary">{l.matchedName}</span>
+                                    <span className="text-base font-medium text-text-primary">{l.matchedName}</span>
                                     {l.matchType && <span className="text-[10px] text-text-secondary">({matchTypeLabel(l.matchType)})</span>}
                                   </div>
                                 ) : (
@@ -1352,28 +1352,43 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                                 </button>
                               </div>
                             ) : (
-                              <span className="font-medium text-text-primary">{l.productName}</span>
+                              <span className="text-base font-medium text-text-primary">{l.productName}</span>
                             )}
 
-                            {/* Referencia: lo que dice el albarán (gris) */}
-                            {fromOcr && l.rawText && (
-                              <div className="text-[11px] text-text-tertiary mt-1">albarán: {l.rawText}{l.supplierCode ? ` · cód. ${l.supplierCode}` : ''}</div>
-                            )}
-                            {(l.albaranQty != null || l.lineAmount != null) && (
-                              <div className="text-[11px] text-text-secondary mt-0.5">
-                                el albarán dice:{' '}
-                                {l.albaranQty != null ? `${l.albaranQty}${l.albaranUnit ? ' ' + l.albaranUnit : ''}` : '—'}
-                                {l.lineAmount != null ? ` · ${l.lineAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €` : ''}
+                            {/* Lo que dice el albarán, agrupado (cantidad/importe arriba, detalle en gris) */}
+                            {fromOcr && (l.rawText || l.albaranQty != null || l.lineAmount != null) && (
+                              <div className="mt-1.5 rounded-md bg-page px-2.5 py-1.5">
+                                <div className="text-[10px] text-text-tertiary">El albarán dice</div>
+                                {(l.albaranQty != null || l.lineAmount != null) && (
+                                  <div className="text-sm text-text-primary">
+                                    {l.albaranQty != null ? `${l.albaranQty}${l.albaranUnit ? ' ' + l.albaranUnit : ''}` : '—'}
+                                    {l.lineAmount != null ? ` · ${l.lineAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €` : ''}
+                                  </div>
+                                )}
+                                {l.rawText && (
+                                  <div className="text-[11px] text-text-tertiary mt-0.5">{l.rawText}{l.supplierCode ? ` · cód. ${l.supplierCode}` : ''}</div>
+                                )}
+                                {(l.lotCode || l.expiryDate) && (
+                                  <div className="text-[11px] text-text-tertiary mt-0.5">
+                                    {l.lotCode ? `lote ${l.lotCode}` : ''}{l.lotCode && l.expiryDate ? ' · ' : ''}{l.expiryDate ? `caduca ${l.expiryDate}` : ''}
+                                  </div>
+                                )}
+                                {hasReference && (
+                                  <div className="text-[11px] text-text-tertiary mt-0.5">
+                                    pedido {l.qtyOrdered ?? '—'} · recibido {l.alreadyReceived ?? '—'} · pendiente {l.pending ?? '—'}
+                                  </div>
+                                )}
                               </div>
                             )}
-                            {hasReference && (
-                              <div className="text-[11px] text-text-tertiary mt-0.5">
-                                pedido: {l.qtyOrdered ?? '—'} · ya recibido: {l.alreadyReceived ?? '—'} · pendiente: {l.pending ?? '—'}
+                            {/* No-OCR: lote/caduca y referencia de pedido sueltos */}
+                            {!fromOcr && (l.lotCode || l.expiryDate) && (
+                              <div className="text-[11px] text-text-tertiary mt-1">
+                                {l.lotCode ? `lote ${l.lotCode}` : ''}{l.lotCode && l.expiryDate ? ' · ' : ''}{l.expiryDate ? `caduca ${l.expiryDate}` : ''}
                               </div>
                             )}
-                            {(l.lotCode || l.expiryDate) && (
+                            {!fromOcr && hasReference && (
                               <div className="text-[11px] text-text-tertiary mt-0.5">
-                                {l.lotCode ? `lote: ${l.lotCode}` : ''}{l.lotCode && l.expiryDate ? ' · ' : ''}{l.expiryDate ? `caduca: ${l.expiryDate}` : ''}
+                                pedido {l.qtyOrdered ?? '—'} · recibido {l.alreadyReceived ?? '—'} · pendiente {l.pending ?? '—'}
                               </div>
                             )}
                           </div>
@@ -1413,7 +1428,11 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                             <p className="text-[11px] text-text-secondary">formato: {l.formatLabel ?? '—'}</p>
                           ) : !l.recipeItemId ? (
                             <span className="text-[11px] text-text-tertiary">casa el artículo primero</span>
-                          ) : (
+                          ) : (() => {
+                            const hasPack = l.packCount != null && l.packCount > 1 && l.packInnerBase != null && !!l.baseUnit
+                            const container = (l.formatName ?? 'Caja').trim() || 'Caja'
+                            const unitAbbr = l.baseUnit?.abbr ?? ''
+                            return (
                             <div className="space-y-1">
                               {(l.formatOptions?.length ?? 0) > 1 && (
                                 <select value={l.purchaseFormatId ?? ''} onChange={e => selectFormatOption(l.key, e.target.value)} disabled={saving}
@@ -1422,30 +1441,41 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                                   {l.formatOptions!.map(opt => (<option key={opt.id} value={opt.id}>{opt.label ?? opt.name ?? 'Formato'}</option>))}
                                 </select>
                               )}
-                              <div className="flex items-center gap-1 flex-wrap">
-                                <span className="text-[11px] text-text-secondary">formato:</span>
-                                <input type="text" value={l.formatName ?? ''} onChange={e => setFormatName(l.key, e.target.value)} disabled={saving} placeholder="Formato"
-                                  className="w-28 px-1.5 py-1 text-xs border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50" />
-                                <span className="text-[11px] text-text-secondary">=</span>
-                                <input type="text" inputMode="decimal" value={l.formatQtyInBase != null ? String(l.formatQtyInBase) : ''} onChange={e => setFormatQty(l.key, e.target.value)} disabled={saving} placeholder="?"
-                                  className={`w-16 px-1.5 py-1 text-xs text-right rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50 border ${l.formatQtyInBase == null ? 'border-warning/60 bg-warning-bg/30' : 'border-border-default'}`} />
-                                <span className="text-[11px] text-text-secondary">{l.baseUnit?.abbr ?? ''}</span>
-                                {l.formatSuggested && <span className="text-[10px] text-accent" title="Propuesto por la IA — confírmalo">✨</span>}
-                              </div>
+                              {hasPack ? (
+                                <div className="flex items-center gap-1.5 text-[13px] text-text-secondary">
+                                  <Box size={15} className="shrink-0 text-text-tertiary" />
+                                  <span>
+                                    <span className="text-text-primary">{container}</span>
+                                    {` · ${l.packCount} × ${formatBaseQty(l.packInnerBase!, unitAbbr)} = ${formatBaseQty(l.packCount! * l.packInnerBase!, unitAbbr)}`}
+                                    <span className="text-text-tertiary">{` · se cuenta por ${(l.packInnerName ?? 'Ud')}`}</span>
+                                  </span>
+                                </div>
+                              ) : (
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-1 flex-wrap">
+                                    <span className="text-[11px] text-text-secondary">formato:</span>
+                                    <input type="text" value={l.formatName ?? ''} onChange={e => setFormatName(l.key, e.target.value)} disabled={saving} placeholder="Formato"
+                                      className="w-28 px-1.5 py-1 text-xs border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50" />
+                                    <span className="text-[11px] text-text-secondary">=</span>
+                                    <input type="text" inputMode="decimal" value={l.formatQtyInBase != null ? String(l.formatQtyInBase) : ''} onChange={e => setFormatQty(l.key, e.target.value)} disabled={saving} placeholder="?"
+                                      className={`w-16 px-1.5 py-1 text-xs text-right rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50 border ${l.formatQtyInBase == null ? 'border-warning/60 bg-warning-bg/30' : 'border-border-default'}`} />
+                                    <span className="text-[11px] text-text-secondary">{unitAbbr}</span>
+                                    {l.formatSuggested && <span className="text-[10px] text-accent" title="Propuesto por la IA — confírmalo">✨</span>}
+                                  </div>
+                                  {l.formatQtyInBase == null && (
+                                    <p className="text-[10px] text-warning">¿Cuánto contiene un {container.toLowerCase()}? (en {unitAbbr || 'base'})</p>
+                                  )}
+                                </div>
+                              )}
                               {l.formatSuggested && (l.formatOptions?.length ?? 0) > 1 && (
                                 <p className="text-[10px] text-warning">Confirma el formato: el albarán no indicaba cuál con certeza.</p>
-                              )}
-                              {l.formatQtyInBase == null && (
-                                <p className="text-[10px] text-warning">¿Cuánto contiene un {(l.formatName ?? '').trim() || 'formato'}? (en {l.baseUnit?.abbr ?? 'base'})</p>
                               )}
                               {l.purchaseFormatId && !l.formatTouched && !l.formatSuggested && (
                                 <p className="text-[10px] text-text-tertiary">formato que ya tenías con este proveedor</p>
                               )}
-                              {l.packCount != null && l.packInnerBase != null && l.baseUnit && (
-                                <p className="text-[10px] text-success">✓ {((l.formatName ?? 'Caja').trim() || 'Caja')}: {l.packCount} × {formatBaseQty(l.packInnerBase, l.baseUnit.abbr)} = {formatBaseQty(l.packCount * l.packInnerBase, l.baseUnit.abbr)} · se contará por {(l.packInnerName ?? 'Ud')}</p>
-                              )}
                             </div>
-                          )}
+                            )
+                          })()}
 
                           {/* Ajustar como el albarán (proponer + confirmar; unidad amigable) */}
                           {fromOcr && l.recipeItemId && (
@@ -1497,53 +1527,57 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                         </div>
 
                         {/* Fila 3: recibido (a ciegas) + € / formato */}
-                        <div className="mt-2 flex items-end gap-4 flex-wrap">
+                        <div className="mt-2.5 flex items-end gap-4 flex-wrap">
                           <div>
-                            <label className="block text-[11px] text-text-secondary mb-0.5">Recibido <span className="text-text-tertiary">(cuéntalo)</span></label>
-                            <input type="text" inputMode="decimal" value={l.qty} onChange={e => setQty(l.key, e.target.value)} disabled={saving} placeholder="0"
-                              className={`w-24 px-2 py-1.5 text-sm text-center font-medium rounded-md border bg-page text-text-primary focus:outline-none focus:ring-2 focus:ring-accent disabled:opacity-50 ${hasQty ? 'border-accent/50' : 'border-accent/30 bg-accent-bg/30'}`} />
+                            <label className="block text-[11px] text-text-secondary mb-1">Recibido <span className="text-text-tertiary">(cuéntalo)</span></label>
+                            <div className="flex items-center gap-1.5">
+                              <input type="text" inputMode="decimal" value={l.qty} onChange={e => setQty(l.key, e.target.value)} disabled={saving} placeholder="0"
+                                className={`w-20 px-2 py-1.5 text-lg text-center font-medium rounded-md border bg-page text-text-primary focus:outline-none focus:ring-2 focus:ring-accent disabled:opacity-50 ${hasQty ? 'border-accent/50' : 'border-accent/30 bg-accent-bg/30'}`} />
+                              {(l.formatLabel ?? l.formatName) && (
+                                <span className="text-xs text-text-tertiary">{(l.formatLabel ?? l.formatName)!.toLowerCase()}</span>
+                              )}
+                            </div>
                             {(() => {
                               const qn = parseNum(l.qty)
                               if (qn === null || qn <= 0) return null
                               const unidad = l.formatLabel ?? l.formatName ?? null
-                              if (!unidad) return <p className="text-[10px] text-warning mt-0.5">elige formato ↑</p>
+                              if (!unidad) return <p className="text-[10px] text-warning mt-1">elige formato ↑</p>
                               const enAlmacen = qtyInBaseFromFormat(qn, l.formatQtyInBase)
                               return (
-                                <div className="mt-0.5 leading-tight">
-                                  <p className="text-[10px] text-text-secondary">{qn} × {unidad}</p>
-                                  {enAlmacen !== null && l.baseUnit && (
-                                    <p className="text-[10px] text-text-tertiary">= {formatBaseQty(enAlmacen, l.baseUnit.abbr)} al almacén</p>
-                                  )}
-                                  {l.convertedNote && <p className="text-[10px] text-text-tertiary">{l.convertedNote}</p>}
+                                <div className="mt-1 leading-tight">
+                                  {enAlmacen !== null && l.baseUnit ? (
+                                    <p className="inline-flex items-center gap-1 text-xs text-text-secondary"><ArrowRight size={13} className="shrink-0" /> {formatBaseQty(enAlmacen, l.baseUnit.abbr)} al almacén</p>
+                                  ) : null}
+                                  {l.convertedNote && <p className="text-[10px] text-text-tertiary mt-0.5">{l.convertedNote}</p>}
                                 </div>
                               )
                             })()}
                           </div>
                           <div>
-                            <label className="block text-[11px] text-text-secondary mb-0.5">€ / formato</label>
+                            <label className="block text-[11px] text-text-secondary mb-1">€ / {((l.formatName ?? '').trim() || 'formato').toLowerCase()}</label>
                             <input type="text" inputMode="decimal" value={l.unitCost} onChange={e => setCost(l.key, e.target.value)} disabled={saving} placeholder="—"
                               className="w-24 px-2 py-1.5 text-sm text-right border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50" />
                           </div>
                         </div>
 
-                        {/* Fila 4: NO CUADRA con el albarán (rojo prominente) */}
+                        {/* Fila 4: no cuadra con el albarán (rojo prominente) */}
                         {albaranDiff && (
-                          <div className="mt-2 flex items-start gap-1.5 text-[12px] font-medium text-danger">
-                            <AlertTriangle size={14} className="shrink-0 translate-y-0.5" />
-                            <span>
-                              NO CUADRA CON EL ALBARÁN
-                              {amountDelta !== null && l.lineAmount != null && (
-                                <span className="block font-normal">
-                                  importe: {(qtyN! * costN!).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} € recibido vs {l.lineAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} € del albarán
-                                </span>
-                              )}
-                              {qtyDeltaBase !== null && recInBase !== null && l.albaranQty != null && l.baseUnit && (
-                                <span className="block font-normal">
-                                  cantidad: {formatBaseQty(recInBase, l.baseUnit.abbr)} recibido vs {formatBaseQty(l.albaranQty, l.baseUnit.abbr)} del albarán
-                                </span>
-                              )}
-                              <span className="block font-normal text-text-secondary">Revisa la cantidad o el formato. Al confirmar te pediré el motivo.</span>
-                            </span>
+                          <div className="mt-2.5 rounded-md bg-danger-bg px-2.5 py-2">
+                            <div className="flex items-center gap-1.5 text-[13px] font-medium text-danger">
+                              <AlertTriangle size={15} className="shrink-0" />
+                              No cuadra con el albarán
+                            </div>
+                            {amountDelta !== null && l.lineAmount != null && (
+                              <div className="text-[12px] text-danger mt-1">
+                                cuentas {(qtyN! * costN!).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} € · el albarán dice {l.lineAmount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                              </div>
+                            )}
+                            {qtyDeltaBase !== null && recInBase !== null && l.albaranQty != null && l.baseUnit && (
+                              <div className="text-[12px] text-danger mt-1">
+                                cuentas {formatBaseQty(recInBase, l.baseUnit.abbr)} · el albarán dice {formatBaseQty(l.albaranQty, l.baseUnit.abbr)}
+                              </div>
+                            )}
+                            <div className="text-[11px] text-text-secondary mt-1">Revisa la cantidad o el formato. Al confirmar te pediré el motivo.</div>
                           </div>
                         )}
                       </div>
@@ -1552,7 +1586,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                 </div>
 
                 {fromOcr && ocrPrefill?.rawDocumentUrl && (
-                  <div className="order-1 lg:order-2 lg:sticky lg:top-4">
+                  <div className="order-2 lg:order-1 lg:sticky lg:top-4">
                     <ReceiptPhotoViewer path={ocrPrefill.rawDocumentUrl} />
                   </div>
                 )}
