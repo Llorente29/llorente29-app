@@ -517,3 +517,83 @@ export async function setupSimplePurchase(
 
   return { format, link, ancestorsRecomputed, recalculatedDishes }
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// Árbol de formato leído del albarán: "Caja contiene N × (unidad interior)"
+// ═══════════════════════════════════════════════════════════════════════
+export interface PackTreeSetup {
+  accountId: string
+  itemId: string
+  count: number              // nº de unidades interiores por caja (p.ej. 3)
+  innerQtyInBase: number     // contenido de UNA unidad interior, en base (p.ej. 2000 g)
+  innerName: string          // nombre de la unidad interior ("Ud", "Bolsa"…)
+  cajaName: string           // nombre del contenedor de compra ("Caja"…)
+  source?: PurchaseFormatSource
+  createdBy?: string | null
+  createdByName?: string | null
+}
+
+// Crea/REUTILIZA el árbol "Caja = N × (unidad interior)" tal como lo dice el
+// albarán. La unidad interior es un NODO REAL (unidad de stock contable, para
+// inventario). El total de la Caja se DERIVA aquí, en un ÚNICO sitio
+// (count × inner.qtyInBase) y NUNCA se teclea por separado → imposible que el
+// total y el desglose se descuadren. Sin trigger en cascada (misma filosofía
+// que costCascadeService: la garantía vive en una sola función app-orquestada).
+// Reutiliza la unidad interior si ya existe (mismo contenido en base) y la Caja
+// si ya existe con ese interior y ese número → no prolifera nodos.
+// Devuelve la CAJA (nodo de compra) y la unidad INTERIOR (nodo de stock).
+export async function ensurePackTree(
+  setup: PackTreeSetup
+): Promise<{ caja: PurchaseFormat; inner: PurchaseFormat }> {
+  requireSupabase()
+  if (!(setup.count > 0) || !(setup.innerQtyInBase > 0)) {
+    throw new Error('ensurePackTree: count e innerQtyInBase deben ser > 0.')
+  }
+  const formats = await listFormatsByItem(setup.itemId)
+
+  // 1) Unidad interior: reutiliza si ya hay un nodo sin padre con ese contenido.
+  const eps = Math.max(0.001, setup.innerQtyInBase * 0.0001)
+  let inner =
+    formats.find(
+      (f) => f.parentFormatId == null && f.archivedAt == null && Math.abs(f.qtyInBase - setup.innerQtyInBase) <= eps
+    ) ?? null
+  if (!inner) {
+    inner = await createPurchaseFormat({
+      accountId: setup.accountId,
+      itemId: setup.itemId,
+      name: setup.innerName,
+      qtyInBase: setup.innerQtyInBase,
+      source: setup.source ?? 'manual',
+      createdBy: setup.createdBy ?? null,
+      createdByName: setup.createdByName ?? null,
+    })
+  }
+
+  // 2) Caja: total DERIVADO del árbol (única fuente de verdad). Reutiliza si ya
+  //    existe una caja con ese interior y ese número de unidades.
+  const cajaQtyInBase = setup.count * inner.qtyInBase
+  const innerId = inner.id
+  let caja =
+    formats.find(
+      (f) =>
+        f.parentFormatId === innerId &&
+        f.archivedAt == null &&
+        f.qtyPerParent != null &&
+        Math.abs(f.qtyPerParent - setup.count) < 1e-9
+    ) ?? null
+  if (!caja) {
+    caja = await createPurchaseFormat({
+      accountId: setup.accountId,
+      itemId: setup.itemId,
+      name: setup.cajaName,
+      qtyInBase: cajaQtyInBase,
+      parentFormatId: innerId,
+      qtyPerParent: setup.count,
+      source: setup.source ?? 'manual',
+      createdBy: setup.createdBy ?? null,
+      createdByName: setup.createdByName ?? null,
+    })
+  }
+  return { caja, inner }
+}
+
