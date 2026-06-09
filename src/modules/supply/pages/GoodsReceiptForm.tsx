@@ -25,12 +25,12 @@
 // Tras confirmar, VUELVE SOLO (onSaved con mensaje); aviso como toast en lista.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, Search, Loader2, Check, Save, ListChecks, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, Search, Loader2, Check, Save, ListChecks, AlertTriangle, Pencil } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import { useOperativeLocation } from '@/modules/supply/hooks/useOperativeLocation'
 import OperativeLocationBanner from '@/modules/supply/components/OperativeLocationBanner'
 import ReceiptPhotoViewer from '@/modules/supply/components/ReceiptPhotoViewer'
-import { listSuppliers, createPurchaseFormat } from '@/modules/kitchen/services/purchaseFormatService'
+import { listSuppliers, createPurchaseFormat, ensurePackTree } from '@/modules/kitchen/services/purchaseFormatService'
 import type { Supplier } from '@/types/kitchen'
 import {
   getSupplierCatalog,
@@ -166,6 +166,11 @@ interface DraftLine {
   formatSuggested?: boolean         // el formato lo propuso la IA (✨)
   formatTouched?: boolean           // el humano editó el formato → no autollenar
   formatOptions?: SupplierFormatOption[]  // todos los formatos del artículo (elegir bote/caja)
+  // Desglose del formato leído/confirmado del albarán ("Caja = 3 × 2 kg"): alimenta
+  // ensurePackTree al persistir (Caja → unidad interior contable + total derivado).
+  packCount?: number | null         // nº de unidades interiores por caja (3)
+  packInnerBase?: number | null     // contenido de UNA unidad interior, en base (2000 g)
+  packInnerName?: string | null     // nombre de la unidad interior ("Ud")
 }
 
 function parseNum(v: string): number | null {
@@ -291,6 +296,79 @@ interface NotEnterLine {
   reason: 'sin reconocer' | 'sin formato'   // sin artículo casado / sin formato→base resuelto
 }
 
+// Unidad amigable para teclear el contenido de un formato SIN gramos sueltos:
+// peso → kg, volumen → L, unidad → ud. Devuelve etiqueta + factor a la unidad base.
+function friendlyUnit(baseAbbr: string | null | undefined): { label: string; factor: number } {
+  switch ((baseAbbr ?? '').toLowerCase()) {
+    case 'g': return { label: 'kg', factor: 1000 }
+    case 'ml': return { label: 'L', factor: 1000 }
+    case 'kg': return { label: 'kg', factor: 1 }
+    case 'l': return { label: 'L', factor: 1 }
+    default: return { label: baseAbbr || 'ud', factor: 1 }
+  }
+}
+
+// Convierte (valor, unidad-del-albarán) a la unidad BASE del artículo. null si la
+// dimensión no casa (p.ej. el albarán dice KG pero el artículo se mide en ud).
+function unitToArticleBase(v: number, u: string, baseAbbr: string | null | undefined): number | null {
+  const b = (baseAbbr ?? '').toLowerCase()
+  const uu = u.toLowerCase()
+  const isWeight = b === 'g' || b === 'kg'
+  const isVolume = b === 'ml' || b === 'l'
+  const isUnit = b === 'ud'
+  if (isWeight && (uu === 'kg' || uu === 'g')) {
+    const inG = v * (uu === 'kg' ? 1000 : 1)
+    return b === 'g' ? inG : inG / 1000
+  }
+  if (isVolume && (uu === 'l' || uu === 'ml' || uu === 'cl')) {
+    const inMl = v * (uu === 'l' ? 1000 : uu === 'cl' ? 10 : 1)
+    return b === 'ml' ? inMl : inMl / 1000
+  }
+  if (isUnit && (uu === 'ud' || uu === 'uds' || uu === 'u')) return v
+  return null
+}
+
+// Lee del TEXTO del albarán el desglose de un formato, DETERMINISTA (sin IA, sin
+// inventar): "CAJA 3 UD DE 1 KG" → { n:3, m:1 } (m en unidad amigable: kg/L/ud).
+// "PAQUETE 250 UD" (artículo en ud) → { n:250, m:1 }. Si no encaja con la unidad
+// base del artículo → null (el editor nace vacío y lo teclea el humano).
+function titleCaseWord(w: string): string {
+  return w.charAt(0) + w.slice(1).toLowerCase()
+}
+
+// Lee del TEXTO del albarán el desglose de un formato, DETERMINISTA (sin IA, sin
+// inventar): "CAJA 3 UD DE 1 KG" → { n:3, m:1, container:'Caja', innerLabel:'Ud' }.
+// "PAQUETE 250 UD" (artículo en ud) → { n:250, m:1, container:'Paquete' }. Si no
+// encaja con la unidad base → null (el editor nace vacío y lo teclea el humano).
+function parsePack(rawText: string | null, baseAbbr: string | null | undefined): { n: number; m: number; container: string | null; innerLabel: string } | null {
+  if (!rawText) return null
+  const t = rawText.toUpperCase()
+  const fu = friendlyUnit(baseAbbr)
+  // (A) "[contenedor] N UD DE M <unidad>"
+  const a = t.match(/(?:(CAJA|CJ|PAQUETE|PAQ|SACO|CUBO|GARRAFA|BIDON|BIDÓN|BANDEJA|ESTUCHE|BOTE|BOLSA|LATA|BARRIL|MALLA|RED|PACK)\s+)?(\d+(?:[.,]\d+)?)\s*UD(?:S|ES)?\s+DE\s+(\d+(?:[.,]\d+)?)\s*(KG|G|L|ML|CL)\b/)
+  if (a) {
+    const container = a[1] ? titleCaseWord(a[1]) : null
+    const n = parseFloat(a[2].replace(',', '.'))
+    const v = parseFloat(a[3].replace(',', '.'))
+    const base = unitToArticleBase(v, a[4], baseAbbr)
+    if (base !== null && n > 0) {
+      const mFriendly = base / fu.factor
+      if (mFriendly > 0) return { n, m: Math.round(mFriendly * 1000) / 1000, container, innerLabel: 'Ud' }
+    }
+    return null
+  }
+  // (B) "[contenedor] N UD" sin "DE", solo para artículos medidos en unidades
+  if ((baseAbbr ?? '').toLowerCase() === 'ud') {
+    const b = t.match(/(?:(CAJA|CJ|PAQUETE|PAQ|SACO|CUBO|GARRAFA|BIDON|BIDÓN|BANDEJA|ESTUCHE|BOTE|BOLSA|LATA|BARRIL|MALLA|RED|PACK)\s+)?(\d+(?:[.,]\d+)?)\s*UD(?:S|ES)?\b/)
+    if (b) {
+      const container = b[1] ? titleCaseWord(b[1]) : null
+      const n = parseFloat(b[2].replace(',', '.'))
+      if (n > 0) return { n, m: 1, container, innerLabel: 'Ud' }
+    }
+  }
+  return null
+}
+
 export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill, onBack, onSaved }: GoodsReceiptFormProps) {
   const { userProfile, authUserId } = useApp()
   const op = useOperativeLocation()
@@ -336,6 +414,10 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
   const [pickerKey, setPickerKey] = useState<string | null>(null)
   // Motivo del descuadre por línea (clave de DraftLine → motivo). Se vuelca a discrepancy_reason.
   const [discrepancyReasons, setDiscrepancyReasons] = useState<Record<string, string>>({})
+  // Editor "ajustar como el albarán" (un formato a la vez): línea abierta + N uds × M unidad.
+  const [adjustKey, setAdjustKey] = useState<string | null>(null)
+  const [adjN, setAdjN] = useState('')
+  const [adjM, setAdjM] = useState('')
 
   function chooseMatch(key: string, recipeItemId: string, name: string, semaphore: 'green' | 'yellow' | null, matchType: string | null) {
     setDraft(d => d.map(x => x.key === key
@@ -395,6 +477,20 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
       // El coste escala con el nuevo contenido tecleado (€/base constante).
       const newCost = rescaleCostToFormat(parseNum(l.unitCost), l.formatQtyInBase, n, l.purchaseFormatId ? (formatPrices[l.purchaseFormatId] ?? null) : null)
       return { ...l, formatQtyInBase: n, unitCost: newCost, formatTouched: true, formatSuggested: false, purchaseFormatId: null, formatLabel: label }
+    }))
+  }
+  // "Ajustar como el albarán": fija el DESGLOSE (Caja = count × interior) en la línea.
+  // El total (formatQtyInBase) se deriva del desglose; al persistir, ensurePackTree
+  // crea la unidad interior contable + la Caja con el total derivado.
+  function applyPackFromAlbaran(key: string, count: number, innerBase: number, innerName: string, container: string) {
+    const total = count * innerBase
+    setDraft(d => d.map(l => {
+      if (l.key !== key) return l
+      const label = l.baseUnit ? `${container} (${formatBaseQty(total, l.baseUnit.abbr)})` : container
+      const newCost = rescaleCostToFormat(parseNum(l.unitCost), l.formatQtyInBase, total, l.purchaseFormatId ? (formatPrices[l.purchaseFormatId] ?? null) : null)
+      return { ...l, formatName: container, formatQtyInBase: total, unitCost: newCost, formatLabel: label,
+        packCount: count, packInnerBase: innerBase, packInnerName: innerName,
+        formatTouched: true, formatSuggested: false, purchaseFormatId: null }
     }))
   }
   // Elegir uno de los formatos existentes del artículo (bote/caja). Fija id+nombre+qty
@@ -916,16 +1012,33 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
         let purchaseFormatId = l.purchaseFormatId
         if (l.recipeItemId && !purchaseFormatId && l.formatQtyInBase != null && l.formatQtyInBase > 0) {
           try {
-            const fmt = await createPurchaseFormat({
-              accountId,
-              itemId: l.recipeItemId,
-              name: (l.formatName ?? '').trim() || 'Formato',
-              qtyInBase: l.formatQtyInBase,
-              source: 'ai_suggested',
-              aiConfidence: l.formatSuggested ? 0.8 : null,
-              needsReview: false,
-            })
-            purchaseFormatId = fmt.id
+            if (l.packCount != null && l.packCount > 0 && l.packInnerBase != null && l.packInnerBase > 0) {
+              // Desglose del albarán → árbol: unidad interior contable + Caja con
+              // total DERIVADO (count × interior), garantía en una sola función.
+              const tree = await ensurePackTree({
+                accountId,
+                itemId: l.recipeItemId,
+                count: l.packCount,
+                innerQtyInBase: l.packInnerBase,
+                innerName: (l.packInnerName ?? '').trim() || 'Ud',
+                cajaName: (l.formatName ?? '').trim() || 'Caja',
+                source: 'manual',
+                createdBy: authUserId ?? null,
+                createdByName: userProfile?.displayName ?? null,
+              })
+              purchaseFormatId = tree.caja.id
+            } else {
+              const fmt = await createPurchaseFormat({
+                accountId,
+                itemId: l.recipeItemId,
+                name: (l.formatName ?? '').trim() || 'Formato',
+                qtyInBase: l.formatQtyInBase,
+                source: 'ai_suggested',
+                aiConfidence: l.formatSuggested ? 0.8 : null,
+                needsReview: false,
+              })
+              purchaseFormatId = fmt.id
+            }
           } catch (e) {
             console.error('persist: no se pudo crear el formato de compra', e)
           }
@@ -1204,6 +1317,13 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                     }
                     const albaranDiff = amountDelta !== null || qtyDeltaBase !== null
 
+                    // "Ajustar como el albarán": leemos los números del TEXTO del albarán
+                    // ("CAJA 3 UD DE 1 KG" → 3 × 1 kg), determinista. Si no encaja → no prefijamos.
+                    const fu = friendlyUnit(l.baseUnit?.abbr)
+                    const albaranPack = fromOcr ? parsePack(l.rawText, l.baseUnit?.abbr) : null
+                    const albaranPackTotalBase = albaranPack ? albaranPack.n * albaranPack.m * fu.factor : null
+                    const formatMismatchAlbaran = albaranPackTotalBase != null && albaranPackTotalBase > 0 && l.formatQtyInBase != null && Math.abs(l.formatQtyInBase - albaranPackTotalBase) / albaranPackTotalBase > 0.02
+
                     return (
                       <div key={l.key}
                         className={`rounded-lg border p-3 ${albaranDiff ? 'border-danger bg-danger-bg' : 'border-border-default bg-card'} ${complete && !hasQty ? 'opacity-60' : ''}`}>
@@ -1321,7 +1441,58 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                               {l.purchaseFormatId && !l.formatTouched && !l.formatSuggested && (
                                 <p className="text-[10px] text-text-tertiary">formato que ya tenías con este proveedor</p>
                               )}
+                              {l.packCount != null && l.packInnerBase != null && l.baseUnit && (
+                                <p className="text-[10px] text-success">✓ {((l.formatName ?? 'Caja').trim() || 'Caja')}: {l.packCount} × {formatBaseQty(l.packInnerBase, l.baseUnit.abbr)} = {formatBaseQty(l.packCount * l.packInnerBase, l.baseUnit.abbr)} · se contará por {(l.packInnerName ?? 'Ud')}</p>
+                              )}
                             </div>
+                          )}
+
+                          {/* Ajustar como el albarán (proponer + confirmar; unidad amigable) */}
+                          {fromOcr && l.recipeItemId && (
+                            adjustKey === l.key ? (
+                              <div className="mt-2 rounded-md border border-border-default bg-page p-2.5 space-y-2">
+                                <p className="text-[11px] text-text-secondary">el albarán dice: <span className="text-text-primary">{l.rawText}</span></p>
+                                <p className="text-[11px] text-text-secondary">cópialo aquí (1 {((l.formatName ?? '').trim() || 'formato').toLowerCase()}):</p>
+                                <div className="flex items-center gap-1.5 flex-wrap text-sm">
+                                  <input type="text" inputMode="decimal" value={adjN} onChange={e => setAdjN(e.target.value)} disabled={saving} placeholder="uds"
+                                    className="w-14 px-1.5 py-1 text-sm text-right border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent" />
+                                  <span className="text-text-secondary">uds ×</span>
+                                  <input type="text" inputMode="decimal" value={adjM} onChange={e => setAdjM(e.target.value)} disabled={saving} placeholder="cont."
+                                    className="w-16 px-1.5 py-1 text-sm text-right border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent" />
+                                  <span className="text-text-secondary">{fu.label}</span>
+                                  {(() => {
+                                    const n = parseNum(adjN); const m = parseNum(adjM)
+                                    const total = (n !== null && m !== null) ? n * m * fu.factor : null
+                                    return <span className="text-text-secondary">= {total !== null && l.baseUnit ? formatBaseQty(total, l.baseUnit.abbr) : '—'}</span>
+                                  })()}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <button type="button" disabled={saving} onClick={() => {
+                                    const n = parseNum(adjN); const m = parseNum(adjM)
+                                    if (n !== null && m !== null && n > 0 && m > 0) {
+                                      const container = albaranPack?.container ?? ((l.formatName ?? '').trim() || 'Caja')
+                                      const innerName = albaranPack?.innerLabel ?? 'Ud'
+                                      applyPackFromAlbaran(l.key, n, m * fu.factor, innerName, container)
+                                      setAdjustKey(null)
+                                    }
+                                  }} className="px-2.5 py-1 rounded-md text-[11px] font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50">Usar este formato</button>
+                                  <button type="button" onClick={() => setAdjustKey(null)} className="px-2 py-1 rounded-md text-[11px] border border-border-default bg-card text-text-secondary hover:bg-page">Cancelar</button>
+                                </div>
+                              </div>
+                            ) : (
+                              <button type="button" disabled={saving}
+                                onClick={() => {
+                                  if (albaranPack) { setAdjN(String(albaranPack.n)); setAdjM(String(albaranPack.m)) }
+                                  else { setAdjN(''); setAdjM('') }
+                                  setAdjustKey(l.key)
+                                }}
+                                className={`inline-flex items-center gap-1 mt-1 text-[11px] transition-base disabled:opacity-50 ${formatMismatchAlbaran ? 'text-danger font-medium' : 'text-text-secondary hover:text-text-primary'}`}>
+                                {formatMismatchAlbaran ? <AlertTriangle size={12} /> : <Pencil size={12} />}
+                                {formatMismatchAlbaran && albaranPack
+                                  ? `ajustar: el albarán dice ${albaranPack.n} × ${albaranPack.m} ${fu.label} por ${((l.formatName ?? 'formato').trim() || 'formato').toLowerCase()}`
+                                  : 'ajustar como el albarán'}
+                              </button>
+                            )
                           )}
                         </div>
 
