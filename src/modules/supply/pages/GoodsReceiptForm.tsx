@@ -481,8 +481,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
           (baseAbbrNorm === 'g'  && ['g','gr','gramo','gramos'].includes(albUnit)) ||
           (baseAbbrNorm === 'ml' && ['ml','mililitro','mililitros'].includes(albUnit)) ||
           (baseAbbrNorm === 'ud' && ['ud','uds','u','unidad','unidades'].includes(albUnit))
-        let qtyStr: string | null = null      // null = no tocar el qty existente
-        let convertedNote: string | null = null
+        let convertedNote: string | null = null   // referencia "480 ud → 6 cajas" (NO precarga el recibido: a ciegas)
         if (
           sameAsBase &&
           formatQtyInBase != null && formatQtyInBase > 1 &&
@@ -492,7 +491,6 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
           const redondeo = Math.round(enFormato)
           const limpio = redondeo >= 1 && Math.abs(enFormato - redondeo) / redondeo <= 0.02
           if (limpio) {
-            qtyStr = String(redondeo)
             const baseLabel = base ? formatBaseQty(line.albaranQty, base.abbr) : `${line.albaranQty}`
             convertedNote = `${baseLabel} → ${redondeo} ${(formatName ?? 'formato').toLowerCase()}${redondeo === 1 ? '' : 's'}`
           }
@@ -504,7 +502,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
           return {
             ...x, baseUnit: base, purchaseFormatId, formatName, formatQtyInBase,
             formatLabel: label, formatSuggested: suggested, formatOptions: options,
-            ...(qtyStr !== null ? { qty: qtyStr, convertedNote } : {}),
+            ...(convertedNote !== null ? { convertedNote } : {}),
           }
         }))
       }
@@ -583,7 +581,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
       qtyOrdered: null,
       alreadyReceived: null,
       pending: null,
-      qty: l.qty != null ? String(l.qty) : '',   // precargada; se reexpresa al formato tras resolverlo
+      qty: '',   // RECIBIDO A CIEGAS: nace vacío SIEMPRE; la cantidad del albarán queda como referencia (albaranQty)
       unitCost: l.unitCost != null ? String(l.unitCost) : '',
       lineAmount: l.lineAmount ?? null,
       albaranUnit: l.albaranUnit ?? null,
@@ -929,6 +927,8 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
           unitCost,
           lotCode: l.lotCode,          // hueco FEFO/APPCC
           expiryDate: l.expiryDate,
+          docQty: l.albaranQty ?? null,        // lo que el albarán DICE (cantidad) — ancla del cuadre
+          docAmount: l.lineAmount ?? null,     // lo que el albarán DICE (importe)
           mapSource: l.recipeItemId ? (l.matchType ?? 'manual') : 'unmapped',
           mapNeedsReview: unmapped,
           position: position++,
