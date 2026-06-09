@@ -27,6 +27,7 @@
 // igual que KitchenItemsPage.
 
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   ChefHat,
   Search,
@@ -123,6 +124,7 @@ function dishStatus(item: RecipeItem, incompleteIds: Set<string>): DishStatus {
 
 export default function KitchenRecipesPage() {
   const { activeAccountId, accountsLoading } = useActiveAccount()
+  const [searchParams, setSearchParams] = useSearchParams()
 
   const [items, setItems] = useState<RecipeItem[]>([])
   const [incompleteIds, setIncompleteIds] = useState<Set<string>>(new Set())
@@ -134,6 +136,22 @@ export default function KitchenRecipesPage() {
   // E5: URLs firmadas de las fotos (id del plato -> URL servible). El listado
   // guarda el PATH en kitchen_photo_url; aquí lo firmamos para poder mostrarlo.
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({})
+
+  // Navegación entrante desde otra pantalla (p.ej. "Es un plato" en Excepciones):
+  // si la URL trae ?recipe=ID, abrimos su editor directamente. Usamos query param
+  // (no location.state) porque sobrevive al remontaje de la app al cambiar de ruta.
+  // Tras abrirlo, limpiamos el param para que un "volver" a la lista no lo reabra.
+  useEffect(() => {
+    const incomingId = searchParams.get('recipe')
+    if (incomingId) {
+      setSelectedRecipeId(incomingId)
+      const next = new URLSearchParams(searchParams)
+      next.delete('recipe')
+      setSearchParams(next, { replace: true })
+    }
+    // Solo al montar / cambiar el param entrante.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     if (accountsLoading) return

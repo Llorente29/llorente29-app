@@ -10073,6 +10073,14 @@ export type Database = {
         }
         Returns: string
       }
+      create_dish_from_unmapped: {
+        Args: { p_account_id: string; p_product_name: string }
+        Returns: {
+          out_lineas_casadas: number
+          out_marcas_creadas: number
+          out_recipe_item_id: string
+        }[]
+      }
       current_user_account_ids: { Args: never; Returns: string[] }
       current_user_can_approve_invoice: {
         Args: { p_invoice_id: string }
@@ -10339,6 +10347,7 @@ export type Database = {
           movements_written: number
         }[]
       }
+      reprocess_sale: { Args: { p_sale_id: string }; Returns: number }
       resolve_lastapp_line: {
         Args: {
           p_account_id: string

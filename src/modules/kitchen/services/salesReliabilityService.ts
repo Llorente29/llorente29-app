@@ -438,6 +438,33 @@ export async function classifyUnmappedProduct(
  * por nombre, con confianza + semáforo. Envuelve la RPC run_mapping (la misma que
  * usa Supply para casar líneas de albarán). Solo sugiere; no escribe nada.
  */
+/**
+ * Crea un plato NUEVO del TPV que no existe en Folvy (no_recipe sin mapeo):
+ * recipe_item(dish) + lastapp_product_map + menu_item(s), recasa, y devuelve el
+ * recipe_item_id para llevar al editor de escandallo. Cierra el agujero de los
+ * productos nuevos del TPV. La lógica vive en la RPC create_dish_from_unmapped
+ * (anti-invención: EXCEPTION si la marca no resuelve o el producto es un combo).
+ */
+export async function createDishFromUnmapped(
+  accountId: string,
+  productName: string,
+): Promise<{ recipeItemId: string | null; marcasCreadas: number; lineasCasadas: number }> {
+  requireSupabase()
+  const { data, error } = await supabase!.rpc('create_dish_from_unmapped', {
+    p_account_id: accountId,
+    p_product_name: productName,
+  })
+  if (error) throw new Error(error.message)
+  const row = (Array.isArray(data) ? data[0] : data) as
+    { out_recipe_item_id: string | null; out_marcas_creadas: number; out_lineas_casadas: number } | undefined
+  if (!row) throw new Error('No se pudo crear el plato.')
+  return {
+    recipeItemId: row.out_recipe_item_id ?? null,
+    marcasCreadas: Number(row.out_marcas_creadas ?? 0),
+    lineasCasadas: Number(row.out_lineas_casadas ?? 0),
+  }
+}
+
 export async function suggestMatch(
   accountId: string,
   productName: string,

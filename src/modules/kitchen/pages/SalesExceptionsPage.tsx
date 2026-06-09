@@ -15,16 +15,19 @@
 // mano es la excepción (corromper el food cost con un número a ojo es peor que NULL).
 
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, ChevronDown, ChevronRight, Sparkles, ReceiptText,
   HelpCircle, Calculator, EyeOff, Archive, Loader2, GlassWater, ChefHat, Package,
 } from 'lucide-react'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import {
   getReliability,
   listBlindLines,
   suggestMatch,
   resolveUnmapped,
   classifyUnmappedProduct,
+  createDishFromUnmapped,
   listCostlessSoldProducts,
   type SalesReliability,
   type BlindGroup,
@@ -294,6 +297,7 @@ function BlindRow({
 }: {
   product: BlindProduct; accountId: string; isLast: boolean; onResolved: () => void
 }) {
+  const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [suggestions, setSuggestions] = useState<MatchSuggestion[] | null>(null)
   const [suggestLoading, setSuggestLoading] = useState(false)
@@ -302,6 +306,7 @@ function BlindRow({
   const [showCostInput, setShowCostInput] = useState(false)
   const [costInput, setCostInput] = useState('')
   const [classifyMsg, setClassifyMsg] = useState<string | null>(null)
+  const [confirmDishOpen, setConfirmDishOpen] = useState(false)
 
   const canSuggest = product.reason === 'no_menu_item' || product.reason === 'no_recipe'
 
@@ -343,10 +348,36 @@ function BlindRow({
             onResolved()
           }
         } else if (res.resultado === 'is_dish') {
-          setClassifyMsg('Marcado como plato. Crea su escandallo en Recetas; al recasar, casará solo.')
-          setBusy(null)
+          // Es un plato: llevar directo al editor de su escandallo. El editor
+          // vuelve a Recetas (no a aquí) — flujo simple y predecible.
+          if (res.recipeItemId) {
+            navigate('/kitchen/recetas?recipe=' + res.recipeItemId)
+          } else {
+            setClassifyMsg('Marcado como plato. Crea su escandallo en Recetas; al recasar, casará solo.')
+            setBusy(null)
+          }
         } else {
           setClassifyMsg('Marcado como combo (pendiente del módulo de combos).')
+          setBusy(null)
+        }
+      })
+      .catch((e) => { setRowError(String(e.message ?? e)); setBusy(null) })
+  }
+
+  // no_recipe SIN mapeo (plato nuevo del TPV): crea el plato real (recipe_item +
+  // mapeo + menu_item), recasa y lleva al editor de escandallo. No deja al usuario
+  // en "revisa el mapeo": resuelve el caso entero. Confirma con un modal Folvy
+  // (no window.confirm, que rompe la marca).
+  function confirmCreateDish() {
+    setConfirmDishOpen(false)
+    setBusy('classify-dish')
+    setRowError(null)
+    createDishFromUnmapped(accountId, product.productName)
+      .then((res) => {
+        if (res.recipeItemId) {
+          navigate('/kitchen/recetas?recipe=' + res.recipeItemId)
+        } else {
+          setClassifyMsg('Plato creado. Crea su escandallo en Recetas.')
           setBusy(null)
         }
       })
@@ -445,7 +476,7 @@ function BlindRow({
                 <ActionButton
                   icon={busy === 'classify-dish' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ChefHat className="w-3.5 h-3.5" />}
                   label="Es un plato (crear escandallo)"
-                  onClick={() => doClassify('dish', null, 'classify-dish')}
+                  onClick={() => setConfirmDishOpen(true)}
                   disabled={busy !== null}
                 />
                 <ActionButton
@@ -517,6 +548,16 @@ function BlindRow({
           )}
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmDishOpen}
+        title="Crear plato nuevo"
+        message={`Se va a crear el plato "${product.productName}" en Folvy y se enlazará con sus ventas.\n\nDespués te llevaremos a su ficha para añadir la receta.`}
+        confirmLabel="Crear plato"
+        busy={busy === 'classify-dish'}
+        onConfirm={confirmCreateDish}
+        onCancel={() => setConfirmDishOpen(false)}
+      />
     </div>
   )
 }
@@ -526,9 +567,16 @@ function CostlessRow({
 }: {
   product: CostlessProduct; accountId: string; isLast: boolean; onResolved: () => void
 }) {
+  const navigate = useNavigate()
   const [busy, setBusy] = useState<'resale' | 'dish' | 'combo' | null>(null)
   const [rowError, setRowError] = useState<string | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
+
+  function goToRecipe() {
+    // El producto ya está casado y tiene su recipe_item; "completar escandallo"
+    // lleva directo a su editor sin pasar por el RPC (no hay nada que clasificar).
+    navigate('/kitchen/recetas?recipe=' + product.recipeItemId)
+  }
 
   function doClassify(action: ClassifyAction) {
     if (busy) return
@@ -540,8 +588,12 @@ function CostlessRow({
           setMsg('Convertido a reventa. Queda pendiente de coste: lo rellenará la factura, o ponlo a mano en la ficha.')
           setTimeout(onResolved, 1800)
         } else if (res.resultado === 'is_dish') {
-          setMsg('Marcado como plato. Crea su escandallo en Recetas; al recompute, dejará de estar sin coste.')
-          setBusy(null)
+          if (res.recipeItemId) {
+            navigate('/kitchen/recetas?recipe=' + res.recipeItemId)
+          } else {
+            setMsg('Marcado como plato. Crea su escandallo en Recetas; al recompute, dejará de estar sin coste.')
+            setBusy(null)
+          }
         } else {
           setMsg('Marcado como combo (pendiente del módulo de combos y modificadores).')
           setBusy(null)
@@ -583,9 +635,9 @@ function CostlessRow({
 
       <div className="flex flex-wrap gap-2 mt-2">
         <ActionButton
-          icon={busy === 'dish' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ChefHat className="w-3.5 h-3.5" />}
+          icon={<ChefHat className="w-3.5 h-3.5" />}
           label={product.hasRecipeLines ? 'Completar escandallo' : 'Es un plato (crear escandallo)'}
-          onClick={() => doClassify('dish')}
+          onClick={goToRecipe}
           disabled={busy !== null}
         />
         <ActionButton

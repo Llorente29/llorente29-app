@@ -123,10 +123,25 @@ export function isPublicAuthRoute(pathname: string): boolean {
 export const SHELL_PREVIEW_ROUTE = '/shell'
 
 export function isShellRoute(pathname: string): boolean {
-  // Prefijo: /shell y cualquier sub-ruta /shell/... (G-8.1: el Shell navega
-  // por rutas internas como /shell/appcc/hoy). AppContext debe saltarse la
-  // lógica de slug para TODAS ellas, no solo /shell exacto.
-  return pathname === SHELL_PREVIEW_ROUTE || pathname.startsWith(SHELL_PREVIEW_ROUTE + '/')
+  // G-8 COMPLETADO: el Shell ya NO vive en /shell — es el render por defecto y
+  // vive en la RAÍZ (Bloque K, sin slug). Las URLs del Shell son /kitchen/menu,
+  // /personal/turnos, /appcc/hoy, etc. — el primer segmento es el basePath de un
+  // módulo, NO un slug de cuenta.
+  //
+  // Por tanto, para AppContext, TODA ruta que no sea auth-pública ni admin es
+  // ruta de Shell: AppContext debe saltarse la sincronización URL <-> slug (ya
+  // no hay slug que sincronizar en el modelo actual). Sin esto, AppContext
+  // interpretaba el basePath del módulo como un slug de cuenta invalido y
+  // reescribia la URL con buildRoute(slug,...), rompiendo la ruta en cada F5 y
+  // expulsando al usuario a Inicio.
+  //
+  // Las rutas de auth-publica (/login, /welcome, ...) y admin (/_admin) se
+  // excluyen en los propios guards de AppContext (isPublicAuthRoute || isShellRoute
+  // || isAdminRoute), asi que aqui basta con cubrir el resto: cualquier pathname
+  // autenticado de cliente.
+  if (isPublicAuthRoute(pathname)) return false
+  if (isAdminRoute(pathname)) return false
+  return true
 }
 
 /* =====================================================
