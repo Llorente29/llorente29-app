@@ -3819,6 +3819,8 @@ export type Database = {
         Row: {
           account_id: string
           created_at: string
+          doc_amount: number | null
+          doc_qty: number | null
           expiry_date: string | null
           goods_receipt_id: string
           id: string
@@ -3843,6 +3845,8 @@ export type Database = {
         Insert: {
           account_id: string
           created_at?: string
+          doc_amount?: number | null
+          doc_qty?: number | null
           expiry_date?: string | null
           goods_receipt_id: string
           id?: string
@@ -3867,6 +3871,8 @@ export type Database = {
         Update: {
           account_id?: string
           created_at?: string
+          doc_amount?: number | null
+          doc_qty?: number | null
           expiry_date?: string | null
           goods_receipt_id?: string
           id?: string
