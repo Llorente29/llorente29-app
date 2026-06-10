@@ -25,7 +25,7 @@
 // Tras confirmar, VUELVE SOLO (onSaved con mensaje); aviso como toast en lista.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, Search, Loader2, Check, Save, ListChecks, AlertTriangle, Pencil, Box, ArrowRight } from 'lucide-react'
+import { ArrowLeft, Search, Loader2, Check, Save, ListChecks, AlertTriangle, Box, ArrowRight } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import { useOperativeLocation } from '@/modules/supply/hooks/useOperativeLocation'
 import OperativeLocationBanner from '@/modules/supply/components/OperativeLocationBanner'
@@ -369,6 +369,77 @@ function parsePack(rawText: string | null, baseAbbr: string | null | undefined):
   return null
 }
 
+// ── T1: Constructor de formato guiado ──────────────────────────────────────
+// Estado del asistente que pregunta en idioma de cocina cómo viene un artículo.
+// "shape": en qué llega (caja / paquete / unidad suelta / a peso).
+// Si es caja: "boxHas" = qué trae dentro (paquetes / unidades directas).
+// Los números se teclean en lenguaje humano; el factor a base lo calcula el wizard
+// usando friendlyUnit (kg→g, L→ml) para no pedir gramos al cocinero.
+type WizardShape = 'caja' | 'paquete' | 'ud' | 'peso' | null
+type WizardBoxHas = 'paquetes' | 'directas' | null
+interface WizardState {
+  shape: WizardShape
+  boxHas: WizardBoxHas
+  count: string        // nº de paquetes por caja (si boxHas==='paquetes')
+  perInner: string     // unidades/cantidad por paquete o por caja directa
+  innerName: string    // nombre de la unidad interior contable ("Paquete", "Ud"…)
+  containerName: string // nombre del contenedor de compra ("Caja"…)
+}
+function emptyWizard(): WizardState {
+  return { shape: null, boxHas: null, count: '', perInner: '', innerName: '', containerName: '' }
+}
+// Pre-rellena el asistente desde lo que parsePack leyó del albarán (si leyó algo):
+// "CAJA 3 UD DE 1 KG" → caja con paquetes, 3 × 1 (en unidad amigable). Si no hay
+// lectura, devuelve un asistente en blanco para que el humano conteste de cero.
+function wizardFromPack(
+  pack: { n: number; m: number; container: string | null; innerLabel: string } | null,
+  baseAbbr: string | null | undefined,
+): WizardState {
+  const w = emptyWizard()
+  if (!pack) return w
+  const isUnit = (baseAbbr ?? '').toLowerCase() === 'ud'
+  // m===1 + base en ud → "Caja N Ud" (sin capa interior real); si no, paquetes con contenido.
+  if (isUnit && pack.m === 1) {
+    w.shape = 'caja'; w.boxHas = 'directas'
+    w.perInner = String(pack.n)
+    w.containerName = pack.container ?? 'Caja'
+    w.innerName = 'Ud'
+  } else {
+    w.shape = 'caja'; w.boxHas = 'paquetes'
+    w.count = String(pack.n)
+    w.perInner = String(pack.m)   // en unidad amigable (kg/L/ud)
+    w.containerName = pack.container ?? 'Caja'
+    w.innerName = pack.innerLabel || 'Paquete'
+  }
+  return w
+}
+// Traduce el estado del asistente a (count, innerBase, innerName, container) para
+// applyPackFromAlbaran. innerBase va SIEMPRE en unidad base (multiplica por el factor
+// amigable). Devuelve null si el asistente aún no está completo.
+function wizardToPack(
+  wz: WizardState,
+  baseAbbr: string | null | undefined,
+): { count: number; innerBase: number; innerName: string; container: string } | null {
+  const fu = friendlyUnit(baseAbbr)
+  const per = parseNum(wz.perInner)
+  if (per === null || per <= 0) return null
+  if (wz.shape === 'caja' && wz.boxHas === 'paquetes') {
+    const c = parseNum(wz.count)
+    if (c === null || c <= 0) return null
+    return { count: c, innerBase: per * fu.factor, innerName: wz.innerName.trim() || 'Paquete', container: wz.containerName.trim() || 'Caja' }
+  }
+  if (wz.shape === 'caja' && wz.boxHas === 'directas') {
+    // Caja con unidades directas: 1 nivel. count = per (uds por caja), interior = 1 ud/base.
+    return { count: per, innerBase: fu.factor, innerName: 'Ud', container: wz.containerName.trim() || 'Caja' }
+  }
+  if (wz.shape === 'paquete') {
+    // Paquete suelto que contiene "per" en unidad amigable → formato plano (count=1).
+    return { count: 1, innerBase: per * fu.factor, innerName: 'Ud', container: wz.containerName.trim() || 'Paquete' }
+  }
+  // shape 'ud' o 'peso' = formato base directo (1 contenedor = "per" en amigable).
+  return { count: 1, innerBase: per * fu.factor, innerName: 'Ud', container: wz.containerName.trim() || (wz.shape === 'peso' ? friendlyUnit(baseAbbr).label : 'Ud') }
+}
+
 export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill, onBack, onSaved }: GoodsReceiptFormProps) {
   const { userProfile, authUserId } = useApp()
   const op = useOperativeLocation()
@@ -414,10 +485,12 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
   const [pickerKey, setPickerKey] = useState<string | null>(null)
   // Motivo del descuadre por línea (clave de DraftLine → motivo). Se vuelca a discrepancy_reason.
   const [discrepancyReasons, setDiscrepancyReasons] = useState<Record<string, string>>({})
-  // Editor "ajustar como el albarán" (un formato a la vez): línea abierta + N uds × M unidad.
-  const [adjustKey, setAdjustKey] = useState<string | null>(null)
-  const [adjN, setAdjN] = useState('')
-  const [adjM, setAdjM] = useState('')
+  // ── T1: Constructor de formato guiado (un asistente por línea) ──
+  // Reemplaza las casillas abstractas adjN×adjM por preguntas en idioma de cocina.
+  // Escribe en los MISMOS campos (packCount/packInnerBase/packInnerName/formatName)
+  // que ya consume persist→ensurePackTree. NO toca el motor.
+  const [wizardKey, setWizardKey] = useState<string | null>(null)
+  const [wz, setWz] = useState<WizardState>(emptyWizard())
 
   function chooseMatch(key: string, recipeItemId: string, name: string, semaphore: 'green' | 'yellow' | null, matchType: string | null) {
     setDraft(d => d.map(x => x.key === key
@@ -1477,53 +1550,119 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                             )
                           })()}
 
-                          {/* Ajustar como el albarán (proponer + confirmar; unidad amigable) */}
+                          {/* ── T1: Constructor de formato guiado ─────────────────── */}
+                          {/* Pregunta en idioma de cocina cómo viene el artículo y arma */}
+                          {/* el árbol (mismos campos pack* que consume persist→ensurePackTree). */}
+                          {/* El botón es deliberado (no se abre solo): respeta "no frenar al muelle". */}
                           {fromOcr && l.recipeItemId && (
-                            adjustKey === l.key ? (
-                              <div className="mt-2 rounded-md border border-border-default bg-page p-2.5 space-y-2">
-                                <p className="text-[11px] text-text-secondary">el albarán dice: <span className="text-text-primary">{l.rawText}</span></p>
-                                <p className="text-[11px] text-text-secondary">cópialo aquí (1 {((l.formatName ?? '').trim() || 'formato').toLowerCase()}):</p>
-                                <div className="flex items-center gap-1.5 flex-wrap text-sm">
-                                  <input type="text" inputMode="decimal" value={adjN} onChange={e => setAdjN(e.target.value)} disabled={saving} placeholder="uds"
-                                    className="w-14 px-1.5 py-1 text-sm text-right border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent" />
-                                  <span className="text-text-secondary">uds ×</span>
-                                  <input type="text" inputMode="decimal" value={adjM} onChange={e => setAdjM(e.target.value)} disabled={saving} placeholder="cont."
-                                    className="w-16 px-1.5 py-1 text-sm text-right border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent" />
-                                  <span className="text-text-secondary">{fu.label}</span>
-                                  {(() => {
-                                    const n = parseNum(adjN); const m = parseNum(adjM)
-                                    const total = (n !== null && m !== null) ? n * m * fu.factor : null
-                                    return <span className="text-text-secondary">= {total !== null && l.baseUnit ? formatBaseQty(total, l.baseUnit.abbr) : '—'}</span>
-                                  })()}
+                            wizardKey === l.key ? (() => {
+                              const fwz = friendlyUnit(l.baseUnit?.abbr)
+                              const baseLabel = (l.baseUnit?.abbr ?? '').toLowerCase()
+                              const isUnitBase = baseLabel === 'ud' || baseLabel === ''
+                              const preview = wizardToPack(wz, l.baseUnit?.abbr)
+                              const previewTotal = preview ? preview.count * preview.innerBase : null
+                              return (
+                              <div className="mt-2 rounded-md border border-border-default bg-page p-3 space-y-2.5">
+                                <div className="flex items-center justify-between gap-2">
+                                  <p className="text-[12px] font-medium text-text-primary">¿Cómo viene este artículo?</p>
+                                  <button type="button" onClick={() => { setWizardKey(null); setWz(emptyWizard()) }}
+                                    className="text-[11px] text-text-tertiary hover:text-text-secondary">cerrar</button>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                  <button type="button" disabled={saving} onClick={() => {
-                                    const n = parseNum(adjN); const m = parseNum(adjM)
-                                    if (n !== null && m !== null && n > 0 && m > 0) {
-                                      const container = albaranPack?.container ?? ((l.formatName ?? '').trim() || 'Caja')
-                                      const innerName = albaranPack?.innerLabel ?? 'Ud'
-                                      applyPackFromAlbaran(l.key, n, m * fu.factor, innerName, container)
-                                      setAdjustKey(null)
-                                    }
-                                  }} className="px-2.5 py-1 rounded-md text-[11px] font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50">Usar este formato</button>
-                                  <button type="button" onClick={() => setAdjustKey(null)} className="px-2 py-1 rounded-md text-[11px] border border-border-default bg-card text-text-secondary hover:bg-page">Cancelar</button>
+                                {l.rawText && <p className="text-[11px] text-text-tertiary">el albarán dice: <span className="text-text-secondary">{l.rawText}</span></p>}
+
+                                {/* Paso 1: forma */}
+                                <div className="flex flex-wrap gap-1.5">
+                                  {([['caja','En caja'],['paquete','En paquete'],['ud','Unidad suelta'],['peso','A peso']] as [WizardShape,string][]).map(([s,lab]) => (
+                                    <button key={s} type="button" disabled={saving}
+                                      onClick={() => setWz(() => ({ ...emptyWizard(), shape: s, containerName: s === 'caja' ? 'Caja' : s === 'paquete' ? 'Paquete' : '' }))}
+                                      className={`px-2.5 py-1.5 rounded-md text-[12px] border transition-base disabled:opacity-50 ${wz.shape === s ? 'border-accent bg-accent text-text-on-accent' : 'border-border-default bg-card text-text-secondary hover:bg-page'}`}>
+                                      {lab}
+                                    </button>
+                                  ))}
+                                </div>
+
+                                {/* Paso 2: si es caja, qué trae dentro */}
+                                {wz.shape === 'caja' && (
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {([['paquetes','Trae paquetes dentro'],['directas','Unidades directas']] as [WizardBoxHas,string][]).map(([b,lab]) => (
+                                      <button key={b} type="button" disabled={saving}
+                                        onClick={() => setWz(w => ({ ...w, boxHas: b }))}
+                                        className={`px-2.5 py-1.5 rounded-md text-[12px] border transition-base disabled:opacity-50 ${wz.boxHas === b ? 'border-accent bg-accent text-text-on-accent' : 'border-border-default bg-card text-text-secondary hover:bg-page'}`}>
+                                        {lab}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {/* Paso 3: cantidades, en idioma humano */}
+                                {wz.shape === 'caja' && wz.boxHas === 'paquetes' && (
+                                  <div className="space-y-1.5">
+                                    <label className="flex items-center gap-1.5 text-[12px] text-text-secondary">
+                                      <span className="min-w-[150px]">¿Cuántos paquetes por caja?</span>
+                                      <input type="text" inputMode="decimal" value={wz.count} onChange={e => setWz(w => ({ ...w, count: e.target.value }))} disabled={saving} placeholder="ej. 12"
+                                        className="w-20 px-1.5 py-1 text-sm text-right border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent" />
+                                    </label>
+                                    <label className="flex items-center gap-1.5 text-[12px] text-text-secondary">
+                                      <span className="min-w-[150px]">¿Cuánto trae cada paquete?</span>
+                                      <input type="text" inputMode="decimal" value={wz.perInner} onChange={e => setWz(w => ({ ...w, perInner: e.target.value }))} disabled={saving} placeholder="ej. 20"
+                                        className="w-20 px-1.5 py-1 text-sm text-right border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent" />
+                                      <span className="text-text-tertiary">{fwz.label}</span>
+                                    </label>
+                                  </div>
+                                )}
+                                {((wz.shape === 'caja' && wz.boxHas === 'directas') || wz.shape === 'paquete' || wz.shape === 'ud' || wz.shape === 'peso') && wz.shape && (
+                                  <label className="flex items-center gap-1.5 text-[12px] text-text-secondary">
+                                    <span className="min-w-[150px]">
+                                      {wz.shape === 'caja' ? '¿Cuántas unidades por caja?' : wz.shape === 'paquete' ? '¿Cuánto trae el paquete?' : wz.shape === 'peso' ? '¿Cuánto pesa?' : '¿Cuántas unidades?'}
+                                    </span>
+                                    <input type="text" inputMode="decimal" value={wz.perInner} onChange={e => setWz(w => ({ ...w, perInner: e.target.value }))} disabled={saving} placeholder="cantidad"
+                                      className="w-20 px-1.5 py-1 text-sm text-right border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent" />
+                                    <span className="text-text-tertiary">{wz.shape === 'caja' || (wz.shape === 'ud') ? (isUnitBase ? 'ud' : fwz.label) : fwz.label}</span>
+                                  </label>
+                                )}
+
+                                {/* Paso 4 (cierre): unidad base — visible, confirmable */}
+                                {preview && l.baseUnit && (
+                                  <div className="rounded-md bg-card border border-border-default px-2.5 py-1.5">
+                                    <p className="text-[12px] text-text-primary">
+                                      {wz.boxHas === 'paquetes'
+                                        ? `1 ${(wz.containerName||'caja').toLowerCase()} = ${wz.count} ${(wz.innerName||'paquetes').toLowerCase()} × ${wz.perInner} ${fwz.label}`
+                                        : `1 ${(wz.containerName||(wz.shape==='peso'?fwz.label:'ud')).toLowerCase()} = ${wz.perInner} ${isUnitBase && wz.shape!=='peso' ? 'ud' : fwz.label}`}
+                                      {previewTotal !== null && <span className="text-text-secondary"> → {formatBaseQty(previewTotal, l.baseUnit.abbr)}</span>}
+                                    </p>
+                                    <p className="text-[10px] text-text-tertiary mt-0.5">se cuenta en {l.baseUnit.abbr}</p>
+                                  </div>
+                                )}
+                                {!l.baseUnit && (
+                                  <p className="text-[11px] text-warning">Este artículo aún no tiene unidad base definida. Resuélvela en su ficha antes de montar el formato.</p>
+                                )}
+
+                                <div className="flex items-center gap-2 pt-0.5">
+                                  <button type="button" disabled={saving || !preview || !l.baseUnit}
+                                    onClick={() => {
+                                      const p = wizardToPack(wz, l.baseUnit?.abbr)
+                                      if (p) { applyPackFromAlbaran(l.key, p.count, p.innerBase, p.innerName, p.container); setWizardKey(null); setWz(emptyWizard()) }
+                                    }}
+                                    className="px-2.5 py-1 rounded-md text-[12px] font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    Usar este formato
+                                  </button>
+                                  <button type="button" onClick={() => { setWizardKey(null); setWz(emptyWizard()) }}
+                                    className="px-2 py-1 rounded-md text-[12px] border border-border-default bg-card text-text-secondary hover:bg-page">Cancelar</button>
                                 </div>
                               </div>
-                            ) : (
+                              )
+                            })() : (
                               <button type="button" disabled={saving}
-                                onClick={() => {
-                                  if (albaranPack) { setAdjN(String(albaranPack.n)); setAdjM(String(albaranPack.m)) }
-                                  else { setAdjN(''); setAdjM('') }
-                                  setAdjustKey(l.key)
-                                }}
+                                onClick={() => { setWz(wizardFromPack(albaranPack, l.baseUnit?.abbr)); setWizardKey(l.key) }}
                                 className={`inline-flex items-center gap-1 mt-1 text-[11px] transition-base disabled:opacity-50 ${formatMismatchAlbaran ? 'text-danger font-medium' : 'text-text-secondary hover:text-text-primary'}`}>
-                                {formatMismatchAlbaran ? <AlertTriangle size={12} /> : <Pencil size={12} />}
+                                {formatMismatchAlbaran ? <AlertTriangle size={12} /> : <Box size={12} />}
                                 {formatMismatchAlbaran && albaranPack
-                                  ? `ajustar: el albarán dice ${albaranPack.n} × ${albaranPack.m} ${fu.label} por ${((l.formatName ?? 'formato').trim() || 'formato').toLowerCase()}`
-                                  : 'ajustar como el albarán'}
+                                  ? `revisar formato: el albarán dice ${albaranPack.n} × ${albaranPack.m} ${fu.label}`
+                                  : albaranPack ? 'revisar formato' : 'montar formato'}
                               </button>
                             )
                           )}
+                          {/* ── fin T1 ─────────────────────────────────────────────── */}
                         </div>
 
                         {/* Fila 3: recibido (a ciegas) + € / formato */}

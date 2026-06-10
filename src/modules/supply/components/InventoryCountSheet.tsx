@@ -6,9 +6,15 @@
 //   - 'en_revision': revisión. Ya se ve system_qty, variación, % y € con color;
 //     las líneas fuera de tolerancia piden motivo (reason_code).
 // La aprobación → ajuste en stock es 1.4 (aquí solo se cuenta y diagnostica).
+//
+// T1 (apertura): si el conteo es de APERTURA (count.isOpening), ancla el stock
+// inicial del local. No es una corrección de merma: fija el punto de partida.
+// La UI lo refleja (banner, textos y botón) para que el usuario lo entienda; el
+// backend escribe esos movimientos como 'apertura' y el AvT los excluye de la
+// variación.
 
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, Loader2, Check, AlertTriangle, Save, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, Loader2, Check, AlertTriangle, Save, ShieldCheck, Flag } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import {
   getInventoryCount,
@@ -71,6 +77,7 @@ export default function InventoryCountSheet({
   }, [countId, reloadTick])
 
   const isReview = count?.status === 'en_revision' || count?.status === 'aprobado'
+  const isOpening = count?.isOpening === true
 
   // Agrupar por área en orden de recorrido.
   const grouped = useMemo(() => {
@@ -138,7 +145,10 @@ export default function InventoryCountSheet({
       setError(`Hay ${missingReasons} línea(s) fuera de tolerancia sin motivo. Asígnalo antes de aprobar.`)
       return
     }
-    if (!window.confirm('¿Aprobar el conteo? Esto ajustará el stock real con las diferencias y no se puede deshacer.')) return
+    const confirmMsg = isOpening
+      ? '¿Aprobar el inventario de apertura? Esto fija el stock inicial del local como punto de partida.'
+      : '¿Aprobar el conteo? Esto ajustará el stock real con las diferencias y no se puede deshacer.'
+    if (!window.confirm(confirmMsg)) return
     setApproving(true); setError(null)
     try {
       const res = await approveInventoryCount(countId, authUserId ?? null, userProfile?.displayName ?? null)
@@ -166,11 +176,16 @@ export default function InventoryCountSheet({
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-xl font-display font-medium text-text-primary">
-            {count?.code ?? 'Conteo'} {isReview && <span className="text-sm text-text-secondary font-normal">· revisión</span>}
+            {isOpening && <Flag size={16} className="inline-block mr-1.5 -mt-0.5 text-accent" />}
+            {count?.code ?? 'Conteo'}
+            {isOpening && <span className="text-sm text-accent font-normal"> · apertura</span>}
+            {isReview && <span className="text-sm text-text-secondary font-normal"> · revisión</span>}
           </h2>
           <p className="text-sm text-text-secondary mt-0.5">
             {isReview
-              ? 'Revisa las diferencias. Las que se salen de tolerancia necesitan un motivo.'
+              ? (isOpening
+                  ? 'Revisa el stock inicial antes de fijarlo. Al aprobar, queda como punto de partida del local.'
+                  : 'Revisa las diferencias. Las que se salen de tolerancia necesitan un motivo.')
               : `Cuenta lo que ves. No se muestra el dato del sistema. ${countedCount}/${lines.length} contados.`}
           </p>
         </div>
@@ -184,10 +199,22 @@ export default function InventoryCountSheet({
           <button type="button" onClick={handleApprove} disabled={approving || missingReasons > 0}
             title={missingReasons > 0 ? 'Asigna motivo a las líneas fuera de tolerancia' : undefined}
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base">
-            {approving ? <Loader2 size={15} className="animate-spin" /> : <ShieldCheck size={15} />} Aprobar y ajustar stock
+            {approving ? <Loader2 size={15} className="animate-spin" /> : <ShieldCheck size={15} />}
+            {isOpening ? 'Aprobar apertura' : 'Aprobar y ajustar stock'}
           </button>
         )}
       </div>
+
+      {isOpening && !isApproved && (
+        <div className="p-3 rounded-md bg-accent-bg border border-accent/20 text-sm flex items-start gap-2">
+          <Flag size={15} className="text-accent shrink-0 mt-0.5" />
+          <span className="text-text-secondary">
+            <span className="font-medium text-text-primary">Inventario de apertura.</span> Es el primer
+            inventario de este local: lo que cuentes fija el stock inicial. No es una corrección de merma —
+            es el punto de partida desde el que se medirán las variaciones.
+          </span>
+        </div>
+      )}
 
       {error && <div className="p-3 rounded-md bg-danger-bg text-danger border border-danger/20 text-sm">{error}</div>}
 
@@ -197,7 +224,7 @@ export default function InventoryCountSheet({
           <SummaryCell label="OK" value={String(summary.ok)} tone="ok" />
           <SummaryCell label="Fuera tol." value={String(summary.out)} tone={summary.out > 0 ? 'warn' : undefined} />
           <SummaryCell label="Sin contar" value={String(summary.uncounted)} />
-          <SummaryCell label="Efecto €" value={eur(summary.totalVarianceValue)} tone={summary.totalVarianceValue < 0 ? 'warn' : undefined} />
+          <SummaryCell label={isOpening ? 'Valor inicial' : 'Efecto €'} value={eur(summary.totalVarianceValue)} tone={!isOpening && summary.totalVarianceValue < 0 ? 'warn' : undefined} />
         </div>
       )}
 
@@ -214,23 +241,23 @@ export default function InventoryCountSheet({
                 <thead className="text-text-tertiary text-xs">
                   <tr className="border-t border-border-default">
                     <th className="text-left font-medium px-3 py-1.5">Artículo</th>
-                    {isReview && <th className="text-right font-medium px-3 py-1.5">Sistema</th>}
+                    {isReview && !isOpening && <th className="text-right font-medium px-3 py-1.5">Sistema</th>}
                     <th className="text-right font-medium px-3 py-1.5">{isReview ? 'Contado' : 'Cantidad'}</th>
-                    {isReview && <th className="text-right font-medium px-3 py-1.5">Variación</th>}
+                    {isReview && !isOpening && <th className="text-right font-medium px-3 py-1.5">Variación</th>}
                     {isReview && <th className="text-right font-medium px-3 py-1.5">€</th>}
-                    {isReview && <th className="text-left font-medium px-3 py-1.5">Motivo</th>}
+                    {isReview && !isOpening && <th className="text-left font-medium px-3 py-1.5">Motivo</th>}
                   </tr>
                 </thead>
                 <tbody>
                   {g.lines.map(l => {
-                    const out = isReview && l.withinTolerance === false
+                    const out = isReview && !isOpening && l.withinTolerance === false
                     return (
                       <tr key={l.id} className={`border-t border-border-default ${out ? 'bg-warning-bg/40' : ''}`}>
                         <td className="px-3 py-2 text-text-primary">
                           {l.itemName}
                           {l.abcClass && <span className="ml-1.5 text-[10px] px-1 py-0.5 rounded bg-page text-text-tertiary">{l.abcClass}</span>}
                         </td>
-                        {isReview && <td className="px-3 py-2 text-right tabular-nums text-text-secondary">{qty(l.systemQty)} {l.unitAbbr}</td>}
+                        {isReview && !isOpening && <td className="px-3 py-2 text-right tabular-nums text-text-secondary">{qty(l.systemQty)} {l.unitAbbr}</td>}
                         <td className="px-3 py-2 text-right">
                           {isReview ? (
                             <span className="tabular-nums text-text-primary">{qty(l.countedQty)} {l.unitAbbr}</span>
@@ -249,18 +276,18 @@ export default function InventoryCountSheet({
                             </div>
                           )}
                         </td>
-                        {isReview && (
+                        {isReview && !isOpening && (
                           <td className={`px-3 py-2 text-right tabular-nums ${l.withinTolerance === false ? 'text-warning font-medium' : 'text-text-secondary'}`}>
                             {l.varianceQty !== null ? `${l.varianceQty > 0 ? '+' : ''}${qty(l.varianceQty)}` : '—'}
                             {l.variancePct !== null && <span className="text-xs text-text-tertiary ml-1">({l.variancePct > 0 ? '+' : ''}{l.variancePct.toFixed(1)}%)</span>}
                           </td>
                         )}
                         {isReview && (
-                          <td className={`px-3 py-2 text-right tabular-nums ${(l.varianceValue ?? 0) < 0 ? 'text-danger' : 'text-text-secondary'}`}>
+                          <td className={`px-3 py-2 text-right tabular-nums ${(!isOpening && (l.varianceValue ?? 0) < 0) ? 'text-danger' : 'text-text-secondary'}`}>
                             {eur(l.varianceValue)}
                           </td>
                         )}
-                        {isReview && (
+                        {isReview && !isOpening && (
                           <td className="px-3 py-2">
                             {out ? (
                               <select value={l.reasonCode ?? ''} onChange={e => onReasonChange(l, e.target.value)}
@@ -292,17 +319,24 @@ export default function InventoryCountSheet({
       )}
       {approved && (
         <div className="p-3 rounded-md bg-success-bg text-success border border-success/20 text-sm flex items-center gap-1.5">
-          <ShieldCheck size={15} /> Conteo aprobado. {approved.adjustments} ajuste(s) aplicado(s) al stock.
+          <ShieldCheck size={15} />
+          {isOpening
+            ? `Apertura aprobada. Stock inicial fijado en ${approved.adjustments} artículo(s).`
+            : `Conteo aprobado. ${approved.adjustments} ajuste(s) aplicado(s) al stock.`}
         </div>
       )}
       {isReview && !isApproved && (
         <p className="text-xs text-text-tertiary flex items-center gap-1.5">
           <AlertTriangle size={12} />
-          {missingReasons > 0
-            ? `Faltan ${missingReasons} motivo(s) en líneas fuera de tolerancia para poder aprobar.`
-            : canApprove
-              ? 'Al aprobar, las diferencias se escriben como ajuste y corrigen el stock real.'
-              : 'Conteo en revisión. La aprobación que ajusta el stock la hace un responsable.'}
+          {isOpening
+            ? (canApprove
+                ? 'Al aprobar, este conteo fija el stock inicial del local. A partir de aquí se medirán las variaciones.'
+                : 'Apertura en revisión. La aprobación que fija el stock inicial la hace un responsable.')
+            : missingReasons > 0
+              ? `Faltan ${missingReasons} motivo(s) en líneas fuera de tolerancia para poder aprobar.`
+              : canApprove
+                ? 'Al aprobar, las diferencias se escriben como ajuste y corrigen el stock real.'
+                : 'Conteo en revisión. La aprobación que ajusta el stock la hace un responsable.'}
         </p>
       )}
     </div>

@@ -5,6 +5,11 @@
 // variación vs tolerancia ABC). NO escribe ajustes — eso es 1.4 (al aprobar).
 //
 // El local NO se elige: viene del local operativo (useOperativeLocation).
+//
+// T1 (apertura): un conteo puede ser de APERTURA (is_opening). Lo decide el
+// backend al generar la hoja: es apertura si el local no tiene aún ningún
+// movimiento 'apertura'. Al aprobarlo, ancla el stock inicial (no es merma);
+// el AvT excluirá esos movimientos del cómputo de variación.
 
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
 
@@ -34,6 +39,7 @@ export interface InventoryCount {
   kind: InventoryCountKind
   status: InventoryCountStatus
   blind: boolean
+  isOpening: boolean
   startedAt: string | null
   closedAt: string | null
   approvedAt: string | null
@@ -117,7 +123,7 @@ export async function buildInventoryCount(
 export async function listInventoryCounts(accountId: string, locationId: string): Promise<InventoryCount[]> {
   requireSupabase()
   const { data, error } = await from('inventory_count')
-    .select('id, code, location_id, kind, status, blind, started_at, closed_at, approved_at, created_at, inventory_count_line(count)')
+    .select('id, code, location_id, kind, status, blind, is_opening, started_at, closed_at, approved_at, created_at, inventory_count_line(count)')
     .eq('account_id', accountId)
     .eq('location_id', locationId)
     .order('created_at', { ascending: false })
@@ -132,6 +138,7 @@ export async function listInventoryCounts(accountId: string, locationId: string)
       kind: (r.kind as InventoryCountKind) ?? 'cycle',
       status: (r.status as InventoryCountStatus) ?? 'abierto',
       blind: Boolean(r.blind),
+      isOpening: Boolean(r.is_opening),
       startedAt: (r.started_at as string | null) ?? null,
       closedAt: (r.closed_at as string | null) ?? null,
       approvedAt: (r.approved_at as string | null) ?? null,
@@ -144,7 +151,7 @@ export async function listInventoryCounts(accountId: string, locationId: string)
 export async function getInventoryCount(countId: string): Promise<InventoryCount | null> {
   requireSupabase()
   const { data, error } = await from('inventory_count')
-    .select('id, code, location_id, kind, status, blind, started_at, closed_at, approved_at, created_at')
+    .select('id, code, location_id, kind, status, blind, is_opening, started_at, closed_at, approved_at, created_at')
     .eq('id', countId)
     .maybeSingle()
   if (error) throw new Error(`Error cargando el conteo: ${error.message}`)
@@ -157,6 +164,7 @@ export async function getInventoryCount(countId: string): Promise<InventoryCount
     kind: (r.kind as InventoryCountKind) ?? 'cycle',
     status: (r.status as InventoryCountStatus) ?? 'abierto',
     blind: Boolean(r.blind),
+    isOpening: Boolean(r.is_opening),
     startedAt: (r.started_at as string | null) ?? null,
     closedAt: (r.closed_at as string | null) ?? null,
     approvedAt: (r.approved_at as string | null) ?? null,
@@ -249,8 +257,9 @@ export interface ApplyCountResult {
 }
 
 /**
- * Aprueba el conteo: escribe los ajustes en el ledger y recalcula el saldo.
- * Cierra la capa 1 (el conteo deja de ser diagnóstico y corrige el stock real).
+ * Aprueba el conteo: escribe los movimientos en el ledger y recalcula el saldo.
+ * Si el conteo es de APERTURA, los escribe como 'apertura' (ancla el stock
+ * inicial, no es merma); si no, como 'ajuste' (variación). Cierra la capa 1.
  * Lanza error si hay líneas fuera de tolerancia sin motivo.
  */
 export async function approveInventoryCount(
