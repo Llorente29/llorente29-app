@@ -9,7 +9,7 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   Plus, Boxes, Loader2, X, PencilLine, ChevronUp, ChevronDown,
   Search, MapPin, Archive, ClipboardList, ChevronRight,
-  TrendingDown, RefreshCw, Trash2,
+  TrendingDown, RefreshCw, Trash2, Gauge,
 } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useApp } from '@/context/AppContext'
@@ -18,6 +18,7 @@ import { useOperativeLocation } from '@/modules/supply/hooks/useOperativeLocatio
 import OperativeLocationBanner from '@/modules/supply/components/OperativeLocationBanner'
 import InventoryCountSheet from '@/modules/supply/components/InventoryCountSheet'
 import WasteSection from '@/modules/supply/components/WasteSection'
+import AutoInventorySection from '@/modules/supply/components/AutoInventorySection'
 import {
   createInventoryCount,
   buildInventoryCount,
@@ -67,7 +68,7 @@ export default function InventoryPage() {
   const [assignAreaId, setAssignAreaId] = useState<string | null>(null)
 
   // navegación interna: áreas | conteos | consumo, y conteo abierto
-  const [tab, setTab] = useState<'areas' | 'counts' | 'consumption' | 'waste'>('areas')
+  const [tab, setTab] = useState<'areas' | 'counts' | 'autoinventory' | 'consumption' | 'waste'>('areas')
   const [openCountId, setOpenCountId] = useState<string | null>(null)
   const [counts, setCounts] = useState<InventoryCount[]>([])
   const [countsLoading, setCountsLoading] = useState(false)
@@ -277,6 +278,10 @@ export default function InventoryPage() {
           className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-base ${tab === 'counts' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>
           <span className="inline-flex items-center gap-1.5"><ClipboardList size={15} /> Conteos</span>
         </button>
+        <button type="button" onClick={() => setTab('autoinventory')}
+          className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-base ${tab === 'autoinventory' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>
+          <span className="inline-flex items-center gap-1.5"><Gauge size={15} /> Autoinventario</span>
+        </button>
         <button type="button" onClick={() => setTab('consumption')}
           className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-base ${tab === 'consumption' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>
           <span className="inline-flex items-center gap-1.5"><TrendingDown size={15} /> Consumo</span>
@@ -336,6 +341,15 @@ export default function InventoryPage() {
           loading={countsLoading}
           onOpen={(id) => setOpenCountId(id)}
           onNew={() => setNewCountOpen(true)}
+        />
+      )}
+
+      {tab === 'autoinventory' && activeAccountId && (
+        <AutoInventorySection
+          accountId={activeAccountId}
+          locationId={locationId}
+          onError={(m) => setError(m)}
+          onFlash={(m) => setFlash(m)}
         />
       )}
 

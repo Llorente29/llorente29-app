@@ -10084,6 +10084,37 @@ export type Database = {
           recipe_item_id: string
         }[]
       }
+      autoinventory_queue: {
+        Args: {
+          p_account_id: string
+          p_coverage_target?: number
+          p_location_id: string
+          p_w_risk?: number
+          p_w_rotation?: number
+          p_w_value?: number
+          p_window_days?: number
+        }
+        Returns: {
+          abc_rich: string
+          base_unit: string
+          code: string
+          coverage_pct: number
+          critical_reason: string
+          in_scope: boolean
+          must_count: boolean
+          name: string
+          qty_on_hand: number
+          rank: number
+          recipe_item_id: string
+          risk_eur: number
+          rotation_eur: number
+          score: number
+          score_risk: number
+          score_rotation: number
+          score_value: number
+          stock_value: number
+        }[]
+      }
       belongs_to_account: { Args: { p_account_id: string }; Returns: boolean }
       build_inventory_count: {
         Args: { p_area_ids?: string[]; p_count_id: string; p_full?: boolean }
