@@ -29,6 +29,7 @@ import {
   type LastappIntegration,
   type LastappLocationMap,
   type FolvyLocation,
+  type ImportReport,
 } from '@/admin/services/lastappIntegrationService'
 
 type Feedback = { kind: 'ok' | 'error'; msg: string } | null
@@ -45,6 +46,7 @@ export default function IntegrationsSection({ accountId }: { accountId: string }
   const [locations, setLocations] = useState<FolvyLocation[]>([])
   const [loading, setLoading] = useState(true)
   const [feedback, setFeedback] = useState<Feedback>(null)
+  const [report, setReport] = useState<ImportReport | null>(null)
   const [busy, setBusy] = useState<string | null>(null) // clave de la acción en curso
 
   const reload = useCallback(async () => {
@@ -79,18 +81,24 @@ export default function IntegrationsSection({ accountId }: { accountId: string }
   const locName = (id: string) => locations.find(l => l.id === id)?.name ?? id
 
   async function handleImport(int: LastappIntegration, dryRun: boolean) {
-    setBusy(`import:${int.id}:${dryRun}`); setFeedback(null)
+    setBusy(`import:${int.id}:${dryRun}`); setFeedback(null); setReport(null)
     const res = await importCatalog({
       accountId, lastappOrganizationId: int.lastappOrganizationId, dryRun,
     })
     if (!res.ok) {
       setFeedback({ kind: 'error', msg: res.error })
     } else {
+      setReport(res.summary)
+      const unresolved = res.summary.brands_unresolved?.length ?? 0
       setFeedback({
-        kind: 'ok',
+        kind: unresolved > 0 ? 'error' : 'ok',
         msg: dryRun
-          ? 'Simulación del import completada (no se ha escrito nada). Revisa el resultado en la consola de la Edge.'
-          : 'Catálogo importado. Ahora pulsa "Sembrar escandallos y recasar".',
+          ? (unresolved > 0
+              ? `Simulación: ${unresolved} marca(s) de Last NO existen en Folvy → su catálogo no entraría. Créalas antes de importar (ver detalle abajo).`
+              : 'Simulación correcta: todas las marcas resuelven. Puedes importar de verdad.')
+          : (unresolved > 0
+              ? `Importado parcial: ${unresolved} marca(s) sin resolver quedaron fuera. Crea esas marcas y reimporta.`
+              : 'Catálogo importado. Ahora pulsa "Sembrar escandallos y recasar".'),
       })
       if (!dryRun) await reload()
     }
@@ -125,6 +133,41 @@ export default function IntegrationsSection({ accountId }: { accountId: string }
           ? 'bg-success-bg text-success border-success/20'
           : 'bg-danger-bg text-danger border-danger/20'}`}>
           {feedback.msg}
+        </div>
+      )}
+
+      {report && (
+        <div className="rounded-lg p-3 mb-3 text-sm border border-border-default bg-card space-y-2">
+          <div className="flex items-center gap-2 text-text-secondary">
+            <span className="font-medium text-text-primary">Resumen del import</span>
+            {report.dry_run && <span className="text-[10px] px-1.5 py-0.5 rounded border bg-page text-text-tertiary border-border-default">simulación</span>}
+          </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-text-secondary text-xs">
+            <span>Productos: <b className="text-text-primary tabular-nums">{report.products ?? 0}</b></span>
+            <span>Combos: <b className="text-text-primary tabular-nums">{report.combos ?? 0}</b></span>
+            <span>Categorías: <b className="text-text-primary tabular-nums">{report.categories ?? 0}</b></span>
+            <span>Grupos modif.: <b className="text-text-primary tabular-nums">{report.modifier_groups ?? 0}</b></span>
+          </div>
+          {(report.brands_in_use?.length ?? 0) > 0 && (
+            <div className="text-xs text-text-secondary">
+              <span className="text-text-tertiary">Marcas resueltas: </span>
+              {report.brands_in_use!.join(', ')}
+            </div>
+          )}
+          {(report.brands_unresolved?.length ?? 0) > 0 && (
+            <div className="text-xs">
+              <span className="text-danger font-medium">Marcas sin resolver (faltan en Folvy): </span>
+              <span className="text-text-primary">{report.brands_unresolved!.join(', ')}</span>
+              <p className="text-[11px] text-text-tertiary mt-1">
+                Crea estas marcas en la cuenta (con un nombre que normalice igual) y vuelve a importar. Su catálogo no entra hasta que existan.
+              </p>
+            </div>
+          )}
+          {(report.warnings?.length ?? 0) > 0 && (
+            <div className="text-[11px] text-text-tertiary">
+              Avisos: {report.warnings!.slice(0, 5).join(' · ')}{report.warnings!.length > 5 ? '…' : ''}
+            </div>
+          )}
         </div>
       )}
 

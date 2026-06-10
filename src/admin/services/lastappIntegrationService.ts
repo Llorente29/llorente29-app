@@ -159,7 +159,21 @@ export async function getCatalogCount(
   return count ?? 0
 }
 
-export type ImportResult = { ok: true; summary: unknown } | { ok: false; error: string }
+/** Resumen que devuelve la Edge (report). Campos relevantes para la UI. */
+export interface ImportReport {
+  ok?: boolean
+  dry_run?: boolean
+  brands_in_use?: string[]
+  brands_skipped_empty?: string[]
+  brands_unresolved?: string[]
+  categories?: number
+  products?: number
+  combos?: number
+  modifier_groups?: number
+  warnings?: string[]
+}
+
+export type ImportResult = { ok: true; summary: ImportReport } | { ok: false; error: string }
 
 async function parseInvokeError(error: unknown): Promise<string> {
   try {
@@ -196,9 +210,9 @@ export async function importCatalog(input: {
       },
     })
     if (error) return { ok: false, error: await parseInvokeError(error) }
-    const body = data as { error?: string }
+    const body = data as ImportReport & { error?: string }
     if (body?.error) return { ok: false, error: body.error }
-    return { ok: true, summary: data }
+    return { ok: true, summary: body }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Error de red.' }
   }
