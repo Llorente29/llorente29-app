@@ -6965,6 +6965,7 @@ export type Database = {
           id: string
           indirect_cost_pct: number | null
           is_active: boolean
+          is_operational_critical: boolean
           is_purchasable: boolean
           is_sellable: boolean
           is_stockable: boolean
@@ -6978,6 +6979,7 @@ export type Database = {
           needs_review: boolean
           notes: string | null
           nutrition: Json | null
+          operational_min_qty: number | null
           origin: string | null
           plating_notes: string | null
           prep_notes: string | null
@@ -7038,6 +7040,7 @@ export type Database = {
           id?: string
           indirect_cost_pct?: number | null
           is_active?: boolean
+          is_operational_critical?: boolean
           is_purchasable?: boolean
           is_sellable?: boolean
           is_stockable?: boolean
@@ -7051,6 +7054,7 @@ export type Database = {
           needs_review?: boolean
           notes?: string | null
           nutrition?: Json | null
+          operational_min_qty?: number | null
           origin?: string | null
           plating_notes?: string | null
           prep_notes?: string | null
@@ -7111,6 +7115,7 @@ export type Database = {
           id?: string
           indirect_cost_pct?: number | null
           is_active?: boolean
+          is_operational_critical?: boolean
           is_purchasable?: boolean
           is_sellable?: boolean
           is_stockable?: boolean
@@ -7124,6 +7129,7 @@ export type Database = {
           needs_review?: boolean
           notes?: string | null
           nutrition?: Json | null
+          operational_min_qty?: number | null
           origin?: string | null
           plating_notes?: string | null
           prep_notes?: string | null
