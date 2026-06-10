@@ -11,6 +11,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { getAccountById, updateAccount, setAccountStatus } from '@/modules/multitenancy/services/accountsService'
 import type { Account, AccountStatus, AccountUpdate } from '@/types/multitenancy'
 import { getCatalog, getAccountItems, setAccountModules, type CatalogModule } from '@/platform/accountModulesService'
+import IntegrationsSection from '@/admin/components/IntegrationsSection'
 
 type LoadState =
   | { state: 'loading' }
@@ -385,6 +386,9 @@ export default function CuentaDetallePage() {
           </>
         )}
       </section>
+
+      {/* Integraciones Last.app (onboarding multi-TPV, solo Folvy) */}
+      {accountId && <IntegrationsSection accountId={accountId} />}
 
       {/* Ciclo de vida / estado */}
       <section>
