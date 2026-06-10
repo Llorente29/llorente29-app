@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -8838,6 +8838,94 @@ export type Database = {
           },
         ]
       }
+      stock_waste: {
+        Row: {
+          account_id: string
+          cost_eur: number | null
+          created_at: string
+          created_by: string | null
+          created_by_name: string | null
+          expiry_date: string | null
+          id: string
+          location_id: string
+          lot_code: string | null
+          notes: string | null
+          occurred_at: string
+          photo_url: string | null
+          qty_base: number
+          reason_code: string
+          recipe_item_id: string
+          unit_cost: number | null
+          use_qty: number | null
+          use_unit_factor: number | null
+          use_unit_label: string | null
+        }
+        Insert: {
+          account_id: string
+          cost_eur?: number | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          expiry_date?: string | null
+          id?: string
+          location_id: string
+          lot_code?: string | null
+          notes?: string | null
+          occurred_at?: string
+          photo_url?: string | null
+          qty_base: number
+          reason_code: string
+          recipe_item_id: string
+          unit_cost?: number | null
+          use_qty?: number | null
+          use_unit_factor?: number | null
+          use_unit_label?: string | null
+        }
+        Update: {
+          account_id?: string
+          cost_eur?: number | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          expiry_date?: string | null
+          id?: string
+          location_id?: string
+          lot_code?: string | null
+          notes?: string | null
+          occurred_at?: string
+          photo_url?: string | null
+          qty_base?: number
+          reason_code?: string
+          recipe_item_id?: string
+          unit_cost?: number | null
+          use_qty?: number | null
+          use_unit_factor?: number | null
+          use_unit_label?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_waste_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_waste_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_waste_recipe_item_id_fkey"
+            columns: ["recipe_item_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_item"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       storage_area: {
         Row: {
           account_id: string
@@ -10359,6 +10447,28 @@ export type Database = {
           movements_written: number
         }[]
       }
+      register_waste: {
+        Args: {
+          p_account_id: string
+          p_expiry_date?: string
+          p_location_id: string
+          p_lot_code?: string
+          p_notes?: string
+          p_photo_url?: string
+          p_qty_base: number
+          p_reason_code: string
+          p_recipe_item_id: string
+          p_use_qty?: number
+          p_use_unit_factor?: number
+          p_use_unit_label?: string
+          p_user_id?: string
+          p_user_name?: string
+        }
+        Returns: {
+          cost_eur: number
+          waste_id: string
+        }[]
+      }
       reprocess_sale: { Args: { p_sale_id: string }; Returns: number }
       resolve_lastapp_line: {
         Args: {
@@ -10629,4 +10739,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-

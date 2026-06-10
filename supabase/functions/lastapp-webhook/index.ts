@@ -289,14 +289,25 @@ Deno.serve(async (req: Request) => {
         .select("account_id").eq("lastapp_location_id", lastLocationId).maybeSingle();
       if (locErr) throw new Error(`lastapp_location_map: ${locErr.message}`);
       const accountId = (locRow?.account_id as string | undefined) ?? null;
-      if (!accountId) throw new Error(`location ${lastLocationId} no mapeada a ninguna cuenta`);
 
-      const caches = await loadHeaderCaches(sb, accountId, lastLocationId);
-      const bills = Array.isArray(tab.bills) ? tab.bills : [];
-      for (const bill of bills) {
-        await ingestBill(sb, accountId, bill, tab, caches);
+      if (!accountId) {
+        // LOCAL NO MAPEADO: NO es un error, es una venta PENDIENTE de que el cliente
+        // vincule esa tienda de Last a su local. La venta NO SE PIERDE: el log se
+        // escribe SIEMPRE al final con el payload entero y processed=false, así que
+        // queda guardada y reprocesable. Marcamos una nota específica para poder
+        // distinguir "pendiente de mapear local" de un error real, y listarla luego.
+        // NO se hace throw: salir limpio del try con processedOk=false.
+        note = "pendiente-local-no-mapeado";
+        processError = `location ${lastLocationId} pendiente de mapear (venta guardada en el log para reproceso)`;
+        console.log("tab:closed pendiente", processError);
+      } else {
+        const caches = await loadHeaderCaches(sb, accountId, lastLocationId);
+        const bills = Array.isArray(tab.bills) ? tab.bills : [];
+        for (const bill of bills) {
+          await ingestBill(sb, accountId, bill, tab, caches);
+        }
+        processedOk = true;
       }
-      processedOk = true;
     } catch (e) {
       processError = e instanceof Error ? e.message : String(e);
       console.error("tab:closed ingest error", processError);

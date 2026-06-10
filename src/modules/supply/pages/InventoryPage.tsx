@@ -9,7 +9,7 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   Plus, Boxes, Loader2, X, PencilLine, ChevronUp, ChevronDown,
   Search, MapPin, Archive, ClipboardList, ChevronRight,
-  TrendingDown, RefreshCw,
+  TrendingDown, RefreshCw, Trash2,
 } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useApp } from '@/context/AppContext'
@@ -17,6 +17,7 @@ import { listSupplyLocations, type SupplyLocation } from '@/modules/supply/servi
 import { useOperativeLocation } from '@/modules/supply/hooks/useOperativeLocation'
 import OperativeLocationBanner from '@/modules/supply/components/OperativeLocationBanner'
 import InventoryCountSheet from '@/modules/supply/components/InventoryCountSheet'
+import WasteSection from '@/modules/supply/components/WasteSection'
 import {
   createInventoryCount,
   buildInventoryCount,
@@ -66,7 +67,7 @@ export default function InventoryPage() {
   const [assignAreaId, setAssignAreaId] = useState<string | null>(null)
 
   // navegación interna: áreas | conteos | consumo, y conteo abierto
-  const [tab, setTab] = useState<'areas' | 'counts' | 'consumption'>('areas')
+  const [tab, setTab] = useState<'areas' | 'counts' | 'consumption' | 'waste'>('areas')
   const [openCountId, setOpenCountId] = useState<string | null>(null)
   const [counts, setCounts] = useState<InventoryCount[]>([])
   const [countsLoading, setCountsLoading] = useState(false)
@@ -280,6 +281,10 @@ export default function InventoryPage() {
           className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-base ${tab === 'consumption' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>
           <span className="inline-flex items-center gap-1.5"><TrendingDown size={15} /> Consumo</span>
         </button>
+        <button type="button" onClick={() => setTab('waste')}
+          className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-base ${tab === 'waste' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>
+          <span className="inline-flex items-center gap-1.5"><Trash2 size={15} /> Merma</span>
+        </button>
       </div>
 
       {tab === 'areas' && (
@@ -338,6 +343,17 @@ export default function InventoryPage() {
         <ConsumptionSection
           accountId={activeAccountId}
           locationId={locationId}
+          onError={(m) => setError(m)}
+          onFlash={(m) => setFlash(m)}
+        />
+      )}
+
+      {tab === 'waste' && activeAccountId && (
+        <WasteSection
+          accountId={activeAccountId}
+          locationId={locationId}
+          userId={authUserId ?? null}
+          userName={userProfile?.displayName ?? null}
           onError={(m) => setError(m)}
           onFlash={(m) => setFlash(m)}
         />
