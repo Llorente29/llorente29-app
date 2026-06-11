@@ -3563,6 +3563,102 @@ export type Database = {
           },
         ]
       }
+      external_brand_map: {
+        Row: {
+          account_id: string
+          brand_id: string
+          created_at: string
+          external_brand_id: string
+          external_location_id: string
+          id: string
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          brand_id: string
+          created_at?: string
+          external_brand_id: string
+          external_location_id: string
+          id?: string
+          source: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          brand_id?: string
+          created_at?: string
+          external_brand_id?: string
+          external_location_id?: string
+          id?: string
+          source?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "external_brand_map_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "external_brand_map_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      external_product_map: {
+        Row: {
+          account_id: string
+          created_at: string
+          external_brand_id: string | null
+          external_product_id: string
+          id: string
+          menu_item_id: string
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          external_brand_id?: string | null
+          external_product_id: string
+          id?: string
+          menu_item_id: string
+          source: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          external_brand_id?: string | null
+          external_product_id?: string
+          id?: string
+          menu_item_id?: string
+          source?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "external_product_map_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "external_product_map_menu_item_id_fkey"
+            columns: ["menu_item_id"]
+            isOneToOne: false
+            referencedRelation: "menu_item"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       family_vat_default: {
         Row: {
           created_at: string
@@ -8176,6 +8272,9 @@ export type Database = {
           computed_cost: number | null
           cost_computed_at: string | null
           created_at: string
+          external_brand_id: string | null
+          external_product_id: string | null
+          external_source: string | null
           id: string
           line_total: number | null
           line_type: string
@@ -8199,6 +8298,9 @@ export type Database = {
           computed_cost?: number | null
           cost_computed_at?: string | null
           created_at?: string
+          external_brand_id?: string | null
+          external_product_id?: string | null
+          external_source?: string | null
           id?: string
           line_total?: number | null
           line_type?: string
@@ -8222,6 +8324,9 @@ export type Database = {
           computed_cost?: number | null
           cost_computed_at?: string | null
           created_at?: string
+          external_brand_id?: string | null
+          external_product_id?: string | null
+          external_source?: string | null
           id?: string
           line_total?: number | null
           line_type?: string
