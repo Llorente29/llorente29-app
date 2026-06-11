@@ -3566,31 +3566,34 @@ export type Database = {
       external_brand_map: {
         Row: {
           account_id: string
-          brand_id: string
+          brand_id: string | null
           created_at: string
           external_brand_id: string
           external_location_id: string
           id: string
+          is_ignored: boolean
           source: string
           updated_at: string
         }
         Insert: {
           account_id: string
-          brand_id: string
+          brand_id?: string | null
           created_at?: string
           external_brand_id: string
           external_location_id: string
           id?: string
+          is_ignored?: boolean
           source: string
           updated_at?: string
         }
         Update: {
           account_id?: string
-          brand_id?: string
+          brand_id?: string | null
           created_at?: string
           external_brand_id?: string
           external_location_id?: string
           id?: string
+          is_ignored?: boolean
           source?: string
           updated_at?: string
         }
@@ -10440,6 +10443,19 @@ export type Database = {
           product_name: string
           recipe_item_id: string
           recipe_type: string
+          ventas: number
+        }[]
+      }
+      list_pending_external_brands: {
+        Args: { p_account_id: string }
+        Returns: {
+          external_brand_id: string
+          external_location_id: string
+          folvy_location_id: string
+          folvy_location_name: string
+          pista_catalogo: string
+          pista_productos: string
+          source: string
           ventas: number
         }[]
       }

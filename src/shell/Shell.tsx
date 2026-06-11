@@ -15,7 +15,7 @@
 //        abre el héroe de la barra. En escritorio NO cambia nada: la burbuja
 //        sigue con su botón flotante (controlado por el mismo estado).
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useLocation, Routes, Route } from 'react-router-dom'
 import ShellTopBar, { HOME_KEY } from './ShellTopBar'
 import ModuleSidebar from './ModuleSidebar'
@@ -27,6 +27,9 @@ import HomeGeneral from './home/HomeGeneral'
 import TrabajadorApp from '../pages/trabajador/TrabajadorApp'
 import { useApp } from '../context/AppContext'
 import { useIsMobile } from './useIsMobile'
+import { usePlatformAdmin } from '@/platform/usePlatformAdmin'
+import { listAccounts } from '@/modules/multitenancy/services/accountsService'
+import type { Account } from '@/types/multitenancy'
 import { FolvyAIBubble } from '../modules/folvy-ai/components/FolvyAIBubble'
 
 const SETTINGS_BASE = 'configuracion'
@@ -34,7 +37,34 @@ const SETTINGS_BASE = 'configuracion'
 export default function Shell() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { userProfile } = useApp()
+  const { userProfile, accounts, activeAccount, activeAccountId, setActiveAccountId } = useApp()
+  const { isPlatformAdmin } = usePlatformAdmin()
+
+  // Lista de cuentas para el selector. Usuario normal: solo SUS cuentas (accounts
+  // del contexto). Platform admin: TODAS (puede gestionar cualquier cliente).
+  const [allAccounts, setAllAccounts] = useState<Account[]>([])
+  useEffect(() => {
+    if (!isPlatformAdmin) return
+    let alive = true
+    listAccounts({ includeInternal: true })
+      .then(rows => { if (alive) setAllAccounts(rows) })
+      .catch(() => { if (alive) setAllAccounts([]) })
+    return () => { alive = false }
+  }, [isPlatformAdmin])
+  const selectorAccounts = isPlatformAdmin ? allAccounts : accounts
+
+  // Cuenta activa mostrada: para platform admin sale de allAccounts (resuelve
+  // aunque la cuenta no esté entre las del usuario); si no, la del contexto.
+  const shownAccount = isPlatformAdmin
+    ? (allAccounts.find(a => a.id === activeAccountId) ?? activeAccount)
+    : activeAccount
+
+  // Cambiar de cliente (EXCLUSIVO platform admin): fija la cuenta activa y va
+  // al inicio del nuevo cliente. El AppContext recarga perfil/permisos/datos solo.
+  function switchAccount(accountId: string) {
+    setActiveAccountId(accountId)
+    navigate('/')
+  }
 
   // R1.2/R1.3a/R1.3b: ¿viewport móvil? (< 768px). Decide barra inferior,
   // sub-pestañas vs sidebar, paddings y modo controlado de la IA.
@@ -138,8 +168,27 @@ export default function Shell() {
         userInitials={initials}
         currentEmployeeId={userProfile?.employeeId ?? null}
         onEnterWorkerMode={userProfile?.employeeId ? () => setWorkerMode(true) : undefined}
+        activeAccount={shownAccount}
+        accounts={selectorAccounts}
+        onSwitchAccount={isPlatformAdmin ? switchAccount : undefined}
       />
 
+      {/* Banda "Estás gestionando: [cliente]" — EXCLUSIVO platform admin. Deja
+          claro en qué cliente se está operando al saltar entre cuentas. */}
+      {isPlatformAdmin && shownAccount && (
+        <div
+          className="flex items-center gap-2"
+          style={{
+            background: 'var(--color-accent-bg, #eef2f7)',
+            borderBottom: '1px solid var(--color-border-default, #e5e5e5)',
+            color: 'var(--color-accent, #1E3A5F)',
+            fontSize: 13,
+            padding: isMobile ? '6px 16px' : '7px 26px',
+          }}
+        >
+          <span>Estás gestionando: <b>{shownAccount.name}</b></span>
+        </div>
+      )}
       {activeModule ? (
         isMobile ? (
           <div className="flex-1 flex flex-col">

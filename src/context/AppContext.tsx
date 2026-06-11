@@ -241,16 +241,61 @@ const AppContext = createContext<AppContextType | null>(null)
  * el marcador { __full_access: true }. Para usuarios sin set asignado
  * devuelve `{}` (fail-closed). Si profile es null, no llamamos al RPC.
  */
+// Decodifica el claim folvy.is_platform_admin del JWT actual (misma técnica
+// que usePlatformAdmin). Permite que loadProfileAndPermissions sepa, sin pasar
+// por React, si el usuario es platform admin → puede entrar en cualquier cuenta.
+async function isPlatformAdminFromToken(): Promise<boolean> {
+  if (!supabase) return false
+  try {
+    const { data } = await supabase.auth.getSession()
+    const jwt = data.session?.access_token
+    if (!jwt) return false
+    const parts = jwt.split('.')
+    if (parts.length !== 3) return false
+    const payloadB64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+    const payload = JSON.parse(atob(payloadB64))
+    return payload?.folvy?.is_platform_admin === true
+  } catch {
+    return false
+  }
+}
+
 async function loadProfileAndPermissions(
   uid: string,
   accountId: string,
 ): Promise<{ profile: UserProfile | null; perms: EffectivePermissions | null }> {
   const profile = await getUserProfile(uid, accountId)
-  if (!profile) {
+  if (profile) {
+    const perms = await getEffectivePermissions(accountId)
+    return { profile, perms }
+  }
+
+  // No hay perfil del usuario en esta cuenta. Si es PLATFORM ADMIN, entra en
+  // modo impersonation: perfil sintético de admin con acceso total (le permite
+  // gestionar cualquier cliente). Si NO es platform admin → sin acceso (null).
+  const isPA = await isPlatformAdminFromToken()
+  if (!isPA) {
     return { profile: null, perms: null }
   }
+
+  const nowIso = new Date().toISOString()
+  const syntheticProfile: UserProfile = {
+    id: `impersonation:${uid}:${accountId}`,
+    userId: uid,
+    accountId,
+    employeeId: null,
+    role: 'admin',
+    displayName: 'Folvy Admin',
+    active: true,
+    // Welcome/terms completados: evita que el guard de App.tsx fuerce /welcome.
+    welcomeCompletedAt: nowIso,
+    termsAcceptedAt: nowIso,
+    lastPasswordChangeAt: null,
+    createdAt: nowIso,
+    updatedAt: nowIso,
+  }
   const perms = await getEffectivePermissions(accountId)
-  return { profile, perms }
+  return { profile: syntheticProfile, perms }
 }
 
 export function AppProvider({ children }: { children: React.ReactNode }) {

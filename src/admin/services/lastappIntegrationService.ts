@@ -6,6 +6,7 @@
 //
 //   1. Alta de la integración        → fila en lastapp_integration (org + token_secret_name)
 //   2. Vincular tiendas Last → local → fila(s) en lastapp_location_map
+//   2.bis Vincular marca externa → marca Folvy → fila(s) en external_brand_map (genérico)
 //   3. Importar catálogo             → Edge lastapp-catalog-import (token desde Vault)
 //   4. Sembrar escandallos + recasar → seed_lastapp_catalog + recast_lastapp_sales
 //
@@ -142,6 +143,129 @@ export async function linkLocation(input: {
     needs_review: false,
   })
   if (error) throw new Error(`No se pudo vincular la tienda: ${error.message}`)
+}
+
+// ─── 2.bis  Marcas externas → marcas Folvy (amarre GENÉRICO) ────────────────
+// Gemelo de linkLocation, a nivel marca. Tabla external_brand_map: source-agnostic
+// (hoy 'lastapp'; mañana 'otter' sin cambios). El humano une una vez "id externo
+// de marca = mi marca de Folvy"; a partir de ahí la atribución de marca de cada
+// venta es determinista (por external_brand_id), no por nombre ni catálogo.
+
+export interface ExternalBrandMap {
+  id: string
+  source: string
+  externalLocationId: string
+  externalBrandId: string
+  brandId: string
+}
+
+export interface FolvyBrand {
+  id: string
+  name: string
+}
+
+export interface PendingExternalBrand {
+  source: string
+  externalLocationId: string
+  externalBrandId: string
+  folvyLocationId: string | null
+  folvyLocationName: string | null
+  ventas: number
+  pistaCatalogo: string | null
+  pistaProductos: string | null
+}
+
+export async function listBrandMaps(accountId: string): Promise<ExternalBrandMap[]> {
+  requireSupabase()
+  const { data, error } = await from('external_brand_map')
+    .select('id, source, external_location_id, external_brand_id, brand_id')
+    .eq('account_id', accountId)
+  if (error) throw new Error(`Error cargando marcas vinculadas: ${error.message}`)
+  return ((data as Row[] | null) ?? []).map(r => ({
+    id: r.id as string,
+    source: r.source as string,
+    externalLocationId: r.external_location_id as string,
+    externalBrandId: r.external_brand_id as string,
+    brandId: r.brand_id as string,
+  }))
+}
+
+export async function listFolvyBrands(accountId: string): Promise<FolvyBrand[]> {
+  requireSupabase()
+  const { data, error } = await from('brand')
+    .select('id, name')
+    .eq('account_id', accountId)
+    .order('name', { ascending: true })
+  if (error) throw new Error(`Error cargando marcas del cliente: ${error.message}`)
+  return ((data as Row[] | null) ?? []).map(r => ({ id: r.id as string, name: r.name as string }))
+}
+
+/**
+ * Vincula una marca externa (de cualquier fuente) a una marca de Folvy.
+ * El humano elige con la marca de Folvy delante; el id externo se guarda por debajo.
+ * Tras vincular, las ventas de esa (source, external_location_id, external_brand_id)
+ * se atribuyen a la marca de Folvy de forma determinista.
+ */
+export async function linkBrand(input: {
+  accountId: string
+  source: string
+  externalLocationId: string
+  externalBrandId: string
+  brandId: string
+}): Promise<void> {
+  requireSupabase()
+  const { error } = await from('external_brand_map').insert({
+    account_id: input.accountId,
+    source: input.source,
+    external_location_id: input.externalLocationId,
+    external_brand_id: input.externalBrandId,
+    brand_id: input.brandId,
+  })
+  if (error) throw new Error(`No se pudo vincular la marca: ${error.message}`)
+}
+
+/**
+ * Lista las marcas externas que han llegado en ventas y aún NO están vinculadas,
+ * con pistas para reconocerlas (nombre de catálogo para propias, productos para
+ * cedidas). Llama a la RPC list_pending_external_brands. Agnóstica de fuente.
+ */
+export async function listPendingExternalBrands(accountId: string): Promise<PendingExternalBrand[]> {
+  const sb = requireSupabase()
+  const { data, error } = await sb.rpc('list_pending_external_brands', { p_account_id: accountId })
+  if (error) throw new Error(`Error cargando marcas pendientes: ${error.message}`)
+  return ((data as Row[] | null) ?? []).map(r => ({
+    source: r.source as string,
+    externalLocationId: r.external_location_id as string,
+    externalBrandId: r.external_brand_id as string,
+    folvyLocationId: (r.folvy_location_id as string | null) ?? null,
+    folvyLocationName: (r.folvy_location_name as string | null) ?? null,
+    ventas: Number(r.ventas ?? 0),
+    pistaCatalogo: (r.pista_catalogo as string | null) ?? null,
+    pistaProductos: (r.pista_productos as string | null) ?? null,
+  }))
+}
+
+/**
+ * Marca una marca externa como IGNORADA (decisión deliberada de no vincularla).
+ * Escribe en external_brand_map con brand_id NULL e is_ignored=true. Sale de
+ * pendientes sin atribuir ventas. Reversible borrando la fila.
+ */
+export async function ignoreBrand(input: {
+  accountId: string
+  source: string
+  externalLocationId: string
+  externalBrandId: string
+}): Promise<void> {
+  requireSupabase()
+  const { error } = await from('external_brand_map').insert({
+    account_id: input.accountId,
+    source: input.source,
+    external_location_id: input.externalLocationId,
+    external_brand_id: input.externalBrandId,
+    brand_id: null,
+    is_ignored: true,
+  })
+  if (error) throw new Error(`No se pudo ignorar la marca: ${error.message}`)
 }
 
 // ─── 3. Catálogo ───────────────────────────────────────────────────────────

@@ -24,17 +24,18 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Home, MapPin, Settings, Shield, LogOut, User } from 'lucide-react'
+import { Home, MapPin, Settings, Shield, LogOut, User, Building2, ChevronDown } from 'lucide-react'
 import { getOrderedModules } from './moduleRegistry'
 import { useIsMobile } from './useIsMobile'
 import { isMobileOverflowModule } from './shellMobileNav'
+import LocationSelector from '../modules/multitenancy/components/LocationSelector'
 import { usePlatformAdmin } from '@/platform/usePlatformAdmin'
 import { usePermissions } from '@/modules/multitenancy/hooks/usePermissions'
 import { signOut } from '@/services/authService'
 import NotificationBell from '@/components/NotificationBell'
 import { configuracionModule } from '@/modules/configuracion/module'
 import type { ModuleDefinition } from './types'
-import type { UserProfileRole } from '@/types/multitenancy'
+import type { UserProfileRole, Account } from '@/types/multitenancy'
 
 // Clave especial del Home general (no es un módulo, es del Shell).
 export const HOME_KEY = '__home__'
@@ -50,7 +51,6 @@ interface ShellTopBarProps {
   onOpenSettings?: () => void
   settingsActive?: boolean
   userInitials?: string
-  locationLabel?: string
   /** employee_id del user logueado. null = admin sin employee vinculado;
    *  la campana se esconde. */
   currentEmployeeId?: string | null
@@ -58,6 +58,12 @@ interface ShellTopBarProps {
    *  el user es encargado dual (tiene employee_id). Si no se pasa, el item
    *  "Ver como trabajador" del menú no se renderiza. */
   onEnterWorkerMode?: () => void
+  /** Cuenta activa (para mostrar a platform admin qué cliente gestiona). */
+  activeAccount?: Account | null
+  /** Lista de cuentas a las que saltar (solo se usa si es platform admin). */
+  accounts?: Account[]
+  /** Cambia la cuenta activa y va al inicio. Solo se cablea para platform admin. */
+  onSwitchAccount?: (accountId: string) => void
 }
 
 /**
@@ -84,15 +90,33 @@ export default function ShellTopBar({
   onOpenSettings,
   settingsActive = false,
   userInitials = 'JG',
-  locationLabel = 'Todos los locales',
   currentEmployeeId = null,
   onEnterWorkerMode,
+  activeAccount = null,
+  accounts = [],
+  onSwitchAccount,
 }: ShellTopBarProps) {
   const modules = getOrderedModules()
   const navigate = useNavigate()
   const isMobile = useIsMobile()
   const { isPlatformAdmin } = usePlatformAdmin()
   const { hasPermission, role } = usePermissions()
+
+  // Selector de cuenta: SOLO para platform admin (acceso exclusivo de staff).
+  const canSwitchAccount = isPlatformAdmin && !!onSwitchAccount && accounts.length > 0
+  const [acctMenuOpen, setAcctMenuOpen] = useState(false)
+  const acctMenuRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!acctMenuOpen) return
+    function onClickOutside(e: MouseEvent) {
+      if (acctMenuRef.current && !acctMenuRef.current.contains(e.target as Node)) {
+        setAcctMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onClickOutside)
+    return () => document.removeEventListener('mousedown', onClickOutside)
+  }, [acctMenuOpen])
 
   // Pestañas: solo los módulos con al menos un item visible. "Inicio" queda
   // fuera (es del Shell, no un módulo, y siempre se ve).
@@ -172,11 +196,56 @@ export default function ShellTopBar({
         </nav>
       )}
 
-      {/* Lado derecho: local, notificaciones, avatar */}
+      {/* Lado derecho: selector de cuenta (solo staff), local, notificaciones, avatar */}
       <div className="flex items-center shrink-0" style={{ marginLeft: 'auto', gap: 16 }}>
+        {/* Selector de cuenta — EXCLUSIVO platform admin. Marca qué cliente se
+            gestiona y permite saltar a otro (va al inicio del nuevo cliente). */}
+        {canSwitchAccount && !isMobile && (
+          <div className="relative" ref={acctMenuRef}>
+            <button
+              type="button"
+              onClick={() => setAcctMenuOpen(o => !o)}
+              className="inline-flex items-center rounded-md"
+              style={{ background: 'rgba(255,255,255,0.12)', color: CREAM, fontSize: 14, gap: 6, padding: '6px 10px' }}
+            >
+              <Building2 size={15} />
+              <span style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {activeAccount?.name ?? 'Cuenta'}
+              </span>
+              <ChevronDown size={14} style={{ transform: acctMenuOpen ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
+            </button>
+            {acctMenuOpen && (
+              <div
+                className="absolute right-0 rounded-lg overflow-auto"
+                style={{ top: 40, minWidth: 240, maxHeight: 360, background: '#fff', border: '1px solid var(--color-border, #e5e5e5)', boxShadow: '0 6px 24px rgba(0,0,0,0.12)', zIndex: 50 }}
+              >
+                <div style={{ padding: '8px 12px', fontSize: 11, color: '#8a8a8a', borderBottom: '1px solid var(--color-border, #eee)' }}>
+                  Cambiar de cliente
+                </div>
+                {accounts.map(a => {
+                  const isActive = a.id === activeAccount?.id
+                  return (
+                    <button
+                      key={a.id}
+                      type="button"
+                      onClick={() => { setAcctMenuOpen(false); onSwitchAccount!(a.id) }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left"
+                      style={{ background: isActive ? 'var(--color-accent-bg, #eef2f7)' : 'transparent', color: isActive ? INK : '#1a1a1a', fontWeight: isActive ? 600 : 400 }}
+                    >
+                      <Building2 size={14} style={{ opacity: 0.6, flexShrink: 0 }} />
+                      <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</span>
+                      {isActive && <span style={{ fontSize: 10, color: INK }}>actual</span>}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
         {!isMobile && (
           <span className="inline-flex items-center" style={{ color: MUTED, fontSize: 14, gap: 5 }}>
-            <MapPin size={16} /> {locationLabel}
+            <MapPin size={16} />
+            <LocationSelector />
           </span>
         )}
         {configVisible && (

@@ -15,7 +15,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import {
-  Plug, Loader2, Plus, Download, Sprout, Link2, ShieldAlert, Store, RefreshCw,
+  Plug, Loader2, Plus, Download, Sprout, Link2, ShieldAlert, Store, RefreshCw, Tag, EyeOff, ChevronDown,
 } from 'lucide-react'
 import {
   listIntegrations,
@@ -26,13 +26,33 @@ import {
   getCatalogCount,
   importCatalog,
   seedAndRecast,
+  listBrandMaps,
+  listFolvyBrands,
+  listPendingExternalBrands,
+  linkBrand,
+  ignoreBrand,
   type LastappIntegration,
   type LastappLocationMap,
   type FolvyLocation,
+  type FolvyBrand,
+  type ExternalBrandMap,
+  type PendingExternalBrand,
   type ImportReport,
 } from '@/admin/services/lastappIntegrationService'
 
 type Feedback = { kind: 'ok' | 'error'; msg: string } | null
+
+// Agrupa las marcas pendientes por local Folvy. Las sin local resuelto van al final.
+function groupByLocation(items: PendingExternalBrand[]) {
+  const groups = new Map<string, { key: string; name: string; items: PendingExternalBrand[] }>()
+  for (const it of items) {
+    const key = it.folvyLocationId ?? '__none__'
+    const name = it.folvyLocationName ?? 'Sin local vinculado'
+    if (!groups.has(key)) groups.set(key, { key, name, items: [] })
+    groups.get(key)!.items.push(it)
+  }
+  return Array.from(groups.values())
+}
 
 const OWNERSHIP_OPTIONS = [
   { value: 'own', label: 'Propia' },
@@ -44,22 +64,32 @@ export default function IntegrationsSection({ accountId }: { accountId: string }
   const [catalogCounts, setCatalogCounts] = useState<Record<string, number>>({})
   const [maps, setMaps] = useState<LastappLocationMap[]>([])
   const [locations, setLocations] = useState<FolvyLocation[]>([])
+  const [brandMaps, setBrandMaps] = useState<ExternalBrandMap[]>([])
+  const [brands, setBrands] = useState<FolvyBrand[]>([])
+  const [pendingBrands, setPendingBrands] = useState<PendingExternalBrand[]>([])
   const [loading, setLoading] = useState(true)
   const [feedback, setFeedback] = useState<Feedback>(null)
   const [report, setReport] = useState<ImportReport | null>(null)
   const [busy, setBusy] = useState<string | null>(null) // clave de la acción en curso
+  const [openLocation, setOpenLocation] = useState<string | null>(null) // acordeón: cocina abierta
 
   const reload = useCallback(async () => {
     setLoading(true)
     try {
-      const [ints, mp, locs] = await Promise.all([
+      const [ints, mp, locs, bmaps, fbrands, pend] = await Promise.all([
         listIntegrations(accountId),
         listLocationMaps(accountId),
         listFolvyLocations(accountId),
+        listBrandMaps(accountId),
+        listFolvyBrands(accountId),
+        listPendingExternalBrands(accountId),
       ])
       setIntegrations(ints)
       setMaps(mp)
       setLocations(locs)
+      setBrandMaps(bmaps)
+      setBrands(fbrands)
+      setPendingBrands(pend)
       // Conteo de catálogo por org (en paralelo).
       const counts: Record<string, number> = {}
       await Promise.all(
@@ -79,6 +109,7 @@ export default function IntegrationsSection({ accountId }: { accountId: string }
   useEffect(() => { void reload() }, [reload])
 
   const locName = (id: string) => locations.find(l => l.id === id)?.name ?? id
+  const brandName = (id: string) => brands.find(b => b.id === id)?.name ?? id
 
   async function handleImport(int: LastappIntegration, dryRun: boolean) {
     setBusy(`import:${int.id}:${dryRun}`); setFeedback(null); setReport(null)
@@ -278,6 +309,87 @@ export default function IntegrationsSection({ accountId }: { accountId: string }
             />
           </div>
 
+          {/* ── Marcas externas → marcas Folvy ── */}
+          <div className="border border-border-default rounded-lg bg-card p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Tag size={15} className="text-accent" />
+              <span className="text-sm font-medium text-text-primary">Marcas vinculadas</span>
+            </div>
+            <p className="text-[11px] text-text-tertiary">
+              Cada marca de Last (propia o cedida) se vincula a una marca de Folvy. A partir de ahí, las ventas de esa
+              marca se atribuyen de forma determinista por su id — no por nombre. Vincula una vez; vale para siempre.
+            </p>
+
+            {/* Ya vinculadas */}
+            {brandMaps.length > 0 && (
+              <div className="border border-border-default rounded-md overflow-hidden">
+                {brandMaps.map(bm => (
+                  <div key={bm.id} className="flex items-center gap-3 px-3 py-2 text-sm border-t border-border-default first:border-t-0">
+                    <Tag size={14} className="text-text-tertiary shrink-0" />
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-[11px] text-text-tertiary font-mono break-all">{bm.externalBrandId}</span>
+                    </span>
+                    <span className="text-text-tertiary">→</span>
+                    <span className="text-text-primary">{brandName(bm.brandId)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Pendientes de vincular — ACORDEÓN POR COCINA (una abierta a la vez) */}
+            {pendingBrands.length === 0 ? (
+              <p className="text-[11px] text-text-tertiary">No hay marcas pendientes de vincular.</p>
+            ) : (
+              <div className="space-y-2">
+                <span className="text-[11px] font-medium text-text-secondary">
+                  Pendientes de vincular ({pendingBrands.length}) — entra en cada cocina:
+                </span>
+                {groupByLocation(pendingBrands).map(grp => {
+                  const isOpen = openLocation === grp.key
+                  return (
+                    <div key={grp.key} className="border border-border-default rounded-lg overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => setOpenLocation(isOpen ? null : grp.key)}
+                        className="w-full flex items-center justify-between gap-3 px-3 py-2.5 bg-card hover:bg-page transition-base text-left"
+                      >
+                        <span className="flex items-center gap-2 min-w-0">
+                          <Store size={15} className="text-accent shrink-0" />
+                          <span className="text-sm font-medium text-text-primary truncate">{grp.name}</span>
+                        </span>
+                        <span className="flex items-center gap-2 shrink-0">
+                          <span className="text-[11px] text-text-tertiary">
+                            {grp.items.length} {grp.items.length === 1 ? 'marca pendiente' : 'marcas pendientes'}
+                          </span>
+                          <ChevronDown
+                            size={15}
+                            className={`text-text-tertiary transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                          />
+                        </span>
+                      </button>
+                      {isOpen && (
+                        <div className="p-3 space-y-2 border-t border-border-default bg-page/40">
+                          {grp.items.map(pb => (
+                            <PendingBrandRow
+                              key={`${pb.source}:${pb.externalLocationId}:${pb.externalBrandId}`}
+                              accountId={accountId}
+                              pending={pb}
+                              brands={brands}
+                              busy={!!busy}
+                              onLinked={() => { setFeedback({ kind: 'ok', msg: 'Marca vinculada. Sus ventas se atribuirán al recasar.' }); void reload() }}
+                              onIgnored={() => { setFeedback({ kind: 'ok', msg: 'Marca marcada como no vinculada. Puedes revertirlo más tarde.' }); void reload() }}
+                              onError={(m) => setFeedback({ kind: 'error', msg: m })}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
           <button type="button" onClick={() => void reload()} disabled={!!busy}
             className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md border border-border-default text-text-secondary hover:bg-page transition-base disabled:opacity-50">
             <RefreshCw size={13} /> Actualizar
@@ -445,6 +557,118 @@ function LinkLocationForm({
         className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 transition-base">
         {saving ? <Loader2 size={14} className="animate-spin" /> : <Link2 size={14} />} Vincular
       </button>
+    </div>
+  )
+}
+
+// ── Fila: marca externa pendiente → marca Folvy ──
+// Muestra el nombre reconocible de la marca (pista de catálogo para propias,
+// pista de productos para cedidas) y un desplegable de marcas de Folvy.
+// El cliente NO teclea ids: elige con el nombre delante, dentro del contexto de
+// su cocina. Si no la reconoce o no es suya, puede IGNORARLA (no adivinar).
+function PendingBrandRow({
+  accountId, pending, brands, busy, onLinked, onIgnored, onError,
+}: {
+  accountId: string
+  pending: PendingExternalBrand
+  brands: FolvyBrand[]
+  busy: boolean
+  onLinked: () => void
+  onIgnored: () => void
+  onError: (m: string) => void
+}) {
+  const [saving, setSaving] = useState(false)
+  const [ignoring, setIgnoring] = useState(false)
+
+  // Sugerencia: marca de Folvy cuyo nombre coincide (normalizado) con la pista de
+  // catálogo. "Milanesa House" ≠ "Milanesa Haus" → la sugerencia es precisa, no las
+  // confunde. Si no hay pista o no coincide ninguna, no sugiere (el cliente elige).
+  const norm = (s: string) =>
+    s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim()
+  const suggested = pending.pistaCatalogo
+    ? brands.find(b => norm(b.name) === norm(pending.pistaCatalogo!)) ?? null
+    : null
+
+  const [brandId, setBrandId] = useState(suggested?.id ?? '')
+
+  const canSave = brandId !== '' && !saving && !ignoring && !busy
+  const tienePistaCatalogo = !!pending.pistaCatalogo
+  const titulo = pending.pistaCatalogo ?? 'Marca sin nombre (cedida)'
+
+  async function submit() {
+    setSaving(true)
+    try {
+      await linkBrand({
+        accountId,
+        source: pending.source,
+        externalLocationId: pending.externalLocationId,
+        externalBrandId: pending.externalBrandId,
+        brandId,
+      })
+      onLinked()
+    } catch (e) {
+      onError(e instanceof Error ? e.message : 'No se pudo vincular la marca.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function ignore() {
+    setIgnoring(true)
+    try {
+      await ignoreBrand({
+        accountId,
+        source: pending.source,
+        externalLocationId: pending.externalLocationId,
+        externalBrandId: pending.externalBrandId,
+      })
+      onIgnored()
+    } catch (e) {
+      onError(e instanceof Error ? e.message : 'No se pudo ignorar la marca.')
+    } finally {
+      setIgnoring(false)
+    }
+  }
+
+  return (
+    <div className="border border-border-default rounded-md bg-page p-3 space-y-2">
+      <div className="flex items-baseline justify-between gap-2 flex-wrap">
+        <span className="text-sm font-medium text-text-primary">{titulo}</span>
+        <span className="text-[11px] text-text-tertiary tabular-nums">{pending.ventas} ventas</span>
+      </div>
+      {pending.pistaProductos && (
+        <p className="text-[11px] text-text-tertiary">
+          {!tienePistaCatalogo && <span className="text-text-secondary">Productos: </span>}
+          {pending.pistaProductos}
+        </p>
+      )}
+      <div className="text-[10px] text-text-tertiary font-mono break-all">id {pending.externalBrandId}</div>
+      <div className="flex items-end gap-2 flex-wrap pt-1">
+        <label className="block flex-1 min-w-[160px]">
+          <span className="text-[11px] text-text-secondary">
+            Vincular a marca de Folvy
+            {suggested && <span className="text-accent"> · sugerida: {suggested.name}</span>}
+          </span>
+          <select value={brandId} onChange={e => setBrandId(e.target.value)}
+            className="mt-0.5 w-full px-3 py-2 text-sm border border-border-default rounded-md bg-card text-text-primary">
+            <option value="">— Elige marca —</option>
+            {brands.map(b => (
+              <option key={b.id} value={b.id}>
+                {b.name}{suggested?.id === b.id ? '  (sugerida)' : ''}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button type="button" onClick={submit} disabled={!canSave}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 transition-base">
+          {saving ? <Loader2 size={14} className="animate-spin" /> : <Tag size={14} />} Vincular
+        </button>
+        <button type="button" onClick={ignore} disabled={saving || ignoring || busy}
+          title="No vincular esta marca (sacarla de pendientes; reversible)"
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm border border-border-default text-text-secondary hover:bg-card disabled:opacity-50 transition-base">
+          {ignoring ? <Loader2 size={14} className="animate-spin" /> : <EyeOff size={14} />} Ignorar
+        </button>
+      </div>
     </div>
   )
 }
