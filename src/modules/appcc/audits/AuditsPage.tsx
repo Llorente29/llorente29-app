@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
+import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
 import { pageToRoute } from '@/routes'
 import * as auditsService from './auditsService'
 import type {
@@ -44,6 +45,7 @@ export default function AuditsPage() {
     [locations]
   )
 
+  const { resolvedLocationId } = useLocationScope()
   const [locationId, setLocationId] = useState<string>(
     activeLocations[0]?.id ?? ''
   )
@@ -52,6 +54,12 @@ export default function AuditsPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showNew, setShowNew] = useState(false)
+
+  // El selector global de local manda cuando hay uno concreto; en consolidado
+  // (null) cae a la auto-selección (pantalla operativa de un solo local).
+  useEffect(() => {
+    if (resolvedLocationId) setLocationId(resolvedLocationId)
+  }, [resolvedLocationId])
 
   useEffect(() => {
     if (!locationId && activeLocations.length > 0) {

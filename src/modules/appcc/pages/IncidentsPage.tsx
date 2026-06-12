@@ -25,6 +25,7 @@ import type { PdfPreviewResult } from '@/modules/appcc/services/pdfExportService
 import IncidentDetailModal from '@/modules/appcc/components/IncidentDetailModal'
 import ReportPreviewModal from '@/components/ReportPreviewModal'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
+import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
 import type {
   AppccIncident,
   AppccSeverity,
@@ -75,6 +76,7 @@ export default function IncidentsPage() {
     [locations]
   )
 
+  const { resolvedLocationId } = useLocationScope()
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null)
   const [incidents, setIncidents] = useState<AppccIncident[]>([])
   const [loading, setLoading] = useState(false)
@@ -85,6 +87,12 @@ export default function IncidentsPage() {
   const [showNewModal, setShowNewModal] = useState(false)
   const [preview, setPreview] = useState<PdfPreviewResult | null>(null)
   const [previewTitle, setPreviewTitle] = useState<string>('Informe de incidencia')
+
+  // El selector global de local manda cuando hay uno concreto; en consolidado
+  // (null) cae a la auto-selección (pantalla operativa de un solo local).
+  useEffect(() => {
+    if (resolvedLocationId) setSelectedLocationId(resolvedLocationId)
+  }, [resolvedLocationId])
 
   // Auto-seleccionar primer local (prefiere activo, fallback a cualquiera)
   useEffect(() => {

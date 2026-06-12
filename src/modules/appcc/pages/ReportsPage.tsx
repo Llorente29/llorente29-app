@@ -2,9 +2,10 @@
 // Pantalla para generar informes PDF APPCC: controles, incidencias, inspector completo.
 // Bloque E: añadidos botones "Vista previa" además de "Descargar PDF".
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Download, FileText, AlertTriangle, ClipboardList, Loader2, Eye } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
+import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
 import {
   generateControlsReportPdf,
   generateIncidentsReportPdf,
@@ -36,8 +37,15 @@ export default function ReportsPage() {
   const { locations } = useApp()
   const activeLocations = useMemo<Location[]>(() => locations.filter(l => l.active), [locations])
 
+  const { resolvedLocationId } = useLocationScope()
   const [locationId, setLocationId] = useState<string>(activeLocations[0]?.id ?? '')
   const [reportType, setReportType] = useState<ReportType>('inspector')
+
+  // El selector global de local manda cuando hay uno concreto; en consolidado
+  // (null) mantiene la elección local (el informe se genera por un solo local).
+  useEffect(() => {
+    if (resolvedLocationId) setLocationId(resolvedLocationId)
+  }, [resolvedLocationId])
   const [fromDate, setFromDate] = useState<string>(() => {
     const d = new Date()
     d.setMonth(d.getMonth() - 1)

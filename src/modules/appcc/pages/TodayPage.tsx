@@ -17,6 +17,7 @@ import { useNavigate } from 'react-router-dom'
 import type { Location } from '@/types'
 import { useApp } from '@/context/AppContext'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
+import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
 import { pageToRoute } from '@/routes'
 import * as executionsService from '@/modules/appcc/services/executionsService'
 import * as schedulesService from '@/modules/appcc/services/schedulesService'
@@ -61,6 +62,7 @@ export default function TodayPage() {
     [locations]
   )
 
+  const { resolvedLocationId } = useLocationScope()
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null)
   const [executions, setExecutions] = useState<AppccExecution[]>([])
   const [plans, setPlans] = useState<AppccPlan[]>([])
@@ -68,6 +70,13 @@ export default function TodayPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showCatalog, setShowCatalog] = useState(false)
+
+  // El selector global de local manda cuando hay uno concreto; en consolidado
+  // (resolvedLocationId null) cae a la auto-selección del primer local activo,
+  // porque esta es una pantalla operativa de un solo local (no agrega).
+  useEffect(() => {
+    if (resolvedLocationId) setSelectedLocationId(resolvedLocationId)
+  }, [resolvedLocationId])
 
   useEffect(() => {
     if (!selectedLocationId && activeLocations.length > 0) {

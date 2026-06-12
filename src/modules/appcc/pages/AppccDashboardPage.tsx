@@ -22,6 +22,7 @@ import {
   PieChart, Pie, Cell, BarChart, Bar,
 } from 'recharts'
 import { useApp } from '@/context/AppContext'
+import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
 import * as analyticsService from '@/modules/appcc/services/analyticsService'
 import type {
   DateRange,
@@ -56,8 +57,14 @@ export default function AppccDashboardPage() {
   )
 
   // ---------- Filtros ----------
+  const { resolvedLocationId } = useLocationScope()
   const [preset, setPreset] = useState<RangePreset>('month')
   const [selectedLocationId, setSelectedLocationId] = useState<string>('all')
+
+  // El selector global de local manda: 'all' (consolidado) o el local activo.
+  useEffect(() => {
+    setSelectedLocationId(resolvedLocationId ?? 'all')
+  }, [resolvedLocationId])
   const range: DateRange = useMemo(
     () => analyticsService.rangeFromPreset(preset),
     [preset]
