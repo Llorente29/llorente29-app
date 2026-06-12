@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Plus, FileText, Loader2, Trash2, X, ScanLine, ArrowLeft, RefreshCw, CheckCircle2, AlertTriangle, Settings2 } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
+import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
 import { useApp } from '@/context/AppContext'
 import {
   listSupplierInvoices,
@@ -69,6 +70,7 @@ interface DraftLine extends SupplierInvoiceLineInput { key: string }
 
 export default function SupplierInvoicesPage() {
   const { activeAccountId, accountsLoading } = useActiveAccount()
+  const { resolvedLocationId } = useLocationScope()
   const { userProfile, authUserId } = useApp()
 
   const [invoices, setInvoices] = useState<SupplierInvoice[]>([])
@@ -116,10 +118,10 @@ export default function SupplierInvoicesPage() {
     if (!activeAccountId) { setLoading(false); return }
     setLoading(true); setError(null)
     Promise.all([
-      listSupplierInvoices(activeAccountId),
+      listSupplierInvoices(activeAccountId, resolvedLocationId),
       listSuppliers(activeAccountId),
       listSupplyLocations(activeAccountId),
-      listGoodsReceipts({ accountId: activeAccountId }),
+      listGoodsReceipts({ accountId: activeAccountId, locationId: resolvedLocationId ?? undefined }),
     ])
       .then(([inv, sup, loc, rec]) => {
         setInvoices(inv); setSuppliers(sup); setLocations(loc)
@@ -127,7 +129,7 @@ export default function SupplierInvoicesPage() {
       })
       .catch(e => setError(e instanceof Error ? e.message : 'Error cargando facturas.'))
       .finally(() => setLoading(false))
-  }, [activeAccountId, accountsLoading, reloadTick])
+  }, [activeAccountId, accountsLoading, resolvedLocationId, reloadTick])
 
   // Albaranes del proveedor seleccionado (para enlazar).
   const supplierReceipts = useMemo(

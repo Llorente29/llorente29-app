@@ -228,6 +228,8 @@ function from(table: string) {
 // ── Pedidos ──
 export interface ListPurchaseOrdersOptions {
   accountId: string
+  /** Local activo (scope global). null/undefined = consolidado = sin filtrar por local. */
+  locationId?: string | null
   status?: PurchaseOrderStatus
   includeArchived?: boolean
   search?: string
@@ -242,6 +244,7 @@ export async function listPurchaseOrders(
     .eq('account_id', opts.accountId)
     .order('order_date', { ascending: false })
 
+  if (opts.locationId) query = query.eq('location_id', opts.locationId)
   if (opts.status) query = query.eq('status', opts.status)
   if (!opts.includeArchived) query = query.is('archived_at', null)
   if (opts.search && opts.search.trim() !== '') {

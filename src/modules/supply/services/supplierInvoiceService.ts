@@ -117,13 +117,21 @@ function mapInvoice(r: Row): SupplierInvoice {
   }
 }
 
-/** Lista de facturas de la cuenta (cabecera + nombre de proveedor). */
-export async function listSupplierInvoices(accountId: string): Promise<SupplierInvoice[]> {
+/**
+ * Lista de facturas de la cuenta (cabecera + nombre de proveedor).
+ * `locationId` null/undefined = consolidado = sin filtrar por local.
+ */
+export async function listSupplierInvoices(
+  accountId: string,
+  locationId?: string | null,
+): Promise<SupplierInvoice[]> {
   requireSupabase()
-  const { data, error } = await from('supplier_invoice')
+  let query = from('supplier_invoice')
     .select('id, account_id, supplier_id, location_id, code, doc_kind, invoice_number, invoice_date, status, match_status, source, tax_base_total, tax_total, grand_total, notes, needs_review, created_at, supplier:supplier_id ( name )')
     .eq('account_id', accountId)
     .order('created_at', { ascending: false })
+  if (locationId) query = query.eq('location_id', locationId)
+  const { data, error } = await query
   if (error) throw new Error(`Error cargando facturas: ${error.message}`)
   return ((data as Row[]) ?? []).map(mapInvoice)
 }

@@ -12,6 +12,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Plus, Truck, ChevronRight, Search } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
+import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
 import { useIsMobile } from '@/shell/useIsMobile'
 import {
   listPurchaseOrders,
@@ -56,6 +57,7 @@ type View = 'list' | 'builder'
 
 export default function SupplyOrdersPage() {
   const { activeAccountId, accountsLoading } = useActiveAccount()
+  const { resolvedLocationId } = useLocationScope()
   const isMobile = useIsMobile()
 
   const [orders, setOrders] = useState<PurchaseOrder[]>([])
@@ -76,7 +78,7 @@ export default function SupplyOrdersPage() {
     setLoading(true)
     setError(null)
     Promise.all([
-      listPurchaseOrders({ accountId: activeAccountId }),
+      listPurchaseOrders({ accountId: activeAccountId, locationId: resolvedLocationId }),
       listSuppliers(activeAccountId),
     ])
       .then(([rows, sups]) => {
@@ -90,7 +92,7 @@ export default function SupplyOrdersPage() {
       })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [activeAccountId, accountsLoading, reloadTick])
+  }, [activeAccountId, accountsLoading, resolvedLocationId, reloadTick])
 
   const supplierNameById = useMemo(() => {
     const m = new Map<string, string>()

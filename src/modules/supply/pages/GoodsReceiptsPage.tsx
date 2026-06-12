@@ -21,6 +21,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Plus, PackageCheck, Search, Loader2, Check, RotateCcw, PencilLine, ScanLine, Settings2 } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
+import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
 import { useIsMobile } from '@/shell/useIsMobile'
 import {
   listGoodsReceipts,
@@ -62,6 +63,7 @@ type View = 'list' | 'form' | 'scan'
 
 export default function GoodsReceiptsPage() {
   const { activeAccountId, accountsLoading } = useActiveAccount()
+  const { resolvedLocationId } = useLocationScope()
   const isMobile = useIsMobile()
 
   const [receipts, setReceipts] = useState<GoodsReceipt[]>([])
@@ -117,7 +119,7 @@ export default function GoodsReceiptsPage() {
     setLoading(true)
     setError(null)
     Promise.all([
-      listGoodsReceipts({ accountId: activeAccountId }),
+      listGoodsReceipts({ accountId: activeAccountId, locationId: resolvedLocationId ?? undefined }),
       listSuppliers(activeAccountId),
       listSupplyLocations(activeAccountId),
     ])
@@ -132,7 +134,7 @@ export default function GoodsReceiptsPage() {
       })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [activeAccountId, accountsLoading, reloadTick])
+  }, [activeAccountId, accountsLoading, resolvedLocationId, reloadTick])
 
   const supplierNameById = useMemo(() => {
     const m = new Map<string, string>()
