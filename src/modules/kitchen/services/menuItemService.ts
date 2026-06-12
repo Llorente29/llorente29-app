@@ -98,6 +98,7 @@ function menuItemInsertToRow(input: MenuItemInsert): RowMenuItemInsert {
 function menuItemUpdateToRow(patch: MenuItemUpdate): RowMenuItemUpdate {
   const row: RowMenuItemUpdate = {}
   if (patch.name !== undefined) row.name = patch.name
+  if (patch.recipeItemId !== undefined) row.recipe_item_id = patch.recipeItemId
   if (patch.description !== undefined) row.description = patch.description
   if (patch.category !== undefined) row.category = patch.category
   if (patch.photoUrl !== undefined) row.photo_url = patch.photoUrl

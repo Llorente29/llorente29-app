@@ -70,6 +70,16 @@ const BRAND_ALIAS: Record<string, string> = {
   "dirty burgers": "dirty burger", // Last (plural) -> Folvy (singular)
 };
 
+// Marcas DESCARTADAS a propósito: existen en Last pero NO se importan a Folvy
+// ni se reportan como "sin resolver". Clave en forma NORMALIZADA.
+//   - "foodint": es la "marca" que Last usa para la VENTA DIRECTA / tienda online
+//     (shop: domicilio propio, takeaway, local, sin Glovo/Uber). Hoy solo tiene
+//     pruebas, sin ventas reales. El cliente abandonará Last en breve y Folvy
+//     tendrá su PROPIA shop de venta directa (canal 'shop', no una marca). Por eso
+//     no se importa como marca: la venta directa es un CANAL transversal a las
+//     marcas, no una marca en sí.
+const DISCARDED_BRANDS: Set<string> = new Set(["foodint"]);
+
 // Infiere el tipo de grupo de modificadores por su nombre (heurística).
 function inferGroupType(name: string): string {
   const n = normalize(name);
@@ -200,6 +210,7 @@ Deno.serve(async (req: Request) => {
     brands_in_use: [] as string[],
     brands_skipped_empty: [] as string[],
     brands_unresolved: [] as string[],
+    brands_discarded: [] as string[],   // marcas descartadas a propósito (DISCARDED_BRANDS)
     categories: 0, products: 0, combos: 0,
     modifier_groups: 0, modifier_options: 0, assignments: 0,
     combo_slots: 0, combo_slot_options: 0,
@@ -329,6 +340,12 @@ Deno.serve(async (req: Request) => {
     // Helper: resuelve brand_id Folvy desde nombre Last; registra unresolved.
     const resolveBrand = (brandName: string): string | null => {
       const norm = normalize(brandName);
+      // Marca descartada a propósito (p.ej. FOODINT = venta directa): ni se importa
+      // ni se reporta como "sin resolver". Se registra aparte (informativo).
+      if (DISCARDED_BRANDS.has(norm)) {
+        if (!report.brands_discarded.includes(brandName)) report.brands_discarded.push(brandName);
+        return null;
+      }
       const aliased = BRAND_ALIAS[norm] ?? norm; // aplica alias conocido si existe
       const id = brandByNorm.get(aliased);
       if (!id) {

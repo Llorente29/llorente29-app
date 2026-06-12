@@ -634,6 +634,7 @@ export interface MenuItemUpdate {
   tags?: string[]
   packagingDescription?: string | null
   packagingCost?: number | null
+  recipeItemId?: string | null
 }
 
 // ─────────────────────────────────────────────────────────────────────

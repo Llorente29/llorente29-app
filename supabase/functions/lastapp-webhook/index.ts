@@ -2,28 +2,28 @@
 //
 // FRONTERA de ingesta de Last.app (principio de frontera única).
 // ============================================================================
-// Escucha `tab:closed` (cuenta cerrada = venta definitiva). Su trabajo es de
-// FRONTERA, no de motor:
-//   1) valida el token de Last.app (autorización en la entrada)
-//   2) resuelve la CABECERA de la venta (marca, canal, local, economía) e inserta
-//      la `sale` cruda (con raw_products embebido)
-//   3) DELEGA la construcción de las líneas al MOTOR: adapt_lastapp_order(sale)
-//      descompone raw_products en la jerarquía canónica (product/modifier/combo_item),
-//      compute_sale_line_cost calcula el coste de cada línea producto, y
-//      compute_sale_line_consumption descuenta el escandallo del stock (consumo
-//      teórico = ventas × receta; base del AvT). Coste SIEMPRE antes que consumo:
-//      el consumo solo escribe si la línea ya tiene computed_cost.
+// Escucha `tab:closed` (cuenta cerrada = venta definitiva). Resuelve la CABECERA
+// de la venta (marca/canal/local), inserta la `sale` cruda y DELEGA las líneas al
+// MOTOR (adapt_lastapp_order + compute_sale_line_cost + compute_sale_line_consumption).
 //
-// La frontera NO casa líneas ni escribe sale_line. Eso es trabajo del adaptador
-// (única forma de poblar líneas, compartida con el backfill). Añadir otro TPV =
-// otra frontera (su webhook + su token) + su adaptador; el motor no se toca.
+// RESOLUCIÓN DE MARCA (corregido 12/06):
+//   1) PRIMARIO  -> external_brand_map por (locationId + locationBrandId) del TICKET.
+//                   Id estable, SIEMPRE presente en el ticket, NO depende del catálogo.
+//   2) RESPALDO  -> por producto -> catálogo -> nombre de marca (método viejo).
+//                   Frágil: falla si el producto del ticket no está en el catálogo
+//                   cargado. Antes era el ÚNICO método, lo que dejaba ventas sin
+//                   marca aunque el ticket trajera el locationBrandId y el mapa
+//                   tuviera la traducción. Ahora es solo respaldo.
 //
-// El motor (adapt_lastapp_order, compute_sale_line_cost) es MOTOR PURO sin guard
-// de usuario: confía en que esta frontera ya autorizó (token validado). Por eso
-// se invoca con service_role sin problema (migración 20260608T2800).
+// Además, el insert guarda SIEMPRE external_brand_text / external_location_text /
+// raw_tab (raw event store en tiempo real), de modo que recasar por mapa
+// (resolve_sale_brand_from_map / reprocess_sale) es posible sin depender de
+// backfills posteriores.
 //
-// Idempotencia: external_ref = bill.id (no duplica). El adaptador es idempotente
-// por venta (borra y reconstruye sus líneas, respeta 'manual'/ignored/delisted).
+// La frontera NO casa líneas ni escribe sale_line. Eso es trabajo del adaptador.
+// Añadir otro TPV = otra frontera (su webhook + token) + su adaptador; motor intacto.
+//
+// Idempotencia: external_ref = bill.id. El adaptador es idempotente por venta.
 //
 // SEGURIDAD: Last NO firma; manda un `authorization` fijo. Validamos contra
 // LASTAPP_WEBHOOK_TOKEN. Sin token válido -> 401.
@@ -80,15 +80,16 @@ interface LastBill {
   deleted?: boolean; payments?: LastPayment[];
 }
 interface LastTab {
-  id?: string; locationId?: string; source?: string; pickupType?: string | null;
+  id?: string; locationId?: string; locationBrandId?: string | null; // ⟵ CAMBIO: marca del ticket
+  source?: string; pickupType?: string | null;
   closeTime?: string; creationTime?: string; products?: LastProduct[]; bills?: LastBill[];
 }
 
 // ── Caché mínima: SOLO lo que la frontera necesita para la CABECERA de la venta ──
-// (marca del ticket, canal, local). La resolución de LÍNEAS ya NO es de la frontera.
 interface HeaderCaches {
   catalogByCatProd: Map<string, { lastapp_brand_name: string | null }>;
   brandByName: Map<string, string>;
+  brandByExternalId: Map<string, string>;   // ⟵ CAMBIO: mapa estable "locId|brandId" -> brand_id
   channelBySlug: Map<string, string>;
   folvyLocationId: string | null;
 }
@@ -134,6 +135,20 @@ async function loadHeaderCaches(sb: SupabaseClient, accountId: string, lastLocat
   const dirtyBurgerId = brandByName.get(normalize("Dirty Burger"));
   if (dirtyBurgerId) brandByName.set(normalize("Dirty Burgers"), dirtyBurgerId);
 
+  // ⟵ CAMBIO: external_brand_map = FUENTE PRIMARIA de marca.
+  // Clave compuesta "external_location_id|external_brand_id" -> brand_id.
+  // Solo source=lastapp, no ignoradas, con brand_id resuelto.
+  const brandMap = await loadAllPaged(sb, "external_brand_map",
+    "external_location_id, external_brand_id, brand_id, is_ignored, source", "account_id", accountId);
+  const brandByExternalId = new Map<string, string>();
+  for (const m of brandMap) {
+    if (m.source !== "lastapp") continue;
+    if (m.is_ignored === true) continue;
+    if (!m.brand_id) continue;
+    const key = `${m.external_location_id}|${m.external_brand_id}`;
+    brandByExternalId.set(key, m.brand_id as string);
+  }
+
   const channels = await loadAllPaged(sb, "sales_channel", "id, slug, is_active", "account_id", accountId);
   const channelBySlug = new Map<string, string>();
   for (const c of channels) {
@@ -147,13 +162,24 @@ async function loadHeaderCaches(sb: SupabaseClient, accountId: string, lastLocat
   if (locErr) throw new Error(`lastapp_location_map: ${locErr.message}`);
   const folvyLocationId = (locMap?.location_id as string | undefined) ?? null;
 
-  return { catalogByCatProd, brandByName, channelBySlug, folvyLocationId };
+  return { catalogByCatProd, brandByName, brandByExternalId, channelBySlug, folvyLocationId };
 }
 
-// Marca del TICKET: la del primer producto cuyo catalogProductId resuelve a una marca.
-// (El catalogProductId es único por marca; un ticket es de una sola marca.) El adaptador
-// usará esta brand_id para resolver el menu_item de cada producto.
-function resolveSaleBrand(products: LastProduct[], caches: HeaderCaches): string | null {
+// ⟵ CAMBIO: resolución de marca en DOS PASOS.
+//   1) PRIMARIO: por locationId+locationBrandId del TICKET vía external_brand_map.
+//      Estable, siempre presente, no depende del catálogo.
+//   2) RESPALDO: por producto -> catálogo -> nombre (método viejo, solo si falla 1).
+function resolveSaleBrand(
+  tab: LastTab, products: LastProduct[], caches: HeaderCaches,
+): string | null {
+  // 1) PRIMARIO
+  const extLoc = tab.locationId ?? null;
+  const extBrand = tab.locationBrandId ?? null;
+  if (extLoc && extBrand) {
+    const fromMap = caches.brandByExternalId.get(`${extLoc}|${extBrand}`);
+    if (fromMap) return fromMap;
+  }
+  // 2) RESPALDO
   for (const p of products) {
     if (!p.catalogProductId) continue;
     const cat = caches.catalogByCatProd.get(p.catalogProductId);
@@ -183,9 +209,9 @@ async function ingestBill(
   const slug = channelSlug(payType);
   const channelId = slug ? (caches.channelBySlug.get(slug) ?? null) : null;
   const products = Array.isArray(tab.products) ? tab.products : [];
-  const saleBrandId = resolveSaleBrand(products, caches);
+  const saleBrandId = resolveSaleBrand(tab, products, caches); // ⟵ CAMBIO: pasa tab (id del ticket)
 
-  // 1) Insertar la SALE (cabecera + economía + raw_products). SIN líneas.
+  // 1) Insertar la SALE (cabecera + economía + raw_products + raw_tab). SIN líneas.
   const { data: saleRow, error: saleErr } = await sb.from("sale").insert({
     account_id: accountId,
     source: "lastapp",
@@ -194,6 +220,8 @@ async function ingestBill(
     channel_id: channelId,
     brand_id: saleBrandId,
     location_id: caches.folvyLocationId,
+    external_brand_text: tab.locationBrandId ?? null,   // ⟵ CAMBIO: id crudo de marca del ticket
+    external_location_text: tab.locationId ?? null,     // ⟵ CAMBIO: id crudo de local del ticket
     sold_at: bill.creationTime ?? bill.finalizingTime ?? tab.closeTime ?? new Date().toISOString(),
     total: typeof bill.total === "number" ? bill.total / 100 : 0,
     delivery_cost: typeof bill.deliveryFee === "number" ? bill.deliveryFee / 100 : null,
@@ -202,6 +230,7 @@ async function ingestBill(
     taxable_base: typeof bill.taxableBase === "number" ? bill.taxableBase / 100 : null,
     service_type: mapServiceType(tab.pickupType),
     raw_products: JSON.stringify(products),
+    raw_tab: JSON.stringify(tab),                       // ⟵ CAMBIO: raw event store en tiempo real
     is_active: true,
   }).select("id").single();
   if (saleErr || !saleRow) throw new Error(`sale insert ${billId}: ${saleErr?.message ?? "unknown"}`);

@@ -22,6 +22,7 @@ import {
   Trash2, TrendingUp, X,
 } from 'lucide-react'
 import { getMenuItemById, updateMenuItem } from '@/modules/kitchen/services/menuItemService'
+import { listRecipeItems } from '@/modules/kitchen/services/recipeItemService'
 import {
   getProductModifierGroups,
   type CatalogModifierGroup,
@@ -35,7 +36,7 @@ import {
 } from '@/modules/kitchen/services/channelRateService'
 import { uploadMenuPhoto, deleteMenuPhoto } from '@/modules/kitchen/services/menuPhotoService'
 import { supabase } from '@/lib/supabase'
-import type { MenuItem, MenuItemUpdate } from '@/types/kitchen'
+import type { MenuItem, MenuItemUpdate, RecipeItem } from '@/types/kitchen'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -181,6 +182,14 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
   const [shortNameVal, setShortNameVal] = useState('')
   const [fieldSaving, setFieldSaving] = useState<string | null>(null)
 
+  // ── Vincular escandallo (picker) ──
+  const [recipePickerOpen, setRecipePickerOpen] = useState(false)
+  const [recipeOptions, setRecipeOptions] = useState<RecipeItem[]>([])
+  const [recipeSearch, setRecipeSearch] = useState('')
+  const [recipeLoading, setRecipeLoading] = useState(false)
+  const [linking, setLinking] = useState(false)
+  const [linkError, setLinkError] = useState<string | null>(null)
+
   // ─── Data loading ───────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -267,6 +276,36 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
       if (fresh) setItem(fresh)
     } catch (err: unknown) {
       console.error('CatalogProductDetailPage: refresco falló', err)
+    }
+  }
+
+  function openRecipePicker() {
+    if (!item) return
+    setRecipePickerOpen(true)
+    setRecipeSearch('')
+    setLinkError(null)
+    setRecipeLoading(true)
+    listRecipeItems({ accountId: item.accountId, type: 'dish', includeInactive: false })
+      .then((rows) => setRecipeOptions(rows))
+      .catch((err: unknown) => {
+        setLinkError(err instanceof Error ? err.message : 'No se pudieron cargar los escandallos.')
+        setRecipeOptions([])
+      })
+      .finally(() => setRecipeLoading(false))
+  }
+
+  async function linkRecipe(recipeItemId: string) {
+    if (!item) return
+    setLinking(true)
+    setLinkError(null)
+    try {
+      await updateMenuItem(item.id, { recipeItemId })
+      setRecipePickerOpen(false)
+      await refreshItem()
+    } catch (err: unknown) {
+      setLinkError(err instanceof Error ? err.message : 'No se pudo vincular el escandallo.')
+    } finally {
+      setLinking(false)
     }
   }
 
@@ -586,7 +625,7 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
                 </button>
                 <AiButton label="Mejorar descripción con IA" />
                 {!hasRecipe && (
-                  <button className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium bg-[#D67442] text-white hover:bg-[#C25F2E] transition-colors">
+                  <button onClick={openRecipePicker} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium bg-[#D67442] text-white hover:bg-[#C25F2E] transition-colors">
                     <Link2 size={15} /> Vincular escandallo
                   </button>
                 )}
@@ -631,7 +670,7 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
           badge={hasRecipe ? 'OK' : 'Sin escandallo'} badgeColor={hasRecipe ? 'ok' : 'warn'} defaultOpen={hasRecipe}>
           {!hasRecipe ? (
             <EmptyState text="Sin escandallo vinculado. Conecta una receta para ver costes, alérgenos y elaboración.">
-              <button className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[#D67442] text-white hover:bg-[#C25F2E] transition-colors">
+              <button onClick={openRecipePicker} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[#D67442] text-white hover:bg-[#C25F2E] transition-colors">
                 <Link2 size={13} /> Vincular escandallo
               </button>
               <AiButton label="Crear escandallo con IA" />
@@ -979,6 +1018,78 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
           <button className="text-sm font-medium text-purple-700 hover:underline">Empezar con IA →</button>
         </div>
       </div>
+
+      {recipePickerOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !linking && setRecipePickerOpen(false)}>
+          <div className="bg-white rounded-xl w-full max-w-lg max-h-[80vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-stone-200">
+              <div className="flex items-center gap-2 text-stone-800">
+                <Link2 size={16} className="text-[#D67442]" />
+                <span className="text-sm font-medium">Vincular escandallo a «{item?.name}»</span>
+              </div>
+              <button onClick={() => !linking && setRecipePickerOpen(false)} className="text-stone-400 hover:text-stone-700 disabled:opacity-50" disabled={linking}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="px-5 py-3 border-b border-stone-100">
+              <input
+                type="text"
+                autoFocus
+                value={recipeSearch}
+                onChange={(e) => setRecipeSearch(e.target.value)}
+                placeholder="Buscar escandallo por nombre…"
+                className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg bg-stone-50 focus:outline-none focus:ring-2 focus:ring-[#D67442]/20 focus:border-[#D67442]"
+              />
+            </div>
+            {linkError && (
+              <div className="mx-5 mt-3 p-2.5 rounded-lg bg-red-50 text-red-700 border border-red-200 text-xs">{linkError}</div>
+            )}
+            <div className="flex-1 overflow-y-auto px-2 py-2">
+              {recipeLoading ? (
+                <div className="flex items-center justify-center gap-2 py-10 text-sm text-stone-400">
+                  <Loader2 className="w-4 h-4 animate-spin" /> Cargando escandallos…
+                </div>
+              ) : (() => {
+                const q = recipeSearch.trim().toLowerCase()
+                const filtered = q === '' ? recipeOptions : recipeOptions.filter((r) => r.name.toLowerCase().includes(q))
+                if (filtered.length === 0) {
+                  return <div className="py-10 text-center text-sm text-stone-400">No hay escandallos que coincidan.</div>
+                }
+                return (
+                  <ul className="space-y-0.5">
+                    {filtered.map((r) => (
+                      <li key={r.id}>
+                        <button
+                          onClick={() => linkRecipe(r.id)}
+                          disabled={linking}
+                          className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg text-left hover:bg-[#D67442]/5 disabled:opacity-50 transition-colors group"
+                        >
+                          <div className="min-w-0">
+                            <div className="text-sm text-stone-800 truncate">{r.name}</div>
+                            {r.code && <div className="text-[11px] text-stone-400">{r.code}</div>}
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-xs tabular-nums text-stone-500">{fmtEur(r.computedCost)}</span>
+                            <Link2 size={14} className="text-stone-300 group-hover:text-[#D67442]" />
+                          </div>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )
+              })()}
+            </div>
+            <div className="px-5 py-3 border-t border-stone-100 flex items-center justify-between">
+              <span className="text-[11px] text-stone-400">
+                {linking ? 'Vinculando…' : 'Elige el escandallo que corresponde a este producto.'}
+              </span>
+              <button onClick={() => !linking && setRecipePickerOpen(false)} disabled={linking} className="px-3 py-1.5 text-sm rounded-lg text-stone-500 hover:bg-stone-50 disabled:opacity-50">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
