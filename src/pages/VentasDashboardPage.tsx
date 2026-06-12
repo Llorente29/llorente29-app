@@ -229,6 +229,24 @@ export default function VentasDashboardPage() {
   const own = data?.by_ownership.find((o) => o.ownership === 'own')
   const lic = data?.by_ownership.find((o) => o.ownership === 'licensed')
 
+  // Variación vs periodo anterior (maneja prev=0 → sin base de comparación).
+  const prevNet = data?.prev?.net ?? 0
+  const curNet = data?.kpis.net ?? 0
+  const deltaPct =
+    prevNet > 0 ? Math.round(((curNet - prevNet) / prevNet) * 100) : null
+  const periodPrevLabel: Record<PeriodKey, string> = {
+    today: 'vs ayer',
+    yesterday: 'vs anteayer',
+    last7: 'vs 7 días previos',
+    month: 'vs mes anterior',
+  }
+
+  // Hora pico (para el texto del heatmap).
+  const peakHour =
+    data && data.by_hour.length > 0
+      ? data.by_hour.reduce((a, b) => (b.net > a.net ? b : a)).hour
+      : null
+
   return (
     <div className="max-w-5xl mx-auto px-4 py-6">
       {/* Cabecera */}
@@ -301,6 +319,11 @@ export default function VentasDashboardPage() {
             <KpiCard label="Ventas netas" value={eur(data.kpis.net)} sub={`${data.kpis.orders} pedidos`} />
             <KpiCard label="Ticket medio" value={eur(data.kpis.aov)} />
             <KpiCard label="Pedidos" value={String(data.kpis.orders)} />
+            <KpiCard
+              label={periodPrevLabel[period]}
+              value={deltaPct === null ? '—' : `${deltaPct >= 0 ? '▲' : '▼'} ${Math.abs(deltaPct)}%`}
+              sub={prevNet > 0 ? `${eur(prevNet)} · ${data.prev.orders} ped.` : 'sin datos previos'}
+            />
           </div>
 
           {/* Propias vs cedidas + Canal */}
@@ -319,6 +342,13 @@ export default function VentasDashboardPage() {
                   <div className="text-xs" style={{ color: '#854F0B' }}>{lic?.orders ?? 0} pedidos</div>
                 </div>
               </div>
+              {(own?.net ?? 0) > 0 && (lic?.net ?? 0) > 0 && (
+                <div className="text-[11px] text-stone-400 mt-2">
+                  {(lic?.net ?? 0) > (own?.net ?? 0)
+                    ? 'Las cedidas venden más; vigila el margen, que suele ser menor.'
+                    : 'Las propias lideran las ventas: tu marca tira y deja más margen.'}
+                </div>
+              )}
             </div>
 
             <div className="rounded-xl bg-white border border-stone-200 p-4">
@@ -391,6 +421,11 @@ export default function VentasDashboardPage() {
                 )
               })}
             </div>
+            {peakHour !== null && (
+              <div className="text-[11px] text-stone-400 mt-2">
+                Hora punta a las {peakHour}h (hora local). Los datos llegan en UTC y se muestran en la zona de tu cuenta.
+              </div>
+            )}
           </div>
         </>
       )}

@@ -60,6 +60,11 @@ export interface HourRow {
   orders: number
 }
 
+export interface PrevPeriod {
+  net: number
+  orders: number
+}
+
 export interface SalesDashboard {
   kpis: DashboardKpis
   by_channel: ChannelRow[]
@@ -67,6 +72,7 @@ export interface SalesDashboard {
   by_ownership: OwnershipRow[]
   by_location: LocationRow[]
   by_hour: HourRow[]
+  prev: PrevPeriod
 }
 
 // ── Filtros del dashboard (todos opcionales → null = todos) ──────────────────
@@ -88,6 +94,7 @@ const EMPTY: SalesDashboard = {
   by_ownership: [],
   by_location: [],
   by_hour: [],
+  prev: { net: 0, orders: 0 },
 }
 
 // ── Llamada a la RPC ─────────────────────────────────────────────────────────
@@ -128,5 +135,6 @@ export async function getSalesDashboard(
     by_ownership: d.by_ownership ?? [],
     by_location: d.by_location ?? [],
     by_hour: d.by_hour ?? [],
+    prev: d.prev ?? { net: 0, orders: 0 },
   }
 }
