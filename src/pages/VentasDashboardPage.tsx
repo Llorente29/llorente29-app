@@ -3,15 +3,17 @@
 // Dashboard de Ventas (Folvy Sales). Pinta los agregados de la RPC server-side
 // `sales_dashboard` (vía salesDashboardService). Cálculo en SQL; aquí solo se
 // muestra. Diseño contrastado con el benchmark (Otter / R365 / Apicbase):
-// KPIs con nº de pedidos junto al importe (dato clave para gerentes dark
-// kitchen), propias vs cedidas (margen distinto, nadie más lo separa), ventas
-// por canal, ranking de marcas y locales, y mapa de calor horario EN HORA LOCAL.
+// KPIs con nº de pedidos junto al importe (clave para gerentes dark kitchen),
+// propias vs cedidas (margen distinto, nadie más lo separa), ventas por canal,
+// ranking de marcas y locales, y mapa de calor horario EN HORA LOCAL.
 //
-// Filtros: en esta primera versión está activo el de PERIODO. La RPC y el
-// servicio ya aceptan local/marca/tipo/canal → se encienden sin reescribir.
+// Filtros universales (como Otter/R365): periodo, local, tipo (propia/cedida),
+// canal y marca. Todos se envían a la RPC, que filtra server-side.
 
 import { useEffect, useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
+import { supabase } from '@/lib/supabase'
 import {
   getSalesDashboard,
   type SalesDashboard,
@@ -59,6 +61,14 @@ const PERIOD_LABELS: Record<PeriodKey, string> = {
 
 const TERRA = '#D67442'
 
+interface OptionRow {
+  id: string
+  name: string
+}
+interface BrandOption extends OptionRow {
+  ownershipType: string | null
+}
+
 // ── Componentes de presentación ──────────────────────────────────────────────
 
 function KpiCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
@@ -84,13 +94,30 @@ function OwnershipPill({ type }: { type: string | null }) {
   return (
     <span
       className="text-[10px] px-1.5 py-0.5 rounded-full"
-      style={{
-        background: own ? '#E1F5EE' : '#FAEEDA',
-        color: own ? '#0F6E56' : '#854F0B',
-      }}
+      style={{ background: own ? '#E1F5EE' : '#FAEEDA', color: own ? '#0F6E56' : '#854F0B' }}
     >
       {own ? 'propia' : 'cedida'}
     </span>
+  )
+}
+
+function Select({
+  value,
+  onChange,
+  children,
+}: {
+  value: string
+  onChange: (v: string) => void
+  children: ReactNode
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="text-xs px-2.5 py-1.5 rounded-lg border border-stone-200 text-stone-600 bg-white hover:border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#D67442]/20"
+    >
+      {children}
+    </select>
   )
 }
 
@@ -98,10 +125,55 @@ function OwnershipPill({ type }: { type: string | null }) {
 
 export default function VentasDashboardPage() {
   const { activeAccountId, accountsLoading } = useActiveAccount()
+
   const [period, setPeriod] = useState<PeriodKey>('today')
+  const [locationId, setLocationId] = useState<string>('')
+  const [ownership, setOwnership] = useState<string>('')
+  const [channel, setChannel] = useState<string>('')
+  const [brandId, setBrandId] = useState<string>('')
+
+  const [locations, setLocations] = useState<OptionRow[]>([])
+  const [brands, setBrands] = useState<BrandOption[]>([])
+
   const [data, setData] = useState<SalesDashboard | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (accountsLoading || !activeAccountId || !supabase) return
+    let cancelled = false
+
+    supabase
+      .from('locations')
+      .select('id,name')
+      .eq('account_id', activeAccountId)
+      .order('name')
+      .then(({ data }) => {
+        if (!cancelled && data) setLocations(data as OptionRow[])
+      })
+
+    supabase
+      .from('brand')
+      .select('id,name,ownership_type')
+      .eq('account_id', activeAccountId)
+      .is('archived_at', null)
+      .order('name')
+      .then(({ data }) => {
+        if (!cancelled && data) {
+          setBrands(
+            (data as { id: string; name: string; ownership_type: string | null }[]).map((b) => ({
+              id: b.id,
+              name: b.name,
+              ownershipType: b.ownership_type,
+            }))
+          )
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeAccountId, accountsLoading])
 
   useEffect(() => {
     if (accountsLoading) return
@@ -115,7 +187,15 @@ export default function VentasDashboardPage() {
     setError(null)
 
     const { from, to } = periodRange(period)
-    getSalesDashboard({ accountId: activeAccountId, from, to })
+    getSalesDashboard({
+      accountId: activeAccountId,
+      from,
+      to,
+      locationId: locationId || null,
+      brandId: brandId || null,
+      ownership: (ownership || null) as 'own' | 'licensed' | null,
+      channel: channel || null,
+    })
       .then((d) => {
         if (!cancelled) setData(d)
       })
@@ -131,9 +211,8 @@ export default function VentasDashboardPage() {
     return () => {
       cancelled = true
     }
-  }, [activeAccountId, accountsLoading, period])
+  }, [activeAccountId, accountsLoading, period, locationId, ownership, channel, brandId])
 
-  // Derivados para pintar barras (porcentajes sobre el máximo del bloque).
   const channelMax = useMemo(
     () => Math.max(1, ...(data?.by_channel ?? []).map((c) => c.net)),
     [data]
@@ -152,8 +231,8 @@ export default function VentasDashboardPage() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6">
-      {/* Cabecera + filtro de periodo */}
-      <div className="flex items-center justify-between flex-wrap gap-3 mb-5">
+      {/* Cabecera */}
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
         <div>
           <h1 className="text-2xl font-serif text-stone-800">Ventas</h1>
           <p className="text-sm text-stone-500">Resumen del negocio en tiempo real</p>
@@ -164,9 +243,7 @@ export default function VentasDashboardPage() {
               key={k}
               onClick={() => setPeriod(k)}
               className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
-                period === k
-                  ? 'border-transparent text-white'
-                  : 'border-stone-200 text-stone-600 hover:bg-stone-50'
+                period === k ? 'border-transparent text-white' : 'border-stone-200 text-stone-600 hover:bg-stone-50'
               }`}
               style={period === k ? { background: TERRA } : undefined}
             >
@@ -174,6 +251,33 @@ export default function VentasDashboardPage() {
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Fila de filtros */}
+      <div className="flex flex-wrap gap-2 mb-5">
+        <Select value={locationId} onChange={setLocationId}>
+          <option value="">Todos los locales</option>
+          {locations.map((l) => (
+            <option key={l.id} value={l.id}>{l.name}</option>
+          ))}
+        </Select>
+        <Select value={ownership} onChange={setOwnership}>
+          <option value="">Propias y cedidas</option>
+          <option value="own">Solo propias</option>
+          <option value="licensed">Solo cedidas</option>
+        </Select>
+        <Select value={channel} onChange={setChannel}>
+          <option value="">Todos los canales</option>
+          <option value="glovo">Glovo</option>
+          <option value="uber">Uber</option>
+          <option value="justeat">JustEat</option>
+        </Select>
+        <Select value={brandId} onChange={setBrandId}>
+          <option value="">Todas las marcas</option>
+          {brands.map((b) => (
+            <option key={b.id} value={b.id}>{b.name}</option>
+          ))}
+        </Select>
       </div>
 
       {error && (
@@ -187,7 +291,7 @@ export default function VentasDashboardPage() {
       ) : !data || data.kpis.orders === 0 ? (
         <div className="py-20 text-center">
           <div className="text-stone-400 text-sm">
-            Aún no hay ventas en este periodo. El panel se irá poblando según entren pedidos.
+            No hay ventas con estos filtros. Prueba a ampliar el periodo o quitar filtros.
           </div>
         </div>
       ) : (
@@ -206,16 +310,12 @@ export default function VentasDashboardPage() {
               <div className="flex gap-2.5">
                 <div className="flex-1 rounded-lg p-3" style={{ background: '#E1F5EE' }}>
                   <div className="text-xs" style={{ color: '#0F6E56' }}>Propias</div>
-                  <div className="text-xl font-medium tabular-nums" style={{ color: '#04342C' }}>
-                    {eur(own?.net ?? 0)}
-                  </div>
+                  <div className="text-xl font-medium tabular-nums" style={{ color: '#04342C' }}>{eur(own?.net ?? 0)}</div>
                   <div className="text-xs" style={{ color: '#0F6E56' }}>{own?.orders ?? 0} pedidos</div>
                 </div>
                 <div className="flex-1 rounded-lg p-3" style={{ background: '#FAEEDA' }}>
                   <div className="text-xs" style={{ color: '#854F0B' }}>Cedidas</div>
-                  <div className="text-xl font-medium tabular-nums" style={{ color: '#412402' }}>
-                    {eur(lic?.net ?? 0)}
-                  </div>
+                  <div className="text-xl font-medium tabular-nums" style={{ color: '#412402' }}>{eur(lic?.net ?? 0)}</div>
                   <div className="text-xs" style={{ color: '#854F0B' }}>{lic?.orders ?? 0} pedidos</div>
                 </div>
               </div>
@@ -246,8 +346,7 @@ export default function VentasDashboardPage() {
                   {data.by_brand.slice(0, 8).map((b) => (
                     <tr key={b.name} className="border-t border-stone-50 first:border-0">
                       <td className="py-1.5">
-                        <span className="text-stone-700">{b.name}</span>{' '}
-                        <OwnershipPill type={b.ownership_type} />
+                        <span className="text-stone-700">{b.name}</span> <OwnershipPill type={b.ownership_type} />
                       </td>
                       <td className="py-1.5 text-center text-stone-500 tabular-nums">{b.orders}</td>
                       <td className="py-1.5 text-right tabular-nums">{eur(b.net)}</td>
