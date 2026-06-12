@@ -8279,6 +8279,8 @@ export type Database = {
           external_product_id: string | null
           external_source: string | null
           id: string
+          ignore_reason: string | null
+          ignored_at: string | null
           line_total: number | null
           line_type: string
           map_confidence: number | null
@@ -8305,6 +8307,8 @@ export type Database = {
           external_product_id?: string | null
           external_source?: string | null
           id?: string
+          ignore_reason?: string | null
+          ignored_at?: string | null
           line_total?: number | null
           line_type?: string
           map_confidence?: number | null
@@ -8331,6 +8335,8 @@ export type Database = {
           external_product_id?: string | null
           external_source?: string | null
           id?: string
+          ignore_reason?: string | null
+          ignored_at?: string | null
           line_total?: number | null
           line_type?: string
           map_confidence?: number | null
@@ -10654,12 +10660,29 @@ export type Database = {
         }[]
       }
       resolve_unmapped_sales: {
-        Args: { p_account_id: string; p_action: string; p_product_name: string }
+        Args: {
+          p_account_id: string
+          p_action: string
+          p_product_name: string
+          p_reason?: string
+          p_brand_id?: string
+        }
         Returns: {
           brand_id: string
           lineas_afectadas: number
           menu_item_id: string
           recipe_item_id: string
+          resultado: string
+        }[]
+      }
+      unignore_unmapped_sales: {
+        Args: {
+          p_account_id: string
+          p_product_name: string
+          p_brand_id?: string
+        }
+        Returns: {
+          lineas_afectadas: number
           resultado: string
         }[]
       }
