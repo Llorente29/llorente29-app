@@ -16,6 +16,7 @@ import { Banknote, Users, Inbox, Leaf, BarChart3 } from 'lucide-react'
 
 import { useIsMobile } from '../useIsMobile'
 import { useApp } from '../../context/AppContext'
+import { useLocationScope } from '../../modules/multitenancy/hooks/useLocationScope'
 import MetricCard from './widgets/MetricCard'
 import ModuleSummaryCard from './widgets/ModuleSummaryCard'
 import { getHomeMetrics, type HomeMetrics } from './homeMetricsService'
@@ -56,6 +57,7 @@ export default function HomeGeneral({ userName, onOpenModule }: HomeGeneralProps
   const saludo = userName ? `${greeting()}, ${userName}` : greeting()
   const isMobile = useIsMobile()
   const { activeAccountId } = useApp()
+  const { resolvedLocationId } = useLocationScope()
 
   const [metrics, setMetrics] = useState<HomeMetrics | null>(null)
   const [loading, setLoading] = useState(true)
@@ -64,11 +66,11 @@ export default function HomeGeneral({ userName, onOpenModule }: HomeGeneralProps
     if (!activeAccountId) { setMetrics(null); setLoading(false); return }
     let alive = true
     setLoading(true)
-    getHomeMetrics(activeAccountId)
+    getHomeMetrics(activeAccountId, resolvedLocationId)
       .then(m => { if (alive) { setMetrics(m); setLoading(false) } })
       .catch(() => { if (alive) { setMetrics(null); setLoading(false) } })
     return () => { alive = false }
-  }, [activeAccountId])
+  }, [activeAccountId, resolvedLocationId])
 
   const metricsColumns = isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)'
   const modulesColumns = isMobile ? '1fr' : 'repeat(3, 1fr)'

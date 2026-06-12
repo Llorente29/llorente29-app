@@ -31,15 +31,18 @@ function requireSb() {
   return supabase
 }
 
-/** Suma de ventas (€) de un rango [desde, hasta) para la cuenta. */
-async function sumVentas(accountId: string, desdeISO: string, hastaISO: string): Promise<{ total: number; n: number }> {
+/** Suma de ventas (€) de un rango [desde, hasta) para la cuenta.
+ *  `locationId` null = consolidado = todas las ubicaciones. */
+async function sumVentas(accountId: string, desdeISO: string, hastaISO: string, locationId?: string | null): Promise<{ total: number; n: number }> {
   const sb = requireSb()
-  const { data, error } = await sb
+  let query = sb
     .from('sale')
     .select('total')
     .eq('account_id', accountId)
     .gte('sold_at', desdeISO)
     .lt('sold_at', hastaISO)
+  if (locationId) query = query.eq('location_id', locationId)
+  const { data, error } = await query
   if (error) throw new Error(error.message)
   const rows = (data as { total: number | null }[] | null) ?? []
   const total = rows.reduce((acc, r) => acc + (Number(r.total) || 0), 0)
@@ -47,8 +50,10 @@ async function sumVentas(accountId: string, desdeISO: string, hastaISO: string):
 }
 
 /** Métricas completas del Home para la cuenta activa. Nunca lanza: ante fallo
- *  de una métrica, ese campo va a null y el resto se calcula igual. */
-export async function getHomeMetrics(accountId: string): Promise<HomeMetrics> {
+ *  de una métrica, ese campo va a null y el resto se calcula igual.
+ *  `locationId` null/undefined = consolidado (todas las ubicaciones); si trae un
+ *  UUID, todas las métricas se acotan a ese local. */
+export async function getHomeMetrics(accountId: string, locationId?: string | null): Promise<HomeMetrics> {
   const sb = requireSb()
 
   const now = new Date()
@@ -64,9 +69,9 @@ export async function getHomeMetrics(accountId: string): Promise<HomeMetrics> {
 
   // Ventas hoy + ayer (para la variación).
   try {
-    const hoy = await sumVentas(accountId, startToday.toISOString(), startTomorrow.toISOString())
+    const hoy = await sumVentas(accountId, startToday.toISOString(), startTomorrow.toISOString(), locationId)
     result.ventasHoy = hoy.total
-    const ayer = await sumVentas(accountId, startYesterday.toISOString(), startToday.toISOString())
+    const ayer = await sumVentas(accountId, startYesterday.toISOString(), startToday.toISOString(), locationId)
     if (ayer.total > 0) {
       result.ventasVsAyerPct = Math.round(((hoy.total - ayer.total) / ayer.total) * 100)
     }
@@ -74,27 +79,36 @@ export async function getHomeMetrics(accountId: string): Promise<HomeMetrics> {
 
   // Ventas 7 días + pedidos + ticket medio (resumen Sales).
   try {
-    const semana = await sumVentas(accountId, start7d.toISOString(), startTomorrow.toISOString())
+    const semana = await sumVentas(accountId, start7d.toISOString(), startTomorrow.toISOString(), locationId)
     result.ventas7d = semana.total
     result.numPedidos7d = semana.n
     result.ticketMedio7d = semana.n > 0 ? semana.total / semana.n : 0
   } catch { /* quedan null */ }
 
-  // Locales del cliente.
+  // Locales del cliente. Si hay local activo, el scope es 1.
   try {
-    const { count, error } = await sb
-      .from('locations')
-      .select('id', { count: 'exact', head: true })
-      .eq('account_id', accountId)
-    if (!error) result.numLocales = count ?? 0
+    if (locationId) {
+      result.numLocales = 1
+    } else {
+      const { count, error } = await sb
+        .from('locations')
+        .select('id', { count: 'exact', head: true })
+        .eq('account_id', accountId)
+      if (!error) result.numLocales = count ?? 0
+    }
   } catch { /* null */ }
 
   // Trabajando ahora: empleados cuyo ÚLTIMO evento de fichaje es una entrada.
   // clock_entries es por eventos (type 'in'/'out' u similar). Se liga a la cuenta
   // vía locations. Si la tabla está vacía → 0 real (nadie fichado).
   try {
-    const { data: locs } = await sb.from('locations').select('id').eq('account_id', accountId)
-    const locIds = ((locs as { id: string }[] | null) ?? []).map(l => l.id)
+    let locIds: string[]
+    if (locationId) {
+      locIds = [locationId]
+    } else {
+      const { data: locs } = await sb.from('locations').select('id').eq('account_id', accountId)
+      locIds = ((locs as { id: string }[] | null) ?? []).map(l => l.id)
+    }
     if (locIds.length === 0) {
       result.trabajandoAhora = 0
     } else {
