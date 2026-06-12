@@ -136,13 +136,40 @@ export default function HomeEmpleado({ employee, onNavigate, onLogout, exitLabel
                 Volver a gestión
               </button>
             ) : (
-              <button
-                onClick={onLogout}
-                className="p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-base"
-                aria-label="Salir"
-              >
-                <LogOut size={16} />
-              </button>
+              // ─────────────────────────────────────────────────────────────
+              // ARREGLO MÍNIMO (12/06/2026): el worker puro NO tiene botón de
+              // "salir". Razón: su acceso entra por QR de UN SOLO USO; si hace
+              // signOut, la sesión se destruye y NO puede volver a entrar (la
+              // app le pide email/contraseña que no tiene) → queda ATRAPADO.
+              // Como cada trabajador usa su propio móvil, la sesión debe
+              // PERSISTIR: entra una vez por QR, instala la PWA, y abre siempre
+              // el icono estando ya dentro (como WhatsApp). Sin botón de salir,
+              // no puede quedar atrapado.
+              //
+              // ⚠️ OBLIGATORIO PENDIENTE — ARREGLO COMPLETO (no opcional):
+              //   Sustituir esta ausencia de "salir" por un cierre SEGURO que
+              //   NO deje atrapado al trabajador. Diseño:
+              //     1. El botón "salir" del worker NO debe hacer signOut().
+              //        Debe llevar a la pantalla de NOMBRE + PIN (LoginEmpleado,
+              //        que YA EXISTE y usa pin de 4 dígitos), NO a la de
+              //        email/contraseña (esa es para gestores).
+              //     2. Flujo: worker pulsa "salir" → LoginEmpleado (lista de
+              //        nombres + PIN) → elige su nombre → mete su PIN → entra.
+              //        Así puede salir y volver SIN depender del QR.
+              //     3. Esto habilita además el caso FUTURO de TABLET COMÚN
+              //        (recetas, recepciones, pedidos): varios trabajadores en
+              //        un mismo dispositivo, cada uno entrando con su PIN.
+              //     4. Requisitos: que cada empleado tenga PIN asignado (hoy
+              //        algunos no lo tienen — ver alta de empleado); que la
+              //        sesión Supabase del dispositivo permita "cambiar de
+              //        trabajador" sin signOut global, o un signOut que vuelva
+              //        a LoginEmpleado y NO al login de gestor.
+              //   POR QUÉ ES OBLIGATORIO: sin esto, un trabajador que preste el
+              //   móvil, o una tablet común, no tiene forma limpia de cerrar/
+              //   cambiar de usuario. El mínimo de hoy solo evita el atrapamiento;
+              //   no cubre el cierre voluntario ni el multi-usuario.
+              // ─────────────────────────────────────────────────────────────
+              null
             )}
           </div>
         </div>
