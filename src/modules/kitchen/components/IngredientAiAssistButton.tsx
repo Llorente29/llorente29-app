@@ -79,6 +79,7 @@ export function IngredientAiAssistButton({ itemId, accountId, onApplied, classNa
   const [proposal, setProposal] = useState<EnrichProposal | null>(null)
 
   // Selección del cocinero (qué acepta).
+  const [acceptFamily, setAcceptFamily] = useState(false)
   const [acceptAllergens, setAcceptAllergens] = useState<Set<string>>(new Set())
   const [acceptWaste, setAcceptWaste] = useState(false)
   const [acceptConservation, setAcceptConservation] = useState(false)
@@ -95,6 +96,7 @@ export function IngredientAiAssistButton({ itemId, accountId, onApplied, classNa
       const res = await enrichIngredient(itemId, accountId)
       setProposal(res.proposal)
       // Por defecto, preselecciona lo propuesto (el cocinero puede desmarcar).
+      setAcceptFamily(res.proposal.family !== null)
       setAcceptAllergens(new Set(res.proposal.allergens.map((a) => a.code)))
       setAcceptWaste(res.proposal.defaultWastePct !== null)
       setAcceptConservation(res.proposal.conservationType !== null)
@@ -128,7 +130,8 @@ export function IngredientAiAssistButton({ itemId, accountId, onApplied, classNa
 
   const hasAnythingToApply =
     !!proposal &&
-    (acceptAllergens.size > 0 ||
+    ((acceptFamily && proposal.family !== null) ||
+      acceptAllergens.size > 0 ||
       (acceptWaste && proposal.defaultWastePct !== null) ||
       (acceptConservation && proposal.conservationType !== null) ||
       (acceptNutrition && proposal.nutrition !== null) ||
@@ -144,6 +147,9 @@ export function IngredientAiAssistButton({ itemId, accountId, onApplied, classNa
         acceptAllergens.has(a.code),
       )
       await applyEnrichment(itemId, {
+        ...(acceptFamily && proposal.family !== null
+          ? { familyId: proposal.family.id }
+          : {}),
         ...(allergens.length > 0 ? { allergens } : {}),
         ...(acceptWaste && proposal.defaultWastePct !== null
           ? { defaultWastePct: proposal.defaultWastePct }
@@ -220,6 +226,33 @@ export function IngredientAiAssistButton({ itemId, accountId, onApplied, classNa
                       {conf.text} · revisa y acepta lo que quieras
                     </p>
                   )}
+
+                  {/* Familia → de ella se deriva el IVA y se retira "sin terminar" */}
+                  <div>
+                    <p className="text-xs font-medium text-text-secondary mb-1.5">Familia e IVA</p>
+                    {proposal.family ? (
+                      <label className="flex items-start justify-between gap-2 cursor-pointer rounded-md bg-page p-2">
+                        <span className="text-xs text-text-primary">
+                          Clasificar en <span className="font-medium">{proposal.family.name}</span>
+                          <span className="block text-[11px] text-text-secondary mt-0.5">
+                            El IVA se deriva de la familia (no lo inventa la IA). Si la ficha
+                            queda completa, se retira el aviso «sin terminar».
+                          </span>
+                        </span>
+                        <input
+                          type="checkbox"
+                          checked={acceptFamily}
+                          onChange={(e) => setAcceptFamily(e.target.checked)}
+                          className="accent-accent mt-0.5"
+                        />
+                      </label>
+                    ) : (
+                      <p className="text-xs text-text-secondary">
+                        La IA no ha podido clasificar la familia con seguridad. Asígnala a mano
+                        en la ficha (de la familia sale el IVA).
+                      </p>
+                    )}
+                  </div>
 
                   {/* Alérgenos */}
                   <div>

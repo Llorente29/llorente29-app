@@ -22,7 +22,15 @@ export interface EnrichAllergen {
   state: AllergenState
 }
 
+export interface EnrichFamily {
+  id: string
+  name: string
+}
+
 export interface EnrichProposal {
+  // Familia casada con una EXISTENTE de la cuenta (o null si la IA no acertó una
+  // con seguridad). De ella se deriva el IVA con el motor fiscal al aplicar.
+  family: EnrichFamily | null
   allergens: EnrichAllergen[]
   defaultWastePct: number | null
   conservationType: string | null
@@ -42,6 +50,7 @@ export interface EnrichResult {
 interface EnrichResponseRow {
   session_id: string | null
   proposal: {
+    family?: { id: string; name: string } | null
     allergens: { code: string; state: string }[]
     default_waste_pct: number | null
     conservation_type: string | null
@@ -77,6 +86,7 @@ export async function enrichIngredient(
   return {
     sessionId: row.session_id,
     proposal: {
+      family: row.proposal.family ?? null,
       allergens: (row.proposal.allergens ?? []).map((a) => ({
         code: a.code as AllergenCode,
         state: a.state as AllergenState,
@@ -95,12 +105,23 @@ export async function enrichIngredient(
 
 export interface EnrichDecisions {
   // Solo los campos presentes se aplican. allergens: lista FINAL aceptada.
+  // familyId: familia ACEPTADA (de las existentes). Si se aplica, el IVA se deriva
+  // de ella con el motor fiscal (propose_vat_category). Nunca lo decide la IA.
+  familyId?: string | null
   allergens?: EnrichAllergen[]
   defaultWastePct?: number | null
   conservationType?: string | null
   shelfLifeDays?: number | null
   menuTags?: string[]
   nutrition?: Record<string, number> | null
+}
+
+export interface ApplyEnrichmentResult {
+  item: RecipeItem | null
+  /** El IVA quedó derivado de la familia (vat_category_id no null). */
+  vatDerived: boolean
+  /** La ficha quedó terminada (se retiró needs_review). */
+  finished: boolean
 }
 
 /**
@@ -111,7 +132,7 @@ export interface EnrichDecisions {
 export async function applyEnrichment(
   recipeItemId: string,
   decisions: EnrichDecisions,
-): Promise<RecipeItem | null> {
+): Promise<ApplyEnrichmentResult> {
   requireSupabase()
 
   // 1) Campos directos del recipe_item (merma, conservación, vida útil).
@@ -167,7 +188,49 @@ export async function applyEnrichment(
     }
   }
 
-  return updated
+  // 3) Familia (aceptada por el humano) + IVA derivado por el motor fiscal.
+  //    El IVA NO lo decide la IA: se deriva de la familia con propose_vat_category
+  //    (family_vat_default). Anti-invención: si la familia no mapea a una categoría,
+  //    el IVA queda sin asignar y el ingrediente NO se da por terminado.
+  if (decisions.familyId !== undefined) {
+    const { error: famErr } = await supabase!
+      .from('recipe_item')
+      .update({ family_id: decisions.familyId })
+      .eq('id', recipeItemId)
+    if (famErr) throw new Error(`Error asignando la familia: ${famErr.message}`)
+
+    if (decisions.familyId) {
+      const { error: vatErr } = await supabase!.rpc('propose_vat_category', {
+        p_recipe_item_id: recipeItemId,
+      })
+      if (vatErr) throw new Error(`Error derivando el IVA de la familia: ${vatErr.message}`)
+    }
+  }
+
+  // 4) ¿Ficha terminada? Releer el estado y RETIRAR "sin terminar" SOLO si:
+  //    familia asignada + IVA derivado + sin incidencia abierta (review_notes null).
+  //    Si falta algún dato fiable, queda needs_review (no se fuerza "terminado").
+  const { data: cur, error: curErr } = await supabase!
+    .from('recipe_item')
+    .select('family_id, vat_category_id, needs_review, review_notes')
+    .eq('id', recipeItemId)
+    .maybeSingle()
+  if (curErr) throw new Error(`Error releyendo el ingrediente: ${curErr.message}`)
+
+  const hasFamily = !!cur?.family_id
+  const vatDerived = !!cur?.vat_category_id
+  const hasIncident = cur?.review_notes != null
+  const wasFlagged = cur?.needs_review === true
+
+  let finished = false
+  if (hasFamily && vatDerived && !hasIncident) {
+    if (wasFlagged) {
+      updated = await updateRecipeItem(recipeItemId, { needsReview: false })
+    }
+    finished = true
+  }
+
+  return { item: updated, vatDerived, finished }
 }
 
 /**
