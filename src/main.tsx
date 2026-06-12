@@ -26,3 +26,16 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     </BrowserRouter>
   </React.StrictMode>
 )
+
+// PWA: registrar el service worker para que la app sea INSTALABLE (Android
+// muestra "Instalar app"; iOS permite "Añadir a inicio" abriéndose como app).
+// Se registra tras 'load' para no competir con la carga inicial. Solo en
+// producción (en dev molesta con el caché del propio Vite). Si el navegador no
+// soporta service workers, no pasa nada: la app funciona igual sin instalarse.
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch((err) => {
+      console.warn('[PWA] No se pudo registrar el service worker:', err)
+    })
+  })
+}

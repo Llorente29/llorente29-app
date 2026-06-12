@@ -73,6 +73,33 @@ function buildVisionPrompt(brandHint?: string): string {
   );
 }
 
+// Prompt de extracción por TEXTO (voz transcrita, Excel/Word convertidos a
+// texto, o descripción conversacional del cocinero). Mismo contrato JSON.
+function buildTextPrompt(inputText: string, brandHint?: string): string {
+  return (
+    `Eres un asistente experto en fichas técnicas de cocina y escandallos.\n` +
+    `Te paso el TEXTO de una ficha de receta / escandallo (puede venir de una hoja ` +
+    `de cálculo, un documento, una transcripción de voz o una descripción del cocinero).\n` +
+    `Extrae su contenido en JSON ESTRICTO (sin texto adicional, sin markdown), con esta forma EXACTA:\n` +
+    `{\n` +
+    `  "dish": {"name": "<nombre del plato>", "brand": ${brandHint ? `"${brandHint}"` : 'null'}, "yield_portions": <raciones o null>},\n` +
+    `  "lines": [\n` +
+    `    {"raw_text": "<SOLO el nombre del ingrediente>", "quantity": <número o null>, "unit": "<g|ml|ud|kg|l u otra, o null>", "cost": <coste si aparece o null>, "note": "<anotaciones o null>"}\n` +
+    `  ],\n` +
+    `  "steps": [{"position": 1, "text": "<paso de elaboración>"}],\n` +
+    `  "notes": "<observaciones generales o null>"\n` +
+    `}\n\n` +
+    `REGLAS:\n` +
+    `- "raw_text" debe ser SOLO el nombre del ingrediente, SIN anotaciones de cantidad/formato/merma (esas van en "note").\n` +
+    `- Mantén el nombre del ingrediente literal (no lo traduzcas ni lo corrijas).\n` +
+    `- Cantidades como número decimal (170, no "170g"); la unidad va aparte en "unit".\n` +
+    `- Si un dato no está, usa null. NO inventes cantidades ni costes.\n` +
+    `- Si el texto no es una receta legible, devuelve {"dish":{"name":null},"lines":[]}.\n` +
+    `- Responde ÚNICAMENTE el JSON.\n\n` +
+    `TEXTO DE LA FICHA:\n` + inputText
+  );
+}
+
 function extractJson(textOut: string): ParsedRecipe | null {
   try {
     const clean = textOut.replace(/```json|```/g, '').trim();
@@ -104,34 +131,71 @@ Deno.serve(async (req) => {
   let body: ExtractRequest;
   try { body = await req.json(); } catch { return jsonResponse(400, { error: 'Body JSON inválido' }); }
 
-  const { account_id, kind, file_paths, brand_hint } = body;
+  const { account_id, kind, file_paths, input_text, brand_hint } = body;
   if (!account_id || !kind) return jsonResponse(400, { error: 'Faltan account_id o kind' });
-  if (kind !== 'photo') {
-    return jsonResponse(400, { error: `Extractor '${kind}' aún no implementado; v1 soporta 'photo'` });
+
+  // Dos vías de extracción:
+  //  - VISIÓN (kind 'photo'): imágenes o PDF en file_paths → bloques image/document.
+  //  - TEXTO  (kind 'conversational' o 'voice'): input_text → prompt de texto.
+  //    Excel/Word se convierten a texto en el cliente y entran por esta vía.
+  const isVision = kind === 'photo';
+  const isText = kind === 'conversational' || kind === 'voice';
+  if (!isVision && !isText) {
+    return jsonResponse(400, { error: `Extractor '${kind}' no soportado.` });
   }
-  if (!file_paths || file_paths.length === 0) {
+  if (isVision && (!file_paths || file_paths.length === 0)) {
     return jsonResponse(400, { error: "kind 'photo' requiere file_paths" });
+  }
+  if (isText && (!input_text || input_text.trim() === '')) {
+    return jsonResponse(400, { error: `kind '${kind}' requiere input_text` });
   }
 
   const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
   if (!anthropicKey) return jsonResponse(500, { error: 'Servicio de IA no configurado' });
   const model = Deno.env.get('VISION_MODEL') ?? DEFAULT_VISION_MODEL;
 
-  // ── 1) Leer imagen(es) de Storage como base64 ──
-  const imageBlocks: unknown[] = [];
-  const inputFiles: { path: string; bucket: string }[] = [];
-  for (const path of file_paths) {
-    const { data: file, error: dlErr } = await sb.storage.from(BUCKET).download(path);
-    if (dlErr || !file) {
-      return jsonResponse(400, { error: `No se pudo leer ${path}: ${dlErr?.message ?? 'desconocido'}` });
-    }
-    const buf = new Uint8Array(await file.arrayBuffer());
+  // ── 1) Construir los bloques de contenido según la vía ──
+  // base64 seguro para ficheros grandes (evita desbordar el call stack con
+  // String.fromCharCode sobre arrays enormes: troceamos en chunks).
+  function toBase64(buf: Uint8Array): string {
     let binary = '';
-    for (let i = 0; i < buf.length; i++) binary += String.fromCharCode(buf[i]);
-    const b64 = btoa(binary);
-    const mime = file.type || 'image/jpeg';
-    imageBlocks.push({ type: 'image', source: { type: 'base64', media_type: mime, data: b64 } });
-    inputFiles.push({ path, bucket: BUCKET });
+    const chunk = 0x8000;
+    for (let i = 0; i < buf.length; i += chunk) {
+      binary += String.fromCharCode(...buf.subarray(i, i + chunk));
+    }
+    return btoa(binary);
+  }
+
+  const contentBlocks: unknown[] = [];
+  const inputFiles: { path: string; bucket: string }[] = [];
+
+  if (isVision) {
+    for (const path of file_paths!) {
+      const { data: file, error: dlErr } = await sb.storage.from(BUCKET).download(path);
+      if (dlErr || !file) {
+        return jsonResponse(400, { error: `No se pudo leer ${path}: ${dlErr?.message ?? 'desconocido'}` });
+      }
+      const buf = new Uint8Array(await file.arrayBuffer());
+      const b64 = toBase64(buf);
+      // Distinguir PDF de imagen: Claude lee el PDF como bloque 'document',
+      // las imágenes como bloque 'image'. Detectamos por mime y por extensión.
+      const lowerPath = path.toLowerCase();
+      const isPdf = (file.type || '').includes('pdf') || lowerPath.endsWith('.pdf');
+      if (isPdf) {
+        contentBlocks.push({
+          type: 'document',
+          source: { type: 'base64', media_type: 'application/pdf', data: b64 },
+        });
+      } else {
+        const mime = file.type && file.type.startsWith('image/') ? file.type : 'image/jpeg';
+        contentBlocks.push({ type: 'image', source: { type: 'base64', media_type: mime, data: b64 } });
+      }
+      inputFiles.push({ path, bucket: BUCKET });
+    }
+    contentBlocks.push({ type: 'text', text: buildVisionPrompt(brand_hint) });
+  } else {
+    // Vía TEXTO: el cliente ya convirtió Excel/Word/voz a texto plano.
+    contentBlocks.push({ type: 'text', text: buildTextPrompt(input_text!.trim(), brand_hint) });
   }
 
   // ── 2) Llamar a Opus visión ──
@@ -139,19 +203,26 @@ Deno.serve(async (req) => {
   let parsed: ParsedRecipe | null = null;
   let rawResponse: unknown = null;
   try {
+    // Las llamadas con bloque 'document' (PDF) requieren el header beta de PDFs.
+    const hasPdf = contentBlocks.some(
+      (b) => (b as { type?: string }).type === 'document',
+    );
+    const aiHeaders: Record<string, string> = {
+      'x-api-key': anthropicKey,
+      'anthropic-version': ANTHROPIC_VERSION,
+      'content-type': 'application/json',
+    };
+    if (hasPdf) aiHeaders['anthropic-beta'] = 'pdfs-2024-09-25';
+
     const aiResp = await fetch(ANTHROPIC_ENDPOINT, {
       method: 'POST',
-      headers: {
-        'x-api-key': anthropicKey,
-        'anthropic-version': ANTHROPIC_VERSION,
-        'content-type': 'application/json',
-      },
+      headers: aiHeaders,
       body: JSON.stringify({
         model,
         max_tokens: 4096,
         messages: [{
           role: 'user',
-          content: [...imageBlocks, { type: 'text', text: buildVisionPrompt(brand_hint) }],
+          content: contentBlocks,
         }],
       }),
     });
@@ -177,8 +248,9 @@ Deno.serve(async (req) => {
   // ── 3) Crear la sesión de IA (pending_review) ──
   const { data: session, error: sessErr } = await sb.from('recipe_item_ai_session').insert({
     account_id,
-    kind: 'photo',
-    input_files: inputFiles as unknown,
+    kind,
+    input_files: isVision ? (inputFiles as unknown) : null,
+    input_text: isText ? input_text : null,
     raw_response: rawResponse as unknown,
     parsed_result: parsed as unknown,
     ai_model: model,

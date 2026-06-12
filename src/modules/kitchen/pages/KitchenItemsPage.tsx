@@ -20,7 +20,7 @@
 // scroll horizontal. Mismo mecanismo y estilo que KitchenProfitabilityPage (R1.4).
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Plus, Soup, X, AlertTriangle, ChevronRight, Search, Sparkles, Tag, FolderTree, BookMarked, Check } from 'lucide-react'
+import { Plus, Soup, X, AlertTriangle, ChevronRight, Search, Sparkles, Tag, FolderTree, BookMarked, Check, Loader2, Wand2 } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useIsMobile } from '@/shell/useIsMobile'
@@ -30,6 +30,7 @@ import {
 } from '@/modules/kitchen/services/recipeItemService'
 import { searchTemplates, type IngredientTemplate } from '@/modules/kitchen/services/ingredientTemplateService'
 import { adoptFromTemplate } from '@/modules/kitchen/services/ingredientAdoptionService'
+import { enrichIngredientsBulk, type BulkEnrichProgress, type BulkEnrichResult } from '@/modules/kitchen/services/recipeBulkEnrichService'
 import { listUnits } from '@/modules/kitchen/services/kitchenUnitService'
 import KitchenItemDetailPage from '@/modules/kitchen/pages/KitchenItemDetailPage'
 import FamilyReviewPanel from '@/modules/kitchen/components/FamilyReviewPanel'
@@ -76,6 +77,11 @@ export default function KitchenItemsPage() {
   // null = vista lista; un id = vista detalle del ingrediente.
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
   const [reloadTick, setReloadTick] = useState(0)
+
+  // ── Completado masivo con IA (ingredientes pendientes) ──
+  const [bulkRunning, setBulkRunning] = useState(false)
+  const [bulkProgress, setBulkProgress] = useState<BulkEnrichProgress | null>(null)
+  const [bulkResult, setBulkResult] = useState<BulkEnrichResult | null>(null)
   // Familias de ingrediente (para chip + filtro) y resumen de propuestas IA (banner).
   const [families, setFamilies] = useState<IngredientFamily[]>([])
   const [proposalSummary, setProposalSummary] = useState<ProposalSummary | null>(null)
@@ -182,8 +188,102 @@ export default function KitchenItemsPage() {
   }
 
   // ── Vista LISTA ──
+  // Ingredientes pendientes (needs_review) — los que la IA puede completar.
+  const pendingItems = useMemo(
+    () => items.filter((it) => it.needsReview).map((it) => ({ id: it.id, name: it.name })),
+    [items],
+  )
+
+  async function handleBulkEnrich() {
+    if (!activeAccountId || pendingItems.length === 0 || bulkRunning) return
+    setBulkRunning(true)
+    setBulkResult(null)
+    setBulkProgress({ done: 0, total: pendingItems.length, currentName: '', finishedCount: 0, retrying: false })
+    try {
+      const result = await enrichIngredientsBulk(activeAccountId, pendingItems, (p) =>
+        setBulkProgress(p),
+      )
+      setBulkResult(result)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Error en el completado masivo.')
+    } finally {
+      setBulkRunning(false)
+      setReloadTick((t) => t + 1)
+    }
+  }
+
+  function closeBulkModal() {
+    setBulkProgress(null)
+    setBulkResult(null)
+  }
+
   return (
     <div className="space-y-4">
+      {/* Modal de completado masivo con IA */}
+      {(bulkProgress || bulkResult) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-card rounded-xl w-full max-w-md p-6 border border-border-default">
+            {bulkResult ? (
+              <>
+                <div className="flex items-center gap-2 text-text-primary mb-3">
+                  <Sparkles className="w-5 h-5 text-terracota" />
+                  <span className="text-base font-medium">Completado terminado</span>
+                </div>
+                <ul className="text-sm text-text-secondary space-y-1 mb-4">
+                  <li>
+                    <span className="font-medium text-text-primary">{bulkResult.finished}</span>{' '}
+                    ingrediente{bulkResult.finished === 1 ? '' : 's'} terminado{bulkResult.finished === 1 ? '' : 's'} (familia + IVA).
+                  </li>
+                  {bulkResult.partial > 0 && (
+                    <li>
+                      {bulkResult.partial} siguen pendientes — la IA no encontró una familia fiable, o falta precio/proveedor real (eso lo completas tú).
+                    </li>
+                  )}
+                  {bulkResult.failed > 0 && (
+                    <li className="text-amber-600">
+                      {bulkResult.failed} fallaron (reintenta el botón para esos).
+                    </li>
+                  )}
+                </ul>
+                <button
+                  type="button"
+                  onClick={closeBulkModal}
+                  className="w-full px-3 py-2 rounded-md text-sm font-medium bg-terracota text-white hover:bg-terracota-hover transition-colors"
+                >
+                  Entendido
+                </button>
+              </>
+            ) : bulkProgress ? (
+              <div className="text-center py-4">
+                <Loader2 className="w-8 h-8 animate-spin text-terracota mx-auto mb-3" />
+                <p className="text-sm text-text-primary font-medium">
+                  Completando con IA… {bulkProgress.done}/{bulkProgress.total}
+                </p>
+                {bulkProgress.currentName && (
+                  <p className="text-xs text-text-secondary mt-1 truncate">
+                    {bulkProgress.currentName}
+                  </p>
+                )}
+                {bulkProgress.retrying && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    Esperando un momento para no saturar el servicio…
+                  </p>
+                )}
+                <div className="w-full bg-page rounded-full h-2 mt-3 overflow-hidden">
+                  <div
+                    className="bg-terracota h-2 transition-all"
+                    style={{ width: `${bulkProgress.total > 0 ? Math.round((bulkProgress.done / bulkProgress.total) * 100) : 0}%` }}
+                  />
+                </div>
+                <p className="text-xs text-text-secondary mt-2">
+                  No cierres esta ventana hasta que termine.
+                </p>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      )}
+
       {/* Cabecera */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
@@ -194,15 +294,29 @@ export default function KitchenItemsPage() {
             Catálogo de materias primas para el escandallo de cocina
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setCreateOpen(true)}
-          disabled={!activeAccountId}
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base"
-        >
-          <Plus size={16} />
-          Nuevo ingrediente
-        </button>
+        <div className="flex items-center gap-2">
+          {pendingItems.length > 0 && (
+            <button
+              type="button"
+              onClick={handleBulkEnrich}
+              disabled={!activeAccountId || bulkRunning}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-terracota text-white hover:bg-terracota-hover disabled:opacity-50 transition-colors"
+              title="La IA completa familia, IVA, alérgenos y conservación de los ingredientes pendientes"
+            >
+              {bulkRunning ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={16} />}
+              Completar {pendingItems.length} con IA
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setCreateOpen(true)}
+            disabled={!activeAccountId}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base"
+          >
+            <Plus size={16} />
+            Nuevo ingrediente
+          </button>
+        </div>
       </div>
 
       {/* Banner: propuestas de familia generadas por IA, pendientes de aplicar */}

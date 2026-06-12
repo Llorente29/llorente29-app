@@ -36,10 +36,14 @@ import {
   AlertTriangle,
   ChevronRight,
   Soup,
+  Camera,
+  Loader2,
+  X,
 } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { listRecipeItems, getDishesIncomplete } from '@/modules/kitchen/services/recipeItemService'
 import { getDishPhotoUrl } from '@/modules/kitchen/services/recipePhotoService'
+import { importRecipeFromFile, type ImportRecipeResult } from '@/modules/kitchen/services/recipeImportService'
 import type { RecipeItem } from '@/types/kitchen'
 import RecipeEditorPage from '@/modules/kitchen/pages/RecipeEditorPage'
 
@@ -137,6 +141,13 @@ export default function KitchenRecipesPage() {
   // guarda el PATH en kitchen_photo_url; aquí lo firmamos para poder mostrarlo.
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({})
 
+  // ── Función estrella: importar escandallo por foto ──
+  const [importing, setImporting] = useState(false)
+  const [importStage, setImportStage] = useState<'idle' | 'uploading' | 'reading' | 'done'>('idle')
+  const [importError, setImportError] = useState<string | null>(null)
+  const [importResult, setImportResult] = useState<ImportRecipeResult | null>(null)
+  const [reloadTick, setReloadTick] = useState(0)
+
   // Navegación entrante desde otra pantalla (p.ej. "Es un plato" en Excepciones):
   // si la URL trae ?recipe=ID, abrimos su editor directamente. Usamos query param
   // (no location.state) porque sobrevive al remontaje de la app al cambiar de ruta.
@@ -194,7 +205,7 @@ export default function KitchenRecipesPage() {
     return () => {
       cancelled = true
     }
-  }, [activeAccountId, accountsLoading])
+  }, [activeAccountId, accountsLoading, reloadTick])
 
   // E5: resolver en lote las URLs firmadas de los platos que tienen foto.
   // kitchen_photo_url es un PATH de bucket privado; sin firmar no es servible.
@@ -237,6 +248,36 @@ export default function KitchenRecipesPage() {
     return items.filter((it) => matchesTokens(q, it.name, it.altName, it.code))
   }, [items, search])
 
+  // Dispara la importación por foto: sube → extrae con IA → materializa.
+  async function handleImportPhoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file || !activeAccountId) return
+
+    setImporting(true)
+    setImportError(null)
+    setImportResult(null)
+    setImportStage('uploading')
+    try {
+      // Pequeño cambio de etapa para feedback (la subida es rápida; la IA tarda).
+      window.setTimeout(() => setImportStage((s) => (s === 'uploading' ? 'reading' : s)), 800)
+      const result = await importRecipeFromFile(activeAccountId, file)
+      setImportResult(result)
+      setImportStage('done')
+    } catch (err: unknown) {
+      setImportError(err instanceof Error ? err.message : 'No se pudo importar la ficha.')
+      setImportStage('idle')
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  function closeImportModal() {
+    setImportStage('idle')
+    setImportError(null)
+    setImportResult(null)
+  }
+
   // ── Vista DETALLE: el editor del plato seleccionado ──
   if (selectedRecipeId) {
     return (
@@ -260,13 +301,103 @@ export default function KitchenRecipesPage() {
             Tus platos y el escandallo de cada uno
           </p>
         </div>
-        <div className="text-sm text-text-secondary">
-          {search.trim() !== ''
-            ? `${filtered.length} de ${items.length}`
-            : `${items.length}`}{' '}
-          plato{items.length === 1 ? '' : 's'}
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => document.getElementById('recipe-import-input')?.click()}
+            disabled={importing}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium bg-terracota text-white hover:bg-terracota-hover disabled:opacity-50 transition-colors"
+            title="Sube una foto, PDF, Excel o Word de tu ficha y la IA monta el escandallo"
+          >
+            <Camera className="w-4 h-4" /> Importar ficha
+          </button>
+          <span className="text-sm text-text-secondary">
+            {search.trim() !== ''
+              ? `${filtered.length} de ${items.length}`
+              : `${items.length}`}{' '}
+            plato{items.length === 1 ? '' : 's'}
+          </span>
         </div>
       </div>
+
+      <input
+        id="recipe-import-input"
+        type="file"
+        accept="image/*,application/pdf,.pdf,.xlsx,.xls,.csv,.docx"
+        className="hidden"
+        onChange={handleImportPhoto}
+      />
+
+      {/* Modal de importación por foto (feedback del flujo) */}
+      {importStage !== 'idle' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-card rounded-xl w-full max-w-md p-6 border border-border-default">
+            {importStage === 'done' && importResult ? (
+              <>
+                <div className="flex items-center gap-2 text-text-primary mb-3">
+                  <Sparkles className="w-5 h-5 text-terracota" />
+                  <span className="text-base font-medium">Escandallo importado</span>
+                </div>
+                <p className="text-sm text-text-secondary mb-1">
+                  <span className="font-medium text-text-primary">{importResult.dishName}</span>{' '}
+                  · {importResult.linesCreated} ingrediente{importResult.linesCreated === 1 ? '' : 's'} en la receta.
+                </p>
+                {importResult.newArticlesCreated > 0 && (
+                  <p className="text-xs text-text-secondary mb-1">
+                    {importResult.newArticlesCreated} ingrediente{importResult.newArticlesCreated === 1 ? '' : 's'} nuevo{importResult.newArticlesCreated === 1 ? '' : 's'} creado{importResult.newArticlesCreated === 1 ? '' : 's'} (marcados para completar coste y proveedor).
+                  </p>
+                )}
+                {importResult.linesSkipped > 0 && (
+                  <p className="text-xs text-amber-600 mb-1">
+                    {importResult.linesSkipped} línea{importResult.linesSkipped === 1 ? '' : 's'} sin cantidad/unidad clara — revísalas en la ficha.
+                  </p>
+                )}
+                <div className="flex gap-2 mt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const id = importResult.recipeId
+                      closeImportModal()
+                      setSelectedRecipeId(id)
+                    }}
+                    className="flex-1 px-3 py-2 rounded-md text-sm font-medium bg-terracota text-white hover:bg-terracota-hover transition-colors"
+                  >
+                    Abrir escandallo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { closeImportModal(); setReloadTick((t) => t + 1) }}
+                    className="px-3 py-2 rounded-md text-sm text-text-secondary hover:bg-page transition-colors"
+                  >
+                    Cerrar
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-4">
+                <Loader2 className="w-8 h-8 animate-spin text-terracota mx-auto mb-3" />
+                <p className="text-sm text-text-primary font-medium">
+                  {importStage === 'uploading' ? 'Subiendo la ficha…' : 'Leyendo tu ficha con IA…'}
+                </p>
+                <p className="text-xs text-text-secondary mt-1">
+                  {importStage === 'uploading'
+                    ? 'Un momento.'
+                    : 'La IA está extrayendo ingredientes y cantidades. Puede tardar unos segundos.'}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {importError && (
+        <div className="p-3 rounded-md bg-danger-bg text-danger border border-danger/20 text-sm flex items-center justify-between gap-2">
+          <span>{importError}</span>
+          <button type="button" onClick={() => setImportError(null)} className="text-danger hover:opacity-70 flex-shrink-0">
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       {/* Búsqueda */}
       <div className="relative">

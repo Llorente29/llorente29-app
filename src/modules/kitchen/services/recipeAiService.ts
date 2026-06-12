@@ -171,27 +171,11 @@ export async function applyEnrichment(
     }
   }
 
-  // 2) Alérgenos (satélite recipe_item_allergen). Upsert por (item, code).
-  //    source='ai_enrich' para trazar el origen IA (texto libre, sin CHECK).
-  if (decisions.allergens && decisions.allergens.length > 0) {
-    const rows = decisions.allergens.map((a) => ({
-      recipe_item_id: recipeItemId,
-      allergen_code: a.code,
-      state: a.state,
-      source: 'ai_enrich',
-    }))
-    const { error } = await supabase!
-      .from('recipe_item_allergen')
-      .upsert(rows, { onConflict: 'recipe_item_id,allergen_code' })
-    if (error) {
-      throw new Error(`Error guardando alérgenos: ${error.message}`)
-    }
-  }
-
-  // 3) Familia (aceptada por el humano) + IVA derivado por el motor fiscal.
-  //    El IVA NO lo decide la IA: se deriva de la familia con propose_vat_category
-  //    (family_vat_default). Anti-invención: si la familia no mapea a una categoría,
-  //    el IVA queda sin asignar y el ingrediente NO se da por terminado.
+  // 2) Familia (aceptada por el humano) + IVA derivado por el motor fiscal.
+  //    Va PRIMERO (es lo esencial para "terminar" el ingrediente). El IVA NO lo
+  //    decide la IA: se deriva de la familia con propose_vat_category
+  //    (family_vat_default). Anti-invención: si la familia no mapea a una
+  //    categoría, el IVA queda sin asignar y el ingrediente NO se da por terminado.
   if (decisions.familyId !== undefined) {
     const { error: famErr } = await supabase!
       .from('recipe_item')
@@ -204,6 +188,36 @@ export async function applyEnrichment(
         p_recipe_item_id: recipeItemId,
       })
       if (vatErr) throw new Error(`Error derivando el IVA de la familia: ${vatErr.message}`)
+    }
+  }
+
+  // 3) Alérgenos (satélite recipe_item_allergen). SECUNDARIO: si falla, se registra
+  //    pero NO corta el flujo — un fallo aquí no debe impedir terminar el ingrediente
+  //    (que depende de familia + IVA, no de los alérgenos). Se borran primero los de
+  //    origen IA y se reinsertan, para evitar conflictos (409) al reprocesar.
+  if (decisions.allergens && decisions.allergens.length > 0) {
+    try {
+      const codes = decisions.allergens.map((a) => a.code)
+      // Limpia las filas previas de origen IA para estos códigos (idempotente).
+      await supabase!
+        .from('recipe_item_allergen')
+        .delete()
+        .eq('recipe_item_id', recipeItemId)
+        .in('allergen_code', codes)
+      const rows = decisions.allergens.map((a) => ({
+        recipe_item_id: recipeItemId,
+        allergen_code: a.code,
+        state: a.state,
+        source: 'ai_enrich',
+      }))
+      const { error } = await supabase!
+        .from('recipe_item_allergen')
+        .insert(rows)
+      if (error) {
+        console.warn('[applyEnrichment] alérgenos no guardados (no bloquea):', error.message)
+      }
+    } catch (e) {
+      console.warn('[applyEnrichment] alérgenos: excepción no bloqueante:', String(e))
     }
   }
 

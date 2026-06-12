@@ -136,12 +136,45 @@ function buildPrompt(name: string, familyName: string | null, familyOptions: str
 }
 
 function extractJson(textOut: string): ParsedEnrich | null {
+  if (!textOut) return null;
+  // 1) intento directo (quitando fences markdown)
+  const clean = textOut.replace(/```json|```/g, '').trim();
   try {
-    const clean = textOut.replace(/```json|```/g, '').trim();
     return JSON.parse(clean) as ParsedEnrich;
   } catch {
-    return null;
+    // sigue al plan B
   }
+  // 2) Plan B: extraer el PRIMER objeto {...} balanceado del texto, aunque la IA
+  //    haya añadido prosa antes/después ("Aquí está la propuesta: {...}"). Esto
+  //    recupera respuestas que no son JSON puro pero contienen el objeto.
+  const start = clean.indexOf('{');
+  if (start === -1) return null;
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  for (let i = start; i < clean.length; i++) {
+    const ch = clean[i];
+    if (inStr) {
+      if (esc) { esc = false; }
+      else if (ch === '\\') { esc = true; }
+      else if (ch === '"') { inStr = false; }
+      continue;
+    }
+    if (ch === '"') { inStr = true; continue; }
+    if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) {
+        const candidate = clean.slice(start, i + 1);
+        try {
+          return JSON.parse(candidate) as ParsedEnrich;
+        } catch {
+          return null;
+        }
+      }
+    }
+  }
+  return null;
 }
 
 Deno.serve(async (req) => {
