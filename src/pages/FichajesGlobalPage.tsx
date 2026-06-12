@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { LogIn, LogOut, Users, Clock, Activity } from 'lucide-react'
 import { useApp } from '../context/AppContext'
+import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
 import { Badge, Card } from '../components/ui'
 
 export default function FichajesGlobalPage() {
@@ -10,6 +11,12 @@ export default function FichajesGlobalPage() {
   const [dateTo, setDateTo] = useState(new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().slice(0, 10))
   const [empFilter, setEmpFilter] = useState('')
   const [locFilter, setLocFilter] = useState('todas')
+
+  // El selector global de local manda: local activo → ese local; consolidado → 'todas'.
+  const { resolvedLocationId } = useLocationScope()
+  useEffect(() => {
+    setLocFilter(resolvedLocationId ?? 'todas')
+  }, [resolvedLocationId])
 
   const filtered = staff.filter(e =>
     (!empFilter || e.id === empFilter) &&

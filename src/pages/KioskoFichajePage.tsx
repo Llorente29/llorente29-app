@@ -26,6 +26,11 @@ import {
 type Step = 'select-employee' | 'enter-pin' | 'confirming' | 'success' | 'error'
 
 export default function KioskoFichajePage() {
+  // TODO scope-local: NO se conecta al selector global de local a propósito.
+  // El local del kiosko es CONFIG del dispositivo físico (qué tablet está en qué
+  // local, persistido en localStorage + geofence), no un filtro de vista. Atarlo
+  // al selector global cambiaría qué empleados pueden fichar según el header, que
+  // es semánticamente erróneo. Decidir con Julio si alguna vez debe sincronizarse.
   const { locations, staff, addClockEntry } = useApp()
   const [config, setConfig] = useState<KioskoConfig | null>(null)
   const [showConfig, setShowConfig] = useState(false)

@@ -11,6 +11,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Check, AlertCircle, AlertTriangle, Clock, Users, MapPin } from 'lucide-react'
 import { useApp } from '../context/AppContext'
+import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
 import { Card } from '../components/ui'
 import type { Employee, Location } from '../types'
 import {
@@ -28,6 +29,12 @@ export default function AhoraMismoPage() {
   const [now, setNow] = useState(new Date())
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [filterLoc, setFilterLoc] = useState<string>('all')
+
+  // El selector global de local manda: local activo → ese local; consolidado → 'all'.
+  const { resolvedLocationId } = useLocationScope()
+  useEffect(() => {
+    setFilterLoc(resolvedLocationId ?? 'all')
+  }, [resolvedLocationId])
   // Mapa por empleado de su CalendarContext (asignaciones publicadas para hoy)
   const [calendarCtxByEmp, setCalendarCtxByEmp] = useState<Map<string, CalendarContext>>(new Map())
 

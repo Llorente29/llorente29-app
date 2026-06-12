@@ -1,5 +1,6 @@
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { useApp } from '../context/AppContext'
+import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
 import { Button, Input, Select, Textarea, Badge, Card, Tabs, Modal, Label, Alert } from '../components/ui'
 import type { Employee, ClockEntry, WeeklySchedule } from '../types'
 import DocumentosTab from '../components/personal/DocumentosTab'
@@ -63,6 +64,13 @@ export default function StaffPage() {
   const [search, setSearch] = useState('')
   const [locFilter, setLocFilter] = useState('todas')
   const [stateFilter, setStateFilter] = useState<'all' | 'active' | 'inactive'>('active')
+
+  // El selector global de local manda: local activo → filtra a ese local;
+  // consolidado (null) → 'todas'. El select propio sigue disponible.
+  const { resolvedLocationId } = useLocationScope()
+  useEffect(() => {
+    setLocFilter(resolvedLocationId ?? 'todas')
+  }, [resolvedLocationId])
   const [contractFilter, setContractFilter] = useState('todos')
   const [showNewEmployeeModal, setShowNewEmployeeModal] = useState(false)
 
