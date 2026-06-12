@@ -12,6 +12,7 @@ import type { Employee } from '../../types'
 import { hasOpenShift } from '../../services/fichajeKiosko'
 import NotificationBell from '../../components/NotificationBell'
 import { supabase } from '../../lib/supabase'
+import InstallAppButton from '../../components/InstallAppButton'
 
 export type WorkerModule = 'appcc' | 'portal' | 'fichar'
 
@@ -185,6 +186,11 @@ export default function HomeEmpleado({ employee, onNavigate, onLogout, exitLabel
             </span>
           </button>
         )}
+      </div>
+
+      {/* Instalar la app en el móvil (PWA) — banner discreto */}
+      <div className="px-5 pt-4">
+        <InstallAppButton />
       </div>
 
       {/* Alerta APPCC grande cuando hay tareas pendientes */}
