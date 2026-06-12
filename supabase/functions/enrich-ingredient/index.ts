@@ -49,6 +49,10 @@ interface ParsedEnrich {
   shelf_life_days: number | null;
   menu_tags: string[];
   nutrition: Record<string, number | null> | null;
+  // Familia: la IA elige el NOMBRE de UNA de las familias existentes de la cuenta
+  // (no inventa). El IVA NO lo decide la IA: se deriva de la familia con el motor
+  // fiscal (family_vat_default → propose_vat_category) en el front al aplicar.
+  family_name: string | null;
   confidence: number;
 }
 
@@ -59,14 +63,23 @@ function jsonResponse(status: number, body: unknown): Response {
   });
 }
 
-function buildPrompt(name: string, familyName: string | null): string {
+function buildPrompt(name: string, familyName: string | null, familyOptions: string[]): string {
+  const familyBlock = familyOptions.length > 0
+    ? (
+        `\nFAMILIAS DISPONIBLES (clasifica el ingrediente en UNA de estas, copiando su\n` +
+        `nombre EXACTO; si ninguna encaja con seguridad, devuelve null):\n` +
+        familyOptions.map((f) => `  - ${f}`).join('\n') + '\n'
+      )
+    : '';
   return (
     `Eres un experto en seguridad alimentaria y producción de cocina en España.\n` +
     `Te doy un ingrediente de la despensa de un restaurante. Propón sus datos de ficha.\n\n` +
     `INGREDIENTE: "${name}"\n` +
-    (familyName ? `FAMILIA: "${familyName}"\n` : '') +
+    (familyName ? `FAMILIA ACTUAL: "${familyName}"\n` : '') +
+    familyBlock +
     `\nDevuelve JSON ESTRICTO (sin texto adicional, sin markdown) con esta forma EXACTA:\n` +
     `{\n` +
+    `  "family_name": "<nombre EXACTO de una familia de la lista, o null>",\n` +
     `  "allergens": [{"code": "<uno de la lista>", "state": "contains|may_contain"}],\n` +
     `  "default_waste_pct": <merma típica en cocina, 0 a 95, o null si no aplica/no se sabe>,\n` +
     `  "conservation_type": "<fridge|freezer|dry|hot, o null>",\n` +
@@ -111,6 +124,12 @@ function buildPrompt(name: string, familyName: string | null): string {
     `  laboratorio. Si no estás razonablemente seguro de un valor, ese campo null.\n` +
     `  Si el ingrediente no aporta nutrición relevante (agua, sal), pon los que\n` +
     `  apliquen y el resto null.\n` +
+    `- "family_name": clasifica el ingrediente en UNA familia de la lista DISPONIBLES,\n` +
+    `  copiando su nombre EXACTAMENTE como aparece. Es la decisión MÁS importante: de\n` +
+    `  la familia se deriva el IVA. Si dudas entre dos, elige la más específica que\n` +
+    `  encaje con seguridad. Si NINGUNA encaja con seguridad, devuelve null (no fuerces\n` +
+    `  una familia incorrecta: es peor que dejarla sin clasificar). NUNCA inventes un\n` +
+    `  nombre fuera de la lista.\n` +
     `- "confidence": tu confianza global en la propuesta.\n` +
     `- Responde ÚNICAMENTE el JSON.`
   );
@@ -159,7 +178,7 @@ Deno.serve(async (req) => {
   if (itemErr) return jsonResponse(500, { error: `Error leyendo ingrediente: ${itemErr.message}` });
   if (!item) return jsonResponse(404, { error: 'Ingrediente no encontrado' });
 
-  // Nombre de la familia (contexto para la IA), si tiene.
+  // Nombre de la familia actual (contexto para la IA), si tiene.
   let familyName: string | null = null;
   if (item.family_id) {
     const { data: fam } = await sb
@@ -169,6 +188,24 @@ Deno.serve(async (req) => {
       .maybeSingle();
     familyName = fam?.name ?? null;
   }
+
+  // Familias de ingrediente de la cuenta (las opciones entre las que la IA elige).
+  // Anti-invención: la IA SOLO puede clasificar en una de estas; no inventa familias.
+  const { data: famRows } = await sb
+    .from('recipe_family')
+    .select('id, name')
+    .eq('account_id', account_id)
+    .eq('scope', 'ingredient')
+    .eq('is_active', true)
+    .order('position', { ascending: true });
+  const accountFamilies = ((famRows ?? []) as { id: string; name: string }[])
+    .filter((f) => f && typeof f.name === 'string' && f.name.trim() !== '');
+  const familyOptions = accountFamilies.map((f) => f.name);
+  // Índice normalizado nombre→id para casar la respuesta de la IA sin ambigüedad.
+  const normFamily = (s: string) =>
+    s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim();
+  const familyByNorm = new Map<string, { id: string; name: string }>();
+  for (const f of accountFamilies) familyByNorm.set(normFamily(f.name), { id: f.id, name: f.name });
 
   const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
   if (!anthropicKey) return jsonResponse(500, { error: 'Servicio de IA no configurado' });
@@ -189,7 +226,7 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         model,
         max_tokens: 1024,
-        messages: [{ role: 'user', content: buildPrompt(item.name, familyName) }],
+        messages: [{ role: 'user', content: buildPrompt(item.name, familyName, familyOptions) }],
       }),
     });
     if (!aiResp.ok) {
@@ -245,6 +282,14 @@ Deno.serve(async (req) => {
   const confidence = typeof parsed.confidence === 'number'
     ? Math.max(0, Math.min(1, parsed.confidence)) : null;
 
+  // Familia: SOLO vale si la IA devolvió un nombre que casa EXACTO (normalizado)
+  // con una familia existente de la cuenta. Si no casa → null (no inventa familia).
+  let family: { id: string; name: string } | null = null;
+  if (typeof parsed.family_name === 'string' && parsed.family_name.trim() !== '') {
+    const match = familyByNorm.get(normFamily(parsed.family_name));
+    if (match) family = match;
+  }
+
   // Nutrición: solo claves conocidas, numéricas y en rango sano (por 100 g).
   // energy hasta 900 kcal/100g (grasa pura ~900); el resto hasta 100 g/100g.
   const NUTRITION_KEYS: Record<string, number> = {
@@ -270,6 +315,7 @@ Deno.serve(async (req) => {
   }
 
   const cleanProposal = {
+    family,
     allergens,
     default_waste_pct: waste,
     conservation_type: conservation,
