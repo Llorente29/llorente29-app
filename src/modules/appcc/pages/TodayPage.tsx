@@ -133,11 +133,14 @@ export default function TodayPage() {
             )
             for (const schedule of toCreate) {
               if (cancelled) return
-              // Resolver asignación: responsable fijo → fichado → sin asignar
-              const assignedTo = await assignmentService.resolveAssignment(
-                schedule.id,
+              // Asignación v2: por momento del control (apertura/cierre/hora
+              // fija/cualquiera) cruzado con horario vivo + vacaciones + equidad.
+              const assignedTo = await assignmentService.resolveAssignment({
+                templateId: schedule.template_id,
                 locationId,
-              )
+                date: today,
+                scheduledTime: schedule.scheduled_time,
+              })
               await executionsService.createExecution(
                 accountIdLocal,
                 locationId,
