@@ -54,6 +54,18 @@ function from(table: string) {
 
 export type KdsStationState = 'done' | 'pending'
 
+/** Línea hija de un plato: componente de combo (line_type='combo_item') o
+ *  modificador (line_type='modifier'). El board solo trae 1 nivel de hijas
+ *  (las hijas directas del padre top-level); las nietas (p.ej. modificador de
+ *  un componente de combo) NO vienen en Nivel 1a. */
+export interface KdsLineChild {
+  line_id: string
+  name: string
+  qty: number
+  line_type: string
+  customer_note: string | null
+}
+
 export interface KdsLine {
   line_id: string
   name: string
@@ -65,6 +77,10 @@ export interface KdsLine {
   /** menu_item_id para abrir el Cook Mode (kds_recipe lo necesita). La RPC
    *  kds_board lo devuelve en cada línea (confirmado). */
   menu_item_id: string | null
+  /** Hijas de esta línea (componentes de combo y/o modificadores). [] si ninguna. */
+  children: KdsLineChild[]
+  /** Nota del cliente para ESTE plato (de raw_tab por organizationProductId). */
+  customer_note: string | null
 }
 
 /** Estación tal como la devuelve kds_board (para nombrar grupos en el kiosco,
