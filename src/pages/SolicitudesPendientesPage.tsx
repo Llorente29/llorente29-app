@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Clock, Check, FileText, CheckCircle2, Inbox, AlertTriangle, MessageSquare, X, Settings, Lock } from 'lucide-react'
 import { useApp } from '../context/AppContext'
+import { useActiveAccount } from '../modules/multitenancy/hooks/useActiveAccount'
 import { Card, Button } from '../components/ui'
 import type { VacationRequest, VacationStatus, VacationType, VacationSettings } from '../types/personal'
 import { VACATION_TYPES, ALWAYS_AVAILABLE_VACATION_TYPE } from '../types/personal'
@@ -17,6 +18,7 @@ type FilterTab = 'pendientes' | 'aprobadas' | 'todas'
 
 export default function SolicitudesPendientesPage() {
   const { staff } = useApp()
+  const { activeAccountId } = useActiveAccount()
   const [filter, setFilter] = useState<FilterTab>('pendientes')
   const [vacations, setVacations] = useState<VacationRequest[]>([])
   const [loading, setLoading] = useState(true)
@@ -46,16 +48,19 @@ export default function SolicitudesPendientesPage() {
 
   useEffect(() => { load() }, [filter])
 
-  // Cargar la configuración global una sola vez.
+  // Cargar la configuración global de LA CUENTA ACTIVA. Un superadmin puede ver
+  // varias cuentas, así que acotamos por account_id; sin cuenta activa no hay
+  // qué configurar.
   useEffect(() => {
     let cancelled = false
-    fetchVacationSettings().then(list => {
+    if (!activeAccountId) { setSettings(null); return }
+    fetchVacationSettings(activeAccountId).then(list => {
       if (cancelled) return
       const global = (list || []).find(s => s.scope === 'global')
       setSettings(global || null)
     })
     return () => { cancelled = true }
-  }, [])
+  }, [activeAccountId])
 
   // Realtime: refrescar cuando cambian las vacaciones
   useEffect(() => {
@@ -109,18 +114,20 @@ export default function SolicitudesPendientesPage() {
     await load()
   }
 
-  // Activar/desactivar un tipo en el selector del trabajador (lista negra).
+  // Activar/desactivar un tipo en el selector del trabajador (lista negra),
+  // en la fila global de la cuenta activa.
   async function toggleType(t: VacationType, enabled: boolean) {
     if (t === ALWAYS_AVAILABLE_VACATION_TYPE) return // núcleo, no se apaga
+    if (!activeAccountId) { setSettingsError('No hay una empresa activa seleccionada.'); return }
     setSettingsError('')
     const current = settings?.requestTypesDisabled ?? []
     const next = enabled ? current.filter(x => x !== t) : Array.from(new Set([...current, t]))
     setSavingType(t)
-    const ok = await updateDisabledRequestTypes(next)
+    const ok = await updateDisabledRequestTypes(activeAccountId, next)
     if (ok && settings) {
       setSettings({ ...settings, requestTypesDisabled: next })
     } else if (!ok) {
-      setSettingsError('No se pudo guardar. Revisa que exista la configuración global de vacaciones.')
+      setSettingsError('No se pudo guardar. Revisa que exista la configuración de vacaciones de esta empresa.')
     }
     setSavingType(null)
   }
@@ -317,48 +324,56 @@ export default function SolicitudesPendientesPage() {
               hechas, y tú puedes seguir registrando cualquier tipo manualmente.
             </p>
 
-            {settingsError && (
-              <div className="bg-danger-bg border border-danger/30 rounded-lg p-2 mb-3 text-xs text-danger">
-                {settingsError}
+            {!activeAccountId ? (
+              <div className="bg-warning-bg border border-warning/30 rounded-lg p-3 text-xs text-warning">
+                Selecciona una empresa para configurar los tipos de solicitud.
               </div>
-            )}
+            ) : (
+              <>
+                {settingsError && (
+                  <div className="bg-danger-bg border border-danger/30 rounded-lg p-2 mb-3 text-xs text-danger">
+                    {settingsError}
+                  </div>
+                )}
 
-            <div className="space-y-1.5">
-              {VACATION_TYPES.map(t => {
-                const isCore = t.id === ALWAYS_AVAILABLE_VACATION_TYPE
-                const enabled = isCore || !disabledTypes.includes(t.id)
-                const saving = savingType === t.id
-                return (
-                  <label key={t.id}
-                    className={`flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg border transition-base ${
-                      isCore
-                        ? 'border-border-default bg-page cursor-default'
-                        : 'border-border-default hover:border-accent cursor-pointer'
-                    }`}>
-                    <span className="text-sm text-text-primary inline-flex items-center gap-1.5">
-                      {t.label}
-                      {isCore && (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-accent-bg text-text-secondary">
-                          <Lock size={10} /> Siempre disponible
+                <div className="space-y-1.5">
+                  {VACATION_TYPES.map(t => {
+                    const isCore = t.id === ALWAYS_AVAILABLE_VACATION_TYPE
+                    const enabled = isCore || !disabledTypes.includes(t.id)
+                    const saving = savingType === t.id
+                    return (
+                      <label key={t.id}
+                        className={`flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg border transition-base ${
+                          isCore
+                            ? 'border-border-default bg-page cursor-default'
+                            : 'border-border-default hover:border-accent cursor-pointer'
+                        }`}>
+                        <span className="text-sm text-text-primary inline-flex items-center gap-1.5">
+                          {t.label}
+                          {isCore && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-accent-bg text-text-secondary">
+                              <Lock size={10} /> Siempre disponible
+                            </span>
+                          )}
                         </span>
-                      )}
-                    </span>
-                    <input
-                      type="checkbox"
-                      className="w-4 h-4 rounded accent-accent disabled:opacity-60"
-                      checked={enabled}
-                      disabled={isCore || saving || !settings}
-                      onChange={e => toggleType(t.id, e.target.checked)}
-                    />
-                  </label>
-                )
-              })}
-            </div>
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 rounded accent-accent disabled:opacity-60"
+                          checked={enabled}
+                          disabled={isCore || saving || !settings}
+                          onChange={e => toggleType(t.id, e.target.checked)}
+                        />
+                      </label>
+                    )
+                  })}
+                </div>
 
-            {!settings && (
-              <p className="text-[11px] text-text-secondary mt-3">
-                No se ha podido cargar la configuración global de vacaciones.
-              </p>
+                {!settings && (
+                  <p className="text-[11px] text-text-secondary mt-3">
+                    No se ha podido cargar la configuración de vacaciones de esta empresa.
+                  </p>
+                )}
+              </>
             )}
 
             <button

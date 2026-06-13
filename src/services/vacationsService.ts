@@ -127,6 +127,17 @@ export async function deleteVacation(id: string): Promise<boolean> {
 }
 
 // ─── Settings ─────────────────────────────────────────────────────────────
+//
+// vacation_settings tiene account_id (una fila scope='global' POR CUENTA).
+// - Para LEER desde un contexto donde el usuario pertenece a una sola cuenta
+//   (trabajador, manager), la RLS ya acota a esa cuenta → no hace falta pasar
+//   accountId (fetchVacationSettings() sin argumento sigue valiendo).
+// - Para un SUPERADMIN que ve varias cuentas, hay que pasar accountId para
+//   obtener la fila de la cuenta concreta que se está mirando.
+// - Para ESCRIBIR siempre se exige accountId: con una fila global por cuenta,
+//   no acotar dispararía el update sobre TODAS las cuentas que el usuario pueda
+//   escribir (un superadmin tocaría todas). El accountId lo aporta el front
+//   (useActiveAccount), nunca se deduce en SQL.
 
 interface SettingsRow {
   id: string
@@ -156,14 +167,17 @@ function rowToSettings(r: SettingsRow): VacationSettings {
   }
 }
 
-export async function fetchVacationSettings(): Promise<VacationSettings[] | null> {
+export async function fetchVacationSettings(accountId?: string): Promise<VacationSettings[] | null> {
   if (!supabase) return null
-  const { data, error } = await supabase.from('vacation_settings').select('*')
+  let query = supabase.from('vacation_settings').select('*')
+  if (accountId) query = query.eq('account_id', accountId)
+  const { data, error } = await query
   if (error) { console.error('fetchVacationSettings:', error); return null }
   return (data as SettingsRow[]).map(rowToSettings)
 }
 
 export async function updateGlobalSettings(
+  accountId: string,
   vacationDays: number, asuntosDays: number, minStaff: number, minLead: number,
 ): Promise<boolean> {
   if (!supabase) return false
@@ -173,24 +187,26 @@ export async function updateGlobalSettings(
     min_staff_per_location: minStaff,
     min_lead_days: minLead,
     updated_at: new Date().toISOString(),
-  }).eq('scope', 'global')
+  }).eq('account_id', accountId).eq('scope', 'global')
   if (error) { console.error('updateGlobalSettings:', error); return false }
   return true
 }
 
-// Actualiza la LISTA NEGRA de tipos que el trabajador no puede solicitar.
-// Vive en la fila scope='global' (mismo modelo que updateGlobalSettings).
-// Devuelve false si no existe esa fila (no la crea: sería un hueco de semilla
-// a resolver aparte) o si hay error, para no dar por guardado lo que no se guardó.
-export async function updateDisabledRequestTypes(disabled: VacationType[]): Promise<boolean> {
+// Actualiza la LISTA NEGRA de tipos que el trabajador no puede solicitar, en la
+// fila global de LA CUENTA indicada. Devuelve false si no existe esa fila o si
+// hay error, para no dar por guardado lo que no se guardó.
+export async function updateDisabledRequestTypes(
+  accountId: string,
+  disabled: VacationType[],
+): Promise<boolean> {
   if (!supabase) return false
   const { data, error } = await supabase.from('vacation_settings').update({
     request_types_disabled: disabled,
     updated_at: new Date().toISOString(),
-  }).eq('scope', 'global').select('id')
+  }).eq('account_id', accountId).eq('scope', 'global').select('id')
   if (error) { console.error('updateDisabledRequestTypes:', error); return false }
   if (!data || data.length === 0) {
-    console.warn('updateDisabledRequestTypes: no existe fila scope=global; no se guardó nada')
+    console.warn('updateDisabledRequestTypes: no existe fila scope=global para la cuenta; no se guardó nada')
     return false
   }
   return true

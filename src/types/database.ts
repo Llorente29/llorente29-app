@@ -9881,6 +9881,7 @@ export type Database = {
       }
       vacation_settings: {
         Row: {
+          account_id: string
           asuntos_propios_per_year: number
           created_at: string
           employee_id: string | null
@@ -9893,6 +9894,7 @@ export type Database = {
           vacation_days_per_year: number
         }
         Insert: {
+          account_id: string
           asuntos_propios_per_year?: number
           created_at?: string
           employee_id?: string | null
@@ -9905,6 +9907,7 @@ export type Database = {
           vacation_days_per_year?: number
         }
         Update: {
+          account_id?: string
           asuntos_propios_per_year?: number
           created_at?: string
           employee_id?: string | null
@@ -9917,6 +9920,13 @@ export type Database = {
           vacation_days_per_year?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "vacation_settings_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "vacation_settings_employee_id_fkey"
             columns: ["employee_id"]
