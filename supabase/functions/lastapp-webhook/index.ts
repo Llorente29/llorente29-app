@@ -1,35 +1,28 @@
 // supabase/functions/lastapp-webhook/index.ts
 //
-// FRONTERA de ingesta de Last.app (principio de frontera única).
+// FRONTERA de ingesta de Last.app (principio de frontera única + origen-agnóstico).
 // ============================================================================
-// Escucha `tab:closed` (cuenta cerrada = venta definitiva). Resuelve la CABECERA
-// de la venta (marca/canal/local), inserta la `sale` cruda y DELEGA las líneas al
-// MOTOR (adapt_lastapp_order + compute_sale_line_cost + compute_sale_line_consumption).
+// Traduce eventos de Last a la MÁQUINA DE ESTADOS CANÓNICA de la venta (motor):
+//   tab:created                        -> upsertSale: la venta NACE 'open' (sin coste/consumo)
+//   tab:updated / tab_products:updated -> upsertSale: RE-SYNC de líneas (solo si 'open')
+//   tab:closed                         -> upsertSale + close_sale (consolida coste+consumo)
+//   tab:cancelled                      -> cancel_sale por cada bill (status='cancelled' + revierte)
+//   bill:deleted / payment:deleted     -> cancel_sale (DEFENSIVO: estructura no verificada aún)
+//   (resto)                            -> solo log
 //
-// RESOLUCIÓN DE MARCA (corregido 12/06):
-//   1) PRIMARIO  -> external_brand_map por (locationId + locationBrandId) del TICKET.
-//                   Id estable, SIEMPRE presente en el ticket, NO depende del catálogo.
-//   2) RESPALDO  -> por producto -> catálogo -> nombre de marca (método viejo).
-//                   Frágil: falla si el producto del ticket no está en el catálogo
-//                   cargado. Antes era el ÚNICO método, lo que dejaba ventas sin
-//                   marca aunque el ticket trajera el locationBrandId y el mapa
-//                   tuviera la traducción. Ahora es solo respaldo.
+// MODELO A: la venta figura desde que entra (tab:created) y se resta si se cancela.
+// El consumo de stock se escribe SOLO al cerrar (close_sale), nunca en 'open'.
+// Identidad: external_ref = bill.id (una venta por bill); external_tab_ref = tab.id
+// (metadato para agrupar el pedido en el KDS / futura sala).
 //
-// Además, el insert guarda SIEMPRE external_brand_text / external_location_text /
-// raw_tab (raw event store en tiempo real), de modo que recasar por mapa
-// (resolve_sale_brand_from_map / reprocess_sale) es posible sin depender de
-// backfills posteriores.
+// RESOLUCIÓN DE MARCA (corregido 12/06): external_brand_map por (locationId +
+// locationBrandId) del TICKET (primario, estable) -> respaldo por producto/catálogo.
 //
-// La frontera NO casa líneas ni escribe sale_line. Eso es trabajo del adaptador.
-// Añadir otro TPV = otra frontera (su webhook + token) + su adaptador; motor intacto.
+// Idempotencia: external_ref = bill.id. Cancelación idempotente (no re-cancela).
 //
-// Idempotencia: external_ref = bill.id. El adaptador es idempotente por venta.
-//
-// SEGURIDAD: Last NO firma; manda un `authorization` fijo. Validamos contra
-// LASTAPP_WEBHOOK_TOKEN. Sin token válido -> 401.
-//
-// DEPLOY: SIEMPRE con --no-verify-jwt (webhook externo; sin el flag el gateway
-// corta con 401 antes de ejecutar y la ingesta falla en silencio).
+// SEGURIDAD: Last NO firma; manda un `authorization` fijo -> LASTAPP_WEBHOOK_TOKEN.
+// DEPLOY: SIEMPRE con --no-verify-jwt (sin la flag el gateway corta con 401 antes
+// de ejecutar y la ingesta falla en silencio).
 
 import { corsHeaders } from "../_shared/cors.ts";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
@@ -190,38 +183,34 @@ function resolveSaleBrand(
   return null;
 }
 
-// ── Ingesta de un bill: inserta la sale y DELEGA las líneas al adaptador ──
-async function ingestBill(
+// ── upsertSale: crea o REFRESCA la venta desde (bill, tab). NO la cierra. ──
+// Idempotente por external_ref = bill.id. Reutilizable por tab:created (nace),
+// tab:updated/tab_products:updated (re-sync) y tab:closed (que además cierra).
+// GUARD DE ESTADO: una venta ya 'closed'/'cancelled' NO se re-adapta (un evento
+// tardío no puede corromper una venta consolidada). El re-adapt es seguro:
+// adapt_lastapp_order borra y reescribe sus propias líneas (preserva manuales).
+async function upsertSale(
   sb: SupabaseClient, accountId: string, bill: LastBill, tab: LastTab, caches: HeaderCaches,
-): Promise<{ written: boolean; reason?: string; lines?: number }> {
+): Promise<{ id: string; status: string; isNew: boolean } | null> {
   const billId = bill.id;
-  if (!billId) return { written: false, reason: "no bill id" };
-  if (bill.deleted === true) return { written: false, reason: "bill deleted" };
-
-  // Idempotencia.
-  const { data: exists, error: exErr } = await sb.from("sale").select("id")
-    .eq("account_id", accountId).eq("source", "lastapp")
-    .eq("external_ref", String(billId)).limit(1).maybeSingle();
-  if (exErr) throw new Error(`exists check ${billId}: ${exErr.message}`);
-  if (exists) return { written: false, reason: "already exists" };
+  if (!billId) return null;
+  if (bill.deleted === true) return null;
 
   const payType = bill.payments?.[0]?.type ?? tab.source ?? null;
   const slug = channelSlug(payType);
   const channelId = slug ? (caches.channelBySlug.get(slug) ?? null) : null;
   const products = Array.isArray(tab.products) ? tab.products : [];
-  const saleBrandId = resolveSaleBrand(tab, products, caches); // ⟵ CAMBIO: pasa tab (id del ticket)
+  const saleBrandId = resolveSaleBrand(tab, products, caches);
 
-  // 1) Insertar la SALE (cabecera + economía + raw_products + raw_tab). SIN líneas.
-  const { data: saleRow, error: saleErr } = await sb.from("sale").insert({
-    account_id: accountId,
-    source: "lastapp",
-    external_ref: String(billId),
+  // Campos de cabecera/economía comunes a insert y update.
+  const common = {
     external_channel_text: payType,
     channel_id: channelId,
     brand_id: saleBrandId,
     location_id: caches.folvyLocationId,
-    external_brand_text: tab.locationBrandId ?? null,   // ⟵ CAMBIO: id crudo de marca del ticket
-    external_location_text: tab.locationId ?? null,     // ⟵ CAMBIO: id crudo de local del ticket
+    external_brand_text: tab.locationBrandId ?? null,
+    external_location_text: tab.locationId ?? null,
+    external_tab_ref: tab.id ?? null,                  // ⟵ 0b: identidad del pedido (tab.id)
     sold_at: bill.creationTime ?? bill.finalizingTime ?? tab.closeTime ?? new Date().toISOString(),
     total: typeof bill.total === "number" ? bill.total / 100 : 0,
     delivery_cost: typeof bill.deliveryFee === "number" ? bill.deliveryFee / 100 : null,
@@ -230,44 +219,89 @@ async function ingestBill(
     taxable_base: typeof bill.taxableBase === "number" ? bill.taxableBase / 100 : null,
     service_type: mapServiceType(tab.pickupType),
     raw_products: JSON.stringify(products),
-    raw_tab: JSON.stringify(tab),                       // ⟵ CAMBIO: raw event store en tiempo real
+    raw_tab: JSON.stringify(tab),
+  };
+
+  // ¿existe ya?
+  const { data: existing, error: exErr } = await sb.from("sale")
+    .select("id, status")
+    .eq("account_id", accountId).eq("source", "lastapp")
+    .eq("external_ref", String(billId)).limit(1).maybeSingle();
+  if (exErr) throw new Error(`exists check ${billId}: ${exErr.message}`);
+
+  if (existing) {
+    const status = (existing as { status?: string }).status ?? "open";
+    // GUARD: no re-adaptar ventas ya consolidadas/canceladas.
+    if (status !== "open") return { id: (existing as { id: string }).id, status, isNew: false };
+
+    await sb.from("sale").update({ ...common, updated_at: new Date().toISOString() })
+      .eq("id", (existing as { id: string }).id);
+    const { error: adaptErr } = await sb.rpc("adapt_lastapp_order", { p_sale_id: (existing as { id: string }).id });
+    if (adaptErr) console.error(`re-adapt ${billId}: ${adaptErr.message}`);
+    return { id: (existing as { id: string }).id, status: "open", isNew: false };
+  }
+
+  // No existe -> nace 'open'.
+  const { data: saleRow, error: saleErr } = await sb.from("sale").insert({
+    account_id: accountId,
+    source: "lastapp",
+    external_ref: String(billId),
+    status: "open",
+    opened_at: bill.creationTime ?? bill.finalizingTime ?? new Date().toISOString(),
     is_active: true,
+    ...common,
   }).select("id").single();
   if (saleErr || !saleRow) throw new Error(`sale insert ${billId}: ${saleErr?.message ?? "unknown"}`);
 
-  // 2) DELEGAR al MOTOR: el adaptador descompone raw_products en la jerarquía canónica.
   const { error: adaptErr } = await sb.rpc("adapt_lastapp_order", { p_sale_id: saleRow.id });
   if (adaptErr) {
-    // Rollback de la sale: si no podemos poblar líneas, no dejamos una venta huérfana.
+    // No dejamos una venta huérfana sin líneas.
     await sb.from("sale").delete().eq("id", saleRow.id);
     throw new Error(`adapt_lastapp_order ${billId}: ${adaptErr.message}`);
   }
+  return { id: saleRow.id, status: "open", isNew: true };
+}
 
-  // 3) Calcular el coste de cada línea PRODUCTO (el coste se agrega en el padre).
-  const { data: prodLines, error: plErr } = await sb.from("sale_line")
-    .select("id").eq("sale_id", saleRow.id).eq("line_type", "product");
-  if (plErr) {
-    console.error(`coste: no pude listar líneas product de ${billId}: ${plErr.message}`);
-  } else {
-    for (const l of prodLines ?? []) {
-      const { error: cErr } = await sb.rpc("compute_sale_line_cost", { p_sale_line_id: (l as { id: string }).id });
-      if (cErr) console.error(`compute_sale_line_cost ${(l as { id: string }).id}: ${cErr.message}`);
-    }
-  }
+// ── ingestBill: upsert + CIERRE (tab:closed). El consumo de stock se escribe AQUÍ. ──
+async function ingestBill(
+  sb: SupabaseClient, accountId: string, bill: LastBill, tab: LastTab, caches: HeaderCaches,
+): Promise<{ written: boolean; reason?: string }> {
+  const r = await upsertSale(sb, accountId, bill, tab, caches);
+  if (!r) return { written: false, reason: "no bill id / deleted" };
+  if (r.status === "cancelled") return { written: false, reason: "cancelled, no close" };
 
-  // 4) Descontar el CONSUMO TEÓRICO de cada línea PRODUCTO (ventas × escandallo).
-  //    SIEMPRE después del coste (solo descuenta si la línea tiene computed_cost).
-  //    Motor puro e idempotente. RESILIENTE: si una línea falla, log y sigue; NUNCA
-  //    tumba la ingesta (la venta y su coste ya están dentro; el consumo es
-  //    recuperable con el botón "Recalcular consumo").
-  if (!plErr) {
-    for (const l of prodLines ?? []) {
-      const { error: kErr } = await sb.rpc("compute_sale_line_consumption", { p_sale_line_id: (l as { id: string }).id });
-      if (kErr) console.error(`compute_sale_line_consumption ${(l as { id: string }).id}: ${kErr.message}`);
-    }
-  }
+  // close_sale: status='closed' + consolida COSTE + CONSUMO (motor canónico).
+  const { error: closeErr } = await sb.rpc("close_sale", { p_sale_id: r.id });
+  if (closeErr) console.error(`close_sale ${bill.id}: ${closeErr.message}`);
+  return { written: true };
+}
 
-  return { written: true, lines: (prodLines ?? []).length };
+// ── Cancelación: marca la(s) venta(s) por bill.id y revierte consumo ──
+// Reutilizable por tab:cancelled (varios bills), bill:deleted y payment:deleted.
+// Idempotente: si la venta no existe o ya está cancelled, no hace daño.
+async function cancelByBillId(
+  sb: SupabaseClient, accountId: string, billId: string, reason: string,
+): Promise<boolean> {
+  const { data: sale, error } = await sb.from("sale").select("id, status")
+    .eq("account_id", accountId).eq("source", "lastapp")
+    .eq("external_ref", String(billId)).limit(1).maybeSingle();
+  if (error) { console.error(`cancel lookup ${billId}: ${error.message}`); return false; }
+  if (!sale) return false;                       // no la teníamos: nada que cancelar
+  if ((sale as { status?: string }).status === "cancelled") return true; // ya estaba
+
+  const { error: cErr } = await sb.rpc("cancel_sale", {
+    p_sale_id: (sale as { id: string }).id, p_reason: reason,
+  });
+  if (cErr) { console.error(`cancel_sale ${billId}: ${cErr.message}`); return false; }
+  return true;
+}
+
+// Resuelve la cuenta a partir del locationId de Last (igual que tab:closed).
+async function resolveAccountId(sb: SupabaseClient, lastLocationId: string): Promise<string | null> {
+  const { data, error } = await sb.from("lastapp_location_map")
+    .select("account_id").eq("lastapp_location_id", lastLocationId).maybeSingle();
+  if (error) throw new Error(`lastapp_location_map: ${error.message}`);
+  return (data?.account_id as string | undefined) ?? null;
 }
 
 // ── Entrada HTTP (la frontera) ──
@@ -314,10 +348,7 @@ Deno.serve(async (req: Request) => {
       const lastLocationId = tab.locationId ?? null;
       if (!lastLocationId) throw new Error("tab:closed sin locationId");
 
-      const { data: locRow, error: locErr } = await sb.from("lastapp_location_map")
-        .select("account_id").eq("lastapp_location_id", lastLocationId).maybeSingle();
-      if (locErr) throw new Error(`lastapp_location_map: ${locErr.message}`);
-      const accountId = (locRow?.account_id as string | undefined) ?? null;
+      const accountId = await resolveAccountId(sb, lastLocationId);
       if (!accountId) throw new Error(`location ${lastLocationId} no mapeada a ninguna cuenta`);
 
       const caches = await loadHeaderCaches(sb, accountId, lastLocationId);
@@ -329,6 +360,110 @@ Deno.serve(async (req: Request) => {
     } catch (e) {
       processError = e instanceof Error ? e.message : String(e);
       console.error("tab:closed ingest error", processError);
+    }
+
+  } else if (eventType === "tab:created") {
+    // El pedido NACE en vivo (modelo A): venta 'open', sin coste/consumo todavía.
+    // En delivery el bill ya viene; en sala (sin bills) no nace hasta cerrar.
+    note = "frontera-tab-created";
+    try {
+      const tab = (payload?.data ?? {}) as LastTab;
+      const lastLocationId = tab.locationId ?? null;
+      if (!lastLocationId) throw new Error("tab:created sin locationId");
+
+      const accountId = await resolveAccountId(sb, lastLocationId);
+      if (!accountId) throw new Error(`location ${lastLocationId} no mapeada a ninguna cuenta`);
+
+      const caches = await loadHeaderCaches(sb, accountId, lastLocationId);
+      const bills = Array.isArray(tab.bills) ? tab.bills : [];
+      for (const bill of bills) {
+        await upsertSale(sb, accountId, bill, tab, caches);   // nace 'open'
+      }
+      processedOk = true;
+    } catch (e) {
+      processError = e instanceof Error ? e.message : String(e);
+      console.error("tab:created error", processError);
+    }
+
+  } else if (eventType === "tab:updated" || eventType === "tab_products:updated") {
+    // El pedido vivo cambió (líneas/total). RE-SYNC: upsertSale re-adapta las
+    // líneas SOLO si la venta sigue 'open' (guard de estado en upsertSale).
+    // Sigue sin tocar stock (eso es del cierre).
+    note = `frontera-${eventType}`;
+    try {
+      const tab = (payload?.data ?? {}) as LastTab;
+      const lastLocationId = tab.locationId ?? null;
+      if (!lastLocationId) throw new Error(`${eventType} sin locationId`);
+
+      const accountId = await resolveAccountId(sb, lastLocationId);
+      if (!accountId) throw new Error(`location ${lastLocationId} no mapeada a ninguna cuenta`);
+
+      const caches = await loadHeaderCaches(sb, accountId, lastLocationId);
+      const bills = Array.isArray(tab.bills) ? tab.bills : [];
+      for (const bill of bills) {
+        await upsertSale(sb, accountId, bill, tab, caches);   // re-sync (si 'open')
+      }
+      processedOk = true;
+    } catch (e) {
+      processError = e instanceof Error ? e.message : String(e);
+      console.error(`${eventType} error`, processError);
+    }
+
+  } else if (eventType === "tab:cancelled") {
+    // Cancelación del pedido completo. Mismo payload que tab:closed (trae bills[]).
+    // Marca cada venta del tab como 'cancelled' y revierte su consumo.
+    note = "frontera-tab-cancelled";
+    try {
+      const tab = (payload?.data ?? {}) as LastTab;
+      const lastLocationId = tab.locationId ?? null;
+      if (!lastLocationId) throw new Error("tab:cancelled sin locationId");
+
+      const accountId = await resolveAccountId(sb, lastLocationId);
+      if (!accountId) throw new Error(`location ${lastLocationId} no mapeada a ninguna cuenta`);
+
+      const bills = Array.isArray(tab.bills) ? tab.bills : [];
+      for (const bill of bills) {
+        if (bill.id) await cancelByBillId(sb, accountId, String(bill.id), "tab:cancelled");
+      }
+      processedOk = true;
+    } catch (e) {
+      processError = e instanceof Error ? e.message : String(e);
+      console.error("tab:cancelled error", processError);
+    }
+
+  } else if (eventType === "bill:deleted" || eventType === "payment:deleted") {
+    // DEFENSIVO (estructura aún no verificada con payload real). Intenta resolver
+    // el bill.id desde varias formas posibles del payload y, si está, cancela esa
+    // venta. Si no encuentra bill id o cuenta, NO falla: loguea para inspección.
+    note = `frontera-${eventType}`;
+    try {
+      const data = (payload?.data ?? {}) as Record<string, unknown>;
+      // bill:deleted -> data.id (el propio bill) ; payment:deleted -> data.billId
+      const billId =
+        (data.billId as string | undefined) ??
+        (data.id as string | undefined) ??
+        ((data.bill as { id?: string } | undefined)?.id) ?? null;
+      // locationId puede venir en data.locationId o anidado; intentamos lo directo.
+      const lastLocationId =
+        (data.locationId as string | undefined) ??
+        ((data.tab as { locationId?: string } | undefined)?.locationId) ?? null;
+
+      if (billId && lastLocationId) {
+        const accountId = await resolveAccountId(sb, lastLocationId);
+        if (accountId) {
+          await cancelByBillId(sb, accountId, String(billId), eventType);
+          processedOk = true;
+        } else {
+          processError = `location ${lastLocationId} no mapeada`;
+        }
+      } else {
+        // Sin datos suficientes: lo dejamos sin procesar para inspeccionar el log
+        // y afinar el mapeo con un payload real (plan acordado: activar luego).
+        processError = `payload sin billId/locationId resolubles (revisar log)`;
+      }
+    } catch (e) {
+      processError = e instanceof Error ? e.message : String(e);
+      console.error(`${eventType} error`, processError);
     }
   }
 
