@@ -10,7 +10,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   Wand2, Save, Check, Megaphone, ChevronLeft, ChevronRight, X, Plus,
-  Users, AlertTriangle, CalendarDays,
+  Users, AlertTriangle, CalendarDays, Copy,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import {
@@ -18,6 +18,8 @@ import {
   getSchedule,
   upsertSchedule,
   publishSchedule,
+  copyScheduleToWeeks,
+  type CopyScheduleResult,
 } from '../services/schedulerService'
 import {
   generateSchedule,
@@ -76,6 +78,7 @@ export default function CalendarioPage() {
   const [gapModal, setGapModal] = useState<UncoveredSlot | null>(null)
   const [issues, setIssues] = useState<ValidationIssue[]>([])
   const [issuesShown, setIssuesShown] = useState(false)
+  const [copyModalOpen, setCopyModalOpen] = useState(false)
 
   const employees = useMemo(
     () => staff.filter(e => e.active && (e.locationId === locationId || (e.assignedLocations || []).includes(locationId))),
@@ -296,6 +299,14 @@ export default function CalendarioPage() {
         >
           <Megaphone size={14} /> Publicar
         </button>
+        <button
+          onClick={() => setCopyModalOpen(true)}
+          disabled={Object.keys(cells).length === 0}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded border border-border-default bg-card text-text-primary text-sm hover:bg-page disabled:opacity-40 transition-base"
+          title="Copiar este horario a la semana siguiente, al resto del mes o a un rango"
+        >
+          <Copy size={14} /> Copiar
+        </button>
       </div>
 
       <div className="flex items-center gap-3 text-xs text-text-secondary">
@@ -464,6 +475,15 @@ export default function CalendarioPage() {
             setCellAssign(gapModal.template_id, gapModal.day_of_week, [...cur, empId])
             setGapModal(null)
           }}
+        />
+      )}
+
+      {copyModalOpen && (
+        <CopyScheduleModal
+          locationId={locationId}
+          sourceWeekStart={weekStart}
+          onClose={() => setCopyModalOpen(false)}
+          onDone={refresh}
         />
       )}
     </div>
@@ -956,4 +976,161 @@ function humanRestPattern(p: string): string {
   if (kind === 'tarde_dia') return `${d1} tarde + ${d2} día`
   if (kind === 'dia_manana') return `${d1} día + ${d2} mañana`
   return p
+}
+
+/* =====================================================
+   Modal: Copiar horario a otras semanas
+   ===================================================== */
+
+type CopyMode = 'next' | 'month' | 'n'
+
+function monthOfISO(iso: string): number {
+  return Number(iso.split('-')[1])
+}
+
+function fmtShortDay(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
+}
+
+interface CopyScheduleModalProps {
+  locationId: string
+  sourceWeekStart: string
+  onClose: () => void
+  onDone: () => void
+}
+
+function CopyScheduleModal({ locationId, sourceWeekStart, onClose, onDone }: CopyScheduleModalProps) {
+  const [mode, setMode] = useState<CopyMode>('next')
+  const [nWeeks, setNWeeks] = useState(4)
+  const [removeVac, setRemoveVac] = useState(true)
+  const [running, setRunning] = useState(false)
+  const [result, setResult] = useState<CopyScheduleResult | null>(null)
+
+  const targets = useMemo<string[]>(() => {
+    if (mode === 'next') return [addDays(sourceWeekStart, 7)]
+    if (mode === 'n') {
+      const out: string[] = []
+      for (let i = 1; i <= nWeeks; i++) out.push(addDays(sourceWeekStart, 7 * i))
+      return out
+    }
+    // resto del mes: semanas siguientes cuyo lunes cae en el mes de la semana origen
+    const out: string[] = []
+    const srcMonth = monthOfISO(sourceWeekStart)
+    let wk = addDays(sourceWeekStart, 7)
+    for (let i = 0; i < 6 && monthOfISO(wk) === srcMonth; i++) {
+      out.push(wk)
+      wk = addDays(wk, 7)
+    }
+    return out
+  }, [mode, nWeeks, sourceWeekStart])
+
+  const rangeLabel = targets.length > 0
+    ? `${fmtShortDay(targets[0])} – ${fmtShortDay(addDays(targets[targets.length - 1], 6))}`
+    : '—'
+
+  async function run() {
+    if (targets.length === 0) return
+    setRunning(true)
+    const res = await copyScheduleToWeeks(locationId, sourceWeekStart, targets, {
+      skipPublished: true,
+      removeApprovedVacations: removeVac,
+    })
+    setResult(res)
+    setRunning(false)
+  }
+
+  function finish() {
+    onDone()
+    onClose()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+      <div className="bg-card rounded-xl max-w-md w-full p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-display font-semibold text-accent inline-flex items-center gap-1.5">
+            <Copy size={16} /> Copiar este horario
+          </h3>
+          <button onClick={onClose} className="text-text-secondary hover:text-text-primary">
+            <X size={18} />
+          </button>
+        </div>
+
+        {!result ? (
+          <>
+            <p className="text-xs text-text-secondary mb-3">
+              Copia los turnos de esta semana a futuras semanas <strong>como borrador</strong>.
+              Las semanas ya publicadas se omiten; las que estén en borrador se sobrescriben.
+            </p>
+
+            <div className="space-y-2 mb-3">
+              <label className="flex items-center gap-2 text-sm text-text-primary cursor-pointer">
+                <input type="radio" name="copymode" checked={mode === 'next'} onChange={() => setMode('next')} className="accent-accent" />
+                A la semana siguiente
+              </label>
+              <label className="flex items-center gap-2 text-sm text-text-primary cursor-pointer">
+                <input type="radio" name="copymode" checked={mode === 'month'} onChange={() => setMode('month')} className="accent-accent" />
+                Al resto del mes
+              </label>
+              <label className="flex items-center gap-2 text-sm text-text-primary cursor-pointer">
+                <input type="radio" name="copymode" checked={mode === 'n'} onChange={() => setMode('n')} className="accent-accent" />
+                A las próximas
+                <select
+                  value={nWeeks}
+                  onChange={e => { setNWeeks(Number(e.target.value)); setMode('n') }}
+                  className="border border-border-default rounded px-2 py-1 text-sm bg-card"
+                >
+                  {[2, 3, 4, 6, 8, 13].map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+                semanas
+              </label>
+            </div>
+
+            <label className="flex items-start gap-2 text-sm text-text-primary cursor-pointer bg-page rounded-lg p-2.5 mb-3">
+              <input type="checkbox" checked={removeVac} onChange={e => setRemoveVac(e.target.checked)} className="mt-0.5 accent-accent" />
+              <span>
+                Quitar a quien tenga <strong>vacaciones aprobadas</strong> en cada día
+                <span className="block text-[11px] text-text-secondary">Deja el hueco sin cubrir para que lo asignes a otra persona.</span>
+              </span>
+            </label>
+
+            <div className="text-xs text-text-secondary mb-4">
+              {targets.length === 0
+                ? 'No hay semanas destino en este rango.'
+                : <>Se copiará a <strong>{targets.length}</strong> semana{targets.length !== 1 ? 's' : ''} ({rangeLabel}).</>}
+            </div>
+
+            <div className="flex gap-2">
+              <button onClick={onClose} className="flex-1 px-4 py-2 text-sm border border-border-default rounded bg-card text-text-primary hover:bg-page transition-base">
+                Cancelar
+              </button>
+              <button
+                onClick={run}
+                disabled={running || targets.length === 0}
+                className="flex-1 px-4 py-2 text-sm rounded bg-accent text-text-on-accent font-medium hover:bg-accent-hover disabled:opacity-40 transition-base"
+              >
+                {running ? 'Copiando…' : 'Copiar'}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="bg-page rounded-lg p-3 mb-4 text-sm text-text-primary space-y-1">
+              <p><strong className="text-success">{result.copied.length}</strong> semana{result.copied.length !== 1 ? 's' : ''} copiada{result.copied.length !== 1 ? 's' : ''} como borrador.</p>
+              {result.skipped.length > 0 && (
+                <p><strong className="text-warning">{result.skipped.length}</strong> omitida{result.skipped.length !== 1 ? 's' : ''} por estar ya publicada{result.skipped.length !== 1 ? 's' : ''}.</p>
+              )}
+              {result.removedForVacation > 0 && (
+                <p><strong>{result.removedForVacation}</strong> asignación{result.removedForVacation !== 1 ? 'es' : ''} quitada{result.removedForVacation !== 1 ? 's' : ''} por vacaciones aprobadas.</p>
+              )}
+            </div>
+            <button onClick={finish} className="w-full px-4 py-2 text-sm rounded bg-accent text-text-on-accent font-medium hover:bg-accent-hover transition-base">
+              Hecho
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  )
 }

@@ -300,3 +300,130 @@ export async function listRecentSchedules(
   }
   return (data ?? []) as Schedule[];
 }
+
+/* =====================================================
+   COPIAR HORARIO A OTRAS SEMANAS
+   ===================================================== */
+
+export interface CopyScheduleResult {
+  copied: string[]; // week_starts copiados (lunes ISO)
+  skipped: string[]; // week_starts omitidos por estar ya publicados
+  removedForVacation: number; // asignaciones quitadas por vacaciones aprobadas
+}
+
+// Suma dias a una fecha ISO (YYYY-MM-DD) en horario local, sin desfase de zona.
+function addDaysISO(iso: string, days: number): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + days);
+  const yy = dt.getFullYear();
+  const mm = String(dt.getMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
+}
+
+/**
+ * Copia el horario (cells + coverage_overrides) de una semana origen a una o
+ * varias semanas destino.
+ * - Siempre escribe como BORRADOR (status='draft'): nunca publica el futuro; el
+ *   trabajador no ve nada hasta que el gestor publique cada semana.
+ * - skipPublished (default true): no pisa semanas destino ya publicadas (las
+ *   omite y las reporta). Las que esten en borrador se sobrescriben.
+ * - removeApprovedVacations (default true): al copiar, quita de cada celda a los
+ *   empleados con vacaciones APROBADAS que cubran la fecha real de ese dia en la
+ *   semana destino (cells guarda dia 0-6; la fecha real = lunes destino + dia).
+ */
+export async function copyScheduleToWeeks(
+  locationId: string,
+  sourceWeekStart: string,
+  targetWeekStarts: string[],
+  opts?: { skipPublished?: boolean; removeApprovedVacations?: boolean }
+): Promise<CopyScheduleResult | null> {
+  if (!supabase) return null;
+  const sb = supabase;
+  const skipPublished = opts?.skipPublished ?? true;
+  const removeVac = opts?.removeApprovedVacations ?? true;
+
+  const source = await getSchedule(locationId, sourceWeekStart);
+  if (!source || Object.keys(source.cells || {}).length === 0) {
+    return { copied: [], skipped: [], removedForVacation: 0 };
+  }
+  const sourceCells = source.cells as ScheduleCells;
+  const sourceOverrides = (source.coverage_overrides || {}) as CoverageOverrides;
+
+  // Vacaciones aprobadas de los empleados que aparecen en el horario origen,
+  // acotadas al rango que cubren las semanas destino.
+  const vacByEmp = new Map<string, Array<{ start: string; end: string }>>();
+  if (removeVac && targetWeekStarts.length > 0) {
+    const empIds = new Set<string>();
+    for (const tid of Object.keys(sourceCells)) {
+      for (const dk of Object.keys(sourceCells[tid])) {
+        for (const id of sourceCells[tid][dk]) empIds.add(id);
+      }
+    }
+    if (empIds.size > 0) {
+      const sorted = [...targetWeekStarts].sort();
+      const rangeStart = sorted[0];
+      const rangeEnd = addDaysISO(sorted[sorted.length - 1], 6);
+      const { data: vac } = await sb
+        .from('vacations')
+        .select('employee_id, start_date, end_date')
+        .eq('status', 'aprobada')
+        .in('employee_id', Array.from(empIds))
+        .lte('start_date', rangeEnd)
+        .gte('end_date', rangeStart);
+      for (const v of (vac || []) as Array<{ employee_id: string; start_date: string; end_date: string }>) {
+        const arr = vacByEmp.get(v.employee_id) || [];
+        arr.push({ start: v.start_date, end: v.end_date });
+        vacByEmp.set(v.employee_id, arr);
+      }
+    }
+  }
+
+  function onVacation(empId: string, dateISO: string): boolean {
+    const ranges = vacByEmp.get(empId);
+    if (!ranges) return false;
+    return ranges.some((r) => r.start <= dateISO && dateISO <= r.end);
+  }
+
+  const result: CopyScheduleResult = { copied: [], skipped: [], removedForVacation: 0 };
+
+  for (const target of targetWeekStarts) {
+    if (target === sourceWeekStart) continue; // nunca se copia sobre si misma
+    const existing = await getSchedule(locationId, target);
+    if (existing && existing.status === 'published' && skipPublished) {
+      result.skipped.push(target);
+      continue;
+    }
+
+    // Construir cells destino, descontando vacaciones por fecha real.
+    const newCells: ScheduleCells = {};
+    for (const tid of Object.keys(sourceCells)) {
+      newCells[tid] = {};
+      for (const dk of Object.keys(sourceCells[tid])) {
+        const dateISO = addDaysISO(target, Number(dk));
+        const ids = sourceCells[tid][dk].filter((id) => {
+          if (removeVac && onVacation(id, dateISO)) {
+            result.removedForVacation++;
+            return false;
+          }
+          return true;
+        });
+        newCells[tid][dk] = ids;
+      }
+    }
+
+    const saved = await upsertSchedule({
+      location_id: locationId,
+      week_start: target,
+      cells: newCells,
+      coverage_overrides: sourceOverrides,
+      status: 'draft',
+      generated_at: new Date().toISOString(),
+      published_at: null,
+    });
+    if (saved) result.copied.push(target);
+  }
+
+  return result;
+}
