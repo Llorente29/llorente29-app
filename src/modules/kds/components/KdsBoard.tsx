@@ -9,7 +9,7 @@
 // token no autentica Realtime por RLS → vive del polling). Sonido + resalte al
 // entrar un ticket nuevo.
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2, RefreshCw, Volume2, VolumeX } from 'lucide-react'
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
 import {
@@ -24,9 +24,11 @@ const POLL_MS = 10_000
 const NEW_HIGHLIGHT_MS = 6_000
 
 interface KdsBoardProps {
-  locationId: string
+  /** Local (sesión). En kiosco va null: la RPC deriva el local del token. */
+  locationId: string | null
   token?: string | null
-  /** id estación → nombre (con sesión). El kiosco puede no tenerlo. */
+  /** id estación → nombre (respaldo de sesión). El board ya trae `stations`,
+   *  que es la fuente principal (también sirve al kiosco sin sesión). */
   stationNames?: Record<string, string>
   /** Filtro manual de estación (selector de sesión). Prevalece sobre el del
    *  dispositivo si se pasa. null/undefined = sin override. */
@@ -149,6 +151,14 @@ export default function KdsBoard({
   const effectiveFilter = manualStationFilter ?? board?.station_filter ?? null
   const tickets = board?.tickets ?? []
 
+  // Nombres de estación: el board manda (kiosco sin sesión incluido); el prop
+  // de sesión es respaldo si el board aún no trajo el bloque.
+  const resolvedStationNames = useMemo(() => {
+    const m: Record<string, string> = { ...stationNames }
+    for (const s of board?.stations ?? []) m[s.id] = s.name
+    return m
+  }, [board, stationNames])
+
   return (
     <div className="flex flex-col h-full bg-zinc-950 text-zinc-100">
       {/* Barra de estado del tablero */}
@@ -197,7 +207,7 @@ export default function KdsBoard({
               <KdsTicketCard
                 key={ticket.sale_id}
                 ticket={ticket}
-                stationNames={stationNames}
+                stationNames={resolvedStationNames}
                 stationFilter={effectiveFilter}
                 isNew={newIds.has(ticket.sale_id)}
                 busy={busy}

@@ -13,6 +13,7 @@ import Shell from './shell/Shell'
 import AccountStatusGate from './components/AccountStatusGate'
 import TrabajadorApp from './pages/trabajador/TrabajadorApp'
 import { useAuth } from './modules/multitenancy/hooks/useAuth'
+import KdsKioskRoute from './modules/kds/KdsKioskRoute'
 
 // G-8.6 (Sprint 3): App.tsx reducido. El render autenticado es el Shell modular
 // (src/shell/Shell.tsx), que vive en la raíz y resuelve la cuenta por AppContext.
@@ -78,6 +79,14 @@ export default function App() {
   // canjea el token y establece sesión antes de cualquier gate.
   if (location.pathname === '/acceso') {
     return <AccesoClaimPage />
+  }
+  // Modo KIOSCO del KDS (frontera de token, sin sesión). Ruta pública /kds:
+  // el dispositivo se identifica con su token (?token= o localStorage) y la RPC
+  // kds_board deriva el local. Va ANTES de los gates de sesión/cuenta. NB: las
+  // rutas del Shell viven bajo /:slug/kds (no empiezan por '/kds'), así que este
+  // startsWith solo captura el kiosco público.
+  if (location.pathname.startsWith('/kds')) {
+    return <KdsKioskRoute />
   }
   if (isPublicAuthRoute(location.pathname)) {
     return <AuthRouter />

@@ -62,9 +62,18 @@ export interface KdsLine {
   marked: boolean
   allergens: string[]
   has_recipe: boolean
-  /** menu_item_id para abrir el Cook Mode (la RPC kds_recipe lo necesita).
-   *  La RPC kds_board puede no traerlo en todas las versiones → opcional. */
-  menu_item_id?: string | null
+  /** menu_item_id para abrir el Cook Mode (kds_recipe lo necesita). La RPC
+   *  kds_board lo devuelve en cada línea (confirmado). */
+  menu_item_id: string | null
+}
+
+/** Estación tal como la devuelve kds_board (para nombrar grupos en el kiosco,
+ *  sin sesión: el board ya trae el bloque `stations` de la ubicación). */
+export interface KdsBoardStation {
+  id: string
+  name: string
+  kind: StationKind
+  display_order: number
 }
 
 export interface KdsTicket {
@@ -84,6 +93,8 @@ export interface KdsBoard {
   location_id: string
   station_filter: string[] | null
   now: string
+  /** Estaciones de la ubicación (para nombrar grupos sin sesión en el kiosco). */
+  stations: KdsBoardStation[]
   tickets: KdsTicket[]
 }
 
@@ -130,8 +141,9 @@ export interface KdsRecipe {
 // RPC DEL TABLERO (doble puerta: token opcional)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Tablero de una ubicación. Con sesión → sin token; kiosco → con token. */
-export function getBoard(locationId: string, token?: string | null): Promise<KdsBoard> {
+/** Tablero de una ubicación. Con sesión → locationId + sin token. Kiosco →
+ *  locationId = null + token (la RPC deriva el local del token). */
+export function getBoard(locationId: string | null, token?: string | null): Promise<KdsBoard> {
   return rpc<KdsBoard>('kds_board', {
     p_location_id: locationId,
     p_device_token: token ?? null,
