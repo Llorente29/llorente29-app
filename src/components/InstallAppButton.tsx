@@ -5,11 +5,17 @@
 // navegador. Pensado para el portal del trabajador (al que llega por QR).
 //
 // Comportamiento por plataforma:
-//  · Android/Chrome: captura el evento beforeinstallprompt y, al pulsar, lanza
-//    el prompt NATIVO de instalación. Es el caso de la mayoría de trabajadores.
-//  · iPhone/Safari: iOS no permite prompt automático → mostramos instrucciones
-//    cortas (Compartir → Añadir a pantalla de inicio).
+//  · Android/Chrome: usa el evento beforeinstallprompt y, al pulsar, lanza el
+//    prompt NATIVO de instalación. Es el caso de la mayoría de trabajadores.
+//  · iPhone/Safari: iOS no permite prompt automático → instrucciones cortas
+//    (Compartir → Añadir a pantalla de inicio).
 //  · App ya instalada (modo standalone): no se muestra nada.
+//
+// CLAVE (12/06/2026): el evento beforeinstallprompt lo captura main.tsx ANTES
+// de montar React y lo guarda en window.__folvyInstallPrompt. Este botón lo LEE
+// al montar (cubre el caso "el evento saltó antes que el botón") y además
+// escucha el evento propio 'folvy:installable' (cubre el caso "salta después").
+// Así nunca se pierde el prompt nativo → no caemos al modal por error.
 
 import { useEffect, useState } from 'react'
 
@@ -29,32 +35,44 @@ function isIOS(): boolean {
   return /iphone|ipad|ipod/i.test(window.navigator.userAgent)
 }
 
+function isAndroid(): boolean {
+  return /android/i.test(window.navigator.userAgent)
+}
+
 export default function InstallAppButton() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [installed, setInstalled] = useState(false)
-  const [showIosHelp, setShowIosHelp] = useState(false)
+  // Modal de instrucciones manuales: 'ios' | 'android' | null
+  const [helpFor, setHelpFor] = useState<'ios' | 'android' | null>(null)
 
   useEffect(() => {
-    if (isInStandaloneMode()) {
+    if (isInStandaloneMode() || window.__folvyAppInstalled) {
       setInstalled(true)
       return
     }
 
-    // Android/Chrome: el navegador dispara este evento cuando la app es instalable.
-    const onBeforeInstall = (e: Event) => {
-      e.preventDefault() // evitamos el mini-banner por defecto; usamos nuestro botón
-      setDeferredPrompt(e as BeforeInstallPromptEvent)
+    // 1) ¿Ya lo capturó main.tsx antes de que montásemos? Léelo de window.
+    if (window.__folvyInstallPrompt) {
+      setDeferredPrompt(window.__folvyInstallPrompt as BeforeInstallPromptEvent)
     }
-    // Cuando la instalación se completa.
+
+    // 2) ¿Llega DESPUÉS de montar? main.tsx emite 'folvy:installable'.
+    const onInstallable = () => {
+      if (window.__folvyInstallPrompt) {
+        setDeferredPrompt(window.__folvyInstallPrompt as BeforeInstallPromptEvent)
+      }
+    }
     const onInstalled = () => {
       setInstalled(true)
       setDeferredPrompt(null)
     }
 
-    window.addEventListener('beforeinstallprompt', onBeforeInstall)
+    window.addEventListener('folvy:installable', onInstallable)
+    window.addEventListener('folvy:installed', onInstalled)
     window.addEventListener('appinstalled', onInstalled)
     return () => {
-      window.removeEventListener('beforeinstallprompt', onBeforeInstall)
+      window.removeEventListener('folvy:installable', onInstallable)
+      window.removeEventListener('folvy:installed', onInstalled)
       window.removeEventListener('appinstalled', onInstalled)
     }
   }, [])
@@ -64,28 +82,23 @@ export default function InstallAppButton() {
 
   async function handleClick() {
     if (deferredPrompt) {
-      // Android: lanzar el prompt nativo.
+      // Android/Chrome: lanzar el prompt nativo (un solo uso).
       await deferredPrompt.prompt()
       const choice = await deferredPrompt.userChoice
       if (choice.outcome === 'accepted') {
         setInstalled(true)
       }
       setDeferredPrompt(null)
+      window.__folvyInstallPrompt = null
     } else if (isIOS()) {
-      // iOS: no hay prompt; mostramos instrucciones.
-      setShowIosHelp(true)
+      // iOS: no hay prompt nativo; instrucciones de Safari.
+      setHelpFor('ios')
     } else {
-      // Otros navegadores sin soporte: instrucciones genéricas.
-      setShowIosHelp(true)
+      // Android sin prompt todavía (raro tras el fix), u otro navegador:
+      // instrucciones del menú de Chrome en Android, NO las de iOS.
+      setHelpFor(isAndroid() ? 'android' : 'android')
     }
   }
-
-  // En Android, si aún no llegó beforeinstallprompt y no es iOS, el botón puede
-  // no hacer nada útil; lo mostramos igual porque en iOS sirve para las
-  // instrucciones, y en Android el evento suele llegar en segundos.
-  const canShow = deferredPrompt !== null || isIOS() || true
-
-  if (!canShow) return null
 
   return (
     <>
@@ -102,21 +115,31 @@ export default function InstallAppButton() {
         Instalar Folvy en este móvil
       </button>
 
-      {showIosHelp && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowIosHelp(false)}>
+      {helpFor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setHelpFor(null)}>
           <div className="bg-card rounded-xl w-full max-w-sm p-6 border border-border-default" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-base font-medium text-text-primary mb-3">Instalar en tu móvil</h3>
             <p className="text-sm text-text-secondary mb-2">
               Para guardar Folvy como una app en tu pantalla de inicio:
             </p>
-            <ol className="text-sm text-text-secondary space-y-2 list-decimal list-inside mb-4">
-              <li>Pulsa el botón <strong>Compartir</strong> de tu navegador (el cuadrado con la flecha hacia arriba).</li>
-              <li>Elige <strong>Añadir a pantalla de inicio</strong>.</li>
-              <li>Confirma con <strong>Añadir</strong>.</li>
-            </ol>
+
+            {helpFor === 'ios' ? (
+              <ol className="text-sm text-text-secondary space-y-2 list-decimal list-inside mb-4">
+                <li>Pulsa el botón <strong>Compartir</strong> de Safari (el cuadrado con la flecha hacia arriba).</li>
+                <li>Elige <strong>Añadir a pantalla de inicio</strong>.</li>
+                <li>Confirma con <strong>Añadir</strong>.</li>
+              </ol>
+            ) : (
+              <ol className="text-sm text-text-secondary space-y-2 list-decimal list-inside mb-4">
+                <li>Abre el menú de Chrome: los <strong>tres puntos (⋮)</strong> arriba a la derecha.</li>
+                <li>Pulsa <strong>Instalar aplicación</strong> (o <strong>Añadir a pantalla de inicio</strong>).</li>
+                <li>Confirma con <strong>Instalar</strong>.</li>
+              </ol>
+            )}
+
             <button
               type="button"
-              onClick={() => setShowIosHelp(false)}
+              onClick={() => setHelpFor(null)}
               className="w-full px-3 py-2 rounded-md text-sm font-medium bg-terracota text-white hover:bg-terracota-hover transition-colors"
             >
               Entendido

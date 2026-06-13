@@ -17,6 +17,42 @@ import './index.css'
 //     - Antes: app.folvy.app/llorente29-app/{slug}/{rest}
 //     - Ahora: app.folvy.app/{slug}/{rest}
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PWA — CAPTURA GLOBAL TEMPRANA de beforeinstallprompt (12/06/2026).
+//
+// El navegador dispara `beforeinstallprompt` EN CUANTO decide que la app es
+// instalable. Si esperásemos al useEffect del botón (que monta más tarde),
+// podríamos perder el evento y el botón nunca tendría el prompt nativo → caía
+// al modal de instrucciones. Por eso lo capturamos AQUÍ, antes de montar React,
+// y lo guardamos en `window` para que InstallAppButton lo lea al montar.
+//
+// Además emitimos eventos propios (`folvy:installable` / `folvy:installed`)
+// para avisar al botón tanto si ya estaba montado como si monta después.
+// ─────────────────────────────────────────────────────────────────────────────
+
+declare global {
+  interface Window {
+    __folvyInstallPrompt?: Event | null
+    __folvyAppInstalled?: boolean
+  }
+}
+
+window.__folvyInstallPrompt = window.__folvyInstallPrompt ?? null
+window.__folvyAppInstalled = window.__folvyAppInstalled ?? false
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  // Evitamos el mini-banner por defecto; usamos nuestro botón.
+  e.preventDefault()
+  window.__folvyInstallPrompt = e
+  window.dispatchEvent(new Event('folvy:installable'))
+})
+
+window.addEventListener('appinstalled', () => {
+  window.__folvyInstallPrompt = null
+  window.__folvyAppInstalled = true
+  window.dispatchEvent(new Event('folvy:installed'))
+})
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserRouter>
