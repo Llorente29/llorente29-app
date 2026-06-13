@@ -214,15 +214,16 @@ export async function updateDisabledRequestTypes(
 
 // ─── Helpers de cálculo ───────────────────────────────────────────────────
 
-// Días laborables (lunes-viernes) entre dos fechas inclusive
-export function workingDaysBetween(start: string, end: string): number {
+// Días naturales (todos los días, fines de semana incluidos) entre dos fechas
+// inclusive. Hostelería trabaja findes, así que las vacaciones se cuentan en
+// días naturales (mínimo legal 30, Art. 38 ET), no en laborables.
+export function naturalDaysBetween(start: string, end: string): number {
   const startD = new Date(start + 'T00:00:00')
   const endD = new Date(end + 'T00:00:00')
   let count = 0
   const cur = new Date(startD)
   while (cur <= endD) {
-    const day = cur.getDay()
-    if (day !== 0 && day !== 6) count++
+    count++
     cur.setDate(cur.getDate() + 1)
   }
   return count

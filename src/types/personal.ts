@@ -24,7 +24,7 @@ export interface VacationRequest {
   type: VacationType
   startDate: string           // YYYY-MM-DD
   endDate: string             // YYYY-MM-DD
-  days: number                // días laborables descontados
+  days: number                // días naturales descontados
   status: VacationStatus
   notes?: string
   requestedAt: string
@@ -43,7 +43,7 @@ export interface VacationSettings {
   id: string
   scope: 'global' | 'employee'
   employeeId?: string
-  vacationDaysPerYear: number       // default 22
+  vacationDaysPerYear: number       // default 30
   asuntosPropiosPerYear: number     // default 3
   minStaffPerLocation: number       // default 2
   minLeadDays: number               // default 30

@@ -7,7 +7,7 @@ import type { VacationRequest, VacationType, VacationSettings } from '../../type
 import { VACATION_TYPES, ALWAYS_AVAILABLE_VACATION_TYPE } from '../../types/personal'
 import {
   fetchVacations, requestVacation, cancelVacation,
-  fetchVacationSettings, workingDaysBetween, leadDays, availableDays,
+  fetchVacationSettings, naturalDaysBetween, leadDays, availableDays,
 } from '../../services/vacationsService'
 
 interface Props {
@@ -67,7 +67,7 @@ export default function MisVacaciones({ employee, onBack }: Props) {
   }, [vacations, settings, employee])
 
   // Validaciones del form
-  const dias = startDate && endDate ? workingDaysBetween(startDate, endDate) : 0
+  const dias = startDate && endDate ? naturalDaysBetween(startDate, endDate) : 0
   const lead = startDate ? leadDays(startDate) : 0
   const minLead = settings?.minLeadDays || 30
   const leadAlert = startDate && lead < minLead
@@ -81,7 +81,7 @@ export default function MisVacaciones({ employee, onBack }: Props) {
   async function handleSubmit() {
     if (!startDate || !endDate) { setError('Indica fechas de inicio y fin'); return }
     if (new Date(endDate) < new Date(startDate)) { setError('La fecha de fin no puede ser anterior a la de inicio'); return }
-    if (dias === 0) { setError('El rango no incluye días laborables'); return }
+    if (dias === 0) { setError('Indica un rango de fechas válido'); return }
 
     setSubmitting(true); setError('')
     try {
@@ -177,7 +177,7 @@ export default function MisVacaciones({ employee, onBack }: Props) {
                             {' – '}
                             {new Date(v.endDate + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}
                           </p>
-                          <p className="text-[10px] text-text-secondary mt-0.5">{v.days} día{v.days !== 1 ? 's' : ''} laborables</p>
+                          <p className="text-[10px] text-text-secondary mt-0.5">{v.days} día{v.days !== 1 ? 's' : ''} naturales</p>
                           {v.notes && <p className="text-xs text-text-secondary mt-1 italic">"{v.notes}"</p>}
                           {v.reviewNotes && (
                             <p className="text-xs mt-1 px-2 py-1 rounded bg-page text-text-secondary">
@@ -229,7 +229,7 @@ export default function MisVacaciones({ employee, onBack }: Props) {
 
               {dias > 0 && (
                 <div className="bg-page rounded-lg p-2 mb-3 text-xs text-text-secondary">
-                  {dias} día{dias !== 1 ? 's' : ''} laborable{dias !== 1 ? 's' : ''}
+                  {dias} día{dias !== 1 ? 's' : ''} natural{dias !== 1 ? 'es' : ''}
                 </div>
               )}
 

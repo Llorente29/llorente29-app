@@ -8,7 +8,7 @@ import type { VacationRequest, VacationStatus, VacationType, VacationSettings } 
 import { VACATION_TYPES } from '../../types/personal'
 import {
   fetchVacations, reviewVacation, deleteVacation,
-  fetchVacationSettings, availableDays, workingDaysBetween,
+  fetchVacationSettings, availableDays, naturalDaysBetween,
   requestVacation, updateVacationPaid,
 } from '../../services/vacationsService'
 import { createNotification } from '../../services/notificationsService'
@@ -133,7 +133,7 @@ export default function VacacionesTab({ employee }: Props) {
 
   async function handleAdd() {
     if (!startDate || !endDate) return
-    const dias = workingDaysBetween(startDate, endDate)
+    const dias = naturalDaysBetween(startDate, endDate)
     await requestVacation(employee.id, type, startDate, endDate, dias, notes, false, paid)
     // Si lo crea el gestor, lo aprobamos automáticamente
     const refreshed = await fetchVacations(employee.id)
