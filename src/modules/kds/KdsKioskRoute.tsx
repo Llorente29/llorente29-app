@@ -1,6 +1,6 @@
 // src/modules/kds/KdsKioskRoute.tsx
 //
-// Modo KIOSCO del KDS — ruta pública /kds (la monta App.tsx ANTES de los gates
+// Modo KIOSCO del KDS — ruta pública /cocina-tv (la monta App.tsx ANTES de los gates
 // de sesión). FRONTERA DE TOKEN: no hay login; el dispositivo se identifica con
 // un token largo (kds_device.token). El token entra por ?token=XXX (se guarda en
 // localStorage para futuros arranques) o ya está guardado de una vinculación
@@ -43,7 +43,7 @@ export default function KdsKioskRoute() {
     if (fromUrl) {
       storeToken(fromUrl)
       // Limpia el token de la URL (evita que quede expuesto/compartido).
-      window.history.replaceState({}, '', '/kds')
+      window.history.replaceState({}, '', '/cocina-tv')
       setToken(fromUrl)
       return
     }

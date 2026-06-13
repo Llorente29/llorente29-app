@@ -8,7 +8,7 @@
 //
 // DOBLE PUERTA (sesión / token): todas las RPC del tablero aceptan un token de
 // dispositivo opcional. Desde la app con sesión → se llama SIN token (RLS). Desde
-// el kiosco (/kds?token=...) → se pasa el token a TODAS las RPC.
+// el kiosco (/cocina-tv?token=...) → se pasa el token a TODAS las RPC.
 //
 // Patrón calcado de salesDashboardService (rpc casteado) y goodsReceiptService
 // (from() acotado para tablas que aún no están en database.ts: kitchen_station,

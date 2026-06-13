@@ -80,12 +80,12 @@ export default function App() {
   if (location.pathname === '/acceso') {
     return <AccesoClaimPage />
   }
-  // Modo KIOSCO del KDS (frontera de token, sin sesión). Ruta pública /kds:
-  // el dispositivo se identifica con su token (?token= o localStorage) y la RPC
-  // kds_board deriva el local. Va ANTES de los gates de sesión/cuenta. NB: las
-  // rutas del Shell viven bajo /:slug/kds (no empiezan por '/kds'), así que este
-  // startsWith solo captura el kiosco público.
-  if (location.pathname.startsWith('/kds')) {
+  // Modo COCINA-TV del KDS (frontera de token, sin sesión). Ruta pública propia,
+  // separada del módulo KDS del Shell (/kds, /kds/ajustes) para no colisionar:
+  // el Shell monta los módulos en la raíz (/kds), así que el kiosco NO puede
+  // compartir ese prefijo. El dispositivo se identifica con su token (?token= o
+  // localStorage) y la RPC kds_board deriva el local. Va ANTES de los gates.
+  if (location.pathname.startsWith('/cocina-tv')) {
     return <KdsKioskRoute />
   }
   if (isPublicAuthRoute(location.pathname)) {

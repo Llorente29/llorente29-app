@@ -2,7 +2,7 @@
 //
 // Ajustes · Dispositivos / tablets. Crea un kds_device con token largo aleatorio
 // generado en cliente, asigna local + estaciones (station_ids; vacío = todas),
-// copia la URL del kiosco (/kds?token=...) y permite revocar (is_active=false).
+// copia la URL del kiosco (/cocina-tv?token=...) y permite revocar (is_active=false).
 // Muestra last_seen_at.
 
 import { useEffect, useMemo, useState } from 'react'
@@ -17,7 +17,7 @@ interface Props { accountId: string; locationId: string }
 
 function kioskUrl(token: string): string {
   const origin = typeof window !== 'undefined' ? window.location.origin : ''
-  return `${origin}/kds?token=${token}`
+  return `${origin}/cocina-tv?token=${token}`
 }
 
 function formatLastSeen(iso: string | null): string {

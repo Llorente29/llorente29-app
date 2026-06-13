@@ -4,7 +4,7 @@
 // carga las estaciones del local (para nombrar los grupos y ofrecer un filtro
 // manual) y monta el tablero reutilizable KdsBoard SIN token (RLS de sesión).
 //
-// El mismo KdsBoard se reutiliza en el kiosco (/kds) con token de dispositivo.
+// El mismo KdsBoard se reutiliza en el kiosco (/cocina-tv) con token de dispositivo.
 
 import { useEffect, useMemo, useState } from 'react'
 import { MapPin } from 'lucide-react'

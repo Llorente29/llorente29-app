@@ -4,8 +4,8 @@
 // Sigue el patrón canónico de kitchen/module.tsx.
 //
 // Dos pantallas dentro del Shell (sesión): el TABLERO (board) y los AJUSTES de
-// cocina. El kiosco público (/kds con token) NO va aquí: vive en App.tsx como
-// ruta pública (frontera de token), y reutiliza el mismo KdsBoard.
+// cocina. El kiosco público (/cocina-tv con token) NO va aquí: vive en App.tsx
+// como ruta pública (frontera de token), y reutiliza el mismo KdsBoard.
 
 import { MonitorPlay, SlidersHorizontal } from 'lucide-react'
 import type { ModuleDefinition } from '@/shell/types'
@@ -20,8 +20,9 @@ export const kdsModule: ModuleDefinition = {
   topBarOrder: 7,
   // Gating
   requiredRole: 'manager',
-  // Routing: rutas relativas al basePath 'kds' → /:slug/kds/<path>.
-  // (El kiosco público /kds —sin slug— lo resuelve App.tsx, no este routing.)
+  // Routing: el Shell monta los módulos en la RAÍZ (sin slug) → basePath 'kds'
+  // produce /kds (tablero) y /kds/ajustes. El kiosco público /cocina-tv lo
+  // resuelve App.tsx (ruta propia, fuera de este routing), no aquí.
   basePath: 'kds',
   routes: [
     { path: '',        element: <KdsBoardPage /> },
