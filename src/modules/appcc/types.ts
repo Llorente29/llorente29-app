@@ -40,6 +40,9 @@ export interface AppccTemplate {
   is_active: boolean
   requires_feature: string | null
   estimated_minutes: number | null
+  // Momento de asignación del control (motor de asignación v2):
+  //   opening | closing | fixed_time | any
+  assignment_moment: 'opening' | 'closing' | 'fixed_time' | 'any'
   created_at: string
   updated_at: string
 }

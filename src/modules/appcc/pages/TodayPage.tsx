@@ -15,6 +15,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { Location } from '@/types'
+import { fetchEmployees } from '@/services/supabaseSync'
 import { useApp } from '@/context/AppContext'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
@@ -29,7 +30,7 @@ import type {
   AppccTemplate,
   AppccPlan,
 } from '@/modules/appcc/types'
-import { Plus, X, ClipboardList, ArrowRight, AlertCircle } from 'lucide-react'
+import { Plus, X, ClipboardList, ArrowRight, AlertCircle, Users, UserCircle2 } from 'lucide-react'
 
 const STATUS_LABELS: Record<AppccExecutionStatus, string> = {
   pending: 'Pendiente',
@@ -70,6 +71,7 @@ export default function TodayPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showCatalog, setShowCatalog] = useState(false)
+  const [empNames, setEmpNames] = useState<Map<string, string>>(new Map())
 
   // El selector global de local manda cuando hay uno concreto; en consolidado
   // (resolvedLocationId null) cae a la auto-selección del primer local activo,
@@ -93,6 +95,18 @@ export default function TodayPage() {
       setTemplates(tpls)
     }).catch(err => {
       console.error('[TodayPage] Error cargando catálogo', err)
+    })
+  }, [])
+
+  // Nombres de empleados (para mostrar el responsable de cada control)
+  useEffect(() => {
+    fetchEmployees(null).then(emps => {
+      if (!emps) return
+      const m = new Map<string, string>()
+      for (const e of emps) m.set(e.id, e.name)
+      setEmpNames(m)
+    }).catch(err => {
+      console.error('[TodayPage] Error cargando empleados', err)
     })
   }, [])
 
@@ -329,6 +343,31 @@ export default function TodayPage() {
                     {plan?.name ?? 'Plan APPCC'}
                     {exec.scheduled_time ? ` · ${exec.scheduled_time.slice(0, 5)}` : ''}
                   </div>
+                  {(() => {
+                    const moment = tpl?.assignment_moment ?? 'any'
+                    if (exec.assigned_to) {
+                      return (
+                        <div className="text-sm mt-1 inline-flex items-center gap-1 text-text-secondary">
+                          <UserCircle2 size={14} className="shrink-0" />
+                          {empNames.get(exec.assigned_to) ?? 'Asignado'}
+                        </div>
+                      )
+                    }
+                    if (moment !== 'any') {
+                      // Control de apertura/cierre/hora fija sin nadie disponible: hueco real.
+                      return (
+                        <div className="text-sm mt-1 inline-flex items-center gap-1 text-danger font-medium">
+                          <AlertCircle size={14} className="shrink-0" /> Sin cubrir
+                        </div>
+                      )
+                    }
+                    // Control 'any': lo puede hacer cualquiera del turno (normal).
+                    return (
+                      <div className="text-sm mt-1 inline-flex items-center gap-1 text-text-secondary">
+                        <Users size={14} className="shrink-0" /> Cualquiera
+                      </div>
+                    )
+                  })()}
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
                   <span className={`text-xs px-2.5 py-1 rounded-sm font-medium ${STATUS_BADGE[exec.status]}`}>
