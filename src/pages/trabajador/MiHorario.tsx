@@ -6,10 +6,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   ArrowLeft, ChevronLeft, ChevronRight, RefreshCw, Globe2, Clock, FileText,
+  Users, Sun,
 } from 'lucide-react'
 import type { Employee, Location } from '../../types'
 import { listShiftTemplates, getSchedule } from '../../services/schedulerService'
-import { fetchLocations } from '../../services/supabaseSync'
+import { fetchLocations, fetchEmployees } from '../../services/supabaseSync'
 import {
   listSwapsForEmployee,
   cancelSwap,
@@ -17,6 +18,7 @@ import {
 import type { ShiftSwapRequest } from '../../types/shiftSwap'
 import MiBolsaHoras from '../../components/MiBolsaHoras'
 import SolicitarCambioModal from '../../components/trabajador/SolicitarCambioModal'
+import { fetchVacations } from '../../services/vacationsService'
 import {
   type ShiftTemplate,
   type Schedule,
@@ -25,6 +27,7 @@ import {
   getMondayOfWeek,
   toISODate,
   DAY_LABELS,
+  DAY_LABELS_SHORT,
 } from '../../types/scheduler'
 
 const DAYS: DayOfWeek[] = [0, 1, 2, 3, 4, 5, 6]
@@ -62,6 +65,7 @@ interface DayShift {
   end: string
   hours: number
   crossesMidnight: boolean
+  coworkers: string[]
 }
 
 export default function MiHorario({ employee, onBack }: MiHorarioProps) {
@@ -70,6 +74,8 @@ export default function MiHorario({ employee, onBack }: MiHorarioProps) {
   const [templates, setTemplates] = useState<ShiftTemplate[]>([])
   const [schedule, setSchedule] = useState<Schedule | null>(null)
   const [loading, setLoading] = useState(false)
+  const [vacationDates, setVacationDates] = useState<Set<string>>(new Set())
+  const [empNames, setEmpNames] = useState<Map<string, string>>(new Map())
   const [location, setLocation] = useState<Location | undefined>(undefined)
   const [swaps, setSwaps] = useState<ShiftSwapRequest[]>([])
   const [swapModalShift, setSwapModalShift] = useState<{
@@ -128,6 +134,43 @@ export default function MiHorario({ employee, onBack }: MiHorarioProps) {
     return () => { cancel = true }
   }, [employeeId])
 
+  // Cargar compañeros (para "con quién trabajas") y mis vacaciones aprobadas
+  useEffect(() => {
+    let cancel = false
+    async function load() {
+      const [emps, vacs] = await Promise.all([
+        fetchEmployees(null),
+        fetchVacations(employeeId),
+      ])
+      if (cancel) return
+      if (emps) {
+        const m = new Map<string, string>()
+        for (const e of emps) m.set(e.id, e.name)
+        setEmpNames(m)
+      }
+      if (vacs) {
+        const set = new Set<string>()
+        for (const v of vacs) {
+          if (v.status !== 'aprobada') continue
+          const [ey, em, ed] = v.endDate.split('-').map(Number)
+          const end = new Date(ey, em - 1, ed)
+          const [sy, sm, sd] = v.startDate.split('-').map(Number)
+          const cur = new Date(sy, sm - 1, sd)
+          while (cur <= end) {
+            const yy = cur.getFullYear()
+            const mm = String(cur.getMonth() + 1).padStart(2, '0')
+            const dd = String(cur.getDate()).padStart(2, '0')
+            set.add(`${yy}-${mm}-${dd}`)
+            cur.setDate(cur.getDate() + 1)
+          }
+        }
+        setVacationDates(set)
+      }
+    }
+    load()
+    return () => { cancel = true }
+  }, [employeeId])
+
   // Construir mis turnos por día
   const turnosPorDia = useMemo<Record<string, DayShift[]>>(() => {
     const out: Record<string, DayShift[]> = {}
@@ -145,11 +188,15 @@ export default function MiHorario({ employee, onBack }: MiHorarioProps) {
         const [eh, em] = end.split(':').map(Number)
         const crossesMidnight = (eh * 60 + em) <= (sh * 60 + sm)
         const hours = shiftDurationHours(start, end)
+        const coworkers = ids
+          .filter(id => id !== employeeId)
+          .map(id => empNames.get(id) || '—')
         if (!out[dayKey]) out[dayKey] = []
         out[dayKey].push({
           templateId: tid,
           label: t.label,
           start, end, hours, crossesMidnight,
+          coworkers,
         })
       }
     }
@@ -158,7 +205,7 @@ export default function MiHorario({ employee, onBack }: MiHorarioProps) {
       out[k].sort((a, b) => a.start.localeCompare(b.start))
     }
     return out
-  }, [schedule, templates, employeeId])
+  }, [schedule, templates, employeeId, empNames])
 
   const totalHoras = useMemo(() => {
     let sum = 0
@@ -264,6 +311,37 @@ export default function MiHorario({ employee, onBack }: MiHorarioProps) {
         </div>
       )}
 
+      {/* Tira semanal de un vistazo */}
+      {!loading && schedule && (
+        <div className="mx-4 mb-3 grid grid-cols-7 gap-1">
+          {DAYS.map(d => {
+            const dateISO = addDays(weekStart, d)
+            const has = (turnosPorDia[String(d)] || []).length > 0
+            const isVac = vacationDates.has(dateISO)
+            const isToday = String(d) === todayKey
+            return (
+              <div
+                key={d}
+                className={`rounded-lg py-1.5 text-center border ${isToday ? 'border-accent' : 'border-border-default'} ${has ? 'bg-accent-bg' : 'bg-card'}`}
+              >
+                <div className={`text-[10px] ${isToday ? 'text-accent font-bold' : 'text-text-secondary'}`}>
+                  {DAY_LABELS_SHORT[d]}
+                </div>
+                <div className="mt-0.5 flex items-center justify-center h-4">
+                  {isVac ? (
+                    <Sun size={12} className="text-warning" />
+                  ) : has ? (
+                    <span className="w-1.5 h-1.5 rounded-full bg-accent inline-block" />
+                  ) : (
+                    <span className="text-[10px] text-text-secondary">·</span>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
       {/* Bolsa de horas (si el empleado tiene visibilidad activa) */}
       <div className="mx-4 mb-3">
         <MiBolsaHoras employee={employee} location={location} />
@@ -277,6 +355,7 @@ export default function MiHorario({ employee, onBack }: MiHorarioProps) {
           const isToday = String(d) === todayKey
           const totalDia = turnos.reduce((acc, t) => acc + t.hours, 0)
           const libre = turnos.length === 0
+          const isVac = vacationDates.has(dateISO)
           return (
             <div
               key={d}
@@ -302,7 +381,13 @@ export default function MiHorario({ employee, onBack }: MiHorarioProps) {
               </div>
 
               {libre ? (
-                <div className="text-sm text-text-secondary italic">Libre</div>
+                isVac ? (
+                  <div className="text-sm text-warning inline-flex items-center gap-1.5">
+                    <Sun size={14} /> Vacaciones
+                  </div>
+                ) : (
+                  <div className="text-sm text-text-secondary italic">Libre</div>
+                )
               ) : (
                 <div className="space-y-1.5">
                   {turnos.map((t, i) => {
@@ -322,6 +407,11 @@ export default function MiHorario({ employee, onBack }: MiHorarioProps) {
                               <span className="ml-2 text-[10px] text-text-secondary">(cruza 00:00)</span>
                             )}
                             <div className="text-[11px] text-text-secondary">{t.label}</div>
+                            {t.coworkers.length > 0 && (
+                              <div className="text-[10px] text-text-secondary inline-flex items-center gap-1 mt-0.5">
+                                <Users size={10} /> {t.coworkers.join(', ')}
+                              </div>
+                            )}
                           </div>
                           <span className="text-xs font-mono text-text-primary">{t.hours}h</span>
                         </div>
