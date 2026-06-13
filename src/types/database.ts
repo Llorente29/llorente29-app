@@ -2221,6 +2221,7 @@ export type Database = {
       appcc_templates: {
         Row: {
           account_id: string | null
+          assignment_moment: string
           code: string
           created_at: string
           description: string | null
@@ -2235,6 +2236,7 @@ export type Database = {
         }
         Insert: {
           account_id?: string | null
+          assignment_moment?: string
           code: string
           created_at?: string
           description?: string | null
@@ -2249,6 +2251,7 @@ export type Database = {
         }
         Update: {
           account_id?: string | null
+          assignment_moment?: string
           code?: string
           created_at?: string
           description?: string | null
@@ -9872,6 +9875,10 @@ export type Database = {
       }
       adapt_lastapp_order: { Args: { p_sale_id: string }; Returns: number }
       appcc_mark_overdue: { Args: never; Returns: undefined }
+      apply_appcc_assignment_moments: {
+        Args: { p_account_id: string }
+        Returns: undefined
+      }
       apply_inventory_count: {
         Args: { p_count_id: string; p_user_id?: string; p_user_name?: string }
         Returns: {
@@ -10495,6 +10502,10 @@ export type Database = {
           recipe_items_creados: number
           vinculos_creados: number
         }[]
+      }
+      seed_vacation_settings_for_account: {
+        Args: { p_account_id: string }
+        Returns: undefined
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
