@@ -1,11 +1,17 @@
 // src/modules/kds/components/KdsTicketCard.tsx
 //
 // Una tarjeta = un ticket. Tema oscuro, alto contraste, objetivos táctiles
-// amplios (se ve en TV/tablet a distancia). Líneas agrupadas por estación + un
-// cajón "Sin estación" (líneas con station_id null mientras el ruteo no esté
-// sembrado). Por estación, un botón bump/recall. Marcado por plato a la
-// izquierda; tocar el NOMBRE abre el Cook Mode (los dos gestos no colisionan).
+// amplios (se ve en TV/tablet a distancia). Líneas agrupadas por estación. Por
+// estación, un botón bump/recall. Marcado por plato a la izquierda; tocar el
+// NOMBRE abre el Cook Mode (los dos gestos no colisionan). Pie de tarjeta: botón
+// "Servir" (bump del Pase) que cierra el ticket en cocina.
+//
+// Cajón "Sin estación": ahora el backend rutea las líneas sin familia a la
+// estación por defecto del local (default_station_id), así que con datos
+// normales NO aparece. Se conserva por ROBUSTEZ: si algún día faltara la default,
+// las líneas con station_id null siguen siendo visibles (no se pierden).
 
+import { useEffect, useRef, useState } from 'react'
 import { Check, ChefHat, Undo2, AlertTriangle } from 'lucide-react'
 import type { KdsTicket, KdsLine } from '../services/kdsService'
 import { ticketCode, channelLabel, timeLevel, timeChipClasses } from '../kdsUtils'
@@ -18,6 +24,9 @@ interface KdsTicketCardProps {
   stationNames: Record<string, string>
   /** Estaciones que este dispositivo muestra (null = todas). */
   stationFilter: string[] | null
+  /** Estación de Pase del local (board.expo_station_id). null → sin Pase
+   *  configurado: el botón Servir se deshabilita. */
+  expoStationId: string | null
   isNew: boolean
   busy: boolean
   onBump: (saleId: string, stationId: string) => void
@@ -60,12 +69,35 @@ function stationLabel(stationId: string, names: Record<string, string>): string 
 }
 
 export default function KdsTicketCard({
-  ticket, stationNames, stationFilter, isNew, busy,
+  ticket, stationNames, stationFilter, expoStationId, isNew, busy,
   onBump, onUnbump, onMarkLine, onOpenCook,
 }: KdsTicketCardProps) {
   const level = timeLevel(ticket.minutos)
   const groups = groupByStation(ticket, stationFilter)
   const channel = channelLabel(ticket.channel)
+
+  // Botón Servir con confirmación de DOS toques (anti-toque-fantasma): el 1er
+  // toque arma "¿Servir?" durante ~2 s; el 2º dentro de esa ventana confirma y
+  // hace bump del Pase (el ticket sale del board al refrescar). Sin modal.
+  const [confirming, setConfirming] = useState(false)
+  const timerRef = useRef<number | null>(null)
+  useEffect(() => () => { if (timerRef.current) window.clearTimeout(timerRef.current) }, [])
+
+  function handleServe() {
+    if (!expoStationId || busy) return
+    if (confirming) {
+      if (timerRef.current) window.clearTimeout(timerRef.current)
+      timerRef.current = null
+      setConfirming(false)
+      onBump(ticket.sale_id, expoStationId)
+      return
+    }
+    setConfirming(true)
+    timerRef.current = window.setTimeout(() => {
+      setConfirming(false)
+      timerRef.current = null
+    }, 2000)
+  }
 
   return (
     <article
@@ -175,6 +207,24 @@ export default function KdsTicketCard({
             </section>
           )
         })}
+      </div>
+
+      {/* Pie: Servir (cierra el ticket en cocina = bump del Pase) */}
+      <div className="p-2 border-t border-zinc-700 bg-zinc-900/40 mt-auto">
+        <button
+          disabled={busy || !expoStationId}
+          onClick={handleServe}
+          title={!expoStationId ? 'Configura una estación de Pase en Ajustes → Estaciones' : undefined}
+          className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg font-bold text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+            confirming
+              ? 'bg-amber-500 text-zinc-950 hover:bg-amber-400 ring-2 ring-amber-300 animate-pulse'
+              : 'bg-emerald-500 text-zinc-950 hover:bg-emerald-400'
+          }`}
+        >
+          {confirming
+            ? <>¿Servir? Toca otra vez</>
+            : <><Check size={16} /> Servir</>}
+        </button>
       </div>
     </article>
   )

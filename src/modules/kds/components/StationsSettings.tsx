@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react'
 import { Plus, Loader2, Check, X, Pencil } from 'lucide-react'
 import { Button, Input, Select, Badge } from '../../../components/ui'
 import {
-  listStations, createStation, updateStation,
+  listStations, createStation, updateStation, setDefaultStation,
   type KitchenStation, type StationKind,
 } from '../services/kdsService'
 
@@ -74,11 +74,22 @@ export default function StationsSettings({ accountId, locationId }: Props) {
     setEditId(null)
   }
 
+  // Fija la estación por defecto del local (UNA por local; el servicio hace el
+  // orden seguro false→true para no chocar con el índice único parcial).
+  async function handleSetDefault(id: string) {
+    setSaving(true)
+    try { await setDefaultStation(accountId, locationId, id); await load() }
+    catch (e: unknown) { setError(e instanceof Error ? e.message : 'Error fijando la estación por defecto') }
+    finally { setSaving(false) }
+  }
+
   return (
     <div className="space-y-4">
       <p className="text-sm text-text-secondary">
         Las estaciones organizan el tablero por puesto de cocina. Marca como <strong>Expo</strong> la
-        estación de pase: cuando se completa, el pedido se da por servido.
+        estación de pase: cuando se completa, el pedido se da por servido. El <strong>radio «por
+        defecto»</strong> (uno por local) recibe las líneas sin ruteo específico: esos platos se
+        preparan en esa estación.
       </p>
 
       {error && <div className="text-sm text-danger">{error}</div>}
@@ -129,9 +140,23 @@ export default function StationsSettings({ accountId, locationId }: Props) {
                 </>
               ) : (
                 <>
+                  <label
+                    className={`shrink-0 flex items-center ${s.isActive ? 'cursor-pointer' : 'opacity-40'}`}
+                    title={s.isActive ? 'Estación por defecto del local' : 'Activa la estación para poder ponerla por defecto'}
+                  >
+                    <input
+                      type="radio"
+                      name={`kds-default-${locationId}`}
+                      checked={s.isDefault}
+                      disabled={!s.isActive || saving}
+                      onChange={() => void handleSetDefault(s.id)}
+                      className="w-4 h-4 accent-accent"
+                    />
+                  </label>
                   <span className={`flex-1 font-medium ${s.isActive ? 'text-text-primary' : 'text-text-secondary line-through'}`}>
                     {s.name}
                   </span>
+                  {s.isDefault && <Badge color="blue">Por defecto</Badge>}
                   <Badge color={s.kind === 'expo' ? 'violet' : 'gray'}>
                     {s.kind === 'expo' ? 'Expo / Pase' : 'Preparación'}
                   </Badge>

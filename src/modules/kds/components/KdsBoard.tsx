@@ -209,6 +209,7 @@ export default function KdsBoard({
                 ticket={ticket}
                 stationNames={resolvedStationNames}
                 stationFilter={effectiveFilter}
+                expoStationId={board?.expo_station_id ?? null}
                 isNew={newIds.has(ticket.sale_id)}
                 busy={busy}
                 onBump={handleBump}

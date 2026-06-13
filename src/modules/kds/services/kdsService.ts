@@ -74,6 +74,8 @@ export interface KdsBoardStation {
   name: string
   kind: StationKind
   display_order: number
+  /** Estación por defecto del local (las líneas sin ruteo caen aquí). */
+  is_default: boolean
 }
 
 export interface KdsTicket {
@@ -93,6 +95,12 @@ export interface KdsBoard {
   location_id: string
   station_filter: string[] | null
   now: string
+  /** Estación por defecto del local: las líneas sin ruteo específico caen aquí
+   *  (ya no en station_id null). null si el local no tiene default configurada. */
+  default_station_id: string | null
+  /** Estación de Pase (expo) del local: la que sirve el botón "Servir". null si
+   *  el local no tiene estación de Pase → el botón Servir se deshabilita. */
+  expo_station_id: string | null
   /** Estaciones de la ubicación (para nombrar grupos sin sesión en el kiosco). */
   stations: KdsBoardStation[]
   tickets: KdsTicket[]
@@ -207,6 +215,9 @@ export interface KitchenStation {
   kind: StationKind
   displayOrder: number
   isActive: boolean
+  /** Estación por defecto del local (UNA por local). Las líneas de plato sin
+   *  ruteo específico se preparan aquí. */
+  isDefault: boolean
 }
 
 function rowToStation(r: Row): KitchenStation {
@@ -218,6 +229,7 @@ function rowToStation(r: Row): KitchenStation {
     kind: (r.kind as StationKind) ?? 'prep',
     displayOrder: (r.display_order as number) ?? 0,
     isActive: Boolean(r.is_active),
+    isDefault: Boolean(r.is_default),
   }
 }
 
@@ -269,6 +281,23 @@ export async function updateStation(
   if (patch.isActive !== undefined) update.is_active = patch.isActive
   const { error } = await from('kitchen_station').update(update).eq('id', id)
   if (error) throw new Error(`KDS · updateStation: ${error.message}`)
+}
+
+/** Fija la estación por defecto del local. UNA por local (índice único parcial
+ *  where is_default en el backend). ATÓMICO vía RPC: kds_set_default_station
+ *  hace el swap (quitar el anterior + poner el nuevo) en una sola transacción,
+ *  sin la ventana de "cero defaults" de dos UPDATE sueltos. La cuenta la deriva
+ *  la RPC de la estación → accountId queda sin usar (firma intacta para no tocar
+ *  el componente que la llama). */
+export async function setDefaultStation(
+  _accountId: string,
+  locationId: string,
+  stationId: string
+): Promise<void> {
+  await rpc<void>('kds_set_default_station', {
+    p_location_id: locationId,
+    p_station_id: stationId,
+  })
 }
 
 // ── Familias de plato (recipe_family scope='dish') ──────────────────────────
