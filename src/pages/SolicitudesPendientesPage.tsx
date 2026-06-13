@@ -1,13 +1,14 @@
 // src/pages/SolicitudesPendientesPage.tsx
 // Panel del gestor con todas las solicitudes pendientes de aprobar.
 import { useState, useEffect } from 'react'
-import { Clock, Check, FileText, CheckCircle2, Inbox, AlertTriangle, MessageSquare, X } from 'lucide-react'
+import { Clock, Check, FileText, CheckCircle2, Inbox, AlertTriangle, MessageSquare, X, Settings, Lock } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { Card, Button } from '../components/ui'
-import type { VacationRequest, VacationStatus } from '../types/personal'
-import { VACATION_TYPES } from '../types/personal'
+import type { VacationRequest, VacationStatus, VacationType, VacationSettings } from '../types/personal'
+import { VACATION_TYPES, ALWAYS_AVAILABLE_VACATION_TYPE } from '../types/personal'
 import {
   fetchPendingVacations, fetchVacations, reviewVacation,
+  fetchVacationSettings, updateDisabledRequestTypes,
 } from '../services/vacationsService'
 import { isSupabaseEnabled } from '../lib/supabase'
 import { supabase } from '../lib/supabase'
@@ -21,6 +22,12 @@ export default function SolicitudesPendientesPage() {
   const [loading, setLoading] = useState(true)
   const [reviewModal, setReviewModal] = useState<{ vac: VacationRequest; action: 'aprobar' | 'rechazar' } | null>(null)
   const [reviewNotes, setReviewNotes] = useState('')
+
+  // Configuración: tipos de ausencia que los empleados pueden solicitar.
+  const [settings, setSettings] = useState<VacationSettings | null>(null)
+  const [showSettings, setShowSettings] = useState(false)
+  const [savingType, setSavingType] = useState<VacationType | null>(null)
+  const [settingsError, setSettingsError] = useState('')
 
   async function load() {
     setLoading(true)
@@ -38,6 +45,17 @@ export default function SolicitudesPendientesPage() {
   }
 
   useEffect(() => { load() }, [filter])
+
+  // Cargar la configuración global una sola vez.
+  useEffect(() => {
+    let cancelled = false
+    fetchVacationSettings().then(list => {
+      if (cancelled) return
+      const global = (list || []).find(s => s.scope === 'global')
+      setSettings(global || null)
+    })
+    return () => { cancelled = true }
+  }, [])
 
   // Realtime: refrescar cuando cambian las vacaciones
   useEffect(() => {
@@ -91,6 +109,22 @@ export default function SolicitudesPendientesPage() {
     await load()
   }
 
+  // Activar/desactivar un tipo en el selector del trabajador (lista negra).
+  async function toggleType(t: VacationType, enabled: boolean) {
+    if (t === ALWAYS_AVAILABLE_VACATION_TYPE) return // núcleo, no se apaga
+    setSettingsError('')
+    const current = settings?.requestTypesDisabled ?? []
+    const next = enabled ? current.filter(x => x !== t) : Array.from(new Set([...current, t]))
+    setSavingType(t)
+    const ok = await updateDisabledRequestTypes(next)
+    if (ok && settings) {
+      setSettings({ ...settings, requestTypesDisabled: next })
+    } else if (!ok) {
+      setSettingsError('No se pudo guardar. Revisa que exista la configuración global de vacaciones.')
+    }
+    setSavingType(null)
+  }
+
   function statusBadge(s: VacationStatus) {
     const map = {
       solicitada: { label: 'Pendiente', cls: 'bg-warning-bg text-warning' },
@@ -111,27 +145,36 @@ export default function SolicitudesPendientesPage() {
     : null
   const reviewMinStaffWarning = reviewStaffInfo && reviewStaffInfo.afterApproval < 2
 
+  const disabledTypes = settings?.requestTypesDisabled ?? []
+
   return (
     <div className="space-y-4">
-      {/* Tabs */}
-      <div className="flex items-center gap-2">
-        {([
-          { id: 'pendientes' as FilterTab, label: 'Pendientes', Icon: Clock },
-          { id: 'aprobadas' as FilterTab,  label: 'Aprobadas',  Icon: Check },
-          { id: 'todas' as FilterTab,      label: 'Todas',      Icon: FileText },
-        ]).map(t => {
-          const TabIcon = t.Icon
-          return (
-            <button key={t.id} onClick={() => setFilter(t.id)}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-base ${
-                filter === t.id
-                  ? 'bg-accent text-text-on-accent'
-                  : 'bg-card border border-border-default text-text-secondary hover:border-accent'
-              }`}>
-              <TabIcon size={14} /> {t.label}
-            </button>
-          )
-        })}
+      {/* Tabs + ajustes */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          {([
+            { id: 'pendientes' as FilterTab, label: 'Pendientes', Icon: Clock },
+            { id: 'aprobadas' as FilterTab,  label: 'Aprobadas',  Icon: Check },
+            { id: 'todas' as FilterTab,      label: 'Todas',      Icon: FileText },
+          ]).map(t => {
+            const TabIcon = t.Icon
+            return (
+              <button key={t.id} onClick={() => setFilter(t.id)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-base ${
+                  filter === t.id
+                    ? 'bg-accent text-text-on-accent'
+                    : 'bg-card border border-border-default text-text-secondary hover:border-accent'
+                }`}>
+                <TabIcon size={14} /> {t.label}
+              </button>
+            )
+          })}
+        </div>
+        <button onClick={() => { setShowSettings(true); setSettingsError('') }}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium bg-card border border-border-default text-text-secondary hover:border-accent transition-base"
+          title="Configurar qué pueden solicitar los empleados">
+          <Settings size={14} /> Ajustes
+        </button>
       </div>
 
       {loading ? (
@@ -257,6 +300,73 @@ export default function SolicitudesPendientesPage() {
                 {reviewModal.action === 'aprobar' ? 'Aprobar' : 'Rechazar'}
               </Button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal ajustes: tipos que los empleados pueden solicitar */}
+      {showSettings && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-card rounded-xl max-w-md w-full p-5 max-h-[90vh] overflow-y-auto">
+            <p className="font-bold text-lg inline-flex items-center gap-1.5 text-text-primary">
+              <Settings size={18} className="text-accent" /> Tipos que pueden solicitar
+            </p>
+            <p className="text-xs text-text-secondary mt-1 mb-4">
+              Elige qué tipos de ausencia ven tus empleados al solicitar desde el portal.
+              Lo que apagues deja de aparecer en su selector; no afecta a solicitudes ya
+              hechas, y tú puedes seguir registrando cualquier tipo manualmente.
+            </p>
+
+            {settingsError && (
+              <div className="bg-danger-bg border border-danger/30 rounded-lg p-2 mb-3 text-xs text-danger">
+                {settingsError}
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              {VACATION_TYPES.map(t => {
+                const isCore = t.id === ALWAYS_AVAILABLE_VACATION_TYPE
+                const enabled = isCore || !disabledTypes.includes(t.id)
+                const saving = savingType === t.id
+                return (
+                  <label key={t.id}
+                    className={`flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg border transition-base ${
+                      isCore
+                        ? 'border-border-default bg-page cursor-default'
+                        : 'border-border-default hover:border-accent cursor-pointer'
+                    }`}>
+                    <span className="text-sm text-text-primary inline-flex items-center gap-1.5">
+                      {t.label}
+                      {isCore && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-accent-bg text-text-secondary">
+                          <Lock size={10} /> Siempre disponible
+                        </span>
+                      )}
+                    </span>
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 rounded accent-accent disabled:opacity-60"
+                      checked={enabled}
+                      disabled={isCore || saving || !settings}
+                      onChange={e => toggleType(t.id, e.target.checked)}
+                    />
+                  </label>
+                )
+              })}
+            </div>
+
+            {!settings && (
+              <p className="text-[11px] text-text-secondary mt-3">
+                No se ha podido cargar la configuración global de vacaciones.
+              </p>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setShowSettings(false)}
+              className="w-full mt-4 py-2.5 rounded-lg text-sm font-medium bg-accent text-text-on-accent hover:bg-accent-hover transition-base">
+              Hecho
+            </button>
           </div>
         </div>
       )}

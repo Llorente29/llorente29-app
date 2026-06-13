@@ -47,6 +47,12 @@ export interface VacationSettings {
   asuntosPropiosPerYear: number     // default 3
   minStaffPerLocation: number       // default 2
   minLeadDays: number               // default 30
+  // LISTA NEGRA: tipos de ausencia que el trabajador NO puede solicitar desde el
+  // portal. Vacío = todos visibles. 'vacaciones' nunca debe aparecer aquí
+  // (es núcleo, siempre disponible — ver ALWAYS_AVAILABLE_VACATION_TYPE).
+  // Solo afecta al selector del trabajador; el gestor sigue pudiendo registrar
+  // cualquier tipo manualmente.
+  requestTypesDisabled: VacationType[]
   createdAt: string
   updatedAt: string
 }
@@ -60,6 +66,11 @@ export const VACATION_TYPES: { id: VacationType; label: string; descontable: boo
   { id: 'permiso_mudanza',      label: 'Mudanza',                descontable: false, defaultPaid: true  },
   { id: 'otro',                 label: 'Otro permiso',           descontable: false, defaultPaid: false },
 ]
+
+// 'vacaciones' es NÚCLEO: siempre disponible para el trabajador y no se puede
+// apagar desde la configuración. El selector del trabajador y el panel de
+// configuración del gestor comparten esta constante para no desincronizarse.
+export const ALWAYS_AVAILABLE_VACATION_TYPE: VacationType = 'vacaciones'
 
 export const DOCUMENT_TYPES: { id: string; label: string; icon: string }[] = [
   { id: 'nomina',             label: 'Nómina',              icon: '💰' },

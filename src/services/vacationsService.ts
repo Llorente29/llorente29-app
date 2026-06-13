@@ -136,6 +136,7 @@ interface SettingsRow {
   asuntos_propios_per_year: number
   min_staff_per_location: number
   min_lead_days: number
+  request_types_disabled: string[] | null
   created_at: string
   updated_at: string
 }
@@ -149,6 +150,7 @@ function rowToSettings(r: SettingsRow): VacationSettings {
     asuntosPropiosPerYear: Number(r.asuntos_propios_per_year),
     minStaffPerLocation: r.min_staff_per_location,
     minLeadDays: r.min_lead_days,
+    requestTypesDisabled: (r.request_types_disabled ?? []) as VacationType[],
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   }
@@ -173,6 +175,24 @@ export async function updateGlobalSettings(
     updated_at: new Date().toISOString(),
   }).eq('scope', 'global')
   if (error) { console.error('updateGlobalSettings:', error); return false }
+  return true
+}
+
+// Actualiza la LISTA NEGRA de tipos que el trabajador no puede solicitar.
+// Vive en la fila scope='global' (mismo modelo que updateGlobalSettings).
+// Devuelve false si no existe esa fila (no la crea: sería un hueco de semilla
+// a resolver aparte) o si hay error, para no dar por guardado lo que no se guardó.
+export async function updateDisabledRequestTypes(disabled: VacationType[]): Promise<boolean> {
+  if (!supabase) return false
+  const { data, error } = await supabase.from('vacation_settings').update({
+    request_types_disabled: disabled,
+    updated_at: new Date().toISOString(),
+  }).eq('scope', 'global').select('id')
+  if (error) { console.error('updateDisabledRequestTypes:', error); return false }
+  if (!data || data.length === 0) {
+    console.warn('updateDisabledRequestTypes: no existe fila scope=global; no se guardó nada')
+    return false
+  }
   return true
 }
 

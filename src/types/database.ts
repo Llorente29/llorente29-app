@@ -8177,6 +8177,7 @@ export type Database = {
           paid: number | null
           payment_method: string | null
           raw_products: string | null
+          raw_tab: string | null
           refund_amount: number | null
           service_type: string | null
           sold_at: string
@@ -8206,6 +8207,7 @@ export type Database = {
           paid?: number | null
           payment_method?: string | null
           raw_products?: string | null
+          raw_tab?: string | null
           refund_amount?: number | null
           service_type?: string | null
           sold_at: string
@@ -8235,6 +8237,7 @@ export type Database = {
           paid?: number | null
           payment_method?: string | null
           raw_products?: string | null
+          raw_tab?: string | null
           refund_amount?: number | null
           service_type?: string | null
           sold_at?: string
@@ -9884,6 +9887,7 @@ export type Database = {
           id: string
           min_lead_days: number
           min_staff_per_location: number
+          request_types_disabled: string[]
           scope: string
           updated_at: string
           vacation_days_per_year: number
@@ -9895,6 +9899,7 @@ export type Database = {
           id?: string
           min_lead_days?: number
           min_staff_per_location?: number
+          request_types_disabled?: string[]
           scope?: string
           updated_at?: string
           vacation_days_per_year?: number
@@ -9906,6 +9911,7 @@ export type Database = {
           id?: string
           min_lead_days?: number
           min_staff_per_location?: number
+          request_types_disabled?: string[]
           scope?: string
           updated_at?: string
           vacation_days_per_year?: number
@@ -10540,6 +10546,27 @@ export type Database = {
           units_sold: number
         }[]
       }
+      migrate_brands_and_map: {
+        Args: { p_dest: string; p_run?: boolean; p_source: string }
+        Returns: {
+          n: number
+          paso: string
+        }[]
+      }
+      migrate_kitchen_core: {
+        Args: { p_dest: string; p_run?: boolean; p_source: string }
+        Returns: {
+          n: number
+          paso: string
+        }[]
+      }
+      migrate_locations_and_staff: {
+        Args: { p_dest: string; p_run?: boolean; p_source: string }
+        Returns: {
+          n: number
+          paso: string
+        }[]
+      }
       next_folvy_code: {
         Args: { p_account_id: string; p_type: string }
         Returns: string
@@ -10659,30 +10686,23 @@ export type Database = {
           resolved: number
         }[]
       }
+      resolve_sale_brand_from_map: {
+        Args: { p_sale_id: string }
+        Returns: undefined
+      }
       resolve_unmapped_sales: {
         Args: {
           p_account_id: string
           p_action: string
+          p_brand_id?: string
           p_product_name: string
           p_reason?: string
-          p_brand_id?: string
         }
         Returns: {
           brand_id: string
           lineas_afectadas: number
           menu_item_id: string
           recipe_item_id: string
-          resultado: string
-        }[]
-      }
-      unignore_unmapped_sales: {
-        Args: {
-          p_account_id: string
-          p_product_name: string
-          p_brand_id?: string
-        }
-        Returns: {
-          lineas_afectadas: number
           resultado: string
         }[]
       }
@@ -10735,6 +10755,18 @@ export type Database = {
               semaphore: string
             }[]
           }
+      sales_dashboard: {
+        Args: {
+          p_account_id: string
+          p_brand_id?: string
+          p_channel?: string
+          p_from?: string
+          p_location_id?: string
+          p_ownership?: string
+          p_to?: string
+        }
+        Returns: Json
+      }
       sales_mapping_reliability: {
         Args: { p_account_id: string; p_from?: string; p_to?: string }
         Returns: {
@@ -10761,6 +10793,13 @@ export type Database = {
         Args: { p_account_id: string }
         Returns: undefined
       }
+      seed_catalog_from_lastapp: {
+        Args: { p_account_id: string }
+        Returns: {
+          saltados_sin_marca: number
+          sembrados: number
+        }[]
+      }
       seed_lastapp_catalog: {
         Args: { p_account_id: string }
         Returns: {
@@ -10780,6 +10819,17 @@ export type Database = {
         }[]
       }
       unaccent: { Args: { "": string }; Returns: string }
+      unignore_unmapped_sales: {
+        Args: {
+          p_account_id: string
+          p_brand_id?: string
+          p_product_name: string
+        }
+        Returns: {
+          lineas_afectadas: number
+          resultado: string
+        }[]
+      }
       vat_rate_for: {
         Args: { p_category_id: string; p_date: string }
         Returns: {

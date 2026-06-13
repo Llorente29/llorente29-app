@@ -4,7 +4,7 @@ import { ArrowLeft, Plus, Sun } from 'lucide-react'
 import { Card } from '../../components/ui'
 import type { Employee } from '../../types'
 import type { VacationRequest, VacationType, VacationSettings } from '../../types/personal'
-import { VACATION_TYPES } from '../../types/personal'
+import { VACATION_TYPES, ALWAYS_AVAILABLE_VACATION_TYPE } from '../../types/personal'
 import {
   fetchVacations, requestVacation, cancelVacation,
   fetchVacationSettings, workingDaysBetween, leadDays, availableDays,
@@ -43,6 +43,18 @@ export default function MisVacaciones({ employee, onBack }: Props) {
 
   useEffect(() => { load() }, [employee.id])
 
+  // Tipos que el trabajador PUEDE solicitar: todos los del catálogo menos los
+  // deshabilitados por el gestor. 'vacaciones' es núcleo y siempre se muestra,
+  // aunque por error estuviera en la lista negra. Si los ajustes aún cargan
+  // (settings null), la lista negra es vacía → se muestran todos (no ocultamos
+  // nada por error mientras carga).
+  const availableTypes = useMemo(() => {
+    const disabled = settings?.requestTypesDisabled ?? []
+    return VACATION_TYPES.filter(
+      t => t.id === ALWAYS_AVAILABLE_VACATION_TYPE || !disabled.includes(t.id)
+    )
+  }, [settings])
+
   // Saldos
   const saldoVacaciones = useMemo(() => {
     if (!settings) return null
@@ -59,6 +71,12 @@ export default function MisVacaciones({ employee, onBack }: Props) {
   const lead = startDate ? leadDays(startDate) : 0
   const minLead = settings?.minLeadDays || 30
   const leadAlert = startDate && lead < minLead
+
+  function openRequest() {
+    // Asegurar que el tipo seleccionado es uno disponible (por defecto vacaciones).
+    setType(availableTypes.some(t => t.id === type) ? type : ALWAYS_AVAILABLE_VACATION_TYPE)
+    setShowRequest(true)
+  }
 
   async function handleSubmit() {
     if (!startDate || !endDate) { setError('Indica fechas de inicio y fin'); return }
@@ -107,7 +125,7 @@ export default function MisVacaciones({ employee, onBack }: Props) {
             <p className="text-xs text-text-secondary uppercase tracking-wide">Mis vacaciones</p>
             <p className="font-bold text-text-primary">{employee.name.split(' ')[0]}</p>
           </div>
-          <button onClick={() => setShowRequest(true)}
+          <button onClick={openRequest}
             className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-accent text-text-on-accent text-xs font-medium hover:bg-accent-hover transition-base">
             <Plus size={12} /> Solicitar
           </button>
@@ -191,7 +209,7 @@ export default function MisVacaciones({ employee, onBack }: Props) {
               <label className="text-xs text-text-secondary block mb-1">Tipo</label>
               <select value={type} onChange={e => setType(e.target.value as VacationType)}
                 className="w-full border border-border-default rounded-lg px-3 py-2 text-sm bg-card mb-3">
-                {VACATION_TYPES.map(t => (
+                {availableTypes.map(t => (
                   <option key={t.id} value={t.id}>{t.label}</option>
                 ))}
               </select>
