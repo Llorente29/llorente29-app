@@ -20,6 +20,7 @@ import { ventasModule } from '@/modules/ventas/module'
 import { kitchenModule } from '@/modules/kitchen/module'
 import { integrationsModule } from '@/modules/integrations/module'
 import { supplyModule } from '@/modules/supply/module'
+import { kdsModule } from '@/modules/kds/module'
 
 export const moduleRegistry: ModuleDefinition[] = [
   personalModule,     // G-8.4 (Folvy Team, topBarOrder 1)
@@ -28,6 +29,7 @@ export const moduleRegistry: ModuleDefinition[] = [
   kitchenModule,      //       (Folvy Kitchen, topBarOrder 4)
   integrationsModule, //       (Folvy Connect, topBarOrder 5)
   supplyModule,       //       (Folvy Supply, topBarOrder 6) — aprovisionamiento / MRP II
+  kdsModule,          //       (Folvy KDS, topBarOrder 7) — tablero de cocina + ajustes
 ]
 
 /** Devuelve los módulos ordenados por su posición en el TopBar. */
