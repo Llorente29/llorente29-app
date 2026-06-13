@@ -55,15 +55,10 @@ export default function MisVacaciones({ employee, onBack }: Props) {
     )
   }, [settings])
 
-  // Saldos
+  // Saldo
   const saldoVacaciones = useMemo(() => {
     if (!settings) return null
     return availableDays(employee, vacations, 'vacaciones', settings.vacationDaysPerYear)
-  }, [vacations, settings, employee])
-
-  const saldoAsuntos = useMemo(() => {
-    if (!settings) return null
-    return availableDays(employee, vacations, 'asuntos_propios', settings.asuntosPropiosPerYear)
   }, [vacations, settings, employee])
 
   // Validaciones del form
@@ -137,17 +132,12 @@ export default function MisVacaciones({ employee, onBack }: Props) {
           </Card>
         ) : (
           <>
-            {/* Saldos */}
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              <Card className="p-3 text-center">
+            {/* Saldo */}
+            <div className="mb-4">
+              <Card className="p-4 text-center">
                 <p className="text-[10px] text-text-secondary uppercase tracking-wide">Vacaciones</p>
-                <p className="text-2xl font-bold text-success mt-1">{saldoVacaciones?.available.toFixed(1) || '-'}</p>
-                <p className="text-[10px] text-text-secondary">de {saldoVacaciones?.prorrateado.toFixed(1) || '-'} días</p>
-              </Card>
-              <Card className="p-3 text-center">
-                <p className="text-[10px] text-text-secondary uppercase tracking-wide">Asuntos propios</p>
-                <p className="text-2xl font-bold text-accent mt-1">{saldoAsuntos?.available.toFixed(1) || '-'}</p>
-                <p className="text-[10px] text-text-secondary">de {saldoAsuntos?.prorrateado.toFixed(1) || '-'} días</p>
+                <p className="text-3xl font-bold text-success mt-1">{saldoVacaciones?.available.toFixed(1) || '-'}</p>
+                <p className="text-[10px] text-text-secondary">de {saldoVacaciones?.prorrateado.toFixed(1) || '-'} días disponibles</p>
               </Card>
             </div>
 
