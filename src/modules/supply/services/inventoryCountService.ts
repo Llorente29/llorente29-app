@@ -63,6 +63,12 @@ export interface InventoryCountLine {
   abcClass: 'A' | 'B' | 'C' | null
   withinTolerance: boolean | null
   reasonCode: string | null
+  // Coste/familia del artículo (para € por línea y filtro por familia).
+  unitCost: number | null          // computed_cost: coste por unidad base (€/unidad base)
+  familyId: string | null
+  familyName: string | null
+  needsReview: boolean             // recipe_item.needs_review (pendiente de revisar)
+  lineValue: number | null         // counted_qty × unitCost (€), null si falta alguno
 }
 
 export interface InventoryCountSummary {
@@ -179,15 +185,29 @@ export async function listCountLines(countId: string): Promise<InventoryCountLin
     .select(`
       id, recipe_item_id, storage_area_id, position, system_qty, counted_qty,
       variance_qty, variance_pct, variance_value, abc_class, within_tolerance, reason_code,
-      recipe_item:recipe_item_id ( name, kitchen_unit:base_unit_id ( abbreviation ) ),
+      recipe_item:recipe_item_id (
+        name, computed_cost, family_id, needs_review,
+        kitchen_unit:base_unit_id ( abbreviation ),
+        recipe_family:family_id ( name )
+      ),
       storage_area:storage_area_id ( name )
     `)
     .eq('inventory_count_id', countId)
     .order('position', { ascending: true })
   if (error) throw new Error(`Error cargando las líneas: ${error.message}`)
   return ((data as Row[] | null) ?? []).map(r => {
-    const item = (r.recipe_item ?? null) as { name?: string; kitchen_unit?: { abbreviation?: string } | null } | null
+    const item = (r.recipe_item ?? null) as {
+      name?: string
+      computed_cost?: number | null
+      family_id?: string | null
+      needs_review?: boolean | null
+      kitchen_unit?: { abbreviation?: string } | null
+      recipe_family?: { name?: string } | null
+    } | null
     const area = (r.storage_area ?? null) as { name?: string } | null
+    const countedQty = (r.counted_qty as number | null) ?? null
+    const unitCost = (item?.computed_cost as number | null) ?? null
+    const lineValue = (countedQty !== null && unitCost !== null) ? countedQty * unitCost : null
     return {
       id: r.id as string,
       recipeItemId: r.recipe_item_id as string,
@@ -197,13 +217,18 @@ export async function listCountLines(countId: string): Promise<InventoryCountLin
       storageAreaName: area?.name ?? null,
       position: Number(r.position ?? 0),
       systemQty: (r.system_qty as number | null) ?? null,
-      countedQty: (r.counted_qty as number | null) ?? null,
+      countedQty,
       varianceQty: (r.variance_qty as number | null) ?? null,
       variancePct: (r.variance_pct as number | null) ?? null,
       varianceValue: (r.variance_value as number | null) ?? null,
       abcClass: (r.abc_class as 'A' | 'B' | 'C' | null) ?? null,
       withinTolerance: (r.within_tolerance as boolean | null) ?? null,
       reasonCode: (r.reason_code as string | null) ?? null,
+      unitCost,
+      familyId: (item?.family_id as string | null) ?? null,
+      familyName: item?.recipe_family?.name ?? null,
+      needsReview: Boolean(item?.needs_review),
+      lineValue,
     }
   })
 }

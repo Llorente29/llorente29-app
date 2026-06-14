@@ -14,7 +14,7 @@
 // variación.
 
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, Loader2, Check, AlertTriangle, Save, ShieldCheck, Flag } from 'lucide-react'
+import { ArrowLeft, Loader2, Check, AlertTriangle, Save, ShieldCheck, Flag, Search, X } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import {
   getInventoryCount,
@@ -55,6 +55,11 @@ export default function InventoryCountSheet({
   const [approving, setApproving] = useState(false)
   const [approved, setApproved] = useState<{ adjustments: number; itemsRecomputed: number } | null>(null)
 
+  // Buscador + filtros (operatividad con muchas líneas).
+  const [query, setQuery] = useState('')
+  const [quick, setQuick] = useState<'all' | 'uncounted' | 'out' | 'review'>('all')
+  const [familyFilter, setFamilyFilter] = useState<string>('') // '' = todas, '__none__' = sin familia
+
   const { userProfile, authUserId } = useApp()
   const role = userProfile?.role ?? 'worker'
   const canApprove = role === 'admin' || role === 'manager'
@@ -79,11 +84,44 @@ export default function InventoryCountSheet({
   const isReview = count?.status === 'en_revision' || count?.status === 'aprobado'
   const isOpening = count?.isOpening === true
 
-  // Agrupar por área en orden de recorrido.
+  // Familias presentes en el conteo (para el filtro).
+  const familyOptions = useMemo(() => {
+    const m = new Map<string, string>()
+    let hasNone = false
+    for (const l of lines) {
+      if (l.familyId) m.set(l.familyId, l.familyName ?? 'Familia')
+      else hasNone = true
+    }
+    const opts = Array.from(m, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name))
+    if (hasNone) opts.push({ id: '__none__', name: 'Sin familia' })
+    return opts
+  }, [lines])
+
+  // Líneas visibles tras buscador + filtros rápidos + familia.
+  const visibleLines = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return lines.filter(l => {
+      if (q && !l.itemName.toLowerCase().includes(q)) return false
+      if (quick === 'uncounted' && l.countedQty !== null) return false
+      if (quick === 'out' && l.withinTolerance !== false) return false
+      if (quick === 'review' && !l.needsReview) return false
+      if (familyFilter === '__none__' && l.familyId) return false
+      if (familyFilter && familyFilter !== '__none__' && l.familyId !== familyFilter) return false
+      return true
+    })
+  }, [lines, query, quick, familyFilter])
+
+  // Valor total (€) de las líneas visibles que tienen coste.
+  const visibleValue = useMemo(
+    () => visibleLines.reduce((s, l) => s + (l.lineValue ?? 0), 0),
+    [visibleLines],
+  )
+
+  // Agrupar por área en orden de recorrido (sobre las visibles).
   const grouped = useMemo(() => {
     const groups: { areaId: string | null; areaName: string; lines: InventoryCountLine[] }[] = []
     const byArea = new Map<string, number>()
-    for (const l of lines) {
+    for (const l of visibleLines) {
       const key = l.storageAreaId ?? '__none__'
       if (!byArea.has(key)) {
         byArea.set(key, groups.length)
@@ -92,7 +130,7 @@ export default function InventoryCountSheet({
       groups[byArea.get(key)!].lines.push(l)
     }
     return groups
-  }, [lines])
+  }, [visibleLines])
 
   async function onCountedChange(line: InventoryCountLine, value: string) {
     const parsed = value.trim() === '' ? null : Number(value.replace(',', '.'))
@@ -228,9 +266,60 @@ export default function InventoryCountSheet({
         </div>
       )}
 
+      {/* Buscador + filtros + valor (operatividad) */}
+      {lines.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-tertiary" />
+              <input
+                type="text" value={query} onChange={e => setQuery(e.target.value)}
+                placeholder="Buscar artículo…"
+                className="w-full pl-8 pr-8 py-2 text-sm border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+              />
+              {query && (
+                <button type="button" onClick={() => setQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-text-tertiary hover:text-text-primary">
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+            {familyOptions.length > 0 && (
+              <select value={familyFilter} onChange={e => setFamilyFilter(e.target.value)}
+                className="px-2.5 py-2 text-sm border border-border-default rounded-md bg-card text-text-primary">
+                <option value="">Todas las familias</option>
+                {familyOptions.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+              </select>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {([
+              ['all', 'Todas'],
+              ['uncounted', 'Sin contar'],
+              ...(isReview && !isOpening ? [['out', 'Fuera de tolerancia'] as const] : []),
+              ['review', 'Pendiente revisión'],
+            ] as const).map(([k, label]) => (
+              <button key={k} type="button" onClick={() => setQuick(k)}
+                className={`px-2.5 py-1 text-xs rounded-md border transition-base ${quick === k ? 'bg-accent text-text-on-accent border-accent' : 'border-border-default text-text-secondary hover:bg-page'}`}>
+                {label}
+              </button>
+            ))}
+            <span className="ml-auto text-xs text-text-tertiary">
+              {visibleLines.length} de {lines.length}
+              {visibleValue > 0 && <> · <span className="text-text-secondary font-medium">{eur(visibleValue)}</span></>}
+            </span>
+          </div>
+        </div>
+      )}
+
       {lines.length === 0 ? (
         <div className="text-center py-10 text-text-secondary text-sm border border-dashed border-border-default rounded-lg">
           Este conteo no tiene líneas. Genera la hoja desde la lista de conteos.
+        </div>
+      ) : visibleLines.length === 0 ? (
+        <div className="text-center py-10 text-text-secondary text-sm border border-dashed border-border-default rounded-lg">
+          Ningún artículo coincide con el buscador o los filtros.
         </div>
       ) : (
         <div className="space-y-4">
@@ -243,6 +332,7 @@ export default function InventoryCountSheet({
                     <th className="text-left font-medium px-3 py-1.5">Artículo</th>
                     {isReview && !isOpening && <th className="text-right font-medium px-3 py-1.5">Sistema</th>}
                     <th className="text-right font-medium px-3 py-1.5">{isReview ? 'Contado' : 'Cantidad'}</th>
+                    <th className="text-right font-medium px-3 py-1.5">Valor</th>
                     {isReview && !isOpening && <th className="text-right font-medium px-3 py-1.5">Variación</th>}
                     {isReview && <th className="text-right font-medium px-3 py-1.5">€</th>}
                     {isReview && !isOpening && <th className="text-left font-medium px-3 py-1.5">Motivo</th>}
@@ -275,6 +365,11 @@ export default function InventoryCountSheet({
                               {savingId === l.id && <Loader2 size={12} className="animate-spin text-text-tertiary" />}
                             </div>
                           )}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums">
+                          {l.lineValue !== null
+                            ? <span className={l.lineValue >= 100 ? 'text-accent font-medium' : 'text-text-secondary'}>{eur(l.lineValue)}</span>
+                            : <span className="text-text-tertiary" title="Sin coste todavía">—</span>}
                         </td>
                         {isReview && !isOpening && (
                           <td className={`px-3 py-2 text-right tabular-nums ${l.withinTolerance === false ? 'text-warning font-medium' : 'text-text-secondary'}`}>
