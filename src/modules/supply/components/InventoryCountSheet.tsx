@@ -172,9 +172,14 @@ export default function InventoryCountSheet({
   const countedCount = useMemo(() => lines.filter(l => l.countedQty !== null).length, [lines])
 
   // Líneas fuera de tolerancia sin motivo (bloquean la aprobación).
+  // En una APERTURA no aplica: es el punto de partida del local, no se
+  // compara contra un stock previo, así que la tolerancia no tiene sentido
+  // y nunca debe bloquear la aprobación.
   const missingReasons = useMemo(
-    () => lines.filter(l => l.countedQty !== null && l.withinTolerance === false && !l.reasonCode).length,
-    [lines],
+    () => isOpening
+      ? 0
+      : lines.filter(l => l.countedQty !== null && l.withinTolerance === false && !l.reasonCode).length,
+    [lines, isOpening],
   )
   const isApproved = count?.status === 'aprobado'
 
