@@ -238,11 +238,13 @@ export function generatePurchaseOrderPdf(data: PurchaseOrderPdfData): { blob: Bl
 
   let y = margin
 
-  // ── CABECERA ──
-  // Logo del cliente, protagonista (sin marco; el autotrim del servicio deja el
-  // PNG con fondo transparente). Caja amplia y la identidad fiscal a su lado,
-  // verticalmente centrada contra el logo.
-  const logoBoxW = 34, logoBoxH = 24
+  // ── CABECERA (variante C: lomo de marca + logo grande sin marco) ──
+  // El cliente manda: logo a gran tamaño SIN recuadro (su fondo blanco se funde
+  // con el papel; nada lo encierra) + nombre. Un lomo navy fino en el canalillo
+  // izquierdo da carácter de marca sin gastar tinta (imprime limpio, también en
+  // B/N). El bloque del documento va a la derecha.
+  const headerTop = y
+  const logoBoxW = 42, logoBoxH = 30
   let identX = margin
   let logoH = 0
   if (data.client.logoUrl) {
@@ -253,45 +255,51 @@ export function generatePurchaseOrderPdf(data: PurchaseOrderPdfData): { blob: Bl
       if (h > logoBoxH) { h = logoBoxH; w = h * ratio }
       doc.addImage(data.client.logoUrl, 'PNG', margin, y, w, h, undefined, 'FAST')
       logoH = h
-      identX = margin + w + 6
+      identX = margin + w + 7
     } catch {
       identX = margin
     }
   }
 
   // Identidad fiscal del cliente (centrada contra la altura del logo).
-  const nameBaseline = logoH > 0 ? y + logoH / 2 - 1 : y + 5
-  display('bold'); doc.setFontSize(16); ink(INK)
-  doc.text(data.client.legalName ?? 'Cliente', identX, nameBaseline)
+  const identMaxW = (pageW - margin - 52) - identX // deja sitio al bloque documento
+  const nameBaseline = logoH > 0 ? y + logoH / 2 - 2 : y + 6
+  display('bold'); doc.setFontSize(17); ink(INK)
+  doc.text(data.client.legalName ?? 'Cliente', identX, nameBaseline, { maxWidth: Math.max(identMaxW, 50) })
   sans('normal'); doc.setFontSize(8.5); ink(MUTED)
   let cy = nameBaseline + 5
   if (data.client.cif) { doc.text(`CIF ${data.client.cif}`, identX, cy); cy += 4 }
-  if (data.client.billingAddress) { doc.text(data.client.billingAddress, identX, cy, { maxWidth: 95 }); cy += 4 }
+  if (data.client.billingAddress) { doc.text(data.client.billingAddress, identX, cy, { maxWidth: Math.max(identMaxW, 50) }); cy += 4 }
   const contactBits = [data.client.billingEmail, data.client.billingPhone].filter(Boolean).join(' · ')
-  if (contactBits) { doc.text(contactBits, identX, cy); cy += 4 }
+  if (contactBits) { doc.text(contactBits, identX, cy, { maxWidth: Math.max(identMaxW, 50) }); cy += 4 }
 
   // Bloque documento (derecha).
   ink(NAVY); sans('bold'); doc.setFontSize(9)
-  doc.text('PEDIDO DE COMPRA', pageW - margin, y + 2, { align: 'right' })
+  doc.text('PEDIDO DE COMPRA', pageW - margin, headerTop + 3, { align: 'right' })
   display('bold'); doc.setFontSize(20); ink(TERRA)
-  doc.text(data.code ?? '—', pageW - margin, y + 9.5, { align: 'right' })
+  doc.text(data.code ?? '—', pageW - margin, headerTop + 11, { align: 'right' })
   sans('normal'); doc.setFontSize(8.5); ink(MUTED)
-  doc.text(`Fecha: ${dateEs(data.orderDate)}`, pageW - margin, y + 15, { align: 'right' })
-  doc.text(`Entrega prevista: ${dateEs(data.expectedDate)}`, pageW - margin, y + 19, { align: 'right' })
+  doc.text(`Fecha: ${dateEs(data.orderDate)}`, pageW - margin, headerTop + 16.5, { align: 'right' })
+  doc.text(`Entrega prevista: ${dateEs(data.expectedDate)}`, pageW - margin, headerTop + 20.5, { align: 'right' })
   // Chip de estado.
   if (data.status) {
     const label = STATUS_LABEL[data.status] ?? data.status
     sans('bold'); doc.setFontSize(7.5)
     const tw = doc.getTextWidth(label.toUpperCase())
-    const chipW = tw + 8, chipX = pageW - margin - chipW, chipY = y + 22.5
+    const chipW = tw + 8, chipX = pageW - margin - chipW, chipY = headerTop + 24
     fill(SOFT); stroke(LINE); doc.setLineWidth(0.2)
     doc.roundedRect(chipX, chipY, chipW, 5, 2.5, 2.5, 'FD')
     ink(NAVY); doc.text(label.toUpperCase(), chipX + chipW / 2, chipY + 3.4, { align: 'center' })
   }
 
-  y = Math.max(cy, y + 28) + 2
+  const headerBottom = Math.max(cy, headerTop + logoH, headerTop + 29)
 
-  // Regla de marca navy→terracota.
+  // Lomo de marca navy (fino) en el canalillo izquierdo, a la altura de la cabecera.
+  fill(NAVY); doc.rect(9, headerTop, 2.4, headerBottom - headerTop, 'F')
+
+  y = headerBottom + 4
+
+  // Regla de marca navy→terracota (separador Folvy, fino).
   fill(NAVY); doc.rect(margin, y, contentW * 0.4, 1.1, 'F')
   fill(TERRA); doc.rect(margin + contentW * 0.4, y, contentW * 0.12, 1.1, 'F')
   fill(LINE); doc.rect(margin + contentW * 0.52, y, contentW * 0.48, 1.1, 'F')
