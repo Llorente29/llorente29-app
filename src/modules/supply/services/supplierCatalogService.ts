@@ -113,12 +113,47 @@ function buildFormatLabel(
 }
 
 /**
+ * Stock legible para la pantalla de pedido. El stock vive en unidad base
+ * (g/ml/ud); el comprador piensa en FORMATO (cajas). Si conocemos la
+ * equivalencia del formato preferente (formatQtyInBase), convertimos el stock
+ * a "número de formatos" — igual que hace tspoon ("4,5 Caja"). Si no hay
+ * formato, caemos a la unidad base legible (kg/L). Null → "—".
+ *
+ * Ej: Patatas 43.530 g, Caja = 10.000 g → "4,4 Caja".
+ *     Aceite 780 ml, sin formato → "780 ml".
+ */
+export function formatStockForOrder(
+  stockOnHand: number | null,
+  formatQtyInBase: number | null,
+  formatName: string | null,
+  baseAbbr: string | null,
+): string {
+  if (stockOnHand === null || stockOnHand === undefined) return '—'
+
+  const nf = (v: number, max = 1) =>
+    new Intl.NumberFormat('es-ES', { maximumFractionDigits: max }).format(v)
+
+  // Con formato de envase real → expresar en nº de formatos ("4,4 Caja").
+  if (formatQtyInBase && formatQtyInBase > 0 && formatName && !isUnitWord(formatName)) {
+    const n = stockOnHand / formatQtyInBase
+    const plural = n === 1 ? formatName : `${formatName}s`
+    return `${nf(n)} ${plural.toLowerCase()}`
+  }
+
+  // Sin envase → unidad base legible (escalar g→kg, ml→L cuando procede).
+  if (baseAbbr === 'g' && Math.abs(stockOnHand) >= 1000) return `${nf(stockOnHand / 1000)} kg`
+  if (baseAbbr === 'ml' && Math.abs(stockOnHand) >= 1000) return `${nf(stockOnHand / 1000)} L`
+  return `${nf(stockOnHand, 0)} ${baseAbbr ?? ''}`.trim()
+}
+
+/**
  * Catálogo de un proveedor: todos sus article_supplier activos, con artículo,
  * código, formato (nombre+equivalencia) y precio. Ordenado por nombre de artículo.
  */
 export async function getSupplierCatalog(
   accountId: string,
   supplierId: string,
+  locationId?: string | null,
 ): Promise<SupplierCatalogEntry[]> {
   requireSupabase()
   const { data, error } = await from('article_supplier')
@@ -200,6 +235,27 @@ export async function getSupplierCatalog(
       stockOnHand: null, // gancho inventario
     }
   })
+
+  // Stock real del local activo (T1 inventario, vivo desde 14/06): si nos pasan
+  // un locationId, leemos recipe_item_location_stock para los artículos del
+  // catálogo y rellenamos stockOnHand (qty_on_hand en unidad base). Sin local,
+  // se queda en null (la UI muestra "—").
+  if (locationId && itemIds.length) {
+    const { data: stockRows, error: es } = await from('recipe_item_location_stock')
+      .select('recipe_item_id, qty_on_hand')
+      .eq('account_id', accountId)
+      .eq('location_id', locationId)
+      .in('recipe_item_id', itemIds)
+    if (es) throw new Error(`Error cargando el stock: ${es.message}`)
+    const stockByItem = new Map<string, number>()
+    for (const s of (stockRows as Row[] | null) ?? []) {
+      stockByItem.set(s.recipe_item_id as string, (s.qty_on_hand as number | null) ?? 0)
+    }
+    for (const e of entries) {
+      const v = stockByItem.get(e.recipeItemId)
+      e.stockOnHand = v === undefined ? null : v
+    }
+  }
 
   // Orden por nombre de artículo (es-ES).
   entries.sort((a, b) => a.itemName.localeCompare(b.itemName, 'es'))

@@ -24,6 +24,7 @@ import { listSuppliers } from '@/modules/kitchen/services/purchaseFormatService'
 import type { Supplier } from '@/types/kitchen'
 import {
   getSupplierCatalog,
+  formatStockForOrder,
   listSupplyLocations,
   type SupplierCatalogEntry,
   type SupplyLocation,
@@ -94,7 +95,7 @@ export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuild
     let cancelled = false
     setLoadingCatalog(true)
     setError(null)
-    getSupplierCatalog(activeAccountId, supplierId)
+    getSupplierCatalog(activeAccountId, supplierId, locationId || null)
       .then((entries) => {
         if (cancelled) return
         setCatalog(entries)
@@ -107,7 +108,7 @@ export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuild
       })
       .finally(() => { if (!cancelled) setLoadingCatalog(false) })
     return () => { cancelled = true }
-  }, [activeAccountId, supplierId])
+  }, [activeAccountId, supplierId, locationId])
 
   const visibleCatalog = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -344,8 +345,8 @@ export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuild
                               <span className="ml-1.5 text-[10px] px-1 py-0.5 rounded bg-accent-bg text-accent border border-accent/20">preferente</span>
                             )}
                           </td>
-                          <td className="px-3 py-2 text-right text-text-tertiary">
-                            {e.stockOnHand === null ? '—' : e.stockOnHand}
+                          <td className="px-3 py-2 text-right text-text-tertiary tabular-nums">
+                            {formatStockForOrder(e.stockOnHand, e.formatQtyInBase, e.formatName, e.baseUnitAbbr)}
                           </td>
                           <td className="px-3 py-2 text-center">
                             <input
