@@ -239,8 +239,12 @@ export function generatePurchaseOrderPdf(data: PurchaseOrderPdfData): { blob: Bl
   let y = margin
 
   // ── CABECERA ──
-  const logoBoxW = 22, logoBoxH = 18
+  // Logo del cliente, protagonista (sin marco; el autotrim del servicio deja el
+  // PNG con fondo transparente). Caja amplia y la identidad fiscal a su lado,
+  // verticalmente centrada contra el logo.
+  const logoBoxW = 34, logoBoxH = 24
   let identX = margin
+  let logoH = 0
   if (data.client.logoUrl) {
     try {
       const props = doc.getImageProperties(data.client.logoUrl)
@@ -248,17 +252,19 @@ export function generatePurchaseOrderPdf(data: PurchaseOrderPdfData): { blob: Bl
       let w = logoBoxW, h = w / ratio
       if (h > logoBoxH) { h = logoBoxH; w = h * ratio }
       doc.addImage(data.client.logoUrl, 'PNG', margin, y, w, h, undefined, 'FAST')
-      identX = margin + Math.max(w, 14) + 5
+      logoH = h
+      identX = margin + w + 6
     } catch {
       identX = margin
     }
   }
 
-  // Identidad fiscal del cliente.
+  // Identidad fiscal del cliente (centrada contra la altura del logo).
+  const nameBaseline = logoH > 0 ? y + logoH / 2 - 1 : y + 5
   display('bold'); doc.setFontSize(16); ink(INK)
-  doc.text(data.client.legalName ?? 'Cliente', identX, y + 5)
+  doc.text(data.client.legalName ?? 'Cliente', identX, nameBaseline)
   sans('normal'); doc.setFontSize(8.5); ink(MUTED)
-  let cy = y + 10
+  let cy = nameBaseline + 5
   if (data.client.cif) { doc.text(`CIF ${data.client.cif}`, identX, cy); cy += 4 }
   if (data.client.billingAddress) { doc.text(data.client.billingAddress, identX, cy, { maxWidth: 95 }); cy += 4 }
   const contactBits = [data.client.billingEmail, data.client.billingPhone].filter(Boolean).join(' · ')
@@ -283,7 +289,7 @@ export function generatePurchaseOrderPdf(data: PurchaseOrderPdfData): { blob: Bl
     ink(NAVY); doc.text(label.toUpperCase(), chipX + chipW / 2, chipY + 3.4, { align: 'center' })
   }
 
-  y = Math.max(cy, y + 24) + 3
+  y = Math.max(cy, y + 28) + 2
 
   // Regla de marca navy→terracota.
   fill(NAVY); doc.rect(margin, y, contentW * 0.4, 1.1, 'F')
