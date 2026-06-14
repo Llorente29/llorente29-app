@@ -12,7 +12,7 @@ import {
   hasOpenShift, nextClockType, buildClockEntry, defaultKioskoConfig,
 } from '../../services/fichajeKiosko'
 
-const RADIUS_M = 200
+const RADIUS_M = 1000  // FIX 14/06: era 200 fijo. El radio del kiosko no llega al movil (vive en localStorage del admin). Holgado hasta mover radio/flag a la tabla locations.
 
 interface Props {
   employee: Employee
@@ -251,7 +251,7 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
                   {inZone ? 'Estás en la zona del local' : `Estás a ${Math.round(distance)}m del local`}
                 </p>
                 <p className="text-xs text-text-secondary mt-0.5">
-                  {inZone ? `${Math.round(distance)}m · ${selectedLoc.name}` : 'Acércate hasta menos de 200m para fichar'}
+                  {inZone ? `${Math.round(distance)}m · ${selectedLoc.name}` : 'Acércate al local para fichar'}
                 </p>
               </div>
             </div>

@@ -162,7 +162,7 @@ export function saveKioskoConfig(config: KioskoConfig): void {
 export function defaultKioskoConfig(locationId: string): KioskoConfig {
   return {
     locationId,
-    geofenceRadiusM: 200,
+    geofenceRadiusM: 1000,  // FIX 14/06: era 200. Holgado hasta mover radio/flag a la tabla locations (hoy viven en localStorage del admin, no llegan al movil).
     requirePhoto: false,
     blockOutsideGeofence: true,
   }
