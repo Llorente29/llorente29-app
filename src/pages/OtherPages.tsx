@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useApp } from '../context/AppContext'
 import { Card } from '../components/ui'
-import { Wallet, MapPin, Info, ChevronDown, ChevronRight, Check, AlertCircle, Loader2 } from 'lucide-react'
+import { Wallet, MapPin, Info, ChevronDown, ChevronRight, Check, AlertCircle, Loader2, Navigation, ExternalLink } from 'lucide-react'
 import type { Location } from '../types'
 
 // DashboardPage se ha movido a su propia page: src/pages/DashboardPage.tsx
@@ -21,6 +21,13 @@ export { DashboardPage } from './DashboardPage'
 // - Patrón inmediato en checkbox (Activo) y botón Eliminar.
 // - Feedback visual por local: spinner mientras guarda, ✓ tras éxito,
 //   ⚠ rojo si falla.
+//
+// FIX UBICACIÓN (14/06/2026):
+// - La sección de geolocalización ya NO se esconde tras "lat/lng definidos"
+//   (condición imposible de cumplir en un local nuevo: sin coordenadas no
+//   aparecía, y sin aparecer no se podían poner). Ahora siempre visible.
+// - Botón "Usar mi ubicación actual": captura lat/lng por GPS del navegador
+//   (sin dependencias ni API key). Pensado para abrirse EN el local.
 // ============================================================
 
 // Estado de guardado por local. 'idle' por defecto, otros estados
@@ -38,6 +45,9 @@ export function LocationsPage() {
   const [editBuffers, setEditBuffers] = useState<EditBuffers>({})
   const [saveStates, setSaveStates] = useState<Record<string, SaveState>>({})
   const [errorMessages, setErrorMessages] = useState<Record<string, string>>({})
+  // Estado del botón "Usar mi ubicación actual" por local.
+  const [gpsState, setGpsState] = useState<Record<string, 'idle' | 'locating' | 'error'>>({})
+  const [gpsError, setGpsError] = useState<Record<string, string>>({})
 
   // Helpers para gestionar el feedback visual por local.
   function markSaving(id: string) {
@@ -139,6 +149,46 @@ export function LocationsPage() {
       const msg = err instanceof Error ? err.message : 'No se pudo guardar'
       markError(loc.id, msg)
     }
+  }
+
+  // Captura la ubicación actual por GPS del navegador y la persiste.
+  // Pensado para abrirse desde un móvil EN el local.
+  function captureLocation(loc: Location) {
+    if (!('geolocation' in navigator)) {
+      setGpsState(prev => ({ ...prev, [loc.id]: 'error' }))
+      setGpsError(prev => ({ ...prev, [loc.id]: 'Este dispositivo no permite geolocalización.' }))
+      return
+    }
+    setGpsState(prev => ({ ...prev, [loc.id]: 'locating' }))
+    setGpsError(prev => ({ ...prev, [loc.id]: '' }))
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const lat = Number(pos.coords.latitude.toFixed(7))
+        const lng = Number(pos.coords.longitude.toFixed(7))
+        setGpsState(prev => ({ ...prev, [loc.id]: 'idle' }))
+        // Limpia lat/lng del buffer para que se vean los valores recién capturados.
+        setEditBuffers(prev => {
+          const b = prev[loc.id]
+          if (!b) return prev
+          const next = { ...b }
+          delete next.lat
+          delete next.lng
+          return { ...prev, [loc.id]: next }
+        })
+        void persistImmediate(loc, { lat, lng })
+      },
+      err => {
+        setGpsState(prev => ({ ...prev, [loc.id]: 'error' }))
+        const msg =
+          err.code === err.PERMISSION_DENIED
+            ? 'Permiso de ubicación denegado. Actívalo en el navegador para usar esto.'
+            : err.code === err.POSITION_UNAVAILABLE
+              ? 'No se pudo obtener la ubicación (señal GPS no disponible).'
+              : 'Se agotó el tiempo al obtener la ubicación. Inténtalo de nuevo.'
+        setGpsError(prev => ({ ...prev, [loc.id]: msg }))
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    )
   }
 
   async function deleteLocation(loc: Location) {
@@ -330,40 +380,71 @@ export function LocationsPage() {
                       )}
                     </div>
 
-                    {/* Geolocalización (si la tienes configurada) */}
-                    {(loc.lat !== undefined || loc.lng !== undefined) && (
-                      <div className="bg-page rounded-md p-3">
-                        <p className="text-xs font-semibold mb-2 inline-flex items-center gap-1.5 text-text-primary">
-                          <MapPin size={14} /> Geolocalización del kiosko
+                    {/* Ubicación del local (para el fichaje por GPS) — siempre visible */}
+                    <div className="bg-page rounded-md p-3">
+                      <p className="text-xs font-semibold mb-1 inline-flex items-center gap-1.5 text-text-primary">
+                        <MapPin size={14} /> Ubicación del local (fichaje por GPS)
+                      </p>
+                      <p className="text-xs text-text-secondary mb-3">
+                        Abre esta pantalla en un móvil <strong>desde el local</strong> y pulsa el botón para
+                        fijar su posición. También puedes pegar las coordenadas de Google Maps.
+                      </p>
+
+                      <button
+                        onClick={() => captureLocation(loc)}
+                        disabled={gpsState[loc.id] === 'locating'}
+                        className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md border border-accent text-accent hover:bg-accent/10 transition-base disabled:opacity-60"
+                      >
+                        {gpsState[loc.id] === 'locating'
+                          ? <><Loader2 size={14} className="animate-spin" /> Obteniendo ubicación…</>
+                          : <><Navigation size={14} /> Usar mi ubicación actual</>
+                        }
+                      </button>
+
+                      {gpsState[loc.id] === 'error' && gpsError[loc.id] && (
+                        <p className="mt-2 text-xs text-danger inline-flex items-start gap-1.5">
+                          <AlertCircle size={12} className="mt-0.5 shrink-0" /> {gpsError[loc.id]}
                         </p>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <label className="text-xs text-text-secondary uppercase font-medium">Latitud</label>
-                            <input
-                              type="number"
-                              step="any"
-                              value={getCurrentValue(loc, 'lat') ?? ''}
-                              onChange={e => updateBuffer(loc.id, { lat: e.target.value ? parseFloat(e.target.value) : undefined })}
-                              onBlur={() => persistBuffer(loc)}
-                              className="mt-1 w-full border border-border-default rounded-md px-3 py-1.5 text-sm bg-card text-text-primary focus:outline-none focus:ring-2 focus:ring-accent"
-                              placeholder="40.4168"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-xs text-text-secondary uppercase font-medium">Longitud</label>
-                            <input
-                              type="number"
-                              step="any"
-                              value={getCurrentValue(loc, 'lng') ?? ''}
-                              onChange={e => updateBuffer(loc.id, { lng: e.target.value ? parseFloat(e.target.value) : undefined })}
-                              onBlur={() => persistBuffer(loc)}
-                              className="mt-1 w-full border border-border-default rounded-md px-3 py-1.5 text-sm bg-card text-text-primary focus:outline-none focus:ring-2 focus:ring-accent"
-                              placeholder="-3.7038"
-                            />
-                          </div>
+                      )}
+
+                      <div className="grid grid-cols-2 gap-2 mt-3">
+                        <div>
+                          <label className="text-xs text-text-secondary uppercase font-medium">Latitud</label>
+                          <input
+                            type="number"
+                            step="any"
+                            value={getCurrentValue(loc, 'lat') ?? ''}
+                            onChange={e => updateBuffer(loc.id, { lat: e.target.value ? parseFloat(e.target.value) : undefined })}
+                            onBlur={() => persistBuffer(loc)}
+                            className="mt-1 w-full border border-border-default rounded-md px-3 py-1.5 text-sm bg-card text-text-primary focus:outline-none focus:ring-2 focus:ring-accent"
+                            placeholder="40.4345672"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-text-secondary uppercase font-medium">Longitud</label>
+                          <input
+                            type="number"
+                            step="any"
+                            value={getCurrentValue(loc, 'lng') ?? ''}
+                            onChange={e => updateBuffer(loc.id, { lng: e.target.value ? parseFloat(e.target.value) : undefined })}
+                            onBlur={() => persistBuffer(loc)}
+                            className="mt-1 w-full border border-border-default rounded-md px-3 py-1.5 text-sm bg-card text-text-primary focus:outline-none focus:ring-2 focus:ring-accent"
+                            placeholder="-3.6528093"
+                          />
                         </div>
                       </div>
-                    )}
+
+                      {getCurrentValue(loc, 'lat') != null && getCurrentValue(loc, 'lng') != null && (
+                        <a
+                          href={`https://www.google.com/maps/search/?api=1&query=${getCurrentValue(loc, 'lat')},${getCurrentValue(loc, 'lng')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-2 inline-flex items-center gap-1.5 text-xs text-accent hover:underline"
+                        >
+                          <ExternalLink size={12} /> Ver el punto en Google Maps
+                        </a>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
