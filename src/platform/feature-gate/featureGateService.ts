@@ -3,7 +3,6 @@
 // actual y permite preguntar si tiene acceso a una funcionalidad concreta.
 
 import { supabase } from '@/lib/supabase'
-import { ACCOUNT_ID_FOLVY } from '@/config/constants'
 import type {
   Account,
   AccountPlatformState,
@@ -52,10 +51,10 @@ async function load(): Promise<AccountPlatformState | null> {
         return null
       }
 
-      // 2. Buscar su user_profile
+      // 2. Buscar su user_profile (incluye la cuenta a la que pertenece)
       const { data: profileData } = await supabase
         .from('user_profiles')
-        .select('id, role')
+        .select('id, role, account_id')
         .eq('user_id', user.id)
         .maybeSingle()
 
@@ -64,14 +63,14 @@ async function load(): Promise<AccountPlatformState | null> {
         return null
       }
 
-      // 3. Determinar account_id
-      //    - Admin: cuenta interna de Folvy
-      //    - Manager/Trabajador: vía manager_locations → locations
-      let accountId: string | null = null
+      // 3. Determinar account_id = la cuenta del PROPIO perfil.
+      //    Respaldo (trabajadores sin account_id directo): vía manager_locations.
+      //    NUNCA caer a una cuenta hardcodeada: en producción un admin lo es
+      //    de SU cuenta, no del banco de pruebas. Caer al sandbox provocaba
+      //    un 406 (RLS) y dejaba la ficha en blanco (React #300).
+      let accountId: string | null = profileData.account_id ?? null
 
-      if (profileData.role === 'admin') {
-        accountId = ACCOUNT_ID_FOLVY
-      } else {
+      if (!accountId) {
         const { data: managerLocs } = await supabase
           .from('manager_locations')
           .select('locations(account_id)')
