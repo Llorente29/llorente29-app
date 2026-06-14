@@ -12,6 +12,7 @@ import { getAccountById, updateAccount, setAccountStatus } from '@/modules/multi
 import type { Account, AccountStatus, AccountUpdate } from '@/types/multitenancy'
 import { getCatalog, getAccountItems, setAccountModules, type CatalogModule } from '@/platform/accountModulesService'
 import IntegrationsSection from '@/admin/components/IntegrationsSection'
+import AccountLogoUploader from '@/admin/components/AccountLogoUploader'
 
 type LoadState =
   | { state: 'loading' }
@@ -296,6 +297,9 @@ export default function CuentaDetallePage() {
           <Field label="CIF / NIF" value={edit.cif} onChange={v => setEdit(p => ({ ...p, cif: v }))} />
         </div>
       </section>
+
+      {/* Logo de la empresa (autoservicio) */}
+      {accountId && <AccountLogoUploader accountId={accountId} />}
 
       {/* Dirección de facturación */}
       <section className="mb-6">
