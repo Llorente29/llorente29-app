@@ -629,3 +629,69 @@ export async function ensurePackTree(
   return { caja, inner }
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// Migración de artículos entre proveedores (mantenimiento).
+// "Este proveedor ya no me sirve / está duplicado → mueve sus artículos a
+// otro." Operación potente: previsualización SIEMPRE antes de ejecutar
+// (preview_supplier_migration), y luego migrate_supplier_articles (RPC
+// transaccional, modo 'fill' = rellenar huecos en las colisiones). El RPC
+// recostea los raws vía trigger; aquí cascadeamos a los platos que los usan.
+// ─────────────────────────────────────────────────────────────────────
+export interface SupplierMigrationPreview {
+  origenTotal: number   // artículos que cuelgan del origen
+  colisiones: number    // de esos, los que el destino YA tiene (se fusionan)
+  migranLimpio: number  // los que el destino no tiene (se mueven directos)
+}
+
+export async function previewSupplierMigration(
+  sourceId: string,
+  targetId: string,
+): Promise<SupplierMigrationPreview> {
+  requireSupabase()
+  const { data, error } = await supabase!.rpc('preview_supplier_migration', {
+    p_source: sourceId,
+    p_target: targetId,
+  })
+  if (error) throw new Error(`No se pudo previsualizar la migración: ${error.message}`)
+  const r = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null
+  return {
+    origenTotal: Number(r?.origen_total ?? 0),
+    colisiones: Number(r?.colisiones ?? 0),
+    migranLimpio: Number(r?.migran_limpio ?? 0),
+  }
+}
+
+export interface SupplierMigrationResult {
+  moved: number
+  merged: number
+  affectedItemIds: string[]
+}
+
+export async function migrateSupplierArticles(
+  sourceId: string,
+  targetId: string,
+  mode: 'fill' = 'fill',
+): Promise<SupplierMigrationResult> {
+  requireSupabase()
+  const { data, error } = await supabase!.rpc('migrate_supplier_articles', {
+    p_source: sourceId,
+    p_target: targetId,
+    p_mode: mode,
+  })
+  if (error) throw new Error(`No se pudo migrar: ${error.message}`)
+  const r = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null
+  const affected = (r?.affected_item_ids ?? []) as string[]
+  // El RPC recostea los raws (trigger). Cascada a los platos que los usan.
+  for (const id of affected) {
+    try {
+      await cascadeFromItem(id)
+    } catch (e) {
+      console.error(`migrateSupplierArticles: cascada de coste falló para ${id}`, e)
+    }
+  }
+  return {
+    moved: Number(r?.moved ?? 0),
+    merged: Number(r?.merged ?? 0),
+    affectedItemIds: affected,
+  }
+}

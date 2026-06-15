@@ -651,6 +651,7 @@ export type Database = {
           is_internal: boolean
           legal_name: string | null
           locale: string | null
+          logo_url: string | null
           metadata: Json | null
           name: string
           past_due_at: string | null
@@ -679,6 +680,7 @@ export type Database = {
           is_internal?: boolean
           legal_name?: string | null
           locale?: string | null
+          logo_url?: string | null
           metadata?: Json | null
           name: string
           past_due_at?: string | null
@@ -707,6 +709,7 @@ export type Database = {
           is_internal?: boolean
           legal_name?: string | null
           locale?: string | null
+          logo_url?: string | null
           metadata?: Json | null
           name?: string
           past_due_at?: string | null
@@ -4581,6 +4584,151 @@ export type Database = {
           },
         ]
       }
+      kds_device: {
+        Row: {
+          account_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          label: string
+          last_seen_at: string | null
+          location_id: string
+          station_ids: string[] | null
+          token: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label: string
+          last_seen_at?: string | null
+          location_id: string
+          station_ids?: string[] | null
+          token: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label?: string
+          last_seen_at?: string | null
+          location_id?: string
+          station_ids?: string[] | null
+          token?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kds_device_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kds_device_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kds_line_state: {
+        Row: {
+          account_id: string
+          id: string
+          marked: boolean
+          marked_at: string | null
+          sale_line_id: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          id?: string
+          marked?: boolean
+          marked_at?: string | null
+          sale_line_id: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          id?: string
+          marked?: boolean
+          marked_at?: string | null
+          sale_line_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kds_line_state_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kds_line_state_sale_line_id_fkey"
+            columns: ["sale_line_id"]
+            isOneToOne: true
+            referencedRelation: "sale_line"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kds_ticket_station_state: {
+        Row: {
+          account_id: string
+          id: string
+          sale_id: string
+          station_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          id?: string
+          sale_id: string
+          station_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          id?: string
+          sale_id?: string
+          station_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kds_ticket_station_state_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kds_ticket_station_state_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sale"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kds_ticket_station_state_station_id_fkey"
+            columns: ["station_id"]
+            isOneToOne: false
+            referencedRelation: "kitchen_station"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       kitchen_cut_type: {
         Row: {
           account_id: string
@@ -4668,6 +4816,55 @@ export type Database = {
         }
         Relationships: []
       }
+      kitchen_family_route: {
+        Row: {
+          account_id: string
+          created_at: string
+          family_id: string
+          id: string
+          station_id: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          family_id: string
+          id?: string
+          station_id: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          family_id?: string
+          id?: string
+          station_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kitchen_family_route_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kitchen_family_route_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_family"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kitchen_family_route_station_id_fkey"
+            columns: ["station_id"]
+            isOneToOne: false
+            referencedRelation: "kitchen_station"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       kitchen_settings: {
         Row: {
           account_id: string
@@ -4753,6 +4950,60 @@ export type Database = {
             columns: ["account_id"]
             isOneToOne: true
             referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kitchen_station: {
+        Row: {
+          account_id: string
+          created_at: string
+          display_order: number
+          id: string
+          is_active: boolean
+          is_default: boolean
+          kind: string
+          location_id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_active?: boolean
+          is_default?: boolean
+          kind?: string
+          location_id: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_active?: boolean
+          is_default?: boolean
+          kind?: string
+          location_id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kitchen_station_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kitchen_station_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
             referencedColumns: ["id"]
           },
         ]
@@ -7008,6 +7259,7 @@ export type Database = {
           is_purchasable: boolean
           is_sellable: boolean
           is_stockable: boolean
+          kds_station_id: string | null
           kitchen_photo_url: string | null
           label_override: string | null
           label_simplified: boolean
@@ -7083,6 +7335,7 @@ export type Database = {
           is_purchasable?: boolean
           is_sellable?: boolean
           is_stockable?: boolean
+          kds_station_id?: string | null
           kitchen_photo_url?: string | null
           label_override?: string | null
           label_simplified?: boolean
@@ -7158,6 +7411,7 @@ export type Database = {
           is_purchasable?: boolean
           is_sellable?: boolean
           is_stockable?: boolean
+          kds_station_id?: string | null
           kitchen_photo_url?: string | null
           label_override?: string | null
           label_simplified?: boolean
@@ -7225,6 +7479,13 @@ export type Database = {
             columns: ["family_id"]
             isOneToOne: false
             referencedRelation: "recipe_family"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recipe_item_kds_station_id_fkey"
+            columns: ["kds_station_id"]
+            isOneToOne: false
+            referencedRelation: "kitchen_station"
             referencedColumns: ["id"]
           },
           {
@@ -8101,7 +8362,10 @@ export type Database = {
           account_id: string
           archived_at: string | null
           brand_id: string | null
+          cancel_reason: string | null
+          cancelled_at: string | null
           channel_id: string | null
+          closed_at: string | null
           created_at: string
           created_by: string | null
           created_by_name: string | null
@@ -8111,9 +8375,11 @@ export type Database = {
           external_channel_text: string | null
           external_location_text: string | null
           external_ref: string | null
+          external_tab_ref: string | null
           id: string
           is_active: boolean
           location_id: string | null
+          opened_at: string | null
           paid: number | null
           payment_method: string | null
           raw_products: string | null
@@ -8122,6 +8388,7 @@ export type Database = {
           service_type: string | null
           sold_at: string
           source: string
+          status: string
           tax: number | null
           taxable_base: number | null
           total: number
@@ -8131,7 +8398,10 @@ export type Database = {
           account_id: string
           archived_at?: string | null
           brand_id?: string | null
+          cancel_reason?: string | null
+          cancelled_at?: string | null
           channel_id?: string | null
+          closed_at?: string | null
           created_at?: string
           created_by?: string | null
           created_by_name?: string | null
@@ -8141,9 +8411,11 @@ export type Database = {
           external_channel_text?: string | null
           external_location_text?: string | null
           external_ref?: string | null
+          external_tab_ref?: string | null
           id?: string
           is_active?: boolean
           location_id?: string | null
+          opened_at?: string | null
           paid?: number | null
           payment_method?: string | null
           raw_products?: string | null
@@ -8152,6 +8424,7 @@ export type Database = {
           service_type?: string | null
           sold_at: string
           source?: string
+          status?: string
           tax?: number | null
           taxable_base?: number | null
           total?: number
@@ -8161,7 +8434,10 @@ export type Database = {
           account_id?: string
           archived_at?: string | null
           brand_id?: string | null
+          cancel_reason?: string | null
+          cancelled_at?: string | null
           channel_id?: string | null
+          closed_at?: string | null
           created_at?: string
           created_by?: string | null
           created_by_name?: string | null
@@ -8171,9 +8447,11 @@ export type Database = {
           external_channel_text?: string | null
           external_location_text?: string | null
           external_ref?: string | null
+          external_tab_ref?: string | null
           id?: string
           is_active?: boolean
           location_id?: string | null
+          opened_at?: string | null
           paid?: number | null
           payment_method?: string | null
           raw_products?: string | null
@@ -8182,6 +8460,7 @@ export type Database = {
           service_type?: string | null
           sold_at?: string
           source?: string
+          status?: string
           tax?: number | null
           taxable_base?: number | null
           total?: number
@@ -9934,6 +10213,10 @@ export type Database = {
         Args: { p_area_ids?: string[]; p_count_id: string; p_full?: boolean }
         Returns: number
       }
+      cancel_sale: {
+        Args: { p_reason?: string; p_sale_id: string }
+        Returns: undefined
+      }
       classify_unmapped_product: {
         Args: {
           p_account_id: string
@@ -9960,6 +10243,7 @@ export type Database = {
           total_variance_value: number
         }[]
       }
+      close_sale: { Args: { p_sale_id: string }; Returns: undefined }
       compute_sale_line_consumption: {
         Args: { p_sale_line_id: string }
         Returns: number
@@ -10077,6 +10361,60 @@ export type Database = {
         Returns: boolean
       }
       invoice_required_role: { Args: { p_invoice_id: string }; Returns: string }
+      kds_authorize: {
+        Args: { p_location_id: string; p_token: string }
+        Returns: string
+      }
+      kds_board: {
+        Args: { p_device_token?: string; p_location_id?: string }
+        Returns: Json
+      }
+      kds_bump: {
+        Args: { p_sale_id: string; p_station_id: string; p_token?: string }
+        Returns: undefined
+      }
+      kds_mark_line: {
+        Args: { p_sale_line_id: string; p_token?: string }
+        Returns: boolean
+      }
+      kds_recipe: {
+        Args: {
+          p_location_id?: string
+          p_menu_item_id: string
+          p_qty?: number
+          p_token?: string
+        }
+        Returns: Json
+      }
+      kds_resolve_device: {
+        Args: { p_token: string }
+        Returns: {
+          account_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          label: string
+          last_seen_at: string | null
+          location_id: string
+          station_ids: string[] | null
+          token: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "kds_device"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      kds_set_default_station: {
+        Args: { p_location_id: string; p_station_id: string }
+        Returns: undefined
+      }
+      kds_unbump: {
+        Args: { p_sale_id: string; p_station_id: string; p_token?: string }
+        Returns: undefined
+      }
       kitchen_ancestors_of: {
         Args: { p_item_id: string }
         Returns: {
@@ -10261,6 +10599,14 @@ export type Database = {
           paso: string
         }[]
       }
+      migrate_supplier_articles: {
+        Args: { p_mode?: string; p_source: string; p_target: string }
+        Returns: {
+          affected_item_ids: string[]
+          merged: number
+          moved: number
+        }[]
+      }
       next_folvy_code: {
         Args: { p_account_id: string; p_type: string }
         Returns: string
@@ -10294,6 +10640,14 @@ export type Database = {
           base_cost: number
           delta: number
           total_cost: number
+        }[]
+      }
+      preview_supplier_migration: {
+        Args: { p_source: string; p_target: string }
+        Returns: {
+          colisiones: number
+          migran_limpio: number
+          origen_total: number
         }[]
       }
       propose_vat_category: {
@@ -10400,6 +10754,7 @@ export type Database = {
           resultado: string
         }[]
       }
+      revert_sale_consumption: { Args: { p_sale_id: string }; Returns: number }
       run_invoice_match: {
         Args: { p_invoice_id: string }
         Returns: {
@@ -10449,6 +10804,7 @@ export type Database = {
               semaphore: string
             }[]
           }
+      safe_jsonb: { Args: { p_text: string }; Returns: Json }
       sales_dashboard: {
         Args: {
           p_account_id: string
