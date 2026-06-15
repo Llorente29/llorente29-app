@@ -28,8 +28,10 @@
 //  · Árbol de formatos anidado y foto→IA del albarán: fases siguientes.
 
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, Truck, Star, Check, AlertTriangle, Loader2, Pencil, Sparkles, ChevronDown, ChevronRight, Archive, RotateCcw, ArrowRightLeft } from 'lucide-react'
+import { Plus, Truck, Star, Check, AlertTriangle, Loader2, Pencil, Sparkles, ChevronDown, ChevronRight, Archive, RotateCcw, ArrowRightLeft, Trash2 } from 'lucide-react'
 import IngredientSubstituteModal from '@/modules/kitchen/components/IngredientSubstituteModal'
+import IngredientAddModal from '@/modules/kitchen/components/IngredientAddModal'
+import IngredientRemoveModal from '@/modules/kitchen/components/IngredientRemoveModal'
 import {
   listSuppliers,
   createSupplier,
@@ -140,6 +142,8 @@ export default function PurchaseSourcesSection({
   // Mostrar también los proveedores archivados (descatalogados). Por defecto no.
   const [showArchived, setShowArchived] = useState(false)
   const [substituteOpen, setSubstituteOpen] = useState(false)
+  const [addIngredientOpen, setAddIngredientOpen] = useState(false)
+  const [removeIngredientOpen, setRemoveIngredientOpen] = useState(false)
 
   // ¿El ingrediente cobra hoy su coste de un valor tecleado a mano (fixed)?
   // Si es así, al añadir la primera fuente el SERVICE lo pasará a last_purchase
@@ -677,16 +681,23 @@ export default function PurchaseSourcesSection({
           </div>
         )}
 
-        {/* Mantenimiento: sustituir este ingrediente por otro en los escandallos elegidos */}
+        {/* Este ingrediente en los escandallos: sustituir / añadir / quitar (granular por plato) */}
         <div className="mt-4 pt-3 border-t border-border-default">
-          <button
-            type="button"
-            onClick={() => setSubstituteOpen(true)}
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium border border-border-default text-text-primary hover:bg-page hover:border-accent transition-base"
-          >
-            <ArrowRightLeft className="w-4 h-4 text-accent" />
-            Sustituir «{item.name}» por otro ingrediente
-          </button>
+          <div className="text-xs font-medium text-text-secondary mb-2">Este ingrediente en los escandallos</div>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => setSubstituteOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium border border-border-default text-text-primary hover:bg-page hover:border-accent transition-base">
+              <ArrowRightLeft className="w-4 h-4 text-accent" /> Sustituir por otro
+            </button>
+            <button type="button" onClick={() => setAddIngredientOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium border border-border-default text-text-primary hover:bg-page hover:border-accent transition-base">
+              <Plus className="w-4 h-4 text-accent" /> Añadir a platos
+            </button>
+            <button type="button" onClick={() => setRemoveIngredientOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium border border-border-default text-text-primary hover:bg-page hover:border-accent transition-base">
+              <Trash2 className="w-4 h-4 text-accent" /> Quitar de platos
+            </button>
+          </div>
         </div>
       </div>
 
@@ -696,6 +707,22 @@ export default function PurchaseSourcesSection({
           units={units}
           onClose={() => setSubstituteOpen(false)}
           onDone={() => { setSubstituteOpen(false); onChanged?.() }}
+        />
+      )}
+      {addIngredientOpen && (
+        <IngredientAddModal
+          source={{ id: item.id, name: item.name, accountId: item.accountId, baseUnitId: item.baseUnitId }}
+          units={units}
+          onClose={() => setAddIngredientOpen(false)}
+          onDone={() => { setAddIngredientOpen(false); onChanged?.() }}
+        />
+      )}
+      {removeIngredientOpen && (
+        <IngredientRemoveModal
+          source={{ id: item.id, name: item.name, accountId: item.accountId }}
+          units={units}
+          onClose={() => setRemoveIngredientOpen(false)}
+          onDone={() => { setRemoveIngredientOpen(false); onChanged?.() }}
         />
       )}
     </div>

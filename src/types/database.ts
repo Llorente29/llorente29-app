@@ -10167,6 +10167,20 @@ export type Database = {
         }[]
       }
       adapt_lastapp_order: { Args: { p_sale_id: string }; Returns: number }
+      add_ingredient_to_recipes: {
+        Args: {
+          p_cut?: string
+          p_parents?: string[]
+          p_qty: number
+          p_target: string
+          p_unit: string
+        }
+        Returns: {
+          added: number
+          affected_item_ids: string[]
+          skipped_cycle: number
+        }[]
+      }
       appcc_mark_overdue: { Args: never; Returns: undefined }
       apply_appcc_assignment_moments: {
         Args: { p_account_id: string }
@@ -10642,6 +10656,22 @@ export type Database = {
         Returns: string
       }
       normalize_ingredient_name: { Args: { p_text: string }; Returns: string }
+      preview_add_ingredient: {
+        Args: {
+          p_cut?: string
+          p_qty: number
+          p_target: string
+          p_unit: string
+        }
+        Returns: {
+          already_has: boolean
+          coste_actual: number
+          coste_nuevo: number
+          is_cycle: boolean
+          parent_item_id: string
+          parent_name: string
+        }[]
+      }
       preview_modifier_impact_cost: {
         Args: {
           p_impact_type: string
@@ -10654,6 +10684,18 @@ export type Database = {
           base_cost: number
           delta: number
           total_cost: number
+        }[]
+      }
+      preview_remove_ingredient: {
+        Args: { p_source: string }
+        Returns: {
+          coste_actual: number
+          coste_nuevo: number
+          first_qty: number
+          first_unit_id: string
+          n_lines: number
+          parent_item_id: string
+          parent_name: string
         }[]
       }
       preview_substitute_ingredient: {
@@ -10733,6 +10775,13 @@ export type Database = {
         Returns: {
           cost_eur: number
           waste_id: string
+        }[]
+      }
+      remove_ingredient_from_recipes: {
+        Args: { p_parents: string[]; p_source: string }
+        Returns: {
+          affected_item_ids: string[]
+          removed: number
         }[]
       }
       reprocess_sale: { Args: { p_sale_id: string }; Returns: number }

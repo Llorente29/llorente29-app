@@ -798,3 +798,147 @@ export async function substituteIngredientInRecipes(
     affectedItemIds: affected,
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// QUITAR ingrediente de los escandallos elegidos. Mismo molde que Sustituir:
+// preview (lista de platos con coste actual → coste sin el ingrediente) →
+// selección → acción → recoste.
+// ─────────────────────────────────────────────────────────────────────
+
+export interface RemoveDishPreview {
+  parentItemId: string
+  parentName: string
+  nLines: number
+  firstQty: number | null
+  firstUnitId: string | null
+  costeActual: number | null
+  costeNuevo: number | null
+}
+
+export async function previewRemoveIngredient(sourceId: string): Promise<RemoveDishPreview[]> {
+  requireSupabase()
+  const { data, error } = await supabase!.rpc('preview_remove_ingredient', { p_source: sourceId })
+  if (error) throw new Error(`No se pudo previsualizar: ${error.message}`)
+  const rows = (Array.isArray(data) ? data : []) as Record<string, unknown>[]
+  return rows.map((r) => ({
+    parentItemId: r.parent_item_id as string,
+    parentName: (r.parent_name as string) ?? '—',
+    nLines: Number(r.n_lines ?? 1),
+    firstQty: r.first_qty == null ? null : Number(r.first_qty),
+    firstUnitId: (r.first_unit_id as string) ?? null,
+    costeActual: r.coste_actual == null ? null : Number(r.coste_actual),
+    costeNuevo: r.coste_nuevo == null ? null : Number(r.coste_nuevo),
+  }))
+}
+
+export interface RemoveResult {
+  removed: number
+  affectedItemIds: string[]
+}
+
+export async function removeIngredientFromRecipes(sourceId: string, parentIds: string[]): Promise<RemoveResult> {
+  requireSupabase()
+  const { data, error } = await supabase!.rpc('remove_ingredient_from_recipes', {
+    p_source: sourceId,
+    p_parents: parentIds,
+  })
+  if (error) throw new Error(`No se pudo quitar el ingrediente: ${error.message}`)
+  const r = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null
+  const affected = (r?.affected_item_ids ?? []) as string[]
+  for (const id of affected) {
+    try { await cascadeFromItem(id) }
+    catch (e) { console.error(`removeIngredientFromRecipes: cascada falló para ${id}`, e) }
+  }
+  return { removed: Number(r?.removed ?? 0), affectedItemIds: affected }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// AÑADIR ingrediente a los platos elegidos (con cantidad + unidad + corte).
+// preview (lista de platos: ya lo usa / crearía ciclo / coste actual → con el
+// ingrediente) → selección → acción → recoste.
+// ─────────────────────────────────────────────────────────────────────
+
+export interface CutTypeOption {
+  id: string
+  name: string
+}
+
+export async function listCutTypes(accountId: string): Promise<CutTypeOption[]> {
+  requireSupabase()
+  const { data, error } = await supabase!
+    .from('kitchen_cut_type')
+    .select('id, name')
+    .eq('account_id', accountId)
+    .order('name')
+  if (error) throw new Error(`No se pudieron cargar los cortes: ${error.message}`)
+  return (data ?? []).map((r) => ({ id: r.id as string, name: r.name as string }))
+}
+
+export interface AddDishPreview {
+  parentItemId: string
+  parentName: string
+  alreadyHas: boolean
+  isCycle: boolean
+  costeActual: number | null
+  costeNuevo: number | null
+}
+
+export async function previewAddIngredient(
+  targetId: string,
+  qty: number,
+  unitId: string,
+  cutId: string | null,
+): Promise<AddDishPreview[]> {
+  requireSupabase()
+  const { data, error } = await supabase!.rpc('preview_add_ingredient', {
+    p_target: targetId,
+    p_qty: qty,
+    p_unit: unitId,
+    p_cut: cutId ?? undefined,
+  })
+  if (error) throw new Error(`No se pudo previsualizar: ${error.message}`)
+  const rows = (Array.isArray(data) ? data : []) as Record<string, unknown>[]
+  return rows.map((r) => ({
+    parentItemId: r.parent_item_id as string,
+    parentName: (r.parent_name as string) ?? '—',
+    alreadyHas: Boolean(r.already_has),
+    isCycle: Boolean(r.is_cycle),
+    costeActual: r.coste_actual == null ? null : Number(r.coste_actual),
+    costeNuevo: r.coste_nuevo == null ? null : Number(r.coste_nuevo),
+  }))
+}
+
+export interface AddResult {
+  added: number
+  skippedCycle: number
+  affectedItemIds: string[]
+}
+
+export async function addIngredientToRecipes(
+  targetId: string,
+  qty: number,
+  unitId: string,
+  cutId: string | null,
+  parentIds: string[],
+): Promise<AddResult> {
+  requireSupabase()
+  const { data, error } = await supabase!.rpc('add_ingredient_to_recipes', {
+    p_target: targetId,
+    p_qty: qty,
+    p_unit: unitId,
+    p_cut: cutId ?? undefined,
+    p_parents: parentIds,
+  })
+  if (error) throw new Error(`No se pudo añadir el ingrediente: ${error.message}`)
+  const r = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null
+  const affected = (r?.affected_item_ids ?? []) as string[]
+  for (const id of affected) {
+    try { await cascadeFromItem(id) }
+    catch (e) { console.error(`addIngredientToRecipes: cascada falló para ${id}`, e) }
+  }
+  return {
+    added: Number(r?.added ?? 0),
+    skippedCycle: Number(r?.skipped_cycle ?? 0),
+    affectedItemIds: affected,
+  }
+}
