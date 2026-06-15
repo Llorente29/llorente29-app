@@ -3,7 +3,7 @@
 // Bloque E: añadidos botones "Vista previa" además de "Descargar PDF".
 
 import { useEffect, useMemo, useState } from 'react'
-import { Download, FileText, AlertTriangle, ClipboardList, Loader2, Eye } from 'lucide-react'
+import { Download, FileText, AlertTriangle, ClipboardList, Loader2, Eye, Users } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
 import {
@@ -11,13 +11,14 @@ import {
   generateIncidentsReportPdf,
   generateInspectorReportPdf,
   generateDailySummaryPdf,
+  generateEmployeeComplianceReportPdf,
   type PdfPreviewResult,
   type PdfExportOptions,
 } from '@/modules/appcc/services/pdfExportService'
 import ReportPreviewModal from '@/components/ReportPreviewModal'
 import type { Location } from '@/types'
 
-type ReportType = 'controls' | 'incidents' | 'inspector' | 'daily'
+type ReportType = 'controls' | 'incidents' | 'inspector' | 'daily' | 'team'
 
 interface ReportOption {
   id: ReportType
@@ -28,6 +29,7 @@ interface ReportOption {
 
 const REPORT_OPTIONS: ReportOption[] = [
   { id: 'inspector', icon: ClipboardList, title: 'Informe inspector', desc: 'Controles + incidencias + acciones correctoras. El que pide Sanidad.' },
+  { id: 'team', icon: Users, title: 'Rendimiento del equipo', desc: 'Quien hizo sus tareas y quien no, en el periodo. Para reuniones y responsabilidades.' },
   { id: 'controls', icon: FileText, title: 'Informe de controles', desc: 'Todos los checklists completados en el periodo.' },
   { id: 'incidents', icon: AlertTriangle, title: 'Informe de incidencias', desc: 'Incidencias con estado y acciones correctoras.' },
   { id: 'daily', icon: Download, title: 'Resumen de un día', desc: 'Resumen de todos los controles de una fecha concreta.' },
@@ -78,6 +80,8 @@ export default function ReportsPage() {
         return await generateInspectorReportPdf(locationId, fromDate, toDate, locInfo, opts)
       case 'daily':
         return await generateDailySummaryPdf(locationId, singleDate, locInfo, opts)
+      case 'team':
+        return await generateEmployeeComplianceReportPdf(locationId, fromDate, toDate, locInfo, opts)
     }
   }
 

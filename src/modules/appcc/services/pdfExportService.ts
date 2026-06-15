@@ -12,6 +12,7 @@ import { supabase } from '@/lib/supabase'
 import * as executionsService from './executionsService'
 import * as templatesService from './templatesService'
 import * as incidentsService from './incidentsService'
+import * as analyticsService from './analyticsService'
 import type { AppccIncidentAction } from './incidentsService'
 import type {
   AppccExecutionResponse,
@@ -406,6 +407,110 @@ export async function generateControlsReportPdf(
 
   drawFooter(doc)
   return finalizePdf(doc, `APPCC_Controles_${fromDate}_${toDate}_${locationInfo.name.replace(/\s/g, '_')}.pdf`, options)
+}
+
+// ============================================================
+// 3b. INFORME DE RENDIMIENTO DEL EQUIPO (cumplimiento por empleado)
+// Quien hizo sus tareas y quien no, en el periodo. El reparto ya es
+// equitativo por turno/disponibilidad => comparacion justa (dif. vs Jolt/Zenput).
+// ============================================================
+
+export async function generateEmployeeComplianceReportPdf(
+  locationId: string,
+  fromDate: string,
+  toDate: string,
+  locationInfo: LocationInfo,
+  options?: PdfExportOptions,
+): Promise<PdfPreviewResult | null> {
+  const rows = await analyticsService.getEmployeeCompliance(
+    { from: fromDate, to: toDate },
+    [locationId],
+  )
+  if (rows.length === 0) throw new Error('No hay tareas asignadas en este periodo')
+
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  const W = doc.internal.pageSize.getWidth()
+  const margin = 15
+  const contentW = W - margin * 2
+  let y = margin
+
+  y = drawHeader(doc, y, margin, contentW, locationInfo, 'Rendimiento del equipo APPCC')
+
+  doc.setFontSize(14)
+  doc.setTextColor(ACCENT[0], ACCENT[1], ACCENT[2])
+  doc.setFont('helvetica', 'bold')
+  doc.text(`Rendimiento del equipo del ${fromDate} al ${toDate}`, margin, y)
+  y += 6
+
+  doc.setFontSize(8)
+  doc.setFont('helvetica', 'italic')
+  doc.setTextColor(GRAY[0], GRAY[1], GRAY[2])
+  doc.text('Reparto equilibrado por turno y disponibilidad: la comparacion es justa.', margin, y, { maxWidth: contentW })
+  y += 7
+
+  const totAssigned = rows.reduce((a, r) => a + r.assigned, 0)
+  const totDone = rows.reduce((a, r) => a + r.done, 0)
+  const totMissed = rows.reduce((a, r) => a + r.overdueMissed, 0)
+  const totRate = totAssigned > 0 ? Math.round((totDone / totAssigned) * 100) : 0
+  doc.setFontSize(9)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(GRAY[0], GRAY[1], GRAY[2])
+  doc.text(`Asignadas: ${totAssigned}  |  Hechas: ${totDone}  |  Sin hacer: ${totMissed}  |  Cumplimiento global: ${totRate}%`, margin, y)
+  y += 8
+
+  const xAssign = margin + 105
+  const xDone = margin + 125
+  const xLate = margin + 145
+  const xMissed = margin + 168
+  const xRate = margin + contentW
+
+  doc.setFillColor(ACCENT[0], ACCENT[1], ACCENT[2])
+  doc.rect(margin, y - 4, contentW, 7, 'F')
+  doc.setTextColor(255, 255, 255)
+  doc.setFontSize(8)
+  doc.setFont('helvetica', 'bold')
+  doc.text('EMPLEADO', margin + 2, y)
+  doc.text('Asign.', xAssign, y, { align: 'right' })
+  doc.text('Hechas', xDone, y, { align: 'right' })
+  doc.text('Tarde', xLate, y, { align: 'right' })
+  doc.text('Sin hacer', xMissed, y, { align: 'right' })
+  doc.text('Cumpl.', xRate, y, { align: 'right' })
+  y += 7
+
+  for (const r of rows) {
+    if (y > 270) { doc.addPage(); y = margin }
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.setTextColor(0, 0, 0)
+    doc.text(r.employeeName, margin + 2, y, { maxWidth: 95 })
+    doc.setTextColor(GRAY[0], GRAY[1], GRAY[2])
+    doc.text(String(r.assigned), xAssign, y, { align: 'right' })
+    doc.setTextColor(0, 0, 0)
+    doc.text(String(r.done), xDone, y, { align: 'right' })
+    const lc = r.late > 0 ? ([0, 0, 0] as const) : GRAY
+    doc.setTextColor(lc[0], lc[1], lc[2])
+    doc.text(r.late > 0 ? String(r.late) : '-', xLate, y, { align: 'right' })
+    const mc = r.overdueMissed > 0 ? DANGER : GRAY
+    doc.setTextColor(mc[0], mc[1], mc[2])
+    doc.text(r.overdueMissed > 0 ? String(r.overdueMissed) : '-', xMissed, y, { align: 'right' })
+    const rc = r.completionRate >= 90 ? SUCCESS : r.completionRate >= 70 ? ([245, 158, 11] as const) : DANGER
+    doc.setTextColor(rc[0], rc[1], rc[2])
+    doc.setFont('helvetica', 'bold')
+    doc.text(`${r.completionRate}%`, xRate, y, { align: 'right' })
+    doc.setDrawColor(230, 230, 230)
+    doc.setLineWidth(0.2)
+    doc.line(margin, y + 2, margin + contentW, y + 2)
+    y += 7
+  }
+
+  y += 4
+  doc.setFontSize(7)
+  doc.setTextColor(GRAY[0], GRAY[1], GRAY[2])
+  doc.setFont('helvetica', 'italic')
+  doc.text('Documento generado por Folvy APPCC. "Sin hacer" = tareas vencidas no completadas; lo pendiente aun a tiempo no cuenta. "Tarde" a granularidad de dia.', margin, y, { maxWidth: contentW })
+
+  drawFooter(doc)
+  return finalizePdf(doc, `APPCC_Rendimiento_${fromDate}_${toDate}_${locationInfo.name.replace(/\s/g, '_')}.pdf`, options)
 }
 
 // ============================================================
