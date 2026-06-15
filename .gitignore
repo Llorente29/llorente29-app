@@ -50,3 +50,11 @@ tspoon_dump/
 *folvy_competitive_map*
 regenerar_formatos.sql
 regenerar_formatos_informe.txt
+
+# SQL con datos confidenciales de cliente (precios/carta) - NO versionar
+supabase/migrations/fix_precios*.sql
+supabase/migrations/preview_precios*.sql
+supabase/migrations/verif_precios*.sql
+supabase/migrations/fix_preferentes*.sql
+supabase/migrations/verif_preferentes*.sql
+supabase/migrations/mapa_preferentes*.sql

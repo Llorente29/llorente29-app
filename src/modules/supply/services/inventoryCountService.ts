@@ -316,3 +316,42 @@ export const REASON_CODES: { value: string; label: string }[] = [
   { value: 'traspaso', label: 'Traspaso no registrado' },
   { value: 'otro', label: 'Otro' },
 ]
+
+// ─── Inspector de revisión (IA): propone motivo de variación ───
+// Para las líneas fuera de tolerancia, la IA propone el reason_code más probable
+// con confianza y explicación. NO auto-aplica: el front muestra la sugerencia y
+// el responsable la confirma con un clic. "IA propone, humano decide".
+export interface CountReasonSuggestion {
+  id: string            // inventory_count_line.id
+  reasonCode: string    // uno de REASON_CODES
+  confidence: number    // 0..1
+  explanation: string
+}
+
+export interface CountReasonLineInput {
+  id: string
+  itemName: string
+  familyName: string | null
+  abcClass: string | null
+  varianceQty: number | null
+  variancePct: number | null
+  varianceValue: number | null
+  unitAbbr: string | null
+}
+
+export async function proposeCountReasons(
+  lines: CountReasonLineInput[],
+): Promise<CountReasonSuggestion[]> {
+  requireSupabase()
+  const { data, error } = await supabase!.functions.invoke('propose-count-reasons', {
+    body: { lines },
+  })
+  if (error) throw new Error(`No se pudieron sugerir motivos: ${error.message}`)
+  const arr = ((data as { suggestions?: unknown[] } | null)?.suggestions ?? []) as Array<Record<string, unknown>>
+  return arr.map((s) => ({
+    id: String(s.id ?? ''),
+    reasonCode: String(s.reasonCode ?? 'otro'),
+    confidence: Number(s.confidence ?? 0),
+    explanation: String(s.explanation ?? ''),
+  }))
+}
