@@ -47,11 +47,11 @@ export default function AutoInventorySection({
   // Idempotente: si ya existe la cola de hoy, la reutiliza; si el autoinventario
   // está apagado en Ajustes, no genera nada. La automática (al montar) y el botón
   // manual llaman a lo mismo.
-  async function runGenerate(manual: boolean) {
+  async function runGenerate(manual: boolean, ignoreFreshness = false) {
     if (!accountId || !locationId || generating) return
     setGenerating(true)
     try {
-      const res = await generateDailyCount(accountId, locationId)
+      const res = await generateDailyCount(accountId, locationId, ignoreFreshness)
       if (res === null) {
         if (manual) onFlash('El autoinventario está desactivado. Actívalo en Ajustes.')
       } else if (res.alreadyExisted) {
@@ -142,6 +142,11 @@ export default function AutoInventorySection({
           <button type="button" onClick={() => void runGenerate(true)} disabled={generating}
             className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md bg-accent text-text-on-accent hover:bg-accent-hover transition-base disabled:opacity-50">
             {generating ? <Loader2 size={13} className="animate-spin" /> : <ClipboardCheck size={13} />} Generar cola de hoy
+          </button>
+          <button type="button" onClick={() => void runGenerate(true, true)} disabled={generating}
+            title="Fuerza una cola con todo el alcance, ignorando lo contado recientemente (repaso completo)."
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md border border-border-default text-text-secondary hover:bg-page transition-base disabled:opacity-50">
+            <RefreshCw size={13} /> Forzar repaso
           </button>
           <button type="button" onClick={() => setReloadTick(t => t + 1)}
             className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md border border-border-default text-text-secondary hover:bg-page transition-base">

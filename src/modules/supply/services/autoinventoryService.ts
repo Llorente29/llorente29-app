@@ -217,6 +217,7 @@ export interface DailyCountResult {
 export async function generateDailyCount(
   accountId: string,
   locationId: string,
+  ignoreFreshness = false,
   dateISO?: string,
 ): Promise<DailyCountResult | null> {
   requireSupabase()
@@ -232,6 +233,7 @@ export async function generateDailyCount(
     p_employee_ids: counters.length > 0 ? counters : undefined,
     p_per_person: settings.perPerson,
     p_coverage_target: 80,
+    p_ignore_freshness: ignoreFreshness,
   })
   if (error) throw new Error(`No se pudo generar la cola del día: ${error.message}`)
   const r = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null
