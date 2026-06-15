@@ -19,7 +19,7 @@
 // chip "sin terminar" + unidad/coste fijo/coste computado etiquetados), sin
 // scroll horizontal. Mismo mecanismo y estilo que KitchenProfitabilityPage (R1.4).
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Component, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from 'react'
 import { Plus, Soup, X, AlertTriangle, ChevronRight, Search, Sparkles, Tag, FolderTree, BookMarked, Check, Loader2, Wand2 } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
@@ -158,6 +158,16 @@ export default function KitchenItemsPage() {
     })
   }, [items, search, familyFilter])
 
+  // Ingredientes pendientes (needs_review) — los que la IA puede completar.
+  // IMPORTANTE: este hook DEBE declararse ANTES del `return` condicional de la
+  // vista detalle (más abajo). Un hook después de un return rompe el orden de
+  // hooks de React al cambiar de lista a detalle → "Rendered fewer hooks than
+  // expected" / error #300 → pantalla en blanco. Por eso vive aquí arriba.
+  const pendingItems = useMemo(
+    () => items.filter((it) => it.needsReview).map((it) => ({ id: it.id, name: it.name })),
+    [items],
+  )
+
   function handleCreated(created: RecipeItem) {
     setCreateOpen(false)
     setReloadTick(t => t + 1)
@@ -175,25 +185,31 @@ export default function KitchenItemsPage() {
   }
 
   // ── Vista DETALLE: el ingrediente seleccionado ──
+  // Va envuelta en una boundary: si la ficha (o sus secciones de proveedor/
+  // precio) lanza, mostramos un error legible + "Volver" en vez de tumbar toda
+  // la cocina en blanco. key={selectedItemId} resetea la boundary al cambiar de
+  // ingrediente (si no, un fallo se "quedaría pegado" para el siguiente).
   if (selectedItemId) {
     return (
-      <KitchenItemDetailPage
-        itemId={selectedItemId}
+      <DetailErrorBoundary
+        key={selectedItemId}
         onBack={() => {
           setSelectedItemId(null)
           setReloadTick(t => t + 1)
         }}
-      />
+      >
+        <KitchenItemDetailPage
+          itemId={selectedItemId}
+          onBack={() => {
+            setSelectedItemId(null)
+            setReloadTick(t => t + 1)
+          }}
+        />
+      </DetailErrorBoundary>
     )
   }
 
   // ── Vista LISTA ──
-  // Ingredientes pendientes (needs_review) — los que la IA puede completar.
-  const pendingItems = useMemo(
-    () => items.filter((it) => it.needsReview).map((it) => ({ id: it.id, name: it.name })),
-    [items],
-  )
-
   async function handleBulkEnrich() {
     if (!activeAccountId || pendingItems.length === 0 || bulkRunning) return
     setBulkRunning(true)
@@ -545,6 +561,61 @@ export default function KitchenItemsPage() {
       )}
     </div>
   )
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// DetailErrorBoundary — red de seguridad de la vista DETALLE.
+// Si un componente hijo (la ficha del ingrediente y sus secciones de
+// proveedor/precio) lanza una excepción, en lugar de tumbar TODA la cocina
+// en blanco mostramos un mensaje legible + "Volver al listado".
+// Pre-producción: el mensaje del error se muestra a propósito para poder
+// diagnosticarlo, y el stack real queda en consola (componentDidCatch).
+// Las error boundaries DEBEN ser componentes de clase en React.
+// ─────────────────────────────────────────────────────────────────────
+interface DetailErrorBoundaryProps {
+  onBack: () => void
+  children: ReactNode
+}
+
+interface DetailErrorBoundaryState {
+  error: Error | null
+}
+
+class DetailErrorBoundary extends Component<DetailErrorBoundaryProps, DetailErrorBoundaryState> {
+  state: DetailErrorBoundaryState = { error: null }
+
+  static getDerivedStateFromError(error: Error): DetailErrorBoundaryState {
+    return { error }
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    // Rastro en consola para no perder el stack real al diagnosticar.
+    console.error('[KitchenItemDetail] error capturado por la boundary:', error, info)
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="p-4">
+          <div className="rounded-md bg-danger-bg text-danger border border-danger/20 p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span className="text-sm font-medium">No se pudo abrir la ficha del ingrediente</span>
+            </div>
+            <p className="text-xs break-words mb-3">{this.state.error.message}</p>
+            <button
+              type="button"
+              onClick={this.props.onBack}
+              className="px-3 py-1.5 text-sm rounded-md font-medium bg-accent text-text-on-accent hover:opacity-90 transition-base"
+            >
+              ← Volver al listado
+            </button>
+          </div>
+        </div>
+      )
+    }
+    return this.props.children
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────
