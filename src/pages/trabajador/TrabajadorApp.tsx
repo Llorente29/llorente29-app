@@ -16,6 +16,8 @@ import MisVacaciones from './MisVacaciones'
 import MiBolsaHoras from '../../components/MiBolsaHoras'
 import MisTurnos from './MisTurnos'
 import CambiosTurnoPage from './CambiosTurnoPage'
+import MiAutoinventario from './MiAutoinventario'
+import { getMyDailyQueue } from '../../modules/supply/services/autoinventoryService'
 import MisChecklistsPage from './MisChecklistsPage'
 import BottomTabBar from '../../components/trabajador/BottomTabBar'
 import type { WorkerTab } from '../../components/trabajador/BottomTabBar'
@@ -30,6 +32,7 @@ type SubPage =
   | 'portal'
   | 'fichar' | 'horario' | 'fichajes' | 'documentos' | 'vacaciones' | 'bolsa' | 'turnos' | 'cambios'
   | 'appcc_list' | 'appcc_execution'
+  | 'inventario'
 
 interface Props {
   employeeId?: string
@@ -59,6 +62,9 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
   // Desde dónde se entró a fichar, para volver al sitio correcto (home o portal).
   const [ficharOrigin, setFicharOrigin] = useState<'home' | 'portal'>('portal')
   const [appccPendingCount, setAppccPendingCount] = useState(0)
+  // Autoinventario: ¿hay cola asignada hoy a este empleado? y cuántos faltan.
+  const [showInventory, setShowInventory] = useState(false)
+  const [inventoryPendingCount, setInventoryPendingCount] = useState(0)
   // ¿El local tiene APPCC configurado? Decide si se muestra el tab "Tareas".
   const [showAppccTab, setShowAppccTab] = useState(false)
   // refreshAttempted: marca si ya hemos pedido un refresh para resolver el caso
@@ -127,6 +133,20 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
       })
     return () => { cancel = true }
   }, [employee?.locationId])
+
+  // Autoinventario del día: ¿este empleado tiene cola asignada hoy?
+  useEffect(() => {
+    if (!employee?.locationId || !employee?.id) return
+    let cancel = false
+    getMyDailyQueue(employee.locationId, employee.id)
+      .then(({ lines }) => {
+        if (cancel) return
+        setShowInventory(lines.length > 0)
+        setInventoryPendingCount(lines.filter((l) => l.countedQty == null).length)
+      })
+      .catch(() => { if (!cancel) { setShowInventory(false); setInventoryPendingCount(0) } })
+    return () => { cancel = true }
+  }, [employee?.locationId, employee?.id, subPage])
 
   // Refresh único bajo demanda: si llegamos aquí con employeeId pero sin
   // encontrar al empleado en staff, y el sync ya no está activo, puede ser
@@ -239,6 +259,7 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
   if (subPage === 'vacaciones') return <MisVacaciones employee={employee} onBack={() => setSubPage('portal')} />
   if (subPage === 'turnos') return <MisTurnos employee={employee} onBack={() => setSubPage('portal')} />
   if (subPage === 'cambios') return <CambiosTurnoPage employee={employee} onBack={() => setSubPage('portal')} />
+  if (subPage === 'inventario') return <MiAutoinventario employee={employee} onBack={() => setSubPage('home')} />
 
   if (subPage === 'bolsa' && showBolsaHoras) {
     return (
@@ -290,11 +311,14 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
         onNavigate={(mod: WorkerModule) => {
           if (mod === 'appcc') setSubPage('appcc_list')
           else if (mod === 'portal') setSubPage('portal')
+          else if (mod === 'inventario') setSubPage('inventario')
           else if (mod === 'fichar') { setFicharOrigin('home'); setSubPage('fichar') }
         }}
         onLogout={onExitMode}
         exitLabel={exitLabel}
         appccPendingCount={appccPendingCount}
+        showInventory={showInventory}
+        inventoryPendingCount={inventoryPendingCount}
       />
       <BottomTabBar active="inicio" onSelect={goToTab} showTareas={showAppccTab} />
     </div>

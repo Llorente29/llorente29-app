@@ -7,14 +7,14 @@
 // NO cambia lógica, props ni navegación: solo el aspecto.
 
 import { useEffect, useState } from 'react'
-import { Leaf, User, LogOut, AlertCircle, ArrowLeft, ChevronRight, LogIn, Clock } from 'lucide-react'
+import { Leaf, User, LogOut, AlertCircle, ArrowLeft, ChevronRight, LogIn, Clock, Boxes } from 'lucide-react'
 import type { Employee } from '../../types'
 import { hasOpenShift } from '../../services/fichajeKiosko'
 import NotificationBell from '../../components/NotificationBell'
 import { supabase } from '../../lib/supabase'
 import InstallAppButton from '../../components/InstallAppButton'
 
-export type WorkerModule = 'appcc' | 'portal' | 'fichar'
+export type WorkerModule = 'appcc' | 'portal' | 'fichar' | 'inventario'
 
 interface Props {
   employee: Employee
@@ -27,6 +27,10 @@ interface Props {
   exitLabel?: 'logout' | 'back-to-management'
   /** Número de checklists APPCC pendientes hoy para este empleado */
   appccPendingCount?: number
+  /** ¿Hay cola de autoinventario asignada hoy a este empleado? */
+  showInventory?: boolean
+  /** Nº de artículos del autoinventario aún sin contar hoy. */
+  inventoryPendingCount?: number
 }
 
 interface ModuleButton {
@@ -41,7 +45,7 @@ interface ModuleButton {
   badgeColor?: string
 }
 
-export default function HomeEmpleado({ employee, onNavigate, onLogout, exitLabel = 'logout', appccPendingCount = 0 }: Props) {
+export default function HomeEmpleado({ employee, onNavigate, onLogout, exitLabel = 'logout', appccPendingCount = 0, showInventory = false, inventoryPendingCount = 0 }: Props) {
   const open = hasOpenShift(employee)
   const [showAppcc, setShowAppcc] = useState(false)
 
@@ -81,6 +85,18 @@ export default function HomeEmpleado({ employee, onNavigate, onLogout, exitLabel
       iconColor: 'text-accent',
       iconBg: 'bg-accent-bg',
     },
+    ...(showInventory ? [{
+      id: 'inventario' as WorkerModule,
+      icon: Boxes,
+      title: 'Conteo',
+      desc: inventoryPendingCount > 0
+        ? `${inventoryPendingCount} por contar`
+        : 'Conteo del día hecho',
+      iconColor: 'text-terracota',
+      iconBg: 'bg-terracota-bg',
+      badge: inventoryPendingCount > 0 ? inventoryPendingCount : undefined,
+      badgeColor: 'bg-terracota',
+    }] : []),
     // Preparado para más módulos:
     // { id: 'stock', icon: Package, title: 'Stock', desc: 'Recuentos y recepciones', iconColor: '...', iconBg: '...' },
   ]

@@ -10,9 +10,10 @@
 // posterior; hoy el conteo se crea en la pestaña "Conteos".
 
 import { useEffect, useMemo, useState } from 'react'
-import { Gauge, Loader2, RefreshCw, AlertTriangle, ScanLine } from 'lucide-react'
+import { Gauge, Loader2, RefreshCw, AlertTriangle, ScanLine, ClipboardCheck } from 'lucide-react'
 import {
   getAutoInventoryQueue,
+  generateDailyCount,
   type AutoInventoryItem,
 } from '@/modules/supply/services/autoinventoryService'
 
@@ -28,7 +29,7 @@ const fmtPct = (v: number | null) =>
 const fmtScore = (v: number) => new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 }).format(v)
 
 export default function AutoInventorySection({
-  accountId, locationId, onError,
+  accountId, locationId, onError, onFlash,
 }: {
   accountId: string
   locationId: string
@@ -39,6 +40,40 @@ export default function AutoInventorySection({
   const [rows, setRows] = useState<AutoInventoryItem[]>([])
   const [loading, setLoading] = useState(false)
   const [reloadTick, setReloadTick] = useState(0)
+  const [generating, setGenerating] = useState(false)
+
+  // Generación de la COLA DEL DÍA (A3/A4): reparte por persona los artículos más
+  // "rancios" del alcance hasta cubrir el objetivo, con tope por persona.
+  // Idempotente: si ya existe la cola de hoy, la reutiliza; si el autoinventario
+  // está apagado en Ajustes, no genera nada. La automática (al montar) y el botón
+  // manual llaman a lo mismo.
+  async function runGenerate(manual: boolean) {
+    if (!accountId || !locationId || generating) return
+    setGenerating(true)
+    try {
+      const res = await generateDailyCount(accountId, locationId)
+      if (res === null) {
+        if (manual) onFlash('El autoinventario está desactivado. Actívalo en Ajustes.')
+      } else if (res.alreadyExisted) {
+        if (manual) onFlash(`La cola de hoy ya estaba generada (${res.linesCreated} artículos).`)
+      } else if (res.linesCreated === 0) {
+        if (manual) onFlash('Hoy no hay artículos que contar (cobertura ya cubierta).')
+      } else {
+        onFlash(`Cola de hoy generada: ${res.linesCreated} artículos repartidos para contar.`)
+      }
+    } catch (e) {
+      onError(e instanceof Error ? e.message : 'No se pudo generar la cola del día.')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  // Automático: al abrir la pestaña, genera la cola de hoy si procede (silencioso).
+  useEffect(() => {
+    if (!accountId || !locationId) return
+    void runGenerate(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountId, locationId])
 
   useEffect(() => {
     if (!accountId || !locationId) { setRows([]); return }
@@ -99,10 +134,16 @@ export default function AutoInventorySection({
             ))}
           </div>
         </div>
-        <button type="button" onClick={() => setReloadTick(t => t + 1)}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md border border-border-default text-text-secondary hover:bg-page transition-base">
-          <RefreshCw size={13} /> Actualizar
-        </button>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => void runGenerate(true)} disabled={generating}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md bg-accent text-text-on-accent hover:bg-accent-hover transition-base disabled:opacity-50">
+            {generating ? <Loader2 size={13} className="animate-spin" /> : <ClipboardCheck size={13} />} Generar cola de hoy
+          </button>
+          <button type="button" onClick={() => setReloadTick(t => t + 1)}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md border border-border-default text-text-secondary hover:bg-page transition-base">
+            <RefreshCw size={13} /> Actualizar
+          </button>
+        </div>
       </div>
 
       {/* KPIs */}

@@ -4385,6 +4385,7 @@ export type Database = {
         Row: {
           abc_class: string | null
           account_id: string
+          assigned_to: string | null
           counted_by: string | null
           counted_by_name: string | null
           counted_qty: number | null
@@ -4405,6 +4406,7 @@ export type Database = {
         Insert: {
           abc_class?: string | null
           account_id: string
+          assigned_to?: string | null
           counted_by?: string | null
           counted_by_name?: string | null
           counted_qty?: number | null
@@ -4425,6 +4427,7 @@ export type Database = {
         Update: {
           abc_class?: string | null
           account_id?: string
+          assigned_to?: string | null
           counted_by?: string | null
           counted_by_name?: string | null
           counted_qty?: number | null
@@ -4443,6 +4446,13 @@ export type Database = {
           within_tolerance?: boolean | null
         }
         Relationships: [
+          {
+            foreignKeyName: "inventory_count_line_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "inventory_count_line_inventory_count_id_fkey"
             columns: ["inventory_count_id"]
@@ -9661,6 +9671,8 @@ export type Database = {
       supply_settings: {
         Row: {
           account_id: string
+          autoinventory_enabled: boolean
+          autoinventory_per_person: number
           created_at: string
           created_by: string | null
           created_by_name: string | null
@@ -9674,6 +9686,8 @@ export type Database = {
         }
         Insert: {
           account_id: string
+          autoinventory_enabled?: boolean
+          autoinventory_per_person?: number
           created_at?: string
           created_by?: string | null
           created_by_name?: string | null
@@ -9687,6 +9701,8 @@ export type Database = {
         }
         Update: {
           account_id?: string
+          autoinventory_enabled?: boolean
+          autoinventory_per_person?: number
           created_at?: string
           created_by?: string | null
           created_by_name?: string | null
@@ -10245,6 +10261,10 @@ export type Database = {
         Args: { p_reason?: string; p_sale_id: string }
         Returns: undefined
       }
+      check_count_variance: {
+        Args: { p_counted: number; p_line_id: string }
+        Returns: string
+      }
       classify_unmapped_product: {
         Args: {
           p_account_id: string
@@ -10379,6 +10399,20 @@ export type Database = {
       format_price_per_base: {
         Args: { p_format_id: string; p_supplier_id: string }
         Returns: number
+      }
+      generate_daily_count: {
+        Args: {
+          p_account_id: string
+          p_coverage_target?: number
+          p_employee_ids?: string[]
+          p_location_id: string
+          p_per_person?: number
+        }
+        Returns: {
+          already_existed: boolean
+          count_id: string
+          lines_created: number
+        }[]
       }
       get_effective_permissions: {
         Args: { p_account_id: string }
