@@ -57,9 +57,13 @@ export default function AutoInventorySection({
       } else if (res.alreadyExisted) {
         if (manual) onFlash(`La cola de hoy ya estaba generada (${res.linesCreated} artículos).`)
       } else if (res.linesCreated === 0) {
-        if (manual) onFlash('Hoy no hay artículos que contar (cobertura ya cubierta).')
+        if (manual) onFlash('Hoy no hay artículos que contar: la fiabilidad ya está al día.')
       } else {
-        onFlash(`Cola de hoy generada: ${res.linesCreated} artículos repartidos para contar.`)
+        const cob = res.coverageBefore != null && res.coverageAfter != null
+          ? ` · fiabilidad ${res.coverageBefore}% → ${res.coverageAfter}%`
+          : ''
+        const cupo = res.perPersonToday != null ? ` (hasta ${res.perPersonToday} por persona)` : ''
+        onFlash(`Cola de hoy: ${res.linesCreated} artículos repartidos${cupo}${cob}.`)
       }
     } catch (e) {
       onError(e instanceof Error ? e.message : 'No se pudo generar la cola del día.')

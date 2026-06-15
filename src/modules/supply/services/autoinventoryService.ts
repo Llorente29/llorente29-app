@@ -203,6 +203,12 @@ export interface DailyCountResult {
   countId: string
   linesCreated: number
   alreadyExisted: boolean
+  /** Cobertura fresca del valor ANTES de la cola de hoy (%). null si ya existía. */
+  coverageBefore: number | null
+  /** Cobertura fresca tras añadir la cola de hoy (%). null si ya existía. */
+  coverageAfter: number | null
+  /** Cupo por persona aplicado hoy (adaptativo según frescura). null si ya existía. */
+  perPersonToday: number | null
 }
 
 // Genera (idempotente) la cola del día y la reparte por persona. Respeta el
@@ -233,6 +239,9 @@ export async function generateDailyCount(
     countId: r?.count_id as string,
     linesCreated: Number(r?.lines_created ?? 0),
     alreadyExisted: Boolean(r?.already_existed),
+    coverageBefore: r?.coverage_before == null ? null : Number(r.coverage_before),
+    coverageAfter: r?.coverage_after == null ? null : Number(r.coverage_after),
+    perPersonToday: r?.per_person_today == null ? null : Number(r.per_person_today),
   }
 }
 
