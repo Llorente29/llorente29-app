@@ -15,7 +15,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   BarChart3, AlertTriangle, Clock, ClipboardCheck,
-  TrendingUp, MapPin, FileWarning, CalendarClock,
+  TrendingUp, MapPin, FileWarning, CalendarClock, UserCheck,
 } from 'lucide-react'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -33,6 +33,7 @@ import type {
   LocationMetrics,
   TopFailingTemplate,
   HeatmapCell,
+  EmployeeCompliance,
   RangePreset,
 } from '@/modules/appcc/services/analyticsService'
 import { SEVERITY_LABEL } from '@/modules/appcc/types'
@@ -81,6 +82,7 @@ export default function AppccDashboardPage() {
   const [byLocation, setByLocation] = useState<LocationMetrics[]>([])
   const [topFailing, setTopFailing] = useState<TopFailingTemplate[]>([])
   const [heatmap, setHeatmap] = useState<HeatmapCell[]>([])
+  const [empCompliance, setEmpCompliance] = useState<EmployeeCompliance[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -92,7 +94,7 @@ export default function AppccDashboardPage() {
       setLoading(true)
       setError(null)
       try {
-        const [k, d, s, c, byL, topF, hm] = await Promise.all([
+        const [k, d, s, c, byL, topF, hm, ec] = await Promise.all([
           analyticsService.getKpiSummary(range, filterLocationIds),
           analyticsService.getDailyCompliance(range, filterLocationIds),
           analyticsService.getSeverityDistribution(range, filterLocationIds),
@@ -103,10 +105,12 @@ export default function AppccDashboardPage() {
           ),
           analyticsService.getTopFailingTemplates(range, filterLocationIds, 5),
           analyticsService.getIncidentsHeatmap(range, filterLocationIds),
+          analyticsService.getEmployeeCompliance(range, filterLocationIds),
         ])
         if (cancelled) return
         setKpi(k); setDaily(d); setSeverity(s); setCategory(c)
         setByLocation(byL); setTopFailing(topF); setHeatmap(hm)
+        setEmpCompliance(ec)
       } catch (err) {
         if (cancelled) return
         console.error('[AppccDashboardPage] load error', err)
@@ -318,6 +322,14 @@ export default function AppccDashboardPage() {
         </Panel>
       )}
 
+      {/* ============ CUMPLIMIENTO POR EMPLEADO ============ */}
+      <Panel title="Cumplimiento por empleado" Icon={UserCheck}>
+        <p className="text-xs text-text-secondary mb-3 -mt-1">
+          Reparto equilibrado por turno y disponibilidad: la comparacion es justa.
+        </p>
+        <EmployeeComplianceTable rows={empCompliance} />
+      </Panel>
+
       {/* ============ TOP 5 FALLOS ============ */}
       <Panel title="Top plantillas con más fallos" Icon={FileWarning}>
         {topFailing.length === 0 ? (
@@ -428,6 +440,56 @@ function EmptyState({ message }: { message: string }) {
   return (
     <div className="text-center text-text-secondary text-sm py-8 italic">
       {message}
+    </div>
+  )
+}
+
+function EmployeeComplianceTable({ rows }: { rows: EmployeeCompliance[] }) {
+  if (rows.length === 0) {
+    return <EmptyState message="Sin tareas asignadas en el periodo" />
+  }
+  const best = [...rows].sort((a, b) => b.completionRate - a.completionRate)[0]
+  return (
+    <div className="overflow-x-auto -mx-3 sm:-mx-4">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-xs uppercase tracking-wider text-text-secondary border-b border-border-default">
+            <th className="px-3 sm:px-4 py-2 font-medium">Empleado</th>
+            <th className="px-3 py-2 font-medium text-right">Asign.</th>
+            <th className="px-3 py-2 font-medium text-right">Hechas</th>
+            <th className="px-3 py-2 font-medium text-right hidden sm:table-cell">Tarde</th>
+            <th className="px-3 py-2 font-medium text-right">Sin hacer</th>
+            <th className="px-3 py-2 font-medium text-right">Cumpl.</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(r => {
+            const color = r.completionRate >= 90 ? 'text-success'
+              : r.completionRate >= 70 ? 'text-warning'
+              : 'text-danger'
+            const isBest = r.employeeId === best.employeeId && r.completionRate >= 90 && rows.length > 1
+            return (
+              <tr key={r.employeeId} className="border-b border-border-default last:border-0">
+                <td className="px-3 sm:px-4 py-2.5 font-medium text-text-primary">
+                  {r.employeeName}
+                  {isBest && <span className="ml-2 text-xs text-success">★ mejor</span>}
+                </td>
+                <td className="px-3 py-2.5 text-right tabular-nums text-text-secondary">{r.assigned}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums text-text-primary">{r.done}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums text-warning hidden sm:table-cell">
+                  {r.late > 0 ? r.late : '—'}
+                </td>
+                <td className="px-3 py-2.5 text-right tabular-nums text-danger">
+                  {r.overdueMissed > 0 ? r.overdueMissed : '—'}
+                </td>
+                <td className={`px-3 py-2.5 text-right tabular-nums font-semibold ${color}`}>
+                  {r.completionRate}%
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
     </div>
   )
 }

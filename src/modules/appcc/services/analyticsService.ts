@@ -484,6 +484,94 @@ export async function getIncidentsHeatmap(
 // HELPER: derivar rango ISO desde un preset
 // ============================================================
 
+// ============================================================
+// CUMPLIMIENTO POR EMPLEADO (rendicion de cuentas)
+// Quien hizo su trabajo y quien no. El reparto ya es equitativo por turno/
+// disponibilidad (resolveAssignment), asi que esta comparacion es JUSTA:
+// solo cuenta lo que a cada uno se le asigno. Diferenciador vs Jolt/Zenput,
+// que no reparten por disponibilidad.
+// ============================================================
+
+export interface EmployeeCompliance {
+  employeeId: string
+  employeeName: string
+  assigned: number        // tareas asignadas en el rango
+  done: number            // completadas (a tiempo o tarde)
+  late: number            // completadas pero en fecha posterior a la prevista
+  overdueMissed: number   // vencidas sin hacer (paso el dia y no se completo)
+  pendingOnTime: number   // pendientes aun a tiempo (hoy/futuro), no penalizan
+  completionRate: number  // done / assigned (0-100)
+}
+
+export async function getEmployeeCompliance(
+  range: DateRange,
+  locationIds: string[] | null,
+): Promise<EmployeeCompliance[]> {
+  if (!supabase) return []
+  const today = new Date().toISOString().slice(0, 10)
+
+  let q = supabase
+    .from('appcc_executions')
+    .select('assigned_to, status, scheduled_date, completed_at')
+    .gte('scheduled_date', range.from)
+    .lte('scheduled_date', range.to)
+    .not('assigned_to', 'is', null)
+  if (locationIds && locationIds.length > 0) {
+    q = q.in('location_id', locationIds)
+  }
+  const { data: execs, error } = await q
+  if (error) {
+    console.error('[analyticsService] getEmployeeCompliance error', error)
+    return []
+  }
+
+  type Agg = {
+    assigned: number; done: number; late: number
+    overdueMissed: number; pendingOnTime: number
+  }
+  const stats = new Map<string, Agg>()
+  for (const r of execs ?? []) {
+    const id = r.assigned_to as string
+    const a = stats.get(id) ?? { assigned: 0, done: 0, late: 0, overdueMissed: 0, pendingOnTime: 0 }
+    a.assigned++
+    const done = r.status === 'completed' || r.completed_at != null
+    if (done) {
+      a.done++
+      const compDate = typeof r.completed_at === 'string' ? r.completed_at.slice(0, 10) : null
+      if (compDate && r.scheduled_date && compDate > (r.scheduled_date as string)) a.late++
+    } else if ((r.scheduled_date as string) < today) {
+      a.overdueMissed++
+    } else {
+      a.pendingOnTime++
+    }
+    stats.set(id, a)
+  }
+
+  const ids = [...stats.keys()]
+  if (ids.length === 0) return []
+
+  const { data: emps } = await supabase
+    .from('employees')
+    .select('id, name')
+    .in('id', ids)
+  const nameById = new Map<string, string>()
+  for (const e of emps ?? []) nameById.set(e.id as string, (e.name as string) ?? '-')
+
+  return ids.map(id => {
+    const a = stats.get(id)!
+    return {
+      employeeId: id,
+      employeeName: (nameById.get(id) ?? '-').trim(),
+      assigned: a.assigned,
+      done: a.done,
+      late: a.late,
+      overdueMissed: a.overdueMissed,
+      pendingOnTime: a.pendingOnTime,
+      completionRate: a.assigned > 0 ? Math.round((a.done / a.assigned) * 100) : 0,
+    }
+  }).sort((x, y) => x.completionRate - y.completionRate || y.overdueMissed - x.overdueMissed)
+}
+
 export type RangePreset = 'week' | 'month' | 'quarter'
 
 export function rangeFromPreset(preset: RangePreset): DateRange {
