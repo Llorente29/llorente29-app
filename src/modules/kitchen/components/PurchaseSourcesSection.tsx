@@ -28,7 +28,7 @@
 //  · Árbol de formatos anidado y foto→IA del albarán: fases siguientes.
 
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, Truck, Star, Check, AlertTriangle, Loader2, Pencil, Sparkles, ChevronDown, ChevronRight } from 'lucide-react'
+import { Plus, Truck, Star, Check, AlertTriangle, Loader2, Pencil, Sparkles, ChevronDown, ChevronRight, Archive, RotateCcw } from 'lucide-react'
 import {
   listSuppliers,
   createSupplier,
@@ -36,6 +36,9 @@ import {
   listFormatsByItem,
   setupSimplePurchase,
   updateArticleSupplier,
+  setPreferredSupplier,
+  unlinkSupplierFormat,
+  reactivateSupplierLink,
 } from '@/modules/kitchen/services/purchaseFormatService'
 import type { RecomputedAncestor } from '@/modules/kitchen/services/costCascadeService'
 import {
@@ -133,6 +136,8 @@ export default function PurchaseSourcesSection({
   const [supplierCode, setSupplierCode] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  // Mostrar también los proveedores archivados (descatalogados). Por defecto no.
+  const [showArchived, setShowArchived] = useState(false)
 
   // ¿El ingrediente cobra hoy su coste de un valor tecleado a mano (fixed)?
   // Si es así, al añadir la primera fuente el SERVICE lo pasará a last_purchase
@@ -145,7 +150,7 @@ export default function PurchaseSourcesSection({
     try {
       const [sup, lnk, fmt] = await Promise.all([
         listSuppliers(item.accountId),
-        listSuppliersByItem(item.id),
+        listSuppliersByItem(item.id, { includeInactive: showArchived }),
         listFormatsByItem(item.id),
       ])
       setSuppliers(sup)
@@ -164,7 +169,34 @@ export default function PurchaseSourcesSection({
   useEffect(() => {
     void reload()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [item.id])
+  }, [item.id, showArchived])
+
+  // Handlers de gestión de la fila (principal / archivar / reactivar). Cada uno
+  // recostea en el service (cascada); aquí recargamos y avisamos al detalle.
+  async function handleMakePreferred(linkId: string) {
+    await setPreferredSupplier(linkId, item.id)
+    setSuccessNote('Proveedor principal actualizado. Coste recalculado.')
+    await reload()
+    if (onChanged) onChanged()
+  }
+
+  async function handleArchive(linkId: string, supplierName: string) {
+    const ok = window.confirm(
+      `¿Archivar "${supplierName}" como proveedor de ${item.name}? Se conserva el histórico; puedes reactivarlo cuando quieras. El coste se recalculará con los proveedores que queden.`,
+    )
+    if (!ok) return
+    await unlinkSupplierFormat(linkId)
+    setSuccessNote('Proveedor archivado. Coste recalculado.')
+    await reload()
+    if (onChanged) onChanged()
+  }
+
+  async function handleReactivate(linkId: string) {
+    await reactivateSupplierLink(linkId)
+    setSuccessNote('Proveedor reactivado. Coste recalculado.')
+    await reload()
+    if (onChanged) onChanged()
+  }
 
   // Por defecto, la unidad de "¿cuánto trae?" es la unidad base del ingrediente.
   useEffect(() => {
@@ -364,9 +396,23 @@ export default function PurchaseSourcesSection({
                   await reload()
                   if (onChanged) onChanged()
                 }}
+                onMakePreferred={() => handleMakePreferred(link.id)}
+                onArchive={(supplierName) => handleArchive(link.id, supplierName)}
+                onReactivate={() => handleReactivate(link.id)}
               />
             ))}
           </div>
+        )}
+
+        {!loading && !error && (
+          <button
+            type="button"
+            onClick={() => setShowArchived((v) => !v)}
+            className="text-[11px] text-text-secondary hover:text-text-primary transition-base inline-flex items-center gap-1"
+          >
+            <Archive className="w-3 h-3" />
+            {showArchived ? 'Ocultar descatalogados' : 'Ver descatalogados'}
+          </button>
         )}
 
         {/* Confirmación veraz tras un cambio de coste (recuento real) + qué platos */}
@@ -647,6 +693,9 @@ interface SourceRowProps {
   baseUnit: KitchenUnit | null
   priceUnits: KitchenUnit[]   // unidades de la misma dimensión que la base (kg/g, L/ml, ud)
   onSaved: () => void | Promise<void>
+  onMakePreferred: () => void | Promise<void>
+  onArchive: (supplierName: string) => void | Promise<void>
+  onReactivate: () => void | Promise<void>
 }
 
 // La unidad "humana" para mostrar/teclear el precio: la de MAYOR factor de la
@@ -661,7 +710,18 @@ function toInputStr(n: number): string {
   return String(Math.round(n * 10000) / 10000)
 }
 
-function SourceRow({ link, supplierName, format, baseUnit, priceUnits, onSaved }: SourceRowProps) {
+function SourceRow({
+  link,
+  supplierName,
+  format,
+  baseUnit,
+  priceUnits,
+  onSaved,
+  onMakePreferred,
+  onArchive,
+  onReactivate,
+}: SourceRowProps) {
+  const archived = !link.isActive
   const baseAbbr = baseUnit?.abbreviation ?? ''
   const displayUnit = pickDisplayUnit(priceUnits, baseUnit)
   const displayAbbr = displayUnit?.abbreviation ?? baseAbbr
@@ -681,6 +741,7 @@ function SourceRow({ link, supplierName, format, baseUnit, priceUnits, onSaved }
   const [val, setVal] = useState('')
   const [codeVal, setCodeVal] = useState(link.supplierCode ?? '')
   const [saving, setSaving] = useState(false)
+  const [busy, setBusy] = useState(false)   // estrella / archivar / reactivar
 
   function openEdit() {
     setPriceUnitId(displayUnit?.id ?? '')
@@ -734,15 +795,53 @@ function SourceRow({ link, supplierName, format, baseUnit, priceUnits, onSaved }
     }
   }
 
+  async function doMakePreferred() {
+    if (link.isPreferred || busy) return
+    setBusy(true)
+    try { await onMakePreferred() } finally { setBusy(false) }
+  }
+  async function doArchive() {
+    if (busy) return
+    setBusy(true)
+    try { await onArchive(supplierName) } finally { setBusy(false) }
+  }
+  async function doReactivate() {
+    if (busy) return
+    setBusy(true)
+    try { await onReactivate() } finally { setBusy(false) }
+  }
+
   return (
-    <div className="flex items-center gap-3 rounded-md border border-border-default bg-page px-3 py-2">
+    <div className={`flex items-center gap-2 rounded-md border border-border-default bg-page px-3 py-2 ${archived ? 'opacity-60' : ''}`}>
+      {/* Estrella: marca este proveedor como PRINCIPAL (exclusivo por ingrediente).
+          El principal manda el coste del ingrediente. No se muestra en archivados. */}
+      {!archived && (
+        <button
+          type="button"
+          onClick={() => void doMakePreferred()}
+          disabled={busy}
+          aria-label={link.isPreferred ? 'Proveedor principal' : 'Marcar como principal'}
+          title={link.isPreferred ? 'Principal de este ingrediente' : 'Marcar como principal'}
+          className={`flex-shrink-0 p-1 rounded-md transition-base disabled:opacity-50 ${
+            link.isPreferred ? 'text-warning' : 'text-text-secondary hover:text-warning'
+          }`}
+        >
+          <Star className={`w-4 h-4 ${link.isPreferred ? 'fill-current' : ''}`} />
+        </button>
+      )}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-text-primary truncate">{supplierName}</span>
-          {link.isPreferred && (
+          {link.isPreferred && !archived && (
             <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-warning-bg text-warning flex-shrink-0">
               <Star className="w-3 h-3" />
               principal
+            </span>
+          )}
+          {archived && (
+            <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-page border border-border-default text-text-secondary flex-shrink-0">
+              <Archive className="w-3 h-3" />
+              descatalogado
             </span>
           )}
         </div>
@@ -764,7 +863,7 @@ function SourceRow({ link, supplierName, format, baseUnit, priceUnits, onSaved }
         </div>
       </div>
 
-      <div className="flex-shrink-0">
+      <div className="flex-shrink-0 flex items-center gap-1">
         {editing ? (
           <div className="flex flex-col items-end gap-1">
             <div className="flex items-center gap-1.5">
@@ -846,6 +945,33 @@ function SourceRow({ link, supplierName, format, baseUnit, priceUnits, onSaved }
               : fmtEur(link.lastPrice, 2)}
             <Pencil className="w-3 h-3 text-text-secondary" />
           </button>
+        )}
+
+        {/* Archivar (descatalogar) o reactivar. No durante la edición de precio. */}
+        {!editing && (
+          archived ? (
+            <button
+              type="button"
+              onClick={() => void doReactivate()}
+              disabled={busy}
+              title="Volver a comprar este artículo a este proveedor"
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs text-accent hover:bg-accent-bg transition-base disabled:opacity-50"
+            >
+              {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+              Reactivar
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void doArchive()}
+              disabled={busy}
+              aria-label="Archivar este proveedor"
+              title="Archivar (descatalogar) este proveedor"
+              className="p-1 rounded-md text-text-secondary hover:text-danger transition-base disabled:opacity-50"
+            >
+              {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Archive className="w-3.5 h-3.5" />}
+            </button>
+          )
         )}
       </div>
     </div>

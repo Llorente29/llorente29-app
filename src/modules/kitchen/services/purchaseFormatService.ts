@@ -277,13 +277,22 @@ function articleSupplierUpdateToRow(patch: ArticleSupplierUpdate): RowArticleSup
   return row
 }
 
-export async function listSuppliersByItem(itemId: string): Promise<ArticleSupplier[]> {
+export async function listSuppliersByItem(
+  itemId: string,
+  opts?: { includeInactive?: boolean },
+): Promise<ArticleSupplier[]> {
   requireSupabase()
-  const { data, error } = await supabase!
+  let q = supabase!
     .from('article_supplier')
     .select('*')
     .eq('recipe_item_id', itemId)
-    .eq('is_active', true)
+  // Por defecto solo los activos. Con includeInactive traemos también los
+  // archivados (descatalogados) para poder verlos/reactivarlos en la ficha.
+  if (!opts?.includeInactive) {
+    q = q.eq('is_active', true)
+  }
+  const { data, error } = await q
+    .order('is_active', { ascending: false })
     .order('is_preferred', { ascending: false })
   if (error) throw new Error(`Error listando proveedores del ingrediente ${itemId}: ${error.message}`)
   return (data ?? []).map(rowToArticleSupplier)
@@ -399,6 +408,29 @@ export async function unlinkSupplierFormat(linkId: string): Promise<string> {
     await cascadeFromItem(updated.recipeItemId)
   } catch (e) {
     console.error(`unlinkSupplierFormat: cascada de coste falló para ${updated.recipeItemId}`, e)
+  }
+  return updated.recipeItemId
+}
+
+// "Volver a comprar este artículo a este proveedor": reactiva un vínculo
+// archivado (is_active=true). Simétrico a unlinkSupplierFormat. El coste del
+// ingrediente puede cambiar (vuelve a entrar este proveedor en el cálculo del
+// preferido/más reciente), así que recosteamos y propagamos a los platos.
+// Devuelve el recipe_item_id afectado.
+export async function reactivateSupplierLink(linkId: string): Promise<string> {
+  requireSupabase()
+  const { data, error } = await supabase!
+    .from('article_supplier')
+    .update({ is_active: true })
+    .eq('id', linkId)
+    .select('*')
+    .single()
+  if (error) throw new Error(`Error reactivando el vínculo ${linkId}: ${error.message}`)
+  const updated = rowToArticleSupplier(data)
+  try {
+    await cascadeFromItem(updated.recipeItemId)
+  } catch (e) {
+    console.error(`reactivateSupplierLink: cascada de coste falló para ${updated.recipeItemId}`, e)
   }
   return updated.recipeItemId
 }
