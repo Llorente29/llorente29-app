@@ -31,6 +31,7 @@ import { useOperativeLocation } from '@/modules/supply/hooks/useOperativeLocatio
 import OperativeLocationBanner from '@/modules/supply/components/OperativeLocationBanner'
 import ReceiptPhotoViewer from '@/modules/supply/components/ReceiptPhotoViewer'
 import { listSuppliers, createPurchaseFormat, ensurePackTree } from '@/modules/kitchen/services/purchaseFormatService'
+import { rescaleLastPriceToFormat } from '@/modules/kitchen/lib/unitConversion'
 import type { Supplier } from '@/types/kitchen'
 import {
   getSupplierCatalog,
@@ -244,25 +245,18 @@ function formatBaseQty(qty: number, abbr: string): string {
 // Ej.: bote 200 g a 2,03 € → 0,01015 €/g → caja 1.200 g = 12,18 €.
 // Los descuentos por volumen NO se modelan aquí (se tratan en el aviso de precio /
 // precio pactado). Devuelve '' si no hay base de cálculo fiable (no inventa).
+// Capa de PRESENTACIÓN sobre la conversión canónica (unitConversion.ts, una sola
+// verdad del escalado €/base → €/formato; cap a 0.c). El cálculo es idéntico al
+// del editor de la ficha y al motor; aquí solo formateamos para el input editable:
+// redondeo a céntimo, y '' cuando no hay ancla (que lo ponga el humano).
 function rescaleCostToFormat(
   prevCost: number | null,
   prevQtyInBase: number | null,
   nextQtyInBase: number | null,
   refPerBase: number | null,   // €/base de referencia del proveedor (formatPrices), si se conoce
 ): string {
-  if (nextQtyInBase === null || !Number.isFinite(nextQtyInBase) || nextQtyInBase <= 0) return ''
-  // €/base: PRIMERO el implícito de la propia línea (escalado matemático que pidió
-  // Julio: 1 €/ud → caja de 10 = 10 €). Solo si la línea no tiene precio aún, caemos
-  // al €/base de referencia del proveedor. Los descuentos por volumen NO entran aquí.
-  let perBase: number | null = null
-  if (prevCost !== null && Number.isFinite(prevCost) && prevCost > 0
-      && prevQtyInBase !== null && Number.isFinite(prevQtyInBase) && prevQtyInBase > 0) {
-    perBase = prevCost / prevQtyInBase
-  } else if (refPerBase !== null && Number.isFinite(refPerBase) && refPerBase > 0) {
-    perBase = refPerBase
-  }
-  if (perBase === null) return ''   // sin ancla → vaciar, que el humano lo ponga
-  const next = perBase * nextQtyInBase
+  const next = rescaleLastPriceToFormat(prevCost, prevQtyInBase, nextQtyInBase, refPerBase)
+  if (next === null) return ''   // sin ancla → vaciar, que el humano lo ponga
   // Redondeo a céntimo para el campo editable (el cálculo fino de stock es server-side).
   return String(Math.round(next * 100) / 100)
 }
