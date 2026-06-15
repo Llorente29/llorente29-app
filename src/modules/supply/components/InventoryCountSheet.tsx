@@ -14,8 +14,9 @@
 // variación.
 
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, Loader2, Check, AlertTriangle, Save, ShieldCheck, Flag, Search, X } from 'lucide-react'
+import { ArrowLeft, Loader2, Check, AlertTriangle, Save, ShieldCheck, Flag, Search, X, Calculator } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
+import FormatCalculator from '@/modules/kitchen/components/FormatCalculator'
 import {
   getInventoryCount,
   listCountLines,
@@ -52,6 +53,8 @@ export default function InventoryCountSheet({
   const [summary, setSummary] = useState<InventoryCountSummary | null>(null)
   const [savingId, setSavingId] = useState<string | null>(null)
   const [reloadTick, setReloadTick] = useState(0)
+  // Línea cuyo modal de calculadora de formatos está abierto (null = ninguno).
+  const [calcLineId, setCalcLineId] = useState<string | null>(null)
   const [approving, setApproving] = useState(false)
   const [approved, setApproved] = useState<{ adjustments: number; itemsRecomputed: number } | null>(null)
 
@@ -148,6 +151,23 @@ export default function InventoryCountSheet({
       setSavingId(null)
     }
   }
+
+  // La calculadora de formatos devuelve el total ya en unidad base → lo fijamos
+  // como cantidad contada y lo guardamos (mismo camino que el tecleo manual).
+  async function onCalcAccept(line: InventoryCountLine, qtyInBase: number) {
+    setLines(prev => prev.map(l => l.id === line.id ? { ...l, countedQty: qtyInBase } : l))
+    setCalcLineId(null)
+    setSavingId(line.id)
+    try {
+      await saveCountedQty(line.id, qtyInBase)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo guardar.')
+    } finally {
+      setSavingId(null)
+    }
+  }
+
+  const calcLine = calcLineId ? (lines.find(l => l.id === calcLineId) ?? null) : null
 
   async function onReasonChange(line: InventoryCountLine, value: string) {
     setLines(prev => prev.map(l => l.id === line.id ? { ...l, reasonCode: value || null } : l))
@@ -367,6 +387,15 @@ export default function InventoryCountSheet({
                                 className="w-24 px-2 py-1 text-sm text-right border border-border-default rounded bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
                               />
                               <span className="text-xs text-text-tertiary w-6 text-left">{l.unitAbbr}</span>
+                              <button
+                                type="button"
+                                onClick={() => setCalcLineId(l.id)}
+                                title="Calculadora de formatos (cuenta por cajas y suma solo)"
+                                aria-label="Abrir calculadora de formatos"
+                                className="p-1 rounded text-text-tertiary hover:text-accent hover:bg-accent-bg transition-base"
+                              >
+                                <Calculator size={14} />
+                              </button>
                               {savingId === l.id && <Loader2 size={12} className="animate-spin text-text-tertiary" />}
                             </div>
                           )}
@@ -438,6 +467,17 @@ export default function InventoryCountSheet({
                 ? 'Al aprobar, las diferencias se escriben como ajuste y corrigen el stock real.'
                 : 'Conteo en revisión. La aprobación que ajusta el stock la hace un responsable.'}
         </p>
+      )}
+
+      {calcLine && (
+        <FormatCalculator
+          itemId={calcLine.recipeItemId}
+          itemName={calcLine.itemName}
+          baseAbbr={calcLine.unitAbbr}
+          initialQtyInBase={calcLine.countedQty}
+          onAccept={(q) => onCalcAccept(calcLine, q)}
+          onClose={() => setCalcLineId(null)}
+        />
       )}
     </div>
   )
