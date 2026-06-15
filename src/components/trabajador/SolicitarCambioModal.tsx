@@ -13,7 +13,7 @@ import {
 } from '../../types/scheduler'
 import type { SwapType } from '../../types/shiftSwap'
 import { SWAP_TYPE_LABELS, SWAP_TYPE_DESCRIPTIONS } from '../../types/shiftSwap'
-import { fetchEmployees } from '../../services/supabaseSync'
+import { fetchColleagues } from '../../services/supabaseSync'
 import {
   createCesionRequest,
   createIntercambioRequest,
@@ -79,8 +79,10 @@ export default function SolicitarCambioModal({
   useEffect(() => {
     let cancel = false
     async function load() {
-      const all = await fetchEmployees(null)
-      if (cancel || !all) return
+      const locIds = [myEmployee.locationId, ...(myEmployee.assignedLocations || [])]
+        .filter((v): v is string => Boolean(v))
+      const all = await fetchColleagues(locIds)
+      if (cancel) return
       const list = all
         .filter(e => e.id !== myEmployee.id && e.active)
         .map(e => ({ id: e.id, name: e.name, photo: e.photo || undefined }))

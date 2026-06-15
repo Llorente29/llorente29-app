@@ -285,6 +285,29 @@ export async function fetchEmployees(accountId: string | null): Promise<Employee
 }
 
 /**
+ * Devuelve los empleados que comparten local(es) con el trabajador.
+ * A diferencia de fetchEmployees(accountId), NO exige accountId: en sesion de
+ * trabajador no se conoce la cuenta, pero si su(s) location_id. La RLS de
+ * employees (employees_read) ya restringe a los locales de la cuenta del
+ * usuario, asi que filtrar por location_id es seguro y suficiente.
+ *
+ * Usado por el modulo de cambios de turno (modal de solicitud, tablon, mis
+ * solicitudes) para poblar la lista de companeros y resolver nombres.
+ */
+export async function fetchColleagues(locationIds: string[]): Promise<Employee[]> {
+  if (!supabase) return []
+  const ids = (locationIds || []).filter(Boolean)
+  if (ids.length === 0) return []
+  const { data, error } = await supabase
+    .from('employees')
+    .select('*')
+    .in('location_id', ids)
+    .order('name')
+  if (error) { console.error('Supabase fetchColleagues:', error); return [] }
+  return (data as EmployeeRow[]).map(rowToEmployee)
+}
+
+/**
  * Inserta o actualiza un employee.
  * No requiere accountId: location_id ya identifica la cuenta indirectamente,
  * y RLS valida que el caller tenga acceso a esa location.

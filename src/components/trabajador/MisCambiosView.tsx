@@ -15,7 +15,7 @@ import {
   listSwapsForEmployee,
   cancelSwap,
 } from '../../services/shiftSwapService'
-import { fetchEmployees } from '../../services/supabaseSync'
+import { fetchColleagues } from '../../services/supabaseSync'
 import { listShiftTemplates } from '../../services/schedulerService'
 import type { ShiftTemplate, DayOfWeek } from '../../types/scheduler'
 import { DAY_LABELS } from '../../types/scheduler'
@@ -50,9 +50,11 @@ export default function MisCambiosView({ myEmployee, onChanged }: Props) {
 
   async function load() {
     setLoading(true)
+    const locIds = [myEmployee.locationId, ...(myEmployee.assignedLocations || [])]
+      .filter((v): v is string => Boolean(v))
     const [mineRaw, allEmployees, templates] = await Promise.all([
       listSwapsForEmployee(myEmployee.id),
-      fetchEmployees(null),
+      fetchColleagues(locIds),
       myEmployee.locationId ? listShiftTemplates(myEmployee.locationId) : Promise.resolve([] as ShiftTemplate[]),
     ])
     const empMap = new Map((allEmployees || []).map(e => [e.id, e]))
