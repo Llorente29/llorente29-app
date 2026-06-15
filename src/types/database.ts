@@ -1564,6 +1564,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "appcc_executions_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "appcc_executions_location_id_fkey"
             columns: ["location_id"]
             isOneToOne: false
@@ -1862,6 +1869,13 @@ export type Database = {
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appcc_incidents_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "employees"
             referencedColumns: ["id"]
           },
           {
@@ -10642,6 +10656,19 @@ export type Database = {
           total_cost: number
         }[]
       }
+      preview_substitute_ingredient: {
+        Args: { p_source: string; p_target: string }
+        Returns: {
+          coste_actual: number
+          coste_nuevo: number
+          estado: string
+          first_qty: number
+          first_unit_id: string
+          n_lines: number
+          parent_item_id: string
+          parent_name: string
+        }[]
+      }
       preview_supplier_migration: {
         Args: { p_source: string; p_target: string }
         Returns: {
@@ -10865,6 +10892,16 @@ export type Database = {
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      substitute_ingredient_in_recipes: {
+        Args: { p_parents: string[]; p_source: string; p_target: string }
+        Returns: {
+          affected_item_ids: string[]
+          flagged: number
+          merged: number
+          replaced: number
+          skipped_cycle: number
+        }[]
+      }
       supplier_format_prices: {
         Args: { p_account_id: string; p_supplier_id: string }
         Returns: {

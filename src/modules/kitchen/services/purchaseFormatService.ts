@@ -695,3 +695,106 @@ export async function migrateSupplierArticles(
     affectedItemIds: affected,
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// SUSTITUIR INGREDIENTE EN ESCANDALLOS (mantenimiento). Granular por plato.
+// preview → lista de platos afectados con estado + coste actual y proyectado
+// (el proyectado lo calcula la RPC con _qty_in_base, la misma conversión del
+// motor) → eliges platos → acción solo sobre los elegidos → recoste.
+// ─────────────────────────────────────────────────────────────────────
+
+export interface SubstituteCandidate {
+  id: string
+  name: string
+}
+
+export async function listSubstituteCandidates(
+  accountId: string,
+  excludeId: string,
+): Promise<SubstituteCandidate[]> {
+  requireSupabase()
+  const { data, error } = await supabase!
+    .from('recipe_item')
+    .select('id, name, type')
+    .eq('account_id', accountId)
+    .neq('id', excludeId)
+    .neq('type', 'dish')
+    .order('name')
+  if (error) throw new Error(`No se pudieron cargar los ingredientes: ${error.message}`)
+  return (data ?? []).map((r) => ({ id: r.id as string, name: r.name as string }))
+}
+
+export type SubstituteDishEstado = 'limpio' | 'fusion' | 'revisar' | 'ciclo'
+
+export interface SubstituteDishPreview {
+  parentItemId: string
+  parentName: string
+  estado: SubstituteDishEstado
+  nLines: number
+  firstQty: number | null
+  firstUnitId: string | null
+  costeActual: number | null
+  costeNuevo: number | null
+}
+
+export async function previewSubstituteIngredient(
+  sourceId: string,
+  targetId: string,
+): Promise<SubstituteDishPreview[]> {
+  requireSupabase()
+  const { data, error } = await supabase!.rpc('preview_substitute_ingredient', {
+    p_source: sourceId,
+    p_target: targetId,
+  })
+  if (error) throw new Error(`No se pudo previsualizar la sustitución: ${error.message}`)
+  const rows = (Array.isArray(data) ? data : []) as Record<string, unknown>[]
+  return rows.map((r) => ({
+    parentItemId: r.parent_item_id as string,
+    parentName: (r.parent_name as string) ?? '—',
+    estado: (r.estado as SubstituteDishEstado) ?? 'limpio',
+    nLines: Number(r.n_lines ?? 1),
+    firstQty: r.first_qty == null ? null : Number(r.first_qty),
+    firstUnitId: (r.first_unit_id as string) ?? null,
+    costeActual: r.coste_actual == null ? null : Number(r.coste_actual),
+    costeNuevo: r.coste_nuevo == null ? null : Number(r.coste_nuevo),
+  }))
+}
+
+export interface IngredientSubstituteResult {
+  replaced: number
+  merged: number
+  flagged: number
+  skippedCycle: number
+  affectedItemIds: string[]
+}
+
+export async function substituteIngredientInRecipes(
+  sourceId: string,
+  targetId: string,
+  parentIds: string[],
+): Promise<IngredientSubstituteResult> {
+  requireSupabase()
+  const { data, error } = await supabase!.rpc('substitute_ingredient_in_recipes', {
+    p_source: sourceId,
+    p_target: targetId,
+    p_parents: parentIds,
+  })
+  if (error) throw new Error(`No se pudo sustituir el ingrediente: ${error.message}`)
+  const r = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null
+  const affected = (r?.affected_item_ids ?? []) as string[]
+  // La RPC solo toca recipe_line. Recosteamos cada plato afectado (coste+alérgenos).
+  for (const id of affected) {
+    try {
+      await cascadeFromItem(id)
+    } catch (e) {
+      console.error(`substituteIngredientInRecipes: cascada de coste falló para ${id}`, e)
+    }
+  }
+  return {
+    replaced: Number(r?.replaced ?? 0),
+    merged: Number(r?.merged ?? 0),
+    flagged: Number(r?.flagged ?? 0),
+    skippedCycle: Number(r?.skipped_cycle ?? 0),
+    affectedItemIds: affected,
+  }
+}

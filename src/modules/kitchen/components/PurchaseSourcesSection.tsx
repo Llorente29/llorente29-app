@@ -28,7 +28,8 @@
 //  · Árbol de formatos anidado y foto→IA del albarán: fases siguientes.
 
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, Truck, Star, Check, AlertTriangle, Loader2, Pencil, Sparkles, ChevronDown, ChevronRight, Archive, RotateCcw } from 'lucide-react'
+import { Plus, Truck, Star, Check, AlertTriangle, Loader2, Pencil, Sparkles, ChevronDown, ChevronRight, Archive, RotateCcw, ArrowRightLeft } from 'lucide-react'
+import IngredientSubstituteModal from '@/modules/kitchen/components/IngredientSubstituteModal'
 import {
   listSuppliers,
   createSupplier,
@@ -138,6 +139,7 @@ export default function PurchaseSourcesSection({
   const [formError, setFormError] = useState<string | null>(null)
   // Mostrar también los proveedores archivados (descatalogados). Por defecto no.
   const [showArchived, setShowArchived] = useState(false)
+  const [substituteOpen, setSubstituteOpen] = useState(false)
 
   // ¿El ingrediente cobra hoy su coste de un valor tecleado a mano (fixed)?
   // Si es así, al añadir la primera fuente el SERVICE lo pasará a last_purchase
@@ -674,7 +676,28 @@ export default function PurchaseSourcesSection({
             </div>
           </div>
         )}
+
+        {/* Mantenimiento: sustituir este ingrediente por otro en los escandallos elegidos */}
+        <div className="mt-4 pt-3 border-t border-border-default">
+          <button
+            type="button"
+            onClick={() => setSubstituteOpen(true)}
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium border border-border-default text-text-primary hover:bg-page hover:border-accent transition-base"
+          >
+            <ArrowRightLeft className="w-4 h-4 text-accent" />
+            Sustituir «{item.name}» por otro ingrediente
+          </button>
+        </div>
       </div>
+
+      {substituteOpen && (
+        <IngredientSubstituteModal
+          source={{ id: item.id, name: item.name, accountId: item.accountId }}
+          units={units}
+          onClose={() => setSubstituteOpen(false)}
+          onDone={() => { setSubstituteOpen(false); onChanged?.() }}
+        />
+      )}
     </div>
   )
 }
