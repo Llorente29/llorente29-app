@@ -58,3 +58,91 @@ export function unitCostFromFormat(price: number, qtyInBase: number): number | n
   if (!Number.isFinite(qtyInBase) || qtyInBase <= 0) return null
   return price / qtyInBase
 }
+
+// INVERSA de unitCostFromFormat: del €/unidad base al precio del FORMATO.
+//   formatPrice = unitCostBase * qtyInBase
+// Es la pieza que hace posible la edición "base-first" de la ficha: el cocinero
+// teclea lo que sabe (€/kg, €/g) y derivamos el €/caja que se guarda en
+// article_supplier.last_price. Round-trip exacto con unitCostFromFormat
+// (lo que entra como €/base se recupera como €/base en el motor).
+//   Ej.: 0,00899 €/g × 2200 g = 19,78 €/caja.
+export function formatPriceFromUnitCost(
+  unitCostBase: number,
+  qtyInBase: number,
+): number | null {
+  if (!Number.isFinite(unitCostBase) || unitCostBase < 0) return null
+  if (!Number.isFinite(qtyInBase) || qtyInBase <= 0) return null
+  return unitCostBase * qtyInBase
+}
+
+// Conversión de PRECIO POR UNIDAD entre unidades de la MISMA dimensión.
+// OJO: es la INVERSA de convertToBase (que convierte CANTIDADES). Un precio por
+// unidad escala al revés que la cantidad: si 1 kg = 1000 g, entonces el €/g es
+// el €/kg DIVIDIDO por 1000 (no multiplicado).
+//   €/base = pricePerUnit * (baseUnit.factorToBase / fromUnit.factorToBase)
+//   Ej.: 8,99 €/kg con base=g → 8,99 * (1/1000) = 0,00899 €/g.
+// Igual que convertToBase, NO inventa entre dimensiones distintas: si la unidad
+// tecleada no comparte dimensión con la base, devuelve null (que la UI reeduque).
+export function unitPriceToBase(
+  pricePerUnit: number,
+  fromUnit: KitchenUnit,
+  baseUnit: KitchenUnit,
+): number | null {
+  if (!Number.isFinite(pricePerUnit) || pricePerUnit < 0) return null
+  if (fromUnit.dimension !== baseUnit.dimension) return null
+  const fromFactor = fromUnit.factorToBase
+  const baseFactor = baseUnit.factorToBase
+  if (!(Number.isFinite(fromFactor) && fromFactor > 0)) return null
+  if (!(Number.isFinite(baseFactor) && baseFactor > 0)) return null
+  return pricePerUnit * (baseFactor / fromFactor)
+}
+
+// Inversa de unitPriceToBase: del €/unidad base al €/unidad de visualización
+// (p.ej. para PRE-RELLENAR el editor en €/kg a partir del €/g guardado).
+//   €/toUnit = pricePerBase * (toUnit.factorToBase / baseUnit.factorToBase)
+//   Ej.: 0,00899 €/g con destino kg → 0,00899 * (1000/1) = 8,99 €/kg.
+export function unitPriceFromBase(
+  pricePerBase: number,
+  toUnit: KitchenUnit,
+  baseUnit: KitchenUnit,
+): number | null {
+  if (!Number.isFinite(pricePerBase) || pricePerBase < 0) return null
+  if (toUnit.dimension !== baseUnit.dimension) return null
+  const toFactor = toUnit.factorToBase
+  const baseFactor = baseUnit.factorToBase
+  if (!(Number.isFinite(toFactor) && toFactor > 0)) return null
+  if (!(Number.isFinite(baseFactor) && baseFactor > 0)) return null
+  return pricePerBase * (toFactor / baseFactor)
+}
+
+// Re-deriva el precio del FORMATO (article_supplier.last_price) cuando cambia el
+// contenido del formato (qtyInBase), MANTENIENDO EL €/BASE CONSTANTE. Mismo
+// escalado matemático que rescaleCostToFormat de la recepción (decisión de Julio:
+// €/base = prevCost/prevQtyInBase, o el €/base de referencia del proveedor si la
+// línea aún no tiene precio; los descuentos por volumen NO se modelan aquí).
+//
+// Diferencia con la copia de recepción: aquí devolvemos `number | null` (valor
+// limpio para escribir en last_price), no un string redondeado a céntimo para un
+// input. La recepción seguirá formateando a string en su capa cuando migre (0.c).
+// Sin ancla (ni precio previo ni referencia) → null: no se inventa, lo pone el humano.
+export function rescaleLastPriceToFormat(
+  prevPrice: number | null,
+  prevQtyInBase: number | null,
+  nextQtyInBase: number | null,
+  refPerBase: number | null,
+): number | null {
+  if (nextQtyInBase === null || !Number.isFinite(nextQtyInBase) || nextQtyInBase <= 0) {
+    return null
+  }
+  let perBase: number | null = null
+  if (
+    prevPrice !== null && Number.isFinite(prevPrice) && prevPrice > 0 &&
+    prevQtyInBase !== null && Number.isFinite(prevQtyInBase) && prevQtyInBase > 0
+  ) {
+    perBase = prevPrice / prevQtyInBase
+  } else if (refPerBase !== null && Number.isFinite(refPerBase) && refPerBase > 0) {
+    perBase = refPerBase
+  }
+  if (perBase === null) return null
+  return perBase * nextQtyInBase
+}

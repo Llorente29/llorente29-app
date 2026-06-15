@@ -38,7 +38,13 @@ import {
   updateArticleSupplier,
 } from '@/modules/kitchen/services/purchaseFormatService'
 import type { RecomputedAncestor } from '@/modules/kitchen/services/costCascadeService'
-import { convertToBase, unitCostFromFormat } from '@/modules/kitchen/lib/unitConversion'
+import {
+  convertToBase,
+  unitCostFromFormat,
+  formatPriceFromUnitCost,
+  unitPriceToBase,
+  unitPriceFromBase,
+} from '@/modules/kitchen/lib/unitConversion'
 import type {
   RecipeItem,
   KitchenUnit,
@@ -351,7 +357,8 @@ export default function PurchaseSourcesSection({
                     : 'Proveedor'
                 }
                 format={link.purchaseFormatId ? formatsById.get(link.purchaseFormatId) ?? null : null}
-                baseAbbr={baseAbbr}
+                baseUnit={baseUnit}
+                priceUnits={qtyUnits}
                 onSaved={async () => {
                   setSuccessNote('Coste actualizado desde la compra.')
                   await reload()
@@ -626,37 +633,100 @@ export default function PurchaseSourcesSection({
   )
 }
 
-// ── Fila de una fuente de compra existente, con edición de precio inline ──
-// Editar el precio dispara updateArticleSupplier, que recostea los platos
-// (cascada en el service). onSaved refresca la lista y avisa al detalle.
+// ── Fila de una fuente de compra existente, con edición de precio BASE-FIRST ──
+// El cocinero VE y EDITA el precio en su unidad humana (€/kg, €/g, €/L, €/ud),
+// no el precio del formato. Internamente seguimos guardando last_price como el
+// precio del FORMATO (€/caja) = €/base × qtyInBase (formatPriceFromUnitCost),
+// para no tocar el motor de coste ni los pedidos. Así es IMPOSIBLE teclear €/kg
+// donde el sistema esperaba €/caja (el error COHELDI). Editar dispara
+// updateArticleSupplier, que recostea los platos (cascada en el service).
 interface SourceRowProps {
   link: ArticleSupplier
   supplierName: string
   format: PurchaseFormat | null
-  baseAbbr: string
+  baseUnit: KitchenUnit | null
+  priceUnits: KitchenUnit[]   // unidades de la misma dimensión que la base (kg/g, L/ml, ud)
   onSaved: () => void | Promise<void>
 }
 
-function SourceRow({ link, supplierName, format, baseAbbr, onSaved }: SourceRowProps) {
-  const [editing, setEditing] = useState(false)
-  const [val, setVal] = useState(link.lastPrice !== null ? String(link.lastPrice) : '')
-  const [codeVal, setCodeVal] = useState(link.supplierCode ?? '')
-  const [saving, setSaving] = useState(false)
+// La unidad "humana" para mostrar/teclear el precio: la de MAYOR factor de la
+// dimensión (kg sobre g, L sobre ml). Cae a la base si no hay candidatas.
+function pickDisplayUnit(priceUnits: KitchenUnit[], baseUnit: KitchenUnit | null): KitchenUnit | null {
+  if (priceUnits.length === 0) return baseUnit
+  return priceUnits.reduce((best, u) => (u.factorToBase > best.factorToBase ? u : best), priceUnits[0])
+}
 
+// Redondeo limpio para pre-rellenar el input (evita 8,9900000001).
+function toInputStr(n: number): string {
+  return String(Math.round(n * 10000) / 10000)
+}
+
+function SourceRow({ link, supplierName, format, baseUnit, priceUnits, onSaved }: SourceRowProps) {
+  const baseAbbr = baseUnit?.abbreviation ?? ''
+  const displayUnit = pickDisplayUnit(priceUnits, baseUnit)
+  const displayAbbr = displayUnit?.abbreviation ?? baseAbbr
+
+  // €/base actual (lo que guarda el motor) y su expresión en la unidad humana.
   const unitCost =
     format && link.lastPrice !== null
       ? unitCostFromFormat(link.lastPrice, format.qtyInBase)
       : null
+  const priceInDisplay =
+    unitCost !== null && displayUnit && baseUnit
+      ? unitPriceFromBase(unitCost, displayUnit, baseUnit)
+      : null
+
+  const [editing, setEditing] = useState(false)
+  const [priceUnitId, setPriceUnitId] = useState<string>(displayUnit?.id ?? '')
+  const [val, setVal] = useState('')
+  const [codeVal, setCodeVal] = useState(link.supplierCode ?? '')
+  const [saving, setSaving] = useState(false)
+
+  function openEdit() {
+    setPriceUnitId(displayUnit?.id ?? '')
+    setVal(priceInDisplay !== null ? toInputStr(priceInDisplay) : '')
+    setCodeVal(link.supplierCode ?? '')
+    setEditing(true)
+  }
+
+  // Derivación en vivo mientras se teclea (idéntica a lo que se guardará).
+  const selectedUnit = priceUnits.find((u) => u.id === priceUnitId) ?? baseUnit
+  const typed = parseDecimal(val)
+  const previewPerBase =
+    typed !== null && selectedUnit && baseUnit
+      ? unitPriceToBase(typed, selectedUnit, baseUnit)
+      : null
+  const previewFormatPrice =
+    previewPerBase !== null && format
+      ? formatPriceFromUnitCost(previewPerBase, format.qtyInBase)
+      : null
 
   async function save() {
-    const n = parseDecimal(val)
-    if (n === null || n < 0) {
+    const t = parseDecimal(val)
+    if (t === null || t < 0) {
+      setEditing(false)
+      return
+    }
+    // Base-first: lo tecleado es €/unidad → lo pasamos a €/base y derivamos el
+    // precio del FORMATO que se guarda en last_price. Requiere formato (qtyInBase).
+    let newLastPrice: number | null = null
+    if (format && baseUnit && selectedUnit) {
+      const perBase = unitPriceToBase(t, selectedUnit, baseUnit)
+      newLastPrice = perBase !== null ? formatPriceFromUnitCost(perBase, format.qtyInBase) : null
+    } else {
+      // Vínculo sin formato (degenerado): guardamos el valor tal cual como respaldo.
+      newLastPrice = t
+    }
+    if (newLastPrice === null) {
       setEditing(false)
       return
     }
     setSaving(true)
     try {
-      await updateArticleSupplier(link.id, { lastPrice: n, supplierCode: codeVal.trim() || null })
+      await updateArticleSupplier(link.id, {
+        lastPrice: newLastPrice,
+        supplierCode: codeVal.trim() || null,
+      })
       setEditing(false)
       await onSaved()
     } finally {
@@ -676,14 +746,13 @@ function SourceRow({ link, supplierName, format, baseAbbr, onSaved }: SourceRowP
             </span>
           )}
         </div>
+        {/* Detalle del formato: cuánto trae y, como secundario, el precio del formato. */}
         <div className="text-xs text-text-secondary truncate">
           {format ? `${format.name} · ${fmtNum(format.qtyInBase)} ${baseAbbr}` : 'Sin formato'}
-          {unitCost !== null && (
+          {format && link.lastPrice !== null && (
             <>
               {' · '}
-              <span className="font-mono">
-                {fmtEur(unitCost, 5)} / {baseAbbr}
-              </span>
+              <span className="font-mono">{fmtEur(link.lastPrice, 2)} / {format.name.toLowerCase()}</span>
             </>
           )}
           {link.supplierCode && (
@@ -697,54 +766,84 @@ function SourceRow({ link, supplierName, format, baseAbbr, onSaved }: SourceRowP
 
       <div className="flex-shrink-0">
         {editing ? (
-          <div className="flex items-center gap-1.5">
-            <input
-              type="text"
-              inputMode="decimal"
-              autoFocus
-              value={val}
-              onChange={(e) => setVal(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void save()
-                if (e.key === 'Escape') setEditing(false)
-              }}
-              disabled={saving}
-              className="w-20 px-2 py-1 text-sm border border-border-default rounded-md bg-card text-text-primary text-right focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
-            />
-            <input
-              type="text"
-              value={codeVal}
-              onChange={(e) => setCodeVal(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void save()
-                if (e.key === 'Escape') setEditing(false)
-              }}
-              disabled={saving}
-              placeholder="cód."
-              title="Código del proveedor"
-              className="w-24 px-2 py-1 text-sm border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
-            />
-            <button
-              type="button"
-              onClick={() => void save()}
-              disabled={saving}
-              aria-label="Guardar precio y código"
-              className="p-1 rounded-md text-success hover:bg-success-bg transition-base disabled:opacity-50"
-            >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-            </button>
+          <div className="flex flex-col items-end gap-1">
+            <div className="flex items-center gap-1.5">
+              {/* Input de PRECIO en unidad humana: número + €/unidad */}
+              <div className="flex items-center rounded-md border border-border-default bg-card overflow-hidden focus-within:ring-1 focus-within:ring-accent">
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  autoFocus
+                  value={val}
+                  onChange={(e) => setVal(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void save()
+                    if (e.key === 'Escape') setEditing(false)
+                  }}
+                  disabled={saving}
+                  placeholder="0,00"
+                  className="w-20 px-2 py-1 text-sm bg-transparent text-text-primary text-right focus:outline-none disabled:opacity-50"
+                />
+                <span className="pl-1 text-xs text-text-secondary">€/</span>
+                {priceUnits.length > 1 ? (
+                  <select
+                    value={priceUnitId}
+                    onChange={(e) => setPriceUnitId(e.target.value)}
+                    disabled={saving}
+                    aria-label="Unidad del precio"
+                    className="py-1 pr-1.5 text-xs bg-transparent text-text-primary cursor-pointer focus:outline-none disabled:opacity-50"
+                  >
+                    {priceUnits.map((u) => (
+                      <option key={u.id} value={u.id}>{u.abbreviation}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <span className="pr-2 text-xs text-text-secondary">{displayAbbr}</span>
+                )}
+              </div>
+              <input
+                type="text"
+                value={codeVal}
+                onChange={(e) => setCodeVal(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void save()
+                  if (e.key === 'Escape') setEditing(false)
+                }}
+                disabled={saving}
+                placeholder="cód."
+                title="Código del proveedor"
+                className="w-20 px-2 py-1 text-sm border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+              />
+              <button
+                type="button"
+                onClick={() => void save()}
+                disabled={saving}
+                aria-label="Guardar precio y código"
+                className="p-1 rounded-md text-success hover:bg-success-bg transition-base disabled:opacity-50"
+              >
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+              </button>
+            </div>
+            {/* Derivación en vivo: exactamente lo que se va a guardar (no aproximado) */}
+            {previewPerBase !== null && baseUnit && (
+              <div className="text-[11px] text-text-secondary font-mono">
+                = {fmtEur(previewPerBase, 5)} / {baseAbbr}
+                {previewFormatPrice !== null && format && (
+                  <> · {fmtEur(previewFormatPrice, 2)} / {format.name.toLowerCase()}</>
+                )}
+              </div>
+            )}
           </div>
         ) : (
           <button
             type="button"
-            onClick={() => {
-              setVal(link.lastPrice !== null ? String(link.lastPrice) : '')
-              setCodeVal(link.supplierCode ?? '')
-              setEditing(true)
-            }}
+            onClick={openEdit}
             className="inline-flex items-center gap-1.5 text-sm font-mono text-text-primary hover:text-accent transition-base"
+            title="Editar precio (en tu unidad: €/kg, €/g…)"
           >
-            {fmtEur(link.lastPrice, 2)}
+            {priceInDisplay !== null
+              ? `${fmtEur(priceInDisplay, priceInDisplay < 1 ? 4 : 2)} / ${displayAbbr}`
+              : fmtEur(link.lastPrice, 2)}
             <Pencil className="w-3 h-3 text-text-secondary" />
           </button>
         )}
