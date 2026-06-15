@@ -17,6 +17,8 @@ import type { Employee } from '../../types'
 import {
   getMyDailyQueue,
   checkCountVariance,
+  countRemainingLines,
+  autocloseDailyCount,
   type DailyQueueLine,
 } from '../../modules/supply/services/autoinventoryService'
 import { saveCountedQty } from '../../modules/supply/services/inventoryCountService'
@@ -38,6 +40,7 @@ export default function MiAutoinventario({ employee, onBack }: Props) {
   const [saving, setSaving] = useState(false)
   const [warnKind, setWarnKind] = useState<'low' | 'high'>('low')
   const [errMsg, setErrMsg] = useState('')
+  const [countId, setCountId] = useState<string | null>(null)
 
   useEffect(() => {
     let cancel = false
@@ -47,8 +50,9 @@ export default function MiAutoinventario({ employee, onBack }: Props) {
           if (!cancel) setPhase('empty')
           return
         }
-        const { lines } = await getMyDailyQueue(employee.locationId, employee.id)
+        const { countId: cid, lines } = await getMyDailyQueue(employee.locationId, employee.id)
         if (cancel) return
+        setCountId(cid)
         const pending = lines.filter((l) => l.countedQty == null)
         setTotal(lines.length)
         setDoneBefore(lines.length - pending.length)
@@ -107,6 +111,21 @@ export default function MiAutoinventario({ employee, onBack }: Props) {
     setValue('')
     if (idx + 1 >= queue.length) {
       setPhase('done')
+      // El trabajador terminó SU parte. Si era el último del día (no quedan
+      // líneas sin contar en TODO el conteo), dispara el auto-cierre: cierra y
+      // aplica lo limpio solo. Silencioso: el trabajador no se entera, ya vio
+      // '¡Listo!'. Si quedan otras personas por contar, no se cierra aún.
+      if (countId) {
+        void (async () => {
+          try {
+            const remaining = await countRemainingLines(countId)
+            if (remaining === 0) await autocloseDailyCount(countId)
+          } catch {
+            // Si falla el auto-cierre, no se le muestra error al trabajador:
+            // el barrido del día siguiente lo cerrará igualmente.
+          }
+        })()
+      }
     } else {
       setIdx(idx + 1)
       setPhase('counting')

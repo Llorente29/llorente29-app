@@ -322,3 +322,41 @@ export async function checkCountVariance(
   const v = String(data ?? 'ok')
   return v === 'low' || v === 'high' ? v : 'ok'
 }
+
+
+// ¿Cuántas líneas del conteo (de TODAS las personas) quedan sin contar?
+// Sirve para que el trabajador, al terminar SU última pieza, sepa si es el
+// último del día y deba disparar el auto-cierre.
+export async function countRemainingLines(countId: string): Promise<number> {
+  requireSupabase()
+  const { count, error } = await supabase!
+    .from('inventory_count_line')
+    .select('id', { count: 'exact', head: true })
+    .eq('inventory_count_id', countId)
+    .is('counted_qty', null)
+  if (error) throw new Error(`No se pudo comprobar el conteo: ${error.message}`)
+  return count ?? 0
+}
+
+export interface AutocloseResult {
+  closed: boolean
+  applied: number
+  pendingAnomalies: number
+  finalStatus: string
+}
+
+// Auto-cierra el conteo del día (cierra + aplica lo limpio en modo parcial).
+// Lo dispara el trabajador al contar la última pieza pendiente del conteo.
+// Idempotente y seguro: si ya está aprobado/anulado, no hace nada.
+export async function autocloseDailyCount(countId: string): Promise<AutocloseResult> {
+  requireSupabase()
+  const { data, error } = await supabase!.rpc('autoclose_daily_count', { p_count_id: countId })
+  if (error) throw new Error(`No se pudo cerrar el conteo del día: ${error.message}`)
+  const r = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null
+  return {
+    closed: Boolean(r?.closed),
+    applied: Number(r?.applied ?? 0),
+    pendingAnomalies: Number(r?.pending_anomalies ?? 0),
+    finalStatus: String(r?.final_status ?? ''),
+  }
+}

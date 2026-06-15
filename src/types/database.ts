@@ -10202,13 +10202,30 @@ export type Database = {
         Args: { p_account_id: string }
         Returns: undefined
       }
-      apply_inventory_count: {
-        Args: { p_count_id: string; p_user_id?: string; p_user_name?: string }
-        Returns: {
-          adjustments: number
-          items_recomputed: number
-        }[]
-      }
+      apply_inventory_count:
+        | {
+            Args: {
+              p_count_id: string
+              p_user_id?: string
+              p_user_name?: string
+            }
+            Returns: {
+              adjustments: number
+              items_recomputed: number
+            }[]
+          }
+        | {
+            Args: {
+              p_count_id: string
+              p_partial?: boolean
+              p_user_id?: string
+              p_user_name?: string
+            }
+            Returns: {
+              adjustments: number
+              items_recomputed: number
+            }[]
+          }
       apply_invoice_costs: {
         Args: { p_invoice_id: string }
         Returns: {
@@ -10219,6 +10236,15 @@ export type Database = {
           old_price: number
           pct: number
           recipe_item_id: string
+        }[]
+      }
+      autoclose_daily_count: {
+        Args: { p_count_id: string }
+        Returns: {
+          applied: number
+          closed: boolean
+          final_status: string
+          pending_anomalies: number
         }[]
       }
       autoinventory_queue: {
@@ -10405,13 +10431,17 @@ export type Database = {
           p_account_id: string
           p_coverage_target?: number
           p_employee_ids?: string[]
+          p_ignore_freshness?: boolean
           p_location_id: string
           p_per_person?: number
         }
         Returns: {
           already_existed: boolean
           count_id: string
+          coverage_after: number
+          coverage_before: number
           lines_created: number
+          per_person_today: number
         }[]
       }
       get_effective_permissions: {
