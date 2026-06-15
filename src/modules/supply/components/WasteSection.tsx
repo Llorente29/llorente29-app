@@ -12,8 +12,9 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Trash2, Loader2, Plus, RefreshCw, Search, Camera, X, Image as ImageIcon,
+  Trash2, Loader2, Plus, RefreshCw, Search, Camera, X, Image as ImageIcon, Calculator,
 } from 'lucide-react'
+import FormatCalculator from '@/modules/kitchen/components/FormatCalculator'
 import {
   listInventoryItems,
   type InventoryItem,
@@ -73,6 +74,8 @@ export default function WasteSection({
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  // Modal de calculadora de formatos abierto (para el artículo elegido).
+  const [calcOpen, setCalcOpen] = useState(false)
 
   // Listado.
   const [rangeKey, setRangeKey] = useState<RangeKey>('today')
@@ -214,12 +217,20 @@ export default function WasteSection({
 
         {/* Cantidad + causa */}
         <div className="flex items-end gap-2 flex-wrap">
-          <label className="block">
+          <div className="block">
             <span className="text-[11px] text-text-secondary">Cantidad (en unidad base)</span>
-            <input type="text" inputMode="decimal" value={qty} onChange={e => setQty(e.target.value)}
-              placeholder="0" disabled={!pickedItem}
-              className="mt-0.5 w-28 px-3 py-2 text-sm text-right border border-border-default rounded-md bg-page text-text-primary disabled:opacity-50" />
-          </label>
+            <div className="mt-0.5 flex items-center gap-1">
+              <input type="text" inputMode="decimal" value={qty} onChange={e => setQty(e.target.value)}
+                placeholder="0" disabled={!pickedItem}
+                className="w-28 px-3 py-2 text-sm text-right border border-border-default rounded-md bg-page text-text-primary disabled:opacity-50" />
+              <button type="button" onClick={() => setCalcOpen(true)} disabled={!pickedItem}
+                title="Calculadora de formatos (cuenta por cajas y suma solo)"
+                aria-label="Abrir calculadora de formatos"
+                className="p-2 rounded-md border border-border-default text-text-secondary hover:text-accent hover:bg-accent-bg disabled:opacity-50 disabled:cursor-not-allowed transition-base">
+                <Calculator size={15} />
+              </button>
+            </div>
+          </div>
           <label className="block flex-1 min-w-[160px]">
             <span className="text-[11px] text-text-secondary">Causa</span>
             <select value={reason} onChange={e => setReason(e.target.value)} disabled={!pickedItem}
@@ -325,6 +336,17 @@ export default function WasteSection({
             <span className="w-8" />
           </div>
         </div>
+      )}
+
+      {calcOpen && pickedItem && (
+        <FormatCalculator
+          itemId={pickedItem.recipeItemId}
+          itemName={pickedItem.name}
+          baseAbbr={null}
+          initialQtyInBase={qtyNum !== null && Number.isFinite(qtyNum) ? qtyNum : null}
+          onAccept={(q) => { setQty(String(q)); setCalcOpen(false) }}
+          onClose={() => setCalcOpen(false)}
+        />
       )}
     </div>
   )
