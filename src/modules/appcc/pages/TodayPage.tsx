@@ -98,17 +98,23 @@ export default function TodayPage() {
     })
   }, [])
 
-  // Nombres de empleados (para mostrar el responsable de cada control)
+  // Nombres de empleados (para mostrar el responsable de cada control).
+  // Depende de activeAccountId: al montar, la cuenta puede no estar resuelta
+  // todavia y fetchEmployees devolveria vacio; recargamos cuando se conoce
+  // (y al cambiar de cuenta) para que el mapa case con las executions mostradas.
   useEffect(() => {
-    fetchEmployees(null).then(emps => {
-      if (!emps) return
+    if (!activeAccountId) return
+    let cancelled = false
+    fetchEmployees(activeAccountId).then(emps => {
+      if (cancelled || !emps) return
       const m = new Map<string, string>()
       for (const e of emps) m.set(e.id, e.name)
       setEmpNames(m)
     }).catch(err => {
       console.error('[TodayPage] Error cargando empleados', err)
     })
-  }, [])
+    return () => { cancelled = true }
+  }, [activeAccountId])
 
   /**
    * Lazy generation + listado de executions del día.
@@ -204,6 +210,15 @@ export default function TodayPage() {
     if (!selectedLocationId) return
     const template = templates.find(t => t.id === templateId)
     if (!template) return
+
+    // Evita duplicados: si ya existe una execution de hoy para esta plantilla
+    // (programada o manual), la abrimos en vez de crear otra.
+    const existing = executions.find(e => e.template_id === templateId)
+    if (existing) {
+      setShowCatalog(false)
+      navigate(pageToRoute('appcc_execution', slug, { executionId: existing.id }))
+      return
+    }
 
     try {
       const newExec = await executionsService.createExecution(
