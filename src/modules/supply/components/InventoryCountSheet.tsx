@@ -14,7 +14,7 @@
 // variación.
 
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, Loader2, Check, AlertTriangle, Save, ShieldCheck, Flag, Search, X, Calculator } from 'lucide-react'
+import { ArrowLeft, Loader2, Check, AlertTriangle, Save, ShieldCheck, Flag, Search, X, Calculator, Sparkles, Ban } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import FormatCalculator from '@/modules/kitchen/components/FormatCalculator'
 import {
@@ -24,7 +24,10 @@ import {
   saveReasonCode,
   closeInventoryCount,
   approveInventoryCount,
+  voidInventoryCount,
+  proposeCountReasons,
   REASON_CODES,
+  type CountReasonSuggestion,
   type InventoryCount,
   type InventoryCountLine,
   type InventoryCountSummary,
@@ -56,7 +59,11 @@ export default function InventoryCountSheet({
   // Línea cuyo modal de calculadora de formatos está abierto (null = ninguno).
   const [calcLineId, setCalcLineId] = useState<string | null>(null)
   const [approving, setApproving] = useState(false)
+  const [voiding, setVoiding] = useState(false)
   const [approved, setApproved] = useState<{ adjustments: number; itemsRecomputed: number } | null>(null)
+  // Inspector IA: sugerencias de motivo por línea (id → sugerencia) + estado.
+  const [suggestions, setSuggestions] = useState<Record<string, CountReasonSuggestion>>({})
+  const [suggesting, setSuggesting] = useState(false)
 
   // Buscador + filtros (operatividad con muchas líneas).
   const [query, setQuery] = useState('')
@@ -175,6 +182,41 @@ export default function InventoryCountSheet({
     catch (e) { setError(e instanceof Error ? e.message : 'No se pudo guardar el motivo.') }
   }
 
+  // Líneas fuera de tolerancia (candidatas del inspector IA). En apertura no aplica.
+  const outLines = useMemo(
+    () => isOpening ? [] : lines.filter(l => l.countedQty !== null && l.withinTolerance === false),
+    [lines, isOpening],
+  )
+
+  // Inspector IA: pide motivos para las líneas fuera de tolerancia. NO auto-aplica;
+  // guarda la sugerencia por línea y el responsable la usa con un clic.
+  async function runSuggest() {
+    if (outLines.length === 0 || suggesting) return
+    setSuggesting(true)
+    setError(null)
+    try {
+      const sug = await proposeCountReasons(outLines.map(l => ({
+        id: l.id,
+        itemName: l.itemName,
+        familyName: l.familyName,
+        abcClass: l.abcClass,
+        varianceQty: l.varianceQty,
+        variancePct: l.variancePct,
+        varianceValue: l.varianceValue,
+        unitAbbr: l.unitAbbr,
+      })))
+      setSuggestions(prev => {
+        const next = { ...prev }
+        for (const s of sug) next[s.id] = s
+        return next
+      })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudieron sugerir motivos.')
+    } finally {
+      setSuggesting(false)
+    }
+  }
+
   async function handleClose() {
     if (!window.confirm('¿Cerrar el conteo y calcular las diferencias? Después podrás revisarlas.')) return
     setClosing(true); setError(null)
@@ -202,6 +244,19 @@ export default function InventoryCountSheet({
     [lines, isOpening],
   )
   const isApproved = count?.status === 'aprobado'
+  const isVoided = count?.status === 'anulado'
+
+  async function handleVoid() {
+    if (!window.confirm('¿Anular este conteo? Quedará archivado como anulado y no podrá usarse. No afecta al stock.')) return
+    setVoiding(true); setError(null)
+    try {
+      await voidInventoryCount(countId)
+      onBack()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo anular el conteo.')
+      setVoiding(false)
+    }
+  }
 
   async function handleApprove() {
     if (missingReasons > 0) {
@@ -252,20 +307,29 @@ export default function InventoryCountSheet({
               : `Cuenta lo que ves. No se muestra el dato del sistema. ${countedCount}/${lines.length} contados.`}
           </p>
         </div>
-        {!isReview && (
-          <button type="button" onClick={handleClose} disabled={closing}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 transition-base">
-            {closing ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />} Cerrar conteo
-          </button>
-        )}
-        {isReview && !isApproved && canApprove && (
-          <button type="button" onClick={handleApprove} disabled={approving || missingReasons > 0}
-            title={missingReasons > 0 ? 'Asigna motivo a las líneas fuera de tolerancia' : undefined}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base">
-            {approving ? <Loader2 size={15} className="animate-spin" /> : <ShieldCheck size={15} />}
-            {isOpening ? 'Aprobar apertura' : 'Aprobar y ajustar stock'}
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {!isApproved && !isVoided && canApprove && (
+            <button type="button" onClick={handleVoid} disabled={voiding}
+              title="Anular este conteo (no afecta al stock)"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm text-danger hover:bg-danger-bg transition-base disabled:opacity-50">
+              {voiding ? <Loader2 size={15} className="animate-spin" /> : <Ban size={15} />} Anular
+            </button>
+          )}
+          {!isReview && !isVoided && (
+            <button type="button" onClick={handleClose} disabled={closing}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 transition-base">
+              {closing ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />} Cerrar conteo
+            </button>
+          )}
+          {isReview && !isApproved && canApprove && (
+            <button type="button" onClick={handleApprove} disabled={approving || missingReasons > 0}
+              title={missingReasons > 0 ? 'Asigna motivo a las líneas fuera de tolerancia' : undefined}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base">
+              {approving ? <Loader2 size={15} className="animate-spin" /> : <ShieldCheck size={15} />}
+              {isOpening ? 'Aprobar apertura' : 'Aprobar y ajustar stock'}
+            </button>
+          )}
+        </div>
       </div>
 
       {isOpening && !isApproved && (
@@ -335,6 +399,24 @@ export default function InventoryCountSheet({
               {visibleValue > 0 && <> · <span className="text-text-secondary font-medium">{eur(visibleValue)}</span></>}
             </span>
           </div>
+        </div>
+      )}
+
+      {isReview && !isOpening && outLines.length > 0 && (
+        <div className="flex items-center justify-between gap-2 flex-wrap p-2.5 rounded-md bg-accent-bg/40 border border-border-default">
+          <div className="flex items-center gap-1.5 text-xs text-text-secondary">
+            <Sparkles size={14} className="text-accent flex-shrink-0" />
+            <span>{outLines.length} línea(s) fuera de tolerancia. La IA puede proponerte el motivo de cada una — tú decides.</span>
+          </div>
+          <button
+            type="button"
+            onClick={runSuggest}
+            disabled={suggesting}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-md font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 transition-base"
+          >
+            {suggesting ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+            {suggesting ? 'Pensando…' : 'Sugerir motivos con IA'}
+          </button>
         </div>
       )}
 
@@ -419,11 +501,30 @@ export default function InventoryCountSheet({
                         {isReview && !isOpening && (
                           <td className="px-3 py-2">
                             {out ? (
-                              <select value={l.reasonCode ?? ''} onChange={e => onReasonChange(l, e.target.value)}
-                                className="px-2 py-1 text-xs border border-border-default rounded bg-card text-text-primary">
-                                <option value="">— Motivo —</option>
-                                {REASON_CODES.map(rc => <option key={rc.value} value={rc.value}>{rc.label}</option>)}
-                              </select>
+                              <div className="space-y-1">
+                                <select value={l.reasonCode ?? ''} onChange={e => onReasonChange(l, e.target.value)}
+                                  className="px-2 py-1 text-xs border border-border-default rounded bg-card text-text-primary">
+                                  <option value="">— Motivo —</option>
+                                  {REASON_CODES.map(rc => <option key={rc.value} value={rc.value}>{rc.label}</option>)}
+                                </select>
+                                {suggestions[l.id] && !l.reasonCode && (
+                                  <div className="space-y-0.5 max-w-[220px]">
+                                    <div className={`text-[11px] flex items-center gap-1 ${suggestions[l.id].confidence >= 0.6 ? 'text-accent' : 'text-text-tertiary'}`}>
+                                      <Sparkles size={11} className="flex-shrink-0" />
+                                      <span>
+                                        {suggestions[l.id].confidence >= 0.6 ? 'IA: ' : 'IA (quizá): '}
+                                        <span className="font-medium">{REASON_CODES.find(rc => rc.value === suggestions[l.id].reasonCode)?.label ?? suggestions[l.id].reasonCode}</span>
+                                        {' · '}{Math.round(suggestions[l.id].confidence * 100)}%
+                                      </span>
+                                      <button type="button" onClick={() => onReasonChange(l, suggestions[l.id].reasonCode)}
+                                        className="underline hover:text-accent ml-1">usar</button>
+                                    </div>
+                                    {suggestions[l.id].explanation && (
+                                      <p className="text-[10px] text-text-tertiary leading-snug">{suggestions[l.id].explanation}</p>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
                             ) : l.countedQty === null ? (
                               <span className="text-xs text-text-tertiary">sin contar</span>
                             ) : (
@@ -466,6 +567,15 @@ export default function InventoryCountSheet({
               : canApprove
                 ? 'Al aprobar, las diferencias se escriben como ajuste y corrigen el stock real.'
                 : 'Conteo en revisión. La aprobación que ajusta el stock la hace un responsable.'}
+        </p>
+      )}
+
+      {isReview && !isOpening && !isApproved && missingReasons > 0 && (
+        <p className="text-[11px] text-text-tertiary flex items-start gap-1.5 max-w-prose">
+          <Sparkles size={12} className="mt-0.5 flex-shrink-0 text-accent" />
+          <span>
+            Lo que apruebes sin motivo se corrige en el stock pero queda como <span className="font-medium">merma fantasma</span> (variación sin explicar) → infla tu food cost y no aprendes de dónde se va el producto. Asigna un motivo a cada línea fuera de tolerancia; la IA puede proponértelo.
+          </span>
         </p>
       )}
 
