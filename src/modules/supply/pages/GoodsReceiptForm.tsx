@@ -64,13 +64,16 @@ import {
   getSupplySettings,
   getSupplierFormatPrices,
   getSupplierLastPrices,
+  getPriceDrift,
   priceAlertFor,
   negotiatedAlertFor,
+  driftAlertFor,
   lineActualPerBase,
   expiryAlertFor,
   type LineMatchCandidate,
   type SupplySettings,
   type SupplierPriceRef,
+  type PriceDrift,
   type BaseUnitInfo,
 } from '@/modules/supply/services/goodsReceiptService'
 import LineMatchPicker from '@/modules/supply/pages/LineMatchPicker'
@@ -510,6 +513,8 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
   const [formatPrices, setFormatPrices] = useState<Record<string, number>>({})
   // recipe_item_id → { lastPrice, negotiatedPrice } (€/base). Clave del aviso de PACTADO.
   const [priceRefs, setPriceRefs] = useState<Record<string, SupplierPriceRef>>({})
+  // recipe_item_id → deriva de precio (price_drift_for). Clave del aviso de DERIVA.
+  const [driftByItem, setDriftByItem] = useState<Record<string, PriceDrift>>({})
   useEffect(() => {
     getSupplySettings(accountId).then(setSupplySettings).catch(() => {})
   }, [accountId])
@@ -983,6 +988,33 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
     [filled],
   )
 
+  // Deriva de precio por artículo casado. Depende solo de (cuenta, item, ventana),
+  // no del proveedor ni del precio tecleado → se recarga cuando cambia el conjunto
+  // de artículos casados o la ventana, no en cada tecla. Clave estable = ids unidos.
+  const matchedItemIds = useMemo(
+    () => Array.from(new Set(draft.map(l => l.recipeItemId).filter((x): x is string => !!x))),
+    [draft],
+  )
+  const matchedItemIdsKey = matchedItemIds.join(',')
+  useEffect(() => {
+    if (matchedItemIds.length === 0) { setDriftByItem({}); return }
+    let cancelled = false
+    Promise.all(
+      matchedItemIds.map(id =>
+        getPriceDrift(accountId, id, supplySettings.driftWindowMonths).then(d => [id, d] as const),
+      ),
+    )
+      .then(pairs => {
+        if (cancelled) return
+        const m: Record<string, PriceDrift> = {}
+        for (const [id, d] of pairs) if (d) m[id] = d
+        setDriftByItem(m)
+      })
+      .catch(() => { if (!cancelled) setDriftByItem({}) })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountId, matchedItemIdsKey, supplySettings.driftWindowMonths])
+
   // ── Resumen anti-error ──
   // Las líneas "de más" se listan con DETALLE (cuánto, contra lo pendiente y
   // contra el pedido total) para que el aviso sea accionable, no genérico.
@@ -1014,17 +1046,21 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
     const sinTocar = untouchedLines.length
     const sinMapear = filled.length - willPost
     // C2.2.c — recuento de avisos para el resumen pre-confirmación.
-    let priceAlerts = 0, expiryAlerts = 0, negotiatedAlerts = 0
+    let priceAlerts = 0, expiryAlerts = 0, negotiatedAlerts = 0, driftAlerts = 0
     for (const l of draft) {
-      if (l.recipeItemId && priceAlertFor({
+      // Mismo criterio que el render: puntual y pactado solo cuentan con cantidad > 0
+      // (sin recepción contada no hay entrante que comparar). La deriva no lo exige.
+      const qN = parseNum(l.qty)
+      const hasQtyL = qN !== null && qN > 0
+      if (l.recipeItemId && hasQtyL && priceAlertFor({
         lineAmount: l.lineAmount ?? null,
         unitCost: parseNum(l.unitCost),
-        qtyReceived: parseNum(l.qty),
+        qtyReceived: qN,
         formatQtyInBase: l.formatQtyInBase,
         expectedPerBase: l.purchaseFormatId ? (formatPrices[l.purchaseFormatId] ?? null) : null,
         thresholdPct: supplySettings.priceAlertPct,
       })) priceAlerts++
-      if (l.recipeItemId && negotiatedAlertFor({
+      if (l.recipeItemId && hasQtyL && negotiatedAlertFor({
         newPrice: lineActualPerBase({
           lineAmount: l.lineAmount ?? null,
           unitCost: parseNum(l.unitCost),
@@ -1034,6 +1070,16 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
         negotiatedPrice: priceRefs[l.recipeItemId]?.negotiatedPrice ?? null,
         thresholdPct: supplySettings.negotiatedAlertPct,
       })) negotiatedAlerts++
+      if (l.recipeItemId) {
+        const dr = driftByItem[l.recipeItemId] ?? null
+        if (dr && driftAlertFor({
+          pctVsMedian: dr.pctVsMedian,
+          nRecepciones: dr.nRecepciones,
+          medianEurBase: dr.medianEurBase,
+          thresholdPct: supplySettings.driftAlertPct,
+          minReceptions: 3,
+        })) driftAlerts++
+      }
       if (expiryAlertFor(l.expiryDate, supplySettings.expiryAlertDays)) expiryAlerts++
     }
     // ── Desglose EXACTO de "qué entra al almacén" (deuda Julio 7/06) ──
@@ -1085,11 +1131,11 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
       coinciden, deMenos, deMas: overLines.length, sinTocar,
       overLines, untouchedLines,
       enterLines, notEnterLines,
-      priceAlerts, expiryAlerts, negotiatedAlerts,
+      priceAlerts, expiryAlerts, negotiatedAlerts, driftAlerts,
       hasReference, anomaly, masaSinTocar,
       flagLines,
     }
-  }, [draft, filled, willPost, hasReference, formatPrices, supplySettings])
+  }, [draft, filled, willPost, hasReference, formatPrices, priceRefs, driftByItem, supplySettings])
 
   const supplierName = useMemo(() => suppliers.find(s => s.id === supplierId)?.name ?? '—', [suppliers, supplierId])
   const locationName = useMemo(() => locations.find(l => l.id === locationId)?.name ?? '—', [locations, locationId])
@@ -1401,7 +1447,10 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                       else if (l.pending > 0 && qtyN! < l.pending) cmp = { label: 'Parcial', cls: 'bg-warning-bg text-warning border-warning/20' }
                       else cmp = { label: 'OK', cls: 'bg-success-bg text-success border-success/20' }
                     }
-                    const priceAlert = l.recipeItemId
+                    // Sin cantidad contada (0/vacía) NO hay recepción que comparar: la
+                    // puntual y el pactado callan (su €/base entrante se calcula desde la
+                    // cantidad → 0/sin sentido). La deriva NO depende del entrante, sí puede salir.
+                    const priceAlert = l.recipeItemId && hasQty
                       ? priceAlertFor({
                           lineAmount: l.lineAmount ?? null,
                           unitCost: parseNum(l.unitCost),
@@ -1413,7 +1462,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                       : null
                     // Aviso de PACTADO: independiente del puntual. Compara el €/base
                     // entrante con negotiated_price del proveedor. Sin pacto → no salta.
-                    const negotiatedAlert = l.recipeItemId
+                    const negotiatedAlert = l.recipeItemId && hasQty
                       ? negotiatedAlertFor({
                           newPrice: lineActualPerBase({
                             lineAmount: l.lineAmount ?? null,
@@ -1423,6 +1472,18 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                           }),
                           negotiatedPrice: priceRefs[l.recipeItemId]?.negotiatedPrice ?? null,
                           thresholdPct: supplySettings.negotiatedAlertPct,
+                        })
+                      : null
+                    // Aviso de DERIVA: tendencia sostenida sobre la mediana del periodo.
+                    // minReceptions=3: con <3 compras la mediana no es fiable (no es deriva).
+                    const drift = l.recipeItemId ? (driftByItem[l.recipeItemId] ?? null) : null
+                    const driftAlert = drift
+                      ? driftAlertFor({
+                          pctVsMedian: drift.pctVsMedian,
+                          nRecepciones: drift.nRecepciones,
+                          medianEurBase: drift.medianEurBase,
+                          thresholdPct: supplySettings.driftAlertPct,
+                          minReceptions: 3,
                         })
                       : null
                     const expiryAlert = expiryAlertFor(l.expiryDate, supplySettings.expiryAlertDays)
@@ -1541,9 +1602,9 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                                 ) : (
                                   <span className="text-[10px] px-1 py-0.5 rounded bg-warning-bg text-warning border border-warning/20">sin mapear</span>
                                 )}
-                                {/* Los avisos de PRECIO (puntual + pactado) ya no van aquí: se
-                                    muestran legibles junto al campo de precio (Fila 3). */}
-                                {(priceAlert || negotiatedAlert) && (
+                                {/* Los avisos de PRECIO (puntual + pactado + deriva) ya no van aquí:
+                                    se muestran legibles junto al campo de precio (Fila 3). */}
+                                {(priceAlert || negotiatedAlert || driftAlert) && (
                                   <span className="text-[10px] px-1 py-0.5 rounded bg-warning-bg text-warning border border-warning/20" title="Hay un aviso de precio en esta línea (abajo, junto al precio)">
                                     ⚠ precio
                                   </span>
@@ -1764,7 +1825,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
 
                         {/* Avisos de PRECIO legibles, junto al precio (donde está el ojo al teclear).
                             En unidad humana (€/kg, €/L, €/ud), no en €/base crudo. */}
-                        {(priceAlert || negotiatedAlert) && (() => {
+                        {(priceAlert || negotiatedAlert || driftAlert) && (() => {
                           const baseKU = l.baseUnit ? (units.find(u => u.id === l.baseUnit!.id) ?? null) : null
                           const fb = l.baseUnit?.abbr ?? ''
                           return (
@@ -1791,6 +1852,17 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                                     <span className="shrink-0 leading-none text-base">🤝</span>
                                     <span>
                                       <span className="font-medium">Por encima de lo pactado</span>: pactaste {fmtHumanPrice(pact.value)} €/{pact.abbr}, te cobran {fmtHumanPrice(now.value)} €/{now.abbr} <span className="font-medium">(+{negotiatedAlert.pct}%)</span>.
+                                    </span>
+                                  </div>
+                                )
+                              })()}
+                              {driftAlert && (() => {
+                                const med = driftAlert.median != null ? perBaseToHuman(driftAlert.median, baseKU, units, fb) : null
+                                return (
+                                  <div className="flex items-start gap-2 rounded-md border border-terracota/30 bg-terracota/10 px-3 py-2 text-sm text-terracota">
+                                    <span className="shrink-0 leading-none text-base">📈</span>
+                                    <span>
+                                      <span className="font-medium">Tendencia al alza</span>: este artículo lleva <span className="font-medium">+{driftAlert.pct}%</span> sobre la mediana{med ? ` (${fmtHumanPrice(med.value)} €/${med.abbr})` : ''} de tus últimas {driftAlert.nRecepciones} compras ({supplySettings.driftWindowMonths} meses).
                                     </span>
                                   </div>
                                 )
@@ -1901,7 +1973,7 @@ function ReviewPanel({
     coinciden: number; deMenos: number; deMas: number; sinTocar: number
     overLines: OverLine[]; untouchedLines: UntouchedLine[]
     enterLines: EnterLine[]; notEnterLines: NotEnterLine[]
-    priceAlerts: number; expiryAlerts: number; negotiatedAlerts: number
+    priceAlerts: number; expiryAlerts: number; negotiatedAlerts: number; driftAlerts: number
     flagLines: { key: string; name: string; why: string }[]
     hasReference: boolean; anomaly: boolean; masaSinTocar: boolean
   }
@@ -1963,10 +2035,11 @@ function ReviewPanel({
             )}
           </div>
 
-          {(summary.priceAlerts > 0 || summary.expiryAlerts > 0 || summary.negotiatedAlerts > 0) && (
+          {(summary.priceAlerts > 0 || summary.expiryAlerts > 0 || summary.negotiatedAlerts > 0 || summary.driftAlerts > 0) && (
             <div className="text-sm rounded-md bg-warning-bg text-warning border border-warning/20 px-3 py-2">
               {summary.priceAlerts > 0 && <p>⚠ {summary.priceAlerts} artículo(s) con salto de precio respecto a la última compra.</p>}
               {summary.negotiatedAlerts > 0 && <p>🤝 {summary.negotiatedAlerts} artículo(s) por encima del precio pactado.</p>}
+              {summary.driftAlerts > 0 && <p>📈 {summary.driftAlerts} artículo(s) con tendencia de precio al alza.</p>}
               {summary.expiryAlerts > 0 && <p>⚠ {summary.expiryAlerts} artículo(s) con caducidad vencida o próxima.</p>}
               <p className="text-text-secondary text-xs mt-0.5">Revísalos en la lista; no impiden confirmar.</p>
             </div>

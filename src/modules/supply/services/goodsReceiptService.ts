@@ -1477,6 +1477,63 @@ export function negotiatedAlertFor(args: {
   return { pct: Math.round(pct), negotiatedPrice, newPrice }
 }
 
+// ── DERIVA ACUMULADA (3ª alarma): cuánto se aleja el precio actual de la MEDIANA
+// de las compras del periodo. La calcula la función SQL price_drift_for (no se toca).
+export interface PriceDrift {
+  actualEurBase: number | null
+  medianEurBase: number | null
+  nRecepciones: number
+  pctVsMedian: number | null
+}
+
+// Lectura pura: deriva de precio de UN artículo en la ventana dada (meses).
+// price_drift_for(p_account_id, p_item_id, p_window_months) → una fila.
+// Llamada untyped (la RPC no está en database.ts), igual de robusta.
+export async function getPriceDrift(
+  accountId: string, itemId: string, windowMonths: number,
+): Promise<PriceDrift | null> {
+  requireSupabase()
+  const { data, error } = await (supabase! as unknown as {
+    rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>
+  }).rpc('price_drift_for', {
+    p_account_id: accountId,
+    p_item_id: itemId,
+    p_window_months: windowMonths,
+  })
+  if (error) { console.error('[goodsReceiptService] getPriceDrift', error); return null }
+  const row = Array.isArray(data) ? (data[0] ?? null) : (data ?? null)
+  if (!row) return null
+  const r = row as Record<string, unknown>
+  return {
+    actualEurBase: r.actual_eur_base != null ? Number(r.actual_eur_base) : null,
+    medianEurBase: r.median_eur_base != null ? Number(r.median_eur_base) : null,
+    nRecepciones: Number(r.n_recepciones ?? 0),
+    pctVsMedian: r.pct_vs_median != null ? Number(r.pct_vs_median) : null,
+  }
+}
+
+// Aviso de DERIVA (puro, testeable). null = sin aviso. Independiente del puntual
+// y del pactado. Salta solo si:
+//   · nRecepciones >= minReceptions — MÍNIMO DE CONFIANZA (deliberado, p.ej. 3):
+//     con 1-2 puntos la mediana no es fiable (cualquier compra ES la mediana o la
+//     desvía entera); no es "deriva sostenida", es ruido. Por eso no avisamos.
+//   · pctVsMedian > thresholdPct — solo ENCARECIMIENTO (deriva positiva);
+//     abaratarse sobre la mediana no es una alarma.
+export interface DriftAlert { pct: number; median: number | null; nRecepciones: number }
+export function driftAlertFor(args: {
+  pctVsMedian: number | null
+  nRecepciones: number
+  medianEurBase?: number | null
+  thresholdPct: number
+  minReceptions: number
+}): DriftAlert | null {
+  const { pctVsMedian, nRecepciones, medianEurBase, thresholdPct, minReceptions } = args
+  if (nRecepciones < minReceptions) return null
+  if (pctVsMedian == null || !Number.isFinite(pctVsMedian)) return null
+  if (pctVsMedian <= thresholdPct) return null
+  return { pct: Math.round(pctVsMedian), median: medianEurBase ?? null, nRecepciones }
+}
+
 // Aviso de caducidad para una línea (puro). null = sin aviso.
 export interface ExpiryAlert { kind: 'expired' | 'soon'; days: number }
 export function expiryAlertFor(expiryDate: string | null, alertDays: number, today = new Date()): ExpiryAlert | null {
