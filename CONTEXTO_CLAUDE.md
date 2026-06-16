@@ -48,6 +48,26 @@ Cadencia: en cada paso, antes de cerrarlo, Claude para SOLO y aplica el control 
 ---
 1. ESTADO VIVO ⟵ se regenera cada sesión
 
+**Última actualización: 2026-06-16 (CIERRE jornada). Lo último — RECONSTRUCCIÓN DEL MOTOR DE APROVISIONAMIENTO A €/UNIDAD BASE + TRES ALARMAS DE PRECIO EN RECEPCIÓN. Cierra de raíz el OBLIGATORIO D (la ambigüedad de `last_price`: el módulo de pedidos lo usaba como €/caja y Kitchen como €/base → caso Delicias-COHELDI).**
+
+**(A) `article_supplier.last_price` AHORA ES €/UNIDAD BASE (€/g, €/ml, €/ud), no €/formato.** Cambio de raíz, ejecutado y verificado COSTE-NEUTRAL en las dos cuentas (Folvy Interno + Llorente29 Food). El motor `kitchen_recompute_raw_cost` lee el €/base DIRECTO (desacoplado del formato: basta un precio €/base, el formato ya NO es requisito del coste). El €/caja se DERIVA donde hace falta (pedidos = `last_price × qty_in_base`).
+
+**(B) ESCRITORES A €/base canónico vía `_eur_base_from_format(format_id, precio_formato)` (= precio ÷ qty_in_base).** `confirm_goods_receipt`, `learn_from_receipt` y `apply_invoice_costs` escriben €/base. El BUG DEL DOBLE (meter `qty × precio` como si fuera €/base, que inflaba costes) muere POR CONSTRUCCIÓN.
+
+**(C) UI BASE-FIRST.** Ficha de ingrediente y alta teclean/muestran €/kg (€/L, €/ud) reutilizando `unitPriceToBase`/`unitPriceFromBase`/`pickDisplayUnit` (único hogar en `unitConversion.ts`); el €/caja se deriva y es solo informativo. **Selector de estrategia de coste** en la ficha (4 reales del CHECK: `last_purchase`, `average_weighted`, `average_window`, `fixed`). **Alta blindada**: pregunta "¿peso / volumen / unidades?" y fija la base FINA (`is_base=true`) de esa dimensión — IMPOSIBLE crear con base no-fina (origen del bug del aceite con base "L"). Botón **"Recostear todo"** (`recostAllRaws`) dispara el motor sobre todos los raws/tools no-fixed: Folvy Interno 183/183, Llorente29 98/98.
+
+**(D) PRECIO PACTADO** — columna `article_supplier.negotiated_price` (€/base, NULL = sin pacto), editable en la ficha del ingrediente y del proveedor ("pactado", mecánica base-first idéntica al precio). NO afecta al coste (sigue saliendo de `last_price`/estrategia); es REFERENCIA para la alarma.
+
+**(E) TRES ALARMAS DE PRECIO EN RECEPCIÓN, independientes** (una línea dispara cualquiera, varias o ninguna), avisos LEGIBLES en €/kg junto al campo de precio (no chip diminuto, no €/base crudo): **(1) salto puntual** vs último pagado (`priceAlertFor`, umbral `supply_settings.price_alert_pct`); **(2) contra pactado** (`negotiatedAlertFor`, `negotiated_alert_pct`, default 0 = avisa en cuanto lo supere); **(3) deriva acumulada** vs MEDIANA del periodo (`price_drift_for` + `driftAlertFor`, `drift_alert_pct`=25, `drift_window_months`=6, mínimo 3 recepciones para que la mediana sea fiable). El €/base entrante se calcula con UNA fórmula compartida (`lineActualPerBase`: OCR vía importe de línea, manual vía precio tecleado ÷ qty_in_base); sin cantidad contada (>0) las dos que dependen del entrante callan (la deriva no, lee el ledger). **Ningún competidor junta las tres.**
+
+**(F) FIXES DE RAÍZ del régimen viejo:** `supplier_format_prices` devolvía un valor heredado (÷qty_in_base de más) → la alarma puntual marcaba disparates (230000%); arreglada a €/base directo. `void_goods_receipt`: al anular revierte stock Y `last_price` (lo deja en el de la recepción superviviente más reciente del mismo proveedor/formato, o NULL si no queda) + recostea; `price_drift_for` ignora recepciones anuladas (`gr.status='confirmado'`).
+
+**(G) SQL VERSIONADO:** `supabase/migrations/20260616T1200_aprovisionamiento_eur_base.sql` (volcado fiel: 8 funciones + columnas nuevas, idempotente). `database.ts` regenerado con `negotiated_price` / `negotiated_alert_pct` / `drift_alert_pct` / `drift_window_months`.
+
+**PENDIENTE / PRÓXIMO FRENTE — Bloque 6c «proveedores que se encarecen»:** panel que corre `price_drift_for` sobre TODOS los artículos, ordenado por **€ EVAPORADO** (no por %), clicable a la ficha. Diseñado, NO construido (requiere `price_drift_all` SQL nueva + UI); se hará sobre datos ya limpios. **Deuda menor:** chunk >500 kB (warning de build conocido).
+
+---
+
 **Última actualización: 2026-06-13 (CIERRE jornada). Lo último — MÓDULO KDS (Kitchen Display System) COMPLETO Y EN PRODUCCIÓN, verificado en vivo de punta a punta sobre Llorente29.**
 
 **KDS — FRENTE COMPLETO HOY (13/06), VERIFICADO EN VIVO. Módulo nuevo `src/modules/kds/` (topBarOrder 7, "Folvy KDS"). 8 migraciones (2100→2800) + helper safe_jsonb (2750). Commits: 4f1c8d6 (0a), 3ccaab3 (0b), d542a8f (capa1 backend), cbbcc77+8867e39 (frontend+kiosco), 733c36b (fix ruta), 9290215 (estación defecto), 94d43f4 (botón Servir+RPC), df5e7c6 (ticket completo). Todos rev-list 0.**
