@@ -2306,6 +2306,7 @@ export type Database = {
           is_active: boolean
           is_preferred: boolean
           last_price: number | null
+          negotiated_price: number | null
           purchase_format_id: string | null
           recipe_item_id: string
           supplier_code: string | null
@@ -2320,6 +2321,7 @@ export type Database = {
           is_active?: boolean
           is_preferred?: boolean
           last_price?: number | null
+          negotiated_price?: number | null
           purchase_format_id?: string | null
           recipe_item_id: string
           supplier_code?: string | null
@@ -2334,6 +2336,7 @@ export type Database = {
           is_active?: boolean
           is_preferred?: boolean
           last_price?: number | null
+          negotiated_price?: number | null
           purchase_format_id?: string | null
           recipe_item_id?: string
           supplier_code?: string | null
@@ -9676,8 +9679,11 @@ export type Database = {
           created_at: string
           created_by: string | null
           created_by_name: string | null
+          drift_alert_pct: number
+          drift_window_months: number
           expiry_alert_days: number
           id: string
+          negotiated_alert_pct: number
           price_alert_pct: number
           tol_a_pct: number
           tol_b_pct: number
@@ -9691,8 +9697,11 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           created_by_name?: string | null
+          drift_alert_pct?: number
+          drift_window_months?: number
           expiry_alert_days?: number
           id?: string
+          negotiated_alert_pct?: number
           price_alert_pct?: number
           tol_a_pct?: number
           tol_b_pct?: number
@@ -9706,8 +9715,11 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           created_by_name?: string | null
+          drift_alert_pct?: number
+          drift_window_months?: number
           expiry_alert_days?: number
           id?: string
+          negotiated_alert_pct?: number
           price_alert_pct?: number
           tol_a_pct?: number
           tol_b_pct?: number
@@ -10159,6 +10171,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _eur_base_from_format: {
+        Args: { p_format_id: string; p_price_per_format: number }
+        Returns: number
+      }
       _impact_cost: {
         Args: {
           p_quantity: number
@@ -10202,30 +10218,18 @@ export type Database = {
         Args: { p_account_id: string }
         Returns: undefined
       }
-      apply_inventory_count:
-        | {
-            Args: {
-              p_count_id: string
-              p_user_id?: string
-              p_user_name?: string
-            }
-            Returns: {
-              adjustments: number
-              items_recomputed: number
-            }[]
-          }
-        | {
-            Args: {
-              p_count_id: string
-              p_partial?: boolean
-              p_user_id?: string
-              p_user_name?: string
-            }
-            Returns: {
-              adjustments: number
-              items_recomputed: number
-            }[]
-          }
+      apply_inventory_count: {
+        Args: {
+          p_count_id: string
+          p_partial?: boolean
+          p_user_id?: string
+          p_user_name?: string
+        }
+        Returns: {
+          adjustments: number
+          items_recomputed: number
+        }[]
+      }
       apply_invoice_costs: {
         Args: { p_invoice_id: string }
         Returns: {

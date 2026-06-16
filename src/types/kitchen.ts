@@ -506,6 +506,9 @@ export interface ArticleSupplier {
   supplierCode: string | null
   purchaseFormatId: string | null
   lastPrice: number | null
+  // €/UNIDAD BASE, precio PACTADO (acordado) con el proveedor. NULL = sin pacto.
+  // Es referencia (futura alarma); NO entra en el coste, que sale de lastPrice.
+  negotiatedPrice: number | null
   isPreferred: boolean
   isActive: boolean
   createdAt: string
@@ -524,6 +527,7 @@ export interface ArticleSupplierUpdate {
   supplierCode?: string | null
   purchaseFormatId?: string | null
   lastPrice?: number | null
+  negotiatedPrice?: number | null
   isPreferred?: boolean
   isActive?: boolean
 }

@@ -115,6 +115,19 @@ export function unitPriceFromBase(
   return pricePerBase * (toFactor / baseFactor)
 }
 
+// La unidad "humana" para mostrar/teclear un precio dentro de una dimensión: la
+// de MAYOR factor (kg sobre g, L sobre ml). Cae a baseUnit si no hay candidatas.
+// Es la unidad en la que el cocinero piensa el precio (€/kg, €/L) — luego se
+// convierte a €/base con unitPriceToBase. Único hogar de esta lógica: la usan
+// la ficha del ingrediente, la del proveedor y el alta.
+export function pickDisplayUnit(
+  priceUnits: KitchenUnit[],
+  baseUnit: KitchenUnit | null,
+): KitchenUnit | null {
+  if (priceUnits.length === 0) return baseUnit
+  return priceUnits.reduce((best, u) => (u.factorToBase > best.factorToBase ? u : best), priceUnits[0])
+}
+
 // Re-deriva el precio del FORMATO (article_supplier.last_price) cuando cambia el
 // contenido del formato (qtyInBase), MANTENIENDO EL €/BASE CONSTANTE. Mismo
 // escalado matemático que rescaleCostToFormat de la recepción (decisión de Julio:

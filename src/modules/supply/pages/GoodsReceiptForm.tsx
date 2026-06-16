@@ -31,8 +31,9 @@ import { useOperativeLocation } from '@/modules/supply/hooks/useOperativeLocatio
 import OperativeLocationBanner from '@/modules/supply/components/OperativeLocationBanner'
 import ReceiptPhotoViewer from '@/modules/supply/components/ReceiptPhotoViewer'
 import { listSuppliers, createPurchaseFormat, ensurePackTree } from '@/modules/kitchen/services/purchaseFormatService'
-import { rescaleLastPriceToFormat } from '@/modules/kitchen/lib/unitConversion'
-import type { Supplier } from '@/types/kitchen'
+import { rescaleLastPriceToFormat, unitPriceFromBase, pickDisplayUnit } from '@/modules/kitchen/lib/unitConversion'
+import { listUnits } from '@/modules/kitchen/services/kitchenUnitService'
+import type { Supplier, KitchenUnit } from '@/types/kitchen'
 import {
   getSupplierCatalog,
   listSupplyLocations,
@@ -62,10 +63,14 @@ import {
   formatQtyInBaseFromPack,
   getSupplySettings,
   getSupplierFormatPrices,
+  getSupplierLastPrices,
   priceAlertFor,
+  negotiatedAlertFor,
+  lineActualPerBase,
   expiryAlertFor,
   type LineMatchCandidate,
   type SupplySettings,
+  type SupplierPriceRef,
   type BaseUnitInfo,
 } from '@/modules/supply/services/goodsReceiptService'
 import LineMatchPicker from '@/modules/supply/pages/LineMatchPicker'
@@ -178,6 +183,33 @@ function parseNum(v: string): number | null {
   if (v.trim() === '') return null
   const n = Number(v.replace(',', '.'))
   return Number.isFinite(n) ? n : null
+}
+
+// €/UNIDAD BASE (€/g, €/ml, €/ud) → €/UNIDAD HUMANA (€/kg, €/L, €/ud) para que el
+// aviso de precio se entienda (0,00954 €/g no se lee; 9,54 €/kg sí). Reutiliza
+// pickDisplayUnit + unitPriceFromBase de unitConversion. Necesita el KitchenUnit
+// base de la línea (resuelto por id desde la lista de unidades). Sin él, cae a la
+// abreviatura conocida sin convertir (no rompe).
+function perBaseToHuman(
+  perBase: number,
+  baseKU: KitchenUnit | null,
+  units: KitchenUnit[],
+  fallbackAbbr: string,
+): { value: number; abbr: string } {
+  if (!baseKU) return { value: perBase, abbr: fallbackAbbr }
+  const priceUnits = units.filter((u) => u.dimension === baseKU.dimension && (u.isActive || u.isBase))
+  const displayUnit = pickDisplayUnit(priceUnits, baseKU)
+  if (!displayUnit) return { value: perBase, abbr: baseKU.abbreviation }
+  const v = unitPriceFromBase(perBase, displayUnit, baseKU)
+  return v != null
+    ? { value: v, abbr: displayUnit.abbreviation }
+    : { value: perBase, abbr: baseKU.abbreviation }
+}
+
+// Formato monetario humano (2 decimales; hasta 4 si es muy pequeño).
+function fmtHumanPrice(v: number | null): string {
+  if (v == null || !Number.isFinite(v)) return '—'
+  return v.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: Math.abs(v) < 1 ? 4 : 2 })
 }
 
 // Nombre de formato por defecto cuando la IA no propuso uno (el humano puede editarlo).
@@ -465,16 +497,26 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
   // C2.2.b.1 — casado por línea: candidatos de run_mapping por key + picker abierto.
   const [lineMatch, setLineMatch] = useState<Record<string, { loading: boolean; candidates: LineMatchCandidate[] }>>({})
 
-  // C2.2.c — ajustes de avisos + last_price por artículo del proveedor.
-  const [supplySettings, setSupplySettings] = useState<SupplySettings>({ priceAlertPct: 15, expiryAlertDays: 3 })
-  // €/unidad-base por formato (deriva caja→bote vía SQL). Clave del aviso de precio.
+  // C2.2.c — ajustes de avisos + precios de referencia por artículo del proveedor.
+  const [supplySettings, setSupplySettings] = useState<SupplySettings>({
+    priceAlertPct: 15, expiryAlertDays: 3, negotiatedAlertPct: 0, driftAlertPct: 25, driftWindowMonths: 6,
+  })
+  // Unidades de cocina (para expresar el €/base de los avisos en €/kg, €/L, €/ud).
+  const [units, setUnits] = useState<KitchenUnit[]>([])
+  useEffect(() => {
+    listUnits().then(setUnits).catch(() => setUnits([]))
+  }, [])
+  // €/unidad-base por formato (deriva caja→bote vía SQL). Clave del aviso PUNTUAL.
   const [formatPrices, setFormatPrices] = useState<Record<string, number>>({})
+  // recipe_item_id → { lastPrice, negotiatedPrice } (€/base). Clave del aviso de PACTADO.
+  const [priceRefs, setPriceRefs] = useState<Record<string, SupplierPriceRef>>({})
   useEffect(() => {
     getSupplySettings(accountId).then(setSupplySettings).catch(() => {})
   }, [accountId])
   useEffect(() => {
-    if (!supplierId) { setFormatPrices({}); return }
+    if (!supplierId) { setFormatPrices({}); setPriceRefs({}); return }
     getSupplierFormatPrices(accountId, supplierId).then(setFormatPrices).catch(() => setFormatPrices({}))
+    getSupplierLastPrices(accountId, supplierId).then(setPriceRefs).catch(() => setPriceRefs({}))
   }, [accountId, supplierId])
   const [pickerKey, setPickerKey] = useState<string | null>(null)
   // Motivo del descuadre por línea (clave de DraftLine → motivo). Se vuelca a discrepancy_reason.
@@ -972,15 +1014,26 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
     const sinTocar = untouchedLines.length
     const sinMapear = filled.length - willPost
     // C2.2.c — recuento de avisos para el resumen pre-confirmación.
-    let priceAlerts = 0, expiryAlerts = 0
+    let priceAlerts = 0, expiryAlerts = 0, negotiatedAlerts = 0
     for (const l of draft) {
       if (l.recipeItemId && priceAlertFor({
         lineAmount: l.lineAmount ?? null,
+        unitCost: parseNum(l.unitCost),
         qtyReceived: parseNum(l.qty),
         formatQtyInBase: l.formatQtyInBase,
         expectedPerBase: l.purchaseFormatId ? (formatPrices[l.purchaseFormatId] ?? null) : null,
         thresholdPct: supplySettings.priceAlertPct,
       })) priceAlerts++
+      if (l.recipeItemId && negotiatedAlertFor({
+        newPrice: lineActualPerBase({
+          lineAmount: l.lineAmount ?? null,
+          unitCost: parseNum(l.unitCost),
+          qtyReceived: parseNum(l.qty),
+          formatQtyInBase: l.formatQtyInBase,
+        }),
+        negotiatedPrice: priceRefs[l.recipeItemId]?.negotiatedPrice ?? null,
+        thresholdPct: supplySettings.negotiatedAlertPct,
+      })) negotiatedAlerts++
       if (expiryAlertFor(l.expiryDate, supplySettings.expiryAlertDays)) expiryAlerts++
     }
     // ── Desglose EXACTO de "qué entra al almacén" (deuda Julio 7/06) ──
@@ -1032,7 +1085,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
       coinciden, deMenos, deMas: overLines.length, sinTocar,
       overLines, untouchedLines,
       enterLines, notEnterLines,
-      priceAlerts, expiryAlerts,
+      priceAlerts, expiryAlerts, negotiatedAlerts,
       hasReference, anomaly, masaSinTocar,
       flagLines,
     }
@@ -1351,10 +1404,25 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                     const priceAlert = l.recipeItemId
                       ? priceAlertFor({
                           lineAmount: l.lineAmount ?? null,
+                          unitCost: parseNum(l.unitCost),
                           qtyReceived: qtyN,
                           formatQtyInBase: l.formatQtyInBase,
                           expectedPerBase: l.purchaseFormatId ? (formatPrices[l.purchaseFormatId] ?? null) : null,
                           thresholdPct: supplySettings.priceAlertPct,
+                        })
+                      : null
+                    // Aviso de PACTADO: independiente del puntual. Compara el €/base
+                    // entrante con negotiated_price del proveedor. Sin pacto → no salta.
+                    const negotiatedAlert = l.recipeItemId
+                      ? negotiatedAlertFor({
+                          newPrice: lineActualPerBase({
+                            lineAmount: l.lineAmount ?? null,
+                            unitCost: parseNum(l.unitCost),
+                            qtyReceived: qtyN,
+                            formatQtyInBase: l.formatQtyInBase,
+                          }),
+                          negotiatedPrice: priceRefs[l.recipeItemId]?.negotiatedPrice ?? null,
+                          thresholdPct: supplySettings.negotiatedAlertPct,
                         })
                       : null
                     const expiryAlert = expiryAlertFor(l.expiryDate, supplySettings.expiryAlertDays)
@@ -1473,10 +1541,11 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                                 ) : (
                                   <span className="text-[10px] px-1 py-0.5 rounded bg-warning-bg text-warning border border-warning/20">sin mapear</span>
                                 )}
-                                {priceAlert && (
-                                  <span className="text-[10px] px-1 py-0.5 rounded bg-warning-bg text-warning border border-warning/20"
-                                    title={`Última compra: ${priceAlert.lastPrice.toFixed(2)} € → ahora ${priceAlert.newPrice.toFixed(2)} €`}>
-                                    {priceAlert.direction === 'up' ? '↑' : '↓'}{Math.abs(priceAlert.pct)}% precio
+                                {/* Los avisos de PRECIO (puntual + pactado) ya no van aquí: se
+                                    muestran legibles junto al campo de precio (Fila 3). */}
+                                {(priceAlert || negotiatedAlert) && (
+                                  <span className="text-[10px] px-1 py-0.5 rounded bg-warning-bg text-warning border border-warning/20" title="Hay un aviso de precio en esta línea (abajo, junto al precio)">
+                                    ⚠ precio
                                   </span>
                                 )}
                                 {expiryAlert && (
@@ -1693,6 +1762,43 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                           </div>
                         </div>
 
+                        {/* Avisos de PRECIO legibles, junto al precio (donde está el ojo al teclear).
+                            En unidad humana (€/kg, €/L, €/ud), no en €/base crudo. */}
+                        {(priceAlert || negotiatedAlert) && (() => {
+                          const baseKU = l.baseUnit ? (units.find(u => u.id === l.baseUnit!.id) ?? null) : null
+                          const fb = l.baseUnit?.abbr ?? ''
+                          return (
+                            <div className="mt-2.5 space-y-1.5">
+                              {priceAlert && (() => {
+                                const before = perBaseToHuman(priceAlert.lastPrice, baseKU, units, fb)
+                                const now = perBaseToHuman(priceAlert.newPrice, baseKU, units, fb)
+                                const subio = priceAlert.direction === 'up'
+                                return (
+                                  <div className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning-bg px-3 py-2 text-sm text-warning">
+                                    <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+                                    <span>
+                                      <span className="font-medium">{subio ? 'Subió' : 'Bajó'} un {Math.abs(priceAlert.pct)}%</span> respecto a la última compra
+                                      {' '}(antes {fmtHumanPrice(before.value)} €/{before.abbr}, ahora {fmtHumanPrice(now.value)} €/{now.abbr}).
+                                    </span>
+                                  </div>
+                                )
+                              })()}
+                              {negotiatedAlert && (() => {
+                                const pact = perBaseToHuman(negotiatedAlert.negotiatedPrice, baseKU, units, fb)
+                                const now = perBaseToHuman(negotiatedAlert.newPrice, baseKU, units, fb)
+                                return (
+                                  <div className="flex items-start gap-2 rounded-md border border-accent/30 bg-accent-bg px-3 py-2 text-sm text-accent">
+                                    <span className="shrink-0 leading-none text-base">🤝</span>
+                                    <span>
+                                      <span className="font-medium">Por encima de lo pactado</span>: pactaste {fmtHumanPrice(pact.value)} €/{pact.abbr}, te cobran {fmtHumanPrice(now.value)} €/{now.abbr} <span className="font-medium">(+{negotiatedAlert.pct}%)</span>.
+                                    </span>
+                                  </div>
+                                )
+                              })()}
+                            </div>
+                          )
+                        })()}
+
                         {/* Fila 4: no cuadra con el albarán (rojo prominente) */}
                         {albaranDiff && (
                           <div className="mt-2.5 rounded-md bg-danger-bg px-2.5 py-2">
@@ -1795,7 +1901,7 @@ function ReviewPanel({
     coinciden: number; deMenos: number; deMas: number; sinTocar: number
     overLines: OverLine[]; untouchedLines: UntouchedLine[]
     enterLines: EnterLine[]; notEnterLines: NotEnterLine[]
-    priceAlerts: number; expiryAlerts: number
+    priceAlerts: number; expiryAlerts: number; negotiatedAlerts: number
     flagLines: { key: string; name: string; why: string }[]
     hasReference: boolean; anomaly: boolean; masaSinTocar: boolean
   }
@@ -1857,9 +1963,10 @@ function ReviewPanel({
             )}
           </div>
 
-          {(summary.priceAlerts > 0 || summary.expiryAlerts > 0) && (
+          {(summary.priceAlerts > 0 || summary.expiryAlerts > 0 || summary.negotiatedAlerts > 0) && (
             <div className="text-sm rounded-md bg-warning-bg text-warning border border-warning/20 px-3 py-2">
               {summary.priceAlerts > 0 && <p>⚠ {summary.priceAlerts} artículo(s) con salto de precio respecto a la última compra.</p>}
+              {summary.negotiatedAlerts > 0 && <p>🤝 {summary.negotiatedAlerts} artículo(s) por encima del precio pactado.</p>}
               {summary.expiryAlerts > 0 && <p>⚠ {summary.expiryAlerts} artículo(s) con caducidad vencida o próxima.</p>}
               <p className="text-text-secondary text-xs mt-0.5">Revísalos en la lista; no impiden confirmar.</p>
             </div>

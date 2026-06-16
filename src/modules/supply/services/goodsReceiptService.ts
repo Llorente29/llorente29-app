@@ -1284,21 +1284,33 @@ export async function suggestItemAttributes(
 // ── C2.2.c: ajustes de Supply + avisos copiloto (salto de precio, caducidad) ──
 
 export interface SupplySettings {
-  priceAlertPct: number      // umbral de salto de precio (±%)
-  expiryAlertDays: number    // días para avisar de caducidad próxima
+  priceAlertPct: number       // umbral de salto puntual de precio (±%)
+  expiryAlertDays: number     // días para avisar de caducidad próxima
+  negotiatedAlertPct: number  // umbral sobre el precio PACTADO (0 = avisa en cuanto lo supere)
+  driftAlertPct: number       // (6b) umbral de deriva sostenida de precio (%)
+  driftWindowMonths: number   // (6b) ventana de la deriva (meses)
 }
-const SUPPLY_SETTINGS_DEFAULTS: SupplySettings = { priceAlertPct: 15, expiryAlertDays: 3 }
+const SUPPLY_SETTINGS_DEFAULTS: SupplySettings = {
+  priceAlertPct: 15,
+  expiryAlertDays: 3,
+  negotiatedAlertPct: 0,
+  driftAlertPct: 25,
+  driftWindowMonths: 6,
+}
 
 export async function getSupplySettings(accountId: string): Promise<SupplySettings> {
   requireSupabase()
   const { data, error } = await from('supply_settings')
-    .select('price_alert_pct, expiry_alert_days')
+    .select('price_alert_pct, expiry_alert_days, negotiated_alert_pct, drift_alert_pct, drift_window_months')
     .eq('account_id', accountId)
     .maybeSingle()
   if (error || !data) return { ...SUPPLY_SETTINGS_DEFAULTS }   // sin fila → defaults de fábrica
   return {
     priceAlertPct: Number((data as Row).price_alert_pct ?? SUPPLY_SETTINGS_DEFAULTS.priceAlertPct),
     expiryAlertDays: Number((data as Row).expiry_alert_days ?? SUPPLY_SETTINGS_DEFAULTS.expiryAlertDays),
+    negotiatedAlertPct: Number((data as Row).negotiated_alert_pct ?? SUPPLY_SETTINGS_DEFAULTS.negotiatedAlertPct),
+    driftAlertPct: Number((data as Row).drift_alert_pct ?? SUPPLY_SETTINGS_DEFAULTS.driftAlertPct),
+    driftWindowMonths: Number((data as Row).drift_window_months ?? SUPPLY_SETTINGS_DEFAULTS.driftWindowMonths),
   }
 }
 
@@ -1311,6 +1323,9 @@ export async function saveSupplySettings(
       account_id: accountId,
       price_alert_pct: s.priceAlertPct,
       expiry_alert_days: s.expiryAlertDays,
+      negotiated_alert_pct: s.negotiatedAlertPct,
+      drift_alert_pct: s.driftAlertPct,
+      drift_window_months: s.driftWindowMonths,
       updated_at: new Date().toISOString(),
       created_by: createdBy,
       created_by_name: createdByName,
@@ -1318,20 +1333,26 @@ export async function saveSupplySettings(
   if (error) throw new Error(`No se pudieron guardar los ajustes: ${error.message}`)
 }
 
-// last_price por artículo de un proveedor (para el aviso de salto de precio).
-// Mapa recipe_item_id -> last_price. Una sola consulta por proveedor.
+// Precios de referencia por artículo de un proveedor: último pagado (last_price)
+// y PACTADO (negotiated_price), ambos en €/UNIDAD BASE. Mapa recipe_item_id ->
+// { lastPrice, negotiatedPrice }. Una sola consulta por proveedor. Alimenta los
+// dos avisos de recepción (puntual usa formatPrices; pactado usa negotiatedPrice).
+export interface SupplierPriceRef { lastPrice: number | null; negotiatedPrice: number | null }
 export async function getSupplierLastPrices(
   accountId: string, supplierId: string,
-): Promise<Record<string, number>> {
+): Promise<Record<string, SupplierPriceRef>> {
   requireSupabase()
   const { data, error } = await from('article_supplier')
-    .select('recipe_item_id, last_price')
+    .select('recipe_item_id, last_price, negotiated_price')
     .eq('account_id', accountId)
     .eq('supplier_id', supplierId)
   if (error) { console.error('[goodsReceiptService] getSupplierLastPrices', error); return {} }
-  const map: Record<string, number> = {}
+  const map: Record<string, SupplierPriceRef> = {}
   for (const r of (data as Row[] | null) ?? []) {
-    if (r.last_price != null) map[r.recipe_item_id as string] = Number(r.last_price)
+    map[r.recipe_item_id as string] = {
+      lastPrice: r.last_price != null ? Number(r.last_price) : null,
+      negotiatedPrice: r.negotiated_price != null ? Number(r.negotiated_price) : null,
+    }
   }
   return map
 }
@@ -1368,6 +1389,7 @@ export interface PriceAlert { pct: number; lastPrice: number; newPrice: number; 
  *
  * Entradas:
  *  - lineAmount      : importe NETO de la línea del albarán (dato duro del OCR).
+ *  - unitCost        : precio del FORMATO (€/formato) tecleado a mano (fallback sin OCR).
  *  - qtyReceived     : cantidad recibida EN EL FORMATO seleccionado.
  *  - formatQtyInBase : unidades base que tiene ese formato (caja = 2400 g).
  *  - expectedPerBase : €/base esperado para ESE formato y proveedor (lo deriva la
@@ -1375,26 +1397,25 @@ export interface PriceAlert { pct: number; lastPrice: number; newPrice: number; 
  *                      caja→bote). null = sin precio de referencia → sin aviso.
  *  - thresholdPct    : umbral de aviso (p.ej. 15).
  *
- * €/base del albarán = lineAmount / (qtyReceived * formatQtyInBase).
+ * El €/base entrante lo calcula lineActualPerBase (única fórmula, dos fuentes:
+ * OCR vía lineAmount, manual vía unitCost) → así puntual y pactado coinciden.
  */
 export function priceAlertFor(args: {
   lineAmount?: number | null
+  unitCost?: number | null
   qtyReceived?: number | null
   formatQtyInBase: number | null
   expectedPerBase: number | null
   thresholdPct: number
 }): PriceAlert | null {
-  const { lineAmount, qtyReceived, formatQtyInBase, expectedPerBase, thresholdPct } = args
+  const { lineAmount, unitCost, qtyReceived, formatQtyInBase, expectedPerBase, thresholdPct } = args
 
-  // Sin precio de referencia derivado, o sin formato → no se puede comparar.
+  // Sin precio de referencia derivado → no se puede comparar.
   if (expectedPerBase == null || expectedPerBase <= 0) return null
-  if (formatQtyInBase == null || formatQtyInBase <= 0) return null
 
-  // €/base del albarán a partir del importe de línea (dato duro). Sin él, sin aviso.
-  if (lineAmount == null || lineAmount <= 0 || qtyReceived == null || qtyReceived <= 0) return null
-  const basesTotal = qtyReceived * formatQtyInBase
-  if (basesTotal <= 0) return null
-  const actualPerBase = lineAmount / basesTotal
+  // €/base del entrante (OCR o tecleado). Sin dato → sin aviso.
+  const actualPerBase = lineActualPerBase({ lineAmount, unitCost, qtyReceived, formatQtyInBase })
+  if (actualPerBase == null || actualPerBase <= 0) return null
 
   const pct = ((actualPerBase - expectedPerBase) / expectedPerBase) * 100
   if (!Number.isFinite(pct) || Math.abs(pct) <= thresholdPct) return null
@@ -1404,6 +1425,56 @@ export function priceAlertFor(args: {
     newPrice: actualPerBase,
     direction: pct >= 0 ? 'up' : 'down',
   }
+}
+
+// €/UNIDAD BASE del entrante para una línea. ÚNICA fórmula del €/base entrante,
+// compartida por las dos alarmas (puntual y pactado). Dos fuentes del MISMO dato:
+//   · lineAmount : importe TOTAL de la línea (OCR/albarán escaneado). Preferente.
+//                  €/base = lineAmount / (qtyReceived × formatQtyInBase).  [no cambia]
+//   · unitCost   : precio del FORMATO (€/formato), TECLEADO a mano. Fallback cuando
+//                  no hay OCR. €/base = unitCost / formatQtyInBase.
+// Sin formatQtyInBase, o sin ninguna de las dos fuentes → null (no se puede comparar).
+export function lineActualPerBase(args: {
+  lineAmount?: number | null
+  unitCost?: number | null
+  qtyReceived?: number | null
+  formatQtyInBase: number | null
+}): number | null {
+  const { lineAmount, unitCost, qtyReceived, formatQtyInBase } = args
+  if (formatQtyInBase == null || formatQtyInBase <= 0) return null
+  // OCR: importe total de línea ÷ (cantidad × base por formato). Caso original, intacto.
+  if (lineAmount != null && lineAmount > 0) {
+    if (qtyReceived == null || qtyReceived <= 0) return null
+    const basesTotal = qtyReceived * formatQtyInBase
+    if (basesTotal <= 0) return null
+    return lineAmount / basesTotal
+  }
+  // Manual: €/formato tecleado ÷ base por formato = €/base.
+  if (unitCost != null && unitCost > 0) {
+    return unitCost / formatQtyInBase
+  }
+  return null
+}
+
+// Aviso de PRECIO PACTADO para una línea (puro, testeable). Independiente del
+// aviso puntual (priceAlertFor), que NO se toca. null = sin aviso.
+//   · Compara en €/UNIDAD BASE (misma unidad que el puntual).
+//   · Salta solo si HAY pacto (negotiatedPrice != null) y el entrante lo supera
+//     por encima del umbral: newPrice > negotiatedPrice × (1 + thresholdPct/100).
+//   · Sin pacto → null (no se alarma). thresholdPct 0 = avisa en cuanto lo supere.
+export interface NegotiatedAlert { pct: number; negotiatedPrice: number; newPrice: number }
+export function negotiatedAlertFor(args: {
+  newPrice: number | null
+  negotiatedPrice: number | null
+  thresholdPct: number
+}): NegotiatedAlert | null {
+  const { newPrice, negotiatedPrice, thresholdPct } = args
+  if (negotiatedPrice == null || negotiatedPrice <= 0) return null
+  if (newPrice == null || newPrice <= 0) return null
+  if (newPrice <= negotiatedPrice * (1 + thresholdPct / 100)) return null
+  const pct = ((newPrice - negotiatedPrice) / negotiatedPrice) * 100
+  if (!Number.isFinite(pct)) return null
+  return { pct: Math.round(pct), negotiatedPrice, newPrice }
 }
 
 // Aviso de caducidad para una línea (puro). null = sin aviso.

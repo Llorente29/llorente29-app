@@ -79,7 +79,9 @@ export default function GoodsReceiptsPage() {
 
   // C2.2.c — ajustes de avisos (umbral precio %, días caducidad).
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [settings, setSettings] = useState<SupplySettings>({ priceAlertPct: 15, expiryAlertDays: 3 })
+  const [settings, setSettings] = useState<SupplySettings>({
+    priceAlertPct: 15, expiryAlertDays: 3, negotiatedAlertPct: 0, driftAlertPct: 25, driftWindowMonths: 6,
+  })
   const [savingSettings, setSavingSettings] = useState(false)
   async function openSettings() {
     if (!activeAccountId) return
@@ -401,6 +403,15 @@ export default function GoodsReceiptsPage() {
                   onChange={e => setSettings(s => ({ ...s, priceAlertPct: Number(e.target.value) }))} disabled={savingSettings}
                   className="w-24 px-3 py-2 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent" />
                 <span className="text-sm text-text-secondary">% respecto a la última compra</span>
+              </div>
+            </label>
+            <label className="block">
+              <span className="text-sm text-text-primary">Avisar si supera lo pactado en</span>
+              <div className="mt-1 flex items-center gap-2">
+                <input type="number" min={0} max={100} value={settings.negotiatedAlertPct}
+                  onChange={e => setSettings(s => ({ ...s, negotiatedAlertPct: Number(e.target.value) }))} disabled={savingSettings}
+                  className="w-24 px-3 py-2 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent" />
+                <span className="text-sm text-text-secondary">% sobre el precio pactado (0 = en cuanto lo supere)</span>
               </div>
             </label>
             <label className="block">

@@ -32,6 +32,7 @@ import { searchTemplates, type IngredientTemplate } from '@/modules/kitchen/serv
 import { adoptFromTemplate } from '@/modules/kitchen/services/ingredientAdoptionService'
 import { enrichIngredientsBulk, type BulkEnrichProgress, type BulkEnrichResult } from '@/modules/kitchen/services/recipeBulkEnrichService'
 import { recostAllRaws, type BulkRecostResult } from '@/modules/kitchen/services/costCascadeService'
+import { unitPriceToBase, pickDisplayUnit } from '@/modules/kitchen/lib/unitConversion'
 import { listUnits } from '@/modules/kitchen/services/kitchenUnitService'
 import KitchenItemDetailPage from '@/modules/kitchen/pages/KitchenItemDetailPage'
 import FamilyReviewPanel from '@/modules/kitchen/components/FamilyReviewPanel'
@@ -45,6 +46,7 @@ import {
 import type {
   RecipeItem,
   KitchenUnit,
+  CostStrategy,
 } from '@/types/kitchen'
 
 const NO_FAMILY_FILTER = '__all__'
@@ -787,10 +789,26 @@ function IngredientCreateModal({
   onOpenExisting,
 }: IngredientCreateModalProps) {
   const [name, setName] = useState('')
-  const [baseUnitId, setBaseUnitId] = useState<string>(units[0]?.id ?? '')
-  const [fixedCost, setFixedCost] = useState<string>('')
+  // Base-first: el usuario elige CÓMO se mide (dimensión), no la unidad. La base
+  // la fija el sistema a la unidad FINA (is_base=true) de esa dimensión — nunca
+  // una no-fina (el bug del aceite con base "L"). '' = aún sin elegir.
+  const [dimension, setDimension] = useState<string>('')
+  // Precio OPCIONAL en unidad humana (€/kg, €/L, €/ud según la dimensión).
+  const [price, setPrice] = useState<string>('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Unidad base = la FINA (is_base=true) de la dimensión elegida. Imposible no-fina.
+  const baseUnit = useMemo(
+    () => (dimension ? units.find(u => u.dimension === dimension && u.isBase) ?? null : null),
+    [units, dimension],
+  )
+  // Unidad humana del precio (€/kg, €/L, €/ud): la de mayor factor de la dimensión.
+  const priceUnits = useMemo(
+    () => (dimension ? units.filter(u => u.dimension === dimension && (u.isActive || u.isBase)) : []),
+    [units, dimension],
+  )
+  const displayUnit = useMemo(() => pickDisplayUnit(priceUnits, baseUnit), [priceUnits, baseUnit])
 
   // ── Buscador del MASTER (adopción al vuelo) ──
   // Al teclear el nombre, se busca en el catálogo global de Folvy. Cada
@@ -860,14 +878,33 @@ function IngredientCreateModal({
       setError('El nombre es obligatorio.')
       return
     }
-    if (!baseUnitId) {
-      setError('Elige una unidad base.')
+    // La base SIEMPRE acaba en una unidad fina (is_base=true). Si no hay dimensión
+    // elegida (o la dimensión no tiene unidad base sembrada), no se crea.
+    if (!dimension || !baseUnit) {
+      setError('Elige cómo se mide el ingrediente (peso, volumen o por unidades).')
       return
     }
-    const costParsed = fixedCost.trim() === '' ? null : Number(fixedCost.replace(',', '.'))
-    if (costParsed !== null && (Number.isNaN(costParsed) || costParsed < 0)) {
-      setError('El coste fijo debe ser un número ≥ 0 (deja vacío si aún no lo sabes).')
+    // Precio OPCIONAL, tecleado en unidad humana (€/kg, €/L, €/ud).
+    const priceHuman = price.trim() === '' ? null : Number(price.replace(',', '.'))
+    if (priceHuman !== null && (Number.isNaN(priceHuman) || priceHuman < 0)) {
+      setError('El precio debe ser un número ≥ 0 (deja vacío si aún no lo sabes).')
       return
+    }
+
+    // Estrategia SIN hardcodear: si el cocinero teclea un precio a mano → 'fixed'
+    // con el coste convertido a €/BASE (desde la unidad humana). Si NO pone precio
+    // → 'last_purchase' SIN coste (queda sin computed_cost; needs_review natural).
+    // NO inventamos coste.
+    let costStrategy: CostStrategy = 'last_purchase'
+    let fixedCostBase: number | null = null
+    if (priceHuman !== null) {
+      const perBase = displayUnit ? unitPriceToBase(priceHuman, displayUnit, baseUnit) : null
+      if (perBase === null) {
+        setError('No se pudo convertir el precio a la unidad base.')
+        return
+      }
+      costStrategy = 'fixed'
+      fixedCostBase = perBase
     }
 
     setSubmitting(true)
@@ -877,9 +914,9 @@ function IngredientCreateModal({
         accountId,
         type: 'raw',
         name: trimmed,
-        baseUnitId,
-        costStrategy: 'fixed',
-        fixedCost: costParsed,
+        baseUnitId: baseUnit.id,
+        costStrategy,
+        fixedCost: fixedCostBase,
         createdBy: actorId,
         createdByName: actorName,
       })
@@ -897,22 +934,16 @@ function IngredientCreateModal({
     }
   }
 
-  // Agrupar unidades por dimensión para el selector.
-  const unitsGrouped = useMemo(() => {
-    const groups = new Map<string, KitchenUnit[]>()
-    units.forEach(u => {
-      const list = groups.get(u.dimension) ?? []
-      list.push(u)
-      groups.set(u.dimension, list)
-    })
-    return groups
-  }, [units])
-
   const DIM_LABEL: Record<string, string> = {
     weight: 'Peso',
     volume: 'Volumen',
     unit:   'Unidades',
   }
+  // Dimensiones ofrecidas como botones (orden estable). Solo se muestran las que
+  // tienen una unidad base sembrada en la cuenta (no ofrecemos lo que no se puede fijar).
+  const DIMENSIONS = ['weight', 'volume', 'unit'].filter(
+    dim => units.some(u => u.dimension === dim && u.isBase),
+  )
 
   return (
     <div
@@ -1013,45 +1044,52 @@ function IngredientCreateModal({
 
           <div>
             <label className="block text-xs font-medium text-text-secondary mb-1">
-              Unidad base
+              ¿Cómo se mide?
             </label>
-            <select
-              value={baseUnitId}
-              onChange={e => setBaseUnitId(e.target.value)}
-              disabled={submitting || units.length === 0}
-              className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
-            >
-              {Array.from(unitsGrouped.entries()).map(([dim, list]) => (
-                <optgroup key={dim} label={DIM_LABEL[dim] ?? dim}>
-                  {list.map(u => (
-                    <option key={u.id} value={u.id}>
-                      {u.name} ({u.abbreviation})
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
+            <div className="grid grid-cols-3 gap-2">
+              {DIMENSIONS.map(dim => {
+                const selected = dimension === dim
+                return (
+                  <button
+                    key={dim}
+                    type="button"
+                    onClick={() => setDimension(dim)}
+                    disabled={submitting}
+                    className={
+                      'px-2 py-2 text-sm rounded-md border transition-base disabled:opacity-50 ' +
+                      (selected
+                        ? 'bg-accent text-text-on-accent border-accent font-medium'
+                        : 'bg-page text-text-primary border-border-default hover:border-accent')
+                    }
+                  >
+                    {DIM_LABEL[dim] ?? dim}
+                  </button>
+                )
+              })}
+            </div>
             <p className="text-[11px] text-text-secondary mt-1">
-              La unidad en la que se expresa el coste y las cantidades de las recetas.
+              {baseUnit
+                ? `Se medirá en ${baseUnit.name.toLowerCase()} (${baseUnit.abbreviation}).`
+                : 'Elige la magnitud; la unidad de medida la pone Folvy (la fina: g, ml o ud).'}
             </p>
           </div>
 
           <div>
             <label className="block text-xs font-medium text-text-secondary mb-1">
-              Coste fijo (€ / unidad base)
+              Precio {displayUnit ? `(€ / ${displayUnit.abbreviation})` : '(opcional)'}
             </label>
             <input
               type="text"
               inputMode="decimal"
-              value={fixedCost}
-              onChange={e => setFixedCost(e.target.value)}
-              disabled={submitting}
-              placeholder="Opcional. Ej: 0.012"
+              value={price}
+              onChange={e => setPrice(e.target.value)}
+              disabled={submitting || !dimension}
+              placeholder={displayUnit ? `Opcional. Ej: precio por ${displayUnit.abbreviation}` : 'Elige antes cómo se mide'}
               className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
             />
             <p className="text-[11px] text-text-secondary mt-1">
-              Déjalo vacío si aún no sabes el precio. Cuando añadas un proveedor, el coste se
-              calculará solo desde la compra.
+              Déjalo vacío si aún no sabes el precio: el ingrediente se crea sin coste y el coste se
+              calculará solo cuando añadas un proveedor. Si lo pones, queda como coste fijo.
             </p>
           </div>
 
@@ -1074,7 +1112,8 @@ function IngredientCreateModal({
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={submitting}
+            disabled={submitting || !dimension}
+            title={!dimension ? 'Elige antes cómo se mide el ingrediente' : undefined}
             className="px-3 py-1.5 text-sm rounded-md font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base"
           >
             {submitting ? 'Creando...' : 'Crear'}

@@ -28,7 +28,7 @@
 //  · Árbol de formatos anidado y foto→IA del albarán: fases siguientes.
 
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, Truck, Star, Check, AlertTriangle, Loader2, Pencil, Sparkles, ChevronDown, ChevronRight, Archive, RotateCcw, ArrowRightLeft, Trash2 } from 'lucide-react'
+import { Plus, Truck, Star, Check, AlertTriangle, Loader2, Pencil, Sparkles, ChevronDown, ChevronRight, Archive, RotateCcw, ArrowRightLeft, Trash2, Handshake, X } from 'lucide-react'
 import IngredientSubstituteModal from '@/modules/kitchen/components/IngredientSubstituteModal'
 import IngredientAddModal from '@/modules/kitchen/components/IngredientAddModal'
 import IngredientRemoveModal from '@/modules/kitchen/components/IngredientRemoveModal'
@@ -50,6 +50,7 @@ import {
   formatPriceFromUnitCost,
   unitPriceToBase,
   unitPriceFromBase,
+  pickDisplayUnit,
 } from '@/modules/kitchen/lib/unitConversion'
 import type {
   RecipeItem,
@@ -761,13 +762,6 @@ interface SourceRowProps {
   onReactivate: () => void | Promise<void>
 }
 
-// La unidad "humana" para mostrar/teclear el precio: la de MAYOR factor de la
-// dimensión (kg sobre g, L sobre ml). Cae a la base si no hay candidatas.
-function pickDisplayUnit(priceUnits: KitchenUnit[], baseUnit: KitchenUnit | null): KitchenUnit | null {
-  if (priceUnits.length === 0) return baseUnit
-  return priceUnits.reduce((best, u) => (u.factorToBase > best.factorToBase ? u : best), priceUnits[0])
-}
-
 // Redondeo limpio para pre-rellenar el input (evita 8,9900000001).
 function toInputStr(n: number): string {
   return String(Math.round(n * 10000) / 10000)
@@ -797,12 +791,26 @@ function SourceRow({
       ? unitPriceFromBase(unitCost, displayUnit, baseUnit)
       : null
 
+  // ── Precio PACTADO (negotiated_price): dato PARALELO e independiente del normal.
+  // €/base directo; se muestra/edita en la unidad humana igual que el precio, pero
+  // NO afecta al coste (es solo referencia para la futura alarma).
+  const negInDisplay =
+    link.negotiatedPrice !== null && displayUnit && baseUnit
+      ? unitPriceFromBase(link.negotiatedPrice, displayUnit, baseUnit)
+      : null
+
   const [editing, setEditing] = useState(false)
   const [priceUnitId, setPriceUnitId] = useState<string>(displayUnit?.id ?? '')
   const [val, setVal] = useState('')
   const [codeVal, setCodeVal] = useState(link.supplierCode ?? '')
   const [saving, setSaving] = useState(false)
   const [busy, setBusy] = useState(false)   // estrella / archivar / reactivar
+
+  // Estado propio del editor de pactado (no comparte nada con el del precio normal).
+  const [editingNeg, setEditingNeg] = useState(false)
+  const [negPriceUnitId, setNegPriceUnitId] = useState<string>(displayUnit?.id ?? '')
+  const [negVal, setNegVal] = useState('')
+  const [savingNeg, setSavingNeg] = useState(false)
 
   function openEdit() {
     setPriceUnitId(displayUnit?.id ?? '')
@@ -822,6 +830,37 @@ function SourceRow({
     previewPerBase !== null && format
       ? formatPriceFromUnitCost(previewPerBase, format.qtyInBase)
       : null
+
+  // ── Editor del pactado: misma mecánica base-first, pero escribe negotiatedPrice.
+  function openEditNeg() {
+    setNegPriceUnitId(displayUnit?.id ?? '')
+    setNegVal(negInDisplay !== null ? toInputStr(negInDisplay) : '')
+    setEditingNeg(true)
+  }
+  const negSelectedUnit = priceUnits.find((u) => u.id === negPriceUnitId) ?? baseUnit
+  const negTyped = parseDecimal(negVal)
+  const negPreviewPerBase =
+    negTyped !== null && negSelectedUnit && baseUnit
+      ? unitPriceToBase(negTyped, negSelectedUnit, baseUnit)
+      : null
+
+  async function saveNeg() {
+    const t = parseDecimal(negVal)
+    // Vacío → borra el pacto (NULL). Negativo → cancela sin guardar.
+    let newNeg: number | null = null
+    if (t !== null) {
+      if (t < 0) { setEditingNeg(false); return }
+      newNeg = baseUnit && negSelectedUnit ? unitPriceToBase(t, negSelectedUnit, baseUnit) : t
+    }
+    setSavingNeg(true)
+    try {
+      await updateArticleSupplier(link.id, { negotiatedPrice: newNeg })
+      setEditingNeg(false)
+      await onSaved()
+    } finally {
+      setSavingNeg(false)
+    }
+  }
 
   async function save() {
     const t = parseDecimal(val)
@@ -924,6 +963,92 @@ function SourceRow({
             </>
           )}
         </div>
+
+        {/* Precio PACTADO: discreto, una línea. Editor base-first independiente. */}
+        {!archived && (
+          <div className="text-[11px] mt-0.5">
+            {editingNeg ? (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <div className="flex items-center rounded-md border border-border-default bg-card overflow-hidden focus-within:ring-1 focus-within:ring-accent">
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    autoFocus
+                    value={negVal}
+                    onChange={(e) => setNegVal(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') void saveNeg()
+                      if (e.key === 'Escape') setEditingNeg(false)
+                    }}
+                    disabled={savingNeg}
+                    placeholder="0,00 = sin pacto"
+                    className="w-24 px-2 py-1 text-xs bg-transparent text-text-primary text-right focus:outline-none disabled:opacity-50"
+                  />
+                  <span className="pl-1 text-[10px] text-text-secondary">€/</span>
+                  {priceUnits.length > 1 ? (
+                    <select
+                      value={negPriceUnitId}
+                      onChange={(e) => setNegPriceUnitId(e.target.value)}
+                      disabled={savingNeg}
+                      aria-label="Unidad del precio pactado"
+                      className="py-1 pr-1.5 text-[10px] bg-transparent text-text-primary cursor-pointer focus:outline-none disabled:opacity-50"
+                    >
+                      {priceUnits.map((u) => (
+                        <option key={u.id} value={u.id}>{u.abbreviation}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className="pr-2 text-[10px] text-text-secondary">{displayAbbr}</span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void saveNeg()}
+                  disabled={savingNeg}
+                  aria-label="Guardar precio pactado"
+                  className="p-1 rounded-md text-success hover:bg-success-bg transition-base disabled:opacity-50"
+                >
+                  {savingNeg ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingNeg(false)}
+                  disabled={savingNeg}
+                  aria-label="Cancelar"
+                  className="p-1 rounded-md text-text-secondary hover:text-text-primary transition-base disabled:opacity-50"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+                {negPreviewPerBase !== null && baseUnit && (
+                  <span className="font-mono text-text-secondary">= {fmtEur(negPreviewPerBase, 5)} / {baseAbbr}</span>
+                )}
+              </div>
+            ) : negInDisplay !== null ? (
+              <button
+                type="button"
+                onClick={openEditNeg}
+                className="inline-flex items-center gap-1 text-text-secondary hover:text-accent transition-base"
+                title="Editar precio pactado (en tu unidad: €/kg, €/g…)"
+              >
+                <Handshake className="w-3 h-3" />
+                pactado{' '}
+                <span className="font-mono text-text-primary">
+                  {fmtEur(negInDisplay, negInDisplay < 1 ? 4 : 2)} / {displayAbbr}
+                </span>
+                <Pencil className="w-2.5 h-2.5" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={openEditNeg}
+                className="inline-flex items-center gap-1 text-text-secondary hover:text-accent transition-base"
+                title="Fijar el precio acordado con este proveedor"
+              >
+                <Plus className="w-3 h-3" /> pactar precio
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="flex-shrink-0 flex items-center gap-1">

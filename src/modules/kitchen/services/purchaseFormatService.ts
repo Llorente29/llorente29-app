@@ -248,6 +248,7 @@ export function rowToArticleSupplier(row: RowArticleSupplier): ArticleSupplier {
     supplierCode: row.supplier_code,
     purchaseFormatId: row.purchase_format_id,
     lastPrice: row.last_price,
+    negotiatedPrice: row.negotiated_price,
     isPreferred: row.is_preferred,
     isActive: row.is_active,
     createdAt: row.created_at,
@@ -272,6 +273,7 @@ function articleSupplierUpdateToRow(patch: ArticleSupplierUpdate): RowArticleSup
   if (patch.supplierCode !== undefined) row.supplier_code = patch.supplierCode
   if (patch.purchaseFormatId !== undefined) row.purchase_format_id = patch.purchaseFormatId
   if (patch.lastPrice !== undefined) row.last_price = patch.lastPrice
+  if (patch.negotiatedPrice !== undefined) row.negotiated_price = patch.negotiatedPrice
   if (patch.isPreferred !== undefined) row.is_preferred = patch.isPreferred
   if (patch.isActive !== undefined) row.is_active = patch.isActive
   return row
