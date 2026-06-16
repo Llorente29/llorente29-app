@@ -18,7 +18,7 @@ import type {
 } from '../../../types/kitchen'
 
 export function rowToRecipeItem(row: RowRecipeItem): RecipeItem {
-  return {
+  const mapped: RecipeItem = {
     id: row.id,
     accountId: row.account_id,
     type: row.type as RecipeItemType,
@@ -61,6 +61,15 @@ export function rowToRecipeItem(row: RowRecipeItem): RecipeItem {
     createdBy: row.created_by,
     createdByName: row.created_by_name,
   }
+  // IVA del artículo (vat_category_id / vat_category_source): viven en la fila,
+  // pero database.ts puede ir por detrás del esquema (deuda conocida) y NO están
+  // en el tipo RecipeItem todavía. Sin este passthrough, el IVA guardado en BBDD
+  // nunca llegaba al objeto → la ficha mostraba "sin IVA" aunque estuviera
+  // confirmado. Lectura laxa, igual que hace ItemVatSelector al leerlos.
+  const r = row as unknown as { vat_category_id?: string | null; vat_category_source?: string | null }
+  ;(mapped as unknown as { vat_category_id?: string | null }).vat_category_id = r.vat_category_id ?? null
+  ;(mapped as unknown as { vat_category_source?: string | null }).vat_category_source = r.vat_category_source ?? null
+  return mapped
 }
 
 function recipeItemInsertToRow(input: RecipeItemInsert): RowRecipeItemInsert {
