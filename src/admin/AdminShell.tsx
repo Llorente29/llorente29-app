@@ -25,6 +25,7 @@ import AdminHomePage from './pages/AdminHomePage'
 import NuevaCuentaPage from './pages/NuevaCuentaPage'
 import CuentasListPage from './pages/CuentasListPage'
 import CuentaDetallePage from './pages/CuentaDetallePage'
+import FolvyMapPage from './pages/FolvyMapPage'
 import { listAccounts } from '@/modules/multitenancy/services/accountsService'
 import type { Account } from '@/types/multitenancy'
 
@@ -37,6 +38,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { label: 'Inicio', to: '/_admin/inicio', matchPrefix: '/_admin/inicio' },
   { label: 'Cuentas', to: '/_admin/cuentas', matchPrefix: '/_admin/cuentas' },
+  { label: 'Mapa de Folvy', to: '/_admin/mapa-folvy', matchPrefix: '/_admin/mapa-folvy' },
 ]
 
 // Extrae el accountId de la URL si estamos en la ficha de un cliente
@@ -199,6 +201,7 @@ export default function AdminShell() {
           <Route path="/_admin/cuentas" element={<CuentasListPage />} />
           <Route path="/_admin/cuentas/nueva" element={<NuevaCuentaPage />} />
           <Route path="/_admin/cuentas/:accountId" element={<CuentaDetallePage />} />
+          <Route path="/_admin/mapa-folvy" element={<FolvyMapPage />} />
           {/* Fallback: cualquier /_admin/... desconocido → home */}
           <Route path="*" element={<Navigate to="/_admin/inicio" replace />} />
         </Routes>
