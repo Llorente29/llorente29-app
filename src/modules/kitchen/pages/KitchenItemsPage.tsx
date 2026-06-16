@@ -20,7 +20,7 @@
 // scroll horizontal. Mismo mecanismo y estilo que KitchenProfitabilityPage (R1.4).
 
 import { Component, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from 'react'
-import { Plus, Soup, X, AlertTriangle, ChevronRight, Search, Sparkles, Tag, FolderTree, BookMarked, Check, Loader2, Wand2 } from 'lucide-react'
+import { Plus, Soup, X, AlertTriangle, ChevronRight, Search, Sparkles, Tag, FolderTree, BookMarked, Check, Loader2, Wand2, RefreshCw } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useIsMobile } from '@/shell/useIsMobile'
@@ -31,6 +31,7 @@ import {
 import { searchTemplates, type IngredientTemplate } from '@/modules/kitchen/services/ingredientTemplateService'
 import { adoptFromTemplate } from '@/modules/kitchen/services/ingredientAdoptionService'
 import { enrichIngredientsBulk, type BulkEnrichProgress, type BulkEnrichResult } from '@/modules/kitchen/services/recipeBulkEnrichService'
+import { recostAllRaws, type BulkRecostResult } from '@/modules/kitchen/services/costCascadeService'
 import { listUnits } from '@/modules/kitchen/services/kitchenUnitService'
 import KitchenItemDetailPage from '@/modules/kitchen/pages/KitchenItemDetailPage'
 import FamilyReviewPanel from '@/modules/kitchen/components/FamilyReviewPanel'
@@ -82,6 +83,10 @@ export default function KitchenItemsPage() {
   const [bulkRunning, setBulkRunning] = useState(false)
   const [bulkProgress, setBulkProgress] = useState<BulkEnrichProgress | null>(null)
   const [bulkResult, setBulkResult] = useState<BulkEnrichResult | null>(null)
+
+  // ── Recosteo masivo de raws (motor vigente, cierra migración €/base) ──
+  const [recostRunning, setRecostRunning] = useState(false)
+  const [recostResult, setRecostResult] = useState<BulkRecostResult | null>(null)
   // Familias de ingrediente (para chip + filtro) y resumen de propuestas IA (banner).
   const [families, setFamilies] = useState<IngredientFamily[]>([])
   const [proposalSummary, setProposalSummary] = useState<ProposalSummary | null>(null)
@@ -233,6 +238,27 @@ export default function KitchenItemsPage() {
     setBulkResult(null)
   }
 
+  // Recostea TODOS los raws/tools de la cuenta activa con el motor vigente.
+  // Reutiliza el mismo activeAccountId que el completado masivo IA.
+  async function handleRecostAll() {
+    if (!activeAccountId || recostRunning) return
+    setRecostRunning(true)
+    setRecostResult(null)
+    try {
+      const result = await recostAllRaws(activeAccountId)
+      setRecostResult(result)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Error en el recosteo masivo.')
+    } finally {
+      setRecostRunning(false)
+      setReloadTick((t) => t + 1)
+    }
+  }
+
+  function closeRecostModal() {
+    setRecostResult(null)
+  }
+
   return (
     <div className="space-y-4">
       {/* Modal de completado masivo con IA */}
@@ -300,6 +326,40 @@ export default function KitchenItemsPage() {
         </div>
       )}
 
+      {/* Modal de resultado del recosteo masivo */}
+      {recostResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-card rounded-xl w-full max-w-md p-6 border border-border-default">
+            <div className="flex items-center gap-2 text-text-primary mb-3">
+              <RefreshCw className="w-5 h-5 text-terracota" />
+              <span className="text-base font-medium">Recosteo terminado</span>
+            </div>
+            <p className="text-sm text-text-secondary mb-3">
+              Recosteados{' '}
+              <span className="font-medium text-text-primary">{recostResult.recosted}</span> de{' '}
+              <span className="font-medium text-text-primary">{recostResult.total}</span>.{' '}
+              {recostResult.failures.length} incidencia{recostResult.failures.length === 1 ? '' : 's'}.
+            </p>
+            {recostResult.failures.length > 0 && (
+              <ul className="text-xs text-amber-600 space-y-1 mb-4 max-h-40 overflow-y-auto">
+                {recostResult.failures.map((f) => (
+                  <li key={f.id} className="truncate">
+                    <span className="font-medium">{f.name || f.id}</span>: {f.error}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <button
+              type="button"
+              onClick={closeRecostModal}
+              className="w-full px-3 py-2 rounded-md text-sm font-medium bg-terracota text-white hover:bg-terracota-hover transition-colors"
+            >
+              Entendido
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Cabecera */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
@@ -323,6 +383,16 @@ export default function KitchenItemsPage() {
               Completar {pendingItems.length} con IA
             </button>
           )}
+          <button
+            type="button"
+            onClick={handleRecostAll}
+            disabled={!activeAccountId || recostRunning}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium border border-border-default text-text-secondary hover:text-text-primary hover:bg-page disabled:opacity-50 transition-base"
+            title="Recalcula el coste de todos los ingredientes (motor vigente €/base). Excluye los de coste fijo tecleado."
+          >
+            {recostRunning ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+            Recostear todo
+          </button>
           <button
             type="button"
             onClick={() => setCreateOpen(true)}

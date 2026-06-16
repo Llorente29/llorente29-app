@@ -135,13 +135,15 @@ export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuild
     }, 0)
   }, [catalog, draft])
 
-  // Total estimado = Σ (cantidad × last_price) de las filas con cantidad.
+  // Total estimado = Σ (cantidad × €/caja) de las filas con cantidad. last_price
+  // es €/UNIDAD BASE → el €/caja se deriva con × formatQtyInBase (factor 1 si el
+  // artículo no tiene formato; degenerado, no peta).
   const estTotal = useMemo(() => {
     return catalog.reduce((acc, e) => {
       const v = draft[e.articleSupplierId]?.qty
       const n = v ? Number(v.replace(',', '.')) : 0
       if (!Number.isFinite(n) || n <= 0) return acc
-      return acc + n * (e.lastPrice ?? 0)
+      return acc + n * (e.lastPrice ?? 0) * (e.formatQtyInBase ?? 1)
     }, 0)
   }, [catalog, draft])
 
@@ -184,8 +186,12 @@ export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuild
         const n = v ? Number(v.replace(',', '.')) : 0
         if (!Number.isFinite(n) || n <= 0) continue
         const note = draft[e.articleSupplierId]?.note?.trim() || null
-        const unitPrice = e.lastPrice
-        const lineTotal = unitPrice !== null ? Math.round(n * unitPrice * 100) / 100 : null
+        // last_price es €/base → el €/caja se deriva con × formatQtyInBase (factor 1
+        // si el artículo no tiene formato; degenerado, deja el precio tal cual).
+        // Guardamos el €/caja en la línea para que el PDF lo pinte sin recalcular.
+        const eurPorCaja = e.lastPrice !== null ? e.lastPrice * (e.formatQtyInBase ?? 1) : null
+        const unitPrice = eurPorCaja
+        const lineTotal = eurPorCaja !== null ? Math.round(n * eurPorCaja * 100) / 100 : null
         await createPurchaseOrderLine({
           accountId: activeAccountId,
           purchaseOrderId: order.id,
@@ -349,15 +355,23 @@ export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuild
                             {formatStockForOrder(e.stockOnHand, e.formatQtyInBase, e.formatName, e.baseUnitAbbr)}
                           </td>
                           <td className="px-3 py-2 text-center">
-                            <input
-                              type="text"
-                              inputMode="decimal"
-                              value={d?.qty ?? ''}
-                              onChange={ev => setQty(e.articleSupplierId, ev.target.value)}
-                              disabled={saving}
-                              placeholder="0"
-                              className="w-16 px-2 py-1 text-sm text-center border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
-                            />
+                            <div className="inline-flex items-center gap-1.5">
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                value={d?.qty ?? ''}
+                                onChange={ev => setQty(e.articleSupplierId, ev.target.value)}
+                                disabled={saving}
+                                placeholder="0"
+                                className="w-16 px-2 py-1 text-sm text-center border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+                              />
+                              {/* Unidad pedida: formato ("caja") o, si no tiene, la unidad base ("kg") */}
+                              {(e.formatName ?? e.baseUnitAbbr) && (
+                                <span className="text-[11px] text-text-tertiary whitespace-nowrap">
+                                  {e.formatName ? e.formatName.toLowerCase() : e.baseUnitAbbr}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-3 py-2 text-text-primary">
                             {e.formatLabel ?? e.formatName ?? '—'}

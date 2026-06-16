@@ -309,6 +309,18 @@ export default function PurchaseSourcesSection({
         supId = created.id
       }
 
+      // BASE-FIRST: el cocinero teclea el precio del FORMATO (€/caja) + cuánto
+      // trae (qtyInBase). last_price se guarda en €/UNIDAD BASE = precio ÷ qtyInBase
+      // (el motor lo lee directo, idéntico al previewUnitCost que ve en pantalla).
+      // Si pasáramos el €/caja crudo, el motor lo leería como €/base e inflaría el
+      // coste ×qtyInBase (el bug Delicias, ahora en el alta).
+      const perBase = unitCostFromFormat(priceNum, resolvedQtyInBase)
+      if (perBase === null) {
+        setFormError('No se pudo calcular el precio por unidad base. Revisa el precio y la cantidad.')
+        setSubmitting(false)
+        return
+      }
+
       // El FLIP fixed→last_purchase lo decide el service: le pasamos la estrategia
       // actual del ingrediente. Si es 'fixed', el service la cambia antes del alta.
       const result = await setupSimplePurchase({
@@ -317,7 +329,7 @@ export default function PurchaseSourcesSection({
         formatName: fName,
         qtyInBase: resolvedQtyInBase,
         supplierId: supId,
-        lastPrice: priceNum,
+        lastPrice: perBase,
         supplierCode: supplierCode.trim() || null,
         isPreferred,
         priorCostStrategy: item.costStrategy,
@@ -731,9 +743,10 @@ export default function PurchaseSourcesSection({
 
 // ── Fila de una fuente de compra existente, con edición de precio BASE-FIRST ──
 // El cocinero VE y EDITA el precio en su unidad humana (€/kg, €/g, €/L, €/ud),
-// no el precio del formato. Internamente seguimos guardando last_price como el
-// precio del FORMATO (€/caja) = €/base × qtyInBase (formatPriceFromUnitCost),
-// para no tocar el motor de coste ni los pedidos. Así es IMPOSIBLE teclear €/kg
+// no el precio del formato. Internamente guardamos last_price como €/UNIDAD BASE
+// directo (= unitPriceToBase del valor tecleado); el motor de coste lo lee tal
+// cual, sin pasar por el formato. El €/caja es solo informativo y se DERIVA con
+// formatPriceFromUnitCost cuando hay formato. Así es IMPOSIBLE teclear €/kg
 // donde el sistema esperaba €/caja (el error COHELDI). Editar dispara
 // updateArticleSupplier, que recostea los platos (cascada en el service).
 interface SourceRowProps {
@@ -776,11 +789,9 @@ function SourceRow({
   const displayUnit = pickDisplayUnit(priceUnits, baseUnit)
   const displayAbbr = displayUnit?.abbreviation ?? baseAbbr
 
-  // €/base actual (lo que guarda el motor) y su expresión en la unidad humana.
-  const unitCost =
-    format && link.lastPrice !== null
-      ? unitCostFromFormat(link.lastPrice, format.qtyInBase)
-      : null
+  // €/base actual = link.lastPrice DIRECTO (last_price ya es €/base, desacoplado
+  // del formato; no se deriva con unitCostFromFormat). Y su expresión humana.
+  const unitCost = link.lastPrice
   const priceInDisplay =
     unitCost !== null && displayUnit && baseUnit
       ? unitPriceFromBase(unitCost, displayUnit, baseUnit)
@@ -818,14 +829,15 @@ function SourceRow({
       setEditing(false)
       return
     }
-    // Base-first: lo tecleado es €/unidad → lo pasamos a €/base y derivamos el
-    // precio del FORMATO que se guarda en last_price. Requiere formato (qtyInBase).
+    // Base-first: lo tecleado es €/unidad → lo pasamos a €/base y ESO es lo que
+    // se guarda en last_price (el motor lo lee directo, sin pasar por el formato).
+    // El precio es editable SIEMPRE, con o sin formato: el formato ya no es
+    // requisito del precio.
     let newLastPrice: number | null = null
-    if (format && baseUnit && selectedUnit) {
-      const perBase = unitPriceToBase(t, selectedUnit, baseUnit)
-      newLastPrice = perBase !== null ? formatPriceFromUnitCost(perBase, format.qtyInBase) : null
+    if (baseUnit && selectedUnit) {
+      newLastPrice = unitPriceToBase(t, selectedUnit, baseUnit)
     } else {
-      // Vínculo sin formato (degenerado): guardamos el valor tal cual como respaldo.
+      // Sin unidad/base resoluble (degenerado): guardamos el valor tal cual.
       newLastPrice = t
     }
     if (newLastPrice === null) {
@@ -901,7 +913,8 @@ function SourceRow({
           {format && link.lastPrice !== null && (
             <>
               {' · '}
-              <span className="font-mono">{fmtEur(link.lastPrice, 2)} / {format.name.toLowerCase()}</span>
+              {/* €/caja DERIVADO del €/base (last_price) × qtyInBase, solo informativo */}
+              <span className="font-mono">{fmtEur(formatPriceFromUnitCost(link.lastPrice, format.qtyInBase), 2)} / {format.name.toLowerCase()}</span>
             </>
           )}
           {link.supplierCode && (

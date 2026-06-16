@@ -28,11 +28,12 @@ import {
 } from '@/modules/supply/services/purchaseOrderService'
 import { listGoodsReceipts } from '@/modules/supply/services/goodsReceiptService'
 import { listRecipeItems } from '@/modules/kitchen/services/recipeItemService'
-import { listSuppliers } from '@/modules/kitchen/services/purchaseFormatService'
-import { listSupplyLocations, type SupplyLocation } from '@/modules/supply/services/supplierCatalogService'
+import { listSuppliers, listFormatsByItem } from '@/modules/kitchen/services/purchaseFormatService'
+import { listUnits } from '@/modules/kitchen/services/kitchenUnitService'
+import { listSupplyLocations, buildFormatLabel, type SupplyLocation } from '@/modules/supply/services/supplierCatalogService'
 import { buildPurchaseOrderPdfData, generatePurchaseOrderPdf } from '@/modules/supply/services/purchaseOrderPdf'
 import GoodsReceiptForm from '@/modules/supply/pages/GoodsReceiptForm'
-import type { Supplier } from '@/types/kitchen'
+import type { Supplier, KitchenUnit, PurchaseFormat } from '@/types/kitchen'
 import type { RecipeItem } from '@/types/kitchen'
 
 const STATUS_LABEL: Record<PurchaseOrderStatus, string> = {
@@ -68,6 +69,9 @@ export default function SupplyOrderDetailPage({ orderId, onBack }: SupplyOrderDe
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [locations, setLocations] = useState<SupplyLocation[]>([])
   const [ingredients, setIngredients] = useState<RecipeItem[]>([])
+  const [units, setUnits] = useState<KitchenUnit[]>([])
+  // Formatos de las líneas indexados por purchaseFormatId (para la unidad legible).
+  const [formatById, setFormatById] = useState<Map<string, PurchaseFormat>>(new Map())
   const [hasConfirmedReceipts, setHasConfirmedReceipts] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -90,8 +94,9 @@ export default function SupplyOrderDetailPage({ orderId, onBack }: SupplyOrderDe
       listRecipeItems({ accountId: activeAccountId, type: 'raw' }),
       listSupplyLocations(activeAccountId),
       listGoodsReceipts({ accountId: activeAccountId }),
+      listUnits(),
     ])
-      .then(([ord, lns, sups, ings, locs, receipts]) => {
+      .then(([ord, lns, sups, ings, locs, receipts, uts]) => {
         if (cancelled) return
         if (!ord) {
           setError('Este pedido ya no existe.')
@@ -103,6 +108,7 @@ export default function SupplyOrderDetailPage({ orderId, onBack }: SupplyOrderDe
         setSuppliers(sups)
         setIngredients(ings)
         setLocations(locs)
+        setUnits(uts)
         setHasConfirmedReceipts(
           receipts.some(r => r.purchaseOrderId === orderId && r.status === 'confirmado'),
         )
@@ -133,10 +139,49 @@ export default function SupplyOrderDetailPage({ orderId, onBack }: SupplyOrderDe
     return m
   }, [ingredients])
 
+  // Abreviatura de la unidad base por ingrediente (g/ml/ud), para el fallback
+  // "1 kg" cuando una línea no tiene formato.
+  const baseAbbrByItem = useMemo(() => {
+    const m = new Map<string, string | null>()
+    ingredients.forEach(i => m.set(i.id, units.find(u => u.id === i.baseUnitId)?.abbreviation ?? null))
+    return m
+  }, [ingredients, units])
+
+  // Unidad legible de una línea: el formato ("caja" + label "Caja (10 kg)") o,
+  // si no tiene formato, la unidad base ("kg"). Solo lectura: no toca cálculos.
+  function lineUnit(l: PurchaseOrderLine): { word: string; fullLabel: string | null } {
+    const fmt = l.purchaseFormatId ? formatById.get(l.purchaseFormatId) ?? null : null
+    const baseAbbr = l.recipeItemId ? baseAbbrByItem.get(l.recipeItemId) ?? null : null
+    if (fmt) {
+      return { word: fmt.name.toLowerCase(), fullLabel: buildFormatLabel(fmt.name, fmt.qtyInBase, baseAbbr) }
+    }
+    return { word: baseAbbr ?? '', fullLabel: null }
+  }
+
   const computedTotal = useMemo(
     () => lines.reduce((acc, l) => acc + (l.estLineTotal ?? 0), 0),
     [lines],
   )
+
+  // Formatos de las líneas → indexados por purchaseFormatId. Reutiliza
+  // listFormatsByItem (por ingrediente) + buildFormatLabel del catálogo; solo
+  // resuelve la UNIDAD que ya conoce, no recalcula precios ni cantidades.
+  useEffect(() => {
+    const itemIds = Array.from(
+      new Set(lines.map(l => l.recipeItemId).filter((x): x is string => !!x)),
+    )
+    if (itemIds.length === 0) { setFormatById(new Map()); return }
+    let cancelled = false
+    Promise.all(itemIds.map(id => listFormatsByItem(id)))
+      .then(arrays => {
+        if (cancelled) return
+        const m = new Map<string, PurchaseFormat>()
+        for (const fmts of arrays) for (const f of fmts) m.set(f.id, f)
+        setFormatById(m)
+      })
+      .catch(() => { if (!cancelled) setFormatById(new Map()) })
+    return () => { cancelled = true }
+  }, [lines])
 
   useEffect(() => {
     if (!order) return
@@ -304,13 +349,26 @@ export default function SupplyOrderDetailPage({ orderId, onBack }: SupplyOrderDe
                     </tr>
                   </thead>
                   <tbody>
-                    {lines.map(l => (
+                    {lines.map(l => {
+                      const u = lineUnit(l)
+                      return (
                       <tr key={l.id} className="border-t border-border-default">
                         <td className="px-3 py-2 text-text-primary">
                           {l.recipeItemId ? (ingredientNameById.get(l.recipeItemId) ?? l.productName) : l.productName}
                         </td>
-                        <td className="px-3 py-2 text-right tabular-nums text-text-primary">{l.qtyOrdered}</td>
-                        <td className="px-3 py-2 text-right tabular-nums text-text-secondary">{formatEur(l.estUnitPrice)}</td>
+                        <td className="px-3 py-2 text-right text-text-primary">
+                          <div className="flex flex-col items-end">
+                            <span className="tabular-nums">{l.qtyOrdered}{u.word ? ` ${u.word}` : ''}</span>
+                            {u.fullLabel && (
+                              <span className="text-[11px] text-text-tertiary">{u.fullLabel}</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums text-text-secondary">
+                          {l.estUnitPrice !== null && l.estUnitPrice !== undefined
+                            ? `${formatEur(l.estUnitPrice)}${u.word ? ` / ${u.word}` : ''}`
+                            : '—'}
+                        </td>
                         <td className="px-3 py-2 text-right tabular-nums text-text-primary">{formatEur(l.estLineTotal)}</td>
                         <td className="px-3 py-2 text-right">
                           <button
@@ -323,7 +381,8 @@ export default function SupplyOrderDetailPage({ orderId, onBack }: SupplyOrderDe
                           </button>
                         </td>
                       </tr>
-                    ))}
+                      )
+                    })}
                   </tbody>
                   <tfoot>
                     <tr className="border-t border-border-default bg-page/50">

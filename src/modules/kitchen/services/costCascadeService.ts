@@ -132,3 +132,36 @@ export async function recomputeItemAndAncestors(itemId: string): Promise<Cascade
   }
   return cascadeFromItem(itemId)
 }
+
+export interface BulkRecostResult {
+  total: number
+  recosted: number
+  failures: { id: string; name: string; error: string }[]
+}
+
+// Recostea TODOS los raws/tools de una cuenta con el motor vigente
+// (kitchen_recompute_raw_cost vía recomputeItemAndAncestors). En serie, fail-safe
+// por ítem (uno que falle no aborta el resto). Para cerrar la migración a €/base:
+// rellena los computed_cost a NULL de average_weighted y reconcilia multi-proveedor.
+export async function recostAllRaws(accountId: string): Promise<BulkRecostResult> {
+  requireSupabase()
+  const { data, error } = await supabase!
+    .from('recipe_item')
+    .select('id, name')
+    .eq('account_id', accountId)
+    .in('type', ['raw', 'tool'])
+    .neq('cost_strategy', 'fixed')   // 'fixed' no se recostea: manda el coste tecleado
+  if (error) throw new Error(`recostAllRaws: error listando raws: ${error.message}`)
+  const items = data ?? []
+  const failures: BulkRecostResult['failures'] = []
+  let recosted = 0
+  for (const it of items) {
+    try {
+      await recomputeItemAndAncestors(it.id as string)
+      recosted++
+    } catch (e) {
+      failures.push({ id: it.id as string, name: (it.name as string) ?? '', error: e instanceof Error ? e.message : String(e) })
+    }
+  }
+  return { total: items.length, recosted, failures }
+}

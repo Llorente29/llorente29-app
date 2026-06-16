@@ -31,6 +31,7 @@ import {
 } from '@/modules/kitchen/services/recipeItemService'
 import { listUnits } from '@/modules/kitchen/services/kitchenUnitService'
 import { listSuppliers, listSuppliersByItem } from '@/modules/kitchen/services/purchaseFormatService'
+import { recomputeItemAndAncestors } from '@/modules/kitchen/services/costCascadeService'
 import {
   listIngredientFamilies,
   type IngredientFamily,
@@ -44,7 +45,7 @@ import { listItemAllergens, saveItemAllergens } from '@/modules/kitchen/services
 import { EU_ALLERGENS, ALLERGEN_STATES, allergenLabel, allergenStateLabel, type AllergenCode, type AllergenState } from '@/modules/kitchen/lib/allergens'
 import { supabase } from '@/lib/supabase'
 import type { Database, Json } from '@/types/database'
-import type { RecipeItem, KitchenUnit, Supplier, ArticleSupplier, RecipeItemUpdate, ConservationType } from '@/types/kitchen'
+import type { RecipeItem, KitchenUnit, Supplier, ArticleSupplier, RecipeItemUpdate, ConservationType, CostStrategy } from '@/types/kitchen'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -126,6 +127,16 @@ const CONSERVATION_OPTIONS: { value: ConservationType; label: string }[] = [
   { value: 'freezer', label: 'Congelación' },
   { value: 'dry', label: 'Seco / ambiente' },
   { value: 'hot', label: 'Caliente' },
+]
+
+// Estrategias de coste REALES del enum en BBDD (CHECK recipe_item_cost_strategy_valid:
+// 'fixed' | 'last_purchase' | 'average_weighted' | 'average_window'). Son 4, no 6:
+// el CHECK no admite más (la BBDD es la verdad). Etiquetas estilo tspoon.
+const COST_STRATEGY_OPTIONS: { value: CostStrategy; label: string; hint: string }[] = [
+  { value: 'last_purchase', label: 'Último precio de compra', hint: 'El coste lo manda el último precio del proveedor principal.' },
+  { value: 'average_weighted', label: 'Precio medio ponderado de las compras', hint: 'Media de las compras ponderada por cantidad recibida.' },
+  { value: 'average_window', label: 'Precio medio de las últimas compras', hint: 'Media de las compras dentro de una ventana reciente.' },
+  { value: 'fixed', label: 'Precio fijo (tecleado a mano)', hint: 'El coste lo fijas tú; la compra no lo pisa.' },
 ]
 
 // ─── Sub-componentes ──────────────────────────────────────────────────────────
@@ -215,6 +226,7 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
   const [fCode, setFCode] = useState('')
   const [fFamilyId, setFFamilyId] = useState('')
   const [fBaseUnitId, setFBaseUnitId] = useState('')
+  const [fCostStrategy, setFCostStrategy] = useState<CostStrategy>('last_purchase')
   const [fOrigin, setFOrigin] = useState('')
   const [fConservation, setFConservation] = useState('')
   const [fServiceTemp, setFServiceTemp] = useState('')
@@ -362,6 +374,7 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
     setFCode(item.code ?? '')
     setFFamilyId(item.familyId ?? '')
     setFBaseUnitId(item.baseUnitId)
+    setFCostStrategy(item.costStrategy)
     setFOrigin(item.origin ?? '')
     setFConservation(item.conservationType ?? '')
     setFServiceTemp(item.serviceTempC != null ? String(item.serviceTempC) : '')
@@ -393,12 +406,14 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
     if (!fBaseUnitId) { setFormError('Elige una unidad base.'); return }
 
     const shelf = parseNum(fShelfLife)
+    const strategyChanged = fCostStrategy !== item.costStrategy
     const patch: RecipeItemUpdate = {
       name,
       altName: fAltName.trim() || null,
       code: fCode.trim() || null,
       familyId: fFamilyId || null,
       baseUnitId: fBaseUnitId,
+      costStrategy: fCostStrategy,
       origin: fOrigin.trim() || null,
       conservationType: (fConservation || null) as ConservationType | null,
       serviceTempC: parseNum(fServiceTemp),
@@ -434,6 +449,17 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
         .update(directPatch)
         .eq('id', item.id)
       if (directErr) throw new Error(directErr.message)
+
+      // Si cambió la estrategia de coste, recosteamos el ítem (y sus platos) con
+      // el motor vigente para que el coste mostrado refleje ya la nueva regla.
+      // Reutiliza recomputeItemAndAncestors (no toca el motor); fail-safe.
+      if (strategyChanged) {
+        try {
+          await recomputeItemAndAncestors(item.id)
+        } catch (e) {
+          console.error('KitchenItemDetailPage: recosteo tras cambio de estrategia falló', e)
+        }
+      }
 
       setEditing(false)
       await refreshItem()
@@ -584,6 +610,11 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
             <div className="space-y-3">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-text-secondary">Coste</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Field label="Estrategia de coste" hint={COST_STRATEGY_OPTIONS.find((o) => o.value === fCostStrategy)?.hint}>
+                  <select value={fCostStrategy} onChange={(e) => setFCostStrategy(e.target.value as CostStrategy)} disabled={saving} className={`${INPUT_CLS} cursor-pointer`}>
+                    {COST_STRATEGY_OPTIONS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
+                  </select>
+                </Field>
                 <Field label="Merma por defecto (%)" hint="Parte que se pierde al preparar. El coste real usa cantidad bruta.">
                   <input type="text" inputMode="decimal" value={fWastePct} onChange={(e) => setFWastePct(e.target.value)} disabled={saving} placeholder="Ej: 8" className={INPUT_CLS} />
                 </Field>

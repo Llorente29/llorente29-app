@@ -22,7 +22,7 @@ export interface SupplierCatalogEntry {
   itemName: string               // nombre del artículo
   supplierCode: string | null    // código del proveedor (213634…)
   supplierItemName: string | null // descripción del proveedor ("QUESO GOUDA LONCH.BOCAT.FS 1K")
-  lastPrice: number | null       // último precio conocido (€ por formato)
+  lastPrice: number | null       // último precio conocido en €/UNIDAD BASE (€/g, €/ml, €/ud); el €/caja se deriva con × formatQtyInBase
   isPreferred: boolean           // proveedor preferente para este artículo
   purchaseFormatId: string | null
   formatName: string | null      // "Caja", "Garrafa", "Paquete"
@@ -84,7 +84,7 @@ function isUnitWord(name: string): boolean {
   ].includes(n)
 }
 
-function buildFormatLabel(
+export function buildFormatLabel(
   name: string | null,
   qtyInBase: number | null,
   baseAbbr: string | null,

@@ -495,7 +495,9 @@ export interface PurchaseFormatUpdate {
 
 // ── article_supplier (proveedor ↔ formato que vende, con precio) ──────
 // purchaseFormatId apunta a UN nodo del árbol (opción A: un solo camino).
-// lastPrice es el precio pagado por ESE formato → coste base = precio / qtyInBase.
+// lastPrice es el precio en €/UNIDAD BASE (€/g, €/ml, €/ud) — el motor de coste
+// lo lee directo, desacoplado del formato. El €/caja se DERIVA cuando hace falta
+// (pedidos) con lastPrice × qtyInBase; ya NO se guarda el precio del formato.
 export interface ArticleSupplier {
   id: string
   accountId: string
