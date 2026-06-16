@@ -20,7 +20,7 @@
 // scroll horizontal. Mismo mecanismo y estilo que KitchenProfitabilityPage (R1.4).
 
 import { Component, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from 'react'
-import { Plus, Soup, X, AlertTriangle, ChevronRight, Search, Sparkles, Tag, FolderTree, BookMarked, Check, Loader2, Wand2, RefreshCw } from 'lucide-react'
+import { Plus, Soup, X, AlertTriangle, ChevronRight, Search, Sparkles, Tag, FolderTree, BookMarked, Check, Loader2, Wand2, RefreshCw, Coins } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useIsMobile } from '@/shell/useIsMobile'
@@ -64,6 +64,44 @@ function formatEur(value: number | null): string {
 
 function unitLabel(unit: KitchenUnit | undefined): string {
   return unit ? `${unit.name} (${unit.abbreviation})` : '—'
+}
+
+// Un raw es "costeable" si tiene coste real > 0 — fijo (tecleado a mano) o
+// computado (desde un proveedor con precio / recepción). 0 o null = falta el
+// precio: el ingrediente puede estar CLASIFICADO pero NO entra bien en un
+// escandallo (subcostearía en silencio). De ahí el segundo estado "sin coste".
+function hasRealCost(item: RecipeItem): boolean {
+  return (item.fixedCost != null && item.fixedCost > 0)
+      || (item.computedCost != null && item.computedCost > 0)
+}
+
+// Chip de estado del ingrediente, con DOS señales honestas y excluyentes:
+//   • "sin terminar" (ámbar, alarma) → needsReview: falta clasificar (familia/IVA).
+//     Lo cierra el completado con IA.
+//   • "sin coste" (neutro, aviso)    → ya clasificado pero sin coste real todavía.
+//     Lo cierra añadir proveedor/precio; o una recepción → recosteo → cae solo.
+//   • clasificado Y costeable         → SIN chip (= listo para escandallo).
+// El chip "sin coste" es DERIVADO del coste (no un flag guardado): cuando una
+// recepción recostea el ingrediente, deja de cumplirse y desaparece solo al
+// recargar la lista. Prioridad: clasificación antes que coste (una sola señal/fila).
+function IngredientStatusChip({ item, className = '' }: { item: RecipeItem; className?: string }) {
+  if (item.needsReview) {
+    return (
+      <span className={`${className} text-[11px] px-2 py-0.5 rounded-full bg-warning-bg text-warning inline-flex items-center gap-1 align-middle`}>
+        <AlertTriangle className="w-3 h-3" />
+        sin terminar
+      </span>
+    )
+  }
+  if (!hasRealCost(item)) {
+    return (
+      <span className={`${className} text-[11px] px-2 py-0.5 rounded-full bg-page border border-warning/40 text-text-secondary inline-flex items-center gap-1 align-middle`}>
+        <Coins className="w-3 h-3" />
+        sin coste
+      </span>
+    )
+  }
+  return null
 }
 
 export default function KitchenItemsPage() {
@@ -553,12 +591,7 @@ export default function KitchenItemsPage() {
                             ({item.altName})
                           </span>
                         )}
-                        {item.needsReview && (
-                          <span className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-warning-bg text-warning inline-flex items-center gap-1 align-middle">
-                            <AlertTriangle className="w-3 h-3" />
-                            sin terminar
-                          </span>
-                        )}
+                        <IngredientStatusChip item={item} className="ml-2" />
                       </td>
                       <td className="p-3">
                         {famName ? (
@@ -725,12 +758,7 @@ function IngredientCard({
                 ({item.altName})
               </span>
             )}
-            {item.needsReview && (
-              <span className="text-[11px] px-2 py-0.5 rounded-full bg-warning-bg text-warning inline-flex items-center gap-1">
-                <AlertTriangle className="w-3 h-3" />
-                sin terminar
-              </span>
-            )}
+            <IngredientStatusChip item={item} />
             {familyName && (
               <span className="text-[11px] px-2 py-0.5 rounded-full bg-page border border-border-default text-text-secondary inline-flex items-center gap-1">
                 <Tag className="w-3 h-3" />
