@@ -160,7 +160,7 @@ export default function AvtSection({
                 <span className={`w-24 text-right text-sm font-medium tabular-nums ${(line.varianceValue ?? 0) < 0 ? 'text-danger' : (line.varianceValue ?? 0) > 0 ? 'text-success' : 'text-text-tertiary'}`}>
                   {fmtEur(line.varianceValue)}
                 </span>
-                <span className="w-14 text-right text-xs text-text-tertiary tabular-nums">{line.variancePct == null ? '—' : `${Math.round(line.variancePct)}%`}</span>
+                <span className="w-14 text-right text-xs text-text-tertiary tabular-nums">{(line.systemQty != null && line.systemQty > 0 && line.variancePct != null) ? `${Math.round(line.variancePct)}%` : '—'}</span>
                 <span className="w-32">
                   <span className={`text-[11px] px-2 py-0.5 rounded ${causeChipClass(cause.key)}`}>{cause.label}</span>
                 </span>
