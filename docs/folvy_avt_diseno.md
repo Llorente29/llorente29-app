@@ -1,149 +1,112 @@
-# Folvy — Diseño del AvT (Análisis de Variación Teórica)
+# Folvy — AvT (Teórico vs Real) · Diseño
 
-**Frente 5 del guión vivo · Inventario perpetuo capa 2 · cerrar el bucle merma**
-Estado: diseño para aprobación. No se ha tocado código.
-RECON + benchmark completos (R365, MarketMan, tspoon dump real, código propio).
+> Frente del módulo Almacén, sección "Teórico vs Real". El gran diferenciador de
+> control de food cost. Documento de diseño; se construye por capas.
+> RECON + benchmark hechos el 2026-06-17.
 
----
+## 0. Qué es y por qué importa
 
-## 1. Qué es y por qué lidera
+El AvT (Actual vs Theoretical, "Teórico vs Real") compara, por artículo y periodo:
 
-El AvT responde a la pregunta que ningún dueño de restaurante puede contestar hoy
-sin pelearse con una hoja de cálculo: **"vendí esto, debería haber gastado tanto de
-cada ingrediente — ¿cuánto gasté de verdad, y dónde se evaporó el dinero?"**
+- **Teórico**: lo que el sistema *cree* que tienes = stock inicial + compras − consumo
+  por escandallo. Folvy ya lo tiene vivo (ventas × escandallo → ledger `consumo`).
+- **Real**: lo que un humano *cuenta* físicamente (conteo de inventario cerrado).
+- **Desviación (merma)**: teórico − real. En €, es dinero que se evaporó sin venta:
+  sobre-porción, caducidad, robo, error de recepción, o escandallo mal hecho.
 
-La ecuación, idéntica en todos los líderes:
+Es la métrica reina del food cost. Los líderes apuntan a variance < 2-3%; lo importante
+no es el número absoluto sino la **tendencia** (¿se estrecha o se ensancha?).
 
-```
-stock_esperado = stock_inicial + compras − consumo_teórico ± traspasos − merma_con_causa
-variación      = stock_esperado − conteo_real
-```
+## 1. RECON (estado real, 2026-06-17)
 
-Lo que la variación NO explicada vale en € es la fuga: sobre-porcionado, robo,
-caducidad no registrada, error de escandallo. Ordenado por €, es el mapa del dinero
-perdido.
+- **Teórico**: VIVO. `compute_sale_line_consumption` + `recompute_sales_consumption`
+  escriben movimientos `consumo` (ventas × escandallo). `listConsumptionByRaw` ya lista
+  el consumo por ingrediente/local/periodo (es la base de la pestaña actual).
+- **Real**: conteos de inventario. Hay AL MENOS uno `aprobado` con `closed_at` y líneas
+  contadas (Foodint Alcalá, 15/06, 10 líneas). Son `cycle` (parciales/rotativos del
+  autoinventario), no inventarios completos → el AvT cubre los artículos contados, no
+  todos a la vez. Eso es CORRECTO en modelo rotativo; el diseño lo refleja con honestidad.
+- **Ledger**: `stock_movement` con tipos consumo/recepcion/ajuste/apertura/merma/traspaso;
+  `qty_base` con signo; `unit_cost`. Stock por local en `recipe_item_location_stock`
+  (`qty_on_hand`, `avg_unit_cost` → permite valorar en €).
+- **Merma**: `register_waste` + `stock_waste` (causa). Es una salida conocida y explicada
+  → NO es "desviación inexplicada", se descuenta del misterio.
+- **Saneamiento en curso**: stock negativo en varios artículos (escandallos en ajuste).
+  El AvT debe sobrevivir a datos imperfectos sin mentir.
 
----
+## 2. Benchmark (qué hacen los líderes y dónde fallan)
 
-## 2. Lo que YA está construido (no se reconstruye)
+- **Apicbase**: variance por outlet × categoría contable, dashboard "Count Variance" con
+  filtros (fecha, local, categoría/subcategoría), precios reales por local.
+- **MarketMan**: el más rico en métricas — uso teórico, uso real, varianza, varianza
+  INEXPLICADA, merma, % eficiencia, todo en cantidad Y en €, y como % de ventas. Exige
+  ≥2 inventarios (modelo por periodo puro).
+- **Crunchtime**: clave — ranking de ingredientes por mayor varianza en €, investigación
+  desde el local más desviado; foco en recepción/factura/preparación.
+- **MarketMan/ClearCOGS (multi-unidad)**: lo más valioso a escala NO es el agregado, es la
+  COMPARACIÓN ENTRE LOCALES (qué unidad se desvía, en qué artículo).
 
-Verificado contra BBDD y repo:
+**Huecos donde Folvy golea (deuda-0, no clonar):**
+1. Todos EXIGEN el dato pero no lo CURAN ni avisan si falta → dan números aunque sean
+   basura. Folvy añade SALUD DEL DATO: números honestos o ningún número.
+2. No explican el PORQUÉ más allá de "merma/robo/porción". Folvy distingue causa:
+   merma real (hay waste) vs dato incompleto (stock negativo, falta compra) vs escandallo
+   no fiable.
+3. El AvT vive separado (recetas, compras, POS en sistemas distintos). Folvy ya tiene
+   todo en uno (escandallo al céntimo + ledger + recepción + autoinventario IA).
 
-- **Consumo teórico vivo** — `stock_movement` tipo `consumo` (1.820 mov, −78.719 en
-  Folvy Interno). Ventas × escandallo. Pestaña Consumo ya lo muestra por ingrediente,
-  ordenado por €.
-- **Recepciones en el ledger** — tipo `recepcion` (80 mov, +426.834).
-- **Conteo capa 1 completo** — crear → contar a ciegas → cerrar → aprobar. Ya calcula
-  por línea: `system_qty` (esperado), `counted_qty` (real), `variance_qty`,
-  `variance_pct`, `variance_value` (€), `abc_class`, `within_tolerance`, `reason_code`.
-- **Catálogo de causas** — merma/caducado/rotura/robo_desconocido/error_escandallo/
-  error_recepcion/traspaso/otro.
+## 3. Diseño — 4 piezas
 
-**Conclusión clave:** el ledger ya acumula `+recepción − consumo teórico`. El stock
-esperado del AvT **ya vive en el saldo**. El conteo capa 1 ya lo cruza contra el conteo
-real por línea. **El AvT no hay que calcularlo desde cero: hay que CERRAR el bucle y
-PRESENTARLO como análisis de periodo, no solo como variación de un conteo puntual.**
+### 3.1 Un motor, cinco niveles de zoom
+La misma desviación se agrega/desglosa por: **Cuenta → Local → Almacén/zona → Familia →
+Artículo**. Métricas por fila (estilo MarketMan, superándolo en claridad):
+teórico (€ y qty), real (€ y qty), desviación (€ y %), y para el detalle: merma conocida,
+desviación inexplicada (= desviación − merma). El % se expresa sobre el teórico y, donde
+haya ventas del periodo, también como % de ventas.
 
----
+### 3.2 Dos modos en cada nivel
+- **Puntual** (capa 1): stock teórico HOY (saldo del ledger) − último conteo real cerrado
+  de ese artículo/local. Foto al momento. Vale con UN conteo. Da valor ya.
+- **Por periodo** (capa posterior): entre dos conteos cerrados. conteo inicial + compras
+  − consumo = teórico final; teórico final − conteo final = merma del periodo. El AvT
+  contable serio. Necesita 2 conteos cerrados.
 
-## 3. Benchmark — dónde igualamos y dónde goleamos
+### 3.3 El porqué de cada desviación (clasificación de causa)
+Por artículo, ordenado por € perdido (Crunchtime), cada línea lleva una ETIQUETA de causa:
+- **Merma real**: existe `stock_waste` que explica (parte de) la desviación.
+- **Stock negativo / dato incompleto**: saldo teórico < 0 → falta registrar compras o el
+  escandallo descuenta de más. No es merma, es dato que arreglar.
+- **Escandallo no fiable**: el plato que consume este artículo tiene escandallo dudoso
+  (sin líneas, needs_review, coste 0) → el teórico de este artículo no es de fiar.
+- **Sin clasificar**: desviación inexplicada genuina → candidata a investigar (porción/robo).
 
-### Techo del AvT clásico (R365 + MarketMan)
-- Ecuación inicial+compras−consumo−merma, ingrediente a ingrediente, en cantidad Y €.
-- Métricas: uso teórico, uso real, variación, **variación inexplicada**, merma,
-  **% eficiencia**, todo como **% de ventas**.
-- Objetivo de variación ~1%. Recomiendan tracking diario.
-- **Exigen DOS conteos completos** del periodo (uno abre, otro cierra).
+### 3.4 Salud del dato (★ diferenciador mayor)
+Antes de mostrar números, Folvy declara la fiabilidad del AvT del ámbito elegido:
+cobertura (cuántos artículos tienen conteo real reciente vs total), nº en stock negativo,
+nº de platos sin escandallo fiable, antigüedad del último conteo. Resumen: Buena / Parcial
+/ Sin conteo. Coherente con "IA propone, humano decide" y "la verdad del margen".
 
-### tspoon (dump real, 510 inventarios)
-- Línea de inventario = AvT por ingrediente ya montado: `quantity` vs `quantityExpected`
-  → `quantityDeviation`; `cost` vs `costExpected`; `percent`/`percentCost`; `listLots`;
-  `listCalculator` (factores formato anidado); por **área**; merma con causa en tabla
-  aparte; traspasos src→dst.
-- **Calcula el teórico a fecha de inventario (snapshot), no ledger perpetuo continuo.**
+## 4. Plan por capas
 
-### Veredicto
-Replicar el AvT clásico = **EMPATE**. Folvy ya tiene mejor base (ledger perpetuo
-append-only vs snapshot). Donde se golea de verdad:
+- **Capa 1 (AHORA)**: AvT PUNTUAL a nivel ARTÍCULO × LOCAL. Tabla: artículo · teórico hoy
+  (qty+€) · real (último conteo, qty+€+fecha) · desviación (€+%) · etiqueta de causa.
+  Ordenado por € de desviación. Cabecera con salud del dato del local. Reemplaza/expande
+  la `ConsumptionSection` actual (que se queda como sub-vista "solo consumo" o se integra).
+- **Capa 2**: clasificación de causa fina (cruce con stock_waste, stock negativo, escandallo).
+- **Capa 3**: consolidado por LOCAL (comparación entre locales) + niveles familia/almacén.
+- **Capa 4**: modo POR PERIODO (entre dos conteos) + tendencia (¿variance se estrecha?).
+- **Capa 5**: informes exportables / consolidado de cuenta.
 
-| # | Gol | Nadie lo tiene |
-|---|-----|----------------|
-| 1 | **Cycle counting con IA**: la IA elige QUÉ contar (valor×riesgo×rotación×anomalía) y QUIÉN cuenta (no su zona → mata el sesgo). Convierte el AvT de "2 inventarios pesados" a "3-5 productos/día". | R365/MarketMan exigen 2 conteos completos; tspoon conteos por área a mano; WMS usan ABC fijo, no IA. |
-| 2 | **La merma se comunica y se explica sola** (IA propone causa probable, humano decide). | Todos presentan el AvT como informe pasivo que el dueño debe ir a mirar. |
-| 3 | **Variación inexplicada** cruzada con merma-con-causa ya registrada. | tspoon tiene merma con causa pero no la cruza con la variación del conteo. |
-| 4 | **Dos relojes de coste** (coste de venta congelado / coste de ingrediente vivo) ya resueltos → AvT honesto sin recalcular el pasado. | Ventaja de arquitectura propia. |
-
----
-
-## 4. El bucle a cerrar — qué falta exactamente
-
-Hoy la variación existe **por conteo puntual** (capa 1). Falta elevarla a **análisis de
-periodo** y exponer la merma con su efecto económico. Tres piezas:
-
-### Pieza A — Vista de variación del conteo (rematar lo que ya calcula)
-El conteo capa 1 ya calcula todo. Falta verificar que `InventoryCountSheet` al cerrar
-**muestre bien**: por ingrediente, esperado vs real, variación en cantidad y €, % ,
-clase ABC, dentro/fuera de tolerancia, y el motivo. Ordenado por € de variación (la
-fuga más cara arriba). Si ya lo muestra → es solo pulir presentación.
-
-### Pieza B — AvT de periodo (lo nuevo)
-Una vista que, para un rango y un local, cruce:
-- **consumo teórico del periodo** (lo que ya muestra la pestaña Consumo),
-- contra la **variación real registrada por los conteos del periodo**,
-- y la **merma con causa** ya registrada,
-- para producir, por ingrediente y en €: **variación total**, **merma explicada**
-  (con causa), y **variación inexplicada** (total − explicada).
-- Métricas de cabecera: variación total €, % de eficiencia, variación como % de ventas
-  (las de MarketMan), señal verde/ámbar/rojo contra umbral.
-
-### Pieza C — Cycle counting IA (el gol, encima de A y B)
-La IA propone cada día una mini-lista de 3-5 artículos a contar:
-- **Qué**: prioriza por valor (ABC), rotación (los que más € mueven en consumo),
-  riesgo (alta variación histórica), y anomalía (consumo raro vs patrón).
-- **Quién**: rota el responsable y evita que alguien cuente siempre su propia zona.
-- Al contar, alimenta el mismo motor de conteo (capa 1) → ajuste al ledger → AvT.
-- La diferencia se **analiza y comunica sola**: "Aceite: contado 8 L, esperado 12 L →
-  faltan 4 L (28 €). Causa probable: sobre-porcionado o merma no registrada."
-
----
-
-## 5. Orden de construcción propuesto (por capas, deuda 0)
-
-Cada tramo es completo y usable solo; el siguiente se enchufa sin reescribir.
-
-- **T0 — RECON final** *(falta una pieza)*: leer `InventoryCountSheet.tsx` para ver si
-  la vista de cierre ya presenta bien la variación (Pieza A). Sin esto no sé si A es
-  "pulir" o "construir". **Es el único fichero que me falta.**
-- **T1 — Pieza A**: vista de variación del conteo clara y ordenada por €. Probable que
-  sea pulido, no construcción.
-- **T2 — Pieza B**: AvT de periodo (nueva pestaña o vista). Cruza consumo teórico +
-  variaciones de conteos + merma con causa → variación total / explicada / inexplicada,
-  con las métricas de cabecera. Aquí se iguala el techo de R365/MarketMan.
-- **T3 — Pieza C**: cycle counting IA. El motor de sugerencia (qué/quién) + la
-  comunicación proactiva de la diferencia. Aquí se golea.
-
-Validación: el AvT no se puede probar con datos reales hasta que haya **al menos un
-conteo real ejecutado** en Folvy Interno (hoy hay 0). T1 obliga a hacer el primer
-conteo, que ancla el punto de partida — es además la prueba en vivo del onboarding real.
-
----
-
-## 6. Decisiones abiertas para Julio
-
-1. **Pieza B — ¿pestaña nueva "AvT / Merma" o se integra en la de Consumo?**
-   (La de Consumo ya promete el AvT al pie; podría crecer ahí, o separarse cuando madure.)
-2. **Umbral de la señal** verde/ámbar/rojo: ¿fijo (~1% como los líderes) o configurable
-   por cuenta?
-3. **Cycle counting IA (T3)**: ¿entra en este frente o se declara como sub-frente
-   posterior una vez B esté sólido? (B sin C ya iguala a tspoon; C es el gol.)
-4. **"% de ventas"** como métrica de cabecera: requiere ventas del periodo del local
-   (las tienes). ¿Se incluye desde T2 o se añade después?
-
----
-
-## 7. Lo que NO toca este frente (contención)
-
-- No toca el motor de coste ni el de consumo (están sanos).
-- No toca recepción (frente A, en paralelo).
-- No añade selector manual de local (sale del contexto operativo — deuda activa conocida).
-- No limpia catálogo (frente 2, al final de pruebas).
+## 5. Notas técnicas (para construcción)
+- Real = último `inventory_count` con `status='aprobado'` y `closed_at` no nulo del local;
+  sus líneas `inventory_count_line.counted_qty`. Cobertura = artículos con línea contada.
+- Teórico hoy = `recipe_item_location_stock.qty_on_hand` (saldo vivo del ledger) por
+  artículo/local; valorar con `avg_unit_cost`.
+  OJO: el "teórico puntual" compara el saldo de AHORA con un conteo PASADO; la lectura
+  correcta es "desde aquel conteo, el teórico dice X y la última realidad fue Y". El modo
+  por periodo (capa 4) es el riguroso; la capa 1 es la foto útil pero menos estricta.
+- Valoración SIEMPRE server-side (coherente con la regla de coste de Folvy).
+- Multi-local y precios por local: aplicar el coste real de CADA local (no blended), como
+  recomienda Apicbase, para no confundir diferencia de precio con problema operativo.
+- Acceso por local (RLS) es FRENTE APARTE (hoy el control es solo por cuenta); el AvT
+  consolidado multi-local deberá respetarlo cuando exista.

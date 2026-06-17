@@ -355,3 +355,86 @@ export async function proposeCountReasons(
     explanation: String(s.explanation ?? ''),
   }))
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// AvT capa 1 — Último conteo APROBADO del local (el "Real" más reciente).
+// El AvT puntual lee ese conteo: system_qty (teórico en el instante) vs
+// counted_qty (real) vs variance_value (€), ya calculados al cerrar.
+// ─────────────────────────────────────────────────────────────────────
+
+export interface ApprovedCountRef {
+  id: string
+  code: string | null
+  kind: InventoryCountKind
+  isOpening: boolean
+  closedAt: string | null
+  approvedAt: string | null
+}
+
+/** El conteo aprobado más reciente del local (o null si no hay ninguno). */
+export async function getLatestApprovedCount(
+  accountId: string,
+  locationId: string,
+): Promise<ApprovedCountRef | null> {
+  requireSupabase()
+  const { data, error } = await from('inventory_count')
+    .select('id, code, kind, is_opening, closed_at, approved_at')
+    .eq('account_id', accountId)
+    .eq('location_id', locationId)
+    .eq('status', 'aprobado')
+    .order('approved_at', { ascending: false, nullsFirst: false })
+    .order('closed_at', { ascending: false, nullsFirst: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) throw new Error(`No se pudo buscar el último conteo: ${error.message}`)
+  if (!data) return null
+  const r = data as Row
+  return {
+    id: r.id as string,
+    code: (r.code as string | null) ?? null,
+    kind: (r.kind as InventoryCountKind) ?? 'cycle',
+    isOpening: Boolean(r.is_opening),
+    closedAt: (r.closed_at as string | null) ?? null,
+    approvedAt: (r.approved_at as string | null) ?? null,
+  }
+}
+
+export interface AvtCause {
+  key: 'opening' | 'negative_theoretical' | 'no_recipe' | 'waste' | 'unexplained'
+  label: string
+}
+
+/**
+ * Clasifica la causa de la desviación de una línea (capa 1, heurística sobre los
+ * datos de la propia línea; la capa 2 cruzará con stock_waste/escandallo a fondo).
+ *   - opening: el conteo es de apertura (no hay desviación que juzgar).
+ *   - negative_theoretical: el teórico (system_qty) es < 0 → dato incompleto
+ *     (falta registrar compras o el escandallo descuenta de más), no merma real.
+ *   - no_recipe: el artículo está needs_review o sin coste → teórico poco fiable.
+ *   - waste: hay un motivo de merma declarado en la línea.
+ *   - unexplained: desviación genuina sin explicar (candidata a investigar).
+ */
+export function classifyAvtCause(line: InventoryCountLine, isOpening: boolean): AvtCause {
+  if (isOpening) return { key: 'opening', label: 'Apertura' }
+  if (line.systemQty !== null && line.systemQty < 0) {
+    return { key: 'negative_theoretical', label: 'Dato incompleto' }
+  }
+  if (line.needsReview || line.unitCost === null) {
+    return { key: 'no_recipe', label: 'Escandallo no fiable' }
+  }
+  if (line.reasonCode && ['merma', 'caducado', 'rotura'].includes(line.reasonCode)) {
+    return { key: 'waste', label: 'Merma real' }
+  }
+  return { key: 'unexplained', label: 'Sin clasificar' }
+}
+
+export interface AvtDataHealth {
+  hasCount: boolean
+  countCode: string | null
+  countDate: string | null
+  isOpening: boolean
+  coveredItems: number          // líneas con counted_qty no nulo
+  negativeTheoretical: number   // líneas con system_qty < 0 (dato incompleto)
+  noRecipe: number              // líneas needs_review o sin coste
+  level: 'none' | 'partial' | 'good'
+}

@@ -25,6 +25,7 @@ import { useOperativeLocation } from '@/modules/supply/hooks/useOperativeLocatio
 import OperativeLocationBanner from '@/modules/supply/components/OperativeLocationBanner'
 import InventoryCountSheet from '@/modules/supply/components/InventoryCountSheet'
 import MovementsSection from '@/modules/supply/components/MovementsSection'
+import AvtSection from '@/modules/supply/components/AvtSection'
 import AutoInventorySection from '@/modules/supply/components/AutoInventorySection'
 import StorageZonesSection from '@/modules/supply/components/StorageZonesSection'
 import KitchenItemDetailPage from '@/modules/kitchen/pages/KitchenItemDetailPage'
@@ -61,6 +62,7 @@ export default function InventoryPage() {
 
   // navegación: las 5 secciones del módulo Almacén
   const [tab, setTab] = useState<'resumen' | 'existencias' | 'movimientos' | 'inventarios' | 'avt'>('resumen')
+  const [avtView, setAvtView] = useState<'desviacion' | 'consumo'>('desviacion')
   // dentro de Inventarios: conteos | autoinventario
   const [invTab, setInvTab] = useState<'conteos' | 'autoinv'>('conteos')
   const [openCountId, setOpenCountId] = useState<string | null>(null)
@@ -287,12 +289,33 @@ export default function InventoryPage() {
       )}
 
       {tab === 'avt' && activeAccountId && (
-        <ConsumptionSection
-          accountId={activeAccountId}
-          locationId={locationId}
-          onError={(m) => setError(m)}
-          onFlash={(m) => setFlash(m)}
-        />
+        <div className="space-y-3">
+          <div className="inline-flex rounded-md border border-border-default overflow-hidden">
+            <button type="button" onClick={() => setAvtView('desviacion')}
+              className={`px-3 py-1.5 text-sm transition-base ${avtView === 'desviacion' ? 'bg-accent text-text-on-accent' : 'text-text-secondary hover:bg-page'}`}>
+              Desviación (AvT)
+            </button>
+            <button type="button" onClick={() => setAvtView('consumo')}
+              className={`px-3 py-1.5 text-sm transition-base border-l border-border-default ${avtView === 'consumo' ? 'bg-accent text-text-on-accent' : 'text-text-secondary hover:bg-page'}`}>
+              Consumo teórico
+            </button>
+          </div>
+
+          {avtView === 'desviacion' ? (
+            <AvtSection
+              accountId={activeAccountId}
+              locationId={locationId || null}
+              onError={(m) => setError(m)}
+            />
+          ) : (
+            <ConsumptionSection
+              accountId={activeAccountId}
+              locationId={locationId}
+              onError={(m) => setError(m)}
+              onFlash={(m) => setFlash(m)}
+            />
+          )}
+        </div>
       )}
       </>
       )}
