@@ -10735,6 +10735,14 @@ export type Database = {
         Returns: boolean
       }
       invoice_required_role: { Args: { p_invoice_id: string }; Returns: string }
+      item_movements: {
+        Args: { p_account: string; p_limit?: number; p_recipe_item: string }
+        Returns: Json
+      }
+      item_stock_by_location: {
+        Args: { p_account: string; p_recipe_item: string }
+        Returns: Json
+      }
       kds_authorize: {
         Args: { p_location_id: string; p_token: string }
         Returns: string

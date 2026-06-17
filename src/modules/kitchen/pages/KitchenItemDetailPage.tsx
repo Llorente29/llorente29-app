@@ -38,6 +38,8 @@ import {
 } from '@/modules/kitchen/services/ingredientFamilyService'
 import { uploadDishPhoto, getDishPhotoUrl, deleteDishPhoto } from '@/modules/kitchen/services/recipePhotoService'
 import PurchaseSourcesSection from '@/modules/kitchen/components/PurchaseSourcesSection'
+import ItemStockPanel from '@/modules/kitchen/components/ItemStockPanel'
+import ItemMovementsPanel from '@/modules/kitchen/components/ItemMovementsPanel'
 import ItemVatSelector from '@/modules/kitchen/components/ItemVatSelector'
 import IngredientAiAssistButton from '@/modules/kitchen/components/IngredientAiAssistButton'
 import { getIngredientExtras } from '@/modules/kitchen/services/recipeAiService'
@@ -919,12 +921,22 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
               <p className="text-sm text-text-secondary">Cortes con su rendimiento y coste resultante.</p>
             </CollapsibleSection>
 
-            <CollapsibleSection icon={<Boxes size={16} />} title="Stock por almacén" badge="—" badgeTone="neutral">
-              <p className="text-sm text-text-secondary">Sin inventario todavía. Se llena con la primera recepción o conteo.</p>
+            <CollapsibleSection icon={<Boxes size={16} />} title="Stock por almacén">
+              <ItemStockPanel
+                accountId={item.accountId}
+                recipeItemId={item.id}
+                itemName={item.name}
+                actorId={actorId}
+                actorName={actorName}
+              />
             </CollapsibleSection>
 
-            <CollapsibleSection icon={<Clock size={16} />} title="Histórico de compras" badge="—" badgeTone="neutral">
-              <p className="text-sm text-text-secondary">Últimas recepciones y total por año. Se construye desde recepción / factura.</p>
+            <CollapsibleSection icon={<Clock size={16} />} title="Movimientos del artículo">
+              <ItemMovementsPanel
+                accountId={item.accountId}
+                recipeItemId={item.id}
+                unitAbbr={baseUnit?.abbreviation ?? null}
+              />
             </CollapsibleSection>
 
             <CollapsibleSection icon={<Snowflake size={16} />} title="Conservación y temporada">
