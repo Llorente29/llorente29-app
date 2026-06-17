@@ -69,12 +69,18 @@ export interface ItemMovement {
   notes: string | null
 }
 
-export async function getItemMovements(accountId: string, recipeItemId: string, limit = 50): Promise<ItemMovement[]> {
+export async function getItemMovements(
+  accountId: string,
+  recipeItemId: string,
+  opts?: { from?: string | null; to?: string | null; limit?: number },
+): Promise<ItemMovement[]> {
   requireSupabase()
   const { data, error } = await supabase!.rpc('item_movements', {
     p_account: accountId,
     p_recipe_item: recipeItemId,
-    p_limit: limit,
+    p_from: opts?.from ?? undefined,
+    p_to: opts?.to ?? undefined,
+    p_limit: opts?.limit ?? 200,
   })
   if (error) throw new Error(`No se pudo leer el histórico: ${error.message}`)
   return ((data ?? []) as Row[]).map(r => ({

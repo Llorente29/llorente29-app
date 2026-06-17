@@ -10736,7 +10736,13 @@ export type Database = {
       }
       invoice_required_role: { Args: { p_invoice_id: string }; Returns: string }
       item_movements: {
-        Args: { p_account: string; p_limit?: number; p_recipe_item: string }
+        Args: {
+          p_account: string
+          p_from?: string
+          p_limit?: number
+          p_recipe_item: string
+          p_to?: string
+        }
         Returns: Json
       }
       item_stock_by_location: {
