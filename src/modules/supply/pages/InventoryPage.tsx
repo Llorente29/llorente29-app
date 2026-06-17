@@ -48,6 +48,7 @@ import {
   type StorageArea,
 } from '@/modules/supply/services/storageAreaService'
 import { getStorageCoverage, type StorageCoverage } from '@/modules/supply/services/storageZonesService'
+import { getStockLevelsOverview } from '@/modules/supply/services/stockLevelService'
 
 export default function InventoryPage() {
   const { activeAccountId, accountsLoading } = useActiveAccount()
@@ -377,10 +378,11 @@ function SummarySection({
   accountId: string
   locationId: string
   reloadTick: number
-  onNavigate: (t: 'existencias' | 'movimientos' | 'inventarios' | 'avt') => void
+  onNavigate: (t: 'existencias' | 'niveles' | 'movimientos' | 'inventarios' | 'avt') => void
   onError: (m: string) => void
 }) {
   const [cov, setCov] = useState<StorageCoverage | null>(null)
+  const [belowMin, setBelowMin] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const eur = (v: number) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v)
 
@@ -391,6 +393,10 @@ function SummarySection({
       .then(c => { if (!cancelled) setCov(c) })
       .catch(e => { if (!cancelled) onError(e instanceof Error ? e.message : 'Error cargando el resumen.') })
       .finally(() => { if (!cancelled) setLoading(false) })
+    // contador de bajo mínimo (no bloquea el resumen; si falla, se ignora)
+    getStockLevelsOverview({ accountId, locationId })
+      .then(items => { if (!cancelled) setBelowMin(items.filter(i => i.belowMin).length) })
+      .catch(() => { if (!cancelled) setBelowMin(null) })
     return () => { cancelled = true }
   }, [accountId, locationId, reloadTick]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -427,15 +433,28 @@ function SummarySection({
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <button type="button" onClick={() => onNavigate('existencias')}
-          className="text-left bg-page rounded-lg p-4 border border-dashed border-border-default opacity-80">
+        <button type="button" onClick={() => onNavigate('niveles')}
+          className={`text-left rounded-lg p-4 border transition-base ${(belowMin ?? 0) > 0 ? 'bg-danger-bg border-danger/30 hover:border-danger/50' : 'bg-page border-border-default hover:border-accent/40'}`}>
           <div className="text-[12px] uppercase tracking-wide text-text-secondary mb-1">Bajo mínimo</div>
-          <div className="text-sm text-text-tertiary">Próximamente · niveles máx/mín</div>
+          {belowMin == null ? (
+            <div className="text-sm text-text-tertiary">Sin niveles definidos</div>
+          ) : belowMin > 0 ? (
+            <>
+              <div className="text-2xl font-medium text-danger tabular-nums">{belowMin}</div>
+              <div className="text-xs text-danger mt-1">artículo{belowMin === 1 ? '' : 's'} que reponer</div>
+            </>
+          ) : (
+            <>
+              <div className="text-2xl font-medium text-success tabular-nums">0</div>
+              <div className="text-xs text-text-tertiary mt-1">todo por encima del mínimo</div>
+            </>
+          )}
         </button>
         <button type="button" onClick={() => onNavigate('avt')}
-          className="text-left bg-page rounded-lg p-4 border border-dashed border-border-default opacity-80">
+          className="text-left bg-page rounded-lg p-4 border border-border-default hover:border-accent/40 transition-base">
           <div className="text-[12px] uppercase tracking-wide text-text-secondary mb-1">Desviación teórico vs real</div>
-          <div className="text-sm text-text-tertiary">Próximamente · AvT</div>
+          <div className="text-2xl font-medium text-text-primary">AvT</div>
+          <div className="text-xs text-text-tertiary mt-1">merma y salud del dato</div>
         </button>
       </div>
     </div>
