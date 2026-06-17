@@ -52,7 +52,17 @@ export default function AdjustStockModal({
     let cancelled = false
     setLoading(true)
     listFormatsByItem(target.recipeItemId)
-      .then(fs => { if (!cancelled) setFormats(fs.filter(f => f.qtyInBase > 1)) })
+      .then(fs => {
+        if (cancelled) return
+        const usable = fs.filter(f => f.qtyInBase > 1)
+        setFormats(usable)
+        // Arranca en el formato de compra de referencia (mayor contenido),
+        // que es como cuenta el cocinero; si no hay formatos, queda en base.
+        if (usable.length > 0) {
+          const ref = usable.reduce((a, b) => (b.qtyInBase > a.qtyInBase ? b : a))
+          setUnitSel(ref.id)
+        }
+      })
       .catch(() => { if (!cancelled) setFormats([]) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
