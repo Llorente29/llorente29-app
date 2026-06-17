@@ -1,20 +1,22 @@
 // src/modules/supply/pages/InventoryPage.tsx
 //
-// Página de Inventario (dentro de Supply).
+// Módulo ALMACÉN (dentro de Supply). Antes "Inventario".
 //
-// AL1: la pestaña "Zonas" monta StorageZonesSection — status de cobertura, zonas
-// con preview, huérfanos por valor y asignar/mover/quitar/vaciar/exportar/importar.
-// Desde el peek de un artículo se salta a su ficha (KitchenItemDetailPage) y se
-// vuelve con "Atrás", sin salir de Inventario.
+// Esqueleto de 5 secciones que siguen el flujo mental del operario:
+//   Resumen      — portada: valor de stock, cobertura, alertas.
+//   Existencias  — qué hay y dónde: zonas (AL1) + niveles (frente ②).
+//   Movimientos  — el libro: mermas/ajustes hoy; entrada directa + traspaso (frente ①).
+//   Inventarios  — conteos + autoinventario IA.
+//   Teórico vs Real — consumo (ventas×escandallo) + desviación (frente ③).
 //
-// Las demás pestañas (Conteos, Autoinventario, Consumo, Merma) y sus modales no
-// cambian. El CRUD plano de áreas anterior (alta inline + asignación 1-a-1) lo
-// absorbe StorageZonesSection. `areas` se sigue cargando para el modal de conteo.
+// El stock se valora por local; cada sección hereda el local operativo de la
+// sesión (sin selector manual). Lógica de carga, modal de conteo, ficha embebida
+// y panel de consumo intactos respecto a la versión anterior.
 
 import { useEffect, useMemo, useState } from 'react'
 import {
   Plus, Boxes, Loader2, X, ClipboardList, ChevronRight,
-  TrendingDown, RefreshCw, Trash2, Gauge,
+  TrendingDown, RefreshCw, Gauge, LayoutDashboard, ArrowLeftRight,
 } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useApp } from '@/context/AppContext'
@@ -42,6 +44,7 @@ import {
   listStorageAreas,
   type StorageArea,
 } from '@/modules/supply/services/storageAreaService'
+import { getStorageCoverage, type StorageCoverage } from '@/modules/supply/services/storageZonesService'
 
 export default function InventoryPage() {
   const { activeAccountId, accountsLoading } = useActiveAccount()
@@ -56,8 +59,10 @@ export default function InventoryPage() {
   const [flash, setFlash] = useState<string | null>(null)
   const [reloadTick, setReloadTick] = useState(0)
 
-  // navegación interna: zonas | conteos | autoinventario | consumo | merma
-  const [tab, setTab] = useState<'areas' | 'counts' | 'autoinventory' | 'consumption' | 'waste'>('areas')
+  // navegación: las 5 secciones del módulo Almacén
+  const [tab, setTab] = useState<'resumen' | 'existencias' | 'movimientos' | 'inventarios' | 'avt'>('resumen')
+  // dentro de Inventarios: conteos | autoinventario
+  const [invTab, setInvTab] = useState<'conteos' | 'autoinv'>('conteos')
   const [openCountId, setOpenCountId] = useState<string | null>(null)
   const [counts, setCounts] = useState<InventoryCount[]>([])
   const [countsLoading, setCountsLoading] = useState(false)
@@ -106,7 +111,7 @@ export default function InventoryPage() {
 
   // cargar conteos del local (al entrar en la pestaña o volver de un conteo)
   useEffect(() => {
-    if (tab !== 'counts' || !activeAccountId || !locationId || openCountId) return
+    if (tab !== 'inventarios' || invTab !== 'conteos' || !activeAccountId || !locationId || openCountId) return
     let cancelled = false
     setCountsLoading(true)
     ;(async () => {
@@ -120,7 +125,7 @@ export default function InventoryPage() {
       }
     })()
     return () => { cancelled = true }
-  }, [tab, activeAccountId, locationId, openCountId, reloadTick])
+  }, [tab, invTab, activeAccountId, locationId, openCountId, reloadTick])
 
   async function handleCreateCount(kind: InventoryCountKind, scope: 'areas' | 'full', areaIds: string[]) {
     if (!activeAccountId || !locationId) return
@@ -177,9 +182,9 @@ export default function InventoryPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-display font-medium text-text-primary">Inventario</h1>
+          <h1 className="text-xl font-display font-medium text-text-primary">Almacén</h1>
           <p className="text-sm text-text-secondary mt-0.5">
-            Organiza las zonas de almacén de cada local y coloca cada artículo en su sitio. El conteo seguirá ese orden físico (shelf-to-sheet).
+            Qué tienes, dónde está, cómo se mueve y cuánto deberías tener. El stock se valora por local.
           </p>
         </div>
       </div>
@@ -191,31 +196,41 @@ export default function InventoryPage() {
 
       {!op.isResolved ? null : (
       <>
-      {/* Pestañas */}
+      {/* Pestañas: las 5 secciones del módulo Almacén */}
       <div className="flex items-center gap-1 border-b border-border-default overflow-x-auto">
-        <button type="button" onClick={() => setTab('areas')}
-          className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-base whitespace-nowrap ${tab === 'areas' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>
-          <span className="inline-flex items-center gap-1.5"><Boxes size={15} /> Zonas</span>
+        <button type="button" onClick={() => setTab('resumen')}
+          className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-base whitespace-nowrap ${tab === 'resumen' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>
+          <span className="inline-flex items-center gap-1.5"><LayoutDashboard size={15} /> Resumen</span>
         </button>
-        <button type="button" onClick={() => setTab('counts')}
-          className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-base whitespace-nowrap ${tab === 'counts' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>
-          <span className="inline-flex items-center gap-1.5"><ClipboardList size={15} /> Conteos</span>
+        <button type="button" onClick={() => setTab('existencias')}
+          className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-base whitespace-nowrap ${tab === 'existencias' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>
+          <span className="inline-flex items-center gap-1.5"><Boxes size={15} /> Existencias</span>
         </button>
-        <button type="button" onClick={() => setTab('autoinventory')}
-          className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-base whitespace-nowrap ${tab === 'autoinventory' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>
-          <span className="inline-flex items-center gap-1.5"><Gauge size={15} /> Autoinventario</span>
+        <button type="button" onClick={() => setTab('movimientos')}
+          className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-base whitespace-nowrap ${tab === 'movimientos' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>
+          <span className="inline-flex items-center gap-1.5"><ArrowLeftRight size={15} /> Movimientos</span>
         </button>
-        <button type="button" onClick={() => setTab('consumption')}
-          className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-base whitespace-nowrap ${tab === 'consumption' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>
-          <span className="inline-flex items-center gap-1.5"><TrendingDown size={15} /> Consumo</span>
+        <button type="button" onClick={() => setTab('inventarios')}
+          className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-base whitespace-nowrap ${tab === 'inventarios' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>
+          <span className="inline-flex items-center gap-1.5"><ClipboardList size={15} /> Inventarios</span>
         </button>
-        <button type="button" onClick={() => setTab('waste')}
-          className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-base whitespace-nowrap ${tab === 'waste' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>
-          <span className="inline-flex items-center gap-1.5"><Trash2 size={15} /> Merma</span>
+        <button type="button" onClick={() => setTab('avt')}
+          className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-base whitespace-nowrap ${tab === 'avt' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>
+          <span className="inline-flex items-center gap-1.5"><TrendingDown size={15} /> Teórico vs Real</span>
         </button>
       </div>
 
-      {tab === 'areas' && activeAccountId && locationId && (
+      {tab === 'resumen' && activeAccountId && locationId && (
+        <SummarySection
+          accountId={activeAccountId}
+          locationId={locationId}
+          reloadTick={reloadTick}
+          onNavigate={(t) => setTab(t)}
+          onError={(m) => setError(m)}
+        />
+      )}
+
+      {tab === 'existencias' && activeAccountId && locationId && (
         <StorageZonesSection
           accountId={activeAccountId}
           locationId={locationId}
@@ -226,39 +241,54 @@ export default function InventoryPage() {
         />
       )}
 
-      {tab === 'counts' && (
-        <CountsSection
-          counts={counts}
-          loading={countsLoading}
-          onOpen={(id) => setOpenCountId(id)}
-          onNew={() => setNewCountOpen(true)}
-        />
-      )}
-
-      {tab === 'autoinventory' && activeAccountId && (
-        <AutoInventorySection
-          accountId={activeAccountId}
-          locationId={locationId}
-          onError={(m) => setError(m)}
-          onFlash={(m) => setFlash(m)}
-        />
-      )}
-
-      {tab === 'consumption' && activeAccountId && (
-        <ConsumptionSection
-          accountId={activeAccountId}
-          locationId={locationId}
-          onError={(m) => setError(m)}
-          onFlash={(m) => setFlash(m)}
-        />
-      )}
-
-      {tab === 'waste' && activeAccountId && (
+      {tab === 'movimientos' && activeAccountId && (
         <WasteSection
           accountId={activeAccountId}
           locationId={locationId}
           userId={authUserId ?? null}
           userName={userProfile?.displayName ?? null}
+          onError={(m) => setError(m)}
+          onFlash={(m) => setFlash(m)}
+        />
+      )}
+
+      {tab === 'inventarios' && (
+        <div className="space-y-3">
+          <div className="inline-flex rounded-md border border-border-default overflow-hidden">
+            <button type="button" onClick={() => setInvTab('conteos')}
+              className={`px-3 py-1.5 text-sm font-medium transition-base ${invTab === 'conteos' ? 'bg-accent text-text-on-accent' : 'text-text-secondary hover:text-text-primary'}`}>
+              Conteos
+            </button>
+            <button type="button" onClick={() => setInvTab('autoinv')}
+              className={`px-3 py-1.5 text-sm font-medium transition-base inline-flex items-center gap-1.5 ${invTab === 'autoinv' ? 'bg-accent text-text-on-accent' : 'text-text-secondary hover:text-text-primary'}`}>
+              <Gauge size={14} /> Autoinventario
+            </button>
+          </div>
+
+          {invTab === 'conteos' && (
+            <CountsSection
+              counts={counts}
+              loading={countsLoading}
+              onOpen={(id) => setOpenCountId(id)}
+              onNew={() => setNewCountOpen(true)}
+            />
+          )}
+
+          {invTab === 'autoinv' && activeAccountId && (
+            <AutoInventorySection
+              accountId={activeAccountId}
+              locationId={locationId}
+              onError={(m) => setError(m)}
+              onFlash={(m) => setFlash(m)}
+            />
+          )}
+        </div>
+      )}
+
+      {tab === 'avt' && activeAccountId && (
+        <ConsumptionSection
+          accountId={activeAccountId}
+          locationId={locationId}
           onError={(m) => setError(m)}
           onFlash={(m) => setFlash(m)}
         />
@@ -274,6 +304,78 @@ export default function InventoryPage() {
           onCreate={handleCreateCount}
         />
       )}
+    </div>
+  )
+}
+
+// ── Resumen: portada del almacén ──
+function SummarySection({
+  accountId, locationId, reloadTick, onNavigate, onError,
+}: {
+  accountId: string
+  locationId: string
+  reloadTick: number
+  onNavigate: (t: 'existencias' | 'movimientos' | 'inventarios' | 'avt') => void
+  onError: (m: string) => void
+}) {
+  const [cov, setCov] = useState<StorageCoverage | null>(null)
+  const [loading, setLoading] = useState(true)
+  const eur = (v: number) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    getStorageCoverage(accountId, locationId)
+      .then(c => { if (!cancelled) setCov(c) })
+      .catch(e => { if (!cancelled) onError(e instanceof Error ? e.message : 'Error cargando el resumen.') })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [accountId, locationId, reloadTick]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (loading) return <div className="flex items-center gap-2 text-text-secondary text-sm p-4"><Loader2 size={15} className="animate-spin" /> Cargando resumen…</div>
+
+  const k = cov?.kpis
+  const coveragePct = k && k.rawActive > 0 ? Math.round((k.placed / k.rawActive) * 100) : 0
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <button type="button" onClick={() => onNavigate('existencias')}
+          className="text-left bg-page rounded-lg p-4 border border-border-default hover:border-accent/40 transition-base">
+          <div className="text-[12px] uppercase tracking-wide text-text-secondary mb-1">Valor de stock</div>
+          <div className="text-2xl font-medium text-text-primary tabular-nums">{eur(k?.totalValue ?? 0)}</div>
+          <div className="text-xs text-text-tertiary mt-1">{k?.rawActive ?? 0} artículos</div>
+        </button>
+
+        <button type="button" onClick={() => onNavigate('existencias')}
+          className="text-left bg-page rounded-lg p-4 border border-border-default hover:border-accent/40 transition-base">
+          <div className="text-[12px] uppercase tracking-wide text-text-secondary mb-1">Cobertura</div>
+          <div className="text-2xl font-medium text-text-primary tabular-nums">{coveragePct}%</div>
+          <div className={`text-xs mt-1 ${(k?.orphans ?? 0) > 0 ? 'text-warning' : 'text-text-tertiary'}`}>
+            {(k?.orphans ?? 0)} sin zona{(k?.orphanValue ?? 0) > 0 ? ` · ${eur(k?.orphanValue ?? 0)}` : ''}
+          </div>
+        </button>
+
+        <button type="button" onClick={() => onNavigate('inventarios')}
+          className="text-left bg-page rounded-lg p-4 border border-border-default hover:border-accent/40 transition-base">
+          <div className="text-[12px] uppercase tracking-wide text-text-secondary mb-1">Colocados</div>
+          <div className="text-2xl font-medium text-text-primary tabular-nums">{k?.placed ?? 0}</div>
+          <div className="text-xs text-text-tertiary mt-1">en alguna zona</div>
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <button type="button" onClick={() => onNavigate('existencias')}
+          className="text-left bg-page rounded-lg p-4 border border-dashed border-border-default opacity-80">
+          <div className="text-[12px] uppercase tracking-wide text-text-secondary mb-1">Bajo mínimo</div>
+          <div className="text-sm text-text-tertiary">Próximamente · niveles máx/mín</div>
+        </button>
+        <button type="button" onClick={() => onNavigate('avt')}
+          className="text-left bg-page rounded-lg p-4 border border-dashed border-border-default opacity-80">
+          <div className="text-[12px] uppercase tracking-wide text-text-secondary mb-1">Desviación teórico vs real</div>
+          <div className="text-sm text-text-tertiary">Próximamente · AvT</div>
+        </button>
+      </div>
     </div>
   )
 }
