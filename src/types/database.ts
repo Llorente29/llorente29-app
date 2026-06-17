@@ -10553,6 +10553,15 @@ export type Database = {
           stock_value: number
         }[]
       }
+      avt_period: {
+        Args: {
+          p_account: string
+          p_from: string
+          p_location?: string
+          p_to: string
+        }
+        Returns: Json
+      }
       belongs_to_account: { Args: { p_account_id: string }; Returns: boolean }
       build_inventory_count: {
         Args: { p_area_ids?: string[]; p_count_id: string; p_full?: boolean }

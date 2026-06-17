@@ -26,6 +26,7 @@ import OperativeLocationBanner from '@/modules/supply/components/OperativeLocati
 import InventoryCountSheet from '@/modules/supply/components/InventoryCountSheet'
 import MovementsSection from '@/modules/supply/components/MovementsSection'
 import AvtSection from '@/modules/supply/components/AvtSection'
+import AvtPeriodSection from '@/modules/supply/components/AvtPeriodSection'
 import AutoInventorySection from '@/modules/supply/components/AutoInventorySection'
 import StorageZonesSection from '@/modules/supply/components/StorageZonesSection'
 import KitchenItemDetailPage from '@/modules/kitchen/pages/KitchenItemDetailPage'
@@ -63,6 +64,7 @@ export default function InventoryPage() {
   // navegación: las 5 secciones del módulo Almacén
   const [tab, setTab] = useState<'resumen' | 'existencias' | 'movimientos' | 'inventarios' | 'avt'>('resumen')
   const [avtView, setAvtView] = useState<'desviacion' | 'consumo'>('desviacion')
+  const [avtMode, setAvtMode] = useState<'puntual' | 'periodo'>('periodo')
   // dentro de Inventarios: conteos | autoinventario
   const [invTab, setInvTab] = useState<'conteos' | 'autoinv'>('conteos')
   const [openCountId, setOpenCountId] = useState<string | null>(null)
@@ -302,11 +304,31 @@ export default function InventoryPage() {
           </div>
 
           {avtView === 'desviacion' ? (
-            <AvtSection
-              accountId={activeAccountId}
-              locationId={locationId || null}
-              onError={(m) => setError(m)}
-            />
+            <div className="space-y-3">
+              <div className="inline-flex rounded-md border border-border-default overflow-hidden">
+                <button type="button" onClick={() => setAvtMode('periodo')}
+                  className={`px-3 py-1 text-xs transition-base ${avtMode === 'periodo' ? 'bg-accent text-text-on-accent' : 'text-text-secondary hover:bg-page'}`}>
+                  Por periodo
+                </button>
+                <button type="button" onClick={() => setAvtMode('puntual')}
+                  className={`px-3 py-1 text-xs transition-base border-l border-border-default ${avtMode === 'puntual' ? 'bg-accent text-text-on-accent' : 'text-text-secondary hover:bg-page'}`}>
+                  Último conteo
+                </button>
+              </div>
+              {avtMode === 'periodo' ? (
+                <AvtPeriodSection
+                  accountId={activeAccountId}
+                  locationId={locationId || null}
+                  onError={(m) => setError(m)}
+                />
+              ) : (
+                <AvtSection
+                  accountId={activeAccountId}
+                  locationId={locationId || null}
+                  onError={(m) => setError(m)}
+                />
+              )}
+            </div>
           ) : (
             <ConsumptionSection
               accountId={activeAccountId}
