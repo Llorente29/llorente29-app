@@ -444,6 +444,35 @@ export function LocationsPage() {
                           <ExternalLink size={12} /> Ver el punto en Google Maps
                         </a>
                       )}
+
+                      <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-border-default">
+                        <div>
+                          <label className="text-xs text-text-secondary uppercase font-medium">Radio de fichaje (m)</label>
+                          <input
+                            type="number"
+                            min={20}
+                            step={10}
+                            value={getCurrentValue(loc, 'clockRadiusM') ?? 200}
+                            onChange={e => updateBuffer(loc.id, { clockRadiusM: e.target.value ? parseInt(e.target.value, 10) : undefined })}
+                            onBlur={() => persistBuffer(loc)}
+                            className="mt-1 w-full border border-border-default rounded-md px-3 py-1.5 text-sm bg-card text-text-primary focus:outline-none focus:ring-2 focus:ring-accent"
+                            placeholder="200"
+                          />
+                          <p className="text-[11px] text-text-tertiary mt-1">Distancia para considerar que el trabajador está en el local.</p>
+                        </div>
+                        <div>
+                          <label className="text-xs text-text-secondary uppercase font-medium">Si está fuera del radio</label>
+                          <select
+                            value={getCurrentValue(loc, 'clockGeofenceMode') ?? 'block'}
+                            onChange={e => persistImmediate(loc, { clockGeofenceMode: e.target.value as 'block' | 'warn' })}
+                            className="mt-1 w-full border border-border-default rounded-md px-3 py-1.5 text-sm bg-card text-text-primary focus:outline-none focus:ring-2 focus:ring-accent"
+                          >
+                            <option value="block">Bloquear el fichaje</option>
+                            <option value="warn">Permitir y avisar</option>
+                          </select>
+                          <p className="text-[11px] text-text-tertiary mt-1">"Permitir y avisar" deja fichar aunque el GPS falle, marcando la distancia para revisión.</p>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}

@@ -42,6 +42,8 @@ interface LocationRow {
   lng: number | null
   hours_balance_close_day: number | null
   hours_balance_sync_with_gestoria: boolean | null
+  clock_radius_m: number | null
+  clock_geofence_mode: string | null
   // NOTA: account_id e is_billable existen en BBDD pero NO se exponen al cliente.
   // - account_id: scope server-side, el cliente no debe verlo en el tipo Location.
   // - is_billable: deuda apuntada para módulo Reportes (ver CONTEXTO §11).
@@ -58,6 +60,8 @@ function rowToLocation(r: LocationRow): Location {
     lng: r.lng ?? undefined,
     hoursBalanceCloseDay: r.hours_balance_close_day ?? 25,
     hoursBalanceSyncWithGestoria: r.hours_balance_sync_with_gestoria ?? true,
+    clockRadiusM: r.clock_radius_m ?? 200,
+    clockGeofenceMode: (r.clock_geofence_mode === 'warn' ? 'warn' : 'block'),
   }
 }
 
@@ -79,6 +83,8 @@ function locationToRow(accountId: string, l: Location): LocationInsert {
     lng: l.lng ?? null,
     hours_balance_close_day: l.hoursBalanceCloseDay ?? 25,
     hours_balance_sync_with_gestoria: l.hoursBalanceSyncWithGestoria ?? true,
+    clock_radius_m: l.clockRadiusM ?? 200,
+    clock_geofence_mode: l.clockGeofenceMode ?? 'block',
     // is_billable: omitido → toma DEFAULT true de BBDD.
   }
 }

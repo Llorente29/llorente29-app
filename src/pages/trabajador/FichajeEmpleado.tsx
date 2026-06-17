@@ -12,7 +12,8 @@ import {
   hasOpenShift, nextClockType, buildClockEntry, defaultKioskoConfig,
 } from '../../services/fichajeKiosko'
 
-const RADIUS_M = 1000  // FIX 14/06: era 200 fijo. El radio del kiosko no llega al movil (vive en localStorage del admin). Holgado hasta mover radio/flag a la tabla locations.
+const DEFAULT_RADIUS_M = 200  // fallback si el local no tiene radio configurado
+const radiusForLoc = (loc: Location | null | undefined) => (loc?.clockRadiusM ?? DEFAULT_RADIUS_M)
 
 interface Props {
   employee: Employee
@@ -61,7 +62,7 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
             }
           }).sort((a, b) => a.dist - b.dist)
           const closest = distances[0]
-          if (closest && closest.dist <= RADIUS_M) {
+          if (closest && closest.dist <= radiusForLoc(closest.loc)) {
             setSelectedLocId(closest.loc.id)
           }
           setStep('idle')
@@ -87,22 +88,32 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
     return distanceMeters(position.coords.latitude, position.coords.longitude, lc.lat, lc.lng)
   }, [position, selectedLoc])
 
-  const inZone = distance !== null && distance <= RADIUS_M
+  const inZone = distance !== null && distance <= radiusForLoc(selectedLoc)
+  const geofenceMode = selectedLoc?.clockGeofenceMode ?? 'block'
+  // En modo 'warn' se puede fichar aunque esté fuera de zona (GPS caprichoso / sin coords).
+  const canClock = !!selectedLoc && (inZone || geofenceMode === 'warn')
 
   async function doClockAction() {
     if (!selectedLoc || !position) return
     setStep('confirming')
 
-    const config = defaultKioskoConfig(selectedLoc.id)
+    // El radio efectivo viene del local (no del kiosko fijo).
+    const config = { ...defaultKioskoConfig(selectedLoc.id), geofenceRadiusM: radiusForLoc(selectedLoc) }
     const result = buildClockEntry(currentEmp, selectedLoc, config, position)
 
-    if (!result.withinGeofence) {
+    if (!result.withinGeofence && geofenceMode === 'block') {
       setStep('error')
       setErrorMsg(`Estás a ${Math.round(result.distanceM)}m del local. Acércate para fichar.`)
       return
     }
 
-    await addClockEntry(currentEmp.id, result.entry)
+    // Modo 'warn': se ficha aunque esté fuera de zona, pero queda marcado con la
+    // distancia para que el manager pueda revisarlo (GPS caprichoso / sin coords).
+    const entry = (!result.withinGeofence && geofenceMode === 'warn')
+      ? { ...result.entry, address: `Fuera de zona · ${Math.round(result.distanceM)}m` }
+      : result.entry
+
+    await addClockEntry(currentEmp.id, entry)
     setStep('success')
   }
 
@@ -211,7 +222,7 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
                 if (lc && position) {
                   dist = distanceMeters(position.coords.latitude, position.coords.longitude, lc.lat, lc.lng)
                 }
-                const isClose = dist !== null && dist <= RADIUS_M
+                const isClose = dist !== null && dist <= radiusForLoc(l)
                 return (
                   <button
                     key={l.id}
@@ -251,7 +262,11 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
                   {inZone ? 'Estás en la zona del local' : `Estás a ${Math.round(distance)}m del local`}
                 </p>
                 <p className="text-xs text-text-secondary mt-0.5">
-                  {inZone ? `${Math.round(distance)}m · ${selectedLoc.name}` : 'Acércate al local para fichar'}
+                  {inZone
+                    ? `${Math.round(distance)}m · ${selectedLoc.name}`
+                    : geofenceMode === 'warn'
+                      ? 'Puedes fichar igualmente; quedará marcado para revisión.'
+                      : 'Acércate al local para fichar'}
                 </p>
               </div>
             </div>
@@ -269,9 +284,9 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
         {/* Botón gigante de fichar */}
         <button
           onClick={doClockAction}
-          disabled={!inZone || !selectedLoc}
+          disabled={!canClock}
           className={`inline-flex items-center justify-center gap-3 w-full py-12 rounded-2xl text-2xl font-bold transition-base active:scale-95 ${
-            !inZone || !selectedLoc
+            !canClock
               ? 'bg-page text-text-secondary cursor-not-allowed'
               : nextType === 'entrada'
                 ? 'bg-accent text-text-on-accent shadow-lg hover:bg-accent-hover'
@@ -281,7 +296,7 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
           {nextType === 'entrada' ? <><LogIn size={28} /> FICHAR ENTRADA</> : <><LogOut size={28} /> FICHAR SALIDA</>}
         </button>
 
-        {!inZone && selectedLoc && (
+        {!inZone && selectedLoc && geofenceMode === 'block' && (
           <p className="text-center text-xs text-warning mt-3 inline-flex items-center justify-center gap-1 w-full">
             <AlertTriangle size={11} /> Acércate al local para activar el botón
           </p>

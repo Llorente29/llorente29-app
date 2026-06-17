@@ -5421,6 +5421,8 @@ export type Database = {
           account_id: string | null
           active: boolean
           address: string | null
+          clock_geofence_mode: string
+          clock_radius_m: number
           created_at: string
           hours_balance_close_day: number | null
           hours_balance_sync_with_gestoria: boolean | null
@@ -5436,6 +5438,8 @@ export type Database = {
           account_id?: string | null
           active?: boolean
           address?: string | null
+          clock_geofence_mode?: string
+          clock_radius_m?: number
           created_at?: string
           hours_balance_close_day?: number | null
           hours_balance_sync_with_gestoria?: boolean | null
@@ -5451,6 +5455,8 @@ export type Database = {
           account_id?: string | null
           active?: boolean
           address?: string | null
+          clock_geofence_mode?: string
+          clock_radius_m?: number
           created_at?: string
           hours_balance_close_day?: number | null
           hours_balance_sync_with_gestoria?: boolean | null

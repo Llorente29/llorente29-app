@@ -87,6 +87,9 @@ export interface Location {
   // === Configuración de bolsa de horas ===
   hoursBalanceCloseDay?: number              // día del mes en que cierra el periodo (1-31, default 25)
   hoursBalanceSyncWithGestoria?: boolean     // si true, usa el día configurado en Informes Gestoría
+  // === Geofence de fichaje por local ===
+  clockRadiusM?: number                      // radio en metros para fichar 'en el local' (default 200)
+  clockGeofenceMode?: 'block' | 'warn'       // block = no deja fichar fuera; warn = deja fichar marcando distancia
 }
 
 export interface DaySchedule { active: boolean; start: string; end: string }
