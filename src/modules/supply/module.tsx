@@ -46,7 +46,7 @@ export const supplyModule: ModuleDefinition = {
       { id: 'supply_orders', label: 'Pedidos', icon: ClipboardList, path: '' },
       { id: 'supply_receipts', label: 'Recepciones', icon: PackageCheck, path: 'recepciones' },
       { id: 'supply_invoices', label: 'Facturas', icon: FileText, path: 'facturas' },
-      { id: 'supply_inventory', label: 'Inventario', icon: Boxes, path: 'inventario' },
+      { id: 'supply_inventory', label: 'Almacén', icon: Boxes, path: 'inventario' },
     ],
   },
 }
