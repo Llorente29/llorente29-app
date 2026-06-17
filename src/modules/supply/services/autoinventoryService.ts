@@ -16,6 +16,7 @@
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
 import { getSchedule, listShiftTemplates } from '../../../services/schedulerService'
 import { getMondayOfWeek, toISODate, type ScheduleCells } from '../../../types/scheduler'
+import { fetchEmployees } from '../../../services/supabaseSync'
 
 function requireSupabase(): void {
   if (!isSupabaseEnabled || !supabase) {
@@ -359,4 +360,71 @@ export async function autocloseDailyCount(countId: string): Promise<AutocloseRes
     pendingAnomalies: Number(r?.pending_anomalies ?? 0),
     finalStatus: String(r?.final_status ?? ''),
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Vista de GESTOR del reparto de hoy: quién cuenta qué + resumen por persona.
+// Lee el conteo cycle de hoy y agrupa inventory_count_line.assigned_to (que
+// generate_daily_count ya rellena con el round-robin entre resolveTodayCounters).
+// Los nombres salen de fetchEmployees, igual que la tarjeta de APPCC.
+// ─────────────────────────────────────────────────────────────────────
+
+export interface TodayAssignmentSummary {
+  countId: string | null
+  totalLines: number
+  assignedLines: number
+  /** Reparto por persona, de más a menos artículos. */
+  perPerson: { employeeId: string; name: string; count: number }[]
+  /** recipe_item_id → persona asignada (para pintar la columna en la cola). */
+  byItem: Record<string, { employeeId: string; name: string }>
+}
+
+export async function getTodayAssignments(
+  accountId: string,
+  locationId: string,
+  dateISO?: string,
+): Promise<TodayAssignmentSummary> {
+  requireSupabase()
+  const empty: TodayAssignmentSummary = { countId: null, totalLines: 0, assignedLines: 0, perPerson: [], byItem: {} }
+
+  const day = dateISO ?? toISODate(new Date())
+  const { data: counts } = await supabase!
+    .from('inventory_count')
+    .select('id')
+    .eq('account_id', accountId)
+    .eq('location_id', locationId)
+    .eq('kind', 'cycle')
+    .neq('status', 'anulado')
+    .gte('created_at', day + 'T00:00:00')
+    .order('created_at', { ascending: false })
+    .limit(1)
+  const countId = (counts?.[0]?.id as string | undefined) ?? null
+  if (!countId) return empty
+
+  const { data: lines, error } = await supabase!
+    .from('inventory_count_line')
+    .select('recipe_item_id, assigned_to')
+    .eq('inventory_count_id', countId)
+  if (error) throw new Error(`No se pudo leer la asignación: ${error.message}`)
+
+  const rows = (lines as Row[] | null) ?? []
+  const assigned = rows.filter((r) => r.assigned_to != null)
+
+  const emps = (await fetchEmployees(accountId)) ?? []
+  const nameById = new Map<string, string>()
+  for (const e of emps) nameById.set(e.id, e.name)
+
+  const countByEmp = new Map<string, number>()
+  const byItem: Record<string, { employeeId: string; name: string }> = {}
+  for (const r of assigned) {
+    const id = r.assigned_to as string
+    countByEmp.set(id, (countByEmp.get(id) ?? 0) + 1)
+    byItem[r.recipe_item_id as string] = { employeeId: id, name: nameById.get(id) ?? 'Asignado' }
+  }
+
+  const perPerson = Array.from(countByEmp.entries())
+    .map(([employeeId, count]) => ({ employeeId, name: nameById.get(employeeId) ?? 'Asignado', count }))
+    .sort((a, b) => b.count - a.count || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+
+  return { countId, totalLines: rows.length, assignedLines: assigned.length, perPerson, byItem }
 }

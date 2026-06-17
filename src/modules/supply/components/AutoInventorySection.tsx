@@ -10,11 +10,13 @@
 // posterior; hoy el conteo se crea en la pestaña "Conteos".
 
 import { useEffect, useMemo, useState } from 'react'
-import { Gauge, Loader2, RefreshCw, AlertTriangle, ScanLine, ClipboardCheck } from 'lucide-react'
+import { Gauge, Loader2, RefreshCw, AlertTriangle, ScanLine, ClipboardCheck, UserCircle2, Users } from 'lucide-react'
 import {
   getAutoInventoryQueue,
   generateDailyCount,
+  getTodayAssignments,
   type AutoInventoryItem,
+  type TodayAssignmentSummary,
 } from '@/modules/supply/services/autoinventoryService'
 
 const COVERAGE_OPTIONS = [70, 80, 90, 95] as const
@@ -41,6 +43,7 @@ export default function AutoInventorySection({
   const [loading, setLoading] = useState(false)
   const [reloadTick, setReloadTick] = useState(0)
   const [generating, setGenerating] = useState(false)
+  const [assign, setAssign] = useState<TodayAssignmentSummary | null>(null)
 
   // Generación de la COLA DEL DÍA (A3/A4): reparte por persona los artículos más
   // "rancios" del alcance hasta cubrir el objetivo, con tope por persona.
@@ -65,6 +68,7 @@ export default function AutoInventorySection({
         const cupo = res.perPersonToday != null ? ` (hasta ${res.perPersonToday} por persona)` : ''
         onFlash(`Cola de hoy: ${res.linesCreated} artículos repartidos${cupo}${cob}.`)
       }
+      if (res !== null) setReloadTick(t => t + 1)
     } catch (e) {
       onError(e instanceof Error ? e.message : 'No se pudo generar la cola del día.')
     } finally {
@@ -95,6 +99,16 @@ export default function AutoInventorySection({
     })()
     return () => { cancelled = true }
   }, [accountId, locationId, target, reloadTick]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reparto de hoy (quién cuenta qué) — se refresca al generar/actualizar.
+  useEffect(() => {
+    if (!accountId || !locationId) { setAssign(null); return }
+    let cancelled = false
+    getTodayAssignments(accountId, locationId)
+      .then(a => { if (!cancelled) setAssign(a) })
+      .catch(() => { if (!cancelled) setAssign(null) })
+    return () => { cancelled = true }
+  }, [accountId, locationId, reloadTick])
 
   const inScope = useMemo(() => rows.filter(r => r.inScope), [rows])
   const criticalCount = useMemo(() => rows.filter(r => r.mustCount).length, [rows])
@@ -157,7 +171,7 @@ export default function AutoInventorySection({
 
       {/* KPIs */}
       {!loading && rows.length > 0 && (
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div className="border border-border-default rounded-lg p-3 bg-card">
             <div className="text-2xl font-display font-medium text-text-primary tabular-nums">{inScope.length}</div>
             <div className="text-xs text-text-secondary mt-0.5">a contar hoy <span className="text-text-tertiary">de {rows.length}</span></div>
@@ -171,6 +185,26 @@ export default function AutoInventorySection({
               {criticalCount > 0 && <AlertTriangle size={18} className="text-warning" />}{criticalCount}
             </div>
             <div className="text-xs text-text-secondary mt-0.5">críticos sí o sí</div>
+          </div>
+          <div className="border border-border-default rounded-lg p-3 bg-card">
+            <div className="text-2xl font-display font-medium text-text-primary tabular-nums flex items-center gap-1.5">
+              <Users size={18} className="text-text-tertiary" />{assign?.perPerson.length ?? 0}
+            </div>
+            <div className="text-xs text-text-secondary mt-0.5">personas cuentan hoy</div>
+          </div>
+        </div>
+      )}
+
+      {/* Reparto de hoy: quién cuenta cuántos (equitativo entre quien trabaja hoy) */}
+      {assign && assign.perPerson.length > 0 && (
+        <div className="border border-border-default rounded-lg p-3 bg-card">
+          <div className="text-[11px] uppercase tracking-wide text-text-tertiary mb-2">Reparto de hoy</div>
+          <div className="flex flex-wrap gap-2">
+            {assign.perPerson.map(p => (
+              <span key={p.employeeId} className="inline-flex items-center gap-1.5 text-sm border border-border-default rounded-md px-2.5 py-1 text-text-secondary">
+                <UserCircle2 size={14} className="shrink-0" /> {p.name} <span className="text-text-tertiary tabular-nums">· {p.count}</span>
+              </span>
+            ))}
           </div>
         </div>
       )}
@@ -188,6 +222,7 @@ export default function AutoInventorySection({
           <div className="flex items-center gap-3 px-3 py-2 bg-page text-[11px] uppercase tracking-wide text-text-tertiary border-b border-border-default">
             <span className="w-8 text-right">#</span>
             <span className="flex-1">Artículo</span>
+            <span className="w-32">Asignado a</span>
             <span className="w-24 text-right">Valor stock</span>
             <span className="w-28">Prioridad</span>
             <span className="w-20 text-right">Cobertura</span>
@@ -220,6 +255,11 @@ export default function AutoInventorySection({
                       valor {fmtScore(r.scoreValue)} · rotación {fmtScore(r.scoreRotation)} · riesgo {fmtScore(r.scoreRisk)}
                       {r.rotationEur > 0 && <span className="text-text-tertiary"> · mueve {fmtEur(r.rotationEur)}/mes</span>}
                     </span>
+                  </span>
+                  <span className="w-32 text-xs text-text-secondary truncate">
+                    {assign?.byItem[r.recipeItemId]
+                      ? <span className="inline-flex items-center gap-1"><UserCircle2 size={13} className="shrink-0" /> <span className="truncate">{assign.byItem[r.recipeItemId].name}</span></span>
+                      : <span className="text-text-tertiary">—</span>}
                   </span>
                   <span className="w-24 text-right text-text-primary font-medium tabular-nums">
                     {fmtEur(r.stockValue)}
