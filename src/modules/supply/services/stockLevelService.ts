@@ -27,7 +27,7 @@ export interface StockLevelItem {
   safetyQty: number | null
   hasLevel: boolean
   belowMin: boolean
-  toParQty: number
+  toParQty: number     // par − stock (0 si no aplica) — semilla del "To Par"
 }
 
 export async function getStockLevelsOverview(input: {
@@ -84,4 +84,32 @@ export async function setStockLevel(input: {
     p_user_name: input.userName ?? undefined,
   })
   if (error) throw new Error(`No se pudo guardar el nivel: ${error.message}`)
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Lectura ligera para la FICHA del artículo: min/par de un artículo en
+// todos sus locales (lee la tabla directa; RLS filtra por cuenta).
+// ─────────────────────────────────────────────────────────────────────
+export interface ItemLevelRow {
+  locationId: string
+  minQty: number | null
+  parQty: number | null
+}
+
+export async function getLevelsForItem(accountId: string, recipeItemId: string): Promise<ItemLevelRow[]> {
+  requireSupabase()
+  const { data, error } = await (supabase! as unknown as {
+    from: (t: string) => {
+      select: (c: string) => {
+        eq: (c: string, v: string) => { eq: (c: string, v: string) => Promise<{ data: Row[] | null; error: { message: string } | null }> }
+      }
+    }
+  }).from('stock_level').select('location_id, min_qty, par_qty')
+    .eq('account_id', accountId).eq('recipe_item_id', recipeItemId)
+  if (error) throw new Error(`No se pudieron cargar los niveles del artículo: ${error.message}`)
+  return ((data ?? []) as Row[]).map(r => ({
+    locationId: String(r.location_id),
+    minQty: r.min_qty == null ? null : Number(r.min_qty),
+    parQty: r.par_qty == null ? null : Number(r.par_qty),
+  }))
 }
