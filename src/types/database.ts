@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       _backup_20260516_accounts: {
@@ -3757,6 +3782,71 @@ export type Database = {
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      folvy_map_node: {
+        Row: {
+          code: string
+          created_at: string
+          created_by: string | null
+          created_by_name: string | null
+          description: string | null
+          doc_ref: string | null
+          flow_order: number
+          id: string
+          is_active: boolean
+          layer: string
+          measure_table: string | null
+          name: string
+          parent_id: string | null
+          status_declared: string
+          status_note: string | null
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          description?: string | null
+          doc_ref?: string | null
+          flow_order?: number
+          id?: string
+          is_active?: boolean
+          layer: string
+          measure_table?: string | null
+          name: string
+          parent_id?: string | null
+          status_declared?: string
+          status_note?: string | null
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          description?: string | null
+          doc_ref?: string | null
+          flow_order?: number
+          id?: string
+          is_active?: boolean
+          layer?: string
+          measure_table?: string | null
+          name?: string
+          parent_id?: string | null
+          status_declared?: string
+          status_note?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "folvy_map_node_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "folvy_map_node"
             referencedColumns: ["id"]
           },
         ]
@@ -10242,6 +10332,16 @@ export type Database = {
           recipe_item_id: string
         }[]
       }
+      assign_items_to_zones: {
+        Args: {
+          p_account: string
+          p_item_ids: string[]
+          p_mode?: string
+          p_primary_zone_id: string
+          p_zone_ids: string[]
+        }
+        Returns: Json
+      }
       autoclose_daily_count: {
         Args: { p_count_id: string }
         Returns: {
@@ -10425,6 +10525,13 @@ export type Database = {
         }[]
       }
       folvy_code_prefix: { Args: { p_type: string }; Returns: string }
+      folvy_map_measure: {
+        Args: never
+        Returns: {
+          filas: number
+          measure_table: string
+        }[]
+      }
       force_close_long_impersonations: { Args: never; Returns: number }
       format_price_per_base: {
         Args: { p_format_id: string; p_supplier_id: string }
@@ -10703,6 +10810,15 @@ export type Database = {
           moved: number
         }[]
       }
+      move_items_to_zone: {
+        Args: {
+          p_account: string
+          p_from_zone_id: string
+          p_item_ids: string[]
+          p_to_zone_id: string
+        }
+        Returns: Json
+      }
       next_folvy_code: {
         Args: { p_account_id: string; p_type: string }
         Returns: string
@@ -10785,6 +10901,19 @@ export type Database = {
           colisiones: number
           migran_limpio: number
           origen_total: number
+        }[]
+      }
+      price_drift_for: {
+        Args: {
+          p_account_id: string
+          p_item_id: string
+          p_window_months?: number
+        }
+        Returns: {
+          actual_eur_base: number
+          median_eur_base: number
+          n_recepciones: number
+          pct_vs_median: number
         }[]
       }
       propose_vat_category: {
@@ -11009,6 +11138,31 @@ export type Database = {
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      storage_coverage: {
+        Args: { p_account: string; p_location: string }
+        Returns: Json
+      }
+      storage_orphans: {
+        Args: {
+          p_account: string
+          p_family?: string
+          p_limit?: number
+          p_location: string
+          p_offset?: number
+          p_search?: string
+        }
+        Returns: Json
+      }
+      storage_zone_items: {
+        Args: {
+          p_account: string
+          p_area: string
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+        }
+        Returns: Json
+      }
       substitute_ingredient_in_recipes: {
         Args: { p_parents: string[]; p_source: string; p_target: string }
         Returns: {
@@ -11027,6 +11181,15 @@ export type Database = {
         }[]
       }
       unaccent: { Args: { "": string }; Returns: string }
+      unassign_items_from_zones: {
+        Args: {
+          p_account: string
+          p_item_ids?: string[]
+          p_location: string
+          p_zone_ids?: string[]
+        }
+        Returns: Json
+      }
       unignore_unmapped_sales: {
         Args: {
           p_account_id: string
@@ -11174,6 +11337,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },

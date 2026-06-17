@@ -1,14 +1,19 @@
 // src/modules/supply/pages/InventoryPage.tsx
 //
-// Página de Inventario (dentro de Supply). Capa 1.2: gestión de ÁREAS DE
-// ALMACÉN y asignación de artículos a su "hogar", base del shelf-to-sheet.
-// Las capas siguientes (conteo, aprobación→ajuste, autoinventario, auditoría)
-// se montan sobre esto.
+// Página de Inventario (dentro de Supply).
+//
+// AL1: la pestaña "Zonas" monta StorageZonesSection — status de cobertura, zonas
+// con preview, huérfanos por valor y asignar/mover/quitar/vaciar/exportar/importar.
+// Desde el peek de un artículo se salta a su ficha (KitchenItemDetailPage) y se
+// vuelve con "Atrás", sin salir de Inventario.
+//
+// Las demás pestañas (Conteos, Autoinventario, Consumo, Merma) y sus modales no
+// cambian. El CRUD plano de áreas anterior (alta inline + asignación 1-a-1) lo
+// absorbe StorageZonesSection. `areas` se sigue cargando para el modal de conteo.
 
 import { useEffect, useMemo, useState } from 'react'
 import {
-  Plus, Boxes, Loader2, X, PencilLine, ChevronUp, ChevronDown,
-  Search, MapPin, Archive, ClipboardList, ChevronRight,
+  Plus, Boxes, Loader2, X, ClipboardList, ChevronRight,
   TrendingDown, RefreshCw, Trash2, Gauge,
 } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
@@ -19,6 +24,8 @@ import OperativeLocationBanner from '@/modules/supply/components/OperativeLocati
 import InventoryCountSheet from '@/modules/supply/components/InventoryCountSheet'
 import WasteSection from '@/modules/supply/components/WasteSection'
 import AutoInventorySection from '@/modules/supply/components/AutoInventorySection'
+import StorageZonesSection from '@/modules/supply/components/StorageZonesSection'
+import KitchenItemDetailPage from '@/modules/kitchen/pages/KitchenItemDetailPage'
 import {
   createInventoryCount,
   buildInventoryCount,
@@ -33,17 +40,7 @@ import {
 } from '@/modules/supply/services/consumptionService'
 import {
   listStorageAreas,
-  createStorageArea,
-  renameStorageArea,
-  reorderStorageArea,
-  archiveStorageArea,
-  listAreaItems,
-  assignItemToArea,
-  unassignItemFromArea,
-  listInventoryItems,
   type StorageArea,
-  type AreaItem,
-  type InventoryItem,
 } from '@/modules/supply/services/storageAreaService'
 
 export default function InventoryPage() {
@@ -59,20 +56,15 @@ export default function InventoryPage() {
   const [flash, setFlash] = useState<string | null>(null)
   const [reloadTick, setReloadTick] = useState(0)
 
-  // alta de área
-  const [newAreaName, setNewAreaName] = useState('')
-  const [newAreaParent, setNewAreaParent] = useState<string>('')
-  const [creating, setCreating] = useState(false)
-
-  // asignador de artículos
-  const [assignAreaId, setAssignAreaId] = useState<string | null>(null)
-
-  // navegación interna: áreas | conteos | consumo, y conteo abierto
+  // navegación interna: zonas | conteos | autoinventario | consumo | merma
   const [tab, setTab] = useState<'areas' | 'counts' | 'autoinventory' | 'consumption' | 'waste'>('areas')
   const [openCountId, setOpenCountId] = useState<string | null>(null)
   const [counts, setCounts] = useState<InventoryCount[]>([])
   const [countsLoading, setCountsLoading] = useState(false)
   const [newCountOpen, setNewCountOpen] = useState(false)
+
+  // ficha de un artículo abierta desde el peek de Zonas
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
 
   useEffect(() => {
     if (flash) { const t = setTimeout(() => setFlash(null), 3000); return () => clearTimeout(t) }
@@ -94,7 +86,7 @@ export default function InventoryPage() {
     return () => { cancelled = true }
   }, [activeAccountId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // cargar áreas del local
+  // cargar áreas del local (para el alcance del modal de conteo)
   useEffect(() => {
     if (!activeAccountId || !locationId) { setLoading(false); return }
     let cancelled = false
@@ -111,10 +103,6 @@ export default function InventoryPage() {
     })()
     return () => { cancelled = true }
   }, [activeAccountId, locationId, reloadTick])  // locationId viene del hook operativo
-
-  // áreas raíz y subáreas (jerarquía opcional de 1 nivel)
-  const rootAreas = useMemo(() => areas.filter(a => !a.parentId), [areas])
-  const childrenOf = (id: string) => areas.filter(a => a.parentId === id)
 
   // cargar conteos del local (al entrar en la pestaña o volver de un conteo)
   useEffect(() => {
@@ -134,55 +122,6 @@ export default function InventoryPage() {
     return () => { cancelled = true }
   }, [tab, activeAccountId, locationId, openCountId, reloadTick])
 
-  async function handleCreate() {
-    if (!activeAccountId || !locationId || !newAreaName.trim()) return
-    setCreating(true); setError(null)
-    try {
-      await createStorageArea({
-        accountId: activeAccountId,
-        locationId,
-        name: newAreaName,
-        parentId: newAreaParent || null,
-        position: (areas.length + 1) * 10,
-        createdBy: authUserId ?? null,
-        createdByName: userProfile?.displayName ?? null,
-      })
-      setNewAreaName(''); setNewAreaParent('')
-      setReloadTick(t => t + 1)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'No se pudo crear el área.')
-    } finally {
-      setCreating(false)
-    }
-  }
-
-  async function handleRename(area: StorageArea) {
-    const name = window.prompt('Nuevo nombre del área:', area.name)
-    if (!name || name.trim() === area.name) return
-    try { await renameStorageArea(area.id, name); setReloadTick(t => t + 1) }
-    catch (e) { setError(e instanceof Error ? e.message : 'No se pudo renombrar.') }
-  }
-
-  async function handleMove(area: StorageArea, dir: -1 | 1) {
-    const siblings = area.parentId ? childrenOf(area.parentId) : rootAreas
-    const idx = siblings.findIndex(a => a.id === area.id)
-    const target = siblings[idx + dir]
-    if (!target) return
-    try {
-      await reorderStorageArea(area.id, target.position)
-      await reorderStorageArea(target.id, area.position)
-      setReloadTick(t => t + 1)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'No se pudo reordenar.')
-    }
-  }
-
-  async function handleArchive(area: StorageArea) {
-    if (!window.confirm(`¿Archivar el área "${area.name}"? No se borra; deja de usarse para conteos.`)) return
-    try { await archiveStorageArea(area.id); setReloadTick(t => t + 1) }
-    catch (e) { setError(e instanceof Error ? e.message : 'No se pudo archivar.') }
-  }
-
   async function handleCreateCount(kind: InventoryCountKind, scope: 'areas' | 'full', areaIds: string[]) {
     if (!activeAccountId || !locationId) return
     setError(null)
@@ -201,7 +140,7 @@ export default function InventoryPage() {
       })
       setNewCountOpen(false)
       if (n === 0) {
-        setError('No hay artículos en el alcance elegido. Asigna artículos a las áreas o usa "Todo el local".')
+        setError('No hay artículos en el alcance elegido. Asigna artículos a las zonas o usa "Todo el local".')
         setReloadTick(t => t + 1)
         return
       }
@@ -219,6 +158,11 @@ export default function InventoryPage() {
     )
   }
 
+  // Ficha de un artículo (desde el peek de Zonas) → ocupa la vista
+  if (selectedItemId) {
+    return <KitchenItemDetailPage itemId={selectedItemId} onBack={() => setSelectedItemId(null)} />
+  }
+
   // Conteo abierto → hoja de conteo (blind / revisión)
   if (openCountId) {
     return (
@@ -229,34 +173,13 @@ export default function InventoryPage() {
     )
   }
 
-  const areaRow = (area: StorageArea, isChild: boolean) => (
-    <div key={area.id}
-      className={`flex items-center gap-2 px-3 py-2.5 border-t border-border-default ${isChild ? 'pl-9 bg-page' : 'bg-card'}`}>
-      {isChild
-        ? <MapPin size={15} className="text-text-tertiary shrink-0" />
-        : <Boxes size={16} className="text-accent shrink-0" />}
-      <span className="flex-1 text-text-primary font-medium">{area.name}</span>
-      <span className="text-xs text-text-tertiary">
-        {area.itemCount ?? 0} artículo{(area.itemCount ?? 0) === 1 ? '' : 's'}
-      </span>
-      <button type="button" onClick={() => setAssignAreaId(area.id)}
-        className="text-xs px-2 py-1 rounded border border-border-default hover:bg-page text-text-secondary">
-        Artículos
-      </button>
-      <button type="button" onClick={() => handleMove(area, -1)} className="text-text-tertiary hover:text-text-primary p-1"><ChevronUp size={15} /></button>
-      <button type="button" onClick={() => handleMove(area, 1)} className="text-text-tertiary hover:text-text-primary p-1"><ChevronDown size={15} /></button>
-      <button type="button" onClick={() => handleRename(area)} className="text-text-tertiary hover:text-text-primary p-1"><PencilLine size={15} /></button>
-      <button type="button" onClick={() => handleArchive(area)} className="text-text-tertiary hover:text-danger p-1"><Archive size={15} /></button>
-    </div>
-  )
-
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-display font-medium text-text-primary">Inventario</h1>
           <p className="text-sm text-text-secondary mt-0.5">
-            Organiza las áreas de almacén de cada local. El conteo seguirá este orden físico (shelf-to-sheet).
+            Organiza las zonas de almacén de cada local y coloca cada artículo en su sitio. El conteo seguirá ese orden físico (shelf-to-sheet).
           </p>
         </div>
       </div>
@@ -268,71 +191,39 @@ export default function InventoryPage() {
 
       {!op.isResolved ? null : (
       <>
-      {/* Pestañas: Áreas | Conteos */}
-      <div className="flex items-center gap-1 border-b border-border-default">
+      {/* Pestañas */}
+      <div className="flex items-center gap-1 border-b border-border-default overflow-x-auto">
         <button type="button" onClick={() => setTab('areas')}
-          className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-base ${tab === 'areas' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>
-          <span className="inline-flex items-center gap-1.5"><Boxes size={15} /> Áreas</span>
+          className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-base whitespace-nowrap ${tab === 'areas' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>
+          <span className="inline-flex items-center gap-1.5"><Boxes size={15} /> Zonas</span>
         </button>
         <button type="button" onClick={() => setTab('counts')}
-          className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-base ${tab === 'counts' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>
+          className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-base whitespace-nowrap ${tab === 'counts' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>
           <span className="inline-flex items-center gap-1.5"><ClipboardList size={15} /> Conteos</span>
         </button>
         <button type="button" onClick={() => setTab('autoinventory')}
-          className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-base ${tab === 'autoinventory' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>
+          className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-base whitespace-nowrap ${tab === 'autoinventory' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>
           <span className="inline-flex items-center gap-1.5"><Gauge size={15} /> Autoinventario</span>
         </button>
         <button type="button" onClick={() => setTab('consumption')}
-          className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-base ${tab === 'consumption' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>
+          className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-base whitespace-nowrap ${tab === 'consumption' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>
           <span className="inline-flex items-center gap-1.5"><TrendingDown size={15} /> Consumo</span>
         </button>
         <button type="button" onClick={() => setTab('waste')}
-          className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-base ${tab === 'waste' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>
+          className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-base whitespace-nowrap ${tab === 'waste' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>
           <span className="inline-flex items-center gap-1.5"><Trash2 size={15} /> Merma</span>
         </button>
       </div>
 
-      {tab === 'areas' && (
-      <>
-      {/* Alta de área */}
-      <div className="border border-border-default rounded-lg p-3 bg-card flex items-end gap-2 flex-wrap">
-        <label className="block flex-1 min-w-[180px]">
-          <span className="text-[11px] text-text-secondary">Nueva área</span>
-          <input type="text" value={newAreaName} onChange={e => setNewAreaName(e.target.value)}
-            placeholder="Cámara, Seco, Barra, Congelador…"
-            className="mt-0.5 w-full px-3 py-2 text-sm border border-border-default rounded-md bg-page text-text-primary" />
-        </label>
-        <label className="block min-w-[160px]">
-          <span className="text-[11px] text-text-secondary">Dentro de (opcional)</span>
-          <select value={newAreaParent} onChange={e => setNewAreaParent(e.target.value)}
-            className="mt-0.5 w-full px-3 py-2 text-sm border border-border-default rounded-md bg-page text-text-primary">
-            <option value="">— Área principal —</option>
-            {rootAreas.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-          </select>
-        </label>
-        <button type="button" onClick={handleCreate} disabled={creating || !newAreaName.trim()}
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 transition-base">
-          {creating ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />} Añadir
-        </button>
-      </div>
-
-      {/* Lista de áreas con jerarquía */}
-      {areas.length === 0 ? (
-        <div className="text-center py-10 text-text-secondary text-sm border border-dashed border-border-default rounded-lg">
-          <Boxes size={28} className="mx-auto mb-2 text-text-tertiary" />
-          Aún no hay áreas en este local. Crea la primera arriba (p. ej. "Cámara").
-        </div>
-      ) : (
-        <div className="border border-border-default rounded-lg overflow-hidden">
-          {rootAreas.map(root => (
-            <div key={root.id}>
-              {areaRow(root, false)}
-              {childrenOf(root.id).map(child => areaRow(child, true))}
-            </div>
-          ))}
-        </div>
-      )}
-      </>
+      {tab === 'areas' && activeAccountId && locationId && (
+        <StorageZonesSection
+          accountId={activeAccountId}
+          locationId={locationId}
+          onError={(m) => setError(m)}
+          onFlash={(m) => setFlash(m)}
+          onOpenItem={(id) => setSelectedItemId(id)}
+          onZonesChanged={() => setReloadTick(t => t + 1)}
+        />
       )}
 
       {tab === 'counts' && (
@@ -383,115 +274,6 @@ export default function InventoryPage() {
           onCreate={handleCreateCount}
         />
       )}
-
-      {/* Modal asignador de artículos */}
-      {assignAreaId && activeAccountId && (
-        <AssignItemsModal
-          accountId={activeAccountId}
-          area={areas.find(a => a.id === assignAreaId)!}
-          onClose={() => { setAssignAreaId(null); setReloadTick(t => t + 1) }}
-          onError={(m) => setError(m)}
-        />
-      )}
-    </div>
-  )
-}
-
-// ── Modal: asignar artículos a un área ──
-function AssignItemsModal({
-  accountId, area, onClose, onError,
-}: {
-  accountId: string
-  area: StorageArea
-  onClose: () => void
-  onError: (m: string) => void
-}) {
-  const [allItems, setAllItems] = useState<InventoryItem[]>([])
-  const [assigned, setAssigned] = useState<AreaItem[]>([])
-  const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
-  const [busy, setBusy] = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const [items, asg] = await Promise.all([
-          listInventoryItems(accountId),
-          listAreaItems(accountId, area.id),
-        ])
-        if (cancelled) return
-        setAllItems(items); setAssigned(asg)
-      } catch (e) {
-        if (!cancelled) onError(e instanceof Error ? e.message : 'Error cargando artículos.')
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    })()
-    return () => { cancelled = true }
-  }, [accountId, area.id]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const assignedIds = useMemo(() => new Set(assigned.map(a => a.recipeItemId)), [assigned])
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return allItems.filter(i => !q || i.name.toLowerCase().includes(q))
-  }, [allItems, search])
-
-  async function toggle(item: InventoryItem) {
-    setBusy(item.recipeItemId)
-    try {
-      if (assignedIds.has(item.recipeItemId)) {
-        await unassignItemFromArea(item.recipeItemId, area.id)
-        setAssigned(prev => prev.filter(a => a.recipeItemId !== item.recipeItemId))
-      } else {
-        await assignItemToArea(accountId, item.recipeItemId, area.id, (assigned.length + 1) * 10)
-        setAssigned(prev => [...prev, { recipeItemId: item.recipeItemId, itemName: item.name, position: (prev.length + 1) * 10 }])
-      }
-    } catch (e) {
-      onError(e instanceof Error ? e.message : 'No se pudo actualizar.')
-    } finally {
-      setBusy(null)
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-start sm:items-center justify-center p-4 overflow-y-auto" role="dialog" aria-modal="true">
-      <div className="bg-card rounded-lg border border-border-default shadow-lg w-full max-w-md my-8">
-        <div className="px-5 py-3 border-b border-border-default flex items-center justify-between">
-          <div>
-            <h3 className="text-base font-medium text-text-primary">Artículos en “{area.name}”</h3>
-            <p className="text-xs text-text-secondary mt-0.5">{assigned.length} asignado{assigned.length === 1 ? '' : 's'}</p>
-          </div>
-          <button type="button" onClick={onClose} className="text-text-tertiary hover:text-text-primary"><X size={18} /></button>
-        </div>
-        <div className="px-5 py-3 border-b border-border-default">
-          <div className="relative">
-            <Search size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-tertiary" />
-            <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar artículo…"
-              className="w-full pl-8 pr-3 py-2 text-sm border border-border-default rounded-md bg-page text-text-primary" />
-          </div>
-        </div>
-        <div className="max-h-[55vh] overflow-y-auto">
-          {loading ? (
-            <div className="flex items-center gap-2 text-text-secondary text-sm p-4"><Loader2 size={15} className="animate-spin" /> Cargando…</div>
-          ) : filtered.length === 0 ? (
-            <p className="text-sm text-text-tertiary p-4 text-center">Sin resultados.</p>
-          ) : (
-            filtered.map(item => {
-              const on = assignedIds.has(item.recipeItemId)
-              return (
-                <button key={item.recipeItemId} type="button" onClick={() => toggle(item)} disabled={busy === item.recipeItemId}
-                  className={`w-full flex items-center gap-2 px-5 py-2.5 text-sm text-left border-t border-border-default hover:bg-page transition-base ${on ? 'text-text-primary' : 'text-text-secondary'}`}>
-                  <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${on ? 'bg-accent border-accent' : 'border-border-default'}`}>
-                    {busy === item.recipeItemId ? <Loader2 size={11} className="animate-spin text-text-on-accent" /> : on ? <span className="text-text-on-accent text-[10px]">✓</span> : null}
-                  </span>
-                  {item.name}
-                </button>
-              )
-            })
-          )}
-        </div>
-      </div>
     </div>
   )
 }
@@ -589,9 +371,9 @@ function NewCountModal({
           <div>
             <span className="block text-xs text-text-secondary mb-1.5">Tipo</span>
             <div className="flex gap-2">
-              {([['cycle', 'Cíclico'], ['audit', 'Auditoría'], ['full', 'Completo']] as const).map(([k, label]) => (
-                <button key={k} type="button" onClick={() => setKind(k)}
-                  className={`px-3 py-1.5 text-sm rounded-md border transition-base ${kind === k ? 'bg-accent text-text-on-accent border-accent' : 'border-border-default text-text-secondary hover:bg-page'}`}>
+              {([['cycle', 'Cíclico'], ['audit', 'Auditoría'], ['full', 'Completo']] as const).map(([kk, label]) => (
+                <button key={kk} type="button" onClick={() => setKind(kk)}
+                  className={`px-3 py-1.5 text-sm rounded-md border transition-base ${kind === kk ? 'bg-accent text-text-on-accent border-accent' : 'border-border-default text-text-secondary hover:bg-page'}`}>
                   {label}
                 </button>
               ))}
@@ -603,7 +385,7 @@ function NewCountModal({
             <div className="flex gap-2 mb-2">
               <button type="button" onClick={() => setScope('areas')}
                 className={`px-3 py-1.5 text-sm rounded-md border transition-base ${scope === 'areas' ? 'bg-accent text-text-on-accent border-accent' : 'border-border-default text-text-secondary hover:bg-page'}`}>
-                Por áreas
+                Por zonas
               </button>
               <button type="button" onClick={() => setScope('full')}
                 className={`px-3 py-1.5 text-sm rounded-md border transition-base ${scope === 'full' ? 'bg-accent text-text-on-accent border-accent' : 'border-border-default text-text-secondary hover:bg-page'}`}>
@@ -612,7 +394,7 @@ function NewCountModal({
             </div>
             {scope === 'areas' && (
               areas.length === 0 ? (
-                <p className="text-xs text-text-tertiary">No hay áreas. Crea áreas o usa "Todo el local".</p>
+                <p className="text-xs text-text-tertiary">No hay zonas. Crea zonas o usa "Todo el local".</p>
               ) : (
                 <div className="border border-border-default rounded-md max-h-48 overflow-y-auto">
                   {areas.map(a => (
@@ -644,10 +426,6 @@ function NewCountModal({
 }
 
 // ── Sección de consumo teórico del local (capa 2) ──
-// Muestra, para un rango y el local operativo, cuánto se consumió de cada
-// ingrediente según ventas × escandallo (cantidad base + € + nº de ventas),
-// ordenado por € desc. El botón recalcula el histórico del rango (frontera con
-// guard). Legible desde el minuto cero: no necesita inventario inicial.
 type RangeKey = 'today' | '7d' | '30d' | 'month' | 'all'
 
 function rangeFor(key: RangeKey): { from: string | null; to: string | null; label: string } {
@@ -703,7 +481,6 @@ function ConsumptionSection({
     if (!accountId) return
     setRecomputing(true); onError('')
     try {
-      // Recalcula el rango visible (sin rango = todo el histórico).
       const res = await recomputeConsumption({ accountId, from: range.from, to: range.to })
       onFlash(`Consumo recalculado: ${res.linesProcessed} líneas, ${res.movementsWritten} movimientos.`)
       setReloadTick(t => t + 1)
@@ -730,7 +507,6 @@ function ConsumptionSection({
         </button>
       </div>
 
-      {/* Selector de rango */}
       <div className="flex items-center gap-1.5 flex-wrap">
         {([['today', 'Hoy'], ['7d', '7 días'], ['30d', '30 días'], ['month', 'Mes actual'], ['all', 'Todo']] as const).map(([k, label]) => (
           <button key={k} type="button" onClick={() => setRangeKey(k)}
