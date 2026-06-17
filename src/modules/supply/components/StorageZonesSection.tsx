@@ -22,7 +22,7 @@ import {
 } from 'lucide-react'
 import {
   getStorageCoverage, listOrphans, listZoneItems,
-  removeItemsFromZone, emptyZone,
+  removeItemsFromZone, emptyZone, formatStockQty,
   type StorageCoverage, type ZoneCoverage, type OrphanItem, type ZoneItem,
 } from '@/modules/supply/services/storageZonesService'
 import { createStorageArea, renameStorageArea, archiveStorageArea } from '@/modules/supply/services/storageAreaService'
@@ -308,6 +308,25 @@ function Kpi({ label, value, warn }: { label: string; value: number | string; wa
   )
 }
 
+// ── Celda de cantidad: formato de compra grande + base debajo (o "sin contar") ──
+function QtyCell({
+  qty, unitAbbr, bfName, bfQib, valueEur,
+}: {
+  qty: number | null
+  unitAbbr: string | null
+  bfName: string | null
+  bfQib: number | null
+  valueEur?: number | null
+}) {
+  const d = formatStockQty(qty, unitAbbr, bfName, bfQib, valueEur)
+  return (
+    <span className="w-28 text-right shrink-0">
+      <span className={`block text-sm font-medium tabular-nums ${d.counted ? 'text-text-primary' : 'text-text-tertiary'}`}>{d.main}</span>
+      {d.sub && <span className="block text-[11px] text-text-tertiary tabular-nums">{d.sub}</span>}
+    </span>
+  )
+}
+
 // ── Panel "Sin zona" (huérfanos) ──
 function OrphansPanel({
   accountId, locationId, families, reloadKey, orphanCount, orphanValue, onAssign, onPeek,
@@ -403,8 +422,8 @@ function OrphansPanel({
                   </button>
                   <button type="button" onClick={() => onPeek({ recipeItemId: o.recipeItemId, name: o.name, valueEur: o.valueEur, qty: o.qty, unitAbbr: o.unitAbbr, familyName: o.familyName })}
                     className="flex-1 text-left text-sm text-text-primary hover:text-accent truncate">{o.name}</button>
-                  <span className="text-xs text-text-tertiary w-24 truncate text-right">{o.familyName ?? ''}</span>
-                  <span className="text-sm font-medium text-text-primary tabular-nums w-20 text-right">{fmtEur2(o.valueEur)}</span>
+                  <QtyCell qty={o.qty} unitAbbr={o.unitAbbr} bfName={o.buyFormatName} bfQib={o.buyFormatQtyInBase} valueEur={o.valueEur} />
+                  <span className="text-sm text-text-secondary tabular-nums w-16 text-right shrink-0">{fmtEur2(o.valueEur)}</span>
                 </div>
               )
             })}
@@ -513,7 +532,8 @@ function ZoneCard({
             <div key={it.recipeItemId} className="flex items-center gap-2.5 px-3.5 py-1.5 border-t border-border-default first:border-t-0">
               <button type="button" onClick={() => onPeek({ recipeItemId: it.recipeItemId, name: it.name, valueEur: it.valueEur, qty: it.qty, unitAbbr: it.unitAbbr })}
                 className="flex-1 text-left text-sm text-text-secondary hover:text-accent truncate">{it.name}</button>
-              <span className="text-xs text-text-tertiary tabular-nums">{fmtEur2(it.valueEur)}</span>
+              <QtyCell qty={it.qty} unitAbbr={it.unitAbbr} bfName={it.buyFormatName} bfQib={it.buyFormatQtyInBase} valueEur={it.valueEur} />
+              <span className="text-xs text-text-tertiary tabular-nums w-16 text-right shrink-0">{fmtEur2(it.valueEur)}</span>
             </div>
           ))}
         </div>
@@ -546,7 +566,8 @@ function ZoneCard({
                   {it.name}
                   {it.isPrimary && <span className="ml-2 text-[10px] text-accent border border-accent/40 rounded px-1 py-0.5">principal</span>}
                 </button>
-                <span className="text-sm font-medium text-text-primary tabular-nums w-16 text-right">{fmtEur2(it.valueEur)}</span>
+                <QtyCell qty={it.qty} unitAbbr={it.unitAbbr} bfName={it.buyFormatName} bfQib={it.buyFormatQtyInBase} valueEur={it.valueEur} />
+                <span className="text-sm text-text-secondary tabular-nums w-14 text-right shrink-0">{fmtEur2(it.valueEur)}</span>
                 <button type="button" onClick={() => onMove([it.recipeItemId], it.name)} title="Mover a otra zona" className="p-1 text-text-tertiary hover:text-accent"><ArrowRightLeft size={14} /></button>
                 <button type="button" onClick={() => quickRemove(it.recipeItemId)} title="Quitar (a sin zona)" className="p-1 text-text-tertiary hover:text-danger"><X size={14} /></button>
               </div>

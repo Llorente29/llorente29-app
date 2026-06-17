@@ -46,6 +46,9 @@ export interface ZonePreviewItem {
   valueEur: number
   qty: number
   unitAbbr: string | null
+  buyFormatName: string | null       // formato de compra de referencia (nodo raíz)
+  buyFormatQtyInBase: number | null   // cuánto vale ese formato en la unidad base
+  buyFormatIsPiece: boolean
 }
 
 export interface ZoneCoverage {
@@ -78,6 +81,9 @@ function mapPreviewItem(r: Row): ZonePreviewItem {
     valueEur: num(r.value_eur),
     qty: num(r.qty),
     unitAbbr: strOrNull(r.unit_abbr),
+    buyFormatName: strOrNull(r.buy_format_name),
+    buyFormatQtyInBase: r.buy_format_qty_in_base == null ? null : num(r.buy_format_qty_in_base),
+    buyFormatIsPiece: Boolean(r.buy_format_is_piece),
   }
 }
 
@@ -125,6 +131,9 @@ export interface OrphanItem {
   valueEur: number
   qty: number
   unitAbbr: string | null
+  buyFormatName: string | null
+  buyFormatQtyInBase: number | null
+  buyFormatIsPiece: boolean
 }
 
 export interface OrphanPage {
@@ -158,6 +167,9 @@ export async function listOrphans(
       valueEur: num(r.value_eur),
       qty: num(r.qty),
       unitAbbr: strOrNull(r.unit_abbr),
+      buyFormatName: strOrNull(r.buy_format_name),
+      buyFormatQtyInBase: r.buy_format_qty_in_base == null ? null : num(r.buy_format_qty_in_base),
+      buyFormatIsPiece: Boolean(r.buy_format_is_piece),
     })),
   }
 }
@@ -171,6 +183,9 @@ export interface ZoneItem {
   qty: number
   unitAbbr: string | null
   isPrimary: boolean        // position 0 = esta es su zona principal (lleva el €)
+  buyFormatName: string | null
+  buyFormatQtyInBase: number | null
+  buyFormatIsPiece: boolean
 }
 
 export interface ZoneItemsPage {
@@ -202,6 +217,9 @@ export async function listZoneItems(
       qty: num(r.qty),
       unitAbbr: strOrNull(r.unit_abbr),
       isPrimary: Boolean(r.is_primary),
+      buyFormatName: strOrNull(r.buy_format_name),
+      buyFormatQtyInBase: r.buy_format_qty_in_base == null ? null : num(r.buy_format_qty_in_base),
+      buyFormatIsPiece: Boolean(r.buy_format_is_piece),
     })),
   }
 }
@@ -301,4 +319,41 @@ export async function moveItemsToZone(
   if (error) throw new Error(`No se pudo mover: ${error.message}`)
   const obj = (data ?? {}) as { moved?: unknown }
   return num(obj.moved)
+}
+
+// ─── Presentación: cantidad legible (formato de compra + base) ───
+
+export interface StockQtyDisplay {
+  main: string            // lo grande: "≈ 2,1 Caja" o "8.500 g" o "sin contar"
+  sub: string | null      // lo pequeño: el equivalente en unidad base, si procede
+  counted: boolean        // false = nunca contado (se pinta en gris)
+}
+
+const nf1 = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 })
+const nf2 = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 })
+
+/**
+ * Cómo mostrar la cantidad de un artículo:
+ *   - sin stock ni valor → "sin contar" (gris): no se ha contado nunca.
+ *   - con formato de compra (qtyInBase > 1) → "≈ N {formato}" + base debajo.
+ *   - si no → la cantidad en unidad base, a secas.
+ * qty viene SIEMPRE en la unidad base del artículo.
+ */
+export function formatStockQty(
+  qty: number | null | undefined,
+  unitAbbr: string | null,
+  buyFormatName: string | null,
+  buyFormatQtyInBase: number | null,
+  valueEur?: number | null,
+): StockQtyDisplay {
+  const q = Number(qty)
+  const hasQty = Number.isFinite(q) && q > 0
+  const hasValue = valueEur != null && Number.isFinite(valueEur) && valueEur > 0
+  if (!hasQty && !hasValue) return { main: 'sin contar', sub: null, counted: false }
+  const baseStr = `${nf2.format(Number.isFinite(q) ? q : 0)}${unitAbbr ? ` ${unitAbbr}` : ''}`
+  if (buyFormatName && buyFormatQtyInBase != null && buyFormatQtyInBase > 1 && hasQty) {
+    const n = q / buyFormatQtyInBase
+    return { main: `≈ ${nf1.format(n)} ${buyFormatName}`, sub: baseStr, counted: true }
+  }
+  return { main: baseStr, sub: null, counted: true }
 }
