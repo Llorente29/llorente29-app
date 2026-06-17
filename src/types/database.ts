@@ -9041,6 +9041,100 @@ export type Database = {
           },
         ]
       }
+      stock_adjustment: {
+        Row: {
+          account_id: string
+          cost_eur: number | null
+          counted_base: number
+          created_at: string
+          created_by: string | null
+          created_by_name: string | null
+          delta_base: number
+          expiry_date: string | null
+          id: string
+          location_id: string
+          lot_code: string | null
+          notes: string | null
+          occurred_at: string
+          photo_url: string | null
+          previous_base: number
+          reason_code: string
+          recipe_item_id: string
+          unit_cost: number | null
+          use_qty: number | null
+          use_unit_factor: number | null
+          use_unit_label: string | null
+        }
+        Insert: {
+          account_id: string
+          cost_eur?: number | null
+          counted_base: number
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          delta_base: number
+          expiry_date?: string | null
+          id?: string
+          location_id: string
+          lot_code?: string | null
+          notes?: string | null
+          occurred_at?: string
+          photo_url?: string | null
+          previous_base: number
+          reason_code: string
+          recipe_item_id: string
+          unit_cost?: number | null
+          use_qty?: number | null
+          use_unit_factor?: number | null
+          use_unit_label?: string | null
+        }
+        Update: {
+          account_id?: string
+          cost_eur?: number | null
+          counted_base?: number
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          delta_base?: number
+          expiry_date?: string | null
+          id?: string
+          location_id?: string
+          lot_code?: string | null
+          notes?: string | null
+          occurred_at?: string
+          photo_url?: string | null
+          previous_base?: number
+          reason_code?: string
+          recipe_item_id?: string
+          unit_cost?: number | null
+          use_qty?: number | null
+          use_unit_factor?: number | null
+          use_unit_label?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_adjustment_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_adjustment_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_adjustment_recipe_item_id_fkey"
+            columns: ["recipe_item_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_item"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       stock_movement: {
         Row: {
           account_id: string
@@ -10950,6 +11044,29 @@ export type Database = {
         Returns: {
           lines_processed: number
           movements_written: number
+        }[]
+      }
+      register_adjustment: {
+        Args: {
+          p_account_id: string
+          p_counted_base: number
+          p_expiry_date?: string
+          p_location_id: string
+          p_lot_code?: string
+          p_notes?: string
+          p_photo_url?: string
+          p_reason_code: string
+          p_recipe_item_id: string
+          p_use_qty?: number
+          p_use_unit_factor?: number
+          p_use_unit_label?: string
+          p_user_id?: string
+          p_user_name?: string
+        }
+        Returns: {
+          adjustment_id: string
+          cost_eur: number
+          delta_base: number
         }[]
       }
       register_waste: {

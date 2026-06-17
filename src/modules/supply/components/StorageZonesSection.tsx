@@ -31,6 +31,7 @@ import { exportAssignmentXlsx, type AssignmentRow } from '@/modules/supply/lib/s
 import AssignToZonesModal from '@/modules/supply/components/AssignToZonesModal'
 import ImportZonesModal from '@/modules/supply/components/ImportZonesModal'
 import ItemPeekPanel, { type PeekItem } from '@/modules/supply/components/ItemPeekPanel'
+import { useApp } from '@/context/AppContext'
 
 const PAGE = 50
 
@@ -62,6 +63,10 @@ export default function StorageZonesSection({
   onOpenItem: (recipeItemId: string) => void
   onZonesChanged: () => void
 }) {
+  const { userProfile, authUserId } = useApp()
+  const actorId = authUserId ?? null
+  const actorName = userProfile?.displayName ?? null
+
   const [coverage, setCoverage] = useState<StorageCoverage | null>(null)
   const [loading, setLoading] = useState(true)
   const [reloadKey, setReloadKey] = useState(0)
@@ -292,6 +297,11 @@ export default function StorageZonesSection({
           item={peek}
           onClose={() => setPeek(null)}
           onOpenFull={(id) => { setPeek(null); onOpenItem(id) }}
+          accountId={accountId}
+          locationId={locationId}
+          actorId={actorId}
+          actorName={actorName}
+          onAdjusted={() => { onFlash('Ajuste de stock registrado.'); refreshAll() }}
         />
       )}
     </div>
