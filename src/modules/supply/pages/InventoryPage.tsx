@@ -16,8 +16,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   Plus, Boxes, Loader2, X, ClipboardList, ChevronRight,
-  TrendingDown, RefreshCw, Gauge, LayoutDashboard, ArrowLeftRight,
+  TrendingDown, RefreshCw, Gauge, LayoutDashboard, ArrowLeftRight, SlidersHorizontal,
 } from 'lucide-react'
+import StockLevelsSection from '@/modules/supply/components/StockLevelsSection'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useApp } from '@/context/AppContext'
 import { listSupplyLocations, type SupplyLocation } from '@/modules/supply/services/supplierCatalogService'
@@ -62,7 +63,7 @@ export default function InventoryPage() {
   const [reloadTick, setReloadTick] = useState(0)
 
   // navegación: las 5 secciones del módulo Almacén
-  const [tab, setTab] = useState<'resumen' | 'existencias' | 'movimientos' | 'inventarios' | 'avt'>('resumen')
+  const [tab, setTab] = useState<'resumen' | 'existencias' | 'niveles' | 'movimientos' | 'inventarios' | 'avt'>('resumen')
   const [avtView, setAvtView] = useState<'desviacion' | 'consumo'>('desviacion')
   const [avtMode, setAvtMode] = useState<'puntual' | 'periodo'>('periodo')
   // dentro de Inventarios: conteos | autoinventario
@@ -210,6 +211,10 @@ export default function InventoryPage() {
           className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-base whitespace-nowrap ${tab === 'existencias' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>
           <span className="inline-flex items-center gap-1.5"><Boxes size={15} /> Existencias</span>
         </button>
+        <button type="button" onClick={() => setTab('niveles')}
+          className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-base whitespace-nowrap ${tab === 'niveles' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>
+          <span className="inline-flex items-center gap-1.5"><SlidersHorizontal size={15} /> Niveles</span>
+        </button>
         <button type="button" onClick={() => setTab('movimientos')}
           className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-base whitespace-nowrap ${tab === 'movimientos' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>
           <span className="inline-flex items-center gap-1.5"><ArrowLeftRight size={15} /> Movimientos</span>
@@ -242,6 +247,17 @@ export default function InventoryPage() {
           onFlash={(m) => setFlash(m)}
           onOpenItem={(id) => setSelectedItemId(id)}
           onZonesChanged={() => setReloadTick(t => t + 1)}
+        />
+      )}
+
+      {tab === 'niveles' && activeAccountId && locationId && (
+        <StockLevelsSection
+          accountId={activeAccountId}
+          locationId={locationId}
+          actorId={authUserId ?? null}
+          actorName={userProfile?.displayName ?? null}
+          onError={(m) => setError(m)}
+          onFlash={(m) => setFlash(m)}
         />
       )}
 

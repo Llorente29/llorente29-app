@@ -9135,6 +9135,76 @@ export type Database = {
           },
         ]
       }
+      stock_level: {
+        Row: {
+          account_id: string
+          created_at: string
+          id: string
+          lead_time_days: number | null
+          location_id: string
+          min_qty: number | null
+          par_qty: number | null
+          recipe_item_id: string
+          reorder_point: number | null
+          safety_qty: number | null
+          updated_at: string
+          updated_by: string | null
+          updated_by_name: string | null
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          id?: string
+          lead_time_days?: number | null
+          location_id: string
+          min_qty?: number | null
+          par_qty?: number | null
+          recipe_item_id: string
+          reorder_point?: number | null
+          safety_qty?: number | null
+          updated_at?: string
+          updated_by?: string | null
+          updated_by_name?: string | null
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          id?: string
+          lead_time_days?: number | null
+          location_id?: string
+          min_qty?: number | null
+          par_qty?: number | null
+          recipe_item_id?: string
+          reorder_point?: number | null
+          safety_qty?: number | null
+          updated_at?: string
+          updated_by?: string | null
+          updated_by_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_level_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_level_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_level_recipe_item_id_fkey"
+            columns: ["recipe_item_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_item"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       stock_movement: {
         Row: {
           account_id: string
@@ -11382,8 +11452,28 @@ export type Database = {
         Args: { p_account_id: string }
         Returns: undefined
       }
+      set_stock_level: {
+        Args: {
+          p_account: string
+          p_location: string
+          p_min?: number
+          p_par?: number
+          p_recipe_item: string
+          p_user_id?: string
+          p_user_name?: string
+        }
+        Returns: undefined
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      stock_levels_overview: {
+        Args: {
+          p_account: string
+          p_location: string
+          p_only_with_level?: boolean
+        }
+        Returns: Json
+      }
       storage_coverage: {
         Args: { p_account: string; p_location: string }
         Returns: Json
