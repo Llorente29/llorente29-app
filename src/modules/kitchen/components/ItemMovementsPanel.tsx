@@ -39,37 +39,47 @@ function chipClass(type: string): string {
 }
 
 export default function ItemMovementsPanel({
-  accountId, recipeItemId, unitAbbr,
+  accountId, recipeItemId, unitAbbr, activeLocationId,
 }: {
   accountId: string
   recipeItemId: string
   unitAbbr: string | null
+  /** Local elegido en la cabecera (header). null o 'all' = todos los locales. */
+  activeLocationId: string | null
 }) {
   const [rangeKey, setRangeKey] = useState<RangeKey>('30d')
   const [rows, setRows] = useState<ItemMovement[]>([])
   const [loading, setLoading] = useState(true)
 
   const range = useMemo(() => rangeFor(rangeKey), [rangeKey])
+  const locationFilter = activeLocationId && activeLocationId !== 'all' ? activeLocationId : null
 
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    getItemMovements(accountId, recipeItemId, { from: range.from, to: range.to, limit: 300 })
+    getItemMovements(accountId, recipeItemId, { location: locationFilter, from: range.from, to: range.to, limit: 300 })
       .then(d => { if (!cancelled) setRows(d) })
       .catch(() => { if (!cancelled) setRows([]) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [accountId, recipeItemId, range.from, range.to])
+  }, [accountId, recipeItemId, locationFilter, range.from, range.to])
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-end gap-1.5">
-        {RANGES.map(r => (
-          <button key={r.key} type="button" onClick={() => setRangeKey(r.key)}
-            className={`text-xs rounded-md px-2 py-1 border transition-base ${rangeKey === r.key ? 'bg-accent text-text-on-accent border-accent' : 'border-border-default text-text-secondary hover:bg-page'}`}>
-            {r.label}
-          </button>
-        ))}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <span className="text-[11px] text-text-tertiary">
+          {locationFilter
+            ? (rows[0]?.locationName ? `Solo ${rows[0].locationName}` : 'Solo el local de la cabecera')
+            : 'Todos los locales'}
+        </span>
+        <div className="flex items-center gap-1.5">
+          {RANGES.map(r => (
+            <button key={r.key} type="button" onClick={() => setRangeKey(r.key)}
+              className={`text-xs rounded-md px-2 py-1 border transition-base ${rangeKey === r.key ? 'bg-accent text-text-on-accent border-accent' : 'border-border-default text-text-secondary hover:bg-page'}`}>
+              {r.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {loading ? (

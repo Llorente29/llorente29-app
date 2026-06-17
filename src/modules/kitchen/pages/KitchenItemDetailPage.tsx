@@ -201,7 +201,7 @@ interface KitchenItemDetailPageProps {
 }
 
 export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDetailPageProps) {
-  const { userProfile, authUserId } = useApp()
+  const { userProfile, authUserId, activeLocationId } = useApp()
 
   const [item, setItem] = useState<RecipeItem | null>(null)
   const [units, setUnits] = useState<KitchenUnit[]>([])
@@ -936,6 +936,7 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
                 accountId={item.accountId}
                 recipeItemId={item.id}
                 unitAbbr={baseUnit?.abbreviation ?? null}
+                activeLocationId={activeLocationId ?? null}
               />
             </CollapsibleSection>
 

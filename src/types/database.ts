@@ -10740,6 +10740,7 @@ export type Database = {
           p_account: string
           p_from?: string
           p_limit?: number
+          p_location?: string
           p_recipe_item: string
           p_to?: string
         }

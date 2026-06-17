@@ -72,12 +72,13 @@ export interface ItemMovement {
 export async function getItemMovements(
   accountId: string,
   recipeItemId: string,
-  opts?: { from?: string | null; to?: string | null; limit?: number },
+  opts?: { location?: string | null; from?: string | null; to?: string | null; limit?: number },
 ): Promise<ItemMovement[]> {
   requireSupabase()
   const { data, error } = await supabase!.rpc('item_movements', {
     p_account: accountId,
     p_recipe_item: recipeItemId,
+    p_location: opts?.location ?? undefined,
     p_from: opts?.from ?? undefined,
     p_to: opts?.to ?? undefined,
     p_limit: opts?.limit ?? 200,
