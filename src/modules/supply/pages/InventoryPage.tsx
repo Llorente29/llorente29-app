@@ -24,7 +24,7 @@ import { listSupplyLocations, type SupplyLocation } from '@/modules/supply/servi
 import { useOperativeLocation } from '@/modules/supply/hooks/useOperativeLocation'
 import OperativeLocationBanner from '@/modules/supply/components/OperativeLocationBanner'
 import InventoryCountSheet from '@/modules/supply/components/InventoryCountSheet'
-import WasteSection from '@/modules/supply/components/WasteSection'
+import MovementsSection from '@/modules/supply/components/MovementsSection'
 import AutoInventorySection from '@/modules/supply/components/AutoInventorySection'
 import StorageZonesSection from '@/modules/supply/components/StorageZonesSection'
 import KitchenItemDetailPage from '@/modules/kitchen/pages/KitchenItemDetailPage'
@@ -242,11 +242,12 @@ export default function InventoryPage() {
       )}
 
       {tab === 'movimientos' && activeAccountId && (
-        <WasteSection
+        <MovementsSection
           accountId={activeAccountId}
-          locationId={locationId}
-          userId={authUserId ?? null}
-          userName={userProfile?.displayName ?? null}
+          locationId={locationId || null}
+          locations={locations}
+          actorId={authUserId ?? null}
+          actorName={userProfile?.displayName ?? null}
           onError={(m) => setError(m)}
           onFlash={(m) => setFlash(m)}
         />

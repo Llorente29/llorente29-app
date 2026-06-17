@@ -9217,6 +9217,83 @@ export type Database = {
           },
         ]
       }
+      stock_transfer: {
+        Row: {
+          account_id: string
+          cost_eur: number | null
+          created_at: string
+          created_by: string | null
+          created_by_name: string | null
+          from_location_id: string
+          id: string
+          notes: string | null
+          occurred_at: string
+          qty_base: number
+          recipe_item_id: string
+          to_location_id: string
+          unit_cost: number | null
+        }
+        Insert: {
+          account_id: string
+          cost_eur?: number | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          from_location_id: string
+          id?: string
+          notes?: string | null
+          occurred_at?: string
+          qty_base: number
+          recipe_item_id: string
+          to_location_id: string
+          unit_cost?: number | null
+        }
+        Update: {
+          account_id?: string
+          cost_eur?: number | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          from_location_id?: string
+          id?: string
+          notes?: string | null
+          occurred_at?: string
+          qty_base?: number
+          recipe_item_id?: string
+          to_location_id?: string
+          unit_cost?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_transfer_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_transfer_from_location_id_fkey"
+            columns: ["from_location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_transfer_recipe_item_id_fkey"
+            columns: ["recipe_item_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_item"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_transfer_to_location_id_fkey"
+            columns: ["to_location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       stock_waste: {
         Row: {
           account_id: string
@@ -10800,6 +10877,18 @@ export type Database = {
           ventas: number
         }[]
       }
+      list_stock_movements: {
+        Args: {
+          p_account: string
+          p_from?: string
+          p_limit?: number
+          p_location: string
+          p_offset?: number
+          p_to?: string
+          p_types?: string[]
+        }
+        Returns: Json
+      }
       location_economics: {
         Args: { p_from?: string; p_location_id: string; p_to?: string }
         Returns: {
@@ -11067,6 +11156,22 @@ export type Database = {
           adjustment_id: string
           cost_eur: number
           delta_base: number
+        }[]
+      }
+      register_transfer: {
+        Args: {
+          p_account_id: string
+          p_from_location: string
+          p_notes?: string
+          p_qty_base: number
+          p_recipe_item_id: string
+          p_to_location: string
+          p_user_id?: string
+          p_user_name?: string
+        }
+        Returns: {
+          cost_eur: number
+          transfer_id: string
         }[]
       }
       register_waste: {
