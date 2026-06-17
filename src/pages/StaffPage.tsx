@@ -58,7 +58,7 @@ function getScheduledMinutes(str: string) {
 }
 
 export default function StaffPage() {
-  const { staff, locations, createEmployee, saveEmployee, removeEmployee, gestoriaConfig, activeAccountId, userProfile } = useApp()
+  const { staff, locations, createEmployee, saveEmployee, removeEmployee, gestoriaConfig, activeAccountId, userProfile, addClockEntry } = useApp()
   const [mainTab, setMainTab] = useState<'insights' | 'list'>('insights')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
@@ -282,6 +282,7 @@ export default function StaffPage() {
           accountId={activeAccountId}
           senderEmployeeId={userProfile?.employeeId ?? null}
           senderName={userProfile?.displayName ?? null}
+          addClockEntry={addClockEntry}
         />
       )}
 
@@ -321,7 +322,7 @@ export default function StaffPage() {
 
 // ─── Employee Detail Modal ────────────────────────────────────────────────────
 
-function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestoriaEmail, canSeeSalaries, canManageEmployees, accountId, senderEmployeeId, senderName }: {
+function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestoriaEmail, canSeeSalaries, canManageEmployees, accountId, senderEmployeeId, senderName, addClockEntry }: {
   employee: Employee
   onClose: () => void
   onSave: (e: Employee) => void
@@ -333,11 +334,13 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
   accountId: string | null
   senderEmployeeId: string | null
   senderName: string | null
+  addClockEntry: (employeeId: string, entry: ClockEntry) => Promise<void>
 }) {
   const [emp, setEmp] = useState<Employee>({ ...employee, clockEntries: [...employee.clockEntries] })
   const [tab, setTab] = useState('info')
   const [clocking, setClocking] = useState(false)
   const [clockWarn, setClockWarn] = useState<{ type: 'blocked' | 'rounded' | 'real'; msg: string } | null>(null)
+  const [manualReason, setManualReason] = useState('')
   const [showTerminationModal, setShowTerminationModal] = useState(false)
   const [showSendMessage, setShowSendMessage] = useState(false)
   const [regeneratedPassword, setRegeneratedPassword] = useState<string | null>(null)
@@ -369,78 +372,69 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
     return emp.weeklySchedule?.[key]
   })()
 
-  function handleClock(type: 'entrada' | 'salida') {
+  // Fichaje MANUAL del manager (suple GPS caprichoso / olvido / corrección).
+  // Escribe en BD vía addClockEntry, marca source:'manual', guarda el motivo en
+  // address y el local del empleado en locationIdAtClock. Sin GPS del manager
+  // (no está en el local) y sin bloqueo por horario (está corrigiendo, no fichando
+  // su turno). El redondeo se mantiene SOLO como aviso informativo.
+  async function handleClock(type: 'entrada' | 'salida') {
     setClockWarn(null)
+    if (clocking) return
 
-    if (type === 'entrada' && todaySchedule?.active && todaySchedule.start) {
-      const now = new Date()
-      const nowMin = now.getHours() * 60 + now.getMinutes()
-      const scheduled = getScheduledMinutes(todaySchedule.start)
-      const diff = nowMin - scheduled
-
-      if (diff < -10) {
-        const allowFrom = scheduled - 10
-        const hh = Math.floor(allowFrom / 60).toString().padStart(2, '0')
-        const mm = (allowFrom % 60).toString().padStart(2, '0')
-        setClockWarn({ type: 'blocked', msg: `Fichaje bloqueado: faltan ${Math.abs(diff)} min para tu turno (${todaySchedule.start}). Puedes fichar desde las ${hh}:${mm}.` })
-        return
-      }
-
-      let finalTime = new Date(now)
-      if (diff >= -10 && diff <= 10) {
-        finalTime = new Date(now)
-        finalTime.setHours(Math.floor(scheduled / 60), scheduled % 60, 0, 0)
-        setClockWarn({ type: 'rounded', msg: `Entrada redondeada a ${todaySchedule.start} (diferencia: ${diff > 0 ? '+' : ''}${diff} min)` })
-      } else {
-        setClockWarn({ type: 'real', msg: `Entrada con hora real: ${now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })} (+${diff} min sobre turno)` })
-      }
-
-      const doRegister = (coords: Partial<ClockEntry>) => {
-        const entry: ClockEntry = {
-          id: `ck-${Date.now()}`,
-          type,
-          datetime: finalTime.toISOString(),
-          realDatetime: now.toISOString(),
-          scheduled: todaySchedule.start,
-          roundingApplied: diff >= -10 && diff <= 10,
-          diffMinutes: diff,
-          ...coords,
-        }
-        setEmp(prev => ({ ...prev, clockEntries: [entry, ...prev.clockEntries] }))
-        setClocking(false)
-      }
-
-      setClocking(true)
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          pos => doRegister({ lat: pos.coords.latitude, lng: pos.coords.longitude, address: `${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}` }),
-          () => doRegister({}),
-          { enableHighAccuracy: true, timeout: 10000 }
-        )
-      } else doRegister({})
+    const reason = manualReason.trim()
+    if (!reason) {
+      setClockWarn({ type: 'blocked', msg: 'Indica el motivo del fichaje manual (p. ej. "GPS no funciona", "olvidó fichar").' })
       return
     }
 
-    setClocking(true)
     const now = new Date()
-    const doRegister = (coords: Partial<ClockEntry>) => {
-      const entry: ClockEntry = {
-        id: `ck-${Date.now()}`,
-        type,
-        datetime: now.toISOString(),
-        ...coords,
+    let datetime = now.toISOString()
+    let scheduled: string | undefined
+    let roundingApplied = false
+    let diffMinutes: number | undefined
+
+    // Redondeo informativo si hay horario para hoy (no bloquea nunca).
+    if (type === 'entrada' && todaySchedule?.active && todaySchedule.start) {
+      const nowMin = now.getHours() * 60 + now.getMinutes()
+      const sched = getScheduledMinutes(todaySchedule.start)
+      const diff = nowMin - sched
+      scheduled = todaySchedule.start
+      diffMinutes = diff
+      if (diff >= -10 && diff <= 10) {
+        const r = new Date(now)
+        r.setHours(Math.floor(sched / 60), sched % 60, 0, 0)
+        datetime = r.toISOString()
+        roundingApplied = true
+        setClockWarn({ type: 'rounded', msg: `Entrada redondeada a ${todaySchedule.start}.` })
       }
-      setEmp(prev => ({ ...prev, clockEntries: [entry, ...prev.clockEntries] }))
-      setClocking(false)
     }
 
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        pos => doRegister({ lat: pos.coords.latitude, lng: pos.coords.longitude, address: `${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}` }),
-        () => doRegister({}),
-        { enableHighAccuracy: true, timeout: 10000 }
-      )
-    } else doRegister({})
+    const entry: ClockEntry = {
+      id: `ck-${Date.now()}`,
+      type,
+      datetime,
+      realDatetime: now.toISOString(),
+      scheduled,
+      roundingApplied,
+      diffMinutes,
+      source: 'manual',
+      address: `Manual · ${reason}${senderName ? ` · por ${senderName}` : ''}`,
+      locationIdAtClock: emp.locationId || undefined,
+    }
+
+    setClocking(true)
+    try {
+      await addClockEntry(emp.id, entry)
+      setEmp(prev => ({ ...prev, clockEntries: [entry, ...prev.clockEntries] }))
+      setManualReason('')
+      if (!roundingApplied) {
+        setClockWarn({ type: 'real', msg: `${type === 'entrada' ? 'Entrada' : 'Salida'} registrada a mano: ${now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}.` })
+      }
+    } catch (e) {
+      setClockWarn({ type: 'blocked', msg: `No se pudo registrar el fichaje: ${e instanceof Error ? e.message : 'error'}` })
+    } finally {
+      setClocking(false)
+    }
   }
 
   const TABS = [
@@ -618,12 +612,25 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
                     <p className="text-sm font-semibold tabular-nums text-text-primary">{hoursToday.toFixed(1)}h</p>
                   </div>
                 </div>
+                <div className="mt-3">
+                  <Label>Motivo del fichaje manual</Label>
+                  <Input
+                    className="mt-1"
+                    value={manualReason}
+                    onChange={e => setManualReason(e.target.value)}
+                    placeholder="Ej: GPS no funciona, olvidó fichar…"
+                    disabled={clocking}
+                  />
+                  <p className="text-xs text-text-secondary mt-1">
+                    Queda registrado como fichaje <strong>manual</strong>{senderName ? <> hecho por {senderName}</> : null} con este motivo (rastro legal).
+                  </p>
+                </div>
                 <div className="flex gap-2 mt-3">
                   <Button size="sm" onClick={() => handleClock('entrada')} disabled={clocking || isWorking}>
-                    <LogIn size={14} /> Entrada
+                    <LogIn size={14} /> Fichar entrada (manual)
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => handleClock('salida')} disabled={clocking || !isWorking}>
-                    <Square size={14} /> Salida
+                    <Square size={14} /> Fichar salida (manual)
                   </Button>
                 </div>
                 {clockWarn && (
