@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       _backup_20260516_accounts: {
@@ -3662,6 +3637,54 @@ export type Database = {
           },
         ]
       }
+      external_location_map: {
+        Row: {
+          account_id: string
+          created_at: string
+          external_location_id: string
+          id: string
+          is_active: boolean
+          location_id: string | null
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          external_location_id: string
+          id?: string
+          is_active?: boolean
+          location_id?: string | null
+          source: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          external_location_id?: string
+          id?: string
+          is_active?: boolean
+          location_id?: string | null
+          source?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "external_location_map_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "external_location_map_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       external_product_map: {
         Row: {
           account_id: string
@@ -3709,6 +3732,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      external_webhook_log: {
+        Row: {
+          created_at: string
+          headers: Json | null
+          id: string
+          note: string | null
+          payload: Json | null
+          processed: boolean
+          source: string
+        }
+        Insert: {
+          created_at?: string
+          headers?: Json | null
+          id?: string
+          note?: string | null
+          payload?: Json | null
+          processed?: boolean
+          source: string
+        }
+        Update: {
+          created_at?: string
+          headers?: Json | null
+          id?: string
+          note?: string | null
+          payload?: Json | null
+          processed?: boolean
+          source?: string
+        }
+        Relationships: []
       }
       family_vat_default: {
         Row: {
@@ -4287,6 +4340,56 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "accounts"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      ingredient_family_template: {
+        Row: {
+          accounting_category: string | null
+          code: string
+          created_at: string
+          gpc_brick_code: string | null
+          icon: string | null
+          id: string
+          name_en: string | null
+          name_es: string
+          parent_code: string | null
+          position: number
+          updated_at: string
+        }
+        Insert: {
+          accounting_category?: string | null
+          code: string
+          created_at?: string
+          gpc_brick_code?: string | null
+          icon?: string | null
+          id?: string
+          name_en?: string | null
+          name_es: string
+          parent_code?: string | null
+          position?: number
+          updated_at?: string
+        }
+        Update: {
+          accounting_category?: string | null
+          code?: string
+          created_at?: string
+          gpc_brick_code?: string | null
+          icon?: string | null
+          id?: string
+          name_en?: string | null
+          name_es?: string
+          parent_code?: string | null
+          position?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ingredient_family_template_parent_code_fkey"
+            columns: ["parent_code"]
+            isOneToOne: false
+            referencedRelation: "ingredient_family_template"
+            referencedColumns: ["code"]
           },
         ]
       }
@@ -10535,6 +10638,7 @@ export type Database = {
           raw_item_id: string
         }[]
       }
+      adapt_hubrise_order: { Args: { p_sale_id: string }; Returns: number }
       adapt_lastapp_order: { Args: { p_sale_id: string }; Returns: number }
       add_ingredient_to_recipes: {
         Args: {
@@ -10819,6 +10923,7 @@ export type Database = {
         Args: { p_account_id: string; p_permission_key: string }
         Returns: boolean
       }
+      hubrise_money: { Args: { p: string }; Returns: number }
       invoice_required_role: { Args: { p_invoice_id: string }; Returns: string }
       item_movements: {
         Args: {
@@ -11123,6 +11228,15 @@ export type Database = {
         Returns: string
       }
       normalize_ingredient_name: { Args: { p_text: string }; Returns: string }
+      onboard_account: {
+        Args: {
+          p_account_id: string
+          p_admin_user_id?: string
+          p_plan_code?: string
+          p_status?: string
+        }
+        Returns: Json
+      }
       preview_add_ingredient: {
         Args: {
           p_cut?: string
@@ -11445,6 +11559,10 @@ export type Database = {
           sembrados: number
         }[]
       }
+      seed_ingredient_families_for_account: {
+        Args: { p_account_id: string }
+        Returns: number
+      }
       seed_lastapp_catalog: {
         Args: { p_account_id: string }
         Returns: {
@@ -11679,9 +11797,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },
