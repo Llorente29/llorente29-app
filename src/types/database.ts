@@ -8650,6 +8650,7 @@ export type Database = {
           is_active: boolean
           location_id: string | null
           opened_at: string | null
+          order_status: string | null
           paid: number | null
           payment_method: string | null
           raw_products: string | null
@@ -8686,6 +8687,7 @@ export type Database = {
           is_active?: boolean
           location_id?: string | null
           opened_at?: string | null
+          order_status?: string | null
           paid?: number | null
           payment_method?: string | null
           raw_products?: string | null
@@ -8722,6 +8724,7 @@ export type Database = {
           is_active?: boolean
           location_id?: string | null
           opened_at?: string | null
+          order_status?: string | null
           paid?: number | null
           payment_method?: string | null
           raw_products?: string | null

@@ -109,6 +109,18 @@ function mapStatus(s: string | null | undefined): CanonStatus {
   return "open";
 }
 
+// estado del PEDIDO de plataforma (espejo de HubRise en sale.order_status).
+// Solo deja pasar los valores admitidos por el CHECK; cualquier otro -> null
+// (nunca rompe el upsert por un estado inesperado).
+const ORDER_STATUS_ALLOWED = new Set([
+  "new", "received", "accepted", "in_preparation", "awaiting_collection",
+  "awaiting_shipment", "in_delivery", "completed", "rejected", "cancelled", "delivery_failed",
+]);
+function mapOrderStatus(s: string | null | undefined): string | null {
+  const t = (s ?? "").toLowerCase();
+  return ORDER_STATUS_ALLOWED.has(t) ? t : null;
+}
+
 // Suma de descuentos (price_off) de un pedido HubRise.
 function sumDiscounts(order: Record<string, unknown>): number | null {
   const arr = order["discounts"];
@@ -191,6 +203,7 @@ async function upsertSale(
     external_brand_text: (order["connection_name"] as string | null) ?? null,
     external_location_text: (order["location_id"] as string | null) ?? null,
     external_tab_ref: orderId, // HubRise: el id del pedido también agrupa (no hay tab aparte)
+    order_status: mapOrderStatus(order["status"] as string | null),
     sold_at: (order["created_at"] as string | null) ?? new Date().toISOString(),
     total: money(order["total"]) ?? 0,
     delivery_cost: deliveryFee,
@@ -252,6 +265,12 @@ async function cancelByOrderId(
     p_sale_id: (sale as { id: string }).id, p_reason: reason,
   });
   if (cErr) { console.error(`cancel_sale ${orderId}: ${cErr.message}`); return false; }
+  // Espejo del estado de plataforma (rejected/cancelled/delivery_failed).
+  const os = mapOrderStatus(reason);
+  if (os) {
+    await sb.from("sale").update({ order_status: os })
+      .eq("id", (sale as { id: string }).id);
+  }
   return true;
 }
 
