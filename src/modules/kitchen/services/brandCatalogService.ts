@@ -38,6 +38,7 @@ export interface CatalogProduct {
   isAvailable: boolean
   needsReview: boolean
   modifierGroupCount: number
+  position: number
 }
 
 export interface CatalogCategory {
@@ -155,10 +156,11 @@ export async function listCategoriesWithProducts(
   // Productos (item) de la marca
   const { data: items, error: miErr } = await supabase!
     .from('menu_item')
-    .select('id, name, short_name, description, photo_url, price, product_type, menu_category_id, recipe_item_id, is_active, is_available, needs_review')
+    .select('id, name, short_name, description, photo_url, price, product_type, menu_category_id, recipe_item_id, is_active, is_available, needs_review, position')
     .eq('account_id', accountId)
     .eq('brand_id', brandId)
     .eq('product_type', 'item')
+    .order('position', { ascending: true })
     .order('name', { ascending: true })
   if (miErr) throw new Error(`Error listando productos: ${miErr.message}`)
 
@@ -192,6 +194,7 @@ export async function listCategoriesWithProducts(
     isAvailable: i.is_available !== false,
     needsReview: i.needs_review === true,
     modifierGroupCount: groupCountByItem.get(i.id as string) ?? 0,
+    position: Number(i.position ?? 0),
   })
 
   const categories: CatalogCategory[] = (cats ?? []).map((c) => ({

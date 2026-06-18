@@ -35,6 +35,7 @@ import {
   type SalesChannel as SalesChannelType,
 } from '@/modules/kitchen/services/channelRateService'
 import { uploadMenuPhoto, deleteMenuPhoto } from '@/modules/kitchen/services/menuPhotoService'
+import ProductPlacementSection from '@/modules/kitchen/components/ProductPlacementSection'
 import { supabase } from '@/lib/supabase'
 import type { MenuItem, MenuItemUpdate, RecipeItem } from '@/types/kitchen'
 
@@ -156,7 +157,6 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
   const [recipeCost, setRecipeCost] = useState<number | null>(null)
   const [brandName, setBrandName] = useState<string>('')
   const [channelLogos, setChannelLogos] = useState<Record<string, string>>({})
-  const [locations, setLocations] = useState<{ id: string; name: string }[]>([])
 
   // Edición de identidad
   const [editing, setEditing] = useState(false)
@@ -252,8 +252,6 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
             if (!cancelled) setChannelLogos(map)
           }
         })
-      supabase.from('locations').select('id, name').eq('account_id', item.accountId)
-        .then(({ data }) => { if (!cancelled && data) setLocations(data as { id: string; name: string }[]) })
     }
     return () => { cancelled = true }
   }, [item?.id, item?.accountId, item?.recipeItemId, item?.brandId])
@@ -473,7 +471,6 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
   }
 
   const hasRecipe = !!item.recipeItemId
-  const locationNames = locations.length > 0 ? locations.map(l => l.name) : ['Alcalá', 'Carabanchel', 'Pza Castilla']
 
   // ─── Render ─────────────────────────────────────────────────────────────
 
@@ -941,27 +938,17 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
           </div>
         </CollapsibleSection>
 
-        {/* S10 — Marcas y ubicaciones */}
-        <CollapsibleSection id="s-marcas" icon="map-pin" title="Marcas y ubicaciones">
-          <div className="mb-3">
-            <div className="text-[11px] uppercase tracking-wide text-stone-400 mb-1.5">Marca</div>
-            <span className="inline-flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg bg-stone-100">
-              <span className="w-5 h-5 rounded bg-[#D67442] flex items-center justify-center text-white text-[10px] font-bold">
-                {(brandName || 'P').charAt(0)}
-              </span>
-              {brandName || '—'}
-            </span>
-          </div>
-          <div>
-            <div className="text-[11px] uppercase tracking-wide text-stone-400 mb-1.5">Ubicaciones</div>
-            <div className="flex flex-wrap gap-1.5">
-              {locationNames.map((n) => (
-                <span key={n} className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg bg-stone-100 text-stone-600">
-                  <MapPin size={13} className="text-stone-400" /> {n}
-                </span>
-              ))}
-            </div>
-          </div>
+        {/* S10 — Marcas, categoría y disponibilidad (interactivo) */}
+        <CollapsibleSection id="s-marcas" icon="map-pin" title="Marcas y categoría" defaultOpen>
+          <ProductPlacementSection
+            accountId={item.accountId}
+            menuItemId={item.id}
+            recipeItemId={item.recipeItemId}
+            currentBrandId={item.brandId}
+            productName={item.name}
+            basePrice={item.price}
+            onChanged={refreshItem}
+          />
         </CollapsibleSection>
 
         {/* S11 — Avanzado */}

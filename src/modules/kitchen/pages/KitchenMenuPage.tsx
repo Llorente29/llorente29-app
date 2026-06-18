@@ -14,7 +14,7 @@
 // Patrón: useApp() + useActiveAccount() + useIsMobile(), igual que KitchenItemsPage.
 
 import { useEffect, useMemo, useState } from 'react'
-import { Search, ChevronDown, ChevronRight, CircleDashed, CheckCircle2, AlertTriangle, UtensilsCrossed, Package, Link2Off } from 'lucide-react'
+import { Search, ChevronDown, ChevronRight, CircleDashed, CheckCircle2, AlertTriangle, UtensilsCrossed, Package, Link2Off, Plus, FolderPlus, ArrowRightLeft, X, Undo2, Info, ArrowUp, ArrowDown, Trash2 } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import {
   listBrandsWithCatalog,
@@ -24,10 +24,13 @@ import {
   type CatalogCategory,
   type CatalogCombo,
 } from '@/modules/kitchen/services/brandCatalogService'
-import { getMenuItemEconomics } from '@/modules/kitchen/services/menuItemService'
+import { getMenuItemEconomics, setMenuItemCategoryBulk, reorderMenuItems } from '@/modules/kitchen/services/menuItemService'
+import { listMenuCategories, reorderMenuCategories, deactivateMenuCategory, updateMenuCategory, type MenuCategory } from '@/modules/kitchen/services/menuCategoryService'
 import { getReliability, type SalesReliability } from '@/modules/kitchen/services/salesReliabilityService'
 import CatalogProductDetailPage from '@/modules/kitchen/pages/CatalogProductDetailPage'
 import SalesExceptionsPage from '@/modules/kitchen/pages/SalesExceptionsPage'
+import NewMenuItemModal from '@/modules/kitchen/components/NewMenuItemModal'
+import NewCategoryModal from '@/modules/kitchen/components/NewCategoryModal'
 import type { MenuItemEconomics } from '@/types/kitchen'
 
 function formatEur(value: number | null): string {
@@ -49,6 +52,7 @@ export default function KitchenMenuPage() {
   const [brands, setBrands] = useState<CatalogBrand[]>([])
   const [selectedBrandId, setSelectedBrandId] = useState<string | null>(null)
   const [categories, setCategories] = useState<CatalogCategory[]>([])
+  const [allCats, setAllCats] = useState<MenuCategory[]>([])
   const [combos, setCombos] = useState<CatalogCombo[]>([])
   const [economics, setEconomics] = useState<Map<string, MenuItemEconomics>>(new Map())
   const [reliability, setReliability] = useState<SalesReliability | null>(null)
@@ -59,6 +63,15 @@ export default function KitchenMenuPage() {
   const [expandedCombos, setExpandedCombos] = useState<Set<string>>(new Set())
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null)
   const [showExceptions, setShowExceptions] = useState(false)
+  const [showNewProduct, setShowNewProduct] = useState(false)
+  const [showNewCategory, setShowNewCategory] = useState(false)
+  // Capa 1 — organizar: selección múltiple + mover en bloque + deshacer
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [moveTarget, setMoveTarget] = useState<string>('') // '' = sin elegir; '__none__' = Sin categoría; else categoryId
+  const [moving, setMoving] = useState(false)
+  const [undo, setUndo] = useState<{ label: string; revert: () => Promise<void> } | null>(null)
+  const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set())
+  const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string; count: number } | null>(null)
 
   // Cargar marcas con catálogo
   useEffect(() => {
@@ -99,11 +112,13 @@ export default function KitchenMenuPage() {
       listCategoriesWithProducts(activeAccountId, selectedBrandId),
       listCombos(activeAccountId, selectedBrandId),
       getMenuItemEconomics(selectedBrandId).catch(() => [] as MenuItemEconomics[]),
+      listMenuCategories(activeAccountId, selectedBrandId).catch(() => [] as MenuCategory[]),
     ])
-      .then(([cats, cbs, econ]) => {
+      .then(([cats, cbs, econ, all]) => {
         if (cancelled) return
         setCategories(cats)
         setCombos(cbs)
+        setAllCats(all)
         const m = new Map<string, MenuItemEconomics>()
         for (const e of econ) m.set(e.menuItemId, e)
         setEconomics(m)
@@ -126,14 +141,31 @@ export default function KitchenMenuPage() {
     return { total, withRecipe, pct: total > 0 ? Math.round((withRecipe / total) * 100) : 0 }
   }, [selectedBrand])
 
+  // Todas las categorías de la marca como secciones (incluidas las VACÍAS, para
+  // que el usuario vea su estructura y no piense que "desaparecieron") + el grupo
+  // "Sin categoría" al final si hay productos sin clasificar.
+  const displayCategories = useMemo<CatalogCategory[]>(() => {
+    const withProducts = new Map(categories.map((c) => [c.id, c]))
+    const out: CatalogCategory[] = allCats.map((c) => ({
+      id: c.id,
+      name: c.name,
+      emoji: c.emoji,
+      position: c.position,
+      products: withProducts.get(c.id)?.products ?? [],
+    }))
+    const sin = categories.find((c) => c.id === '__sin_categoria__')
+    if (sin && sin.products.length > 0) out.push(sin)
+    return out
+  }, [allCats, categories])
+
   // Filtro de búsqueda
   const filteredCategories = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return categories
-    return categories
+    if (!q) return displayCategories
+    return displayCategories
       .map((c) => ({ ...c, products: c.products.filter((p) => p.name.toLowerCase().includes(q)) }))
       .filter((c) => c.products.length > 0)
-  }, [categories, search])
+  }, [displayCategories, search])
 
   const filteredCombos = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -167,6 +199,201 @@ export default function KitchenMenuPage() {
       getReliability(activeAccountId).then(setReliability).catch(() => {})
     }
   }
+
+  // Tras crear producto o categoría: cerrar el modal y recargar la carta de la
+  // marca (categorías + combos + conteos de marca + economía por canal).
+  function refreshAfterCreate() {
+    setShowNewProduct(false)
+    setShowNewCategory(false)
+    if (!activeAccountId || !selectedBrandId) return
+    listCategoriesWithProducts(activeAccountId, selectedBrandId).then(setCategories).catch(() => {})
+    listCombos(activeAccountId, selectedBrandId).then(setCombos).catch(() => {})
+    listMenuCategories(activeAccountId, selectedBrandId).then(setAllCats).catch(() => {})
+    listBrandsWithCatalog(activeAccountId).then(setBrands).catch(() => {})
+    getMenuItemEconomics(selectedBrandId)
+      .then((econ) => {
+        const m = new Map<string, MenuItemEconomics>()
+        for (const e of econ) m.set(e.menuItemId, e)
+        setEconomics(m)
+      })
+      .catch(() => {})
+  }
+
+  // ── Capa 1: organizar la carta (mover/recategorizar) ──────────────────────
+  const isLicensed = selectedBrand?.ownershipType === 'licensed'
+
+  // Categoría actual de cada producto (para poder deshacer un movimiento).
+  const productCategoryById = useMemo(() => {
+    const m = new Map<string, string | null>()
+    for (const c of categories) for (const p of c.products) m.set(p.id, p.categoryId)
+    return m
+  }, [categories])
+
+  // Al cambiar de marca: limpiar selección y deshacer (no arrastrar estado).
+  useEffect(() => {
+    setSelectedIds(new Set())
+    setMoveTarget('')
+    setUndo(null)
+    setCollapsedCats(new Set())
+    setConfirmDelete(null)
+  }, [selectedBrandId])
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const n = new Set(prev)
+      if (n.has(id)) n.delete(id); else n.add(id)
+      return n
+    })
+  }
+
+  function setCategorySelection(cat: CatalogCategory, on: boolean) {
+    setSelectedIds((prev) => {
+      const n = new Set(prev)
+      for (const p of cat.products) { if (on) n.add(p.id); else n.delete(p.id) }
+      return n
+    })
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set())
+    setMoveTarget('')
+  }
+
+  function reloadCatalogProducts() {
+    if (!activeAccountId || !selectedBrandId) return
+    listCategoriesWithProducts(activeAccountId, selectedBrandId).then(setCategories).catch(() => {})
+    listMenuCategories(activeAccountId, selectedBrandId).then(setAllCats).catch(() => {})
+    listBrandsWithCatalog(activeAccountId).then(setBrands).catch(() => {})
+  }
+
+  // Mover en bloque los seleccionados al destino elegido. Guarda el origen de
+  // cada uno para poder deshacer.
+  async function applyBulkMove() {
+    if (selectedIds.size === 0 || moveTarget === '' || moving) return
+    const ids = Array.from(selectedIds)
+    const target = moveTarget === '__none__' ? null : moveTarget
+    const catName = moveTarget === '__none__'
+      ? 'Sin categoría'
+      : (categories.find((c) => c.id === moveTarget)?.name ?? 'otra categoría')
+    const prev = ids.map((id) => ({ id, categoryId: productCategoryById.get(id) ?? null }))
+    setMoving(true)
+    setError(null)
+    try {
+      await setMenuItemCategoryBulk(ids, target)
+      clearSelection()
+      reloadCatalogProducts()
+      setUndo({
+        label: `${ids.length} producto${ids.length > 1 ? 's movidos' : ' movido'} a ${catName}`,
+        revert: async () => {
+          const groups = new Map<string | null, string[]>()
+          for (const p of prev) {
+            const arr = groups.get(p.categoryId) ?? []
+            arr.push(p.id); groups.set(p.categoryId, arr)
+          }
+          for (const [cat, gids] of groups) await setMenuItemCategoryBulk(gids, cat)
+        },
+      })
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setMoving(false)
+    }
+  }
+
+  // Deshacer genérico: ejecuta la función de reversión guardada (mover, borrar…).
+  async function runUndo() {
+    if (!undo || moving) return
+    setMoving(true)
+    setError(null)
+    try {
+      await undo.revert()
+      setUndo(null)
+      reloadCatalogProducts()
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setMoving(false)
+    }
+  }
+
+  // ── Reordenar categorías (↑/↓) ────────────────────────────────────────────
+  // Recalcula posiciones 0..n-1 de TODAS las categorías tras el intercambio, así
+  // funciona aunque hoy estén sin orden real. Optimista: actualiza UI y persiste.
+  async function moveCategory(catId: string, dir: -1 | 1) {
+    if (moving) return
+    const idx = allCats.findIndex((c) => c.id === catId)
+    const j = idx + dir
+    if (idx < 0 || j < 0 || j >= allCats.length) return
+    const next = [...allCats]
+    ;[next[idx], next[j]] = [next[j], next[idx]]
+    const renum = next.map((c, i) => ({ ...c, position: i }))
+    setAllCats(renum)               // optimista
+    setMoving(true); setError(null)
+    try {
+      await reorderMenuCategories(renum.map((c) => ({ id: c.id, position: c.position })))
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e))
+      reloadCatalogProducts()       // revertir a la verdad
+    } finally {
+      setMoving(false)
+    }
+  }
+
+  // ── Reordenar productos dentro de una categoría (↑/↓) ──────────────────────
+  async function moveProduct(cat: CatalogCategory, productId: string, dir: -1 | 1) {
+    if (moving) return
+    const list = cat.products
+    const idx = list.findIndex((p) => p.id === productId)
+    const j = idx + dir
+    if (idx < 0 || j < 0 || j >= list.length) return
+    const nextProducts = [...list]
+    ;[nextProducts[idx], nextProducts[j]] = [nextProducts[j], nextProducts[idx]]
+    // Optimista: reescribir el array de productos de ESA categoría en el estado.
+    setCategories((prev) => prev.map((c) => (c.id === cat.id ? { ...c, products: nextProducts } : c)))
+    setMoving(true); setError(null)
+    try {
+      await reorderMenuItems(nextProducts.map((p, i) => ({ id: p.id, position: i })))
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e))
+      reloadCatalogProducts()
+    } finally {
+      setMoving(false)
+    }
+  }
+
+  // ── Borrar (desactivar) una categoría ──────────────────────────────────────
+  // Soft-delete: sus productos NO se borran; caen a "Sin categoría". Confirmación
+  // con el conteo + deshacer (reactiva la categoría).
+  async function confirmDeleteCategory() {
+    if (!confirmDelete || moving) return
+    const { id, name } = confirmDelete
+    setMoving(true); setError(null)
+    try {
+      await deactivateMenuCategory(id)
+      setConfirmDelete(null)
+      reloadCatalogProducts()
+      setUndo({
+        label: `Categoría «${name}» eliminada`,
+        revert: async () => { await updateMenuCategory(id, { isActive: true }) },
+      })
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setMoving(false)
+    }
+  }
+
+  function toggleCollapse(catId: string) {
+    setCollapsedCats((prev) => {
+      const n = new Set(prev)
+      if (n.has(catId)) n.delete(catId); else n.add(catId)
+      return n
+    })
+  }
+
+  // Opciones del selector "Mover a…": todas las categorías reales de la marca
+  // (incluidas las vacías, que son destino válido) — no solo las que tienen productos.
+  const moveOptions = useMemo(() => allCats, [allCats])
 
   if (selectedProductId) {
     return (
@@ -224,7 +451,34 @@ export default function KitchenMenuPage() {
             marca · {selectedBrand.ownershipType === 'own' ? 'propia' : 'cedida'}
           </span>
         )}
+        {selectedBrand && (
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={() => setShowNewCategory(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+            >
+              <FolderPlus className="w-4 h-4" /> Categoría
+            </button>
+            <button
+              onClick={() => setShowNewProduct(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg font-medium bg-[#1E3A5F] text-white hover:opacity-90"
+            >
+              <Plus className="w-4 h-4" /> Añadir producto
+            </button>
+          </div>
+        )}
       </div>
+
+      {/* Aviso marca cedida: hoy no hay catalog_source (deuda CP2); usamos
+          ownership_type como proxy honesto: las cedidas suelen venir del TPV. */}
+      {isLicensed && (
+        <div className="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 flex items-start gap-2">
+          <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+          <p className="text-xs text-amber-800">
+            Esta marca es <span className="font-medium">cedida</span>. Sus cambios podrían gestionarse desde el TPV del titular; al publicar (próximamente) decidirás qué carta manda.
+          </p>
+        </div>
+      )}
 
       {/* KPIs */}
       {selectedBrand && (
@@ -274,6 +528,43 @@ export default function KitchenMenuPage() {
         <div className="mb-4 p-3 rounded-lg bg-red-50 text-red-700 text-sm">{error}</div>
       )}
 
+      {/* Barra de acción en bloque: aparece al seleccionar productos. Cubre mover
+          uno o muchos a la vez (arranque en frío de los "Sin categoría"). */}
+      {selectedIds.size > 0 && (
+        <div className="sticky top-2 z-20 mb-4 p-3 rounded-xl bg-[#1E3A5F] text-white flex items-center gap-3 flex-wrap shadow-lg">
+          <span className="text-sm font-medium">
+            {selectedIds.size} seleccionado{selectedIds.size > 1 ? 's' : ''}
+          </span>
+          <span className="text-sm text-white/70">Mover a</span>
+          <select
+            value={moveTarget}
+            onChange={(e) => setMoveTarget(e.target.value)}
+            disabled={moving}
+            className="text-sm rounded-lg px-2.5 py-1.5 bg-white text-gray-900 border-0"
+          >
+            <option value="">elige categoría…</option>
+            {moveOptions.map((c) => (
+              <option key={c.id} value={c.id}>{c.emoji ? `${c.emoji} ` : ''}{c.name}</option>
+            ))}
+            <option value="__none__">Sin categoría</option>
+          </select>
+          <button
+            onClick={applyBulkMove}
+            disabled={moving || moveTarget === ''}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg font-medium bg-white text-[#1E3A5F] hover:opacity-90 disabled:opacity-40"
+          >
+            <ArrowRightLeft className="w-4 h-4" /> {moving ? 'Moviendo…' : 'Mover'}
+          </button>
+          <button
+            onClick={clearSelection}
+            disabled={moving}
+            className="ml-auto inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-lg text-white/80 hover:bg-white/10"
+          >
+            <X className="w-4 h-4" /> Cancelar
+          </button>
+        </div>
+      )}
+
       {loadingCatalog ? (
         <div className="text-sm text-gray-500">Cargando catálogo…</div>
       ) : (
@@ -281,10 +572,48 @@ export default function KitchenMenuPage() {
           {/* Categorías + productos */}
           {filteredCategories.map((cat) => (
             <div key={cat.id} className="mb-6">
-              <h2 className="text-base font-medium text-gray-900 mb-2">
-                {cat.emoji ? `${cat.emoji} ` : ''}{cat.name}
-              </h2>
-              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+              {(() => {
+                const isReal = cat.id !== '__sin_categoria__'
+                const catIdx = allCats.findIndex((c) => c.id === cat.id)
+                const collapsed = collapsedCats.has(cat.id)
+                return (
+                  <>
+                    <div className="flex items-center gap-2 mb-2">
+                      <button
+                        onClick={() => toggleCollapse(cat.id)}
+                        className="text-gray-400 hover:text-gray-700"
+                        title={collapsed ? 'Desplegar' : 'Plegar'}
+                        aria-label={collapsed ? 'Desplegar categoría' : 'Plegar categoría'}
+                      >
+                        {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                      </button>
+                      <input
+                        type="checkbox"
+                        checked={cat.products.length > 0 && cat.products.every((p) => selectedIds.has(p.id))}
+                        onChange={(e) => setCategorySelection(cat, e.target.checked)}
+                        className="w-4 h-4 rounded border-gray-300 cursor-pointer"
+                        title="Seleccionar todos"
+                      />
+                      <h2 className="text-base font-medium text-gray-900">
+                        {cat.emoji ? `${cat.emoji} ` : ''}{cat.name}
+                        <span className="ml-2 text-xs font-normal text-gray-400">{cat.products.length}</span>
+                      </h2>
+                      {isReal && (
+                        <div className="ml-auto flex items-center gap-1">
+                          <button onClick={() => moveCategory(cat.id, -1)} disabled={moving || catIdx <= 0}
+                            className="p-1 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent"
+                            title="Subir" aria-label="Subir categoría"><ArrowUp className="w-4 h-4" /></button>
+                          <button onClick={() => moveCategory(cat.id, 1)} disabled={moving || catIdx >= allCats.length - 1}
+                            className="p-1 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent"
+                            title="Bajar" aria-label="Bajar categoría"><ArrowDown className="w-4 h-4" /></button>
+                          <button onClick={() => setConfirmDelete({ id: cat.id, name: cat.name, count: cat.products.length })} disabled={moving}
+                            className="p-1 rounded text-gray-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-30"
+                            title="Borrar categoría" aria-label="Borrar categoría"><Trash2 className="w-4 h-4" /></button>
+                        </div>
+                      )}
+                    </div>
+                    {!collapsed && (
+                    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
                 {cat.products.map((p, idx) => {
                   const econ = economics.get(p.id)
                   const hasRecipe = p.recipeItemId !== null
@@ -292,8 +621,16 @@ export default function KitchenMenuPage() {
                     <div
                       key={p.id}
                       onClick={() => setSelectedProductId(p.id)}
-                      className={`flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 ${idx < cat.products.length - 1 ? 'border-b border-gray-100' : ''}`}
+                      className={`flex items-center gap-3 px-4 py-3 cursor-pointer ${selectedIds.has(p.id) ? 'bg-[#1E3A5F]/5' : 'hover:bg-gray-50'} ${idx < cat.products.length - 1 ? 'border-b border-gray-100' : ''}`}
                     >
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(p.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={() => toggleSelect(p.id)}
+                        className="w-4 h-4 rounded border-gray-300 cursor-pointer shrink-0"
+                        title="Seleccionar"
+                      />
                       <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center text-gray-400 shrink-0">
                         {p.photoUrl
                           ? <img src={p.photoUrl} alt="" className="w-10 h-10 rounded-lg object-cover" />
@@ -345,10 +682,27 @@ export default function KitchenMenuPage() {
                           </div>
                         )}
                       </div>
+                      <div className="shrink-0 flex flex-col -my-1" onClick={(e) => e.stopPropagation()}>
+                        <button onClick={() => moveProduct(cat, p.id, -1)} disabled={moving || idx <= 0}
+                          className="p-0.5 text-gray-300 hover:text-gray-700 disabled:opacity-20"
+                          title="Subir" aria-label="Subir producto"><ArrowUp className="w-3.5 h-3.5" /></button>
+                        <button onClick={() => moveProduct(cat, p.id, 1)} disabled={moving || idx >= cat.products.length - 1}
+                          className="p-0.5 text-gray-300 hover:text-gray-700 disabled:opacity-20"
+                          title="Bajar" aria-label="Bajar producto"><ArrowDown className="w-3.5 h-3.5" /></button>
+                      </div>
                     </div>
                   )
                 })}
+                {cat.products.length === 0 && (
+                  <div className="px-4 py-3 text-xs text-gray-400">
+                    Aún sin productos · selecciónalos arriba y usa «Mover a {cat.name}»
+                  </div>
+                )}
               </div>
+                    )}
+                  </>
+                )
+              })()}
             </div>
           ))}
 
@@ -403,6 +757,67 @@ export default function KitchenMenuPage() {
             <p className="text-sm text-gray-500">Sin resultados para “{search}”.</p>
           )}
         </>
+      )}
+
+      {undo && (
+        <div className="sticky bottom-3 z-20 mt-4 p-3 rounded-xl bg-gray-900 text-white flex items-center gap-3 shadow-lg max-w-md mx-auto">
+          <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />
+          <span className="text-sm flex-1">{undo.label}</span>
+          <button
+            onClick={runUndo}
+            disabled={moving}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg font-medium bg-white/10 hover:bg-white/20 disabled:opacity-50"
+          >
+            <Undo2 className="w-4 h-4" /> Deshacer
+          </button>
+          <button onClick={() => setUndo(null)} className="text-white/60 hover:text-white" aria-label="Cerrar">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !moving && setConfirmDelete(null)}>
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-md border border-gray-200" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-3.5 border-b border-gray-200 flex items-center gap-2">
+              <Trash2 className="w-4 h-4 text-red-600" />
+              <h3 className="text-base font-medium text-gray-900">Borrar categoría</h3>
+            </div>
+            <div className="px-5 py-4 text-sm text-gray-700">
+              Vas a quitar la categoría <span className="font-medium">«{confirmDelete.name}»</span>.
+              {confirmDelete.count > 0 ? (
+                <> Sus <span className="font-medium">{confirmDelete.count} producto{confirmDelete.count > 1 ? 's' : ''}</span> no se borran: pasan a «Sin categoría».</>
+              ) : ' Está vacía.'}
+            </div>
+            <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-gray-200 bg-gray-50 rounded-b-xl">
+              <button onClick={() => setConfirmDelete(null)} disabled={moving}
+                className="px-3 py-1.5 text-sm rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-50">Cancelar</button>
+              <button onClick={confirmDeleteCategory} disabled={moving}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm rounded-lg font-medium bg-red-600 text-white hover:opacity-90 disabled:opacity-50">
+                <Trash2 className="w-4 h-4" /> {moving ? 'Borrando…' : 'Borrar categoría'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showNewCategory && activeAccountId && selectedBrand && (
+        <NewCategoryModal
+          accountId={activeAccountId}
+          brandId={selectedBrand.id}
+          brandName={selectedBrand.name}
+          onClose={() => setShowNewCategory(false)}
+          onCreated={refreshAfterCreate}
+        />
+      )}
+      {showNewProduct && activeAccountId && selectedBrand && (
+        <NewMenuItemModal
+          accountId={activeAccountId}
+          brandId={selectedBrand.id}
+          brandName={selectedBrand.name}
+          onClose={() => setShowNewProduct(false)}
+          onCreated={refreshAfterCreate}
+        />
       )}
     </div>
   )

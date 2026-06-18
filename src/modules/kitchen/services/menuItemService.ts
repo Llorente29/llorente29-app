@@ -247,6 +247,247 @@ export async function createMenuItem(input: MenuItemInsert): Promise<MenuItem> {
   return rowToMenuItem(data)
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// createBaseMenuItem — alta de producto BASE (CP1-a)
+// ─────────────────────────────────────────────────────────────────────
+// Crea un producto de carta con baja fricción (patrón Otter "create-then-cost"):
+// solo marca + nombre + precio (+ categoría opcional). El canal va NULL (el precio
+// por canal se ajusta luego con menu_item_override, CP1-b) y el escandallo se
+// vincula después en la ficha (CatalogProductDetailPage). NO usa MenuItemInsert
+// (que exige channelId/recipeItemId): el producto base no los tiene todavía.
+
+export interface CreateBaseMenuItemInput {
+  accountId: string
+  brandId: string
+  name: string
+  price: number
+  vatRate?: number
+  menuCategoryId?: string | null
+  description?: string | null
+  shortName?: string | null
+  createdBy?: string | null
+  createdByName?: string | null
+}
+
+export async function createBaseMenuItem(input: CreateBaseMenuItemInput): Promise<MenuItem> {
+  requireSupabase()
+
+  const name = input.name.trim()
+  if (name === '') throw new Error('El nombre del producto es obligatorio.')
+  if (!Number.isFinite(input.price) || input.price < 0) {
+    throw new Error('El precio debe ser un número válido.')
+  }
+
+  const { data, error } = await supabase!
+    .from('menu_item')
+    .insert({
+      account_id: input.accountId,
+      brand_id: input.brandId,
+      name,
+      price: input.price,
+      vat_rate: input.vatRate ?? 10,
+      product_type: 'item',
+      menu_category_id: input.menuCategoryId ?? null,
+      description: input.description?.trim() ? input.description.trim() : null,
+      short_name: input.shortName?.trim() ? input.shortName.trim() : null,
+      channel_id: null,        // base: el precio por canal se hace con override (CP1-b)
+      recipe_item_id: null,    // se vincula el escandallo después, en la ficha
+      is_available: true,
+      source: 'manual',
+      created_by: input.createdBy ?? null,
+      created_by_name: input.createdByName ?? null,
+    } as RowMenuItemInsert)
+    .select('*')
+    .single()
+
+  if (error) throw new Error(`Error creando producto: ${error.message}`)
+  return rowToMenuItem(data)
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Categoría de un producto (CP1 capa 1) — mover/recategorizar
+// ─────────────────────────────────────────────────────────────────────
+// Cambia SOLO menu_category_id (no toca precio, escandallo ni nada más). Pasar
+// null = mover a "Sin categoría". Confinado: no pasa por MenuItemUpdate.
+
+export async function setMenuItemCategory(
+  menuItemId: string,
+  categoryId: string | null,
+): Promise<void> {
+  requireSupabase()
+  const { error } = await supabase!
+    .from('menu_item')
+    .update({ menu_category_id: categoryId })
+    .eq('id', menuItemId)
+  if (error) throw new Error(`Error moviendo el producto de categoría: ${error.message}`)
+}
+
+// Mover en bloque (arranque en frío: clasificar muchos a la vez). Una sola query
+// con .in() — atómica para el usuario, sin 23 viajes.
+export async function setMenuItemCategoryBulk(
+  menuItemIds: string[],
+  categoryId: string | null,
+): Promise<void> {
+  requireSupabase()
+  if (menuItemIds.length === 0) return
+  const { error } = await supabase!
+    .from('menu_item')
+    .update({ menu_category_id: categoryId })
+    .in('id', menuItemIds)
+  if (error) throw new Error(`Error moviendo productos de categoría: ${error.message}`)
+}
+
+// Reordenar productos: aplica nuevas posiciones (una por producto). Se llama tras
+// subir/bajar una fila. Secuencial (listas pequeñas por categoría). Siembra el
+// orden 0..n-1 desde el caller, así que sirve aunque hoy todo esté a position 0.
+export async function reorderMenuItems(
+  updates: { id: string; position: number }[],
+): Promise<void> {
+  requireSupabase()
+  for (const u of updates) {
+    const { error } = await supabase!
+      .from('menu_item')
+      .update({ position: u.position })
+      .eq('id', u.id)
+    if (error) throw new Error(`Error reordenando productos: ${error.message}`)
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Mismo producto/receta en VARIAS MARCAS (ficha-cockpit) — marcas virtuales
+// ─────────────────────────────────────────────────────────────────────
+// Folvy comparte la RECETA (recipe_item, de la cuenta) y tiene un menu_item por
+// marca apuntando a ella (PVP propio por marca). Aquí: ver en qué marcas está,
+// añadir a una marca (crea/reactiva el menu_item copiando el PVP de origen) y
+// quitar (archiva el menu_item de esa marca). El coste/escandallo es único.
+
+export interface RecipeBrandPresence {
+  menuItemId: string
+  brandId: string
+  brandName: string
+  price: number
+}
+
+export interface AccountBrandLite {
+  id: string
+  name: string
+  ownershipType: string | null
+}
+
+export async function listBrandsForRecipe(
+  accountId: string,
+  recipeItemId: string,
+): Promise<RecipeBrandPresence[]> {
+  requireSupabase()
+  const { data: items, error } = await supabase!
+    .from('menu_item')
+    .select('id, brand_id, price')
+    .eq('account_id', accountId)
+    .eq('recipe_item_id', recipeItemId)
+    .is('archived_at', null)
+  if (error) throw new Error(`Error listando marcas del producto: ${error.message}`)
+  const brandIds = [...new Set((items ?? []).map((i) => i.brand_id as string))]
+  const names = new Map<string, string>()
+  if (brandIds.length > 0) {
+    const { data: bs } = await supabase!.from('brand').select('id, name').in('id', brandIds)
+    for (const b of bs ?? []) names.set(b.id as string, b.name as string)
+  }
+  return (items ?? []).map((i) => ({
+    menuItemId: i.id as string,
+    brandId: i.brand_id as string,
+    brandName: names.get(i.brand_id as string) ?? '—',
+    price: Number(i.price ?? 0),
+  }))
+}
+
+export async function listAccountBrands(accountId: string): Promise<AccountBrandLite[]> {
+  requireSupabase()
+  const { data, error } = await supabase!
+    .from('brand')
+    .select('id, name, ownership_type')
+    .eq('account_id', accountId)
+    .is('archived_at', null)
+    .order('name', { ascending: true })
+  if (error) throw new Error(`Error listando marcas: ${error.message}`)
+  return (data ?? []).map((b) => ({
+    id: b.id as string,
+    name: b.name as string,
+    ownershipType: (b.ownership_type as string) ?? null,
+  }))
+}
+
+// Añade la receta a una marca: crea el menu_item base (canal NULL) apuntando a la
+// MISMA receta, copiando el PVP de origen. Si existe uno archivado para esa
+// (marca, receta), lo reactiva (el índice único (brand,channel,recipe) cuenta
+// también los archivados → no se puede insertar otro).
+export async function addRecipeToBrand(input: {
+  accountId: string
+  recipeItemId: string
+  brandId: string
+  price: number
+  name: string
+  vatRate?: number
+  createdBy?: string | null
+  createdByName?: string | null
+}): Promise<MenuItem> {
+  requireSupabase()
+
+  const { data: existing, error: findErr } = await supabase!
+    .from('menu_item')
+    .select('id, archived_at')
+    .eq('brand_id', input.brandId)
+    .eq('recipe_item_id', input.recipeItemId)
+    .is('channel_id', null)
+    .maybeSingle()
+  if (findErr) throw new Error(`Error comprobando el producto en la marca: ${findErr.message}`)
+
+  if (existing) {
+    if ((existing as { archived_at: string | null }).archived_at === null) {
+      throw new Error('Este producto ya está en esa marca.')
+    }
+    const { data, error } = await supabase!
+      .from('menu_item')
+      .update({ is_active: true, archived_at: null, price: input.price })
+      .eq('id', (existing as { id: string }).id)
+      .select('*')
+      .single()
+    if (error) throw new Error(`Error reactivando el producto en la marca: ${error.message}`)
+    return rowToMenuItem(data)
+  }
+
+  const { data, error } = await supabase!
+    .from('menu_item')
+    .insert({
+      account_id: input.accountId,
+      brand_id: input.brandId,
+      recipe_item_id: input.recipeItemId,
+      name: input.name,
+      price: input.price,
+      vat_rate: input.vatRate ?? 10,
+      product_type: 'item',
+      channel_id: null,
+      is_available: true,
+      source: 'manual',
+      created_by: input.createdBy ?? null,
+      created_by_name: input.createdByName ?? null,
+    } as RowMenuItemInsert)
+    .select('*')
+    .single()
+  if (error) throw new Error(`Error añadiendo el producto a la marca: ${error.message}`)
+  return rowToMenuItem(data)
+}
+
+export async function getMenuItemCategoryId(menuItemId: string): Promise<string | null> {
+  requireSupabase()
+  const { data, error } = await supabase!
+    .from('menu_item')
+    .select('menu_category_id')
+    .eq('id', menuItemId)
+    .maybeSingle()
+  if (error) throw new Error(`Error leyendo la categoría del producto: ${error.message}`)
+  return (data?.menu_category_id as string | null) ?? null
+}
+
 export async function updateMenuItem(
   id: string,
   patch: MenuItemUpdate
