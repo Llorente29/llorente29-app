@@ -10631,6 +10631,7 @@ export type Database = {
         }
         Returns: number
       }
+      _require_manage_admins: { Args: never; Returns: undefined }
       _sale_line_raw_consumption: {
         Args: { p_sale_line_id: string }
         Returns: {
@@ -10638,6 +10639,7 @@ export type Database = {
           raw_item_id: string
         }[]
       }
+      _user_can_manage_admins: { Args: { p_user_id: string }; Returns: boolean }
       adapt_hubrise_order: { Args: { p_sale_id: string }; Returns: number }
       adapt_lastapp_order: { Args: { p_sale_id: string }; Returns: number }
       add_ingredient_to_recipes: {
@@ -10854,6 +10856,15 @@ export type Database = {
           out_recipe_item_id: string
         }[]
       }
+      create_platform_admin_tx: {
+        Args: {
+          p_created_by: string
+          p_full_name: string
+          p_role: string
+          p_user_id: string
+        }
+        Returns: string
+      }
       current_user_account_ids: { Args: never; Returns: string[] }
       current_user_can_approve_invoice: {
         Args: { p_invoice_id: string }
@@ -10873,6 +10884,7 @@ export type Database = {
         Returns: boolean
       }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
+      default_permissions_for_role: { Args: { p_role: string }; Returns: Json }
       delete_account_tx: {
         Args: { p_account_id: string; p_admin_user_id: string }
         Returns: undefined
@@ -10914,6 +10926,10 @@ export type Database = {
           lines_created: number
           per_person_today: number
         }[]
+      }
+      get_auth_user_id_by_email: {
+        Args: { p_created_by: string; p_email: string }
+        Returns: string
       }
       get_effective_permissions: {
         Args: { p_account_id: string }
@@ -11080,6 +11096,30 @@ export type Database = {
           pista_productos: string
           source: string
           ventas: number
+        }[]
+      }
+      list_platform_admins: {
+        Args: never
+        Returns: {
+          active: boolean
+          can_archive_accounts: boolean
+          can_create_accounts: boolean
+          can_delete_accounts: boolean
+          can_edit_seed_data: boolean
+          can_impersonate: boolean
+          can_manage_admins: boolean
+          can_reset_2fa_of_others: boolean
+          can_send_global_notifications: boolean
+          can_suspend_accounts: boolean
+          can_view_audit_log: boolean
+          can_view_system_health: boolean
+          created_at: string
+          email: string
+          full_name: string
+          id: string
+          last_login_at: string
+          role: string
+          user_id: string
         }[]
       }
       list_platform_events: {
@@ -11609,6 +11649,18 @@ export type Database = {
       }
       seed_vacation_settings_for_account: {
         Args: { p_account_id: string }
+        Returns: undefined
+      }
+      set_platform_admin_active: {
+        Args: { p_active: boolean; p_admin_id: string }
+        Returns: undefined
+      }
+      set_platform_admin_permissions: {
+        Args: { p_admin_id: string; p_permissions: Json }
+        Returns: undefined
+      }
+      set_platform_admin_role: {
+        Args: { p_admin_id: string; p_role: string }
         Returns: undefined
       }
       set_stock_level: {

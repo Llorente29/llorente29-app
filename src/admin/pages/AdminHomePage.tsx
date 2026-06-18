@@ -29,15 +29,15 @@ const SECTIONS: Section[] = [
     to: '/_admin/auditoria',
   },
   {
-    key: 'metricas',
-    title: 'Métricas',
-    description: 'Indicadores de la plataforma: clientes activos, uso, crecimiento.',
-    to: null,
-  },
-  {
     key: 'staff',
     title: 'Staff',
     description: 'Gestión de administradores de plataforma y sus permisos.',
+    to: '/_admin/staff',
+  },
+  {
+    key: 'metricas',
+    title: 'Métricas',
+    description: 'Indicadores de la plataforma: clientes activos, uso, crecimiento.',
     to: null,
   },
   {
