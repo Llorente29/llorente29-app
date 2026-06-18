@@ -21,7 +21,10 @@
 //        Nunca se deduce del producto (principio de marca estable).
 //
 // SEGURIDAD (frontera): HubRise firma cada request con
-//   X-HubRise-Hmac-SHA256 = base64( HMAC_SHA256( body_crudo, HUBRISE_WEBHOOK_SECRET ) ).
+//   X-HubRise-Hmac-SHA256 = HEX( HMAC_SHA256( body_crudo, CLIENT_SECRET ) ).
+//   OJO (verificado contra la doc de HubRise): la firma es HEXDIGEST (no base64)
+//   y el secreto es el CLIENT_SECRET del cliente OAuth (no un secreto de webhook
+//   aparte). En el entorno, HUBRISE_WEBHOOK_SECRET DEBE contener el client_secret.
 //   Se valida sobre los BYTES EXACTOS del body (sin re-serializar). Firma inválida -> 401.
 //
 // DEPLOY (al alta, H3): SIEMPRE con --no-verify-jwt (sin la flag el gateway corta
@@ -30,9 +33,9 @@
 // PENDIENTE DE CONFIRMAR EL DÍA DEL ALTA (no son decisiones, son comprobaciones):
 //   - Que `connection_name` venga poblado por marca virtual (clave de marca).
 //   - Que el estado `completed` llegue de Uber Eats / Just Eat vía HubRise.
-//   - El secreto HMAC: si HubRise lo da POR CONEXIÓN (no único), habrá que
-//     resolverlo por conexión antes de validar (hoy: un único HUBRISE_WEBHOOK_SECRET).
 //   - Cadenas exactas de `channel` (p.ej. "Uber Eats" / "Just Eat" / "Glovo").
+// (Resuelto: el secreto HMAC es el client_secret del cliente OAuth, único por
+//  aplicación, en hex. No es por conexión.)
 
 import { corsHeaders } from "../_shared/cors.ts";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
@@ -40,7 +43,8 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 const HUBRISE_WEBHOOK_SECRET = Deno.env.get("HUBRISE_WEBHOOK_SECRET") ?? "";
 
 // ── Firma HMAC-SHA256 (Web Crypto) ──────────────────────────────────────────
-async function computeHmacSha256Base64(secret: string, rawBody: string): Promise<string> {
+// HubRise firma en HEXDIGEST (no base64). El secreto es el client_secret.
+async function computeHmacSha256Hex(secret: string, rawBody: string): Promise<string> {
   const key = await crypto.subtle.importKey(
     "raw",
     new TextEncoder().encode(secret),
@@ -49,7 +53,7 @@ async function computeHmacSha256Base64(secret: string, rawBody: string): Promise
     ["sign"],
   );
   const sigBuf = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(rawBody));
-  return btoa(String.fromCharCode(...new Uint8Array(sigBuf)));
+  return Array.from(new Uint8Array(sigBuf)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 function timingSafeEqual(a: string, b: string): boolean {
@@ -61,8 +65,9 @@ function timingSafeEqual(a: string, b: string): boolean {
 
 async function isValidSignature(rawBody: string, headerSig: string | null): Promise<boolean> {
   if (!headerSig || !HUBRISE_WEBHOOK_SECRET) return false;
-  const expected = await computeHmacSha256Base64(HUBRISE_WEBHOOK_SECRET, rawBody);
-  return timingSafeEqual(expected, headerSig);
+  // HubRise envía el hex en minúsculas; normalizamos por si acaso.
+  const expected = await computeHmacSha256Hex(HUBRISE_WEBHOOK_SECRET, rawBody);
+  return timingSafeEqual(expected, headerSig.trim().toLowerCase());
 }
 
 // ── Helpers de formato HubRise ──────────────────────────────────────────────
