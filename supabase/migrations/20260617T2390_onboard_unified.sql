@@ -104,7 +104,7 @@ BEGIN
       audit_mode_default, audit_threshold_default, audit_shadow_min_samples,
       reliability_min_pct, max_recipe_depth_warning, version_alert_pct, photo_retention_days
     ) VALUES (
-      p_account_id, 'EUR', 'average_window', 30,
+      p_account_id, 'EUR', 'avg_window', 30,
       0, false, 'none',
       'claude-sonnet-4-6', true, 'es',
       'shadow', 0.15, 5,
@@ -175,7 +175,14 @@ BEGIN
       v_tpl.code, v_tpl.version,
       v_tpl.photo_url, v_tpl.conservation_type, v_tpl.default_waste_pct,
       v_tpl.shelf_life_days, v_tpl.nutrition,
-      (SELECT cost_strategy_default FROM kitchen_settings WHERE account_id = p_account_id),
+      -- recipe_item.cost_strategy exige 'average_window'; kitchen_settings usa
+      -- 'avg_window'. Traducir para no violar el CHECK de recipe_item.
+      CASE (SELECT cost_strategy_default FROM kitchen_settings WHERE account_id = p_account_id)
+        WHEN 'avg_window' THEN 'average_window'
+        WHEN 'last_purchase' THEN 'last_purchase'
+        WHEN 'fixed' THEN 'fixed'
+        ELSE 'average_window'
+      END,
       true, true, true, false, false
     ) RETURNING id INTO v_item_id;
     v_n_items := v_n_items + 1;
