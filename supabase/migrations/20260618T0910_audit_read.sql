@@ -56,16 +56,16 @@ BEGIN
   SELECT
     l.id,
     l.created_at,
-    l.event_type,
+    l.event_type::text,
     l.platform_admin_id                              AS admin_id,
-    pa.full_name                                     AS admin_name,
-    au.email                                         AS admin_email,
+    pa.full_name::text                               AS admin_name,
+    au.email::text                                   AS admin_email,
     l.target_account_id,
-    acc.name                                         AS account_name,
+    acc.name::text                                   AS account_name,
     l.target_user_id,
     l.details,
-    host(l.ip_address)                               AS ip_address,
-    l.user_agent,
+    host(l.ip_address)::text                          AS ip_address,
+    l.user_agent::text,
     count(*) OVER ()                                 AS total_count
   FROM platform_audit_log l
   LEFT JOIN platform_admins pa ON pa.id = l.platform_admin_id

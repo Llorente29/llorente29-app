@@ -135,6 +135,15 @@ export function summarizeDetails(ev: AuditEvent): string {
     if (deact.length) parts.push(`−${deact.join(', ')}`)
     return parts.join('  ')
   }
+  if (ev.eventType === 'account_created') {
+    const parts: string[] = []
+    if (d.plan) parts.push(`plan: ${d.plan}`)
+    if (d.slug) parts.push(`slug: ${d.slug}`)
+    if (d.status) parts.push(`estado: ${d.status}`)
+    // Altas antiguas guardaban el array de UUIDs de submódulos: lo resumimos.
+    if (Array.isArray(d.submodules)) parts.push(`${(d.submodules as unknown[]).length} módulos`)
+    return parts.join(' · ')
+  }
   // Genérico: compacta el jsonb.
   try {
     return Object.entries(d).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join(', ')
