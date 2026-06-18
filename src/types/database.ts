@@ -10823,6 +10823,14 @@ export type Database = {
         Args: { p_account_id: string }
         Returns: undefined
       }
+      clear_menu_item_override: {
+        Args: {
+          p_channel_id: string
+          p_location_id?: string
+          p_menu_item_id: string
+        }
+        Returns: undefined
+      }
       close_inventory_count: {
         Args: { p_count_id: string }
         Returns: {
@@ -11255,6 +11263,36 @@ export type Database = {
           new_articles_created: number
           result_recipe_id: string
           was_created: boolean
+        }[]
+      }
+      menu_item_channel_economics: {
+        Args: { p_menu_item_id: string; p_overrides?: Json }
+        Returns: {
+          channel_id: string
+          channel_name: string
+          channel_type: string
+          commission_amount: number
+          commission_base: string
+          commission_fixed: number
+          commission_pct: number
+          contribution_margin: number
+          contribution_margin_pct: number
+          cost: number
+          cost_available: boolean
+          food_cost_pct: number
+          food_cost_status: string
+          is_available: boolean
+          net_margin: number
+          net_margin_pct: number
+          order_costs_per_item: number
+          own_courier_cost: number
+          own_customer_fee: number
+          price: number
+          price_source: string
+          price_with_vat: number
+          service_type: string
+          target_food_cost_pct: number
+          vat_rate: number
         }[]
       }
       menu_item_economics: {
@@ -11712,6 +11750,16 @@ export type Database = {
           p_note?: string
           p_valid_until?: string
           p_value: number
+        }
+        Returns: undefined
+      }
+      set_menu_item_override: {
+        Args: {
+          p_channel_id: string
+          p_is_available?: boolean
+          p_location_id?: string
+          p_menu_item_id: string
+          p_price?: number
         }
         Returns: undefined
       }

@@ -28,14 +28,16 @@ import {
   type CatalogModifierGroup,
 } from '@/modules/kitchen/services/brandCatalogService'
 import {
-  listChannelRates,
   listSalesChannels,
-  baseFromGross,
-  type ChannelRate,
   type SalesChannel as SalesChannelType,
 } from '@/modules/kitchen/services/channelRateService'
+import {
+  getMenuItemChannelEconomics,
+  type ChannelEconomics,
+} from '@/modules/kitchen/services/menuOverrideService'
 import { uploadMenuPhoto, deleteMenuPhoto } from '@/modules/kitchen/services/menuPhotoService'
 import ProductPlacementSection from '@/modules/kitchen/components/ProductPlacementSection'
+import EditPricesModal from '@/modules/kitchen/components/EditPricesModal'
 import { supabase } from '@/lib/supabase'
 import type { MenuItem, MenuItemUpdate, RecipeItem } from '@/types/kitchen'
 
@@ -59,8 +61,6 @@ const GROUP_TYPE_LABEL: Record<string, string> = {
   choice: 'Elección', extras: 'Extras', removal: 'Quitar',
   side: 'Acompañamiento', cross_sell: 'Sugerencia', info: 'Info',
 }
-
-const DEFAULT_ITEMS_PER_ORDER = 2
 
 // Estilos de los tags conocidos (resto → neutro).
 const TAG_STYLES: Record<string, string> = {
@@ -151,10 +151,10 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Datos económicos E2
-  const [channelRates, setChannelRates] = useState<ChannelRate[]>([])
+  // Datos económicos — del motor menu_item_channel_economics (fuente única de verdad)
+  const [econ, setEcon] = useState<ChannelEconomics[]>([])
+  const [econReload, setEconReload] = useState(0)
   const [salesChannels, setSalesChannels] = useState<SalesChannelType[]>([])
-  const [recipeCost, setRecipeCost] = useState<number | null>(null)
   const [brandName, setBrandName] = useState<string>('')
   const [channelLogos, setChannelLogos] = useState<Record<string, string>>({})
 
@@ -176,6 +176,7 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
 
   // Edición inline (notas, packaging, avanzado)
   const [notesVal, setNotesVal] = useState('')
+  const [showPrices, setShowPrices] = useState(false)
   const [packDesc, setPackDesc] = useState('')
   const [packCost, setPackCost] = useState('')
   const [kitchenNameVal, setKitchenNameVal] = useState('')
@@ -226,19 +227,13 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
     if (!item) return
     let cancelled = false
     Promise.all([
-      listChannelRates(item.accountId),
       listSalesChannels(item.accountId),
-    ]).then(([rates, chs]) => {
+      getMenuItemChannelEconomics(item.id),
+    ]).then(([chs, rows]) => {
       if (cancelled) return
-      setChannelRates(rates)
       setSalesChannels(chs)
+      setEcon(rows)
     }).catch(() => {})
-    if (item.recipeItemId && supabase) {
-      supabase.from('recipe_item').select('computed_cost').eq('id', item.recipeItemId).single()
-        .then(({ data }) => { if (!cancelled && data) setRecipeCost(data.computed_cost as number | null) })
-    } else {
-      setRecipeCost(null)
-    }
     if (item.brandId && supabase) {
       supabase.from('brand').select('name').eq('id', item.brandId).single()
         .then(({ data }) => { if (!cancelled && data) setBrandName(data.name as string) })
@@ -254,7 +249,7 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
         })
     }
     return () => { cancelled = true }
-  }, [item?.id, item?.accountId, item?.recipeItemId, item?.brandId])
+  }, [item?.id, item?.accountId, item?.recipeItemId, item?.brandId, econReload])
 
   // Init de los campos de edición inline cuando llega/cambia el item.
   useEffect(() => {
@@ -416,31 +411,24 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
     )
   }
 
-  // ─── Computed economics (PRESERVADO de v1) ───────────────────────────────
+  // ─── Economía: derivada del motor (econ), una sola verdad ─────────────────
 
   const pvpSinIva = item.price ?? 0
   const vatPct = item.vatRate ?? 0
   const pvpConIva = Math.round(pvpSinIva * (1 + vatPct / 100) * 100) / 100
+  const recipeCost = econ.find(e => e.costAvailable)?.cost ?? null
   const hasCost = recipeCost != null && recipeCost > 0
   const foodCostPct = hasCost && pvpSinIva > 0 ? Math.round(recipeCost! / pvpSinIva * 10000) / 100 : null
 
   let bestMargin: number | null = null
   let bestChannel = ''
   let bestMarginPct: number | null = null
-  for (const ch of salesChannels) {
-    const rate = channelRates.find(r => r.salesChannelId === ch.id)
-    if (!rate || rate.commissionPct == null) continue
-    const commBase = rate.commissionBase === 'pvp_sin_iva' ? pvpSinIva : pvpConIva
-    const commAmt = Math.round(commBase * rate.commissionPct / 100 * 100) / 100
-    const commFixedBase = baseFromGross(rate.commissionFixed) ?? 0
-    const courierBase = baseFromGross(rate.ownCourierCost) ?? 0
-    const custFeeBase = baseFromGross(rate.ownCustomerFee, rate.ownCustomerFeeVatPct ?? 10) ?? 0
-    const orderCost = rate.serviceType === 'own_delivery' ? (commFixedBase + courierBase - custFeeBase) / DEFAULT_ITEMS_PER_ORDER : 0
-    const m = pvpSinIva - (hasCost ? recipeCost! : 0) - commAmt - orderCost
-    if (bestMargin === null || m > bestMargin) {
-      bestMargin = m
-      bestChannel = ch.name
-      bestMarginPct = pvpSinIva > 0 ? Math.round(m / pvpSinIva * 10000) / 100 : null
+  for (const e of econ) {
+    if (e.netMargin == null) continue
+    if (bestMargin === null || e.netMargin > bestMargin) {
+      bestMargin = e.netMargin
+      bestChannel = e.channelName
+      bestMarginPct = e.netMarginPct
     }
   }
 
@@ -721,53 +709,59 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
             </div>
           </div>
 
-          {/* Barras de margen por canal */}
-          {salesChannels.length > 0 ? (
+          {/* Barras de margen por canal — del motor menu_item_channel_economics */}
+          {econ.length > 0 ? (
             <div className="space-y-6">
-              {salesChannels.map(ch => {
-                const rate = channelRates.find(r => r.salesChannelId === ch.id)
-                if (!rate) {
+              {econ.map(e => {
+                const ch = salesChannels.find(s => s.id === e.channelId)
+                const badge = ch
+                  ? channelBadge(ch)
+                  : <span className="h-11 px-4 rounded-xl flex items-center text-stone-800 text-base font-medium bg-stone-100 flex-shrink-0">{e.channelName}</span>
+                const noRate = e.serviceType == null && e.commissionPct == null
+                if (noRate) {
                   return (
-                    <div key={ch.id} className="flex items-center justify-between border border-dashed border-stone-200 rounded-[10px] px-5 py-4">
+                    <div key={e.channelId} className="flex items-center justify-between border border-dashed border-stone-200 rounded-[10px] px-5 py-4">
                       <div className="flex items-center gap-2.5 text-sm text-stone-400">
-                        {channelBadge(ch)} · sin configurar
+                        {badge} · sin configurar
                       </div>
                       <span className="text-sm font-medium text-[#D67442] cursor-pointer hover:underline">Configurar en Ajustes</span>
                     </div>
                   )
                 }
-                const commBase = rate.commissionBase === 'pvp_sin_iva' ? pvpSinIva : pvpConIva
-                const commAmt = rate.commissionPct != null ? Math.round(commBase * rate.commissionPct / 100 * 100) / 100 : 0
-                const commFixedBase = baseFromGross(rate.commissionFixed) ?? 0
-                const courierBase = baseFromGross(rate.ownCourierCost) ?? 0
-                const custFeeBase = baseFromGross(rate.ownCustomerFee, rate.ownCustomerFeeVatPct ?? 10) ?? 0
-                const orderCostTotal = rate.serviceType === 'own_delivery' ? (commFixedBase + courierBase - custFeeBase) : 0
-                const hasOrderCosts = rate.serviceType === 'own_delivery' && orderCostTotal !== 0
-                const orderCostPerItem = hasOrderCosts ? Math.round(orderCostTotal / DEFAULT_ITEMS_PER_ORDER * 100) / 100 : 0
-                const margin = pvpSinIva - (hasCost ? recipeCost! : 0) - commAmt - orderCostPerItem
-                const marginPct = pvpSinIva > 0 ? Math.round(margin / pvpSinIva * 10000) / 100 : 0
-                const costPct = hasCost && pvpSinIva > 0 ? Math.round(recipeCost! / pvpSinIva * 100) : 0
-                const commPctBar = pvpSinIva > 0 ? Math.round(commAmt / pvpSinIva * 100) : 0
-                const transPctBar = pvpSinIva > 0 ? Math.round(orderCostPerItem / pvpSinIva * 100) : 0
+                const price = e.price
+                const cost = e.costAvailable ? (e.cost ?? 0) : 0
+                const commAmt = e.commissionAmount ?? 0
+                const orderCost = e.orderCostsPerItem ?? 0
+                const margin = e.netMargin ?? 0
+                const marginPct = e.netMarginPct ?? 0
+                const hasOrderCosts = e.serviceType === 'own_delivery' && orderCost > 0
+                const costPct = e.costAvailable && price > 0 ? Math.round(cost / price * 100) : 0
+                const commPctBar = price > 0 ? Math.round(commAmt / price * 100) : 0
+                const transPctBar = price > 0 ? Math.round(orderCost / price * 100) : 0
                 const marginPctBar = Math.max(0, 100 - costPct - commPctBar - transPctBar)
 
                 return (
-                  <div key={ch.id}>
+                  <div key={e.channelId}>
                     <div className="flex items-center justify-between mb-2.5">
-                      <div className="flex items-center gap-2.5">{channelBadge(ch)}</div>
+                      <div className="flex items-center gap-2.5">{badge}</div>
                       <div className="text-right">
                         <span className={`font-mono text-xl font-medium ${margin >= 0 ? 'text-[#4A7A35]' : 'text-[#A32D2D]'}`}>{fmtEur(margin)}</span>
-                        <div className="text-[12px] text-stone-400">{marginPct}% del PVP{!hasCost ? ' · sin food cost' : ''}</div>
+                        <div className="text-[12px] text-stone-400">{marginPct}% del PVP{!e.costAvailable ? ' · sin food cost' : ''}</div>
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-x-4 gap-y-1 mb-2 text-[12px] text-stone-500">
-                      {hasCost && <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-[#A68B6B]" /> Food cost {fmtEur(recipeCost)}</span>}
-                      {rate.commissionPct != null && <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-[#4A6A8A]" /> Comisión {rate.commissionPct}% ({fmtEur(commAmt)})</span>}
-                      {hasOrderCosts && <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-[#8BADC4]" /> Canal ≈{fmtEur(orderCostPerItem)}</span>}
+                      {e.costAvailable && <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-[#A68B6B]" /> Food cost {fmtEur(e.cost)}</span>}
+                      {e.commissionPct != null && <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-[#4A6A8A]" /> Comisión {e.commissionPct}% ({fmtEur(commAmt)})</span>}
+                      {hasOrderCosts && (
+                        <span className="flex items-center gap-1.5 cursor-help"
+                          title={`Coste de reparto propio por pedido: coste del rider${e.ownCourierCost != null ? ` (${fmtEur(e.ownCourierCost)})` : ''} + comisión fija${e.commissionFixed != null ? ` (${fmtEur(e.commissionFixed)})` : ''} − envío que paga el cliente${e.ownCustomerFee != null ? ` (${fmtEur(e.ownCustomerFee)})` : ''}, sin IVA, repartido entre ~2 platos por pedido. Es una estimación hasta tener ventas reales.`}>
+                          <span className="w-2 h-2 rounded-sm bg-[#8BADC4]" /> Canal ≈{fmtEur(orderCost)} <span className="text-stone-300">ⓘ</span>
+                        </span>
+                      )}
                       <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-[#7CB663]" /> Margen {fmtEur(margin)}</span>
                     </div>
                     <div className="h-7 rounded-lg overflow-hidden flex bg-[#ECEAE4]">
-                      {hasCost && costPct > 0 && <div className="h-full bg-[#A68B6B] transition-all duration-500" style={{ width: `${costPct}%` }} />}
+                      {e.costAvailable && costPct > 0 && <div className="h-full bg-[#A68B6B] transition-all duration-500" style={{ width: `${costPct}%` }} />}
                       {commPctBar > 0 && <div className="h-full bg-[#4A6A8A] transition-all duration-500" style={{ width: `${commPctBar}%` }} />}
                       {transPctBar > 0 && <div className="h-full bg-[#8BADC4] transition-all duration-500" style={{ width: `${transPctBar}%` }} />}
                       <div className="h-full bg-[#7CB663] transition-all duration-500" style={{ width: `${marginPctBar}%` }} />
@@ -775,9 +769,9 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
                   </div>
                 )
               })}
-              {channelRates.some(r => r.serviceType === 'own_delivery') && (
+              {econ.some(e => e.serviceType === 'own_delivery') && (
                 <p className="text-[12px] text-stone-400 leading-relaxed pt-3 border-t border-stone-200">
-                  Los costes de canal (fija, rider, envío) se reparten entre ~{DEFAULT_ITEMS_PER_ORDER} artículos por pedido. Folvy lo calculará con datos reales cuando haya más ventas.
+                  En los canales de reparto propio, el coste de canal = comisión fija + coste del rider − envío que paga el cliente (sin IVA), por pedido, repartido entre ~2 platos. Es una estimación; Folvy la afinará con el número real de platos por pedido cuando haya más ventas. El margen mostrado ya lo descuenta.
                 </p>
               )}
             </div>
@@ -821,8 +815,19 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
               </tbody>
             </table>
           </div>
-          <button className="mt-3 text-sm font-medium text-[#D67442] hover:underline">+ Añadir override</button>
+          <button onClick={() => setShowPrices(true)} className="mt-3 text-sm font-medium text-[#D67442] hover:underline">Editar precios</button>
         </CollapsibleSection>
+
+        {showPrices && item && (
+          <EditPricesModal
+            menuItemId={item.id}
+            productName={item.name}
+            basePrice={item.price ?? 0}
+            vatRate={item.vatRate ?? 0}
+            onClose={() => setShowPrices(false)}
+            onSaved={async () => { setShowPrices(false); setEconReload(v => v + 1); await refreshItem() }}
+          />
+        )}
 
         {/* S4 — Modificadores (PRESERVADO) */}
         <CollapsibleSection id="s-modificadores" icon="sliders" title="Modificadores"
