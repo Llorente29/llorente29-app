@@ -38,7 +38,7 @@ const SECTIONS: Section[] = [
     key: 'metricas',
     title: 'Métricas',
     description: 'Indicadores de la plataforma: clientes activos, uso, crecimiento.',
-    to: null,
+    to: '/_admin/metricas',
   },
   {
     key: 'impersonation',

@@ -28,6 +28,7 @@ import CuentaDetallePage from './pages/CuentaDetallePage'
 import FolvyMapPage from './pages/FolvyMapPage'
 import AuditoriaPage from './pages/AuditoriaPage'
 import StaffPage from './pages/StaffPage'
+import MetricasPage from './pages/MetricasPage'
 import { listAccounts } from '@/modules/multitenancy/services/accountsService'
 import type { Account } from '@/types/multitenancy'
 
@@ -42,6 +43,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Cuentas', to: '/_admin/cuentas', matchPrefix: '/_admin/cuentas' },
   { label: 'Auditoría', to: '/_admin/auditoria', matchPrefix: '/_admin/auditoria' },
   { label: 'Staff', to: '/_admin/staff', matchPrefix: '/_admin/staff' },
+  { label: 'Métricas', to: '/_admin/metricas', matchPrefix: '/_admin/metricas' },
   { label: 'Mapa de Folvy', to: '/_admin/mapa-folvy', matchPrefix: '/_admin/mapa-folvy' },
 ]
 
@@ -207,6 +209,7 @@ export default function AdminShell() {
           <Route path="/_admin/cuentas/:accountId" element={<CuentaDetallePage />} />
           <Route path="/_admin/auditoria" element={<AuditoriaPage />} />
           <Route path="/_admin/staff" element={<StaffPage />} />
+          <Route path="/_admin/metricas" element={<MetricasPage />} />
           <Route path="/_admin/mapa-folvy" element={<FolvyMapPage />} />
           {/* Fallback: cualquier /_admin/... desconocido → home */}
           <Route path="*" element={<Navigate to="/_admin/inicio" replace />} />

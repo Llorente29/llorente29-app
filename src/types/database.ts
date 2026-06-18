@@ -11312,6 +11312,7 @@ export type Database = {
         }
         Returns: Json
       }
+      platform_metrics: { Args: never; Returns: Json }
       preview_add_ingredient: {
         Args: {
           p_cut?: string
