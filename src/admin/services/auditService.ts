@@ -144,6 +144,30 @@ export function summarizeDetails(ev: AuditEvent): string {
     if (Array.isArray(d.submodules)) parts.push(`${(d.submodules as unknown[]).length} módulos`)
     return parts.join(' · ')
   }
+  // Cambios de configuración de la capa de precios (legible, no JSON crudo).
+  if (ev.eventType === 'system_config_changed') {
+    const cfg = d.config
+    const money = (v: unknown) => `${Number(v ?? 0)} €`
+    if (cfg === 'plan_pricing') {
+      const f = (d.from ?? {}) as Record<string, unknown>
+      const t = (d.to ?? {}) as Record<string, unknown>
+      const segs: string[] = []
+      if (f.base !== t.base) segs.push(`base ${money(f.base)}→${money(t.base)}`)
+      if (f.per_location !== t.per_location) segs.push(`€/local ${money(f.per_location)}→${money(t.per_location)}`)
+      if (f.max_locations !== t.max_locations) segs.push(`locales ${f.max_locations}→${t.max_locations}`)
+      return `${d.plan ?? 'plan'}: ${segs.length ? segs.join(' · ') : 'sin cambios'}`
+    }
+    if (cfg === 'addon_price') {
+      return `add-on ${d.addon ?? ''}: ${money(d.from)}→${money(d.to)}`
+    }
+    if (cfg === 'account_discount') {
+      if (d.action === 'clear') return 'descuento retirado'
+      const v = d.discount_type === 'percent' ? `${Number(d.value)}%` : `${Number(d.value)} €`
+      const until = d.valid_until ? ` · hasta ${String(d.valid_until).slice(0, 10)}` : ''
+      const note = d.note ? ` · ${d.note}` : ''
+      return `descuento ${v}${until}${note}`
+    }
+  }
   // Genérico: compacta el jsonb.
   try {
     return Object.entries(d).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join(', ')

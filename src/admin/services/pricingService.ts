@@ -82,3 +82,66 @@ export async function setSubmodulePrice(submoduleId: string, priceEur: number): 
     return { ok: false, error: e instanceof Error ? e.message : String(e) }
   }
 }
+
+// ─── Descuentos por cliente (capa de precios P-C) ───────────────────────────
+
+export interface AccountDiscount {
+  id: string
+  discountType: 'percent' | 'fixed'
+  value: number
+  note: string | null
+  validUntil: string | null   // ISO o null (sin caducidad)
+  active: boolean
+  createdAt: string
+}
+
+export async function getAccountDiscount(accountId: string): Promise<AccountDiscount | null> {
+  const sb = requireSupabase()
+  const { data, error } = await sb.rpc('get_account_discount', { p_account_id: accountId })
+  if (error) throw new Error(error.message)
+  if (!data) return null
+  const d = data as Record<string, unknown>
+  return {
+    id: d.id as string,
+    discountType: d.discount_type as 'percent' | 'fixed',
+    value: Number(d.value ?? 0),
+    note: (d.note as string) ?? null,
+    validUntil: (d.valid_until as string) ?? null,
+    active: Boolean(d.active),
+    createdAt: d.created_at as string,
+  }
+}
+
+export async function setAccountDiscount(
+  accountId: string,
+  discountType: 'percent' | 'fixed',
+  value: number,
+  note: string | null,
+  validUntil: string | null,
+): Promise<MutationResult> {
+  try {
+    const sb = requireSupabase()
+    const { error } = await sb.rpc('set_account_discount', {
+      p_account_id: accountId,
+      p_discount_type: discountType,
+      p_value: value,
+      p_note: note ?? undefined,
+      p_valid_until: validUntil ?? undefined,
+    })
+    if (error) return { ok: false, error: error.message }
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) }
+  }
+}
+
+export async function clearAccountDiscount(accountId: string): Promise<MutationResult> {
+  try {
+    const sb = requireSupabase()
+    const { error } = await sb.rpc('clear_account_discount', { p_account_id: accountId })
+    if (error) return { ok: false, error: error.message }
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) }
+  }
+}

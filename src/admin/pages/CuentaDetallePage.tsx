@@ -11,6 +11,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { getAccountById, updateAccount, setAccountStatus } from '@/modules/multitenancy/services/accountsService'
 import type { Account, AccountStatus, AccountUpdate } from '@/types/multitenancy'
 import { getCatalog, getAccountItems, setAccountModules, type CatalogModule } from '@/platform/accountModulesService'
+import { getAccountDiscount, setAccountDiscount, clearAccountDiscount, type AccountDiscount } from '@/admin/services/pricingService'
 import IntegrationsSection from '@/admin/components/IntegrationsSection'
 import AccountLogoUploader from '@/admin/components/AccountLogoUploader'
 
@@ -111,6 +112,15 @@ export default function CuentaDetallePage() {
   const [modulesSaving, setModulesSaving] = useState(false)
   const [modulesFeedback, setModulesFeedback] = useState<{ kind: 'ok' | 'error'; msg: string } | null>(null)
 
+  // Descuento (capa de precios P-C).
+  const [discount, setDiscount] = useState<AccountDiscount | null>(null)
+  const [discType, setDiscType] = useState<'percent' | 'fixed'>('percent')
+  const [discValue, setDiscValue] = useState('')
+  const [discNote, setDiscNote] = useState('')
+  const [discUntil, setDiscUntil] = useState('')
+  const [discSaving, setDiscSaving] = useState(false)
+  const [discFeedback, setDiscFeedback] = useState<{ kind: 'ok' | 'error'; msg: string } | null>(null)
+
   function hydrateEdit(acc: Account) {
     const addr = acc.billingAddress ?? {}
     setEdit({
@@ -167,6 +177,21 @@ export default function CuentaDetallePage() {
     return () => { cancelled = true }
   }, [accountId])
 
+  // Carga el descuento activo de la cuenta.
+  useEffect(() => {
+    if (!accountId) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const d = await getAccountDiscount(accountId)
+        if (!cancelled) setDiscount(d)
+      } catch (e) {
+        if (!cancelled) setDiscFeedback({ kind: 'error', msg: e instanceof Error ? e.message : String(e) })
+      }
+    })()
+    return () => { cancelled = true }
+  }, [accountId])
+
   function toggleSubmodule(submoduleId: string) {
     setSelectedSubmodules(prev => {
       const next = new Set(prev)
@@ -191,6 +216,40 @@ export default function CuentaDetallePage() {
     } finally {
       setModulesSaving(false)
     }
+  }
+
+  async function handleSaveDiscount() {
+    if (!accountId) return
+    const value = Number(discValue)
+    if (!Number.isFinite(value) || value <= 0) {
+      setDiscFeedback({ kind: 'error', msg: 'Introduce un valor mayor que 0.' }); return
+    }
+    if (discType === 'percent' && value > 100) {
+      setDiscFeedback({ kind: 'error', msg: 'Un porcentaje no puede pasar de 100.' }); return
+    }
+    setDiscSaving(true); setDiscFeedback(null)
+    const res = await setAccountDiscount(
+      accountId, discType, value,
+      discNote.trim() || null,
+      discUntil ? new Date(discUntil + 'T23:59:59').toISOString() : null,
+    )
+    if (!res.ok) { setDiscFeedback({ kind: 'error', msg: res.error }); setDiscSaving(false); return }
+    const d = await getAccountDiscount(accountId)
+    setDiscount(d)
+    setDiscValue(''); setDiscNote(''); setDiscUntil('')
+    setDiscFeedback({ kind: 'ok', msg: 'Descuento aplicado.' })
+    setDiscSaving(false)
+  }
+
+  async function handleClearDiscount() {
+    if (!accountId) return
+    if (!window.confirm('¿Retirar el descuento activo de este cliente?')) return
+    setDiscSaving(true); setDiscFeedback(null)
+    const res = await clearAccountDiscount(accountId)
+    if (!res.ok) { setDiscFeedback({ kind: 'error', msg: res.error }); setDiscSaving(false); return }
+    setDiscount(null)
+    setDiscFeedback({ kind: 'ok', msg: 'Descuento retirado.' })
+    setDiscSaving(false)
   }
 
   async function handleSaveData() {
@@ -389,6 +448,78 @@ export default function CuentaDetallePage() {
             </button>
           </>
         )}
+      </section>
+
+      {/* Descuento del cliente (capa de precios P-C) */}
+      <section className="mb-8">
+        <h2 className="text-base font-display font-medium mb-3" style={{ color: 'var(--color-accent)' }}>Descuento</h2>
+        {discFeedback && (
+          <div className="rounded-lg p-3 mb-3" style={discFeedback.kind === 'ok'
+            ? { background: '#E3F0E6', border: '1px solid #A8D0B5' }
+            : { background: '#FDECEC', border: '1px solid #E5A0A0' }}>
+            <p className="text-sm" style={{ color: discFeedback.kind === 'ok' ? '#1F6B3B' : '#A12626' }}>{discFeedback.msg}</p>
+          </div>
+        )}
+
+        {discount ? (
+          <div className="rounded-lg p-4 mb-3" style={{ border: '1px solid var(--color-border, #e5e5e5)', background: 'var(--color-bg-surface, #fff)' }}>
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div>
+                <p className="text-sm font-medium" style={{ color: 'var(--color-text-primary, #1a1a1a)' }}>
+                  {discount.discountType === 'percent' ? `${discount.value}% de descuento` : `${discount.value} € de descuento`}
+                </p>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-secondary, #888)' }}>
+                  {discount.validUntil ? `Válido hasta ${discount.validUntil.slice(0, 10)}` : 'Sin caducidad'}
+                  {discount.note ? ` · ${discount.note}` : ''}
+                </p>
+              </div>
+              <button type="button" onClick={handleClearDiscount} disabled={discSaving}
+                className="px-3 py-2 rounded-md text-sm font-medium"
+                style={{ background: '#fff', color: '#A12626', border: '1px solid #E5A0A0', opacity: discSaving ? 0.5 : 1 }}>
+                Retirar descuento
+              </button>
+            </div>
+            <p className="text-xs mt-3" style={{ color: 'var(--color-text-secondary, #999)' }}>
+              Aplicar uno nuevo sustituye al actual (un descuento activo por cliente).
+            </p>
+          </div>
+        ) : (
+          <p className="text-sm mb-3" style={{ color: 'var(--color-text-secondary, #666)' }}>Sin descuento activo.</p>
+        )}
+
+        <div className="rounded-lg p-4" style={{ border: '1px solid var(--color-border, #e5e5e5)' }}>
+          <p className="text-sm font-medium mb-3" style={{ color: 'var(--color-accent)' }}>{discount ? 'Sustituir por' : 'Aplicar descuento'}</p>
+          <div className="flex items-end gap-3 flex-wrap">
+            <div>
+              <label className="block text-[11px] mb-0.5" style={{ color: 'var(--color-text-secondary, #888)' }}>Tipo</label>
+              <select value={discType} onChange={e => setDiscType(e.target.value as 'percent' | 'fixed')}
+                className="px-2 py-2 rounded-md text-sm bg-white" style={{ border: '1px solid var(--color-border, #ccc)' }}>
+                <option value="percent">Porcentaje (%)</option>
+                <option value="fixed">Importe fijo (€)</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[11px] mb-0.5" style={{ color: 'var(--color-text-secondary, #888)' }}>{discType === 'percent' ? 'Valor (%)' : 'Valor (€)'}</label>
+              <input type="number" min="0" step="0.01" value={discValue} onChange={e => setDiscValue(e.target.value)}
+                className="w-28 px-2 py-2 rounded-md text-sm" style={{ border: '1px solid var(--color-border, #ccc)' }} />
+            </div>
+            <div>
+              <label className="block text-[11px] mb-0.5" style={{ color: 'var(--color-text-secondary, #888)' }}>Caduca (opcional)</label>
+              <input type="date" value={discUntil} onChange={e => setDiscUntil(e.target.value)}
+                className="px-2 py-2 rounded-md text-sm" style={{ border: '1px solid var(--color-border, #ccc)' }} />
+            </div>
+            <div className="flex-1 min-w-[160px]">
+              <label className="block text-[11px] mb-0.5" style={{ color: 'var(--color-text-secondary, #888)' }}>Nota (opcional)</label>
+              <input type="text" value={discNote} onChange={e => setDiscNote(e.target.value)} placeholder="Ej: promo 3 meses"
+                className="w-full px-2 py-2 rounded-md text-sm" style={{ border: '1px solid var(--color-border, #ccc)' }} />
+            </div>
+            <button type="button" onClick={handleSaveDiscount} disabled={discSaving}
+              className="px-4 py-2 rounded-md text-sm font-medium"
+              style={{ background: 'var(--color-terracota)', color: '#fff', opacity: discSaving ? 0.6 : 1 }}>
+              {discSaving ? 'Guardando…' : 'Aplicar'}
+            </button>
+          </div>
+        </div>
       </section>
 
       {/* Integraciones Last.app (onboarding multi-TPV, solo Folvy) */}

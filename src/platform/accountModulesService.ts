@@ -12,8 +12,10 @@
 // escribe directo con la sesión actual del platform admin, sin RPC ni Edge
 // Function. Si lo invoca un no-admin, la RLS rechaza el write.
 //
-// PRECIO: al activar un submódulo se guarda unit_price_eur = 0 (modelo de
-// precios desacoplado). El precio real se gestionará donde se decida el cobro.
+// PRECIO (Sesión 18, capa de precios P-C): al activar un add-on (type='addon')
+// se siembra unit_price_eur desde submodules.price_eur (precio de catálogo),
+// editable por cliente. Los 'tier' (parte del plan) van a 0. Al reactivar un
+// add-on se refresca su precio al de catálogo vigente.
 //
 // BAJA: quitar un submódulo NO borra el item; lo marca status='canceled' +
 // ends_at=now() (conserva historial). Reactivar uno dado de baja lo vuelve a
@@ -212,6 +214,20 @@ export async function setAccountModules(
   const desired = new Set(desiredSubmoduleIds)
   const nowIso = new Date().toISOString()
 
+  // Precio de catálogo a sembrar: add-ons -> submodules.price_eur; tiers -> 0.
+  const priceBySubmodule = new Map<string, number>()
+  if (desiredSubmoduleIds.length > 0) {
+    const { data: meta, error: metaErr } = await sb
+      .from('submodules')
+      .select('id, type, price_eur')
+      .in('id', desiredSubmoduleIds)
+    if (metaErr) throw new Error(`Error cargando precios de catálogo: ${metaErr.message}`)
+    for (const r of meta ?? []) {
+      priceBySubmodule.set(r.id, r.type === 'addon' ? Number(r.price_eur ?? 0) : 0)
+    }
+  }
+  const priceFor = (id: string) => priceBySubmodule.get(id) ?? 0
+
   const currentBySubmodule = new Map(current.map(i => [i.submoduleId, i]))
   const activeBefore = new Set(current.filter(i => i.active).map(i => i.submoduleId))
 
@@ -227,7 +243,7 @@ export async function setAccountModules(
         subscription_id: subscriptionId,
         submodule_id: submoduleId,
         quantity: 1,
-        unit_price_eur: 0,
+        unit_price_eur: priceFor(submoduleId),
         status: 'active',
         starts_at: nowIso,
         ends_at: null,
@@ -237,7 +253,7 @@ export async function setAccountModules(
     } else if (!existing.active) {
       const { error } = await sb
         .from('subscription_items')
-        .update({ status: 'active', ends_at: null })
+        .update({ status: 'active', ends_at: null, unit_price_eur: priceFor(submoduleId) })
         .eq('id', existing.itemId)
       if (error) throw new Error(`Error reactivando submódulo ${submoduleId}: ${error.message}`)
       activatedIds.push(submoduleId)

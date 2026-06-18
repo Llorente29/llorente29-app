@@ -10819,6 +10819,10 @@ export type Database = {
         }[]
       }
       cleanup_auth_rate_limits: { Args: never; Returns: number }
+      clear_account_discount: {
+        Args: { p_account_id: string }
+        Returns: undefined
+      }
       close_inventory_count: {
         Args: { p_count_id: string }
         Returns: {
@@ -10974,6 +10978,7 @@ export type Database = {
           per_person_today: number
         }[]
       }
+      get_account_discount: { Args: { p_account_id: string }; Returns: Json }
       get_auth_user_id_by_email: {
         Args: { p_created_by: string; p_email: string }
         Returns: string
@@ -11698,6 +11703,16 @@ export type Database = {
       }
       seed_vacation_settings_for_account: {
         Args: { p_account_id: string }
+        Returns: undefined
+      }
+      set_account_discount: {
+        Args: {
+          p_account_id: string
+          p_discount_type: string
+          p_note?: string
+          p_valid_until?: string
+          p_value: number
+        }
         Returns: undefined
       }
       set_plan_pricing: {
