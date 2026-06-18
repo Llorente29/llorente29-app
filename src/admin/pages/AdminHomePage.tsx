@@ -3,7 +3,7 @@
 // Home del portal de staff Folvy (plano de control interno). Sesión 16.
 //
 // Punto de entrada del panel /_admin. Presenta las secciones del portal como
-// tarjetas. Hoy solo "Cuentas" está activa; el resto son huecos preparados
+// tarjetas. Activas: Cuentas, Auditoría. El resto son huecos preparados
 // (deshabilitados) que marcan el rumbo del portal interno.
 
 import { useNavigate } from 'react-router-dom'
@@ -23,6 +23,12 @@ const SECTIONS: Section[] = [
     to: '/_admin/cuentas',
   },
   {
+    key: 'auditoria',
+    title: 'Auditoría',
+    description: 'Registro inmutable de acciones administrativas y eventos de seguridad.',
+    to: '/_admin/auditoria',
+  },
+  {
     key: 'metricas',
     title: 'Métricas',
     description: 'Indicadores de la plataforma: clientes activos, uso, crecimiento.',
@@ -32,12 +38,6 @@ const SECTIONS: Section[] = [
     key: 'staff',
     title: 'Staff',
     description: 'Gestión de administradores de plataforma y sus permisos.',
-    to: null,
-  },
-  {
-    key: 'auditoria',
-    title: 'Auditoría',
-    description: 'Registro de eventos de seguridad y acciones administrativas.',
     to: null,
   },
   {

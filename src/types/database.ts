@@ -11082,6 +11082,32 @@ export type Database = {
           ventas: number
         }[]
       }
+      list_platform_events: {
+        Args: {
+          p_account_id?: string
+          p_admin_id?: string
+          p_event_type?: string
+          p_from?: string
+          p_limit?: number
+          p_offset?: number
+          p_to?: string
+        }
+        Returns: {
+          account_name: string
+          admin_email: string
+          admin_id: string
+          admin_name: string
+          created_at: string
+          details: Json
+          event_type: string
+          id: string
+          ip_address: string
+          target_account_id: string
+          target_user_id: string
+          total_count: number
+          user_agent: string
+        }[]
+      }
       list_stock_movements: {
         Args: {
           p_account: string
@@ -11117,6 +11143,15 @@ export type Database = {
           is_estimate: boolean
           labor_cost: number
         }[]
+      }
+      log_platform_event: {
+        Args: {
+          p_details?: Json
+          p_event_type: string
+          p_target_account_id?: string
+          p_target_user_id?: string
+        }
+        Returns: string
       }
       materialize_recipe_session: {
         Args: { p_session_id: string }

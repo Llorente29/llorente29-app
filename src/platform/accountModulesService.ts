@@ -5,8 +5,7 @@
 //
 // Lee el catálogo de submódulos DIRECTAMENTE de la BBDD (tablas modules +
 // submodules), no hardcodeado: un módulo nuevo insertado en BBDD aparece solo
-// en la pantalla, sin tocar código. (Resuelve la deuda de NuevaCuentaPage que
-// sí tiene el catálogo a mano.)
+// en la pantalla, sin tocar código.
 //
 // SEGURIDAD: la RLS de subscription_items exige current_user_is_admin()
 // (= estar en platform_admins activo) para escribir. Por eso este service
@@ -14,14 +13,16 @@
 // Function. Si lo invoca un no-admin, la RLS rechaza el write.
 //
 // PRECIO: al activar un submódulo se guarda unit_price_eur = 0 (modelo de
-// precios desacoplado, decisión registrada en CONTEXTO_ESTADO §1). El precio
-// real se gestionará donde se decida el cobro; rellenar este campo después
-// no rompe nada.
+// precios desacoplado). El precio real se gestionará donde se decida el cobro.
 //
 // BAJA: quitar un submódulo NO borra el item; lo marca status='canceled' +
 // ends_at=now() (conserva historial). Reactivar uno dado de baja lo vuelve a
-// 'active' y limpia ends_at. (Valores de status válidos por CHECK:
-// active / trialing / canceled.)
+// 'active' y limpia ends_at.
+//
+// AUDITORÍA (Sesión 18): tras reconciliar, registra un evento
+// account_modules_changed (vía RPC log_platform_event) con los códigos de los
+// submódulos activados/desactivados. Best-effort: si el log falla, la operación
+// de negocio (que ya está persistida) NO se revierte ni lanza error.
 
 import { supabase } from '../lib/supabase'
 
@@ -137,6 +138,51 @@ export async function getAccountItems(accountId: string): Promise<AccountModuleI
   }))
 }
 
+// ─── Auditoría (best-effort) ───────────────────────────────────────────────
+
+/**
+ * Resuelve una lista de submodule ids a sus codes legibles (para el detalle
+ * del evento de auditoría). Si falla, devuelve los ids tal cual (no crítico).
+ */
+async function resolveSubmoduleCodes(ids: string[]): Promise<string[]> {
+  if (ids.length === 0) return []
+  const sb = requireSupabase()
+  try {
+    const { data } = await sb.from('submodules').select('id, code').in('id', ids)
+    const byId = new Map((data ?? []).map(r => [r.id, r.code]))
+    return ids.map(id => byId.get(id) ?? id)
+  } catch {
+    return ids
+  }
+}
+
+/**
+ * Registra el evento account_modules_changed. Best-effort: nunca lanza.
+ */
+async function auditModulesChange(
+  accountId: string,
+  activatedIds: string[],
+  deactivatedIds: string[],
+): Promise<void> {
+  if (activatedIds.length === 0 && deactivatedIds.length === 0) return
+  try {
+    const sb = requireSupabase()
+    const [activated, deactivated] = await Promise.all([
+      resolveSubmoduleCodes(activatedIds),
+      resolveSubmoduleCodes(deactivatedIds),
+    ])
+    await sb.rpc('log_platform_event', {
+      p_event_type: 'account_modules_changed',
+      p_target_account_id: accountId,
+      p_target_user_id: undefined,
+      p_details: { activated, deactivated },
+    })
+  } catch (e) {
+    // El cambio de módulos ya está persistido; el log es secundario.
+    console.warn('[auditModulesChange] no se pudo registrar el evento:', e)
+  }
+}
+
 // ─── Reconciliación: fija el conjunto de submódulos activos ────────────────
 
 /**
@@ -149,6 +195,8 @@ export async function getAccountItems(accountId: string): Promise<AccountModuleI
  *
  * No usa transacción multi-statement (supabase-js no la expone); cada cambio
  * es idempotente y la operación es segura de re-ejecutar.
+ *
+ * Tras reconciliar, registra el evento de auditoría con lo activado/desactivado.
  */
 export async function setAccountModules(
   accountId: string,
@@ -165,6 +213,11 @@ export async function setAccountModules(
   const nowIso = new Date().toISOString()
 
   const currentBySubmodule = new Map(current.map(i => [i.submoduleId, i]))
+  const activeBefore = new Set(current.filter(i => i.active).map(i => i.submoduleId))
+
+  // Diffs para la auditoría (qué pasó a activo / qué se dio de baja).
+  const activatedIds: string[] = []
+  const deactivatedIds: string[] = []
 
   // 1. Activar / reactivar / crear los deseados.
   for (const submoduleId of desired) {
@@ -180,12 +233,14 @@ export async function setAccountModules(
         ends_at: null,
       })
       if (error) throw new Error(`Error activando submódulo ${submoduleId}: ${error.message}`)
+      activatedIds.push(submoduleId)
     } else if (!existing.active) {
       const { error } = await sb
         .from('subscription_items')
         .update({ status: 'active', ends_at: null })
         .eq('id', existing.itemId)
       if (error) throw new Error(`Error reactivando submódulo ${submoduleId}: ${error.message}`)
+      activatedIds.push(submoduleId)
     }
   }
 
@@ -197,6 +252,11 @@ export async function setAccountModules(
         .update({ status: 'canceled', ends_at: nowIso })
         .eq('id', item.itemId)
       if (error) throw new Error(`Error dando de baja submódulo ${item.submoduleId}: ${error.message}`)
+      deactivatedIds.push(item.submoduleId)
     }
   }
+
+  // 3. Auditoría (best-effort, tras persistir los cambios). No rompe si falla.
+  void activeBefore // (referencia conservada por claridad del diff arriba)
+  await auditModulesChange(accountId, activatedIds, deactivatedIds)
 }

@@ -12,7 +12,7 @@
 // sincronización slug↔cuenta (isAdminRoute en routes.ts).
 //
 // Sesión 16: portal de staff. La entrada es /_admin/inicio (AdminHomePage), con
-// tarjetas a las secciones. Hoy activa: Cuentas.
+// tarjetas a las secciones. Activas: Cuentas, Auditoría.
 //
 // AÑADIDO: selector de cliente en la cabecera (saltar de cliente a cliente) +
 // banda "Estás gestionando: [Cliente]" visible cuando estás dentro de uno, para
@@ -26,6 +26,7 @@ import NuevaCuentaPage from './pages/NuevaCuentaPage'
 import CuentasListPage from './pages/CuentasListPage'
 import CuentaDetallePage from './pages/CuentaDetallePage'
 import FolvyMapPage from './pages/FolvyMapPage'
+import AuditoriaPage from './pages/AuditoriaPage'
 import { listAccounts } from '@/modules/multitenancy/services/accountsService'
 import type { Account } from '@/types/multitenancy'
 
@@ -38,6 +39,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { label: 'Inicio', to: '/_admin/inicio', matchPrefix: '/_admin/inicio' },
   { label: 'Cuentas', to: '/_admin/cuentas', matchPrefix: '/_admin/cuentas' },
+  { label: 'Auditoría', to: '/_admin/auditoria', matchPrefix: '/_admin/auditoria' },
   { label: 'Mapa de Folvy', to: '/_admin/mapa-folvy', matchPrefix: '/_admin/mapa-folvy' },
 ]
 
@@ -201,6 +203,7 @@ export default function AdminShell() {
           <Route path="/_admin/cuentas" element={<CuentasListPage />} />
           <Route path="/_admin/cuentas/nueva" element={<NuevaCuentaPage />} />
           <Route path="/_admin/cuentas/:accountId" element={<CuentaDetallePage />} />
+          <Route path="/_admin/auditoria" element={<AuditoriaPage />} />
           <Route path="/_admin/mapa-folvy" element={<FolvyMapPage />} />
           {/* Fallback: cualquier /_admin/... desconocido → home */}
           <Route path="*" element={<Navigate to="/_admin/inicio" replace />} />
