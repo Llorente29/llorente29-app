@@ -41,6 +41,12 @@ const SECTIONS: Section[] = [
     to: '/_admin/metricas',
   },
   {
+    key: 'precios',
+    title: 'Planes y precios',
+    description: 'Precios de los planes y de los módulos extra (add-ons).',
+    to: '/_admin/precios',
+  },
+  {
     key: 'impersonation',
     title: 'Impersonation',
     description: 'Acceder a la app de un cliente para dar soporte (ver como él).',

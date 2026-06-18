@@ -527,6 +527,50 @@ export type Database = {
           },
         ]
       }
+      account_discount: {
+        Row: {
+          account_id: string
+          active: boolean
+          created_at: string
+          created_by: string | null
+          discount_type: string
+          id: string
+          note: string | null
+          valid_until: string | null
+          value: number
+        }
+        Insert: {
+          account_id: string
+          active?: boolean
+          created_at?: string
+          created_by?: string | null
+          discount_type: string
+          id?: string
+          note?: string | null
+          valid_until?: string | null
+          value: number
+        }
+        Update: {
+          account_id?: string
+          active?: boolean
+          created_at?: string
+          created_by?: string | null
+          discount_type?: string
+          id?: string
+          note?: string | null
+          valid_until?: string | null
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "account_discount_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       account_email_log: {
         Row: {
           account_id: string
@@ -9627,6 +9671,7 @@ export type Database = {
           id: string
           module_id: string
           name: string
+          price_eur: number
           sort_order: number | null
           status: string
           tier_level: number | null
@@ -9641,6 +9686,7 @@ export type Database = {
           id?: string
           module_id: string
           name: string
+          price_eur?: number
           sort_order?: number | null
           status?: string
           tier_level?: number | null
@@ -9655,6 +9701,7 @@ export type Database = {
           id?: string
           module_id?: string
           name?: string
+          price_eur?: number
           sort_order?: number | null
           status?: string
           tier_level?: number | null
@@ -11148,6 +11195,7 @@ export type Database = {
           user_agent: string
         }[]
       }
+      list_pricing: { Args: never; Returns: Json }
       list_stock_movements: {
         Args: {
           p_account: string
@@ -11652,6 +11700,15 @@ export type Database = {
         Args: { p_account_id: string }
         Returns: undefined
       }
+      set_plan_pricing: {
+        Args: {
+          p_base_price_eur: number
+          p_max_locations: number
+          p_per_location_price: number
+          p_plan_id: string
+        }
+        Returns: undefined
+      }
       set_platform_admin_active: {
         Args: { p_active: boolean; p_admin_id: string }
         Returns: undefined
@@ -11674,6 +11731,10 @@ export type Database = {
           p_user_id?: string
           p_user_name?: string
         }
+        Returns: undefined
+      }
+      set_submodule_price: {
+        Args: { p_price_eur: number; p_submodule_id: string }
         Returns: undefined
       }
       show_limit: { Args: never; Returns: number }
