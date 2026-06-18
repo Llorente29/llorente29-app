@@ -271,5 +271,125 @@ verificación en la app. `database.ts` regenerado tras cada cambio de esquema.
 
 ---
 
-*Documento vivo. Al aprobar, se versiona en `docs/folvy_catalogo_publicador_diseno.md` y se
-referencia en `CONTEXTO_CLAUDE.md` y en el guion vivo. Construcción: CP0 (cerrar RECON) → CP1.*
+## 10. OPERACIÓN DE PEDIDOS — mapeo control → API de HubRise (investigación 18/06)
+
+Investigación a fondo de la API real de HubRise (developers/api) + páginas de cada plataforma.
+Esto cubre la **otra mitad del tubo**: recibir pedidos es inútil si no se opera (aceptar, agotar,
+cerrar, ampliar tiempo). Cuatro superficies de control, cada una con su **granularidad** (donde
+está la trampa) y su **bloqueo por P-A** declarado.
+
+### 10.1 — Ciclo de vida del pedido (aceptar / rechazar / listo)
+- **Cómo:** `PUT /location/orders/:id` con `status`. La misma petición puede cambiar estado y
+  además borrar líneas o añadir pagos. (developers/api/orders)
+- **Estados canónicos HubRise:** `new` → `received` → `accepted` → (`in_preparation` /
+  `awaiting_collection` / `in_delivery`) → `completed`; más `rejected` y `cancelled`. No hay que
+  pasar por todos: la secuencia depende del caso.
+- **Patrón recomendado (integration-guide):** pasar a `received` para acusar recibo, luego
+  `accepted`/`rejected`; actualizar la hora de entrega confirmada a la vez que `accepted`; avisar
+  si un pedido sigue `new` > ~5 min en horario (enlaza con la alarma de silencio).
+- **Reglas DURAS por plataforma (verificadas):**
+  - **Uber:** el pedido nuevo debe pasar a Aceptado/Denegado/Cancelado **en < 10 min** o Uber lo
+    auto-cancela. Marcar "listo" es **opcional** (Uber lo automatiza al agotar el tiempo de prep).
+    Uber devuelve solo: `in_delivery` al salir el rider, `completed` al entregar, `delivery_failed`.
+  - **Glovo:** **el puente de Glovo NO puede cancelar un pedido ya creado** → el rechazo va en el
+    momento de aceptar, no después.
+  - **JustEat:** mínimo obligatorio = marcar **Confirmado** (= `accepted` en HubRise).
+- **Granularidad: por pedido. ✅ DESBLOQUEADO** (el pedido ya entra con su location/conexión).
+
+### 10.2 — Cerrar / abrir con duración + horarios
+- **Cómo:** `order_acceptance` a nivel de **location** (PUT location). Tres modos
+  (developers/api/accounts):
+  - `{"mode":"normal"}`
+  - `{"mode":"busy","extra_preparation_time":<int>,"resume_at":<ISO-8601 opcional>}`
+  - `{"mode":"paused","resume_at":<ISO-8601 opcional>,"reason":<str opcional>}`
+- **`resume_at` ES el temporizador de tu modal "¿cuánto cerrar?":** "1 hora" = paused
+  resume_at=ahora+1h; "Indefinidamente" = paused sin resume_at; "Hasta el cierre" =
+  resume_at=hora de cierre. Encaja al 100% con la captura de Last.
+- **Horarios:** `opening_hours` por día con franjas `from`/`to` (varias por día). + `preparation_time`
+  por defecto; `busy` suma `extra_preparation_time`.
+- **CORRIGE el §8:** el documento daba por imposible "pausar la tienda desde HubRise". **SÍ se puede**
+  (`mode:paused` + `resume_at`). La limitación real es de **granularidad** (ver 10.5), no de capacidad.
+- **Granularidad: por LOCATION. ✅ DESBLOQUEADO** para cerrar la location entera.
+
+### 10.3 — 86 por producto / combo / modificador
+- **Cómo:** **inventario** de HubRise (developers/api/catalogs). Entradas por `sku_ref` y por
+  `option_ref` con `stock` y `expires_at`. Lo no especificado = stock **ilimitado**. El push de
+  inventario **sobrescribe** las entradas del catálogo.
+- **Mapeo:** agotar plato = `stock:"0"` en su SKU; agotar modificador = `stock:"0"` en su opción;
+  **"agotar hasta tal hora"** = `expires_at`. Cubre la pantalla "Stock de productos" de Last
+  (productos + modificadores + grupos).
+- **Combos (deals):** no tienen inventario propio; su disponibilidad sale de sus SKU componentes o
+  de `restrictions` por variant.
+- **Granularidad: por SKU/opción, por location. ✅ DESBLOQUEADO** (push de inventario al catálogo).
+
+### 10.4 — 86 / precio por CANAL
+- **Cómo:** **variants** (blog/catalog-variants). `price_overrides` + `restrictions` a nivel de SKU,
+  opción y deal, por variant (= contexto/plataforma). Es exactamente nuestro `menu_item_override`
+  por canal → se proyecta a variants.
+- **Granularidad: por canal (variant). 🟡 modelable ya**, pero su destino real (qué variant ↔ qué
+  conexión) depende de **P-A**.
+
+### 10.5 — LO OCULTO: granularidad de "cerrar marca / cerrar canal" (🔴 depende de P-A)
+- **`order_acceptance` es por LOCATION, no por marca ni por canal.** Pausar la location pausa
+  **todas** sus conexiones a la vez.
+- **Cerrar UNA marca** (como en la captura de Last) exige que esa marca sea **su propia
+  location/conexión** en HubRise → esto es **P-A** (modelo de conexiones para marcas virtuales,
+  pendiente de Janaina). Si las 6 marcas comparten location, no se puede cerrar una sola.
+- **Cerrar UN canal** (Uber sí, JustEat no) es lo más difícil: HubRise pausa a nivel location, no por
+  canal. Probablemente Last lo hace marca-por-location o vía API nativa de cada plataforma. En HubRise
+  puro NO es limpio → **DEUDA a verificar** (posible: variants/restrictions para "ocultar todo en ese
+  canal", o pausa nativa de plataforma fuera de HubRise).
+- **Conclusión:** el cierre por marca/canal está **condicionado a P-A**, igual que el publicador.
+
+---
+
+## 11. BENCHMARK — Order Manager de Last (capturas reales, 18/06)
+
+La pestaña "Pedidos" del Centro de Mando. Lo que aporta sobre la API es la **forma de la UX**:
+- **Feed** con dos vistas conmutables (cuadrícula / lista) + **filtro por estado** (Nuevo/En curso/
+  Cerrado…). Tarjeta = código + plataforma + hora + punto de color de estado.
+- **Vista lista** añade columna de **tiempo con semáforo** (verde/rojo según tardanza vs objetivo —
+  un pedido en 41:53 sale rojo): es rendimiento de entrega, no solo dato. Columnas: Cuenta, Tiempo,
+  Fecha pedido, **Fecha de entrega**, Dirección, **Repartidor**, Teléfono.
+- **Detalle:** líneas del pedido · Información del pedido (hora de recogida, método de pago, totales
+  con descuento y gastos de envío) · Información del cliente (nombre, teléfono). Acciones: **Reabrir**,
+  **Ticket** (imprimir), editar (lápiz), **"Nuevo delivery"** (alta manual de pedido).
+- **Reparto propio = enganche con Catcher (clave):** en pedidos de reparto propio el detalle muestra
+  "Proveedor de envío: **Catcher**" + **"Cancelar envío"** + dirección + gastos + repartidor. → La
+  pestaña Pedidos no solo empuja estado a la plataforma; en reparto propio **crea/cancela el envío vía
+  Catcher** (broker last-mile ya previsto en el roadmap). Es una capa más del ciclo de vida.
+
+→ *Lección:* el ciclo de vida tiene **dos enganches de salida**: (1) estado a la plataforma (HubRise)
+y (2) gestión del reparto propio (Catcher). El segundo es un frente conectado, declarado, no de hoy.
+
+---
+
+## 12. PLAN DE CONSTRUCCIÓN ACTUALIZADO (qué está desbloqueado hoy vs P-A)
+
+**✅ DESBLOQUEADO (buildable ya, no depende de Janaina), sobre la venta canónica existente:**
+- **Ciclo de vida del pedido** (10.1): feed + detalle + aceptar/rechazar/listo + ampliar tiempo,
+  empujando `status` a HubRise por pedido. Resuelve el problema real de que hoy los de Uber se
+  auto-cancelarían a los 10 min.
+- **Cerrar/abrir la location con duración** (10.2): `order_acceptance` + `resume_at` + horarios.
+- **86 por producto/modificador** (10.3): push de inventario (`stock:0` / `expires_at`).
+
+**🔴 CONDICIONADO A P-A (diseñado, esperando respuesta de Janaina), se enchufa encima sin reescribir:**
+- **Publicador de catálogo** (CP2, §6) — mapeo marca→catálogo/conexión.
+- **Cerrar por marca y por canal** (10.5).
+- **86/precio por canal vía variants** (10.4) — modelable, destino real según conexiones.
+
+**🟡 FRENTE CONECTADO (declarado, no de hoy):**
+- **Catcher** (§11): crear/cancelar envío de reparto propio desde el detalle del pedido.
+- **Impresión** (ticket/comanda, cloud printing) — frente de cero (§8).
+
+**Orden recomendado:** construir la **capa operativa desbloqueada** ahora (ciclo de vida + cierre de
+location + 86 por producto) sobre la venta canónica; publicador + cierre por marca/canal cuando
+Janaina conteste P-A. "Publicador y ciclo de vida van de la mano" (Julio): el **destino** es las dos
+mitades juntas; el **camino** sin deuda es construir primero lo que no está bloqueado.
+
+---
+
+*Documento vivo. Actualizado 18/06 con la investigación de operación de pedidos (API HubRise real +
+benchmark Order Manager de Last). Se versiona en `docs/folvy_catalogo_publicador_diseno.md` y se
+referencia en `CONTEXTO_CLAUDE.md` y en el guion vivo. Construcción: capa operativa desbloqueada
+(ciclo de vida + cierre location + 86 producto) → publicador + cierre marca/canal cuando se resuelva P-A.*
