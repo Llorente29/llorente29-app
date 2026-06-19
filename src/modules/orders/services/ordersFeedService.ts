@@ -3,9 +3,14 @@
 // Servicio del FEED de pedidos (lente "por pedido").
 //
 // VÍA ÚNICA DE EMPUJE (Opción A): el front SOLO mueve el estado interno vía
-// set_order_status. El empuje al canal (Last -> Glovo/Uber) lo dispara el trigger
-// trg_sale_push_status al cambiar order_status. El feed no llama a ninguna Edge;
-// el empuje es consecuencia del cambio de estado, igual desde feed o cocina-kiosco.
+// set_order_status. El empuje al canal lo dispara el trigger trg_sale_push_status.
+//
+// CICLO DE VIDA POR TIPO DE REPARTO (7a):
+//   - platform (Glovo/Uber/JE): listo -> "Entregado al rider" -> cerrado. Folvy se
+//     desentiende al recoger el rider (Glovo gestiona el resto en su sistema).
+//   - pickup: listo -> "Entregado al cliente" -> cerrado.
+//   - own_delivery: listo -> "En reparto" -> "Completar". (7b añadirá "En ruta" +
+//     seguimiento con flota + métricas.)
 
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
 
@@ -70,19 +75,25 @@ export interface OrdersFeedResult {
   orders: OrderFeedItem[]
 }
 
-// ── Transiciones (la "ruta completa" del pedido) ────────────────────────────
+// ── Tipo de reparto ─────────────────────────────────────────────────────────
 
 const TERMINAL_SET: OrderStatus[] = ['completed', 'rejected', 'cancelled', 'delivery_failed']
 export function isTerminalStatus(s: OrderStatus): boolean { return TERMINAL_SET.includes(s) }
 
 function isPickup(serviceType: string | null): boolean {
   const t = (serviceType ?? '').toLowerCase()
-  return t.includes('collection') || t.includes('pickup') || t.includes('takeaway')
+  return t.includes('pickup') || t.includes('collection') || t.includes('takeaway')
 }
+function isPlatformDelivery(serviceType: string | null): boolean {
+  return (serviceType ?? '').toLowerCase().includes('platform')
+}
+
+// ── Transiciones (la "ruta completa" del pedido) ────────────────────────────
 
 export interface OrderAction { label: string; next: OrderStatus }
 
 export function primaryAction(order: OrderFeedItem): OrderAction | null {
+  const s = order.service_type
   switch (order.order_status) {
     case 'new':
     case 'received':
@@ -90,11 +101,18 @@ export function primaryAction(order: OrderFeedItem): OrderAction | null {
     case 'accepted':
       return { label: 'Empezar', next: 'in_preparation' }
     case 'in_preparation':
-      return isPickup(order.service_type)
+      // pickup y plataforma -> "listo esperando recogida"; reparto propio -> a reparto
+      return (isPickup(s) || isPlatformDelivery(s))
         ? { label: 'Marcar listo', next: 'awaiting_collection' }
         : { label: 'Marcar listo', next: 'in_delivery' }
     case 'awaiting_collection':
     case 'awaiting_shipment':
+      return {
+        label: isPlatformDelivery(s) ? 'Entregado al rider'
+             : isPickup(s)            ? 'Entregado al cliente'
+             :                          'Completar',
+        next: 'completed',
+      }
     case 'in_delivery':
       return { label: 'Completar', next: 'completed' }
     default:

@@ -4,22 +4,19 @@
 // sale.order_status cambia. VÍA ÚNICA: el front nunca llama aquí; lo hace la BBDD.
 // ============================================================================
 // Entra por net.http_post del trigger, con header x-order-advance-secret (sin JWT).
-// Por eso se despliega CON --no-verify-jwt: la frontera la valida el SECRET, no el
-// gateway. (Mismo patrón que los webhooks y el monitor de ingesta.)
+// Deploy CON --no-verify-jwt: la frontera la valida el SECRET.
 //
-// QUÉ HACE: recibe { sale_id, new_status }, resuelve el canal de la venta y, si es
-// Last y el empuje está activado para esa integración, llama a Last
-// (PUT /orders/{tabId}/status o POST /orders/{tabId}/cancel). NO toca el estado
-// interno: ya lo movió quien disparó (feed o cocina). Solo propaga al canal.
-//
-// AGNÓSTICA: canales sin empuje (HubRise hoy) -> no hace nada, no rompe.
+// CICLO DE VIDA POR TIPO DE REPARTO (7a):
+//   - platform_delivery: Folvy empuja hasta READY_TO_PICKUP (listo para el rider).
+//     El CIERRE (completed) NO se empuja: el rider de Glovo aún lleva el pedido al
+//     cliente; Glovo gestiona ese tramo. Empujar DELIVERED daría INVALID_STATUS_CHANGE.
+//   - own_delivery / pickup: se empuja todo el ciclo (Folvy controla el desenlace).
 
 import { corsHeaders } from "../_shared/cors.ts";
 import { createClient } from "@supabase/supabase-js";
 
 const LASTAPP_BASE = "https://api.last.app/v2";
 
-// order_status (Folvy) -> newStatus (Last). null = no se propaga.
 const LAST_STATUS: Record<string, string | null> = {
   new: null,
   received: null,
@@ -29,8 +26,8 @@ const LAST_STATUS: Record<string, string | null> = {
   awaiting_shipment: "READY_TO_PICKUP",
   in_delivery: "ON_DELIVERY",
   completed: "DELIVERED",
-  rejected: null,            // -> cancel
-  cancelled: null,           // -> cancel
+  rejected: null,
+  cancelled: null,
   delivery_failed: null,
 };
 
@@ -39,7 +36,6 @@ const CANCEL_STATES = ["cancelled", "rejected", "delivery_failed"];
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-  // Frontera: secret del disparador interno (no JWT).
   const secret = req.headers.get("x-order-advance-secret") ?? "";
   const expected = Deno.env.get("ORDER_ADVANCE_SECRET") ?? "";
   if (!expected || secret !== expected) {
@@ -58,12 +54,17 @@ Deno.serve(async (req: Request) => {
   const sb = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "");
 
   const { data: sale } = await sb.from("sale")
-    .select("account_id, source, external_tab_ref, external_location_text")
+    .select("account_id, source, external_tab_ref, external_location_text, service_type")
     .eq("id", saleId).maybeSingle();
 
   if (!sale) return json({ ok: false, error: "venta no encontrada" }, 404);
   if (sale.source !== "lastapp") {
     return json({ ok: true, push: { attempted: false, reason: "canal sin empuje saliente" } }, 200);
+  }
+
+  // Plataforma: Folvy NO empuja el cierre (Glovo gestiona la entrega del rider al cliente).
+  if (newStatus === "completed" && sale.service_type === "platform_delivery") {
+    return json({ ok: true, push: { attempted: false, reason: "plataforma cierra en su sistema" } }, 200);
   }
 
   const { data: integ } = await sb.from("lastapp_integration")
