@@ -1,16 +1,17 @@
 // src/modules/orders/components/OrdersFeed.tsx
 //
 // El FEED de pedidos (lente "por pedido"). Tablero navy con:
-//   - Toggle CUADRÍCULA / POR ESTADO (kanban) — el local elige.
-//   - Filtros por estado, contadores, polling 10s + realtime sobre `sale`.
+//   - Toggle CUADRÍCULA / POR ESTADO (kanban), filtros, contadores, polling + realtime.
 //   - Sonido al entrar cualquier pedido nuevo accionable.
 //   - RUTA COMPLETA: cada tarjeta avanza vía advanceOrder (estado interno + empuje).
-//   - ESCANDALLO: pulsar un plato con receta abre el Cook Mode (reusa el panel del KDS).
+//   - ESCANDALLO: pulsar un plato con receta abre el Cook Mode (panel del KDS).
+//   - MARCAR LÍNEA: check por plato (kds_mark_line, compartido con el KDS).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { LayoutGrid, Columns3, RefreshCw, Volume2, VolumeX } from 'lucide-react'
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
 import { playNewTicketSound } from '@/modules/kds/kdsUtils'
+import { markLine as kdsMarkLine } from '@/modules/kds/services/kdsService'
 import CookModePanel from '@/modules/kds/components/CookModePanel'
 import {
   getOrdersFeed, advanceOrder, isTerminalStatus,
@@ -105,6 +106,16 @@ export default function OrdersFeed({ locationId }: OrdersFeedProps) {
     if (!line.menu_item_id) return
     setCook({ menuItemId: line.menu_item_id, qty: line.qty, name: line.name })
   }, [])
+
+  // Marca/desmarca una línea (compartido con el KDS vía kds_mark_line, con sesión).
+  const markLineHandler = useCallback(async (lineId: string) => {
+    try {
+      await kdsMarkLine(lineId)
+      await refresh()
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'No se pudo marcar la línea')
+    }
+  }, [refresh])
 
   useEffect(() => {
     firstLoad.current = true
@@ -216,7 +227,7 @@ export default function OrdersFeed({ locationId }: OrdersFeedProps) {
             </div>
           ) : view === 'grid' ? (
             <div className="grid gap-4 items-start" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(330px, 1fr))' }}>
-              {filtered.map(o => <OrderCard key={o.sale_id} order={o} allowGrow onAdvance={advance} onOpenRecipe={openRecipe} />)}
+              {filtered.map(o => <OrderCard key={o.sale_id} order={o} allowGrow onAdvance={advance} onOpenRecipe={openRecipe} onMarkLine={markLineHandler} />)}
             </div>
           ) : (
             <div className="grid gap-4 h-full" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
@@ -230,7 +241,7 @@ export default function OrdersFeed({ locationId }: OrdersFeedProps) {
                       <span className="ml-auto bg-[#1d3242] text-[#93a6b3] text-[12px] font-extrabold px-2 py-px rounded-full tabular-nums">{list.length}</span>
                     </div>
                     <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3">
-                      {list.map(o => <OrderCard key={o.sale_id} order={o} allowGrow={false} onAdvance={advance} onOpenRecipe={openRecipe} />)}
+                      {list.map(o => <OrderCard key={o.sale_id} order={o} allowGrow={false} onAdvance={advance} onOpenRecipe={openRecipe} onMarkLine={markLineHandler} />)}
                     </div>
                   </div>
                 )

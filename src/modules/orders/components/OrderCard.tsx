@@ -1,18 +1,19 @@
 // src/modules/orders/components/OrderCard.tsx
 //
 // Tarjeta de pedido del feed (lente "por pedido"). Principios del diseño aprobado:
-//   - A1: la COMANDA COMPLETA en la tarjeta (no hay que abrir nada para ver qué lleva).
+//   - A1: la COMANDA COMPLETA en la tarjeta.
 //   - Modificadores y notas PROTAGONISTAS: rojo = quitar/alergia, ámbar = añadir.
 //   - Alérgenos desde el escandallo. Nota del cliente = banda roja, nunca truncada.
 //   - B2: el pedido que NECESITA ACCIÓN es más grande + halo; crítico parpadea.
 //   - Tema navy Folvy.
 //
 // RUTA COMPLETA: el pie avanza el pedido (Aceptar/Empezar/Listo/Completar + Cancelar).
-// ESCANDALLO: pulsar el nombre de un plato con receta abre el Cook Mode (reusa el
-// CookModePanel del KDS) — gorro de chef = tiene ficha.
+// ESCANDALLO: pulsar el nombre de un plato con receta abre el Cook Mode (KDS).
+// MARCAR LÍNEA: check a la izquierda de cada plato (reusa kds_mark_line, compartido
+//   con el KDS) — marcar aquí marca también en cocina.
 
 import { useState } from 'react'
-import { ChefHat } from 'lucide-react'
+import { ChefHat, Check } from 'lucide-react'
 import { timeLevel, channelLabel, ticketCode } from '@/modules/kds/kdsUtils'
 import ChannelBadge from './ChannelBadge'
 import {
@@ -72,25 +73,48 @@ function ChildRow({ child }: { child: OrderFeedChild }) {
   )
 }
 
-function LineRow({ line, onOpenRecipe }: { line: OrderFeedLine; onOpenRecipe?: (line: OrderFeedLine) => void }) {
+function LineRow({
+  line, onOpenRecipe, onMarkLine, marking,
+}: {
+  line: OrderFeedLine
+  onOpenRecipe?: (line: OrderFeedLine) => void
+  onMarkLine?: (lineId: string) => void
+  marking?: boolean
+}) {
   const clickable = line.has_recipe && line.menu_item_id != null && onOpenRecipe != null
+  const marked = line.marked
+
   return (
-    <div className="py-2.5 border-b border-white/[0.07] last:border-b-0">
-      <div className="flex items-baseline gap-3">
+    <div className={`py-2.5 border-b border-white/[0.07] last:border-b-0 ${marked ? 'opacity-55' : ''}`}>
+      <div className="flex items-baseline gap-2.5">
+        {onMarkLine && (
+          <button
+            onClick={() => onMarkLine(line.line_id)}
+            disabled={marking}
+            title={marked ? 'Marcado · tocar para desmarcar' : 'Marcar como hecho'}
+            className={`shrink-0 self-center w-6 h-6 rounded-md grid place-items-center ring-1 disabled:opacity-50 ${
+              marked
+                ? 'bg-[#3ba776] text-[#0e1d15] ring-[#3ba776]'
+                : 'bg-transparent text-[#5f7280] ring-[#3a5366] hover:ring-[#3ba776] hover:text-[#86e0b6]'
+            }`}
+          >
+            {marked && <Check size={15} strokeWidth={3} />}
+          </button>
+        )}
         <span className="font-serif font-bold text-[17px] text-[#D67442] min-w-[28px]" style={{ fontFamily: 'Fraunces, Georgia, serif' }}>
           {line.qty}×
         </span>
         {clickable ? (
           <button
             onClick={() => onOpenRecipe!(line)}
-            className="text-[15px] font-bold flex-1 leading-tight text-left hover:text-[#86e0b6] flex items-center gap-1.5 min-w-0"
+            className={`text-[15px] font-bold flex-1 leading-tight text-left hover:text-[#86e0b6] flex items-center gap-1.5 min-w-0 ${marked ? 'line-through' : ''}`}
             title="Ver ficha técnica"
           >
             <span className="truncate">{line.name}</span>
             <ChefHat size={13} className="shrink-0 opacity-70" />
           </button>
         ) : (
-          <span className="text-[15px] font-bold flex-1 leading-tight">{line.name}</span>
+          <span className={`text-[15px] font-bold flex-1 leading-tight ${marked ? 'line-through' : ''}`}>{line.name}</span>
         )}
         {line.line_total != null && (
           <span className="text-[13px] text-[#93a6b3] tabular-nums">{fmt(line.line_total)}</span>
@@ -98,13 +122,13 @@ function LineRow({ line, onOpenRecipe }: { line: OrderFeedLine; onOpenRecipe?: (
       </div>
 
       {line.children.length > 0 && (
-        <div className="mt-2 ml-[40px] flex flex-col gap-1.5">
+        <div className="mt-2 ml-[58px] flex flex-col gap-1.5">
           {line.children.map(c => <ChildRow key={c.line_id} child={c} />)}
         </div>
       )}
 
       {line.allergens.length > 0 && (
-        <div className="mt-2 ml-[40px] flex items-center gap-1.5 flex-wrap">
+        <div className="mt-2 ml-[58px] flex items-center gap-1.5 flex-wrap">
           <span className="text-[10.5px] font-extrabold uppercase tracking-wide text-[#5f7280]">Alérgenos</span>
           {line.allergens.map(a => (
             <span key={a} className="text-[12px] font-bold px-2 py-0.5 rounded-md bg-[#e0a33e]/[0.14] text-[#f0c578] border border-[#e0a33e]/30">{a}</span>
@@ -113,7 +137,7 @@ function LineRow({ line, onOpenRecipe }: { line: OrderFeedLine; onOpenRecipe?: (
       )}
 
       {line.customer_note && (
-        <div className="mt-2 ml-[40px] text-[13px] text-[#f7b9bb] bg-[#e5484d]/[0.12] border border-[#e5484d]/30 rounded-lg px-2.5 py-1.5">
+        <div className="mt-2 ml-[58px] text-[13px] text-[#f7b9bb] bg-[#e5484d]/[0.12] border border-[#e5484d]/30 rounded-lg px-2.5 py-1.5">
           ⚠ {line.customer_note}
         </div>
       )}
@@ -128,10 +152,12 @@ interface OrderCardProps {
   allowGrow?: boolean
   onAdvance?: (saleId: string, next: OrderStatus) => void | Promise<void>
   onOpenRecipe?: (line: OrderFeedLine) => void
+  onMarkLine?: (lineId: string) => void | Promise<void>
 }
 
-export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRecipe }: OrderCardProps) {
+export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRecipe, onMarkLine }: OrderCardProps) {
   const [busy, setBusy] = useState(false)
+  const [markingId, setMarkingId] = useState<string | null>(null)
   const level = timeLevel(order.minutos)
   const needsAction = isNeedsAction(order.order_status)
   const terminal = isTerminal(order.order_status)
@@ -155,6 +181,12 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
     if (!onAdvance || busy) return
     setBusy(true)
     try { await onAdvance(order.sale_id, next) } finally { setBusy(false) }
+  }
+
+  const mark = async (lineId: string) => {
+    if (!onMarkLine || markingId) return
+    setMarkingId(lineId)
+    try { await onMarkLine(lineId) } finally { setMarkingId(null) }
   }
 
   const secIsDanger = secondary != null && (secondary.next === 'cancelled' || secondary.next === 'rejected')
@@ -195,7 +227,15 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
       )}
 
       <div className="px-4 pl-5 border-t border-white/[0.07]">
-        {order.lineas.map(l => <LineRow key={l.line_id} line={l} onOpenRecipe={onOpenRecipe} />)}
+        {order.lineas.map(l => (
+          <LineRow
+            key={l.line_id}
+            line={l}
+            onOpenRecipe={onOpenRecipe}
+            onMarkLine={onMarkLine ? mark : undefined}
+            marking={markingId === l.line_id}
+          />
+        ))}
       </div>
 
       <div className="px-4 py-3 pl-5 border-t border-white/[0.07]">
