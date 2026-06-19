@@ -2551,6 +2551,8 @@ export type Database = {
           name: string
           notes: string | null
           ownership_type: string
+          qr_caption: string | null
+          shop_url: string | null
           slug: string
           updated_at: string
         }
@@ -2567,6 +2569,8 @@ export type Database = {
           name: string
           notes?: string | null
           ownership_type?: string
+          qr_caption?: string | null
+          shop_url?: string | null
           slug: string
           updated_at?: string
         }
@@ -2583,6 +2587,8 @@ export type Database = {
           name?: string
           notes?: string | null
           ownership_type?: string
+          qr_caption?: string | null
+          shop_url?: string | null
           slug?: string
           updated_at?: string
         }

@@ -44,6 +44,8 @@ interface FormState {
   ownershipType: BrandOwnershipType
   color: string
   logoUrl: string
+  shopUrl: string
+  qrCaption: string
   notes: string
 }
 
@@ -54,6 +56,8 @@ function brandToFormState(b: Brand): FormState {
     ownershipType: b.ownershipType,
     color: b.color ?? '',
     logoUrl: b.logoUrl ?? '',
+    shopUrl: b.shopUrl ?? '',
+    qrCaption: b.qrCaption ?? '',
     notes: b.notes ?? '',
   }
 }
@@ -107,6 +111,14 @@ export default function BrandDataTab({ brand, onBrandChange }: BrandDataTabProps
     const logoTrimmed = form.logoUrl.trim()
     const logoNext: string | null = logoTrimmed === '' ? null : logoTrimmed
     if (logoNext !== brand.logoUrl) patch.logoUrl = logoNext
+
+    const shopTrimmed = form.shopUrl.trim()
+    const shopNext: string | null = shopTrimmed === '' ? null : shopTrimmed
+    if (shopNext !== brand.shopUrl) patch.shopUrl = shopNext
+
+    const captionTrimmed = form.qrCaption.trim()
+    const captionNext: string | null = captionTrimmed === '' ? null : captionTrimmed
+    if (captionNext !== brand.qrCaption) patch.qrCaption = captionNext
 
     const notesTrimmed = form.notes.trim()
     const notesNext: string | null = notesTrimmed === '' ? null : notesTrimmed
@@ -332,6 +344,53 @@ export default function BrandDataTab({ brand, onBrandChange }: BrandDataTabProps
             </a>
           ) : (
             <p className="text-sm text-text-secondary">—</p>
+          )}
+        </Field>
+
+        <Field
+          label="Tienda propia (URL)"
+          hint={editing ? 'Folvy Shop de esta marca. El ticket de bolsa pinta un QR a esta URL para llevar pedidos al canal directo.' : undefined}
+        >
+          {editing ? (
+            <input
+              type="url"
+              value={form.shopUrl}
+              onChange={(e) => setForm({ ...form, shopUrl: e.target.value })}
+              placeholder="https://..."
+              disabled={submitting}
+              className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+            />
+          ) : brand.shopUrl ? (
+            <a
+              href={brand.shopUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-accent hover:underline break-all"
+            >
+              {brand.shopUrl}
+            </a>
+          ) : (
+            <p className="text-sm text-text-secondary">—</p>
+          )}
+        </Field>
+
+        <Field
+          label="Texto del QR"
+          hint={editing ? 'Mensaje que acompaña al QR en el ticket (lo decides tú). Si lo dejas vacío, se usa un texto por defecto.' : undefined}
+        >
+          {editing ? (
+            <input
+              type="text"
+              value={form.qrCaption}
+              onChange={(e) => setForm({ ...form, qrCaption: e.target.value })}
+              placeholder="Pide directo la próxima vez y ahorra"
+              disabled={submitting}
+              className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+            />
+          ) : (
+            <p className="text-sm text-text-primary whitespace-pre-wrap">
+              {brand.qrCaption || <span className="text-text-secondary">—</span>}
+            </p>
           )}
         </Field>
 

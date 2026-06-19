@@ -113,6 +113,8 @@ export interface Brand {
   ownershipType: BrandOwnershipType
   color: string | null
   logoUrl: string | null
+  shopUrl: string | null
+  qrCaption: string | null
   notes: string | null
   isActive: boolean
   archivedAt: string | null
@@ -141,6 +143,8 @@ export interface BrandUpdate {
   ownershipType?: BrandOwnershipType
   color?: string | null
   logoUrl?: string | null
+  shopUrl?: string | null
+  qrCaption?: string | null
   notes?: string | null
   isActive?: boolean
   archivedAt?: string | null

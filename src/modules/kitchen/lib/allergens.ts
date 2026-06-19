@@ -23,7 +23,7 @@ export type AllergenCode =
   | 'eggs'
   | 'fish'
   | 'peanuts'
-  | 'soybeans'
+  | 'soy'
   | 'milk'
   | 'nuts'
   | 'celery'
@@ -56,7 +56,7 @@ export const EU_ALLERGENS: readonly AllergenDef[] = [
   { code: 'eggs',        labelEs: 'Huevos',            labelEn: 'Eggs' },
   { code: 'fish',        labelEs: 'Pescado',           labelEn: 'Fish' },
   { code: 'peanuts',     labelEs: 'Cacahuetes',        labelEn: 'Peanuts' },
-  { code: 'soybeans',    labelEs: 'Soja',              labelEn: 'Soybeans' },
+  { code: 'soy',         labelEs: 'Soja',              labelEn: 'Soybeans' },
   { code: 'milk',        labelEs: 'Lácteos',           labelEn: 'Milk' },
   { code: 'nuts',        labelEs: 'Frutos de cáscara', labelEn: 'Tree nuts' },
   { code: 'celery',      labelEs: 'Apio',              labelEn: 'Celery' },
