@@ -3,25 +3,22 @@
 // Tarjeta de pedido del feed (lente "por pedido"). Principios del diseño aprobado:
 //   - A1: la COMANDA COMPLETA en la tarjeta (no hay que abrir nada para ver qué lleva).
 //   - Modificadores y notas PROTAGONISTAS: rojo = quitar/alergia, ámbar = añadir.
-//     Nota del cliente = banda roja, nunca truncada.
-//   - Alérgenos desde el escandallo (la plataforma no los da).
-//   - B2: el pedido que NECESITA ACCIÓN (sin aceptar) es más grande + halo terracota;
-//     el crítico por tiempo (rojo) parpadea.
-//   - Tema navy Folvy (pase oscuro), no negro puro.
+//   - Alérgenos desde el escandallo. Nota del cliente = banda roja, nunca truncada.
+//   - B2: el pedido que NECESITA ACCIÓN es más grande + halo; crítico parpadea.
+//   - Tema navy Folvy.
 //
-// RUTA COMPLETA: el pie tiene la acción de avance (Aceptar -> Empezar -> Listo ->
-// Completar) + una secundaria (Cancelar / Rechazar / Reabrir). Mueve el estado
-// operativo interno vía onAdvance (no notifica aún a la plataforma).
+// RUTA COMPLETA: el pie avanza el pedido (Aceptar/Empezar/Listo/Completar + Cancelar).
+// ESCANDALLO: pulsar el nombre de un plato con receta abre el Cook Mode (reusa el
+// CookModePanel del KDS) — gorro de chef = tiene ficha.
 
 import { useState } from 'react'
+import { ChefHat } from 'lucide-react'
 import { timeLevel, channelLabel, ticketCode } from '@/modules/kds/kdsUtils'
 import ChannelBadge from './ChannelBadge'
 import {
   primaryAction, secondaryAction,
   type OrderFeedItem, type OrderFeedLine, type OrderFeedChild, type OrderStatus,
 } from '../services/ordersFeedService'
-
-// ── Etiquetas y agrupaciones de estado ──────────────────────────────────────
 
 const STATUS_LABEL: Record<OrderStatus, string> = {
   new: 'Nuevo · sin aceptar',
@@ -43,9 +40,7 @@ const TERMINAL: OrderStatus[] = ['completed', 'rejected', 'cancelled', 'delivery
 function isNeedsAction(s: OrderStatus): boolean { return NEEDS_ACTION.includes(s) }
 function isTerminal(s: OrderStatus): boolean { return TERMINAL.includes(s) }
 
-/** Heurística: ¿el modificador quita algo (rojo) o añade (ámbar)?
- *  Deuda declarada: lo ideal sería un flag en modifier_option; mientras, el
- *  prefijo "sin/no/quitar" marca "quitar". Cubre la mayoría de casos reales. */
+/** Heurística: ¿el modificador quita (rojo) o añade (ámbar)? Deuda declarada. */
 function modKind(name: string): 'remove' | 'add' {
   return /^\s*(sin|no|quitar|without|sans)\b/i.test(name) ? 'remove' : 'add'
 }
@@ -55,7 +50,7 @@ function fmt(n: number | null | undefined): string {
   return n.toFixed(2).replace('.', ',') + ' €'
 }
 
-// ── Sub-render: modificadores / combos de una línea ─────────────────────────
+// ── Sub-render ──────────────────────────────────────────────────────────────
 
 function ChildRow({ child }: { child: OrderFeedChild }) {
   if (child.line_type === 'combo_item') {
@@ -77,14 +72,26 @@ function ChildRow({ child }: { child: OrderFeedChild }) {
   )
 }
 
-function LineRow({ line }: { line: OrderFeedLine }) {
+function LineRow({ line, onOpenRecipe }: { line: OrderFeedLine; onOpenRecipe?: (line: OrderFeedLine) => void }) {
+  const clickable = line.has_recipe && line.menu_item_id != null && onOpenRecipe != null
   return (
     <div className="py-2.5 border-b border-white/[0.07] last:border-b-0">
       <div className="flex items-baseline gap-3">
         <span className="font-serif font-bold text-[17px] text-[#D67442] min-w-[28px]" style={{ fontFamily: 'Fraunces, Georgia, serif' }}>
           {line.qty}×
         </span>
-        <span className="text-[15px] font-bold flex-1 leading-tight">{line.name}</span>
+        {clickable ? (
+          <button
+            onClick={() => onOpenRecipe!(line)}
+            className="text-[15px] font-bold flex-1 leading-tight text-left hover:text-[#86e0b6] flex items-center gap-1.5 min-w-0"
+            title="Ver ficha técnica"
+          >
+            <span className="truncate">{line.name}</span>
+            <ChefHat size={13} className="shrink-0 opacity-70" />
+          </button>
+        ) : (
+          <span className="text-[15px] font-bold flex-1 leading-tight">{line.name}</span>
+        )}
         {line.line_total != null && (
           <span className="text-[13px] text-[#93a6b3] tabular-nums">{fmt(line.line_total)}</span>
         )}
@@ -118,13 +125,12 @@ function LineRow({ line }: { line: OrderFeedLine }) {
 
 interface OrderCardProps {
   order: OrderFeedItem
-  /** En cuadrícula, el que necesita acción ocupa 2 columnas (B2). En kanban no. */
   allowGrow?: boolean
-  /** Avanza/cambia el estado del pedido. */
   onAdvance?: (saleId: string, next: OrderStatus) => void | Promise<void>
+  onOpenRecipe?: (line: OrderFeedLine) => void
 }
 
-export default function OrderCard({ order, allowGrow = true, onAdvance }: OrderCardProps) {
+export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRecipe }: OrderCardProps) {
   const [busy, setBusy] = useState(false)
   const level = timeLevel(order.minutos)
   const needsAction = isNeedsAction(order.order_status)
@@ -154,9 +160,7 @@ export default function OrderCard({ order, allowGrow = true, onAdvance }: OrderC
   const secIsDanger = secondary != null && (secondary.next === 'cancelled' || secondary.next === 'rejected')
 
   return (
-    <div
-      className={`relative rounded-2xl overflow-hidden bg-[#16242f] ${halo} ${grow} ${terminal ? 'opacity-70' : ''}`}
-    >
+    <div className={`relative rounded-2xl overflow-hidden bg-[#16242f] ${halo} ${grow} ${terminal ? 'opacity-70' : ''}`}>
       <div className="absolute left-0 top-0 bottom-0 w-[5px]" style={{ backgroundColor: spine }} />
 
       {/* cabecera */}
@@ -171,18 +175,15 @@ export default function OrderCard({ order, allowGrow = true, onAdvance }: OrderC
         </span>
       </div>
 
-      {/* estado */}
       <div className="px-4 pb-2.5 pl-5 text-[12.5px] font-bold text-[#93a6b3] flex items-center gap-2">
         <span className="w-2 h-2 rounded-full" style={{ backgroundColor: needsAction ? '#D67442' : terminal ? '#5f7280' : '#D67442' }} />
         {STATUS_LABEL[order.order_status]}
       </div>
 
-      {/* marca / canal */}
       <div className="px-4 pb-2.5 pl-5 text-[12.5px] text-[#93a6b3]">
         {order.brand || order.channel || '—'}
       </div>
 
-      {/* nota del cliente a nivel pedido — banda roja, nunca truncada */}
       {order.customer_note && (
         <div className="mx-4 mb-2 ml-5 bg-[#e5484d]/[0.13] border border-[#e5484d]/[0.34] border-l-4 border-l-[#e5484d] rounded-lg px-3 py-2.5 flex gap-2.5 items-start">
           <span className="text-[16px] leading-none">⚠</span>
@@ -193,12 +194,10 @@ export default function OrderCard({ order, allowGrow = true, onAdvance }: OrderC
         </div>
       )}
 
-      {/* COMANDA completa */}
       <div className="px-4 pl-5 border-t border-white/[0.07]">
-        {order.lineas.map(l => <LineRow key={l.line_id} line={l} />)}
+        {order.lineas.map(l => <LineRow key={l.line_id} line={l} onOpenRecipe={onOpenRecipe} />)}
       </div>
 
-      {/* pie: total + acciones de avance (ruta completa) */}
       <div className="px-4 py-3 pl-5 border-t border-white/[0.07]">
         <div className="flex items-center gap-3">
           <span className="font-serif font-semibold text-[18px] tabular-nums" style={{ fontFamily: 'Fraunces, Georgia, serif' }}>
