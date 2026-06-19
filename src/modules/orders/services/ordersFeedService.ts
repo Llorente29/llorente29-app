@@ -44,6 +44,10 @@ export interface OrderFeedLine {
   line_total: number | null
   marked: boolean
   allergens: string[]
+  family: string | null          // dish_family.name (categoría de cocina normalizada)
+  family_color: string | null
+  family_icon: string | null
+  menu_category: string | null   // menu_item.category (texto libre de carta; hoy vacío)
   has_recipe: boolean
   customer_note: string | null
   children: OrderFeedChild[]
@@ -58,6 +62,11 @@ export interface OrderFeedItem {
   service_type: string | null
   source: string
   brand: string | null
+  brand_logo_url: string | null
+  brand_color: string | null
+  brand_shop_url: string | null
+  brand_qr_caption: string | null
+  brand_ownership_type: 'own' | 'licensed' | null
   channel: string | null
   channel_id: string | null
   customer_name: string | null
