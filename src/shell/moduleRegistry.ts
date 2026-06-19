@@ -10,6 +10,11 @@
 //   - G-3: appccModule (piloto).
 //   - G-5: personalModule, ventasModule.
 //
+// FUSIÓN ORDERS+KDS (19/06): el módulo KDS desaparece como botón propio; su
+// tablero y sus ajustes viven ahora DENTRO de Folvy Orders (vistas Cocina y
+// Ajustes). El kiosco /cocina-tv sigue en App.tsx, intacto. El código del KDS
+// (board, componentes, servicio, kiosco) permanece en src/modules/kds/.
+//
 // Más adelante (G-7) este registro estático se complementará con la consulta
 // a la tabla `account_modules` para gating por cuenta.
 
@@ -21,7 +26,6 @@ import { kitchenModule } from '@/modules/kitchen/module'
 import { integrationsModule } from '@/modules/integrations/module'
 import { supplyModule } from '@/modules/supply/module'
 import { ordersModule } from '@/modules/orders/module'
-import { kdsModule } from '@/modules/kds/module'
 
 export const moduleRegistry: ModuleDefinition[] = [
   personalModule,     // G-8.4 (Folvy Team, topBarOrder 1)
@@ -30,8 +34,7 @@ export const moduleRegistry: ModuleDefinition[] = [
   kitchenModule,      //       (Folvy Kitchen, topBarOrder 4)
   integrationsModule, //       (Folvy Connect, topBarOrder 5)
   supplyModule,       //       (Folvy Supply, topBarOrder 6) — aprovisionamiento / MRP II
-  kdsModule,          //       (Folvy KDS, topBarOrder 7) — tablero de cocina + ajustes
-  ordersModule,       //       (Folvy Orders, topBarOrder 8) — centro de mando de pedidos + ajustes
+  ordersModule,       //       (Folvy Orders, topBarOrder 7) — pedidos + cocina (KDS) + ajustes
 ]
 
 /** Devuelve los módulos ordenados por su posición en el TopBar. */

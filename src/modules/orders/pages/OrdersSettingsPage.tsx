@@ -1,156 +1,87 @@
 // src/modules/orders/pages/OrdersSettingsPage.tsx
 //
-// Ajustes de Folvy Orders. Hoy una sola sección: "Auto-aceptación de pedidos".
-// Esta zona CRECE (tiempos de preparación, sonidos, vista del ticket, throttling…)
-// como en Otter Order Manager / Toast Orders Hub / Deliverect — separada del
-// tablero en vivo (el feed, siguiente tramo), pero en el mismo mundo "pedidos".
+// Ajustes de Folvy Orders — cáscara de pestañas que fusiona:
+//   - Auto-aceptación (por CUENTA, no exige local)
+//   - Estaciones / Ruteo familias / Dispositivos (por LOCAL, del KDS)
 //
-// Auto-aceptación: estándar de los integradores — el pedido entra YA aceptado,
-// nadie corre contra el reloj de 10 min de Uber. Baseline ON; aquí se APAGA por
-// canal el que no la quiera. La decisión la ejecuta la frontera (webhook), no
-// esta pantalla; aquí solo se configura. Nivel MARCA llegará con P-A.
+// El guard "elige un local" se afloja A NIVEL DE PESTAÑA: solo las tres de cocina
+// lo exigen; Auto-aceptación funciona en consolidado. Reusa tal cual los
+// componentes del KDS (no se mueven de carpeta) + el de auto-aceptación.
 
-import { useEffect, useState } from 'react'
-import { SlidersHorizontal, Zap, Loader2, AlertCircle, Info } from 'lucide-react'
-import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
-import {
-  listChannelAcceptance,
-  setChannelAutoAccept,
-  type ChannelAcceptance,
-} from '@/modules/orders/services/orderAcceptanceService'
+import { useState } from 'react'
+import { MapPin } from 'lucide-react'
+import { Tabs } from '../../../components/ui'
+import { useApp } from '../../../context/AppContext'
+import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
+import AutoAcceptSettings from '../components/AutoAcceptSettings'
+import StationsSettings from '@/modules/kds/components/StationsSettings'
+import FamilyRoutingSettings from '@/modules/kds/components/FamilyRoutingSettings'
+import DevicesSettings from '@/modules/kds/components/DevicesSettings'
+
+type TabKey = 'autoaccept' | 'estaciones' | 'ruteo' | 'dispositivos'
+
+function LocationGuard() {
+  return (
+    <div className="grid place-items-center h-[40vh] text-center text-text-secondary">
+      <div>
+        <MapPin className="mx-auto mb-3" size={32} />
+        <p className="text-lg font-medium text-text-primary">Selecciona un local</p>
+        <p className="text-sm mt-1">Estos ajustes son por local. Elige uno en el selector de arriba.</p>
+      </div>
+    </div>
+  )
+}
 
 export default function OrdersSettingsPage() {
-  const { activeAccountId } = useActiveAccount()
+  const { activeAccountId } = useApp()
+  const { resolvedLocationId, isConsolidated } = useLocationScope()
+  const [tab, setTab] = useState<TabKey>('autoaccept')
 
-  const [channels, setChannels] = useState<ChannelAcceptance[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [savingId, setSavingId] = useState<string | null>(null)
+  if (!activeAccountId) return null
 
-  useEffect(() => {
-    if (!activeAccountId) return
-    let cancelled = false
-    setLoading(true)
-    setError(null)
-    listChannelAcceptance(activeAccountId)
-      .then(rows => { if (!cancelled) { setChannels(rows); setLoading(false) } })
-      .catch((e: unknown) => {
-        if (cancelled) return
-        setError(e instanceof Error ? e.message : 'Error cargando los canales')
-        setLoading(false)
-      })
-    return () => { cancelled = true }
-  }, [activeAccountId])
-
-  async function toggle(ch: ChannelAcceptance) {
-    if (!activeAccountId || savingId) return
-    const next = !ch.autoAccept
-    // Optimista: refleja el cambio ya; revierte si falla.
-    setChannels(prev => prev.map(c =>
-      c.channelId === ch.channelId ? { ...c, autoAccept: next, hasExplicitRow: true } : c))
-    setSavingId(ch.channelId)
-    try {
-      await setChannelAutoAccept(activeAccountId, ch.channelId, next)
-    } catch (e: unknown) {
-      setChannels(prev => prev.map(c =>
-        c.channelId === ch.channelId ? { ...c, autoAccept: ch.autoAccept } : c))
-      setError(e instanceof Error ? e.message : 'No se pudo guardar el cambio')
-    } finally {
-      setSavingId(null)
-    }
-  }
+  const hasLocation = !isConsolidated && !!resolvedLocationId
 
   return (
     <div className="max-w-3xl space-y-5">
-      {/* Cabecera */}
-      <div className="flex items-center gap-2">
-        <SlidersHorizontal size={20} className="text-accent shrink-0" />
-        <h1 className="text-xl font-semibold text-text-primary">Ajustes de pedidos</h1>
+      <div>
+        <h1 className="text-2xl font-display text-text-primary">Ajustes de pedidos</h1>
+        <p className="text-sm text-text-secondary mt-1">
+          Auto-aceptación por canal y configuración del tablero de cocina (estaciones, ruteo y tablets).
+        </p>
       </div>
 
-      {/* Sección: Auto-aceptación */}
-      <section className="rounded-xl border border-border-default bg-card overflow-hidden">
-        <div className="p-4 border-b border-border-default">
-          <div className="flex items-center gap-2">
-            <Zap size={18} className="text-accent shrink-0" />
-            <h2 className="text-base font-semibold text-text-primary">Auto-aceptación de pedidos</h2>
-          </div>
-          <p className="text-sm text-text-secondary mt-1.5">
-            Cuando está activada, los pedidos de ese canal se <strong>aceptan solos</strong> al entrar,
-            sin esperar a que nadie pulse un botón. Es lo recomendado: evita perder pedidos por el
-            límite de tiempo de plataformas como Uber. Desactívala en un canal solo si quieres
-            aceptar a mano.
-          </p>
-        </div>
+      <Tabs
+        value={tab}
+        onChange={v => setTab(v as TabKey)}
+        tabs={[
+          { value: 'autoaccept', label: 'Auto-aceptación' },
+          { value: 'estaciones', label: 'Estaciones' },
+          { value: 'ruteo', label: 'Ruteo familias' },
+          { value: 'dispositivos', label: 'Dispositivos' },
+        ]}
+      />
 
-        {error && (
-          <div className="mx-4 mt-4 p-3 rounded-md bg-danger-bg text-danger border border-danger/20 text-sm flex items-start gap-2">
-            <AlertCircle size={16} className="shrink-0 mt-0.5" />
-            <span>{error}</span>
-          </div>
-        )}
+      <div className="pt-1">
+        {/* Por cuenta: no exige local */}
+        {tab === 'autoaccept' && <AutoAcceptSettings accountId={activeAccountId} />}
 
-        {loading ? (
-          <div className="flex items-center gap-2 text-text-secondary p-6">
-            <Loader2 className="animate-spin" size={18} /> Cargando canales…
-          </div>
-        ) : channels.length === 0 ? (
-          <div className="p-6 text-sm text-text-secondary">
-            Esta cuenta aún no tiene canales de venta configurados. Cuando conectes Glovo, Uber o
-            Just Eat, aparecerán aquí para controlar su auto-aceptación.
-          </div>
-        ) : (
-          <ul className="divide-y divide-border-default">
-            {channels.map(ch => {
-              const saving = savingId === ch.channelId
-              return (
-                <li key={ch.channelId} className="flex items-center gap-3 px-4 py-3">
-                  <span
-                    className="w-2.5 h-2.5 rounded-full shrink-0"
-                    style={{ backgroundColor: ch.color || '#8B8178' }}
-                    aria-hidden
-                  />
-                  <span className="flex-1 min-w-0 text-sm font-medium text-text-primary truncate">
-                    {ch.name}
-                  </span>
-                  <span className={`text-xs ${ch.autoAccept ? 'text-success' : 'text-text-secondary'}`}>
-                    {ch.autoAccept ? 'Automática' : 'Manual'}
-                  </span>
-                  {/* Switch */}
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={ch.autoAccept}
-                    aria-label={`Auto-aceptación de ${ch.name}`}
-                    disabled={saving}
-                    onClick={() => void toggle(ch)}
-                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-base ${
-                      ch.autoAccept ? 'bg-accent' : 'bg-border-strong'
-                    } ${saving ? 'opacity-60 cursor-wait' : 'cursor-pointer'}`}
-                  >
-                    <span
-                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-base ${
-                        ch.autoAccept ? 'translate-x-[22px]' : 'translate-x-0.5'
-                      }`}
-                    />
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
+        {/* Por local: guard solo en estas tres pestañas */}
+        {tab === 'estaciones' && (
+          hasLocation && resolvedLocationId
+            ? <StationsSettings accountId={activeAccountId} locationId={resolvedLocationId} />
+            : <LocationGuard />
         )}
-
-        {/* Aviso de nivel marca (P-A) */}
-        {!loading && channels.length > 0 && (
-          <div className="px-4 py-3 border-t border-border-default text-xs text-text-secondary flex items-start gap-2">
-            <Info size={14} className="shrink-0 mt-0.5" />
-            <span>
-              La auto-aceptación se controla por canal. El ajuste fino por marca llegará cuando se
-              habiliten las conexiones por marca.
-            </span>
-          </div>
+        {tab === 'ruteo' && (
+          hasLocation && resolvedLocationId
+            ? <FamilyRoutingSettings accountId={activeAccountId} locationId={resolvedLocationId} />
+            : <LocationGuard />
         )}
-      </section>
+        {tab === 'dispositivos' && (
+          hasLocation && resolvedLocationId
+            ? <DevicesSettings accountId={activeAccountId} locationId={resolvedLocationId} />
+            : <LocationGuard />
+        )}
+      </div>
     </div>
   )
 }
