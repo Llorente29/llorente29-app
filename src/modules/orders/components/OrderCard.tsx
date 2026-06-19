@@ -184,8 +184,19 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
   const primary = primaryAction(order)
   const secondary = secondaryAction(order)
 
+  // Transiciones donde TODO debería estar hecho: avisar si quedan líneas sin marcar.
+  const READY_OR_CLOSE: OrderStatus[] = ['awaiting_collection', 'awaiting_shipment', 'in_delivery', 'completed']
+  const unmarkedCount = order.lineas.filter(l => !l.marked).length
+
   const run = async (next: OrderStatus) => {
     if (!onAdvance || busy) return
+    // #4 anti-faltantes: avisar (no bloquear) si se da por listo/cierra con líneas sin marcar
+    if (READY_OR_CLOSE.includes(next) && unmarkedCount > 0) {
+      const ok = window.confirm(
+        `Quedan ${unmarkedCount} ${unmarkedCount === 1 ? 'línea sin marcar' : 'líneas sin marcar'}. ¿Continuar de todos modos?`
+      )
+      if (!ok) return
+    }
     setBusy(true)
     try { await onAdvance(order.sale_id, next) } finally { setBusy(false) }
   }

@@ -27,6 +27,7 @@ import { getBrandById } from '../../services/brandsService'
 import type { Brand } from '../../../../types/multitenancy'
 import BrandDataTab from './BrandDataTab'
 import BrandLocationsTab from './BrandLocationsTab'
+import BrandLogoUploader from './BrandLogoUploader'
 
 // ─────────────────────────────────────────────────────────────────────
 // Configuración de tabs
@@ -151,6 +152,9 @@ export default function BrandDetailView({ brandId, onBack }: BrandDetailViewProp
               </p>
             </div>
           </div>
+
+          {/* Logo de la marca (lo consume el ticket de bolsa de impresión) */}
+          <BrandLogoUploader accountId={brand.accountId} brandId={brand.id} />
 
           {/* Tabs */}
           <div className="border-b border-border-default">
