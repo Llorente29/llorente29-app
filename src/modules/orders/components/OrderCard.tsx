@@ -2,22 +2,22 @@
 //
 // Tarjeta de pedido del feed (lente "por pedido"). Principios del diseño aprobado:
 //   - A1: la COMANDA COMPLETA en la tarjeta.
-//   - Modificadores y notas PROTAGONISTAS: rojo = quitar/alergia, ámbar = añadir.
+//   - Modificadores PROTAGONISTAS: rojo = quitar, ámbar = añadir, neutro = elección.
+//     Color por group_type del catálogo (verdad); texto como desempate; lo inferido
+//     se marca con un punto "sin confirmar". Bebidas/postres (cross_sell) al final.
 //   - Alérgenos desde el escandallo. Nota del cliente = banda roja, nunca truncada.
 //   - B2: el pedido que NECESITA ACCIÓN es más grande + halo; crítico parpadea.
 //   - Tema navy Folvy.
 //
-// RUTA COMPLETA: el pie avanza el pedido (Aceptar/Empezar/Listo/Completar + Cancelar).
-// ESCANDALLO: pulsar el nombre de un plato con receta abre el Cook Mode (KDS).
-// MARCAR LÍNEA: check a la izquierda de cada plato (reusa kds_mark_line, compartido
-//   con el KDS) — marcar aquí marca también en cocina.
+// RUTA COMPLETA: el pie avanza el pedido. ESCANDALLO: pulsar el plato abre Cook Mode.
+// MARCAR LÍNEA: check por plato (kds_mark_line, compartido con el KDS).
 
 import { useState } from 'react'
 import { ChefHat, Check } from 'lucide-react'
 import { timeLevel, channelLabel, ticketCode } from '@/modules/kds/kdsUtils'
 import ChannelBadge from './ChannelBadge'
 import {
-  primaryAction, secondaryAction,
+  primaryAction, secondaryAction, childVisual,
   type OrderFeedItem, type OrderFeedLine, type OrderFeedChild, type OrderStatus,
 } from '../services/ordersFeedService'
 
@@ -41,11 +41,6 @@ const TERMINAL: OrderStatus[] = ['completed', 'rejected', 'cancelled', 'delivery
 function isNeedsAction(s: OrderStatus): boolean { return NEEDS_ACTION.includes(s) }
 function isTerminal(s: OrderStatus): boolean { return TERMINAL.includes(s) }
 
-/** Heurística: ¿el modificador quita (rojo) o añade (ámbar)? Deuda declarada. */
-function modKind(name: string): 'remove' | 'add' {
-  return /^\s*(sin|no|quitar|without|sans)\b/i.test(name) ? 'remove' : 'add'
-}
-
 function fmt(n: number | null | undefined): string {
   if (n == null) return ''
   return n.toFixed(2).replace('.', ',') + ' €'
@@ -54,6 +49,7 @@ function fmt(n: number | null | undefined): string {
 // ── Sub-render ──────────────────────────────────────────────────────────────
 
 function ChildRow({ child }: { child: OrderFeedChild }) {
+  // Componente de combo: neutro, sin signo (forma parte del plato).
   if (child.line_type === 'combo_item') {
     return (
       <div className="flex items-center gap-2 text-[13px] font-semibold px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/10 text-[#dbe4ea]">
@@ -61,14 +57,25 @@ function ChildRow({ child }: { child: OrderFeedChild }) {
       </div>
     )
   }
-  const kind = modKind(child.name)
-  const cls = kind === 'remove'
-    ? 'bg-[#e5484d]/[0.16] text-[#f7a9ab] border-[#e5484d]/[0.35]'
-    : 'bg-[#e0a33e]/[0.16] text-[#f3cd86] border-[#e0a33e]/[0.32]'
-  const tag = kind === 'remove' ? '' : '+ '
+
+  const v = childVisual(child)
+  const cls =
+    v.tone === 'remove'
+      ? 'bg-[#e5484d]/[0.16] text-[#f7a9ab] border-[#e5484d]/[0.35]'
+      : v.tone === 'add'
+        ? 'bg-[#e0a33e]/[0.16] text-[#f3cd86] border-[#e0a33e]/[0.32]'
+        : 'bg-white/[0.04] text-[#dbe4ea] border-white/10'
+  const prefix = v.tone === 'add' ? '+ ' : ''
+
   return (
     <div className={`flex items-center gap-2 text-[14px] font-bold px-2.5 py-1.5 rounded-lg border ${cls}`}>
-      {tag}{child.name}
+      <span className="flex-1">{prefix}{child.name}</span>
+      {!v.confirmed && (
+        <span
+          className="shrink-0 w-1.5 h-1.5 rounded-full bg-current opacity-40"
+          title="Tipo inferido del texto (sin confirmar en el catálogo)"
+        />
+      )}
     </div>
   )
 }
@@ -195,7 +202,6 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
     <div className={`relative rounded-2xl overflow-hidden bg-[#16242f] ${halo} ${grow} ${terminal ? 'opacity-70' : ''}`}>
       <div className="absolute left-0 top-0 bottom-0 w-[5px]" style={{ backgroundColor: spine }} />
 
-      {/* cabecera */}
       <div className="flex items-center gap-2.5 px-4 pt-3.5 pb-2.5 pl-5">
         <span className="font-serif font-semibold text-[20px]" style={{ fontFamily: 'Fraunces, Georgia, serif' }}>
           {ticketCode(order.external_tab_ref, order.external_ref)}

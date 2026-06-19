@@ -6,11 +6,12 @@
 // set_order_status. El empuje al canal lo dispara el trigger trg_sale_push_status.
 //
 // CICLO DE VIDA POR TIPO DE REPARTO (7a):
-//   - platform (Glovo/Uber/JE): listo -> "Entregado al rider" -> cerrado. Folvy se
-//     desentiende al recoger el rider (Glovo gestiona el resto en su sistema).
+//   - platform (Glovo/Uber/JE): listo -> "Entregado al rider" -> cerrado.
 //   - pickup: listo -> "Entregado al cliente" -> cerrado.
-//   - own_delivery: listo -> "En reparto" -> "Completar". (7b añadirá "En ruta" +
-//     seguimiento con flota + métricas.)
+//   - own_delivery: listo -> "En reparto" -> "Completar". (7b: flota + métricas)
+//
+// MODIFICADORES (#6): cada hija trae group_type del catálogo (removal/extras/
+// choice/side/cross_sell/info) o null si no casó. El front pinta por ese dato.
 
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
 
@@ -21,11 +22,16 @@ export type OrderStatus =
   | 'awaiting_collection' | 'awaiting_shipment' | 'in_delivery'
   | 'completed' | 'rejected' | 'cancelled' | 'delivery_failed'
 
+/** Tipo de grupo de modificador del catálogo (verdad estructural). */
+export type ModifierGroupType =
+  | 'choice' | 'extras' | 'removal' | 'side' | 'cross_sell' | 'info'
+
 export interface OrderFeedChild {
   line_id: string
   name: string
   qty: number
-  line_type: string
+  line_type: string                          // 'combo_item' | 'modifier'
+  group_type: ModifierGroupType | null       // null si no casó con el catálogo
   customer_note: string | null
 }
 
@@ -101,7 +107,6 @@ export function primaryAction(order: OrderFeedItem): OrderAction | null {
     case 'accepted':
       return { label: 'Empezar', next: 'in_preparation' }
     case 'in_preparation':
-      // pickup y plataforma -> "listo esperando recogida"; reparto propio -> a reparto
       return (isPickup(s) || isPlatformDelivery(s))
         ? { label: 'Marcar listo', next: 'awaiting_collection' }
         : { label: 'Marcar listo', next: 'in_delivery' }
@@ -130,6 +135,36 @@ export function secondaryAction(order: OrderFeedItem): OrderAction | null {
   return { label: 'Cancelar', next: 'cancelled' }
 }
 
+// ── Modificadores: cómo pintar una hija (#6) ────────────────────────────────
+
+export type ChildTone = 'remove' | 'add' | 'neutral'
+export interface ChildVisual { tone: ChildTone; confirmed: boolean }
+
+const LOOKS_REMOVE = /^\s*(sin|no|quitar|without|sans)\b/i
+
+/**
+ * Decide cómo pintar una hija combinando el dato del catálogo (group_type, fiable)
+ * con el texto como desempate/red de seguridad. confirmed=false => inferido.
+ */
+export function childVisual(child: OrderFeedChild): ChildVisual {
+  if (child.line_type === 'combo_item') return { tone: 'neutral', confirmed: true }
+  const looksRemove = LOOKS_REMOVE.test(child.name)
+  switch (child.group_type) {
+    case 'removal': return { tone: 'remove', confirmed: true }
+    case 'extras':  return { tone: 'add', confirmed: true }
+    case 'choice':
+    case 'side':
+      // elección del plato; si el texto dice "sin", es un quitar mal clasificado
+      return looksRemove ? { tone: 'remove', confirmed: false } : { tone: 'neutral', confirmed: true }
+    case 'cross_sell':
+    case 'info':
+      return { tone: 'neutral', confirmed: true }
+    default:
+      // no casó con el catálogo: heurística por texto, sin confirmar
+      return looksRemove ? { tone: 'remove', confirmed: false } : { tone: 'add', confirmed: false }
+  }
+}
+
 // ── Llamadas a las RPC ──────────────────────────────────────────────────────
 
 function requireSupabase(): void {
@@ -138,7 +173,6 @@ function requireSupabase(): void {
   }
 }
 
-/** Trae el feed de pedidos de un local. */
 export async function getOrdersFeed(locationId: string): Promise<OrdersFeedResult> {
   requireSupabase()
   const { data, error } = await supabase!.rpc('orders_feed', { p_location_id: locationId })
@@ -146,10 +180,6 @@ export async function getOrdersFeed(locationId: string): Promise<OrdersFeedResul
   return data as unknown as OrdersFeedResult
 }
 
-/**
- * Avanza el pedido: mueve order_status con la sesión del usuario (guard manager/admin).
- * El empuje al canal lo dispara el trigger trg_sale_push_status automáticamente.
- */
 export async function advanceOrder(saleId: string, newStatus: OrderStatus): Promise<void> {
   requireSupabase()
   const { error } = await supabase!.rpc('set_order_status', {
