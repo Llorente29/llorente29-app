@@ -13,9 +13,10 @@
 // MARCAR LÍNEA: check por plato (kds_mark_line, compartido con el KDS).
 
 import { useState } from 'react'
-import { ChefHat, Check } from 'lucide-react'
+import { ChefHat, Check, Printer } from 'lucide-react'
 import { timeLevel, channelLabel, ticketCode } from '@/modules/kds/kdsUtils'
 import ChannelBadge from './ChannelBadge'
+import TicketPreviewModal from './TicketPreviewModal'
 import {
   primaryAction, secondaryAction, childVisual,
   type OrderFeedItem, type OrderFeedLine, type OrderFeedChild, type OrderStatus,
@@ -165,6 +166,7 @@ interface OrderCardProps {
 export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRecipe, onMarkLine }: OrderCardProps) {
   const [busy, setBusy] = useState(false)
   const [markingId, setMarkingId] = useState<string | null>(null)
+  const [showTickets, setShowTickets] = useState(false)
   const level = timeLevel(order.minutos)
   const needsAction = isNeedsAction(order.order_status)
   const terminal = isTerminal(order.order_status)
@@ -218,7 +220,14 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
           {ticketCode(order.external_tab_ref, order.external_ref)}
         </span>
         <ChannelBadge channel={order.channel ?? channelLabel(order.channel)} />
-        <span className="ml-auto inline-flex items-center gap-1.5 font-extrabold text-[16px] tabular-nums" style={{ color: timeColor }}>
+        <button
+          onClick={() => setShowTickets(true)}
+          title="Previsualizar tickets"
+          className="ml-auto shrink-0 w-7 h-7 rounded-lg grid place-items-center text-[#5f7280] ring-1 ring-[#243a48] hover:text-[#D67442] hover:ring-[#D67442]/50"
+        >
+          <Printer size={15} />
+        </button>
+        <span className="inline-flex items-center gap-1.5 font-extrabold text-[16px] tabular-nums" style={{ color: timeColor }}>
           <span className="w-2 h-2 rounded-full" style={{ backgroundColor: spine }} />
           {order.minutos}′
         </span>
@@ -297,6 +306,10 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
           </div>
         )}
       </div>
+
+      {showTickets && (
+        <TicketPreviewModal order={order} onClose={() => setShowTickets(false)} />
+      )}
     </div>
   )
 }
