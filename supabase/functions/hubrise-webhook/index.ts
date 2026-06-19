@@ -20,6 +20,16 @@
 // MARCA: por (location_id, connection_name) vía external_brand_map source='hubrise'.
 //        Nunca se deduce del producto (principio de marca estable).
 //
+// AUTO-ACEPTACIÓN (fase 2, 19/06): estándar de los integradores — el pedido entra
+//   YA aceptado; nadie corre contra el reloj de 10 min de Uber. La decisión vive en
+//   la FRONTERA (aquí), leyendo `order_acceptance_config` (cuenta × canal × marca),
+//   y el empuje reusa el helper compartido `_shared/hubrisePush.ts`. Baseline = ON
+//   (sin fila de config -> se auto-acepta). Una fila auto_accept=false APAGA ese caso.
+//   GUARDA anti-doble-empuje: solo se empuja `accepted` si el pedido entra en
+//   new|received (si HubRise ya manda accepted/in_preparation no se toca). El espejo
+//   local de `order_status='accepted'` SOLO si HubRise da 2xx (nunca mentimos).
+//   `respect_hours` queda leído pero INERTE hasta que exista el módulo Horarios.
+//
 // SEGURIDAD (frontera): HubRise firma cada request con
 //   X-HubRise-Hmac-SHA256 = HEX( HMAC_SHA256( body_crudo, CLIENT_SECRET ) ).
 //   OJO (verificado contra la doc de HubRise): la firma es HEXDIGEST (no base64)
@@ -38,6 +48,7 @@
 //  aplicación, en hex. No es por conexión.)
 
 import { corsHeaders } from "../_shared/cors.ts";
+import { pushOrderStatus } from "../_shared/hubrisePush.ts";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const HUBRISE_WEBHOOK_SECRET = Deno.env.get("HUBRISE_WEBHOOK_SECRET") ?? "";
@@ -182,6 +193,45 @@ async function resolveChannel(
   return data.id as string;
 }
 
+// ── Resolución de AUTO-ACEPTACIÓN (cuenta × canal × marca) ───────────────────
+// Lee order_acceptance_config y elige la fila MÁS ESPECÍFICA que case con el
+// pedido. Especificidad: marca+canal (4) > marca (3) > canal (2) > defecto (1).
+// NULL en la fila = comodín. Sin ninguna fila que case -> baseline ON (auto-acepta).
+async function resolveAutoAccept(
+  sb: SupabaseClient, accountId: string, channelId: string | null, brandId: string | null,
+): Promise<{ autoAccept: boolean; respectHours: boolean }> {
+  const { data, error } = await sb.from("order_acceptance_config")
+    .select("channel_id, brand_id, auto_accept, respect_hours")
+    .eq("account_id", accountId);
+  if (error) {
+    // Config ilegible -> no bloquear la ingesta; cae al baseline (ON) con prudencia
+    // de NO empujar si no podemos leer (mejor manual que doble empuje a ciegas).
+    console.error(`order_acceptance_config: ${error.message}`);
+    return { autoAccept: false, respectHours: false };
+  }
+
+  let best: { score: number; autoAccept: boolean; respectHours: boolean } | null = null;
+  for (const row of (data ?? []) as Array<Record<string, unknown>>) {
+    const rCh = (row["channel_id"] as string | null) ?? null;
+    const rBr = (row["brand_id"] as string | null) ?? null;
+    // La fila debe CASAR: su canal es comodín o == canal del pedido; íd. marca.
+    if (rCh !== null && rCh !== channelId) continue;
+    if (rBr !== null && rBr !== brandId) continue;
+    const score = (rCh !== null ? 2 : 0) + (rBr !== null ? 3 : 0) + 1; // defecto=1
+    if (!best || score > best.score) {
+      best = {
+        score,
+        autoAccept: row["auto_accept"] !== false,         // null/true -> true
+        respectHours: row["respect_hours"] === true,
+      };
+    }
+  }
+
+  // Sin fila que case = baseline ON (estándar integradores).
+  if (!best) return { autoAccept: true, respectHours: false };
+  return { autoAccept: best.autoAccept, respectHours: best.respectHours };
+}
+
 // ── upsertSale: crea o REFRESCA la venta desde el pedido HubRise. NO la cierra. ──
 // Idempotente por external_ref = order.id. GUARD: una venta ya closed/cancelled
 // NO se re-adapta (un update tardío no corrompe una venta consolidada).
@@ -249,6 +299,44 @@ async function upsertSale(
     throw new Error(`adapt_hubrise_order ${orderId}: ${adaptErr.message}`);
   }
   return { id: saleRow.id, status: "open", isNew: true };
+}
+
+// ── Auto-aceptación: empuja `accepted` en la frontera si procede ─────────────
+// Guardas: el pedido entra en new|received (nunca re-acepta), la config resuelve
+// a ON, y hay external_ref. El espejo local SOLO si HubRise da 2xx.
+// Devuelve true si dejó el pedido aceptado (para no pisar luego con el estado entrante).
+async function maybeAutoAccept(
+  sb: SupabaseClient,
+  args: {
+    accountId: string; saleId: string; externalRef: string;
+    incomingStatus: string | null; channelId: string | null; brandId: string | null;
+  },
+): Promise<boolean> {
+  const incoming = (args.incomingStatus ?? "").toLowerCase();
+  // Solo sobre pedidos aún sin aceptar. Si ya viene accepted/in_preparation/etc.,
+  // no tocamos nada (evita doble empuje en los order.update de HubRise).
+  if (incoming !== "new" && incoming !== "received") return false;
+  if (!args.externalRef) return false;
+
+  const cfg = await resolveAutoAccept(sb, args.accountId, args.channelId, args.brandId);
+  if (!cfg.autoAccept) return false;
+  // cfg.respectHours queda INERTE hasta Horarios (no se evalúa todavía).
+
+  const res = await pushOrderStatus(args.externalRef, "accepted", { confirmedTime: null });
+  if (!res.ok) {
+    // No mentimos el estado: si HubRise rechaza, el pedido se queda como entró.
+    console.error(`auto-accept push ${args.externalRef}: ${res.error} (HTTP ${res.status})`);
+    return false;
+  }
+
+  // Espejo local SOLO tras 2xx de HubRise.
+  const { error: updErr } = await sb.from("sale")
+    .update({ order_status: "accepted" }).eq("id", args.saleId);
+  if (updErr) {
+    console.error(`auto-accept mirror ${args.saleId}: ${updErr.message}`);
+    // El empuje a HubRise sí ocurrió; el espejo se recupera en el próximo order.update.
+  }
+  return true;
 }
 
 async function cancelByOrderId(
@@ -344,10 +432,21 @@ Deno.serve(async (req: Request) => {
           sb, loc.accountId, channelSlug(order["channel"] as string | null));
 
         const r = await upsertSale(sb, loc.accountId, loc.locationId, order, { brandId, channelId });
+
         if (r && canon === "closed" && r.status === "open") {
           // completed -> consolidar coste + consumo.
           const { error: closeErr } = await sb.rpc("close_sale", { p_sale_id: r.id });
           if (closeErr) console.error(`close_sale ${orderId}: ${closeErr.message}`);
+        } else if (r && r.status === "open") {
+          // AUTO-ACEPTACIÓN (solo pedidos vivos sin aceptar; la función guarda el resto).
+          await maybeAutoAccept(sb, {
+            accountId: loc.accountId,
+            saleId: r.id,
+            externalRef: String(orderId ?? ""),
+            incomingStatus: (order["status"] as string | null) ?? null,
+            channelId,
+            brandId,
+          });
         }
         processedOk = true;
       }
