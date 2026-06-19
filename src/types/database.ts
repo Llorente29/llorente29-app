@@ -5408,6 +5408,7 @@ export type Database = {
           lastapp_organization_id: string
           organization_name: string | null
           ownership_type: string
+          push_status_enabled: boolean
           token_secret_name: string
           updated_at: string
         }
@@ -5419,6 +5420,7 @@ export type Database = {
           lastapp_organization_id: string
           organization_name?: string | null
           ownership_type?: string
+          push_status_enabled?: boolean
           token_secret_name: string
           updated_at?: string
         }
@@ -5430,6 +5432,7 @@ export type Database = {
           lastapp_organization_id?: string
           organization_name?: string | null
           ownership_type?: string
+          push_status_enabled?: boolean
           token_secret_name?: string
           updated_at?: string
         }
@@ -11836,6 +11839,10 @@ export type Database = {
           p_price?: number
         }
         Returns: undefined
+      }
+      set_order_status: {
+        Args: { p_new_status: string; p_sale_id: string }
+        Returns: string
       }
       set_plan_pricing: {
         Args: {

@@ -9,12 +9,17 @@
 //     el crítico por tiempo (rojo) parpadea.
 //   - Tema navy Folvy (pase oscuro), no negro puro.
 //
-// Las acciones (aceptar/rechazar) llegan en el sub-paso siguiente; esta tarjeta ya
-// deja el hueco del pie.
+// RUTA COMPLETA: el pie tiene la acción de avance (Aceptar -> Empezar -> Listo ->
+// Completar) + una secundaria (Cancelar / Rechazar / Reabrir). Mueve el estado
+// operativo interno vía onAdvance (no notifica aún a la plataforma).
 
+import { useState } from 'react'
 import { timeLevel, channelLabel, ticketCode } from '@/modules/kds/kdsUtils'
 import ChannelBadge from './ChannelBadge'
-import type { OrderFeedItem, OrderFeedLine, OrderFeedChild, OrderStatus } from '../services/ordersFeedService'
+import {
+  primaryAction, secondaryAction,
+  type OrderFeedItem, type OrderFeedLine, type OrderFeedChild, type OrderStatus,
+} from '../services/ordersFeedService'
 
 // ── Etiquetas y agrupaciones de estado ──────────────────────────────────────
 
@@ -60,7 +65,6 @@ function ChildRow({ child }: { child: OrderFeedChild }) {
       </div>
     )
   }
-  // modifier
   const kind = modKind(child.name)
   const cls = kind === 'remove'
     ? 'bg-[#e5484d]/[0.16] text-[#f7a9ab] border-[#e5484d]/[0.35]'
@@ -116,18 +120,19 @@ interface OrderCardProps {
   order: OrderFeedItem
   /** En cuadrícula, el que necesita acción ocupa 2 columnas (B2). En kanban no. */
   allowGrow?: boolean
+  /** Avanza/cambia el estado del pedido. */
+  onAdvance?: (saleId: string, next: OrderStatus) => void | Promise<void>
 }
 
-export default function OrderCard({ order, allowGrow = true }: OrderCardProps) {
+export default function OrderCard({ order, allowGrow = true, onAdvance }: OrderCardProps) {
+  const [busy, setBusy] = useState(false)
   const level = timeLevel(order.minutos)
   const needsAction = isNeedsAction(order.order_status)
   const terminal = isTerminal(order.order_status)
   const critical = needsAction && level === 'late'
 
-  // Lomo de urgencia
   const spine = level === 'late' ? '#e5484d' : level === 'warn' ? '#e0a33e' : '#3ba776'
 
-  // B2: halo + tamaño
   const grow = allowGrow && needsAction ? 'sm:col-span-2' : ''
   const halo = critical
     ? 'ring-2 ring-[#e5484d] shadow-[0_14px_40px_rgba(229,72,77,0.3)] animate-pulse'
@@ -137,11 +142,21 @@ export default function OrderCard({ order, allowGrow = true }: OrderCardProps) {
 
   const timeColor = level === 'late' ? '#f4999c' : level === 'warn' ? '#f3cd86' : '#86e0b6'
 
+  const primary = primaryAction(order)
+  const secondary = secondaryAction(order)
+
+  const run = async (next: OrderStatus) => {
+    if (!onAdvance || busy) return
+    setBusy(true)
+    try { await onAdvance(order.sale_id, next) } finally { setBusy(false) }
+  }
+
+  const secIsDanger = secondary != null && (secondary.next === 'cancelled' || secondary.next === 'rejected')
+
   return (
     <div
       className={`relative rounded-2xl overflow-hidden bg-[#16242f] ${halo} ${grow} ${terminal ? 'opacity-70' : ''}`}
     >
-      {/* lomo de urgencia */}
       <div className="absolute left-0 top-0 bottom-0 w-[5px]" style={{ backgroundColor: spine }} />
 
       {/* cabecera */}
@@ -183,18 +198,47 @@ export default function OrderCard({ order, allowGrow = true }: OrderCardProps) {
         {order.lineas.map(l => <LineRow key={l.line_id} line={l} />)}
       </div>
 
-      {/* pie: total + (acciones en sub-paso siguiente) */}
-      <div className="px-4 py-3 pl-5 border-t border-white/[0.07] flex items-center gap-3">
-        <span className="font-serif font-semibold text-[18px] tabular-nums" style={{ fontFamily: 'Fraunces, Georgia, serif' }}>
-          {fmt(order.total)}
-          {order.paid != null && order.paid > 0 && (
-            <span className="text-[11px] font-bold text-[#7fd6ab] bg-[#3ba776]/[0.14] border border-[#3ba776]/30 px-2 py-0.5 rounded-md ml-2 align-middle">Pagado</span>
-          )}
-        </span>
-        {order.service_type && (
-          <span className="ml-auto text-[11.5px] text-[#5f7280] font-semibold uppercase tracking-wide">
-            {order.service_type.includes('collection') ? 'Recogida' : 'Entrega'}
+      {/* pie: total + acciones de avance (ruta completa) */}
+      <div className="px-4 py-3 pl-5 border-t border-white/[0.07]">
+        <div className="flex items-center gap-3">
+          <span className="font-serif font-semibold text-[18px] tabular-nums" style={{ fontFamily: 'Fraunces, Georgia, serif' }}>
+            {fmt(order.total)}
+            {order.paid != null && order.paid > 0 && (
+              <span className="text-[11px] font-bold text-[#7fd6ab] bg-[#3ba776]/[0.14] border border-[#3ba776]/30 px-2 py-0.5 rounded-md ml-2 align-middle">Pagado</span>
+            )}
           </span>
+          {order.service_type && (
+            <span className="ml-auto text-[11.5px] text-[#5f7280] font-semibold uppercase tracking-wide">
+              {order.service_type.includes('collection') || order.service_type.includes('pickup') ? 'Recogida' : 'Entrega'}
+            </span>
+          )}
+        </div>
+
+        {onAdvance && (primary || secondary) && (
+          <div className="flex items-center gap-2 mt-3">
+            {secondary && (
+              <button
+                onClick={() => run(secondary.next)}
+                disabled={busy}
+                className={`px-3 py-2 rounded-xl text-[13px] font-bold ring-1 disabled:opacity-50 ${
+                  secIsDanger
+                    ? 'text-[#f4999c] ring-[#e5484d]/40 hover:bg-[#e5484d]/[0.12]'
+                    : 'text-[#93a6b3] ring-[#243a48] hover:text-[#f2efe9]'
+                }`}
+              >
+                {secondary.label}
+              </button>
+            )}
+            {primary && (
+              <button
+                onClick={() => run(primary.next)}
+                disabled={busy}
+                className="ml-auto flex-1 px-4 py-2.5 rounded-xl text-[14px] font-extrabold bg-[#D67442] text-[#1a1208] hover:bg-[#e08652] disabled:opacity-50"
+              >
+                {busy ? '…' : primary.label}
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>

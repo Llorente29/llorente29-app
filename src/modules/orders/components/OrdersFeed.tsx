@@ -5,17 +5,19 @@
 //   - Filtros por estado (Activos / Nuevos / En curso / Cerrados / Incidencias).
 //   - Contadores de cabecera.
 //   - Orden: los que necesitan acción arriba; dentro, el más antiguo primero.
-//   - Polling 10s + realtime sobre `sale` (mismo patrón que KdsBoard; `sale` no
-//     está en la publicación realtime → el polling es el sostén fiable).
-//   - Sonido al entrar un pedido nuevo (reusa playNewTicketSound).
-//
-// Las acciones (aceptar/rechazar) llegan en el sub-paso siguiente.
+//   - Polling 10s + realtime sobre `sale`.
+//   - Sonido al entrar CUALQUIER pedido nuevo accionable (no solo 'new').
+//   - RUTA COMPLETA: cada tarjeta avanza vía advanceOrder (estado interno + empuje
+//     al canal). Si el empuje a la plataforma falla, avisa (el estado interno avanzó).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { LayoutGrid, Columns3, RefreshCw, Volume2 } from 'lucide-react'
+import { LayoutGrid, Columns3, RefreshCw, Volume2, VolumeX } from 'lucide-react'
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
 import { playNewTicketSound } from '@/modules/kds/kdsUtils'
-import { getOrdersFeed, type OrderFeedItem, type OrderStatus } from '../services/ordersFeedService'
+import {
+  getOrdersFeed, advanceOrder, isTerminalStatus,
+  type OrderFeedItem, type OrderStatus,
+} from '../services/ordersFeedService'
 import OrderCard from './OrderCard'
 
 const POLL_MS = 10_000
@@ -35,7 +37,6 @@ const FILTER_LABEL: Record<FilterKey, string> = {
   activos: 'Activos', nuevos: 'Nuevos', curso: 'En curso', cerrados: 'Cerrados', incidencias: 'Incidencias',
 }
 
-// Columnas del kanban (orden de izquierda a derecha).
 const KANBAN: { key: string; label: string; dot: string; match: (s: OrderStatus) => boolean }[] = [
   { key: 'new',   label: 'Por aceptar',     dot: '#D67442', match: s => ['new','received'].includes(s) },
   { key: 'prep',  label: 'En preparación',  dot: '#e0a33e', match: s => ['accepted','in_preparation'].includes(s) },
@@ -44,7 +45,6 @@ const KANBAN: { key: string; label: string; dot: string; match: (s: OrderStatus)
 
 function isNew(s: OrderStatus): boolean { return ['new','received'].includes(s) }
 
-/** Orden: los que necesitan acción arriba; dentro, más antiguo (más minutos) primero. */
 function sortOrders(a: OrderFeedItem, b: OrderFeedItem): number {
   const na = isNew(a.order_status) ? 0 : 1
   const nb = isNew(b.order_status) ? 0 : 1
@@ -58,19 +58,21 @@ export default function OrdersFeed({ locationId }: OrdersFeedProps) {
   const [orders, setOrders] = useState<OrderFeedItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const [view, setView] = useState<ViewKey>('grid')
   const [filter, setFilter] = useState<FilterKey>('activos')
-  const [soundOn, setSoundOn] = useState(false)
+  const [soundOn, setSoundOn] = useState(true)
   const knownIds = useRef<Set<string>>(new Set())
   const firstLoad = useRef(true)
+  const soundRef = useRef(true)
+  soundRef.current = soundOn
 
   const refresh = useCallback(async () => {
     try {
       const res = await getOrdersFeed(locationId)
       const next = res.orders ?? []
-      // sonido al entrar un pedido nuevo (tras la primera carga)
-      if (soundOn && !firstLoad.current) {
-        const fresh = next.some(o => isNew(o.order_status) && !knownIds.current.has(o.sale_id))
+      if (soundRef.current && !firstLoad.current) {
+        const fresh = next.some(o => !knownIds.current.has(o.sale_id) && !isTerminalStatus(o.order_status))
         if (fresh) playNewTicketSound()
       }
       knownIds.current = new Set(next.map(o => o.sale_id))
@@ -82,9 +84,23 @@ export default function OrdersFeed({ locationId }: OrdersFeedProps) {
     } finally {
       setLoading(false)
     }
-  }, [locationId, soundOn])
+  }, [locationId])
 
-  // Carga inicial + al cambiar de local
+  // Avanza el pedido (estado interno + empuje al canal). Avisa si el empuje falla.
+  const advance = useCallback(async (saleId: string, next: OrderStatus) => {
+    try {
+      const res = await advanceOrder(saleId, next)
+      if (res?.push?.attempted && !res.push.ok) {
+        setNotice(`Pedido avanzado, pero no se pudo notificar a la plataforma: ${res.push.reason ?? ''}`)
+      } else {
+        setNotice(null)
+      }
+      await refresh()
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'No se pudo actualizar el pedido')
+    }
+  }, [refresh])
+
   useEffect(() => {
     firstLoad.current = true
     setLoading(true)
@@ -92,13 +108,11 @@ export default function OrdersFeed({ locationId }: OrdersFeedProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locationId])
 
-  // Polling fiable
   useEffect(() => {
     const id = window.setInterval(() => { void refresh() }, POLL_MS)
     return () => window.clearInterval(id)
   }, [refresh])
 
-  // Realtime sobre sale (refuerza el polling cuando hay sesión)
   useEffect(() => {
     if (!isSupabaseEnabled || !supabase) return
     const ch = supabase
@@ -121,6 +135,14 @@ export default function OrdersFeed({ locationId }: OrdersFeedProps) {
 
   const filterCount = (k: FilterKey) => orders.filter(o => FILTERS[k](o.order_status)).length
 
+  const toggleSound = () => {
+    setSoundOn(prev => {
+      const nv = !prev
+      if (nv) playNewTicketSound()
+      return nv
+    })
+  }
+
   return (
     <div className="rounded-2xl overflow-hidden ring-1 ring-[#243a48] bg-[#0e1820] text-[#f2efe9] flex flex-col h-[calc(100vh-9rem)] min-h-[520px]">
       {/* Cabecera */}
@@ -136,11 +158,11 @@ export default function OrdersFeed({ locationId }: OrdersFeedProps) {
           )}
         </div>
         <button
-          onClick={() => setSoundOn(s => !s)}
-          title={soundOn ? 'Sonido activado' : 'Sonido desactivado'}
+          onClick={toggleSound}
+          title={soundOn ? 'Sonido activado · tocar para silenciar' : 'Sonido silenciado · tocar para activar'}
           className={`p-2 rounded-lg ring-1 ${soundOn ? 'bg-[#1d3242] text-[#f2efe9] ring-[#2c4a6e]' : 'bg-[#16242f] text-[#5f7280] ring-[#243a48]'}`}
         >
-          <Volume2 size={16} />
+          {soundOn ? <Volume2 size={16} /> : <VolumeX size={16} />}
         </button>
         <button onClick={() => void refresh()} title="Actualizar" className="p-2 rounded-lg bg-[#16242f] text-[#93a6b3] ring-1 ring-[#243a48] hover:text-[#f2efe9]">
           <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
@@ -170,6 +192,12 @@ export default function OrdersFeed({ locationId }: OrdersFeedProps) {
         {error && (
           <div className="text-[#f4999c] bg-[#e5484d]/[0.12] border border-[#e5484d]/30 rounded-xl px-4 py-3 text-sm mb-4">{error}</div>
         )}
+        {notice && (
+          <div className="text-[#f3cd86] bg-[#e0a33e]/[0.12] border border-[#e0a33e]/30 rounded-xl px-4 py-3 text-sm mb-4 flex items-center gap-3">
+            <span className="flex-1">{notice}</span>
+            <button onClick={() => setNotice(null)} className="text-[#93a6b3] hover:text-[#f2efe9] font-bold">Cerrar</button>
+          </div>
+        )}
 
         {loading && orders.length === 0 ? (
           <div className="grid place-items-center h-[50vh] text-[#5f7280]">Cargando pedidos…</div>
@@ -182,7 +210,7 @@ export default function OrdersFeed({ locationId }: OrdersFeedProps) {
           </div>
         ) : view === 'grid' ? (
           <div className="grid gap-4 items-start" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(330px, 1fr))' }}>
-            {filtered.map(o => <OrderCard key={o.sale_id} order={o} allowGrow />)}
+            {filtered.map(o => <OrderCard key={o.sale_id} order={o} allowGrow onAdvance={advance} />)}
           </div>
         ) : (
           <div className="grid gap-4 h-full" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
@@ -196,7 +224,7 @@ export default function OrdersFeed({ locationId }: OrdersFeedProps) {
                     <span className="ml-auto bg-[#1d3242] text-[#93a6b3] text-[12px] font-extrabold px-2 py-px rounded-full tabular-nums">{list.length}</span>
                   </div>
                   <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3">
-                    {list.map(o => <OrderCard key={o.sale_id} order={o} allowGrow={false} />)}
+                    {list.map(o => <OrderCard key={o.sale_id} order={o} allowGrow={false} onAdvance={advance} />)}
                   </div>
                 </div>
               )

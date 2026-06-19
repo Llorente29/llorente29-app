@@ -3,6 +3,10 @@
 // Servicio del FEED de pedidos (lente "por pedido"). Llama a la RPC orders_feed
 // (ya tipada en database.ts) y expone tipos espejo del JSON que devuelve.
 //
+// Avance del pedido (ruta completa): advanceOrder llama a la Edge order-advance,
+// que mueve el estado interno + empuja al canal (Last) cuando procede. setOrderStatus
+// (RPC directa) queda como utilidad de bajo nivel (la Edge la usa por dentro).
+//
 // Agnóstico de canal: la RPC ya entrega campos canónicos; este servicio no sabe
 // de HubRise/Otter/Last.
 
@@ -73,7 +77,60 @@ export interface OrdersFeedResult {
   orders: OrderFeedItem[]
 }
 
-// ── Llamada a la RPC ────────────────────────────────────────────────────────
+// ── Transiciones (la "ruta completa" del pedido) ────────────────────────────
+
+const TERMINAL_SET: OrderStatus[] = ['completed', 'rejected', 'cancelled', 'delivery_failed']
+export function isTerminalStatus(s: OrderStatus): boolean { return TERMINAL_SET.includes(s) }
+
+function isPickup(serviceType: string | null): boolean {
+  const t = (serviceType ?? '').toLowerCase()
+  return t.includes('collection') || t.includes('pickup') || t.includes('takeaway')
+}
+
+export interface OrderAction { label: string; next: OrderStatus }
+
+/** Acción PRIMARIA de avance según el estado actual. null si es terminal. */
+export function primaryAction(order: OrderFeedItem): OrderAction | null {
+  switch (order.order_status) {
+    case 'new':
+    case 'received':
+      return { label: 'Aceptar', next: 'accepted' }
+    case 'accepted':
+      return { label: 'Empezar', next: 'in_preparation' }
+    case 'in_preparation':
+      return isPickup(order.service_type)
+        ? { label: 'Marcar listo', next: 'awaiting_collection' }
+        : { label: 'Marcar listo', next: 'in_delivery' }
+    case 'awaiting_collection':
+    case 'awaiting_shipment':
+    case 'in_delivery':
+      return { label: 'Completar', next: 'completed' }
+    default:
+      return null
+  }
+}
+
+/** Acción SECUNDARIA: cancelar (activos) o reabrir (terminales). */
+export function secondaryAction(order: OrderFeedItem): OrderAction | null {
+  if (isTerminalStatus(order.order_status)) {
+    return { label: 'Reabrir', next: 'in_preparation' }
+  }
+  if (order.order_status === 'new' || order.order_status === 'received') {
+    return { label: 'Rechazar', next: 'rejected' }
+  }
+  return { label: 'Cancelar', next: 'cancelled' }
+}
+
+// ── Resultado del avance (incluye el empuje al canal) ───────────────────────
+
+export interface AdvanceResult {
+  ok: boolean
+  internal_status?: string
+  push?: { attempted: boolean; ok: boolean; reason?: string }
+  error?: string
+}
+
+// ── Llamadas a las RPC / Edge ───────────────────────────────────────────────
 
 function requireSupabase(): void {
   if (!isSupabaseEnabled || !supabase) {
@@ -87,4 +144,24 @@ export async function getOrdersFeed(locationId: string): Promise<OrdersFeedResul
   const { data, error } = await supabase!.rpc('orders_feed', { p_location_id: locationId })
   if (error) throw new Error(`Orders · orders_feed: ${error.message}`)
   return data as unknown as OrdersFeedResult
+}
+
+/** RPC directa de bajo nivel: solo mueve el estado interno (sin empuje). */
+export async function setOrderStatus(saleId: string, newStatus: OrderStatus): Promise<void> {
+  requireSupabase()
+  const { error } = await supabase!.rpc('set_order_status', {
+    p_sale_id: saleId,
+    p_new_status: newStatus,
+  })
+  if (error) throw new Error(`Orders · set_order_status: ${error.message}`)
+}
+
+/** Avanza el pedido (ruta completa): estado interno + empuje al canal (Last). */
+export async function advanceOrder(saleId: string, newStatus: OrderStatus): Promise<AdvanceResult> {
+  requireSupabase()
+  const { data, error } = await supabase!.functions.invoke('order-advance', {
+    body: { sale_id: saleId, new_status: newStatus },
+  })
+  if (error) throw new Error(`Orders · order-advance: ${error.message}`)
+  return data as AdvanceResult
 }
