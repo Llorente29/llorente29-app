@@ -144,16 +144,25 @@ function Block({ blk }: { blk: TicketBlock }) {
 
 function QrBlock({ data, caption, size }: { data: string; caption?: string; size: 'sm' | 'lg' }) {
   const [url, setUrl] = useState<string | null>(null)
-  const px = size === 'lg' ? 70 : 34
+  const px = size === 'lg' ? 96 : 34
   useEffect(() => {
     let on = true
     QRCode.toDataURL(data, { width: px * 2, margin: 0 }).then((u) => { if (on) setUrl(u) }).catch(() => {})
     return () => { on = false }
   }, [data, px])
+  // 'lg' (bolsa): QR CENTRADO con el caption DEBAJO. 'sm' (pegatina): pequeño en línea.
+  if (size === 'lg') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, marginTop: 8 }}>
+        {url ? <img src={url} width={px} height={px} alt="QR" /> : <div style={{ width: px, height: px, background: '#eee' }} />}
+        {caption && <div style={{ fontSize: 10.5, lineHeight: 1.4, textAlign: 'center', fontWeight: 600, maxWidth: 200 }}>{caption}</div>}
+      </div>
+    )
+  }
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
       {url ? <img src={url} width={px} height={px} alt="QR" style={{ flexShrink: 0 }} /> : <div style={{ width: px, height: px, background: '#eee', flexShrink: 0 }} />}
-      {caption && <div style={{ fontSize: 10, lineHeight: 1.4 }}>{caption}</div>}
+      {caption && <div style={{ fontSize: 9, lineHeight: 1.3 }}>{caption}</div>}
     </div>
   )
 }

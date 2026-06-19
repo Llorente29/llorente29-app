@@ -32,6 +32,10 @@ export interface OrderFeedChild {
   qty: number
   line_type: string                          // 'combo_item' | 'modifier'
   group_type: ModifierGroupType | null       // null si no casó con el catálogo
+  menu_item_id: string | null                // los combo_item casados lo traen
+  family: string | null                      // familia del componente (para separar bebidas)
+  family_color: string | null
+  menu_category: string | null
   customer_note: string | null
 }
 

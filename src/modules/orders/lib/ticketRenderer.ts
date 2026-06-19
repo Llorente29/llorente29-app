@@ -48,7 +48,7 @@ export interface TicketDoc {
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-function ticketNumber(order: OrderFeedItem): string {
+export function ticketNumber(order: OrderFeedItem): string {
   // Marca propia: correlativo Folvy (cuando exista ticket_code). Hoy no está en
   // el feed, así que cae a external_ref. Marca cedida: external_ref de Last.
   // En ambos casos el identificador VISIBLE protagonista es order_code (abajo).
@@ -85,12 +85,63 @@ function deliveryLabel(serviceType: string | null): string {
   return serviceType ? serviceType.toUpperCase() : 'REPARTO'
 }
 
-/** ¿Esta línea es bebida/postre (va en bolsa aparte en la pegatina opción c)? */
-function isDrinkOrDessert(line: OrderFeedLine): boolean {
-  const fam = (line.family ?? '').toLowerCase()
-  const name = (line.name ?? '').toLowerCase()
-  return /bebida|drink|refresco|postre|dessert|dulce/.test(fam) ||
-         /mahou|coca|cola|agua|cerveza|fanta|sprite|refresco/.test(name)
+/** ¿Es bebida/postre? (va en bolsa aparte en la pegatina opción c).
+ *  Prioriza la FAMILIA (dato fiable); cae al nombre solo si no hay familia. */
+function isDrinkOrDessert(family: string | null, name: string): boolean {
+  const fam = (family ?? '').toLowerCase()
+  if (fam) return /bebida|drink|refresco|postre|dessert|dulce/.test(fam)
+  // sin familia: heurística por nombre (red de seguridad)
+  return /mahou|coca|cola|agua|cerveza|fanta|sprite|refresco|nestea|aquarius|zumo/.test(name.toLowerCase())
+}
+
+/** Artículo FÍSICO aplanado: una línea suelta es 1 artículo; un combo se expande
+ *  en sus componentes (combo_item). Cada artículo lleva su nombre, qty, familia,
+ *  alérgenos (de la línea padre si es combo), modificadores propios. */
+interface FlatItem {
+  name: string
+  qty: number
+  family: string | null
+  allergens: string[]
+  modifiers: OrderFeedChild[]
+  isDrink: boolean
+}
+
+function flattenItems(order: OrderFeedItem): FlatItem[] {
+  const out: FlatItem[] = []
+  const pushExpanded = (it: FlatItem) => {
+    // Comida: una pegatina por UNIDAD física (cada envase su etiqueta) -> expandir qty.
+    // Bebidas/postres: se agrupan en la bolsa de bebidas -> no se expanden aquí.
+    if (it.isDrink) { out.push(it); return }
+    const n = Math.max(1, Math.round(it.qty))
+    for (let i = 0; i < n; i++) out.push({ ...it, qty: 1 })
+  }
+  for (const line of order.lineas) {
+    const comboComponents = line.children.filter(c => c.line_type === 'combo_item')
+    if (comboComponents.length > 0) {
+      // Es un combo: cada componente es un artículo físico propio (expandido por su qty).
+      for (const comp of comboComponents) {
+        pushExpanded({
+          name: comp.name,
+          qty: comp.qty,
+          family: comp.family,
+          allergens: line.allergens,                 // alérgenos del plato padre (aprox.)
+          modifiers: [],                             // los modificadores de combo cuelgan aparte; simplificamos
+          isDrink: isDrinkOrDessert(comp.family, comp.name),
+        })
+      }
+    } else {
+      // Suelto: un artículo (expandido por su qty), con sus modificadores (no combo_item).
+      pushExpanded({
+        name: line.name,
+        qty: line.qty,
+        family: line.family,
+        allergens: line.allergens,
+        modifiers: line.children.filter(c => c.line_type !== 'combo_item'),
+        isDrink: isDrinkOrDessert(line.family, line.name),
+      })
+    }
+  }
+  return out
 }
 
 /** Modificadores de una línea, en texto legible con su signo (sin/＋). */
@@ -115,7 +166,6 @@ export function renderBagTicket(order: OrderFeedItem, fiscal?: { legalName?: str
   if (fiscal?.address)   b.push({ kind: 'text', text: fiscal.address, align: 'center', muted: true })
   b.push({ kind: 'space' })
   b.push({ kind: 'text', text: fmtDate(order.entro_at), align: 'center', muted: true })
-  b.push({ kind: 'row', left: 'Ticket', right: ticketNumber(order), muted: true })
 
   // Código de pedido (protagonista)
   b.push({ kind: 'space' })
@@ -214,27 +264,29 @@ export function renderKitchenTicket(order: OrderFeedItem): TicketDoc {
 // ── 3. Pegatinas (opción c: por artículo comida + agrupada bebidas/postres) ──
 
 export function renderLabels(order: OrderFeedItem): TicketDoc[] {
-  const food = order.lineas.filter((l) => !isDrinkOrDessert(l))
-  const drinks = order.lineas.filter((l) => isDrinkOrDessert(l))
+  const items = flattenItems(order)
+  const food = items.filter((it) => !it.isDrink)
+  const drinks = items.filter((it) => it.isDrink)
   const labels: TicketDoc[] = []
   const code = orderCode(order)
   const who = order.customer_name?.split(' ')[0] ?? ''
+  // Total de PIEZAS: una por artículo de comida + una (agrupada) si hay bebidas/postres.
   const totalPieces = food.length + (drinks.length > 0 ? 1 : 0)
   let idx = 0
 
-  // Una pegatina por artículo de comida
-  for (const line of food) {
+  // Una pegatina por artículo de comida (sueltos + componentes de combo)
+  for (const it of food) {
     idx++
     const b: TicketBlock[] = []
     b.push({ kind: 'row', left: code, right: `${(order.brand ?? '').slice(0, 14)} · ${order.channel ?? ''}`, bold: true })
     b.push({ kind: 'rule', dashed: true })
-    b.push({ kind: 'text', text: `${line.qty}x ${line.name}`, bold: true })
-    for (const m of modifierLines(line.children)) {
+    b.push({ kind: 'text', text: it.name, bold: true })
+    for (const m of modifierLines(it.modifiers)) {
       b.push({ kind: 'text', text: '  ' + m.text, muted: true })
     }
     // Alérgenos en texto (capa 1; iconos en capa 2)
-    if (line.allergens.length) {
-      b.push({ kind: 'text', text: '⚠ ' + line.allergens.join(' · '), muted: true })
+    if (it.allergens.length) {
+      b.push({ kind: 'text', text: '⚠ ' + it.allergens.join(' · '), muted: true })
     }
     b.push({ kind: 'row', left: `${idx} de ${totalPieces} · ${who}`, right: '', muted: true })
     if (order.brand_shop_url) b.push({ kind: 'qr', data: order.brand_shop_url, size: 'sm' })
@@ -249,10 +301,10 @@ export function renderLabels(order: OrderFeedItem): TicketDoc[] {
     b.push({ kind: 'row', left: code, right: 'BOLSA BEBIDAS', bold: true })
     b.push({ kind: 'rule', dashed: true })
     b.push({ kind: 'text', text: 'Bebidas y postres', bold: true })
-    for (const line of drinks) {
-      b.push({ kind: 'text', text: `  ${line.qty}x ${line.name}` })
+    for (const it of drinks) {
+      b.push({ kind: 'text', text: `  ${it.qty}x ${it.name}` })
     }
-    b.push({ kind: 'row', left: `bolsa aparte · ${who}`, right: '', muted: true })
+    b.push({ kind: 'row', left: `${idx} de ${totalPieces} · bolsa aparte · ${who}`, right: '', muted: true })
     if (order.brand_shop_url) b.push({ kind: 'qr', data: order.brand_shop_url, size: 'sm' })
     b.push({ kind: 'cut' })
     labels.push({ title: `Pegatina bebidas`, widthMm: 80, blocks: b })
