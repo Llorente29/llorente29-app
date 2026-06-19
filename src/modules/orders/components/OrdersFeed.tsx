@@ -3,7 +3,9 @@
 // El FEED de pedidos (lente "por pedido"). Tablero navy con:
 //   - Toggle CUADRÍCULA / POR ESTADO (kanban), filtros, contadores, polling + realtime.
 //   - Sonido al entrar cualquier pedido nuevo accionable.
-//   - RUTA COMPLETA: cada tarjeta avanza vía advanceOrder (estado interno + empuje).
+//   - RUTA COMPLETA: avanza el pedido vía advanceOrder (set_order_status). El empuje
+//     al canal lo dispara el trigger trg_sale_push_status (vía única, también desde
+//     cocina-kiosco).
 //   - ESCANDALLO: pulsar un plato con receta abre el Cook Mode (panel del KDS).
 //   - MARCAR LÍNEA: check por plato (kds_mark_line, compartido con el KDS).
 
@@ -59,7 +61,6 @@ export default function OrdersFeed({ locationId }: OrdersFeedProps) {
   const [orders, setOrders] = useState<OrderFeedItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
   const [view, setView] = useState<ViewKey>('grid')
   const [filter, setFilter] = useState<FilterKey>('activos')
   const [soundOn, setSoundOn] = useState(true)
@@ -88,14 +89,10 @@ export default function OrdersFeed({ locationId }: OrdersFeedProps) {
     }
   }, [locationId])
 
+  // Avanza el estado interno; el empuje al canal lo dispara el trigger en BBDD.
   const advance = useCallback(async (saleId: string, next: OrderStatus) => {
     try {
-      const res = await advanceOrder(saleId, next)
-      if (res?.push?.attempted && !res.push.ok) {
-        setNotice(`Pedido avanzado, pero no se pudo notificar a la plataforma: ${res.push.reason ?? ''}`)
-      } else {
-        setNotice(null)
-      }
+      await advanceOrder(saleId, next)
       await refresh()
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'No se pudo actualizar el pedido')
@@ -107,7 +104,6 @@ export default function OrdersFeed({ locationId }: OrdersFeedProps) {
     setCook({ menuItemId: line.menu_item_id, qty: line.qty, name: line.name })
   }, [])
 
-  // Marca/desmarca una línea (compartido con el KDS vía kds_mark_line, con sesión).
   const markLineHandler = useCallback(async (lineId: string) => {
     try {
       await kdsMarkLine(lineId)
@@ -208,12 +204,6 @@ export default function OrdersFeed({ locationId }: OrdersFeedProps) {
         <div className="flex-1 overflow-y-auto p-5">
           {error && (
             <div className="text-[#f4999c] bg-[#e5484d]/[0.12] border border-[#e5484d]/30 rounded-xl px-4 py-3 text-sm mb-4">{error}</div>
-          )}
-          {notice && (
-            <div className="text-[#f3cd86] bg-[#e0a33e]/[0.12] border border-[#e0a33e]/30 rounded-xl px-4 py-3 text-sm mb-4 flex items-center gap-3">
-              <span className="flex-1">{notice}</span>
-              <button onClick={() => setNotice(null)} className="text-[#93a6b3] hover:text-[#f2efe9] font-bold">Cerrar</button>
-            </div>
           )}
 
           {loading && orders.length === 0 ? (
