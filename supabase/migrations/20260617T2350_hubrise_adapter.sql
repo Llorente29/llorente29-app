@@ -12,6 +12,12 @@
 -- Reutiliza SIN TOCAR: close_sale, cancel_sale, compute_sale_line_cost,
 --   compute_sale_line_consumption (todas agnósticas de fuente).
 --
+-- ACTUALIZACIÓN 2026-06-19: además de las líneas, el adaptador extrae los CAMPOS
+-- CANÓNICOS de pedido (cliente, teléfono, dirección, hora prometida, nota del
+-- cliente) del raw_tab a columnas de sale. La pantalla (orders_feed) los lee sin
+-- saber del formato HubRise; el día que entre Otter, su adaptador rellena las
+-- mismas columnas. raw_tab se conserva intacto como respaldo. (Frontera única.)
+--
 -- Reglas aplicadas:
 --   * DDL idempotente (IF NOT EXISTS / CREATE OR REPLACE). Sin BEGIN/COMMIT explícito
 --     (SQL Editor). Sin SELECT de prueba (no se ejecuta SECURITY DEFINER aquí).
@@ -39,14 +45,17 @@ ALTER TABLE public.external_location_map ENABLE ROW LEVEL SECURITY;
 
 -- RLS: la cuenta ve lo suyo; superadmin ve todo. Patrón current_user_account_ids
 -- (mismo helper que usa external_brand_map / el resto de tablas multi-tenant).
+-- NOTA 2026-06-19: current_user_account_ids() devuelve uuid[] (array), no SETOF.
+-- El patrón correcto es `= ANY(...)` (igual que la RLS de sale), no
+-- `IN (SELECT ...)` que daría "operator does not exist: uuid = uuid[]".
 DROP POLICY IF EXISTS external_location_map_select ON public.external_location_map;
 CREATE POLICY external_location_map_select ON public.external_location_map
-  FOR SELECT USING (account_id IN (SELECT public.current_user_account_ids()));
+  FOR SELECT USING (account_id = ANY (public.current_user_account_ids()));
 
 DROP POLICY IF EXISTS external_location_map_write ON public.external_location_map;
 CREATE POLICY external_location_map_write ON public.external_location_map
-  FOR ALL USING (account_id IN (SELECT public.current_user_account_ids()))
-  WITH CHECK (account_id IN (SELECT public.current_user_account_ids()));
+  FOR ALL USING (account_id = ANY (public.current_user_account_ids()))
+  WITH CHECK (account_id = ANY (public.current_user_account_ids()));
 
 
 -- ── 2) Log de webhook genérico multi-fuente ──────────────────────────────────
@@ -114,6 +123,7 @@ DECLARE
   v_combo_matched boolean;
   v_deduced_brand uuid;
   v_deduced_menu  uuid;
+  v_expected    timestamptz;   -- hora prometida canónica (parseo protegido)
 BEGIN
   SELECT * INTO v_sale FROM sale WHERE id = p_sale_id;
   IF NOT FOUND THEN RETURN 0; END IF;
@@ -126,6 +136,41 @@ BEGIN
   v_order := v_sale.raw_tab::jsonb;
   v_items := COALESCE(v_order->'items', '[]'::jsonb);
   v_deals := COALESCE(v_order->'deals', '{}'::jsonb);
+
+  -- ──────────────────────────────────────────────────────────────────────────
+  -- CAMPOS CANÓNICOS DE PEDIDO (agnósticos de canal)
+  -- Extraer cliente / teléfono / dirección / hora prometida / nota del cliente
+  -- del JSON HubRise a las columnas canónicas de sale. La pantalla las lee sin
+  -- saber del formato HubRise. raw_tab se conserva intacto.
+  -- Hora: parseo PROTEGIDO (si el formato fuese raro, NULL en vez de abortar).
+  -- ──────────────────────────────────────────────────────────────────────────
+  BEGIN
+    v_expected := CASE
+        WHEN v_order->>'service_type' = 'collection'
+          THEN nullif(coalesce(v_order->>'expected_time_pickup', v_order->>'expected_time'), '')::timestamptz
+        ELSE nullif(coalesce(v_order->>'expected_time', v_order->>'expected_time_pickup'), '')::timestamptz
+      END;
+  EXCEPTION WHEN others THEN
+    v_expected := NULL;
+  END;
+
+  UPDATE sale SET
+    customer_name = nullif(btrim(
+        coalesce(v_order->'customer'->>'first_name','') || ' ' ||
+        coalesce(v_order->'customer'->>'last_name','')), ''),
+    customer_phone = nullif(v_order->'customer'->>'phone',''),
+    delivery_address = nullif(btrim(coalesce(
+        -- delivery.address como objeto estructurado (forma habitual HubRise)
+        nullif(concat_ws(', ',
+          nullif(v_order->'delivery'->'address'->>'line_1',''),
+          nullif(v_order->'delivery'->'address'->>'line_2',''),
+          nullif(v_order->'delivery'->'address'->>'post_code',''),
+          nullif(v_order->'delivery'->'address'->>'city','')), ''),
+        -- fallback: delivery.address como texto plano
+        nullif(v_order->'delivery'->>'address',''))), ''),
+    expected_time = v_expected,
+    customer_note = nullif(v_order->>'customer_notes','')
+  WHERE id = p_sale_id;
 
   -- Borrar y reescribir SOLO nuestras líneas (preservar manuales / ignored / delisted).
   DELETE FROM sale_line

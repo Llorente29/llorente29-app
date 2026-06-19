@@ -6753,6 +6753,61 @@ export type Database = {
           },
         ]
       }
+      order_acceptance_config: {
+        Row: {
+          account_id: string
+          auto_accept: boolean
+          brand_id: string | null
+          channel_id: string | null
+          id: string
+          respect_hours: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          account_id: string
+          auto_accept?: boolean
+          brand_id?: string | null
+          channel_id?: string | null
+          id?: string
+          respect_hours?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          account_id?: string
+          auto_accept?: boolean
+          brand_id?: string | null
+          channel_id?: string | null
+          id?: string
+          respect_hours?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_acceptance_config_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_acceptance_config_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_acceptance_config_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "sales_channel"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       permission_set_assignments: {
         Row: {
           assigned_at: string
@@ -8639,8 +8694,13 @@ export type Database = {
           created_at: string
           created_by: string | null
           created_by_name: string | null
+          customer_name: string | null
+          customer_note: string | null
+          customer_phone: string | null
+          delivery_address: string | null
           delivery_cost: number | null
           discount_amount: number | null
+          expected_time: string | null
           external_brand_text: string | null
           external_channel_text: string | null
           external_location_text: string | null
@@ -8676,8 +8736,13 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           created_by_name?: string | null
+          customer_name?: string | null
+          customer_note?: string | null
+          customer_phone?: string | null
+          delivery_address?: string | null
           delivery_cost?: number | null
           discount_amount?: number | null
+          expected_time?: string | null
           external_brand_text?: string | null
           external_channel_text?: string | null
           external_location_text?: string | null
@@ -8713,8 +8778,13 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           created_by_name?: string | null
+          customer_name?: string | null
+          customer_note?: string | null
+          customer_phone?: string | null
+          delivery_address?: string | null
           delivery_cost?: number | null
           discount_amount?: number | null
+          expected_time?: string | null
           external_brand_text?: string | null
           external_channel_text?: string | null
           external_location_text?: string | null
@@ -11406,6 +11476,7 @@ export type Database = {
         }
         Returns: Json
       }
+      orders_feed: { Args: { p_location_id: string }; Returns: Json }
       platform_metrics: { Args: never; Returns: Json }
       preview_add_ingredient: {
         Args: {
