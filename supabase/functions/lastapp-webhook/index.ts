@@ -18,6 +18,16 @@
 // RESOLUCIÓN DE MARCA (corregido 12/06): external_brand_map por (locationId +
 // locationBrandId) del TICKET (primario, estable) -> respaldo por producto/catálogo.
 //
+// ── ALIMENTA EL FEED DE ORDERS (19/06) ───────────────────────────────────────
+// Last es ahora un adaptador de pleno derecho del feed de pedidos (igual que
+// HubRise). El webhook escribe:
+//   (1) order_status (ciclo de plataforma): Last NACE 'accepted' (no hay paso de
+//       aceptación en el TPV; el pedido ya viene confirmado — decisión A). Cierre
+//       -> 'completed'. Cancelación -> 'cancelled'.
+//   (2) campos CANÓNICOS extraídos del tab (cliente/teléfono/dirección/hora/nota),
+//       las MISMAS columnas que rellena HubRise. La pantalla los lee agnóstica.
+// El adaptador adapt_lastapp_order NO se toca (solo arma líneas).
+//
 // Idempotencia: external_ref = bill.id. Cancelación idempotente (no re-cancela).
 //
 // SEGURIDAD: Last NO firma; manda un `authorization` fijo -> LASTAPP_WEBHOOK_TOKEN.
@@ -72,17 +82,64 @@ interface LastBill {
   tax?: number; taxableBase?: number; creationTime?: string; finalizingTime?: string;
   deleted?: boolean; payments?: LastPayment[];
 }
+// ⟵ NUEVO (19/06): sub-objetos del tab con cliente/entrega (ya venían en raw_tab,
+// no se tipaban). Forma verificada en BBDD: customerInfo{name,surname,phoneNumber},
+// delivery{address,details,postalCode,geocodedAddress,...}.
+interface LastCustomerInfo { name?: string | null; surname?: string | null; phoneNumber?: string | null }
+interface LastDelivery {
+  address?: string | null; details?: string | null; postalCode?: string | null;
+  geocodedAddress?: string | null;
+}
 interface LastTab {
-  id?: string; locationId?: string; locationBrandId?: string | null; // ⟵ CAMBIO: marca del ticket
+  id?: string; locationId?: string; locationBrandId?: string | null; // ⟵ marca del ticket
   source?: string; pickupType?: string | null;
   closeTime?: string; creationTime?: string; products?: LastProduct[]; bills?: LastBill[];
+  // ⟵ NUEVO (19/06): datos canónicos del pedido
+  customerInfo?: LastCustomerInfo | null;
+  delivery?: LastDelivery | null;
+  customerNote?: string | null;
+  schedulingTime?: string | null;
+}
+
+// ── NUEVO (19/06): compone los campos CANÓNICOS del pedido desde el tab ──
+// Mismas columnas que rellena el adaptador HubRise. Agnóstico para la pantalla.
+function buildCanonicalFields(tab: LastTab): {
+  customer_name: string | null;
+  customer_phone: string | null;
+  delivery_address: string | null;
+  expected_time: string | null;
+  customer_note: string | null;
+} {
+  const ci = tab.customerInfo ?? null;
+  const d = tab.delivery ?? null;
+
+  const name = [ci?.name, ci?.surname].filter(Boolean).join(" ").trim();
+
+  // dirección: prioriza la geocodificada (más completa); si no, compone partes.
+  let addr: string | null = null;
+  if (d) {
+    const geo = (d.geocodedAddress ?? "").trim();
+    if (geo) addr = geo;
+    else {
+      const parts = [d.address, d.details, d.postalCode].map(x => (x ?? "").trim()).filter(Boolean);
+      addr = parts.length ? parts.join(", ") : null;
+    }
+  }
+
+  return {
+    customer_name: name || null,
+    customer_phone: (ci?.phoneNumber ?? "").trim() || null,
+    delivery_address: addr,
+    expected_time: (tab.schedulingTime ?? "").trim() || null,  // ISO de Last (programado); null = ASAP
+    customer_note: (tab.customerNote ?? "").trim() || null,
+  };
 }
 
 // ── Caché mínima: SOLO lo que la frontera necesita para la CABECERA de la venta ──
 interface HeaderCaches {
   catalogByCatProd: Map<string, { lastapp_brand_name: string | null }>;
   brandByName: Map<string, string>;
-  brandByExternalId: Map<string, string>;   // ⟵ CAMBIO: mapa estable "locId|brandId" -> brand_id
+  brandByExternalId: Map<string, string>;   // ⟵ mapa estable "locId|brandId" -> brand_id
   channelBySlug: Map<string, string>;
   folvyLocationId: string | null;
 }
@@ -128,9 +185,8 @@ async function loadHeaderCaches(sb: SupabaseClient, accountId: string, lastLocat
   const dirtyBurgerId = brandByName.get(normalize("Dirty Burger"));
   if (dirtyBurgerId) brandByName.set(normalize("Dirty Burgers"), dirtyBurgerId);
 
-  // ⟵ CAMBIO: external_brand_map = FUENTE PRIMARIA de marca.
+  // external_brand_map = FUENTE PRIMARIA de marca.
   // Clave compuesta "external_location_id|external_brand_id" -> brand_id.
-  // Solo source=lastapp, no ignoradas, con brand_id resuelto.
   const brandMap = await loadAllPaged(sb, "external_brand_map",
     "external_location_id, external_brand_id, brand_id, is_ignored, source", "account_id", accountId);
   const brandByExternalId = new Map<string, string>();
@@ -158,21 +214,18 @@ async function loadHeaderCaches(sb: SupabaseClient, accountId: string, lastLocat
   return { catalogByCatProd, brandByName, brandByExternalId, channelBySlug, folvyLocationId };
 }
 
-// ⟵ CAMBIO: resolución de marca en DOS PASOS.
+// Resolución de marca en DOS PASOS.
 //   1) PRIMARIO: por locationId+locationBrandId del TICKET vía external_brand_map.
-//      Estable, siempre presente, no depende del catálogo.
-//   2) RESPALDO: por producto -> catálogo -> nombre (método viejo, solo si falla 1).
+//   2) RESPALDO: por producto -> catálogo -> nombre (solo si falla 1).
 function resolveSaleBrand(
   tab: LastTab, products: LastProduct[], caches: HeaderCaches,
 ): string | null {
-  // 1) PRIMARIO
   const extLoc = tab.locationId ?? null;
   const extBrand = tab.locationBrandId ?? null;
   if (extLoc && extBrand) {
     const fromMap = caches.brandByExternalId.get(`${extLoc}|${extBrand}`);
     if (fromMap) return fromMap;
   }
-  // 2) RESPALDO
   for (const p of products) {
     if (!p.catalogProductId) continue;
     const cat = caches.catalogByCatProd.get(p.catalogProductId);
@@ -187,8 +240,7 @@ function resolveSaleBrand(
 // Idempotente por external_ref = bill.id. Reutilizable por tab:created (nace),
 // tab:updated/tab_products:updated (re-sync) y tab:closed (que además cierra).
 // GUARD DE ESTADO: una venta ya 'closed'/'cancelled' NO se re-adapta (un evento
-// tardío no puede corromper una venta consolidada). El re-adapt es seguro:
-// adapt_lastapp_order borra y reescribe sus propias líneas (preserva manuales).
+// tardío no puede corromper una venta consolidada, ni revertir su order_status).
 async function upsertSale(
   sb: SupabaseClient, accountId: string, bill: LastBill, tab: LastTab, caches: HeaderCaches,
 ): Promise<{ id: string; status: string; isNew: boolean } | null> {
@@ -203,6 +255,7 @@ async function upsertSale(
   const saleBrandId = resolveSaleBrand(tab, products, caches);
 
   // Campos de cabecera/economía comunes a insert y update.
+  // ⟵ NUEVO: order_status='accepted' (Last nace aceptado) + campos canónicos.
   const common = {
     external_channel_text: payType,
     channel_id: channelId,
@@ -210,7 +263,7 @@ async function upsertSale(
     location_id: caches.folvyLocationId,
     external_brand_text: tab.locationBrandId ?? null,
     external_location_text: tab.locationId ?? null,
-    external_tab_ref: tab.id ?? null,                  // ⟵ 0b: identidad del pedido (tab.id)
+    external_tab_ref: tab.id ?? null,
     sold_at: bill.creationTime ?? bill.finalizingTime ?? tab.closeTime ?? new Date().toISOString(),
     total: typeof bill.total === "number" ? bill.total / 100 : 0,
     delivery_cost: typeof bill.deliveryFee === "number" ? bill.deliveryFee / 100 : null,
@@ -218,6 +271,8 @@ async function upsertSale(
     tax: typeof bill.tax === "number" ? bill.tax / 100 : null,
     taxable_base: typeof bill.taxableBase === "number" ? bill.taxableBase / 100 : null,
     service_type: mapServiceType(tab.pickupType),
+    order_status: "accepted",                 // ⟵ Last entra ya aceptado (decisión A)
+    ...buildCanonicalFields(tab),             // ⟵ cliente/teléfono/dirección/hora/nota
     raw_products: JSON.stringify(products),
     raw_tab: JSON.stringify(tab),
   };
@@ -231,7 +286,7 @@ async function upsertSale(
 
   if (existing) {
     const status = (existing as { status?: string }).status ?? "open";
-    // GUARD: no re-adaptar ventas ya consolidadas/canceladas.
+    // GUARD: no re-adaptar (ni re-tocar order_status) ventas ya consolidadas/canceladas.
     if (status !== "open") return { id: (existing as { id: string }).id, status, isNew: false };
 
     await sb.from("sale").update({ ...common, updated_at: new Date().toISOString() })
@@ -272,7 +327,13 @@ async function ingestBill(
 
   // close_sale: status='closed' + consolida COSTE + CONSUMO (motor canónico).
   const { error: closeErr } = await sb.rpc("close_sale", { p_sale_id: r.id });
-  if (closeErr) console.error(`close_sale ${bill.id}: ${closeErr.message}`);
+  if (closeErr) {
+    console.error(`close_sale ${bill.id}: ${closeErr.message}`);
+  } else {
+    // ⟵ NUEVO: el pedido completó su ciclo de plataforma.
+    const { error: osErr } = await sb.from("sale").update({ order_status: "completed" }).eq("id", r.id);
+    if (osErr) console.error(`order_status completed ${bill.id}: ${osErr.message}`);
+  }
   return { written: true };
 }
 
@@ -293,6 +354,11 @@ async function cancelByBillId(
     p_sale_id: (sale as { id: string }).id, p_reason: reason,
   });
   if (cErr) { console.error(`cancel_sale ${billId}: ${cErr.message}`); return false; }
+
+  // ⟵ NUEVO: el pedido se canceló en el ciclo de plataforma.
+  const { error: osErr } = await sb.from("sale").update({ order_status: "cancelled" })
+    .eq("id", (sale as { id: string }).id);
+  if (osErr) console.error(`order_status cancelled ${billId}: ${osErr.message}`);
   return true;
 }
 
@@ -377,7 +443,7 @@ Deno.serve(async (req: Request) => {
       const caches = await loadHeaderCaches(sb, accountId, lastLocationId);
       const bills = Array.isArray(tab.bills) ? tab.bills : [];
       for (const bill of bills) {
-        await upsertSale(sb, accountId, bill, tab, caches);   // nace 'open'
+        await upsertSale(sb, accountId, bill, tab, caches);   // nace 'open' + accepted
       }
       processedOk = true;
     } catch (e) {
@@ -438,12 +504,10 @@ Deno.serve(async (req: Request) => {
     note = `frontera-${eventType}`;
     try {
       const data = (payload?.data ?? {}) as Record<string, unknown>;
-      // bill:deleted -> data.id (el propio bill) ; payment:deleted -> data.billId
       const billId =
         (data.billId as string | undefined) ??
         (data.id as string | undefined) ??
         ((data.bill as { id?: string } | undefined)?.id) ?? null;
-      // locationId puede venir en data.locationId o anidado; intentamos lo directo.
       const lastLocationId =
         (data.locationId as string | undefined) ??
         ((data.tab as { locationId?: string } | undefined)?.locationId) ?? null;
@@ -457,8 +521,6 @@ Deno.serve(async (req: Request) => {
           processError = `location ${lastLocationId} no mapeada`;
         }
       } else {
-        // Sin datos suficientes: lo dejamos sin procesar para inspeccionar el log
-        // y afinar el mapeo con un payload real (plan acordado: activar luego).
         processError = `payload sin billId/locationId resolubles (revisar log)`;
       }
     } catch (e) {
