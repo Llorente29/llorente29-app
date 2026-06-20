@@ -123,10 +123,11 @@ Deno.serve(async (req: Request) => {
 
   // --- Resolver la integración y el nombre del secret del token ---
   const { data: integ, error: integErr } = await sb
-    .from("lastapp_integration")
+    .from("external_integration")
     .select("token_secret_name")
     .eq("account_id", accountId)
-    .eq("lastapp_organization_id", orgId)
+    .eq("source", "lastapp")
+    .eq("external_org_id", orgId)
     .single();
   if (integErr || !integ) {
     return jsonResponse({ error: "Integration not found for that account/org" }, 404);
@@ -192,12 +193,13 @@ Deno.serve(async (req: Request) => {
 
       const rows = prods.map((p) => ({
         account_id: accountId,
-        lastapp_organization_id: orgId,
+        source: "lastapp",
+        external_org_id: orgId,
         catalog_product_id: p.catalogProductId,
         organization_product_id: p.organizationProductId,
-        lastapp_catalog_id: catId,
-        lastapp_brand_name: catalogBrand[catId] ?? null,
-        lastapp_channel: catalogChannel[catId] ?? null,
+        external_catalog_id: catId,
+        external_brand_name: catalogBrand[catId] ?? null,
+        external_channel: catalogChannel[catId] ?? null,
         product_name: p.name,
         price_cents: p.price,
         product_type: p.type,
@@ -208,8 +210,8 @@ Deno.serve(async (req: Request) => {
 
       if (!dryRun) {
         const { error: upErr } = await sb
-          .from("lastapp_catalog_product")
-          .upsert(rows, { onConflict: "account_id,catalog_product_id" });
+          .from("external_catalog_product")
+          .upsert(rows, { onConflict: "account_id,source,catalog_product_id" });
         if (upErr) {
           stats.errors.push(`upsert catalog ${catId}: ${upErr.message}`);
           continue;

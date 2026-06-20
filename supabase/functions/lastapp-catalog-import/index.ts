@@ -189,10 +189,11 @@ Deno.serve(async (req: Request) => {
 
   // ── Token de la integración ──
   const { data: integ, error: integErr } = await sb
-    .from("lastapp_integration")
+    .from("external_integration")
     .select("token_secret_name")
     .eq("account_id", accountId)
-    .eq("lastapp_organization_id", orgId)
+    .eq("source", "lastapp")
+    .eq("external_org_id", orgId)
     .single();
   if (integErr || !integ) return jsonResponse({ error: "Integration not found" }, 404);
   const token = Deno.env.get(integ.token_secret_name) ?? "";

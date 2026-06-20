@@ -1,9 +1,21 @@
 // supabase/functions/lastapp-backfill-sales/index.ts
-// Backfill de ventas historicas desde Last.app hacia sale/sale_line.
-// Pagina GET /bills por ventanas de 1 dia (limit 100, sin cursor en la API),
-// pide el detalle de cada bill y escribe cabecera + lineas, resolviendo cada
-// linea via la funcion SQL resolve_lastapp_line (compartida con el webhook).
+// Backfill de ventas historicas desde Last.app hacia sale (+ sale_line via motor).
+// ============================================================================
+// CANÓNICO (20/06): la frontera escribe la venta CRUDA (source, raw_products,
+// external_brand_text, external_location_text, canal, local, totales) y DELEGA el
+// casado en reprocess_sale — el MISMO motor agnóstico que usa el webhook en vivo:
+//   reprocess_sale → resolve_sale_brand_from_map (marca por external_brand_map)
+//                  → adapt_lastapp_order (líneas por menu_item.external_id=matrícula)
+//                  → compute_sale_line_cost + compute_sale_line_consumption.
+//
+// CAMBIO vs versión vieja: ya NO se resuelven líneas aquí (se eliminó
+// resolve_lastapp_line) ni se marcan 'manual'. El backfill NO inserta sale_line:
+// las arma adapt_lastapp_order con map_source 'pos'/'unmapped' (normales,
+// RE-CASABLES). 'manual' se reserva para correcciones humanas reales; una línea
+// 'manual' es inmune al recast — justo lo que NO queremos en un backfill.
+//
 // Idempotente por external_ref = bill.id.
+// ============================================================================
 
 import { corsHeaders } from "../_shared/cors.ts";
 import { createClient } from "@supabase/supabase-js";
@@ -68,16 +80,30 @@ Deno.serve(async (req: Request) => {
   );
 
   const { data: integ, error: integErr } = await sb
-    .from("lastapp_integration").select("token_secret_name")
-    .eq("account_id", accountId).eq("lastapp_organization_id", orgId).single();
+    .from("external_integration").select("token_secret_name")
+    .eq("account_id", accountId).eq("external_org_id", orgId).eq("source", "lastapp").single();
   if (integErr || !integ) return jsonResponse({ error: "Integration not found" }, 404);
   const token = Deno.env.get(integ.token_secret_name) ?? "";
   if (!token) return jsonResponse({ error: `Secret ${integ.token_secret_name} not set` }, 500);
 
+  // Local Folvy desde el mapa agnóstico (source='lastapp').
   const { data: locMap } = await sb
-    .from("lastapp_location_map").select("location_id")
-    .eq("account_id", accountId).eq("lastapp_location_id", lastLocId).single();
+    .from("external_location_map").select("location_id")
+    .eq("account_id", accountId).eq("source", "lastapp")
+    .eq("external_location_id", lastLocId).maybeSingle();
   const folvyLocationId = locMap?.location_id ?? null;
+
+  // channel_id por slug (cache simple por slug → id).
+  const channelIdBySlug = new Map<string, string | null>();
+  async function resolveChannelId(slug: string | null): Promise<string | null> {
+    if (!slug) return null;
+    if (channelIdBySlug.has(slug)) return channelIdBySlug.get(slug) ?? null;
+    const { data } = await sb.from("sales_channel").select("id")
+      .eq("account_id", accountId).eq("slug", slug).maybeSingle();
+    const id = data?.id ?? null;
+    channelIdBySlug.set(slug, id);
+    return id;
+  }
 
   const stats = {
     days: 0, bills_seen: 0, sales_written: 0, sales_skipped: 0,
@@ -122,44 +148,19 @@ Deno.serve(async (req: Request) => {
         const payType = bill?.payments?.[0]?.type ?? null;
         const slug = channelSlug(payType);
         const products: any[] = bill?.products ?? [];
+        // Marca/local CRUDOS para resolve_sale_brand_from_map (best-effort: la API
+        // de bills puede no traer locationBrandId; si falta, los no-combo casan por
+        // matrícula igualmente y resolve_sale_brand_from_map aplica su respaldo).
+        const externalBrandText = bill?.locationBrandId ?? bill?.brandId ?? null;
 
-        const resolvedLines: any[] = [];
-        let saleBrandId: string | null = null;
-        for (const p of products) {
-          let menuItemId: string | null = null;
-          if (p.catalogProductId && slug) {
-            const { data: rr } = await sb.rpc("resolve_lastapp_line", {
-              p_account_id: accountId,
-              p_catalog_product_id: p.catalogProductId,
-              p_channel_slug: slug,
-            });
-            const row = Array.isArray(rr) ? rr[0] : rr;
-            menuItemId = row?.menu_item_id ?? null;
-          }
-          if (menuItemId && !saleBrandId) {
-            const { data: mi } = await sb.from("menu_item").select("brand_id").eq("id", menuItemId).maybeSingle();
-            saleBrandId = mi?.brand_id ?? null;
-          }
-          resolvedLines.push({
-            raw_text: p.name ?? "", product_name: p.name ?? "",
-            quantity: p.quantity ?? 1,
-            unit_price: typeof p.price === "number" ? p.price / 100 : null,
-            menu_item_id: menuItemId,
-            map_source: menuItemId ? "manual" : "unmapped",
-            map_needs_review: menuItemId ? false : true,
-          });
-          if (!menuItemId) stats.lines_unresolved++;
-        }
+        if (dryRun) { stats.sales_written++; stats.lines_written += products.length; continue; }
 
-        const channelId = slug
-          ? (await sb.from("sales_channel").select("id").eq("account_id", accountId).eq("slug", slug).maybeSingle()).data?.id ?? null
-          : null;
-
-        if (dryRun) { stats.sales_written++; stats.lines_written += resolvedLines.length; continue; }
+        const channelId = await resolveChannelId(slug);
 
         const { data: saleRow, error: saleErr } = await sb.from("sale").insert({
           account_id: accountId, source: "lastapp", external_ref: billId,
-          external_channel_text: payType, channel_id: channelId, brand_id: saleBrandId,
+          external_channel_text: payType, channel_id: channelId,
+          external_brand_text: externalBrandText, external_location_text: lastLocId,
           location_id: folvyLocationId,
           sold_at: bill.creationTime ?? bill.finalizingTime,
           total: typeof bill.total === "number" ? bill.total / 100 : 0,
@@ -169,17 +170,20 @@ Deno.serve(async (req: Request) => {
         }).select("id").single();
         if (saleErr || !saleRow) { stats.errors.push(`sale insert ${billId}: ${saleErr?.message}`); continue; }
 
-        const lineRows = resolvedLines.map((l) => ({ ...l, account_id: accountId, sale_id: saleRow.id }));
-        if (lineRows.length > 0) {
-          const { error: lineErr } = await sb.from("sale_line").insert(lineRows);
-          if (lineErr) {
-            // Evitar venta huerfana: borrar la sale si fallan sus lineas
-            stats.errors.push(`lines ${billId}: ${lineErr.message}`);
-            await sb.from("sale").delete().eq("id", saleRow.id);
-            continue;
-          }
-          stats.lines_written += lineRows.length;
+        // Casado canónico: el motor arma las líneas, resuelve marca, costea y consume.
+        const { error: rpErr } = await sb.rpc("reprocess_sale", { p_sale_id: saleRow.id });
+        if (rpErr) {
+          stats.errors.push(`reprocess ${billId}: ${rpErr.message}`);
+          await sb.from("sale").delete().eq("id", saleRow.id); // no dejar venta huérfana
+          continue;
         }
+
+        // Stats de líneas resultantes (producto).
+        const { data: lns } = await sb.from("sale_line")
+          .select("menu_item_id, line_type").eq("sale_id", saleRow.id);
+        const prod = (lns ?? []).filter((l: any) => (l.line_type ?? "product") === "product");
+        stats.lines_written += prod.length;
+        stats.lines_unresolved += prod.filter((l: any) => !l.menu_item_id).length;
         stats.sales_written++;
       }
       day = nextDay(day);

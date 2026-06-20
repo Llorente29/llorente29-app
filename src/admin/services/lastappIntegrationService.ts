@@ -4,11 +4,14 @@
 // de Last.app de un cliente. Orquesta el procedimiento genérico — vale para
 // marcas propias, cedidas (Cloudtown) o cualquier cliente nuevo:
 //
-//   1. Alta de la integración        → fila en lastapp_integration (org + token_secret_name)
-//   2. Vincular tiendas Last → local → fila(s) en lastapp_location_map
+//   1. Alta de la integración        → fila en external_integration (source='lastapp')
+//   2. Vincular tiendas Last → local → fila(s) en external_location_map (source='lastapp')
 //   2.bis Vincular marca externa → marca Folvy → fila(s) en external_brand_map (genérico)
 //   3. Importar catálogo             → Edge lastapp-catalog-import (token desde Vault)
-//   4. Sembrar escandallos + recasar → seed_lastapp_catalog + recast_lastapp_sales
+//   4. Sembrar catálogo + recasar    → seed_catalog_canonical + recast_lastapp_sales
+//
+// (20/06) Tablas convergidas al modelo agnóstico external_*; los nombres de campo
+// de dominio en TS conservan "lastapp" por estabilidad de la UI (deuda cosmética).
 //
 // SEGURIDAD: el VALOR del token NUNCA pasa por aquí ni por la pantalla. La fila
 // solo guarda el NOMBRE del secret (token_secret_name); el valor se pone por CLI
@@ -59,15 +62,16 @@ export interface FolvyLocation {
 
 export async function listIntegrations(accountId: string): Promise<LastappIntegration[]> {
   requireSupabase()
-  const { data, error } = await from('lastapp_integration')
-    .select('id, account_id, lastapp_organization_id, organization_name, token_secret_name, ownership_type, is_active')
+  const { data, error } = await from('external_integration')
+    .select('id, account_id, external_org_id, organization_name, token_secret_name, ownership_type, is_active')
     .eq('account_id', accountId)
+    .eq('source', 'lastapp')
     .order('created_at', { ascending: true })
   if (error) throw new Error(`Error cargando integraciones: ${error.message}`)
   return ((data as Row[] | null) ?? []).map(r => ({
     id: r.id as string,
     accountId: r.account_id as string,
-    lastappOrganizationId: r.lastapp_organization_id as string,
+    lastappOrganizationId: r.external_org_id as string,
     organizationName: (r.organization_name as string | null) ?? null,
     tokenSecretName: r.token_secret_name as string,
     ownershipType: (r.ownership_type as string) ?? 'own',
@@ -83,9 +87,10 @@ export async function createIntegration(input: {
   ownershipType: string
 }): Promise<void> {
   requireSupabase()
-  const { error } = await from('lastapp_integration').insert({
+  const { error } = await from('external_integration').insert({
     account_id: input.accountId,
-    lastapp_organization_id: input.lastappOrganizationId,
+    source: 'lastapp',
+    external_org_id: input.lastappOrganizationId,
     organization_name: input.organizationName,
     token_secret_name: input.tokenSecretName,
     ownership_type: input.ownershipType,
@@ -98,14 +103,15 @@ export async function createIntegration(input: {
 
 export async function listLocationMaps(accountId: string): Promise<LastappLocationMap[]> {
   requireSupabase()
-  const { data, error } = await from('lastapp_location_map')
-    .select('id, lastapp_location_id, lastapp_location_name, location_id, needs_review')
+  const { data, error } = await from('external_location_map')
+    .select('id, external_location_id, external_location_name, location_id, needs_review')
     .eq('account_id', accountId)
+    .eq('source', 'lastapp')
   if (error) throw new Error(`Error cargando locales vinculados: ${error.message}`)
   return ((data as Row[] | null) ?? []).map(r => ({
     id: r.id as string,
-    lastappLocationId: r.lastapp_location_id as string,
-    lastappLocationName: (r.lastapp_location_name as string | null) ?? null,
+    lastappLocationId: r.external_location_id as string,
+    lastappLocationName: (r.external_location_name as string | null) ?? null,
     locationId: r.location_id as string,
     needsReview: r.needs_review === true,
   }))
@@ -135,10 +141,11 @@ export async function linkLocation(input: {
   locationId: string
 }): Promise<void> {
   requireSupabase()
-  const { error } = await from('lastapp_location_map').insert({
+  const { error } = await from('external_location_map').insert({
     account_id: input.accountId,
-    lastapp_location_id: input.lastappLocationId,
-    lastapp_location_name: input.lastappLocationName,
+    source: 'lastapp',
+    external_location_id: input.lastappLocationId,
+    external_location_name: input.lastappLocationName,
     location_id: input.locationId,
     needs_review: false,
   })
@@ -275,10 +282,11 @@ export async function getCatalogCount(
   lastappOrganizationId: string,
 ): Promise<number> {
   requireSupabase()
-  const { count, error } = await from('lastapp_catalog_product')
+  const { count, error } = await from('external_catalog_product')
     .select('id', { count: 'exact', head: true })
     .eq('account_id', accountId)
-    .eq('lastapp_organization_id', lastappOrganizationId)
+    .eq('source', 'lastapp')
+    .eq('external_org_id', lastappOrganizationId)
   if (error) throw new Error(`Error contando catálogo: ${error.message}`)
   return count ?? 0
 }
@@ -345,19 +353,22 @@ export async function importCatalog(input: {
 // ─── 4. Sembrar escandallos + recasar ──────────────────────────────────────
 
 /**
- * Siembra escandallos del catálogo (seed_lastapp_catalog: crea recipe_item dish
- * needs_review + menu_item por canal + lastapp_product_map para los productos
- * con marca conocida) y recasa las ventas ya entradas (recast_lastapp_sales).
- * Tras esto, las ventas que tenían catálogo pero no escandallo quedan casadas.
+ * Siembra el catálogo en el modelo CANÓNICO (seed_catalog_canonical: 1 menu_item
+ * BASE por marca×matrícula con external_source='lastapp'+external_id=matrícula,
+ * + overrides de precio por canal) y recasa las ventas ya entradas
+ * (recast_lastapp_sales). Tras esto, las ventas que tenían catálogo pero no
+ * escandallo quedan casadas por matrícula.
  *
- * No se parsean los contadores de retorno a propósito (los nombres de columna
- * del RETURNS no están verificados): la UI confirma éxito y remite a Ventas para
- * ver el casado real. Surfacing de cifras = mejora menor posterior.
+ * Sustituye al viejo seed_lastapp_catalog (modelo por canal + lastapp_product_map),
+ * jubilado en la convergencia de ingesta (20/06).
+ *
+ * No se parsean los contadores de retorno a propósito: la UI confirma éxito y
+ * remite a Ventas para ver el casado real. Surfacing de cifras = mejora menor.
  */
 export async function seedAndRecast(accountId: string): Promise<void> {
   const sb = requireSupabase()
-  const { error: seedErr } = await sb.rpc('seed_lastapp_catalog', { p_account_id: accountId })
-  if (seedErr) throw new Error(`Error sembrando escandallos: ${seedErr.message}`)
+  const { error: seedErr } = await sb.rpc('seed_catalog_canonical', { p_account_id: accountId })
+  if (seedErr) throw new Error(`Error sembrando el catálogo: ${seedErr.message}`)
   const { error: recastErr } = await sb.rpc('recast_lastapp_sales', { p_account_id: accountId })
   if (recastErr) throw new Error(`Error recasando ventas: ${recastErr.message}`)
 }

@@ -439,11 +439,12 @@ export async function classifyUnmappedProduct(
  * usa Supply para casar líneas de albarán). Solo sugiere; no escribe nada.
  */
 /**
- * Crea un plato NUEVO del TPV que no existe en Folvy (no_recipe sin mapeo):
- * recipe_item(dish) + lastapp_product_map + menu_item(s), recasa, y devuelve el
- * recipe_item_id para llevar al editor de escandallo. Cierra el agujero de los
- * productos nuevos del TPV. La lógica vive en la RPC create_dish_from_unmapped
- * (anti-invención: EXCEPTION si la marca no resuelve o el producto es un combo).
+ * Crea un plato NUEVO del TPV que no existe en Folvy (no_recipe/no_menu_item):
+ * recipe_item(dish) + menu_item SELLADO (external_source='lastapp'+external_id=
+ * matrícula), recasa, y devuelve el recipe_item_id para llevar al editor de
+ * escandallo. Modelo canónico (sin product_map). La lógica vive en la RPC
+ * create_dish_from_unmapped (anti-invención: EXCEPTION si la marca no resuelve,
+ * no hay matrícula, o el producto es un combo).
  */
 export async function createDishFromUnmapped(
   accountId: string,

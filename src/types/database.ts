@@ -11808,6 +11808,15 @@ export type Database = {
         Args: { p_account_id: string }
         Returns: undefined
       }
+      seed_catalog_canonical: {
+        Args: { p_account_id: string }
+        Returns: {
+          base_ya_existentes: number
+          overrides_creados: number
+          productos_base_creados: number
+          saltados_sin_marca: number
+        }[]
+      }
       seed_catalog_from_lastapp: {
         Args: { p_account_id: string }
         Returns: {

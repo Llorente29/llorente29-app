@@ -67,9 +67,9 @@ Deno.serve(async (req: Request) => {
     return json({ ok: true, push: { attempted: false, reason: "plataforma cierra en su sistema" } }, 200);
   }
 
-  const { data: integ } = await sb.from("lastapp_integration")
+  const { data: integ } = await sb.from("external_integration")
     .select("token_secret_name, push_status_enabled, is_active")
-    .eq("account_id", sale.account_id).eq("is_active", true)
+    .eq("account_id", sale.account_id).eq("source", "lastapp").eq("is_active", true)
     .limit(1).maybeSingle();
 
   if (!integ) {

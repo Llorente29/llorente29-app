@@ -150,7 +150,7 @@ function buildCanonicalFields(tab: LastTab): {
 
 // ── Caché mínima: SOLO lo que la frontera necesita para la CABECERA de la venta ──
 interface HeaderCaches {
-  catalogByCatProd: Map<string, { lastapp_brand_name: string | null }>;
+  catalogByCatProd: Map<string, { external_brand_name: string | null }>;
   brandByName: Map<string, string>;
   brandByExternalId: Map<string, string>;   // ⟵ mapa estable "locId|brandId" -> brand_id
   channelBySlug: Map<string, string>;
@@ -176,13 +176,13 @@ async function loadAllPaged(
 }
 
 async function loadHeaderCaches(sb: SupabaseClient, accountId: string, lastLocationId: string): Promise<HeaderCaches> {
-  const catalog = await loadAllPaged(sb, "lastapp_catalog_product",
-    "catalog_product_id, lastapp_brand_name", "account_id", accountId);
-  const catalogByCatProd = new Map<string, { lastapp_brand_name: string | null }>();
+  const catalog = await loadAllPaged(sb, "external_catalog_product",
+    "catalog_product_id, external_brand_name", "account_id", accountId);
+  const catalogByCatProd = new Map<string, { external_brand_name: string | null }>();
   for (const r of catalog) {
     if (r.catalog_product_id) {
       catalogByCatProd.set(r.catalog_product_id as string, {
-        lastapp_brand_name: (r.lastapp_brand_name as string | null) ?? null,
+        external_brand_name: (r.external_brand_name as string | null) ?? null,
       });
     }
   }
@@ -218,10 +218,10 @@ async function loadHeaderCaches(sb: SupabaseClient, accountId: string, lastLocat
     if (c.slug) channelBySlug.set((c.slug as string).toLowerCase(), c.id as string);
   }
 
-  const { data: locMap, error: locErr } = await sb.from("lastapp_location_map")
-    .select("location_id").eq("account_id", accountId)
-    .eq("lastapp_location_id", lastLocationId).maybeSingle();
-  if (locErr) throw new Error(`lastapp_location_map: ${locErr.message}`);
+  const { data: locMap, error: locErr } = await sb.from("external_location_map")
+    .select("location_id").eq("account_id", accountId).eq("source", "lastapp")
+    .eq("external_location_id", lastLocationId).maybeSingle();
+  if (locErr) throw new Error(`external_location_map: ${locErr.message}`);
   const folvyLocationId = (locMap?.location_id as string | undefined) ?? null;
 
   return { catalogByCatProd, brandByName, brandByExternalId, channelBySlug, folvyLocationId };
@@ -243,7 +243,7 @@ function resolveSaleBrand(
     if (!p.catalogProductId) continue;
     const cat = caches.catalogByCatProd.get(p.catalogProductId);
     if (!cat) continue;
-    const brandId = caches.brandByName.get(normalize(cat.lastapp_brand_name));
+    const brandId = caches.brandByName.get(normalize(cat.external_brand_name));
     if (brandId) return brandId;
   }
   return null;
@@ -377,9 +377,10 @@ async function cancelByBillId(
 
 // Resuelve la cuenta a partir del locationId de Last (igual que tab:closed).
 async function resolveAccountId(sb: SupabaseClient, lastLocationId: string): Promise<string | null> {
-  const { data, error } = await sb.from("lastapp_location_map")
-    .select("account_id").eq("lastapp_location_id", lastLocationId).maybeSingle();
-  if (error) throw new Error(`lastapp_location_map: ${error.message}`);
+  const { data, error } = await sb.from("external_location_map")
+    .select("account_id").eq("source", "lastapp")
+    .eq("external_location_id", lastLocationId).maybeSingle();
+  if (error) throw new Error(`external_location_map: ${error.message}`);
   return (data?.account_id as string | undefined) ?? null;
 }
 
