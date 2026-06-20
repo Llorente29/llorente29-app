@@ -99,16 +99,27 @@ interface LastTab {
   delivery?: LastDelivery | null;
   customerNote?: string | null;
   schedulingTime?: string | null;
+  // ⟵ NUEVO (20/06): códigos de pedido. name = nº REAL de la plataforma (Glovo
+  // 101688354460 / JustEat 187227548 / Uber AF5D0); code = corto interno de Last
+  // (G931/U382/J076), efímero. Verificado contra raw_tab en BBDD.
+  name?: string | null;
+  code?: string | null;
 }
 
 // ── NUEVO (19/06): compone los campos CANÓNICOS del pedido desde el tab ──
 // Mismas columnas que rellena el adaptador HubRise. Agnóstico para la pantalla.
+// (20/06) Añade los DOS códigos de pedido: platform_order_code = nº real de la
+// plataforma (portable: cada frontera lo rellena desde su payload; el ticket lo
+// pinta sin saber de Last) y pos_short_code = corto interno de Last (referencia;
+// quedará null en pedidos que NO entren por Last, p.ej. HubRise — y eso es correcto).
 function buildCanonicalFields(tab: LastTab): {
   customer_name: string | null;
   customer_phone: string | null;
   delivery_address: string | null;
   expected_time: string | null;
   customer_note: string | null;
+  platform_order_code: string | null;
+  pos_short_code: string | null;
 } {
   const ci = tab.customerInfo ?? null;
   const d = tab.delivery ?? null;
@@ -132,6 +143,8 @@ function buildCanonicalFields(tab: LastTab): {
     delivery_address: addr,
     expected_time: (tab.schedulingTime ?? "").trim() || null,  // ISO de Last (programado); null = ASAP
     customer_note: (tab.customerNote ?? "").trim() || null,
+    platform_order_code: (tab.name ?? "").trim() || null,      // ⟵ nº real de plataforma
+    pos_short_code: (tab.code ?? "").trim() || null,           // ⟵ corto de Last (efímero)
   };
 }
 

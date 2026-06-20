@@ -55,14 +55,28 @@ export function ticketNumber(order: OrderFeedItem): string {
   return order.external_tab_ref ?? order.external_ref ?? '—'
 }
 
-/** Código de pedido grande (el protagonista): el ref corto del canal. */
-function orderCode(order: OrderFeedItem): string {
-  // external_tab_ref suele ser un uuid largo; el código corto "G406" viene del
-  // canal. Usamos external_ref si parece corto; si no, los últimos 5 del tab.
-  const ref = order.external_ref ?? ''
-  if (ref && ref.length <= 8) return ref.toUpperCase()
+/** Código GRANDE del ticket (el protagonista, lo que se canta/casa en el mostrador):
+ *  el código corto del pedido (pos_short_code: G931/U382/J076 — en Glovo es el que
+ *  muestra el rider al recoger; en Uber/JE, identificador ágil). Decisión 20/06,
+ *  benchmark Glovo/Uber/Toast: el corto manda; el nº largo de plataforma va de
+ *  referencia (platformRef). Sin mencionar al TPV intermedio (NUNCA "Last" en el
+ *  papel). Si no hay corto (p.ej. HubRise), cae al nº largo y, en último caso, al tab. */
+function pickupCode(order: OrderFeedItem): string {
+  const short = (order.pos_short_code ?? '').trim()
+  if (short) return short.toUpperCase()
+  const real = (order.platform_order_code ?? '').trim()
+  if (real) return real
   const tab = order.external_tab_ref ?? order.external_ref ?? ''
-  return tab ? ('#' + tab.replace(/-/g, '').slice(-5).toUpperCase()) : '—'
+  return tab ? '#' + tab.replace(/-/g, '').slice(-5).toUpperCase() : '—'
+}
+
+/** Línea fina de referencia: "Glovo · 101688354460" (el nº real de la plataforma,
+ *  para soporte/factura). null si no hay número de plataforma. */
+function platformRef(order: OrderFeedItem): string | null {
+  const real = (order.platform_order_code ?? '').trim()
+  if (!real) return null
+  const ch = (order.channel ?? '').trim()
+  return ch ? `${ch} · ${real}` : real
 }
 
 function money(n: number | null | undefined): string {
@@ -167,12 +181,13 @@ export function renderBagTicket(order: OrderFeedItem, fiscal?: { legalName?: str
   b.push({ kind: 'space' })
   b.push({ kind: 'text', text: fmtDate(order.entro_at), align: 'center', muted: true })
 
-  // Código de pedido (protagonista)
+  // Código de pedido (protagonista): nº real de plataforma con el canal delante.
   b.push({ kind: 'space' })
-  b.push({ kind: 'banner', text: orderCode(order) })
+  b.push({ kind: 'banner', text: pickupCode(order) })
+  const bagRef = platformRef(order)
+  if (bagRef) b.push({ kind: 'text', text: bagRef, align: 'center', muted: true })
 
   // Datos de entrega
-  if (order.channel) b.push({ kind: 'row', left: order.channel, right: order.external_ref ?? '', bold: true })
   b.push({ kind: 'text', text: 'Método: ' + deliveryLabel(order.service_type) })
   if (order.customer_name)   b.push({ kind: 'text', text: 'Cliente: ' + order.customer_name })
   if (order.delivery_address) b.push({ kind: 'text', text: 'Dir: ' + order.delivery_address })
@@ -218,9 +233,10 @@ export function renderKitchenTicket(order: OrderFeedItem): TicketDoc {
   const b: TicketBlock[] = []
 
   b.push({ kind: 'text', text: 'TICKET ' + (order.channel ?? '').toUpperCase(), align: 'center', bold: true })
-  b.push({ kind: 'banner', text: orderCode(order) })
+  b.push({ kind: 'banner', text: pickupCode(order) })
   b.push({ kind: 'text', text: (order.brand ?? '').toUpperCase(), bold: true })
-  if (order.external_ref) b.push({ kind: 'row', left: order.channel ?? '', right: order.external_ref, muted: true })
+  const kitchenRef = platformRef(order)
+  if (kitchenRef) b.push({ kind: 'text', text: kitchenRef, muted: true })
   b.push({ kind: 'text', text: fmtDate(order.entro_at), muted: true })
   if (order.customer_name) b.push({ kind: 'row', left: 'Cliente', right: order.customer_name.split(' ')[0], bold: true })
   if (order.expected_time) b.push({ kind: 'row', left: 'Recogida', right: fmtDate(order.expected_time) })
@@ -268,7 +284,7 @@ export function renderLabels(order: OrderFeedItem): TicketDoc[] {
   const food = items.filter((it) => !it.isDrink)
   const drinks = items.filter((it) => it.isDrink)
   const labels: TicketDoc[] = []
-  const code = orderCode(order)
+  const code = pickupCode(order)
   const who = order.customer_name?.split(' ')[0] ?? ''
   // Total de PIEZAS: una por artículo de comida + una (agrupada) si hay bebidas/postres.
   const totalPieces = food.length + (drinks.length > 0 ? 1 : 0)
@@ -278,7 +294,7 @@ export function renderLabels(order: OrderFeedItem): TicketDoc[] {
   for (const it of food) {
     idx++
     const b: TicketBlock[] = []
-    b.push({ kind: 'row', left: code, right: `${(order.brand ?? '').slice(0, 14)} · ${order.channel ?? ''}`, bold: true })
+    b.push({ kind: 'row', left: code, right: `${(order.brand ?? '').slice(0, 16)}`, bold: true })
     b.push({ kind: 'rule', dashed: true })
     b.push({ kind: 'text', text: it.name, bold: true })
     for (const m of modifierLines(it.modifiers)) {

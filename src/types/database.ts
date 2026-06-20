@@ -8722,6 +8722,8 @@ export type Database = {
           order_status: string | null
           paid: number | null
           payment_method: string | null
+          platform_order_code: string | null
+          pos_short_code: string | null
           raw_products: string | null
           raw_tab: string | null
           refund_amount: number | null
@@ -8764,6 +8766,8 @@ export type Database = {
           order_status?: string | null
           paid?: number | null
           payment_method?: string | null
+          platform_order_code?: string | null
+          pos_short_code?: string | null
           raw_products?: string | null
           raw_tab?: string | null
           refund_amount?: number | null
@@ -8806,6 +8810,8 @@ export type Database = {
           order_status?: string | null
           paid?: number | null
           payment_method?: string | null
+          platform_order_code?: string | null
+          pos_short_code?: string | null
           raw_products?: string | null
           raw_tab?: string | null
           refund_amount?: number | null

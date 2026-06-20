@@ -61,6 +61,8 @@ export interface OrderFeedItem {
   sale_id: string
   external_ref: string | null
   external_tab_ref: string | null
+  platform_order_code: string | null   // nº REAL de la plataforma (Glovo/Uber/JE); protagonista del ticket
+  pos_short_code: string | null         // corto interno de Last (G931/U382/J076); referencia, null si no entró por Last
   order_status: OrderStatus
   status: string
   service_type: string | null
