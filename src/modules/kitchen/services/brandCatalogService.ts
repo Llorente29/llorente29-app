@@ -38,6 +38,7 @@ export interface CatalogProduct {
   isAvailable: boolean
   needsReview: boolean
   modifierGroupCount: number
+  comboSlotCount: number   // nº de slots si es combo (0 si es item)
   position: number
 }
 
@@ -135,8 +136,9 @@ export async function listBrandsWithCatalog(accountId: string): Promise<CatalogB
     })
 }
 
-// Categorías + productos (no combos) de una marca, agrupados por categoría.
-// Los productos sin categoría se agrupan en una pseudo-categoría "Sin categoría".
+// Categorías + productos Y COMBOS de una marca, agrupados por categoría.
+// Los combos viven en su menu_category_id como un producto más (se distinguen por
+// productType='combo' para mostrar su nº de slots). Lo sin categoría → "Sin categoría".
 export async function listCategoriesWithProducts(
   accountId: string,
   brandId: string,
@@ -153,13 +155,12 @@ export async function listCategoriesWithProducts(
     .order('name', { ascending: true })
   if (catErr) throw new Error(`Error listando categorías: ${catErr.message}`)
 
-  // Productos (item) de la marca
+  // Productos Y combos de la marca (los combos también viven en su categoría).
   const { data: items, error: miErr } = await supabase!
     .from('menu_item')
     .select('id, name, short_name, description, photo_url, price, product_type, menu_category_id, recipe_item_id, is_active, is_available, needs_review, position')
     .eq('account_id', accountId)
     .eq('brand_id', brandId)
-    .eq('product_type', 'item')
     .order('position', { ascending: true })
     .order('name', { ascending: true })
   if (miErr) throw new Error(`Error listando productos: ${miErr.message}`)
@@ -180,6 +181,22 @@ export async function listCategoriesWithProducts(
     }
   }
 
+  // Conteo de slots por combo (los combos viven en su categoría como un item más).
+  const comboIds = (items ?? []).filter((i) => i.product_type === 'combo').map((i) => i.id as string)
+  const slotCountByCombo = new Map<string, number>()
+  if (comboIds.length > 0) {
+    const { data: slots, error: sErr } = await supabase!
+      .from('combo_slot')
+      .select('combo_item_id')
+      .eq('account_id', accountId)
+      .in('combo_item_id', comboIds)
+    if (sErr) throw new Error(`Error contando slots de combo: ${sErr.message}`)
+    for (const s of slots ?? []) {
+      const k = s.combo_item_id as string
+      slotCountByCombo.set(k, (slotCountByCombo.get(k) ?? 0) + 1)
+    }
+  }
+
   const toProduct = (i: Record<string, unknown>): CatalogProduct => ({
     id: i.id as string,
     name: i.name as string,
@@ -187,13 +204,14 @@ export async function listCategoriesWithProducts(
     description: (i.description as string) ?? null,
     photoUrl: (i.photo_url as string) ?? null,
     price: Number(i.price ?? 0),
-    productType: 'item',
+    productType: i.product_type === 'combo' ? 'combo' : 'item',
     categoryId: (i.menu_category_id as string) ?? null,
     recipeItemId: (i.recipe_item_id as string) ?? null,
     isActive: i.is_active !== false,
     isAvailable: i.is_available !== false,
     needsReview: i.needs_review === true,
     modifierGroupCount: groupCountByItem.get(i.id as string) ?? 0,
+    comboSlotCount: slotCountByCombo.get(i.id as string) ?? 0,
     position: Number(i.position ?? 0),
   })
 

@@ -1,6 +1,6 @@
 // supabase/functions/lastapp-sync-catalog/index.ts
 // Sincroniza los catálogos de Last.app de una organización hacia
-// lastapp_catalog_product (cache catalogProductId -> organizationProductId).
+// external_catalog_product (source='lastapp'; cache catalogProductId -> organizationProductId).
 // Patrón de arranque calcado de map-products (auth dual, service-role).
 // Entrada (POST JSON): { account_id, lastapp_organization_id, dry_run? }
 // Auth: platform admin (JWT folvy.is_platform_admin) o x-internal-key.

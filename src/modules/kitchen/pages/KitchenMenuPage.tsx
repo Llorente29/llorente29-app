@@ -19,10 +19,8 @@ import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import {
   listBrandsWithCatalog,
   listCategoriesWithProducts,
-  listCombos,
   type CatalogBrand,
   type CatalogCategory,
-  type CatalogCombo,
 } from '@/modules/kitchen/services/brandCatalogService'
 import { getMenuItemEconomics, setMenuItemCategoryBulk, reorderMenuItems } from '@/modules/kitchen/services/menuItemService'
 import { listMenuCategories, reorderMenuCategories, deactivateMenuCategory, updateMenuCategory, type MenuCategory } from '@/modules/kitchen/services/menuCategoryService'
@@ -53,14 +51,12 @@ export default function KitchenMenuPage() {
   const [selectedBrandId, setSelectedBrandId] = useState<string | null>(null)
   const [categories, setCategories] = useState<CatalogCategory[]>([])
   const [allCats, setAllCats] = useState<MenuCategory[]>([])
-  const [combos, setCombos] = useState<CatalogCombo[]>([])
   const [economics, setEconomics] = useState<Map<string, MenuItemEconomics>>(new Map())
   const [reliability, setReliability] = useState<SalesReliability | null>(null)
   const [loadingBrands, setLoadingBrands] = useState(true)
   const [loadingCatalog, setLoadingCatalog] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [expandedCombos, setExpandedCombos] = useState<Set<string>>(new Set())
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null)
   const [showExceptions, setShowExceptions] = useState(false)
   const [showNewProduct, setShowNewProduct] = useState(false)
@@ -110,14 +106,12 @@ export default function KitchenMenuPage() {
     setError(null)
     Promise.all([
       listCategoriesWithProducts(activeAccountId, selectedBrandId),
-      listCombos(activeAccountId, selectedBrandId),
       getMenuItemEconomics(selectedBrandId).catch(() => [] as MenuItemEconomics[]),
       listMenuCategories(activeAccountId, selectedBrandId).catch(() => [] as MenuCategory[]),
     ])
-      .then(([cats, cbs, econ, all]) => {
+      .then(([cats, econ, all]) => {
         if (cancelled) return
         setCategories(cats)
-        setCombos(cbs)
         setAllCats(all)
         const m = new Map<string, MenuItemEconomics>()
         for (const e of econ) m.set(e.menuItemId, e)
@@ -167,20 +161,6 @@ export default function KitchenMenuPage() {
       .filter((c) => c.products.length > 0)
   }, [displayCategories, search])
 
-  const filteredCombos = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) return combos
-    return combos.filter((c) => c.name.toLowerCase().includes(q))
-  }, [combos, search])
-
-  function toggleCombo(id: string) {
-    setExpandedCombos((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id); else next.add(id)
-      return next
-    })
-  }
-
   // DETALLE de producto (patrón lista+detalle por estado). Al volver, recargamos
   // el catálogo de la marca para reflejar cambios (precio, nombre editados).
   function handleDetailBack() {
@@ -207,7 +187,6 @@ export default function KitchenMenuPage() {
     setShowNewCategory(false)
     if (!activeAccountId || !selectedBrandId) return
     listCategoriesWithProducts(activeAccountId, selectedBrandId).then(setCategories).catch(() => {})
-    listCombos(activeAccountId, selectedBrandId).then(setCombos).catch(() => {})
     listMenuCategories(activeAccountId, selectedBrandId).then(setAllCats).catch(() => {})
     listBrandsWithCatalog(activeAccountId).then(setBrands).catch(() => {})
     getMenuItemEconomics(selectedBrandId)
@@ -634,27 +613,40 @@ export default function KitchenMenuPage() {
                       <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center text-gray-400 shrink-0">
                         {p.photoUrl
                           ? <img src={p.photoUrl} alt="" className="w-10 h-10 rounded-lg object-cover" />
-                          : <UtensilsCrossed className="w-4 h-4" />}
+                          : p.productType === 'combo'
+                            ? <Package className="w-4 h-4" />
+                            : <UtensilsCrossed className="w-4 h-4" />}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="font-medium text-gray-900 text-sm truncate">
                           {p.name}
+                          {p.productType === 'combo' && (
+                            <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 align-middle inline-flex items-center gap-1">
+                              <Package className="w-3 h-3" /> combo
+                            </span>
+                          )}
                           {!p.isAvailable && (
                             <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 align-middle">agotado</span>
                           )}
                         </div>
                         <div className="text-xs text-gray-500 truncate">
                           {p.shortName ? `${p.shortName} · ` : ''}
-                          {p.modifierGroupCount > 0
-                            ? `${p.modifierGroupCount} grupo${p.modifierGroupCount > 1 ? 's' : ''} modif.`
-                            : 'sin modificadores'}
+                          {p.productType === 'combo'
+                            ? `${p.comboSlotCount} slot${p.comboSlotCount !== 1 ? 's' : ''}`
+                            : p.modifierGroupCount > 0
+                              ? `${p.modifierGroupCount} grupo${p.modifierGroupCount > 1 ? 's' : ''} modif.`
+                              : 'sin modificadores'}
                         </div>
                       </div>
                       <div className="text-sm font-medium text-gray-900 shrink-0 w-16 text-right">
                         {formatEur(p.price)}
                       </div>
                       <div className="shrink-0 w-40 text-right">
-                        {!hasRecipe ? (
+                        {p.productType === 'combo' ? (
+                          <span className="inline-flex items-center gap-1 text-xs text-gray-400">
+                            <Package className="w-3.5 h-3.5" /> coste por componentes
+                          </span>
+                        ) : !hasRecipe ? (
                           <span className="inline-flex items-center gap-1 text-xs text-amber-600">
                             <CircleDashed className="w-3.5 h-3.5" /> Sin escandallo
                           </span>
@@ -706,54 +698,7 @@ export default function KitchenMenuPage() {
             </div>
           ))}
 
-          {/* Combos */}
-          {filteredCombos.length > 0 && (
-            <div className="mb-6">
-              <h2 className="text-base font-medium text-gray-900 mb-2">🍱 Combos</h2>
-              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                {filteredCombos.map((c, idx) => {
-                  const open = expandedCombos.has(c.id)
-                  return (
-                    <div key={c.id} className={idx < filteredCombos.length - 1 ? 'border-b border-gray-100' : ''}>
-                      <button
-                        onClick={() => toggleCombo(c.id)}
-                        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50"
-                      >
-                        {open ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
-                        <Package className="w-4 h-4 text-gray-400 shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <span className="font-medium text-gray-900 text-sm">{c.name}</span>
-                          {!c.isAvailable && (
-                            <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">agotado</span>
-                          )}
-                        </div>
-                        <span className="text-sm font-medium text-gray-900 shrink-0">{formatEur(c.price)}</span>
-                        <span className="text-xs text-gray-500 shrink-0 w-16 text-right">
-                          {c.slots.length} slot{c.slots.length !== 1 ? 's' : ''}
-                        </span>
-                      </button>
-                      {open && (
-                        <div className="px-4 pb-3 pl-11">
-                          <div className="flex flex-wrap gap-2">
-                            {c.slots.map((s) => (
-                              <span key={s.id} className="text-xs bg-gray-100 text-gray-600 px-2.5 py-1 rounded-lg">
-                                {s.name} <span className="text-gray-400">({s.optionCount})</span>
-                              </span>
-                            ))}
-                          </div>
-                          <p className="text-xs text-gray-400 mt-2">
-                            Coste estimado: pendiente de escandallos de los componentes
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-
-          {filteredCategories.length === 0 && filteredCombos.length === 0 && (
+          {filteredCategories.length === 0 && (
             <p className="text-sm text-gray-500">Sin resultados para “{search}”.</p>
           )}
         </>
