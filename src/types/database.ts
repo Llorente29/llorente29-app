@@ -3687,14 +3687,137 @@ export type Database = {
           },
         ]
       }
+      external_catalog_product: {
+        Row: {
+          account_id: string
+          catalog_product_id: string
+          created_at: string
+          external_brand_name: string | null
+          external_catalog_id: string | null
+          external_channel: string | null
+          external_org_id: string
+          id: string
+          is_enabled: boolean | null
+          needs_review: boolean
+          organization_product_id: string | null
+          price_cents: number | null
+          product_name: string | null
+          product_type: string | null
+          seen_in_catalog_at: string | null
+          seen_in_sale_at: string | null
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          catalog_product_id: string
+          created_at?: string
+          external_brand_name?: string | null
+          external_catalog_id?: string | null
+          external_channel?: string | null
+          external_org_id: string
+          id?: string
+          is_enabled?: boolean | null
+          needs_review?: boolean
+          organization_product_id?: string | null
+          price_cents?: number | null
+          product_name?: string | null
+          product_type?: string | null
+          seen_in_catalog_at?: string | null
+          seen_in_sale_at?: string | null
+          source?: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          catalog_product_id?: string
+          created_at?: string
+          external_brand_name?: string | null
+          external_catalog_id?: string | null
+          external_channel?: string | null
+          external_org_id?: string
+          id?: string
+          is_enabled?: boolean | null
+          needs_review?: boolean
+          organization_product_id?: string | null
+          price_cents?: number | null
+          product_name?: string | null
+          product_type?: string | null
+          seen_in_catalog_at?: string | null
+          seen_in_sale_at?: string | null
+          source?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lastapp_catalog_product_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      external_integration: {
+        Row: {
+          account_id: string
+          created_at: string
+          external_org_id: string
+          id: string
+          is_active: boolean
+          organization_name: string | null
+          ownership_type: string
+          push_status_enabled: boolean
+          source: string
+          token_secret_name: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          external_org_id: string
+          id?: string
+          is_active?: boolean
+          organization_name?: string | null
+          ownership_type?: string
+          push_status_enabled?: boolean
+          source?: string
+          token_secret_name: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          external_org_id?: string
+          id?: string
+          is_active?: boolean
+          organization_name?: string | null
+          ownership_type?: string
+          push_status_enabled?: boolean
+          source?: string
+          token_secret_name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lastapp_integration_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       external_location_map: {
         Row: {
           account_id: string
           created_at: string
           external_location_id: string
+          external_location_name: string | null
           id: string
           is_active: boolean
           location_id: string | null
+          needs_review: boolean
           source: string
           updated_at: string
         }
@@ -3702,9 +3825,11 @@ export type Database = {
           account_id: string
           created_at?: string
           external_location_id: string
+          external_location_name?: string | null
           id?: string
           is_active?: boolean
           location_id?: string | null
+          needs_review?: boolean
           source: string
           updated_at?: string
         }
@@ -3712,9 +3837,11 @@ export type Database = {
           account_id?: string
           created_at?: string
           external_location_id?: string
+          external_location_name?: string | null
           id?: string
           is_active?: boolean
           location_id?: string | null
+          needs_review?: boolean
           source?: string
           updated_at?: string
         }
@@ -5333,214 +5460,6 @@ export type Database = {
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "accounts"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      lastapp_catalog_product: {
-        Row: {
-          account_id: string
-          catalog_product_id: string
-          created_at: string
-          id: string
-          is_enabled: boolean | null
-          lastapp_brand_name: string | null
-          lastapp_catalog_id: string | null
-          lastapp_channel: string | null
-          lastapp_organization_id: string
-          needs_review: boolean
-          organization_product_id: string | null
-          price_cents: number | null
-          product_name: string | null
-          product_type: string | null
-          seen_in_catalog_at: string | null
-          seen_in_sale_at: string | null
-          updated_at: string
-        }
-        Insert: {
-          account_id: string
-          catalog_product_id: string
-          created_at?: string
-          id?: string
-          is_enabled?: boolean | null
-          lastapp_brand_name?: string | null
-          lastapp_catalog_id?: string | null
-          lastapp_channel?: string | null
-          lastapp_organization_id: string
-          needs_review?: boolean
-          organization_product_id?: string | null
-          price_cents?: number | null
-          product_name?: string | null
-          product_type?: string | null
-          seen_in_catalog_at?: string | null
-          seen_in_sale_at?: string | null
-          updated_at?: string
-        }
-        Update: {
-          account_id?: string
-          catalog_product_id?: string
-          created_at?: string
-          id?: string
-          is_enabled?: boolean | null
-          lastapp_brand_name?: string | null
-          lastapp_catalog_id?: string | null
-          lastapp_channel?: string | null
-          lastapp_organization_id?: string
-          needs_review?: boolean
-          organization_product_id?: string | null
-          price_cents?: number | null
-          product_name?: string | null
-          product_type?: string | null
-          seen_in_catalog_at?: string | null
-          seen_in_sale_at?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "lastapp_catalog_product_account_id_fkey"
-            columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "accounts"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      lastapp_integration: {
-        Row: {
-          account_id: string
-          created_at: string
-          id: string
-          is_active: boolean
-          lastapp_organization_id: string
-          organization_name: string | null
-          ownership_type: string
-          push_status_enabled: boolean
-          token_secret_name: string
-          updated_at: string
-        }
-        Insert: {
-          account_id: string
-          created_at?: string
-          id?: string
-          is_active?: boolean
-          lastapp_organization_id: string
-          organization_name?: string | null
-          ownership_type?: string
-          push_status_enabled?: boolean
-          token_secret_name: string
-          updated_at?: string
-        }
-        Update: {
-          account_id?: string
-          created_at?: string
-          id?: string
-          is_active?: boolean
-          lastapp_organization_id?: string
-          organization_name?: string | null
-          ownership_type?: string
-          push_status_enabled?: boolean
-          token_secret_name?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "lastapp_integration_account_id_fkey"
-            columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "accounts"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      lastapp_location_map: {
-        Row: {
-          account_id: string
-          created_at: string
-          id: string
-          lastapp_location_id: string
-          lastapp_location_name: string | null
-          location_id: string | null
-          needs_review: boolean
-        }
-        Insert: {
-          account_id: string
-          created_at?: string
-          id?: string
-          lastapp_location_id: string
-          lastapp_location_name?: string | null
-          location_id?: string | null
-          needs_review?: boolean
-        }
-        Update: {
-          account_id?: string
-          created_at?: string
-          id?: string
-          lastapp_location_id?: string
-          lastapp_location_name?: string | null
-          location_id?: string | null
-          needs_review?: boolean
-        }
-        Relationships: [
-          {
-            foreignKeyName: "lastapp_location_map_account_id_fkey"
-            columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "lastapp_location_map_location_id_fkey"
-            columns: ["location_id"]
-            isOneToOne: false
-            referencedRelation: "locations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      lastapp_product_map: {
-        Row: {
-          account_id: string
-          created_at: string
-          id: string
-          lastapp_product_name: string | null
-          needs_review: boolean
-          organization_product_id: string
-          recipe_item_id: string | null
-          updated_at: string
-        }
-        Insert: {
-          account_id: string
-          created_at?: string
-          id?: string
-          lastapp_product_name?: string | null
-          needs_review?: boolean
-          organization_product_id: string
-          recipe_item_id?: string | null
-          updated_at?: string
-        }
-        Update: {
-          account_id?: string
-          created_at?: string
-          id?: string
-          lastapp_product_name?: string | null
-          needs_review?: boolean
-          organization_product_id?: string
-          recipe_item_id?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "lastapp_product_map_account_id_fkey"
-            columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "lastapp_product_map_recipe_item_id_fkey"
-            columns: ["recipe_item_id"]
-            isOneToOne: false
-            referencedRelation: "recipe_item"
             referencedColumns: ["id"]
           },
         ]
@@ -11674,18 +11593,6 @@ export type Database = {
         }[]
       }
       reprocess_sale: { Args: { p_sale_id: string }; Returns: number }
-      resolve_lastapp_line: {
-        Args: {
-          p_account_id: string
-          p_catalog_product_id: string
-          p_channel_slug: string
-        }
-        Returns: {
-          menu_item_id: string
-          org_product_id: string
-          recipe_item_id: string
-        }[]
-      }
       resolve_mapping_proposals: {
         Args: {
           p_fuzzy_min?: number
@@ -11817,25 +11724,9 @@ export type Database = {
           saltados_sin_marca: number
         }[]
       }
-      seed_catalog_from_lastapp: {
-        Args: { p_account_id: string }
-        Returns: {
-          saltados_sin_marca: number
-          sembrados: number
-        }[]
-      }
       seed_ingredient_families_for_account: {
         Args: { p_account_id: string }
         Returns: number
-      }
-      seed_lastapp_catalog: {
-        Args: { p_account_id: string }
-        Returns: {
-          menu_items_creados: number
-          productos_sin_marca: number
-          recipe_items_creados: number
-          vinculos_creados: number
-        }[]
       }
       seed_vacation_settings_for_account: {
         Args: { p_account_id: string }
