@@ -58,3 +58,4 @@ supabase/migrations/verif_precios*.sql
 supabase/migrations/fix_preferentes*.sql
 supabase/migrations/verif_preferentes*.sql
 supabase/migrations/mapa_preferentes*.sql
+body.json
