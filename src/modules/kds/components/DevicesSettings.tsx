@@ -6,18 +6,25 @@
 // Muestra last_seen_at.
 
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, Loader2, Copy, Check, Tablet, Ban } from 'lucide-react'
+import { Plus, Loader2, Copy, Check, Tablet, Ban, QrCode, X, MapPin } from 'lucide-react'
 import { Button, Input, Badge } from '../../../components/ui'
 import {
   listDevices, createDevice, revokeDevice, generateDeviceToken, listStations,
   type KdsDevice, type KitchenStation,
 } from '../services/kdsService'
+import QRCode from 'qrcode'
+import { supabase } from '../../../lib/supabase'
 
 interface Props { accountId: string; locationId: string }
 
 function kioskUrl(token: string): string {
   const origin = typeof window !== 'undefined' ? window.location.origin : ''
   return `${origin}/cocina-tv?token=${token}`
+}
+
+function estacionUrl(token: string): string {
+  const origin = typeof window !== 'undefined' ? window.location.origin : ''
+  return `${origin}/estacion?token=${token}`
 }
 
 function formatLastSeen(iso: string | null): string {
@@ -33,6 +40,9 @@ export default function DevicesSettings({ accountId, locationId }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [locationName, setLocationName] = useState<string>('')
+  const [qrFor, setQrFor] = useState<KdsDevice | null>(null)
+  const [qrDataUrl, setQrDataUrl] = useState<string>('')
 
   // Form de alta
   const [label, setLabel] = useState('')
@@ -57,6 +67,23 @@ export default function DevicesSettings({ accountId, locationId }: Props) {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { void load() }, [accountId, locationId])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!supabase || !locationId) return
+    void supabase
+      .from('locations').select('name').eq('id', locationId).single()
+      .then(({ data }) => { if (!cancelled && data) setLocationName((data as { name: string }).name) })
+    return () => { cancelled = true }
+  }, [locationId])
+
+  // Genera el QR de la URL de estación al abrir el modal.
+  useEffect(() => {
+    if (!qrFor) { setQrDataUrl(''); return }
+    void QRCode.toDataURL(estacionUrl(qrFor.token), { width: 320, margin: 1 })
+      .then(setQrDataUrl)
+      .catch(() => setQrDataUrl(''))
+  }, [qrFor])
 
   const stationNames = useMemo(() => {
     const m: Record<string, string> = {}
@@ -89,11 +116,12 @@ export default function DevicesSettings({ accountId, locationId }: Props) {
     finally { setSaving(false) }
   }
 
-  async function handleCopy(device: KdsDevice) {
+  async function handleCopy(device: KdsDevice, which: 'estacion' | 'kiosco') {
     try {
-      await navigator.clipboard.writeText(kioskUrl(device.token))
-      setCopiedId(device.id)
-      window.setTimeout(() => setCopiedId(c => (c === device.id ? null : c)), 1800)
+      const url = which === 'estacion' ? estacionUrl(device.token) : kioskUrl(device.token)
+      await navigator.clipboard.writeText(url)
+      setCopiedId(device.id + which)
+      window.setTimeout(() => setCopiedId(c => (c === device.id + which ? null : c)), 1800)
     } catch {
       setError('No se pudo copiar al portapapeles.')
     }
@@ -106,9 +134,14 @@ export default function DevicesSettings({ accountId, locationId }: Props) {
   return (
     <div className="space-y-4">
       <p className="text-sm text-text-secondary">
-        Cada tablet/TV de cocina es un dispositivo con su token. Abre la URL del kiosco en el
-        dispositivo para vincularlo. Si no eliges estaciones, mostrará <strong>todas</strong>.
+        Cada tablet/TV de cocina es un dispositivo con su token. Abre la <strong>URL estación</strong>
+        (o escanea el <strong>QR</strong>) en la tablet para vincularla. Si no eliges estaciones, mostrará <strong>todas</strong>.
       </p>
+
+      <div className="flex items-center gap-2 text-sm px-3 py-2 rounded-lg bg-accent/10 text-accent ring-1 ring-accent/20">
+        <MapPin size={15} className="shrink-0" />
+        Creando dispositivos en: <strong>{locationName || 'este local'}</strong>
+      </div>
 
       {error && <div className="text-sm text-danger">{error}</div>}
 
@@ -170,8 +203,14 @@ export default function DevicesSettings({ accountId, locationId }: Props) {
               </div>
               {d.isActive && (
                 <>
-                  <Button size="sm" variant="outline" onClick={() => void handleCopy(d)}>
-                    {copiedId === d.id ? <><Check size={14} /> Copiado</> : <><Copy size={14} /> URL kiosco</>}
+                  <Button size="sm" variant="outline" onClick={() => setQrFor(d)}>
+                    <QrCode size={14} /> QR
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => void handleCopy(d, 'estacion')}>
+                    {copiedId === d.id + 'estacion' ? <><Check size={14} /> Copiado</> : <><Copy size={14} /> URL estación</>}
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => void handleCopy(d, 'kiosco')}>
+                    {copiedId === d.id + 'kiosco' ? <><Check size={14} /> Copiado</> : <>URL kiosco</>}
                   </Button>
                   <button
                     onClick={() => void handleRevoke(d.id)}
@@ -185,6 +224,28 @@ export default function DevicesSettings({ accountId, locationId }: Props) {
             </li>
           ))}
         </ul>
+      )}
+
+      {qrFor && (
+        <div className="fixed inset-0 z-50 bg-black/50 grid place-items-center p-4" onClick={() => setQrFor(null)}>
+          <div className="bg-card rounded-2xl border border-border-default p-6 max-w-sm w-full text-center" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-medium text-text-primary">{qrFor.label}</h3>
+              <button onClick={() => setQrFor(null)} className="p-1.5 rounded-md hover:bg-page text-text-secondary"><X size={18} /></button>
+            </div>
+            {qrDataUrl ? (
+              <img src={qrDataUrl} alt="QR de la estación" className="mx-auto rounded-xl bg-white p-2" width={280} height={280} />
+            ) : (
+              <div className="h-[280px] grid place-items-center text-text-secondary"><Loader2 className="animate-spin" size={24} /></div>
+            )}
+            <p className="text-sm text-text-secondary mt-4">
+              Escanea con la tablet para abrir la estación en <strong>{locationName || 'este local'}</strong>.
+            </p>
+            <Button variant="outline" size="sm" className="mt-3" onClick={() => void handleCopy(qrFor, 'estacion')}>
+              {copiedId === qrFor.id + 'estacion' ? <><Check size={14} /> Copiado</> : <><Copy size={14} /> Copiar URL</>}
+            </Button>
+          </div>
+        </div>
       )}
     </div>
   )
