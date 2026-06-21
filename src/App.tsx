@@ -14,6 +14,7 @@ import AccountStatusGate from './components/AccountStatusGate'
 import TrabajadorApp from './pages/trabajador/TrabajadorApp'
 import { useAuth } from './modules/multitenancy/hooks/useAuth'
 import KdsKioskRoute from './modules/kds/KdsKioskRoute'
+import TabletStationRoute from './modules/tablet/TabletStationRoute'
 
 // G-8.6 (Sprint 3): App.tsx reducido. El render autenticado es el Shell modular
 // (src/shell/Shell.tsx), que vive en la raíz y resuelve la cuenta por AppContext.
@@ -87,6 +88,13 @@ export default function App() {
   // localStorage) y la RPC kds_board deriva el local. Va ANTES de los gates.
   if (location.pathname.startsWith('/cocina-tv')) {
     return <KdsKioskRoute />
+  }
+  // Modo ESTACIÓN DE TABLET (frontera de token, sin sesión). Ruta pública propia,
+  // hermana de /cocina-tv: un terminal a pantalla completa con pestañas
+  // (Pedidos · Cocina · Disponibilidad). Mismo token de dispositivo. Va ANTES
+  // de los gates de sesión por la misma razón que el kiosco.
+  if (location.pathname.startsWith('/estacion')) {
+    return <TabletStationRoute />
   }
   if (isPublicAuthRoute(location.pathname)) {
     return <AuthRouter />
