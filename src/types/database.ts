@@ -2442,6 +2442,48 @@ export type Database = {
         }
         Relationships: []
       }
+      availability_push_log: {
+        Row: {
+          account_id: string
+          catalog_product_id: string | null
+          created_at: string
+          enable: boolean | null
+          error: string | null
+          external_catalog_id: string | null
+          external_org_id: string | null
+          http_status: number | null
+          id: string
+          ok: boolean | null
+          organization_product_id: string | null
+        }
+        Insert: {
+          account_id: string
+          catalog_product_id?: string | null
+          created_at?: string
+          enable?: boolean | null
+          error?: string | null
+          external_catalog_id?: string | null
+          external_org_id?: string | null
+          http_status?: number | null
+          id?: string
+          ok?: boolean | null
+          organization_product_id?: string | null
+        }
+        Update: {
+          account_id?: string
+          catalog_product_id?: string | null
+          created_at?: string
+          enable?: boolean | null
+          error?: string | null
+          external_catalog_id?: string | null
+          external_org_id?: string | null
+          http_status?: number | null
+          id?: string
+          ok?: boolean | null
+          organization_product_id?: string | null
+        }
+        Relationships: []
+      }
       billing_events: {
         Row: {
           account_id: string
@@ -3695,6 +3737,7 @@ export type Database = {
           external_brand_name: string | null
           external_catalog_id: string | null
           external_channel: string | null
+          external_location_id: string | null
           external_org_id: string
           id: string
           is_enabled: boolean | null
@@ -3715,6 +3758,7 @@ export type Database = {
           external_brand_name?: string | null
           external_catalog_id?: string | null
           external_channel?: string | null
+          external_location_id?: string | null
           external_org_id: string
           id?: string
           is_enabled?: boolean | null
@@ -3735,6 +3779,7 @@ export type Database = {
           external_brand_name?: string | null
           external_catalog_id?: string | null
           external_channel?: string | null
+          external_location_id?: string | null
           external_org_id?: string
           id?: string
           is_enabled?: boolean | null
@@ -5942,6 +5987,8 @@ export type Database = {
           ai_confidence: number | null
           ai_suggested_price: number | null
           archived_at: string | null
+          availability_reason: string | null
+          available_until: string | null
           brand_id: string
           category: string | null
           channel_id: string | null
@@ -5979,6 +6026,8 @@ export type Database = {
           ai_confidence?: number | null
           ai_suggested_price?: number | null
           archived_at?: string | null
+          availability_reason?: string | null
+          available_until?: string | null
           brand_id: string
           category?: string | null
           channel_id?: string | null
@@ -6016,6 +6065,8 @@ export type Database = {
           ai_confidence?: number | null
           ai_suggested_price?: number | null
           archived_at?: string | null
+          availability_reason?: string | null
+          available_until?: string | null
           brand_id?: string
           category?: string | null
           channel_id?: string | null
@@ -7030,6 +7081,51 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
           value?: Json
+        }
+        Relationships: []
+      }
+      product_availability: {
+        Row: {
+          account_id: string
+          available_until: string | null
+          created_at: string
+          external_id: string | null
+          id: string
+          is_available: boolean
+          location_id: string | null
+          reason: string
+          recipe_item_id: string | null
+          set_at: string
+          set_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          available_until?: string | null
+          created_at?: string
+          external_id?: string | null
+          id?: string
+          is_available?: boolean
+          location_id?: string | null
+          reason?: string
+          recipe_item_id?: string | null
+          set_at?: string
+          set_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          available_until?: string | null
+          created_at?: string
+          external_id?: string | null
+          id?: string
+          is_available?: boolean
+          location_id?: string | null
+          reason?: string
+          recipe_item_id?: string | null
+          set_at?: string
+          set_by?: string | null
+          updated_at?: string
         }
         Relationships: []
       }
@@ -10789,6 +10885,25 @@ export type Database = {
           stock_value: number
         }[]
       }
+      availability_panel: {
+        Args: { p_account_id: string; p_location_id?: string }
+        Returns: {
+          available_until: string
+          brand_names: string[]
+          brands: number
+          location_id: string
+          location_name: string
+          name: string
+          photo_url: string
+          product_key: string
+          reason: string
+          recipe_item_id: string
+          representative_menu_item_id: string
+          set_at: string
+          source_folvy: boolean
+          source_last: boolean
+        }[]
+      }
       avt_period: {
         Args: {
           p_account: string
@@ -11776,6 +11891,16 @@ export type Database = {
       set_platform_admin_role: {
         Args: { p_admin_id: string; p_role: string }
         Returns: undefined
+      }
+      set_product_availability: {
+        Args: {
+          p_available_until?: string
+          p_is_available: boolean
+          p_location_id?: string
+          p_menu_item_id: string
+          p_reason?: string
+        }
+        Returns: Json
       }
       set_stock_level: {
         Args: {

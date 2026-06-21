@@ -33,7 +33,9 @@ import {
 } from '@/modules/kitchen/services/channelRateService'
 import {
   getMenuItemChannelEconomics,
+  setProductAvailability,
   type ChannelEconomics,
+  type ProductAvailabilityResult,
 } from '@/modules/kitchen/services/menuOverrideService'
 import { uploadMenuPhoto, deleteMenuPhoto } from '@/modules/kitchen/services/menuPhotoService'
 import ProductPlacementSection from '@/modules/kitchen/components/ProductPlacementSection'
@@ -177,6 +179,10 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
   // Edición inline (notas, packaging, avanzado)
   const [notesVal, setNotesVal] = useState('')
   const [showPrices, setShowPrices] = useState(false)
+  const [availSaving, setAvailSaving] = useState(false)
+  const [availConfirm, setAvailConfirm] = useState(false)
+  const [availResult, setAvailResult] = useState<ProductAvailabilityResult | null>(null)
+  const [availError, setAvailError] = useState<string | null>(null)
   const [packDesc, setPackDesc] = useState('')
   const [packCost, setPackCost] = useState('')
   const [kitchenNameVal, setKitchenNameVal] = useState('')
@@ -269,6 +275,23 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
       if (fresh) setItem(fresh)
     } catch (err: unknown) {
       console.error('CatalogProductDetailPage: refresco falló', err)
+    }
+  }
+
+  // 86: marcar disponible/agotado (cascada cross-brand + empuje a canales en el servidor)
+  async function handleToggleAvailability(next: boolean) {
+    if (!item) return
+    setAvailError(null)
+    setAvailSaving(true)
+    try {
+      const res = await setProductAvailability(item.id, next, 'manual')
+      setAvailResult(next ? null : res)   // mostramos el alcance solo al agotar
+      setAvailConfirm(false)
+      await refreshItem()
+    } catch (err: unknown) {
+      setAvailError(err instanceof Error ? err.message : 'Error cambiando disponibilidad')
+    } finally {
+      setAvailSaving(false)
     }
   }
 
@@ -809,12 +832,64 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
                   <td className="py-2.5 pr-3 text-right font-mono">{fmtEur(pvpConIva)}</td>
                   <td className="py-2.5 pr-3 text-right font-mono">{bestMargin != null ? fmtEur(bestMargin) : '—'}</td>
                   <td className="py-2.5 text-right">
-                    <span className={`inline-block w-2.5 h-2.5 rounded-full ${item.isAvailable ? 'bg-green-500' : 'bg-stone-300'}`} />
+                    {item.isAvailable ? (
+                      <button
+                        onClick={() => { setAvailError(null); setAvailConfirm(true) }}
+                        disabled={availSaving}
+                        className="inline-flex items-center gap-1.5 text-[12px] font-medium text-green-700 hover:text-green-800 disabled:opacity-50"
+                      >
+                        <span className="inline-block w-2.5 h-2.5 rounded-full bg-green-500" />
+                        Disponible
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleToggleAvailability(true)}
+                        disabled={availSaving}
+                        className="inline-flex items-center gap-1.5 text-[12px] font-medium text-stone-500 hover:text-green-700 disabled:opacity-50"
+                      >
+                        <span className="inline-block w-2.5 h-2.5 rounded-full bg-stone-300" />
+                        {availSaving ? 'Reactivando…' : 'Agotado · reactivar'}
+                      </button>
+                    )}
                   </td>
                 </tr>
               </tbody>
             </table>
           </div>
+          {availConfirm && (
+            <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm">
+              <p className="font-medium text-amber-900">¿Marcar como agotado?</p>
+              <p className="text-amber-800 mt-0.5">
+                Se agotará en <strong>todas las marcas</strong> que comparten este producto y se retirará de las plataformas (Glovo, Uber, JustEat) donde esté publicado. Podrás reactivarlo cuando quieras.
+              </p>
+              <div className="flex gap-2 mt-2.5">
+                <button
+                  onClick={() => handleToggleAvailability(false)}
+                  disabled={availSaving}
+                  className="px-3 py-1.5 rounded-md bg-amber-600 text-white text-[13px] font-medium hover:bg-amber-700 disabled:opacity-50"
+                >
+                  {availSaving ? 'Agotando…' : 'Sí, agotar'}
+                </button>
+                <button
+                  onClick={() => setAvailConfirm(false)}
+                  disabled={availSaving}
+                  className="px-3 py-1.5 rounded-md border border-stone-300 text-[13px] font-medium text-stone-600 hover:bg-stone-50 disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+          {availResult && !item.isAvailable && (
+            <div className="mt-3 rounded-lg border border-stone-200 bg-stone-50 p-3 text-[13px] text-stone-600">
+              Agotado en <strong>{availResult.brands}</strong> marca{availResult.brands === 1 ? '' : 's'}
+              {' · '}<strong>{availResult.channels}</strong> canal{availResult.channels === 1 ? '' : 'es'}
+              {' '}({availResult.affectedItems} ficha{availResult.affectedItems === 1 ? '' : 's'}).
+            </div>
+          )}
+          {availError && (
+            <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-[13px] text-red-700">{availError}</div>
+          )}
           <button onClick={() => setShowPrices(true)} className="mt-3 text-sm font-medium text-[#D67442] hover:underline">Editar precios</button>
         </CollapsibleSection>
 

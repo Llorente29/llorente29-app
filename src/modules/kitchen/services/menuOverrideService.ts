@@ -167,4 +167,46 @@ export async function clearMenuItemOverride(input: ClearOverrideInput): Promise<
   if (error) throw new Error(`Error limpiando el override del canal: ${error.message}`)
 }
 
+// ─── 86 / DISPONIBILIDAD (producto físico, cascada cross-brand) ───────────────
+
+export type AvailabilityReason = 'manual' | 'stock_out' | 'schedule'
+
+/** Alcance real devuelto por set_product_availability (para el "se agota en N marcas"). */
+export interface ProductAvailabilityResult {
+  affectedItems: number   // fichas (menu_item) afectadas en todas las marcas
+  brands: number          // marcas distintas
+  channels: number        // canales (catálogos) donde se empujará
+  matriculas: number      // matrículas distintas tocadas
+}
+
+/**
+ * Marca un producto disponible / agotado (86). El servidor cascadea CROSS-BRAND:
+ * afecta a todas las marcas que comparten el producto físico (mismo escandallo o
+ * misma matrícula) y dispara el empuje a los canales (Last hoy; HubRise/Otter
+ * mañana). `reason` deja entrar auto-86 sin cambiar la firma; `availableUntil`
+ * es el timer (Fase 2). Devuelve el alcance real.
+ */
+export async function setProductAvailability(
+  menuItemId: string,
+  isAvailable: boolean,
+  reason: AvailabilityReason = 'manual',
+  availableUntil?: string | null,
+): Promise<ProductAvailabilityResult> {
+  requireSupabase()
+  const { data, error } = await supabase!.rpc('set_product_availability', {
+    p_menu_item_id: menuItemId,
+    p_is_available: isAvailable,
+    p_reason: reason,
+    p_available_until: availableUntil ?? undefined,
+  })
+  if (error) throw new Error(`Error cambiando disponibilidad: ${error.message}`)
+  const r = (data ?? {}) as Record<string, unknown>
+  return {
+    affectedItems: Number(r.affected_items ?? 0),
+    brands: Number(r.brands ?? 0),
+    channels: Number(r.channels ?? 0),
+    matriculas: Number(r.matriculas ?? 0),
+  }
+}
+
 export { ZERO_UUID }

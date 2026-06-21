@@ -198,6 +198,10 @@ Deno.serve(async (req: Request) => {
         catalog_product_id: p.catalogProductId,
         organization_product_id: p.organizationProductId,
         external_catalog_id: catId,
+        // Header locationID del catálogo: necesario para el empuje del 86
+        // (PUT /catalogs/{catalogId}/products/{productId}). Lo conocemos del walk de
+        // locations; persistirlo evita re-recorrer /locations en cada push.
+        external_location_id: catalogLocation[catId] ?? null,
         external_brand_name: catalogBrand[catId] ?? null,
         external_channel: catalogChannel[catId] ?? null,
         product_name: p.name,
