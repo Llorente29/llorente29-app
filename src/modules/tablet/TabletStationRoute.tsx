@@ -39,7 +39,7 @@ export default function TabletStationRoute() {
   const [status, setStatus] = useState<Status>('idle')
   const [pasteValue, setPasteValue] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [tab, setTab] = useState<Tab>('cocina')
+  const [tab, setTab] = useState<Tab>('pedidos')
   const [locInfo, setLocInfo] = useState<TabletLocationInfo | null>(null)
 
   // Resolución inicial del token: ?token= en la URL o localStorage.
