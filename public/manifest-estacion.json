@@ -1,0 +1,17 @@
+{
+  "name": "Folvy Estación",
+  "short_name": "Estación",
+  "description": "Estación de cocina Folvy: pedidos, cocina y disponibilidad.",
+  "start_url": "/estacion",
+  "scope": "/estacion",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0e1820",
+  "theme_color": "#0e1820",
+  "icons": [
+    { "src": "/folvy-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/folvy-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/folvy-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/folvy-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

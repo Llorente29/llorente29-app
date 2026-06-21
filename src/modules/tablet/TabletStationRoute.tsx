@@ -55,6 +55,24 @@ export default function TabletStationRoute() {
     setToken(readStoredToken())
   }, [])
 
+  // Manifest de ESTACIÓN: mientras esta ruta está montada, apuntamos el
+  // <link rel="manifest"> a /manifest-estacion.json (start_url=/estacion), para
+  // que "Añadir a inicio" cree un icono que abre la estación, no la raíz con
+  // login. Al desmontar (volver a la app normal) restauramos el manifest global.
+  useEffect(() => {
+    const link = document.querySelector<HTMLLinkElement>('link[rel="manifest"]')
+    if (!link) return
+    const original = link.getAttribute('href')
+    link.setAttribute('href', '/manifest-estacion.json')
+    const themeMeta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
+    const originalTheme = themeMeta?.getAttribute('content') ?? null
+    themeMeta?.setAttribute('content', '#0e1820')
+    return () => {
+      if (original) link.setAttribute('href', original)
+      if (themeMeta && originalTheme) themeMeta.setAttribute('content', originalTheme)
+    }
+  }, [])
+
   // Valida el token (kds_board) y, en paralelo, carga el local del dispositivo.
   useEffect(() => {
     if (!token) { setStatus('idle'); return }
