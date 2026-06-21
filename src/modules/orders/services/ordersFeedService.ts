@@ -188,18 +188,33 @@ function requireSupabase(): void {
   }
 }
 
-export async function getOrdersFeed(locationId: string): Promise<OrdersFeedResult> {
+export async function getOrdersFeed(
+  locationId: string,
+  token?: string | null,
+): Promise<OrdersFeedResult> {
   requireSupabase()
-  const { data, error } = await supabase!.rpc('orders_feed', { p_location_id: locationId })
+  // Con token (Estación de Tablet, sin sesión) → RPC by-token; el local sale del
+  // dispositivo y se ignora locationId. Sin token → RPC de sesión.
+  const { data, error } = token
+    ? await (supabase!.rpc as unknown as (fn: string, args: Record<string, unknown>)
+        => Promise<{ data: unknown; error: { message: string } | null }>)(
+        'orders_feed_by_token', { p_device_token: token })
+    : await supabase!.rpc('orders_feed', { p_location_id: locationId })
   if (error) throw new Error(`Orders · orders_feed: ${error.message}`)
   return data as unknown as OrdersFeedResult
 }
 
-export async function advanceOrder(saleId: string, newStatus: OrderStatus): Promise<void> {
+export async function advanceOrder(
+  saleId: string,
+  newStatus: OrderStatus,
+  token?: string | null,
+): Promise<void> {
   requireSupabase()
-  const { error } = await supabase!.rpc('set_order_status', {
-    p_sale_id: saleId,
-    p_new_status: newStatus,
-  })
+  const { error } = token
+    ? await (supabase!.rpc as unknown as (fn: string, args: Record<string, unknown>)
+        => Promise<{ error: { message: string } | null }>)(
+        'set_order_status_by_token',
+        { p_device_token: token, p_sale_id: saleId, p_new_status: newStatus })
+    : await supabase!.rpc('set_order_status', { p_sale_id: saleId, p_new_status: newStatus })
   if (error) throw new Error(`Orders · set_order_status: ${error.message}`)
 }

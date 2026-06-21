@@ -17,6 +17,7 @@ import KdsBoard from '../kds/components/KdsBoard'
 import { getBoard } from '../kds/services/kdsService'
 import { getDeviceLocation, type TabletLocationInfo } from './services/tabletAvailabilityService'
 import TabletAvailabilityTab from './TabletAvailabilityTab'
+import OrdersFeed from '../orders/components/OrdersFeed'
 
 const TOKEN_KEY = 'kds_device_token' // mismo token que el kiosco
 
@@ -192,12 +193,8 @@ export default function TabletStationRoute() {
         )}
 
         {tab === 'pedidos' && (
-          <div className="h-full grid place-items-center text-center text-zinc-600 px-6">
-            <div>
-              <ClipboardList size={40} className="mx-auto mb-3 text-zinc-700" />
-              <p className="text-2xl font-semibold text-zinc-400">Pedidos</p>
-              <p className="text-sm mt-1 max-w-sm">En camino. La próxima capa trae el feed de pedidos a esta tablet.</p>
-            </div>
+          <div className="h-full overflow-y-auto p-4">
+            <OrdersFeed locationId={locInfo?.locationId ?? ''} token={token} />
           </div>
         )}
       </main>

@@ -55,9 +55,9 @@ function sortOrders(a: OrderFeedItem, b: OrderFeedItem): number {
   return b.minutos - a.minutos
 }
 
-interface OrdersFeedProps { locationId: string }
+interface OrdersFeedProps { locationId: string; token?: string | null }
 
-export default function OrdersFeed({ locationId }: OrdersFeedProps) {
+export default function OrdersFeed({ locationId, token }: OrdersFeedProps) {
   const [orders, setOrders] = useState<OrderFeedItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -72,7 +72,7 @@ export default function OrdersFeed({ locationId }: OrdersFeedProps) {
 
   const refresh = useCallback(async () => {
     try {
-      const res = await getOrdersFeed(locationId)
+      const res = await getOrdersFeed(locationId, token)
       const next = res.orders ?? []
       if (soundRef.current && !firstLoad.current) {
         const fresh = next.some(o => !knownIds.current.has(o.sale_id) && !isTerminalStatus(o.order_status))
@@ -87,12 +87,12 @@ export default function OrdersFeed({ locationId }: OrdersFeedProps) {
     } finally {
       setLoading(false)
     }
-  }, [locationId])
+  }, [locationId, token])
 
   // Avanza el estado interno; el empuje al canal lo dispara el trigger en BBDD.
   const advance = useCallback(async (saleId: string, next: OrderStatus) => {
     try {
-      await advanceOrder(saleId, next)
+      await advanceOrder(saleId, next, token)
       await refresh()
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'No se pudo actualizar el pedido')
@@ -106,7 +106,7 @@ export default function OrdersFeed({ locationId }: OrdersFeedProps) {
 
   const markLineHandler = useCallback(async (lineId: string) => {
     try {
-      await kdsMarkLine(lineId)
+      await kdsMarkLine(lineId, token)
       await refresh()
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'No se pudo marcar la línea')
@@ -126,13 +126,14 @@ export default function OrdersFeed({ locationId }: OrdersFeedProps) {
   }, [refresh])
 
   useEffect(() => {
+    if (token) return
     if (!isSupabaseEnabled || !supabase) return
     const ch = supabase
       .channel(`orders-feed-${locationId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sale' }, () => { void refresh() })
       .subscribe()
     return () => { void supabase!.removeChannel(ch) }
-  }, [locationId, refresh])
+  }, [locationId, token, refresh])
 
   const counts = useMemo(() => ({
     nuevos: orders.filter(o => FILTERS.nuevos(o.order_status)).length,
@@ -242,7 +243,7 @@ export default function OrdersFeed({ locationId }: OrdersFeedProps) {
       </div>
 
       {/* Cook Mode (reusa el panel del KDS) — sesión, sin token */}
-      <CookModePanel target={cook} onClose={() => setCook(null)} />
+      <CookModePanel target={cook} onClose={() => setCook(null)} token={token} locationId={locationId} />
     </>
   )
 }
