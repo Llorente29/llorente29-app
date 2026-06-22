@@ -5330,6 +5330,7 @@ export type Database = {
           price_rounding: string
           reliability_min_pct: number
           target_food_cost_pct: number | null
+          target_plate_cost_pct: number | null
           transcription_language: string
           updated_at: string
           version_alert_pct: number
@@ -5356,6 +5357,7 @@ export type Database = {
           price_rounding?: string
           reliability_min_pct?: number
           target_food_cost_pct?: number | null
+          target_plate_cost_pct?: number | null
           transcription_language?: string
           updated_at?: string
           version_alert_pct?: number
@@ -5382,6 +5384,7 @@ export type Database = {
           price_rounding?: string
           reliability_min_pct?: number
           target_food_cost_pct?: number | null
+          target_plate_cost_pct?: number | null
           transcription_language?: string
           updated_at?: string
           version_alert_pct?: number
@@ -7084,6 +7087,140 @@ export type Database = {
         }
         Relationships: []
       }
+      print_job: {
+        Row: {
+          account_id: string
+          attempts: number
+          created_at: string
+          doc_type: string
+          done_at: string | null
+          id: string
+          last_error: string | null
+          location_id: string
+          payload: Json
+          printer_id: string | null
+          sale_id: string | null
+          sent_at: string | null
+          source: string
+          status: string
+        }
+        Insert: {
+          account_id: string
+          attempts?: number
+          created_at?: string
+          doc_type: string
+          done_at?: string | null
+          id?: string
+          last_error?: string | null
+          location_id: string
+          payload: Json
+          printer_id?: string | null
+          sale_id?: string | null
+          sent_at?: string | null
+          source?: string
+          status?: string
+        }
+        Update: {
+          account_id?: string
+          attempts?: number
+          created_at?: string
+          doc_type?: string
+          done_at?: string | null
+          id?: string
+          last_error?: string | null
+          location_id?: string
+          payload?: Json
+          printer_id?: string | null
+          sale_id?: string | null
+          sent_at?: string | null
+          source?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "print_job_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "print_job_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "print_job_printer_id_fkey"
+            columns: ["printer_id"]
+            isOneToOne: false
+            referencedRelation: "printer"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "print_job_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sale"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      printer: {
+        Row: {
+          account_id: string
+          config: Json
+          created_at: string
+          doc_types: string[]
+          id: string
+          is_active: boolean
+          location_id: string
+          name: string
+          transport: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          config?: Json
+          created_at?: string
+          doc_types?: string[]
+          id?: string
+          is_active?: boolean
+          location_id: string
+          name: string
+          transport: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          config?: Json
+          created_at?: string
+          doc_types?: string[]
+          id?: string
+          is_active?: boolean
+          location_id?: string
+          name?: string
+          transport?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "printer_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "printer_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_availability: {
         Row: {
           account_id: string
@@ -7621,6 +7758,7 @@ export type Database = {
           nutrition: Json | null
           operational_min_qty: number | null
           origin: string | null
+          packaging_cost: number
           plating_notes: string | null
           prep_notes: string | null
           prep_time_minutes: number | null
@@ -7697,6 +7835,7 @@ export type Database = {
           nutrition?: Json | null
           operational_min_qty?: number | null
           origin?: string | null
+          packaging_cost?: number
           plating_notes?: string | null
           prep_notes?: string | null
           prep_time_minutes?: number | null
@@ -7773,6 +7912,7 @@ export type Database = {
           nutrition?: Json | null
           operational_min_qty?: number | null
           origin?: string | null
+          packaging_cost?: number
           plating_notes?: string | null
           prep_notes?: string | null
           prep_time_minutes?: number | null
@@ -10904,6 +11044,10 @@ export type Database = {
           source_last: boolean
         }[]
       }
+      availability_panel_by_token: {
+        Args: { p_device_token: string }
+        Returns: Json
+      }
       avt_period: {
         Args: {
           p_account: string
@@ -10925,6 +11069,10 @@ export type Database = {
       check_count_variance: {
         Args: { p_counted: number; p_line_id: string }
         Returns: string
+      }
+      claim_print_jobs: {
+        Args: { p_device_token: string; p_limit?: number }
+        Returns: Json
       }
       classify_unmapped_product: {
         Args: {
@@ -11069,6 +11217,21 @@ export type Database = {
       delete_account_tx: {
         Args: { p_account_id: string; p_admin_user_id: string }
         Returns: undefined
+      }
+      device_location_by_token: {
+        Args: { p_device_token: string }
+        Returns: Json
+      }
+      enqueue_print_job: {
+        Args: {
+          p_account_id: string
+          p_doc_type: string
+          p_location_id: string
+          p_payload: Json
+          p_sale_id: string
+          p_source?: string
+        }
+        Returns: number
       }
       explode_recipe_to_raws: {
         Args: { p_item_id: string; p_multiplier: number }
@@ -11401,6 +11564,7 @@ export type Database = {
           contribution_margin_pct: number
           cost: number
           cost_available: boolean
+          food_cost: number
           food_cost_pct: number
           food_cost_status: string
           is_available: boolean
@@ -11409,11 +11573,15 @@ export type Database = {
           order_costs_per_item: number
           own_courier_cost: number
           own_customer_fee: number
+          packaging_cost: number
+          plate_cost_pct: number
+          plate_cost_status: string
           price: number
           price_source: string
           price_with_vat: number
           service_type: string
           target_food_cost_pct: number
+          target_plate_cost_pct: number
           vat_rate: number
         }[]
       }
@@ -11431,18 +11599,23 @@ export type Database = {
           cost_available: boolean
           delivery_fee: number
           flow_type: string
+          food_cost: number
           food_cost_pct: number
           food_cost_status: string
           menu_item_id: string
           menu_item_name: string
           net_margin: number
           net_margin_pct: number
+          packaging_cost: number
+          plate_cost_pct: number
+          plate_cost_status: string
           price: number
           price_with_vat: number
           recipe_item_id: string
           revenue_share_amount: number
           revenue_share_pct: number
           target_food_cost_pct: number
+          target_plate_cost_pct: number
           vat_rate: number
         }[]
       }
@@ -11525,7 +11698,12 @@ export type Database = {
         }
         Returns: Json
       }
+      order_for_print: {
+        Args: { p_device_token: string; p_sale_id: string }
+        Returns: Json
+      }
       orders_feed: { Args: { p_location_id: string }; Returns: Json }
+      orders_feed_by_token: { Args: { p_device_token: string }; Returns: Json }
       platform_metrics: { Args: never; Returns: Json }
       preview_add_ingredient: {
         Args: {
@@ -11568,6 +11746,10 @@ export type Database = {
           parent_item_id: string
           parent_name: string
         }[]
+      }
+      preview_scope_by_token: {
+        Args: { p_device_token: string; p_menu_item_id: string }
+        Returns: Json
       }
       preview_substitute_ingredient: {
         Args: { p_source: string; p_target: string }
@@ -11707,6 +11889,15 @@ export type Database = {
           removed: number
         }[]
       }
+      report_print_job: {
+        Args: {
+          p_device_token: string
+          p_error?: string
+          p_job_id: string
+          p_ok: boolean
+        }
+        Returns: undefined
+      }
       reprocess_sale: { Args: { p_sale_id: string }; Returns: number }
       resolve_mapping_proposals: {
         Args: {
@@ -11826,6 +12017,10 @@ export type Database = {
           threshold_pct: number
         }[]
       }
+      search_products_by_token: {
+        Args: { p_device_token: string; p_query: string }
+        Returns: Json
+      }
       seed_appcc_for_account: {
         Args: { p_account_id: string }
         Returns: undefined
@@ -11871,6 +12066,14 @@ export type Database = {
         Args: { p_new_status: string; p_sale_id: string }
         Returns: string
       }
+      set_order_status_by_token: {
+        Args: {
+          p_device_token: string
+          p_new_status: string
+          p_sale_id: string
+        }
+        Returns: string
+      }
       set_plan_pricing: {
         Args: {
           p_base_price_eur: number
@@ -11897,6 +12100,16 @@ export type Database = {
           p_available_until?: string
           p_is_available: boolean
           p_location_id?: string
+          p_menu_item_id: string
+          p_reason?: string
+        }
+        Returns: Json
+      }
+      set_product_availability_by_token: {
+        Args: {
+          p_available_until?: string
+          p_device_token: string
+          p_is_available: boolean
           p_menu_item_id: string
           p_reason?: string
         }
