@@ -79,7 +79,7 @@ export type RowBrandChannelRateUpdate  = Tables['brand_channel_rate']['Update']
 // Uniones de literales (reflejan los CHECK constraints de la BBDD).
 // NO son enums (regla §6.2: verbatimModuleSyntax/erasableSyntaxOnly).
 // ─────────────────────────────────────────────────────────────────────
-export type RecipeItemType   = 'raw' | 'recipe' | 'tool' | 'dish'
+export type RecipeItemType   = 'raw' | 'recipe' | 'tool' | 'dish' | 'packaging'
 export type CostStrategy     = 'fixed' | 'last_purchase' | 'average_weighted' | 'average_window'
 export type ConservationType = 'fridge' | 'freezer' | 'dry' | 'hot'
 export type ServiceType      = 'platform_delivery' | 'own_delivery' | 'pickup'
@@ -752,6 +752,8 @@ export interface MenuItemEconomics {
   channelName: string
   flowType: MenuItemFlowType
   cost: number | null
+  packagingCost: number | null
+  foodCost: number | null
   costAvailable: boolean
   price: number
   vatRate: number
@@ -769,4 +771,7 @@ export interface MenuItemEconomics {
   netMarginPct: number | null
   targetFoodCostPct: number | null
   foodCostStatus: FoodCostStatus
+  plateCostPct: number | null
+  targetPlateCostPct: number | null
+  plateCostStatus: FoodCostStatus
 }

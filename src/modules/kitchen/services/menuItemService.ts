@@ -563,6 +563,8 @@ interface RowMenuItemEconomics {
   channel_name: string
   flow_type: string
   cost: number | null
+  packaging_cost: number | null
+  food_cost: number | null
   cost_available: boolean
   price: number
   vat_rate: number
@@ -580,6 +582,9 @@ interface RowMenuItemEconomics {
   net_margin_pct: number | null
   target_food_cost_pct: number | null
   food_cost_status: string
+  plate_cost_pct: number | null
+  target_plate_cost_pct: number | null
+  plate_cost_status: string
 }
 
 function rowToMenuItemEconomics(row: RowMenuItemEconomics): MenuItemEconomics {
@@ -591,6 +596,8 @@ function rowToMenuItemEconomics(row: RowMenuItemEconomics): MenuItemEconomics {
     channelName: row.channel_name,
     flowType: row.flow_type as MenuItemFlowType,
     cost: row.cost,
+    packagingCost: row.packaging_cost,
+    foodCost: row.food_cost,
     costAvailable: row.cost_available,
     price: row.price,
     vatRate: row.vat_rate,
@@ -608,6 +615,9 @@ function rowToMenuItemEconomics(row: RowMenuItemEconomics): MenuItemEconomics {
     netMarginPct: row.net_margin_pct,
     targetFoodCostPct: row.target_food_cost_pct,
     foodCostStatus: row.food_cost_status as FoodCostStatus,
+    plateCostPct: row.plate_cost_pct,
+    targetPlateCostPct: row.target_plate_cost_pct,
+    plateCostStatus: row.plate_cost_status as FoodCostStatus,
   }
 }
 

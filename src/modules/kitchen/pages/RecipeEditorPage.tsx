@@ -16,7 +16,7 @@
 //
 // Patrón: useActiveAccount() (cuenta), igual que KitchenItemsPage.
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { ChangeEvent } from 'react'
+import type { ChangeEvent, ReactNode } from 'react'
 import {
   ArrowLeft,
   ChefHat,
@@ -276,6 +276,9 @@ export default function RecipeEditorPage({
 
   // ── Añadir ingrediente (E2a) ──
   const [addOpen, setAddOpen] = useState(false)
+  // Qué tipo se está añadiendo (sección que abrió el modal): filtra candidatos y
+  // textos, y decide el tipo del item al crear uno nuevo.
+  const [addKind, setAddKind] = useState<'raw' | 'recipe' | 'packaging'>('raw')
   const [addSearch, setAddSearch] = useState('')
   const [addPicked, setAddPicked] = useState<RecipeItem | null>(null)
   const [addQty, setAddQty] = useState('')
@@ -420,6 +423,27 @@ export default function RecipeEditorPage({
     () => lines.reduce((max, l) => Math.max(max, l.lineCost ?? 0), 0),
     [lines]
   )
+
+  // Tres secciones del escandallo por tipo del hijo. Nada se oculta: lo que no
+  // sea 'recipe' ni 'packaging' (raw, tool, desconocido) cae en Ingredientes.
+  const ingredientLines = useMemo(
+    () => lines.filter((l) => l.childType !== 'recipe' && l.childType !== 'packaging'),
+    [lines]
+  )
+  const subRecipeLines = useMemo(
+    () => lines.filter((l) => l.childType === 'recipe'),
+    [lines]
+  )
+  const packagingLines = useMemo(
+    () => lines.filter((l) => l.childType === 'packaging'),
+    [lines]
+  )
+  // Desglose de coste del plato (mismas líneas que el total → siempre cuadra).
+  const packagingCost = useMemo(
+    () => packagingLines.reduce((acc, l) => acc + (l.lineCost ?? 0), 0),
+    [packagingLines]
+  )
+  const foodCost = totalCost - packagingCost
 
   // Propagación de estado al plato (decisión Julio 30/05): un plato con CUALQUIER
   // ingrediente sin terminar (childNeedsReview) o línea no costeable (needsReview)
@@ -570,7 +594,7 @@ export default function RecipeEditorPage({
   // las palabras, en cualquier orden, sin acentos), ordenados por USO REAL, tope 8.
   const candidates = useMemo(() => {
     const q = addSearch.trim()
-    let items = addableItems
+    let items = addableItems.filter((it) => it.type === addKind)
     if (q !== '') {
       items = items.filter((it) => matchesTokens(q, it.name, it.code))
     }
@@ -581,7 +605,7 @@ export default function RecipeEditorPage({
       return a.name.localeCompare(b.name)
     })
     return sorted.slice(0, 8)
-  }, [addableItems, addSearch, usageCounts])
+  }, [addableItems, addSearch, usageCounts, addKind])
 
   // Unidades agrupadas por dimensión para el selector de "crear ingrediente" (E2b).
   const unitsGrouped = useMemo(() => {
@@ -911,7 +935,13 @@ export default function RecipeEditorPage({
     return unitsById.get(item.baseUnitId)?.abbreviation ?? ''
   }
 
-  function openAdd() {
+  // Etiqueta visible del tipo que se está añadiendo (títulos/botones/placeholder
+  // del modal). Solo texto: no cambia ninguna lógica.
+  const addKindLabel =
+    addKind === 'packaging' ? 'packaging' : addKind === 'recipe' ? 'sub-receta' : 'ingrediente'
+
+  function openAdd(kind: 'raw' | 'recipe' | 'packaging' = 'raw') {
+    setAddKind(kind)
     setAddOpen(true)
     setAddSearch('')
     setAddPicked(null)
@@ -929,7 +959,10 @@ export default function RecipeEditorPage({
       listUnits({}),
     ])
       .then(([items, unitList]) => {
-        const addable = items.filter((it) => it.type === 'raw' || it.type === 'recipe')
+        // raw + recipe + packaging; el filtro por sección lo hace `candidates`.
+        const addable = items.filter(
+          (it) => it.type === 'raw' || it.type === 'recipe' || it.type === 'packaging'
+        )
         setAddableItems(addable)
         setUnits(unitList)
         const m = new Map<string, KitchenUnit>()
@@ -988,7 +1021,7 @@ export default function RecipeEditorPage({
     if (!activeAccountId) return
     const name = createName.trim()
     if (name === '') {
-      setAddError('El nombre del ingrediente es obligatorio.')
+      setAddError(`El nombre del ${addKindLabel} es obligatorio.`)
       return
     }
     if (!createUnitId) {
@@ -1010,7 +1043,7 @@ export default function RecipeEditorPage({
     setAddError(null)
     createRecipeItem({
       accountId: activeAccountId,
-      type: 'raw',
+      type: addKind === 'packaging' ? 'packaging' : 'raw',
       name,
       baseUnitId: createUnitId,
       costStrategy: 'fixed',
@@ -1029,7 +1062,7 @@ export default function RecipeEditorPage({
         setAddSearch('')
       })
       .catch((err: unknown) => {
-        const msg = err instanceof Error ? err.message : 'No se pudo crear el ingrediente'
+        const msg = err instanceof Error ? err.message : `No se pudo crear el ${addKindLabel}`
         setAddError(msg)
       })
       .finally(() => setCreateSaving(false))
@@ -1139,6 +1172,245 @@ export default function RecipeEditorPage({
   }
 
   const isAi = recipe.source === 'ai_recipe' || recipe.source === 'ocr_invoice'
+
+  // Render de UNA línea del escandallo. Mismo JSX para las tres secciones
+  // (Ingredientes / Sub-recetas / Packaging): el tipo no cambia cómo se pinta.
+  function renderLine(line: RecipeLineBreakdown) {
+    const pct = maxLineCost > 0 ? Math.round(((line.lineCost ?? 0) / maxLineCost) * 100) : 0
+    const editing = editingLineId === line.lineId
+    const saving = savingLineId === line.lineId
+    const wasteOpen = wasteOpenLineId === line.lineId
+    const waste = effectiveWastePct(line)
+    const netQty = line.quantityNet ?? line.quantity
+    const aiLoading = aiWasteLineId === line.lineId
+    const aiSuggestion = aiWasteSuggestions[line.lineId]
+    return (
+      <div
+        key={line.lineId}
+        className="group border-b border-border-default last:border-b-0"
+      >
+        <div className="flex items-center gap-2.5 py-2 px-1.5">
+          <span className="w-[30px] h-[30px] rounded-md bg-accent-bg inline-flex items-center justify-center flex-shrink-0">
+            <span
+              className={
+                'w-2.5 h-2.5 rounded-full ' +
+                ((line.needsReview || line.childNeedsReview) ? 'bg-warning' : 'bg-terracota')
+              }
+            />
+          </span>
+
+          {/* E3: NETO (lo que va al plato) editable inline + unidad */}
+          <div className="min-w-[78px] flex-shrink-0">
+            {editing ? (
+              <div className="flex items-center gap-1">
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  autoFocus
+                  value={draftQty}
+                  onChange={(e) => setDraftQty(e.target.value)}
+                  onFocus={(e) => e.currentTarget.select()}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      commitEdit(line)
+                    } else if (e.key === 'Escape') {
+                      e.preventDefault()
+                      setEditingLineId(null)
+                    }
+                  }}
+                  onBlur={() => commitEdit(line)}
+                  className="w-[50px] px-1 py-0.5 font-mono text-sm text-text-primary bg-card border border-accent rounded focus:outline-none focus:ring-1 focus:ring-accent"
+                />
+                <span className="font-mono text-sm text-text-secondary">
+                  {line.unitAbbr}
+                </span>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => startEdit(line)}
+                title="Editar cantidad neta (lo que va al plato)"
+                className="font-mono text-sm text-text-primary text-left hover:bg-accent-bg rounded px-1 -ml-1 transition-colors"
+              >
+                {formatQty(netQty)}{' '}
+                <span className="text-text-secondary">{line.unitAbbr}</span>
+              </button>
+            )}
+          </div>
+
+          <span className={'flex-1 min-w-0 text-sm text-text-primary ' + (isMobile ? 'break-words' : 'truncate')}>
+            {line.childName}
+            {line.childNeedsReview && (
+              <span className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-warning-bg text-warning inline-flex items-center gap-1 align-middle">
+                <AlertTriangle className="w-3 h-3" />
+                sin terminar
+              </span>
+            )}
+            {line.needsReview && (
+              <span className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-warning-bg text-warning inline-flex items-center gap-1 align-middle">
+                <AlertTriangle className="w-3 h-3" />
+                no costeable
+              </span>
+            )}
+            {/* E3: chip de merma. Si hay merma → mostrar y permitir override.
+                Si no la hay → ofrecer sugerencia IA / añadir a mano. */}
+            {waste > 0 ? (
+              <button
+                type="button"
+                onClick={() => openWaste(line)}
+                title="Merma de esta línea (clic para ajustar)"
+                className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-accent-bg text-text-secondary inline-flex items-center gap-1 align-middle hover:text-text-primary transition-colors"
+              >
+                ↘ merma {formatQty(waste)}%
+              </button>
+            ) : aiSuggestion !== undefined ? (
+              <button
+                type="button"
+                onClick={() => applyAiWaste(line, aiSuggestion)}
+                title="Aplicar la merma sugerida por la IA"
+                className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-warning-bg text-warning inline-flex items-center gap-1 align-middle hover:opacity-80 transition-opacity"
+              >
+                <Sparkles className="w-3 h-3" />
+                IA sugiere {formatQty(aiSuggestion)}% · aplicar
+              </button>
+            ) : aiLoading ? (
+              <span className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-accent-bg text-text-secondary inline-flex items-center gap-1 align-middle">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                consultando IA…
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => openWaste(line)}
+                title="Añadir merma a esta línea"
+                className={'ml-2 text-[11px] px-2 py-0.5 rounded-full border border-border-default text-text-secondary inline-flex items-center gap-1 align-middle ' + (isMobile ? 'opacity-100 ' : 'opacity-0 group-hover:opacity-100 focus:opacity-100 ') + 'hover:text-text-primary transition-all'}
+              >
+                + merma
+              </button>
+            )}
+          </span>
+
+          {!isMobile && (
+            <span className="w-[38px] h-1 rounded-full bg-accent-bg overflow-hidden flex-shrink-0">
+              <span
+                className="block h-full bg-terracota transition-all duration-base"
+                style={{ width: `${pct}%` }}
+              />
+            </span>
+          )}
+
+          <span
+            className={
+              'font-mono text-sm min-w-[52px] text-right transition-colors duration-base ' +
+              (saving
+                ? 'opacity-50 animate-pulse text-text-secondary'
+                : flashLineId === line.lineId
+                  ? 'text-terracota font-medium'
+                  : 'text-text-secondary')
+            }
+            title={waste > 0 ? `Coste sobre bruto ${formatQty(line.quantity)} ${line.unitAbbr}` : undefined}
+          >
+            {formatEur(line.lineCost)}
+          </span>
+
+          <button
+            type="button"
+            onClick={() => handleDelete(line)}
+            disabled={saving}
+            title="Eliminar línea"
+            className={'ml-0.5 w-6 h-6 rounded inline-flex items-center justify-center text-text-secondary ' + (isMobile ? 'opacity-100 ' : 'opacity-0 group-hover:opacity-100 focus:opacity-100 ') + 'hover:text-danger hover:bg-danger-bg transition-all disabled:opacity-30'}
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        {/* E3: panel de merma expandido (override por receta) */}
+        {wasteOpen && (
+          <div className="flex items-center gap-2 pb-2.5 pl-[88px] pr-1.5 text-[13px] text-text-secondary">
+            <span>Merma en esta receta:</span>
+            <input
+              type="text"
+              inputMode="decimal"
+              autoFocus
+              value={draftWaste}
+              onChange={(e) => setDraftWaste(e.target.value)}
+              onFocus={(e) => e.currentTarget.select()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  commitWaste(line)
+                } else if (e.key === 'Escape') {
+                  e.preventDefault()
+                  setWasteOpenLineId(null)
+                }
+              }}
+              onBlur={() => commitWaste(line)}
+              className="w-[52px] px-1 py-0.5 font-mono text-sm text-text-primary bg-card border border-accent rounded focus:outline-none focus:ring-1 focus:ring-accent"
+            />
+            <span className="font-mono">%</span>
+            <span className="text-text-secondary opacity-70">
+              → el bruto efectivo y el coste se recalculan
+            </span>
+            {waste === 0 && (
+              <button
+                type="button"
+                onClick={() => suggestWasteAI(line)}
+                disabled={aiLoading}
+                className="ml-auto inline-flex items-center gap-1 text-[12px] text-terracota hover:opacity-80 disabled:opacity-50 transition-opacity"
+              >
+                {aiLoading ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="w-3.5 h-3.5" />
+                )}
+                Sugerir con IA
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Una sección del escandallo (Ingredientes / Sub-recetas / Packaging): cabecera
+  // con su acento + contador + "+" propio (abre el alta filtrada a su tipo).
+  function Section({
+    title, icon, kind, sectionLines, emptyHint,
+  }: {
+    title: string
+    icon: ReactNode
+    kind: 'raw' | 'recipe' | 'packaging'
+    sectionLines: RecipeLineBreakdown[]
+    emptyHint: string
+  }) {
+    const accent =
+      kind === 'packaging' ? 'text-info' : kind === 'recipe' ? 'text-success' : 'text-terracota'
+    return (
+      <div className="mb-4 last:mb-0">
+        <div className="flex items-center justify-between mb-1.5">
+          <div className={'flex items-center gap-1.5 text-xs font-medium tracking-wide uppercase ' + accent}>
+            {icon}
+            <span>{title}</span>
+            <span className="text-text-secondary normal-case font-normal">· {sectionLines.length}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => openAdd(kind)}
+            title={`Añadir ${title.toLowerCase()}`}
+            className="w-6 h-6 rounded-md bg-terracota text-white inline-flex items-center justify-center hover:bg-terracota-hover transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" />
+          </button>
+        </div>
+        {sectionLines.length === 0 ? (
+          <div className="py-3 text-center text-xs text-text-secondary opacity-60">{emptyHint}</div>
+        ) : (
+          <div>{sectionLines.map(renderLine)}</div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-6">
@@ -1286,10 +1558,10 @@ export default function RecipeEditorPage({
           <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px]">
             {/* Columna izquierda: composición */}
             <div className="p-4 md:p-5 lg:border-r border-border-default">
-              {/* Cabecera de la composición + acciones rápidas */}
+              {/* Cabecera del escandallo + acciones rápidas (el alta vive en cada sección) */}
               <div className="flex items-center justify-between mb-3">
                 <span className="text-xs font-medium tracking-wide text-text-secondary uppercase">
-                  Composición · {lines.length} ingredientes
+                  Escandallo
                 </span>
                 <div className="flex items-center gap-1">
                   {linesWithoutWaste.length > 0 && (
@@ -1339,14 +1611,6 @@ export default function RecipeEditorPage({
                     className="hidden"
                     onChange={handleImportRecipe}
                   />
-                  <button
-                    type="button"
-                    onClick={openAdd}
-                    title="Añadir ingrediente"
-                    className="w-7 h-7 rounded-md bg-terracota text-white inline-flex items-center justify-center hover:bg-terracota-hover transition-colors"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
                 </div>
               </div>
 
@@ -1428,214 +1692,42 @@ export default function RecipeEditorPage({
                 </div>
               )}
 
-              {/* Lista de ingredientes */}
-              {lines.length === 0 ? (
-                <div className="py-10 text-center text-sm text-text-secondary opacity-70">
-                  Este escandallo aún no tiene ingredientes.
-                </div>
+              {/* Tres secciones del escandallo (Ingredientes / Sub-recetas / Packaging).
+                  Vacío total → solo Ingredientes con su hint; en cuanto hay 1 línea, las tres.
+                  Section se INVOCA como función (no <Section/>): así no hay frontera de
+                  componente que remonte los inputs de edición inline en cada render. */}
+              {lines.length === 0 && ingredientLines.length === 0 ? (
+                Section({
+                  title: 'Ingredientes',
+                  icon: <ChefHat className="w-3.5 h-3.5" />,
+                  kind: 'raw',
+                  sectionLines: ingredientLines,
+                  emptyHint: 'Este escandallo aún no tiene ingredientes.',
+                })
               ) : (
-                <div>
-                  {lines.map((line) => {
-                    const pct =
-                      maxLineCost > 0
-                        ? Math.round(((line.lineCost ?? 0) / maxLineCost) * 100)
-                        : 0
-                    const editing = editingLineId === line.lineId
-                    const saving = savingLineId === line.lineId
-                    const wasteOpen = wasteOpenLineId === line.lineId
-                    const waste = effectiveWastePct(line)
-                    const netQty = line.quantityNet ?? line.quantity
-                    const aiLoading = aiWasteLineId === line.lineId
-                    const aiSuggestion = aiWasteSuggestions[line.lineId]
-                    return (
-                      <div
-                        key={line.lineId}
-                        className="group border-b border-border-default last:border-b-0"
-                      >
-                      <div className="flex items-center gap-2.5 py-2 px-1.5">
-                        <span className="w-[30px] h-[30px] rounded-md bg-accent-bg inline-flex items-center justify-center flex-shrink-0">
-                          <span
-                            className={
-                              'w-2.5 h-2.5 rounded-full ' +
-                              ((line.needsReview || line.childNeedsReview) ? 'bg-warning' : 'bg-terracota')
-                            }
-                          />
-                        </span>
-
-                        {/* E3: NETO (lo que va al plato) editable inline + unidad */}
-                        <div className="min-w-[78px] flex-shrink-0">
-                          {editing ? (
-                            <div className="flex items-center gap-1">
-                              <input
-                                type="text"
-                                inputMode="decimal"
-                                autoFocus
-                                value={draftQty}
-                                onChange={(e) => setDraftQty(e.target.value)}
-                                onFocus={(e) => e.currentTarget.select()}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    e.preventDefault()
-                                    commitEdit(line)
-                                  } else if (e.key === 'Escape') {
-                                    e.preventDefault()
-                                    setEditingLineId(null)
-                                  }
-                                }}
-                                onBlur={() => commitEdit(line)}
-                                className="w-[50px] px-1 py-0.5 font-mono text-sm text-text-primary bg-card border border-accent rounded focus:outline-none focus:ring-1 focus:ring-accent"
-                              />
-                              <span className="font-mono text-sm text-text-secondary">
-                                {line.unitAbbr}
-                              </span>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => startEdit(line)}
-                              title="Editar cantidad neta (lo que va al plato)"
-                              className="font-mono text-sm text-text-primary text-left hover:bg-accent-bg rounded px-1 -ml-1 transition-colors"
-                            >
-                              {formatQty(netQty)}{' '}
-                              <span className="text-text-secondary">{line.unitAbbr}</span>
-                            </button>
-                          )}
-                        </div>
-
-                        <span className={'flex-1 min-w-0 text-sm text-text-primary ' + (isMobile ? 'break-words' : 'truncate')}>
-                          {line.childName}
-                          {line.childNeedsReview && (
-                            <span className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-warning-bg text-warning inline-flex items-center gap-1 align-middle">
-                              <AlertTriangle className="w-3 h-3" />
-                              sin terminar
-                            </span>
-                          )}
-                          {line.needsReview && (
-                            <span className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-warning-bg text-warning inline-flex items-center gap-1 align-middle">
-                              <AlertTriangle className="w-3 h-3" />
-                              no costeable
-                            </span>
-                          )}
-                          {/* E3: chip de merma. Si hay merma → mostrar y permitir override.
-                              Si no la hay → ofrecer sugerencia IA / añadir a mano. */}
-                          {waste > 0 ? (
-                            <button
-                              type="button"
-                              onClick={() => openWaste(line)}
-                              title="Merma de esta línea (clic para ajustar)"
-                              className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-accent-bg text-text-secondary inline-flex items-center gap-1 align-middle hover:text-text-primary transition-colors"
-                            >
-                              ↘ merma {formatQty(waste)}%
-                            </button>
-                          ) : aiSuggestion !== undefined ? (
-                            <button
-                              type="button"
-                              onClick={() => applyAiWaste(line, aiSuggestion)}
-                              title="Aplicar la merma sugerida por la IA"
-                              className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-warning-bg text-warning inline-flex items-center gap-1 align-middle hover:opacity-80 transition-opacity"
-                            >
-                              <Sparkles className="w-3 h-3" />
-                              IA sugiere {formatQty(aiSuggestion)}% · aplicar
-                            </button>
-                          ) : aiLoading ? (
-                            <span className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-accent-bg text-text-secondary inline-flex items-center gap-1 align-middle">
-                              <Loader2 className="w-3 h-3 animate-spin" />
-                              consultando IA…
-                            </span>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => openWaste(line)}
-                              title="Añadir merma a esta línea"
-                              className={'ml-2 text-[11px] px-2 py-0.5 rounded-full border border-border-default text-text-secondary inline-flex items-center gap-1 align-middle ' + (isMobile ? 'opacity-100 ' : 'opacity-0 group-hover:opacity-100 focus:opacity-100 ') + 'hover:text-text-primary transition-all'}
-                            >
-                              + merma
-                            </button>
-                          )}
-                        </span>
-
-                        {!isMobile && (
-                          <span className="w-[38px] h-1 rounded-full bg-accent-bg overflow-hidden flex-shrink-0">
-                            <span
-                              className="block h-full bg-terracota transition-all duration-base"
-                              style={{ width: `${pct}%` }}
-                            />
-                          </span>
-                        )}
-
-                        <span
-                          className={
-                            'font-mono text-sm min-w-[52px] text-right transition-colors duration-base ' +
-                            (saving
-                              ? 'opacity-50 animate-pulse text-text-secondary'
-                              : flashLineId === line.lineId
-                                ? 'text-terracota font-medium'
-                                : 'text-text-secondary')
-                          }
-                          title={waste > 0 ? `Coste sobre bruto ${formatQty(line.quantity)} ${line.unitAbbr}` : undefined}
-                        >
-                          {formatEur(line.lineCost)}
-                        </span>
-
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(line)}
-                          disabled={saving}
-                          title="Eliminar línea"
-                          className={'ml-0.5 w-6 h-6 rounded inline-flex items-center justify-center text-text-secondary ' + (isMobile ? 'opacity-100 ' : 'opacity-0 group-hover:opacity-100 focus:opacity-100 ') + 'hover:text-danger hover:bg-danger-bg transition-all disabled:opacity-30'}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-
-                      {/* E3: panel de merma expandido (override por receta) */}
-                      {wasteOpen && (
-                        <div className="flex items-center gap-2 pb-2.5 pl-[88px] pr-1.5 text-[13px] text-text-secondary">
-                          <span>Merma en esta receta:</span>
-                          <input
-                            type="text"
-                            inputMode="decimal"
-                            autoFocus
-                            value={draftWaste}
-                            onChange={(e) => setDraftWaste(e.target.value)}
-                            onFocus={(e) => e.currentTarget.select()}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault()
-                                commitWaste(line)
-                              } else if (e.key === 'Escape') {
-                                e.preventDefault()
-                                setWasteOpenLineId(null)
-                              }
-                            }}
-                            onBlur={() => commitWaste(line)}
-                            className="w-[52px] px-1 py-0.5 font-mono text-sm text-text-primary bg-card border border-accent rounded focus:outline-none focus:ring-1 focus:ring-accent"
-                          />
-                          <span className="font-mono">%</span>
-                          <span className="text-text-secondary opacity-70">
-                            → el bruto efectivo y el coste se recalculan
-                          </span>
-                          {waste === 0 && (
-                            <button
-                              type="button"
-                              onClick={() => suggestWasteAI(line)}
-                              disabled={aiLoading}
-                              className="ml-auto inline-flex items-center gap-1 text-[12px] text-terracota hover:opacity-80 disabled:opacity-50 transition-opacity"
-                            >
-                              {aiLoading ? (
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                              ) : (
-                                <Sparkles className="w-3.5 h-3.5" />
-                              )}
-                              Sugerir con IA
-                            </button>
-                          )}
-                        </div>
-                      )}
-                      </div>
-                    )
+                <>
+                  {Section({
+                    title: 'Ingredientes',
+                    icon: <ChefHat className="w-3.5 h-3.5" />,
+                    kind: 'raw',
+                    sectionLines: ingredientLines,
+                    emptyHint: 'Sin ingredientes todavía.',
                   })}
-                </div>
+                  {Section({
+                    title: 'Sub-recetas',
+                    icon: <ChefHat className="w-3.5 h-3.5" />,
+                    kind: 'recipe',
+                    sectionLines: subRecipeLines,
+                    emptyHint: 'Sin sub-recetas.',
+                  })}
+                  {Section({
+                    title: 'Packaging',
+                    icon: <ShoppingBag className="w-3.5 h-3.5" />,
+                    kind: 'packaging',
+                    sectionLines: packagingLines,
+                    emptyHint: 'Sin envases. Añade la caja, bolsa, etc.',
+                  })}
+                </>
               )}
 
               {/* ── Alta de ingrediente (E2a) ── */}
@@ -1719,14 +1811,14 @@ export default function RecipeEditorPage({
                       </div>
                     </div>
                   ) : addCreating ? (
-                    // Crear ingrediente nuevo al vuelo (E2b)
+                    // Crear ingrediente/packaging nuevo al vuelo (E2b)
                     <div>
                       <div className="flex items-center gap-2 mb-2">
                         <span className="w-[30px] h-[30px] rounded-md bg-card border border-terracota/30 inline-flex items-center justify-center flex-shrink-0">
                           <Plus className="w-3.5 h-3.5 text-terracota" />
                         </span>
                         <span className="text-sm font-medium text-text-primary">
-                          Nuevo ingrediente
+                          Nuevo {addKindLabel}
                         </span>
                         <button
                           type="button"
@@ -1743,7 +1835,7 @@ export default function RecipeEditorPage({
                           autoFocus
                           value={createName}
                           onChange={(e) => setCreateName(e.target.value)}
-                          placeholder="Nombre del ingrediente"
+                          placeholder={`Nombre del ${addKindLabel}`}
                           className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
                         />
                         <div className="flex gap-2">
@@ -1797,7 +1889,7 @@ export default function RecipeEditorPage({
                             autoFocus
                             value={addSearch}
                             onChange={(e) => setAddSearch(e.target.value)}
-                            placeholder="Buscar ingrediente o preparación…"
+                            placeholder={`Buscar ${addKindLabel}…`}
                             className="w-full pl-8 pr-2 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
                           />
                         </div>
@@ -1827,14 +1919,14 @@ export default function RecipeEditorPage({
                               Sin coincidencias
                               {addSearch.trim() !== '' ? ` para «${addSearch.trim()}»` : ''}.
                             </div>
-                            {addSearch.trim() !== '' && (
+                            {addSearch.trim() !== '' && addKind !== 'recipe' && (
                               <button
                                 type="button"
                                 onClick={openCreate}
                                 className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md bg-terracota text-white hover:bg-terracota-hover transition-colors"
                               >
                                 <Plus className="w-3.5 h-3.5" />
-                                Crear «{addSearch.trim()}» como ingrediente nuevo
+                                Crear «{addSearch.trim()}» como {addKindLabel} nuevo
                               </button>
                             )}
                           </div>
@@ -1878,7 +1970,7 @@ export default function RecipeEditorPage({
                                 </button>
                               )
                             })}
-                            {addSearch.trim() !== '' && (
+                            {addSearch.trim() !== '' && addKind !== 'recipe' && (
                               <button
                                 type="button"
                                 onClick={openCreate}
@@ -1903,7 +1995,7 @@ export default function RecipeEditorPage({
                 Coste en vivo
               </div>
 
-              <div className="text-xs text-white/60">Coste total</div>
+              <div className="text-xs text-white/60">{packagingCost > 0 ? 'Plate cost' : 'Coste total'}</div>
               <div
                 className={
                   'font-mono font-medium text-white leading-tight text-[34px] origin-left transition-all duration-slow ' +
@@ -1916,6 +2008,18 @@ export default function RecipeEditorPage({
                 por porción · {recipe.yieldPortions ?? 1} ración
                 {(recipe.yieldPortions ?? 1) !== 1 ? 'es' : ''}
               </div>
+              {packagingCost > 0 && (
+                <div className="mt-2.5 flex flex-col gap-1">
+                  <div className="flex items-center justify-between text-[12px]">
+                    <span className="text-white/55">Comida</span>
+                    <span className="font-mono text-white/85">{formatEur(foodCost)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[12px]">
+                    <span className="text-white/55">Packaging</span>
+                    <span className="font-mono text-white/85">{formatEur(packagingCost)}</span>
+                  </div>
+                </div>
+              )}
 
               <div className="h-px bg-white/15 my-3.5" />
 
@@ -2007,6 +2111,11 @@ export default function RecipeEditorPage({
                                     {e.netMargin !== null && e.netMargin !== undefined && (
                                       <span className="block font-mono text-[10px] text-white/50">
                                         margen {formatEur(e.netMargin)}
+                                      </span>
+                                    )}
+                                    {!isLicensed && e.plateCostPct !== null && e.plateCostPct !== undefined && packagingCost > 0 && (
+                                      <span className={'block font-mono text-[10px] ' + statusColor(e.plateCostStatus).replace('text-text-secondary', 'text-white/50')}>
+                                        plate {formatPct(e.plateCostPct)}
                                       </span>
                                     )}
                                   </span>

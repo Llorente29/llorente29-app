@@ -64,10 +64,11 @@ function formatQty(value: number): string {
 }
 
 const TYPE_LABEL: Record<RecipeItemType, string> = {
-  raw:    'Ingrediente',
-  recipe: 'Sub-receta',
-  tool:   'Herramienta',
-  dish:   'Plato',
+  raw:       'Ingrediente',
+  recipe:    'Sub-receta',
+  tool:      'Herramienta',
+  dish:      'Plato',
+  packaging: 'Packaging',
 }
 
 // ─────────────────────────────────────────────────────────────────────

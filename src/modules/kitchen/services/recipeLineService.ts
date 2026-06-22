@@ -19,6 +19,10 @@ export interface RecipeLineBreakdown {
   lineId: string
   childItemId: string
   childName: string
+  // childType: tipo del hijo (raw | recipe | tool | dish | packaging). Lo usa el
+  // editor para agrupar el escandallo en secciones (Ingredientes / Sub-recetas /
+  // Packaging) y para desglosar el coste (food vs packaging) desde las líneas.
+  childType: string
   quantity: number
   // quantityNet: el NETO que va al plato (E3). El cocinero edita ESTE número.
   quantityNet: number | null
@@ -125,10 +129,11 @@ export async function getRecipeBreakdown(parentItemId: string): Promise<RecipeLi
     throw new Error(`Error obteniendo desglose del plato ${parentItemId}: ${error.message}`)
   }
   return (data ?? []).map((row) => {
-    // NOTA: quantity_net, unit_id y child_default_waste_pct (E3) + child_needs_review
-    // aún no están en los tipos autogenerados (src/types/database.ts). Cast acotado solo aquí.
-    // TODO saneamiento: regenerar tipos de Supabase y quitar el cast.
+    // NOTA: quantity_net, unit_id, child_default_waste_pct, child_needs_review y
+    // child_type aún pueden no estar en los tipos autogenerados según el momento
+    // del regen. Cast acotado solo aquí. Tras regen de database.ts puede retirarse.
     const r = row as typeof row & {
+      child_type?: string
       quantity_net?: number | null
       unit_id?: string | null
       child_default_waste_pct?: number | null
@@ -138,6 +143,7 @@ export async function getRecipeBreakdown(parentItemId: string): Promise<RecipeLi
       lineId: r.line_id,
       childItemId: r.child_item_id,
       childName: r.child_name,
+      childType: r.child_type ?? 'raw',
       quantity: r.quantity,
       quantityNet: r.quantity_net ?? null,
       unitAbbr: r.unit_abbr,
