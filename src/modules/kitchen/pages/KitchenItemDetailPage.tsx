@@ -26,10 +26,11 @@ import { useApp } from '@/context/AppContext'
 import {
   getRecipeItemById,
   updateRecipeItem,
-  archiveRecipeItem,
   getRawUsageCounts,
   recomputeUsersOf,
   countUsersOf,
+  checkItemDeletable,
+  deleteOrArchiveItem,
 } from '@/modules/kitchen/services/recipeItemService'
 import { listUnits } from '@/modules/kitchen/services/kitchenUnitService'
 import { listSuppliers, listSuppliersByItem } from '@/modules/kitchen/services/purchaseFormatService'
@@ -248,7 +249,10 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
   const [fMenuTags, setFMenuTags] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
-  const [archiving, setArchiving] = useState(false)
+  // Eliminar/archivar autónomo: Folvy decide (borra si no se usa, archiva si sí).
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleteCheck, setDeleteCheck] = useState<Awaited<ReturnType<typeof checkItemDeletable>> | null>(null)
+  const [deleteBusy, setDeleteBusy] = useState(false)
   // Disparador de recarga del item (tras aplicar el copiloto IA, etc.)
   const [reloadTick, setReloadTick] = useState(0)
   // Datos cargados aparte del mapper de RecipeItem (para mostrar en la ficha).
@@ -509,17 +513,29 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
     }
   }
 
-  async function handleArchive() {
+  async function openDeleteDialog() {
     if (!item) return
-    const ok = window.confirm(`¿Archivar "${item.name}"? Dejará de aparecer en el catálogo.`)
-    if (!ok) return
-    setArchiving(true)
+    setDeleteCheck(null)
+    setDeleteOpen(true)
     try {
-      await archiveRecipeItem(item.id)
+      setDeleteCheck(await checkItemDeletable(item.id))
+    } catch (e) {
+      setFormError(e instanceof Error ? e.message : 'No se pudo comprobar el borrado.')
+      setDeleteOpen(false)
+    }
+  }
+
+  async function confirmDelete() {
+    if (!item) return
+    setDeleteBusy(true)
+    try {
+      await deleteOrArchiveItem(item.id)   // borra o archiva; en ambos casos sale del catálogo
+      setDeleteOpen(false)
       onBack()
-    } catch (err: unknown) {
-      setFormError(err instanceof Error ? err.message : 'No se pudo archivar.')
-      setArchiving(false)
+    } catch (e) {
+      setFormError(e instanceof Error ? e.message : 'No se pudo completar la acción.')
+    } finally {
+      setDeleteBusy(false)
     }
   }
 
@@ -1056,14 +1072,82 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
             <ItemVatSelector item={item} onChanged={refreshItem} />
           </div>
 
-          {/* Archivar */}
+          {/* Eliminar (Folvy decide: borra si no se usa, archiva si sí) */}
           <div className="pt-4">
-            <button type="button" onClick={handleArchive} disabled={archiving} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md text-danger hover:bg-danger-bg transition-base disabled:opacity-50">
-              <Archive size={14} />
-              {archiving ? 'Archivando…' : 'Archivar ingrediente'}
+            <button
+              type="button"
+              onClick={openDeleteDialog}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md text-danger hover:bg-danger-bg transition-base"
+            >
+              <Trash2 className="w-4 h-4" />
+              Eliminar
             </button>
           </div>
         </>
+      )}
+
+      {/* Diálogo de confirmación de eliminar/archivar */}
+      {deleteOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !deleteBusy && setDeleteOpen(false)}>
+          <div className="bg-card rounded-xl w-full max-w-md p-6 border border-border-default" onClick={(e) => e.stopPropagation()}>
+            {deleteCheck === null ? (
+              <div className="flex items-center gap-2 text-text-secondary py-2">
+                <Loader2 className="w-4 h-4 animate-spin" /> Comprobando…
+              </div>
+            ) : deleteCheck.deletable ? (
+              <>
+                <div className="flex items-center gap-2 text-text-primary mb-2">
+                  <Trash2 className="w-5 h-5 text-danger" />
+                  <span className="text-base font-medium">¿Eliminar «{item.name}»?</span>
+                </div>
+                <p className="text-sm text-text-secondary mb-4">
+                  Se eliminará definitivamente. Esta acción no se puede deshacer.
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-2 text-text-primary mb-2">
+                  <Archive className="w-5 h-5 text-warning" />
+                  <span className="text-base font-medium">«{item.name}» está en uso</span>
+                </div>
+                <p className="text-sm text-text-secondary mb-4">
+                  No se puede eliminar porque: {deleteCheck.reasons.join(' · ')}. Se archivará en su
+                  lugar (podrás recuperarlo).
+                </p>
+              </>
+            )}
+            {deleteCheck !== null && (
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDeleteOpen(false)}
+                  disabled={deleteBusy}
+                  className="px-3 py-1.5 text-sm rounded-md text-text-secondary hover:bg-page transition-base disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmDelete}
+                  disabled={deleteBusy}
+                  className={
+                    'inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md font-medium text-white transition-base disabled:opacity-50 ' +
+                    (deleteCheck.deletable ? 'bg-danger hover:opacity-90' : 'bg-accent hover:opacity-90')
+                  }
+                >
+                  {deleteBusy ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : deleteCheck.deletable ? (
+                    <Trash2 className="w-3.5 h-3.5" />
+                  ) : (
+                    <Archive className="w-3.5 h-3.5" />
+                  )}
+                  {deleteBusy ? 'Procesando…' : deleteCheck.deletable ? 'Eliminar' : 'Archivar'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   )

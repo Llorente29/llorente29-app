@@ -11362,6 +11362,10 @@ export type Database = {
           depth: number
         }[]
       }
+      kitchen_delete_or_archive_item: {
+        Args: { p_item_id: string }
+        Returns: Json
+      }
       kitchen_dish_state_for_ai: {
         Args: { p_recipe_item_id: string }
         Returns: Json
@@ -11373,6 +11377,7 @@ export type Database = {
           has_incomplete: boolean
         }[]
       }
+      kitchen_item_delete_check: { Args: { p_item_id: string }; Returns: Json }
       kitchen_raw_usage_counts: {
         Args: { p_account_id: string }
         Returns: {

@@ -34,6 +34,7 @@ import {
   Bike,
   ShoppingBag,
   Trash2,
+  Archive,
   ShieldCheck,
   Loader2,
 } from 'lucide-react'
@@ -47,6 +48,8 @@ import {
   createRecipeItem,
   updateRecipeItem,
   dismissReview,
+  checkItemDeletable,
+  deleteOrArchiveItem,
 } from '@/modules/kitchen/services/recipeItemService'
 import {
   getRecipeBreakdown,
@@ -305,6 +308,12 @@ export default function RecipeEditorPage({
   const [econLoading, setEconLoading] = useState(false)
   const [collapsedBrands, setCollapsedBrands] = useState<Record<string, boolean>>({})
   const [econReloadTick, setEconReloadTick] = useState(0)
+
+  // Eliminar/archivar autónomo del plato (Folvy decide: borra si no se usa, archiva si sí).
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleteCheck, setDeleteCheck] = useState<Awaited<ReturnType<typeof checkItemDeletable>> | null>(null)
+  const [deleteBusy, setDeleteBusy] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   useEffect(() => {
     if (accountsLoading) return
@@ -1125,6 +1134,35 @@ export default function RecipeEditorPage({
   const previewLineCost = addPicked ? costPerBase(addPicked) * previewNum : 0
   const previewValid = !!addPicked && previewNum > 0
 
+  // ── Eliminar/archivar el plato (Folvy decide) ──
+  async function openDeleteDialog() {
+    if (!recipe) return
+    setDeleteCheck(null)
+    setDeleteError(null)
+    setDeleteOpen(true)
+    try {
+      setDeleteCheck(await checkItemDeletable(recipe.id))
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : 'No se pudo comprobar el borrado.')
+      setDeleteOpen(false)
+    }
+  }
+
+  async function confirmDelete() {
+    if (!recipe) return
+    setDeleteBusy(true)
+    setDeleteError(null)
+    try {
+      await deleteOrArchiveItem(recipe.id)   // borra o archiva; en ambos casos sale del catálogo
+      setDeleteOpen(false)
+      onBack?.()
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : 'No se pudo completar la acción.')
+    } finally {
+      setDeleteBusy(false)
+    }
+  }
+
   // Botón "Volver al listado" (solo si el contenedor pasó onBack).
   const backLink = onBack ? (
     <button
@@ -1415,6 +1453,74 @@ export default function RecipeEditorPage({
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-6">
       {backLink}
+
+      {/* Diálogo de confirmación de eliminar/archivar el plato */}
+      {deleteOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !deleteBusy && setDeleteOpen(false)}>
+          <div className="bg-card rounded-xl w-full max-w-md p-6 border border-border-default" onClick={(e) => e.stopPropagation()}>
+            {deleteCheck === null ? (
+              <div className="flex items-center gap-2 text-text-secondary py-2">
+                <Loader2 className="w-4 h-4 animate-spin" /> Comprobando…
+              </div>
+            ) : deleteCheck.deletable ? (
+              <>
+                <div className="flex items-center gap-2 text-text-primary mb-2">
+                  <Trash2 className="w-5 h-5 text-danger" />
+                  <span className="text-base font-medium">¿Eliminar «{recipe.name}»?</span>
+                </div>
+                <p className="text-sm text-text-secondary mb-4">
+                  Se eliminará definitivamente. Esta acción no se puede deshacer.
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-2 text-text-primary mb-2">
+                  <Archive className="w-5 h-5 text-warning" />
+                  <span className="text-base font-medium">«{recipe.name}» está en uso</span>
+                </div>
+                <p className="text-sm text-text-secondary mb-4">
+                  No se puede eliminar porque: {deleteCheck.reasons.join(' · ')}. Se archivará en su
+                  lugar (podrás recuperarlo).
+                </p>
+              </>
+            )}
+            {deleteError && (
+              <div className="mb-3 px-2.5 py-1.5 rounded-md bg-danger-bg text-danger text-xs">{deleteError}</div>
+            )}
+            {deleteCheck !== null && (
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDeleteOpen(false)}
+                  disabled={deleteBusy}
+                  className="px-3 py-1.5 text-sm rounded-md text-text-secondary hover:bg-page transition-base disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmDelete}
+                  disabled={deleteBusy}
+                  className={
+                    'inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md font-medium text-white transition-base disabled:opacity-50 ' +
+                    (deleteCheck.deletable ? 'bg-danger hover:opacity-90' : 'bg-accent hover:opacity-90')
+                  }
+                >
+                  {deleteBusy ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : deleteCheck.deletable ? (
+                    <Trash2 className="w-3.5 h-3.5" />
+                  ) : (
+                    <Archive className="w-3.5 h-3.5" />
+                  )}
+                  {deleteBusy ? 'Procesando…' : deleteCheck.deletable ? 'Eliminar' : 'Archivar'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="bg-card rounded-xl border border-border-default overflow-hidden">
 
         {/* ── Cabecera compacta con vida: foto 96px + título + chips (E5 visual) ── */}
@@ -1493,6 +1599,14 @@ export default function RecipeEditorPage({
               >
                 <Camera className="w-3.5 h-3.5" />
                 {photoUploading ? 'Subiendo…' : photoUrl ? 'Ver / cambiar foto' : 'Añadir foto'}
+              </button>
+              <button
+                type="button"
+                onClick={openDeleteDialog}
+                className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-card text-danger font-medium border border-danger/30 hover:bg-danger-bg transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Eliminar
               </button>
               {photoError && (
                 <span className="px-2.5 py-1 rounded-md bg-danger text-white text-xs">

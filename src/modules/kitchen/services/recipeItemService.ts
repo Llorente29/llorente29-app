@@ -530,3 +530,63 @@ export async function createPackagingItem(input: {
   await tryRecompute(created.id)
   return (await getRecipeItemById(created.id)) ?? created
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// Borrado SEGURO y AUTÓNOMO (borra si no se usa, archiva si sí)
+// ─────────────────────────────────────────────────────────────────────
+
+export interface ItemDeleteCheck {
+  deletable: boolean
+  reasons: string[]   // motivos por los que NO se puede borrar (vacío si deletable)
+  name: string
+  type: string
+}
+
+/**
+ * Pregunta si un artículo/receta se puede BORRAR físicamente o si habría que
+ * archivarlo (porque está en cartas, se usa en platos, tiene stock, etc.).
+ * No modifica nada. La UI lo usa para mostrar el diálogo correcto antes de actuar.
+ */
+export async function checkItemDeletable(itemId: string): Promise<ItemDeleteCheck> {
+  requireSupabase()
+  const { data, error } = await supabase!.rpc('kitchen_item_delete_check', {
+    p_item_id: itemId,
+  })
+  if (error) {
+    throw new Error(`Error comprobando si se puede borrar ${itemId}: ${error.message}`)
+  }
+  const r = (data ?? {}) as { deletable?: boolean; reasons?: string[]; name?: string; type?: string }
+  return {
+    deletable: !!r.deletable,
+    reasons: Array.isArray(r.reasons) ? r.reasons : [],
+    name: r.name ?? '',
+    type: r.type ?? '',
+  }
+}
+
+export interface ItemDeleteResult {
+  action: 'deleted' | 'archived'
+  name: string
+  reasons?: string[]
+}
+
+/**
+ * Borra el artículo/receta si no tiene referencias bloqueantes; si las tiene, lo
+ * archiva. Re-evalúa en el servidor (no se fía del check de la UI). Devuelve qué
+ * hizo y, si archivó, por qué.
+ */
+export async function deleteOrArchiveItem(itemId: string): Promise<ItemDeleteResult> {
+  requireSupabase()
+  const { data, error } = await supabase!.rpc('kitchen_delete_or_archive_item', {
+    p_item_id: itemId,
+  })
+  if (error) {
+    throw new Error(`Error al eliminar/archivar ${itemId}: ${error.message}`)
+  }
+  const r = (data ?? {}) as { action?: string; name?: string; reasons?: string[] }
+  return {
+    action: r.action === 'deleted' ? 'deleted' : 'archived',
+    name: r.name ?? '',
+    reasons: Array.isArray(r.reasons) ? r.reasons : undefined,
+  }
+}
