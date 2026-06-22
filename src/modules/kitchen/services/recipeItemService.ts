@@ -396,3 +396,46 @@ export async function restoreRecipeItem(id: string): Promise<RecipeItem> {
   }
   return rowToRecipeItem(data)
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// Reclasificar la NATURALEZA de un artículo (raw / packaging / tool)
+// ─────────────────────────────────────────────────────────────────────
+// Cambiar el `type` de un artículo no toca su coste (un raw y un packaging se
+// costean igual), pero SÍ cambia el desglose food/packaging de cada plato que lo
+// usa. updateRecipeItem recostea solo el propio artículo; estos helpers cubren
+// el resto: contar en cuántos platos está (para avisar) y recostear esos platos.
+
+/**
+ * En cuántos PLATOS/RECETAS distintos aparece este artículo como línea.
+ * Lectura directa de recipe_line (RLS de la cuenta). Para el aviso "se reordenará
+ * en N platos" al cambiar la naturaleza del artículo.
+ */
+export async function countUsersOf(itemId: string): Promise<number> {
+  requireSupabase()
+  const { data, error } = await supabase!
+    .from('recipe_line')
+    .select('parent_item_id')
+    .eq('child_item_id', itemId)
+  if (error) {
+    throw new Error(`Error contando el uso del artículo ${itemId}: ${error.message}`)
+  }
+  const parents = new Set((data ?? []).map((r) => r.parent_item_id as string))
+  return parents.size
+}
+
+/**
+ * Recostea todos los platos/recetas que usan este artículo (RPC
+ * kitchen_recompute_users_of, server-side, guard de tenancy). Se llama tras
+ * cambiar la naturaleza del artículo para que el desglose food/packaging de sus
+ * platos quede al día. Devuelve el nº de platos recosteados.
+ */
+export async function recomputeUsersOf(itemId: string): Promise<number> {
+  requireSupabase()
+  const { data, error } = await supabase!.rpc('kitchen_recompute_users_of', {
+    p_item_id: itemId,
+  })
+  if (error) {
+    throw new Error(`Error recalculando los platos que usan ${itemId}: ${error.message}`)
+  }
+  return (data as number) ?? 0
+}

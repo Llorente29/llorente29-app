@@ -28,6 +28,8 @@ import {
   updateRecipeItem,
   archiveRecipeItem,
   getRawUsageCounts,
+  recomputeUsersOf,
+  countUsersOf,
 } from '@/modules/kitchen/services/recipeItemService'
 import { listUnits } from '@/modules/kitchen/services/kitchenUnitService'
 import { listSuppliers, listSuppliersByItem } from '@/modules/kitchen/services/purchaseFormatService'
@@ -47,7 +49,7 @@ import { listItemAllergens, saveItemAllergens } from '@/modules/kitchen/services
 import { EU_ALLERGENS, ALLERGEN_STATES, allergenLabel, allergenStateLabel, type AllergenCode, type AllergenState } from '@/modules/kitchen/lib/allergens'
 import { supabase } from '@/lib/supabase'
 import type { Database, Json } from '@/types/database'
-import type { RecipeItem, KitchenUnit, Supplier, ArticleSupplier, RecipeItemUpdate, ConservationType, CostStrategy } from '@/types/kitchen'
+import type { RecipeItem, KitchenUnit, Supplier, ArticleSupplier, RecipeItemUpdate, RecipeItemType, ConservationType, CostStrategy } from '@/types/kitchen'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -236,6 +238,10 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
   const [fShelfLife, setFShelfLife] = useState('')
   const [fSeasonStart, setFSeasonStart] = useState('')
   const [fSeasonEnd, setFSeasonEnd] = useState('')
+  // Naturaleza del artículo (raw / packaging / tool). Cambiarla lo recoloca en
+  // las recetas. typeUsersCount = en cuántos platos está (para el aviso inline).
+  const [fType, setFType] = useState<RecipeItemType>('raw')
+  const [typeUsersCount, setTypeUsersCount] = useState<number | null>(null)
   // Campos editables nuevos (alérgenos, nutrición, etiquetas de menú)
   const [fAllergens, setFAllergens] = useState<Map<AllergenCode, AllergenState>>(new Map())
   const [fNutrition, setFNutrition] = useState<Record<string, string>>({})
@@ -371,6 +377,8 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
   // ── Edición ──
   function openEdit() {
     if (!item) return
+    setFType(item.type)
+    setTypeUsersCount(null)
     setFName(item.name)
     setFAltName(item.altName ?? '')
     setFCode(item.code ?? '')
@@ -401,6 +409,21 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
     setEditing(true)
   }
 
+  // El usuario cambió el selector de naturaleza: consulta en cuántos platos está
+  // (para el aviso). Si falla el conteo, no bloquea: la reclasificación va igual.
+  async function onTypeChange(next: RecipeItemType) {
+    setFType(next)
+    if (!item || next === item.type) {
+      setTypeUsersCount(null)
+      return
+    }
+    try {
+      setTypeUsersCount(await countUsersOf(item.id))
+    } catch {
+      setTypeUsersCount(null)
+    }
+  }
+
   async function saveEdit() {
     if (!item) return
     const name = fName.trim()
@@ -409,6 +432,7 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
 
     const shelf = parseNum(fShelfLife)
     const strategyChanged = fCostStrategy !== item.costStrategy
+    const typeChanged = fType !== item.type
     const patch: RecipeItemUpdate = {
       name,
       altName: fAltName.trim() || null,
@@ -423,11 +447,23 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
       shelfLifeDays: shelf === null ? null : Math.round(shelf),
       seasonStart: fSeasonStart || null,
       seasonEnd: fSeasonEnd || null,
+      ...(typeChanged ? { type: fType } : {}),
     }
     setSaving(true)
     setFormError(null)
     try {
       await updateRecipeItem(item.id, patch)
+
+      if (typeChanged) {
+        // El artículo cambió de naturaleza: recostear los platos que lo usan para
+        // que su desglose food/packaging quede al día. No bloquea el guardado si
+        // falla (el coste del propio artículo ya se actualizó).
+        try {
+          await recomputeUsersOf(item.id)
+        } catch (e) {
+          console.error('recomputeUsersOf falló tras reclasificar', e)
+        }
+      }
 
       // Alérgenos (lista final, reemplazo) vía su servicio.
       const allergenList = Array.from(fAllergens.entries()).map(([code, state]) => ({ code, state }))
@@ -586,6 +622,30 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
             <div className="space-y-3">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-text-secondary">Identidad y clasificación</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="sm:col-span-2 space-y-2">
+                  <Field label="Naturaleza" hint="Qué es este artículo. Cambiarlo lo recoloca en las recetas.">
+                    <select
+                      value={fType}
+                      onChange={(e) => onTypeChange(e.target.value as RecipeItemType)}
+                      disabled={saving}
+                      className={`${INPUT_CLS} cursor-pointer`}
+                    >
+                      <option value="raw">Ingrediente</option>
+                      <option value="packaging">Envase / packaging</option>
+                      <option value="tool">Herramienta</option>
+                    </select>
+                  </Field>
+                  {item && fType !== item.type && (
+                    <div className="text-xs text-warning bg-warning-bg rounded-md px-2.5 py-1.5 flex items-start gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5 mt-px flex-shrink-0" />
+                      <span>
+                        Cambiar la naturaleza recolocará este artículo
+                        {typeUsersCount !== null ? ` en ${typeUsersCount} plato${typeUsersCount === 1 ? '' : 's'}` : ' en las recetas donde se usa'} y
+                        recalculará su desglose de coste. No cambia su precio.
+                      </span>
+                    </div>
+                  )}
+                </div>
                 <Field label="Nombre"><input type="text" value={fName} onChange={(e) => setFName(e.target.value)} disabled={saving} className={INPUT_CLS} /></Field>
                 <Field label="Nombre comercial / alternativo" hint="Cómo lo llama el proveedor, la factura o el TPV."><input type="text" value={fAltName} onChange={(e) => setFAltName(e.target.value)} disabled={saving} className={INPUT_CLS} /></Field>
                 <Field label="Familia">

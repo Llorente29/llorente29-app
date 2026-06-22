@@ -11386,6 +11386,7 @@ export type Database = {
           child_item_id: string
           child_name: string
           child_needs_review: boolean
+          child_type: string
           line_cost: number
           line_id: string
           needs_review: boolean
@@ -11409,6 +11410,10 @@ export type Database = {
       }
       kitchen_recompute_item: { Args: { p_item_id: string }; Returns: number }
       kitchen_recompute_raw_cost: {
+        Args: { p_item_id: string }
+        Returns: number
+      }
+      kitchen_recompute_users_of: {
         Args: { p_item_id: string }
         Returns: number
       }
