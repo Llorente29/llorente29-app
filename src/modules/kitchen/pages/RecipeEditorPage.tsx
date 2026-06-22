@@ -67,6 +67,7 @@ import {
   getDishPhotoUrl,
   deleteDishPhoto,
 } from '@/modules/kitchen/services/recipePhotoService'
+import { importRecipeFromFile, type ImportRecipeResult } from '@/modules/kitchen/services/recipeImportService'
 import RecipeStepsTab from '@/modules/kitchen/components/RecipeStepsTab'
 import ModifierImpactsTab from '@/modules/kitchen/components/ModifierImpactsTab'
 import type { RecipeItem, MenuItemEconomics, KitchenUnit } from '@/types/kitchen'
@@ -246,6 +247,12 @@ export default function RecipeEditorPage({
   // Recarga del plato tras "dar por revisado" (baja la bandera needs_review).
   const [reloadTick, setReloadTick] = useState(0)
   const [dismissing, setDismissing] = useState(false)
+  // ── Importar ficha (rellenar ESTE escandallo, no crear otro) ──
+  const importInputRef = useRef<HTMLInputElement | null>(null)
+  const [importing, setImporting] = useState(false)
+  const [importStage, setImportStage] = useState<'idle' | 'uploading' | 'reading' | 'done'>('idle')
+  const [importError, setImportError] = useState<string | null>(null)
+  const [importResult, setImportResult] = useState<ImportRecipeResult | null>(null)
 
   // ── Edición inline (E1 + E3) ──
   // E1: editar cantidad. E3: el campo editable primario es el NETO (lo que va al
@@ -493,6 +500,40 @@ export default function RecipeEditorPage({
     } finally {
       setDismissing(false)
     }
+  }
+
+  // Importa una ficha (foto/PDF/Excel/Word) y RELLENA este escandallo (no crea
+  // otro): pasa targetRecipeId = recipeId. La RPC borra las líneas viejas y las
+  // reemplaza. Al terminar refrescamos plato+líneas (reloadTick) y FC
+  // (econReloadTick), igual que tras editar una línea.
+  async function handleImportRecipe(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file || !activeAccountId || !recipeId) return
+    setImporting(true)
+    setImportError(null)
+    setImportResult(null)
+    setImportStage('uploading')
+    try {
+      // Cambio de etapa para feedback (la subida es rápida; la IA tarda).
+      window.setTimeout(() => setImportStage((s) => (s === 'uploading' ? 'reading' : s)), 800)
+      const result = await importRecipeFromFile(activeAccountId, file, { targetRecipeId: recipeId })
+      setImportResult(result)
+      setImportStage('done')
+      setReloadTick((t) => t + 1)
+      setEconReloadTick((t) => t + 1)
+    } catch (err: unknown) {
+      setImportError(err instanceof Error ? err.message : 'No se pudo importar la ficha.')
+      setImportStage('idle')
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  function closeImportModal() {
+    setImportStage('idle')
+    setImportError(null)
+    setImportResult(null)
   }
 
   const econByBrand = useMemo(() => {
@@ -1283,6 +1324,23 @@ export default function RecipeEditorPage({
                   </button>
                   <button
                     type="button"
+                    onClick={() => importInputRef.current?.click()}
+                    disabled={importing}
+                    title="Importar ficha (foto, PDF, Excel o Word) y rellenar este escandallo"
+                    className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md bg-terracota-bg text-terracota font-medium hover:bg-terracota/15 disabled:opacity-50 transition-colors mr-1"
+                  >
+                    {importing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Camera className="w-3.5 h-3.5" />}
+                    Importar ficha
+                  </button>
+                  <input
+                    ref={importInputRef}
+                    type="file"
+                    accept="image/*,application/pdf,.pdf,.xlsx,.xls,.csv,.docx"
+                    className="hidden"
+                    onChange={handleImportRecipe}
+                  />
+                  <button
+                    type="button"
                     onClick={openAdd}
                     title="Añadir ingrediente"
                     className="w-7 h-7 rounded-md bg-terracota text-white inline-flex items-center justify-center hover:bg-terracota-hover transition-colors"
@@ -1296,6 +1354,77 @@ export default function RecipeEditorPage({
               {(editError || aiWasteError) && (
                 <div className="mb-2 px-2.5 py-1.5 rounded-md bg-danger-bg text-danger text-xs">
                   {editError ?? aiWasteError}
+                </div>
+              )}
+
+              {/* Modal de importación de ficha (progreso + resultado) */}
+              {importStage !== 'idle' && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+                  <div className="bg-card rounded-xl w-full max-w-md p-6 border border-border-default">
+                    {importStage === 'done' && importResult ? (
+                      <>
+                        <div className="flex items-center gap-2 text-text-primary mb-3">
+                          <Sparkles className="w-5 h-5 text-terracota" />
+                          <span className="text-base font-medium">Ficha importada</span>
+                        </div>
+                        <p className="text-sm text-text-secondary mb-1">
+                          <span className="font-medium text-text-primary">{importResult.dishName}</span>{' '}
+                          · {importResult.linesCreated} ingrediente{importResult.linesCreated === 1 ? '' : 's'} en el escandallo.
+                        </p>
+                        {importResult.newArticlesCreated > 0 && (
+                          <p className="text-xs text-text-secondary mb-1">
+                            {importResult.newArticlesCreated} ingrediente{importResult.newArticlesCreated === 1 ? '' : 's'} nuevo{importResult.newArticlesCreated === 1 ? '' : 's'} creado{importResult.newArticlesCreated === 1 ? '' : 's'} (marcados para completar coste y proveedor).
+                          </p>
+                        )}
+                        {importResult.linesSkipped > 0 && (
+                          <p className="text-xs text-amber-600 mb-1">
+                            {importResult.linesSkipped} línea{importResult.linesSkipped === 1 ? '' : 's'} sin cantidad/unidad clara — revísalas abajo.
+                          </p>
+                        )}
+                        <div className="flex gap-2 mt-4">
+                          <button
+                            type="button"
+                            onClick={closeImportModal}
+                            className="flex-1 px-3 py-2 rounded-md text-sm font-medium bg-terracota text-white hover:bg-terracota-hover transition-colors"
+                          >
+                            Ver escandallo
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-center py-4">
+                        <Loader2 className="w-8 h-8 animate-spin text-terracota mx-auto mb-3" />
+                        <p className="text-sm text-text-primary font-medium">
+                          {importStage === 'uploading' ? 'Subiendo la ficha…' : 'Leyendo tu ficha con IA…'}
+                        </p>
+                        <p className="text-xs text-text-secondary mt-1">
+                          {importStage === 'uploading'
+                            ? 'Un momento.'
+                            : 'La IA está extrayendo ingredientes y cantidades. Puede tardar unos segundos.'}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Error de importación */}
+              {importError && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setImportError(null)}>
+                  <div className="bg-card rounded-xl w-full max-w-md p-6 border border-border-default" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center gap-2 text-danger mb-2">
+                      <AlertTriangle className="w-5 h-5" />
+                      <span className="text-base font-medium">No se pudo importar</span>
+                    </div>
+                    <p className="text-sm text-text-secondary mb-4">{importError}</p>
+                    <button
+                      type="button"
+                      onClick={() => setImportError(null)}
+                      className="px-3 py-2 rounded-md text-sm font-medium bg-terracota text-white hover:bg-terracota-hover"
+                    >
+                      Cerrar
+                    </button>
+                  </div>
                 </div>
               )}
 

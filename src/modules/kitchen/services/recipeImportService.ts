@@ -13,6 +13,11 @@
 //   3. RPC `materialize_recipe_session` → recipe_item (dish) + recipe_line, casando
 //      ingredientes existentes y creando los nuevos como raw provisional (needs_review).
 //
+// DESTINO (21/06): si se pasa `targetRecipeId`, la importación RELLENA ese plato
+// (no crea uno nuevo). El Edge siembra la sesión con ese recipe_item y la RPC
+// borra sus líneas y las reemplaza. Lo usa "Importar ficha" DENTRO de un
+// escandallo abierto (rellenar el cascarón vacío sin duplicar el plato).
+//
 // Anti-invención: los ingredientes no casados se crean needs_review; el coste no
 // se da por bueno hasta que el humano lo complete.
 
@@ -149,17 +154,38 @@ interface MaterializeRow {
   lines_skipped: number
 }
 
+// ── Opciones de importación ───────────────────────────────────────────────────
+
+export interface ImportRecipeOptions {
+  /** Marca probable: ayuda a la extracción (opcional). */
+  brandHint?: string
+  /**
+   * Si se indica, la importación RELLENA ese plato (recipe_item) en vez de crear
+   * uno nuevo. La sesión nace apuntando a él y la RPC reemplaza sus líneas.
+   * Lo usa "Importar ficha" dentro de un escandallo abierto.
+   */
+  targetRecipeId?: string
+}
+
 // ── Importación end-to-end ────────────────────────────────────────────────────
 
 /**
  * Importa un escandallo desde un fichero (imagen, PDF, Excel o Word).
+ *
+ * @param accountId  Cuenta activa.
+ * @param file       Fichero de la ficha (foto/PDF/Excel/Word).
+ * @param opts       { brandHint?, targetRecipeId? }. Si `targetRecipeId` viene,
+ *                   rellena ese plato existente en vez de crear uno nuevo.
  */
 export async function importRecipeFromFile(
   accountId: string,
   file: File,
-  brandHint?: string,
+  opts?: ImportRecipeOptions,
 ): Promise<ImportRecipeResult> {
   if (!supabase) throw new Error('Supabase no disponible')
+
+  const brandHint = opts?.brandHint
+  const targetRecipeId = opts?.targetRecipeId
 
   const fileKind = detectKind(file)
   if (fileKind === 'unsupported') {
@@ -193,6 +219,7 @@ export async function importRecipeFromFile(
       kind: 'photo',
       file_paths: [path],
       brand_hint: brandHint ?? null,
+      target_recipe_id: targetRecipeId ?? null,
     }
   } else {
     const text = fileKind === 'excel' ? await excelToText(file) : await wordToText(file)
@@ -201,6 +228,7 @@ export async function importRecipeFromFile(
       kind: 'conversational',
       input_text: text,
       brand_hint: brandHint ?? null,
+      target_recipe_id: targetRecipeId ?? null,
     }
   }
 

@@ -12,6 +12,12 @@
 // Patrón de Edge Function calcado de map-products (auth, CORS, Anthropic, parseo).
 //
 // Auth: usuario autenticado (JWT) o llamada interna (x-internal-key = service role).
+//
+// DESTINO (21/06): si la petición trae `target_recipe_id`, la sesión nace
+// apuntando a ese plato (recipe_item_ai_session.recipe_item_id). La RPC
+// materialize_recipe_session ya RELLENA ese plato (borra sus líneas y las
+// reemplaza) en vez de crear uno nuevo. Sirve para "Importar ficha" DENTRO de
+// un escandallo abierto (rellenar el cascarón vacío sin duplicar el plato).
 
 import { corsHeaders } from '../_shared/cors.ts';
 import { createClient } from '@supabase/supabase-js';
@@ -25,9 +31,10 @@ const BUCKET = 'recipe-uploads';
 interface ExtractRequest {
   account_id: string;
   kind: 'photo' | 'voice' | 'conversational' | 'manual_assistance';
-  file_paths?: string[];   // rutas dentro del bucket recipe-uploads/{account_id}/...
-  input_text?: string;     // para manual/conversational
-  brand_hint?: string;     // marca probable, ayuda a la extracción (opcional)
+  file_paths?: string[];      // rutas dentro del bucket recipe-uploads/{account_id}/...
+  input_text?: string;        // para manual/conversational
+  brand_hint?: string;        // marca probable, ayuda a la extracción (opcional)
+  target_recipe_id?: string;  // si viene, la sesión rellena ESE plato (no crea uno nuevo)
 }
 
 // Estructura intermedia COMÚN (el contrato que unifica todos los formatos)
@@ -131,7 +138,7 @@ Deno.serve(async (req) => {
   let body: ExtractRequest;
   try { body = await req.json(); } catch { return jsonResponse(400, { error: 'Body JSON inválido' }); }
 
-  const { account_id, kind, file_paths, input_text, brand_hint } = body;
+  const { account_id, kind, file_paths, input_text, brand_hint, target_recipe_id } = body;
   if (!account_id || !kind) return jsonResponse(400, { error: 'Faltan account_id o kind' });
 
   // Dos vías de extracción:
@@ -148,6 +155,26 @@ Deno.serve(async (req) => {
   }
   if (isText && (!input_text || input_text.trim() === '')) {
     return jsonResponse(400, { error: `kind '${kind}' requiere input_text` });
+  }
+
+  // ── Destino (rellenar un plato existente) ──
+  // Si se pide rellenar un plato, debe ser de la cuenta y visible para el usuario
+  // (RLS). Evita sembrar la sesión con un recipe_item ajeno que la materialización
+  // (SECURITY DEFINER) borraría y rellenaría sin re-chequear la cuenta.
+  if (target_recipe_id) {
+    const { data: target, error: tErr } = await sb
+      .from('recipe_item')
+      .select('id')
+      .eq('id', target_recipe_id)
+      .eq('account_id', account_id)
+      .maybeSingle();
+    if (tErr) {
+      console.error('[extract-recipe] validación destino:', tErr.message);
+      return jsonResponse(500, { error: 'No se pudo validar el plato destino', detail: tErr.message });
+    }
+    if (!target) {
+      return jsonResponse(400, { error: 'El plato destino no existe o no es de esta cuenta.' });
+    }
   }
 
   const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
@@ -246,6 +273,8 @@ Deno.serve(async (req) => {
   }
 
   // ── 3) Crear la sesión de IA (pending_review) ──
+  // Si vino target_recipe_id, la sesión nace apuntando a ese plato → la RPC
+  // materialize_recipe_session lo rellena en vez de crear uno nuevo.
   const { data: session, error: sessErr } = await sb.from('recipe_item_ai_session').insert({
     account_id,
     kind,
@@ -256,6 +285,7 @@ Deno.serve(async (req) => {
     ai_model: model,
     ai_latency_ms: latencyMs,
     status: 'pending_review',
+    recipe_item_id: target_recipe_id ?? null,
   }).select('id').single();
   if (sessErr) {
     console.error('[extract-recipe] insert sesión:', sessErr.message);
