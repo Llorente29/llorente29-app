@@ -439,3 +439,94 @@ export async function recomputeUsersOf(itemId: string): Promise<number> {
   }
   return (data as number) ?? 0
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// Conteo de artículos por naturaleza (para mostrar/ocultar pestañas)
+// ─────────────────────────────────────────────────────────────────────
+/**
+ * Cuántos artículos de un tipo hay en la cuenta (no archivados). Se usa para
+ * decidir si la pestaña "Herramientas" se muestra (solo si hay alguna).
+ */
+export async function countRecipeItemsByType(
+  accountId: string,
+  type: RecipeItemType,
+): Promise<number> {
+  requireSupabase()
+  const { count, error } = await supabase!
+    .from('recipe_item')
+    .select('id', { count: 'exact', head: true })
+    .eq('account_id', accountId)
+    .eq('type', type)
+    .is('archived_at', null)
+  if (error) {
+    throw new Error(`Error contando artículos de tipo ${type}: ${error.message}`)
+  }
+  return count ?? 0
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Alta de ENVASE (packaging) con IVA por defecto correcto
+// ─────────────────────────────────────────────────────────────────────
+/**
+ * Crea un artículo de tipo 'packaging' con el IVA correcto por defecto: la
+ * categoría 'no_alimentario' del motor de IVA (un envase no es alimento → tipo
+ * general, hoy 21%). NO se hardcodea el número: se asigna la CATEGORÍA del motor
+ * y la tasa la sigue calculando el motor por fecha. Si la categoría no existe en
+ * la cuenta (motor sin sembrar), crea el envase igualmente sin IVA (el usuario lo
+ * pone en la ficha) — nunca bloquea el alta.
+ *
+ * Devuelve el artículo ya creado y recosteado (computed_cost = 0 al nacer, sin
+ * proveedor todavía). El usuario completa coste/proveedor en la ficha.
+ */
+export async function createPackagingItem(input: {
+  accountId: string
+  name: string
+  baseUnitId: string
+  createdBy?: string | null
+  createdByName?: string | null
+}): Promise<RecipeItem> {
+  requireSupabase()
+
+  // Categoría de IVA 'no_alimentario' (general). Lectura suave: si falla o no
+  // existe, seguimos sin IVA (no bloquea el alta del envase).
+  let vatCategoryId: string | null = null
+  try {
+    const { data: cat } = await supabase!
+      .from('vat_category')
+      .select('id')
+      .eq('code', 'no_alimentario')
+      .maybeSingle()
+    vatCategoryId = (cat as { id: string } | null)?.id ?? null
+  } catch {
+    vatCategoryId = null
+  }
+
+  // Insert directo (incluye family_id/vat que el insert canónico no mapea).
+  const insertRow: Record<string, unknown> = {
+    account_id: input.accountId,
+    type: 'packaging',
+    name: input.name,
+    base_unit_id: input.baseUnitId,
+    cost_strategy: 'fixed',
+    source: 'manual',
+    needs_review: false,
+    created_by: input.createdBy ?? null,
+    created_by_name: input.createdByName ?? null,
+  }
+  if (vatCategoryId) {
+    insertRow.vat_category_id = vatCategoryId
+    insertRow.vat_category_source = 'default'
+  }
+
+  const { data, error } = await supabase!
+    .from('recipe_item')
+    .insert(insertRow as never)
+    .select('*')
+    .single()
+  if (error) {
+    throw new Error(`Error creando envase: ${error.message}`)
+  }
+  const created = rowToRecipeItem(data)
+  await tryRecompute(created.id)
+  return (await getRecipeItemById(created.id)) ?? created
+}

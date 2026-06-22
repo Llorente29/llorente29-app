@@ -27,7 +27,9 @@ import { useIsMobile } from '@/shell/useIsMobile'
 import {
   listRecipeItems,
   createRecipeItem,
+  countRecipeItemsByType,
 } from '@/modules/kitchen/services/recipeItemService'
+import SimpleArticleCreateModal from '@/modules/kitchen/components/SimpleArticleCreateModal'
 import { searchTemplates, type IngredientTemplate } from '@/modules/kitchen/services/ingredientTemplateService'
 import { adoptFromTemplate } from '@/modules/kitchen/services/ingredientAdoptionService'
 import { enrichIngredientsBulk, type BulkEnrichProgress, type BulkEnrichResult } from '@/modules/kitchen/services/recipeBulkEnrichService'
@@ -47,6 +49,7 @@ import type {
   RecipeItem,
   KitchenUnit,
   CostStrategy,
+  RecipeItemType,
 } from '@/types/kitchen'
 
 const NO_FAMILY_FILTER = '__all__'
@@ -113,8 +116,14 @@ export default function KitchenItemsPage() {
   const [units, setUnits] = useState<KitchenUnit[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Pestaña por naturaleza del artículo (raw / packaging / tool).
+  const [activeTab, setActiveTab] = useState<RecipeItemType>('raw')
+  // Conteo de herramientas: la pestaña Herramientas solo se muestra si hay alguna.
+  const [toolCount, setToolCount] = useState(0)
   // Modal: solo alta (crear). La edición va al detalle.
   const [createOpen, setCreateOpen] = useState(false)
+  // Alta simple de envase/herramienta (modal aparte del de ingrediente).
+  const [simpleCreateOpen, setSimpleCreateOpen] = useState(false)
   // null = vista lista; un id = vista detalle del ingrediente.
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
   const [reloadTick, setReloadTick] = useState(0)
@@ -149,8 +158,13 @@ export default function KitchenItemsPage() {
     setLoading(true)
     setError(null)
 
+    // Conteo de herramientas (para decidir si se muestra su pestaña). No bloquea.
+    countRecipeItemsByType(activeAccountId, 'tool')
+      .then((n) => { if (!cancelled) setToolCount(n) })
+      .catch(() => { if (!cancelled) setToolCount(0) })
+
     Promise.all([
-      listRecipeItems({ accountId: activeAccountId, type: 'raw' }),
+      listRecipeItems({ accountId: activeAccountId, type: activeTab }),
       listUnits(),
       listIngredientFamilies(activeAccountId),
       getFamilyProposalSummary(activeAccountId),
@@ -176,7 +190,7 @@ export default function KitchenItemsPage() {
       })
 
     return () => { cancelled = true }
-  }, [activeAccountId, accountsLoading, reloadTick])
+  }, [activeAccountId, accountsLoading, reloadTick, activeTab])
 
   // Mapa unitId → unidad, para mostrar la abreviatura junto al nombre.
   const unitsById = useMemo(() => {
@@ -215,8 +229,9 @@ export default function KitchenItemsPage() {
 
   function handleCreated(created: RecipeItem) {
     setCreateOpen(false)
+    setSimpleCreateOpen(false)
     setReloadTick(t => t + 1)
-    // Salto al detalle del ingrediente recién creado: la siguiente acción natural
+    // Salto al detalle del artículo recién creado: la siguiente acción natural
     // es decirle a Folvy de quién se compra (y ver el coste fluir).
     setSelectedItemId(created.id)
   }
@@ -226,6 +241,7 @@ export default function KitchenItemsPage() {
   // abre el existente. Anti-duplicado a nivel de UX.
   function handleOpenExisting(itemId: string) {
     setCreateOpen(false)
+    setSimpleCreateOpen(false)
     setSelectedItemId(itemId)
   }
 
@@ -404,49 +420,75 @@ export default function KitchenItemsPage() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-xl font-display font-medium text-text-primary">
-            Ingredientes
+            Artículos
           </h2>
           <p className="text-sm text-text-secondary mt-0.5">
-            Catálogo de materias primas para el escandallo de cocina
+            Ingredientes, envases y herramientas de la cocina
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {pendingItems.length > 0 && (
-            <button
-              type="button"
-              onClick={handleBulkEnrich}
-              disabled={!activeAccountId || bulkRunning}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-terracota text-white hover:bg-terracota-hover disabled:opacity-50 transition-colors"
-              title="La IA completa familia, IVA, alérgenos y conservación de los ingredientes pendientes"
-            >
-              {bulkRunning ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={16} />}
-              Completar {pendingItems.length} con IA
-            </button>
+          {activeTab === 'raw' && (
+            <>
+              {pendingItems.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleBulkEnrich}
+                  disabled={!activeAccountId || bulkRunning}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-terracota text-white hover:bg-terracota-hover disabled:opacity-50 transition-colors"
+                  title="La IA completa familia, IVA, alérgenos y conservación de los ingredientes pendientes"
+                >
+                  {bulkRunning ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={16} />}
+                  Completar {pendingItems.length} con IA
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleRecostAll}
+                disabled={!activeAccountId || recostRunning}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium border border-border-default text-text-secondary hover:text-text-primary hover:bg-page disabled:opacity-50 transition-base"
+                title="Recalcula el coste de todos los ingredientes (motor vigente €/base). Excluye los de coste fijo tecleado."
+              >
+                {recostRunning ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                Recostear todo
+              </button>
+            </>
           )}
           <button
             type="button"
-            onClick={handleRecostAll}
-            disabled={!activeAccountId || recostRunning}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium border border-border-default text-text-secondary hover:text-text-primary hover:bg-page disabled:opacity-50 transition-base"
-            title="Recalcula el coste de todos los ingredientes (motor vigente €/base). Excluye los de coste fijo tecleado."
-          >
-            {recostRunning ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
-            Recostear todo
-          </button>
-          <button
-            type="button"
-            onClick={() => setCreateOpen(true)}
+            onClick={() => (activeTab === 'raw' ? setCreateOpen(true) : setSimpleCreateOpen(true))}
             disabled={!activeAccountId}
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base"
           >
             <Plus size={16} />
-            Nuevo ingrediente
+            {activeTab === 'raw' ? 'Nuevo ingrediente' : activeTab === 'packaging' ? 'Nuevo envase' : 'Nueva herramienta'}
           </button>
         </div>
       </div>
 
-      {/* Banner: propuestas de familia generadas por IA, pendientes de aplicar */}
-      {!loading && !error && proposalSummary && proposalSummary.total > 0 && (
+      {/* Barra de pestañas por naturaleza */}
+      <div className="flex items-center gap-1 border-b border-border-default">
+        {([
+          { id: 'raw', label: 'Ingredientes' },
+          { id: 'packaging', label: 'Packaging' },
+          ...(toolCount > 0 || activeTab === 'tool' ? [{ id: 'tool', label: 'Herramientas' }] : []),
+        ] as { id: RecipeItemType; label: string }[]).map(t => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => { setActiveTab(t.id); setSearch(''); setFamilyFilter(NO_FAMILY_FILTER); setSelectedItemId(null) }}
+            className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-base ${
+              activeTab === t.id
+                ? 'border-accent text-text-primary'
+                : 'border-transparent text-text-secondary hover:text-text-primary'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Banner: propuestas de familia generadas por IA, pendientes de aplicar (solo Ingredientes) */}
+      {activeTab === 'raw' && !loading && !error && proposalSummary && proposalSummary.total > 0 && (
         <div className="p-3 rounded-md bg-accent-bg border border-accent/20 flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-start gap-2 min-w-0">
             <Sparkles size={18} className="text-accent shrink-0 mt-0.5" />
@@ -481,36 +523,40 @@ export default function KitchenItemsPage() {
               type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Buscar ingrediente…"
+              placeholder="Buscar artículo…"
               className="w-full pl-8 pr-2 py-2 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
             />
           </div>
-          <select
-            value={familyFilter}
-            onChange={e => setFamilyFilter(e.target.value)}
-            className="px-2 py-2 text-sm border border-border-default rounded-md bg-page text-text-primary cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent"
-          >
-            <option value={NO_FAMILY_FILTER}>Todas las familias</option>
-            <option value={UNCLASSIFIED}>Sin clasificar</option>
-            {families.map(f => (
-              <option key={f.id} value={f.id}>{f.name}</option>
-            ))}
-          </select>
-          <button
-            type="button"
-            onClick={() => setManagerOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm rounded-md border border-border-default text-text-secondary hover:text-text-primary hover:bg-page transition-base shrink-0"
-            title="Crear, renombrar o reordenar familias"
-          >
-            <FolderTree size={15} /> Familias
-          </button>
+          {activeTab === 'raw' && (
+            <>
+              <select
+                value={familyFilter}
+                onChange={e => setFamilyFilter(e.target.value)}
+                className="px-2 py-2 text-sm border border-border-default rounded-md bg-page text-text-primary cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent"
+              >
+                <option value={NO_FAMILY_FILTER}>Todas las familias</option>
+                <option value={UNCLASSIFIED}>Sin clasificar</option>
+                {families.map(f => (
+                  <option key={f.id} value={f.id}>{f.name}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => setManagerOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm rounded-md border border-border-default text-text-secondary hover:text-text-primary hover:bg-page transition-base shrink-0"
+                title="Crear, renombrar o reordenar familias"
+              >
+                <FolderTree size={15} /> Familias
+              </button>
+            </>
+          )}
         </div>
       )}
 
       {/* Estados */}
       {loading && (
         <div className="p-8 text-center text-sm text-text-secondary">
-          Cargando ingredientes...
+          Cargando artículos...
         </div>
       )}
 
@@ -524,7 +570,11 @@ export default function KitchenItemsPage() {
         <div className="p-8 rounded-md bg-card border border-border-default text-center">
           <Soup size={32} className="mx-auto text-text-secondary mb-2" />
           <p className="text-sm text-text-secondary">
-            Aún no hay ingredientes. Pulsa "Nuevo ingrediente" para empezar.
+            {activeTab === 'raw'
+              ? 'Aún no hay ingredientes. Pulsa "Nuevo ingrediente" para empezar.'
+              : activeTab === 'packaging'
+                ? 'Aún no hay envases. Pulsa "Nuevo envase" para añadir cajas, bolsas, etc.'
+                : 'Aún no hay herramientas. Pulsa "Nueva herramienta" para empezar.'}
           </p>
         </div>
       )}
@@ -651,7 +701,7 @@ export default function KitchenItemsPage() {
         />
       )}
 
-      {/* Modal de SOLO alta */}
+      {/* Modal de SOLO alta (ingrediente) */}
       {createOpen && (
         <IngredientCreateModal
           accountId={activeAccountId!}
@@ -660,6 +710,21 @@ export default function KitchenItemsPage() {
           actorId={authUserId ?? null}
           actorName={userProfile?.displayName ?? null}
           onClose={() => setCreateOpen(false)}
+          onCreated={handleCreated}
+          onOpenExisting={handleOpenExisting}
+        />
+      )}
+
+      {/* Modal de alta simple (envase / herramienta) */}
+      {simpleCreateOpen && (
+        <SimpleArticleCreateModal
+          accountId={activeAccountId!}
+          articleType={activeTab === 'tool' ? 'tool' : 'packaging'}
+          units={units}
+          existingItems={items}
+          actorId={authUserId ?? null}
+          actorName={userProfile?.displayName ?? null}
+          onClose={() => setSimpleCreateOpen(false)}
           onCreated={handleCreated}
           onOpenExisting={handleOpenExisting}
         />

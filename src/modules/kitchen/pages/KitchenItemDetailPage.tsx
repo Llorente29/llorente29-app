@@ -578,6 +578,11 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
     )
   }
 
+  // Naturaleza del artículo: las secciones de ALIMENTO (alérgenos, nutrición,
+  // merma, temporada, vida útil, temp. de servicio, etiquetas de menú) solo
+  // tienen sentido en un ingrediente. Un envase o herramienta las oculta.
+  const isRaw = item.type === 'raw'
+
   // ── Semáforo "Utilizable" (honesto) ──
   const cost = effectiveCost(item)
   const okPrecio = cost !== null
@@ -677,9 +682,11 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
                     {COST_STRATEGY_OPTIONS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
                   </select>
                 </Field>
-                <Field label="Merma por defecto (%)" hint="Parte que se pierde al preparar. El coste real usa cantidad bruta.">
-                  <input type="text" inputMode="decimal" value={fWastePct} onChange={(e) => setFWastePct(e.target.value)} disabled={saving} placeholder="Ej: 8" className={INPUT_CLS} />
-                </Field>
+                {isRaw && (
+                  <Field label="Merma por defecto (%)" hint="Parte que se pierde al preparar. El coste real usa cantidad bruta.">
+                    <input type="text" inputMode="decimal" value={fWastePct} onChange={(e) => setFWastePct(e.target.value)} disabled={saving} placeholder="Ej: 8" className={INPUT_CLS} />
+                  </Field>
+                )}
               </div>
             </div>
 
@@ -693,16 +700,21 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
                     {CONSERVATION_OPTIONS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
                   </select>
                 </Field>
-                <Field label="Temp. de servicio (°C)"><input type="text" inputMode="decimal" value={fServiceTemp} onChange={(e) => setFServiceTemp(e.target.value)} disabled={saving} className={INPUT_CLS} /></Field>
-                <Field label="Vida útil (días)" hint="Caducidad típica; habilitará alertas FIFO."><input type="text" inputMode="numeric" value={fShelfLife} onChange={(e) => setFShelfLife(e.target.value)} disabled={saving} className={INPUT_CLS} /></Field>
-                <div className="grid grid-cols-2 gap-2">
-                  <Field label="Temporada desde"><input type="date" value={fSeasonStart} onChange={(e) => setFSeasonStart(e.target.value)} disabled={saving} className={INPUT_CLS} /></Field>
-                  <Field label="hasta"><input type="date" value={fSeasonEnd} onChange={(e) => setFSeasonEnd(e.target.value)} disabled={saving} className={INPUT_CLS} /></Field>
-                </div>
+                {isRaw && (
+                  <>
+                    <Field label="Temp. de servicio (°C)"><input type="text" inputMode="decimal" value={fServiceTemp} onChange={(e) => setFServiceTemp(e.target.value)} disabled={saving} className={INPUT_CLS} /></Field>
+                    <Field label="Vida útil (días)" hint="Caducidad típica; habilitará alertas FIFO."><input type="text" inputMode="numeric" value={fShelfLife} onChange={(e) => setFShelfLife(e.target.value)} disabled={saving} className={INPUT_CLS} /></Field>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Field label="Temporada desde"><input type="date" value={fSeasonStart} onChange={(e) => setFSeasonStart(e.target.value)} disabled={saving} className={INPUT_CLS} /></Field>
+                      <Field label="hasta"><input type="date" value={fSeasonEnd} onChange={(e) => setFSeasonEnd(e.target.value)} disabled={saving} className={INPUT_CLS} /></Field>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
-            {/* Alérgenos (editables) */}
+            {/* Alérgenos (editables) — solo ingrediente */}
+            {isRaw && (
             <div className="space-y-3">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-text-secondary">Alérgenos</h3>
               <p className="text-[11px] text-text-secondary -mt-1.5">Declaración por los 14 del Reglamento UE 1169. Marca el estado de cada uno.</p>
@@ -736,8 +748,10 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
                 })}
               </div>
             </div>
+            )}
 
-            {/* Nutrición (editable, por 100 g) */}
+            {/* Nutrición (editable, por 100 g) — solo ingrediente */}
+            {isRaw && (
             <div className="space-y-3">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-text-secondary">Nutrición (por 100 g)</h3>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -755,8 +769,10 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
                 ))}
               </div>
             </div>
+            )}
 
-            {/* Etiquetas de menú (editables) */}
+            {/* Etiquetas de menú (editables) — solo ingrediente */}
+            {isRaw && (
             <div className="space-y-3">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-text-secondary">Etiquetas de menú</h3>
               <div className="flex flex-wrap gap-2">
@@ -787,6 +803,7 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
                 })}
               </div>
             </div>
+            )}
 
             {formError && (<div className="p-2 rounded-md bg-danger-bg text-danger border border-danger/20 text-xs">{formError}</div>)}
 
@@ -927,7 +944,7 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 <DataCell label={`Coste / ${baseUnit?.abbreviation ?? 'base'}`} value={formatEur(cost)} mono />
                 <DataCell label="Origen del coste" value={costOrigin} />
-                <DataCell label="Merma por defecto" value={item.defaultWastePct != null ? `${item.defaultWastePct} %` : '—'} mono />
+                {isRaw && <DataCell label="Merma por defecto" value={item.defaultWastePct != null ? `${item.defaultWastePct} %` : '—'} mono />}
                 <DataCell label="Usado en" value={usageCount === null ? '—' : `${usageCount} platos`} mono />
               </div>
               <div className="mt-2.5 grid grid-cols-2 sm:grid-cols-4 gap-2.5">
@@ -935,6 +952,7 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
               </div>
             </CollapsibleSection>
 
+            {isRaw && (
             <CollapsibleSection icon={<AlertTriangle size={16} />} title="Alérgenos" badge={allergens.length > 0 ? undefined : 'Sin declarar'} badgeTone="neutral" defaultOpen={allergens.length > 0}>
               {allergens.length > 0 ? (
                 <div className="flex flex-wrap gap-1.5">
@@ -958,7 +976,9 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
                 <p className="text-sm text-text-secondary">Sin alérgenos declarados. Edita la ficha o usa "Completar con IA" para añadirlos.</p>
               )}
             </CollapsibleSection>
+            )}
 
+            {isRaw && (
             <CollapsibleSection icon={<Activity size={16} />} title="Nutrición" badge={hasNutrition ? undefined : 'Próximamente'} badgeTone="neutral">
               {hasNutrition ? (
                 <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm max-w-md">
@@ -976,10 +996,13 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
                 <p className="text-sm text-text-secondary">Información nutricional por 100 g. Pendiente de editor.</p>
               )}
             </CollapsibleSection>
+            )}
 
+            {isRaw && (
             <CollapsibleSection icon={<Scissors size={16} />} title="Cortes y merma" badge="Próximamente" badgeTone="neutral">
               <p className="text-sm text-text-secondary">Cortes con su rendimiento y coste resultante.</p>
             </CollapsibleSection>
+            )}
 
             <CollapsibleSection icon={<Boxes size={16} />} title="Stock por almacén">
               <ItemStockPanel
@@ -1003,9 +1026,9 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
             <CollapsibleSection icon={<Snowflake size={16} />} title="Conservación y temporada">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 <DataCell label="Conservación" value={item.conservationType ? CONSERVATION_LABEL[item.conservationType] ?? item.conservationType : '—'} />
-                <DataCell label="Temp. de servicio" value={item.serviceTempC != null ? `${item.serviceTempC} °C` : '—'} />
-                <DataCell label="Vida útil" value={item.shelfLifeDays != null ? `${item.shelfLifeDays} días` : '—'} mono />
-                <DataCell label="Temporada" value={formatSeason(item.seasonStart, item.seasonEnd)} />
+                {isRaw && <DataCell label="Temp. de servicio" value={item.serviceTempC != null ? `${item.serviceTempC} °C` : '—'} />}
+                {isRaw && <DataCell label="Vida útil" value={item.shelfLifeDays != null ? `${item.shelfLifeDays} días` : '—'} mono />}
+                {isRaw && <DataCell label="Temporada" value={formatSeason(item.seasonStart, item.seasonEnd)} />}
               </div>
             </CollapsibleSection>
 
