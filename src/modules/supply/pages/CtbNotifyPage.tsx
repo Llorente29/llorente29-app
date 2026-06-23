@@ -32,6 +32,8 @@ export default function CtbNotifyPage() {
   const [error, setError] = useState<string | null>(null)
   const [flash, setFlash] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
+  // Tras compartir, esta fila ofrece "¿Enviado? → Sí" en el momento real.
+  const [confirmSentId, setConfirmSentId] = useState<string | null>(null)
   const [reloadTick, setReloadTick] = useState(0)
 
   useEffect(() => {
@@ -78,7 +80,8 @@ export default function CtbNotifyPage() {
           const file = new File([blob], `albaran-${item.receiptCode ?? 'recepcion'}.${ext}`, { type: blob.type })
           if (nav.canShare({ files: [file] })) {
             await nav.share({ files: [file], text: msg })
-            setFlash('Compartido. Cuando lo hayas enviado al grupo, marca "Enviado".')
+            setConfirmSentId(item.id)
+            setFlash('Compartido. Confirma abajo cuando lo hayas enviado al grupo.')
             return
           }
         } catch { /* cae al fallback de abajo */ }
@@ -89,7 +92,8 @@ export default function CtbNotifyPage() {
         try {
           await nav.share({ text: msg })
           if (url) window.open(url, '_blank')
-          setFlash('Texto compartido. Adjunta el albarán abierto y marca "Enviado".')
+          setConfirmSentId(item.id)
+          setFlash('Texto compartido. Adjunta el albarán y confirma abajo cuando lo hayas enviado.')
           return
         } catch { /* cae al fallback de abajo */ }
       }
@@ -97,7 +101,8 @@ export default function CtbNotifyPage() {
       // 3) PC: copia el texto + abre el albarán para arrastrarlo al grupo.
       try { await navigator.clipboard.writeText(msg) } catch { /* sin portapapeles */ }
       if (url) window.open(url, '_blank')
-      setFlash('Mensaje copiado. Pégalo en el grupo de CTB y adjunta el albarán abierto. Luego marca "Enviado".')
+      setConfirmSentId(item.id)
+      setFlash('Mensaje copiado. Pégalo en el grupo de CTB y adjunta el albarán; confirma abajo cuando lo hayas enviado.')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo preparar el envío.')
     } finally {
@@ -109,6 +114,7 @@ export default function CtbNotifyPage() {
     setBusyId(item.id); setError(null)
     try {
       await markCtbSent(item.id)
+      setConfirmSentId(null)
       setFlash('Marcado como enviado a CTB.')
       setReloadTick(t => t + 1)
     } catch (err) {
@@ -208,16 +214,30 @@ export default function CtbNotifyPage() {
                       </button>
                     )}
                     {item.status === 'pendiente' && (
-                      <>
-                        <button type="button" disabled={busyId === item.id} onClick={() => handleShare(item)}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 transition-base">
-                          {busyId === item.id ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Enviar
-                        </button>
-                        <button type="button" disabled={busyId === item.id} onClick={() => handleMarkSent(item)}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm font-medium border border-success/30 bg-card text-success hover:bg-success-bg disabled:opacity-50 transition-base">
-                          <Check size={14} /> Marcar enviado
-                        </button>
-                      </>
+                      confirmSentId === item.id ? (
+                        <>
+                          <span className="text-sm text-text-secondary mr-1">¿Enviado al grupo?</span>
+                          <button type="button" disabled={busyId === item.id} onClick={() => handleMarkSent(item)}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm font-medium bg-success text-white hover:opacity-90 disabled:opacity-50 transition-base">
+                            {busyId === item.id ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} Sí, enviado
+                          </button>
+                          <button type="button" disabled={busyId === item.id} onClick={() => setConfirmSentId(null)}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm font-medium border border-border-default bg-card hover:bg-page disabled:opacity-50 transition-base">
+                            Aún no
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button type="button" disabled={busyId === item.id} onClick={() => handleShare(item)}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 transition-base">
+                            {busyId === item.id ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Enviar
+                          </button>
+                          <button type="button" disabled={busyId === item.id} onClick={() => handleMarkSent(item)}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm font-medium border border-success/30 bg-card text-success hover:bg-success-bg disabled:opacity-50 transition-base">
+                            <Check size={14} /> Marcar enviado
+                          </button>
+                        </>
+                      )
                     )}
                   </div>
                 </div>
