@@ -197,35 +197,7 @@ export async function resolveTodayCounters(locationId: string, dateISO: string):
     .lte('start_date', dateISO)
     .gte('end_date', dateISO)
   const onVac = new Set((vac ?? []).map((v: { employee_id: string }) => v.employee_id))
-  const scheduled = ids.filter((id) => !onVac.has(id))
-
-  // FILTRO DE PRESENTES: del universo del cuadrante (scheduled), quedarse con
-  // quienes están AHORA fichados (su último fichaje de hoy es 'entrada', no han
-  // salido después). Evita asignar a quien debería estar pero no ha venido.
-  // FALLBACK: si NADIE del cuadrante ha fichado aún (típico a primera hora), se
-  // reparte entre todo el cuadrante — mejor eso que no repartir.
-  if (scheduled.length === 0) return scheduled
-  const present = await resolvePresentNow(scheduled, dateISO)
-  return present.length > 0 ? present : scheduled
-}
-
-// Quién de la lista está PRESENTE ahora: su último fichaje de HOY es 'entrada'
-// (ha entrado y no ha fichado salida después). Lee clock_entries del día.
-async function resolvePresentNow(employeeIds: string[], dateISO: string): Promise<string[]> {
-  if (!supabase || employeeIds.length === 0) return []
-  const { data, error } = await supabase
-    .from('clock_entries')
-    .select('employee_id, type, datetime')
-    .in('employee_id', employeeIds)
-    .gte('datetime', dateISO + 'T00:00:00')
-    .order('datetime', { ascending: true })
-  if (error || !data) return []
-  // último evento del día por empleado; presente si es 'entrada'
-  const lastType = new Map<string, string>()
-  for (const e of data as { employee_id: string; type: string }[]) {
-    lastType.set(e.employee_id, e.type)
-  }
-  return employeeIds.filter((id) => lastType.get(id) === 'entrada')
+  return ids.filter((id) => !onVac.has(id))
 }
 
 export interface DailyCountResult {
