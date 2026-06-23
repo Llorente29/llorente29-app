@@ -31,9 +31,7 @@ interface Props {
   showInventory?: boolean
   /** Nº de artículos del autoinventario aún sin contar hoy. */
   inventoryPendingCount?: number
-  /** ¿Hay pedidos pendientes de recibir en el local del empleado? */
-  showReceiving?: boolean
-  /** Nº de pedidos pendientes de recibir (enviado + parcial) en su local. */
+  /** Nº de pedidos pendientes de recibir (enviado + parcial); 0 = sin badge. */
   receivingPendingCount?: number
 }
 
@@ -49,7 +47,7 @@ interface ModuleButton {
   badgeColor?: string
 }
 
-export default function HomeEmpleado({ employee, onNavigate, onLogout, exitLabel = 'logout', appccPendingCount = 0, showInventory = false, inventoryPendingCount = 0, showReceiving = false, receivingPendingCount = 0 }: Props) {
+export default function HomeEmpleado({ employee, onNavigate, onLogout, exitLabel = 'logout', appccPendingCount = 0, showInventory = false, inventoryPendingCount = 0, receivingPendingCount = 0 }: Props) {
   const open = hasOpenShift(employee)
   const [showAppcc, setShowAppcc] = useState(false)
 
@@ -101,18 +99,18 @@ export default function HomeEmpleado({ employee, onNavigate, onLogout, exitLabel
       badge: inventoryPendingCount > 0 ? inventoryPendingCount : undefined,
       badgeColor: 'bg-terracota',
     }] : []),
-    ...(showReceiving ? [{
+    {
       id: 'recepcion' as WorkerModule,
       icon: Truck,
       title: 'Recepciones',
       desc: receivingPendingCount > 0
         ? `${receivingPendingCount} pedido${receivingPendingCount > 1 ? 's' : ''} por recibir`
-        : 'Recibir un pedido',
+        : 'Recibir un pedido o albarán',
       iconColor: 'text-accent',
       iconBg: 'bg-accent-bg',
       badge: receivingPendingCount > 0 ? receivingPendingCount : undefined,
       badgeColor: 'bg-accent',
-    }] : []),
+    },
     // Preparado para más módulos:
     // { id: 'stock', icon: Package, title: 'Stock', desc: 'Recuentos y recepciones', iconColor: '...', iconBg: '...' },
   ]

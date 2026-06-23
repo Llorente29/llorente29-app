@@ -1,24 +1,20 @@
 // src/modules/supply/components/OrderReceiveFlow.tsx
 //
-// FLUJO "RECIBIR PEDIDO": selector de pedidos PENDIENTES de recibir → recepción
-// arrancada DESDE ese pedido (reusa GoodsReceiptForm con la prop `order`, que ya
-// enlaza purchaseOrderId/purchaseOrderLineId, muestra pedido/ya-recibido/pendiente
-// por línea y soporta OCR o manual; aquí NO se duplica nada de esa lógica).
+// PANTALLA "RECEPCIONES" del trabajador / oficina. Un solo sitio para todo:
+//   · PEDIDOS PENDIENTES (enviado / recibido_parcial): eliges uno → contar a mano
+//     o escanear su albarán (OCR casado contra las líneas del pedido).
+//   · SIN PEDIDO (siempre disponible): escanear un albarán suelto (OCR) o recibir
+//     a ciegas (eliges proveedor y cuentas).
 //
-// REUTILIZABLE en dos sitios (misma pieza, sin copiar):
-//   · PC / encargado: montado desde GoodsReceiptsPage (botón "Recibir pedido").
-//   · Móvil del trabajador: montado desde TrabajadorApp (módulo "Recepciones").
+// Reusa GoodsReceiptForm (prop `order` enlaza el pedido; `ocrPrefill` trae lo
+// leído; sin ninguna de las dos = recepción ciega) y ReceiptScanPanel (OCR).
 //
-// "Pendiente de recibir" = pedidos en estado `enviado` o `recibido_parcial`
-// (el motor recompute_purchase_order_status ya los marca solo al confirmar una
-// recepción). Los `borrador`/`recibido`/`cerrado`/`cancelado` NO aparecen.
-//
-// locationId (opcional): si se pasa, filtra los pedidos a ese local (el caso del
-// trabajador, que recibe en SU local). Sin él, todos los del scope de la cuenta.
+// REUTILIZABLE en PC (GoodsReceiptsPage) y en el móvil del trabajador (TrabajadorApp).
+// locationId (opcional): filtra los pedidos a ese local (el caso del trabajador).
 
 import { useEffect, useMemo, useState } from 'react'
 import {
-  ArrowLeft, Loader2, PackageCheck, ChevronRight, Truck, Search,
+  ArrowLeft, Loader2, PackageCheck, ChevronRight, Truck, Search, ScanLine, ListChecks,
 } from 'lucide-react'
 import {
   listPurchaseOrders,
@@ -27,7 +23,8 @@ import {
 } from '@/modules/supply/services/purchaseOrderService'
 import { listSuppliers } from '@/modules/kitchen/services/purchaseFormatService'
 import type { Supplier } from '@/types/kitchen'
-import GoodsReceiptForm from '@/modules/supply/pages/GoodsReceiptForm'
+import GoodsReceiptForm, { type OcrPrefill } from '@/modules/supply/pages/GoodsReceiptForm'
+import ReceiptScanPanel from '@/modules/supply/pages/ReceiptScanPanel'
 
 interface Props {
   accountId: string
@@ -56,6 +53,9 @@ function formatDate(value: string | null): string {
     .format(new Date(value))
 }
 
+// Paso interno. picked = pedido elegido (null en las vías "sin pedido").
+type Step = 'list' | 'choose' | 'manual' | 'scan' | 'form-scan'
+
 export default function OrderReceiveFlow({ accountId, locationId, onBack, onSaved }: Props) {
   const [orders, setOrders] = useState<PurchaseOrder[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
@@ -64,16 +64,15 @@ export default function OrderReceiveFlow({ accountId, locationId, onBack, onSave
   const [search, setSearch] = useState('')
   const [reloadTick, setReloadTick] = useState(0)
 
-  // Pedido elegido → montamos la recepción contra él.
-  const [picked, setPicked] = useState<PurchaseOrder | null>(null)
+  const [step, setStep] = useState<Step>('list')
+  const [picked, setPicked] = useState<PurchaseOrder | null>(null)  // null = sin pedido
+  const [ocr, setOcr] = useState<OcrPrefill | null>(null)
 
   useEffect(() => {
     let cancelled = false
     setLoading(true)
     setError(null)
     Promise.all([
-      // listPurchaseOrders filtra por UN estado; pedimos sin estado y filtramos
-      // a los dos pendientes en cliente (más simple que dos llamadas).
       listPurchaseOrders({ accountId, locationId: locationId ?? undefined }),
       listSuppliers(accountId),
     ])
@@ -107,98 +106,207 @@ export default function OrderReceiveFlow({ accountId, locationId, onBack, onSave
     })
   }, [orders, search, supplierNameById])
 
-  // ── Recepción contra el pedido elegido (reusa el form tal cual) ──
-  if (picked) {
+  function backToList() {
+    setStep('list'); setPicked(null); setOcr(null); setReloadTick(t => t + 1)
+  }
+  // Volver desde el form/escáner: si venía de un pedido → a "cómo recibir"; si era
+  // sin pedido → a la lista.
+  function backFromFlow() {
+    setOcr(null)
+    if (picked) setStep('choose')
+    else backToList()
+  }
+
+  // ── Recepción a mano (contra pedido si picked; a ciegas si null) ──
+  if (step === 'manual') {
     return (
       <GoodsReceiptForm
         accountId={accountId}
-        order={picked}
-        onBack={() => { setPicked(null); setReloadTick(t => t + 1) }}
-        onSaved={(msg) => { setPicked(null); onSaved(msg) }}
+        order={picked ?? undefined}
+        onBack={backFromFlow}
+        onSaved={(msg) => { backToList(); onSaved(msg) }}
       />
     )
   }
 
-  // ── Selector de pedidos pendientes ──
+  // ── Escaneo de albarán (OCR). Con o sin pedido detrás ──
+  if (step === 'scan') {
+    return (
+      <ReceiptScanPanel
+        accountId={accountId}
+        onBack={backFromFlow}
+        onCreateReceipt={(o) => { setOcr(o); setStep('form-scan') }}
+      />
+    )
+  }
+
+  // ── Recepción con el albarán leído (fusión pedido+OCR si picked; OCR suelto si null) ──
+  if (step === 'form-scan' && ocr) {
+    return (
+      <GoodsReceiptForm
+        accountId={accountId}
+        order={picked ?? undefined}
+        ocrPrefill={ocr}
+        onBack={backFromFlow}
+        onSaved={(msg) => { backToList(); onSaved(msg) }}
+      />
+    )
+  }
+
+  const pickedSupplier = picked?.supplierId ? (supplierNameById.get(picked.supplierId) ?? 'Proveedor') : 'Sin proveedor'
+
+  // ── Elegir cómo recibir el pedido seleccionado ──
+  if (step === 'choose' && picked) {
+    return (
+      <div className="min-h-screen bg-page">
+        <div className="px-4 pt-5 pb-3 flex items-center gap-3">
+          <button onClick={backToList} className="text-text-secondary w-9 h-9 rounded-full hover:bg-accent-bg flex items-center justify-center transition-base shrink-0" aria-label="Volver">
+            <ArrowLeft size={20} />
+          </button>
+          <div className="min-w-0">
+            <h2 className="text-xl font-display font-medium text-text-primary truncate">{pickedSupplier}</h2>
+            <p className="text-sm text-text-secondary mt-0.5">
+              {picked.code ?? 'Sin código'} · Pedido {formatDate(picked.orderDate)}
+              {picked.expectedDate ? ` · Entrega ${formatDate(picked.expectedDate)}` : ''}
+            </p>
+          </div>
+        </div>
+
+        <div className="px-4 pb-8 space-y-3 max-w-2xl mx-auto">
+          <p className="text-sm text-text-secondary">¿Cómo quieres recibirlo?</p>
+
+          <button onClick={() => setStep('scan')}
+            className="w-full text-left p-4 rounded-2xl bg-card border border-border-default shadow-sm hover:border-accent hover:shadow-md transition-base active:scale-[0.99] flex items-center gap-3">
+            <span className="w-11 h-11 rounded-full bg-accent-bg flex items-center justify-center shrink-0">
+              <ScanLine size={22} className="text-accent" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-text-primary">Escanear albarán</p>
+              <p className="text-xs text-text-secondary mt-0.5">La IA lee el papel y lo casa con las líneas del pedido.</p>
+            </div>
+            <ChevronRight size={18} className="text-text-secondary shrink-0" />
+          </button>
+
+          <button onClick={() => setStep('manual')}
+            className="w-full text-left p-4 rounded-2xl bg-card border border-border-default shadow-sm hover:border-accent hover:shadow-md transition-base active:scale-[0.99] flex items-center gap-3">
+            <span className="w-11 h-11 rounded-full bg-page flex items-center justify-center shrink-0 border border-border-default">
+              <ListChecks size={22} className="text-text-secondary" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-text-primary">Contar a mano</p>
+              <p className="text-xs text-text-secondary mt-0.5">Cuenta lo que llega contra las líneas pedidas.</p>
+            </div>
+            <ChevronRight size={18} className="text-text-secondary shrink-0" />
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // ── LISTA: pedidos pendientes + recepción sin pedido (siempre) ──
   return (
     <div className="min-h-screen bg-page">
-      {/* Cabecera */}
       <div className="px-4 pt-5 pb-3 flex items-center gap-3">
-        <button
-          onClick={onBack}
-          className="text-text-secondary w-9 h-9 rounded-full hover:bg-accent-bg flex items-center justify-center transition-base shrink-0"
-          aria-label="Volver"
-        >
+        <button onClick={onBack} className="text-text-secondary w-9 h-9 rounded-full hover:bg-accent-bg flex items-center justify-center transition-base shrink-0" aria-label="Volver">
           <ArrowLeft size={20} />
         </button>
         <div className="min-w-0">
-          <h2 className="text-xl font-display font-medium text-text-primary truncate">Recibir pedido</h2>
-          <p className="text-sm text-text-secondary mt-0.5">Elige un pedido pendiente de recibir.</p>
+          <h2 className="text-xl font-display font-medium text-text-primary truncate">Recepciones</h2>
+          <p className="text-sm text-text-secondary mt-0.5">Recibe un pedido pendiente o un albarán suelto.</p>
         </div>
       </div>
 
-      <div className="px-4 pb-8 space-y-3 max-w-2xl mx-auto">
+      <div className="px-4 pb-8 space-y-4 max-w-2xl mx-auto">
         {error && (
           <div className="p-3 rounded-md bg-danger-bg text-danger border border-danger/20 text-sm">{error}</div>
         )}
 
-        {/* Buscador (solo si hay varios) */}
-        {!loading && orders.length > 3 && (
-          <div className="relative">
-            <Search size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-secondary" />
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Buscar por proveedor o código…"
-              className="w-full pl-8 pr-2 py-2 text-sm border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
-            />
-          </div>
-        )}
+        {/* Pedidos pendientes */}
+        <div className="space-y-2.5">
+          <p className="text-xs font-medium text-text-secondary uppercase tracking-wide">Pedidos pendientes</p>
 
-        {loading ? (
-          <div className="flex items-center justify-center gap-2 py-16 text-text-secondary">
-            <Loader2 size={18} className="animate-spin" /> Cargando pedidos…
-          </div>
-        ) : visible.length === 0 ? (
-          <div className="p-8 rounded-lg border border-dashed border-border-default text-center">
-            <PackageCheck size={32} className="mx-auto text-text-secondary mb-2" />
-            <p className="text-sm font-medium text-text-primary">No hay pedidos pendientes de recibir</p>
-            <p className="text-xs text-text-secondary mt-1">
-              Cuando se envíe un pedido a un proveedor, aparecerá aquí para recibirlo.
-            </p>
-          </div>
-        ) : (
-          <ul className="space-y-2.5">
-            {visible.map(o => {
-              const supName = o.supplierId ? (supplierNameById.get(o.supplierId) ?? 'Proveedor') : 'Sin proveedor'
-              return (
-                <li key={o.id}>
-                  <button
-                    onClick={() => setPicked(o)}
-                    className="w-full text-left p-4 rounded-2xl bg-card border border-border-default shadow-sm hover:border-accent hover:shadow-md transition-base active:scale-[0.99] flex items-center gap-3"
-                  >
-                    <span className="w-11 h-11 rounded-full bg-accent-bg flex items-center justify-center shrink-0">
-                      <Truck size={22} className="text-accent" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="font-semibold text-text-primary truncate">{supName}</p>
-                        <span className={`shrink-0 text-[11px] px-1.5 py-0.5 rounded border ${STATUS_CLASS[o.status] ?? ''}`}>
-                          {STATUS_LABEL[o.status] ?? o.status}
-                        </span>
+          {!loading && orders.length > 3 && (
+            <div className="relative">
+              <Search size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-secondary" />
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Buscar por proveedor o código…"
+                className="w-full pl-8 pr-2 py-2 text-sm border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+              />
+            </div>
+          )}
+
+          {loading ? (
+            <div className="flex items-center justify-center gap-2 py-10 text-text-secondary">
+              <Loader2 size={18} className="animate-spin" /> Cargando pedidos…
+            </div>
+          ) : visible.length === 0 ? (
+            <div className="p-5 rounded-lg border border-dashed border-border-default text-center">
+              <PackageCheck size={26} className="mx-auto text-text-secondary mb-1.5" />
+              <p className="text-sm font-medium text-text-primary">No hay pedidos pendientes</p>
+              <p className="text-xs text-text-secondary mt-0.5">Puedes recibir un albarán sin pedido abajo.</p>
+            </div>
+          ) : (
+            <ul className="space-y-2.5">
+              {visible.map(o => {
+                const supName = o.supplierId ? (supplierNameById.get(o.supplierId) ?? 'Proveedor') : 'Sin proveedor'
+                return (
+                  <li key={o.id}>
+                    <button onClick={() => { setPicked(o); setOcr(null); setStep('choose') }}
+                      className="w-full text-left p-4 rounded-2xl bg-card border border-border-default shadow-sm hover:border-accent hover:shadow-md transition-base active:scale-[0.99] flex items-center gap-3">
+                      <span className="w-11 h-11 rounded-full bg-accent-bg flex items-center justify-center shrink-0">
+                        <Truck size={22} className="text-accent" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-text-primary truncate">{supName}</p>
+                          <span className={`shrink-0 text-[11px] px-1.5 py-0.5 rounded border ${STATUS_CLASS[o.status] ?? ''}`}>
+                            {STATUS_LABEL[o.status] ?? o.status}
+                          </span>
+                        </div>
+                        <p className="text-xs text-text-secondary mt-0.5 truncate">
+                          {o.code ?? 'Sin código'} · Pedido {formatDate(o.orderDate)}
+                          {o.expectedDate ? ` · Entrega ${formatDate(o.expectedDate)}` : ''}
+                        </p>
                       </div>
-                      <p className="text-xs text-text-secondary mt-0.5 truncate">
-                        {o.code ?? 'Sin código'} · Pedido {formatDate(o.orderDate)}
-                        {o.expectedDate ? ` · Entrega ${formatDate(o.expectedDate)}` : ''}
-                      </p>
-                    </div>
-                    <ChevronRight size={18} className="text-text-secondary shrink-0" />
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
-        )}
+                      <ChevronRight size={18} className="text-text-secondary shrink-0" />
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </div>
+
+        {/* Recepción sin pedido (siempre disponible) */}
+        <div className="space-y-2.5 pt-1">
+          <p className="text-xs font-medium text-text-secondary uppercase tracking-wide">Recibir sin pedido</p>
+
+          <button onClick={() => { setPicked(null); setOcr(null); setStep('scan') }}
+            className="w-full text-left p-4 rounded-2xl bg-card border border-border-default shadow-sm hover:border-accent hover:shadow-md transition-base active:scale-[0.99] flex items-center gap-3">
+            <span className="w-11 h-11 rounded-full bg-accent-bg flex items-center justify-center shrink-0">
+              <ScanLine size={22} className="text-accent" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-text-primary">Escanear albarán</p>
+              <p className="text-xs text-text-secondary mt-0.5">La IA lee el papel del proveedor.</p>
+            </div>
+            <ChevronRight size={18} className="text-text-secondary shrink-0" />
+          </button>
+
+          <button onClick={() => { setPicked(null); setOcr(null); setStep('manual') }}
+            className="w-full text-left p-4 rounded-2xl bg-card border border-border-default shadow-sm hover:border-accent hover:shadow-md transition-base active:scale-[0.99] flex items-center gap-3">
+            <span className="w-11 h-11 rounded-full bg-page flex items-center justify-center shrink-0 border border-border-default">
+              <ListChecks size={22} className="text-text-secondary" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-text-primary">A ciegas</p>
+              <p className="text-xs text-text-secondary mt-0.5">Eliges proveedor y cuentas lo que llega.</p>
+            </div>
+            <ChevronRight size={18} className="text-text-secondary shrink-0" />
+          </button>
+        </div>
       </div>
     </div>
   )

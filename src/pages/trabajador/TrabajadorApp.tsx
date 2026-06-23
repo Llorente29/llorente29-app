@@ -68,8 +68,8 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
   // Autoinventario: ¿hay cola asignada hoy a este empleado? y cuántos faltan.
   const [showInventory, setShowInventory] = useState(false)
   const [inventoryPendingCount, setInventoryPendingCount] = useState(0)
-  // Recepciones: ¿hay pedidos pendientes de recibir en el local del empleado?
-  const [showReceiving, setShowReceiving] = useState(false)
+  // Recepciones: nº de pedidos pendientes en el local (solo para el badge; la
+  // tarjeta "Recepciones" es fija — se entra siempre, haya pedidos o no).
   const [receivingPendingCount, setReceivingPendingCount] = useState(0)
   // ¿El local tiene APPCC configurado? Decide si se muestra el tab "Tareas".
   const [showAppccTab, setShowAppccTab] = useState(false)
@@ -155,7 +155,7 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
   }, [employee?.locationId, employee?.id, subPage])
 
   // Pedidos pendientes de recibir (enviado + parcial) en el local del empleado.
-  // El módulo "Recepciones" solo aparece si hay alguno pendiente.
+  // Solo para el badge de la tarjeta "Recepciones" (la tarjeta es fija).
   useEffect(() => {
     if (!activeAccountId || !employee?.locationId) return
     let cancel = false
@@ -163,10 +163,9 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
       .then((rows) => {
         if (cancel) return
         const pending = rows.filter(o => o.status === 'enviado' || o.status === 'recibido_parcial')
-        setShowReceiving(pending.length > 0)
         setReceivingPendingCount(pending.length)
       })
-      .catch(() => { if (!cancel) { setShowReceiving(false); setReceivingPendingCount(0) } })
+      .catch(() => { if (!cancel) setReceivingPendingCount(0) })
     return () => { cancel = true }
   }, [activeAccountId, employee?.locationId, subPage])
 
@@ -352,7 +351,6 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
         appccPendingCount={appccPendingCount}
         showInventory={showInventory}
         inventoryPendingCount={inventoryPendingCount}
-        showReceiving={showReceiving}
         receivingPendingCount={receivingPendingCount}
       />
       <BottomTabBar active="inicio" onSelect={goToTab} showTareas={showAppccTab} />

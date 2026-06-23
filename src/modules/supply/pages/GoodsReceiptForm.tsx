@@ -737,7 +737,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
   const [supHealth, setSupHealth] = useState('')
   const [supSaving, setSupSaving] = useState(false)
   useEffect(() => {
-    if (fromOcr && ocrPrefill?.unmatchedSupplier) {
+    if (fromOcr && !order && ocrPrefill?.unmatchedSupplier) {
       setSupName(ocrPrefill.proposedSupplierName ?? '')
       setSupNif(ocrPrefill.proposedSupplierNif ?? '')
       setSupPhone(ocrPrefill.proposedSupplierPhone ?? '')
@@ -850,6 +850,42 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
     })()
     return () => { cancelled = true }
   }, [fromOcr, ocrPrefill, accountId])
+
+  // ── FUSIÓN PEDIDO + OCR: referencia del pedido por artículo ──
+  // Cuando se escanea el albarán DE UN PEDIDO (order + ocrPrefill juntos), cargamos
+  // las líneas del pedido para casar cada línea leída del albarán contra su línea
+  // pedida (por recipe_item_id) → hereda poLineId + pedido/ya-recibido/pendiente.
+  // Si un artículo está en varias líneas del pedido, nos quedamos con la que aún
+  // tiene pendiente. Sin pedido detrás (OCR ciego) esto no se activa.
+  const [orderRefByItem, setOrderRefByItem] = useState<
+    Map<string, { poLineId: string; qtyOrdered: number; already: number; pending: number }>
+  >(new Map())
+  useEffect(() => {
+    if (!fromOcr || !order) { setOrderRefByItem(new Map()); return }
+    let cancelled = false
+    ;(async () => {
+      const [poLines, received] = await Promise.all([
+        listPurchaseOrderLines(order.id),
+        listOrderLineReceived(order.id),
+      ])
+      if (cancelled) return
+      const recvByPo = new Map<string, number>()
+      received.forEach(r => recvByPo.set(r.purchaseOrderLineId, r.receivedConfirmed))
+      const m = new Map<string, { poLineId: string; qtyOrdered: number; already: number; pending: number }>()
+      for (const l of poLines) {
+        if (!l.recipeItemId) continue
+        const already = recvByPo.get(l.id) ?? 0
+        const pending = Math.max(0, l.qtyOrdered - already)
+        const prev = m.get(l.recipeItemId)
+        // preferimos la línea del pedido que todavía tiene pendiente
+        if (!prev || (prev.pending <= 0 && pending > 0)) {
+          m.set(l.recipeItemId, { poLineId: l.id, qtyOrdered: l.qtyOrdered, already, pending })
+        }
+      }
+      setOrderRefByItem(m)
+    })().catch(() => { if (!cancelled) setOrderRefByItem(new Map()) })
+    return () => { cancelled = true }
+  }, [fromOcr, order, accountId])
 
   useEffect(() => {
     if (fromOcr) return                   // en OCR las líneas las pone el efecto de arriba
@@ -1031,6 +1067,35 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountId, locationId, matchedItemIdsKey])
+
+  // FUSIÓN PEDIDO + OCR: en cuanto una línea leída casa un artículo (auto o a
+  // mano), hereda la referencia de su línea de pedido (poLineId + pendiente). Si
+  // se descasa o el artículo no está en el pedido, se limpia la referencia. Una
+  // sola vía (reconciliación) en vez de tocar cada punto donde se asigna artículo.
+  useEffect(() => {
+    if (!fromOcr || !order) return
+    setDraft(d => {
+      let changed = false
+      const next = d.map(l => {
+        const ref = l.recipeItemId ? orderRefByItem.get(l.recipeItemId) : undefined
+        if (ref) {
+          if (l.poLineId !== ref.poLineId || l.pending !== ref.pending) {
+            changed = true
+            return { ...l, poLineId: ref.poLineId, qtyOrdered: ref.qtyOrdered, alreadyReceived: ref.already, pending: ref.pending }
+          }
+          return l
+        }
+        // artículo no casado o no presente en el pedido → sin referencia (línea extra)
+        if (l.poLineId !== null || l.pending !== null) {
+          changed = true
+          return { ...l, poLineId: null, qtyOrdered: null, alreadyReceived: null, pending: null }
+        }
+        return l
+      })
+      return changed ? next : d
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fromOcr, order, orderRefByItem, matchedItemIdsKey])
 
   // ── Resumen anti-error ──
   // Las líneas "de más" se listan con DETALLE (cuánto, contra lo pendiente y
@@ -1301,7 +1366,9 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
     }
   }
 
-  const title = againstOrder ? `Recibir pedido ${order?.code ?? ''}` : correcting ? 'Corregir recepción' : fromOcr ? 'Revisar recepción escaneada' : 'Nueva recepción'
+  const title = againstOrder
+    ? `Recibir pedido ${order?.code ?? ''}${fromOcr ? ' · albarán escaneado' : ''}`
+    : correcting ? 'Corregir recepción' : fromOcr ? 'Revisar recepción escaneada' : 'Nueva recepción'
   const subtitle = againstOrder
     ? 'Cuenta lo que ha llegado y escríbelo. Lo pedido y lo pendiente están a la derecha como referencia.'
     : correcting
