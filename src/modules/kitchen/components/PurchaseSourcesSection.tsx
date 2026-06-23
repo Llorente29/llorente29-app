@@ -38,11 +38,15 @@ import {
   listSuppliersByItem,
   listFormatsByItem,
   setupSimplePurchase,
+  ensurePackTree,
   updateArticleSupplier,
+  createPurchaseFormat,
+  updatePurchaseFormat,
   setPreferredSupplier,
   unlinkSupplierFormat,
   reactivateSupplierLink,
 } from '@/modules/kitchen/services/purchaseFormatService'
+import { updateRecipeItem } from '@/modules/kitchen/services/recipeItemService'
 import type { RecomputedAncestor } from '@/modules/kitchen/services/costCascadeService'
 import {
   convertToBase,
@@ -402,6 +406,11 @@ export default function PurchaseSourcesSection({
               <SourceRow
                 key={link.id}
                 link={link}
+                accountId={item.accountId}
+                itemId={item.id}
+                costStrategy={item.costStrategy}
+                actorId={actorId}
+                actorName={actorName}
                 supplierName={
                   link.supplierId && suppliersById.get(link.supplierId)
                     ? suppliersById.get(link.supplierId)!.name
@@ -752,6 +761,11 @@ export default function PurchaseSourcesSection({
 // updateArticleSupplier, que recostea los platos (cascada en el service).
 interface SourceRowProps {
   link: ArticleSupplier
+  accountId: string
+  itemId: string
+  costStrategy: string
+  actorId: string | null
+  actorName: string | null
   supplierName: string
   format: PurchaseFormat | null
   baseUnit: KitchenUnit | null
@@ -769,6 +783,11 @@ function toInputStr(n: number): string {
 
 function SourceRow({
   link,
+  accountId,
+  itemId,
+  costStrategy,
+  actorId,
+  actorName,
   supplierName,
   format,
   baseUnit,
@@ -811,6 +830,121 @@ function SourceRow({
   const [negPriceUnitId, setNegPriceUnitId] = useState<string>(displayUnit?.id ?? '')
   const [negVal, setNegVal] = useState('')
   const [savingNeg, setSavingNeg] = useState(false)
+
+  // ── Editor de FORMATO (crear o editar el formato de compra de este proveedor) ──
+  // Dos modos: SIMPLE (un total: "Saco 25 kg") y PACK ("Caja = 6 × Lata de 3 kg").
+  const [editingFmt, setEditingFmt] = useState(false)
+  const [fmtMode, setFmtMode] = useState<'simple' | 'pack'>('simple')
+  const [savingFmt, setSavingFmt] = useState(false)
+  const [fmtError, setFmtError] = useState<string | null>(null)
+  // simple
+  const [fmtName, setFmtName] = useState('')
+  const [fmtQty, setFmtQty] = useState('')
+  const [fmtUnitId, setFmtUnitId] = useState<string>(baseUnit?.id ?? '')
+  const [fmtDirectBase, setFmtDirectBase] = useState('')
+  // pack
+  const [packCajaName, setPackCajaName] = useState('Caja')
+  const [packCount, setPackCount] = useState('')      // nº de piezas por caja
+  const [packInnerName, setPackInnerName] = useState('')  // "Lata", "Bolsa"…
+  const [packInnerQty, setPackInnerQty] = useState('')    // contenido de UNA pieza
+  const [packUnitId, setPackUnitId] = useState<string>(baseUnit?.id ?? '')
+  const [packDirectBase, setPackDirectBase] = useState('')
+
+  function openFmtEdit() {
+    setFmtError(null)
+    setFmtMode('simple')
+    setFmtName(format?.name ?? '')
+    setFmtQty(format ? toInputStr(format.qtyInBase) : '')
+    setFmtUnitId(baseUnit?.id ?? '')
+    setFmtDirectBase('')
+    setPackCajaName('Caja'); setPackCount(''); setPackInnerName(''); setPackInnerQty('')
+    setPackUnitId(baseUnit?.id ?? ''); setPackDirectBase('')
+    setEditingFmt(true)
+  }
+
+  // helper: convierte (cantidad + unidad) -> base, con fallback directo si la dimensión no cuadra
+  function resolveBase(qtyStr: string, unitId: string, directStr: string): number | null {
+    const q = parseDecimal(qtyStr)
+    const u = priceUnits.find((x) => x.id === unitId) ?? baseUnit
+    if (q === null || !u || !baseUnit) return null
+    const c = convertToBase(q, u, baseUnit)
+    if (c && c.ok) return c.qtyInBase
+    // dimensión distinta -> el cocinero da el total en base
+    const d = parseDecimal(directStr)
+    return d !== null && d > 0 ? d : null
+  }
+
+  // SIMPLE: total en base
+  const fmtQtyInBase = resolveBase(fmtQty, fmtUnitId, fmtDirectBase)
+  const fmtMismatch = (() => {
+    const q = parseDecimal(fmtQty)
+    const u = priceUnits.find((x) => x.id === fmtUnitId) ?? baseUnit
+    if (q === null || !u || !baseUnit) return false
+    const c = convertToBase(q, u, baseUnit)
+    return c !== null && c.ok === false && c.reason === 'dimension_mismatch'
+  })()
+
+  // PACK: contenido de UNA pieza, y total caja = count × inner
+  const packInnerBase = resolveBase(packInnerQty, packUnitId, packDirectBase)
+  const packCountNum = parseDecimal(packCount)
+  const packTotalBase =
+    packInnerBase !== null && packCountNum !== null && packCountNum > 0
+      ? packInnerBase * packCountNum : null
+  const packMismatch = (() => {
+    const q = parseDecimal(packInnerQty)
+    const u = priceUnits.find((x) => x.id === packUnitId) ?? baseUnit
+    if (q === null || !u || !baseUnit) return false
+    const c = convertToBase(q, u, baseUnit)
+    return c !== null && c.ok === false && c.reason === 'dimension_mismatch'
+  })()
+
+  async function saveFmt() {
+    setFmtError(null)
+    try {
+      // FLIP de estrategia: si el ingrediente está en coste 'fixed' (tecleado a
+      // mano), al montar formato+compra el coste debe FLUIR desde el precio. Sin
+      // esto el computed_cost se queda en fixed_cost (a menudo null=0) e ignora el
+      // precio de compra. Mismo flip que hace setupSimplePurchase en el alta.
+      if (costStrategy === 'fixed') {
+        await updateRecipeItem(itemId, { costStrategy: 'last_purchase' })
+      }
+      if (fmtMode === 'simple') {
+        const name = fmtName.trim()
+        if (name === '') { setFmtError('Dale un nombre al formato (Caja, Saco, Garrafa…).'); return }
+        if (fmtQtyInBase === null || !(fmtQtyInBase > 0)) { setFmtError('Indica cuánto trae ese formato.'); return }
+        setSavingFmt(true)
+        if (format) {
+          await updatePurchaseFormat(format.id, { name, qtyInBase: fmtQtyInBase })
+          await updateArticleSupplier(link.id, { purchaseFormatId: format.id })
+        } else {
+          const created = await createPurchaseFormat({
+            accountId, itemId, name, qtyInBase: fmtQtyInBase,
+            source: 'manual', createdBy: actorId, createdByName: actorName,
+          })
+          await updateArticleSupplier(link.id, { purchaseFormatId: created.id })
+        }
+      } else {
+        // PACK: caja = count × pieza
+        const cajaName = packCajaName.trim() || 'Caja'
+        const innerName = packInnerName.trim() || 'Ud'
+        if (packCountNum === null || !(packCountNum > 0)) { setFmtError('¿Cuántas piezas trae la caja?'); return }
+        if (packInnerBase === null || !(packInnerBase > 0)) { setFmtError('Indica el contenido de UNA pieza.'); return }
+        setSavingFmt(true)
+        const { caja } = await ensurePackTree({
+          accountId, itemId, count: packCountNum, innerQtyInBase: packInnerBase,
+          innerName, cajaName, source: 'manual', createdBy: actorId, createdByName: actorName,
+        })
+        // enlaza el proveedor a la CAJA (el formato de compra)
+        await updateArticleSupplier(link.id, { purchaseFormatId: caja.id })
+      }
+      setEditingFmt(false)
+      await onSaved()
+    } catch (e) {
+      setFmtError(e instanceof Error ? e.message : 'No se pudo guardar el formato.')
+    } finally {
+      setSavingFmt(false)
+    }
+  }
 
   function openEdit() {
     setPriceUnitId(displayUnit?.id ?? '')
@@ -962,7 +1096,155 @@ function SourceRow({
               <span>cód. {link.supplierCode}</span>
             </>
           )}
+          {!archived && format && !editingFmt && (
+            <button
+              type="button"
+              onClick={openFmtEdit}
+              className="ml-2 inline-flex items-center gap-1 text-[11px] text-accent hover:underline"
+              title="Editar el formato de compra"
+            >
+              <Pencil className="w-2.5 h-2.5" />editar formato
+            </button>
+          )}
         </div>
+
+        {/* Llamada VISIBLE cuando falta formato: es lo que deja el artículo "sin terminar" */}
+        {!archived && !format && !editingFmt && (
+          <button
+            type="button"
+            onClick={openFmtEdit}
+            className="mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-warning-bg text-warning text-xs font-medium border border-border-default hover:opacity-90 transition-base"
+            title="Definir cómo viene (caja, saco, pack…) para terminar el artículo"
+          >
+            <AlertTriangle className="w-3.5 h-3.5" />
+            Falta el formato — pulsa para definirlo
+          </button>
+        )}
+
+        {/* Editor de formato inline: modo SIMPLE o PACK */}
+        {editingFmt && (
+          <div className="mt-2 p-3 rounded-md border border-border-default bg-page space-y-3">
+            {/* selector de modo */}
+            <div className="inline-flex rounded-md border border-border-default overflow-hidden text-xs">
+              <button
+                type="button"
+                onClick={() => setFmtMode('simple')}
+                className={`px-3 py-1.5 ${fmtMode === 'simple' ? 'bg-accent text-white' : 'bg-card text-text-secondary hover:text-text-primary'}`}
+              >Un total</button>
+              <button
+                type="button"
+                onClick={() => setFmtMode('pack')}
+                className={`px-3 py-1.5 border-l border-border-default ${fmtMode === 'pack' ? 'bg-accent text-white' : 'bg-card text-text-secondary hover:text-text-primary'}`}
+              >Caja con piezas</button>
+            </div>
+
+            {fmtMode === 'simple' ? (
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                <div className="flex-1">
+                  <label className="block text-[11px] font-medium text-text-secondary mb-1">¿Cómo viene?</label>
+                  <input type="text" value={fmtName} onChange={(e) => setFmtName(e.target.value)} disabled={savingFmt}
+                    placeholder="Ej: Saco, Garrafa…"
+                    className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50" />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-[11px] font-medium text-text-secondary mb-1">¿Cuánto trae?</label>
+                  <div className="flex gap-2">
+                    <input type="text" inputMode="decimal" value={fmtQty} onChange={(e) => setFmtQty(e.target.value)} disabled={savingFmt}
+                      placeholder="Ej: 25"
+                      className="flex-1 px-2 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50" />
+                    <select value={fmtUnitId} onChange={(e) => setFmtUnitId(e.target.value)} disabled={savingFmt || priceUnits.length === 0}
+                      className="w-24 px-2 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50">
+                      {priceUnits.map((u) => (<option key={u.id} value={u.id}>{u.abbreviation}</option>))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {/* Caja = N × pieza de X */}
+                <div className="flex flex-wrap items-end gap-2">
+                  <div className="w-28">
+                    <label className="block text-[11px] font-medium text-text-secondary mb-1">Contenedor</label>
+                    <input type="text" value={packCajaName} onChange={(e) => setPackCajaName(e.target.value)} disabled={savingFmt}
+                      placeholder="Caja"
+                      className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50" />
+                  </div>
+                  <span className="pb-2 text-text-secondary text-sm">=</span>
+                  <div className="w-20">
+                    <label className="block text-[11px] font-medium text-text-secondary mb-1">¿cuántas?</label>
+                    <input type="text" inputMode="decimal" value={packCount} onChange={(e) => setPackCount(e.target.value)} disabled={savingFmt}
+                      placeholder="6"
+                      className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50" />
+                  </div>
+                  <span className="pb-2 text-text-secondary text-sm">×</span>
+                  <div className="w-28">
+                    <label className="block text-[11px] font-medium text-text-secondary mb-1">pieza</label>
+                    <input type="text" value={packInnerName} onChange={(e) => setPackInnerName(e.target.value)} disabled={savingFmt}
+                      placeholder="Lata, Bolsa…"
+                      className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50" />
+                  </div>
+                  <span className="pb-2 text-text-secondary text-sm">de</span>
+                  <div className="w-32">
+                    <label className="block text-[11px] font-medium text-text-secondary mb-1">contenido</label>
+                    <div className="flex gap-1">
+                      <input type="text" inputMode="decimal" value={packInnerQty} onChange={(e) => setPackInnerQty(e.target.value)} disabled={savingFmt}
+                        placeholder="3"
+                        className="flex-1 w-12 px-2 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50" />
+                      <select value={packUnitId} onChange={(e) => setPackUnitId(e.target.value)} disabled={savingFmt || priceUnits.length === 0}
+                        className="w-16 px-1 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50">
+                        {priceUnits.map((u) => (<option key={u.id} value={u.id}>{u.abbreviation}</option>))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+                {packMismatch && baseUnit && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-warning">Dime el contenido de UNA pieza en {baseUnit.abbreviation}:</span>
+                    <input type="text" inputMode="decimal" value={packDirectBase} onChange={(e) => setPackDirectBase(e.target.value)} disabled={savingFmt}
+                      placeholder={`en ${baseUnit.abbreviation}`}
+                      className="w-28 px-2 py-1 text-sm border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50" />
+                  </div>
+                )}
+                {packTotalBase !== null && baseUnit && (
+                  <p className="text-[11px] text-success">
+                    → 1 {packCajaName.trim() || 'Caja'} = {fmtNum(packCountNum!)} × {fmtNum(packInnerBase!)} {baseUnit.abbreviation} = {fmtNum(packTotalBase)} {baseUnit.abbreviation}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* preview simple */}
+            {fmtMode === 'simple' && fmtQtyInBase !== null && baseUnit && (
+              <p className="text-[11px] text-success">→ {fmtNum(fmtQtyInBase)} {baseUnit.abbreviation} por {fmtName.trim() || 'formato'}</p>
+            )}
+            {fmtMode === 'simple' && fmtMismatch && baseUnit && (
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-warning">Dime el total en {baseUnit.abbreviation}:</span>
+                <input type="text" inputMode="decimal" value={fmtDirectBase} onChange={(e) => setFmtDirectBase(e.target.value)} disabled={savingFmt}
+                  placeholder={`en ${baseUnit.abbreviation}`}
+                  className="w-28 px-2 py-1 text-sm border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50" />
+              </div>
+            )}
+
+            {fmtError && (
+              <p className="text-[11px] text-danger flex items-start gap-1">
+                <AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0" />{fmtError}
+              </p>
+            )}
+
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={() => void saveFmt()} disabled={savingFmt}
+                className="px-3 py-1.5 text-xs font-medium rounded-md bg-accent text-white hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-1">
+                {savingFmt ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                Guardar formato
+              </button>
+              <button type="button" onClick={() => setEditingFmt(false)} disabled={savingFmt}
+                className="px-2.5 py-1 text-xs text-text-secondary hover:text-text-primary disabled:opacity-50">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Precio PACTADO: discreto, una línea. Editor base-first independiente. */}
         {!archived && (
