@@ -41,6 +41,7 @@ import {
 } from '@/modules/kitchen/services/ingredientFamilyService'
 import { uploadDishPhoto, getDishPhotoUrl, deleteDishPhoto } from '@/modules/kitchen/services/recipePhotoService'
 import PurchaseSourcesSection from '@/modules/kitchen/components/PurchaseSourcesSection'
+import { ReviewBanner } from '@/modules/kitchen/components/ReviewBanner'
 import ItemStockPanel from '@/modules/kitchen/components/ItemStockPanel'
 import ItemMovementsPanel from '@/modules/kitchen/components/ItemMovementsPanel'
 import ItemVatSelector from '@/modules/kitchen/components/ItemVatSelector'
@@ -629,6 +630,14 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
         <div className="mb-3 p-2.5 rounded-md bg-danger-bg text-danger border border-danger/20 text-xs flex items-center justify-between gap-3">
           <span>{photoError}</span>
           <button type="button" onClick={() => setPhotoError(null)} className="text-danger hover:opacity-70 flex-shrink-0" aria-label="Cerrar aviso"><X size={14} /></button>
+        </div>
+      )}
+
+      {/* Aviso de revisión: coste sospechoso, sin escandallo, o pendiente de
+          validar (artículo completo que espera el visto bueno humano). */}
+      {item && !editing && (
+        <div className="mb-4">
+          <ReviewBanner item={item} onDismissed={() => setReloadTick((t) => t + 1)} />
         </div>
       )}
 

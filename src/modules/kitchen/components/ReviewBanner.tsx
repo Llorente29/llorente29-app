@@ -52,11 +52,35 @@ export function ReviewBanner({ item, actorId, onDismissed }: ReviewBannerProps) 
   if (!item.needsReview) return null
 
   const hasReviewNotes = item.reviewNotes !== null && item.reviewNotes !== undefined
-  const isMissingRecipe = !hasReviewNotes && item.computedCost === null
+  const isMissingRecipe = !hasReviewNotes && item.computedCost === null && item.type === 'dish'
+  // Para un INGREDIENTE (raw) sin coste, no es "sin escandallo" (un raw no lleva
+  // escandallo): le falta precio/proveedor/formato. Mensaje propio.
+  const isRawMissingCost = !hasReviewNotes && item.computedCost === null && item.type !== 'dish'
+  // PENDIENTE DE VALIDAR: el artículo necesita revisión pero ya está completo
+  // (tiene coste, no hay incidencia de coste sospechoso ni le falta escandallo).
+  // Caso típico: artículo creado por IA al que ya se le montó formato/precio y el
+  // coste fluye, pero nadie ha confirmado aún que esté correcto. El humano lo
+  // valida ("IA propone, humano decide") y se quita el "sin terminar".
+  const isPendingValidation = !hasReviewNotes && item.computedCost !== null
 
   // Si no hay reviewNotes ni se cumple el caso "sin escandallo", no hay nada
   // accionable que mostrar — evitamos un banner sin contenido.
-  if (!hasReviewNotes && !isMissingRecipe) return null
+  if (!hasReviewNotes && !isMissingRecipe && !isPendingValidation && !isRawMissingCost) return null
+
+  async function handleValidate() {
+    setSubmitting(true)
+    setError(null)
+    try {
+      await dismissReview(item.id, 'Validado: artículo revisado y correcto.', resolvedActorId ?? null)
+      onDismissed?.()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error desconocido'
+      setError(msg)
+      setSubmitting(false)
+      return
+    }
+    setSubmitting(false)
+  }
 
   async function handleConfirmDismiss() {
     const trimmed = reason.trim()
@@ -84,6 +108,99 @@ export function ReviewBanner({ item, actorId, onDismissed }: ReviewBannerProps) 
     setDismissOpen(false)
     setReason('')
     setError(null)
+  }
+
+  if (isRawMissingCost) {
+    return (
+      <div className="rounded-md border border-warning/40 bg-warning-bg p-4 text-sm text-warning">
+        <div className="flex items-start gap-3">
+          <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="font-medium">Falta el coste</p>
+            <p className="mt-1 text-text-secondary">
+              Este ingrediente aún no tiene coste. Añade un proveedor con su precio y
+              formato (en la sección Compra / Proveedores) para que el coste se calcule.
+            </p>
+            {!dismissOpen && (
+              <div className="mt-3">
+                <button
+                  type="button"
+                  onClick={() => setDismissOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border border-warning/40 text-warning hover:bg-warning/10 transition-base"
+                >
+                  Descartar (no aplica)
+                </button>
+              </div>
+            )}
+            {dismissOpen && (
+              <DismissForm
+                reason={reason}
+                onReasonChange={setReason}
+                onConfirm={handleConfirmDismiss}
+                onCancel={handleCancelDismiss}
+                submitting={submitting}
+                error={error}
+                tone="warning"
+              />
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (isPendingValidation) {
+    return (
+      <div className="rounded-md border border-warning/40 bg-warning-bg p-4 text-sm text-warning">
+        <div className="flex items-start gap-3">
+          <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="font-medium">Pendiente de validar</p>
+            <p className="mt-1 text-text-secondary">
+              Este artículo ya tiene coste, proveedor y formato. Falta tu visto bueno
+              (nombre, alérgenos, datos) para darlo por terminado.
+            </p>
+
+            {!dismissOpen && (
+              <div className="mt-3 flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => void handleValidate()}
+                  disabled={submitting}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-success text-text-on-accent hover:opacity-90 transition-base disabled:opacity-50"
+                >
+                  {submitting ? 'Validando…' : 'Dar por bueno'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDismissOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border border-warning/40 text-warning hover:bg-warning/10 transition-base"
+                >
+                  Validar con nota
+                </button>
+              </div>
+            )}
+
+            {dismissOpen && (
+              <DismissForm
+                reason={reason}
+                onReasonChange={setReason}
+                onConfirm={handleConfirmDismiss}
+                onCancel={handleCancelDismiss}
+                submitting={submitting}
+                error={error}
+                tone="warning"
+              />
+            )}
+            {error && !dismissOpen && (
+              <div className="mt-2 p-2 rounded-md bg-danger-bg text-danger border border-danger/20 text-xs">
+                {error}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )
   }
 
   if (isMissingRecipe) {
