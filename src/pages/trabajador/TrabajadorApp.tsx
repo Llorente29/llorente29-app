@@ -18,6 +18,8 @@ import MisTurnos from './MisTurnos'
 import CambiosTurnoPage from './CambiosTurnoPage'
 import MiAutoinventario from './MiAutoinventario'
 import { getMyDailyQueue } from '../../modules/supply/services/autoinventoryService'
+import OrderReceiveFlow from '../../modules/supply/components/OrderReceiveFlow'
+import { listPurchaseOrders } from '../../modules/supply/services/purchaseOrderService'
 import MisChecklistsPage from './MisChecklistsPage'
 import BottomTabBar from '../../components/trabajador/BottomTabBar'
 import type { WorkerTab } from '../../components/trabajador/BottomTabBar'
@@ -33,6 +35,7 @@ type SubPage =
   | 'fichar' | 'horario' | 'fichajes' | 'documentos' | 'vacaciones' | 'bolsa' | 'turnos' | 'cambios'
   | 'appcc_list' | 'appcc_execution'
   | 'inventario'
+  | 'recepcion'
 
 interface Props {
   employeeId?: string
@@ -65,6 +68,9 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
   // Autoinventario: ¿hay cola asignada hoy a este empleado? y cuántos faltan.
   const [showInventory, setShowInventory] = useState(false)
   const [inventoryPendingCount, setInventoryPendingCount] = useState(0)
+  // Recepciones: ¿hay pedidos pendientes de recibir en el local del empleado?
+  const [showReceiving, setShowReceiving] = useState(false)
+  const [receivingPendingCount, setReceivingPendingCount] = useState(0)
   // ¿El local tiene APPCC configurado? Decide si se muestra el tab "Tareas".
   const [showAppccTab, setShowAppccTab] = useState(false)
   // refreshAttempted: marca si ya hemos pedido un refresh para resolver el caso
@@ -147,6 +153,22 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
       .catch(() => { if (!cancel) { setShowInventory(false); setInventoryPendingCount(0) } })
     return () => { cancel = true }
   }, [employee?.locationId, employee?.id, subPage])
+
+  // Pedidos pendientes de recibir (enviado + parcial) en el local del empleado.
+  // El módulo "Recepciones" solo aparece si hay alguno pendiente.
+  useEffect(() => {
+    if (!activeAccountId || !employee?.locationId) return
+    let cancel = false
+    listPurchaseOrders({ accountId: activeAccountId, locationId: employee.locationId })
+      .then((rows) => {
+        if (cancel) return
+        const pending = rows.filter(o => o.status === 'enviado' || o.status === 'recibido_parcial')
+        setShowReceiving(pending.length > 0)
+        setReceivingPendingCount(pending.length)
+      })
+      .catch(() => { if (!cancel) { setShowReceiving(false); setReceivingPendingCount(0) } })
+    return () => { cancel = true }
+  }, [activeAccountId, employee?.locationId, subPage])
 
   // Refresh único bajo demanda: si llegamos aquí con employeeId pero sin
   // encontrar al empleado en staff, y el sync ya no está activo, puede ser
@@ -260,6 +282,16 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
   if (subPage === 'turnos') return <MisTurnos employee={employee} onBack={() => setSubPage('portal')} />
   if (subPage === 'cambios') return <CambiosTurnoPage employee={employee} onBack={() => setSubPage('portal')} />
   if (subPage === 'inventario') return <MiAutoinventario employee={employee} onBack={() => setSubPage('home')} />
+  if (subPage === 'recepcion' && activeAccountId) {
+    return (
+      <OrderReceiveFlow
+        accountId={activeAccountId}
+        locationId={employee.locationId}
+        onBack={() => setSubPage('home')}
+        onSaved={() => setSubPage('home')}
+      />
+    )
+  }
 
   if (subPage === 'bolsa' && showBolsaHoras) {
     return (
@@ -312,6 +344,7 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
           if (mod === 'appcc') setSubPage('appcc_list')
           else if (mod === 'portal') setSubPage('portal')
           else if (mod === 'inventario') setSubPage('inventario')
+          else if (mod === 'recepcion') setSubPage('recepcion')
           else if (mod === 'fichar') { setFicharOrigin('home'); setSubPage('fichar') }
         }}
         onLogout={onExitMode}
@@ -319,6 +352,8 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
         appccPendingCount={appccPendingCount}
         showInventory={showInventory}
         inventoryPendingCount={inventoryPendingCount}
+        showReceiving={showReceiving}
+        receivingPendingCount={receivingPendingCount}
       />
       <BottomTabBar active="inicio" onSelect={goToTab} showTareas={showAppccTab} />
     </div>

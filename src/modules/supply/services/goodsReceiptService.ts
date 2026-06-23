@@ -384,6 +384,49 @@ export async function getItemBaseUnit(itemId: string): Promise<BaseUnitInfo | nu
   }
 }
 
+// ── Zona principal por artículo (referencia automática de la recepción) ──
+//
+// El movimiento de stock se enruta a la ZONA PRINCIPAL del artículo en el local
+// de la recepción (la asignación de menor `position` entre las zonas ACTIVAS de
+// ese local). Esto se hace server-side en confirm_goods_receipt; esta lectura es
+// SOLO para MOSTRARLO como referencia en el resumen pre-confirmar ("→ Cámara"),
+// para que el trabajador VEA dónde entra sin elegir nada. Sin zona en el local →
+// el artículo no aparece en el mapa (sin inventar): la UI no muestra zona.
+//
+// Devuelve un mapa recipe_item_id → nombre de la zona principal. Una sola consulta.
+export async function getItemHomeAreas(
+  accountId: string,
+  locationId: string,
+  itemIds: string[],
+): Promise<Record<string, string>> {
+  requireSupabase()
+  const ids = Array.from(new Set(itemIds.filter(Boolean)))
+  if (ids.length === 0 || !locationId) return {}
+  // Traemos las asignaciones del local (zona activa) para esos artículos, con su
+  // position; en cliente nos quedamos con la de menor position por artículo.
+  const { data, error } = await from('recipe_item_storage_area')
+    .select('recipe_item_id, position, storage_area:storage_area_id ( id, name, location_id, active )')
+    .eq('account_id', accountId)
+    .in('recipe_item_id', ids)
+  if (error) { console.error('[goodsReceiptService] getItemHomeAreas', error); return {} }
+
+  // best[itemId] = { position, name } de la zona principal en ESTE local.
+  const best = new Map<string, { position: number; name: string }>()
+  for (const r of (data as Row[] | null) ?? []) {
+    const sa = (r.storage_area ?? null) as
+      { id?: string; name?: string; location_id?: string; active?: boolean } | null
+    if (!sa || !sa.name || sa.active === false) continue
+    if (sa.location_id !== locationId) continue
+    const itemId = r.recipe_item_id as string
+    const pos = Number(r.position ?? 0)
+    const cur = best.get(itemId)
+    if (!cur || pos < cur.position) best.set(itemId, { position: pos, name: sa.name })
+  }
+  const map: Record<string, string> = {}
+  best.forEach((v, k) => { map[k] = v.name })
+  return map
+}
+
 // Factor de una unidad de empaque (lo que escribe el albarán: "kg", "L", "ud"…)
 // a la base CANÓNICA de su dimensión (peso→g, volumen→ml, unidad→ud).
 // null si la unidad no se reconoce (no se adivina).

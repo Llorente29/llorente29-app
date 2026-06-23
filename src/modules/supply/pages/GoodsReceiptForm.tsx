@@ -59,6 +59,7 @@ import {
   learnSupplierAlias,
   quickCreateSupplier,
   getItemBaseUnit,
+  getItemHomeAreas,
   ensureLastPurchaseStrategy,
   formatQtyInBaseFromPack,
   getSupplySettings,
@@ -318,6 +319,7 @@ interface EnterLine {
   baseAbbr: string | null      // unidad base del artículo (g/ml/ud) para mostrar la cantidad de almacén
   convertedNote: string | null // doble columna "480 ud → 6 cajas" (referencia de compra, si existe)
   unitCost: number | null      // coste por unidad de formato del albarán (referencia)
+  areaName: string | null      // zona principal del artículo en el local (referencia automática)
 }
 // Línea que NO entra y por qué (sin contador abstracto: nombre + motivo).
 interface NotEnterLine {
@@ -515,6 +517,8 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
   const [priceRefs, setPriceRefs] = useState<Record<string, SupplierPriceRef>>({})
   // recipe_item_id → deriva de precio (price_drift_for). Clave del aviso de DERIVA.
   const [driftByItem, setDriftByItem] = useState<Record<string, PriceDrift>>({})
+  // Zona principal por artículo en el local (referencia automática del enrutado).
+  const [homeAreaByItem, setHomeAreaByItem] = useState<Record<string, string>>({})
   useEffect(() => {
     getSupplySettings(accountId).then(setSupplySettings).catch(() => {})
   }, [accountId])
@@ -1015,6 +1019,19 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountId, matchedItemIdsKey, supplySettings.driftWindowMonths])
 
+  // Zona principal por artículo en el local de la recepción. Referencia que se
+  // MUESTRA en el resumen ("→ Cámara"); el enrutado real lo hace el servidor.
+  // Se recarga al cambiar el conjunto de artículos casados o el local.
+  useEffect(() => {
+    if (matchedItemIds.length === 0 || !locationId) { setHomeAreaByItem({}); return }
+    let cancelled = false
+    getItemHomeAreas(accountId, locationId, matchedItemIds)
+      .then(m => { if (!cancelled) setHomeAreaByItem(m) })
+      .catch(() => { if (!cancelled) setHomeAreaByItem({}) })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountId, locationId, matchedItemIdsKey])
+
   // ── Resumen anti-error ──
   // Las líneas "de más" se listan con DETALLE (cuánto, contra lo pendiente y
   // contra el pedido total) para que el aviso sea accionable, no genérico.
@@ -1098,6 +1115,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
           baseAbbr: l.baseUnit?.abbr ?? null,
           convertedNote: l.convertedNote ?? null,
           unitCost: parseNum(l.unitCost),
+          areaName: homeAreaByItem[l.recipeItemId] ?? null,
         })
       } else {
         notEnterLines.push({
@@ -1135,7 +1153,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
       hasReference, anomaly, masaSinTocar,
       flagLines,
     }
-  }, [draft, filled, willPost, hasReference, formatPrices, priceRefs, driftByItem, supplySettings])
+  }, [draft, filled, willPost, hasReference, formatPrices, priceRefs, driftByItem, homeAreaByItem, supplySettings])
 
   const supplierName = useMemo(() => suppliers.find(s => s.id === supplierId)?.name ?? '—', [suppliers, supplierId])
   const locationName = useMemo(() => locations.find(l => l.id === locationId)?.name ?? '—', [locations, locationId])
@@ -2007,6 +2025,9 @@ function ReviewPanel({
                     <span>
                       <span className="font-medium">{e.name}:</span>{' '}
                       {e.baseAbbr ? formatBaseQty(e.qtyInBase, e.baseAbbr) : e.qtyInBase}
+                      {e.areaName && (
+                        <span className="text-accent"> · → {e.areaName}</span>
+                      )}
                       {e.convertedNote && <span className="text-text-secondary"> · {e.convertedNote}</span>}
                       {e.unitCost !== null && (
                         <span className="text-text-secondary">

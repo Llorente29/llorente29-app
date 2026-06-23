@@ -7,14 +7,14 @@
 // NO cambia lógica, props ni navegación: solo el aspecto.
 
 import { useEffect, useState } from 'react'
-import { Leaf, User, LogOut, AlertCircle, ArrowLeft, ChevronRight, LogIn, Clock, Boxes } from 'lucide-react'
+import { Leaf, User, LogOut, AlertCircle, ArrowLeft, ChevronRight, LogIn, Clock, Boxes, Truck } from 'lucide-react'
 import type { Employee } from '../../types'
 import { hasOpenShift } from '../../services/fichajeKiosko'
 import NotificationBell from '../../components/NotificationBell'
 import { supabase } from '../../lib/supabase'
 import InstallAppButton from '../../components/InstallAppButton'
 
-export type WorkerModule = 'appcc' | 'portal' | 'fichar' | 'inventario'
+export type WorkerModule = 'appcc' | 'portal' | 'fichar' | 'inventario' | 'recepcion'
 
 interface Props {
   employee: Employee
@@ -31,6 +31,10 @@ interface Props {
   showInventory?: boolean
   /** Nº de artículos del autoinventario aún sin contar hoy. */
   inventoryPendingCount?: number
+  /** ¿Hay pedidos pendientes de recibir en el local del empleado? */
+  showReceiving?: boolean
+  /** Nº de pedidos pendientes de recibir (enviado + parcial) en su local. */
+  receivingPendingCount?: number
 }
 
 interface ModuleButton {
@@ -45,7 +49,7 @@ interface ModuleButton {
   badgeColor?: string
 }
 
-export default function HomeEmpleado({ employee, onNavigate, onLogout, exitLabel = 'logout', appccPendingCount = 0, showInventory = false, inventoryPendingCount = 0 }: Props) {
+export default function HomeEmpleado({ employee, onNavigate, onLogout, exitLabel = 'logout', appccPendingCount = 0, showInventory = false, inventoryPendingCount = 0, showReceiving = false, receivingPendingCount = 0 }: Props) {
   const open = hasOpenShift(employee)
   const [showAppcc, setShowAppcc] = useState(false)
 
@@ -96,6 +100,18 @@ export default function HomeEmpleado({ employee, onNavigate, onLogout, exitLabel
       iconBg: 'bg-terracota-bg',
       badge: inventoryPendingCount > 0 ? inventoryPendingCount : undefined,
       badgeColor: 'bg-terracota',
+    }] : []),
+    ...(showReceiving ? [{
+      id: 'recepcion' as WorkerModule,
+      icon: Truck,
+      title: 'Recepciones',
+      desc: receivingPendingCount > 0
+        ? `${receivingPendingCount} pedido${receivingPendingCount > 1 ? 's' : ''} por recibir`
+        : 'Recibir un pedido',
+      iconColor: 'text-accent',
+      iconBg: 'bg-accent-bg',
+      badge: receivingPendingCount > 0 ? receivingPendingCount : undefined,
+      badgeColor: 'bg-accent',
     }] : []),
     // Preparado para más módulos:
     // { id: 'stock', icon: Package, title: 'Stock', desc: 'Recuentos y recepciones', iconColor: '...', iconBg: '...' },

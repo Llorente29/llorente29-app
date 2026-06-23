@@ -1,4 +1,4 @@
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
@@ -9619,6 +9619,7 @@ export type Database = {
           recipe_item_id: string
           source_id: string | null
           source_type: string
+          storage_area_id: string | null
           unit_cost: number | null
         }
         Insert: {
@@ -9638,6 +9639,7 @@ export type Database = {
           recipe_item_id: string
           source_id?: string | null
           source_type: string
+          storage_area_id?: string | null
           unit_cost?: number | null
         }
         Update: {
@@ -9657,6 +9659,7 @@ export type Database = {
           recipe_item_id?: string
           source_id?: string | null
           source_type?: string
+          storage_area_id?: string | null
           unit_cost?: number | null
         }
         Relationships: [
@@ -9679,6 +9682,13 @@ export type Database = {
             columns: ["recipe_item_id"]
             isOneToOne: false
             referencedRelation: "recipe_item"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movement_storage_area_id_fkey"
+            columns: ["storage_area_id"]
+            isOneToOne: false
+            referencedRelation: "storage_area"
             referencedColumns: ["id"]
           },
         ]
@@ -12354,3 +12364,4 @@ export const Constants = {
     Enums: {},
   },
 } as const
+

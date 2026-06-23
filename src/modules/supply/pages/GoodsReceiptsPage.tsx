@@ -40,6 +40,7 @@ import { listSupplyLocations, type SupplyLocation } from '@/modules/supply/servi
 import type { Supplier } from '@/types/kitchen'
 import GoodsReceiptForm, { type ReceiptPrefill, type OcrPrefill } from '@/modules/supply/pages/GoodsReceiptForm'
 import ReceiptScanPanel from '@/modules/supply/pages/ReceiptScanPanel'
+import OrderReceiveFlow from '@/modules/supply/components/OrderReceiveFlow'
 
 const STATUS_LABEL: Record<GoodsReceiptStatus, string> = {
   borrador: 'Borrador',
@@ -59,7 +60,7 @@ function formatDate(value: string | null): string {
     .format(new Date(value))
 }
 
-type View = 'list' | 'form' | 'scan'
+type View = 'list' | 'form' | 'scan' | 'receive-order'
 
 export default function GoodsReceiptsPage() {
   const { activeAccountId, accountsLoading } = useActiveAccount()
@@ -236,6 +237,18 @@ export default function GoodsReceiptsPage() {
     )
   }
 
+  // ── Vista RECIBIR PEDIDO: selector de pedidos pendientes → recepción ──
+  if (view === 'receive-order' && activeAccountId) {
+    return (
+      <OrderReceiveFlow
+        accountId={activeAccountId}
+        locationId={resolvedLocationId}
+        onBack={() => { setView('list'); setReloadTick(t => t + 1) }}
+        onSaved={(msg) => { setView('list'); if (msg) setFlash(msg); setReloadTick(t => t + 1) }}
+      />
+    )
+  }
+
   // ── Vista FORM: nueva recepción ciega, corrección (prefill) o propuesta OCR ──
   if (view === 'form' && activeAccountId) {
     return (
@@ -268,6 +281,15 @@ export default function GoodsReceiptsPage() {
             className="inline-flex items-center justify-center w-9 h-9 rounded-md border border-border-default bg-card hover:bg-page disabled:opacity-50 transition-base"
           >
             <Settings2 size={16} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setView('receive-order')}
+            disabled={!activeAccountId}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium border border-border-default bg-card hover:bg-page disabled:opacity-50 disabled:cursor-not-allowed transition-base"
+          >
+            <PackageCheck size={16} />
+            Recibir pedido
           </button>
           <button
             type="button"
