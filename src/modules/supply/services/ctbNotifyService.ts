@@ -102,10 +102,7 @@ export async function countCtbPending(accountId: string): Promise<number> {
 // Marca una entrada como enviada (RPC con sesión; deja rastro de quién/cuándo).
 export async function markCtbSent(queueId: string): Promise<void> {
   requireSupabase()
-  const rpc = (supabase! as unknown as {
-    rpc: (fn: string, args: Record<string, unknown>) => Promise<{ error: { message: string } | null }>
-  }).rpc
-  const { error } = await rpc('mark_ctb_notification_sent', { p_queue_id: queueId })
+  const { error } = await supabase!.rpc('mark_ctb_notification_sent', { p_queue_id: queueId })
   if (error) throw new Error(`No se pudo marcar como enviado: ${error.message}`)
 }
 
