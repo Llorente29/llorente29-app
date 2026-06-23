@@ -653,6 +653,17 @@ export async function deleteGoodsReceiptLine(id: string): Promise<void> {
   if (error) throw new Error(`Error borrando línea ${id}: ${error.message}`)
 }
 
+/**
+ * Borra TODAS las líneas de una recepción. Lo usa la revisión de un BORRADOR en
+ * sitio: la oficina abre el borrador, ajusta y reescribe sus líneas antes de
+ * confirmar (sin crear una recepción nueva ni anular nada — nunca se posteó).
+ */
+export async function deleteGoodsReceiptLinesByReceipt(goodsReceiptId: string): Promise<void> {
+  requireSupabase()
+  const { error } = await from('goods_receipt_line').delete().eq('goods_receipt_id', goodsReceiptId)
+  if (error) throw new Error(`Error borrando las líneas de la recepción: ${error.message}`)
+}
+
 // ── Ciclo del ledger (RPC SECURITY DEFINER; se ejecutan DESDE LA APP) ──
 
 /**

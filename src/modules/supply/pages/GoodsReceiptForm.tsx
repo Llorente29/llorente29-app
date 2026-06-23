@@ -48,6 +48,8 @@ import {
 } from '@/modules/supply/services/purchaseOrderService'
 import {
   createGoodsReceipt,
+  updateGoodsReceipt,
+  deleteGoodsReceiptLinesByReceipt,
   createGoodsReceiptLine,
   confirmReceipt,
   voidReceipt,
@@ -86,6 +88,11 @@ export interface ReceiptPrefill {
   purchaseOrderId: string | null
   supplierDocNumber: string | null
   lines: ReceiptPrefillLine[]
+  // REVISAR BORRADOR EN SITIO: si la fuente es un borrador, la oficina lo revisa
+  // y confirma la MISMA recepción (no crea otra ni anula). Trae la foto del albarán.
+  isDraft?: boolean
+  code?: string | null
+  rawDocumentUrl?: string | null
 }
 export interface ReceiptPrefillLine {
   recipeItemId: string | null
@@ -1243,23 +1250,39 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
     setReviewing(true)
   }
 
+  // ¿Revisión de un BORRADOR en sitio? La oficina confirma la MISMA recepción.
+  const reviewingDraft = correcting && !!prefill?.isDraft
+
   async function persist(confirm: boolean) {
     if (!locationId) { setError('No hay un local operativo definido. Revisa el aviso de local arriba.'); return }
     setSaving(true); setError(null)
     try {
-      const receipt = await createGoodsReceipt({
-        accountId, locationId, supplierId: supplierId || null,
-        purchaseOrderId: linkedOrderId,
-        supplierDocNumber: supplierDoc.trim() || null,
-        receiptDate,
-        receivedAt: new Date().toISOString(),
-        source: fromOcr ? 'ocr' : 'manual',
-        deliveredBy: fromOcr ? (ocrPrefill?.deliveredBy ?? null) : null,
-        aiSessionId: fromOcr ? (ocrPrefill?.aiSessionId ?? null) : null,
-        rawDocumentUrl: fromOcr ? (ocrPrefill?.rawDocumentUrl ?? null) : null,
-        createdBy: authUserId ?? null,
-        createdByName: userProfile?.displayName ?? null,
-      })
+      let receipt: { id: string; code: string | null }
+      if (reviewingDraft && prefill) {
+        // En sitio: actualiza cabecera + limpia líneas para reescribirlas. NO crea
+        // recepción nueva ni anula (el borrador nunca posteó).
+        const updated = await updateGoodsReceipt(prefill.sourceReceiptId, {
+          supplierId: supplierId || null,
+          supplierDocNumber: supplierDoc.trim() || null,
+          receiptDate,
+        })
+        await deleteGoodsReceiptLinesByReceipt(prefill.sourceReceiptId)
+        receipt = { id: updated.id, code: updated.code }
+      } else {
+        receipt = await createGoodsReceipt({
+          accountId, locationId, supplierId: supplierId || null,
+          purchaseOrderId: linkedOrderId,
+          supplierDocNumber: supplierDoc.trim() || null,
+          receiptDate,
+          receivedAt: new Date().toISOString(),
+          source: fromOcr ? 'ocr' : 'manual',
+          deliveredBy: fromOcr ? (ocrPrefill?.deliveredBy ?? null) : null,
+          aiSessionId: fromOcr ? (ocrPrefill?.aiSessionId ?? null) : null,
+          rawDocumentUrl: fromOcr ? (ocrPrefill?.rawDocumentUrl ?? null) : null,
+          createdBy: authUserId ?? null,
+          createdByName: userProfile?.displayName ?? null,
+        })
+      }
 
       let position = 0
       const postingItemIds: string[] = []
@@ -1361,8 +1384,9 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
       }
 
       // Anular y corregir: solo tras confirmar OK la corregida se anula la original.
+      // En revisión de BORRADOR en sitio NO se anula nada (es la misma recepción).
       let voidNote = ''
-      if (correcting && prefill?.sourceReceiptId) {
+      if (correcting && !reviewingDraft && prefill?.sourceReceiptId) {
         try { await voidReceipt(prefill.sourceReceiptId); voidNote = ' · anterior anulada' }
         catch (e) { console.error('persist: corregida OK pero no se pudo anular la original', e); voidNote = ' · OJO: anula la anterior a mano' }
       }
@@ -1380,10 +1404,12 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
 
   const title = againstOrder
     ? `Recibir pedido ${order?.code ?? ''}${fromOcr ? ' · albarán escaneado' : ''}`
-    : correcting ? 'Corregir recepción' : fromOcr ? 'Revisar recepción escaneada' : 'Nueva recepción'
+    : reviewingDraft ? `Revisar recepción ${prefill?.code ?? ''}` : correcting ? 'Corregir recepción' : fromOcr ? 'Revisar recepción escaneada' : 'Nueva recepción'
   const subtitle = againstOrder
     ? 'Cuenta lo que ha llegado y escríbelo. Lo pedido y lo pendiente están a la derecha como referencia.'
-    : correcting
+    : reviewingDraft
+      ? 'Esto contó quien recibió. Revisa la foto del albarán y las líneas; ajusta lo que falte y confirma — entra a stock con su coste.'
+      : correcting
       ? 'Corrige lo que falló y confirma. La recepción anterior se anulará solo al confirmar esta.'
       : fromOcr
         ? 'Esto leyó la IA del albarán. Revisa proveedor, local, cantidades y el formato de cada línea; al confirmar, entra a stock con su coste.'
@@ -1405,6 +1431,14 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
       </div>
 
       {!fixedHeader && <OperativeLocationBanner op={op} locations={locations} />}
+
+      {/* Foto del albarán al revisar un borrador (la oficina ve lo que firmó el muelle). */}
+      {reviewingDraft && prefill?.rawDocumentUrl && (
+        <div className="rounded-lg border border-border-default bg-card p-3">
+          <p className="text-xs text-text-secondary mb-2">Albarán recibido</p>
+          <ReceiptPhotoViewer path={prefill.rawDocumentUrl} />
+        </div>
+      )}
 
       {/* Datos de la recepción */}
       <div className="rounded-lg border border-border-default bg-card p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">

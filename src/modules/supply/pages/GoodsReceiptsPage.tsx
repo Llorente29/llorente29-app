@@ -19,7 +19,7 @@
 // El aviso (flash) se auto-cierra a los segundos (no obliga a teclear).
 
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, PackageCheck, Search, Loader2, Check, RotateCcw, PencilLine, ScanLine, Settings2 } from 'lucide-react'
+import { Plus, PackageCheck, Search, Loader2, Eye, RotateCcw, PencilLine, ScanLine, Settings2 } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
 import { useIsMobile } from '@/shell/useIsMobile'
@@ -27,7 +27,6 @@ import {
   listGoodsReceipts,
   getGoodsReceiptById,
   listGoodsReceiptLines,
-  confirmReceipt,
   voidReceipt,
   type GoodsReceipt,
   type GoodsReceiptStatus,
@@ -162,17 +161,39 @@ export default function GoodsReceiptsPage() {
     })
   }, [receipts, search, supplierNameById])
 
-  async function handleConfirm(id: string) {
+  // Revisar y confirmar un BORRADOR: lee la recepción + líneas + la foto del
+  // albarán y abre el form EN SITIO (isDraft). La oficina ve lo que se contó,
+  // ajusta lo que falte y confirma la MISMA recepción (no crea otra ni anula).
+  async function handleReviewDraft(id: string) {
     setBusyId(id); setFlash(null); setError(null)
     try {
-      const res = await confirmReceipt(id)
-      const parts = [`${res.postedLines} línea(s) a stock`]
-      if (res.skippedLines > 0) parts.push(`${res.skippedLines} sin postear (revisar)`)
-      if (res.recalculatedItems > 0) parts.push(`coste actualizado en ${res.recalculatedItems} ingrediente(s)`)
-      setFlash(`Recepción confirmada: ${parts.join(' · ')}.`)
-      setReloadTick(t => t + 1)
+      const [r, lines] = await Promise.all([
+        getGoodsReceiptById(id),
+        listGoodsReceiptLines(id),
+      ])
+      if (!r) throw new Error('No se pudo recuperar la recepción.')
+      const pf: ReceiptPrefill = {
+        sourceReceiptId: r.id,
+        supplierId: r.supplierId ?? '',
+        locationId: r.locationId,
+        purchaseOrderId: r.purchaseOrderId,
+        supplierDocNumber: r.supplierDocNumber,
+        isDraft: true,
+        code: r.code,
+        rawDocumentUrl: r.rawDocumentUrl,
+        lines: lines.map(l => ({
+          recipeItemId: l.recipeItemId,
+          productName: l.productName,
+          purchaseFormatId: l.purchaseFormatId,
+          qtyReceived: l.qtyReceived,
+          unitCost: l.unitCost,
+          purchaseOrderLineId: l.purchaseOrderLineId,
+        })),
+      }
+      setPrefill(pf)
+      setView('form')
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'No se pudo confirmar la recepción.')
+      setError(err instanceof Error ? err.message : 'No se pudo abrir la recepción.')
     } finally {
       setBusyId(null)
     }
@@ -362,7 +383,7 @@ export default function GoodsReceiptsPage() {
                   <CardField label="Nº albarán" value={r.supplierDocNumber ?? '—'} />
                 </div>
                 <div className="mt-2">
-                  <RowActions r={r} busy={busyId === r.id} onConfirm={handleConfirm} onVoid={handleVoid} onCorrect={handleCorrect} />
+                  <RowActions r={r} busy={busyId === r.id} onReview={handleReviewDraft} onVoid={handleVoid} onCorrect={handleCorrect} />
                 </div>
               </div>
             ))}
@@ -399,7 +420,7 @@ export default function GoodsReceiptsPage() {
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex justify-end">
-                        <RowActions r={r} busy={busyId === r.id} onConfirm={handleConfirm} onVoid={handleVoid} onCorrect={handleCorrect} />
+                        <RowActions r={r} busy={busyId === r.id} onReview={handleReviewDraft} onVoid={handleVoid} onCorrect={handleCorrect} />
                       </div>
                     </td>
                   </tr>
@@ -461,11 +482,11 @@ export default function GoodsReceiptsPage() {
 }
 
 function RowActions({
-  r, busy, onConfirm, onVoid, onCorrect,
+  r, busy, onReview, onVoid, onCorrect,
 }: {
   r: GoodsReceipt
   busy: boolean
-  onConfirm: (id: string) => void
+  onReview: (id: string) => void
   onVoid: (id: string) => void
   onCorrect: (id: string) => void
 }) {
@@ -473,12 +494,12 @@ function RowActions({
     return (
       <button
         type="button"
-        onClick={() => onConfirm(r.id)}
+        onClick={() => onReview(r.id)}
         disabled={busy}
         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base"
       >
-        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check size={15} />}
-        Confirmar
+        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye size={15} />}
+        Revisar y confirmar
       </button>
     )
   }
