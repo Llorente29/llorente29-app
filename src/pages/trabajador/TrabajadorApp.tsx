@@ -286,6 +286,7 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
       <OrderReceiveFlow
         accountId={activeAccountId}
         locationId={employee.locationId}
+        confirmPolicy="by-location"
         onBack={() => setSubPage('home')}
         onSaved={() => setSubPage('home')}
       />

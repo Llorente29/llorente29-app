@@ -139,6 +139,10 @@ interface GoodsReceiptFormProps {
   order?: PurchaseOrder | null
   prefill?: ReceiptPrefill | null
   ocrPrefill?: OcrPrefill | null
+  // 'always' (def): quien recibe puede confirmar (oficina). 'by-location': respeta
+  // locations.receipt_approval — si el local está en 'oficina', el que recibe solo
+  // deja BORRADOR (la oficina confirma). Lo usa el móvil del trabajador.
+  confirmPolicy?: 'always' | 'by-location'
   onBack: () => void
   onSaved: (message?: string) => void
 }
@@ -471,7 +475,7 @@ function wizardToPack(
   return { count: 1, innerBase: per * fu.factor, innerName: 'Ud', container: wz.containerName.trim() || (wz.shape === 'peso' ? friendlyUnit(baseAbbr).label : 'Ud') }
 }
 
-export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill, onBack, onSaved }: GoodsReceiptFormProps) {
+export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill, confirmPolicy = 'always', onBack, onSaved }: GoodsReceiptFormProps) {
   const { userProfile, authUserId } = useApp()
   const op = useOperativeLocation()
   const againstOrder = !!order
@@ -1222,6 +1226,14 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
 
   const supplierName = useMemo(() => suppliers.find(s => s.id === supplierId)?.name ?? '—', [suppliers, supplierId])
   const locationName = useMemo(() => locations.find(l => l.id === locationId)?.name ?? '—', [locations, locationId])
+
+  // ¿Puede quien recibe CONFIRMAR (postear a stock), o solo dejar BORRADOR?
+  // 'always' → siempre (oficina). 'by-location' → solo si el local NO exige oficina.
+  const locApproval = useMemo(
+    () => locations.find(l => l.id === locationId)?.receiptApproval ?? 'trabajador',
+    [locations, locationId],
+  )
+  const canConfirm = confirmPolicy === 'always' || locApproval !== 'oficina'
 
   function startReview() {
     if (!fromOcr && !supplierId) { setError('Elige un proveedor.'); return }
@@ -1997,13 +2009,15 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                   <button type="button" onClick={() => persist(false)} disabled={saving || filled.length === 0}
                     className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium border border-border-default bg-card hover:bg-page disabled:opacity-50 disabled:cursor-not-allowed transition-base">
                     {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save size={15} />}
-                    Guardar borrador
+                    {canConfirm ? 'Guardar borrador' : 'Guardar (la oficina confirma)'}
                   </button>
-                  <button type="button" onClick={startReview} disabled={saving || filled.length === 0}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base">
-                    <Check size={15} />
-                    Revisar y confirmar
-                  </button>
+                  {canConfirm && (
+                    <button type="button" onClick={startReview} disabled={saving || filled.length === 0}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base">
+                      <Check size={15} />
+                      Revisar y confirmar
+                    </button>
+                  )}
                 </div>
               </div>
             </>

@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useApp } from '../context/AppContext'
 import { Card } from '../components/ui'
 import { Wallet, MapPin, Info, ChevronDown, ChevronRight, Check, AlertCircle, Loader2, Navigation, ExternalLink } from 'lucide-react'
 import type { Location } from '../types'
+import { listLocationApprovals, setLocationReceiptApproval } from '@/modules/supply/services/supplierCatalogService'
 
 // DashboardPage se ha movido a su propia page: src/pages/DashboardPage.tsx
 // Re-exportar aquí para retrocompatibilidad con imports antiguos.
@@ -48,6 +49,32 @@ export function LocationsPage() {
   // Estado del botón "Usar mi ubicación actual" por local.
   const [gpsState, setGpsState] = useState<Record<string, 'idle' | 'locating' | 'error'>>({})
   const [gpsError, setGpsError] = useState<Record<string, string>>({})
+
+  // Aprobación de recepciones por local (autocontenido, no pasa por el contexto).
+  const [approvals, setApprovals] = useState<Record<string, 'trabajador' | 'oficina'>>({})
+  const [approvalSaving, setApprovalSaving] = useState<Record<string, boolean>>({})
+  useEffect(() => {
+    const ids = locations.map(l => l.id)
+    if (ids.length === 0) { setApprovals({}); return }
+    let cancelled = false
+    listLocationApprovals(ids)
+      .then(map => { if (!cancelled) setApprovals(map) })
+      .catch(() => { /* por defecto 'trabajador' en la UI */ })
+    return () => { cancelled = true }
+  }, [locations])
+
+  async function changeApproval(locId: string, value: 'trabajador' | 'oficina') {
+    setApprovals(prev => ({ ...prev, [locId]: value }))     // optimista
+    setApprovalSaving(prev => ({ ...prev, [locId]: true }))
+    try {
+      await setLocationReceiptApproval(locId, value)
+    } catch {
+      // revierte si falla
+      setApprovals(prev => ({ ...prev, [locId]: value === 'oficina' ? 'trabajador' : 'oficina' }))
+    } finally {
+      setApprovalSaving(prev => ({ ...prev, [locId]: false }))
+    }
+  }
 
   // Helpers para gestionar el feedback visual por local.
   function markSaving(id: string) {
@@ -472,6 +499,24 @@ export function LocationsPage() {
                           </select>
                           <p className="text-[11px] text-text-tertiary mt-1">"Permitir y avisar" deja fichar aunque el GPS falle, marcando la distancia para revisión.</p>
                         </div>
+                      </div>
+
+                      <div className="mt-4 pt-3 border-t border-border-default">
+                        <label className="text-xs text-text-secondary uppercase font-medium flex items-center gap-1.5">
+                          <Check size={14} /> Confirmación de recepciones
+                        </label>
+                        <select
+                          value={approvals[loc.id] ?? 'trabajador'}
+                          onChange={e => changeApproval(loc.id, e.target.value as 'trabajador' | 'oficina')}
+                          disabled={approvalSaving[loc.id]}
+                          className="mt-1 w-full border border-border-default rounded-md px-3 py-1.5 text-sm bg-card text-text-primary focus:outline-none focus:ring-2 focus:ring-accent disabled:opacity-50"
+                        >
+                          <option value="trabajador">La confirma el trabajador</option>
+                          <option value="oficina">La confirma la oficina</option>
+                        </select>
+                        <p className="text-[11px] text-text-tertiary mt-1">
+                          "La oficina" hace que el trabajador deje la recepción en borrador; la oficina la revisa y confirma desde Folvy Supply → Recepciones.
+                        </p>
                       </div>
                     </div>
                   </div>

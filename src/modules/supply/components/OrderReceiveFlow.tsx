@@ -30,6 +30,8 @@ interface Props {
   accountId: string
   /** Filtra los pedidos pendientes a este local. null/undefined = sin filtrar. */
   locationId?: string | null
+  /** Política de confirmación del form ('by-location' en el móvil del trabajador). */
+  confirmPolicy?: 'always' | 'by-location'
   onBack: () => void
   /** Se llama tras confirmar/guardar la recepción (mensaje opcional para flash). */
   onSaved: (message?: string) => void
@@ -56,7 +58,7 @@ function formatDate(value: string | null): string {
 // Paso interno. picked = pedido elegido (null en las vías "sin pedido").
 type Step = 'list' | 'choose' | 'manual' | 'scan' | 'form-scan'
 
-export default function OrderReceiveFlow({ accountId, locationId, onBack, onSaved }: Props) {
+export default function OrderReceiveFlow({ accountId, locationId, confirmPolicy, onBack, onSaved }: Props) {
   const [orders, setOrders] = useState<PurchaseOrder[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [loading, setLoading] = useState(true)
@@ -123,6 +125,7 @@ export default function OrderReceiveFlow({ accountId, locationId, onBack, onSave
       <GoodsReceiptForm
         accountId={accountId}
         order={picked ?? undefined}
+        confirmPolicy={confirmPolicy}
         onBack={backFromFlow}
         onSaved={(msg) => { backToList(); onSaved(msg) }}
       />
@@ -146,6 +149,7 @@ export default function OrderReceiveFlow({ accountId, locationId, onBack, onSave
       <GoodsReceiptForm
         accountId={accountId}
         order={picked ?? undefined}
+        confirmPolicy={confirmPolicy}
         ocrPrefill={ocr}
         onBack={backFromFlow}
         onSaved={(msg) => { backToList(); onSaved(msg) }}

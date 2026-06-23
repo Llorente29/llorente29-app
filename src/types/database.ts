@@ -5632,6 +5632,7 @@ export type Database = {
           lng: number | null
           name: string
           phone: string | null
+          receipt_approval: string
           updated_at: string
         }
         Insert: {
@@ -5649,6 +5650,7 @@ export type Database = {
           lng?: number | null
           name: string
           phone?: string | null
+          receipt_approval?: string
           updated_at?: string
         }
         Update: {
@@ -5666,6 +5668,7 @@ export type Database = {
           lng?: number | null
           name?: string
           phone?: string | null
+          receipt_approval?: string
           updated_at?: string
         }
         Relationships: [

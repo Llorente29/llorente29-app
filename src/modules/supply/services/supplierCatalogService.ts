@@ -271,13 +271,14 @@ export interface SupplyLocation {
   name: string
   address: string | null
   phone: string | null
+  receiptApproval: 'trabajador' | 'oficina'   // quién confirma la recepción en este local
 }
 
 /** Locales activos de la cuenta, ordenados por nombre. */
 export async function listSupplyLocations(accountId: string): Promise<SupplyLocation[]> {
   requireSupabase()
   const { data, error } = await from('locations')
-    .select('id, name, address, phone')
+    .select('id, name, address, phone, receipt_approval')
     .eq('account_id', accountId)
     .eq('active', true)
     .order('name')
@@ -289,5 +290,39 @@ export async function listSupplyLocations(accountId: string): Promise<SupplyLoca
     name: (r.name as string) ?? '(sin nombre)',
     address: (r.address as string | null) ?? null,
     phone: (r.phone as string | null) ?? null,
+    receiptApproval: ((r.receipt_approval as string | null) ?? 'trabajador') as 'trabajador' | 'oficina',
   }))
+}
+
+// ─── Aprobación de recepciones por local (toggle del editor de local) ───
+// Autocontenido: lee/escribe locations.receipt_approval directamente, sin pasar
+// por el tipo Location del contexto (que no gestiona este campo).
+
+/** Mapa id_local → modo de aprobación, para una lista de locales dada. */
+export async function listLocationApprovals(
+  locationIds: string[],
+): Promise<Record<string, 'trabajador' | 'oficina'>> {
+  requireSupabase()
+  if (locationIds.length === 0) return {}
+  const { data, error } = await from('locations')
+    .select('id, receipt_approval')
+    .in('id', locationIds)
+  if (error) throw new Error(`Error cargando la aprobación de recepciones: ${error.message}`)
+  const out: Record<string, 'trabajador' | 'oficina'> = {}
+  for (const r of (data as Row[]) ?? []) {
+    out[r.id as string] = ((r.receipt_approval as string | null) ?? 'trabajador') as 'trabajador' | 'oficina'
+  }
+  return out
+}
+
+/** Fija quién confirma las recepciones de un local. */
+export async function setLocationReceiptApproval(
+  locationId: string,
+  value: 'trabajador' | 'oficina',
+): Promise<void> {
+  requireSupabase()
+  const { error } = await from('locations')
+    .update({ receipt_approval: value })
+    .eq('id', locationId)
+  if (error) throw new Error(`No se pudo guardar la aprobación de recepciones: ${error.message}`)
 }
