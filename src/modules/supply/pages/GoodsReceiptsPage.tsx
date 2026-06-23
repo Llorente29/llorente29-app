@@ -152,12 +152,22 @@ export default function GoodsReceiptsPage() {
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (q === '') return receipts
-    return receipts.filter(r => {
-      const code = (r.code ?? '').toLowerCase()
-      const sup = (r.supplierId ? supplierNameById.get(r.supplierId) ?? '' : '').toLowerCase()
-      const doc = (r.supplierDocNumber ?? '').toLowerCase()
-      return code.includes(q) || sup.includes(q) || doc.includes(q)
+    const base = q === ''
+      ? receipts
+      : receipts.filter(r => {
+          const code = (r.code ?? '').toLowerCase()
+          const sup = (r.supplierId ? supplierNameById.get(r.supplierId) ?? '' : '').toLowerCase()
+          const doc = (r.supplierDocNumber ?? '').toLowerCase()
+          return code.includes(q) || sup.includes(q) || doc.includes(q)
+        })
+    // Lo accionable primero: BORRADORES arriba (pendientes de confirmar), luego el
+    // resto; dentro de cada grupo, por fecha de recepción descendente (lo reciente
+    // antes). Así la oficina ve de un vistazo lo que tiene que revisar.
+    const rank = (s: string) => (s === 'borrador' ? 0 : s === 'confirmado' ? 1 : 2)
+    return [...base].sort((a, b) => {
+      const dr = rank(a.status) - rank(b.status)
+      if (dr !== 0) return dr
+      return (b.receiptDate ?? '').localeCompare(a.receiptDate ?? '')
     })
   }, [receipts, search, supplierNameById])
 
