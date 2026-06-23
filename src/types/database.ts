@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -3269,6 +3269,83 @@ export type Database = {
             columns: ["location_id"]
             isOneToOne: false
             referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ctb_notification_queue: {
+        Row: {
+          account_id: string
+          created_at: string
+          goods_receipt_id: string
+          has_differences: boolean
+          id: string
+          location_id: string | null
+          notify_group: string
+          sent_at: string | null
+          sent_by: string | null
+          sent_by_name: string | null
+          status: string
+          supplier_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          goods_receipt_id: string
+          has_differences?: boolean
+          id?: string
+          location_id?: string | null
+          notify_group?: string
+          sent_at?: string | null
+          sent_by?: string | null
+          sent_by_name?: string | null
+          status?: string
+          supplier_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          goods_receipt_id?: string
+          has_differences?: boolean
+          id?: string
+          location_id?: string | null
+          notify_group?: string
+          sent_at?: string | null
+          sent_by?: string | null
+          sent_by_name?: string | null
+          status?: string
+          supplier_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ctb_notification_queue_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ctb_notification_queue_goods_receipt_id_fkey"
+            columns: ["goods_receipt_id"]
+            isOneToOne: true
+            referencedRelation: "goods_receipt"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ctb_notification_queue_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ctb_notification_queue_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "supplier"
             referencedColumns: ["id"]
           },
         ]
@@ -10099,6 +10176,7 @@ export type Database = {
           is_active: boolean
           name: string
           notes: string | null
+          notify_group: string | null
           phone: string | null
           tax_id: string | null
           updated_at: string
@@ -10116,6 +10194,7 @@ export type Database = {
           is_active?: boolean
           name: string
           notes?: string | null
+          notify_group?: string | null
           phone?: string | null
           tax_id?: string | null
           updated_at?: string
@@ -10133,6 +10212,7 @@ export type Database = {
           is_active?: boolean
           name?: string
           notes?: string | null
+          notify_group?: string | null
           phone?: string | null
           tax_id?: string | null
           updated_at?: string
@@ -11559,6 +11639,10 @@ export type Database = {
         }
         Returns: string
       }
+      mark_ctb_notification_sent: {
+        Args: { p_queue_id: string }
+        Returns: undefined
+      }
       materialize_recipe_session: {
         Args: { p_session_id: string }
         Returns: {
@@ -12364,4 +12448,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-

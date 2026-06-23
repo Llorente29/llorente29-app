@@ -16,12 +16,13 @@
 //
 // Gating: requiredRole 'manager' (el aprovisionamiento lo gestiona admin/manager).
 
-import { Truck, ClipboardList, PackageCheck, FileText, Boxes } from 'lucide-react'
+import { Truck, ClipboardList, PackageCheck, FileText, Boxes, Send } from 'lucide-react'
 import type { ModuleDefinition } from '@/shell/types'
 import SupplyOrdersPage from '@/modules/supply/pages/SupplyOrdersPage'
 import GoodsReceiptsPage from '@/modules/supply/pages/GoodsReceiptsPage'
 import SupplierInvoicesPage from '@/modules/supply/pages/SupplierInvoicesPage'
 import InventoryPage from '@/modules/supply/pages/InventoryPage'
+import CtbNotifyPage from '@/modules/supply/pages/CtbNotifyPage'
 
 export const supplyModule: ModuleDefinition = {
   // Identidad
@@ -38,6 +39,7 @@ export const supplyModule: ModuleDefinition = {
     { path: 'recepciones', element: <GoodsReceiptsPage /> },
     { path: 'facturas', element: <SupplierInvoicesPage /> },
     { path: 'inventario', element: <InventoryPage /> },
+    { path: 'comunicar-ctb', element: <CtbNotifyPage /> },
   ],
   // Navegación interna del módulo (ModuleSidebar).
   // C2 añade Recepciones. Al construir C3 se añaden Facturas, etc.
@@ -47,6 +49,7 @@ export const supplyModule: ModuleDefinition = {
       { id: 'supply_receipts', label: 'Recepciones', icon: PackageCheck, path: 'recepciones' },
       { id: 'supply_invoices', label: 'Facturas', icon: FileText, path: 'facturas' },
       { id: 'supply_inventory', label: 'Almacén', icon: Boxes, path: 'inventario' },
+      { id: 'supply_ctb', label: 'Comunicar a CTB', icon: Send, path: 'comunicar-ctb' },
     ],
   },
 }
