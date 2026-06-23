@@ -952,7 +952,9 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
             qtyOrdered: ref.qtyOrdered,
             alreadyReceived: ref.already,
             pending: ref.pending,
-            qty: '',
+            // Revisión de BORRADOR → precarga lo que contó el trabajador (para verlo
+            // y ajustar). Corrección de una CONFIRMADA → vacío (se re-cuenta).
+            qty: prefill.isDraft && l.qtyReceived != null ? String(l.qtyReceived) : '',
             unitCost: l.unitCost != null ? String(l.unitCost) : (cat?.lastPrice != null ? String(cat.lastPrice) : ''),
             poLineId: l.purchaseOrderLineId,
             lotCode: null,
