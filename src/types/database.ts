@@ -2583,6 +2583,7 @@ export type Database = {
         Row: {
           account_id: string
           archived_at: string | null
+          catalog_source: string
           color: string | null
           created_at: string
           created_by: string | null
@@ -2601,6 +2602,7 @@ export type Database = {
         Insert: {
           account_id: string
           archived_at?: string | null
+          catalog_source?: string
           color?: string | null
           created_at?: string
           created_by?: string | null
@@ -2619,6 +2621,7 @@ export type Database = {
         Update: {
           account_id?: string
           archived_at?: string | null
+          catalog_source?: string
           color?: string | null
           created_at?: string
           created_by?: string | null
@@ -2889,6 +2892,92 @@ export type Database = {
             columns: ["location_id"]
             isOneToOne: false
             referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      catalog_publish: {
+        Row: {
+          account_id: string
+          brand_id: string
+          id: string
+          note: string | null
+          requested_at: string
+          requested_by: string | null
+          status: string
+        }
+        Insert: {
+          account_id: string
+          brand_id: string
+          id?: string
+          note?: string | null
+          requested_at?: string
+          requested_by?: string | null
+          status?: string
+        }
+        Update: {
+          account_id?: string
+          brand_id?: string
+          id?: string
+          note?: string | null
+          requested_at?: string
+          requested_by?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalog_publish_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalog_publish_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      catalog_publish_target: {
+        Row: {
+          channel_id: string | null
+          connection_name: string | null
+          error_text: string | null
+          external_catalog_id: string | null
+          id: string
+          publish_id: string
+          published_at: string | null
+          status: string
+        }
+        Insert: {
+          channel_id?: string | null
+          connection_name?: string | null
+          error_text?: string | null
+          external_catalog_id?: string | null
+          id?: string
+          publish_id: string
+          published_at?: string | null
+          status?: string
+        }
+        Update: {
+          channel_id?: string | null
+          connection_name?: string | null
+          error_text?: string | null
+          external_catalog_id?: string | null
+          id?: string
+          publish_id?: string
+          published_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalog_publish_target_publish_id_fkey"
+            columns: ["publish_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_publish"
             referencedColumns: ["id"]
           },
         ]
@@ -3888,14 +3977,14 @@ export type Database = {
           created_at: string
           external_catalog_id: string | null
           external_location_id: string | null
-          external_org_id: string
+          external_org_id: string | null
           id: string
           is_active: boolean
           organization_name: string | null
           ownership_type: string
           push_status_enabled: boolean
           source: string
-          token_secret_name: string
+          token_secret_name: string | null
           updated_at: string
         }
         Insert: {
@@ -3905,14 +3994,14 @@ export type Database = {
           created_at?: string
           external_catalog_id?: string | null
           external_location_id?: string | null
-          external_org_id: string
+          external_org_id?: string | null
           id?: string
           is_active?: boolean
           organization_name?: string | null
           ownership_type?: string
           push_status_enabled?: boolean
           source?: string
-          token_secret_name: string
+          token_secret_name?: string | null
           updated_at?: string
         }
         Update: {
@@ -3922,14 +4011,14 @@ export type Database = {
           created_at?: string
           external_catalog_id?: string | null
           external_location_id?: string | null
-          external_org_id?: string
+          external_org_id?: string | null
           id?: string
           is_active?: boolean
           organization_name?: string | null
           ownership_type?: string
           push_status_enabled?: boolean
           source?: string
-          token_secret_name?: string
+          token_secret_name?: string | null
           updated_at?: string
         }
         Relationships: [
