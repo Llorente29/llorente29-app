@@ -149,6 +149,7 @@ function requireSupabase(): void {
 export interface ListRecipeItemsOptions {
   accountId: string
   type?: RecipeItemType
+  types?: RecipeItemType[]   // varios tipos a la vez (p.ej. recepción: raw+packaging+tool)
   includeInactive?: boolean
   includeArchived?: boolean
   search?: string
@@ -164,7 +165,9 @@ export async function listRecipeItems(opts: ListRecipeItemsOptions): Promise<Rec
     .eq('account_id', opts.accountId)
     .order('name', { ascending: true })
 
-  if (opts.type) {
+  if (opts.types && opts.types.length > 0) {
+    query = query.in('type', opts.types)
+  } else if (opts.type) {
     query = query.eq('type', opts.type)
   }
   if (!opts.includeArchived) {

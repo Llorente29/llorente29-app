@@ -102,7 +102,7 @@ export default function LineMatchPicker({
     debounce.current = setTimeout(async () => {
       setSearching(true)
       try {
-        const items = await listRecipeItems({ accountId, type: 'raw', search: search.trim(), includeInactive: false, limit: 20 })
+        const items = await listRecipeItems({ accountId, types: ['raw', 'packaging', 'tool'], search: search.trim(), includeInactive: false, limit: 20 })
         setHits(items.map(i => ({ id: i.id, name: i.name })))
       } catch {
         setHits([])
