@@ -31,6 +31,7 @@ import NewMenuItemModal from '@/modules/kitchen/components/NewMenuItemModal'
 import NewCategoryModal from '@/modules/kitchen/components/NewCategoryModal'
 import type { MenuItemEconomics } from '@/types/kitchen'
 import { publishBrandCatalog, type PublishResult } from '@/modules/kitchen/services/catalogPublishService'
+import PublishStatusChip from '@/modules/kitchen/components/PublishStatusChip'
 
 function formatEur(value: number | null): string {
   if (value === null || value === undefined) return '—'
@@ -72,6 +73,7 @@ export default function KitchenMenuPage() {
   // Publicador (T2a): publicar la carta de la marca a HubRise
   const [publishing, setPublishing] = useState(false)
   const [publishResult, setPublishResult] = useState<PublishResult | null>(null)
+  const [publishStatusKey, setPublishStatusKey] = useState(0)
 
   // Cargar marcas con catálogo
   useEffect(() => {
@@ -211,6 +213,7 @@ export default function KitchenMenuPage() {
     try {
       const res = await publishBrandCatalog(selectedBrand.id)
       setPublishResult(res)
+      setPublishStatusKey((k) => k + 1)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -463,6 +466,9 @@ export default function KitchenMenuPage() {
             >
               <Plus className="w-4 h-4" /> Añadir producto
             </button>
+            {selectedBrand.catalogSource === 'folvy' && activeAccountId && (
+              <PublishStatusChip accountId={activeAccountId} brandId={selectedBrand.id} refreshKey={publishStatusKey} />
+            )}
             {selectedBrand.catalogSource === 'folvy' && (
               <button
                 onClick={handlePublish}
