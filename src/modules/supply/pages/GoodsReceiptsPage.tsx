@@ -19,10 +19,11 @@
 // El aviso (flash) se auto-cierra a los segundos (no obliga a teclear).
 
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, PackageCheck, PackagePlus, AlertTriangle, Search, Loader2, Eye, RotateCcw, PencilLine, ScanLine, Settings2, X } from 'lucide-react'
+import { Plus, PackageCheck, PackagePlus, AlertTriangle, Search, Loader2, Eye, RotateCcw, PencilLine, ScanLine, Settings2 } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
 import { useIsMobile } from '@/shell/useIsMobile'
+import { useApp } from '@/context/AppContext'
 import {
   listGoodsReceipts,
   getGoodsReceiptById,
@@ -37,6 +38,7 @@ import {
 } from '@/modules/supply/services/goodsReceiptService'
 import { listSuppliers } from '@/modules/kitchen/services/purchaseFormatService'
 import { listSupplyLocations, type SupplyLocation } from '@/modules/supply/services/supplierCatalogService'
+import PostPendingModal, { type PendingLine } from '@/modules/supply/components/PostPendingModal'
 import type { Supplier } from '@/types/kitchen'
 import GoodsReceiptForm, { type ReceiptPrefill, type OcrPrefill } from '@/modules/supply/pages/GoodsReceiptForm'
 import ReceiptScanPanel from '@/modules/supply/pages/ReceiptScanPanel'
@@ -64,6 +66,7 @@ type View = 'list' | 'form' | 'scan' | 'receive-order'
 
 export default function GoodsReceiptsPage() {
   const { activeAccountId, accountsLoading } = useActiveAccount()
+  const { authUserId } = useApp()
   const { resolvedLocationId } = useLocationScope()
   const isMobile = useIsMobile()
 
@@ -105,11 +108,12 @@ export default function GoodsReceiptsPage() {
 
   const [busyId, setBusyId] = useState<string | null>(null)
   const [flash, setFlash] = useState<string | null>(null)
-  // Resultado del "Meter al stock" para mostrar en modal (qué entró, qué no y por qué).
-  const [postResult, setPostResult] = useState<{
+  // Datos para el modal "Meter al stock" (resolver pendientes sin salir).
+  const [postModal, setPostModal] = useState<{
     receiptCode: string
+    supplierId: string | null
     posted: number
-    pendingItems: { lineId: string; itemId: string | null; name: string; reason: string }[]
+    lines: PendingLine[]
   } | null>(null)
 
   // El aviso se auto-cierra a los 6 s (no obliga a teclear nada).
@@ -235,13 +239,20 @@ export default function GoodsReceiptsPage() {
     setBusyId(id); setFlash(null); setError(null)
     try {
       const res = await postPendingReceipt(id)
-      const code = receipts.find(r => r.id === id)?.code ?? ''
+      const receipt = receipts.find(r => r.id === id)
+      const code = receipt?.code ?? ''
       if (res.posted > 0 && res.stillPending === 0) {
-        // Todo entró: flash verde simple, sin modal.
         setFlash(`${code}: ${res.posted} línea(s) metida(s) al almacén.`)
       } else {
-        // Algo no entró: modal con el detalle, pegado a la acción.
-        setPostResult({ receiptCode: code, posted: res.posted, pendingItems: res.pendingItems })
+        const lines: PendingLine[] = res.pendingItems.map(it => ({
+          lineId: it.lineId,
+          itemId: it.itemId,
+          name: it.name,
+          reason: it.reason,
+          rawText: it.name,
+          supplierCode: null,
+        }))
+        setPostModal({ receiptCode: code, supplierId: receipt?.supplierId ?? null, posted: res.posted, lines })
       }
       setReloadTick(t => t + 1)
     } catch (err: unknown) {
@@ -523,52 +534,18 @@ export default function GoodsReceiptsPage() {
           </div>
         </div>
       )}
-      {postResult && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setPostResult(null)}>
-          <div className="bg-card rounded-lg shadow-xl max-w-md w-full max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="p-4 border-b border-border-default flex items-center justify-between">
-              <h3 className="font-semibold text-text-primary">
-                {postResult.receiptCode} · Meter al stock
-              </h3>
-              <button type="button" onClick={() => setPostResult(null)} className="text-text-secondary hover:text-text-primary">
-                <X size={18} />
-              </button>
-            </div>
-            <div className="p-4 space-y-3">
-              {postResult.posted > 0 && (
-                <div className="flex items-center gap-2 text-sm text-success bg-success-bg border border-success/20 rounded-md px-3 py-2">
-                  <PackageCheck size={15} className="shrink-0" />
-                  Entraron {postResult.posted} línea(s) al almacén.
-                </div>
-              )}
-              {postResult.pendingItems.length > 0 && (
-                <div>
-                  <p className="text-sm font-medium text-danger flex items-center gap-1.5 mb-2">
-                    <AlertTriangle size={15} /> No entraron {postResult.pendingItems.length} línea(s):
-                  </p>
-                  <ul className="space-y-2">
-                    {postResult.pendingItems.map(it => (
-                      <li key={it.lineId} className="text-sm border border-border-default rounded-md px-3 py-2">
-                        <div className="font-medium text-text-primary">{it.name}</div>
-                        <div className="text-xs text-text-secondary mt-0.5">
-                          {it.reason === 'sin_articulo'
-                            ? 'Sin artículo asignado — hay que casar esta línea a un ingrediente antes de meterla al stock.'
-                            : 'Falta el formato de compra — móntalo en la ficha del artículo (sección Compra / Proveedores) y vuelve a pulsar "Meter al stock".'}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-            <div className="p-4 border-t border-border-default flex justify-end">
-              <button type="button" onClick={() => setPostResult(null)}
-                className="px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 transition-base">
-                Entendido
-              </button>
-            </div>
-          </div>
-        </div>
+      {postModal && (
+        <PostPendingModal
+          accountId={activeAccountId ?? ''}
+          receiptCode={postModal.receiptCode}
+          supplierId={postModal.supplierId}
+          posted={postModal.posted}
+          lines={postModal.lines}
+          actorId={authUserId}
+          actorName={null}
+          onClose={() => setPostModal(null)}
+          onChanged={() => setReloadTick(t => t + 1)}
+        />
       )}
     </div>
   )

@@ -135,11 +135,13 @@ BEGIN
         AND is_active;
   END IF;
 
-  -- ¿Quedan líneas pendientes en esta recepción? Si no, baja needs_review.
+  -- ¿Quedan líneas pendientes en esta recepción? Pendiente = CUALQUIER línea sin
+  -- movimiento de stock (tenga o no artículo: una línea sin casar también está
+  -- pendiente). Solo si NO queda ninguna se baja needs_review. Esto evita el
+  -- desajuste "indicador dice OK pero falta meter género".
   IF NOT EXISTS (
     SELECT 1 FROM goods_receipt_line grl
     WHERE grl.goods_receipt_id = v_receipt.id
-      AND grl.recipe_item_id IS NOT NULL
       AND NOT EXISTS (SELECT 1 FROM stock_movement sm
         WHERE sm.source_type='goods_receipt_line' AND sm.source_id = grl.id)
   ) THEN

@@ -721,6 +721,29 @@ export async function confirmReceipt(receiptId: string): Promise<ConfirmReceiptR
  * propaga el coste RAW→platos de los artículos afectados. Devuelve cuántas
  * entraron y cuántas siguen sin poder entrar (les falta formato).
  */
+/**
+ * Mete al stock UNA línea pendiente concreta (tras casarla a un artículo o
+ * montarle el formato desde el modal). Devuelve true si entró. Si entró,
+ * propaga el coste RAW→platos del artículo.
+ */
+export async function postPendingReceiptLine(
+  lineId: string,
+  itemId: string | null,
+): Promise<boolean> {
+  requireSupabase()
+  const { data, error } = await supabase!.rpc('post_pending_receipt_line', {
+    p_line_id: lineId,
+  })
+  if (error) throw new Error(`Error metiendo la línea al stock: ${error.message}`)
+  const ok = data === true
+  if (ok && itemId) {
+    try { await cascadeFromItem(itemId) } catch (e) {
+      console.error(`postPendingReceiptLine: cascada de coste falló para ${itemId}`, e)
+    }
+  }
+  return ok
+}
+
 export async function postPendingReceipt(
   receiptId: string,
 ): Promise<{
