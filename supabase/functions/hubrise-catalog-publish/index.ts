@@ -140,6 +140,16 @@ Deno.serve(async (req: Request) => {
         .eq("account_id", accountId).eq("brand_id", brandId),
     ]);
 
+    // Canales delivery -> variants de HubRise (T2b). shop/takeaway NO se publica
+    // (canal directo, lo consume la tienda propia).
+    const { data: channels } = await sb.from("sales_channel")
+      .select("id, slug, name, channel_type, archived_at, is_active")
+      .eq("account_id", accountId);
+    const deliveryChannels = (channels ?? []).filter(
+      (c) => c.channel_type === "delivery" && !c.archived_at && c.is_active !== false);
+    const slugByChannelId = new Map((channels ?? []).map((c) => [c.id as string, c.slug as string]));
+    const deliverySlugs = deliveryChannels.map((c) => c.slug as string);
+
     const activeItems = (items ?? []).filter((i) => i.is_active !== false);
 
     // sku_ref donde falte: generar y PERSISTIR (para que publicar y el 86 coincidan)
@@ -159,6 +169,26 @@ Deno.serve(async (req: Request) => {
     const productIds = products.map((p) => p.id as string);
     const comboIds = combos.map((c) => c.id as string);
     const warnings: string[] = [];
+
+    // Overrides por canal (T2b): precio/disponibilidad propios por canal delivery.
+    // Nivel marca/canal (location_id null), que es lo que escribe el editor de precios.
+    const { data: overrides } = productIds.length && deliveryChannels.length
+      ? await sb.from("menu_item_override")
+          .select("menu_item_id, channel_id, price, is_available")
+          .eq("account_id", accountId).in("menu_item_id", productIds).is("location_id", null)
+      : { data: [] as Array<Record<string, unknown>> };
+    const deliverySlugSet = new Set(deliverySlugs);
+    const ovByItem = new Map<string, Array<{ slug: string; price: number | null; avail: boolean }>>();
+    for (const o of overrides ?? []) {
+      const slug = slugByChannelId.get(o.channel_id as string);
+      if (!slug || !deliverySlugSet.has(slug)) continue; // solo canales delivery (variants)
+      const k = o.menu_item_id as string;
+      (ovByItem.get(k) ?? ovByItem.set(k, []).get(k)!).push({
+        slug,
+        price: o.price === null || o.price === undefined ? null : Number(o.price),
+        avail: o.is_available !== false,
+      });
+    }
 
     // Modificadores: asignaciones -> grupos -> opciones
     const { data: asg } = productIds.length
@@ -277,6 +307,25 @@ Deno.serve(async (req: Request) => {
         const olRefs = groupsByItem.get(p.id as string) ?? [];
         const sku: Record<string, unknown> = { ref, price: eur(p.price) };
         if (olRefs.length > 0) sku.option_list_refs = olRefs;
+        // T2b: precio por canal (price_overrides) y 86 por canal (restrictions).
+        const ovs = ovByItem.get(p.id as string) ?? [];
+        const basePrice = Number(p.price ?? 0);
+        const priceOverrides: Array<Record<string, unknown>> = [];
+        const disabledSlugs: string[] = [];
+        for (const ov of ovs) {
+          if (ov.price !== null && Math.abs(ov.price - basePrice) > 0.0001) {
+            priceOverrides.push({ variant_refs: [ov.slug], price: eur(ov.price) });
+          }
+          if (!ov.avail) disabledSlugs.push(ov.slug);
+        }
+        if (priceOverrides.length > 0) sku.price_overrides = priceOverrides;
+        if (disabledSlugs.length > 0) {
+          // restrictions.variant_refs es LISTA BLANCA (item disponible solo en esos
+          // variants). Para 86 de un canal: dejamos los canales delivery NO apagados.
+          // Si todos están apagados -> excluido del catálogo (enabled:false).
+          const enabled = deliverySlugs.filter((s) => !disabledSlugs.includes(s));
+          sku.restrictions = enabled.length === 0 ? { enabled: false } : { variant_refs: enabled };
+        }
         const prod: Record<string, unknown> = {
           ref: "p_" + (p.id as string),
           category_ref: catRefFor((p.menu_category_id as string | null) ?? null),
@@ -335,9 +384,12 @@ Deno.serve(async (req: Request) => {
       return json({ ok: false, error: "La carta no tiene productos ni combos publicables.", warnings }, 200);
     }
 
+    const variants = deliveryChannels.map((c) => ({ ref: c.slug as string, name: c.name as string }));
+
     const catalogData = {
       name: brand.name as string,
       data: {
+        ...(variants.length > 0 ? { variants } : {}),
         categories,
         products: productsPayload,
         option_lists: optionLists,
@@ -379,6 +431,11 @@ Deno.serve(async (req: Request) => {
       .select("connection_name, external_catalog_id, status, error_text")
       .eq("publish_id", publishId);
 
+    const priceOverridesApplied = productsPayload.reduce((acc, p) => {
+      const skus = (p.skus as Array<Record<string, unknown>>) ?? [];
+      return acc + skus.reduce((a, s) => a + (((s.price_overrides as unknown[] | undefined)?.length) ?? 0), 0);
+    }, 0);
+
     return json({
       ok: errCount === 0,
       publish_id: publishId,
@@ -386,6 +443,8 @@ Deno.serve(async (req: Request) => {
       products: productsPayload.length,
       deals: dealsPayload.length,
       option_lists: optionLists.length,
+      variants: variants.length,
+      price_overrides: priceOverridesApplied,
       warnings,
       targets: targets ?? [],
     }, 200);

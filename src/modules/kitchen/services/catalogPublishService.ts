@@ -26,6 +26,8 @@ export interface PublishResult {
   products?: number
   deals?: number
   option_lists?: number
+  variants?: number
+  price_overrides?: number
   warnings: string[]
   targets: PublishTarget[]
 }
@@ -61,6 +63,8 @@ export async function publishBrandCatalog(brandId: string): Promise<PublishResul
     products: d.products,
     deals: d.deals,
     option_lists: d.option_lists,
+    variants: d.variants,
+    price_overrides: d.price_overrides,
     warnings: d.warnings ?? [],
     targets: d.targets ?? [],
   }

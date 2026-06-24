@@ -793,6 +793,11 @@ export default function KitchenMenuPage() {
                   {publishResult.products} producto{publishResult.products === 1 ? '' : 's'} · {publishResult.deals ?? 0} combo{(publishResult.deals ?? 0) === 1 ? '' : 's'} · {publishResult.option_lists ?? 0} grupo{(publishResult.option_lists ?? 0) === 1 ? '' : 's'} de modificadores
                 </p>
               )}
+              {(publishResult.variants ?? 0) > 0 && (
+                <p className="text-gray-600">
+                  {publishResult.variants} canal{(publishResult.variants ?? 0) === 1 ? '' : 'es'} (Glovo/Uber/JustEat) · {publishResult.price_overrides ?? 0} precio{(publishResult.price_overrides ?? 0) === 1 ? '' : 's'} propio{(publishResult.price_overrides ?? 0) === 1 ? '' : 's'} por canal
+                </p>
+              )}
               {publishResult.targets.length > 0 && (
                 <div>
                   <div className="text-xs font-medium text-gray-500 mb-1">Por conexión</div>
