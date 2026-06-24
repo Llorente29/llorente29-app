@@ -474,7 +474,7 @@ export default function KitchenMenuPage() {
                 onClick={handlePublish}
                 disabled={publishing}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg font-medium bg-green-600 text-white hover:opacity-90 disabled:opacity-50"
-                title="Publicar esta carta a las plataformas vía HubRise"
+                title="Publicar esta carta a las plataformas de pedido"
               >
                 {publishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
                 {publishing ? 'Publicando…' : 'Publicar'}
