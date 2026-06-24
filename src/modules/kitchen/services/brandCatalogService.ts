@@ -18,6 +18,7 @@ export interface CatalogBrand {
   id: string
   name: string
   ownershipType: string | null
+  catalogSource: string | null  // 'folvy' (Folvy publica) | 'pos' (el TPV manda, Folvy espeja)
   productCount: number
   comboCount: number
   withRecipeCount: number   // productos (item) con recipe_item_id != null
@@ -92,7 +93,7 @@ export async function listBrandsWithCatalog(accountId: string): Promise<CatalogB
   // 1) Todas las marcas activas de la cuenta
   const { data: brands, error: brErr } = await supabase!
     .from('brand')
-    .select('id, name, ownership_type')
+    .select('id, name, ownership_type, catalog_source')
     .eq('account_id', accountId)
     .is('archived_at', null)
     .order('name', { ascending: true })
@@ -128,6 +129,7 @@ export async function listBrandsWithCatalog(accountId: string): Promise<CatalogB
         id: b.id as string,
         name: b.name as string,
         ownershipType: (b.ownership_type as string) ?? null,
+        catalogSource: (b.catalog_source as string) ?? null,
         productCount: c.products,
         comboCount: c.combos,
         withRecipeCount: c.withRecipe,

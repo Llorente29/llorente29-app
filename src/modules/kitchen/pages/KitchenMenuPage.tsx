@@ -14,7 +14,7 @@
 // Patrón: useApp() + useActiveAccount() + useIsMobile(), igual que KitchenItemsPage.
 
 import { useEffect, useMemo, useState } from 'react'
-import { Search, ChevronDown, ChevronRight, CircleDashed, CheckCircle2, AlertTriangle, UtensilsCrossed, Package, Link2Off, Plus, FolderPlus, ArrowRightLeft, X, Undo2, Info, ArrowUp, ArrowDown, Trash2 } from 'lucide-react'
+import { Search, ChevronDown, ChevronRight, CircleDashed, CheckCircle2, AlertTriangle, UtensilsCrossed, Package, Link2Off, Plus, FolderPlus, ArrowRightLeft, X, Undo2, Info, ArrowUp, ArrowDown, Trash2, UploadCloud, Loader2 } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import {
   listBrandsWithCatalog,
@@ -30,6 +30,7 @@ import SalesExceptionsPage from '@/modules/kitchen/pages/SalesExceptionsPage'
 import NewMenuItemModal from '@/modules/kitchen/components/NewMenuItemModal'
 import NewCategoryModal from '@/modules/kitchen/components/NewCategoryModal'
 import type { MenuItemEconomics } from '@/types/kitchen'
+import { publishBrandCatalog, type PublishResult } from '@/modules/kitchen/services/catalogPublishService'
 
 function formatEur(value: number | null): string {
   if (value === null || value === undefined) return '—'
@@ -68,6 +69,9 @@ export default function KitchenMenuPage() {
   const [undo, setUndo] = useState<{ label: string; revert: () => Promise<void> } | null>(null)
   const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set())
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string; count: number } | null>(null)
+  // Publicador (T2a): publicar la carta de la marca a HubRise
+  const [publishing, setPublishing] = useState(false)
+  const [publishResult, setPublishResult] = useState<PublishResult | null>(null)
 
   // Cargar marcas con catálogo
   useEffect(() => {
@@ -198,8 +202,23 @@ export default function KitchenMenuPage() {
       .catch(() => {})
   }
 
+  // ── Publicar la carta de la marca a HubRise (T2a) ─────────────────────────
+  async function handlePublish() {
+    if (!selectedBrand || publishing) return
+    setPublishing(true)
+    setPublishResult(null)
+    setError(null)
+    try {
+      const res = await publishBrandCatalog(selectedBrand.id)
+      setPublishResult(res)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setPublishing(false)
+    }
+  }
+
   // ── Capa 1: organizar la carta (mover/recategorizar) ──────────────────────
-  const isLicensed = selectedBrand?.ownershipType === 'licensed'
 
   // Categoría actual de cada producto (para poder deshacer un movimiento).
   const productCategoryById = useMemo(() => {
@@ -444,17 +463,27 @@ export default function KitchenMenuPage() {
             >
               <Plus className="w-4 h-4" /> Añadir producto
             </button>
+            {selectedBrand.catalogSource === 'folvy' && (
+              <button
+                onClick={handlePublish}
+                disabled={publishing}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg font-medium bg-green-600 text-white hover:opacity-90 disabled:opacity-50"
+                title="Publicar esta carta a las plataformas vía HubRise"
+              >
+                {publishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
+                {publishing ? 'Publicando…' : 'Publicar'}
+              </button>
+            )}
           </div>
         )}
       </div>
 
-      {/* Aviso marca cedida: hoy no hay catalog_source (deuda CP2); usamos
-          ownership_type como proxy honesto: las cedidas suelen venir del TPV. */}
-      {isLicensed && (
+      {/* Marca gobernada por el TPV (catalog_source='pos'): Folvy espeja, no publica. */}
+      {selectedBrand?.catalogSource === 'pos' && (
         <div className="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 flex items-start gap-2">
           <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
           <p className="text-xs text-amber-800">
-            Esta marca es <span className="font-medium">cedida</span>. Sus cambios podrían gestionarse desde el TPV del titular; al publicar (próximamente) decidirás qué carta manda.
+            La carta de esta marca la manda el <span className="font-medium">TPV</span> (catalog_source = «pos»): Folvy la espeja y no la publica. Cámbiala a «folvy» si quieres gobernarla y publicarla desde aquí.
           </p>
         </div>
       )}
@@ -741,6 +770,61 @@ export default function KitchenMenuPage() {
                 className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm rounded-lg font-medium bg-red-600 text-white hover:opacity-90 disabled:opacity-50">
                 <Trash2 className="w-4 h-4" /> {moving ? 'Borrando…' : 'Borrar categoría'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {publishResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setPublishResult(null)}>
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-lg border border-gray-200" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-3.5 border-b border-gray-200 flex items-center gap-2">
+              {publishResult.ok
+                ? <CheckCircle2 className="w-5 h-5 text-green-600" />
+                : <AlertTriangle className={`w-5 h-5 ${publishResult.status === 'partial' ? 'text-amber-600' : 'text-red-600'}`} />}
+              <h3 className="text-base font-medium text-gray-900">
+                {publishResult.ok ? 'Carta publicada' : publishResult.status === 'partial' ? 'Publicada con avisos' : 'No se pudo publicar'}
+              </h3>
+            </div>
+            <div className="px-5 py-4 text-sm text-gray-700 space-y-3 max-h-[60vh] overflow-auto">
+              {publishResult.error && <p className="text-red-700">{publishResult.error}</p>}
+              {publishResult.products !== undefined && (
+                <p className="text-gray-600">
+                  {publishResult.products} producto{publishResult.products === 1 ? '' : 's'} · {publishResult.deals ?? 0} combo{(publishResult.deals ?? 0) === 1 ? '' : 's'} · {publishResult.option_lists ?? 0} grupo{(publishResult.option_lists ?? 0) === 1 ? '' : 's'} de modificadores
+                </p>
+              )}
+              {publishResult.targets.length > 0 && (
+                <div>
+                  <div className="text-xs font-medium text-gray-500 mb-1">Por conexión</div>
+                  <ul className="space-y-1">
+                    {publishResult.targets.map((t, i) => (
+                      <li key={i} className="flex items-start gap-2">
+                        {t.status === 'ok'
+                          ? <CheckCircle2 className="w-4 h-4 text-green-600 mt-0.5 shrink-0" />
+                          : <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />}
+                        <span>
+                          <span className="font-medium">{t.connection_name ?? t.external_catalog_id}</span>
+                          {t.status !== 'ok' && t.error_text && (
+                            <span className="block text-xs text-red-600">{t.error_text}</span>
+                          )}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {publishResult.warnings.length > 0 && (
+                <div>
+                  <div className="text-xs font-medium text-amber-700 mb-1">Avisos ({publishResult.warnings.length})</div>
+                  <ul className="list-disc pl-5 text-xs text-amber-800 space-y-0.5">
+                    {publishResult.warnings.map((w, i) => <li key={i}>{w}</li>)}
+                  </ul>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-gray-200 bg-gray-50 rounded-b-xl">
+              <button onClick={() => setPublishResult(null)}
+                className="px-3.5 py-1.5 text-sm rounded-lg font-medium bg-[#1E3A5F] text-white hover:opacity-90">Entendido</button>
             </div>
           </div>
         </div>
