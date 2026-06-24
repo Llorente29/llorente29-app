@@ -20,6 +20,12 @@
 // MARCA: por (location_id, connection_name) vía external_brand_map source='hubrise'.
 //        Nunca se deduce del producto (principio de marca estable).
 //
+// ACUSE `received` (24/06, pedido de auditoría de HubRise): en cuanto el EPOS
+//   ingesta un pedido que entra como `new`, acusa `received` a HubRise ANTES de
+//   aceptar, para que la plataforma registre new -> received -> accepted (no un
+//   salto directo a accepted). Es independiente de la auto-aceptación: se acusa
+//   `received` aunque la auto-aceptación esté apagada (acuse = el EPOS lo recibió).
+//
 // AUTO-ACEPTACIÓN (fase 2, 19/06): estándar de los integradores — el pedido entra
 //   YA aceptado; nadie corre contra el reloj de 10 min de Uber. La decisión vive en
 //   la FRONTERA (aquí), leyendo `order_acceptance_config` (cuenta × canal × marca),
@@ -301,6 +307,40 @@ async function upsertSale(
   return { id: saleRow.id, status: "open", isNew: true };
 }
 
+// ── Acuse `received`: avisa a HubRise de que el EPOS recibió el pedido ────────
+// Estándar de integradores y pedido explícito de la auditoría de HubRise: en
+// cuanto entra el pedido se acusa `received`, ANTES de aceptar, para que HubRise
+// registre new -> received -> accepted (no un salto directo a accepted).
+// Guardas: solo si el pedido entra como `new` (si la plataforma ya manda
+// received/accepted no re-empujamos) y solo en la PRIMERA ingesta (isNew).
+// Es independiente de la auto-aceptación (se acusa aunque esté apagada).
+// Espejo local SOLO tras 2xx (nunca mentimos el estado).
+async function maybeAckReceived(
+  sb: SupabaseClient,
+  args: { saleId: string; externalRef: string; incomingStatus: string | null; isNew: boolean },
+): Promise<void> {
+  const incoming = (args.incomingStatus ?? "").toLowerCase();
+  if (incoming !== "new") return;     // ya viene received/accepted/etc. -> no re-empujar
+  if (!args.isNew) return;            // solo en la primera ingesta del pedido
+  if (!args.externalRef) return;
+
+  const res = await pushOrderStatus(args.externalRef, "received", { confirmedTime: null });
+  if (!res.ok) {
+    // No mentimos el estado: si HubRise rechaza, el pedido se queda como entró.
+    console.error(`ack received ${args.externalRef}: ${res.error} (HTTP ${res.status})`);
+    return;
+  }
+
+  // Espejo local SOLO tras 2xx de HubRise.
+  const { error: updErr } = await sb.from("sale")
+    .update({ order_status: "received" }).eq("id", args.saleId);
+  if (updErr) {
+    console.error(`ack received mirror ${args.saleId}: ${updErr.message}`);
+    // El empuje a HubRise sí ocurrió; el espejo se recupera en el próximo order.update
+    // (o lo pisa la auto-aceptación con 'accepted', que es el estado final correcto).
+  }
+}
+
 // ── Auto-aceptación: empuja `accepted` en la frontera si procede ─────────────
 // Guardas: el pedido entra en new|received (nunca re-acepta), la config resuelve
 // a ON, y hay external_ref. El espejo local SOLO si HubRise da 2xx.
@@ -438,6 +478,14 @@ Deno.serve(async (req: Request) => {
           const { error: closeErr } = await sb.rpc("close_sale", { p_sale_id: r.id });
           if (closeErr) console.error(`close_sale ${orderId}: ${closeErr.message}`);
         } else if (r && r.status === "open") {
+          // ACUSE `received` inmediato (auditoría HubRise): el EPOS recibió el pedido.
+          // Va ANTES de la auto-aceptación para que HubRise registre received -> accepted.
+          await maybeAckReceived(sb, {
+            saleId: r.id,
+            externalRef: String(orderId ?? ""),
+            incomingStatus: (order["status"] as string | null) ?? null,
+            isNew: r.isNew,
+          });
           // AUTO-ACEPTACIÓN (solo pedidos vivos sin aceptar; la función guarda el resto).
           await maybeAutoAccept(sb, {
             accountId: loc.accountId,
