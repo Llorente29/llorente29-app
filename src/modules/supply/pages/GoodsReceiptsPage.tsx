@@ -19,7 +19,7 @@
 // El aviso (flash) se auto-cierra a los segundos (no obliga a teclear).
 
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, PackageCheck, Search, Loader2, Eye, RotateCcw, PencilLine, ScanLine, Settings2 } from 'lucide-react'
+import { Plus, PackageCheck, PackagePlus, AlertTriangle, Search, Loader2, Eye, RotateCcw, PencilLine, ScanLine, Settings2, X } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
 import { useIsMobile } from '@/shell/useIsMobile'
@@ -28,6 +28,7 @@ import {
   getGoodsReceiptById,
   listGoodsReceiptLines,
   voidReceipt,
+  postPendingReceipt,
   type GoodsReceipt,
   type GoodsReceiptStatus,
   getSupplySettings,
@@ -104,6 +105,12 @@ export default function GoodsReceiptsPage() {
 
   const [busyId, setBusyId] = useState<string | null>(null)
   const [flash, setFlash] = useState<string | null>(null)
+  // Resultado del "Meter al stock" para mostrar en modal (qué entró, qué no y por qué).
+  const [postResult, setPostResult] = useState<{
+    receiptCode: string
+    posted: number
+    pendingItems: { lineId: string; itemId: string | null; name: string; reason: string }[]
+  } | null>(null)
 
   // El aviso se auto-cierra a los 6 s (no obliga a teclear nada).
   useEffect(() => {
@@ -217,6 +224,28 @@ export default function GoodsReceiptsPage() {
       setReloadTick(t => t + 1)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'No se pudo anular la recepción.')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  // Mete al stock las líneas pendientes (las que quedaron sin postear al confirmar
+  // por falta de formato). Las que ya tienen formato entran; las que no, avisan.
+  async function handlePostPending(id: string) {
+    setBusyId(id); setFlash(null); setError(null)
+    try {
+      const res = await postPendingReceipt(id)
+      const code = receipts.find(r => r.id === id)?.code ?? ''
+      if (res.posted > 0 && res.stillPending === 0) {
+        // Todo entró: flash verde simple, sin modal.
+        setFlash(`${code}: ${res.posted} línea(s) metida(s) al almacén.`)
+      } else {
+        // Algo no entró: modal con el detalle, pegado a la acción.
+        setPostResult({ receiptCode: code, posted: res.posted, pendingItems: res.pendingItems })
+      }
+      setReloadTick(t => t + 1)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'No se pudo meter al stock.')
     } finally {
       setBusyId(null)
     }
@@ -392,8 +421,13 @@ export default function GoodsReceiptsPage() {
                   <CardField label="Fecha" value={formatDate(r.receiptDate)} />
                   <CardField label="Nº albarán" value={r.supplierDocNumber ?? '—'} />
                 </div>
+                {r.needsReview && (
+                  <div className="mt-2 flex items-center gap-1.5 text-xs font-medium text-danger bg-danger-bg border border-danger/30 rounded-md px-2 py-1.5">
+                    <AlertTriangle size={13} className="shrink-0" /> Falta meter género al stock
+                  </div>
+                )}
                 <div className="mt-2">
-                  <RowActions r={r} busy={busyId === r.id} onReview={handleReviewDraft} onVoid={handleVoid} onCorrect={handleCorrect} />
+                  <RowActions r={r} busy={busyId === r.id} onReview={handleReviewDraft} onVoid={handleVoid} onCorrect={handleCorrect} onPostPending={handlePostPending} />
                 </div>
               </div>
             ))}
@@ -425,12 +459,14 @@ export default function GoodsReceiptsPage() {
                         {STATUS_LABEL[r.status]}
                       </span>
                       {r.needsReview && (
-                        <span className="ml-1.5 text-[10px] px-1 py-0.5 rounded bg-warning-bg text-warning border border-warning/20">revisar</span>
+                        <span className="ml-1.5 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-danger-bg text-danger border border-danger/30 font-medium">
+                          <AlertTriangle size={11} /> Falta meter al stock
+                        </span>
                       )}
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex justify-end">
-                        <RowActions r={r} busy={busyId === r.id} onReview={handleReviewDraft} onVoid={handleVoid} onCorrect={handleCorrect} />
+                        <RowActions r={r} busy={busyId === r.id} onReview={handleReviewDraft} onVoid={handleVoid} onCorrect={handleCorrect} onPostPending={handlePostPending} />
                       </div>
                     </td>
                   </tr>
@@ -487,18 +523,66 @@ export default function GoodsReceiptsPage() {
           </div>
         </div>
       )}
+      {postResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setPostResult(null)}>
+          <div className="bg-card rounded-lg shadow-xl max-w-md w-full max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b border-border-default flex items-center justify-between">
+              <h3 className="font-semibold text-text-primary">
+                {postResult.receiptCode} · Meter al stock
+              </h3>
+              <button type="button" onClick={() => setPostResult(null)} className="text-text-secondary hover:text-text-primary">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-4 space-y-3">
+              {postResult.posted > 0 && (
+                <div className="flex items-center gap-2 text-sm text-success bg-success-bg border border-success/20 rounded-md px-3 py-2">
+                  <PackageCheck size={15} className="shrink-0" />
+                  Entraron {postResult.posted} línea(s) al almacén.
+                </div>
+              )}
+              {postResult.pendingItems.length > 0 && (
+                <div>
+                  <p className="text-sm font-medium text-danger flex items-center gap-1.5 mb-2">
+                    <AlertTriangle size={15} /> No entraron {postResult.pendingItems.length} línea(s):
+                  </p>
+                  <ul className="space-y-2">
+                    {postResult.pendingItems.map(it => (
+                      <li key={it.lineId} className="text-sm border border-border-default rounded-md px-3 py-2">
+                        <div className="font-medium text-text-primary">{it.name}</div>
+                        <div className="text-xs text-text-secondary mt-0.5">
+                          {it.reason === 'sin_articulo'
+                            ? 'Sin artículo asignado — hay que casar esta línea a un ingrediente antes de meterla al stock.'
+                            : 'Falta el formato de compra — móntalo en la ficha del artículo (sección Compra / Proveedores) y vuelve a pulsar "Meter al stock".'}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+            <div className="p-4 border-t border-border-default flex justify-end">
+              <button type="button" onClick={() => setPostResult(null)}
+                className="px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 transition-base">
+                Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
 function RowActions({
-  r, busy, onReview, onVoid, onCorrect,
+  r, busy, onReview, onVoid, onCorrect, onPostPending,
 }: {
   r: GoodsReceipt
   busy: boolean
   onReview: (id: string) => void
   onVoid: (id: string) => void
   onCorrect: (id: string) => void
+  onPostPending: (id: string) => void
 }) {
   if (r.status === 'borrador') {
     return (
@@ -516,6 +600,17 @@ function RowActions({
   if (r.status === 'confirmado') {
     return (
       <div className="flex items-center gap-2">
+        {r.needsReview && (
+          <button
+            type="button"
+            onClick={() => onPostPending(r.id)}
+            disabled={busy}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm font-medium bg-danger text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base"
+          >
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <PackagePlus size={15} />}
+            Meter al stock
+          </button>
+        )}
         <button
           type="button"
           onClick={() => onCorrect(r.id)}

@@ -715,9 +715,69 @@ export async function confirmReceipt(receiptId: string): Promise<ConfirmReceiptR
 }
 
 /**
+ * Mete al stock las líneas PENDIENTES de una recepción ya confirmada (las que
+ * quedaron sin movimiento porque al confirmar no tenían formato). Las que ya
+ * tienen formato resoluble entran; las que aún no, siguen pendientes. Tras meter,
+ * propaga el coste RAW→platos de los artículos afectados. Devuelve cuántas
+ * entraron y cuántas siguen sin poder entrar (les falta formato).
+ */
+export async function postPendingReceipt(
+  receiptId: string,
+): Promise<{
+  posted: number
+  stillPending: number
+  recalculatedItems: number
+  pendingItems: { lineId: string; itemId: string | null; name: string; reason: string }[]
+}> {
+  requireSupabase()
+
+  const { data, error } = await supabase!.rpc('post_pending_receipt', {
+    p_receipt_id: receiptId,
+  })
+  if (error) throw new Error(`Error metiendo pendientes al stock: ${error.message}`)
+
+  const row = (Array.isArray(data) ? data[0] : data) as
+    { posted?: number; still_pending?: number; pending_items?: unknown } | null
+  const posted = Number(row?.posted ?? 0)
+  const stillPending = Number(row?.still_pending ?? 0)
+
+  const rawItems = Array.isArray(row?.pending_items) ? row!.pending_items : []
+  const pendingItems = (rawItems as Array<Record<string, unknown>>).map(it => ({
+    lineId: String(it.line_id ?? ''),
+    itemId: it.item_id ? String(it.item_id) : null,
+    name: String(it.name ?? 'Artículo'),
+    reason: String(it.reason ?? 'sin_formato'),
+  }))
+
+  // Ripple de coste: propaga RAW→platos de los artículos que entraron.
+  let recalculatedItems = 0
+  if (posted > 0) {
+    try {
+      const lines = await listGoodsReceiptLines(receiptId)
+      const itemIds = Array.from(
+        new Set(
+          lines.filter(l => l.recipeItemId).map(l => l.recipeItemId as string),
+        ),
+      )
+      for (const itemId of itemIds) {
+        try {
+          await cascadeFromItem(itemId)
+          recalculatedItems++
+        } catch (e) {
+          console.error(`postPendingReceipt: cascada de coste falló para ${itemId}`, e)
+        }
+      }
+    } catch (e) {
+      console.error('postPendingReceipt: no se pudo propagar el coste', e)
+    }
+  }
+
+  return { posted, stillPending, recalculatedItems, pendingItems }
+}
+
+/**
  * Anula una recepción confirmada: postea el reverso de cada movimiento (mismo
  * coste sellado) y refresca el snapshot. El ledger es append-only: no borra nada.
- * No revierte last_price (el precio observado fue real); por eso no cascadea coste.
  */
 export async function voidReceipt(receiptId: string): Promise<number> {
   requireSupabase()

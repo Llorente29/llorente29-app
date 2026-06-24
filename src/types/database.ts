@@ -1,4 +1,4 @@
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
@@ -10998,6 +10998,24 @@ export type Database = {
         Args: { p_format_id: string; p_price_per_format: number }
         Returns: number
       }
+      _generate_daily_count_core: {
+        Args: {
+          p_account_id: string
+          p_coverage_target?: number
+          p_employee_ids?: string[]
+          p_ignore_freshness?: boolean
+          p_location_id: string
+          p_per_person?: number
+        }
+        Returns: {
+          already_existed: boolean
+          count_id: string
+          coverage_after: number
+          coverage_before: number
+          lines_created: number
+          per_person_today: number
+        }[]
+      }
       _impact_cost: {
         Args: {
           p_quantity: number
@@ -11015,6 +11033,10 @@ export type Database = {
         Returns: number
       }
       _require_manage_admins: { Args: never; Returns: undefined }
+      _resolve_day_counters: {
+        Args: { p_date: string; p_location_id: string }
+        Returns: string[]
+      }
       _sale_line_raw_consumption: {
         Args: { p_sale_line_id: string }
         Returns: {
@@ -11287,6 +11309,7 @@ export type Database = {
         }
         Returns: string
       }
+      cron_generate_daily_counts: { Args: never; Returns: undefined }
       current_user_account_ids: { Args: never; Returns: string[] }
       current_user_can_approve_invoice: {
         Args: { p_invoice_id: string }
@@ -11363,6 +11386,10 @@ export type Database = {
           lines_created: number
           per_person_today: number
         }[]
+      }
+      generate_sale_consumption: {
+        Args: { p_sale_id: string }
+        Returns: number
       }
       get_account_discount: { Args: { p_account_id: string }; Returns: Json }
       get_auth_user_id_by_email: {
@@ -11812,6 +11839,18 @@ export type Database = {
       orders_feed: { Args: { p_location_id: string }; Returns: Json }
       orders_feed_by_token: { Args: { p_device_token: string }; Returns: Json }
       platform_metrics: { Args: never; Returns: Json }
+      post_pending_receipt: {
+        Args: { p_receipt_id: string }
+        Returns: {
+          pending_items: Json
+          posted: number
+          still_pending: number
+        }[]
+      }
+      post_pending_receipt_line: {
+        Args: { p_line_id: string }
+        Returns: boolean
+      }
       preview_add_ingredient: {
         Args: {
           p_cut?: string
