@@ -50,6 +50,79 @@ function genRef(id: string): string {
   return "fv_" + id.replace(/-/g, "");
 }
 
+// ── T2c: imágenes ───────────────────────────────────────────────────────────
+// Cloudinary: insertar una transformación tras /upload/ para cumplir el límite de
+// 1 MB de HubRise (y servir webp ligero). Si no es Cloudinary, se sube tal cual.
+function cloudinaryResized(url: string): string {
+  const marker = "/image/upload/";
+  const i = url.indexOf(marker);
+  if (i === -1) return url;
+  const head = url.slice(0, i + marker.length);
+  const tail = url.slice(i + marker.length);
+  return `${head}c_limit,w_1200,q_auto,f_auto/${tail}`;
+}
+function fnv1a(s: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+  }
+  return h.toString(16);
+}
+
+interface ImgTarget { idx: number; itemId: string; photoUrl: string }
+
+// Resuelve los image_id de HubRise para un catálogo: reusa los ya subidos (si la
+// foto no cambió) o sube los nuevos (POST /catalogs/:id/images) y los persiste en
+// catalog_image_map. Devuelve idx(producto) -> image_id. Las imágenes son POR
+// CATÁLOGO, por eso se resuelve dentro del bucle de conexiones.
+async function resolveCatalogImages(
+  sb: SupabaseClient, accountId: string, catalogId: string, token: string,
+  targets: ImgTarget[], warnings: string[],
+): Promise<Map<number, string>> {
+  const out = new Map<number, string>();
+  if (targets.length === 0) return out;
+
+  const itemIds = targets.map((t) => t.itemId);
+  const { data: existing } = await sb.from("catalog_image_map")
+    .select("menu_item_id, image_id, source_url")
+    .eq("account_id", accountId).eq("external_catalog_id", catalogId)
+    .in("menu_item_id", itemIds);
+  const byItem = new Map<string, { image_id: string; source_url: string }>();
+  for (const r of existing ?? []) {
+    byItem.set(r.menu_item_id as string, { image_id: r.image_id as string, source_url: r.source_url as string });
+  }
+
+  for (const t of targets) {
+    const prev = byItem.get(t.itemId);
+    if (prev && prev.source_url === t.photoUrl) { out.set(t.idx, prev.image_id); continue; } // reuso
+    try {
+      const imgResp = await fetch(cloudinaryResized(t.photoUrl));
+      if (!imgResp.ok) { warnings.push(`Foto inaccesible (HTTP ${imgResp.status}), omitida.`); continue; }
+      const ctype = imgResp.headers.get("content-type") || "image/jpeg";
+      const buf = await imgResp.arrayBuffer();
+      if (buf.byteLength > 1_000_000) { warnings.push(`Foto > 1 MB tras redimensionar (${Math.round(buf.byteLength/1024)} KB), omitida.`); continue; }
+      const up = await fetch(`${HUBRISE_BASE}/catalogs/${catalogId}/images`, {
+        method: "POST", headers: { "X-Access-Token": token, "Content-Type": ctype }, body: buf,
+      });
+      if (!up.ok) { warnings.push(`Subida de imagen fallida: ${(await up.text()).slice(0, 150)}`); continue; }
+      const uj = await up.json();
+      const imageId = uj.id as string | undefined;
+      if (!imageId) { warnings.push("Subida de imagen sin id devuelto, omitida."); continue; }
+      await sb.from("catalog_image_map").upsert({
+        account_id: accountId, menu_item_id: t.itemId, external_catalog_id: catalogId,
+        image_id: imageId, source_url: t.photoUrl, source_hash: fnv1a(t.photoUrl),
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "menu_item_id,external_catalog_id" });
+      out.set(t.idx, imageId);
+    } catch (e) {
+      warnings.push(`Error con una foto: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+  return out;
+}
+
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ ok: false, error: "method not allowed" }, 405);
@@ -136,7 +209,7 @@ Deno.serve(async (req: Request) => {
         .select("id, name, emoji, position, parent_id, is_active")
         .eq("account_id", accountId).eq("brand_id", brandId),
       sb.from("menu_item")
-        .select("id, name, description, price, product_type, menu_category_id, external_id, is_active")
+        .select("id, name, description, price, product_type, menu_category_id, external_id, is_active, photo_url")
         .eq("account_id", accountId).eq("brand_id", brandId),
     ]);
 
@@ -300,8 +373,9 @@ Deno.serve(async (req: Request) => {
     };
 
     // ── Construir products (skus) ───────────────────────────────────────────
-    const productsPayload: Array<Record<string, unknown>> = products
-      .sort((a, b) => Number((a as Record<string, unknown>).position ?? 0) - Number((b as Record<string, unknown>).position ?? 0))
+    const sortedProducts = products
+      .sort((a, b) => Number((a as Record<string, unknown>).position ?? 0) - Number((b as Record<string, unknown>).position ?? 0));
+    const productsPayload: Array<Record<string, unknown>> = sortedProducts
       .map((p) => {
         const ref = refById.get(p.id as string)!;
         const olRefs = groupsByItem.get(p.id as string) ?? [];
@@ -335,6 +409,13 @@ Deno.serve(async (req: Request) => {
         if (p.description) prod.description = p.description;
         return prod;
       });
+
+    // Productos con foto: idx en productsPayload -> menu_item + url (para subir/reusar).
+    const imgTargets: ImgTarget[] = [];
+    sortedProducts.forEach((p, idx) => {
+      const url = (p.photo_url as string | null) ?? null;
+      if (url) imgTargets.push({ idx, itemId: p.id as string, photoUrl: url });
+    });
 
     // ── Construir deals (combos) ────────────────────────────────────────────
     const dealsPayload: Array<Record<string, unknown>> = [];
@@ -398,14 +479,26 @@ Deno.serve(async (req: Request) => {
     };
 
     // ── Publicar a cada conexión (PUT reemplaza el catálogo de la marca) ─────
-    let okCount = 0, errCount = 0;
+    // Las imágenes son POR CATÁLOGO: se resuelven (reuso/subida) por conexión y se
+    // inyectan en los productos antes del PUT.
+    let okCount = 0, errCount = 0, imagesTotal = 0;
     for (const c of conns) {
       let targetStatus = "ok", errorText: string | null = null;
       try {
+        const imgMap = await resolveCatalogImages(sb, accountId, c.catalogId, c.token, imgTargets, warnings);
+        if (imgMap.size > imagesTotal) imagesTotal = imgMap.size;
+        const productsForConn = productsPayload.map((prod, idx) => {
+          const imageId = imgMap.get(idx);
+          return imageId ? { ...prod, image_ids: [imageId] } : prod;
+        });
+        const catalogDataForConn = {
+          ...catalogData,
+          data: { ...catalogData.data, products: productsForConn },
+        };
         const res = await fetch(`${HUBRISE_BASE}/catalogs/${c.catalogId}`, {
           method: "PUT",
           headers: { "X-Access-Token": c.token, "Content-Type": "application/json" },
-          body: JSON.stringify(catalogData),
+          body: JSON.stringify(catalogDataForConn),
         });
         if (!res.ok) { targetStatus = "error"; errorText = (await res.text()).slice(0, 400); errCount++; }
         else okCount++;
@@ -445,6 +538,7 @@ Deno.serve(async (req: Request) => {
       option_lists: optionLists.length,
       variants: variants.length,
       price_overrides: priceOverridesApplied,
+      images: imagesTotal,
       warnings,
       targets: targets ?? [],
     }, 200);
