@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -3882,8 +3882,12 @@ export type Database = {
       }
       external_integration: {
         Row: {
+          access_token: string | null
           account_id: string
+          connection_name: string | null
           created_at: string
+          external_catalog_id: string | null
+          external_location_id: string | null
           external_org_id: string
           id: string
           is_active: boolean
@@ -3895,8 +3899,12 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          access_token?: string | null
           account_id: string
+          connection_name?: string | null
           created_at?: string
+          external_catalog_id?: string | null
+          external_location_id?: string | null
           external_org_id: string
           id?: string
           is_active?: boolean
@@ -3908,8 +3916,12 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          access_token?: string | null
           account_id?: string
+          connection_name?: string | null
           created_at?: string
+          external_catalog_id?: string | null
+          external_location_id?: string | null
           external_org_id?: string
           id?: string
           is_active?: boolean
