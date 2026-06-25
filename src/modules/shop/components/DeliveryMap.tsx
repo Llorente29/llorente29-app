@@ -2,13 +2,18 @@
 //
 // Mapa base + dibujo de zonas del editor de entrega (Capa 1 del motor de envío).
 // Pinta: zonas guardadas (radio→círculo, polígono→área; postal no se pinta),
-// un DRAFT en vivo —círculo (radio) O polígono (isócrona por carretera)— de la
-// zona que se crea/edita, y RESALTA la zona seleccionada (highlightZoneId).
+// un DRAFT en vivo —círculo (radio) O polígono (isócrona)— de la zona en edición,
+// y RESALTA la zona seleccionada (highlightZoneId).
+// Además, MODO DIBUJO (drawing): activa mapbox-gl-draw para que el hostelero
+// dibuje un polígono a mano (clic por vértice, doble clic para cerrar) y lo
+// devuelve por onPolygonDrawn.
 // Aísla aquí todo el trato con Mapbox.
 
 import { useEffect, useRef } from 'react'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
+import MapboxDraw from '@mapbox/mapbox-gl-draw'
+import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css'
 import * as turf from '@turf/turf'
 import { hasMapbox, type DeliveryZone } from '@/modules/shop/services/deliveryZoneService'
 
@@ -30,6 +35,8 @@ type DeliveryMapProps = {
   draftCircle?: DraftCircle
   draftPolygon?: DraftPolygon
   highlightZoneId?: string | null
+  drawing?: boolean
+  onPolygonDrawn?: (poly: GeoJSON.Polygon | null) => void
   onReady?: (map: mapboxgl.Map) => void
 }
 
@@ -64,13 +71,16 @@ function draftToGeoJSON(circle: DraftCircle, polygon: DraftPolygon): GeoJSON.Fea
 
 export default function DeliveryMap({
   lat, lng, locationName, zones = [], draftCircle = null, draftPolygon = null,
-  highlightZoneId = null, onReady,
+  highlightZoneId = null, drawing = false, onPolygonDrawn, onReady,
 }: DeliveryMapProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<mapboxgl.Map | null>(null)
+  const drawRef = useRef<MapboxDraw | null>(null)
   const loadedRef = useRef(false)
   const onReadyRef = useRef(onReady)
+  const onPolygonDrawnRef = useRef(onPolygonDrawn)
   onReadyRef.current = onReady
+  onPolygonDrawnRef.current = onPolygonDrawn
 
   useEffect(() => {
     if (!MAPBOX_TOKEN || !containerRef.current || mapRef.current) return
@@ -110,13 +120,31 @@ export default function DeliveryMap({
       map.addLayer({ id: 'draft-fill', type: 'fill', source: 'draft', paint: { 'fill-color': '#185FA5', 'fill-opacity': 0.12 } })
       map.addLayer({ id: 'draft-line', type: 'line', source: 'draft', paint: { 'line-color': '#185FA5', 'line-width': 2, 'line-dasharray': [2, 1] } })
 
+      // Herramienta de dibujo (oculta hasta que drawing=true la active).
+      const draw = new MapboxDraw({
+        displayControlsDefault: false,
+        controls: {},
+        defaultMode: 'simple_select',
+      })
+      drawRef.current = draw
+      map.addControl(draw)
+
+      const emitPolygon = () => {
+        const fc = draw.getAll()
+        const poly = fc.features.find(f => f.geometry.type === 'Polygon')
+        onPolygonDrawnRef.current?.(poly ? (poly.geometry as GeoJSON.Polygon) : null)
+      }
+      map.on('draw.create', emitPolygon)
+      map.on('draw.update', emitPolygon)
+      map.on('draw.delete', () => onPolygonDrawnRef.current?.(null))
+
       loadedRef.current = true
       ;(map.getSource('zones') as mapboxgl.GeoJSONSource)?.setData(zonesToGeoJSON(zones, highlightZoneId))
       ;(map.getSource('draft') as mapboxgl.GeoJSONSource)?.setData(draftToGeoJSON(draftCircle, draftPolygon))
       onReadyRef.current?.(map)
     })
 
-    return () => { map.remove(); mapRef.current = null; loadedRef.current = false }
+    return () => { map.remove(); mapRef.current = null; drawRef.current = null; loadedRef.current = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -133,6 +161,22 @@ export default function DeliveryMap({
     if (!map || !loadedRef.current) return
     ;(map.getSource('draft') as mapboxgl.GeoJSONSource | undefined)?.setData(draftToGeoJSON(draftCircle, draftPolygon))
   }, [draftCircle, draftPolygon])
+
+  // Modo dibujo: al activarse, limpia lo anterior y entra en draw_polygon.
+  // Al desactivarse, borra lo dibujado y vuelve a selección.
+  useEffect(() => {
+    const map = mapRef.current
+    const draw = drawRef.current
+    if (!map || !draw || !loadedRef.current) return
+    if (drawing) {
+      draw.deleteAll()
+      onPolygonDrawnRef.current?.(null)
+      draw.changeMode('draw_polygon')
+    } else {
+      draw.deleteAll()
+      draw.changeMode('simple_select')
+    }
+  }, [drawing])
 
   if (!hasMapbox()) {
     return (

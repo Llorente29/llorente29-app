@@ -48,6 +48,8 @@ export default function ShopDeliveryPage() {
   const [editingZone, setEditingZone] = useState<DeliveryZone | null>(null)
   const [draftRadiusM, setDraftRadiusM] = useState<number | null>(null)
   const [draftPolygon, setDraftPolygon] = useState<DraftPolygon>(null)
+  const [drawing, setDrawing] = useState(false)
+  const [drawnPolygon, setDrawnPolygon] = useState<GeoJSON.Polygon | null>(null)
 
   useEffect(() => {
     if (!resolvedLocationId || !supabase) { setLoc(null); return }
@@ -92,7 +94,10 @@ export default function ShopDeliveryPage() {
     if (z.method !== 'radius') return
     setEditingZone(z); setDraftRadiusM(z.radius_m ?? 2000); setDraftPolygon(null); setMode('edit')
   }
-  function closeEditor() { setMode('idle'); setEditingZone(null); setDraftRadiusM(null); setDraftPolygon(null) }
+  function closeEditor() {
+    setMode('idle'); setEditingZone(null); setDraftRadiusM(null); setDraftPolygon(null)
+    setDrawing(false); setDrawnPolygon(null)
+  }
 
   async function handleDelete(id: string, name: string) {
     if (!confirm(`¿Quitar la zona "${name}"? Dejarás de repartir ahí.`)) return
@@ -148,7 +153,8 @@ export default function ShopDeliveryPage() {
           <DeliveryMap
             key={loc.id}
             lat={loc.lat} lng={loc.lng} locationName={loc.name}
-            zones={zones} draftCircle={draftCircle} draftPolygon={draftPolygon} highlightZoneId={highlightId}
+            zones={zones} draftCircle={draftCircle} draftPolygon={drawing ? draftPolygon : (drawnPolygon ?? draftPolygon)} highlightZoneId={highlightId}
+            drawing={drawing} onPolygonDrawn={setDrawnPolygon}
           />
         </div>
 
@@ -170,8 +176,10 @@ export default function ShopDeliveryPage() {
               centerLat={loc.lat} centerLng={loc.lng}
               zone={mode === 'edit' ? editingZone : null}
               ticketMedio={ticketMedio}
+              drawnPolygon={drawnPolygon}
               onDraftRadius={setDraftRadiusM}
               onDraftPolygon={setDraftPolygon}
+              onDrawingChange={setDrawing}
               onSaved={() => { closeEditor(); reloadZones() }}
               onCancel={closeEditor}
             />

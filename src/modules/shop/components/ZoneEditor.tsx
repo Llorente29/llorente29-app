@@ -1,26 +1,24 @@
 // src/modules/shop/components/ZoneEditor.tsx
 //
 // Editor unificado de zona de entrega para HOSTELEROS (Capa 1).
-// Métodos (selector arriba): radio rápido / por carretera·km / por carretera·tiempo.
-// Para los de carretera, un selector de MEDIO DE REPARTO (moto/coche/bici/pie)
-// hace que la isócrona de Mapbox sea realista (en moto en ciudad el alcance real
-// es mucho menor que en coche por autovía). Por defecto: moto.
-// Las isócronas se calculan en Mapbox (botón "Ver alcance") y se guardan como
-// polígono; el radio se guarda como radio.
+// Métodos: radio rápido / por carretera·km / por carretera·tiempo / códigos
+// postales / zona a mano (dibujar el área en el mapa).
+// Carretera: selector de MEDIO DE REPARTO (moto/coche/bici/pie) → isócrona Mapbox
+// realista. Radio→radio; isócrona y zona a mano→polígono; CP→lista.
 //
 // COPILOTO DE AYUDAS en vivo: tiempo, zona grande, envío vs mínimo, margen vs
-// ticket medio del local (margen general; el por-zona exacto llega con las coords
-// de raw_tab, frente aparte).
+// ticket medio del local (margen general; el por-zona exacto llega con coords de
+// raw_tab, frente aparte).
 //
-// Editar: de momento solo radio se precarga; las de carretera se recrean.
+// Editar: solo radio se precarga; el resto se recrea.
 
 import { useState } from 'react'
 import {
-  upsertRadiusZone, upsertPolygonZone, isochrone,
+  upsertRadiusZone, upsertPolygonZone, upsertPostalZone, isochrone,
   type DeliveryZone, type TravelProfile,
 } from '@/modules/shop/services/deliveryZoneService'
 
-export type ZoneMethodUI = 'radius' | 'meters' | 'minutes'
+export type ZoneMethodUI = 'radius' | 'meters' | 'minutes' | 'postal' | 'draw'
 
 type Props = {
   locationId: string
@@ -28,8 +26,10 @@ type Props = {
   centerLng: number
   zone: DeliveryZone | null
   ticketMedio: number | null
+  drawnPolygon: GeoJSON.Polygon | null      // polígono que el usuario dibuja en el mapa
   onDraftRadius: (radiusM: number | null) => void
   onDraftPolygon: (poly: GeoJSON.Polygon | null) => void
+  onDrawingChange: (drawing: boolean) => void  // pide al mapa entrar/salir de modo dibujo
   onSaved: () => void
   onCancel: () => void
 }
@@ -40,6 +40,12 @@ const inp: React.CSSProperties = { width: '100%' }
 function fmtNum(n: number | null): string { return n == null ? '' : String(n).replace('.', ',') }
 function approxMin(km: number): number { return Math.max(10, Math.round((km / 18) * 60 / 5) * 5) }
 
+function parsePostalCodes(text: string): string[] {
+  const tokens = text.split(/[^0-9]+/).filter(Boolean)
+  return Array.from(new Set(tokens))
+}
+function isValidEsCp(cp: string): boolean { return /^[0-5][0-9]{4}$/.test(cp) }
+
 const PROFILES: { v: TravelProfile; label: string }[] = [
   { v: 'moto', label: '🛵 En moto' },
   { v: 'coche', label: '🚗 En coche' },
@@ -48,8 +54,8 @@ const PROFILES: { v: TravelProfile; label: string }[] = [
 ]
 
 export default function ZoneEditor({
-  locationId, centerLat, centerLng, zone, ticketMedio,
-  onDraftRadius, onDraftPolygon, onSaved, onCancel,
+  locationId, centerLat, centerLng, zone, ticketMedio, drawnPolygon,
+  onDraftRadius, onDraftPolygon, onDrawingChange, onSaved, onCancel,
 }: Props) {
   const editing = zone != null
   const [method, setMethod] = useState<ZoneMethodUI>('radius')
@@ -63,6 +69,10 @@ export default function ZoneEditor({
   const [routeKm, setRouteKm] = useState(3)
   const [minutes, setMinutes] = useState(15)
 
+  const [postalText, setPostalText] = useState((zone?.postal_codes ?? []).join(', '))
+  const postalCodes = parsePostalCodes(postalText)
+  const postalInvalid = postalCodes.filter(c => !isValidEsCp(c))
+
   const [computedPoly, setComputedPoly] = useState<GeoJSON.Polygon | null>(null)
   const [calc, setCalc] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -75,9 +85,13 @@ export default function ZoneEditor({
   }
   function pickMethod(m: ZoneMethodUI) {
     setMethod(m); setComputedPoly(null); onDraftPolygon(null)
+    // Modo dibujo solo en 'draw'.
+    onDrawingChange(m === 'draw')
     if (m === 'radius') onDraftRadius(radiusM); else onDraftRadius(null)
   }
   function clearComputed() { setComputedPoly(null); onDraftPolygon(null) }
+
+  function removeCp(cp: string) { setPostalText(postalCodes.filter(c => c !== cp).join(', ')) }
 
   async function handleCalc() {
     setErr(null); setCalc(true)
@@ -91,6 +105,12 @@ export default function ZoneEditor({
     } finally {
       setCalc(false)
     }
+  }
+
+  function finish(cb: () => void) {
+    // Antes de guardar/cancelar, asegura salir del modo dibujo.
+    onDrawingChange(false)
+    cb()
   }
 
   async function handleSave() {
@@ -107,10 +127,17 @@ export default function ZoneEditor({
     try {
       if (method === 'radius') {
         await upsertRadiusZone(zone?.id ?? null, locationId, radiusM, centerLat, centerLng, eco)
+      } else if (method === 'postal') {
+        if (postalCodes.length === 0) { setErr('Escribe al menos un código postal.'); setSaving(false); return }
+        await upsertPostalZone(zone?.id ?? null, locationId, postalCodes, eco)
+      } else if (method === 'draw') {
+        if (!drawnPolygon) { setErr('Dibuja la zona en el mapa antes de guardar.'); setSaving(false); return }
+        await upsertPolygonZone(zone?.id ?? null, locationId, drawnPolygon, eco)
       } else {
         if (!computedPoly) { setErr('Pulsa “Ver alcance” para calcular la zona antes de guardar.'); setSaving(false); return }
         await upsertPolygonZone(zone?.id ?? null, locationId, computedPoly, eco)
       }
+      onDrawingChange(false)
       onSaved()
     } catch (e: any) {
       setErr(e.message); setSaving(false)
@@ -127,9 +154,15 @@ export default function ZoneEditor({
   } else if (method === 'meters') {
     tips.push({ tone: 'info', text: `Reparto hasta ${routeKm} km de ruta real ${profileWord} (por calles, no en línea recta).` })
     if (routeKm > 5) tips.push({ tone: 'warn', text: `${routeKm} km de ruta es bastante para comida caliente.` })
-  } else {
+  } else if (method === 'minutes') {
     tips.push({ tone: 'info', text: `Reparto hasta ${minutes} min ${profileWord} (tiempo real por carretera).` })
     if (minutes > 25) tips.push({ tone: 'warn', text: `${minutes} min puede ser demasiado para que la comida llegue caliente.` })
+  } else if (method === 'postal') {
+    if (postalCodes.length > 0) tips.push({ tone: 'info', text: `Repartes a ${postalCodes.length} código${postalCodes.length === 1 ? '' : 's'} postal${postalCodes.length === 1 ? '' : 'es'}.` })
+    if (postalInvalid.length > 0) tips.push({ tone: 'warn', text: `Estos no parecen códigos postales españoles: ${postalInvalid.join(', ')}. Revísalos.` })
+  } else {
+    if (drawnPolygon) tips.push({ tone: 'good', text: 'Zona dibujada. Ajusta los puntos en el mapa o guárdala.' })
+    else tips.push({ tone: 'info', text: 'Haz clic en el mapa para marcar las esquinas de tu zona; doble clic para cerrarla.' })
   }
 
   if (isFinite(feeNum) && feeNum > 0 && minOrder.trim()) {
@@ -165,7 +198,7 @@ export default function ZoneEditor({
     <div style={{ border: '2px solid var(--color-accent, #1E3A5F)', borderRadius: 12, padding: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <h3 style={{ margin: 0, fontSize: 15 }}>{editing ? `Editar · ${zone!.name}` : 'Nueva zona'}</h3>
-        <button onClick={onCancel} disabled={saving} title="Cerrar" style={{
+        <button onClick={() => finish(onCancel)} disabled={saving} title="Cerrar" style={{
           border: 'none', background: 'transparent', cursor: 'pointer',
           color: 'var(--color-text-secondary)', fontSize: 18, lineHeight: 1,
         }}>×</button>
@@ -174,10 +207,16 @@ export default function ZoneEditor({
       {!editing && (
         <>
           <label style={lbl}>¿Cómo defines la zona?</label>
-          <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
             {methodBtn('radius', 'Radio rápido')}
             {methodBtn('meters', 'Por carretera · km')}
+          </div>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
             {methodBtn('minutes', 'Por carretera · tiempo')}
+            {methodBtn('postal', 'Códigos postales')}
+          </div>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+            {methodBtn('draw', '✏️ Zona a mano')}
           </div>
         </>
       )}
@@ -185,7 +224,6 @@ export default function ZoneEditor({
       <label style={lbl}>Nombre</label>
       <input style={{ ...inp, marginBottom: 12 }} value={name} onChange={e => setName(e.target.value)} placeholder="Ej. Centro" />
 
-      {/* Selector de medio de reparto (solo carretera) */}
       {showProfile && (
         <>
           <label style={lbl}>¿Cómo repartes?</label>
@@ -201,7 +239,6 @@ export default function ZoneEditor({
         </>
       )}
 
-      {/* Control según método */}
       {method === 'radius' && (
         <>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -236,6 +273,45 @@ export default function ZoneEditor({
             style={{ ...inp, marginBottom: 8 }} />
           <button onClick={handleCalc} disabled={calc} style={calcBtn}>{calc ? 'Calculando…' : 'Ver alcance en el mapa'}</button>
         </>
+      )}
+      {method === 'postal' && (
+        <>
+          <label style={lbl}>Códigos postales (sepáralos por coma o espacio)</label>
+          <textarea value={postalText} onChange={e => setPostalText(e.target.value)}
+            placeholder="28027, 28022, 28002" rows={2}
+            style={{ ...inp, marginBottom: 8, resize: 'vertical', fontFamily: 'inherit', fontSize: 14 }} />
+          {postalCodes.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+              {postalCodes.map(cp => {
+                const bad = !isValidEsCp(cp)
+                return (
+                  <span key={cp} style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    fontSize: 12.5, padding: '3px 8px', borderRadius: 20,
+                    background: bad ? 'var(--color-warning-bg, #FAEEDA)' : 'var(--color-accent-bg, #EDECE6)',
+                    color: bad ? 'var(--color-warning, #854F0B)' : 'var(--color-text-primary)',
+                    border: bad ? '1px solid var(--color-warning, #854F0B)' : '1px solid var(--color-border-default)',
+                  }}>
+                    {cp}
+                    <button onClick={() => removeCp(cp)} title="Quitar" style={{
+                      border: 'none', background: 'transparent', cursor: 'pointer',
+                      color: 'inherit', fontSize: 14, lineHeight: 1, padding: 0,
+                    }}>×</button>
+                  </span>
+                )
+              })}
+            </div>
+          )}
+        </>
+      )}
+      {method === 'draw' && (
+        <div style={{
+          fontSize: 12.5, padding: '10px 12px', borderRadius: 8, marginBottom: 12,
+          background: 'var(--color-accent-bg, #EDECE6)', color: 'var(--color-text-secondary)',
+        }}>
+          Dibuja tu zona en el mapa: haz clic para marcar cada esquina y doble clic
+          para cerrarla. Luego puedes arrastrar los puntos para ajustarla.
+        </div>
       )}
 
       <div style={{ display: 'flex', gap: 8, margin: '12px 0' }}>
@@ -272,7 +348,7 @@ export default function ZoneEditor({
           background: 'var(--color-terracota, #D67442)', color: '#fff', cursor: 'pointer',
           opacity: saving ? 0.6 : 1,
         }}>{saving ? 'Guardando…' : 'Guardar'}</button>
-        <button onClick={onCancel} disabled={saving} style={{
+        <button onClick={() => finish(onCancel)} disabled={saving} style={{
           padding: '9px 16px', borderRadius: 8, border: '1px solid var(--color-border-default)',
           background: 'transparent', cursor: 'pointer',
         }}>Cancelar</button>
