@@ -9160,6 +9160,8 @@ export type Database = {
           brand_id: string | null
           cancel_reason: string | null
           cancelled_at: string | null
+          carrier_code: string | null
+          carrier_order_id: string | null
           channel_id: string | null
           closed_at: string | null
           created_at: string
@@ -9170,7 +9172,12 @@ export type Database = {
           customer_phone: string | null
           delivery_address: string | null
           delivery_cost: number | null
+          delivery_state: string | null
           discount_amount: number | null
+          dispatch_error: string | null
+          dispatch_mode: string
+          eta_delivery: string | null
+          eta_pickup: string | null
           expected_time: string | null
           external_brand_text: string | null
           external_channel_text: string | null
@@ -9189,6 +9196,8 @@ export type Database = {
           raw_products: string | null
           raw_tab: string | null
           refund_amount: number | null
+          rider_name: string | null
+          rider_phone: string | null
           service_type: string | null
           sold_at: string
           source: string
@@ -9196,6 +9205,7 @@ export type Database = {
           tax: number | null
           taxable_base: number | null
           total: number
+          transport_price: number | null
           updated_at: string
         }
         Insert: {
@@ -9204,6 +9214,8 @@ export type Database = {
           brand_id?: string | null
           cancel_reason?: string | null
           cancelled_at?: string | null
+          carrier_code?: string | null
+          carrier_order_id?: string | null
           channel_id?: string | null
           closed_at?: string | null
           created_at?: string
@@ -9214,7 +9226,12 @@ export type Database = {
           customer_phone?: string | null
           delivery_address?: string | null
           delivery_cost?: number | null
+          delivery_state?: string | null
           discount_amount?: number | null
+          dispatch_error?: string | null
+          dispatch_mode?: string
+          eta_delivery?: string | null
+          eta_pickup?: string | null
           expected_time?: string | null
           external_brand_text?: string | null
           external_channel_text?: string | null
@@ -9233,6 +9250,8 @@ export type Database = {
           raw_products?: string | null
           raw_tab?: string | null
           refund_amount?: number | null
+          rider_name?: string | null
+          rider_phone?: string | null
           service_type?: string | null
           sold_at: string
           source?: string
@@ -9240,6 +9259,7 @@ export type Database = {
           tax?: number | null
           taxable_base?: number | null
           total?: number
+          transport_price?: number | null
           updated_at?: string
         }
         Update: {
@@ -9248,6 +9268,8 @@ export type Database = {
           brand_id?: string | null
           cancel_reason?: string | null
           cancelled_at?: string | null
+          carrier_code?: string | null
+          carrier_order_id?: string | null
           channel_id?: string | null
           closed_at?: string | null
           created_at?: string
@@ -9258,7 +9280,12 @@ export type Database = {
           customer_phone?: string | null
           delivery_address?: string | null
           delivery_cost?: number | null
+          delivery_state?: string | null
           discount_amount?: number | null
+          dispatch_error?: string | null
+          dispatch_mode?: string
+          eta_delivery?: string | null
+          eta_pickup?: string | null
           expected_time?: string | null
           external_brand_text?: string | null
           external_channel_text?: string | null
@@ -9277,6 +9304,8 @@ export type Database = {
           raw_products?: string | null
           raw_tab?: string | null
           refund_amount?: number | null
+          rider_name?: string | null
+          rider_phone?: string | null
           service_type?: string | null
           sold_at?: string
           source?: string
@@ -9284,6 +9313,7 @@ export type Database = {
           tax?: number | null
           taxable_base?: number | null
           total?: number
+          transport_price?: number | null
           updated_at?: string
         }
         Relationships: [
@@ -11295,6 +11325,10 @@ export type Database = {
     Views: {
     }
     Functions: {
+      _delivery_zone_account_of_location: {
+        Args: { p_location_id: string }
+        Returns: string
+      }
       _eur_base_from_format: {
         Args: { p_format_id: string; p_price_per_format: number }
         Returns: number
@@ -11771,6 +11805,7 @@ export type Database = {
         Args: { p_account_id: string; p_admin_user_id: string }
         Returns: undefined
       }
+      delete_delivery_zone: { Args: { p_id: string }; Returns: undefined }
       device_location_by_token: {
         Args: { p_device_token: string }
         Returns: Json
@@ -12132,6 +12167,24 @@ export type Database = {
           recipe_item_id: string
           recipe_type: string
           ventas: number
+        }[]
+      }
+      list_delivery_zones: {
+        Args: { p_location_id: string }
+        Returns: {
+          area_geojson: Json
+          center_lat: number
+          center_lng: number
+          delivery_fee: number
+          eta_min: number
+          id: string
+          is_active: boolean
+          method: string
+          min_order: number
+          name: string
+          postal_codes: string[]
+          priority: number
+          radius_m: number
         }[]
       }
       list_pending_external_brands: {
@@ -12660,6 +12713,23 @@ export type Database = {
         Returns: undefined
       }
       reprocess_sale: { Args: { p_sale_id: string }; Returns: number }
+      resolve_delivery_zone: {
+        Args: {
+          p_account_id: string
+          p_lat: number
+          p_lng: number
+          p_postal?: string
+        }
+        Returns: {
+          delivery_fee: number
+          eta_min: number
+          location_id: string
+          method: string
+          min_order: number
+          zone_id: string
+          zone_name: string
+        }[]
+      }
       resolve_mapping_proposals: {
         Args: {
           p_fuzzy_min?: number
@@ -13554,6 +13624,47 @@ export type Database = {
           new_srid_in: number
           schema_name: string
           table_name: string
+        }
+        Returns: string
+      }
+      upsert_delivery_zone_polygon: {
+        Args: {
+          p_delivery_fee: number
+          p_eta_min?: number
+          p_geojson: Json
+          p_id: string
+          p_location_id: string
+          p_min_order?: number
+          p_name: string
+          p_priority?: number
+        }
+        Returns: string
+      }
+      upsert_delivery_zone_postal: {
+        Args: {
+          p_delivery_fee: number
+          p_eta_min?: number
+          p_id: string
+          p_location_id: string
+          p_min_order?: number
+          p_name: string
+          p_postal_codes: string[]
+          p_priority?: number
+        }
+        Returns: string
+      }
+      upsert_delivery_zone_radius: {
+        Args: {
+          p_delivery_fee: number
+          p_eta_min?: number
+          p_id: string
+          p_lat: number
+          p_lng: number
+          p_location_id: string
+          p_min_order?: number
+          p_name: string
+          p_priority?: number
+          p_radius_m: number
         }
         Returns: string
       }

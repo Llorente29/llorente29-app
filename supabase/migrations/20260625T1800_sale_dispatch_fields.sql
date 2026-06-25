@@ -1,0 +1,13 @@
+begin;
+alter table public.sale add column if not exists carrier_code text;
+alter table public.sale add column if not exists dispatch_mode text not null default 'auto';
+alter table public.sale add column if not exists delivery_state text;
+alter table public.sale add column if not exists carrier_order_id text;
+alter table public.sale add column if not exists transport_price numeric;
+alter table public.sale add column if not exists rider_name text;
+alter table public.sale add column if not exists rider_phone text;
+alter table public.sale add column if not exists eta_pickup timestamptz;
+alter table public.sale add column if not exists eta_delivery timestamptz;
+alter table public.sale add column if not exists dispatch_error text;
+create index if not exists idx_sale_carrier_order_id on public.sale (carrier_order_id) where carrier_order_id is not null;
+commit;
