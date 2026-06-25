@@ -4,11 +4,11 @@
 // Pinta la tienda REAL: portada/logo/acento de la marca + su carta real
 // (listCategoriesWithProducts). Reacciona al vuelo a los mandos del tema.
 //
-// Cabecera (sin "pegote"):
-//   - Si hay foto de portada (heroUrl) → foto a sangre + velo oscuro abajo con
+// Cabecera (sin "pegote", logo SIN caja — flota a altura fija y se adapta a
+// cualquier proporción de logo vía object-fit: contain):
+//   - Con foto de portada (heroUrl) → foto a sangre + velo oscuro abajo con
 //     logo + nombre, siempre legible.
-//   - Si no hay → tinte SUAVE del color de marca (no banda sólida) + logo
-//     centrado con aire. Limpio, nunca un bloque de color ajeno al logo.
+//   - Sin foto → tinte SUAVE del color de marca + logo centrado con aire.
 import { useEffect, useState } from 'react'
 import { listCategoriesWithProducts, type CatalogCategory } from '@/modules/kitchen/services/brandCatalogService'
 import type { ShopTemplate, ShopFont, ShopMode } from '@/modules/shop/services/shopThemeService'
@@ -85,29 +85,29 @@ export default function StorefrontPreview({ accountId, brandId, brand, heroUrl, 
 
           {/* ── Cabecera ───────────────────────────────────────────────── */}
           {heroUrl ? (
-            // Con foto de portada: foto a sangre + velo oscuro con logo+nombre
+            // Con foto de portada: foto a sangre + velo oscuro con logo (sin caja) + nombre
             <div style={{ position: 'relative', height: heroH, background: '#000' }}>
               <img src={heroUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
               <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 72, background: 'rgba(0,0,0,.42)', display: 'flex', alignItems: 'center', gap: 11, padding: '0 14px' }}>
                 {brand.logo_url && (
-                  <div style={{ width: 46, height: 46, borderRadius: 12, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flex: '0 0 auto' }}>
-                    <img src={brand.logo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                  </div>
+                  <img
+                    src={brand.logo_url}
+                    alt=""
+                    style={{ height: 40, maxWidth: 84, objectFit: 'contain', flex: '0 0 auto', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,.5))' }}
+                  />
                 )}
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ color: '#fff', fontWeight: 600, fontSize: 18, lineHeight: 1.1 }}>{brand.name}</div>
-                  <div style={{ color: 'rgba(255,255,255,.85)', fontSize: 12, marginTop: 2 }}>Abierto · entrega 25-35 min</div>
+                  <div style={{ color: '#fff', fontWeight: 600, fontSize: 18, lineHeight: 1.1, textShadow: '0 1px 3px rgba(0,0,0,.5)' }}>{brand.name}</div>
+                  <div style={{ color: 'rgba(255,255,255,.9)', fontSize: 12, marginTop: 2, textShadow: '0 1px 2px rgba(0,0,0,.5)' }}>Abierto · entrega 25-35 min</div>
                 </div>
               </div>
             </div>
           ) : (
-            // Sin foto: tinte SUAVE del color de marca + logo centrado con aire
-            <div style={{ height: heroH, background: tint(theme.accent, theme.mode === 'dark' ? 0.22 : 0.12), display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+            // Sin foto: tinte SUAVE del color de marca + logo (sin caja) centrado con aire
+            <div style={{ height: heroH, background: tint(theme.accent, theme.mode === 'dark' ? 0.22 : 0.12), display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
               {brand.logo_url
-                ? <div style={{ width: 70, height: 70, borderRadius: 16, background: theme.mode === 'dark' ? '#1e2125' : '#fff', border: `0.5px solid ${s.line}`, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                    <img src={brand.logo_url} alt="" style={{ width: '78%', height: '78%', objectFit: 'contain' }} />
-                  </div>
-                : <div style={{ width: 70, height: 70, borderRadius: 16, background: theme.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 28, fontWeight: 600 }}>{brand.name.charAt(0)}</div>}
+                ? <img src={brand.logo_url} alt="" style={{ height: 64, maxWidth: 180, objectFit: 'contain' }} />
+                : <div style={{ width: 64, height: 64, borderRadius: 16, background: theme.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 28, fontWeight: 600 }}>{brand.name.charAt(0)}</div>}
               <div style={{ color: theme.accent, fontWeight: 600, fontSize: 18 }}>{brand.name}</div>
             </div>
           )}
