@@ -142,18 +142,27 @@ export async function geocodeAddress(query: string): Promise<GeocodeHit[]> {
   })
 }
 
-/** Isócrona: polígono alcanzable en p_minutes de conducción desde (lat,lng).
+/** Isócrona: polígono REAL por carretera desde (lat,lng).
+ *  - por tiempo:    { minutes: 20 }  → hasta donde llegas conduciendo 20 min
+ *  - por distancia: { meters: 3000 } → hasta donde llegas conduciendo 3 km de ruta
  *  Devuelve un Polygon GeoJSON listo para upsertPolygonZone. */
-export async function isochrone(lat: number, lng: number, minutes: number): Promise<GeoJSON.Polygon> {
+export async function isochrone(
+  lat: number,
+  lng: number,
+  by: { minutes: number } | { meters: number },
+): Promise<GeoJSON.Polygon> {
   if (!MAPBOX_TOKEN) throw new Error('Falta el token de Mapbox (VITE_MAPBOX_TOKEN).')
+  const contour = 'minutes' in by
+    ? `contours_minutes=${Math.round(by.minutes)}`
+    : `contours_meters=${Math.round(by.meters)}`
   const url = `https://api.mapbox.com/isochrone/v1/mapbox/driving/${lng},${lat}`
-    + `?contours_minutes=${Math.round(minutes)}&polygons=true&denoise=1&access_token=${MAPBOX_TOKEN}`
+    + `?${contour}&polygons=true&denoise=1&access_token=${MAPBOX_TOKEN}`
   const res = await fetch(url)
-  if (!res.ok) throw new Error(`Isócrona falló (${res.status}).`)
+  if (!res.ok) throw new Error(`No se pudo calcular el alcance por carretera (${res.status}).`)
   const json = await res.json()
   const feat = json.features?.[0]
   if (!feat?.geometry || feat.geometry.type !== 'Polygon') {
-    throw new Error('La isócrona no devolvió un polígono.')
+    throw new Error('El cálculo de alcance no devolvió un área válida.')
   }
   return feat.geometry as GeoJSON.Polygon
 }

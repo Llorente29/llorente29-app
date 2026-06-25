@@ -1,32 +1,24 @@
 // src/modules/shop/pages/ShopDeliveryPage.tsx
 //
 // Pestaña "Entrega" de Folvy Shop. Capa 1 del motor de envío.
-// Gestor de zonas pensado para HOSTELEROS (no para técnicos): mapa + lista en
-// TARJETAS con banda de color (casa con el círculo del mapa), nombre claro,
-// el PRECIO como protagonista y el dato traducido a lenguaje sencillo
-// (hasta X km a la redonda · llega en ~Y min · pedido mínimo Z €). Botones
-// grandes "Editar" y "Quitar" siempre visibles. Panel lateral crea/edita radio.
-// Métodos por carretera (distancia/tiempo), polígono y CP llegan a continuación.
+// Gestor de zonas para HOSTELEROS: mapa + tarjetas + editor unificado (radio /
+// por carretera por distancia / por carretera por tiempo) con copiloto de ayudas.
+// Carga el ticket medio real del local para el aviso de margen.
 // Casos límite: modo consolidado (elegir local) y local sin coordenadas.
 
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
-import DeliveryMap, { zoneColor, type DraftCircle } from '@/modules/shop/components/DeliveryMap'
-import RadiusZoneEditor from '@/modules/shop/components/RadiusZoneEditor'
+import DeliveryMap, { zoneColor, type DraftCircle, type DraftPolygon } from '@/modules/shop/components/DeliveryMap'
+import ZoneEditor from '@/modules/shop/components/ZoneEditor'
 import { listDeliveryZones, deleteZone, type DeliveryZone } from '@/modules/shop/services/deliveryZoneService'
 
 type LocationRow = { id: string; name: string; lat: number | null; lng: number | null }
 
-// Estimación de tiempo de relleno (solo si el hostelero no escribió ETA).
-// Reparto urbano ~18 km/h de media → min ≈ (km / 18) * 60. Aproximado a propósito;
-// el tiempo REAL por carretera lo dará la isócrona de Mapbox (siguiente tramo).
 function approxMinutesFromRadius(radiusM: number): number {
   const km = radiusM / 1000
-  return Math.max(10, Math.round((km / 18) * 60 / 5) * 5) // redondeo a 5 min, mínimo 10
+  return Math.max(10, Math.round((km / 18) * 60 / 5) * 5)
 }
-
-// Línea de "alcance" en lenguaje de hostelero según el método.
 function reachLabel(z: DeliveryZone): string {
   if (z.method === 'radius' && z.radius_m) {
     const km = z.radius_m / 1000
@@ -36,10 +28,8 @@ function reachLabel(z: DeliveryZone): string {
     const n = z.postal_codes?.length ?? 0
     return `${n} código${n === 1 ? '' : 's'} postal${n === 1 ? '' : 'es'}`
   }
-  return 'zona dibujada en el mapa'
+  return 'alcance por carretera'
 }
-
-// Línea de tiempo: el que puso el hostelero, o estimación aprox.
 function timeLabel(z: DeliveryZone): string {
   if (z.eta_min != null) return `llega en ~${z.eta_min} min`
   if (z.method === 'radius' && z.radius_m) return `llega en ~${approxMinutesFromRadius(z.radius_m)} min (aprox.)`
@@ -50,12 +40,14 @@ export default function ShopDeliveryPage() {
   const { resolvedLocationId, isConsolidated } = useLocationScope()
   const [loc, setLoc] = useState<LocationRow | null>(null)
   const [zones, setZones] = useState<DeliveryZone[]>([])
+  const [ticketMedio, setTicketMedio] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
   const [mode, setMode] = useState<'idle' | 'new' | 'edit'>('idle')
   const [editingZone, setEditingZone] = useState<DeliveryZone | null>(null)
-  const [draftRadiusM, setDraftRadiusM] = useState(2000)
+  const [draftRadiusM, setDraftRadiusM] = useState<number | null>(null)
+  const [draftPolygon, setDraftPolygon] = useState<DraftPolygon>(null)
 
   useEffect(() => {
     if (!resolvedLocationId || !supabase) { setLoc(null); return }
@@ -71,6 +63,20 @@ export default function ShopDeliveryPage() {
     return () => { alive = false }
   }, [resolvedLocationId])
 
+  // Ticket medio real del local (para aviso de margen). Honesto: ventas con total>0.
+  useEffect(() => {
+    if (!resolvedLocationId || !supabase) { setTicketMedio(null); return }
+    let alive = true
+    ;(supabase as any)
+      .from('sale').select('total').eq('location_id', resolvedLocationId).gt('total', 0).limit(2000)
+      .then(({ data }: any) => {
+        if (!alive || !data?.length) { setTicketMedio(null); return }
+        const avg = data.reduce((s: number, r: any) => s + Number(r.total), 0) / data.length
+        setTicketMedio(Math.round(avg * 100) / 100)
+      })
+    return () => { alive = false }
+  }, [resolvedLocationId])
+
   const reloadZones = useCallback(async () => {
     if (!resolvedLocationId) { setZones([]); return }
     try { setZones(await listDeliveryZones(resolvedLocationId)) }
@@ -79,12 +85,14 @@ export default function ShopDeliveryPage() {
 
   useEffect(() => { reloadZones() }, [reloadZones])
 
-  function startNew() { setEditingZone(null); setDraftRadiusM(2000); setMode('new') }
+  function startNew() {
+    setEditingZone(null); setDraftRadiusM(2000); setDraftPolygon(null); setMode('new')
+  }
   function startEdit(z: DeliveryZone) {
     if (z.method !== 'radius') return
-    setEditingZone(z); setDraftRadiusM(z.radius_m ?? 2000); setMode('edit')
+    setEditingZone(z); setDraftRadiusM(z.radius_m ?? 2000); setDraftPolygon(null); setMode('edit')
   }
-  function closeEditor() { setMode('idle'); setEditingZone(null) }
+  function closeEditor() { setMode('idle'); setEditingZone(null); setDraftRadiusM(null); setDraftPolygon(null) }
 
   async function handleDelete(id: string, name: string) {
     if (!confirm(`¿Quitar la zona "${name}"? Dejarás de repartir ahí.`)) return
@@ -123,7 +131,7 @@ export default function ShopDeliveryPage() {
   }
 
   const editorOpen = mode !== 'idle'
-  const draftCircle: DraftCircle = editorOpen
+  const draftCircle: DraftCircle = (editorOpen && draftRadiusM != null && !draftPolygon)
     ? { lat: loc.lat, lng: loc.lng, radiusM: draftRadiusM }
     : null
   const highlightId = mode === 'edit' ? editingZone?.id ?? null : null
@@ -136,19 +144,15 @@ export default function ShopDeliveryPage() {
       </p>
 
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-        {/* Mapa */}
         <div style={{ flex: '1 1 360px', minWidth: 0 }}>
           <DeliveryMap
             key={loc.id}
             lat={loc.lat} lng={loc.lng} locationName={loc.name}
-            zones={zones} draftCircle={draftCircle} highlightZoneId={highlightId}
+            zones={zones} draftCircle={draftCircle} draftPolygon={draftPolygon} highlightZoneId={highlightId}
           />
         </div>
 
-        {/* Panel derecho */}
         <div style={{ flex: '1 1 320px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
-
-          {/* Cabecera: título + botón nueva zona */}
           {!editorOpen && (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ fontSize: 16, fontWeight: 500 }}>Tus zonas de reparto</span>
@@ -156,26 +160,23 @@ export default function ShopDeliveryPage() {
                 display: 'inline-flex', alignItems: 'center', gap: 6,
                 background: 'var(--color-terracota, #D67442)', color: '#fff', border: 'none',
                 padding: '9px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 14,
-              }}>
-                + Nueva zona
-              </button>
+              }}>+ Nueva zona</button>
             </div>
           )}
 
-          {/* Editor (crear o editar) */}
           {editorOpen && (
-            <RadiusZoneEditor
+            <ZoneEditor
               locationId={loc.id}
               centerLat={loc.lat} centerLng={loc.lng}
               zone={mode === 'edit' ? editingZone : null}
-              radiusM={draftRadiusM}
-              onRadiusChange={setDraftRadiusM}
+              ticketMedio={ticketMedio}
+              onDraftRadius={setDraftRadiusM}
+              onDraftPolygon={setDraftPolygon}
               onSaved={() => { closeEditor(); reloadZones() }}
               onCancel={closeEditor}
             />
           )}
 
-          {/* Lista de zonas en TARJETAS */}
           {!editorOpen && (
             zones.length === 0 ? (
               <div style={{
@@ -191,9 +192,7 @@ export default function ShopDeliveryPage() {
                 <button onClick={startNew} style={{
                   background: 'var(--color-terracota, #D67442)', color: '#fff', border: 'none',
                   padding: '9px 16px', borderRadius: 8, cursor: 'pointer', fontSize: 14,
-                }}>
-                  Crear mi primera zona
-                </button>
+                }}>Crear mi primera zona</button>
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -207,10 +206,7 @@ export default function ShopDeliveryPage() {
                       border: '1px solid var(--color-border-default)', borderRadius: 12,
                       overflow: 'hidden', background: 'var(--color-bg-card, #FFFFFF)',
                     }}>
-                      {/* Banda de color */}
                       <div style={{ width: 6, background: color, flexShrink: 0 }} />
-
-                      {/* Cuerpo */}
                       <div style={{ flex: 1, padding: '12px 14px', minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
                           <span style={{ fontSize: 16, fontWeight: 500 }}>{z.name}</span>
@@ -230,43 +226,27 @@ export default function ShopDeliveryPage() {
                           {z.min_order != null && <span>· pedido mínimo {z.min_order.toFixed(0)} €</span>}
                         </div>
                       </div>
-
-                      {/* Precio protagonista */}
                       <div style={{
                         display: 'flex', flexDirection: 'column', alignItems: 'flex-end',
                         justifyContent: 'center', padding: '12px 14px',
                       }}>
-                        <div style={{ fontSize: 20, fontWeight: 500, lineHeight: 1 }}>
-                          {z.delivery_fee.toFixed(2)} €
-                        </div>
+                        <div style={{ fontSize: 20, fontWeight: 500, lineHeight: 1 }}>{z.delivery_fee.toFixed(2)} €</div>
                         <div style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>de envío</div>
                       </div>
-
-                      {/* Acciones */}
                       <div style={{ display: 'flex', flexDirection: 'column', borderLeft: '1px solid var(--color-border-default)' }}>
-                        <button
-                          onClick={() => startEdit(z)}
-                          disabled={!canEdit}
-                          title={canEdit ? 'Editar' : 'Edición disponible próximamente'}
+                        <button onClick={() => startEdit(z)} disabled={!canEdit}
+                          title={canEdit ? 'Editar' : 'La edición de zonas por carretera llega pronto'}
                           style={{
-                            flex: 1, border: 'none', background: 'transparent',
-                            padding: '0 16px', cursor: canEdit ? 'pointer' : 'not-allowed',
+                            flex: 1, border: 'none', background: 'transparent', padding: '0 16px',
+                            cursor: canEdit ? 'pointer' : 'not-allowed',
                             color: canEdit ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
                             fontSize: 13, borderBottom: '1px solid var(--color-border-default)',
                             opacity: canEdit ? 1 : 0.5,
-                          }}>
-                          Editar
-                        </button>
-                        <button
-                          onClick={() => handleDelete(z.id, z.name)}
-                          title="Quitar"
-                          style={{
-                            flex: 1, border: 'none', background: 'transparent',
-                            padding: '0 16px', cursor: 'pointer',
-                            color: 'var(--color-text-secondary)', fontSize: 13,
-                          }}>
-                          Quitar
-                        </button>
+                          }}>Editar</button>
+                        <button onClick={() => handleDelete(z.id, z.name)} title="Quitar" style={{
+                          flex: 1, border: 'none', background: 'transparent', padding: '0 16px',
+                          cursor: 'pointer', color: 'var(--color-text-secondary)', fontSize: 13,
+                        }}>Quitar</button>
                       </div>
                     </div>
                   )

@@ -1,10 +1,10 @@
 // src/modules/shop/components/DeliveryMap.tsx
 //
 // Mapa base + dibujo de zonas del editor de entrega (Capa 1 del motor de envío).
-// Pinta las zonas guardadas (radio→círculo, polígono→área; postal no se pinta),
-// un DRAFT en vivo (círculo de la zona que se crea/edita, redibujado al mover el
-// slider) y RESALTA la zona seleccionada (highlightZoneId): esa se marca fuerte y
-// el resto se atenúa. Aísla aquí todo el trato con Mapbox.
+// Pinta: zonas guardadas (radio→círculo, polígono→área; postal no se pinta),
+// un DRAFT en vivo —círculo (radio) O polígono (isócrona por carretera)— de la
+// zona que se crea/edita, y RESALTA la zona seleccionada (highlightZoneId).
+// Aísla aquí todo el trato con Mapbox.
 
 import { useEffect, useRef } from 'react'
 import mapboxgl from 'mapbox-gl'
@@ -20,6 +20,7 @@ export function zoneColor(index: number): string {
 }
 
 export type DraftCircle = { lat: number; lng: number; radiusM: number } | null
+export type DraftPolygon = GeoJSON.Polygon | null
 
 type DeliveryMapProps = {
   lat: number
@@ -27,7 +28,8 @@ type DeliveryMapProps = {
   locationName: string
   zones?: DeliveryZone[]
   draftCircle?: DraftCircle
-  highlightZoneId?: string | null    // zona resaltada (en edición); el resto se atenúa
+  draftPolygon?: DraftPolygon
+  highlightZoneId?: string | null
   onReady?: (map: mapboxgl.Map) => void
 }
 
@@ -35,7 +37,7 @@ function zonesToGeoJSON(zones: DeliveryZone[], highlightId: string | null): GeoJ
   const anyHighlight = highlightId != null
   const features: GeoJSON.Feature[] = []
   zones.forEach((z, i) => {
-    const dim = anyHighlight && z.id !== highlightId   // atenuar las no seleccionadas
+    const dim = anyHighlight && z.id !== highlightId
     const props = { color: zoneColor(i), zoneId: z.id, dim }
     if (z.method === 'radius' && z.center_lat != null && z.center_lng != null && z.radius_m) {
       const circle = turf.circle([z.center_lng, z.center_lat], z.radius_m / 1000, { steps: 64, units: 'kilometers' })
@@ -48,15 +50,21 @@ function zonesToGeoJSON(zones: DeliveryZone[], highlightId: string | null): GeoJ
   return { type: 'FeatureCollection', features }
 }
 
-function draftToGeoJSON(draft: DraftCircle): GeoJSON.FeatureCollection {
-  if (!draft || !draft.radiusM) return { type: 'FeatureCollection', features: [] }
-  const circle = turf.circle([draft.lng, draft.lat], draft.radiusM / 1000, { steps: 64, units: 'kilometers' })
-  circle.properties = { color: '#185FA5' }
-  return { type: 'FeatureCollection', features: [circle] }
+function draftToGeoJSON(circle: DraftCircle, polygon: DraftPolygon): GeoJSON.FeatureCollection {
+  const features: GeoJSON.Feature[] = []
+  if (polygon) {
+    features.push({ type: 'Feature', geometry: polygon, properties: { color: '#185FA5' } })
+  } else if (circle && circle.radiusM) {
+    const c = turf.circle([circle.lng, circle.lat], circle.radiusM / 1000, { steps: 64, units: 'kilometers' })
+    c.properties = { color: '#185FA5' }
+    features.push(c)
+  }
+  return { type: 'FeatureCollection', features }
 }
 
 export default function DeliveryMap({
-  lat, lng, locationName, zones = [], draftCircle = null, highlightZoneId = null, onReady,
+  lat, lng, locationName, zones = [], draftCircle = null, draftPolygon = null,
+  highlightZoneId = null, onReady,
 }: DeliveryMapProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<mapboxgl.Map | null>(null)
@@ -85,12 +93,10 @@ export default function DeliveryMap({
 
     map.on('load', () => {
       map.addSource('zones', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
-      // Relleno: atenuado si dim.
       map.addLayer({
         id: 'zones-fill', type: 'fill', source: 'zones',
         paint: { 'fill-color': ['get', 'color'], 'fill-opacity': ['case', ['get', 'dim'], 0.05, 0.16] },
       })
-      // Borde: más fino y tenue si dim, más grueso si resaltada.
       map.addLayer({
         id: 'zones-line', type: 'line', source: 'zones',
         paint: {
@@ -106,7 +112,7 @@ export default function DeliveryMap({
 
       loadedRef.current = true
       ;(map.getSource('zones') as mapboxgl.GeoJSONSource)?.setData(zonesToGeoJSON(zones, highlightZoneId))
-      ;(map.getSource('draft') as mapboxgl.GeoJSONSource)?.setData(draftToGeoJSON(draftCircle))
+      ;(map.getSource('draft') as mapboxgl.GeoJSONSource)?.setData(draftToGeoJSON(draftCircle, draftPolygon))
       onReadyRef.current?.(map)
     })
 
@@ -125,8 +131,8 @@ export default function DeliveryMap({
   useEffect(() => {
     const map = mapRef.current
     if (!map || !loadedRef.current) return
-    ;(map.getSource('draft') as mapboxgl.GeoJSONSource | undefined)?.setData(draftToGeoJSON(draftCircle))
-  }, [draftCircle])
+    ;(map.getSource('draft') as mapboxgl.GeoJSONSource | undefined)?.setData(draftToGeoJSON(draftCircle, draftPolygon))
+  }, [draftCircle, draftPolygon])
 
   if (!hasMapbox()) {
     return (
