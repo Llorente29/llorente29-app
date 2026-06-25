@@ -15,6 +15,7 @@ import TrabajadorApp from './pages/trabajador/TrabajadorApp'
 import { useAuth } from './modules/multitenancy/hooks/useAuth'
 import KdsKioskRoute from './modules/kds/KdsKioskRoute'
 import TabletStationRoute from './modules/tablet/TabletStationRoute'
+import ShopHubRoute from './modules/shop/ShopHubRoute'
 
 // G-8.6 (Sprint 3): App.tsx reducido. El render autenticado es el Shell modular
 // (src/shell/Shell.tsx), que vive en la raíz y resuelve la cuenta por AppContext.
@@ -95,6 +96,11 @@ export default function App() {
   // de los gates de sesión por la misma razón que el kiosco.
   if (location.pathname.startsWith('/estacion')) {
     return <TabletStationRoute />
+  }
+  // Hub público de Folvy Shop (tienda multi-marca, sin sesión). Ruta /t/:slug,
+  // hermana de /cocina-tv y /estacion. Va antes de los gates de sesión.
+  if (location.pathname.startsWith('/t/')) {
+    return <ShopHubRoute />
   }
   if (isPublicAuthRoute(location.pathname)) {
     return <AuthRouter />
