@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       _backup_20260516_accounts: {
@@ -2892,6 +2917,57 @@ export type Database = {
             columns: ["location_id"]
             isOneToOne: false
             referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      catalog_image_map: {
+        Row: {
+          account_id: string
+          created_at: string
+          external_catalog_id: string
+          id: string
+          image_id: string
+          menu_item_id: string
+          source_hash: string
+          source_url: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          external_catalog_id: string
+          id?: string
+          image_id: string
+          menu_item_id: string
+          source_hash: string
+          source_url: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          external_catalog_id?: string
+          id?: string
+          image_id?: string
+          menu_item_id?: string
+          source_hash?: string
+          source_url?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalog_image_map_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalog_image_map_menu_item_id_fkey"
+            columns: ["menu_item_id"]
+            isOneToOne: false
+            referencedRelation: "menu_item"
             referencedColumns: ["id"]
           },
         ]
@@ -9191,6 +9267,7 @@ export type Database = {
           computed_cost: number | null
           cost_computed_at: string | null
           created_at: string
+          discount_label: string | null
           external_brand_id: string | null
           external_product_id: string | null
           external_source: string | null
@@ -9204,6 +9281,7 @@ export type Database = {
           map_source: string
           menu_item_id: string | null
           modifier_option_id: string | null
+          original_unit_price: number | null
           parent_sale_line_id: string | null
           product_name: string
           quantity: number
@@ -9219,6 +9297,7 @@ export type Database = {
           computed_cost?: number | null
           cost_computed_at?: string | null
           created_at?: string
+          discount_label?: string | null
           external_brand_id?: string | null
           external_product_id?: string | null
           external_source?: string | null
@@ -9232,6 +9311,7 @@ export type Database = {
           map_source?: string
           menu_item_id?: string | null
           modifier_option_id?: string | null
+          original_unit_price?: number | null
           parent_sale_line_id?: string | null
           product_name: string
           quantity?: number
@@ -9247,6 +9327,7 @@ export type Database = {
           computed_cost?: number | null
           cost_computed_at?: string | null
           created_at?: string
+          discount_label?: string | null
           external_brand_id?: string | null
           external_product_id?: string | null
           external_source?: string | null
@@ -9260,6 +9341,7 @@ export type Database = {
           map_source?: string
           menu_item_id?: string | null
           modifier_option_id?: string | null
+          original_unit_price?: number | null
           parent_sale_line_id?: string | null
           product_name?: string
           quantity?: number
@@ -9614,6 +9696,75 @@ export type Database = {
             columns: ["location_id"]
             isOneToOne: false
             referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shop_theme: {
+        Row: {
+          accent_color: string | null
+          account_id: string
+          brand_id: string | null
+          created_at: string
+          extra: Json
+          font: string
+          hero_url: string | null
+          hub_position: number
+          hub_visible: boolean
+          id: string
+          is_published: boolean
+          mode: string
+          photo_density: string
+          template: string
+          updated_at: string
+        }
+        Insert: {
+          accent_color?: string | null
+          account_id: string
+          brand_id?: string | null
+          created_at?: string
+          extra?: Json
+          font?: string
+          hero_url?: string | null
+          hub_position?: number
+          hub_visible?: boolean
+          id?: string
+          is_published?: boolean
+          mode?: string
+          photo_density?: string
+          template?: string
+          updated_at?: string
+        }
+        Update: {
+          accent_color?: string | null
+          account_id?: string
+          brand_id?: string | null
+          created_at?: string
+          extra?: Json
+          font?: string
+          hero_url?: string | null
+          hub_position?: number
+          hub_visible?: boolean
+          id?: string
+          is_published?: boolean
+          mode?: string
+          photo_density?: string
+          template?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shop_theme_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shop_theme_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand"
             referencedColumns: ["id"]
           },
         ]
@@ -11317,6 +11468,15 @@ export type Database = {
         }
         Returns: undefined
       }
+      clone_brand_catalog: {
+        Args: {
+          p_dst_account: string
+          p_dst_brand: string
+          p_src_account: string
+          p_src_brand: string
+        }
+        Returns: Json
+      }
       close_inventory_count: {
         Args: { p_count_id: string }
         Returns: {
@@ -11456,6 +11616,11 @@ export type Database = {
           qty_base: number
           raw_item_id: string
         }[]
+      }
+      fill_line_discounts: { Args: { p_sale_id: string }; Returns: number }
+      fiscal_for_print: {
+        Args: { p_device_token: string; p_sale_id: string }
+        Returns: Json
       }
       folvy_code_prefix: { Args: { p_type: string }; Returns: string }
       folvy_map_measure: {
@@ -12587,6 +12752,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },
