@@ -1,40 +1,71 @@
 // src/modules/shop/components/DeliveryMap.tsx
 //
-// Mapa base del editor de zonas de entrega (Capa 1 del motor de envío).
-// Monta Mapbox GL centrado en el local, con un pin en su posición.
-// Esta es la pieza visual mínima: SIN zonas todavía (se añaden encima en el
-// editor). Aísla aquí el ciclo de vida del mapa (crear/destruir, token, CSS)
-// para que el editor no tenga que pelearse con Mapbox.
-//
-// El componente NO decide qué local: recibe lat/lng/name ya resueltos. Los
-// casos límite (sin token, sin coords) los resuelve el contenedor (la página).
+// Mapa base + dibujo de zonas del editor de entrega (Capa 1 del motor de envío).
+// Pinta las zonas guardadas (radio→círculo, polígono→área; postal no se pinta),
+// un DRAFT en vivo (círculo de la zona que se crea/edita, redibujado al mover el
+// slider) y RESALTA la zona seleccionada (highlightZoneId): esa se marca fuerte y
+// el resto se atenúa. Aísla aquí todo el trato con Mapbox.
 
 import { useEffect, useRef } from 'react'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
-import { hasMapbox } from '@/modules/shop/services/deliveryZoneService'
+import * as turf from '@turf/turf'
+import { hasMapbox, type DeliveryZone } from '@/modules/shop/services/deliveryZoneService'
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined
+
+const ZONE_COLORS = ['#1D9E75', '#378ADD', '#D85A30', '#7F77DD', '#BA7517', '#D4537E']
+export function zoneColor(index: number): string {
+  return ZONE_COLORS[index % ZONE_COLORS.length]
+}
+
+export type DraftCircle = { lat: number; lng: number; radiusM: number } | null
 
 type DeliveryMapProps = {
   lat: number
   lng: number
   locationName: string
-  /** Se llama una vez cuando el mapa está listo, por si el editor quiere
-   *  añadir capas/controles encima (zonas, draw…). */
+  zones?: DeliveryZone[]
+  draftCircle?: DraftCircle
+  highlightZoneId?: string | null    // zona resaltada (en edición); el resto se atenúa
   onReady?: (map: mapboxgl.Map) => void
 }
 
-export default function DeliveryMap({ lat, lng, locationName, onReady }: DeliveryMapProps) {
+function zonesToGeoJSON(zones: DeliveryZone[], highlightId: string | null): GeoJSON.FeatureCollection {
+  const anyHighlight = highlightId != null
+  const features: GeoJSON.Feature[] = []
+  zones.forEach((z, i) => {
+    const dim = anyHighlight && z.id !== highlightId   // atenuar las no seleccionadas
+    const props = { color: zoneColor(i), zoneId: z.id, dim }
+    if (z.method === 'radius' && z.center_lat != null && z.center_lng != null && z.radius_m) {
+      const circle = turf.circle([z.center_lng, z.center_lat], z.radius_m / 1000, { steps: 64, units: 'kilometers' })
+      circle.properties = props
+      features.push(circle)
+    } else if (z.method === 'polygon' && z.area_geojson) {
+      features.push({ type: 'Feature', geometry: z.area_geojson, properties: props })
+    }
+  })
+  return { type: 'FeatureCollection', features }
+}
+
+function draftToGeoJSON(draft: DraftCircle): GeoJSON.FeatureCollection {
+  if (!draft || !draft.radiusM) return { type: 'FeatureCollection', features: [] }
+  const circle = turf.circle([draft.lng, draft.lat], draft.radiusM / 1000, { steps: 64, units: 'kilometers' })
+  circle.properties = { color: '#185FA5' }
+  return { type: 'FeatureCollection', features: [circle] }
+}
+
+export default function DeliveryMap({
+  lat, lng, locationName, zones = [], draftCircle = null, highlightZoneId = null, onReady,
+}: DeliveryMapProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<mapboxgl.Map | null>(null)
+  const loadedRef = useRef(false)
   const onReadyRef = useRef(onReady)
   onReadyRef.current = onReady
 
   useEffect(() => {
-    if (!MAPBOX_TOKEN || !containerRef.current) return
-    // Guard: no recrear si ya existe (StrictMode monta dos veces en dev).
-    if (mapRef.current) return
+    if (!MAPBOX_TOKEN || !containerRef.current || mapRef.current) return
 
     mapboxgl.accessToken = MAPBOX_TOKEN
     const map = new mapboxgl.Map({
@@ -45,32 +76,57 @@ export default function DeliveryMap({ lat, lng, locationName, onReady }: Deliver
       attributionControl: true,
     })
     mapRef.current = map
-
     map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'top-right')
 
-    // Pin del local.
     new mapboxgl.Marker({ color: '#1E3A5F' })
       .setLngLat([lng, lat])
       .setPopup(new mapboxgl.Popup({ offset: 24 }).setText(locationName))
       .addTo(map)
 
     map.on('load', () => {
+      map.addSource('zones', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
+      // Relleno: atenuado si dim.
+      map.addLayer({
+        id: 'zones-fill', type: 'fill', source: 'zones',
+        paint: { 'fill-color': ['get', 'color'], 'fill-opacity': ['case', ['get', 'dim'], 0.05, 0.16] },
+      })
+      // Borde: más fino y tenue si dim, más grueso si resaltada.
+      map.addLayer({
+        id: 'zones-line', type: 'line', source: 'zones',
+        paint: {
+          'line-color': ['get', 'color'],
+          'line-width': ['case', ['get', 'dim'], 1, 2],
+          'line-opacity': ['case', ['get', 'dim'], 0.4, 1],
+        },
+      })
+
+      map.addSource('draft', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
+      map.addLayer({ id: 'draft-fill', type: 'fill', source: 'draft', paint: { 'fill-color': '#185FA5', 'fill-opacity': 0.12 } })
+      map.addLayer({ id: 'draft-line', type: 'line', source: 'draft', paint: { 'line-color': '#185FA5', 'line-width': 2, 'line-dasharray': [2, 1] } })
+
+      loadedRef.current = true
+      ;(map.getSource('zones') as mapboxgl.GeoJSONSource)?.setData(zonesToGeoJSON(zones, highlightZoneId))
+      ;(map.getSource('draft') as mapboxgl.GeoJSONSource)?.setData(draftToGeoJSON(draftCircle))
       onReadyRef.current?.(map)
     })
 
-    return () => {
-      map.remove()
-      mapRef.current = null
-    }
-    // Solo al montar (el local no cambia en vida del componente; si cambiara,
-    // el contenedor remonta vía key=locationId).
+    return () => { map.remove(); mapRef.current = null; loadedRef.current = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Recentrar si cambian las coords sin remontar (defensivo).
+  useEffect(() => { if (mapRef.current) mapRef.current.setCenter([lng, lat]) }, [lat, lng])
+
   useEffect(() => {
-    if (mapRef.current) mapRef.current.setCenter([lng, lat])
-  }, [lat, lng])
+    const map = mapRef.current
+    if (!map || !loadedRef.current) return
+    ;(map.getSource('zones') as mapboxgl.GeoJSONSource | undefined)?.setData(zonesToGeoJSON(zones, highlightZoneId))
+  }, [zones, highlightZoneId])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !loadedRef.current) return
+    ;(map.getSource('draft') as mapboxgl.GeoJSONSource | undefined)?.setData(draftToGeoJSON(draftCircle))
+  }, [draftCircle])
 
   if (!hasMapbox()) {
     return (
@@ -84,10 +140,5 @@ export default function DeliveryMap({ lat, lng, locationName, onReady }: Deliver
     )
   }
 
-  return (
-    <div
-      ref={containerRef}
-      style={{ height: 420, borderRadius: 12, overflow: 'hidden' }}
-    />
-  )
+  return <div ref={containerRef} style={{ height: 420, borderRadius: 12, overflow: 'hidden' }} />
 }
