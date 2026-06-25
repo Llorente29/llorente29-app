@@ -5,6 +5,8 @@
 //   1) "¿Hasta dónde repartes?" → 4 tarjetas (radio / por carretera / CP / a mano)
 //   2) Solo si "por carretera": medio de reparto + distancia o tiempo
 // El precio y el copiloto de ayudas viven debajo con presencia visual.
+// PRECIO SUGERIDO: botón que propone el envío = MAX(mínimo, base + €/km × distancia),
+// protegiendo margen. El hostelero manda: rellena el campo, no lo impone.
 // Lógica intacta: radio→radio; isócrona y a mano→polígono; CP→lista.
 
 import { useState } from 'react'
@@ -13,9 +15,7 @@ import {
   type DeliveryZone, type TravelProfile,
 } from '@/modules/shop/services/deliveryZoneService'
 
-// Familia de método tal como la piensa el hostelero.
 type ZoneFamily = 'radius' | 'road' | 'postal' | 'draw'
-// Para carretera: por distancia o por tiempo.
 type RoadBy = 'meters' | 'minutes'
 
 type Props = {
@@ -31,6 +31,11 @@ type Props = {
   onSaved: () => void
   onCancel: () => void
 }
+
+// Fórmula de precio sugerido (Paso 1, transparente). Valores de partida
+// sensatos para reparto urbano; el hostelero ve el resultado y puede editarlo.
+const SUGGEST_BASE = 2.99   // suelo real de un reparto (€ de salir)
+const SUGGEST_PER_KM = 0.45 // € por km de distancia
 
 function fmtNum(n: number | null): string { return n == null ? '' : String(n).replace('.', ',') }
 function approxMin(km: number): number { return Math.max(10, Math.round((km / 18) * 60 / 5) * 5) }
@@ -67,6 +72,7 @@ export default function ZoneEditor({
   const [fee, setFee] = useState(zone ? fmtNum(zone.delivery_fee) : '2,50')
   const [minOrder, setMinOrder] = useState(zone ? fmtNum(zone.min_order) : '')
   const [eta, setEta] = useState(zone?.eta_min != null ? String(zone.eta_min) : '')
+  const [feeSuggested, setFeeSuggested] = useState(false) // ¿el fee actual lo propuso Folvy?
 
   const [radiusM, setRadiusM] = useState(zone?.radius_m ?? 2000)
   const [routeKm, setRouteKm] = useState(3)
@@ -92,6 +98,30 @@ export default function ZoneEditor({
     setFamily(f); setComputedPoly(null); onDraftPolygon(null)
     onDrawingChange(f === 'draw')
     if (f === 'radius') onDraftRadius(radiusM); else onDraftRadius(null)
+  }
+
+  // Distancia representativa (km) de la zona, según método, para sugerir precio.
+  // CP y "a mano" no tienen distancia clara → no se puede sugerir por distancia.
+  function zoneDistanceKm(): number | null {
+    if (family === 'radius') return radiusM / 1000
+    if (family === 'road' && roadBy === 'meters') return routeKm
+    if (family === 'road' && roadBy === 'minutes') return (minutes / 60) * 18 // ~18 km/h urbano
+    return null
+  }
+  const canSuggest = zoneDistanceKm() != null
+
+  function suggestPrice() {
+    const km = zoneDistanceKm()
+    if (km == null) return
+    const min = minOrder.trim() ? parseFloat(minOrder.replace(',', '.')) : 0
+    const byDistance = SUGGEST_BASE + SUGGEST_PER_KM * km
+    // Suelo: nunca por debajo del mínimo de envío que el hostelero quiera fijar.
+    // (Aquí el "mínimo" suelo = SUGGEST_BASE; min_order es el mínimo de PEDIDO, distinto.)
+    const suggested = Math.max(SUGGEST_BASE, byDistance)
+    setFee(fmtNum(Math.round(suggested * 20) / 20)) // redondeo a 0,05 €
+    setFeeSuggested(true)
+    // min_order no se toca; es decisión aparte del hostelero.
+    void min
   }
 
   async function handleCalc() {
@@ -156,6 +186,10 @@ export default function ZoneEditor({
     else tips.push({ icon: '✏️', tone: 'info', text: 'Haz clic en el mapa para marcar las esquinas; doble clic para cerrar.' })
   }
 
+  if (feeSuggested) {
+    tips.push({ icon: '✨', tone: 'good', text: `Precio sugerido por Folvy para esta distancia. Ajústalo si quieres.` })
+  }
+
   if (isFinite(feeNum) && feeNum > 0 && minOrder.trim()) {
     const min = parseFloat(minOrder.replace(',', '.'))
     if (isFinite(min) && min > 0) {
@@ -187,7 +221,6 @@ export default function ZoneEditor({
         }}>×</button>
       </div>
 
-      {/* Pregunta 1: ¿hasta dónde repartes? (tarjetas) */}
       {!editing && (
         <>
           <div style={qLabel}>¿Hasta dónde repartes?</div>
@@ -211,11 +244,9 @@ export default function ZoneEditor({
         </>
       )}
 
-      {/* Nombre */}
       <div style={qLabel}>¿Cómo se llama esta zona?</div>
       <input style={{ ...bigInput, marginBottom: 18 }} value={name} onChange={e => setName(e.target.value)} placeholder="Ej. Centro, Barrio norte…" />
 
-      {/* Controles según familia */}
       {family === 'radius' && (
         <div style={{ marginBottom: 18 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
@@ -223,7 +254,7 @@ export default function ZoneEditor({
             <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-terracota, #D67442)' }}>{(radiusM / 1000).toFixed(1)} km</span>
           </div>
           <input type="range" min={500} max={6000} step={100} value={radiusM}
-            onChange={e => refreshRadiusPreview(parseInt(e.target.value, 10))} style={{ width: '100%' }} />
+            onChange={e => { refreshRadiusPreview(parseInt(e.target.value, 10)); setFeeSuggested(false) }} style={{ width: '100%' }} />
         </div>
       )}
 
@@ -256,7 +287,7 @@ export default function ZoneEditor({
                 <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-terracota, #D67442)' }}>{minutes} min</span>
               </div>
               <input type="range" min={5} max={45} step={5} value={minutes}
-                onChange={e => { setMinutes(parseInt(e.target.value, 10)); clearComputed() }} style={{ width: '100%' }} />
+                onChange={e => { setMinutes(parseInt(e.target.value, 10)); clearComputed(); setFeeSuggested(false) }} style={{ width: '100%' }} />
             </div>
           ) : (
             <div style={{ marginBottom: 12 }}>
@@ -265,7 +296,7 @@ export default function ZoneEditor({
                 <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-terracota, #D67442)' }}>{routeKm} km</span>
               </div>
               <input type="range" min={1} max={15} step={1} value={routeKm}
-                onChange={e => { setRouteKm(parseInt(e.target.value, 10)); clearComputed() }} style={{ width: '100%' }} />
+                onChange={e => { setRouteKm(parseInt(e.target.value, 10)); clearComputed(); setFeeSuggested(false) }} style={{ width: '100%' }} />
             </div>
           )}
           <button onClick={handleCalc} disabled={calc} style={calcBtn}>{calc ? 'Calculando…' : '🗺️ Ver alcance en el mapa'}</button>
@@ -312,24 +343,37 @@ export default function ZoneEditor({
         </div>
       )}
 
-      {/* Precio, en lenguaje humano */}
-      <div style={{ display: 'flex', gap: 10, margin: '18px 0 14px' }}>
+      {/* Precio, en lenguaje humano + botón sugerir */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, margin: '18px 0 6px', minHeight: 30 }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)', lineHeight: 1.2 }}>Precio de envío</span>
+        {canSuggest && (
+          <button onClick={suggestPrice} style={{
+            display: 'inline-flex', alignItems: 'center', gap: 5, lineHeight: 1, flexShrink: 0,
+            fontSize: 12.5, fontWeight: 600, padding: '5px 10px', borderRadius: 20, cursor: 'pointer',
+            border: '1px solid var(--color-terracota, #D67442)', background: 'transparent',
+            color: 'var(--color-terracota, #D67442)',
+          }}>✨ Sugerir precio</button>
+        )}
+      </div>
+      <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
         <div style={{ flex: 1.2 }}>
-          <span style={qLabel}>Precio de envío</span>
           <div style={{ position: 'relative' }}>
-            <input style={{ ...bigInput, paddingRight: 26 }} value={fee} onChange={e => setFee(e.target.value)} inputMode="decimal" />
+            <input style={{
+              ...bigInput, paddingRight: 26,
+              borderColor: feeSuggested ? 'var(--color-success, #3F5C2F)' : 'var(--color-border-default)',
+            }} value={fee} onChange={e => { setFee(e.target.value); setFeeSuggested(false) }} inputMode="decimal" />
             <span style={euroSuffix}>€</span>
           </div>
         </div>
         <div style={{ flex: 1 }}>
-          <span style={qLabel}>Pedido mínimo</span>
+          <span style={{ ...qLabel, fontWeight: 400, fontSize: 11.5 }}>Pedido mínimo</span>
           <div style={{ position: 'relative' }}>
             <input style={{ ...bigInput, paddingRight: 26 }} value={minOrder} onChange={e => setMinOrder(e.target.value)} inputMode="decimal" placeholder="—" />
             <span style={euroSuffix}>€</span>
           </div>
         </div>
         <div style={{ flex: 1 }}>
-          <span style={qLabel}>Tiempo entrega</span>
+          <span style={{ ...qLabel, fontWeight: 400, fontSize: 11.5 }}>Tiempo entrega</span>
           <div style={{ position: 'relative' }}>
             <input style={{ ...bigInput, paddingRight: 34 }} value={eta} onChange={e => setEta(e.target.value)} inputMode="numeric" placeholder="—" />
             <span style={{ ...euroSuffix, right: 10 }}>min</span>
@@ -337,7 +381,6 @@ export default function ZoneEditor({
         </div>
       </div>
 
-      {/* Copiloto */}
       {tips.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 16 }}>
           {tips.map((t, i) => (
