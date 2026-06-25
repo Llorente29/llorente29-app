@@ -142,20 +142,38 @@ export async function geocodeAddress(query: string): Promise<GeocodeHit[]> {
   })
 }
 
-/** Isócrona: polígono REAL por carretera desde (lat,lng).
- *  - por tiempo:    { minutes: 20 }  → hasta donde llegas conduciendo 20 min
- *  - por distancia: { meters: 3000 } → hasta donde llegas conduciendo 3 km de ruta
+// Perfil de desplazamiento para el reparto (lenguaje Mapbox).
+//  moto  → cycling        (Mapbox no tiene "moto"; bici modela bien el reparto
+//                          urbano ágil que esquiva atascos: mancha realista)
+//  coche → driving-traffic (coche CON tráfico real, más honesto que driving)
+//  bici  → cycling
+//  pie   → walking
+export type TravelProfile = 'moto' | 'coche' | 'bici' | 'pie'
+
+const MAPBOX_PROFILE: Record<TravelProfile, string> = {
+  moto: 'cycling',
+  coche: 'driving-traffic',
+  bici: 'cycling',
+  pie: 'walking',
+}
+
+/** Isócrona: polígono REAL por carretera desde (lat,lng), según el medio de
+ *  reparto (moto/coche/bici/pie).
+ *  - por tiempo:    { minutes: 20 }
+ *  - por distancia: { meters: 3000 }
  *  Devuelve un Polygon GeoJSON listo para upsertPolygonZone. */
 export async function isochrone(
   lat: number,
   lng: number,
   by: { minutes: number } | { meters: number },
+  profile: TravelProfile = 'moto',
 ): Promise<GeoJSON.Polygon> {
   if (!MAPBOX_TOKEN) throw new Error('Falta el token de Mapbox (VITE_MAPBOX_TOKEN).')
+  const mbProfile = MAPBOX_PROFILE[profile]
   const contour = 'minutes' in by
     ? `contours_minutes=${Math.round(by.minutes)}`
     : `contours_meters=${Math.round(by.meters)}`
-  const url = `https://api.mapbox.com/isochrone/v1/mapbox/driving/${lng},${lat}`
+  const url = `https://api.mapbox.com/isochrone/v1/mapbox/${mbProfile}/${lng},${lat}`
     + `?${contour}&polygons=true&denoise=1&access_token=${MAPBOX_TOKEN}`
   const res = await fetch(url)
   if (!res.ok) throw new Error(`No se pudo calcular el alcance por carretera (${res.status}).`)

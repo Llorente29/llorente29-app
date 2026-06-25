@@ -1,27 +1,23 @@
 // src/modules/shop/components/ZoneEditor.tsx
 //
 // Editor unificado de zona de entrega para HOSTELEROS (Capa 1).
-// Tres métodos en un solo panel, con selector arriba:
-//   - radio  : círculo rápido (aprox.)
-//   - meters : por carretera · distancia de ruta (isócrona Mapbox por metros)
-//   - minutes: por carretera · tiempo (isócrona Mapbox por minutos) — el "Google Maps"
+// Métodos (selector arriba): radio rápido / por carretera·km / por carretera·tiempo.
+// Para los de carretera, un selector de MEDIO DE REPARTO (moto/coche/bici/pie)
+// hace que la isócrona de Mapbox sea realista (en moto en ciudad el alcance real
+// es mucho menor que en coche por autovía). Por defecto: moto.
 // Las isócronas se calculan en Mapbox (botón "Ver alcance") y se guardan como
-// polígono (upsertPolygonZone). El radio se guarda como radio (upsertRadiusZone).
+// polígono; el radio se guarda como radio.
 //
-// COPILOTO DE AYUDAS en vivo (lo que nadie más tiene):
-//   - tiempo estimado / real
-//   - aviso de zona grande (comida fría)
-//   - aviso envío vs pedido mínimo
-//   - aviso de MARGEN general (ticket medio del local − envío)  [Nivel 3 "general"]
-// El margen por-zona EXACTO llega cuando se extraigan coords de raw_tab (frente aparte).
+// COPILOTO DE AYUDAS en vivo: tiempo, zona grande, envío vs mínimo, margen vs
+// ticket medio del local (margen general; el por-zona exacto llega con las coords
+// de raw_tab, frente aparte).
 //
-// Editar: de momento solo zonas de radio (se precargan); las de carretera se
-// recrean (la edición fina de isócrona llega después). Crear: los tres métodos.
+// Editar: de momento solo radio se precarga; las de carretera se recrean.
 
 import { useState } from 'react'
 import {
   upsertRadiusZone, upsertPolygonZone, isochrone,
-  type DeliveryZone,
+  type DeliveryZone, type TravelProfile,
 } from '@/modules/shop/services/deliveryZoneService'
 
 export type ZoneMethodUI = 'radius' | 'meters' | 'minutes'
@@ -30,9 +26,8 @@ type Props = {
   locationId: string
   centerLat: number
   centerLng: number
-  zone: DeliveryZone | null            // null = crear; con datos = editar (solo radio)
-  ticketMedio: number | null           // ticket medio del local (para aviso de margen)
-  // Preview en el mapa: la página controla qué se pinta.
+  zone: DeliveryZone | null
+  ticketMedio: number | null
   onDraftRadius: (radiusM: number | null) => void
   onDraftPolygon: (poly: GeoJSON.Polygon | null) => void
   onSaved: () => void
@@ -43,53 +38,53 @@ const lbl: React.CSSProperties = { fontSize: 12, color: 'var(--color-text-second
 const inp: React.CSSProperties = { width: '100%' }
 
 function fmtNum(n: number | null): string { return n == null ? '' : String(n).replace('.', ',') }
-
-// Estimación de minutos de relleno desde distancia (reparto urbano ~18 km/h).
 function approxMin(km: number): number { return Math.max(10, Math.round((km / 18) * 60 / 5) * 5) }
+
+const PROFILES: { v: TravelProfile; label: string }[] = [
+  { v: 'moto', label: '🛵 En moto' },
+  { v: 'coche', label: '🚗 En coche' },
+  { v: 'bici', label: '🚲 En bici' },
+  { v: 'pie', label: '🚶 Andando' },
+]
 
 export default function ZoneEditor({
   locationId, centerLat, centerLng, zone, ticketMedio,
   onDraftRadius, onDraftPolygon, onSaved, onCancel,
 }: Props) {
   const editing = zone != null
-  // Si editamos, solo radio (precargado). Si creamos, método elegible.
   const [method, setMethod] = useState<ZoneMethodUI>('radius')
+  const [profile, setProfile] = useState<TravelProfile>('moto')
   const [name, setName] = useState(zone?.name ?? '')
   const [fee, setFee] = useState(zone ? fmtNum(zone.delivery_fee) : '2,50')
   const [minOrder, setMinOrder] = useState(zone ? fmtNum(zone.min_order) : '')
   const [eta, setEta] = useState(zone?.eta_min != null ? String(zone.eta_min) : '')
 
-  // Controles por método.
-  const [radiusM, setRadiusM] = useState(zone?.radius_m ?? 2000)   // radio (m)
-  const [routeKm, setRouteKm] = useState(3)                        // distancia de ruta (km)
-  const [minutes, setMinutes] = useState(20)                       // tiempo (min)
+  const [radiusM, setRadiusM] = useState(zone?.radius_m ?? 2000)
+  const [routeKm, setRouteKm] = useState(3)
+  const [minutes, setMinutes] = useState(15)
 
-  // Polígono calculado por Mapbox (para meters/minutes), pendiente de guardar.
   const [computedPoly, setComputedPoly] = useState<GeoJSON.Polygon | null>(null)
   const [calc, setCalc] = useState(false)
-
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
   const feeNum = parseFloat(fee.replace(',', '.'))
 
-  // ── Preview en el mapa según método ──
   function refreshRadiusPreview(m: number) {
     setRadiusM(m); setComputedPoly(null); onDraftPolygon(null); onDraftRadius(m)
   }
   function pickMethod(m: ZoneMethodUI) {
     setMethod(m); setComputedPoly(null); onDraftPolygon(null)
-    if (m === 'radius') onDraftRadius(radiusM)
-    else onDraftRadius(null) // los de carretera no muestran círculo; esperan "Ver alcance"
+    if (m === 'radius') onDraftRadius(radiusM); else onDraftRadius(null)
   }
+  function clearComputed() { setComputedPoly(null); onDraftPolygon(null) }
 
-  // ── Calcular alcance por carretera (Mapbox) ──
   async function handleCalc() {
     setErr(null); setCalc(true)
     try {
       const poly = method === 'meters'
-        ? await isochrone(centerLat, centerLng, { meters: Math.round(routeKm * 1000) })
-        : await isochrone(centerLat, centerLng, { minutes })
+        ? await isochrone(centerLat, centerLng, { meters: Math.round(routeKm * 1000) }, profile)
+        : await isochrone(centerLat, centerLng, { minutes }, profile)
       setComputedPoly(poly); onDraftPolygon(poly); onDraftRadius(null)
     } catch (e: any) {
       setErr(e.message)
@@ -98,12 +93,10 @@ export default function ZoneEditor({
     }
   }
 
-  // ── Guardar ──
   async function handleSave() {
     setErr(null)
     if (!name.trim()) { setErr('Pon un nombre a la zona.'); return }
     if (!isFinite(feeNum) || feeNum < 0) { setErr('El coste debe ser un número válido.'); return }
-
     const eco = {
       name: name.trim(),
       delivery_fee: feeNum,
@@ -124,22 +117,21 @@ export default function ZoneEditor({
     }
   }
 
-  // ── Copiloto de ayudas (en vivo) ──
+  // ── Copiloto de ayudas ──
   const tips: { tone: 'info' | 'warn' | 'good'; text: string }[] = []
+  const profileWord = profile === 'moto' ? 'en moto' : profile === 'coche' ? 'en coche' : profile === 'bici' ? 'en bici' : 'andando'
 
-  // tiempo
   if (method === 'radius') {
     tips.push({ tone: 'info', text: `Reparto hasta ${(radiusM / 1000).toFixed(1)} km a la redonda · llega en ~${approxMin(radiusM / 1000)} min (aprox.)` })
-    if (radiusM / 1000 > 4) tips.push({ tone: 'warn', text: `${(radiusM / 1000).toFixed(1)} km es mucho para comida caliente: puede llegar fría y el reparto se encarece.` })
+    if (radiusM / 1000 > 4) tips.push({ tone: 'warn', text: `${(radiusM / 1000).toFixed(1)} km es mucho para comida caliente: puede llegar fría.` })
   } else if (method === 'meters') {
-    tips.push({ tone: 'info', text: `Reparto hasta ${routeKm} km de ruta real (por calles, no en línea recta).` })
+    tips.push({ tone: 'info', text: `Reparto hasta ${routeKm} km de ruta real ${profileWord} (por calles, no en línea recta).` })
     if (routeKm > 5) tips.push({ tone: 'warn', text: `${routeKm} km de ruta es bastante para comida caliente.` })
   } else {
-    tips.push({ tone: 'info', text: `Reparto hasta ${minutes} min conduciendo (tiempo real por carretera).` })
+    tips.push({ tone: 'info', text: `Reparto hasta ${minutes} min ${profileWord} (tiempo real por carretera).` })
     if (minutes > 25) tips.push({ tone: 'warn', text: `${minutes} min puede ser demasiado para que la comida llegue caliente.` })
   }
 
-  // envío vs mínimo
   if (isFinite(feeNum) && feeNum > 0 && minOrder.trim()) {
     const min = parseFloat(minOrder.replace(',', '.'))
     if (isFinite(min) && min > 0) {
@@ -148,7 +140,6 @@ export default function ZoneEditor({
     }
   }
 
-  // margen general (Nivel 3 "general") con ticket medio del local
   if (isFinite(feeNum) && ticketMedio != null && ticketMedio > 0) {
     const pct = Math.round((feeNum / ticketMedio) * 100)
     if (pct <= 12) tips.push({ tone: 'good', text: `Con tu ticket medio de ${ticketMedio.toFixed(2)} €, un envío de ${feeNum.toFixed(2)} € deja margen sano.` })
@@ -156,10 +147,8 @@ export default function ZoneEditor({
     else tips.push({ tone: 'warn', text: `El envío es el ${pct}% de tu ticket medio (${ticketMedio.toFixed(2)} €): se come buena parte del margen.` })
   }
 
-  const tipColor = (t: string) =>
-    t === 'warn' ? 'var(--color-warning, #854F0B)' : t === 'good' ? 'var(--color-success, #3F5C2F)' : 'var(--color-text-secondary)'
-  const tipBg = (t: string) =>
-    t === 'warn' ? 'var(--color-warning-bg, #FAEEDA)' : t === 'good' ? 'var(--color-success-bg, #EAF3DE)' : 'var(--color-accent-bg, #EDECE6)'
+  const tipColor = (t: string) => t === 'warn' ? 'var(--color-warning, #854F0B)' : t === 'good' ? 'var(--color-success, #3F5C2F)' : 'var(--color-text-secondary)'
+  const tipBg = (t: string) => t === 'warn' ? 'var(--color-warning-bg, #FAEEDA)' : t === 'good' ? 'var(--color-success-bg, #E2E8DA)' : 'var(--color-accent-bg, #EDECE6)'
 
   const methodBtn = (m: ZoneMethodUI, label: string) => (
     <button onClick={() => pickMethod(m)} disabled={editing && m !== 'radius'} style={{
@@ -169,6 +158,8 @@ export default function ZoneEditor({
       opacity: (editing && m !== 'radius') ? 0.4 : 1,
     }}>{label}</button>
   )
+
+  const showProfile = method === 'meters' || method === 'minutes'
 
   return (
     <div style={{ border: '2px solid var(--color-accent, #1E3A5F)', borderRadius: 12, padding: 16 }}>
@@ -180,7 +171,6 @@ export default function ZoneEditor({
         }}>×</button>
       </div>
 
-      {/* Selector de método (oculto al editar: solo radio editable de momento) */}
       {!editing && (
         <>
           <label style={lbl}>¿Cómo defines la zona?</label>
@@ -194,6 +184,22 @@ export default function ZoneEditor({
 
       <label style={lbl}>Nombre</label>
       <input style={{ ...inp, marginBottom: 12 }} value={name} onChange={e => setName(e.target.value)} placeholder="Ej. Centro" />
+
+      {/* Selector de medio de reparto (solo carretera) */}
+      {showProfile && (
+        <>
+          <label style={lbl}>¿Cómo repartes?</label>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+            {PROFILES.map(p => (
+              <button key={p.v} onClick={() => { setProfile(p.v); clearComputed() }} style={{
+                flex: 1, padding: '7px 2px', borderRadius: 8, fontSize: 12, cursor: 'pointer',
+                border: profile === p.v ? '2px solid var(--color-accent, #1E3A5F)' : '1px solid var(--color-border-default)',
+                background: profile === p.v ? 'var(--color-accent-bg, #EDECE6)' : 'transparent',
+              }}>{p.label}</button>
+            ))}
+          </div>
+        </>
+      )}
 
       {/* Control según método */}
       {method === 'radius' && (
@@ -214,7 +220,7 @@ export default function ZoneEditor({
             <span style={{ fontSize: 12, fontWeight: 500 }}>{routeKm} km</span>
           </div>
           <input type="range" min={1} max={15} step={1} value={routeKm}
-            onChange={e => { setRouteKm(parseInt(e.target.value, 10)); setComputedPoly(null); onDraftPolygon(null) }}
+            onChange={e => { setRouteKm(parseInt(e.target.value, 10)); clearComputed() }}
             style={{ ...inp, marginBottom: 8 }} />
           <button onClick={handleCalc} disabled={calc} style={calcBtn}>{calc ? 'Calculando…' : 'Ver alcance en el mapa'}</button>
         </>
@@ -222,17 +228,16 @@ export default function ZoneEditor({
       {method === 'minutes' && (
         <>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-            <label style={{ ...lbl, marginBottom: 0 }}>Tiempo conduciendo</label>
+            <label style={{ ...lbl, marginBottom: 0 }}>Tiempo {profileWord}</label>
             <span style={{ fontSize: 12, fontWeight: 500 }}>{minutes} min</span>
           </div>
           <input type="range" min={5} max={45} step={5} value={minutes}
-            onChange={e => { setMinutes(parseInt(e.target.value, 10)); setComputedPoly(null); onDraftPolygon(null) }}
+            onChange={e => { setMinutes(parseInt(e.target.value, 10)); clearComputed() }}
             style={{ ...inp, marginBottom: 8 }} />
           <button onClick={handleCalc} disabled={calc} style={calcBtn}>{calc ? 'Calculando…' : 'Ver alcance en el mapa'}</button>
         </>
       )}
 
-      {/* Económico */}
       <div style={{ display: 'flex', gap: 8, margin: '12px 0' }}>
         <div style={{ flex: 1 }}>
           <label style={lbl}>Coste €</label>
@@ -248,7 +253,6 @@ export default function ZoneEditor({
         </div>
       </div>
 
-      {/* Copiloto de ayudas */}
       {tips.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
           {tips.map((t, i) => (
