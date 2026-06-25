@@ -10,6 +10,7 @@
 // de configuración, que es lo que escribe en BD.
 import { useEffect, useState, useCallback } from 'react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
+import StorefrontPreview from '@/modules/shop/components/StorefrontPreview'
 import {
   ensureThemesForAccount,
   listBrandsWithTheme,
@@ -117,7 +118,8 @@ export default function ShopDesignPage() {
           const accent = r.accent_color ?? r.brand?.color ?? '#D67442'
           const busy = savingId === r.id
           return (
-            <div key={r.id} style={{ border: '0.5px solid rgba(0,0,0,.14)', borderRadius: 12, padding: 16, opacity: busy ? 0.7 : 1 }}>
+            <div key={r.id} style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            <div style={{ flex: '1 1 420px', minWidth: 0, border: '0.5px solid rgba(0,0,0,.14)', borderRadius: 12, padding: 16, opacity: busy ? 0.7 : 1 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
                 <div style={{ width: 40, height: 40, borderRadius: 10, background: accent, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flex: '0 0 auto' }}>
                   {r.brand?.logo_url
@@ -159,6 +161,15 @@ export default function ShopDesignPage() {
               <Field label="Modo">
                 <Segmented options={MODES} value={r.mode} onChange={v => patch(r.id, { mode: v })} />
               </Field>
+            </div>
+            {accountId && (
+              <StorefrontPreview
+                accountId={accountId}
+                brandId={r.brand_id as string}
+                brand={{ name: r.brand?.name ?? 'Marca', logo_url: r.brand?.logo_url ?? null }}
+                theme={{ template: r.template, accent, font: r.font, mode: r.mode }}
+              />
+            )}
             </div>
           )
         })}
