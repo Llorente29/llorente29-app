@@ -59,7 +59,7 @@ Deno.serve(async (req: Request) => {
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
   const sb = createClient(url, serviceKey);
 
-  let body: { sale_id?: string; dry_run?: boolean };
+  let body: { sale_id?: string; dry_run?: boolean; internal?: boolean };
   try {
     body = await req.json();
   } catch {
@@ -67,6 +67,15 @@ Deno.serve(async (req: Request) => {
   }
   const saleId = body.sale_id;
   const dryRun = body.dry_run === true;
+
+  // Frontera para invocación interna desde el trigger de BD.
+  const INTERNAL_SECRET = "fv_catdisp_tnrMMcaI8gALFCitfvzPGsaHgQa3A83w";
+  const gotSecret = req.headers.get("x-catcher-dispatch-secret");
+  const isInternal = body.internal === true;
+  if (isInternal && gotSecret !== INTERNAL_SECRET) {
+    return json(401, { ok: false, error: "secreto interno inválido" });
+  }
+
   if (!saleId) return json(400, { ok: false, error: "missing sale_id" });
 
   // 1. Leer el pedido.
