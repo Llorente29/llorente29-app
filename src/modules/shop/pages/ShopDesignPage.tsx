@@ -8,9 +8,10 @@
 // - La identidad (logo, color de marca) se LEE de brand, no se duplica.
 // El preview en vivo del storefront es el siguiente tramo; aquí va el panel
 // de configuración, que es lo que escribe en BD.
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import StorefrontPreview from '@/modules/shop/components/StorefrontPreview'
+import { uploadShopHero, deleteShopHero } from '@/modules/shop/services/shopHeroService'
 import {
   ensureThemesForAccount,
   listBrandsWithTheme,
@@ -89,6 +90,32 @@ export default function ShopDesignPage() {
     }
   }, [load])
 
+  const heroInputRef = useRef<HTMLInputElement | null>(null)
+  const [heroForId, setHeroForId] = useState<string | null>(null)
+
+  async function onPickHero(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    const r = rows.find(x => x.id === heroForId)
+    if (!file || !r || !accountId || !r.brand_id) return
+    setSavingId(r.id)
+    try {
+      await uploadShopHero(accountId, r.brand_id, r.id, file)
+      await load()
+    } catch (err: any) {
+      setError(err?.message ?? 'No se pudo subir la portada.')
+    } finally {
+      setSavingId(null)
+    }
+  }
+
+  async function removeHero(r: BrandWithTheme) {
+    setSavingId(r.id)
+    try { await deleteShopHero(r.id); await load() }
+    catch (err: any) { setError(err?.message ?? 'No se pudo quitar la portada.') }
+    finally { setSavingId(null) }
+  }
+
   if (loading) return <div style={{ padding: 24, color: 'var(--text-muted, #888)' }}>Cargando la tienda…</div>
 
   return (
@@ -100,6 +127,8 @@ export default function ShopDesignPage() {
           platos salen de tu carta. Publica cuando esté lista.
         </p>
       </header>
+
+      <input ref={heroInputRef} type="file" accept="image/*" onChange={onPickHero} style={{ display: 'none' }} />
 
       {error && (
         <div style={{ background: '#fcebeb', color: '#a32d2d', borderRadius: 8, padding: '10px 14px', fontSize: 14, margin: '12px 0' }}>
@@ -161,12 +190,27 @@ export default function ShopDesignPage() {
               <Field label="Modo">
                 <Segmented options={MODES} value={r.mode} onChange={v => patch(r.id, { mode: v })} />
               </Field>
+              <Field label="Portada">
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <button onClick={() => { setHeroForId(r.id); heroInputRef.current?.click() }} disabled={busy}
+                    style={{ fontSize: 13, padding: '6px 12px', borderRadius: 8, cursor: 'pointer', border: '0.5px solid rgba(0,0,0,.2)', background: 'transparent', color: 'inherit' }}>
+                    {r.hero_url ? 'Cambiar foto' : 'Subir foto'}
+                  </button>
+                  {r.hero_url && (
+                    <button onClick={() => removeHero(r)} disabled={busy}
+                      style={{ fontSize: 12, color: 'var(--text-muted, #888)', border: '0.5px solid rgba(0,0,0,.2)', borderRadius: 8, padding: '6px 10px', background: 'transparent', cursor: 'pointer' }}>
+                      Quitar
+                    </button>
+                  )}
+                </div>
+              </Field>
             </div>
             {accountId && (
               <StorefrontPreview
                 accountId={accountId}
                 brandId={r.brand_id as string}
                 brand={{ name: r.brand?.name ?? 'Marca', logo_url: r.brand?.logo_url ?? null }}
+                heroUrl={r.hero_url}
                 theme={{ template: r.template, accent, font: r.font, mode: r.mode }}
               />
             )}
