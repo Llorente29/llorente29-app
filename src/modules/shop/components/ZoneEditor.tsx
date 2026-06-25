@@ -1,16 +1,11 @@
 // src/modules/shop/components/ZoneEditor.tsx
 //
-// Editor unificado de zona de entrega para HOSTELEROS (Capa 1).
-// Métodos: radio rápido / por carretera·km / por carretera·tiempo / códigos
-// postales / zona a mano (dibujar el área en el mapa).
-// Carretera: selector de MEDIO DE REPARTO (moto/coche/bici/pie) → isócrona Mapbox
-// realista. Radio→radio; isócrona y zona a mano→polígono; CP→lista.
-//
-// COPILOTO DE AYUDAS en vivo: tiempo, zona grande, envío vs mínimo, margen vs
-// ticket medio del local (margen general; el por-zona exacto llega con coords de
-// raw_tab, frente aparte).
-//
-// Editar: solo radio se precarga; el resto se recrea.
+// Editor de zona de entrega para HOSTELEROS (Capa 1) — rediseño cálido.
+// Flujo en dos preguntas claras en lenguaje de hostelero, no botones técnicos:
+//   1) "¿Hasta dónde repartes?" → 4 tarjetas (radio / por carretera / CP / a mano)
+//   2) Solo si "por carretera": medio de reparto + distancia o tiempo
+// El precio y el copiloto de ayudas viven debajo con presencia visual.
+// Lógica intacta: radio→radio; isócrona y a mano→polígono; CP→lista.
 
 import { useState } from 'react'
 import {
@@ -18,7 +13,10 @@ import {
   type DeliveryZone, type TravelProfile,
 } from '@/modules/shop/services/deliveryZoneService'
 
-export type ZoneMethodUI = 'radius' | 'meters' | 'minutes' | 'postal' | 'draw'
+// Familia de método tal como la piensa el hostelero.
+type ZoneFamily = 'radius' | 'road' | 'postal' | 'draw'
+// Para carretera: por distancia o por tiempo.
+type RoadBy = 'meters' | 'minutes'
 
 type Props = {
   locationId: string
@@ -26,31 +24,33 @@ type Props = {
   centerLng: number
   zone: DeliveryZone | null
   ticketMedio: number | null
-  drawnPolygon: GeoJSON.Polygon | null      // polígono que el usuario dibuja en el mapa
+  drawnPolygon: GeoJSON.Polygon | null
   onDraftRadius: (radiusM: number | null) => void
   onDraftPolygon: (poly: GeoJSON.Polygon | null) => void
-  onDrawingChange: (drawing: boolean) => void  // pide al mapa entrar/salir de modo dibujo
+  onDrawingChange: (drawing: boolean) => void
   onSaved: () => void
   onCancel: () => void
 }
 
-const lbl: React.CSSProperties = { fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 4, display: 'block' }
-const inp: React.CSSProperties = { width: '100%' }
-
 function fmtNum(n: number | null): string { return n == null ? '' : String(n).replace('.', ',') }
 function approxMin(km: number): number { return Math.max(10, Math.round((km / 18) * 60 / 5) * 5) }
-
 function parsePostalCodes(text: string): string[] {
-  const tokens = text.split(/[^0-9]+/).filter(Boolean)
-  return Array.from(new Set(tokens))
+  return Array.from(new Set(text.split(/[^0-9]+/).filter(Boolean)))
 }
 function isValidEsCp(cp: string): boolean { return /^[0-5][0-9]{4}$/.test(cp) }
 
+const FAMILIES: { v: ZoneFamily; icon: string; title: string; hint: string }[] = [
+  { v: 'radius', icon: '🎯', title: 'Un radio', hint: 'Rápido: un círculo alrededor de tu local' },
+  { v: 'road', icon: '🛣️', title: 'Por carretera', hint: 'Realista: por calles, según cómo repartes' },
+  { v: 'postal', icon: '📮', title: 'Códigos postales', hint: 'Por las zonas concretas que tú eliges' },
+  { v: 'draw', icon: '✏️', title: 'La dibujo yo', hint: 'Control total: marca el área a mano' },
+]
+
 const PROFILES: { v: TravelProfile; label: string }[] = [
-  { v: 'moto', label: '🛵 En moto' },
-  { v: 'coche', label: '🚗 En coche' },
-  { v: 'bici', label: '🚲 En bici' },
-  { v: 'pie', label: '🚶 Andando' },
+  { v: 'moto', label: '🛵 Moto' },
+  { v: 'coche', label: '🚗 Coche' },
+  { v: 'bici', label: '🚲 Bici' },
+  { v: 'pie', label: '🚶 A pie' },
 ]
 
 export default function ZoneEditor({
@@ -58,8 +58,11 @@ export default function ZoneEditor({
   onDraftRadius, onDraftPolygon, onDrawingChange, onSaved, onCancel,
 }: Props) {
   const editing = zone != null
-  const [method, setMethod] = useState<ZoneMethodUI>('radius')
+
+  const [family, setFamily] = useState<ZoneFamily>('radius')
+  const [roadBy, setRoadBy] = useState<RoadBy>('minutes')
   const [profile, setProfile] = useState<TravelProfile>('moto')
+
   const [name, setName] = useState(zone?.name ?? '')
   const [fee, setFee] = useState(zone ? fmtNum(zone.delivery_fee) : '2,50')
   const [minOrder, setMinOrder] = useState(zone ? fmtNum(zone.min_order) : '')
@@ -83,40 +86,30 @@ export default function ZoneEditor({
   function refreshRadiusPreview(m: number) {
     setRadiusM(m); setComputedPoly(null); onDraftPolygon(null); onDraftRadius(m)
   }
-  function pickMethod(m: ZoneMethodUI) {
-    setMethod(m); setComputedPoly(null); onDraftPolygon(null)
-    // Modo dibujo solo en 'draw'.
-    onDrawingChange(m === 'draw')
-    if (m === 'radius') onDraftRadius(radiusM); else onDraftRadius(null)
-  }
   function clearComputed() { setComputedPoly(null); onDraftPolygon(null) }
 
-  function removeCp(cp: string) { setPostalText(postalCodes.filter(c => c !== cp).join(', ')) }
+  function pickFamily(f: ZoneFamily) {
+    setFamily(f); setComputedPoly(null); onDraftPolygon(null)
+    onDrawingChange(f === 'draw')
+    if (f === 'radius') onDraftRadius(radiusM); else onDraftRadius(null)
+  }
 
   async function handleCalc() {
     setErr(null); setCalc(true)
     try {
-      const poly = method === 'meters'
+      const poly = roadBy === 'meters'
         ? await isochrone(centerLat, centerLng, { meters: Math.round(routeKm * 1000) }, profile)
         : await isochrone(centerLat, centerLng, { minutes }, profile)
       setComputedPoly(poly); onDraftPolygon(poly); onDraftRadius(null)
-    } catch (e: any) {
-      setErr(e.message)
-    } finally {
-      setCalc(false)
-    }
+    } catch (e: any) { setErr(e.message) } finally { setCalc(false) }
   }
 
-  function finish(cb: () => void) {
-    // Antes de guardar/cancelar, asegura salir del modo dibujo.
-    onDrawingChange(false)
-    cb()
-  }
+  function finish(cb: () => void) { onDrawingChange(false); cb() }
 
   async function handleSave() {
     setErr(null)
-    if (!name.trim()) { setErr('Pon un nombre a la zona.'); return }
-    if (!isFinite(feeNum) || feeNum < 0) { setErr('El coste debe ser un número válido.'); return }
+    if (!name.trim()) { setErr('Ponle un nombre a la zona.'); return }
+    if (!isFinite(feeNum) || feeNum < 0) { setErr('El precio de envío no es válido.'); return }
     const eco = {
       name: name.trim(),
       delivery_fee: feeNum,
@@ -125,12 +118,12 @@ export default function ZoneEditor({
     }
     setSaving(true)
     try {
-      if (method === 'radius') {
+      if (family === 'radius') {
         await upsertRadiusZone(zone?.id ?? null, locationId, radiusM, centerLat, centerLng, eco)
-      } else if (method === 'postal') {
+      } else if (family === 'postal') {
         if (postalCodes.length === 0) { setErr('Escribe al menos un código postal.'); setSaving(false); return }
         await upsertPostalZone(zone?.id ?? null, locationId, postalCodes, eco)
-      } else if (method === 'draw') {
+      } else if (family === 'draw') {
         if (!drawnPolygon) { setErr('Dibuja la zona en el mapa antes de guardar.'); setSaving(false); return }
         await upsertPolygonZone(zone?.id ?? null, locationId, drawnPolygon, eco)
       } else {
@@ -139,226 +132,265 @@ export default function ZoneEditor({
       }
       onDrawingChange(false)
       onSaved()
-    } catch (e: any) {
-      setErr(e.message); setSaving(false)
-    }
+    } catch (e: any) { setErr(e.message); setSaving(false) }
   }
 
   // ── Copiloto de ayudas ──
-  const tips: { tone: 'info' | 'warn' | 'good'; text: string }[] = []
+  const tips: { icon: string; tone: 'info' | 'warn' | 'good'; text: string }[] = []
   const profileWord = profile === 'moto' ? 'en moto' : profile === 'coche' ? 'en coche' : profile === 'bici' ? 'en bici' : 'andando'
 
-  if (method === 'radius') {
-    tips.push({ tone: 'info', text: `Reparto hasta ${(radiusM / 1000).toFixed(1)} km a la redonda · llega en ~${approxMin(radiusM / 1000)} min (aprox.)` })
-    if (radiusM / 1000 > 4) tips.push({ tone: 'warn', text: `${(radiusM / 1000).toFixed(1)} km es mucho para comida caliente: puede llegar fría.` })
-  } else if (method === 'meters') {
-    tips.push({ tone: 'info', text: `Reparto hasta ${routeKm} km de ruta real ${profileWord} (por calles, no en línea recta).` })
-    if (routeKm > 5) tips.push({ tone: 'warn', text: `${routeKm} km de ruta es bastante para comida caliente.` })
-  } else if (method === 'minutes') {
-    tips.push({ tone: 'info', text: `Reparto hasta ${minutes} min ${profileWord} (tiempo real por carretera).` })
-    if (minutes > 25) tips.push({ tone: 'warn', text: `${minutes} min puede ser demasiado para que la comida llegue caliente.` })
-  } else if (method === 'postal') {
-    if (postalCodes.length > 0) tips.push({ tone: 'info', text: `Repartes a ${postalCodes.length} código${postalCodes.length === 1 ? '' : 's'} postal${postalCodes.length === 1 ? '' : 'es'}.` })
-    if (postalInvalid.length > 0) tips.push({ tone: 'warn', text: `Estos no parecen códigos postales españoles: ${postalInvalid.join(', ')}. Revísalos.` })
+  if (family === 'radius') {
+    tips.push({ icon: '🕐', tone: 'info', text: `Hasta ${(radiusM / 1000).toFixed(1)} km a la redonda · llega en ~${approxMin(radiusM / 1000)} min (aprox.)` })
+    if (radiusM / 1000 > 4) tips.push({ icon: '⚠️', tone: 'warn', text: `${(radiusM / 1000).toFixed(1)} km es mucho para comida caliente: puede llegar fría.` })
+  } else if (family === 'road' && roadBy === 'meters') {
+    tips.push({ icon: '🕐', tone: 'info', text: `Hasta ${routeKm} km de ruta real ${profileWord} (por calles, no en línea recta).` })
+    if (routeKm > 5) tips.push({ icon: '⚠️', tone: 'warn', text: `${routeKm} km de ruta es bastante para comida caliente.` })
+  } else if (family === 'road') {
+    tips.push({ icon: '🕐', tone: 'info', text: `Hasta ${minutes} min ${profileWord} (tiempo real por carretera).` })
+    if (minutes > 25) tips.push({ icon: '⚠️', tone: 'warn', text: `${minutes} min puede ser demasiado para que llegue caliente.` })
+  } else if (family === 'postal') {
+    if (postalCodes.length > 0) tips.push({ icon: '📮', tone: 'info', text: `Repartes a ${postalCodes.length} código${postalCodes.length === 1 ? '' : 's'} postal${postalCodes.length === 1 ? '' : 'es'}.` })
+    if (postalInvalid.length > 0) tips.push({ icon: '⚠️', tone: 'warn', text: `No parecen códigos postales españoles: ${postalInvalid.join(', ')}.` })
   } else {
-    if (drawnPolygon) tips.push({ tone: 'good', text: 'Zona dibujada. Ajusta los puntos en el mapa o guárdala.' })
-    else tips.push({ tone: 'info', text: 'Haz clic en el mapa para marcar las esquinas de tu zona; doble clic para cerrarla.' })
+    if (drawnPolygon) tips.push({ icon: '✅', tone: 'good', text: 'Zona dibujada. Ajusta los puntos en el mapa o guárdala.' })
+    else tips.push({ icon: '✏️', tone: 'info', text: 'Haz clic en el mapa para marcar las esquinas; doble clic para cerrar.' })
   }
 
   if (isFinite(feeNum) && feeNum > 0 && minOrder.trim()) {
     const min = parseFloat(minOrder.replace(',', '.'))
     if (isFinite(min) && min > 0) {
       const pct = Math.round((feeNum / min) * 100)
-      if (pct >= 30) tips.push({ tone: 'warn', text: `El envío (${feeNum.toFixed(2)} €) es el ${pct}% de un pedido mínimo de ${min.toFixed(0)} €: pesa mucho en pedidos pequeños.` })
+      if (pct >= 30) tips.push({ icon: '⚠️', tone: 'warn', text: `El envío (${feeNum.toFixed(2)} €) es el ${pct}% de un pedido mínimo de ${min.toFixed(0)} €.` })
     }
   }
-
   if (isFinite(feeNum) && ticketMedio != null && ticketMedio > 0) {
     const pct = Math.round((feeNum / ticketMedio) * 100)
-    if (pct <= 12) tips.push({ tone: 'good', text: `Con tu ticket medio de ${ticketMedio.toFixed(2)} €, un envío de ${feeNum.toFixed(2)} € deja margen sano.` })
-    else if (pct <= 20) tips.push({ tone: 'info', text: `El envío es el ${pct}% de tu ticket medio (${ticketMedio.toFixed(2)} €): razonable, vigila el margen.` })
-    else tips.push({ tone: 'warn', text: `El envío es el ${pct}% de tu ticket medio (${ticketMedio.toFixed(2)} €): se come buena parte del margen.` })
+    if (pct <= 12) tips.push({ icon: '💰', tone: 'good', text: `Con tu ticket medio de ${ticketMedio.toFixed(2)} €, un envío de ${feeNum.toFixed(2)} € deja margen sano.` })
+    else if (pct <= 20) tips.push({ icon: '💰', tone: 'info', text: `El envío es el ${pct}% de tu ticket medio (${ticketMedio.toFixed(2)} €): vigila el margen.` })
+    else tips.push({ icon: '💸', tone: 'warn', text: `El envío es el ${pct}% de tu ticket medio (${ticketMedio.toFixed(2)} €): se come buena parte del margen.` })
   }
 
   const tipColor = (t: string) => t === 'warn' ? 'var(--color-warning, #854F0B)' : t === 'good' ? 'var(--color-success, #3F5C2F)' : 'var(--color-text-secondary)'
   const tipBg = (t: string) => t === 'warn' ? 'var(--color-warning-bg, #FAEEDA)' : t === 'good' ? 'var(--color-success-bg, #E2E8DA)' : 'var(--color-accent-bg, #EDECE6)'
 
-  const methodBtn = (m: ZoneMethodUI, label: string) => (
-    <button onClick={() => pickMethod(m)} disabled={editing && m !== 'radius'} style={{
-      flex: 1, padding: '8px 6px', borderRadius: 8, fontSize: 12.5, cursor: 'pointer',
-      border: method === m ? '2px solid var(--color-accent, #1E3A5F)' : '1px solid var(--color-border-default)',
-      background: method === m ? 'var(--color-accent-bg, #EDECE6)' : 'transparent',
-      opacity: (editing && m !== 'radius') ? 0.4 : 1,
-    }}>{label}</button>
-  )
-
-  const showProfile = method === 'meters' || method === 'minutes'
-
   return (
-    <div style={{ border: '2px solid var(--color-accent, #1E3A5F)', borderRadius: 12, padding: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <h3 style={{ margin: 0, fontSize: 15 }}>{editing ? `Editar · ${zone!.name}` : 'Nueva zona'}</h3>
+    <div style={{
+      border: '1px solid var(--color-border-default)', borderRadius: 16,
+      padding: 20, background: 'var(--color-bg-card, #FFFFFF)',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+        <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600 }}>{editing ? `Editar ${zone!.name}` : 'Nueva zona de reparto'}</h3>
         <button onClick={() => finish(onCancel)} disabled={saving} title="Cerrar" style={{
           border: 'none', background: 'transparent', cursor: 'pointer',
-          color: 'var(--color-text-secondary)', fontSize: 18, lineHeight: 1,
+          color: 'var(--color-text-secondary)', fontSize: 22, lineHeight: 1,
         }}>×</button>
       </div>
 
+      {/* Pregunta 1: ¿hasta dónde repartes? (tarjetas) */}
       {!editing && (
         <>
-          <label style={lbl}>¿Cómo defines la zona?</label>
-          <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
-            {methodBtn('radius', 'Radio rápido')}
-            {methodBtn('meters', 'Por carretera · km')}
-          </div>
-          <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
-            {methodBtn('minutes', 'Por carretera · tiempo')}
-            {methodBtn('postal', 'Códigos postales')}
-          </div>
-          <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
-            {methodBtn('draw', '✏️ Zona a mano')}
-          </div>
-        </>
-      )}
-
-      <label style={lbl}>Nombre</label>
-      <input style={{ ...inp, marginBottom: 12 }} value={name} onChange={e => setName(e.target.value)} placeholder="Ej. Centro" />
-
-      {showProfile && (
-        <>
-          <label style={lbl}>¿Cómo repartes?</label>
-          <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-            {PROFILES.map(p => (
-              <button key={p.v} onClick={() => { setProfile(p.v); clearComputed() }} style={{
-                flex: 1, padding: '7px 2px', borderRadius: 8, fontSize: 12, cursor: 'pointer',
-                border: profile === p.v ? '2px solid var(--color-accent, #1E3A5F)' : '1px solid var(--color-border-default)',
-                background: profile === p.v ? 'var(--color-accent-bg, #EDECE6)' : 'transparent',
-              }}>{p.label}</button>
-            ))}
+          <div style={qLabel}>¿Hasta dónde repartes?</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 18 }}>
+            {FAMILIES.map(f => {
+              const on = family === f.v
+              return (
+                <button key={f.v} onClick={() => pickFamily(f.v)} style={{
+                  textAlign: 'left', padding: '12px 14px', borderRadius: 12, cursor: 'pointer',
+                  border: on ? '2px solid var(--color-terracota, #D67442)' : '1px solid var(--color-border-default)',
+                  background: on ? 'var(--color-warning-bg, #FAEEDA)' : 'transparent',
+                  transition: 'all .12s',
+                }}>
+                  <div style={{ fontSize: 18, marginBottom: 4 }}>{f.icon}</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 2 }}>{f.title}</div>
+                  <div style={{ fontSize: 11.5, color: 'var(--color-text-secondary)', lineHeight: 1.3 }}>{f.hint}</div>
+                </button>
+              )
+            })}
           </div>
         </>
       )}
 
-      {method === 'radius' && (
-        <>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-            <label style={{ ...lbl, marginBottom: 0 }}>Radio</label>
-            <span style={{ fontSize: 12, fontWeight: 500 }}>{(radiusM / 1000).toFixed(1)} km</span>
+      {/* Nombre */}
+      <div style={qLabel}>¿Cómo se llama esta zona?</div>
+      <input style={{ ...bigInput, marginBottom: 18 }} value={name} onChange={e => setName(e.target.value)} placeholder="Ej. Centro, Barrio norte…" />
+
+      {/* Controles según familia */}
+      {family === 'radius' && (
+        <div style={{ marginBottom: 18 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+            <span style={qLabel}>Tamaño del radio</span>
+            <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-terracota, #D67442)' }}>{(radiusM / 1000).toFixed(1)} km</span>
           </div>
           <input type="range" min={500} max={6000} step={100} value={radiusM}
-            onChange={e => refreshRadiusPreview(parseInt(e.target.value, 10))}
-            style={{ ...inp, marginBottom: 12 }} />
-        </>
+            onChange={e => refreshRadiusPreview(parseInt(e.target.value, 10))} style={{ width: '100%' }} />
+        </div>
       )}
-      {method === 'meters' && (
+
+      {family === 'road' && (
         <>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-            <label style={{ ...lbl, marginBottom: 0 }}>Distancia de ruta</label>
-            <span style={{ fontSize: 12, fontWeight: 500 }}>{routeKm} km</span>
+          <div style={qLabel}>¿Cómo repartes?</div>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
+            {PROFILES.map(p => {
+              const on = profile === p.v
+              return (
+                <button key={p.v} onClick={() => { setProfile(p.v); clearComputed() }} style={{
+                  flex: 1, padding: '9px 2px', borderRadius: 10, fontSize: 12.5, cursor: 'pointer', fontWeight: on ? 600 : 400,
+                  border: on ? '2px solid var(--color-accent, #1E3A5F)' : '1px solid var(--color-border-default)',
+                  background: on ? 'var(--color-accent-bg, #EDECE6)' : 'transparent',
+                }}>{p.label}</button>
+              )
+            })}
           </div>
-          <input type="range" min={1} max={15} step={1} value={routeKm}
-            onChange={e => { setRouteKm(parseInt(e.target.value, 10)); clearComputed() }}
-            style={{ ...inp, marginBottom: 8 }} />
-          <button onClick={handleCalc} disabled={calc} style={calcBtn}>{calc ? 'Calculando…' : 'Ver alcance en el mapa'}</button>
-        </>
-      )}
-      {method === 'minutes' && (
-        <>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-            <label style={{ ...lbl, marginBottom: 0 }}>Tiempo {profileWord}</label>
-            <span style={{ fontSize: 12, fontWeight: 500 }}>{minutes} min</span>
+
+          <div style={qLabel}>¿Por distancia o por tiempo?</div>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
+            <button onClick={() => { setRoadBy('minutes'); clearComputed() }} style={toggle(roadBy === 'minutes')}>Por tiempo</button>
+            <button onClick={() => { setRoadBy('meters'); clearComputed() }} style={toggle(roadBy === 'meters')}>Por distancia</button>
           </div>
-          <input type="range" min={5} max={45} step={5} value={minutes}
-            onChange={e => { setMinutes(parseInt(e.target.value, 10)); clearComputed() }}
-            style={{ ...inp, marginBottom: 8 }} />
-          <button onClick={handleCalc} disabled={calc} style={calcBtn}>{calc ? 'Calculando…' : 'Ver alcance en el mapa'}</button>
+
+          {roadBy === 'minutes' ? (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                <span style={qLabel}>Tiempo {profileWord}</span>
+                <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-terracota, #D67442)' }}>{minutes} min</span>
+              </div>
+              <input type="range" min={5} max={45} step={5} value={minutes}
+                onChange={e => { setMinutes(parseInt(e.target.value, 10)); clearComputed() }} style={{ width: '100%' }} />
+            </div>
+          ) : (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                <span style={qLabel}>Distancia de ruta</span>
+                <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-terracota, #D67442)' }}>{routeKm} km</span>
+              </div>
+              <input type="range" min={1} max={15} step={1} value={routeKm}
+                onChange={e => { setRouteKm(parseInt(e.target.value, 10)); clearComputed() }} style={{ width: '100%' }} />
+            </div>
+          )}
+          <button onClick={handleCalc} disabled={calc} style={calcBtn}>{calc ? 'Calculando…' : '🗺️ Ver alcance en el mapa'}</button>
         </>
       )}
-      {method === 'postal' && (
-        <>
-          <label style={lbl}>Códigos postales (sepáralos por coma o espacio)</label>
+
+      {family === 'postal' && (
+        <div style={{ marginBottom: 12 }}>
+          <div style={qLabel}>¿A qué códigos postales repartes?</div>
           <textarea value={postalText} onChange={e => setPostalText(e.target.value)}
             placeholder="28027, 28022, 28002" rows={2}
-            style={{ ...inp, marginBottom: 8, resize: 'vertical', fontFamily: 'inherit', fontSize: 14 }} />
+            style={{ ...bigInput, resize: 'vertical', fontFamily: 'inherit' }} />
           {postalCodes.length > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
               {postalCodes.map(cp => {
                 const bad = !isValidEsCp(cp)
                 return (
                   <span key={cp} style={{
                     display: 'inline-flex', alignItems: 'center', gap: 6,
-                    fontSize: 12.5, padding: '3px 8px', borderRadius: 20,
+                    fontSize: 13, padding: '4px 10px', borderRadius: 20,
                     background: bad ? 'var(--color-warning-bg, #FAEEDA)' : 'var(--color-accent-bg, #EDECE6)',
                     color: bad ? 'var(--color-warning, #854F0B)' : 'var(--color-text-primary)',
                     border: bad ? '1px solid var(--color-warning, #854F0B)' : '1px solid var(--color-border-default)',
                   }}>
                     {cp}
-                    <button onClick={() => removeCp(cp)} title="Quitar" style={{
-                      border: 'none', background: 'transparent', cursor: 'pointer',
-                      color: 'inherit', fontSize: 14, lineHeight: 1, padding: 0,
+                    <button onClick={() => setPostalText(postalCodes.filter(c => c !== cp).join(', '))} title="Quitar" style={{
+                      border: 'none', background: 'transparent', cursor: 'pointer', color: 'inherit', fontSize: 15, lineHeight: 1, padding: 0,
                     }}>×</button>
                   </span>
                 )
               })}
             </div>
           )}
-        </>
+        </div>
       )}
-      {method === 'draw' && (
+
+      {family === 'draw' && (
         <div style={{
-          fontSize: 12.5, padding: '10px 12px', borderRadius: 8, marginBottom: 12,
-          background: 'var(--color-accent-bg, #EDECE6)', color: 'var(--color-text-secondary)',
+          fontSize: 13, padding: '12px 14px', borderRadius: 12, marginBottom: 12,
+          background: 'var(--color-accent-bg, #EDECE6)', color: 'var(--color-text-secondary)', lineHeight: 1.4,
         }}>
           Dibuja tu zona en el mapa: haz clic para marcar cada esquina y doble clic
           para cerrarla. Luego puedes arrastrar los puntos para ajustarla.
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 8, margin: '12px 0' }}>
-        <div style={{ flex: 1 }}>
-          <label style={lbl}>Coste €</label>
-          <input style={inp} value={fee} onChange={e => setFee(e.target.value)} inputMode="decimal" />
+      {/* Precio, en lenguaje humano */}
+      <div style={{ display: 'flex', gap: 10, margin: '18px 0 14px' }}>
+        <div style={{ flex: 1.2 }}>
+          <span style={qLabel}>Precio de envío</span>
+          <div style={{ position: 'relative' }}>
+            <input style={{ ...bigInput, paddingRight: 26 }} value={fee} onChange={e => setFee(e.target.value)} inputMode="decimal" />
+            <span style={euroSuffix}>€</span>
+          </div>
         </div>
         <div style={{ flex: 1 }}>
-          <label style={lbl}>Mínimo €</label>
-          <input style={inp} value={minOrder} onChange={e => setMinOrder(e.target.value)} inputMode="decimal" placeholder="—" />
+          <span style={qLabel}>Pedido mínimo</span>
+          <div style={{ position: 'relative' }}>
+            <input style={{ ...bigInput, paddingRight: 26 }} value={minOrder} onChange={e => setMinOrder(e.target.value)} inputMode="decimal" placeholder="—" />
+            <span style={euroSuffix}>€</span>
+          </div>
         </div>
         <div style={{ flex: 1 }}>
-          <label style={lbl}>Tiempo min</label>
-          <input style={inp} value={eta} onChange={e => setEta(e.target.value)} inputMode="numeric" placeholder="—" />
+          <span style={qLabel}>Tiempo entrega</span>
+          <div style={{ position: 'relative' }}>
+            <input style={{ ...bigInput, paddingRight: 34 }} value={eta} onChange={e => setEta(e.target.value)} inputMode="numeric" placeholder="—" />
+            <span style={{ ...euroSuffix, right: 10 }}>min</span>
+          </div>
         </div>
       </div>
 
+      {/* Copiloto */}
       {tips.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 16 }}>
           {tips.map((t, i) => (
             <div key={i} style={{
-              fontSize: 12.5, padding: '7px 10px', borderRadius: 8,
-              background: tipBg(t.tone), color: tipColor(t.tone),
-            }}>{t.text}</div>
+              display: 'flex', alignItems: 'flex-start', gap: 8,
+              fontSize: 13, padding: '9px 12px', borderRadius: 10,
+              background: tipBg(t.tone), color: tipColor(t.tone), lineHeight: 1.35,
+            }}>
+              <span style={{ flexShrink: 0 }}>{t.icon}</span>
+              <span>{t.text}</span>
+            </div>
           ))}
         </div>
       )}
 
-      {err && <p style={{ color: 'var(--color-danger)', fontSize: 13, marginTop: 0 }}>{err}</p>}
+      {err && <p style={{ color: 'var(--color-danger)', fontSize: 13.5, marginTop: 0 }}>{err}</p>}
 
-      <div style={{ display: 'flex', gap: 8 }}>
+      <div style={{ display: 'flex', gap: 10 }}>
         <button onClick={handleSave} disabled={saving} style={{
-          flex: 1, padding: '9px 0', borderRadius: 8, border: 'none',
-          background: 'var(--color-terracota, #D67442)', color: '#fff', cursor: 'pointer',
-          opacity: saving ? 0.6 : 1,
-        }}>{saving ? 'Guardando…' : 'Guardar'}</button>
+          flex: 1, padding: '12px 0', borderRadius: 12, border: 'none', fontSize: 15, fontWeight: 600,
+          background: 'var(--color-terracota, #D67442)', color: '#fff', cursor: 'pointer', opacity: saving ? 0.6 : 1,
+        }}>{saving ? 'Guardando…' : 'Guardar zona'}</button>
         <button onClick={() => finish(onCancel)} disabled={saving} style={{
-          padding: '9px 16px', borderRadius: 8, border: '1px solid var(--color-border-default)',
-          background: 'transparent', cursor: 'pointer',
+          padding: '12px 20px', borderRadius: 12, border: '1px solid var(--color-border-default)',
+          background: 'transparent', cursor: 'pointer', fontSize: 15,
         }}>Cancelar</button>
       </div>
     </div>
   )
 }
 
+const qLabel: React.CSSProperties = {
+  fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)',
+  marginBottom: 8, display: 'block',
+}
+const bigInput: React.CSSProperties = {
+  width: '100%', padding: '10px 12px', borderRadius: 10, fontSize: 15,
+  border: '1px solid var(--color-border-default)', background: 'var(--color-bg-card, #FFFFFF)',
+  boxSizing: 'border-box',
+}
+const euroSuffix: React.CSSProperties = {
+  position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
+  fontSize: 14, color: 'var(--color-text-secondary)', pointerEvents: 'none',
+}
+function toggle(on: boolean): React.CSSProperties {
+  return {
+    flex: 1, padding: '9px 0', borderRadius: 10, fontSize: 13, cursor: 'pointer', fontWeight: on ? 600 : 400,
+    border: on ? '2px solid var(--color-accent, #1E3A5F)' : '1px solid var(--color-border-default)',
+    background: on ? 'var(--color-accent-bg, #EDECE6)' : 'transparent',
+  }
+}
 const calcBtn: React.CSSProperties = {
-  width: '100%', padding: '8px 0', borderRadius: 8, marginBottom: 4,
-  border: '1px solid var(--color-accent, #1E3A5F)', background: 'transparent',
-  color: 'var(--color-accent, #1E3A5F)', cursor: 'pointer', fontSize: 13,
+  width: '100%', padding: '11px 0', borderRadius: 12, marginBottom: 4, fontSize: 14, fontWeight: 600,
+  border: '2px solid var(--color-accent, #1E3A5F)', background: 'transparent',
+  color: 'var(--color-accent, #1E3A5F)', cursor: 'pointer',
 }
