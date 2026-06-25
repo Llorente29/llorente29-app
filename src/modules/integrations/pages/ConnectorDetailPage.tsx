@@ -8,11 +8,12 @@
 //   - campos type:'secret'  → se cifran en Vault (vía Edge Function). Enmascarados.
 //   - resto (text/number/boolean) → config no sensible (account_connector.config).
 //
-// Guardar → connectorCredentialsService.save (Edge Function → wrappers Vault).
+// Guardar → si NO existe conexión todavía, la CREA (upsertAccountConnector) y
+// luego guarda credenciales en ella. Así un conector de tipo 'credentials' se
+// activa al configurar, sin paso previo de "solicitar".
+//
 // El secreto NUNCA se muestra una vez guardado: el estado se lee como booleano
 // (hasCredentials). Para cambiarlo, se re-introduce.
-//
-// Diseño: tokens del sistema, patrón visual de KitchenItemDetailPage.
 
 import { useEffect, useState } from 'react'
 import { ArrowLeft, Check, Loader2, ShieldCheck, Trash2 } from 'lucide-react'
@@ -22,6 +23,7 @@ import {
   getConnectorCredentialsStatus,
   clearConnectorCredentials,
 } from '@/modules/integrations/services/connectorCredentialsService'
+import { upsertAccountConnector } from '@/modules/integrations/services/connectorService'
 import type {
   Connector,
   AccountConnector,
@@ -37,18 +39,25 @@ const DIRECTION_LABEL: Record<string, string> = {
 interface ConnectorDetailPageProps {
   connector: Connector
   accountConnector: AccountConnector | null // null si aún no hay conexión creada
+  accountId: string                          // cuenta activa (para crear la conexión)
+  locationId: string | null                  // local activo (Catcher es por local)
+  createdBy?: string | null
+  createdByName?: string | null
   onBack: () => void
-  onChanged?: () => void // refresca la lista del Marketplace al guardar/limpiar
+  onChanged?: () => void
 }
 
 export default function ConnectorDetailPage({
-  connector, accountConnector, onBack, onChanged,
+  connector, accountConnector, accountId, locationId,
+  createdBy, createdByName, onBack, onChanged,
 }: ConnectorDetailPageProps) {
   const fields = connector.configSchema?.fields ?? []
   const secretFields = fields.filter(f => f.type === 'secret')
   const plainFields = fields.filter(f => f.type !== 'secret')
 
-  // Valores del formulario (todos como string en el form; se castean al guardar).
+  // La conexión puede crearse en este componente; la guardamos en estado local.
+  const [conn, setConn] = useState<AccountConnector | null>(accountConnector)
+
   const [values, setValues] = useState<Record<string, string>>({})
   const [hasCredentials, setHasCredentials] = useState(false)
   const [loadingStatus, setLoadingStatus] = useState(true)
@@ -57,13 +66,14 @@ export default function ConnectorDetailPage({
   const [error, setError] = useState<string | null>(null)
   const [okMsg, setOkMsg] = useState<string | null>(null)
 
-  // Inicializa los valores no-secretos desde account_connector.config (si hay).
+  useEffect(() => { setConn(accountConnector) }, [accountConnector])
+
   useEffect(() => {
     const initial: Record<string, string> = {}
-    const cfg = (accountConnector?.config as Record<string, unknown> | null) ?? null
+    const cfg = (conn?.config as Record<string, unknown> | null) ?? null
     for (const f of fields) {
       if (f.type === 'secret') {
-        initial[f.key] = '' // los secretos nunca se precargan
+        initial[f.key] = ''
       } else if (cfg && cfg[f.key] !== undefined && cfg[f.key] !== null) {
         initial[f.key] = String(cfg[f.key])
       } else {
@@ -72,14 +82,13 @@ export default function ConnectorDetailPage({
     }
     setValues(initial)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connector.id, accountConnector?.id])
+  }, [connector.id, conn?.id])
 
-  // Estado de credenciales (¿hay secreto guardado?).
   useEffect(() => {
-    if (!accountConnector?.id) { setLoadingStatus(false); return }
+    if (!conn?.id) { setLoadingStatus(false); return }
     let cancelled = false
     setLoadingStatus(true)
-    getConnectorCredentialsStatus(accountConnector.id)
+    getConnectorCredentialsStatus(conn.id)
       .then(res => {
         if (cancelled) return
         if (res.ok) setHasCredentials(res.hasCredentials)
@@ -87,13 +96,12 @@ export default function ConnectorDetailPage({
       })
       .catch(() => { if (!cancelled) setLoadingStatus(false) })
     return () => { cancelled = true }
-  }, [accountConnector?.id])
+  }, [conn?.id])
 
   function setField(key: string, v: string) {
     setValues(prev => ({ ...prev, [key]: v }))
   }
 
-  // Castea un campo plano a su tipo real para guardar en config.
   function castPlain(field: ConnectorConfigField, raw: string): unknown {
     if (field.type === 'boolean') return raw === 'true'
     if (field.type === 'number') {
@@ -104,10 +112,6 @@ export default function ConnectorDetailPage({
   }
 
   async function handleSave() {
-    if (!accountConnector?.id) {
-      setError('Esta integración aún no está creada. Solicítala primero desde el Marketplace.')
-      return
-    }
     // Validar requeridos.
     for (const f of fields) {
       if (f.required && f.type === 'secret' && !hasCredentials && !values[f.key]?.trim()) {
@@ -119,33 +123,41 @@ export default function ConnectorDetailPage({
     }
     setSaving(true); setError(null); setOkMsg(null)
 
-    // Secretos: solo los que el usuario ha rellenado (si lo deja vacío y ya hay
-    // credenciales, no se reenvía → se conserva el secreto actual).
     const secrets: Record<string, string> = {}
     for (const f of secretFields) {
       const v = values[f.key]?.trim()
       if (v) secrets[f.key] = v
     }
-    // Config no sensible.
     const config: Record<string, unknown> = {}
     for (const f of plainFields) {
       config[f.key] = castPlain(f, values[f.key] ?? '')
     }
 
     try {
-      // Si hay secretos nuevos, se guardan (cifrados). Si no hay secretos nuevos
-      // pero sí config, igualmente llamamos a save (la Edge Function actualiza
-      // config y, si no llegan secrets nuevos con credenciales ya presentes,
-      // conserva el secreto). Para simplicidad: enviamos siempre.
+      // Si no existe la conexión todavía, la creamos ahora (activación al configurar).
+      let connection = conn
+      if (!connection) {
+        connection = await upsertAccountConnector({
+          accountId,
+          connectorId: connector.id,
+          status: 'connecting',
+          scope: locationId ? 'location' : 'account',
+          locationId: locationId ?? null,
+          config,
+          createdBy: createdBy ?? null,
+          createdByName: createdByName ?? null,
+        })
+        setConn(connection)
+      }
+
       const res = await saveConnectorCredentials({
-        accountConnectorId: accountConnector.id,
+        accountConnectorId: connection.id,
         secrets,
         config,
       })
       if (!res.ok) { setError(res.error); setSaving(false); return }
       setHasCredentials(prev => prev || Object.keys(secrets).length > 0)
       setOkMsg('Configuración guardada de forma segura.')
-      // Limpiar los inputs de secreto en memoria tras guardar.
       setValues(prev => {
         const next = { ...prev }
         for (const f of secretFields) next[f.key] = ''
@@ -160,14 +172,14 @@ export default function ConnectorDetailPage({
   }
 
   async function handleClear() {
-    if (!accountConnector?.id) return
+    if (!conn?.id) return
     const ok = window.confirm(
       `¿Desconectar ${connector.name}? Se borrarán sus credenciales guardadas.`,
     )
     if (!ok) return
     setClearing(true); setError(null); setOkMsg(null)
     try {
-      const res = await clearConnectorCredentials(accountConnector.id)
+      const res = await clearConnectorCredentials(conn.id)
       if (!res.ok) { setError(res.error); setClearing(false); return }
       setHasCredentials(false)
       setOkMsg('Integración desconectada.')
@@ -179,9 +191,10 @@ export default function ConnectorDetailPage({
     }
   }
 
+  const canSave = !!accountId  // con cuenta activa ya podemos crear+guardar
+
   return (
     <div className="space-y-4">
-      {/* Cabecera */}
       <button
         type="button"
         onClick={onBack}
@@ -211,7 +224,6 @@ export default function ConnectorDetailPage({
           <p className="px-4 pt-3 text-sm text-text-secondary">{connector.description}</p>
         )}
 
-        {/* Formulario dinámico */}
         <div className="px-4 py-4 space-y-3">
           {fields.length === 0 ? (
             <p className="text-sm text-text-secondary">
@@ -276,19 +288,18 @@ export default function ConnectorDetailPage({
               <button
                 type="button"
                 onClick={handleSave}
-                disabled={saving || loadingStatus || !accountConnector}
+                disabled={saving || loadingStatus || !canSave}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base"
               >
                 {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                {saving ? 'Guardando…' : 'Guardar configuración'}
+                {saving ? 'Guardando…' : conn ? 'Guardar configuración' : 'Conectar y guardar'}
               </button>
             </div>
           )}
 
-          {!accountConnector && (
+          {!accountId && (
             <p className="text-xs text-warning border-t border-border-default pt-3">
-              Esta integración aún no está activada en tu cuenta. Vuelve al Marketplace y pulsa
-              su acción para crearla antes de configurar credenciales.
+              Selecciona una cuenta o local activo para configurar esta integración.
             </p>
           )}
         </div>

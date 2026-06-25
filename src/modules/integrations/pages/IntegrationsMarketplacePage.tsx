@@ -4,19 +4,14 @@
 //
 // Patrón LISTA + DETALLE por estado (como Kitchen): si hay un conector
 // seleccionado, monta ConnectorDetailPage; si no, la rejilla del catálogo.
-// Al pulsar una tarjeta se abre el detalle/configuración de ese conector.
 //
-// Cada tarjeta muestra el LOGO real (ConnectorAvatar, con fallback a inicial+
-// color de marca). Acción contextual según connection_type: las de tipo
-// 'request' solicitan (status 'requested'); el resto abre el detalle para
-// configurar credenciales.
-//
-// Honestidad: catálogo real. La activación con credenciales se hace en el
-// detalle (cifrado en Vault vía Edge Function).
+// Los conectores tipo 'credentials' se ACTIVAN al configurar (el detalle crea la
+// conexión al guardar). Los tipo 'request' siguen el flujo de solicitud.
 
 import { useEffect, useState } from 'react'
 import { Store, Loader2, Check, Settings2 } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
+import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
 import { useApp } from '@/context/AppContext'
 import {
   listConnectors,
@@ -44,6 +39,7 @@ const CATEGORY_LABEL: Record<ConnectorCategory, string> = {
 
 export default function IntegrationsMarketplacePage() {
   const { activeAccountId } = useActiveAccount()
+  const { resolvedLocationId } = useLocationScope()
   const { userProfile, authUserId } = useApp()
 
   const [connectors, setConnectors] = useState<Connector[]>([])
@@ -51,8 +47,6 @@ export default function IntegrationsMarketplacePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
-
-  // LISTA + DETALLE por estado: conector seleccionado (null = rejilla).
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
   function loadData() {
@@ -111,20 +105,22 @@ export default function IntegrationsMarketplacePage() {
     }
   }
 
-  // ── DETALLE ──
   const selected = selectedId ? connectors.find(c => c.id === selectedId) ?? null : null
   if (selected) {
     return (
       <ConnectorDetailPage
         connector={selected}
         accountConnector={connectionFor(selected.id) ?? null}
+        accountId={activeAccountId ?? ''}
+        locationId={resolvedLocationId ?? null}
+        createdBy={authUserId ?? null}
+        createdByName={userProfile?.displayName ?? null}
         onBack={() => setSelectedId(null)}
         onChanged={loadData}
       />
     )
   }
 
-  // ── LISTA ──
   const byCategory = new Map<ConnectorCategory, Connector[]>()
   for (const c of connectors) {
     const list = byCategory.get(c.category) ?? []
