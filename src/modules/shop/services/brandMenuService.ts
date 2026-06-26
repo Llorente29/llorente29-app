@@ -1,0 +1,63 @@
+import { supabase } from '@/lib/supabase'
+
+export interface MenuDish {
+  id: string
+  name: string
+  description: string | null
+  photoUrl: string | null
+  price: number
+  productType: 'item' | 'combo'
+}
+
+export interface MenuCategory {
+  id: string
+  name: string
+  emoji: string | null
+  position: number | null
+  products: MenuDish[]
+}
+
+export interface BrandMenu {
+  brandId: string
+  name: string
+  logoUrl: string | null
+  accentColor: string | null
+  cuisineCode: string | null
+  rating: number | null
+  ratingCount: number | null
+  categories: MenuCategory[]
+}
+
+export async function getBrandMenu(slug: string, brandId: string): Promise<BrandMenu | null> {
+  if (!supabase) throw new Error('Supabase no configurado')
+  const { data, error } = await (supabase as any).rpc('shop_brand_menu_by_slug', {
+    p_slug: slug,
+    p_brand_id: brandId,
+  })
+  if (error) throw new Error(error.message)
+  if (!data) return null
+
+  return {
+    brandId: data.brand_id,
+    name: data.name ?? '',
+    logoUrl: data.logo_url ?? null,
+    accentColor: data.accent_color ?? null,
+    cuisineCode: data.cuisine_code ?? null,
+    rating: data.rating ?? null,
+    ratingCount: data.rating_count ?? null,
+    categories: (data.categories ?? []).map((c: any) => ({
+      id: c.id,
+      name: c.name,
+      emoji: c.emoji ?? null,
+      position: c.position ?? null,
+      products: (c.products ?? []).map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        description: p.description ?? null,
+        photoUrl: p.photo_url ?? null,
+        price: Number(p.price ?? 0),
+        productType: p.product_type === 'combo' ? 'combo' : 'item',
+      })),
+    })),
+  }
+}

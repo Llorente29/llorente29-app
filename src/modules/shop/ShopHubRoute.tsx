@@ -1,8 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getShopHub, type ShopHub, type HubBrand, type TopDish } from '@/modules/shop/services/shopHubService'
+import BrandMenuRoute from '@/modules/shop/BrandMenuRoute'
 
 function getSlugFromPath(): string | null {
   const m = window.location.pathname.match(/^\/t\/([^/]+)/)
+  return m ? decodeURIComponent(m[1]) : null
+}
+
+function getBrandIdFromPath(): string | null {
+  const m = window.location.pathname.match(/^\/t\/[^/]+\/([^/]+)/)
   return m ? decodeURIComponent(m[1]) : null
 }
 
@@ -42,13 +48,33 @@ interface Cuisine { code: string; label: string; emoji: string | null }
 
 export default function ShopHubRoute() {
   const [slug] = useState<string | null>(getSlugFromPath())
+  const [brandId, setBrandId] = useState<string | null>(getBrandIdFromPath())
   const [hub, setHub] = useState<ShopHub | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'notfound' | 'error'>('loading')
   const [error, setError] = useState<string | null>(null)
   const [activeCuisine, setActiveCuisine] = useState<string | null>(null) // null = "Todo"
 
+  // Botón atrás/adelante del navegador → re-leer el brandId de la URL
+  useEffect(() => {
+    const onPop = () => setBrandId(getBrandIdFromPath())
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
+
+  function openBrand(id: string) {
+    window.history.pushState({}, '', `/t/${slug}/${id}`)
+    setBrandId(id)
+    window.scrollTo(0, 0)
+  }
+  function backToHub() {
+    window.history.pushState({}, '', `/t/${slug}`)
+    setBrandId(null)
+    window.scrollTo(0, 0)
+  }
+
   useEffect(() => {
     if (!slug) { setStatus('notfound'); return }
+    if (brandId) return // mientras se ve una carta no recargamos el hub
     let alive = true
     setStatus('loading')
     getShopHub(slug)
@@ -63,7 +89,7 @@ export default function ShopHubRoute() {
         setStatus('error')
       })
     return () => { alive = false }
-  }, [slug])
+  }, [slug, brandId])
 
   // Cocinas distintas presentes entre las marcas (orden estable por aparición).
   const cuisines: Cuisine[] = useMemo(() => {
@@ -76,6 +102,11 @@ export default function ShopHubRoute() {
     }
     return Array.from(seen.values())
   }, [hub])
+
+  // Todos los hooks han corrido ya. Si la URL trae brandId, mostramos la carta.
+  if (slug && brandId) {
+    return <BrandMenuRoute slug={slug} brandId={brandId} onBack={backToHub} />
+  }
 
   if (status === 'loading') {
     return <div style={S.page}><div style={{ padding: 60, textAlign: 'center', color: C.inkDim }}>Cargando la tienda…</div></div>
@@ -196,7 +227,7 @@ export default function ShopHubRoute() {
             </div>
           ) : (
             <div style={S.grid}>
-              {visibleBrands.map(b => <BrandCard key={b.brandId} b={b} slug={hub.slug} />)}
+              {visibleBrands.map(b => <BrandCard key={b.brandId} b={b} onOpen={() => openBrand(b.brandId)} />)}
             </div>
           )}
         </div>
@@ -229,9 +260,11 @@ export default function ShopHubRoute() {
   )
 }
 
-function BrandCard({ b, slug }: { b: HubBrand; slug: string }) {
+function BrandCard({ b, onOpen }: { b: HubBrand; onOpen: () => void }) {
   return (
-    <a href={`/t/${slug}/${b.brandId}`} style={S.card}
+    <div role="button" tabIndex={0} onClick={onOpen}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen() } }}
+      style={{ ...S.card, cursor: 'pointer' }}
       onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 14px 30px rgba(26,23,20,.1)' }}
       onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none' }}>
       {/* Foto del plato a toda la tarjeta, con el logo en pastilla limpia encima */}
@@ -261,7 +294,7 @@ function BrandCard({ b, slug }: { b: HubBrand; slug: string }) {
           </div>
         )}
       </div>
-    </a>
+    </div>
   )
 }
 
