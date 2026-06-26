@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { getBrandMenu, type BrandMenu } from '@/modules/shop/services/brandMenuService'
 import DishConfigModal, { type ConfiguredLine } from '@/modules/shop/components/DishConfigModal'
+import { useShopCart } from '@/modules/shop/cart/ShopCartContext'
+import AddedToCartSheet, { type AddedInfo } from '@/modules/shop/cart/AddedToCartSheet'
 
 const C = {
   bg: '#FBF7F0', surface: '#FFFFFF', ink: '#1A1714', inkDim: '#7A726A', line: '#ECE5DA',
@@ -19,11 +21,13 @@ function Star({ size = 14 }: { size?: number }) {
   )
 }
 
-export default function BrandMenuRoute({ slug, brandId, onBack }: { slug: string; brandId: string; onBack: () => void }) {
+export default function BrandMenuRoute({ slug, brandId, onBack, onCheckout }: { slug: string; brandId: string; onBack: () => void; onCheckout: () => void }) {
   const [menu, setMenu] = useState<BrandMenu | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'notfound' | 'error'>('loading')
   const [error, setError] = useState<string | null>(null)
   const [configItemId, setConfigItemId] = useState<string | null>(null)
+  const cart = useShopCart()
+  const [addedInfo, setAddedInfo] = useState<AddedInfo | null>(null)
 
   useEffect(() => {
     let alive = true
@@ -154,10 +158,31 @@ export default function BrandMenuRoute({ slug, brandId, onBack }: { slug: string
           menuItemId={configItemId}
           onClose={() => setConfigItemId(null)}
           onAdd={(line: ConfiguredLine) => {
-            // TODO carrito: aquí se añadirá `line` al carrito cross-brand.
-            console.log('[Shop] línea configurada lista para carrito:', line)
+            const res = cart.addLine(line, menu.brandId, menu.name, menu.locationIds)
+            if (!res.ok && res.reason === 'other_location') {
+              alert('Tu carrito tiene platos de otro local. Para pedir de esta marca, primero vacía el carrito (una entrega = un local).')
+              return
+            }
             setConfigItemId(null)
+            // Mini-panel de confirmación con la info ya actualizada
+            const addedQty = line.quantity
+            const addedTotal = line.unitPrice * line.quantity
+            setAddedInfo({
+              name: line.name,
+              itemsCount: cart.totals.itemsCount + addedQty,
+              total: cart.totals.total + addedTotal,
+            })
           }}
+        />
+      )}
+      {/* Mini-panel de confirmación tras añadir */}
+      {addedInfo && (
+        <AddedToCartSheet
+          info={addedInfo}
+          onKeepInBrand={() => setAddedInfo(null)}
+          onOtherBrands={() => { setAddedInfo(null); onBack() }}
+          onCheckout={() => { setAddedInfo(null); onCheckout() }}
+          onClose={() => setAddedInfo(null)}
         />
       )}
     </div>

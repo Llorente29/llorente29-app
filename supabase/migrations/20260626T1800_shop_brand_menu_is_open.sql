@@ -9,6 +9,7 @@ declare
   v_brand record;
   v_cats jsonb;
   v_is_open boolean;
+  v_location_ids jsonb;
 begin
   select id into v_account_id from accounts where slug = p_slug;
   if v_account_id is null then
@@ -26,6 +27,11 @@ begin
   if v_brand.id is null then
     return null;
   end if;
+  -- Locales activos de la marca (para la regla "mismo local" del carrito)
+  select coalesce(jsonb_agg(distinct bla.location_id), '[]'::jsonb)
+    into v_location_ids
+  from brand_location_availability bla
+  where bla.brand_id = p_brand_id and bla.is_active = true;
   -- ¿Está abierta ahora? (en alguno de sus locales activos)
   select exists (
     select 1 from brand_location_availability bla
@@ -69,6 +75,7 @@ begin
     'rating', v_brand.seed_rating,
     'rating_count', v_brand.seed_rating_count,
     'is_open', v_is_open,
+    'location_ids', v_location_ids,
     'categories', v_cats
   );
 end;

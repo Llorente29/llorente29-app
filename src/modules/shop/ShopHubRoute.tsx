@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getShopHub, type ShopHub, type HubBrand, type TopDish } from '@/modules/shop/services/shopHubService'
 import BrandMenuRoute from '@/modules/shop/BrandMenuRoute'
+import { ShopCartProvider } from '@/modules/shop/cart/ShopCartContext'
+import CartPanel from '@/modules/shop/cart/CartPanel'
 
 function getSlugFromPath(): string | null {
   const m = window.location.pathname.match(/^\/t\/([^/]+)/)
@@ -46,8 +48,7 @@ function shortName(name: string): string {
 // Cocina única (code/label/emoji) presente entre las marcas, para los chips de filtro.
 interface Cuisine { code: string; label: string; emoji: string | null }
 
-export default function ShopHubRoute() {
-  const [slug] = useState<string | null>(getSlugFromPath())
+function ShopHubInner({ slug, onCheckout }: { slug: string; onCheckout: () => void }) {
   const [brandId, setBrandId] = useState<string | null>(getBrandIdFromPath())
   const [hub, setHub] = useState<ShopHub | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'notfound' | 'error'>('loading')
@@ -73,7 +74,6 @@ export default function ShopHubRoute() {
   }
 
   useEffect(() => {
-    if (!slug) { setStatus('notfound'); return }
     if (brandId) return // mientras se ve una carta no recargamos el hub
     let alive = true
     setStatus('loading')
@@ -105,7 +105,7 @@ export default function ShopHubRoute() {
 
   // Todos los hooks han corrido ya. Si la URL trae brandId, mostramos la carta.
   if (slug && brandId) {
-    return <BrandMenuRoute slug={slug} brandId={brandId} onBack={backToHub} />
+    return <BrandMenuRoute slug={slug} brandId={brandId} onBack={backToHub} onCheckout={onCheckout} />
   }
 
   if (status === 'loading') {
@@ -257,6 +257,24 @@ export default function ShopHubRoute() {
         Pedidos con <a href="https://folvy.app" style={{ color: C.accent, textDecoration: 'none', fontWeight: 700 }}>Folvy</a>
       </footer>
     </div>
+  )
+}
+
+// Wrapper: lee el slug y envuelve el Shop con el carrito (persiste entre Hub y carta).
+export default function ShopHubRoute() {
+  const [slug] = useState<string | null>(getSlugFromPath())
+  if (!slug) {
+    return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', color: C.inkDim }}>Tienda no encontrada</div>
+  }
+  // TODO checkout: por ahora un placeholder; será la pieza siguiente.
+  const goToCheckout = () => {
+    alert('Checkout en construcción. Tu pedido está guardado en el carrito.')
+  }
+  return (
+    <ShopCartProvider slug={slug}>
+      <ShopHubInner slug={slug} onCheckout={goToCheckout} />
+      <CartPanel onCheckout={goToCheckout} />
+    </ShopCartProvider>
   )
 }
 
