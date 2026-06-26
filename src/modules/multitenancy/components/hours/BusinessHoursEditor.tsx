@@ -11,7 +11,7 @@
 
 import { useEffect, useState } from 'react'
 import { Plus, Trash2, Clock, Moon, Copy, X } from 'lucide-react'
-import { getHours, replaceHours, type HoursSlot } from '../../services/businessHoursService'
+import { getHours, replaceHours, copyHoursTo, type HoursSlot } from '../../services/businessHoursService'
 
 const DAYS = [
   { idx: 1, label: 'Lunes' },
@@ -27,19 +27,34 @@ function crossesMidnight(open: string, close: string): boolean {
   return close <= open
 }
 
-interface Props {
-  accountId: string
+/** Un posible destino al que copiar este horario (otra marca, otro local…). */
+export interface CopyTarget {
+  key: string         // identificador único para la UI
+  label: string       // texto mostrado
   locationId: string
   brandId: string | null
 }
 
-export default function BusinessHoursEditor({ accountId, locationId, brandId }: Props) {
+interface Props {
+  accountId: string
+  locationId: string
+  brandId: string | null
+  /** Si se pasan, muestra "Copiar este horario a…" con estos destinos. */
+  copyTargets?: CopyTarget[]
+  /** Texto del bloque de copia (ej. "otras marcas de este local"). */
+  copyLabel?: string
+}
+
+export default function BusinessHoursEditor({ accountId, locationId, brandId, copyTargets, copyLabel }: Props) {
   const [slots, setSlots] = useState<HoursSlot[]>([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState<{ kind: 'ok' | 'error'; msg: string } | null>(null)
   const [copyFromDay, setCopyFromDay] = useState<number | null>(null)
-  const [copyTargets, setCopyTargets] = useState<Set<number>>(new Set())
+  const [copyTargetsState, setCopyTargetsState] = useState<Set<number>>(new Set())
+  const [showCopyTo, setShowCopyTo] = useState(false)
+  const [copyToSel, setCopyToSel] = useState<Set<string>>(new Set())
+  const [copying, setCopying] = useState(false)
 
   useEffect(() => {
     if (!locationId) return
@@ -67,10 +82,10 @@ export default function BusinessHoursEditor({ accountId, locationId, brandId }: 
   }
   function openCopyPanel(weekday: number) {
     setCopyFromDay(weekday)
-    setCopyTargets(new Set())
+    setCopyTargetsState(new Set())
   }
   function toggleCopyTarget(weekday: number) {
-    setCopyTargets((prev) => {
+    setCopyTargetsState((prev) => {
       const next = new Set(prev)
       next.has(weekday) ? next.delete(weekday) : next.add(weekday)
       return next
@@ -80,15 +95,15 @@ export default function BusinessHoursEditor({ accountId, locationId, brandId }: 
     if (copyFromDay === null) return
     const source = slots.filter((s) => s.weekday === copyFromDay)
     setSlots((prev) => {
-      const kept = prev.filter((s) => !copyTargets.has(s.weekday))
+      const kept = prev.filter((s) => !copyTargetsState.has(s.weekday))
       const pasted: HoursSlot[] = []
-      copyTargets.forEach((wd) => {
+      copyTargetsState.forEach((wd) => {
         source.forEach((s) => pasted.push({ weekday: wd, openTime: s.openTime, closeTime: s.closeTime }))
       })
       return [...kept, ...pasted]
     })
     setCopyFromDay(null)
-    setCopyTargets(new Set())
+    setCopyTargetsState(new Set())
   }
 
   async function handleSave() {
@@ -102,6 +117,35 @@ export default function BusinessHoursEditor({ accountId, locationId, brandId }: 
       setFeedback({ kind: 'error', msg: e instanceof Error ? e.message : 'No se pudo guardar.' })
     } finally {
       setSaving(false)
+    }
+  }
+
+  function toggleCopyTo(key: string) {
+    setCopyToSel((prev) => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
+  }
+
+  async function applyCopyTo() {
+    if (!copyTargets || copyToSel.size === 0) return
+    setCopying(true)
+    setFeedback(null)
+    try {
+      // Guarda primero el horario actual (por si hay cambios sin guardar)
+      await replaceHours(accountId, locationId, brandId, slots)
+      const targets = copyTargets
+        .filter((t) => copyToSel.has(t.key))
+        .map((t) => ({ locationId: t.locationId, brandId: t.brandId }))
+      await copyHoursTo(accountId, locationId, brandId, targets)
+      setFeedback({ kind: 'ok', msg: `Horario copiado a ${targets.length} destino${targets.length === 1 ? '' : 's'}.` })
+      setShowCopyTo(false)
+      setCopyToSel(new Set())
+    } catch (e) {
+      setFeedback({ kind: 'error', msg: e instanceof Error ? e.message : 'No se pudo copiar.' })
+    } finally {
+      setCopying(false)
     }
   }
 
@@ -195,7 +239,7 @@ export default function BusinessHoursEditor({ accountId, locationId, brandId }: 
                       <p className="text-xs text-text-secondary">Copiar los tramos de {day.label} a:</p>
                       <div className="flex flex-wrap gap-1.5">
                         {DAYS.filter((d) => d.idx !== day.idx).map((d) => {
-                          const on = copyTargets.has(d.idx)
+                          const on = copyTargetsState.has(d.idx)
                           return (
                             <button
                               key={d.idx}
@@ -217,14 +261,14 @@ export default function BusinessHoursEditor({ accountId, locationId, brandId }: 
                         <button
                           type="button"
                           onClick={applyCopy}
-                          disabled={copyTargets.size === 0}
+                          disabled={copyTargetsState.size === 0}
                           className="px-3 py-1.5 rounded-md text-xs font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-40"
                         >
-                          Pegar en {copyTargets.size} día{copyTargets.size === 1 ? '' : 's'}
+                          Pegar en {copyTargetsState.size} día{copyTargetsState.size === 1 ? '' : 's'}
                         </button>
                         <button
                           type="button"
-                          onClick={() => { setCopyFromDay(null); setCopyTargets(new Set()) }}
+                          onClick={() => { setCopyFromDay(null); setCopyTargetsState(new Set()) }}
                           className="px-3 py-1.5 rounded-md text-xs font-medium text-text-secondary hover:text-text-primary"
                         >
                           Cancelar
@@ -239,7 +283,16 @@ export default function BusinessHoursEditor({ accountId, locationId, brandId }: 
         </div>
       )}
 
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        {copyTargets && copyTargets.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => setShowCopyTo((v) => !v)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-card border border-border-default text-text-primary hover:bg-accent-bg transition-base"
+          >
+            <Copy size={15} /> Copiar este horario a…
+          </button>
+        ) : <span />}
         <button
           type="button"
           onClick={handleSave}
@@ -249,6 +302,51 @@ export default function BusinessHoursEditor({ accountId, locationId, brandId }: 
           {saving ? 'Guardando…' : 'Guardar horario'}
         </button>
       </div>
+
+      {showCopyTo && copyTargets && (
+        <div className="p-3 rounded-md border border-border-default bg-page space-y-2">
+          <p className="text-xs text-text-secondary">
+            Copiar el horario actual a {copyLabel ?? 'estos destinos'} (reemplaza el suyo):
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {copyTargets.map((t) => {
+              const on = copyToSel.has(t.key)
+              return (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => toggleCopyTo(t.key)}
+                  className={
+                    'px-2.5 py-1 rounded-full text-xs font-medium border transition-base ' +
+                    (on
+                      ? 'bg-accent text-text-on-accent border-accent'
+                      : 'bg-card text-text-secondary border-border-default hover:text-text-primary')
+                  }
+                >
+                  {t.label}
+                </button>
+              )
+            })}
+          </div>
+          <div className="flex items-center gap-2 pt-1">
+            <button
+              type="button"
+              onClick={applyCopyTo}
+              disabled={copyToSel.size === 0 || copying}
+              className="px-3 py-1.5 rounded-md text-xs font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-40"
+            >
+              {copying ? 'Copiando…' : `Copiar a ${copyToSel.size} destino${copyToSel.size === 1 ? '' : 's'}`}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setShowCopyTo(false); setCopyToSel(new Set()) }}
+              className="px-3 py-1.5 rounded-md text-xs font-medium text-text-secondary hover:text-text-primary"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

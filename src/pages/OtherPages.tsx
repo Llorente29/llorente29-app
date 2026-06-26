@@ -5,7 +5,7 @@ import { Wallet, MapPin, Info, ChevronDown, ChevronRight, Check, AlertCircle, Lo
 import type { Location } from '../types'
 import { listLocationApprovals, setLocationReceiptApproval } from '@/modules/supply/services/supplierCatalogService'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
-import BusinessHoursEditor from '@/modules/multitenancy/components/hours/BusinessHoursEditor'
+import BusinessHoursEditor, { type CopyTarget } from '@/modules/multitenancy/components/hours/BusinessHoursEditor'
 
 // DashboardPage se ha movido a su propia page: src/pages/DashboardPage.tsx
 // Re-exportar aquí para retrocompatibilidad con imports antiguos.
@@ -536,6 +536,15 @@ export function LocationsPage() {
                           accountId={activeAccountId}
                           locationId={loc.id}
                           brandId={null}
+                          copyTargets={locations
+                            .filter((l) => l.id !== loc.id && l.active !== false)
+                            .map<CopyTarget>((l) => ({
+                              key: `loc:${l.id}`,
+                              label: l.name,
+                              locationId: l.id,
+                              brandId: null,
+                            }))}
+                          copyLabel="el horario general de otros locales"
                         />
                       )}
                     </div>

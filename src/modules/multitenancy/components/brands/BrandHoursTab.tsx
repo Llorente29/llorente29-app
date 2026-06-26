@@ -13,7 +13,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { useApp } from '../../../../context/AppContext'
 import { useActiveAccount } from '../../hooks/useActiveAccount'
 import { getHours, hasOwnHours, clearOwnHours, type HoursSlot } from '../../services/businessHoursService'
-import BusinessHoursEditor from '../hours/BusinessHoursEditor'
+import { listBrandsForLocation, listLocationsForBrand } from '../../services/brandLocationService'
+import BusinessHoursEditor, { type CopyTarget } from '../hours/BusinessHoursEditor'
 import type { Brand } from '../../../../types/multitenancy'
 
 interface Props {
@@ -37,10 +38,47 @@ export default function BrandHoursTab({ brand }: Props) {
   const [mode, setMode] = useState<'inherit' | 'own' | null>(null) // null = aún cargando
   const [generalSlots, setGeneralSlots] = useState<HoursSlot[]>([])
   const [loading, setLoading] = useState(false)
+  const [copyTargets, setCopyTargets] = useState<CopyTarget[]>([])
 
   useEffect(() => {
     if (!locationId && activeLocations.length > 0) setLocationId(activeLocations[0].id)
   }, [activeLocations, locationId])
+
+  // Destinos de copia: otras marcas de este local + esta misma marca en otros locales
+  useEffect(() => {
+    if (!activeAccountId || !locationId) { setCopyTargets([]); return }
+    let alive = true
+    Promise.all([
+      listBrandsForLocation(activeAccountId, locationId),
+      listLocationsForBrand(activeAccountId, brand.id),
+    ]).then(([brandsHere, locIdsOfBrand]) => {
+      if (!alive) return
+      const targets: CopyTarget[] = []
+      // Otras marcas del MISMO local (su horario propio)
+      brandsHere
+        .filter((b) => b.id !== brand.id)
+        .forEach((b) => targets.push({
+          key: `b:${b.id}`,
+          label: b.name,
+          locationId,
+          brandId: b.id,
+        }))
+      // Esta MISMA marca en OTROS locales
+      locIdsOfBrand
+        .filter((lid) => lid !== locationId)
+        .forEach((lid) => {
+          const loc = activeLocations.find((l) => l.id === lid)
+          targets.push({
+            key: `l:${lid}`,
+            label: `Esta marca · ${loc?.name ?? 'otro local'}`,
+            locationId: lid,
+            brandId: brand.id,
+          })
+        })
+      setCopyTargets(targets)
+    }).catch(() => { if (alive) setCopyTargets([]) })
+    return () => { alive = false }
+  }, [activeAccountId, locationId, brand.id, activeLocations])
 
   // Al cambiar de local: ¿la marca tiene horario propio? + cargar el general (para mostrarlo si hereda)
   useEffect(() => {
@@ -147,6 +185,8 @@ export default function BrandHoursTab({ brand }: Props) {
                 accountId={activeAccountId}
                 locationId={locationId}
                 brandId={brand.id}
+                copyTargets={copyTargets}
+                copyLabel="otras marcas u otros locales"
               />
             )
           )}

@@ -88,3 +88,28 @@ export async function clearOwnHours(locationId: string, brandId: string): Promis
     .eq('location_id', locationId).eq('brand_id', brandId)
   if (error) throw new Error(`No se pudo limpiar el horario propio: ${error.message}`)
 }
+
+/** Destino de una copia de horario: a un (local, marca|null). */
+export interface HoursTarget {
+  locationId: string
+  brandId: string | null
+}
+
+/** Copia los tramos de un origen (local, marca|null) a varios destinos.
+ *  Cada destino se REEMPLAZA por completo con los tramos del origen.
+ *  Sirve para: marca->marcas (mismo local), general->otros locales,
+ *  y la misma marca entre locales. */
+export async function copyHoursTo(
+  accountId: string,
+  fromLocationId: string,
+  fromBrandId: string | null,
+  targets: HoursTarget[],
+): Promise<void> {
+  if (!supabase) throw new Error('Supabase no disponible')
+  const source = await getHours(fromLocationId, fromBrandId)
+  for (const t of targets) {
+    // No se copia sobre sí mismo
+    if (t.locationId === fromLocationId && t.brandId === fromBrandId) continue
+    await replaceHours(accountId, t.locationId, t.brandId, source)
+  }
+}
