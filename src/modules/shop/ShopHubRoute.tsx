@@ -3,6 +3,7 @@ import { getShopHub, type ShopHub, type HubBrand, type TopDish } from '@/modules
 import BrandMenuRoute from '@/modules/shop/BrandMenuRoute'
 import { ShopCartProvider } from '@/modules/shop/cart/ShopCartContext'
 import CartPanel from '@/modules/shop/cart/CartPanel'
+import CheckoutRoute from '@/modules/shop/checkout/CheckoutRoute'
 
 function getSlugFromPath(): string | null {
   const m = window.location.pathname.match(/^\/t\/([^/]+)/)
@@ -263,17 +264,19 @@ function ShopHubInner({ slug, onCheckout }: { slug: string; onCheckout: () => vo
 // Wrapper: lee el slug y envuelve el Shop con el carrito (persiste entre Hub y carta).
 export default function ShopHubRoute() {
   const [slug] = useState<string | null>(getSlugFromPath())
+  const [checkout, setCheckout] = useState(false)
   if (!slug) {
     return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', color: C.inkDim }}>Tienda no encontrada</div>
   }
-  // TODO checkout: por ahora un placeholder; será la pieza siguiente.
-  const goToCheckout = () => {
-    alert('Checkout en construcción. Tu pedido está guardado en el carrito.')
-  }
+  const goToCheckout = () => { window.scrollTo(0, 0); setCheckout(true) }
   return (
     <ShopCartProvider slug={slug}>
-      <ShopHubInner slug={slug} onCheckout={goToCheckout} />
-      <CartPanel onCheckout={goToCheckout} />
+      {checkout
+        ? <CheckoutRoute slug={slug} onBack={() => setCheckout(false)} />
+        : <>
+            <ShopHubInner slug={slug} onCheckout={goToCheckout} />
+            <CartPanel onCheckout={goToCheckout} />
+          </>}
     </ShopCartProvider>
   )
 }
