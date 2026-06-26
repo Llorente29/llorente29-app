@@ -73,13 +73,25 @@ export default function BrandMenuRoute({ slug, brandId, onBack }: { slug: string
         Estás viendo una vista previa de la carta. Aún no puedes hacer pedidos online.
       </div>
 
+      {/* Banner: marca cerrada ahora (por horario) */}
+      {!menu.isOpen && (
+        <div style={S.closedBanner}>
+          🌙 <strong>Cerrado ahora.</strong> Esta marca no está operando en este momento. Puedes ver la carta, pero no aceptará pedidos hasta que vuelva a abrir.
+        </div>
+      )}
+
       {/* Cabecera de marca */}
       <div style={S.brandHead}>
         {menu.logoUrl
           ? <img src={menu.logoUrl} alt={menu.name} style={S.brandLogo} />
           : <div style={{ ...S.brandLogo, ...S.brandLogoText }}>{menu.name.slice(0, 2).toUpperCase()}</div>}
         <div>
-          <h1 style={S.brandName}>{menu.name}</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <h1 style={S.brandName}>{menu.name}</h1>
+            <span style={menu.isOpen ? S.openPill : S.closedPill}>
+              {menu.isOpen ? 'Abierto ahora' : 'Cerrado ahora'}
+            </span>
+          </div>
           {menu.rating != null && (
             <div style={S.brandMeta}>
               <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: C.star, fontWeight: 800 }}>
@@ -135,6 +147,9 @@ const S: Record<string, React.CSSProperties> = {
   backLink: { background: 'none', border: 'none', cursor: 'pointer', fontWeight: 800, fontSize: 15, color: C.ink, padding: 0 },
   preTag: { fontSize: 12, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: C.amber, background: C.amberBg, border: `1px solid ${C.amberLine}`, padding: '6px 12px', borderRadius: 30 },
   preBanner: { margin: '14px 28px 0', padding: '11px 16px', background: C.amberBg, border: `1px solid ${C.amberLine}`, borderRadius: 12, fontSize: 13.5, color: C.amber, fontWeight: 600 },
+  closedBanner: { margin: '10px 28px 0', padding: '11px 16px', background: '#EFEDEA', border: `1px solid ${C.line}`, borderRadius: 12, fontSize: 13.5, color: C.ink, fontWeight: 600 },
+  openPill: { fontSize: 12.5, fontWeight: 800, color: C.green, background: C.greenBg, padding: '4px 11px', borderRadius: 999 },
+  closedPill: { fontSize: 12.5, fontWeight: 800, color: '#fff', background: '#6B6661', padding: '4px 11px', borderRadius: 999 },
   brandHead: { display: 'flex', alignItems: 'center', gap: 18, margin: '22px 28px 0' },
   brandLogo: { height: 72, width: 'auto', maxWidth: 160, objectFit: 'contain', display: 'block', borderRadius: 16, background: '#fff', boxShadow: '0 3px 12px rgba(0,0,0,.12)', padding: 6, boxSizing: 'border-box' },
   brandLogoText: { width: 72, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 24, color: C.ink },

@@ -25,6 +25,7 @@ export interface BrandMenu {
   cuisineCode: string | null
   rating: number | null
   ratingCount: number | null
+  isOpen: boolean
   categories: MenuCategory[]
 }
 
@@ -45,6 +46,7 @@ export async function getBrandMenu(slug: string, brandId: string): Promise<Brand
     cuisineCode: data.cuisine_code ?? null,
     rating: data.rating ?? null,
     ratingCount: data.rating_count ?? null,
+    isOpen: data.is_open === true,
     categories: (data.categories ?? []).map((c: any) => ({
       id: c.id,
       name: c.name,
