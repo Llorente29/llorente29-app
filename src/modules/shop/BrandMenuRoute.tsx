@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { getBrandMenu, type BrandMenu } from '@/modules/shop/services/brandMenuService'
+import DishConfigModal, { type ConfiguredLine } from '@/modules/shop/components/DishConfigModal'
 
 const C = {
   bg: '#FBF7F0', surface: '#FFFFFF', ink: '#1A1714', inkDim: '#7A726A', line: '#ECE5DA',
@@ -22,6 +23,7 @@ export default function BrandMenuRoute({ slug, brandId, onBack }: { slug: string
   const [menu, setMenu] = useState<BrandMenu | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'notfound' | 'error'>('loading')
   const [error, setError] = useState<string | null>(null)
+  const [configItemId, setConfigItemId] = useState<string | null>(null)
 
   useEffect(() => {
     let alive = true
@@ -125,7 +127,14 @@ export default function BrandMenuRoute({ slug, brandId, onBack }: { slug: string
                     {d.description && <p style={S.dishDesc}>{d.description}</p>}
                     <div style={S.dishFoot}>
                       <span style={S.dishPrice}>{eur(d.price)}</span>
-                      <button style={S.addBtn} disabled title="Aún no puedes pedir">Añadir</button>
+                      <button
+                        style={{ ...S.addBtn, ...(menu.isOpen ? S.addBtnOn : {}) }}
+                        disabled={!menu.isOpen}
+                        title={menu.isOpen ? 'Configurar y añadir' : 'Cerrado ahora'}
+                        onClick={() => menu.isOpen && setConfigItemId(d.id)}
+                      >
+                        Añadir
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -136,6 +145,21 @@ export default function BrandMenuRoute({ slug, brandId, onBack }: { slug: string
       </div>
 
       <div style={S.footer}>Pedidos con <strong style={{ color: C.accent }}>Folvy</strong></div>
+
+      {/* Modal de configuración del plato. onAdd: punto de enganche del carrito
+          (pieza siguiente). De momento cierra el modal tras configurar. */}
+      {configItemId && (
+        <DishConfigModal
+          slug={slug}
+          menuItemId={configItemId}
+          onClose={() => setConfigItemId(null)}
+          onAdd={(line: ConfiguredLine) => {
+            // TODO carrito: aquí se añadirá `line` al carrito cross-brand.
+            console.log('[Shop] línea configurada lista para carrito:', line)
+            setConfigItemId(null)
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -168,6 +192,7 @@ const S: Record<string, React.CSSProperties> = {
   dishFoot: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto' },
   dishPrice: { fontWeight: 900, fontSize: 16 },
   addBtn: { background: C.accent, color: '#fff', border: 'none', borderRadius: 10, padding: '8px 16px', fontWeight: 800, fontSize: 14, cursor: 'not-allowed', opacity: .45 },
+  addBtnOn: { cursor: 'pointer', opacity: 1 },
   footer: { textAlign: 'center', padding: '26px', fontSize: 13, color: C.inkDim },
   backBtn: { background: C.accent, color: '#fff', border: 'none', borderRadius: 10, padding: '9px 18px', fontWeight: 800, fontSize: 14, cursor: 'pointer' },
 }
