@@ -699,6 +699,8 @@ export type Database = {
           metadata: Json | null
           name: string
           past_due_at: string | null
+          shop_hero_url: string | null
+          shop_tagline: string | null
           slug: string
           status: string
           stripe_customer_id: string | null
@@ -728,6 +730,8 @@ export type Database = {
           metadata?: Json | null
           name: string
           past_due_at?: string | null
+          shop_hero_url?: string | null
+          shop_tagline?: string | null
           slug: string
           status?: string
           stripe_customer_id?: string | null
@@ -757,6 +761,8 @@ export type Database = {
           metadata?: Json | null
           name?: string
           past_due_at?: string | null
+          shop_hero_url?: string | null
+          shop_tagline?: string | null
           slug?: string
           status?: string
           stripe_customer_id?: string | null
@@ -2588,6 +2594,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           created_by_name: string | null
+          cuisine_code: string | null
           id: string
           is_active: boolean
           logo_url: string | null
@@ -2607,6 +2614,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           created_by_name?: string | null
+          cuisine_code?: string | null
           id?: string
           is_active?: boolean
           logo_url?: string | null
@@ -2626,6 +2634,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           created_by_name?: string | null
+          cuisine_code?: string | null
           id?: string
           is_active?: boolean
           logo_url?: string | null
@@ -2651,6 +2660,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "employees"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "brand_cuisine_code_fkey"
+            columns: ["cuisine_code"]
+            isOneToOne: false
+            referencedRelation: "shop_cuisine"
+            referencedColumns: ["code"]
           },
         ]
       }
@@ -9780,6 +9796,33 @@ export type Database = {
           },
         ]
       }
+      shop_cuisine: {
+        Row: {
+          code: string
+          created_at: string
+          emoji: string | null
+          is_active: boolean
+          label: string
+          position: number
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          emoji?: string | null
+          is_active?: boolean
+          label: string
+          position?: number
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          emoji?: string | null
+          is_active?: boolean
+          label?: string
+          position?: number
+        }
+        Relationships: []
+      }
       shop_theme: {
         Row: {
           accent_color: string | null
@@ -9795,6 +9838,8 @@ export type Database = {
           is_published: boolean
           mode: string
           photo_density: string
+          seed_rating: number | null
+          seed_rating_count: number | null
           template: string
           updated_at: string
         }
@@ -9812,6 +9857,8 @@ export type Database = {
           is_published?: boolean
           mode?: string
           photo_density?: string
+          seed_rating?: number | null
+          seed_rating_count?: number | null
           template?: string
           updated_at?: string
         }
@@ -9829,6 +9876,8 @@ export type Database = {
           is_published?: boolean
           mode?: string
           photo_density?: string
+          seed_rating?: number | null
+          seed_rating_count?: number | null
           template?: string
           updated_at?: string
         }
@@ -11734,6 +11783,10 @@ export type Database = {
         Args: { p_account_connector_id: string; p_user_id: string }
         Returns: undefined
       }
+      connector_secret_read: {
+        Args: { p_account_connector_id: string }
+        Returns: Json
+      }
       connector_secret_save: {
         Args: {
           p_account_connector_id: string
@@ -12962,6 +13015,7 @@ export type Database = {
         Args: { p_price_eur: number; p_submodule_id: string }
         Returns: undefined
       }
+      shop_hub_by_slug: { Args: { p_slug: string }; Returns: Json }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       st_3dclosestpoint: {

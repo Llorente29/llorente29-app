@@ -15,9 +15,10 @@
 // useActiveAccount(). Reacciona al cambio de cuenta automáticamente.
 
 import { useEffect, useState } from 'react'
-import { Plus, Search, Tag, Archive, Eye } from 'lucide-react'
+import { Plus, Search, Tag, Archive, Eye, Wand2 } from 'lucide-react'
 import { useActiveAccount } from '../../hooks/useActiveAccount'
 import { listBrands } from '../../services/brandsService'
+import { cleanBrandLogos, type BatchLogoResult } from '../../services/brandLogoBatchService'
 import type { Brand, BrandOwnershipType } from '../../../../types/multitenancy'
 import BrandCreateModal from './BrandCreateModal'
 
@@ -41,6 +42,11 @@ export default function BrandsListView({ onSelectBrand }: BrandsListViewProps) {
 
   // Modal de creación
   const [createOpen, setCreateOpen] = useState(false)
+
+  // Limpieza de logos en lote
+  const [cleaning, setCleaning] = useState(false)
+  const [cleanMsg, setCleanMsg] = useState<string | null>(null)
+  const [cleanResult, setCleanResult] = useState<BatchLogoResult | null>(null)
 
   // Reload trigger (para tras crear)
   const [reloadTick, setReloadTick] = useState(0)
@@ -79,6 +85,26 @@ export default function BrandsListView({ onSelectBrand }: BrandsListViewProps) {
     }
   }, [activeAccountId, search, ownershipFilter, includeArchived, reloadTick])
 
+  async function handleCleanLogos() {
+    if (!activeAccountId || cleaning) return
+    if (!window.confirm('Recortar el fondo blanco sobrante de los logos de marca. Los logos sin fondo plano no se tocan. ¿Continuar?')) return
+    setCleaning(true)
+    setCleanResult(null)
+    setCleanMsg('Preparando…')
+    try {
+      const res = await cleanBrandLogos(activeAccountId, (p) => {
+        setCleanMsg(p.current ? `Procesando ${p.done + 1}/${p.total}: ${p.current}` : `Procesadas ${p.total}`)
+      })
+      setCleanResult(res)
+      setCleanMsg(null)
+      setReloadTick((t) => t + 1)
+    } catch (e) {
+      setCleanMsg(e instanceof Error ? e.message : 'Error limpiando logos')
+    } finally {
+      setCleaning(false)
+    }
+  }
+
   return (
     <div className="space-y-4">
       {/* Cabecera con título y botón crear */}
@@ -91,14 +117,26 @@ export default function BrandsListView({ onSelectBrand }: BrandsListViewProps) {
             Gestión de marcas comerciales del grupo
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setCreateOpen(true)}
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 transition-base"
-        >
-          <Plus size={16} />
-          Nueva marca
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleCleanLogos}
+            disabled={cleaning}
+            title="Recorta el fondo blanco sobrante de los logos de marca"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-card border border-border-default text-text-primary hover:bg-accent-bg transition-base disabled:opacity-50"
+          >
+            <Wand2 size={16} />
+            {cleaning ? 'Limpiando…' : 'Limpiar logos'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setCreateOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 transition-base"
+          >
+            <Plus size={16} />
+            Nueva marca
+          </button>
+        </div>
       </div>
 
       {/* Barra de filtros */}
@@ -137,6 +175,18 @@ export default function BrandsListView({ onSelectBrand }: BrandsListViewProps) {
           <span>Mostrar archivadas</span>
         </label>
       </div>
+
+      {(cleanMsg || cleanResult) && (
+        <div className="p-3 rounded-md bg-card border border-border-default text-sm text-text-primary">
+          {cleanMsg && <span>{cleanMsg}</span>}
+          {cleanResult && (
+            <span>
+              Listo: {cleanResult.cleaned} limpiados, {cleanResult.unchanged} sin cambios
+              {cleanResult.errors.length > 0 && `, ${cleanResult.errors.length} con error`}.
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Estados de carga/error/vacío/lista */}
       {loading && (

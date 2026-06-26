@@ -25,6 +25,7 @@ import {
   archiveBrand,
   restoreBrand,
 } from '../../services/brandsService'
+import { listCuisines, type Cuisine } from '../../services/cuisineService'
 import type {
   Brand,
   BrandUpdate,
@@ -46,6 +47,7 @@ interface FormState {
   logoUrl: string
   shopUrl: string
   qrCaption: string
+  cuisineCode: string
   notes: string
 }
 
@@ -58,6 +60,7 @@ function brandToFormState(b: Brand): FormState {
     logoUrl: b.logoUrl ?? '',
     shopUrl: b.shopUrl ?? '',
     qrCaption: b.qrCaption ?? '',
+    cuisineCode: b.cuisineCode ?? '',
     notes: b.notes ?? '',
   }
 }
@@ -67,6 +70,13 @@ export default function BrandDataTab({ brand, onBrandChange }: BrandDataTabProps
   const [form, setForm] = useState<FormState>(() => brandToFormState(brand))
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [cuisines, setCuisines] = useState<Cuisine[]>([])
+
+  useEffect(() => {
+    let alive = true
+    listCuisines().then(cs => { if (alive) setCuisines(cs) }).catch(() => { /* sin lista */ })
+    return () => { alive = false }
+  }, [])
 
   // Si la marca de fuera cambia (otro tab modificó algo, etc.), sincronizamos
   // el formulario solo si NO estamos en modo edit (no pisar lo que el usuario
@@ -119,6 +129,9 @@ export default function BrandDataTab({ brand, onBrandChange }: BrandDataTabProps
     const captionTrimmed = form.qrCaption.trim()
     const captionNext: string | null = captionTrimmed === '' ? null : captionTrimmed
     if (captionNext !== brand.qrCaption) patch.qrCaption = captionNext
+
+    const cuisineNext: string | null = form.cuisineCode === '' ? null : form.cuisineCode
+    if (cuisineNext !== brand.cuisineCode) patch.cuisineCode = cuisineNext
 
     const notesTrimmed = form.notes.trim()
     const notesNext: string | null = notesTrimmed === '' ? null : notesTrimmed
@@ -390,6 +403,36 @@ export default function BrandDataTab({ brand, onBrandChange }: BrandDataTabProps
           ) : (
             <p className="text-sm text-text-primary whitespace-pre-wrap">
               {brand.qrCaption || <span className="text-text-secondary">—</span>}
+            </p>
+          )}
+        </Field>
+
+        <Field
+          label="Tipo de cocina"
+          hint={editing ? 'Cómo aparece la marca en tu tienda online (Folvy Shop). Lo eliges tú; si lo dejas vacío, no se muestra etiqueta.' : undefined}
+        >
+          {editing ? (
+            <select
+              value={form.cuisineCode}
+              onChange={(e) => setForm({ ...form, cuisineCode: e.target.value })}
+              disabled={submitting}
+              className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent"
+            >
+              <option value="">— Sin especificar —</option>
+              {cuisines.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.emoji ? `${c.emoji} ` : ''}{c.label}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <p className="text-sm text-text-primary">
+              {(() => {
+                const c = cuisines.find((x) => x.code === brand.cuisineCode)
+                return c
+                  ? `${c.emoji ? `${c.emoji} ` : ''}${c.label}`
+                  : <span className="text-text-secondary">—</span>
+              })()}
             </p>
           )}
         </Field>

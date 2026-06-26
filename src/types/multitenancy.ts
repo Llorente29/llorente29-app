@@ -115,6 +115,7 @@ export interface Brand {
   logoUrl: string | null
   shopUrl: string | null
   qrCaption: string | null
+  cuisineCode: string | null
   notes: string | null
   isActive: boolean
   archivedAt: string | null
@@ -145,6 +146,7 @@ export interface BrandUpdate {
   logoUrl?: string | null
   shopUrl?: string | null
   qrCaption?: string | null
+  cuisineCode?: string | null
   notes?: string | null
   isActive?: boolean
   archivedAt?: string | null

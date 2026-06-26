@@ -54,6 +54,7 @@ export function rowToBrand(row: RowBrand): Brand {
     logoUrl: row.logo_url,
     shopUrl: row.shop_url,
     qrCaption: row.qr_caption,
+    cuisineCode: row.cuisine_code,
     notes: row.notes,
     isActive: row.is_active,
     archivedAt: row.archived_at,
@@ -88,6 +89,7 @@ function brandUpdateToRow(patch: BrandUpdate): RowBrandUpdate {
   if (patch.logoUrl !== undefined) row.logo_url = patch.logoUrl
   if (patch.shopUrl !== undefined) row.shop_url = patch.shopUrl
   if (patch.qrCaption !== undefined) row.qr_caption = patch.qrCaption
+  if (patch.cuisineCode !== undefined) row.cuisine_code = patch.cuisineCode
   if (patch.notes !== undefined) row.notes = patch.notes
   if (patch.isActive !== undefined) row.is_active = patch.isActive
   if (patch.archivedAt !== undefined) row.archived_at = patch.archivedAt
