@@ -11,7 +11,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useShopCart } from '@/modules/shop/cart/ShopCartContext'
-import { geocodeAddress, checkDelivery, type GeocodeHit, type DeliveryCheck } from '@/modules/shop/checkout/checkoutService'
+import { geocodeAddress, checkDelivery, getDeliverySlots, type GeocodeHit, type DeliveryCheck, type DeliverySlot } from '@/modules/shop/checkout/checkoutService'
 
 const C = {
   page: '#F7F7F5', surface: '#FFFFFF', ink: '#16140F', inkDim: '#6E6960', inkFaint: '#8A857C',
@@ -36,6 +36,12 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
   const [check, setCheck] = useState<DeliveryCheck | null>(null)
   const [checking, setChecking] = useState(false)
   const [expandSummary, setExpandSummary] = useState(false)
+
+  // Hora
+  const [timeMode, setTimeMode] = useState<'asap' | 'scheduled'>('asap')
+  const [slots, setSlots] = useState<DeliverySlot[]>([])
+  const [slotTs, setSlotTs] = useState<string | null>(null)
+  const [loadingSlots, setLoadingSlots] = useState(false)
 
   const debounceRef = useRef<number | null>(null)
 
@@ -62,12 +68,24 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
     finally { setChecking(false) }
   }
 
+  // Cargar franjas cuando se elige "Programar" (necesita local y eta de zona).
+  useEffect(() => {
+    if (timeMode !== 'scheduled' || !cart.locationId) return
+    const eta = check?.ok ? (check.etaMin ?? 40) : 40
+    setLoadingSlots(true)
+    getDeliverySlots(slug, cart.locationId, eta, 30)
+      .then((r) => setSlots(r))
+      .catch(() => setSlots([]))
+      .finally(() => setLoadingSlots(false))
+  }, [timeMode, cart.locationId, check, slug])
+
   const deliveryFee = mode === 'delivery' && check?.ok ? check.deliveryFee : 0
   const grandTotal = totals.subtotal - totals.discount + deliveryFee
   const minOrder = check?.ok ? check.minOrder : null
   const belowMin = mode === 'delivery' && minOrder != null && totals.subtotal < minOrder
   const missingForMin = belowMin && minOrder != null ? minOrder - totals.subtotal : 0
-  const canContinue = cart.lines.length > 0 && (
+  const timeOk = timeMode === 'asap' || (timeMode === 'scheduled' && slotTs != null)
+  const canContinue = cart.lines.length > 0 && timeOk && (
     mode === 'pickup' || (check?.ok === true && !belowMin && detail.trim().length > 0)
   )
 
@@ -170,9 +188,53 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
             )}
           </section>
 
-          <section style={{ ...s.card, ...s.next }}>
+          <section style={s.card}>
             <h2 style={s.h2}>¿Cuándo?</h2>
-            <p style={s.muted}>Siguiente paso.</p>
+
+            {/* Lo antes posible — tarjeta protagonista */}
+            <button
+              style={{ ...s.timeCard, ...(timeMode === 'asap' ? s.timeCardOn : {}) }}
+              onClick={() => { setTimeMode('asap'); setSlotTs(null) }}
+            >
+              <span style={{ ...s.timeIcon, ...(timeMode === 'asap' ? s.timeIconOn : {}) }}>⚡</span>
+              <span style={s.timeCardBody}>
+                <span style={s.timeCardTitle}>Lo antes posible</span>
+                <span style={s.timeCardSub}>
+                  {mode === 'pickup'
+                    ? 'Listo cuanto antes'
+                    : check?.ok && check.etaMin != null
+                      ? `Llega en unos ${check.etaMin} min`
+                      : 'Te lo llevamos cuanto antes'}
+                </span>
+              </span>
+              {timeMode === 'asap' && <span style={s.timeTick}>✓</span>}
+            </button>
+
+            {timeMode === 'asap' ? (
+              <div style={s.schedLinkRow}>
+                <button style={s.schedLink} onClick={() => setTimeMode('scheduled')}>Programar para más tarde</button>
+              </div>
+            ) : (
+              <div style={{ ...s.timeCard, ...s.timeCardOn, display: 'block', marginTop: 10 }}>
+                <div style={s.timeCardTitle}>Programar para más tarde</div>
+                {loadingSlots ? (
+                  <p style={{ ...s.muted, marginTop: 10 }}>Buscando horas disponibles…</p>
+                ) : slots.length === 0 ? (
+                  <p style={{ ...s.muted, marginTop: 10 }}>No quedan franjas hoy. Elige “Lo antes posible”.</p>
+                ) : (
+                  <select
+                    style={s.select}
+                    value={slotTs ?? ''}
+                    onChange={(e) => setSlotTs(e.target.value || null)}
+                  >
+                    <option value="">Elige una hora…</option>
+                    {slots.map((sl) => (
+                      <option key={sl.ts} value={sl.ts}>Hoy · {sl.label}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            )}
           </section>
 
           <section style={{ ...s.card, ...s.next }}>
@@ -255,6 +317,19 @@ const s: Record<string, React.CSSProperties> = {
   okSub: { display: 'block', fontSize: 12, color: C.greenMid },
   noBox: { marginTop: 12, fontSize: 13.5, fontWeight: 600, color: C.red, background: C.redBg, borderRadius: 12, padding: '12px 14px' },
   detailRow: { display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 },
+
+  slotGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(72px, 1fr))', gap: 8, marginTop: 4 },
+  timeCard: { width: '100%', display: 'flex', alignItems: 'center', gap: 13, border: `1.5px solid ${C.lineInput}`, background: '#fff', borderRadius: 14, padding: 14, cursor: 'pointer', textAlign: 'left' },
+  timeCardOn: { border: `2px solid ${C.ink}`, background: '#FAFAF8' },
+  timeIcon: { width: 38, height: 38, borderRadius: 11, background: '#F1EFE8', color: '#888780', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 19, flexShrink: 0 },
+  timeIconOn: { background: C.ink, color: '#fff' },
+  timeCardBody: { flex: 1 },
+  timeCardTitle: { display: 'block', fontSize: 14.5, fontWeight: 900 },
+  timeCardSub: { display: 'block', fontSize: 12.5, color: C.inkDim, marginTop: 2 },
+  timeTick: { width: 22, height: 22, borderRadius: '50%', background: C.ink, color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, flexShrink: 0 },
+  schedLinkRow: { textAlign: 'center', padding: '8px 0 2px' },
+  schedLink: { background: 'none', border: 'none', fontSize: 13.5, fontWeight: 700, color: C.inkDim, borderBottom: `1.5px solid ${C.lineInput}`, paddingBottom: 1, cursor: 'pointer' },
+  select: { width: '100%', marginTop: 10, border: `1.5px solid ${C.lineInput}`, borderRadius: 11, padding: '11px 14px', fontSize: 14, fontWeight: 700, color: C.ink, background: '#fff', boxSizing: 'border-box' },
 
   side: { flex: '0 0 250px', position: 'sticky', top: 16, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 18, padding: '18px 20px' },
   sideTitle: { fontSize: 15, fontWeight: 900, marginBottom: 12 },

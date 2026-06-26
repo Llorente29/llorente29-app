@@ -12,6 +12,17 @@ function db() {
   return supabase as any
 }
 
+export type DeliverySlot = { ts: string; label: string }
+
+/** Franjas de hoy en las que el local entrega (respeta horario comercial). */
+export async function getDeliverySlots(slug: string, locationId: string, etaMin: number, stepMin = 30): Promise<DeliverySlot[]> {
+  const { data, error } = await db().rpc('shop_delivery_slots', {
+    p_slug: slug, p_location_id: locationId, p_eta_min: etaMin, p_step_min: stepMin,
+  })
+  if (error || !data || data.ok !== true) return []
+  return (data.slots ?? []) as DeliverySlot[]
+}
+
 export type DeliveryCheck =
   | { ok: true; zoneId: string; zoneName: string; deliveryFee: number; minOrder: number | null; etaMin: number | null; distanceM: number }
   | { ok: false; reason: 'out_of_zone' | 'account' | 'error' }
