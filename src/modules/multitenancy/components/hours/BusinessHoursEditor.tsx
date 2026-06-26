@@ -12,6 +12,7 @@
 import { useEffect, useState } from 'react'
 import { Plus, Trash2, Clock, Moon, Copy, X } from 'lucide-react'
 import { getHours, replaceHours, copyHoursTo, type HoursSlot } from '../../services/businessHoursService'
+import HoursExceptions from './HoursExceptions'
 
 const DAYS = [
   { idx: 1, label: 'Lunes' },
@@ -347,6 +348,11 @@ export default function BusinessHoursEditor({ accountId, locationId, brandId, co
           </div>
         </div>
       )}
+
+      {/* Días especiales / festivos */}
+      <div className="pt-4 mt-2 border-t border-border-default">
+        <HoursExceptions accountId={accountId} locationId={locationId} brandId={brandId} />
+      </div>
     </div>
   )
 }

@@ -95,6 +95,120 @@ export interface HoursTarget {
   brandId: string | null
 }
 
+// ── Excepciones / festivos ──────────────────────────────────────────────
+
+export interface HoursException {
+  id?: string
+  exceptionDate: string  // 'YYYY-MM-DD'
+  isClosed: boolean
+  openTime: string | null   // 'HH:MM' o null
+  closeTime: string | null
+  note: string | null
+}
+
+/** Lista las excepciones de (local, marca|null) desde hoy en adelante. */
+export async function getExceptions(locationId: string, brandId: string | null): Promise<HoursException[]> {
+  if (!supabase) throw new Error('Supabase no disponible')
+  const today = new Date().toISOString().slice(0, 10)
+  let q = (supabase as any)
+    .from('business_hours_exception')
+    .select('id, exception_date, is_closed, open_time, close_time, note')
+    .eq('location_id', locationId)
+    .gte('exception_date', today)
+    .order('exception_date', { ascending: true })
+  q = brandId === null ? q.is('brand_id', null) : q.eq('brand_id', brandId)
+  const { data, error } = await q
+  if (error) throw new Error(`No se pudieron leer las excepciones: ${error.message}`)
+  return (data ?? []).map((r: any) => ({
+    id: r.id,
+    exceptionDate: r.exception_date,
+    isClosed: r.is_closed,
+    openTime: r.open_time ? (r.open_time as string).slice(0, 5) : null,
+    closeTime: r.close_time ? (r.close_time as string).slice(0, 5) : null,
+    note: r.note ?? null,
+  }))
+}
+
+/** Crea una excepción. */
+export async function addException(
+  accountId: string,
+  locationId: string,
+  brandId: string | null,
+  exc: HoursException,
+): Promise<void> {
+  if (!supabase) throw new Error('Supabase no disponible')
+  const { error } = await (supabase as any).from('business_hours_exception').insert({
+    account_id: accountId,
+    location_id: locationId,
+    brand_id: brandId,
+    exception_date: exc.exceptionDate,
+    is_closed: exc.isClosed,
+    open_time: exc.isClosed ? null : exc.openTime,
+    close_time: exc.isClosed ? null : exc.closeTime,
+    note: exc.note,
+  })
+  if (error) throw new Error(`No se pudo guardar la excepción: ${error.message}`)
+}
+
+/** Da de alta una excepción para un RANGO de fechas (ambas inclusive),
+ *  expandiéndola a una fila por día. Si fromDate === toDate, es un solo día. */
+export async function addExceptionRange(
+  accountId: string,
+  locationId: string,
+  brandId: string | null,
+  fromDate: string,
+  toDate: string,
+  isClosed: boolean,
+  openTime: string | null,
+  closeTime: string | null,
+  note: string | null,
+): Promise<void> {
+  if (!supabase) throw new Error('Supabase no disponible')
+  const start = new Date(fromDate + 'T00:00:00')
+  const end = new Date((toDate || fromDate) + 'T00:00:00')
+  if (end < start) throw new Error('La fecha final es anterior a la inicial.')
+
+  const rows: any[] = []
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const iso = d.toISOString().slice(0, 10)
+    rows.push({
+      account_id: accountId,
+      location_id: locationId,
+      brand_id: brandId,
+      exception_date: iso,
+      is_closed: isClosed,
+      open_time: isClosed ? null : openTime,
+      close_time: isClosed ? null : closeTime,
+      note,
+    })
+  }
+  const isoFrom = start.toISOString().slice(0, 10)
+  const isoTo = end.toISOString().slice(0, 10)
+
+  // Borra primero cualquier excepción previa de ese (local, marca) dentro del rango
+  let del = (supabase as any)
+    .from('business_hours_exception')
+    .delete()
+    .eq('location_id', locationId)
+    .gte('exception_date', isoFrom)
+    .lte('exception_date', isoTo)
+  del = brandId === null ? del.is('brand_id', null) : del.eq('brand_id', brandId)
+  const { error: delErr } = await del
+  if (delErr) throw new Error(`No se pudieron actualizar las excepciones: ${delErr.message}`)
+
+  const { error } = await (supabase as any)
+    .from('business_hours_exception')
+    .insert(rows)
+  if (error) throw new Error(`No se pudieron guardar las excepciones: ${error.message}`)
+}
+
+/** Borra una excepción por id. */
+export async function deleteException(id: string): Promise<void> {
+  if (!supabase) throw new Error('Supabase no disponible')
+  const { error } = await (supabase as any).from('business_hours_exception').delete().eq('id', id)
+  if (error) throw new Error(`No se pudo borrar la excepción: ${error.message}`)
+}
+
 /** Copia los tramos de un origen (local, marca|null) a varios destinos.
  *  Cada destino se REEMPLAZA por completo con los tramos del origen.
  *  Sirve para: marca->marcas (mismo local), general->otros locales,
