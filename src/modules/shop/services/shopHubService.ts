@@ -13,6 +13,7 @@ export interface HubBrand {
   cuisineCode: string | null
   cuisineLabel: string | null
   cuisineEmoji: string | null
+  isOpen: boolean
 }
 
 export interface TopDish {
@@ -58,6 +59,7 @@ export async function getShopHub(slug: string): Promise<ShopHub | null> {
       cuisineCode: b.cuisine_code ?? null,
       cuisineLabel: b.cuisine_label ?? null,
       cuisineEmoji: b.cuisine_emoji ?? null,
+      isOpen: b.is_open === true,
     })),
     topDishes: (data.top_dishes ?? []).map((t: any) => ({
       menuItemId: t.menu_item_id,

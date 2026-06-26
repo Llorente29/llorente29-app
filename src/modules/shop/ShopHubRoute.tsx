@@ -268,10 +268,15 @@ function BrandCard({ b, onOpen }: { b: HubBrand; onOpen: () => void }) {
       onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 14px 30px rgba(26,23,20,.1)' }}
       onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none' }}>
       {/* Foto del plato a toda la tarjeta, con el logo en pastilla limpia encima */}
-      <div style={{ ...S.cardPhoto, background: b.heroUrl ? `center/cover no-repeat url(${b.heroUrl})` : (b.accentColor ? `${b.accentColor}22` : C.accentBg) }}>
+      <div style={{ ...S.cardPhoto, position: 'relative', background: b.heroUrl ? `center/cover no-repeat url(${b.heroUrl})` : (b.accentColor ? `${b.accentColor}22` : C.accentBg), filter: b.isOpen ? 'none' : 'grayscale(0.85)', opacity: b.isOpen ? 1 : 0.82 }}>
         {b.logoUrl
           ? <img src={b.logoUrl} alt={b.name} style={S.logoPill} />
           : <span style={{ ...S.logoPill, fontWeight: 900, fontSize: 16, letterSpacing: '-.03em', color: b.accentColor || C.ink, padding: '8px 14px' }}>{shortName(b.name)}</span>}
+        {!b.isOpen && (
+          <span style={{ position: 'absolute', top: 12, right: 12, background: 'rgba(26,23,20,.82)', color: '#fff', fontSize: 12, fontWeight: 700, padding: '5px 11px', borderRadius: 999, letterSpacing: '-.01em' }}>
+            Cerrado ahora
+          </span>
+        )}
       </div>
       <div style={{ padding: '15px 16px 17px' }}>
         <div style={S.cardName}>{b.name}</div>
