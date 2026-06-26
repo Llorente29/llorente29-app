@@ -28,6 +28,70 @@ function crossesMidnight(open: string, close: string): boolean {
   return close <= open
 }
 
+// Convierte 'HH:MM' a minutos desde medianoche.
+function toMin(t: string): number {
+  const [h, m] = t.split(':').map(Number)
+  return h * 60 + m
+}
+
+// Vista gráfica: 7 días × 24h, una barra por tramo. Los que cruzan medianoche
+// se pintan hasta el borde derecho.
+function HoursGraph({ slots }: { slots: HoursSlot[] }) {
+  const DAYS_G = [
+    { idx: 1, label: 'L' }, { idx: 2, label: 'M' }, { idx: 3, label: 'X' },
+    { idx: 4, label: 'J' }, { idx: 5, label: 'V' }, { idx: 6, label: 'S' }, { idx: 0, label: 'D' },
+  ]
+  const DAY_MIN = 24 * 60
+  const hours = [0, 3, 6, 9, 12, 15, 18, 21, 24]
+  return (
+    <div className="rounded-md border border-border-default p-3 overflow-x-auto">
+      <div style={{ minWidth: 520 }}>
+        {/* Escala de horas */}
+        <div className="flex items-center mb-1" style={{ paddingLeft: 28 }}>
+          <div className="relative flex-1 h-4 text-[10px] text-text-tertiary">
+            {hours.map((h) => (
+              <span key={h} style={{ position: 'absolute', left: `${(h / 24) * 100}%`, transform: 'translateX(-50%)' }}>
+                {String(h).padStart(2, '0')}
+              </span>
+            ))}
+          </div>
+        </div>
+        {DAYS_G.map((d) => {
+          const daySlots = slots.filter((s) => s.weekday === d.idx)
+          return (
+            <div key={d.idx} className="flex items-center gap-2 mb-1.5">
+              <span className="w-5 text-xs font-medium text-text-secondary shrink-0">{d.label}</span>
+              <div className="relative flex-1 h-6 rounded bg-page border border-border-default overflow-hidden">
+                {/* líneas de hora */}
+                {hours.slice(1, -1).map((h) => (
+                  <div key={h} style={{ position: 'absolute', left: `${(h / 24) * 100}%`, top: 0, bottom: 0, width: 1, background: 'var(--color-border-default, #eee)' }} />
+                ))}
+                {daySlots.map((s, i) => {
+                  const start = toMin(s.openTime)
+                  const end = crossesMidnight(s.openTime, s.closeTime) ? DAY_MIN : toMin(s.closeTime)
+                  const left = (start / DAY_MIN) * 100
+                  const width = Math.max(1, ((end - start) / DAY_MIN) * 100)
+                  return (
+                    <div
+                      key={i}
+                      title={`${s.openTime}–${s.closeTime}`}
+                      style={{
+                        position: 'absolute', left: `${left}%`, width: `${width}%`, top: 3, bottom: 3,
+                        background: 'var(--color-accent, #FF5436)', opacity: 0.85, borderRadius: 4,
+                      }}
+                    />
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+
 /** Un posible destino al que copiar este horario (otra marca, otro local…). */
 export interface CopyTarget {
   key: string         // identificador único para la UI
@@ -48,6 +112,7 @@ interface Props {
 
 export default function BusinessHoursEditor({ accountId, locationId, brandId, copyTargets, copyLabel }: Props) {
   const [slots, setSlots] = useState<HoursSlot[]>([])
+  const [view, setView] = useState<'list' | 'graph'>('list')
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState<{ kind: 'ok' | 'error'; msg: string } | null>(null)
@@ -162,8 +227,28 @@ export default function BusinessHoursEditor({ accountId, locationId, brandId, co
         </div>
       )}
 
+      {/* Conmutador Lista / Gráfico */}
+      <div className="inline-flex rounded-lg border border-border-default overflow-hidden text-sm">
+        <button
+          type="button"
+          onClick={() => setView('list')}
+          className={'px-3 py-1.5 font-medium ' + (view === 'list' ? 'bg-accent text-text-on-accent' : 'bg-card text-text-secondary hover:text-text-primary')}
+        >
+          Lista
+        </button>
+        <button
+          type="button"
+          onClick={() => setView('graph')}
+          className={'px-3 py-1.5 font-medium ' + (view === 'graph' ? 'bg-accent text-text-on-accent' : 'bg-card text-text-secondary hover:text-text-primary')}
+        >
+          Gráfico
+        </button>
+      </div>
+
       {loading ? (
         <p className="text-sm text-text-secondary">Cargando horario…</p>
+      ) : view === 'graph' ? (
+        <HoursGraph slots={slots} />
       ) : (
         <div className="rounded-md border border-border-default overflow-hidden">
           {DAYS.map((day) => {
