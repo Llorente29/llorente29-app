@@ -27,6 +27,7 @@ import { getBrandById } from '../../services/brandsService'
 import type { Brand } from '../../../../types/multitenancy'
 import BrandDataTab from './BrandDataTab'
 import BrandLocationsTab from './BrandLocationsTab'
+import BrandHoursTab from './BrandHoursTab'
 import BrandLogoUploader from './BrandLogoUploader'
 
 // ─────────────────────────────────────────────────────────────────────
@@ -47,6 +48,7 @@ interface BrandTabDef {
 const BRAND_TABS: BrandTabDef[] = [
   { id: 'data', label: 'Datos', Component: BrandDataTab },
   { id: 'locations', label: 'Disponibilidad', Component: BrandLocationsTab },
+  { id: 'hours', label: 'Horarios', Component: BrandHoursTab },
   // Para añadir un tab futuro:
   // { id: 'billing', label: 'Facturación', Component: BrandBillingTab },
 ]

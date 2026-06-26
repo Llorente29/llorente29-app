@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useApp } from '../context/AppContext'
 import { Card } from '../components/ui'
-import { Wallet, MapPin, Info, ChevronDown, ChevronRight, Check, AlertCircle, Loader2, Navigation, ExternalLink } from 'lucide-react'
+import { Wallet, MapPin, Info, ChevronDown, ChevronRight, Check, AlertCircle, Loader2, Navigation, ExternalLink, Clock } from 'lucide-react'
 import type { Location } from '../types'
 import { listLocationApprovals, setLocationReceiptApproval } from '@/modules/supply/services/supplierCatalogService'
+import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
+import BusinessHoursEditor from '@/modules/multitenancy/components/hours/BusinessHoursEditor'
 
 // DashboardPage se ha movido a su propia page: src/pages/DashboardPage.tsx
 // Re-exportar aquí para retrocompatibilidad con imports antiguos.
@@ -42,6 +44,7 @@ type EditBuffers = Record<string, Partial<Location>>
 
 export function LocationsPage() {
   const { locations, saveLocation, removeLocation } = useApp()
+  const { activeAccountId } = useActiveAccount()
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [editBuffers, setEditBuffers] = useState<EditBuffers>({})
   const [saveStates, setSaveStates] = useState<Record<string, SaveState>>({})
@@ -518,6 +521,23 @@ export function LocationsPage() {
                           "La oficina" hace que el trabajador deje la recepción en borrador; la oficina la revisa y confirma desde Folvy Supply → Recepciones.
                         </p>
                       </div>
+                    </div>
+
+                    {/* Horario general del local */}
+                    <div className="bg-page rounded-md p-3">
+                      <p className="text-xs font-semibold mb-2 inline-flex items-center gap-1.5 text-accent">
+                        <Clock size={14} /> Horario general del local
+                      </p>
+                      <p className="text-[11px] text-text-tertiary mb-3">
+                        Lo usan todas las marcas de este local que no tengan horario propio. Cada marca puede sobreescribirlo desde su ficha.
+                      </p>
+                      {activeAccountId && (
+                        <BusinessHoursEditor
+                          accountId={activeAccountId}
+                          locationId={loc.id}
+                          brandId={null}
+                        />
+                      )}
                     </div>
                   </div>
                 )}
