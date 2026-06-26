@@ -10,8 +10,8 @@
 // medianoche (cierra de madrugada) y se avisa.
 
 import { useEffect, useState } from 'react'
-import { Plus, Trash2, Clock, Moon, Copy, X } from 'lucide-react'
-import { getHours, replaceHours, copyHoursTo, type HoursSlot } from '../../services/businessHoursService'
+import { Plus, Trash2, Clock, Moon, Copy, X, AlertTriangle } from 'lucide-react'
+import { getHours, replaceHours, copyHoursTo, getStaffingGaps, type HoursSlot, type StaffingGap } from '../../services/businessHoursService'
 import HoursExceptions from './HoursExceptions'
 
 const DAYS = [
@@ -113,6 +113,18 @@ interface Props {
 export default function BusinessHoursEditor({ accountId, locationId, brandId, copyTargets, copyLabel }: Props) {
   const [slots, setSlots] = useState<HoursSlot[]>([])
   const [view, setView] = useState<'list' | 'graph'>('list')
+  const [staffingGaps, setStaffingGaps] = useState<StaffingGap[]>([])
+
+  // Cruce con personal: solo para el horario GENERAL del local (brandId null),
+  // porque el personal cubre el local entero, no una marca concreta.
+  useEffect(() => {
+    if (brandId !== null || !locationId) { setStaffingGaps([]); return }
+    let alive = true
+    getStaffingGaps(locationId)
+      .then((g) => { if (alive) setStaffingGaps(g) })
+      .catch(() => { if (alive) setStaffingGaps([]) })
+    return () => { alive = false }
+  }, [locationId, brandId, slots])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState<{ kind: 'ok' | 'error'; msg: string } | null>(null)
@@ -430,6 +442,28 @@ export default function BusinessHoursEditor({ accountId, locationId, brandId, co
             >
               Cancelar
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Aviso: abierto sin personal (solo horario general del local) */}
+      {brandId === null && staffingGaps.length > 0 && (
+        <div className="rounded-md p-3" style={{ background: '#FFF3D6', border: '1px solid #F2DCA0' }}>
+          <div className="flex items-center gap-1.5 text-sm font-medium mb-1.5" style={{ color: '#7A5A12' }}>
+            <AlertTriangle size={15} /> Abierto sin personal asignado
+          </div>
+          <p className="text-xs mb-2" style={{ color: '#7A5A12' }}>
+            Según el último cuadrante, el local figura abierto pero sin turno de personal en:
+          </p>
+          <div className="space-y-0.5">
+            {staffingGaps.map((g, i) => {
+              const dl: Record<number, string> = { 1: 'Lunes', 2: 'Martes', 3: 'Miércoles', 4: 'Jueves', 5: 'Viernes', 6: 'Sábado', 0: 'Domingo' }
+              return (
+                <div key={i} className="text-xs" style={{ color: '#7A5A12' }}>
+                  <span className="font-medium">{dl[g.weekday]}</span>: {g.gapStart}–{g.gapEnd}
+                </div>
+              )
+            })}
           </div>
         </div>
       )}

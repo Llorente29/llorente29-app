@@ -209,6 +209,27 @@ export async function deleteException(id: string): Promise<void> {
   if (error) throw new Error(`No se pudo borrar la excepción: ${error.message}`)
 }
 
+// ── Cruce con personal (aviso) ──────────────────────────────────────────
+
+export interface StaffingGap {
+  weekday: number
+  gapStart: string  // 'HH:MM'
+  gapEnd: string
+}
+
+/** Tramos en que el local abre (horario general) pero no hay personal asignado,
+ *  según el cuadrante más reciente. Solo aviso. */
+export async function getStaffingGaps(locationId: string): Promise<StaffingGap[]> {
+  if (!supabase) throw new Error('Supabase no disponible')
+  const { data, error } = await (supabase as any).rpc('hours_staffing_gaps', { p_location_id: locationId })
+  if (error) throw new Error(error.message)
+  return (data ?? []).map((r: any) => ({
+    weekday: r.weekday,
+    gapStart: (r.gap_start as string).slice(0, 5),
+    gapEnd: (r.gap_end as string).slice(0, 5),
+  }))
+}
+
 /** Copia los tramos de un origen (local, marca|null) a varios destinos.
  *  Cada destino se REEMPLAZA por completo con los tramos del origen.
  *  Sirve para: marca->marcas (mismo local), general->otros locales,
