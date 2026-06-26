@@ -46,6 +46,7 @@ import {
   DAY_LABELS,
 } from '../types/scheduler'
 import type { Employee } from '../types'
+import { getStaffingGaps, type StaffingGap } from '../modules/multitenancy/services/businessHoursService'
 
 const DAYS: DayOfWeek[] = [0, 1, 2, 3, 4, 5, 6]
 
@@ -77,6 +78,7 @@ export default function CalendarioPage() {
   const [dirty, setDirty] = useState(false)
   const [gapModal, setGapModal] = useState<UncoveredSlot | null>(null)
   const [issues, setIssues] = useState<ValidationIssue[]>([])
+  const [staffingGaps, setStaffingGaps] = useState<StaffingGap[]>([])
   const [issuesShown, setIssuesShown] = useState(false)
   const [copyModalOpen, setCopyModalOpen] = useState(false)
 
@@ -102,6 +104,8 @@ export default function CalendarioPage() {
     setOverrides(sched?.coverage_overrides || {})
     setDirty(false)
     setLoading(false)
+    // Aviso: horario comercial abierto sin personal (lee de BD; refleja lo guardado)
+    getStaffingGaps(locationId).then(setStaffingGaps).catch(() => setStaffingGaps([]))
   }
 
   useEffect(() => {
@@ -197,6 +201,8 @@ export default function CalendarioPage() {
     if (saved) {
       setScheduleRow(saved)
       setDirty(false)
+      // Recalcular aviso de personal con lo recién guardado
+      getStaffingGaps(locationId).then(setStaffingGaps).catch(() => setStaffingGaps([]))
     }
   }
 
@@ -369,6 +375,28 @@ export default function CalendarioPage() {
               })}
             </ul>
           )}
+        </div>
+      )}
+
+      {/* Aviso: horario comercial abierto sin personal asignado */}
+      {staffingGaps.length > 0 && (
+        <div className="rounded-lg p-3 mb-3" style={{ background: '#FFF3D6', border: '1px solid #F2DCA0' }}>
+          <div className="flex items-center gap-1.5 text-sm font-semibold mb-1.5" style={{ color: '#7A5A12' }}>
+            <AlertTriangle size={16} /> Horario comercial abierto sin personal asignado
+          </div>
+          <p className="text-xs mb-2" style={{ color: '#7A5A12' }}>
+            Este local figura abierto al público pero no hay ningún turno con personal en:
+          </p>
+          <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+            {staffingGaps.map((g, i) => {
+              const dl: Record<number, string> = { 1: 'Lun', 2: 'Mar', 3: 'Mié', 4: 'Jue', 5: 'Vie', 6: 'Sáb', 0: 'Dom' }
+              return (
+                <span key={i} className="text-xs" style={{ color: '#7A5A12' }}>
+                  <span className="font-semibold">{dl[g.weekday]}</span> {g.gapStart}–{g.gapEnd}
+                </span>
+              )
+            })}
+          </div>
         </div>
       )}
 
