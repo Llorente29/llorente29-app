@@ -4,10 +4,13 @@
 // geocodificación que el editor de zonas (Mapbox, geocodeAddress) y valida la
 // dirección del cliente contra las zonas de reparto del local (shop_check_delivery).
 //
-// El paso final (placeShopOrder) crea el pedido por la vía canónica
-// (place_shop_order → sale source='folvy_shop'). Reprecia en servidor; el front
-// nunca fija el precio. Agnóstico de pago: en esta versión el pago es simulado y
-// Stripe se enchufa por encima después.
+// Flujo de cobro:
+//   1) placeShopOrder  → crea el pedido canónico (sale source='folvy_shop','new').
+//   2) createShopPaymentIntent → la Edge Function shop-payment-intent crea el
+//      PaymentIntent como DIRECT CHARGE sobre la cuenta conectada del restaurante
+//      y devuelve el client_secret + la cuenta conectada (para el Payment Element).
+//   3) El comensal paga con tarjeta/Bizum; el webhook confirma el pedido.
+// El precio SIEMPRE se recalcula en servidor; el front nunca lo fija.
 
 import { supabase } from '@/lib/supabase'
 import type { OrderLine } from '@/modules/shop/services/dishConfigService'
@@ -69,7 +72,7 @@ export interface ShopOrderPayload {
     note: string
   }
   expectedTime: string | null            // ISO; null = lo antes posible
-  payment: { mode: 'simulated' }
+  payment: { mode: 'simulated' | 'stripe' }
   lines: OrderLine[]
 }
 
@@ -104,5 +107,34 @@ export async function placeShopOrder(slug: string, payload: ShopOrderPayload, dr
     deliveryFee: data.deliveryFee != null ? Number(data.deliveryFee) : undefined,
     total: data.total != null ? Number(data.total) : undefined,
     lines: data.lines ?? undefined,
+  }
+}
+
+// ── Iniciar el cobro (Stripe Connect, direct charge) ────────────────────
+
+export interface PaymentIntentResult {
+  ok: boolean
+  reason?: string
+  clientSecret?: string
+  connectedAccountId?: string
+  amount?: number
+  paymentIntentId?: string
+}
+
+/**
+ * Pide a la Edge Function shop-payment-intent que cree el PaymentIntent del
+ * pedido (direct charge sobre la cuenta conectada del restaurante). Devuelve el
+ * client_secret y la cuenta conectada, que el Payment Element necesita.
+ */
+export async function createShopPaymentIntent(saleId: string): Promise<PaymentIntentResult> {
+  const { data, error } = await db().functions.invoke('shop-payment-intent', { body: { saleId } })
+  if (error) return { ok: false, reason: error.message }
+  if (!data || data.ok !== true) return { ok: false, reason: data?.reason ?? 'error' }
+  return {
+    ok: true,
+    clientSecret: data.clientSecret,
+    connectedAccountId: data.connectedAccountId,
+    amount: data.amount != null ? Number(data.amount) : undefined,
+    paymentIntentId: data.paymentIntentId,
   }
 }

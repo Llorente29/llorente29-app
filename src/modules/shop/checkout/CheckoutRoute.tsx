@@ -6,16 +6,18 @@
 // geocodeAddress (Mapbox) + validacion de zona (shop_check_delivery).
 // Resumen sticky en escritorio; barra inferior fija desplegable en movil.
 //
-// Al confirmar: crea el pedido por la via canonica (place_shop_order →
-// sale source='folvy_shop', order_status='new'). El precio se RECALCULA en
-// servidor (el front no fija precio). Pago simulado en esta version; Stripe se
-// enchufa por encima despues.
+// Flujo: confirmar -> place_shop_order (crea el pedido 'new') -> crear
+// PaymentIntent (direct charge sobre la cuenta del restaurante) -> Payment
+// Element (tarjeta + Bizum) -> pago -> confirmacion. El webhook confirma el
+// pedido server-side. El precio SIEMPRE se recalcula en servidor.
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { loadStripe } from '@stripe/stripe-js'
+import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js'
 import { useShopCart } from '@/modules/shop/cart/ShopCartContext'
 import {
-  geocodeAddress, checkDelivery, getDeliverySlots, placeShopOrder,
-  type GeocodeHit, type DeliveryCheck, type DeliverySlot, type ShopOrderPayload, type PlaceOrderResult,
+  geocodeAddress, checkDelivery, getDeliverySlots, placeShopOrder, createShopPaymentIntent,
+  type GeocodeHit, type DeliveryCheck, type DeliverySlot, type ShopOrderPayload,
 } from '@/modules/shop/checkout/checkoutService'
 
 const C = {
@@ -26,7 +28,17 @@ const C = {
 }
 function eur(n: number): string { return n.toFixed(2).replace('.', ',') + ' \u20AC' }
 
+const PENDING_KEY = 'folvy-shop-pending'
+
 type Mode = 'delivery' | 'pickup'
+
+interface PayContext {
+  clientSecret: string
+  connectedAccountId: string
+  saleId: string
+  code: string
+  total: number
+}
 
 export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: () => void }) {
   const { cart, totals, clear } = useShopCart()
@@ -48,14 +60,35 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
   const [slotTs, setSlotTs] = useState<string | null>(null)
   const [loadingSlots, setLoadingSlots] = useState(false)
 
-  // Contacto + envío del pedido
+  // Contacto + flujo de pago
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [placing, setPlacing] = useState(false)
-  const [placed, setPlaced] = useState<PlaceOrderResult | null>(null)
   const [placeError, setPlaceError] = useState<string | null>(null)
+  const [stage, setStage] = useState<'form' | 'pay'>('form')
+  const [pay, setPayCtx] = useState<PayContext | null>(null)
+  const [placed, setPlaced] = useState<{ code?: string; total?: number } | null>(null)
 
   const debounceRef = useRef<number | null>(null)
+
+  // Retorno de un pago con redirección (p.ej. Bizum): Stripe vuelve con
+  // ?redirect_status=succeeded. Recuperamos el pedido pendiente y confirmamos.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const rs = params.get('redirect_status')
+    if (rs === 'succeeded') {
+      try {
+        const p = JSON.parse(localStorage.getItem(PENDING_KEY) || 'null')
+        if (p) { setPlaced({ code: p.code, total: p.total }); if (p.mode) setMode(p.mode) }
+        else setPlaced({})
+      } catch { setPlaced({}) }
+      try { localStorage.removeItem(PENDING_KEY) } catch { /* ignore */ }
+      clear()
+    } else if (rs === 'failed') {
+      setPlaceError('El pago no se completó. Inténtalo de nuevo.')
+      try { localStorage.removeItem(PENDING_KEY) } catch { /* ignore */ }
+    }
+  }, [])
 
   useEffect(() => {
     if (chosen) return
@@ -102,7 +135,8 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
     mode === 'pickup' || (check?.ok === true && !belowMin && detail.trim().length > 0)
   )
 
-  async function confirm() {
+  // Confirmar el formulario: crea el pedido y arranca el pago.
+  async function goToPayment() {
     if (!canContinue || placing || !cart.locationId) return
     setPlacing(true); setPlaceError(null)
     const payload: ShopOrderPayload = {
@@ -119,19 +153,37 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
         note: notes.trim(),
       },
       expectedTime: timeMode === 'scheduled' ? slotTs : null,
-      payment: { mode: 'simulated' },
+      payment: { mode: 'stripe' },
       lines: cart.lines.map((l) => l.order),
     }
     try {
       const res = await placeShopOrder(slug, payload, false)
-      if (!res.ok) { setPlaceError('No se pudo confirmar el pedido. Inténtalo de nuevo.'); return }
-      setPlaced(res)
-      clear()
+      if (!res.ok || !res.saleId) { setPlaceError('No se pudo crear el pedido. Inténtalo de nuevo.'); return }
+      const pi = await createShopPaymentIntent(res.saleId)
+      if (!pi.ok || !pi.clientSecret || !pi.connectedAccountId) {
+        setPlaceError('No se pudo iniciar el pago. Inténtalo de nuevo.'); return
+      }
+      setPayCtx({
+        clientSecret: pi.clientSecret,
+        connectedAccountId: pi.connectedAccountId,
+        saleId: res.saleId,
+        code: res.code ?? '',
+        total: res.total ?? grandTotal,
+      })
+      setStage('pay')
     } catch {
-      setPlaceError('No se pudo confirmar el pedido. Inténtalo de nuevo.')
+      setPlaceError('No se pudo iniciar el pago. Inténtalo de nuevo.')
     } finally {
       setPlacing(false)
     }
+  }
+
+  function handlePaid() {
+    try { localStorage.removeItem(PENDING_KEY) } catch { /* ignore */ }
+    setPlaced({ code: pay?.code, total: pay?.total })
+    setStage('form')
+    setPayCtx(null)
+    clear()
   }
 
   const summaryLines = (
@@ -154,7 +206,7 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
     </>
   )
 
-  // Pantalla de confirmación (tras crear el pedido)
+  // Pantalla de confirmación (tras pagar)
   if (placed) {
     return (
       <div style={s.page}>
@@ -167,12 +219,35 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
                 ? 'Te avisaremos cuando esté listo para recoger.'
                 : 'Lo estamos preparando y saldrá hacia tu dirección.'}
             </p>
-            <div style={s.successCode}>
-              <span style={s.successCodeLabel}>Código de pedido</span>
-              <span style={s.successCodeNum}>{placed.code}</span>
-            </div>
+            {placed.code ? (
+              <div style={s.successCode}>
+                <span style={s.successCodeLabel}>Código de pedido</span>
+                <span style={s.successCodeNum}>{placed.code}</span>
+              </div>
+            ) : null}
             {placed.total != null && <div style={s.successTotal}>Total {eur(placed.total)}</div>}
             <button style={s.successBtn} onClick={onBack}>Volver a la tienda</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Etapa de pago (Payment Element)
+  if (stage === 'pay' && pay) {
+    return (
+      <div style={s.page}>
+        <header style={s.header}>
+          <button style={s.back} onClick={() => { setStage('form'); setPayCtx(null) }}>{'\u2190'} Volver al pedido</button>
+        </header>
+        <div style={s.payWrap}>
+          <div style={s.payCard}>
+            <h2 style={s.payTitle}>Pago seguro</h2>
+            <div style={s.payTotalRow}>
+              <span>Total a pagar</span>
+              <span style={s.payTotalNum}>{eur(pay.total)}</span>
+            </div>
+            <PaymentSection pay={pay} mode={mode} onPaid={handlePaid} />
           </div>
         </div>
       </div>
@@ -315,9 +390,9 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
             </div>
           </section>
 
-          <section style={{ ...s.card, ...s.next }}>
+          <section style={s.card}>
             <h2 style={s.h2}>¿Cómo pagas?</h2>
-            <p style={s.muted}>Tarjeta, Bizum y wallets — próximamente. En esta versión el pedido se registra al confirmar (pago simulado).</p>
+            <p style={s.muted}>Pago seguro con tarjeta o Bizum. Al pulsar «Ir a pagar» completas el pedido en una pantalla protegida por Stripe.</p>
           </section>
         </main>
 
@@ -330,9 +405,9 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
           <button
             style={{ ...s.cta, ...(canContinue && !placing ? {} : s.ctaOff) }}
             disabled={!canContinue || placing}
-            onClick={confirm}
+            onClick={goToPayment}
           >
-            {placing ? 'Enviando…' : 'Confirmar pedido'}
+            {placing ? 'Un momento…' : 'Ir a pagar'}
           </button>
           {placeError && <div style={s.placeErr}>{placeError}</div>}
         </aside>
@@ -354,9 +429,9 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
           <button
             style={{ ...s.mobileCta, ...(canContinue && !placing ? {} : s.ctaOff) }}
             disabled={!canContinue || placing}
-            onClick={confirm}
+            onClick={goToPayment}
           >
-            {placing ? '…' : 'Confirmar'}
+            {placing ? '…' : 'Ir a pagar'}
           </button>
         </div>
       </div>
@@ -372,6 +447,86 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
           .ck-mobilebar { display: none !important; }
         }
       `}</style>
+    </div>
+  )
+}
+
+// ── Sección de pago (Payment Element de Stripe) ─────────────────────────
+//
+// Para direct charges, Stripe.js se inicializa con la cuenta CONECTADA
+// (stripeAccount). La clave publicable es la de la PLATAFORMA.
+
+function PaymentSection({ pay, mode, onPaid }: { pay: PayContext; mode: Mode; onPaid: () => void }) {
+  const pk = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY as string | undefined
+  const stripePromise = useMemo(
+    () => (pk ? loadStripe(pk, { stripeAccount: pay.connectedAccountId }) : null),
+    [pk, pay.connectedAccountId],
+  )
+
+  if (!pk || !stripePromise) {
+    return <div style={s.payErr}>Falta configurar la clave pública de Stripe (VITE_STRIPE_PUBLISHABLE_KEY).</div>
+  }
+
+  return (
+    <Elements
+      stripe={stripePromise}
+      options={{
+        clientSecret: pay.clientSecret,
+        locale: 'es',
+        appearance: {
+          theme: 'stripe',
+          variables: { colorPrimary: C.accent, borderRadius: '12px', fontSizeBase: '15px' },
+        },
+      }}
+    >
+      <PaymentForm pay={pay} mode={mode} onPaid={onPaid} />
+    </Elements>
+  )
+}
+
+function PaymentForm({ pay, mode, onPaid }: { pay: PayContext; mode: Mode; onPaid: () => void }) {
+  const stripe = useStripe()
+  const elements = useElements()
+  const [paying, setPaying] = useState(false)
+  const [ready, setReady] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  async function doPay() {
+    if (!stripe || !elements || paying) return
+    setPaying(true); setErr(null)
+    // Persistimos el pedido pendiente por si el método redirige (Bizum).
+    try {
+      localStorage.setItem(PENDING_KEY, JSON.stringify({ code: pay.code, total: pay.total, mode }))
+    } catch { /* ignore */ }
+
+    const { error } = await stripe.confirmPayment({
+      elements,
+      confirmParams: { return_url: window.location.href.split('?')[0] },
+      redirect: 'if_required',
+    })
+
+    if (error) {
+      setErr(error.message ?? 'No se pudo completar el pago.')
+      setPaying(false)
+      try { localStorage.removeItem(PENDING_KEY) } catch { /* ignore */ }
+      return
+    }
+    // Métodos sin redirección (tarjeta): éxito inline.
+    onPaid()
+  }
+
+  return (
+    <div>
+      <PaymentElement onReady={() => setReady(true)} />
+      {err && <div style={s.payErr}>{err}</div>}
+      <button
+        style={{ ...s.payBtn, ...(ready && !paying ? {} : s.ctaOff) }}
+        disabled={!ready || paying}
+        onClick={doPay}
+      >
+        {paying ? 'Procesando…' : `Pagar ${eur(pay.total)}`}
+      </button>
+      <p style={s.paySafe}>Pago cifrado y procesado por Stripe.</p>
     </div>
   )
 }
@@ -445,6 +600,16 @@ const s: Record<string, React.CSSProperties> = {
   mobileTotalLabel: { display: 'block', fontSize: 11, color: C.inkFaint },
   mobileTotalNum: { display: 'block', fontSize: 17, fontWeight: 900, letterSpacing: '-.02em', color: C.ink },
   mobileCta: { background: C.accent, color: '#fff', border: 'none', borderRadius: 999, padding: '11px 20px', fontWeight: 800, fontSize: 14, cursor: 'pointer', flexShrink: 0 },
+
+  // Pago
+  payWrap: { maxWidth: 560, margin: '0 auto', padding: '8px 22px 48px' },
+  payCard: { background: C.surface, border: `1px solid ${C.line}`, borderRadius: 20, padding: '24px 24px 28px' },
+  payTitle: { fontSize: 20, fontWeight: 900, letterSpacing: '-.02em', margin: '0 0 14px' },
+  payTotalRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 14, color: C.inkDim, paddingBottom: 16, marginBottom: 16, borderBottom: `1px solid ${C.line}` },
+  payTotalNum: { fontSize: 22, fontWeight: 900, letterSpacing: '-.02em', color: C.ink },
+  payBtn: { width: '100%', background: C.accent, color: '#fff', border: 'none', borderRadius: 999, padding: '14px', fontWeight: 800, fontSize: 15, cursor: 'pointer', marginTop: 18 },
+  payErr: { marginTop: 14, fontSize: 13, fontWeight: 700, color: C.red, background: C.redBg, borderRadius: 11, padding: '11px 13px', textAlign: 'center' },
+  paySafe: { textAlign: 'center', fontSize: 11.5, color: C.inkFaint, marginTop: 12 },
 
   // Confirmación
   successWrap: { maxWidth: 560, margin: '0 auto', padding: '48px 22px', display: 'flex', justifyContent: 'center' },
