@@ -13,6 +13,7 @@ import type { Account, AccountStatus, AccountUpdate } from '@/types/multitenancy
 import { getCatalog, getAccountItems, setAccountModules, type CatalogModule } from '@/platform/accountModulesService'
 import { getAccountDiscount, setAccountDiscount, clearAccountDiscount, type AccountDiscount } from '@/admin/services/pricingService'
 import IntegrationsSection from '@/admin/components/IntegrationsSection'
+import StripeConnectSection from '@/admin/components/StripeConnectSection'
 import AccountLogoUploader from '@/admin/components/AccountLogoUploader'
 
 type LoadState =
@@ -521,6 +522,9 @@ export default function CuentaDetallePage() {
           </div>
         </div>
       </section>
+
+      {/* Cobros (Stripe Connect): conectar cuenta del restaurante + comisión */}
+      {accountId && <StripeConnectSection accountId={accountId} />}
 
       {/* Integraciones Last.app (onboarding multi-TPV, solo Folvy) */}
       {accountId && <IntegrationsSection accountId={accountId} />}

@@ -703,7 +703,11 @@ export type Database = {
           shop_tagline: string | null
           slug: string
           status: string
+          shop_fee_bps: number
+          stripe_account_id: string | null
+          stripe_charges_enabled: boolean
           stripe_customer_id: string | null
+          stripe_details_submitted: boolean
           suspended_at: string | null
           suspended_by: string | null
           suspension_reason: string | null
@@ -734,7 +738,11 @@ export type Database = {
           shop_tagline?: string | null
           slug: string
           status?: string
+          shop_fee_bps?: number
+          stripe_account_id?: string | null
+          stripe_charges_enabled?: boolean
           stripe_customer_id?: string | null
+          stripe_details_submitted?: boolean
           suspended_at?: string | null
           suspended_by?: string | null
           suspension_reason?: string | null
@@ -765,7 +773,11 @@ export type Database = {
           shop_tagline?: string | null
           slug?: string
           status?: string
+          shop_fee_bps?: number
+          stripe_account_id?: string | null
+          stripe_charges_enabled?: boolean
           stripe_customer_id?: string | null
+          stripe_details_submitted?: boolean
           suspended_at?: string | null
           suspended_by?: string | null
           suspension_reason?: string | null
