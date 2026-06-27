@@ -11,6 +11,15 @@
 // el AppContext, que a su vez persiste en localStorage. Cualquier componente
 // que use useLocationScope() recibe el nuevo valor automáticamente.
 //
+// ESTADO DE CARGA (fix timing): el AppContext arranca `locations` desde la
+// caché de localStorage y la rellena después con la sync de Supabase. Si la
+// caché está vacía (sesión nueva, otro dispositivo), durante ese instante el
+// selector mostraría engañosamente solo "Todos los locales" — el cliente cree
+// que no tiene sus locales. Para evitarlo: si hay cuenta activa, la nube está
+// habilitada y aún no han llegado locales (lista vacía + sync en curso o sin
+// primer sync), mostramos "Cargando locales…" deshabilitado en vez del estado
+// engañoso. En cuanto llegan, se pinta el selector normal.
+//
 // COMPONENTE PURO: no hace queries, no lee Supabase, no maneja estado propio.
 // Solo lee del context y delega cambios al setter.
 
@@ -28,8 +37,15 @@ interface LocationSelectorProps {
  * Para accesibilidad, usa aria-label.
  */
 export default function LocationSelector({ className = '' }: LocationSelectorProps) {
-  const { locations } = useApp()
+  const { locations, cloudEnabled, syncing, lastSync, activeAccountId } = useApp()
   const { activeLocationId, setActiveLocationId } = useLocationScope()
+
+  const baseClass =
+    'border border-border-default rounded-md px-2 py-1 text-xs ' +
+    'bg-card text-text-primary cursor-pointer ' +
+    'focus:outline-none focus:ring-1 focus:ring-accent ' +
+    'max-w-[180px] truncate ' +
+    className
 
   // Locaciones activas, ordenadas alfabéticamente.
   // - Si una location tiene active=false, no la mostramos (no es selecionable).
@@ -38,19 +54,29 @@ export default function LocationSelector({ className = '' }: LocationSelectorPro
     .filter((l) => l.active !== false)
     .sort((a, b) => a.name.localeCompare(b.name, 'es'))
 
+  // ¿Estamos aún cargando los locales de la cuenta? Hay cuenta activa y nube,
+  // pero no hay locales todavía y la sync no ha terminado su primer ciclo.
+  const stillLoading =
+    cloudEnabled &&
+    !!activeAccountId &&
+    sortedLocations.length === 0 &&
+    (syncing || lastSync === null)
+
+  if (stillLoading) {
+    return (
+      <select aria-label="Cargando locales" title="Cargando locales" disabled className={baseClass}>
+        <option>Cargando locales…</option>
+      </select>
+    )
+  }
+
   return (
     <select
       aria-label="Local activo"
       title="Local activo"
       value={activeLocationId}
       onChange={(e) => setActiveLocationId(e.target.value)}
-      className={
-        'border border-border-default rounded-md px-2 py-1 text-xs ' +
-        'bg-card text-text-primary cursor-pointer ' +
-        'focus:outline-none focus:ring-1 focus:ring-accent ' +
-        'max-w-[180px] truncate ' +
-        className
-      }
+      className={baseClass}
     >
       <option value="all">Todos los locales</option>
       {sortedLocations.map((loc) => (
