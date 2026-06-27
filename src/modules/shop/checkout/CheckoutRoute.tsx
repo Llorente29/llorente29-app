@@ -1,17 +1,22 @@
 // src/modules/shop/checkout/CheckoutRoute.tsx
 //
 // Checkout de Folvy Shop — estilo B (moderno, una sola pagina, responsive).
-// Secciones apiladas (Entrega · Hora · Pago) en una pagina con scroll.
-// Direccion con AUTOCOMPLETE (debounce, sin boton Buscar) reutilizando
+// Secciones apiladas (Entrega · Hora · Quien recibe · Pago) en una pagina con
+// scroll. Direccion con AUTOCOMPLETE (debounce, sin boton Buscar) reutilizando
 // geocodeAddress (Mapbox) + validacion de zona (shop_check_delivery).
 // Resumen sticky en escritorio; barra inferior fija desplegable en movil.
 //
-// Tramo actual: ENTREGA vivo (modo, autocomplete, validacion, minimo).
-// Hora y Pago son secciones presentes, se rellenan en los siguientes tramos.
+// Al confirmar: crea el pedido por la via canonica (place_shop_order →
+// sale source='folvy_shop', order_status='new'). El precio se RECALCULA en
+// servidor (el front no fija precio). Pago simulado en esta version; Stripe se
+// enchufa por encima despues.
 
 import { useEffect, useRef, useState } from 'react'
 import { useShopCart } from '@/modules/shop/cart/ShopCartContext'
-import { geocodeAddress, checkDelivery, getDeliverySlots, type GeocodeHit, type DeliveryCheck, type DeliverySlot } from '@/modules/shop/checkout/checkoutService'
+import {
+  geocodeAddress, checkDelivery, getDeliverySlots, placeShopOrder,
+  type GeocodeHit, type DeliveryCheck, type DeliverySlot, type ShopOrderPayload, type PlaceOrderResult,
+} from '@/modules/shop/checkout/checkoutService'
 
 const C = {
   page: '#F7F7F5', surface: '#FFFFFF', ink: '#16140F', inkDim: '#6E6960', inkFaint: '#8A857C',
@@ -24,7 +29,7 @@ function eur(n: number): string { return n.toFixed(2).replace('.', ',') + ' \u20
 type Mode = 'delivery' | 'pickup'
 
 export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: () => void }) {
-  const { cart, totals } = useShopCart()
+  const { cart, totals, clear } = useShopCart()
   const [mode, setMode] = useState<Mode>('delivery')
 
   const [query, setQuery] = useState('')
@@ -42,6 +47,13 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
   const [slots, setSlots] = useState<DeliverySlot[]>([])
   const [slotTs, setSlotTs] = useState<string | null>(null)
   const [loadingSlots, setLoadingSlots] = useState(false)
+
+  // Contacto + envío del pedido
+  const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [placing, setPlacing] = useState(false)
+  const [placed, setPlaced] = useState<PlaceOrderResult | null>(null)
+  const [placeError, setPlaceError] = useState<string | null>(null)
 
   const debounceRef = useRef<number | null>(null)
 
@@ -85,9 +97,42 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
   const belowMin = mode === 'delivery' && minOrder != null && totals.subtotal < minOrder
   const missingForMin = belowMin && minOrder != null ? minOrder - totals.subtotal : 0
   const timeOk = timeMode === 'asap' || (timeMode === 'scheduled' && slotTs != null)
-  const canContinue = cart.lines.length > 0 && timeOk && (
+  const contactOk = name.trim().length > 1 && phone.replace(/\s+/g, '').length >= 7
+  const canContinue = cart.lines.length > 0 && timeOk && contactOk && (
     mode === 'pickup' || (check?.ok === true && !belowMin && detail.trim().length > 0)
   )
+
+  async function confirm() {
+    if (!canContinue || placing || !cart.locationId) return
+    setPlacing(true); setPlaceError(null)
+    const payload: ShopOrderPayload = {
+      locationId: cart.locationId,
+      mode,
+      customer: { name: name.trim(), phone: phone.trim() },
+      delivery: {
+        address: mode === 'delivery' ? (chosen?.label ?? '') : '',
+        detail: mode === 'delivery' ? detail.trim() : '',
+        lat: chosen?.lat ?? null,
+        lng: chosen?.lng ?? null,
+        zoneId: check?.ok ? check.zoneId : null,
+        deliveryFee,
+        note: notes.trim(),
+      },
+      expectedTime: timeMode === 'scheduled' ? slotTs : null,
+      payment: { mode: 'simulated' },
+      lines: cart.lines.map((l) => l.order),
+    }
+    try {
+      const res = await placeShopOrder(slug, payload, false)
+      if (!res.ok) { setPlaceError('No se pudo confirmar el pedido. Inténtalo de nuevo.'); return }
+      setPlaced(res)
+      clear()
+    } catch {
+      setPlaceError('No se pudo confirmar el pedido. Inténtalo de nuevo.')
+    } finally {
+      setPlacing(false)
+    }
+  }
 
   const summaryLines = (
     <>
@@ -108,6 +153,31 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
       </div>
     </>
   )
+
+  // Pantalla de confirmación (tras crear el pedido)
+  if (placed) {
+    return (
+      <div style={s.page}>
+        <div style={s.successWrap}>
+          <div style={s.successCard}>
+            <div style={s.successCheck}>{'\u2713'}</div>
+            <h1 style={s.successTitle}>¡Pedido confirmado!</h1>
+            <p style={s.successMsg}>
+              {mode === 'pickup'
+                ? 'Te avisaremos cuando esté listo para recoger.'
+                : 'Lo estamos preparando y saldrá hacia tu dirección.'}
+            </p>
+            <div style={s.successCode}>
+              <span style={s.successCodeLabel}>Código de pedido</span>
+              <span style={s.successCodeNum}>{placed.code}</span>
+            </div>
+            {placed.total != null && <div style={s.successTotal}>Total {eur(placed.total)}</div>}
+            <button style={s.successBtn} onClick={onBack}>Volver a la tienda</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div style={s.page}>
@@ -237,9 +307,17 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
             )}
           </section>
 
+          <section style={s.card}>
+            <h2 style={s.h2}>¿Quién recibe?</h2>
+            <div style={s.detailRow}>
+              <input style={s.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre y apellidos" autoComplete="name" />
+              <input style={s.input} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Teléfono de contacto" inputMode="tel" autoComplete="tel" />
+            </div>
+          </section>
+
           <section style={{ ...s.card, ...s.next }}>
             <h2 style={s.h2}>¿Cómo pagas?</h2>
-            <p style={s.muted}>Siguiente paso (tarjeta, Bizum y wallets).</p>
+            <p style={s.muted}>Tarjeta, Bizum y wallets — próximamente. En esta versión el pedido se registra al confirmar (pago simulado).</p>
           </section>
         </main>
 
@@ -249,7 +327,14 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
           {summaryLines}
           <div style={s.sumTotal}><span>Total</span><span>{eur(grandTotal)}</span></div>
           {belowMin && <div style={s.belowMin}>Te faltan <strong>{eur(missingForMin)}</strong> para el mínimo de {eur(minOrder!)}.</div>}
-          <button style={{ ...s.cta, ...(canContinue ? {} : s.ctaOff) }} disabled={!canContinue}>Confirmar pedido</button>
+          <button
+            style={{ ...s.cta, ...(canContinue && !placing ? {} : s.ctaOff) }}
+            disabled={!canContinue || placing}
+            onClick={confirm}
+          >
+            {placing ? 'Enviando…' : 'Confirmar pedido'}
+          </button>
+          {placeError && <div style={s.placeErr}>{placeError}</div>}
         </aside>
       </div>
 
@@ -260,12 +345,19 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
             {belowMin && <div style={s.belowMin}>Te faltan <strong>{eur(missingForMin)}</strong> para el mínimo.</div>}
           </div>
         )}
+        {placeError && <div style={{ ...s.placeErr, marginBottom: 8 }}>{placeError}</div>}
         <div style={s.mobileBarRow}>
           <button style={s.mobileTotal} onClick={() => setExpandSummary((v) => !v)}>
             <span style={s.mobileTotalLabel}>Total {'\u00B7'} {totals.itemsCount} art. {expandSummary ? '\u2304' : '\u2303'}</span>
             <span style={s.mobileTotalNum}>{eur(grandTotal)}</span>
           </button>
-          <button style={{ ...s.mobileCta, ...(canContinue ? {} : s.ctaOff) }} disabled={!canContinue}>Confirmar</button>
+          <button
+            style={{ ...s.mobileCta, ...(canContinue && !placing ? {} : s.ctaOff) }}
+            disabled={!canContinue || placing}
+            onClick={confirm}
+          >
+            {placing ? '…' : 'Confirmar'}
+          </button>
         </div>
       </div>
 
@@ -344,6 +436,7 @@ const s: Record<string, React.CSSProperties> = {
   belowMin: { fontSize: 12.5, color: C.amber, background: C.amberBg, borderRadius: 11, padding: '10px 12px', marginBottom: 12 },
   cta: { width: '100%', background: C.accent, color: '#fff', border: 'none', borderRadius: 999, padding: '13px', fontWeight: 800, fontSize: 14.5, cursor: 'pointer' },
   ctaOff: { background: '#C9C5BD', cursor: 'not-allowed' },
+  placeErr: { marginTop: 10, fontSize: 12.5, fontWeight: 700, color: C.red, background: C.redBg, borderRadius: 11, padding: '10px 12px', textAlign: 'center' },
 
   mobileBar: { position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 50, padding: 12, display: 'none' },
   mobileSheet: { background: '#fff', border: `1px solid ${C.lineInput}`, borderRadius: 16, padding: '14px 16px', marginBottom: 8, boxShadow: '0 -4px 20px rgba(0,0,0,.1)' },
@@ -352,4 +445,16 @@ const s: Record<string, React.CSSProperties> = {
   mobileTotalLabel: { display: 'block', fontSize: 11, color: C.inkFaint },
   mobileTotalNum: { display: 'block', fontSize: 17, fontWeight: 900, letterSpacing: '-.02em', color: C.ink },
   mobileCta: { background: C.accent, color: '#fff', border: 'none', borderRadius: 999, padding: '11px 20px', fontWeight: 800, fontSize: 14, cursor: 'pointer', flexShrink: 0 },
+
+  // Confirmación
+  successWrap: { maxWidth: 560, margin: '0 auto', padding: '48px 22px', display: 'flex', justifyContent: 'center' },
+  successCard: { background: C.surface, border: `1px solid ${C.line}`, borderRadius: 20, padding: '36px 28px', textAlign: 'center', width: '100%' },
+  successCheck: { width: 64, height: 64, borderRadius: '50%', background: C.greenBg, color: C.green, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 34, fontWeight: 800, margin: '0 auto 16px' },
+  successTitle: { fontSize: 24, fontWeight: 900, letterSpacing: '-.02em', margin: '0 0 8px' },
+  successMsg: { fontSize: 14, color: C.inkDim, lineHeight: 1.5, margin: '0 0 20px' },
+  successCode: { display: 'flex', flexDirection: 'column', gap: 4, background: '#FAFAF8', border: `1px solid ${C.line}`, borderRadius: 14, padding: '14px 16px', marginBottom: 14 },
+  successCodeLabel: { fontSize: 11, color: C.inkFaint, textTransform: 'uppercase', letterSpacing: '.04em', fontWeight: 700 },
+  successCodeNum: { fontSize: 22, fontWeight: 900, letterSpacing: '-.01em', color: C.ink },
+  successTotal: { fontSize: 16, fontWeight: 900, marginBottom: 20 },
+  successBtn: { background: C.accent, color: '#fff', border: 'none', borderRadius: 999, padding: '13px 22px', fontWeight: 800, fontSize: 14.5, cursor: 'pointer' },
 }

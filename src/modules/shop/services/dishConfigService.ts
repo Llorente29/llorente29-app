@@ -294,3 +294,66 @@ export function selectionAllergens(config: DishConfig, sel: DishSelection): Alle
   }
   return [...byCode.values()]
 }
+
+// ── Serialización para el pedido (payload canónico de place_shop_order) ──
+//
+// Aplana la selección del usuario a la estructura mínima que la RPC del pedido
+// necesita para REPRECIAR en servidor y crear las líneas canónicas:
+//   menuItemId + quantity + modifiers[] (base) + combo[] (opción de slot + sus
+//   modificadores anidados). NO viajan precios: el servidor los recalcula desde
+//   el catálogo (anti-manipulación). El precio que ve el usuario es informativo.
+
+export interface OrderLineModifier {
+  optionId: string
+  qty: number
+}
+
+export interface OrderLineComboPick {
+  slotId: string
+  menuItemId: string
+  modifiers: OrderLineModifier[]
+}
+
+export interface OrderLine {
+  menuItemId: string
+  name: string
+  productType: 'item' | 'combo'
+  quantity: number
+  modifiers: OrderLineModifier[]   // modificadores del plato base
+  combo: OrderLineComboPick[]      // opciones de slot elegidas + sus modificadores
+}
+
+/** Convierte (config + selección) en la línea canónica del pedido. */
+export function toOrderLine(config: DishConfig, sel: DishSelection): OrderLine {
+  const baseMods: OrderLineModifier[] = []
+  for (const g of config.modifierGroups) {
+    for (const c of (sel.baseMods[g.id] ?? [])) {
+      baseMods.push({ optionId: c.optionId, qty: c.qty })
+    }
+  }
+
+  const combo: OrderLineComboPick[] = []
+  for (const slot of config.slots) {
+    for (const itemId of (sel.slotChoices[slot.id] ?? [])) {
+      const opt = slot.options.find((o) => o.menuItemId === itemId)
+      const nested: OrderLineModifier[] = []
+      if (opt) {
+        for (const g of opt.modifierGroups) {
+          for (const c of (sel.nestedMods[nestedKey(slot.id, itemId, g.id)] ?? [])) {
+            nested.push({ optionId: c.optionId, qty: c.qty })
+          }
+        }
+      }
+      combo.push({ slotId: slot.id, menuItemId: itemId, modifiers: nested })
+    }
+  }
+
+  return {
+    menuItemId: config.id,
+    name: config.name,
+    productType: config.productType,
+    quantity: Math.max(1, sel.quantity),
+    modifiers: baseMods,
+    combo,
+  }
+}

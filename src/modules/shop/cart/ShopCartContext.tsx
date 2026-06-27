@@ -5,6 +5,10 @@
 // ese local (regla dura "mismo local = una entrega", patrón Otter Multi-Store /
 // Glovo / Uber). Persistente en localStorage por slug.
 //
+// Cada línea conserva además su payload canónico de pedido (`order`), generado
+// al añadir desde (config + selección). Ese payload es lo que el checkout manda
+// a place_shop_order para REPRECIAR en servidor y crear las líneas canónicas.
+//
 // ANCLAS DE DISEÑO previstas (huecos estructurales, no construidos aún; aquí
 // para que enchufarlos luego no rompa nada):
 //   - descuentos/promos: CartTotals.discount + por línea line.discount
@@ -15,6 +19,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { ConfiguredLine } from '@/modules/shop/components/DishConfigModal'
+import { toOrderLine, type OrderLine } from '@/modules/shop/services/dishConfigService'
 
 // ── Modelo ──────────────────────────────────────────────────────────────
 
@@ -29,6 +34,7 @@ export interface CartLine {
   quantity: number
   summary: string[]              // configuración elegida, líneas legibles
   allergens: { code: string; nameEs: string }[]
+  order: OrderLine               // payload canónico para place_shop_order (reprecio server-side)
   discount?: number              // ANCLA promos: descuento € sobre esta línea (futuro)
 }
 
@@ -67,7 +73,11 @@ function loadCart(slug: string): ShopCart {
     const raw = localStorage.getItem(storageKey(slug))
     if (raw) {
       const parsed = JSON.parse(raw) as ShopCart
-      if (parsed && parsed.slug === slug && Array.isArray(parsed.lines)) return parsed
+      if (parsed && parsed.slug === slug && Array.isArray(parsed.lines)) {
+        // Descarta líneas de versiones antiguas sin payload canónico (no se pueden pedir).
+        const lines = parsed.lines.filter((l) => l && (l as CartLine).order != null)
+        return { slug, locationId: lines.length === 0 ? null : parsed.locationId, lines }
+      }
     }
   } catch { /* ignore */ }
   return { slug, locationId: null, lines: [] }
@@ -112,6 +122,7 @@ export function ShopCartProvider({ slug, children }: { slug: string; children: R
         quantity: line.quantity,
         summary: line.summary,
         allergens: line.allergens.map((a) => ({ code: a.code, nameEs: a.nameEs })),
+        order: toOrderLine(line.config, line.selection),
       }
       return { ...prev, locationId: locId, lines: [...prev.lines, newLine] }
     })
@@ -121,7 +132,9 @@ export function ShopCartProvider({ slug, children }: { slug: string; children: R
   function setLineQty(lineId: string, qty: number) {
     setCart((prev) => ({
       ...prev,
-      lines: prev.lines.map((l) => l.lineId === lineId ? { ...l, quantity: Math.max(1, qty) } : l),
+      lines: prev.lines.map((l) => l.lineId === lineId
+        ? { ...l, quantity: Math.max(1, qty), order: { ...l.order, quantity: Math.max(1, qty) } }
+        : l),
     }))
   }
 
