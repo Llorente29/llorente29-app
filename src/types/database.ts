@@ -704,6 +704,9 @@ export type Database = {
           slug: string
           status: string
           shop_fee_bps: number
+          shop_pay_cash_delivery: boolean
+          shop_pay_cash_pickup: boolean
+          shop_pay_online: boolean
           stripe_account_id: string | null
           stripe_charges_enabled: boolean
           stripe_customer_id: string | null
@@ -739,6 +742,9 @@ export type Database = {
           slug: string
           status?: string
           shop_fee_bps?: number
+          shop_pay_cash_delivery?: boolean
+          shop_pay_cash_pickup?: boolean
+          shop_pay_online?: boolean
           stripe_account_id?: string | null
           stripe_charges_enabled?: boolean
           stripe_customer_id?: string | null
@@ -774,6 +780,9 @@ export type Database = {
           slug?: string
           status?: string
           shop_fee_bps?: number
+          shop_pay_cash_delivery?: boolean
+          shop_pay_cash_pickup?: boolean
+          shop_pay_online?: boolean
           stripe_account_id?: string | null
           stripe_charges_enabled?: boolean
           stripe_customer_id?: string | null

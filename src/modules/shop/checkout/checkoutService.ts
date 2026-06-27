@@ -72,7 +72,7 @@ export interface ShopOrderPayload {
     note: string
   }
   expectedTime: string | null            // ISO; null = lo antes posible
-  payment: { mode: 'simulated' | 'stripe' }
+  payment: { mode: 'simulated' | 'stripe' | 'cash' }
   lines: OrderLine[]
 }
 
@@ -136,5 +136,31 @@ export async function createShopPaymentIntent(saleId: string): Promise<PaymentIn
     connectedAccountId: data.connectedAccountId,
     amount: data.amount != null ? Number(data.amount) : undefined,
     paymentIntentId: data.paymentIntentId,
+  }
+}
+
+// ── Config de métodos de pago del Shop (tienda pública, por slug) ────────
+
+export interface ShopPaymentConfig {
+  online: boolean
+  cashPickup: boolean
+  cashDelivery: boolean
+}
+
+/**
+ * Lee qué métodos de pago acepta la tienda (rpc pública shop_payment_config).
+ * Si falla, devuelve un fallback seguro: solo online (nunca abre efectivo por error).
+ */
+export async function getShopPaymentConfig(slug: string): Promise<ShopPaymentConfig> {
+  try {
+    const { data, error } = await db().rpc('shop_payment_config', { p_slug: slug })
+    if (error || !data || data.ok !== true) return { online: true, cashPickup: false, cashDelivery: false }
+    return {
+      online: data.online !== false,
+      cashPickup: data.cashPickup === true,
+      cashDelivery: data.cashDelivery === true,
+    }
+  } catch {
+    return { online: true, cashPickup: false, cashDelivery: false }
   }
 }

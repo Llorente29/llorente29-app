@@ -17,7 +17,8 @@ import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-
 import { useShopCart } from '@/modules/shop/cart/ShopCartContext'
 import {
   geocodeAddress, checkDelivery, getDeliverySlots, placeShopOrder, createShopPaymentIntent,
-  type GeocodeHit, type DeliveryCheck, type DeliverySlot, type ShopOrderPayload,
+  getShopPaymentConfig,
+  type GeocodeHit, type DeliveryCheck, type DeliverySlot, type ShopOrderPayload, type ShopPaymentConfig,
 } from '@/modules/shop/checkout/checkoutService'
 
 const C = {
@@ -68,6 +69,15 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
   const [stage, setStage] = useState<'form' | 'pay'>('form')
   const [pay, setPayCtx] = useState<PayContext | null>(null)
   const [placed, setPlaced] = useState<{ code?: string; total?: number } | null>(null)
+
+  // Métodos de pago que ofrece esta tienda (configurable por cuenta).
+  const [payConfig, setPayConfig] = useState<ShopPaymentConfig>({ online: true, cashPickup: false, cashDelivery: false })
+
+  useEffect(() => {
+    let alive = true
+    getShopPaymentConfig(slug).then((c) => { if (alive) setPayConfig(c) }).catch(() => {})
+    return () => { alive = false }
+  }, [slug])
 
   const debounceRef = useRef<number | null>(null)
 
@@ -135,8 +145,12 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
     mode === 'pickup' || (check?.ok === true && !belowMin && detail.trim().length > 0)
   )
 
-  // Confirmar el formulario: crea el pedido y arranca el pago.
-  async function goToPayment() {
+  // ¿Qué métodos hay disponibles para el modo de entrega elegido?
+  const cashAvailable = mode === 'pickup' ? payConfig.cashPickup : payConfig.cashDelivery
+  const onlineAvailable = payConfig.online
+
+  // Confirmar el formulario. method = 'online' (Stripe) | 'cash' (efectivo).
+  async function goToPayment(method: 'online' | 'cash' = 'online') {
     if (!canContinue || placing || !cart.locationId) return
     setPlacing(true); setPlaceError(null)
     const payload: ShopOrderPayload = {
@@ -153,12 +167,22 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
         note: notes.trim(),
       },
       expectedTime: timeMode === 'scheduled' ? slotTs : null,
-      payment: { mode: 'stripe' },
+      payment: { mode: method === 'cash' ? 'cash' : 'stripe' },
       lines: cart.lines.map((l) => l.order),
     }
     try {
       const res = await placeShopOrder(slug, payload, false)
       if (!res.ok || !res.saleId) { setPlaceError('No se pudo crear el pedido. Inténtalo de nuevo.'); return }
+
+      // EFECTIVO: el pedido nace aceptado (entra en cocina). No hay pago online;
+      // vamos directos a la confirmación.
+      if (method === 'cash') {
+        setPlaced({ code: res.code, total: res.total ?? grandTotal })
+        clear()
+        return
+      }
+
+      // ONLINE: crear el PaymentIntent y pasar a la etapa de pago.
       const pi = await createShopPaymentIntent(res.saleId)
       if (!pi.ok || !pi.clientSecret || !pi.connectedAccountId) {
         setPlaceError('No se pudo iniciar el pago. Inténtalo de nuevo.'); return
@@ -274,7 +298,7 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
           <section style={s.card}>
             <div style={s.modePill}>
               <button style={{ ...s.modeOpt, ...(mode === 'delivery' ? s.modeOptOn : {}) }} onClick={() => setMode('delivery')}>A domicilio</button>
-              <button style={{ ...s.modeOpt, ...(mode === 'pickup' ? s.modeOptOn : {}) }} onClick={() => setMode('pickup')}>Para llevar</button>
+              <button style={{ ...s.modeOpt, ...(mode === 'pickup' ? s.modeOptOn : {}) }} onClick={() => setMode('pickup')}>Recoger en el local</button>
             </div>
 
             {mode === 'delivery' ? (
@@ -313,7 +337,7 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
                 {check && !check.ok && (
                   <div style={s.noBox}>
                     {check.reason === 'out_of_zone'
-                      ? 'Este local no reparte en esa dirección. Prueba “Para llevar” u otra dirección.'
+                      ? 'Este local no reparte en esa dirección. Prueba “Recoger en el local” u otra dirección.'
                       : 'No se pudo comprobar la dirección. Inténtalo de nuevo.'}
                   </div>
                 )}
@@ -327,7 +351,7 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
               </>
             ) : (
               <>
-                <h2 style={s.h2}>Para llevar</h2>
+                <h2 style={s.h2}>Recoger en el local</h2>
                 <p style={s.muted}>Recoges en el local. La dirección de recogida se mostrará al confirmar.</p>
               </>
             )}
@@ -392,7 +416,15 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
 
           <section style={s.card}>
             <h2 style={s.h2}>¿Cómo pagas?</h2>
-            <p style={s.muted}>Pago seguro con tarjeta o Bizum. Al pulsar «Ir a pagar» completas el pedido en una pantalla protegida por Stripe.</p>
+            {onlineAvailable && cashAvailable ? (
+              <p style={s.muted}>Puedes pagar online (tarjeta o Bizum) de forma segura, o en efectivo {mode === 'pickup' ? 'al recoger' : 'a la entrega'}. Elige abajo.</p>
+            ) : onlineAvailable ? (
+              <p style={s.muted}>Pago seguro con tarjeta o Bizum. Al pulsar «Ir a pagar» completas el pedido en una pantalla protegida por Stripe.</p>
+            ) : cashAvailable ? (
+              <p style={s.muted}>Pago en efectivo {mode === 'pickup' ? 'al recoger el pedido' : 'a la entrega'}. Confirma y prepararemos tu pedido.</p>
+            ) : (
+              <p style={s.muted}>Esta tienda no tiene métodos de pago disponibles ahora mismo.</p>
+            )}
           </section>
         </main>
 
@@ -402,13 +434,27 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
           {summaryLines}
           <div style={s.sumTotal}><span>Total</span><span>{eur(grandTotal)}</span></div>
           {belowMin && <div style={s.belowMin}>Te faltan <strong>{eur(missingForMin)}</strong> para el mínimo de {eur(minOrder!)}.</div>}
-          <button
-            style={{ ...s.cta, ...(canContinue && !placing ? {} : s.ctaOff) }}
-            disabled={!canContinue || placing}
-            onClick={goToPayment}
-          >
-            {placing ? 'Un momento…' : 'Ir a pagar'}
-          </button>
+          {onlineAvailable && (
+            <button
+              style={{ ...s.cta, ...(canContinue && !placing ? {} : s.ctaOff) }}
+              disabled={!canContinue || placing}
+              onClick={() => goToPayment('online')}
+            >
+              {placing ? 'Un momento…' : 'Ir a pagar'}
+            </button>
+          )}
+          {cashAvailable && (
+            <button
+              style={{ ...(onlineAvailable ? s.ctaCash : s.cta), ...(canContinue && !placing ? {} : s.ctaOff) }}
+              disabled={!canContinue || placing}
+              onClick={() => goToPayment('cash')}
+            >
+              {placing ? 'Un momento…' : (mode === 'pickup' ? 'Pagar en efectivo al recoger' : 'Pagar en efectivo a la entrega')}
+            </button>
+          )}
+          {!onlineAvailable && !cashAvailable && (
+            <div style={s.placeErr}>Esta tienda no tiene métodos de pago disponibles ahora mismo.</div>
+          )}
           {placeError && <div style={s.placeErr}>{placeError}</div>}
         </aside>
       </div>
@@ -426,14 +472,33 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
             <span style={s.mobileTotalLabel}>Total {'\u00B7'} {totals.itemsCount} art. {expandSummary ? '\u2304' : '\u2303'}</span>
             <span style={s.mobileTotalNum}>{eur(grandTotal)}</span>
           </button>
-          <button
-            style={{ ...s.mobileCta, ...(canContinue && !placing ? {} : s.ctaOff) }}
-            disabled={!canContinue || placing}
-            onClick={goToPayment}
-          >
-            {placing ? '…' : 'Ir a pagar'}
-          </button>
+          {onlineAvailable ? (
+            <button
+              style={{ ...s.mobileCta, ...(canContinue && !placing ? {} : s.ctaOff) }}
+              disabled={!canContinue || placing}
+              onClick={() => goToPayment('online')}
+            >
+              {placing ? '…' : 'Ir a pagar'}
+            </button>
+          ) : cashAvailable ? (
+            <button
+              style={{ ...s.mobileCta, ...(canContinue && !placing ? {} : s.ctaOff) }}
+              disabled={!canContinue || placing}
+              onClick={() => goToPayment('cash')}
+            >
+              {placing ? '…' : 'Efectivo'}
+            </button>
+          ) : null}
         </div>
+        {onlineAvailable && cashAvailable && (
+          <button
+            style={{ ...s.mobileCashLink, ...(canContinue && !placing ? {} : s.ctaOff) }}
+            disabled={!canContinue || placing}
+            onClick={() => goToPayment('cash')}
+          >
+            {mode === 'pickup' ? 'Pagar en efectivo al recoger' : 'Pagar en efectivo a la entrega'}
+          </button>
+        )}
       </div>
 
       <style>{`
@@ -590,6 +655,7 @@ const s: Record<string, React.CSSProperties> = {
   sumTotal: { display: 'flex', justifyContent: 'space-between', fontSize: 19, fontWeight: 900, letterSpacing: '-.02em', margin: '8px 0 12px' },
   belowMin: { fontSize: 12.5, color: C.amber, background: C.amberBg, borderRadius: 11, padding: '10px 12px', marginBottom: 12 },
   cta: { width: '100%', background: C.accent, color: '#fff', border: 'none', borderRadius: 999, padding: '13px', fontWeight: 800, fontSize: 14.5, cursor: 'pointer' },
+  ctaCash: { width: '100%', background: '#fff', color: C.ink, border: `1.5px solid ${C.lineInput}`, borderRadius: 999, padding: '12px', fontWeight: 800, fontSize: 14, cursor: 'pointer', marginTop: 8 },
   ctaOff: { background: '#C9C5BD', cursor: 'not-allowed' },
   placeErr: { marginTop: 10, fontSize: 12.5, fontWeight: 700, color: C.red, background: C.redBg, borderRadius: 11, padding: '10px 12px', textAlign: 'center' },
 
@@ -600,6 +666,7 @@ const s: Record<string, React.CSSProperties> = {
   mobileTotalLabel: { display: 'block', fontSize: 11, color: C.inkFaint },
   mobileTotalNum: { display: 'block', fontSize: 17, fontWeight: 900, letterSpacing: '-.02em', color: C.ink },
   mobileCta: { background: C.accent, color: '#fff', border: 'none', borderRadius: 999, padding: '11px 20px', fontWeight: 800, fontSize: 14, cursor: 'pointer', flexShrink: 0 },
+  mobileCashLink: { width: '100%', marginTop: 8, background: '#fff', color: C.ink, border: `1.5px solid ${C.lineInput}`, borderRadius: 999, padding: '11px', fontWeight: 800, fontSize: 13.5, cursor: 'pointer' },
 
   // Pago
   payWrap: { maxWidth: 560, margin: '0 auto', padding: '8px 22px 48px' },

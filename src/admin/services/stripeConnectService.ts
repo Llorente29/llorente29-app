@@ -89,3 +89,40 @@ export async function setShopFeeBps(accountId: string, feeBps: number): Promise<
   const { error } = await db().from('accounts').update({ shop_fee_bps: clamped }).eq('id', accountId)
   if (error) throw new Error(`No se pudo guardar la comisión: ${error.message}`)
 }
+
+// ── Métodos de pago del Shop (configurables por cuenta) ─────────────────
+
+export interface ShopPaymentMethods {
+  /** Acepta pago online (tarjeta/Bizum vía Stripe). */
+  online: boolean
+  /** Acepta efectivo al recoger (pickup). */
+  cashPickup: boolean
+  /** Acepta efectivo contra entrega (delivery). */
+  cashDelivery: boolean
+}
+
+/** Lee qué métodos de pago acepta el Shop de la cuenta (lectura directa, RLS admin). */
+export async function getShopPaymentMethods(accountId: string): Promise<ShopPaymentMethods> {
+  const { data, error } = await db()
+    .from('accounts')
+    .select('shop_pay_online, shop_pay_cash_pickup, shop_pay_cash_delivery')
+    .eq('id', accountId)
+    .maybeSingle()
+  if (error) throw new Error(`No se pudieron leer los métodos de pago: ${error.message}`)
+  const row = (data ?? {}) as Record<string, unknown>
+  return {
+    online: row.shop_pay_online !== false,
+    cashPickup: row.shop_pay_cash_pickup === true,
+    cashDelivery: row.shop_pay_cash_delivery === true,
+  }
+}
+
+/** Guarda los métodos de pago del Shop. Escritura directa (RLS admin). */
+export async function setShopPaymentMethods(accountId: string, m: ShopPaymentMethods): Promise<void> {
+  const { error } = await db().from('accounts').update({
+    shop_pay_online: m.online,
+    shop_pay_cash_pickup: m.cashPickup,
+    shop_pay_cash_delivery: m.cashDelivery,
+  }).eq('id', accountId)
+  if (error) throw new Error(`No se pudieron guardar los métodos de pago: ${error.message}`)
+}

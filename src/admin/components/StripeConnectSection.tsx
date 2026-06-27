@@ -8,10 +8,11 @@
 // pedido entra en SU cuenta; Folvy cobra su comisión vía application_fee.
 
 import { useCallback, useEffect, useState } from 'react'
-import { CreditCard, Loader2, ExternalLink, RefreshCw, CheckCircle2, AlertTriangle, Percent } from 'lucide-react'
+import { CreditCard, Loader2, ExternalLink, RefreshCw, CheckCircle2, AlertTriangle, Percent, Wallet } from 'lucide-react'
 import {
   getStripeState, startStripeOnboarding, refreshStripeState, setShopFeeBps,
-  type StripeState,
+  getShopPaymentMethods, setShopPaymentMethods,
+  type StripeState, type ShopPaymentMethods,
 } from '@/admin/services/stripeConnectService'
 
 type Feedback = { kind: 'ok' | 'error'; msg: string } | null
@@ -25,12 +26,16 @@ export default function StripeConnectSection({ accountId }: { accountId: string 
   // Comisión en % (lo que ve el admin); en BBDD se guarda en bps.
   const [feePct, setFeePct] = useState('')
 
+  // Métodos de pago del Shop (configurables por cuenta).
+  const [methods, setMethods] = useState<ShopPaymentMethods | null>(null)
+
   const reload = useCallback(async () => {
     setLoading(true)
     try {
-      const s = await getStripeState(accountId)
+      const [s, m] = await Promise.all([getStripeState(accountId), getShopPaymentMethods(accountId)])
       setState(s)
       setFeePct((s.feeBps / 100).toString())
+      setMethods(m)
     } catch (e) {
       setFeedback({ kind: 'error', msg: e instanceof Error ? e.message : 'Error cargando Stripe.' })
     } finally {
@@ -94,6 +99,22 @@ export default function StripeConnectSection({ accountId }: { accountId: string 
       setFeedback({ kind: 'ok', msg: `Comisión guardada: ${pct} % de cada pedido del Shop.` })
     } catch (e) {
       setFeedback({ kind: 'error', msg: e instanceof Error ? e.message : 'No se pudo guardar la comisión.' })
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function toggleMethod(key: keyof ShopPaymentMethods) {
+    if (!methods) return
+    const next = { ...methods, [key]: !methods[key] }
+    setMethods(next)
+    setBusy('methods'); setFeedback(null)
+    try {
+      await setShopPaymentMethods(accountId, next)
+      setFeedback({ kind: 'ok', msg: 'Métodos de pago actualizados.' })
+    } catch (e) {
+      setMethods(methods) // revertir en error
+      setFeedback({ kind: 'error', msg: e instanceof Error ? e.message : 'No se pudieron guardar los métodos.' })
     } finally {
       setBusy(null)
     }
@@ -179,9 +200,60 @@ export default function StripeConnectSection({ accountId }: { accountId: string 
               </button>
             </div>
           </div>
+
+          {/* Métodos de pago del Shop (configurables por cuenta) */}
+          {methods && (
+            <div className="rounded-lg border border-border-default bg-card p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Wallet size={16} className="text-text-secondary" />
+                <span className="text-sm font-medium text-text-primary">Métodos de pago del Shop</span>
+              </div>
+              <p className="text-xs text-text-secondary mb-3">
+                Qué formas de pago ofrece la tienda de este cliente. El pago online necesita Stripe conectado.
+                El efectivo se acepta automáticamente (el pedido entra en cocina sin pasar por pago).
+              </p>
+              <div className="space-y-1">
+                <ToggleRow
+                  label="Pago online (tarjeta / Bizum)"
+                  hint={state.chargesEnabled ? undefined : 'Requiere completar el onboarding de Stripe para cobrar.'}
+                  checked={methods.online}
+                  disabled={busy !== null}
+                  onChange={() => toggleMethod('online')}
+                />
+                <ToggleRow
+                  label="Efectivo al recoger"
+                  hint="El cliente paga en el local al recoger el pedido (recogida)."
+                  checked={methods.cashPickup}
+                  disabled={busy !== null}
+                  onChange={() => toggleMethod('cashPickup')}
+                />
+                <ToggleRow
+                  label="Efectivo contra entrega"
+                  hint="El cliente paga al repartidor al recibir el pedido (domicilio)."
+                  checked={methods.cashDelivery}
+                  disabled={busy !== null}
+                  onChange={() => toggleMethod('cashDelivery')}
+                />
+              </div>
+            </div>
+          )}
         </div>
       )}
     </section>
+  )
+}
+
+function ToggleRow({ label, hint, checked, disabled, onChange }: {
+  label: string; hint?: string; checked: boolean; disabled: boolean; onChange: () => void
+}) {
+  return (
+    <label className={`flex items-start gap-3 py-2 cursor-pointer ${disabled ? 'opacity-60' : ''}`}>
+      <input type="checkbox" checked={checked} disabled={disabled} onChange={onChange} className="mt-0.5" />
+      <span>
+        <span className="block text-sm text-text-primary">{label}</span>
+        {hint && <span className="block text-[11px] text-text-tertiary mt-0.5">{hint}</span>}
+      </span>
+    </label>
   )
 }
 
