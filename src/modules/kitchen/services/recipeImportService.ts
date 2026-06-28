@@ -363,7 +363,8 @@ export async function extractRecipeSession(
         source_ref: extract.session_id,
         status: 'pending',
         chosen_target_id: null,
-        method: null,
+        // NO tocar `method`: la columna es NOT NULL. Se reescribe luego en
+        // resolveImportProposal ('human') al resolver cada línea en el modal.
       } as never)
       .eq('account_id', accountId)
       .eq('source_kind', 'recipe_ingredient')
