@@ -298,6 +298,39 @@ export async function createRecipeItem(input: RecipeItemInsert): Promise<RecipeI
   return (await getRecipeItemById(created.id)) ?? created
 }
 
+/**
+ * Duplica un escandallo COMPLETO (plato + líneas + pasos + enlaces paso↔línea) en
+ * una sola operación atómica server-side (RPC duplicate_recipe_item). Devuelve el
+ * id del plato nuevo. El plato copia nace needs_review=true, source='manual', con
+ * folvy_code nuevo (lo pone el trigger). Útil para platos que se diferencian en
+ * 1-2 ingredientes: duplicar y cambiar un par de líneas.
+ */
+export async function duplicateRecipeItem(
+  sourceId: string,
+  newName?: string,
+): Promise<string> {
+  requireSupabase()
+  // Nota: database.ts no se ha regenerado (el CLI de Supabase no está disponible
+  // en el entorno), así que el nombre de la RPC no está en los tipos generados.
+  // Cast puntual para no bloquear; la RPC existe y está probada en la BD.
+  const { data, error } = await (supabase!.rpc as unknown as (
+    fn: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ data: unknown; error: { message: string } | null }>)(
+    'duplicate_recipe_item',
+    { p_source_id: sourceId, p_new_name: newName ?? null },
+  )
+  if (error) {
+    throw new Error(`Error duplicando la receta: ${error.message}`)
+  }
+  const newId = data as string | null
+  if (!newId) {
+    throw new Error('La duplicación no devolvió el nuevo escandallo.')
+  }
+  await tryRecompute(newId)
+  return newId
+}
+
 export async function updateRecipeItem(
   id: string,
   patch: RecipeItemUpdate

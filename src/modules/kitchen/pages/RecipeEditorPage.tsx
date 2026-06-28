@@ -37,6 +37,7 @@ import {
   Archive,
   ShieldCheck,
   Loader2,
+  Copy,
 } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useApp } from '@/context/AppContext'
@@ -50,6 +51,7 @@ import {
   dismissReview,
   checkItemDeletable,
   deleteOrArchiveItem,
+  duplicateRecipeItem,
 } from '@/modules/kitchen/services/recipeItemService'
 import {
   getRecipeBreakdown,
@@ -228,11 +230,14 @@ interface RecipeEditorPageProps {
   recipeId?: string
   /** Vuelve a la lista de platos. Si no se pasa, no se muestra el botón Volver. */
   onBack?: () => void
+  /** Abre OTRO plato en el editor (lo usa "Duplicar" para ir a la copia). */
+  onOpenRecipe?: (id: string) => void
 }
 
 export default function RecipeEditorPage({
   recipeId: recipeIdProp,
   onBack,
+  onOpenRecipe,
 }: RecipeEditorPageProps = {}) {
   const { activeAccountId, accountsLoading } = useActiveAccount()
   const { userProfile, authUserId } = useApp()
@@ -255,6 +260,9 @@ export default function RecipeEditorPage({
   // Recarga del plato tras "dar por revisado" (baja la bandera needs_review).
   const [reloadTick, setReloadTick] = useState(0)
   const [dismissing, setDismissing] = useState(false)
+  // ── Duplicar receta (copia plato + líneas + pasos y abre la copia) ──
+  const [duplicating, setDuplicating] = useState(false)
+  const [duplicateError, setDuplicateError] = useState<string | null>(null)
   // ── Importar ficha (rellenar ESTE escandallo, no crear otro) ──
   const importInputRef = useRef<HTMLInputElement | null>(null)
   const [importing, setImporting] = useState(false)
@@ -539,6 +547,32 @@ export default function RecipeEditorPage({
       setError(msg)
     } finally {
       setDismissing(false)
+    }
+  }
+
+  // Duplica el escandallo completo (plato + líneas + pasos) en una operación
+  // atómica server-side y abre la copia en el editor para retocarla. Útil para
+  // platos que se diferencian en 1-2 ingredientes.
+  async function handleDuplicate() {
+    if (!recipe || duplicating) return
+    const ok = window.confirm(
+      `¿Duplicar "${recipe.name}"? Se creará una copia con todos sus ingredientes y pasos, marcada para revisar, y la abriremos para que la ajustes.`,
+    )
+    if (!ok) return
+    setDuplicating(true)
+    setDuplicateError(null)
+    try {
+      const newId = await duplicateRecipeItem(recipe.id)
+      if (onOpenRecipe) {
+        onOpenRecipe(newId)
+      } else {
+        // Sin navegación disponible: al menos recargar para reflejar el estado.
+        setReloadTick((t) => t + 1)
+      }
+    } catch (err: unknown) {
+      setDuplicateError(err instanceof Error ? err.message : 'No se pudo duplicar la receta.')
+    } finally {
+      setDuplicating(false)
     }
   }
 
@@ -1610,12 +1644,27 @@ export default function RecipeEditorPage({
               </button>
               <button
                 type="button"
+                onClick={handleDuplicate}
+                disabled={duplicating}
+                className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-card text-terracota font-medium border border-terracota/30 hover:bg-terracota-bg disabled:opacity-60 transition-colors"
+                title="Duplicar este escandallo (copia ingredientes y pasos) y abrir la copia para ajustarla"
+              >
+                {duplicating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Copy className="w-3.5 h-3.5" />}
+                {duplicating ? 'Duplicando…' : 'Duplicar'}
+              </button>
+              <button
+                type="button"
                 onClick={openDeleteDialog}
                 className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-card text-danger font-medium border border-danger/30 hover:bg-danger-bg transition-colors"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 Eliminar
               </button>
+              {duplicateError && (
+                <span className="px-2.5 py-1 rounded-md bg-danger text-white text-xs">
+                  {duplicateError}
+                </span>
+              )}
               {photoError && (
                 <span className="px-2.5 py-1 rounded-md bg-danger text-white text-xs">
                   {photoError}

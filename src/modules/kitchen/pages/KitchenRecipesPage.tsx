@@ -340,6 +340,7 @@ export default function KitchenRecipesPage() {
       <RecipeEditorPage
         recipeId={selectedRecipeId}
         onBack={() => setSelectedRecipeId(null)}
+        onOpenRecipe={(id) => setSelectedRecipeId(id)}
       />
     )
   }
