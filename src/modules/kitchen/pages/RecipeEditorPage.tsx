@@ -70,7 +70,12 @@ import {
   getDishPhotoUrl,
   deleteDishPhoto,
 } from '@/modules/kitchen/services/recipePhotoService'
-import { importRecipeFromFile, type ImportRecipeResult } from '@/modules/kitchen/services/recipeImportService'
+import {
+  extractRecipeSession,
+  type ImportRecipeResult,
+  type ExtractedRecipeSession,
+} from '@/modules/kitchen/services/recipeImportService'
+import RecipeImportReviewModal from '@/modules/kitchen/components/RecipeImportReviewModal'
 import RecipeStepsTab from '@/modules/kitchen/components/RecipeStepsTab'
 import ModifierImpactsTab from '@/modules/kitchen/components/ModifierImpactsTab'
 import type { RecipeItem, MenuItemEconomics, KitchenUnit } from '@/types/kitchen'
@@ -256,6 +261,8 @@ export default function RecipeEditorPage({
   const [importStage, setImportStage] = useState<'idle' | 'uploading' | 'reading' | 'done'>('idle')
   const [importError, setImportError] = useState<string | null>(null)
   const [importResult, setImportResult] = useState<ImportRecipeResult | null>(null)
+  // B2: sesión extraída pendiente de revisar (modal anti-duplicados).
+  const [review, setReview] = useState<ExtractedRecipeSession | null>(null)
 
   // ── Edición inline (E1 + E3) ──
   // E1: editar cantidad. E3: el campo editable primario es el NETO (lo que va al
@@ -546,15 +553,16 @@ export default function RecipeEditorPage({
     setImporting(true)
     setImportError(null)
     setImportResult(null)
+    setReview(null)
     setImportStage('uploading')
     try {
       // Cambio de etapa para feedback (la subida es rápida; la IA tarda).
       window.setTimeout(() => setImportStage((s) => (s === 'uploading' ? 'reading' : s)), 800)
-      const result = await importRecipeFromFile(activeAccountId, file, { targetRecipeId: recipeId })
-      setImportResult(result)
-      setImportStage('done')
-      setReloadTick((t) => t + 1)
-      setEconReloadTick((t) => t + 1)
+      // B2: extrae y abre la revisión (rellena ESTE plato vía targetRecipeId).
+      // La materialización (y el refresco) ocurren al "Terminar" en el modal.
+      const session = await extractRecipeSession(activeAccountId, file, { targetRecipeId: recipeId })
+      setReview(session)
+      setImportStage('idle')
     } catch (err: unknown) {
       setImportError(err instanceof Error ? err.message : 'No se pudo importar la ficha.')
       setImportStage('idle')
@@ -1733,6 +1741,24 @@ export default function RecipeEditorPage({
                 <div className="mb-2 px-2.5 py-1.5 rounded-md bg-danger-bg text-danger text-xs">
                   {editError ?? aiWasteError}
                 </div>
+              )}
+
+              {/* B2: modal de revisión anti-duplicados (rellena este plato) */}
+              {review && activeAccountId && (
+                <RecipeImportReviewModal
+                  accountId={activeAccountId}
+                  sessionId={review.sessionId}
+                  dishName={review.dishName}
+                  lines={review.lines}
+                  onCancel={() => setReview(null)}
+                  onCompleted={(result) => {
+                    setReview(null)
+                    setImportResult(result)
+                    setImportStage('done')
+                    setReloadTick((t) => t + 1)
+                    setEconReloadTick((t) => t + 1)
+                  }}
+                />
               )}
 
               {/* Modal de importación de ficha (progreso + resultado) */}

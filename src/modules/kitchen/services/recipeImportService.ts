@@ -7,19 +7,25 @@
 //   · Excel (.xlsx/.xls/.csv) → se lee a texto en el cliente (SheetJS) → IA texto.
 //   · Word (.docx)          → se lee a texto en el cliente (mammoth) → IA texto.
 //
-// Orquesta tres piezas de backend que ya existen:
-//   1. Subida al bucket recipe-uploads/{cuenta}/recipe-sources/  (solo imagen/PDF).
-//   2. Edge `extract-recipe` (kind 'photo' para visión; 'conversational' para texto).
-//   3. RPC `materialize_recipe_session` → recipe_item (dish) + recipe_line, casando
-//      ingredientes existentes y creando los nuevos como raw provisional (needs_review).
+// FLUJO EN TRES PASOS (B2 — pantalla de revisión anti-duplicados):
+//   1. extractRecipeSession()  → sube + Edge `extract-recipe` → sesión
+//      `recipe_item_ai_session` (pending_review) + una `mapping_proposal` por
+//      línea (status 'pending', sin chosen_target_id). NO materializa.
+//   2. [pantalla de revisión]  → por cada línea, findIngredientMatches() llama a
+//      run_mapping y el humano elige el ingrediente existente (o crea nuevo).
+//      resolveImportProposal() escribe chosen_target_id + status 'human_confirmed'.
+//   3. materializeRecipeSession() → recipe_item (dish) + recipe_line. Como la RPC
+//      respeta chosen_target_id, NO duplica: enlaza al existente.
 //
-// DESTINO (21/06): si se pasa `targetRecipeId`, la importación RELLENA ese plato
-// (no crea uno nuevo). El Edge siembra la sesión con ese recipe_item y la RPC
-// borra sus líneas y las reemplaza. Lo usa "Importar ficha" DENTRO de un
-// escandallo abierto (rellenar el cascarón vacío sin duplicar el plato).
+// Por qué este paso intermedio: sin él, materialize cae al ELSE (crea nuevo) en
+// CADA línea porque las propuestas nacen 'pending' (no en su lista de estados),
+// y duplica ingredientes que ya existen ("Salsa de tomate" cuando ya hay
+// "Tomate Frito"). La pantalla de revisión rellena la decisión que materialize
+// ya sabe leer. Anti-invención: nada se crea si hay un equivalente elegido.
 //
-// Anti-invención: los ingredientes no casados se crean needs_review; el coste no
-// se da por bueno hasta que el humano lo complete.
+// COMPAT: importRecipeFromFile() se conserva (extract + materialize en uno, sin
+// revisión) para no romper llamadas existentes; las pantallas usan el flujo de
+// tres pasos.
 
 import { supabase } from '@/lib/supabase'
 import * as XLSX from 'xlsx'
@@ -124,7 +130,79 @@ async function wordToText(file: File): Promise<string> {
   return text
 }
 
-// ── Resultado ──────────────────────────────────────────────────────────────
+// ── Normalización de nombre de ingrediente ────────────────────────────────────
+// IDÉNTICA a la del Edge extract-recipe y a normalize_ingredient_name (SQL):
+// minúsculas + sin acentos + sin paréntesis + espacios colapsados. La pantalla de
+// revisión la usa para casar cada línea con su mapping_proposal (que la RPC
+// materialize busca por source_normalized).
+
+export function normalizeIngredientName(s: string): string {
+  return s
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s*\([^)]*\)/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+// ── Tipos de la receta extraída ──────────────────────────────────────────────
+
+export interface ParsedRecipeLine {
+  rawText: string
+  quantity: number | null
+  unit: string | null
+  cost: number | null
+  note: string | null
+  /** Nombre normalizado: clave para casar con la mapping_proposal de la sesión. */
+  normalized: string
+}
+
+export interface ExtractedRecipeSession {
+  sessionId: string
+  dishName: string
+  /** Si la sesión rellena un plato existente, su id (targetRecipeId). */
+  targetRecipeId: string | null
+  /** Líneas leídas, deduplicadas por nombre normalizado (igual que el Edge). */
+  lines: ParsedRecipeLine[]
+}
+
+// Forma cruda que devuelve el Edge (parsed_result).
+interface RawParsedRecipe {
+  dish?: { name?: string | null; brand?: string | null; yield_portions?: number | null }
+  lines?: { raw_text: string; quantity: number | null; unit: string | null; cost?: number | null; note?: string | null }[]
+}
+
+interface ExtractResponse {
+  session_id: string
+  status: string
+  parsed: RawParsedRecipe
+  lines_extracted: number
+  lines_mapped: number
+  proposal_error: string | null
+}
+
+// ── Candidato de casado (run_mapping) ─────────────────────────────────────────
+
+export interface ImportMatchCandidate {
+  recipeItemId: string
+  name: string
+  folvyCode: string | null
+  confidence: number
+  matchType: string
+  semaphore: 'green' | 'yellow'
+}
+
+interface RowRunMapping {
+  recipe_item_id: string
+  name: string
+  folvy_code: string | null
+  confidence: number
+  match_type: string
+  semaphore: string
+}
+
+// ── Resultado de materializar ─────────────────────────────────────────────────
 
 export interface ImportRecipeResult {
   recipeId: string
@@ -134,15 +212,6 @@ export interface ImportRecipeResult {
   newArticlesCreated: number
   linesSkipped: number
   linesExtracted: number
-}
-
-interface ExtractResponse {
-  session_id: string
-  status: string
-  parsed: unknown
-  lines_extracted: number
-  lines_mapped: number
-  proposal_error: string | null
 }
 
 interface MaterializeRow {
@@ -167,25 +236,32 @@ export interface ImportRecipeOptions {
   targetRecipeId?: string
 }
 
-// ── Importación end-to-end ────────────────────────────────────────────────────
+// Helper: tipado laxo para supabase.rpc (mismo patrón que el resto del módulo).
+function rpc(fn: string, args: Record<string, unknown>) {
+  return (
+    supabase!.rpc as unknown as (
+      f: string,
+      a: Record<string, unknown>,
+    ) => Promise<{ data: unknown; error: { message: string } | null }>
+  )(fn, args)
+}
+
+// ── Paso 1: subir + extraer (NO materializa) ──────────────────────────────────
 
 /**
- * Importa un escandallo desde un fichero (imagen, PDF, Excel o Word).
- *
- * @param accountId  Cuenta activa.
- * @param file       Fichero de la ficha (foto/PDF/Excel/Word).
- * @param opts       { brandHint?, targetRecipeId? }. Si `targetRecipeId` viene,
- *                   rellena ese plato existente en vez de crear uno nuevo.
+ * Sube la ficha y la extrae con la IA. Devuelve la sesión a revisar (con las
+ * líneas leídas), SIN materializar. La pantalla de revisión resuelve cada línea
+ * y luego llama a materializeRecipeSession().
  */
-export async function importRecipeFromFile(
+export async function extractRecipeSession(
   accountId: string,
   file: File,
   opts?: ImportRecipeOptions,
-): Promise<ImportRecipeResult> {
+): Promise<ExtractedRecipeSession> {
   if (!supabase) throw new Error('Supabase no disponible')
 
   const brandHint = opts?.brandHint
-  const targetRecipeId = opts?.targetRecipeId
+  const targetRecipeId = opts?.targetRecipeId ?? null
 
   const fileKind = detectKind(file)
   if (fileKind === 'unsupported') {
@@ -219,7 +295,7 @@ export async function importRecipeFromFile(
       kind: 'photo',
       file_paths: [path],
       brand_hint: brandHint ?? null,
-      target_recipe_id: targetRecipeId ?? null,
+      target_recipe_id: targetRecipeId,
     }
   } else {
     const text = fileKind === 'excel' ? await excelToText(file) : await wordToText(file)
@@ -228,11 +304,10 @@ export async function importRecipeFromFile(
       kind: 'conversational',
       input_text: text,
       brand_hint: brandHint ?? null,
-      target_recipe_id: targetRecipeId ?? null,
+      target_recipe_id: targetRecipeId,
     }
   }
 
-  // ── Extraer con la IA (Edge extract-recipe) ──
   const { data: extractData, error: extractErr } = await supabase.functions.invoke(
     'extract-recipe',
     { body: extractBody },
@@ -245,22 +320,118 @@ export async function importRecipeFromFile(
     throw new Error('La IA no devolvió un escandallo legible. Prueba con un archivo más claro.')
   }
 
-  // ── Materializar la sesión → escandallo real ──
-  const { data: matData, error: matErr } = await (
-    supabase.rpc as unknown as (
-      fn: string,
-      args: Record<string, unknown>,
-    ) => Promise<{ data: unknown; error: { message: string } | null }>
-  )('materialize_recipe_session', { p_session_id: extract.session_id })
+  const parsed = extract.parsed ?? {}
+  const dishName = parsed.dish?.name?.trim() || 'Escandallo sin nombre'
 
-  if (matErr) {
-    throw new Error(`No se pudo crear el escandallo: ${matErr.message}`)
+  // Deduplicar por nombre normalizado, IGUAL que el Edge al crear las propuestas
+  // (la mapping_proposal es única por texto normalizado dentro de la cuenta).
+  const seen = new Set<string>()
+  const lines: ParsedRecipeLine[] = []
+  for (const l of parsed.lines ?? []) {
+    const rawText = (l.raw_text ?? '').trim()
+    if (rawText === '') continue
+    const normalized = normalizeIngredientName(rawText)
+    if (seen.has(normalized)) continue
+    seen.add(normalized)
+    lines.push({
+      rawText,
+      quantity: l.quantity ?? null,
+      unit: l.unit ?? null,
+      cost: l.cost ?? null,
+      note: l.note ?? null,
+      normalized,
+    })
   }
-  const row = (Array.isArray(matData) ? matData[0] : matData) as MaterializeRow | undefined
+
+  return { sessionId: extract.session_id, dishName, targetRecipeId, lines }
+}
+
+// ── Paso 2: candidatos por similitud (run_mapping) ────────────────────────────
+
+/**
+ * Devuelve los ingredientes existentes más parecidos a un nombre, vía run_mapping
+ * (la misma RPC que usan Ventas y Supply). Umbral bajo + límite alto a propósito:
+ * queremos ver TODOS los gemelos posibles para no duplicar; si el bueno no sale,
+ * la pantalla ofrece búsqueda libre. Solo lee; no escribe nada.
+ *
+ * No devuelve coste (run_mapping no lo trae): la pantalla cruza el coste contra
+ * el mapa de ingredientes que ya tiene cargado.
+ */
+export async function findIngredientMatches(
+  accountId: string,
+  text: string,
+  limit = 6,
+  fuzzyMin = 0.2,
+): Promise<ImportMatchCandidate[]> {
+  if (!supabase) throw new Error('Supabase no disponible')
+  const { data, error } = await rpc('run_mapping', {
+    p_account_id: accountId,
+    p_text: text,
+    p_code: null,
+    p_limit: limit,
+    p_fuzzy_min: fuzzyMin,
+    p_target_types: ['raw', 'recipe'],
+  })
+  if (error) throw new Error(`Error buscando similares: ${error.message}`)
+  return ((data ?? []) as RowRunMapping[]).map((r) => ({
+    recipeItemId: r.recipe_item_id,
+    name: r.name,
+    folvyCode: r.folvy_code ?? null,
+    confidence: Number(r.confidence ?? 0),
+    matchType: r.match_type,
+    semaphore: (r.semaphore as 'green' | 'yellow') ?? 'yellow',
+  }))
+}
+
+// ── Paso 2b: registrar la decisión humana en la propuesta ─────────────────────
+
+/**
+ * Resuelve UNA línea: escribe la decisión del humano en su mapping_proposal para
+ * que materialize la respete. Casa por (source_ref = sesión, source_normalized).
+ *   · chosenTargetId NO nulo → usar ese ingrediente existente (no duplica).
+ *   · chosenTargetId nulo     → crear nuevo a propósito (materialize lo creará
+ *     como raw provisional needs_review).
+ * En ambos casos status='human_confirmed' (que está en la lista que materialize
+ * acepta). Patrón calcado de approveFamilyProposal (UPDATE con RLS, sin RPC).
+ */
+export async function resolveImportProposal(
+  accountId: string,
+  sessionId: string,
+  sourceNormalized: string,
+  chosenTargetId: string | null,
+): Promise<void> {
+  if (!supabase) throw new Error('Supabase no disponible')
+  const { error } = await supabase
+    .from('mapping_proposal')
+    .update({
+      chosen_target_id: chosenTargetId,
+      status: 'human_confirmed',
+      method: 'human',
+    } as never)
+    .eq('account_id', accountId)
+    .eq('source_ref', sessionId)
+    .eq('source_normalized', sourceNormalized)
+  if (error) throw new Error(`Error guardando la decisión: ${error.message}`)
+}
+
+// ── Paso 3: materializar la sesión revisada → escandallo ──────────────────────
+
+/**
+ * Vuelca la sesión a recipe_item (dish) + recipe_line. Llamar SOLO después de
+ * resolver todas las líneas. La RPC respeta chosen_target_id de cada propuesta:
+ * enlaza a los existentes elegidos y crea solo los marcados como nuevos.
+ */
+export async function materializeRecipeSession(
+  sessionId: string,
+  linesExtracted: number,
+): Promise<ImportRecipeResult> {
+  if (!supabase) throw new Error('Supabase no disponible')
+  const { data, error } = await rpc('materialize_recipe_session', { p_session_id: sessionId })
+  if (error) throw new Error(`No se pudo crear el escandallo: ${error.message}`)
+  const row = (Array.isArray(data) ? data[0] : data) as MaterializeRow | undefined
   if (!row?.result_recipe_id) {
     throw new Error('La materialización no devolvió el escandallo creado.')
   }
-
   return {
     recipeId: row.result_recipe_id,
     dishName: row.dish_name,
@@ -268,8 +439,24 @@ export async function importRecipeFromFile(
     linesCreated: row.lines_created,
     newArticlesCreated: row.new_articles_created,
     linesSkipped: row.lines_skipped,
-    linesExtracted: extract.lines_extracted,
+    linesExtracted,
   }
+}
+
+// ── COMPAT: importación end-to-end sin revisión (extract + materialize) ────────
+
+/**
+ * Importa un escandallo en un solo paso (sin pantalla de revisión). Se conserva
+ * por compatibilidad; las pantallas usan el flujo de tres pasos (extract →
+ * revisión → materialize) para no duplicar ingredientes.
+ */
+export async function importRecipeFromFile(
+  accountId: string,
+  file: File,
+  opts?: ImportRecipeOptions,
+): Promise<ImportRecipeResult> {
+  const session = await extractRecipeSession(accountId, file, opts)
+  return materializeRecipeSession(session.sessionId, session.lines.length)
 }
 
 // Compat: nombre anterior (solo foto) usado por la pantalla. Reexporta al nuevo.

@@ -18,6 +18,17 @@
 //   - Familia / etiquetas / modos Tarjetas-Tabla / vistas guardadas / búsqueda
 //     semántica → tramos siguientes (familia/tags dependen del schema S1).
 //
+// TRAMO L1.5 (este): botón "Nuevo plato" — crear una receta DESDE CERO. Faltaba:
+// la pantalla solo permitía importar ficha o rellenar cascarones existentes, no
+// crear un plato nuevo. Reutiliza el modal de alta (RecipeFormModal) que vivía
+// en KitchenRecipePage (el lienzo viejo): nombre + tipo + unidad base + raciones
+// → createRecipeItem({ type:'dish' }) → abre el plato nuevo en el editor para
+// añadir ingredientes. Los 4 campos obligatorios de recipe_item son accountId,
+// type, name, baseUnitId; el resto es opcional y el coste se monta luego con las
+// líneas. (El lienzo viejo KitchenRecipePage queda como ZOMBI a borrar en un
+// commit de limpieza aparte: ya no lo monta nadie — la ruta 'recetas' monta esta
+// página, y el editor es RecipeEditorPage.)
+//
 // FOTO (E5): kitchen_photo_url guarda el PATH de un bucket privado; la URL
 // servible se firma al render con getDishPhotoUrl(). La lista resuelve las
 // URLs firmadas en lote tras cargar los platos (igual criterio que el editor),
@@ -37,14 +48,22 @@ import {
   ChevronRight,
   Soup,
   Camera,
+  Plus,
   Loader2,
   X,
 } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
-import { listRecipeItems, getDishesIncomplete } from '@/modules/kitchen/services/recipeItemService'
+import { useApp } from '@/context/AppContext'
+import { listRecipeItems, getDishesIncomplete, createRecipeItem } from '@/modules/kitchen/services/recipeItemService'
 import { getDishPhotoUrl } from '@/modules/kitchen/services/recipePhotoService'
-import { importRecipeFromFile, type ImportRecipeResult } from '@/modules/kitchen/services/recipeImportService'
-import type { RecipeItem } from '@/types/kitchen'
+import {
+  extractRecipeSession,
+  type ImportRecipeResult,
+  type ExtractedRecipeSession,
+} from '@/modules/kitchen/services/recipeImportService'
+import RecipeImportReviewModal from '@/modules/kitchen/components/RecipeImportReviewModal'
+import { listUnits } from '@/modules/kitchen/services/kitchenUnitService'
+import type { RecipeItem, KitchenUnit, RecipeItemType } from '@/types/kitchen'
 import RecipeEditorPage from '@/modules/kitchen/pages/RecipeEditorPage'
 
 function formatEur(value: number | null | undefined): string {
@@ -128,6 +147,7 @@ function dishStatus(item: RecipeItem, incompleteIds: Set<string>): DishStatus {
 
 export default function KitchenRecipesPage() {
   const { activeAccountId, accountsLoading } = useActiveAccount()
+  const { authUserId, userProfile } = useApp()
   const [searchParams, setSearchParams] = useSearchParams()
 
   const [items, setItems] = useState<RecipeItem[]>([])
@@ -146,7 +166,17 @@ export default function KitchenRecipesPage() {
   const [importStage, setImportStage] = useState<'idle' | 'uploading' | 'reading' | 'done'>('idle')
   const [importError, setImportError] = useState<string | null>(null)
   const [importResult, setImportResult] = useState<ImportRecipeResult | null>(null)
+  // B2: sesión extraída pendiente de revisar (abre el modal anti-duplicados).
+  const [review, setReview] = useState<ExtractedRecipeSession | null>(null)
   const [reloadTick, setReloadTick] = useState(0)
+
+  // ── L1.5: crear plato desde cero ──
+  // Unidades base para el selector del modal (tabla semilla global; carga única
+  // por cuenta, independiente del reloadTick de la lista). El botón "Nuevo plato"
+  // queda deshabilitado hasta que estén cargadas (baseUnitId es obligatorio).
+  const [units, setUnits] = useState<KitchenUnit[]>([])
+  const [unitsLoading, setUnitsLoading] = useState(false)
+  const [showNewDish, setShowNewDish] = useState(false)
 
   // Navegación entrante desde otra pantalla (p.ej. "Es un plato" en Excepciones):
   // si la URL trae ?recipe=ID, abrimos su editor directamente. Usamos query param
@@ -207,6 +237,28 @@ export default function KitchenRecipesPage() {
     }
   }, [activeAccountId, accountsLoading, reloadTick])
 
+  // L1.5: carga de unidades para el modal "Nuevo plato". Una vez por cuenta;
+  // no depende del reloadTick (las unidades no cambian al crear platos).
+  useEffect(() => {
+    if (accountsLoading || !activeAccountId) return
+    let cancelled = false
+    setUnitsLoading(true)
+    listUnits({})
+      .then((rows) => {
+        if (!cancelled) setUnits(rows)
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        console.error('listUnits falló:', err)
+      })
+      .finally(() => {
+        if (!cancelled) setUnitsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [activeAccountId, accountsLoading])
+
   // E5: resolver en lote las URLs firmadas de los platos que tienen foto.
   // kitchen_photo_url es un PATH de bucket privado; sin firmar no es servible.
   // Solo se firma para los platos CON foto, así que el coste es proporcional a
@@ -248,7 +300,9 @@ export default function KitchenRecipesPage() {
     return items.filter((it) => matchesTokens(q, it.name, it.altName, it.code))
   }, [items, search])
 
-  // Dispara la importación por foto: sube → extrae con IA → materializa.
+  // Dispara la importación por foto: sube → extrae con IA → abre la pantalla de
+  // revisión (B2). La materialización ocurre al "Terminar" en el modal, ya sin
+  // duplicar ingredientes.
   async function handleImportPhoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     e.target.value = ''
@@ -257,13 +311,15 @@ export default function KitchenRecipesPage() {
     setImporting(true)
     setImportError(null)
     setImportResult(null)
+    setReview(null)
     setImportStage('uploading')
     try {
       // Pequeño cambio de etapa para feedback (la subida es rápida; la IA tarda).
       window.setTimeout(() => setImportStage((s) => (s === 'uploading' ? 'reading' : s)), 800)
-      const result = await importRecipeFromFile(activeAccountId, file)
-      setImportResult(result)
-      setImportStage('done')
+      const session = await extractRecipeSession(activeAccountId, file)
+      // Abre el modal de revisión y cierra el spinner.
+      setReview(session)
+      setImportStage('idle')
     } catch (err: unknown) {
       setImportError(err instanceof Error ? err.message : 'No se pudo importar la ficha.')
       setImportStage('idle')
@@ -302,11 +358,22 @@ export default function KitchenRecipesPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {/* L1.5: crear plato desde cero (acción principal) */}
+          <button
+            type="button"
+            onClick={() => setShowNewDish(true)}
+            disabled={unitsLoading || units.length === 0}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium bg-terracota text-white hover:bg-terracota-hover disabled:opacity-50 transition-colors"
+            title={units.length === 0 ? 'Cargando unidades…' : 'Crea un plato desde cero y añade sus ingredientes'}
+          >
+            <Plus className="w-4 h-4" /> Nuevo plato
+          </button>
+          {/* Importar ficha (acción secundaria) */}
           <button
             type="button"
             onClick={() => document.getElementById('recipe-import-input')?.click()}
             disabled={importing}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium bg-terracota text-white hover:bg-terracota-hover disabled:opacity-50 transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium border border-terracota text-terracota bg-transparent hover:bg-terracota-bg disabled:opacity-50 transition-colors"
             title="Sube una foto, PDF, Excel o Word de tu ficha y la IA monta el escandallo"
           >
             <Camera className="w-4 h-4" /> Importar ficha
@@ -327,6 +394,40 @@ export default function KitchenRecipesPage() {
         className="hidden"
         onChange={handleImportPhoto}
       />
+
+      {/* L1.5: modal de alta — crear plato desde cero */}
+      {showNewDish && activeAccountId && (
+        <RecipeFormModal
+          accountId={activeAccountId}
+          units={units}
+          actorId={authUserId ?? null}
+          actorName={userProfile?.displayName ?? null}
+          onClose={() => setShowNewDish(false)}
+          onCreated={(created) => {
+            // Cierra el modal, refresca la lista para cuando se vuelva, y abre el
+            // plato recién creado en el editor para empezar a añadir ingredientes.
+            setShowNewDish(false)
+            setReloadTick((t) => t + 1)
+            setSelectedRecipeId(created.id)
+          }}
+        />
+      )}
+
+      {/* B2: modal de revisión anti-duplicados (sobre la pantalla principal) */}
+      {review && activeAccountId && (
+        <RecipeImportReviewModal
+          accountId={activeAccountId}
+          sessionId={review.sessionId}
+          dishName={review.dishName}
+          lines={review.lines}
+          onCancel={() => setReview(null)}
+          onCompleted={(result) => {
+            setReview(null)
+            setImportResult(result)
+            setImportStage('done')
+          }}
+        />
+      )}
 
       {/* Modal de importación por foto (feedback del flujo) */}
       {importStage !== 'idle' && (
@@ -428,7 +529,7 @@ export default function KitchenRecipesPage() {
         <div className="p-8 rounded-md bg-card border border-border-default text-center">
           <Soup size={32} className="mx-auto text-text-secondary mb-2" />
           <p className="text-sm text-text-secondary">
-            Aún no hay platos en esta cuenta.
+            Aún no hay platos en esta cuenta. Pulsa «Nuevo plato» para crear el primero.
           </p>
         </div>
       )}
@@ -554,6 +655,235 @@ export default function KitchenRecipesPage() {
           })}
         </div>
       )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Modal "Nuevo plato" — crear un recipe_item desde cero.
+//
+// Reutilizado de KitchenRecipePage (lienzo viejo). Crea el plato con los 4
+// campos obligatorios (accountId, type, name, baseUnitId) + raciones opcionales,
+// y devuelve el RecipeItem creado vía onCreated() para que el contenedor lo abra
+// en el editor. El coste NO se monta aquí: nace sin líneas y se construye en el
+// editor con "Añadir ingrediente". Para un plato individual la unidad base suele
+// ser "Unidad"; para una sub-receta a granel, peso o volumen.
+// ─────────────────────────────────────────────────────────────────────
+
+interface RecipeFormModalProps {
+  accountId: string
+  units: KitchenUnit[]
+  actorId: string | null
+  actorName: string | null
+  onClose: () => void
+  onCreated: (created: RecipeItem) => void
+}
+
+function RecipeFormModal({
+  accountId,
+  units,
+  actorId,
+  actorName,
+  onClose,
+  onCreated,
+}: RecipeFormModalProps) {
+  const [name, setName] = useState('')
+  const [type, setType] = useState<RecipeItemType>('dish')
+  const [baseUnitId, setBaseUnitId] = useState<string>(units[0]?.id ?? '')
+  const [yieldPortions, setYieldPortions] = useState<string>('')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleSubmit() {
+    const trimmed = name.trim()
+    if (trimmed === '') {
+      setError('El nombre es obligatorio.')
+      return
+    }
+    if (!baseUnitId) {
+      setError('Elige una unidad base.')
+      return
+    }
+    const yieldParsed = yieldPortions.trim() === ''
+      ? null
+      : Number(yieldPortions.replace(',', '.'))
+    if (yieldParsed !== null && (Number.isNaN(yieldParsed) || yieldParsed <= 0)) {
+      setError('Las raciones deben ser un número > 0 (deja vacío si no aplica).')
+      return
+    }
+
+    setSubmitting(true)
+    setError(null)
+    try {
+      const created = await createRecipeItem({
+        accountId,
+        type,
+        name: trimmed,
+        baseUnitId,
+        yieldPortions: yieldParsed,
+        createdBy: actorId,
+        createdByName: actorName,
+      })
+      onCreated(created)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error desconocido'
+      setError(msg)
+      setSubmitting(false)
+    }
+  }
+
+  function onKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Escape' && !submitting) {
+      onClose()
+    }
+  }
+
+  // Unidades agrupadas por dimensión (igual que KitchenItemsPage).
+  const unitsGrouped = useMemo(() => {
+    const groups = new Map<string, KitchenUnit[]>()
+    units.forEach((u) => {
+      const list = groups.get(u.dimension) ?? []
+      list.push(u)
+      groups.set(u.dimension, list)
+    })
+    return groups
+  }, [units])
+
+  const DIM_LABEL: Record<string, string> = {
+    weight: 'Peso',
+    volume: 'Volumen',
+    unit: 'Unidades',
+    length: 'Longitud',
+  }
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="recipe-form-title"
+      onKeyDown={onKeyDown}
+      className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-0 sm:p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-card w-full sm:max-w-md max-h-[95vh] sm:max-h-[90vh] rounded-t-xl sm:rounded-xl shadow-xl flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border-default">
+          <h3 id="recipe-form-title" className="text-base font-medium text-text-primary">
+            Nuevo plato
+          </h3>
+          <button
+            type="button"
+            aria-label="Cerrar"
+            onClick={onClose}
+            disabled={submitting}
+            className="text-text-secondary hover:text-text-primary transition-base disabled:opacity-50"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="px-4 py-4 space-y-3 overflow-y-auto">
+          <div>
+            <label className="block text-xs font-medium text-text-secondary mb-1">
+              Nombre
+            </label>
+            <input
+              type="text"
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              disabled={submitting}
+              placeholder="Ej: Pizza Margherita"
+              className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-text-secondary mb-1">
+              Tipo
+            </label>
+            <select
+              value={type}
+              onChange={(e) => setType(e.target.value as RecipeItemType)}
+              disabled={submitting}
+              className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+            >
+              <option value="dish">Plato (se sirve al cliente)</option>
+              <option value="recipe">Sub-receta (componente reutilizable)</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-text-secondary mb-1">
+              Unidad base
+            </label>
+            <select
+              value={baseUnitId}
+              onChange={(e) => setBaseUnitId(e.target.value)}
+              disabled={submitting || units.length === 0}
+              className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+            >
+              {Array.from(unitsGrouped.entries()).map(([dim, list]) => (
+                <optgroup key={dim} label={DIM_LABEL[dim] ?? dim}>
+                  {list.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name} ({u.abbreviation})
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+            <p className="text-[11px] text-text-secondary mt-1">
+              Para un plato individual normalmente "Unidad". Para una sub-receta a granel, peso o volumen.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-text-secondary mb-1">
+              Raciones
+            </label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={yieldPortions}
+              onChange={(e) => setYieldPortions(e.target.value)}
+              disabled={submitting}
+              placeholder="Opcional. Ej: 8"
+              className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+            />
+            <p className="text-[11px] text-text-secondary mt-1">
+              Cuántas raciones salen de esta receta. Permite calcular el coste por ración.
+            </p>
+          </div>
+
+          {error && (
+            <div className="p-2 rounded-md bg-danger-bg text-danger border border-danger/20 text-xs">
+              {error}
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-border-default">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={submitting}
+            className="px-3 py-1.5 text-sm rounded-md text-text-secondary hover:bg-page transition-base disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={submitting}
+            className="px-3 py-1.5 text-sm rounded-md font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base"
+          >
+            {submitting ? 'Creando...' : 'Crear'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
