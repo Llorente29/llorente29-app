@@ -18,11 +18,11 @@ import { useEffect, useMemo, useState, useCallback } from 'react'
 import { Check, Plus, Search, X, Loader2, AlertTriangle, Info } from 'lucide-react'
 import {
   findIngredientMatches,
-  resolveImportProposal,
   materializeRecipeSession,
   type ParsedRecipeLine,
   type ImportMatchCandidate,
   type ImportRecipeResult,
+  type ImportDecisions,
 } from '@/modules/kitchen/services/recipeImportService'
 import { listRecipeItems } from '@/modules/kitchen/services/recipeItemService'
 import { listUnits } from '@/modules/kitchen/services/kitchenUnitService'
@@ -261,11 +261,17 @@ export default function RecipeImportReviewModal({
     setFinishing(true)
     setError(null)
     try {
+      // Construir el objeto de decisiones para TODAS las líneas y pasarlo a la
+      // RPC. La clave es el nombre normalizado de la línea; el valor, el
+      // ingrediente existente elegido (uuid) o null para "crear nuevo". Esto
+      // NO depende de mapping_proposal: la decisión siempre viaja completa, así
+      // que materialize nunca crea un duplicado de algo que el humano enlazó.
+      const decisions: ImportDecisions = {}
       for (const r of rows) {
-        const targetId = r.decision.kind === 'existing' ? r.decision.targetId : null
-        await resolveImportProposal(accountId, sessionId, r.line.normalized, targetId)
+        decisions[r.line.normalized] =
+          r.decision.kind === 'existing' ? r.decision.targetId : null
       }
-      const result = await materializeRecipeSession(sessionId, rows.length)
+      const result = await materializeRecipeSession(sessionId, rows.length, decisions)
       onCompleted(result)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'No se pudo crear el escandallo.')

@@ -9,23 +9,27 @@
 //
 // FLUJO EN TRES PASOS (B2 — pantalla de revisión anti-duplicados):
 //   1. extractRecipeSession()  → sube + Edge `extract-recipe` → sesión
-//      `recipe_item_ai_session` (pending_review) + una `mapping_proposal` por
-//      línea (status 'pending', sin chosen_target_id). NO materializa.
+//      `recipe_item_ai_session` (pending_review). NO materializa.
 //   2. [pantalla de revisión]  → por cada línea, findIngredientMatches() llama a
 //      run_mapping y el humano elige el ingrediente existente (o crea nuevo).
-//      resolveImportProposal() escribe chosen_target_id + status 'human_confirmed'.
-//   3. materializeRecipeSession() → recipe_item (dish) + recipe_line. Como la RPC
-//      respeta chosen_target_id, NO duplica: enlaza al existente.
+//   3. materializeRecipeSession(sessionId, lines, decisions) → recipe_item (dish)
+//      + recipe_line. Las DECISIONES del humano se pasan DIRECTAMENTE a la RPC
+//      (p_decisions): la RPC las respeta con prioridad y NO duplica.
 //
-// Por qué este paso intermedio: sin él, materialize cae al ELSE (crea nuevo) en
-// CADA línea porque las propuestas nacen 'pending' (no en su lista de estados),
-// y duplica ingredientes que ya existen ("Salsa de tomate" cuando ya hay
-// "Tomate Frito"). La pantalla de revisión rellena la decisión que materialize
-// ya sabe leer. Anti-invención: nada se crea si hay un equivalente elegido.
+// POR QUÉ las decisiones van por parámetro y no por mapping_proposal:
+//   El sistema antiguo guardaba la decisión en `mapping_proposal` y la RPC la
+//   leía de ahí. Pero el Edge no siempre crea la propuesta de una línea (choca
+//   con el índice único mapping_proposal_uq, que no incluye source_ref). Si no
+//   hay propuesta: el UPDATE de la decisión afecta a 0 filas SIN error → la
+//   decisión se pierde en silencio → la RPC no la encuentra → crea ingrediente
+//   nuevo (DUPLICA). Pasar las decisiones por parámetro elimina esa dependencia:
+//   el objeto se construye SIEMPRE para todas las líneas, así que la decisión
+//   nunca se pierde. mapping_proposal queda solo como fallback de compatibilidad.
+//   Anti-invención: nada se crea si el humano eligió un equivalente.
 //
 // COMPAT: importRecipeFromFile() se conserva (extract + materialize en uno, sin
-// revisión) para no romper llamadas existentes; las pantallas usan el flujo de
-// tres pasos.
+// revisión, sin decisions → la RPC usa su fallback) para no romper llamadas
+// existentes; las pantallas usan el flujo de tres pasos con decisiones.
 
 import { supabase } from '@/lib/supabase'
 import * as XLSX from 'xlsx'
@@ -343,47 +347,13 @@ export async function extractRecipeSession(
     })
   }
 
-  // ── Adopción de propuestas (deuda del índice único mapping_proposal_uq) ──
-  // El índice único es por (account_id, source_kind, source_normalized,
-  // target_kind, context_brand_id) — NO incluye source_ref (la sesión). Si una
-  // ficha se reimporta, el Edge no puede recrear las propuestas (chocan con las
-  // de una sesión anterior) y quedan huérfanas, atadas a la sesión vieja y en
-  // 'pending'. El modal resuelve por source_ref = ESTA sesión y materialize las
-  // busca igual → no casan → se crea todo nuevo (duplica).
-  //
-  // Solución sin tocar el Edge ni el índice: REAPUNTAR a esta sesión las
-  // propuestas que existan para esta cuenta + estos textos normalizados, y
-  // dejarlas limpias ('pending', sin chosen_target_id). Así el modal y
-  // materialize trabajan sobre la sesión actual, gane quien gane el insert.
-  const normlist = lines.map((l) => l.normalized)
-  if (normlist.length > 0) {
-    const { error: adoptErr } = await supabase
-      .from('mapping_proposal')
-      .update({
-        source_ref: extract.session_id,
-        status: 'pending',
-        chosen_target_id: null,
-        // NO tocar `method`: la columna es NOT NULL. Se reescribe luego en
-        // resolveImportProposal ('human') al resolver cada línea en el modal.
-      } as never)
-      .eq('account_id', accountId)
-      .eq('source_kind', 'recipe_ingredient')
-      .eq('target_kind', 'recipe_item')
-      .in('source_normalized', normlistDistinct(normlist))
-      .neq('source_ref', extract.session_id)
-    if (adoptErr) {
-      // No es fatal: si la adopción falla, el modal seguirá; pero lo registramos
-      // para no enmascarar un problema de RLS o de datos.
-      console.error('[extractRecipeSession] adopción de propuestas:', adoptErr.message)
-    }
-  }
+  // Las decisiones del humano ya NO dependen de mapping_proposal: se pasan
+  // directamente a materializeRecipeSession (p_decisions). Por eso aquí no se
+  // toca ninguna propuesta — el modal construye el objeto de decisiones y la RPC
+  // lo respeta, exista o no la propuesta. (Esto elimina el antiguo parche de
+  // "adopción de propuestas", que era frágil y dependía del índice único.)
 
   return { sessionId: extract.session_id, dishName, targetRecipeId, lines }
-}
-
-// Quita normalizados repetidos (defensa; las líneas ya vienen deduplicadas).
-function normlistDistinct(xs: string[]): string[] {
-  return Array.from(new Set(xs))
 }
 
 // ── Paso 2: candidatos por similitud (run_mapping) ────────────────────────────
@@ -423,16 +393,14 @@ export async function findIngredientMatches(
   }))
 }
 
-// ── Paso 2b: registrar la decisión humana en la propuesta ─────────────────────
+// ── Paso 2b (COMPAT): registrar la decisión en mapping_proposal ───────────────
 
 /**
- * Resuelve UNA línea: escribe la decisión del humano en su mapping_proposal para
- * que materialize la respete. Casa por (source_ref = sesión, source_normalized).
- *   · chosenTargetId NO nulo → usar ese ingrediente existente (no duplica).
- *   · chosenTargetId nulo     → crear nuevo a propósito (materialize lo creará
- *     como raw provisional needs_review).
- * En ambos casos status='human_confirmed' (que está en la lista que materialize
- * acepta). Patrón calcado de approveFamilyProposal (UPDATE con RLS, sin RPC).
+ * COMPAT / best-effort. La vía principal ya NO es esta: las decisiones se pasan
+ * a materializeRecipeSession (p_decisions), que manda. Esta función se conserva
+ * por si alguna pantalla antigua la usa; escribir aquí es inofensivo (afecta a 0
+ * filas si la propuesta no existe, sin romper nada). No depender de ella para el
+ * casado: la verdad es el objeto de decisiones que recibe la RPC.
  */
 export async function resolveImportProposal(
   accountId: string,
@@ -454,19 +422,31 @@ export async function resolveImportProposal(
   if (error) throw new Error(`Error guardando la decisión: ${error.message}`)
 }
 
+// ── Tipo de las decisiones del humano (clave = nombre normalizado) ────────────
+// { "<source_normalized>": "<recipe_item_id>" | null }
+//   · uuid → usar ese ingrediente existente (no duplica).
+//   · null → crear nuevo a propósito (raw provisional needs_review).
+export type ImportDecisions = Record<string, string | null>
+
 // ── Paso 3: materializar la sesión revisada → escandallo ──────────────────────
 
 /**
  * Vuelca la sesión a recipe_item (dish) + recipe_line. Llamar SOLO después de
- * resolver todas las líneas. La RPC respeta chosen_target_id de cada propuesta:
- * enlaza a los existentes elegidos y crea solo los marcados como nuevos.
+ * resolver todas las líneas. Las DECISIONES del humano se pasan como p_decisions
+ * y la RPC las respeta con prioridad: enlaza a los existentes elegidos y crea
+ * solo los marcados como nuevos. Si no se pasan decisiones (importación sin
+ * revisión), la RPC usa su fallback (mapping_proposal) — comportamiento viejo.
  */
 export async function materializeRecipeSession(
   sessionId: string,
   linesExtracted: number,
+  decisions?: ImportDecisions,
 ): Promise<ImportRecipeResult> {
   if (!supabase) throw new Error('Supabase no disponible')
-  const { data, error } = await rpc('materialize_recipe_session', { p_session_id: sessionId })
+  const { data, error } = await rpc('materialize_recipe_session', {
+    p_session_id: sessionId,
+    p_decisions: decisions ?? null,
+  })
   if (error) throw new Error(`No se pudo crear el escandallo: ${error.message}`)
   const row = (Array.isArray(data) ? data[0] : data) as MaterializeRow | undefined
   if (!row?.result_recipe_id) {
