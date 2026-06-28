@@ -191,17 +191,57 @@ export default function RecipeImportReviewModal({
     patchRow(idx, { pickerOpen: true })
   }
 
-  // Búsqueda libre dentro del picker (run_mapping con el texto tecleado).
+  // Búsqueda libre dentro del picker. Combina DOS fuentes sin duplicar:
+  //   · LITERAL: listRecipeItems({ search }) → ilike por nombre. Encuentra
+  //     cualquier ingrediente que CONTENGA el texto (p.ej. "patat" → "PATATAS
+  //     HOME STYLE CON PIEL"), aunque el parecido difuso no lo casara.
+  //   · DIFUSO: run_mapping → parecidos por semejanza (sinónimos, erratas).
+  // Los literales se ponen primero (coincidencia exacta de texto manda) y de
+  // paso alimentan el mapa de costes para mostrar su €/unidad.
   async function runSearch(idx: number, text: string) {
     patchRow(idx, { search: text })
-    if (text.trim().length < 2) {
+    const q = text.trim()
+    if (q.length < 2) {
       patchRow(idx, { searchResults: [], searching: false })
       return
     }
     patchRow(idx, { searching: true })
     try {
-      const res = await findIngredientMatches(accountId, text.trim(), MATCH_LIMIT, MATCH_FUZZY_MIN)
-      patchRow(idx, { searchResults: res, searching: false })
+      const [literal, fuzzy] = await Promise.all([
+        listRecipeItems({ accountId, type: 'raw', search: q }),
+        findIngredientMatches(accountId, q, MATCH_LIMIT, MATCH_FUZZY_MIN).catch(() => []),
+      ])
+
+      // Los literales (raws) → candidatos + entran al mapa de costes.
+      if (literal.length > 0) {
+        setCostById((prev) => {
+          const next = new Map(prev)
+          for (const it of literal) {
+            if (!next.has(it.id)) {
+              next.set(it.id, {
+                cost: it.fixedCost ?? it.computedCost ?? null,
+                unitAbbr: null, // la abreviatura se resolverá si ya estaba; si no, se ve "€"
+              })
+            }
+          }
+          return next
+        })
+      }
+
+      const literalAsCandidates: ImportMatchCandidate[] = literal.map((it) => ({
+        recipeItemId: it.id,
+        name: it.name,
+        folvyCode: null,
+        confidence: 1, // coincidencia literal de texto: máxima prioridad de orden
+        matchType: 'literal',
+        semaphore: 'green',
+      }))
+
+      // Fusionar sin duplicar (literal primero, luego difusos no repetidos).
+      const seen = new Set(literalAsCandidates.map((c) => c.recipeItemId))
+      const merged = [...literalAsCandidates, ...fuzzy.filter((c) => !seen.has(c.recipeItemId))]
+
+      patchRow(idx, { searchResults: merged, searching: false })
     } catch {
       patchRow(idx, { searchResults: [], searching: false })
     }
