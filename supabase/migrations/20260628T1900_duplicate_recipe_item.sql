@@ -64,14 +64,17 @@ BEGIN
   v_new_name := COALESCE(NULLIF(btrim(p_new_name), ''), v_src.name || ' (copia)');
 
   -- ── 1) El PLATO copia (sin folvy_code: lo pone el trigger; needs_review=true) ──
+  --     Hereda la foto del original (kitchen_photo_url).
   INSERT INTO recipe_item (
     account_id, type, name, base_unit_id, cost_strategy, fixed_cost,
-    created_by_name, yield_portions, source, ai_confidence, needs_review, is_stockable
+    created_by_name, yield_portions, source, ai_confidence, needs_review, is_stockable,
+    kitchen_photo_url
   )
   VALUES (
     v_src.account_id, v_src.type, v_new_name, v_src.base_unit_id, v_src.cost_strategy,
     v_src.fixed_cost, COALESCE(v_src.created_by_name, 'Duplicado'),
-    v_src.yield_portions, 'manual', NULL, true, v_src.is_stockable
+    v_src.yield_portions, 'manual', NULL, true, v_src.is_stockable,
+    v_src.kitchen_photo_url
   )
   RETURNING id INTO v_new_id;
 

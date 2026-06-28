@@ -38,6 +38,7 @@ import {
   ShieldCheck,
   Loader2,
   Copy,
+  Pencil,
 } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useApp } from '@/context/AppContext'
@@ -263,6 +264,10 @@ export default function RecipeEditorPage({
   // ── Duplicar receta (copia plato + líneas + pasos y abre la copia) ──
   const [duplicating, setDuplicating] = useState(false)
   const [duplicateError, setDuplicateError] = useState<string | null>(null)
+  // ── Editar el nombre del plato (click en el título) ──
+  const [editingName, setEditingName] = useState(false)
+  const [nameDraft, setNameDraft] = useState('')
+  const [savingName, setSavingName] = useState(false)
   // ── Importar ficha (rellenar ESTE escandallo, no crear otro) ──
   const importInputRef = useRef<HTMLInputElement | null>(null)
   const [importing, setImporting] = useState(false)
@@ -573,6 +578,31 @@ export default function RecipeEditorPage({
       setDuplicateError(err instanceof Error ? err.message : 'No se pudo duplicar la receta.')
     } finally {
       setDuplicating(false)
+    }
+  }
+
+  // Edición del nombre del plato (click en el título → input → guardar).
+  function startEditName() {
+    if (!recipe) return
+    setNameDraft(recipe.name)
+    setEditingName(true)
+  }
+  async function saveName() {
+    if (!recipe || savingName) return
+    const next = nameDraft.trim()
+    if (!next || next === recipe.name) {
+      setEditingName(false)
+      return
+    }
+    setSavingName(true)
+    try {
+      await updateRecipeItem(recipe.id, { name: next })
+      setEditingName(false)
+      setReloadTick((t) => t + 1)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'No se pudo cambiar el nombre.')
+    } finally {
+      setSavingName(false)
     }
   }
 
@@ -1597,9 +1627,30 @@ export default function RecipeEditorPage({
           {/* Título, tipo/código, chips y botón de foto. */}
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-2 flex-wrap">
-              <h1 className="min-w-0 break-words text-[22px] font-display font-medium text-text-primary leading-tight">
-                {recipe.name}
-              </h1>
+              {editingName ? (
+                <input
+                  type="text"
+                  value={nameDraft}
+                  autoFocus
+                  disabled={savingName}
+                  onChange={(e) => setNameDraft(e.target.value)}
+                  onBlur={saveName}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') saveName()
+                    if (e.key === 'Escape') setEditingName(false)
+                  }}
+                  className="min-w-0 flex-1 text-[22px] font-display font-medium text-text-primary leading-tight bg-card border border-terracota/40 rounded-md px-2 py-0.5 focus:outline-none focus:border-terracota"
+                />
+              ) : (
+                <h1
+                  className="min-w-0 break-words text-[22px] font-display font-medium text-text-primary leading-tight inline-flex items-center gap-2 group cursor-text"
+                  onClick={startEditName}
+                  title="Haz clic para cambiar el nombre"
+                >
+                  {recipe.name}
+                  <Pencil className="w-3.5 h-3.5 text-text-secondary opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                </h1>
+              )}
               <div className="flex gap-1.5 shrink-0">
                 {isAi && (
                   <span className="text-xs px-2.5 py-1 rounded-full bg-accent text-text-on-accent inline-flex items-center gap-1 font-medium">
