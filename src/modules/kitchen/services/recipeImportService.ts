@@ -343,7 +343,46 @@ export async function extractRecipeSession(
     })
   }
 
+  // ── Adopción de propuestas (deuda del índice único mapping_proposal_uq) ──
+  // El índice único es por (account_id, source_kind, source_normalized,
+  // target_kind, context_brand_id) — NO incluye source_ref (la sesión). Si una
+  // ficha se reimporta, el Edge no puede recrear las propuestas (chocan con las
+  // de una sesión anterior) y quedan huérfanas, atadas a la sesión vieja y en
+  // 'pending'. El modal resuelve por source_ref = ESTA sesión y materialize las
+  // busca igual → no casan → se crea todo nuevo (duplica).
+  //
+  // Solución sin tocar el Edge ni el índice: REAPUNTAR a esta sesión las
+  // propuestas que existan para esta cuenta + estos textos normalizados, y
+  // dejarlas limpias ('pending', sin chosen_target_id). Así el modal y
+  // materialize trabajan sobre la sesión actual, gane quien gane el insert.
+  const normlist = lines.map((l) => l.normalized)
+  if (normlist.length > 0) {
+    const { error: adoptErr } = await supabase
+      .from('mapping_proposal')
+      .update({
+        source_ref: extract.session_id,
+        status: 'pending',
+        chosen_target_id: null,
+        method: null,
+      } as never)
+      .eq('account_id', accountId)
+      .eq('source_kind', 'recipe_ingredient')
+      .eq('target_kind', 'recipe_item')
+      .in('source_normalized', normlistDistinct(normlist))
+      .neq('source_ref', extract.session_id)
+    if (adoptErr) {
+      // No es fatal: si la adopción falla, el modal seguirá; pero lo registramos
+      // para no enmascarar un problema de RLS o de datos.
+      console.error('[extractRecipeSession] adopción de propuestas:', adoptErr.message)
+    }
+  }
+
   return { sessionId: extract.session_id, dishName, targetRecipeId, lines }
+}
+
+// Quita normalizados repetidos (defensa; las líneas ya vienen deduplicadas).
+function normlistDistinct(xs: string[]): string[] {
+  return Array.from(new Set(xs))
 }
 
 // ── Paso 2: candidatos por similitud (run_mapping) ────────────────────────────
