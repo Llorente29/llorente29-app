@@ -82,6 +82,25 @@ export function FolvyAIBubble({ open: openProp, onOpenChange, hideLauncher = fal
 
   const [mounted, setMounted] = useState(false);
   const [hasGreeted, setHasGreeted] = useState(false);
+
+  // Primer encuentro: la primera vez que se abre el chat en esta cuenta, se
+  // muestra la CARTA DE PRESENTACIÓN (qué es el copiloto, qué hace) en vez del
+  // saludo proactivo. Después, saludo normal. El flag vive por cuenta en
+  // localStorage (una vez por dispositivo es un comportamiento aceptable).
+  const presentedKey = activeAccountId ? `folvy_copiloto_presentado_${activeAccountId}` : null;
+  const [isFirstEncounter, setIsFirstEncounter] = useState(false);
+  useEffect(() => {
+    if (!presentedKey) return;
+    try {
+      setIsFirstEncounter(localStorage.getItem(presentedKey) !== '1');
+    } catch { setIsFirstEncounter(false); }
+  }, [presentedKey]);
+
+  const markPresented = () => {
+    if (!presentedKey) return;
+    try { localStorage.setItem(presentedKey, '1'); } catch { /* noop */ }
+    setIsFirstEncounter(false);
+  };
   const [stickyToBottom, setStickyToBottom] = useState(true);
   const [showJumpToBottom, setShowJumpToBottom] = useState(false);
 
@@ -125,10 +144,12 @@ export function FolvyAIBubble({ open: openProp, onOpenChange, hideLauncher = fal
   }, [messages, isStreaming, open, stickyToBottom]);
 
   useEffect(() => {
-    if (!open || hasGreeted || messages.length > 0 || !activeAccountId || isStreaming) return;
+    // En el primer encuentro NO saludamos: mostramos la carta de presentación.
+    // El saludo proactivo se reserva para las siguientes visitas.
+    if (!open || hasGreeted || messages.length > 0 || !activeAccountId || isStreaming || isFirstEncounter) return;
     setHasGreeted(true);
     greet();
-  }, [open, hasGreeted, messages.length, activeAccountId, isStreaming, greet]);
+  }, [open, hasGreeted, messages.length, activeAccountId, isStreaming, isFirstEncounter, greet]);
 
   // TTS: cuando el agente TERMINA de responder, lee su última respuesta en voz
   // alta (si el altavoz está activado). Se dispara al pasar isStreaming a false.
@@ -147,6 +168,13 @@ export function FolvyAIBubble({ open: openProp, onOpenChange, hideLauncher = fal
   useEffect(() => {
     if (!open) stopSpeaking();
   }, [open, stopSpeaking]);
+
+  // Al enviar el primer mensaje (o tocar un chip), el primer encuentro queda
+  // cerrado: a partir de aquí, saludo proactivo normal en futuras visitas.
+  const handleSend = (text: string) => {
+    if (isFirstEncounter) markPresented();
+    send(text);
+  };
 
   const handleNewConversation = () => {
     clear();
@@ -333,7 +361,7 @@ export function FolvyAIBubble({ open: openProp, onOpenChange, hideLauncher = fal
                     <button
                       key={prompt}
                       type="button"
-                      onClick={() => send(prompt)}
+                      onClick={() => handleSend(prompt)}
                       className="text-left text-xs rounded-md border border-border-default bg-card px-3 py-2 text-text-primary hover:bg-terracota-bg hover:border-terracota transition-colors duration-fast"
                     >
                       {prompt}
@@ -420,7 +448,7 @@ export function FolvyAIBubble({ open: openProp, onOpenChange, hideLauncher = fal
           )}
 
           <FolvyAIComposer
-            onSend={send}
+            onSend={handleSend}
             onStop={abort}
             isStreaming={isStreaming}
             sttSupported={sttSupported}

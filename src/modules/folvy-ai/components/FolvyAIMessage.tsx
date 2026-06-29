@@ -28,10 +28,12 @@ const ALLOWED_ELEMENTS = ['p', 'strong', 'em', 'ol', 'ul', 'li', 'br'];
 function describeTools(tools: Array<{ name: string }>): string {
   const map: Record<string, string> = {
     catalog_health: 'salud de la carta',
+    assign_resale_cost: 'asignación de coste',
+    reprice_menu_item: 'ajuste de precio',
   };
   if (tools.length === 0) return '';
   const labels = tools.map(t => map[t.name] ?? t.name);
-  return `Folvy AI consultó: ${labels.join(', ')}`;
+  return `Folvy Copiloto consultó: ${labels.join(', ')}`;
 }
 
 const MD_WRAPPER_CLASSES = [
