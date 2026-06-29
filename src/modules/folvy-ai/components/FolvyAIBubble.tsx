@@ -23,9 +23,10 @@
 // X de cierre en la cabecera.
 
 import { useEffect, useRef, useState } from 'react';
-import { X, RotateCcw, RefreshCw, ChevronDown } from 'lucide-react';
+import { X, RotateCcw, RefreshCw, ChevronDown, Volume2, VolumeX } from 'lucide-react';
 import { useApp } from '../../../context/AppContext';
 import { useFolvyAI } from '../hooks/useFolvyAI';
+import { useVoice } from '../hooks/useVoice';
 import { FolvyAIIsotype } from './FolvyAIIsotype';
 import { FolvyAIMessage } from './FolvyAIMessage';
 import { FolvyAIComposer } from './FolvyAIComposer';
@@ -81,6 +82,13 @@ export function FolvyAIBubble({ open: openProp, onOpenChange, hideLauncher = fal
     confirmAction, cancelAction,
   } = useFolvyAI({ accountId: activeAccountId, module });
 
+  // Voz: el dictado se inyecta en el composer; la respuesta se lee si TTS está on.
+  const [dictatedText, setDictatedText] = useState<string | null>(null);
+  const {
+    sttSupported, isListening, startListening, stopListening,
+    ttsSupported, ttsEnabled, toggleTts, speak, stopSpeaking,
+  } = useVoice({ onTranscript: (t) => setDictatedText(t) });
+
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -112,6 +120,24 @@ export function FolvyAIBubble({ open: openProp, onOpenChange, hideLauncher = fal
     setHasGreeted(true);
     greet();
   }, [open, hasGreeted, messages.length, activeAccountId, isStreaming, greet]);
+
+  // TTS: cuando el agente TERMINA de responder, lee su última respuesta en voz
+  // alta (si el altavoz está activado). Se dispara al pasar isStreaming a false.
+  const prevStreamingRef = useRef(false);
+  useEffect(() => {
+    if (prevStreamingRef.current && !isStreaming && ttsEnabled) {
+      const last = messages[messages.length - 1];
+      if (last && last.role === 'assistant' && last.status !== 'error' && last.content.trim()) {
+        speak(last.content);
+      }
+    }
+    prevStreamingRef.current = isStreaming;
+  }, [isStreaming, ttsEnabled, messages, speak]);
+
+  // Al cerrar el panel, callar cualquier lectura en curso.
+  useEffect(() => {
+    if (!open) stopSpeaking();
+  }, [open, stopSpeaking]);
 
   const handleNewConversation = () => {
     clear();
@@ -219,6 +245,22 @@ export function FolvyAIBubble({ open: openProp, onOpenChange, hideLauncher = fal
               </div>
             </div>
             <div className="flex items-center gap-1 shrink-0">
+              {ttsSupported && (
+                <button
+                  type="button"
+                  onClick={toggleTts}
+                  aria-label={ttsEnabled ? 'Desactivar voz' : 'Activar voz'}
+                  title={ttsEnabled ? 'Voz activada (pulsa para silenciar)' : 'Activar lectura en voz alta'}
+                  className={
+                    'rounded-md p-1.5 transition-colors duration-fast ' +
+                    (ttsEnabled
+                      ? 'text-terracota hover:bg-page'
+                      : 'text-text-secondary hover:text-text-primary hover:bg-page')
+                  }
+                >
+                  {ttsEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+                </button>
+              )}
               {messages.length > 0 && !isStreaming && (
                 <button
                   type="button"
@@ -353,6 +395,12 @@ export function FolvyAIBubble({ open: openProp, onOpenChange, hideLauncher = fal
             onSend={send}
             onStop={abort}
             isStreaming={isStreaming}
+            sttSupported={sttSupported}
+            isListening={isListening}
+            onStartListening={startListening}
+            onStopListening={stopListening}
+            dictatedText={dictatedText}
+            onDictatedConsumed={() => setDictatedText(null)}
           />
         </div>
       )}
