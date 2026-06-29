@@ -146,12 +146,31 @@ export function FolvyAIBubble({ open: openProp, onOpenChange, hideLauncher = fal
     return -1;
   })();
 
-  // Acción del agente que está esperando decisión del usuario (pending/executing).
-  // Se muestra como MODAL CENTRAL (decisión relevante, no un cartelito lateral).
+  // Acción del agente que el MODAL CENTRAL debe mostrar: pending/executing
+  // (decisión) y done (éxito visible un momento antes de cerrarse solo).
   const activeActionMsg = messages.find(m =>
     m.role === 'assistant' && m.pendingAction
-    && (m.pendingAction.state === 'pending' || m.pendingAction.state === 'executing'),
+    && (m.pendingAction.state === 'pending'
+        || m.pendingAction.state === 'executing'
+        || m.pendingAction.state === 'done'),
   );
+
+  // Tras un éxito (done), el modal se mantiene ~2,5s mostrando la palomita y
+  // luego se oculta solo. Guardamos el id "ya visto" para no reabrirlo.
+  const [dismissedDoneIds, setDismissedDoneIds] = useState<string[]>([]);
+  useEffect(() => {
+    if (activeActionMsg?.pendingAction?.state === 'done'
+        && !dismissedDoneIds.includes(activeActionMsg.id)) {
+      const id = activeActionMsg.id;
+      const t = setTimeout(() => setDismissedDoneIds(prev => [...prev, id]), 2500);
+      return () => clearTimeout(t);
+    }
+  }, [activeActionMsg, dismissedDoneIds]);
+
+  // El modal se muestra salvo que su éxito ya se haya auto-cerrado.
+  const showActionModal = activeActionMsg
+    && !(activeActionMsg.pendingAction?.state === 'done'
+         && dismissedDoneIds.includes(activeActionMsg.id));
 
   return (
     <>
@@ -340,8 +359,8 @@ export function FolvyAIBubble({ open: openProp, onOpenChange, hideLauncher = fal
 
       {/* Modal central de confirmación de acción (a pantalla completa). Una
           decisión que cambia datos de negocio merece tomar el control de la
-          pantalla, no quedar en un recuadro lateral. */}
-      {activeActionMsg?.pendingAction && (
+          pantalla. Tras confirmar, muestra el éxito un momento y se cierra solo. */}
+      {showActionModal && activeActionMsg?.pendingAction && (
         <FolvyAIActionModal
           action={activeActionMsg.pendingAction}
           onConfirm={() => confirmAction(activeActionMsg.id)}

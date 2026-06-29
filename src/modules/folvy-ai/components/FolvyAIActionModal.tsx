@@ -51,8 +51,31 @@ function effectRows(effect: unknown): Array<{ label: string; value: string }> {
 
 export function FolvyAIActionModal({ action, onConfirm, onCancel }: FolvyAIActionModalProps) {
   const state = action.state ?? 'pending';
-  // El modal solo gobierna la decisión: pending o executing. Resultado → tarjeta.
-  if (state !== 'pending' && state !== 'executing') return null;
+  // El modal gobierna pending/executing (decisión) y done (éxito visible un
+  // momento). Estados terminales no-éxito (cancelled/failed) → fuera del modal.
+  if (state !== 'pending' && state !== 'executing' && state !== 'done') return null;
+
+  // ── Estado de ÉXITO: palomita grande en el centro, se cierra solo ──────────
+  if (state === 'done') {
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        style={{ background: 'rgba(15, 15, 15, 0.55)', backdropFilter: 'blur(2px)' }}
+        role="dialog"
+        aria-modal="true"
+      >
+        <div className="bg-card border border-border-default rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+          <div className="flex flex-col items-center text-center px-6 py-8">
+            <div className="flex items-center justify-center w-14 h-14 rounded-full bg-green-100 mb-4">
+              <Check size={30} className="text-green-600" />
+            </div>
+            <p className="text-base font-display text-text-primary leading-snug">Hecho</p>
+            <p className="text-sm text-text-secondary mt-1">{action.summary}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const busy = state === 'executing';
   const rows = effectRows(action.effect);
