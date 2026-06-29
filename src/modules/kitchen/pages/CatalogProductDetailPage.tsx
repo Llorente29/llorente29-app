@@ -45,6 +45,13 @@ import {
   searchOptionCandidates,
   type ComboSlotDetail, type OptionCandidate, type ComboCost,
 } from '@/modules/kitchen/services/comboEditService'
+import {
+  getProductModifierGroupsEditable,
+  createGroupForProduct, updateGroup, unassignGroupFromProduct, assignExistingGroup,
+  addModifierOption, updateModifierOption, deleteModifierOption,
+  listAssignableGroups,
+  type ModifierGroupDetail, type ModifierOptionDetail, type ExistingGroup,
+} from '@/modules/kitchen/services/modifierEditService'
 import ProductPlacementSection from '@/modules/kitchen/components/ProductPlacementSection'
 import EditPricesModal from '@/modules/kitchen/components/EditPricesModal'
 import { supabase } from '@/lib/supabase'
@@ -64,11 +71,6 @@ function fmtDate(iso: string | null | undefined): string {
   if (!iso) return '—'
   try { return new Date(iso).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) }
   catch { return '—' }
-}
-
-const GROUP_TYPE_LABEL: Record<string, string> = {
-  choice: 'Elección', extras: 'Extras', removal: 'Quitar',
-  side: 'Acompañamiento', cross_sell: 'Sugerencia', info: 'Info',
 }
 
 // Estilos de los tags conocidos (resto → neutro).
@@ -404,6 +406,230 @@ function ComboEditorSection({
         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[#D67442] text-white hover:bg-[#C25F2E] transition-colors disabled:opacity-50">
         <Plus size={13} /> Añadir grupo
       </button>
+    </div>
+  )
+}
+
+// ─── Editor de modificadores: grupos (reutilizables) y opciones ─────────────
+
+function ModifierEditorSection({
+  accountId, brandId, menuItemId,
+}: {
+  accountId: string; brandId: string | null; menuItemId: string
+}) {
+  const [groups, setGroups] = useState<ModifierGroupDetail[]>([])
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  // edición inline nombre de grupo / opción
+  const [editingGroup, setEditingGroup] = useState<string | null>(null)
+  const [groupNameDraft, setGroupNameDraft] = useState('')
+  const [editingOpt, setEditingOpt] = useState<string | null>(null)
+  const [optNameDraft, setOptNameDraft] = useState('')
+  // asignar grupo existente
+  const [assignOpen, setAssignOpen] = useState(false)
+  const [assignable, setAssignable] = useState<ExistingGroup[]>([])
+
+  function reload() {
+    return getProductModifierGroupsEditable(accountId, menuItemId)
+      .then(setGroups)
+      .catch((e) => setErr(String(e.message ?? e)))
+  }
+
+  useEffect(() => {
+    setLoading(true)
+    getProductModifierGroupsEditable(accountId, menuItemId)
+      .then(setGroups)
+      .catch((e) => setErr(String(e.message ?? e)))
+      .finally(() => setLoading(false))
+  }, [accountId, menuItemId])
+
+  function wrap(fn: () => Promise<unknown>) {
+    setBusy(true); setErr(null)
+    fn().then(reload).catch((e) => setErr(String(e.message ?? e))).finally(() => setBusy(false))
+  }
+
+  // ── Grupos ──
+  function addGroup() {
+    if (!brandId) { setErr('El producto no tiene marca; no se puede crear el grupo.'); return }
+    wrap(() => createGroupForProduct(accountId, brandId, menuItemId, 'Nuevo grupo', 'choice', 0, 1))
+  }
+  function startRenameGroup(g: ModifierGroupDetail) { setEditingGroup(g.id); setGroupNameDraft(g.name) }
+  function saveRenameGroup(groupId: string) {
+    const name = groupNameDraft.trim(); setEditingGroup(null)
+    if (!name) return
+    wrap(() => updateGroup(accountId, groupId, { name }))
+  }
+  function setGroupType(g: ModifierGroupDetail, t: string) { wrap(() => updateGroup(accountId, g.id, { groupType: t })) }
+  function setGroupRequired(g: ModifierGroupDetail, required: boolean) {
+    wrap(() => updateGroup(accountId, g.id, { minSelections: required ? Math.max(1, g.minSelections) : 0 }))
+  }
+  function setGroupMax(g: ModifierGroupDetail, max: number) {
+    const m = Math.max(1, max)
+    wrap(() => updateGroup(accountId, g.id, { maxSelections: m, minSelections: Math.min(g.minSelections, m) }))
+  }
+  function removeGroup(groupId: string) { wrap(() => unassignGroupFromProduct(accountId, groupId, menuItemId)) }
+
+  // ── Opciones ──
+  function addOpt(groupId: string) { wrap(() => addModifierOption(accountId, groupId, 'Nueva opción', 0, false)) }
+  function startRenameOpt(o: ModifierOptionDetail) { setEditingOpt(o.id); setOptNameDraft(o.name) }
+  function saveRenameOpt(optId: string) {
+    const name = optNameDraft.trim(); setEditingOpt(null)
+    if (!name) return
+    wrap(() => updateModifierOption(accountId, optId, { name }))
+  }
+  function setOptPrice(optId: string, raw: string) {
+    const v = raw.trim() === '' ? 0 : Number(raw.replace(',', '.'))
+    if (Number.isNaN(v)) return
+    wrap(() => updateModifierOption(accountId, optId, { priceImpact: v }))
+  }
+  function toggleOptDefault(o: ModifierOptionDetail) { wrap(() => updateModifierOption(accountId, o.id, { isDefault: !o.isDefault })) }
+  function removeOpt(optId: string) { wrap(() => deleteModifierOption(accountId, optId)) }
+
+  // ── Asignar grupo existente ──
+  function openAssign() {
+    if (!brandId) return
+    setAssignOpen(true)
+    listAssignableGroups(accountId, brandId, menuItemId).then(setAssignable).catch(() => setAssignable([]))
+  }
+  function pickAssign(groupId: string) {
+    setAssignOpen(false)
+    wrap(() => assignExistingGroup(accountId, groupId, menuItemId))
+  }
+
+  if (loading) return <p className="text-sm text-stone-400">Cargando modificadores…</p>
+
+  return (
+    <div className="space-y-3">
+      {err && <div className="p-2 rounded-lg bg-red-50 text-red-700 text-xs">{err}</div>}
+
+      {groups.length === 0 && (
+        <p className="text-sm text-stone-500">Este producto no tiene modificadores. Crea un grupo o asigna uno existente.</p>
+      )}
+
+      {groups.map((g) => {
+        const required = g.minSelections >= 1
+        return (
+          <div key={g.id} className="border border-stone-200 rounded-lg overflow-hidden">
+            {/* Cabecera del grupo */}
+            <div className="px-3 py-2 bg-stone-50 space-y-2">
+              <div className="flex items-center gap-2">
+                {editingGroup === g.id ? (
+                  <input autoFocus value={groupNameDraft}
+                    onChange={(e) => setGroupNameDraft(e.target.value)}
+                    onBlur={() => saveRenameGroup(g.id)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') saveRenameGroup(g.id); if (e.key === 'Escape') setEditingGroup(null) }}
+                    className="flex-1 text-sm font-medium px-2 py-1 border border-stone-300 rounded" />
+                ) : (
+                  <button onClick={() => startRenameGroup(g)} className="flex-1 text-left text-sm font-medium hover:text-[#D67442]" title="Renombrar grupo">
+                    {g.name}
+                  </button>
+                )}
+                <button onClick={() => removeGroup(g.id)} disabled={busy} className="text-stone-400 hover:text-red-600 p-1" title="Quitar grupo de este producto">
+                  <Trash2 size={14} />
+                </button>
+              </div>
+
+              {/* Aviso de reutilización */}
+              {g.usageCount > 1 && (
+                <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                  Este grupo se usa en {g.usageCount} productos. Los cambios afectan a todos.
+                </p>
+              )}
+
+              <div className="flex flex-wrap items-center gap-3">
+                <select value={g.groupType} disabled={busy} onChange={(e) => setGroupType(g, e.target.value)}
+                  className="text-[11px] px-1.5 py-1 border border-stone-300 rounded bg-white">
+                  <option value="choice">Elegir</option>
+                  <option value="extras">Extras</option>
+                  <option value="removal">Quitar</option>
+                  <option value="size">Tamaño</option>
+                </select>
+                <label className="flex items-center gap-1 text-[11px] text-stone-600 cursor-pointer">
+                  <input type="checkbox" checked={required} disabled={busy} onChange={(e) => setGroupRequired(g, e.target.checked)} />
+                  Obligatorio
+                </label>
+                <label className="flex items-center gap-1 text-[11px] text-stone-600">
+                  Elige hasta
+                  <input type="number" min={1} value={g.maxSelections} disabled={busy}
+                    onChange={(e) => setGroupMax(g, Number(e.target.value))}
+                    className="w-12 px-1 py-0.5 border border-stone-300 rounded text-center" />
+                </label>
+              </div>
+            </div>
+
+            {/* Opciones */}
+            <div className="px-3 py-2 space-y-1.5">
+              {g.options.length === 0 && <p className="text-xs text-stone-400">Sin opciones.</p>}
+              {g.options.map((o) => (
+                <div key={o.id} className="flex items-center gap-2 text-sm">
+                  {editingOpt === o.id ? (
+                    <input autoFocus value={optNameDraft}
+                      onChange={(e) => setOptNameDraft(e.target.value)}
+                      onBlur={() => saveRenameOpt(o.id)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') saveRenameOpt(o.id); if (e.key === 'Escape') setEditingOpt(null) }}
+                      className="flex-1 px-2 py-0.5 border border-stone-300 rounded" />
+                  ) : (
+                    <button onClick={() => startRenameOpt(o)} className="flex-1 text-left truncate hover:text-[#D67442]" title="Renombrar opción">
+                      {o.name}
+                    </button>
+                  )}
+                  <label className="flex items-center gap-1 text-[11px] text-stone-500" title="Opción por defecto">
+                    <input type="checkbox" checked={o.isDefault} disabled={busy} onChange={() => toggleOptDefault(o)} />
+                    Defecto
+                  </label>
+                  <div className="flex items-center gap-0.5 text-[11px] text-stone-500" title="Suplemento de precio (€)">
+                    <span>+€</span>
+                    <input type="text" defaultValue={o.priceImpact ? String(o.priceImpact) : ''} placeholder="0" disabled={busy}
+                      onBlur={(e) => setOptPrice(o.id, e.target.value)}
+                      className="w-14 px-1 py-0.5 border border-stone-200 rounded text-right" />
+                  </div>
+                  <button onClick={() => removeOpt(o.id)} disabled={busy} className="text-stone-300 hover:text-red-600 p-0.5" title="Quitar opción">
+                    <X size={13} />
+                  </button>
+                </div>
+              ))}
+              <button onClick={() => addOpt(g.id)} disabled={busy}
+                className="inline-flex items-center gap-1 text-xs font-medium text-[#D67442] hover:underline mt-1">
+                <Plus size={12} /> Añadir opción
+              </button>
+            </div>
+          </div>
+        )
+      })}
+
+      {/* Acciones: crear grupo / asignar existente */}
+      <div className="flex flex-wrap items-center gap-2">
+        <button onClick={addGroup} disabled={busy || !brandId}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[#D67442] text-white hover:bg-[#C25F2E] transition-colors disabled:opacity-50">
+          <Plus size={13} /> Nuevo grupo
+        </button>
+        <button onClick={openAssign} disabled={busy || !brandId}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-stone-300 text-stone-600 hover:bg-stone-50 disabled:opacity-50">
+          Asignar grupo existente
+        </button>
+      </div>
+
+      {/* Picker de grupos existentes */}
+      {assignOpen && (
+        <div className="p-2.5 rounded-lg bg-stone-50 border border-stone-200 text-xs space-y-1.5">
+          <p className="text-stone-600 mb-1">Grupos de la marca para reutilizar:</p>
+          {assignable.length === 0 ? (
+            <p className="text-stone-400">No hay otros grupos disponibles.</p>
+          ) : (
+            <div className="max-h-52 overflow-y-auto divide-y divide-stone-100">
+              {assignable.map((g) => (
+                <button key={g.id} onClick={() => pickAssign(g.id)} disabled={busy}
+                  className="flex items-center justify-between w-full px-2 py-1.5 hover:bg-white text-left">
+                  <span className="truncate">{g.name}</span>
+                  <span className="text-stone-400 ml-2 shrink-0">{g.optionCount} opc · en {g.usageCount} prod.</span>
+                </button>
+              ))}
+            </div>
+          )}
+          <button onClick={() => setAssignOpen(false)} className="text-stone-500 underline">Cerrar</button>
+        </div>
+      )}
     </div>
   )
 }
@@ -1221,41 +1447,10 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
           />
         )}
 
-        {/* S4 — Modificadores (PRESERVADO) */}
+        {/* S4 — Modificadores (editable) */}
         <CollapsibleSection id="s-modificadores" icon="sliders" title="Modificadores"
           badge={groups.length > 0 ? String(groups.length) : undefined} badgeColor="neutral" defaultOpen={groups.length > 0}>
-          {groups.length === 0 ? (
-            <p className="text-sm text-stone-500">Este producto no tiene modificadores.</p>
-          ) : (
-            <div className="space-y-4">
-              {groups.map((g) => (
-                <div key={g.id} className="border border-stone-200 rounded-lg p-4">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[15px] font-medium">{g.name}</span>
-                  </div>
-                  <div className="flex gap-1.5 mb-3">
-                    <span className="text-[11px] px-2.5 py-1 rounded bg-stone-100 text-stone-500 font-medium">{GROUP_TYPE_LABEL[g.groupType] ?? g.groupType}</span>
-                    <span className="text-[11px] px-2.5 py-1 rounded bg-stone-100 text-stone-500 font-medium">
-                      elige {g.minSelections === g.maxSelections ? g.minSelections : `${g.minSelections}–${g.maxSelections}`}
-                    </span>
-                  </div>
-                  <div className="space-y-0.5">
-                    {g.options.map((o) => (
-                      <div key={o.id} className="flex items-center justify-between py-1.5">
-                        <span className="text-[15px]">
-                          {o.name}
-                          {o.isDefault && <span className="ml-2 text-[11px] text-stone-400">(por defecto)</span>}
-                        </span>
-                        <span className="font-mono text-sm text-stone-500">
-                          {o.priceImpact > 0 ? `+${fmtEur(o.priceImpact)}` : o.priceImpact === 0 ? 'incluido' : fmtEur(o.priceImpact)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          <ModifierEditorSection accountId={item.accountId} brandId={item.brandId ?? null} menuItemId={item.id} />
         </CollapsibleSection>
 
         {/* S5 — Alérgenos y nutrición */}
