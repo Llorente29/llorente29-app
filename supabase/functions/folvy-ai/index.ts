@@ -277,13 +277,19 @@ const TOOL_ASSIGN_RESALE_COST: ToolDef = {
 interface AgentDef {
   persona: string;
   tools: ToolDef[];
+  // Modelo del agente. Si se omite, usa FOLVY_AI_MODEL / DEFAULT_MODEL.
+  // Permite enrutar por complejidad: Haiku para tareas simples, Sonnet para razonar.
+  model?: string;
 }
 
 const AGENTS: Record<string, AgentDef> = {
-  // Agente de Cocina (primera implementación del marco).
+  // Agente de Cocina (primera implementación del marco). Razona sobre coste y
+  // margen → merece Sonnet (la calidad de análisis importa). Por defecto ya es
+  // Sonnet; se deja explícito para documentar la intención.
   kitchen: {
     persona: PERSONA_KITCHEN,
     tools: [TOOL_CATALOG_HEALTH, TOOL_ASSIGN_RESALE_COST],
+    model: 'claude-sonnet-4-6',
   },
   // Agente por defecto (chat global sin módulo concreto).
   _default: {
@@ -365,7 +371,13 @@ Deno.serve(async (req) => {
     console.error('[folvy-ai] ANTHROPIC_API_KEY no configurada');
     return jsonResponse(500, { error: 'IA no configurada' });
   }
-  const model = Deno.env.get('FOLVY_AI_MODEL') ?? DEFAULT_MODEL;
+  // Resolver el agente activo (por módulo) y su modelo. Prioridad de modelo:
+  // 1) FOLVY_AI_MODEL si está puesto en el env → override global (abaratar en
+  //    pruebas con Haiku, o forzar un modelo en emergencia, sin tocar código);
+  // 2) el modelo del agente (enrutado por complejidad: Kitchen=Sonnet);
+  // 3) DEFAULT_MODEL.
+  const agent = resolveAgent(body.module);
+  const model = Deno.env.get('FOLVY_AI_MODEL') ?? agent.model ?? DEFAULT_MODEL;
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
   const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
@@ -386,8 +398,6 @@ Deno.serve(async (req) => {
   const userNameLine = userName ? `Nombre del usuario: ${userName}.` : '';
   const surfaceContext = `Surface: ${surface}${body.module ? ` (modulo: ${body.module})` : ''}. ${userNameLine}` +
     (body.context ? `\nContexto adicional: ${JSON.stringify(body.context)}` : '');
-
-  const agent = resolveAgent(body.module);
 
   let systemPrompt = SYSTEM_PROMPT_BASE
     .replace('{{AGENT_PERSONA}}', agent.persona)
