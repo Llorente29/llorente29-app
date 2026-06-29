@@ -30,6 +30,7 @@ import { FolvyAIIsotype } from './FolvyAIIsotype';
 import { FolvyAIMessage } from './FolvyAIMessage';
 import { FolvyAIComposer } from './FolvyAIComposer';
 import { FolvyAIActionCard } from './FolvyAIActionCard';
+import { FolvyAIActionModal } from './FolvyAIActionModal';
 
 const TOOL_HUMAN_LABEL: Record<string, string> = {
   catalog_health: 'Mirando tu carta',
@@ -145,6 +146,13 @@ export function FolvyAIBubble({ open: openProp, onOpenChange, hideLauncher = fal
     return -1;
   })();
 
+  // Acción del agente que está esperando decisión del usuario (pending/executing).
+  // Se muestra como MODAL CENTRAL (decisión relevante, no un cartelito lateral).
+  const activeActionMsg = messages.find(m =>
+    m.role === 'assistant' && m.pendingAction
+    && (m.pendingAction.state === 'pending' || m.pendingAction.state === 'executing'),
+  );
+
   return (
     <>
       {/* Botón flotante (launcher). Se esconde con hideLauncher (en móvil lo
@@ -257,7 +265,9 @@ export function FolvyAIBubble({ open: openProp, onOpenChange, hideLauncher = fal
                     isStreamingThisMessage={isStreamingThis}
                     onRegenerate={isLastAssistant && !isStreaming ? regenerate : undefined}
                   />
-                  {m.role === 'assistant' && m.pendingAction && (
+                  {m.role === 'assistant' && m.pendingAction
+                    && m.pendingAction.state !== 'pending'
+                    && m.pendingAction.state !== 'executing' && (
                     <div className="ml-9 mr-2">
                       <FolvyAIActionCard
                         action={m.pendingAction}
@@ -326,6 +336,17 @@ export function FolvyAIBubble({ open: openProp, onOpenChange, hideLauncher = fal
             isStreaming={isStreaming}
           />
         </div>
+      )}
+
+      {/* Modal central de confirmación de acción (a pantalla completa). Una
+          decisión que cambia datos de negocio merece tomar el control de la
+          pantalla, no quedar en un recuadro lateral. */}
+      {activeActionMsg?.pendingAction && (
+        <FolvyAIActionModal
+          action={activeActionMsg.pendingAction}
+          onConfirm={() => confirmAction(activeActionMsg.id)}
+          onCancel={() => cancelAction(activeActionMsg.id)}
+        />
       )}
     </>
   );
