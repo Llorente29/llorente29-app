@@ -220,15 +220,38 @@ const TOOL_ASSIGN_RESALE_COST: ToolDef = {
     if (!productName) throw new Error('Falta el nombre del producto.');
     if (!Number.isFinite(unitCost) || unitCost < 0) throw new Error('El coste unitario no es válido.');
 
-    // Registra la propuesta (no ejecuta). assign_resale_cost es L1 (reversible: se
-    // puede volver a dejar sin coste). rollback_hint deja constancia de cómo revertir.
+    // Resolver el ANCLA (recipe_item_id) por nombre del menu_item. Pasar el ancla
+    // explícita hace que classify_unmapped_product entre por "Puerta 1" (directa),
+    // sin adivinar por nombre — evita el callejón needs_target cuando hay variantes
+    // del nombre o matrículas inconsistentes. Buscamos el menu_item activo cuyo
+    // nombre coincida (case-insensitive) y que tenga recipe_item asignado.
+    const { data: anchors, error: anchorErr } = await sb
+      .from('menu_item')
+      .select('id, name, recipe_item_id')
+      .eq('account_id', ctx.accountId)
+      .is('archived_at', null)
+      .not('recipe_item_id', 'is', null)
+      .ilike('name', productName);
+    if (anchorErr) throw new Error(`No pude buscar el artículo: ${anchorErr.message}`);
+
+    // Distintos recipe_item candidatos (puede haber varios menu_item → mismo o
+    // distinto recipe_item según variantes de matrícula).
+    const distinctRecipeIds = [...new Set((anchors ?? []).map((a: any) => a.recipe_item_id).filter(Boolean))];
+
+    let recipeItemId: string | null = null;
+    if (distinctRecipeIds.length === 1) {
+      recipeItemId = distinctRecipeIds[0] as string;
+    }
+    // Si hay 0 o >1 anclas distintas, dejamos recipeItemId null: la función
+    // resolverá por nombre (y devolverá needs_target con candidatos si procede).
+
     const summary = `Asignar coste ${unitCost.toFixed(2)}€/ud a "${productName}" (reventa) y propagarlo a sus marcas`;
     const { data: actionId, error } = await sb.rpc('propose_ai_action', {
       p_account_id: ctx.accountId,
       p_agent: 'kitchen',
       p_tool_name: 'assign_resale_cost',
       p_summary: summary,
-      p_args: { product_name: productName, unit_cost: unitCost },
+      p_args: { product_name: productName, unit_cost: unitCost, recipe_item_id: recipeItemId },
       p_risk: 'L1',
       p_effect_preview: { kind: 'assign_resale_cost', product_name: productName, unit_cost: unitCost },
       p_rollback_hint: { note: 'Volver a dejar el producto sin coste (needs_review)' },
@@ -241,6 +264,7 @@ const TOOL_ASSIGN_RESALE_COST: ToolDef = {
       risk: 'L1',
       summary,
       effect: { product_name: productName, unit_cost: unitCost },
+      resolved_anchor: recipeItemId !== null,
       message: 'Propuesta registrada. El usuario debe confirmarla para que el coste se aplique.',
     };
   },
