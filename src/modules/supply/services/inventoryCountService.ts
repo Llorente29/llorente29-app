@@ -399,8 +399,70 @@ export async function getLatestApprovedCount(
   }
 }
 
+/** El conteo aprobado inmediatamente ANTERIOR a una fecha (inicio de ventana del AvT puntual). */
+export async function getApprovedCountBefore(
+  accountId: string,
+  locationId: string,
+  beforeIso: string,
+): Promise<ApprovedCountRef | null> {
+  requireSupabase()
+  const { data, error } = await from('inventory_count')
+    .select('id, code, kind, is_opening, closed_at, approved_at')
+    .eq('account_id', accountId)
+    .eq('location_id', locationId)
+    .eq('status', 'aprobado')
+    .lt('closed_at', beforeIso)
+    .order('closed_at', { ascending: false, nullsFirst: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) throw new Error(`No se pudo buscar el conteo anterior: ${error.message}`)
+  if (!data) return null
+  const r = data as Row
+  return {
+    id: r.id as string,
+    code: (r.code as string | null) ?? null,
+    kind: (r.kind as InventoryCountKind) ?? 'cycle',
+    isOpening: Boolean(r.is_opening),
+    closedAt: (r.closed_at as string | null) ?? null,
+    approvedAt: (r.approved_at as string | null) ?? null,
+  }
+}
+
+/**
+ * Crudos con consumo infra-contado en [fromIso, toIso) para el local, vía la RPC
+ * ÚNICA avt_incomplete_raws (misma verdad que el AvT de periodo). Devuelve un Set
+ * de recipe_item_id para mirar pertenencia O(1) por línea del conteo.
+ */
+export async function getIncompleteConsumptionItems(
+  accountId: string,
+  locationId: string,
+  fromIso: string | null,
+  toIso: string | null,
+): Promise<Set<string>> {
+  requireSupabase()
+  // CAST PUNTUAL: avt_incomplete_raws no está aún en database.ts (CLI de Supabase
+  // roto; misma deuda que materialize/duplicate). Se retira al regenerar los tipos.
+  const rpc = supabase!.rpc as unknown as (
+    fn: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ data: unknown; error: { message: string } | null }>
+  const { data, error } = await rpc('avt_incomplete_raws', {
+    p_account: accountId,
+    p_from: fromIso,
+    p_to: toIso,
+    p_location: locationId,
+  })
+  if (error) throw new Error(`No se pudo calcular el consumo no medible: ${error.message}`)
+  const out = new Set<string>()
+  for (const row of (data ?? []) as Row[]) {
+    const id = row.recipe_item_id as string | null
+    if (id) out.add(id)
+  }
+  return out
+}
+
 export interface AvtCause {
-  key: 'opening' | 'negative_theoretical' | 'no_recipe' | 'waste' | 'unexplained'
+  key: 'opening' | 'negative_theoretical' | 'consumo_incompleto' | 'no_recipe' | 'waste' | 'unexplained'
   label: string
 }
 
@@ -410,14 +472,24 @@ export interface AvtCause {
  *   - opening: el conteo es de apertura (no hay desviación que juzgar).
  *   - negative_theoretical: el teórico (system_qty) es < 0 → dato incompleto
  *     (falta registrar compras o el escandallo descuenta de más), no merma real.
+ *   - consumo_incompleto: un plato vendido en la ventana tenía una línea de
+ *     escandallo en unidad no convertible → su consumo no se descontó → el
+ *     teórico de este crudo está inflado y su desviación NO es merma fiable.
  *   - no_recipe: el artículo está needs_review o sin coste → teórico poco fiable.
  *   - waste: hay un motivo de merma declarado en la línea.
  *   - unexplained: desviación genuina sin explicar (candidata a investigar).
  */
-export function classifyAvtCause(line: InventoryCountLine, isOpening: boolean): AvtCause {
+export function classifyAvtCause(
+  line: InventoryCountLine,
+  isOpening: boolean,
+  isConsumoIncompleto = false,
+): AvtCause {
   if (isOpening) return { key: 'opening', label: 'Apertura' }
   if (line.systemQty !== null && line.systemQty < 0) {
     return { key: 'negative_theoretical', label: 'Dato incompleto' }
+  }
+  if (isConsumoIncompleto) {
+    return { key: 'consumo_incompleto', label: 'Consumo no medible' }
   }
   if (line.needsReview || line.unitCost === null) {
     return { key: 'no_recipe', label: 'Escandallo no fiable' }

@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Loader2, TrendingDown, AlertTriangle, ShieldCheck, ShieldAlert, ShieldQuestion } from 'lucide-react'
 import {
   getLatestApprovedCount, listCountLines, classifyAvtCause,
+  getApprovedCountBefore, getIncompleteConsumptionItems,
   type InventoryCountLine, type ApprovedCountRef, type AvtCause,
 } from '@/modules/supply/services/inventoryCountService'
 
@@ -19,6 +20,7 @@ const fmtDate = (iso: string | null) => iso ? new Date(iso).toLocaleDateString('
 function causeChipClass(key: AvtCause['key']): string {
   switch (key) {
     case 'negative_theoretical': return 'bg-warning-bg text-warning'
+    case 'consumo_incompleto': return 'bg-warning-bg text-warning'
     case 'no_recipe': return 'bg-page text-text-tertiary'
     case 'waste': return 'bg-background-info text-text-info'
     case 'unexplained': return 'bg-danger-bg text-danger'
@@ -40,11 +42,12 @@ export default function AvtSection({
 }) {
   const [count, setCount] = useState<ApprovedCountRef | null>(null)
   const [lines, setLines] = useState<InventoryCountLine[]>([])
+  const [incompleteSet, setIncompleteSet] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
-    if (!accountId || !locationId) { setLines([]); setCount(null); setLoaded(true); setLoading(false); return }
+    if (!accountId || !locationId) { setLines([]); setCount(null); setIncompleteSet(new Set()); setLoaded(true); setLoading(false); return }
     let cancelled = false
     setLoading(true); setLoaded(false)
     ;(async () => {
@@ -55,8 +58,22 @@ export default function AvtSection({
         if (c) {
           const l = await listCountLines(c.id)
           if (!cancelled) setLines(l)
+          // Consumo no medible en la ventana de este conteo: del conteo aprobado
+          // ANTERIOR (inicio) a este (fin). En apertura no hay desviación → vacío.
+          if (!c.isOpening) {
+            const prev = c.closedAt
+              ? await getApprovedCountBefore(accountId, locationId, c.closedAt)
+              : null
+            const inc = await getIncompleteConsumptionItems(
+              accountId, locationId, prev?.closedAt ?? null, c.closedAt ?? null,
+            )
+            if (!cancelled) setIncompleteSet(inc)
+          } else if (!cancelled) {
+            setIncompleteSet(new Set())
+          }
         } else {
           setLines([])
+          setIncompleteSet(new Set())
         }
       } catch (e) {
         if (!cancelled) onError(e instanceof Error ? e.message : 'Error cargando el AvT.')
@@ -73,19 +90,24 @@ export default function AvtSection({
   const rows = useMemo<AvtRow[]>(() => {
     return lines
       .filter(l => l.countedQty !== null)
-      .map(l => ({ line: l, cause: classifyAvtCause(l, isOpening) }))
+      .map(l => ({ line: l, cause: classifyAvtCause(l, isOpening, incompleteSet.has(l.recipeItemId)) }))
       .sort((a, b) => Math.abs(b.line.varianceValue ?? 0) - Math.abs(a.line.varianceValue ?? 0))
-  }, [lines, isOpening])
+  }, [lines, isOpening, incompleteSet])
 
   // Salud del dato.
   const health = useMemo(() => {
     const covered = rows.length
     const negative = rows.filter(r => r.cause.key === 'negative_theoretical').length
     const noRecipe = rows.filter(r => r.cause.key === 'no_recipe').length
-    const totalVar = rows.reduce((s, r) => s + (r.line.varianceValue ?? 0), 0)
+    const consumoIncompleto = rows.filter(r => r.cause.key === 'consumo_incompleto').length
+    // El total fiable NO suma las líneas con consumo no medible (su desviación es
+    // ruido, no merma): espejo de cómo el AvT de periodo anula su merma.
+    const totalVar = rows
+      .filter(r => r.cause.key !== 'consumo_incompleto')
+      .reduce((s, r) => s + (r.line.varianceValue ?? 0), 0)
     let level: 'none' | 'partial' | 'good' = 'none'
-    if (count) level = (count.kind === 'full' && negative === 0 && noRecipe === 0) ? 'good' : 'partial'
-    return { covered, negative, noRecipe, totalVar, level }
+    if (count) level = (count.kind === 'full' && negative === 0 && noRecipe === 0 && consumoIncompleto === 0) ? 'good' : 'partial'
+    return { covered, negative, noRecipe, consumoIncompleto, totalVar, level }
   }, [rows, count])
 
   if (loading) {
@@ -124,8 +146,9 @@ export default function AvtSection({
         <div className="text-xs text-text-secondary mt-2 leading-relaxed">
           Cubre <strong className="text-text-primary">{health.covered}</strong> artículo{health.covered === 1 ? '' : 's'} contado{health.covered === 1 ? '' : 's'}.
           {health.negative > 0 && <> <span className="text-warning">{health.negative} con stock teórico negativo</span> (falta registrar compras o el escandallo descuenta de más).</>}
-          {health.noRecipe > 0 && <> {health.negative > 0 ? '' : ' '}{health.noRecipe} sin escandallo fiable.</>}
-          {health.negative === 0 && health.noRecipe === 0 && <> Sin avisos de dato.</>}
+          {health.consumoIncompleto > 0 && <> <span className="text-warning">{health.consumoIncompleto} con consumo no medible</span> (un plato vendido tiene una línea sin convertir; su desviación no es merma fiable).</>}
+          {health.noRecipe > 0 && <> {(health.negative > 0 || health.consumoIncompleto > 0) ? '' : ' '}{health.noRecipe} sin escandallo fiable.</>}
+          {health.negative === 0 && health.consumoIncompleto === 0 && health.noRecipe === 0 && <> Sin avisos de dato.</>}
         </div>
       </div>
 
@@ -169,7 +192,7 @@ export default function AvtSection({
           </div>
           <p className="text-xs text-text-tertiary flex items-start gap-1.5">
             <AlertTriangle size={13} className="shrink-0 mt-0.5" />
-            La desviación negativa es producto que se fue sin venta (merma, sobre-porción, robo) o dato incompleto. Las marcadas "dato incompleto" o "escandallo no fiable" se arreglan antes de confiar en su cifra.
+            La desviación negativa es producto que se fue sin venta (merma, sobre-porción, robo) o dato incompleto. Las marcadas "dato incompleto", "consumo no medible" o "escandallo no fiable" se arreglan antes de confiar en su cifra.
           </p>
         </>
       )}

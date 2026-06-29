@@ -483,6 +483,14 @@ export default function RecipeEditorPage({
   )
   const dishNeedsReview = (recipe?.needsReview ?? false) || dishHasIncompleteLine
 
+  // Líneas NO CONVERTIBLES (unidad sin conversión a la base): aportan 0 al total
+  // → el coste mostrado infra-cuenta. Señal VIVA (de `lines`, en sync con lo que
+  // se pinta), no de recipe.completeness (que no se recarga al editar una línea).
+  const unconvertibleLineCount = useMemo(
+    () => lines.filter((l) => l.needsReview).length,
+    [lines]
+  )
+
   // ── Motivo de revisión (flag propio del plato) ──
   // El plato puede estar marcado para revisar por su PROPIO needs_review
   // (típicamente un diagnóstico de coste con review_notes). En ese caso
@@ -1304,7 +1312,13 @@ export default function RecipeEditorPage({
             <span
               className={
                 'w-2.5 h-2.5 rounded-full ' +
-                ((line.needsReview || line.childNeedsReview) ? 'bg-warning' : 'bg-terracota')
+                // Línea NO MEDIBLE (falta conversión de unidad) = bloqueo (danger);
+                // ingrediente SIN TERMINAR = aviso suave (warning); ok = terracota.
+                (line.needsReview
+                  ? 'bg-danger'
+                  : line.childNeedsReview
+                    ? 'bg-warning'
+                    : 'bg-terracota')
               }
             />
           </span>
@@ -1358,9 +1372,12 @@ export default function RecipeEditorPage({
               </span>
             )}
             {line.needsReview && (
-              <span className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-warning-bg text-warning inline-flex items-center gap-1 align-middle">
+              <span
+                title="Esta línea usa una unidad que no se puede convertir a la base del ingrediente: no mide coste ni descuenta stock. Falta definir la conversión."
+                className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-danger-bg text-danger inline-flex items-center gap-1 align-middle"
+              >
                 <AlertTriangle className="w-3 h-3" />
-                no costeable
+                falta convertir la unidad
               </span>
             )}
             {/* E3: chip de merma. Si hay merma → mostrar y permitir override.
@@ -1413,15 +1430,25 @@ export default function RecipeEditorPage({
           <span
             className={
               'font-mono text-sm min-w-[52px] text-right transition-colors duration-base ' +
-              (saving
-                ? 'opacity-50 animate-pulse text-text-secondary'
-                : flashLineId === line.lineId
-                  ? 'text-terracota font-medium'
-                  : 'text-text-secondary')
+              // No medible: el coste de línea es 0 por falta de conversión, pero
+              // mostrar "0,00 €" sería un cero disfrazado. Mostramos "—" en danger.
+              (line.needsReview
+                ? 'text-danger'
+                : saving
+                  ? 'opacity-50 animate-pulse text-text-secondary'
+                  : flashLineId === line.lineId
+                    ? 'text-terracota font-medium'
+                    : 'text-text-secondary')
             }
-            title={waste > 0 ? `Coste sobre bruto ${formatQty(line.quantity)} ${line.unitAbbr}` : undefined}
+            title={
+              line.needsReview
+                ? 'Falta convertir la unidad: no se puede medir el coste de esta línea'
+                : waste > 0
+                  ? `Coste sobre bruto ${formatQty(line.quantity)} ${line.unitAbbr}`
+                  : undefined
+            }
           >
-            {formatEur(line.lineCost)}
+            {line.needsReview ? '—' : formatEur(line.lineCost)}
           </span>
 
           <button
@@ -2248,6 +2275,18 @@ export default function RecipeEditorPage({
                 por porción · {recipe.yieldPortions ?? 1} ración
                 {(recipe.yieldPortions ?? 1) !== 1 ? 'es' : ''}
               </div>
+              {unconvertibleLineCount > 0 && (
+                <div
+                  title="Una o más líneas usan una unidad sin conversión a la base del ingrediente: no entran en el coste ni descuentan stock. El total mostrado infra-cuenta hasta que las resuelvas."
+                  className="mt-2 inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-md bg-white/15 text-white"
+                >
+                  <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span>
+                    Coste incompleto · falta convertir {unconvertibleLineCount}{' '}
+                    {unconvertibleLineCount === 1 ? 'línea' : 'líneas'}
+                  </span>
+                </div>
+              )}
               {packagingCost > 0 && (
                 <div className="mt-2.5 flex flex-col gap-1">
                   <div className="flex items-center justify-between text-[12px]">
