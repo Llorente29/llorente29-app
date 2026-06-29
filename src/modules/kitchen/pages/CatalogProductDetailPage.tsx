@@ -52,6 +52,10 @@ import {
   listAssignableGroups,
   type ModifierGroupDetail, type ModifierOptionDetail, type ExistingGroup,
 } from '@/modules/kitchen/services/modifierEditService'
+import {
+  listOptionsWithImpacts, confirmImpact, rejectImpact, requestAIProposals,
+  type OptionWithImpact,
+} from '@/modules/kitchen/services/modifierImpactService'
 import ProductPlacementSection from '@/modules/kitchen/components/ProductPlacementSection'
 import EditPricesModal from '@/modules/kitchen/components/EditPricesModal'
 import { supabase } from '@/lib/supabase'
@@ -413,9 +417,9 @@ function ComboEditorSection({
 // ─── Editor de modificadores: grupos (reutilizables) y opciones ─────────────
 
 function ModifierEditorSection({
-  accountId, brandId, menuItemId,
+  accountId, brandId, menuItemId, recipeItemId,
 }: {
-  accountId: string; brandId: string | null; menuItemId: string
+  accountId: string; brandId: string | null; menuItemId: string; recipeItemId: string | null
 }) {
   const [groups, setGroups] = useState<ModifierGroupDetail[]>([])
   const [loading, setLoading] = useState(true)
@@ -429,17 +433,27 @@ function ModifierEditorSection({
   // asignar grupo existente
   const [assignOpen, setAssignOpen] = useState(false)
   const [assignable, setAssignable] = useState<ExistingGroup[]>([])
+  // impactos de coste por opción (capa C): optionId -> impacto
+  const [impacts, setImpacts] = useState<Map<string, OptionWithImpact>>(new Map())
+  const [aiBusy, setAiBusy] = useState(false)
+  const [aiMsg, setAiMsg] = useState<string | null>(null)
+
+  function loadImpacts() {
+    listOptionsWithImpacts(menuItemId)
+      .then((opts) => setImpacts(new Map(opts.map((o) => [o.optionId, o]))))
+      .catch(() => {})
+  }
 
   function reload() {
     return getProductModifierGroupsEditable(accountId, menuItemId)
-      .then(setGroups)
+      .then((g) => { setGroups(g); loadImpacts() })
       .catch((e) => setErr(String(e.message ?? e)))
   }
 
   useEffect(() => {
     setLoading(true)
     getProductModifierGroupsEditable(accountId, menuItemId)
-      .then(setGroups)
+      .then((g) => { setGroups(g); loadImpacts() })
       .catch((e) => setErr(String(e.message ?? e)))
       .finally(() => setLoading(false))
   }, [accountId, menuItemId])
@@ -447,6 +461,27 @@ function ModifierEditorSection({
   function wrap(fn: () => Promise<unknown>) {
     setBusy(true); setErr(null)
     fn().then(reload).catch((e) => setErr(String(e.message ?? e))).finally(() => setBusy(false))
+  }
+
+  // ── Coste del modificador (capa C): IA propone / humano confirma ──
+  function askAI() {
+    if (!recipeItemId) { setErr('El producto no tiene escandallo; la IA necesita la receta para proponer el coste.'); return }
+    setAiBusy(true); setAiMsg(null); setErr(null)
+    requestAIProposals(accountId, recipeItemId)
+      .then((r) => {
+        setAiMsg(`IA: ${r.propuestos} propuestas en ${r.procesados} opciones (${r.sin_propuesta} sin propuesta).`)
+        loadImpacts()
+      })
+      .catch((e) => setErr(String(e.message ?? e)))
+      .finally(() => setAiBusy(false))
+  }
+  function confirmOptImpact(impactId: string) {
+    setBusy(true); setErr(null)
+    confirmImpact(impactId, 'Confirmado en ficha').then(loadImpacts).catch((e) => setErr(String(e.message ?? e))).finally(() => setBusy(false))
+  }
+  function rejectOptImpact(impactId: string) {
+    setBusy(true); setErr(null)
+    rejectImpact(impactId).then(loadImpacts).catch((e) => setErr(String(e.message ?? e))).finally(() => setBusy(false))
   }
 
   // ── Grupos ──
@@ -561,8 +596,12 @@ function ModifierEditorSection({
             {/* Opciones */}
             <div className="px-3 py-2 space-y-1.5">
               {g.options.length === 0 && <p className="text-xs text-stone-400">Sin opciones.</p>}
-              {g.options.map((o) => (
-                <div key={o.id} className="flex items-center gap-2 text-sm">
+              {g.options.map((o) => {
+                const oi = impacts.get(o.id)
+                const imp = oi?.impact ?? null
+                return (
+                <div key={o.id} className="space-y-0.5">
+                  <div className="flex items-center gap-2 text-sm">
                   {editingOpt === o.id ? (
                     <input autoFocus value={optNameDraft}
                       onChange={(e) => setOptNameDraft(e.target.value)}
@@ -587,8 +626,36 @@ function ModifierEditorSection({
                   <button onClick={() => removeOpt(o.id)} disabled={busy} className="text-stone-300 hover:text-red-600 p-0.5" title="Quitar opción">
                     <X size={13} />
                   </button>
+                  </div>
+
+                  {/* Estado de coste del modificador (capa C: IA propone / humano confirma) */}
+                  <div className="flex items-center gap-2 pl-1 text-[11px]">
+                    {imp === null && (
+                      <span className="text-stone-400">Coste sin definir</span>
+                    )}
+                    {imp && imp.status === 'proposed' && (
+                      <>
+                        <span className="inline-flex items-center gap-1 text-amber-700">
+                          <Sparkles size={11} /> IA propone
+                          {imp.confidence != null && <span className="text-amber-500">({Math.round(imp.confidence * 100)}%)</span>}
+                          {imp.rationale && <span className="text-stone-400 truncate max-w-[180px]" title={imp.rationale}>· {imp.rationale}</span>}
+                        </span>
+                        <button onClick={() => confirmOptImpact(imp.id)} disabled={busy}
+                          className="text-green-700 hover:underline font-medium">Confirmar</button>
+                        <button onClick={() => rejectOptImpact(imp.id)} disabled={busy}
+                          className="text-stone-400 hover:text-red-600">Rechazar</button>
+                      </>
+                    )}
+                    {imp && imp.status === 'confirmed' && (
+                      <span className="inline-flex items-center gap-1 text-green-700" title={imp.rationale ?? undefined}>
+                        Coste confirmado
+                        {imp.confirmedByName && <span className="text-stone-400">· {imp.confirmedByName}</span>}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              ))}
+                )
+              })}
               <button onClick={() => addOpt(g.id)} disabled={busy}
                 className="inline-flex items-center gap-1 text-xs font-medium text-[#D67442] hover:underline mt-1">
                 <Plus size={12} /> Añadir opción
@@ -608,7 +675,16 @@ function ModifierEditorSection({
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-stone-300 text-stone-600 hover:bg-stone-50 disabled:opacity-50">
           Asignar grupo existente
         </button>
+        {groups.length > 0 && (
+          <button onClick={askAI} disabled={aiBusy || busy || !recipeItemId}
+            title={!recipeItemId ? 'El producto necesita escandallo para que la IA proponga el coste' : 'La IA propone el impacto en coste de las opciones sin definir'}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-amber-300 text-amber-700 hover:bg-amber-50 disabled:opacity-50">
+            <Sparkles size={13} /> {aiBusy ? 'Pidiendo a la IA…' : 'Pedir coste con IA'}
+          </button>
+        )}
       </div>
+
+      {aiMsg && <div className="p-2 rounded-lg bg-amber-50 text-amber-800 text-xs">{aiMsg}</div>}
 
       {/* Picker de grupos existentes */}
       {assignOpen && (
@@ -1450,7 +1526,7 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
         {/* S4 — Modificadores (editable) */}
         <CollapsibleSection id="s-modificadores" icon="sliders" title="Modificadores"
           badge={groups.length > 0 ? String(groups.length) : undefined} badgeColor="neutral" defaultOpen={groups.length > 0}>
-          <ModifierEditorSection accountId={item.accountId} brandId={item.brandId ?? null} menuItemId={item.id} />
+          <ModifierEditorSection accountId={item.accountId} brandId={item.brandId ?? null} menuItemId={item.id} recipeItemId={item.recipeItemId ?? null} />
         </CollapsibleSection>
 
         {/* S5 — Alérgenos y nutrición */}
