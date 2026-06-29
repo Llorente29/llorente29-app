@@ -35,6 +35,7 @@ import {
 } from '@/modules/kitchen/services/recipeItemService'
 import { listUnits } from '@/modules/kitchen/services/kitchenUnitService'
 import { listConversions, upsertConversion, removeConversion, type UnitConversion } from '@/modules/kitchen/services/unitConversionService'
+import { classifyUnmappedProduct } from '@/modules/kitchen/services/salesReliabilityService'
 import { listSuppliers, listSuppliersByItem } from '@/modules/kitchen/services/purchaseFormatService'
 import { recomputeItemAndAncestors } from '@/modules/kitchen/services/costCascadeService'
 import {
@@ -263,6 +264,9 @@ export default function KitchenItemDetailPage({ itemId, onBack, returnTo }: Kitc
   const [reloadTick, setReloadTick] = useState(0)
   // Conversiones de unidad amigables ("1 ud = 85 g") del ingrediente.
   const [conversions, setConversions] = useState<UnitConversion[]>([])
+  // Marcar el artículo como reventa (raw vendible/comprable, propaga a todas sus marcas).
+  const [resaleBusy, setResaleBusy] = useState(false)
+  const [resaleMsg, setResaleMsg] = useState<string | null>(null)
   const [convError, setConvError] = useState<string | null>(null)
   const [convFromUnitId, setConvFromUnitId] = useState('')
   const [convQty, setConvQty] = useState('')
@@ -382,6 +386,27 @@ export default function KitchenItemDetailPage({ itemId, onBack, returnTo }: Kitc
   async function refreshSuppliers() {
     if (!item) return
     try { setLinks(await listSuppliersByItem(item.id)) } catch { /* no crítico */ }
+  }
+
+  // ── Marcar como reventa ──
+  async function handleMarkResale() {
+    if (!item) return
+    setResaleBusy(true); setResaleMsg(null)
+    try {
+      // Puerta 1: anclamos al recipe_item por id (sin adivinar). Coste → needs_review
+      // (lo rellena la factura). Propaga a todas las marcas de sus matrículas.
+      const res = await classifyUnmappedProduct(item.accountId, item.name, 'resale', null, item.id)
+      if (res.resultado === 'resale_linked') {
+        setResaleMsg(`Marcado como reventa. ${res.lineasCasadas} venta(s) casada(s). Coste pendiente de factura.`)
+        setReloadTick((t) => t + 1)
+      } else {
+        setResaleMsg('No se pudo marcar como reventa.')
+      }
+    } catch (e) {
+      setResaleMsg(e instanceof Error ? e.message : 'No se pudo marcar como reventa.')
+    } finally {
+      setResaleBusy(false)
+    }
   }
 
   // ── Conversiones de unidad ──
@@ -1239,7 +1264,7 @@ export default function KitchenItemDetailPage({ itemId, onBack, returnTo }: Kitc
           </div>
 
           {/* Eliminar (Folvy decide: borra si no se usa, archiva si sí) */}
-          <div className="pt-4">
+          <div className="pt-4 flex items-center gap-2 flex-wrap">
             <button
               type="button"
               onClick={openDeleteDialog}
@@ -1248,7 +1273,20 @@ export default function KitchenItemDetailPage({ itemId, onBack, returnTo }: Kitc
               <Trash2 className="w-4 h-4" />
               Eliminar
             </button>
+            {isRaw && (
+              <button
+                type="button"
+                onClick={handleMarkResale}
+                disabled={resaleBusy}
+                title="Marca este artículo como reventa: vendible y comprable, coste de factura. Se aplica a todas sus marcas."
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md text-text-secondary hover:bg-page transition-base disabled:opacity-50"
+              >
+                {resaleBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Scale className="w-4 h-4" />}
+                Es reventa
+              </button>
+            )}
           </div>
+          {resaleMsg && <p className="text-xs text-text-secondary pt-1">{resaleMsg}</p>}
         </>
       )}
 

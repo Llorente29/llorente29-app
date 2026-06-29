@@ -36,6 +36,7 @@ import {
   classifyUnmappedProduct,
   createDishFromUnmapped,
   listCostlessSoldProducts,
+  type ClassifyCandidate,
   type SalesReliability,
   type BlindGroup,
   type BlindProduct,
@@ -438,6 +439,9 @@ function BrandPendingRow({
   const [classifyMsg, setClassifyMsg] = useState<string | null>(null)
   const [confirmDishOpen, setConfirmDishOpen] = useState(false)
   const [ignoreOpen, setIgnoreOpen] = useState(false)
+  // Cuando la RPC no resuelve el ancla, devuelve candidatos para elegir a cuál casar.
+  const [targetCandidates, setTargetCandidates] = useState<ClassifyCandidate[] | null>(null)
+  const [targetAction, setTargetAction] = useState<ClassifyAction | null>(null)
 
   function loadSuggestions() {
     if (suggestions !== null || suggestLoading) return
@@ -458,8 +462,40 @@ function BrandPendingRow({
     if (busy) return
     setBusy(tag)
     setRowError(null)
+    setTargetCandidates(null)
     classifyUnmappedProduct(accountId, product.productName, action, null)
       .then((res) => {
+        if (res.resultado === 'needs_target') {
+          // La RPC no pudo resolver el artículo por el nombre → que el usuario elija.
+          setTargetCandidates(res.candidatos)
+          setTargetAction(action)
+          setBusy(null)
+        } else if (res.resultado === 'resale_linked') {
+          setClassifyMsg('Convertido a reventa y casado. Queda pendiente de coste (lo rellena la factura).')
+          setTimeout(onResolved, 1500)
+        } else if (res.resultado === 'is_dish') {
+          if (res.recipeItemId) navigate('/kitchen/recetas?recipe=' + res.recipeItemId)
+          else { setClassifyMsg('Marcado como plato. Crea su escandallo en Recetas.'); setBusy(null) }
+        } else if (res.resultado === 'is_combo') {
+          setClassifyMsg('Marcado como combo (pendiente del módulo de combos).')
+          setBusy(null)
+        } else {
+          setClassifyMsg('Hecho.')
+          setBusy(null)
+        }
+      })
+      .catch((e) => { setRowError(String(e.message ?? e)); setBusy(null) })
+  }
+
+  // El usuario eligió a qué artículo casar (desde el desplegable de candidatos):
+  // se reintenta anclando al recipe_item elegido (Puerta 1, sin adivinar).
+  function doClassifyToTarget(recipeItemId: string) {
+    if (busy || !targetAction) return
+    setBusy('classify-resale')
+    setRowError(null)
+    classifyUnmappedProduct(accountId, product.productName, targetAction, null, recipeItemId)
+      .then((res) => {
+        setTargetCandidates(null)
         if (res.resultado === 'resale_linked') {
           setClassifyMsg('Convertido a reventa y casado. Queda pendiente de coste (lo rellena la factura).')
           setTimeout(onResolved, 1500)
@@ -467,8 +503,7 @@ function BrandPendingRow({
           if (res.recipeItemId) navigate('/kitchen/recetas?recipe=' + res.recipeItemId)
           else { setClassifyMsg('Marcado como plato. Crea su escandallo en Recetas.'); setBusy(null) }
         } else {
-          setClassifyMsg('Marcado como combo (pendiente del módulo de combos).')
-          setBusy(null)
+          setClassifyMsg('Hecho.'); setBusy(null)
         }
       })
       .catch((e) => { setRowError(String(e.message ?? e)); setBusy(null) })
@@ -532,6 +567,41 @@ function BrandPendingRow({
           ) : null}
 
           {rowError && <div className="p-2 rounded-lg bg-red-50 text-red-700 text-xs">{rowError}</div>}
+
+          {/* La RPC no resolvió el artículo por el nombre → elige a cuál casar (sin adivinar). */}
+          {targetCandidates && (
+            <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-xs space-y-2">
+              <p className="text-amber-800">
+                No encontré el artículo de “{product.productName}” automáticamente. ¿A cuál lo caso?
+              </p>
+              {targetCandidates.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {targetCandidates.map((c) => (
+                    <button
+                      key={c.recipeItemId}
+                      type="button"
+                      disabled={busy !== null}
+                      onClick={() => doClassifyToTarget(c.recipeItemId)}
+                      className="px-2.5 py-1 rounded-md bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 transition-colors disabled:opacity-50"
+                    >
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-amber-700">
+                  No hay artículos de reventa parecidos. Créalo primero, o márcalo desde su ficha.
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={() => { setTargetCandidates(null); setTargetAction(null) }}
+                className="text-amber-700 underline"
+              >
+                Cancelar
+              </button>
+            </div>
+          )}
 
           {/* Pista de tipo (no decide) */}
           <div className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 ${looksLikeResale(product.productName) ? 'bg-blue-50' : 'bg-gray-50'}`}>
@@ -920,6 +990,8 @@ function BlindRow({
   const [costInput, setCostInput] = useState('')
   const [classifyMsg, setClassifyMsg] = useState<string | null>(null)
   const [confirmDishOpen, setConfirmDishOpen] = useState(false)
+  const [targetCandidates, setTargetCandidates] = useState<ClassifyCandidate[] | null>(null)
+  const [targetAction, setTargetAction] = useState<ClassifyAction | null>(null)
 
   const canSuggest = product.reason === 'no_menu_item' || product.reason === 'no_recipe'
 
@@ -951,9 +1023,14 @@ function BlindRow({
     if (busy) return
     setBusy(tag)
     setRowError(null)
+    setTargetCandidates(null)
     classifyUnmappedProduct(accountId, product.productName, action, unitCost)
       .then((res) => {
-        if (res.resultado === 'resale_linked') {
+        if (res.resultado === 'needs_target') {
+          setTargetCandidates(res.candidatos)
+          setTargetAction(action)
+          setBusy(null)
+        } else if (res.resultado === 'resale_linked') {
           if (unitCost == null) {
             setClassifyMsg('Convertido a reventa y casado. Queda PENDIENTE DE COSTE: se rellenará con la próxima factura, o ponlo a mano en la ficha del artículo.')
             setTimeout(onResolved, 1800)
@@ -967,9 +1044,33 @@ function BlindRow({
             setClassifyMsg('Marcado como plato. Crea su escandallo en Recetas; al recasar, casará solo.')
             setBusy(null)
           }
-        } else {
+        } else if (res.resultado === 'is_combo') {
           setClassifyMsg('Marcado como combo (pendiente del módulo de combos).')
           setBusy(null)
+        } else {
+          setClassifyMsg('Hecho.')
+          setBusy(null)
+        }
+      })
+      .catch((e) => { setRowError(String(e.message ?? e)); setBusy(null) })
+  }
+
+  // El usuario eligió a qué artículo casar (desplegable de candidatos): ancla por id.
+  function doClassifyToTarget(recipeItemId: string) {
+    if (busy || !targetAction) return
+    setBusy('classify-resale')
+    setRowError(null)
+    classifyUnmappedProduct(accountId, product.productName, targetAction, null, recipeItemId)
+      .then((res) => {
+        setTargetCandidates(null)
+        if (res.resultado === 'resale_linked') {
+          setClassifyMsg('Convertido a reventa y casado. Pendiente de coste (lo rellena la factura).')
+          setTimeout(onResolved, 1800)
+        } else if (res.resultado === 'is_dish') {
+          if (res.recipeItemId) navigate('/kitchen/recetas?recipe=' + res.recipeItemId)
+          else { setClassifyMsg('Marcado como plato. Crea su escandallo en Recetas.'); setBusy(null) }
+        } else {
+          setClassifyMsg('Hecho.'); setBusy(null)
         }
       })
       .catch((e) => { setRowError(String(e.message ?? e)); setBusy(null) })
@@ -1041,6 +1142,34 @@ function BlindRow({
 
           {rowError && (
             <div className="p-2 rounded-lg bg-red-50 text-red-700 text-xs">{rowError}</div>
+          )}
+
+          {targetCandidates && (
+            <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-xs space-y-2">
+              <p className="text-amber-800">
+                No encontré el artículo de “{product.productName}” automáticamente. ¿A cuál lo caso?
+              </p>
+              {targetCandidates.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {targetCandidates.map((c) => (
+                    <button
+                      key={c.recipeItemId}
+                      type="button"
+                      disabled={busy !== null}
+                      onClick={() => doClassifyToTarget(c.recipeItemId)}
+                      className="px-2.5 py-1 rounded-md bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 transition-colors disabled:opacity-50"
+                    >
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-amber-700">No hay artículos de reventa parecidos. Créalo primero, o márcalo desde su ficha.</p>
+              )}
+              <button type="button" onClick={() => { setTargetCandidates(null); setTargetAction(null) }} className="text-amber-700 underline">
+                Cancelar
+              </button>
+            </div>
           )}
 
           {canSuggest && (
@@ -1170,6 +1299,8 @@ function CostlessRow({
   const [busy, setBusy] = useState<'resale' | 'dish' | 'combo' | null>(null)
   const [rowError, setRowError] = useState<string | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
+  const [targetCandidates, setTargetCandidates] = useState<ClassifyCandidate[] | null>(null)
+  const [targetAction, setTargetAction] = useState<ClassifyAction | null>(null)
 
   function goToRecipe() {
     navigate('/kitchen/recetas?recipe=' + product.recipeItemId)
@@ -1179,9 +1310,15 @@ function CostlessRow({
     if (busy) return
     setBusy(action)
     setRowError(null)
-    classifyUnmappedProduct(accountId, product.productName, action, null)
+    setTargetCandidates(null)
+    // Este producto YA tiene recipeItemId → lo pasamos como ancla (Puerta 1, sin adivinar).
+    classifyUnmappedProduct(accountId, product.productName, action, null, product.recipeItemId)
       .then((res) => {
-        if (res.resultado === 'resale_linked') {
+        if (res.resultado === 'needs_target') {
+          setTargetCandidates(res.candidatos)
+          setTargetAction(action)
+          setBusy(null)
+        } else if (res.resultado === 'resale_linked') {
           setMsg('Convertido a reventa. Queda pendiente de coste: lo rellenará la factura, o ponlo a mano en la ficha.')
           setTimeout(onResolved, 1800)
         } else if (res.resultado === 'is_dish') {
@@ -1191,10 +1328,28 @@ function CostlessRow({
             setMsg('Marcado como plato. Crea su escandallo en Recetas; al recompute, dejará de estar sin coste.')
             setBusy(null)
           }
-        } else {
+        } else if (res.resultado === 'is_combo') {
           setMsg('Marcado como combo (pendiente del módulo de combos y modificadores).')
           setBusy(null)
+        } else {
+          setMsg('Hecho.')
+          setBusy(null)
         }
+      })
+      .catch((e) => { setRowError(String(e.message ?? e)); setBusy(null) })
+  }
+
+  function doClassifyToTarget(recipeItemId: string) {
+    if (busy || !targetAction) return
+    setBusy('resale')
+    setRowError(null)
+    classifyUnmappedProduct(accountId, product.productName, targetAction, null, recipeItemId)
+      .then((res) => {
+        setTargetCandidates(null)
+        if (res.resultado === 'resale_linked') {
+          setMsg('Convertido a reventa. Pendiente de coste (lo rellena la factura).')
+          setTimeout(onResolved, 1800)
+        } else { setMsg('Hecho.'); setBusy(null) }
       })
       .catch((e) => { setRowError(String(e.message ?? e)); setBusy(null) })
   }
@@ -1227,6 +1382,26 @@ function CostlessRow({
 
       {rowError && (
         <div className="p-2 rounded-lg bg-red-50 text-red-700 text-xs mt-2">{rowError}</div>
+      )}
+
+      {targetCandidates && (
+        <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-xs space-y-2 mt-2">
+          <p className="text-amber-800">No encontré el artículo de “{product.productName}”. ¿A cuál lo caso?</p>
+          {targetCandidates.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {targetCandidates.map((c) => (
+                <button key={c.recipeItemId} type="button" disabled={busy !== null}
+                  onClick={() => doClassifyToTarget(c.recipeItemId)}
+                  className="px-2.5 py-1 rounded-md bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 transition-colors disabled:opacity-50">
+                  {c.name}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="text-amber-700">No hay artículos parecidos. Créalo o márcalo desde su ficha.</p>
+          )}
+          <button type="button" onClick={() => { setTargetCandidates(null); setTargetAction(null) }} className="text-amber-700 underline">Cancelar</button>
+        </div>
       )}
 
       <div className="flex flex-wrap gap-2 mt-2">

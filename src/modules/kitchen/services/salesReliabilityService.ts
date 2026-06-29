@@ -388,11 +388,20 @@ export async function resolveUnmapped(
 
 export type ClassifyAction = 'resale' | 'dish' | 'combo'
 
+/** Candidato de artículo para el desplegable cuando la RPC no resuelve el ancla. */
+export interface ClassifyCandidate {
+  recipeItemId: string
+  name: string
+  type: string
+}
+
 export interface ClassifyResult {
-  resultado: 'resale_linked' | 'is_dish' | 'is_combo'
+  resultado: 'resale_linked' | 'is_dish' | 'is_combo' | 'needs_target'
   recipeItemId: string | null
   marcasCreadas: number
   lineasCasadas: number
+  /** Solo en 'needs_target': artículos candidatos para que el usuario elija a cuál casar. */
+  candidatos: ClassifyCandidate[]
 }
 
 interface RowClassify {
@@ -400,20 +409,27 @@ interface RowClassify {
   recipe_item_id: string | null
   marcas_creadas: number
   lineas_casadas: number
+  candidatos: { recipe_item_id: string; name: string; type: string }[] | null
 }
 
 /**
- * Clasifica un producto ciego (no_recipe). 'resale' (artículo de reventa: convierte
- * a raw vendible con coste de compra y propaga a todas las marcas) | 'dish' (es un
- * plato: devuelve el recipe_item_id para ir al editor de escandallo) | 'combo'
- * (declara para el frente de combos). La lógica vive en la RPC classify_unmapped_product.
- * Para 'resale' se puede pasar unitCost (coste de compra por unidad base) opcional.
+ * Clasifica un producto. 'resale' (artículo de reventa: convierte a raw vendible y
+ * propaga a TODAS las marcas de sus matrículas) | 'dish' | 'combo'. La lógica vive en
+ * la RPC classify_unmapped_product.
+ *
+ * Dos puertas:
+ *  - PUERTA 1 (ficha): se pasa recipeItemId → ancla directa al artículo, sin adivinar.
+ *  - PUERTA 2 (Excepciones): solo productName → la RPC resuelve por nombre; si no puede,
+ *    devuelve resultado='needs_target' + candidatos para que el usuario elija a cuál casar
+ *    (entonces se vuelve a llamar pasando el recipeItemId elegido).
+ * Para 'resale' se puede pasar unitCost opcional.
  */
 export async function classifyUnmappedProduct(
   accountId: string,
   productName: string,
   action: ClassifyAction,
   unitCost?: number | null,
+  recipeItemId?: string | null,
 ): Promise<ClassifyResult> {
   requireSupabase()
   const { data, error } = await supabase!.rpc('classify_unmapped_product', {
@@ -421,6 +437,7 @@ export async function classifyUnmappedProduct(
     p_product_name: productName,
     p_action: action,
     p_unit_cost: unitCost ?? undefined,
+    p_recipe_item_id: recipeItemId ?? undefined,
   })
   if (error) throw new Error(error.message)
   const row = (Array.isArray(data) ? data[0] : data) as RowClassify | undefined
@@ -430,6 +447,9 @@ export async function classifyUnmappedProduct(
     recipeItemId: row.recipe_item_id ?? null,
     marcasCreadas: Number(row.marcas_creadas ?? 0),
     lineasCasadas: Number(row.lineas_casadas ?? 0),
+    candidatos: Array.isArray(row.candidatos)
+      ? row.candidatos.map((c) => ({ recipeItemId: c.recipe_item_id, name: c.name, type: c.type }))
+      : [],
   }
 }
 
