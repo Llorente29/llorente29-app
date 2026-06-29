@@ -39,11 +39,11 @@ import {
 } from '@/modules/kitchen/services/menuOverrideService'
 import { uploadMenuPhoto, deleteMenuPhoto } from '@/modules/kitchen/services/menuPhotoService'
 import {
-  getComboContext,
+  getComboContext, getComboCost,
   createSlot, updateSlot, deleteSlot,
   addOption, updateOption, deleteOption,
   searchOptionCandidates,
-  type ComboSlotDetail, type OptionCandidate,
+  type ComboSlotDetail, type OptionCandidate, type ComboCost,
 } from '@/modules/kitchen/services/comboEditService'
 import ProductPlacementSection from '@/modules/kitchen/components/ProductPlacementSection'
 import EditPricesModal from '@/modules/kitchen/components/EditPricesModal'
@@ -166,10 +166,19 @@ function ComboEditorSection({
   const [search, setSearch] = useState('')
   const [candidates, setCandidates] = useState<OptionCandidate[]>([])
   const [searching, setSearching] = useState(false)
+  // coste del combo (se recalcula al cambiar slots/opciones)
+  const [cost, setCost] = useState<ComboCost | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    getComboCost(comboItemId).then((c) => { if (!cancelled) setCost(c) }).catch(() => {})
+    return () => { cancelled = true }
+  }, [comboItemId])
 
   async function reload() {
     const ctx = await getComboContext(accountId, comboItemId)
     setSlots(ctx.slots)
+    getComboCost(comboItemId).then(setCost).catch(() => {})
     onChanged()
   }
 
@@ -227,6 +236,56 @@ function ComboEditorSection({
   return (
     <div className="space-y-3">
       {err && <div className="p-2 rounded-lg bg-red-50 text-red-700 text-xs">{err}</div>}
+
+      {/* Panel de coste del combo (suma de componentes) */}
+      {cost && (
+        <div className="rounded-lg border border-stone-200 overflow-hidden">
+          <div className="grid grid-cols-3 divide-x divide-stone-200 bg-stone-50">
+            <div className="px-3 py-2.5">
+              <div className="text-[10px] uppercase tracking-wide text-stone-400 mb-0.5">Coste</div>
+              <div className="font-mono text-sm font-medium">
+                {cost.isIncomplete ? `≥ ${fmtEur(cost.cost)}` : fmtEur(cost.cost)}
+              </div>
+            </div>
+            <div className="px-3 py-2.5">
+              <div className="text-[10px] uppercase tracking-wide text-stone-400 mb-0.5">Margen</div>
+              <div className="font-mono text-sm font-medium">
+                {cost.margin != null ? fmtEur(cost.margin) : '—'}
+              </div>
+            </div>
+            <div className="px-3 py-2.5">
+              <div className="text-[10px] uppercase tracking-wide text-stone-400 mb-0.5">FC %</div>
+              <div className="font-mono text-sm font-medium">
+                {cost.fcPct != null ? `${cost.fcPct}%` : '—'}
+              </div>
+            </div>
+          </div>
+
+          {cost.isIncomplete && (
+            <div className="px-3 py-2 bg-amber-50 border-t border-amber-200 text-xs text-amber-800">
+              <p className="font-medium mb-1">Coste incompleto. Falta costear:</p>
+              <ul className="space-y-0.5">
+                {cost.detail
+                  .filter((d) => d.required && (d.state === 'incomplete' || d.state === 'empty'))
+                  .map((d) => (
+                    <li key={d.slotId}>
+                      · <span className="font-medium">{d.slotName}</span>
+                      {d.state === 'empty'
+                        ? ' — sin opciones'
+                        : d.option ? ` — «${d.option}» sin escandallo` : ' — sin escandallo'}
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          )}
+
+          {!cost.isIncomplete && cost.slotsProvisional > 0 && (
+            <div className="px-3 py-2 bg-blue-50 border-t border-blue-200 text-[11px] text-blue-700">
+              {cost.slotsProvisional} grupo{cost.slotsProvisional !== 1 ? 's' : ''} con coste provisional (reventa pendiente de factura): el coste subirá cuando entre el precio real.
+            </div>
+          )}
+        </div>
+      )}
 
       {slots.length === 0 && (
         <p className="text-sm text-stone-500">

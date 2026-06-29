@@ -40,6 +40,62 @@ export interface ComboSlotDetail {
   options: ComboSlotOption[]
 }
 
+// ─── Coste del combo (suma de componentes) ──────────────────────────────────
+
+export interface ComboCostSlotDetail {
+  slotId: string
+  slotName: string
+  required: boolean
+  option: string | null
+  cost: number
+  state: 'reliable' | 'provisional' | 'incomplete' | 'empty'
+}
+
+export interface ComboCost {
+  cost: number
+  price: number
+  margin: number | null
+  fcPct: number | null
+  slotsTotal: number
+  slotsReliable: number
+  slotsProvisional: number
+  slotsIncomplete: number
+  isIncomplete: boolean
+  detail: ComboCostSlotDetail[]
+}
+
+/** Coste de carta del combo (RPC compute_combo_cost): suma de la opción
+ *  representativa por slot, honesto con lo que falta costear. */
+export async function getComboCost(comboItemId: string): Promise<ComboCost> {
+  requireSupabase()
+  // Cast puntual: compute_combo_cost es nueva y database.ts no está regenerado
+  // (CLI roto = deuda conocida). Cuando se regenere, este cast sale.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase! as any).rpc('compute_combo_cost', { p_combo_item_id: comboItemId })
+  if (error) throw new Error(`Error calculando el coste del combo: ${error.message}`)
+  const row = Array.isArray(data) ? (data as Record<string, unknown>[])[0] : (data as Record<string, unknown>)
+  const rawDetail = (row?.detail ?? []) as Array<Record<string, unknown>>
+  return {
+    cost: Number(row?.cost ?? 0),
+    price: Number(row?.price ?? 0),
+    margin: row?.margin != null ? Number(row.margin) : null,
+    fcPct: row?.fc_pct != null ? Number(row.fc_pct) : null,
+    slotsTotal: Number(row?.slots_total ?? 0),
+    slotsReliable: Number(row?.slots_reliable ?? 0),
+    slotsProvisional: Number(row?.slots_provisional ?? 0),
+    slotsIncomplete: Number(row?.slots_incomplete ?? 0),
+    isIncomplete: row?.is_incomplete === true,
+    detail: rawDetail.map((d) => ({
+      slotId: String(d.slot_id ?? ''),
+      slotName: String(d.slot_name ?? ''),
+      required: d.required === true,
+      option: (d.option as string) ?? null,
+      cost: Number(d.cost ?? 0),
+      state: (d.state as ComboCostSlotDetail['state']) ?? 'empty',
+    })),
+  }
+}
+
 // ─── Contexto del editor (es combo? + marca + slots) ────────────────────
 
 export interface ComboContext {
