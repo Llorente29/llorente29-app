@@ -290,6 +290,13 @@ export function useFolvyAI(opts: UseFolvyAIOptions): UseFolvyAIReturn {
       const status = (data && (data as Record<string, unknown>).status) as string | undefined;
       if (status === 'executed') {
         patchPendingAction(messageId, { state: 'done', resultMessage: 'Hecho.' });
+      } else if (status === 'needs_target') {
+        // La acción necesita que el usuario elija entre varios destinos posibles.
+        // (UI de selección de candidato = frente posterior.)
+        patchPendingAction(messageId, {
+          state: 'failed',
+          resultMessage: 'Hay varios artículos posibles con ese nombre. Aún no puedo elegir automáticamente; asígnalo desde la ficha del producto.',
+        });
       } else if (status === 'failed') {
         const errMsg = (data as Record<string, unknown>).error as string | undefined;
         patchPendingAction(messageId, { state: 'failed', resultMessage: errMsg ?? 'No se pudo aplicar.' });
