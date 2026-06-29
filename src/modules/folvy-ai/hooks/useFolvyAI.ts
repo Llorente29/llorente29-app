@@ -274,11 +274,15 @@ export function useFolvyAI(opts: UseFolvyAIOptions): UseFolvyAIReturn {
 
     patchPendingAction(messageId, { state: 'executing' });
     try {
+      // Solo enviamos p_edited_args si hay ajustes reales. Enviar null como
+      // argumento jsonb puede llegar como texto "null" y romper el cast en
+      // PostgREST; omitirlo deja que la RPC use su DEFAULT null (NULL SQL real).
+      const rpcArgs: Record<string, unknown> = { p_action_id: action.actionId };
+      if (editedArgs && Object.keys(editedArgs).length > 0) {
+        rpcArgs.p_edited_args = editedArgs;
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error: rpcErr } = await (supabase as any).rpc('commit_ai_action', {
-        p_action_id: action.actionId,
-        p_edited_args: editedArgs ?? null,
-      });
+      const { data, error: rpcErr } = await (supabase as any).rpc('commit_ai_action', rpcArgs);
       if (rpcErr) {
         patchPendingAction(messageId, { state: 'failed', resultMessage: rpcErr.message });
         return;
