@@ -19,13 +19,16 @@ interface NewMenuItemModalProps {
   brandName: string
   // Categoría preseleccionada (cuando se crea desde una categoría concreta).
   defaultCategoryId?: string | null
+  // 'item' (producto normal) o 'combo' (combo vacío que luego se monta con slots).
+  productType?: 'item' | 'combo'
   onClose: () => void
-  onCreated: () => void
+  onCreated: (newId?: string) => void
 }
 
 export default function NewMenuItemModal({
-  accountId, brandId, brandName, defaultCategoryId, onClose, onCreated,
+  accountId, brandId, brandName, defaultCategoryId, productType = 'item', onClose, onCreated,
 }: NewMenuItemModalProps) {
+  const isCombo = productType === 'combo'
   const [name, setName] = useState('')
   const [priceText, setPriceText] = useState('')
   const [vatRate, setVatRate] = useState(10)
@@ -56,12 +59,13 @@ export default function NewMenuItemModal({
     setSubmitting(true)
     setError(null)
     try {
-      await createBaseMenuItem({
+      const created = await createBaseMenuItem({
         accountId, brandId, name: trimmed, price, vatRate,
         menuCategoryId: categoryId === '' ? null : categoryId,
         description: description.trim() || null,
+        productType,
       })
-      onCreated()
+      onCreated(created.id)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error desconocido')
       setSubmitting(false)
@@ -76,7 +80,7 @@ export default function NewMenuItemModal({
     >
       <div className="bg-white rounded-xl shadow-lg w-full max-w-lg border border-gray-200 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-200 sticky top-0 bg-white">
-          <h3 className="text-base font-medium text-gray-900">Nuevo producto</h3>
+          <h3 className="text-base font-medium text-gray-900">{isCombo ? 'Nuevo combo' : 'Nuevo producto'}</h3>
           <button type="button" onClick={onClose} disabled={submitting} aria-label="Cerrar"
             className="text-gray-400 hover:text-gray-700 disabled:opacity-50">
             <X size={18} />
@@ -90,7 +94,7 @@ export default function NewMenuItemModal({
             <label className="block text-xs font-medium text-gray-500 mb-1">Nombre <span className="text-gray-400">(visible al cliente)</span></label>
             <input
               type="text" value={name} onChange={(e) => setName(e.target.value)}
-              placeholder="Ej: La Doble Clásica" autoFocus disabled={submitting}
+              placeholder={isCombo ? 'Ej: Combo Doble + Bebida' : 'Ej: La Doble Clásica'} autoFocus disabled={submitting}
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#D67442]/20 focus:border-[#D67442]"
             />
           </div>
@@ -146,7 +150,11 @@ export default function NewMenuItemModal({
           <div className="flex items-start gap-2 rounded-lg bg-purple-50 border border-purple-100 p-3">
             <Sparkles size={15} className="text-purple-500 shrink-0 mt-0.5" />
             <p className="text-xs text-purple-700/90">
-              Crea el producto ahora. Luego, en su ficha, vincula el <span className="font-medium">escandallo</span> (para ver el coste y el margen) y ajusta el <span className="font-medium">precio por canal</span> si difiere entre plataformas.
+              {isCombo ? (
+                <>Crea el combo ahora. Luego, en su ficha, monta los <span className="font-medium">grupos</span> (por ejemplo «Elige tu bebida») y sus opciones. El coste saldrá de los componentes.</>
+              ) : (
+                <>Crea el producto ahora. Luego, en su ficha, vincula el <span className="font-medium">escandallo</span> (para ver el coste y el margen) y ajusta el <span className="font-medium">precio por canal</span> si difiere entre plataformas.</>
+              )}
             </p>
           </div>
 
@@ -161,7 +169,7 @@ export default function NewMenuItemModal({
           <button type="button" onClick={handleSubmit} disabled={submitting || name.trim() === '' || priceText.trim() === ''}
             className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm rounded-lg font-medium bg-[#1E3A5F] text-white hover:opacity-90 disabled:opacity-50">
             {submitting ? <Loader2 size={14} className="animate-spin" /> : null}
-            {submitting ? 'Creando…' : 'Crear producto'}
+            {submitting ? 'Creando…' : (isCombo ? 'Crear combo' : 'Crear producto')}
           </button>
         </div>
       </div>

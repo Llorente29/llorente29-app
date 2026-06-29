@@ -265,6 +265,7 @@ export interface CreateBaseMenuItemInput {
   menuCategoryId?: string | null
   description?: string | null
   shortName?: string | null
+  productType?: 'item' | 'combo'   // 'item' por defecto; 'combo' crea un combo vacío
   createdBy?: string | null
   createdByName?: string | null
 }
@@ -286,12 +287,12 @@ export async function createBaseMenuItem(input: CreateBaseMenuItemInput): Promis
       name,
       price: input.price,
       vat_rate: input.vatRate ?? 10,
-      product_type: 'item',
+      product_type: input.productType ?? 'item',
       menu_category_id: input.menuCategoryId ?? null,
       description: input.description?.trim() ? input.description.trim() : null,
       short_name: input.shortName?.trim() ? input.shortName.trim() : null,
       channel_id: null,        // base: el precio por canal se hace con override (CP1-b)
-      recipe_item_id: null,    // se vincula el escandallo después, en la ficha
+      recipe_item_id: null,    // un combo NO tiene escandallo propio: su coste es la suma de componentes
       is_available: true,
       source: 'manual',
       created_by: input.createdBy ?? null,
@@ -300,7 +301,7 @@ export async function createBaseMenuItem(input: CreateBaseMenuItemInput): Promis
     .select('*')
     .single()
 
-  if (error) throw new Error(`Error creando producto: ${error.message}`)
+  if (error) throw new Error(`Error creando ${input.productType === 'combo' ? 'combo' : 'producto'}: ${error.message}`)
   return rowToMenuItem(data)
 }
 

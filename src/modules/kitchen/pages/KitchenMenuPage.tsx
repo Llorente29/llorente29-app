@@ -62,6 +62,7 @@ export default function KitchenMenuPage() {
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null)
   const [showExceptions, setShowExceptions] = useState(false)
   const [showNewProduct, setShowNewProduct] = useState(false)
+  const [showNewCombo, setShowNewCombo] = useState(false)
   const [showNewCategory, setShowNewCategory] = useState(false)
   // Capa 1 — organizar: selección múltiple + mover en bloque + deshacer
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -190,6 +191,7 @@ export default function KitchenMenuPage() {
   // marca (categorías + combos + conteos de marca + economía por canal).
   function refreshAfterCreate() {
     setShowNewProduct(false)
+    setShowNewCombo(false)
     setShowNewCategory(false)
     if (!activeAccountId || !selectedBrandId) return
     listCategoriesWithProducts(activeAccountId, selectedBrandId).then(setCategories).catch(() => {})
@@ -202,6 +204,12 @@ export default function KitchenMenuPage() {
         setEconomics(m)
       })
       .catch(() => {})
+  }
+
+  // Tras crear un COMBO: recargar y abrir su ficha para montarle los grupos ya.
+  function afterCreateCombo(newId?: string) {
+    refreshAfterCreate()
+    if (newId) setSelectedProductId(newId)
   }
 
   // ── Publicar la carta de la marca a HubRise (T2a) ─────────────────────────
@@ -465,6 +473,12 @@ export default function KitchenMenuPage() {
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg font-medium bg-[#1E3A5F] text-white hover:opacity-90"
             >
               <Plus className="w-4 h-4" /> Añadir producto
+            </button>
+            <button
+              onClick={() => setShowNewCombo(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+            >
+              <Package className="w-4 h-4" /> Nuevo combo
             </button>
             {selectedBrand.catalogSource === 'folvy' && activeAccountId && (
               <PublishStatusChip accountId={activeAccountId} brandId={selectedBrand.id} refreshKey={publishStatusKey} />
@@ -857,6 +871,16 @@ export default function KitchenMenuPage() {
           brandName={selectedBrand.name}
           onClose={() => setShowNewProduct(false)}
           onCreated={refreshAfterCreate}
+        />
+      )}
+      {showNewCombo && activeAccountId && selectedBrand && (
+        <NewMenuItemModal
+          accountId={activeAccountId}
+          brandId={selectedBrand.id}
+          brandName={selectedBrand.name}
+          productType="combo"
+          onClose={() => setShowNewCombo(false)}
+          onCreated={afterCreateCombo}
         />
       )}
     </div>
