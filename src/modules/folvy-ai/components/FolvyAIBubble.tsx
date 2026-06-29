@@ -29,9 +29,11 @@ import { useFolvyAI } from '../hooks/useFolvyAI';
 import { FolvyAIIsotype } from './FolvyAIIsotype';
 import { FolvyAIMessage } from './FolvyAIMessage';
 import { FolvyAIComposer } from './FolvyAIComposer';
+import { FolvyAIActionCard } from './FolvyAIActionCard';
 
 const TOOL_HUMAN_LABEL: Record<string, string> = {
   catalog_health: 'Mirando tu carta',
+  assign_resale_cost: 'Preparando la propuesta',
 };
 
 const SUGGESTED_PROMPTS = [
@@ -49,9 +51,11 @@ interface FolvyAIBubbleProps {
   onOpenChange?: (open: boolean) => void;
   // Esconde el botón flotante (en móvil lo abre el héroe de la barra inferior).
   hideLauncher?: boolean;
+  // Módulo activo (de la ruta). Selecciona el agente del edge (p.ej. 'kitchen').
+  module?: string;
 }
 
-export function FolvyAIBubble({ open: openProp, onOpenChange, hideLauncher = false }: FolvyAIBubbleProps = {}) {
+export function FolvyAIBubble({ open: openProp, onOpenChange, hideLauncher = false, module }: FolvyAIBubbleProps = {}) {
   const { activeAccountId } = useApp();
 
   // Abierto/cerrado controlable: si llega `open` por prop, manda el padre; si
@@ -73,7 +77,8 @@ export function FolvyAIBubble({ open: openProp, onOpenChange, hideLauncher = fal
   const {
     messages, isStreaming, currentTool, error,
     send, greet, retry, regenerate, abort, clear,
-  } = useFolvyAI({ accountId: activeAccountId });
+    confirmAction, cancelAction,
+  } = useFolvyAI({ accountId: activeAccountId, module });
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -252,6 +257,15 @@ export function FolvyAIBubble({ open: openProp, onOpenChange, hideLauncher = fal
                     isStreamingThisMessage={isStreamingThis}
                     onRegenerate={isLastAssistant && !isStreaming ? regenerate : undefined}
                   />
+                  {m.role === 'assistant' && m.pendingAction && (
+                    <div className="ml-9 mr-2">
+                      <FolvyAIActionCard
+                        action={m.pendingAction}
+                        onConfirm={() => confirmAction(m.id)}
+                        onCancel={() => cancelAction(m.id)}
+                      />
+                    </div>
+                  )}
                   {isStreamingThis && m.content.length > 0 && (
                     <span
                       aria-hidden="true"

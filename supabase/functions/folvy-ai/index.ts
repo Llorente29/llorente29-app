@@ -8,6 +8,7 @@
 //   Para invocaciones desde el dashboard, AICards síncronas, o tests.
 // - Streaming (stream:true): responde SSE, chunk a chunk. Eventos:
 //   {type:'text',content}|{type:'tool_start',name}|{type:'tool_end',name}|
+//   {type:'action_proposed',action_id,tool,risk,summary,effect}|
 //   {type:'done',session_id,usage}|{type:'error',message}
 // - Opening (surface:'opening'): saludo proactivo, inyecta instrucción
 //   especial al system prompt y manda mensaje sintético "saluda".
@@ -23,7 +24,13 @@ const DEFAULT_MODEL = 'claude-sonnet-4-6';
 const MAX_TOKENS = 2048;
 const MAX_TOOL_LOOPS = 5;
 
-const SYSTEM_PROMPT_BASE = `Eres Folvy AI, el asistente de Folvy: la plataforma operativa de cocinas fantasma multi-marca.
+// ── MARCO MULTI-AGENTE ────────────────────────────────────────────────
+//
+// El system prompt se compone: BASE (común a todos los agentes) + PERSONA del
+// agente activo (según `module`) + contexto de pantalla + memoria.
+// Añadir un agente nuevo = añadir su entrada en AGENTS (persona + tools).
+
+const SYSTEM_PROMPT_BASE = `Eres Folvy AI, el copiloto de Folvy: la plataforma operativa para hostelería (restaurantes, bares, cadenas, cocinas, delivery).
 
 VOZ:
 - Profesional pero cercana. Tuteas. Frases cortas. Habla en español.
@@ -34,11 +41,13 @@ VOZ:
 
 PRINCIPIOS:
 - NUNCA inventas datos. Si no tienes el dato, dilo: "No tengo ese dato".
-- NUNCA actúas sin confirmación cuando la acción cambia datos de negocio.
+- NUNCA actúas sin confirmación cuando la acción cambia datos de negocio. Las acciones que escriben pasan SIEMPRE por una propuesta que el usuario confirma; tú nunca das por hecha una acción que no se ha confirmado.
 - Solo respondes sobre Folvy y el negocio del cliente. No eres ChatGPT general.
 - Respetas los permisos del usuario: si una tool falla por permisos, NO inventas la respuesta, explicas que no tienes acceso.
 - Si una tool devuelve datos vacíos o data_access='empty_or_forbidden', NO especules sobre la causa. Limítate a decir: "No veo movimientos en tu cuenta — puede ser que esté vacía o que no tenga permiso para leerla. ¿Has subido ya datos?".
 - NUNCA menciones por nombre productos, integraciones, canales o funcionalidades que no aparezcan literalmente en los datos consultados o en este prompt. Si dudas de si algo existe en Folvy, pregunta al usuario en lugar de afirmarlo.
+
+{{AGENT_PERSONA}}
 
 CONTEXTO DE LA PANTALLA:
 {{SURFACE_CONTEXT}}
@@ -47,6 +56,14 @@ MEMORIA RELEVANTE DE ESTA CUENTA:
 {{MEMORY_CONTEXT}}
 
 Cuando necesites datos del negocio, usa las tools disponibles. No respondas con datos inventados.`;
+
+// Persona por defecto (chat global sin módulo): generalista de Folvy.
+const PERSONA_DEFAULT = `Eres el copiloto general de Folvy. Ayudas al usuario a entender el estado de su negocio y le diriges al módulo adecuado.`;
+
+// Persona del agente de Kitchen: experto en escandallo, coste y margen.
+const PERSONA_KITCHEN = `Eres el copiloto de COCINA de Folvy (Folvy Kitchen). Tu especialidad es el escandallo, el coste por plato, el margen, el food cost y la salud de la carta. Tu trabajo es PROTEGER EL MARGEN del cliente. Hablas el lenguaje de un jefe de cocina que también entiende de números. Cuando detectes un plato con mal margen, un ingrediente que sube de precio, o un escandallo sin terminar, dilo con su impacto en euros y propón la acción concreta.
+
+PUEDES ACTUAR, no solo informar. Tienes herramientas que PROPONEN cambios reales (por ejemplo, asignar el coste a un producto que se vende sin coste). Cuando el usuario acepte que hagas algo ("sí", "hazlo", "asígnalo"), usa la herramienta correspondiente: esta NO ejecuta el cambio directamente, sino que registra una propuesta que el usuario confirmará con un botón. Tras llamar a una herramienta de acción, di con naturalidad que has preparado la propuesta y que la confirme cuando quiera. NUNCA afirmes que un cambio ya se ha aplicado: solo se aplica cuando el usuario confirma.`;
 
 const OPENING_INSTRUCTION = `\n\nMODO SALUDO DE APERTURA:
 El usuario acaba de abrir el chat. Tu primer mensaje es el saludo de bienvenida.
@@ -67,10 +84,11 @@ interface ToolContext {
   accountId: string;
   userJwt: string;
   supabaseUrl: string;
+  anonKey: string;
 }
 
 function clientWithUserJwt(ctx: ToolContext) {
-  return createClient(ctx.supabaseUrl, ctx.userJwt, {
+  return createClient(ctx.supabaseUrl, ctx.anonKey, {
     global: { headers: { Authorization: `Bearer ${ctx.userJwt}` } },
     auth: { persistSession: false, autoRefreshToken: false },
   });
@@ -165,10 +183,99 @@ const TOOL_CATALOG_HEALTH: ToolDef = {
   },
 };
 
-const TOOLS: ToolDef[] = [TOOL_CATALOG_HEALTH];
+// ── WRITE TOOLS (contrato de ejecución: PROPONEN, no ejecutan) ─────────
+// Una write tool nunca escribe el dato de negocio. Calcula el efecto, registra
+// la propuesta vía propose_ai_action (status='proposed') y devuelve el sobre
+// pending_confirmation. El front muestra la tarjeta; al confirmar, el front
+// llama commit_ai_action(action_id), que ejecuta de verdad.
 
-function toolsForAnthropic() {
-  return TOOLS.map(t => ({ name: t.name, description: t.description, input_schema: t.input_schema }));
+const TOOL_ASSIGN_RESALE_COST: ToolDef = {
+  name: 'assign_resale_cost',
+  description:
+    'PROPONE asignar un coste unitario a un producto que se vende sin coste conocido ' +
+    '(reventa: bebidas, postres comprados ya hechos, etc.). NO ejecuta el cambio: ' +
+    'devuelve una propuesta que el usuario debe confirmar. Úsala cuando el usuario ' +
+    'quiera cerrar el hueco de un producto sin mapear / sin coste (lo que aparece en ' +
+    'top_5_unmapped de catalog_health). El coste unitario es lo que al cliente le ' +
+    'cuesta comprar una unidad de ese producto (sin IVA). Tras confirmarse, el coste ' +
+    'se propaga a todas las marcas donde se vende ese producto.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      product_name: {
+        type: 'string',
+        description: 'Nombre exacto del producto sin mapear, tal como aparece en las ventas.',
+      },
+      unit_cost: {
+        type: 'number',
+        description: 'Coste unitario en euros (sin IVA) de una unidad del producto.',
+      },
+    },
+    required: ['product_name', 'unit_cost'],
+  },
+  handler: async (args, ctx) => {
+    const sb = clientWithUserJwt(ctx);
+    const productName = String(args.product_name ?? '').trim();
+    const unitCost = Number(args.unit_cost);
+    if (!productName) throw new Error('Falta el nombre del producto.');
+    if (!Number.isFinite(unitCost) || unitCost < 0) throw new Error('El coste unitario no es válido.');
+
+    // Registra la propuesta (no ejecuta). assign_resale_cost es L1 (reversible: se
+    // puede volver a dejar sin coste). rollback_hint deja constancia de cómo revertir.
+    const summary = `Asignar coste ${unitCost.toFixed(2)}€/ud a "${productName}" (reventa) y propagarlo a sus marcas`;
+    const { data: actionId, error } = await sb.rpc('propose_ai_action', {
+      p_account_id: ctx.accountId,
+      p_agent: 'kitchen',
+      p_tool_name: 'assign_resale_cost',
+      p_summary: summary,
+      p_args: { product_name: productName, unit_cost: unitCost },
+      p_risk: 'L1',
+      p_effect_preview: { kind: 'assign_resale_cost', product_name: productName, unit_cost: unitCost },
+      p_rollback_hint: { note: 'Volver a dejar el producto sin coste (needs_review)' },
+    });
+    if (error) throw new Error(`No pude registrar la propuesta: ${error.message}`);
+
+    return {
+      status: 'pending_confirmation',
+      action_id: actionId,
+      risk: 'L1',
+      summary,
+      effect: { product_name: productName, unit_cost: unitCost },
+      message: 'Propuesta registrada. El usuario debe confirmarla para que el coste se aplique.',
+    };
+  },
+};
+
+// ── REGISTRY DE AGENTES ───────────────────────────────────────────────
+// Cada agente declara su persona y su conjunto de tools. El backend elige el
+// agente según `module`. Añadir un agente = una entrada aquí.
+
+interface AgentDef {
+  persona: string;
+  tools: ToolDef[];
+}
+
+const AGENTS: Record<string, AgentDef> = {
+  // Agente de Cocina (primera implementación del marco).
+  kitchen: {
+    persona: PERSONA_KITCHEN,
+    tools: [TOOL_CATALOG_HEALTH, TOOL_ASSIGN_RESALE_COST],
+  },
+  // Agente por defecto (chat global sin módulo concreto).
+  _default: {
+    persona: PERSONA_DEFAULT,
+    tools: [TOOL_CATALOG_HEALTH],
+  },
+};
+
+/** Resuelve el agente activo a partir del módulo (fallback al generalista). */
+function resolveAgent(module: string | undefined | null): AgentDef {
+  if (module && AGENTS[module]) return AGENTS[module];
+  return AGENTS._default;
+}
+
+function toolsForAnthropic(agent: AgentDef) {
+  return agent.tools.map(t => ({ name: t.name, description: t.description, input_schema: t.input_schema }));
 }
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -237,9 +344,10 @@ Deno.serve(async (req) => {
   const model = Deno.env.get('FOLVY_AI_MODEL') ?? DEFAULT_MODEL;
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
   const sbAdmin = createClient(supabaseUrl, serviceKey);
 
-  const sbUser = createClient(supabaseUrl, userJwt, {
+  const sbUser = createClient(supabaseUrl, anonKey, {
     global: { headers: { Authorization: `Bearer ${userJwt}` } },
     auth: { persistSession: false, autoRefreshToken: false },
   });
@@ -255,14 +363,17 @@ Deno.serve(async (req) => {
   const surfaceContext = `Surface: ${surface}${body.module ? ` (modulo: ${body.module})` : ''}. ${userNameLine}` +
     (body.context ? `\nContexto adicional: ${JSON.stringify(body.context)}` : '');
 
+  const agent = resolveAgent(body.module);
+
   let systemPrompt = SYSTEM_PROMPT_BASE
+    .replace('{{AGENT_PERSONA}}', agent.persona)
     .replace('{{SURFACE_CONTEXT}}', surfaceContext)
     .replace('{{MEMORY_CONTEXT}}', memoryContext);
   if (surface === 'opening') systemPrompt += OPENING_INSTRUCTION;
 
   const sessionId = body.session_id ?? crypto.randomUUID();
   const startedAt = Date.now();
-  const toolCtx: ToolContext = { accountId: account_id, userJwt, supabaseUrl };
+  const toolCtx: ToolContext = { accountId: account_id, userJwt, supabaseUrl, anonKey };
 
   const messages: Array<{ role: 'user' | 'assistant'; content: unknown }> = [
     ...(body.history ?? []).map(m => ({ role: m.role, content: m.content })),
@@ -290,7 +401,7 @@ Deno.serve(async (req) => {
               body: JSON.stringify({
                 model, max_tokens: MAX_TOKENS,
                 system: systemPrompt,
-                tools: toolsForAnthropic(),
+                tools: toolsForAnthropic(agent),
                 messages,
                 stream: true,
               }),
@@ -362,7 +473,7 @@ Deno.serve(async (req) => {
             messages.push({ role: 'assistant', content: assistantBlocks });
             const toolResults: any[] = [];
             for (const tu of toolUses) {
-              const tool = TOOLS.find(t => t.name === tu.name);
+              const tool = agent.tools.find(t => t.name === tu.name);
               if (!tool) {
                 controller.enqueue(encoder.encode(sseEvent({ type: 'tool_end', name: tu.name })));
                 toolResults.push({ type: 'tool_result', tool_use_id: tu.id, is_error: true, content: `Tool desconocida: ${tu.name}` });
@@ -372,6 +483,18 @@ Deno.serve(async (req) => {
                 const out = await tool.handler(tu.input ?? {}, toolCtx);
                 toolsUsed.push({ name: tu.name, input: tu.input, output: out });
                 toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: JSON.stringify(out) });
+                // Si la tool propuso una acción confirmable, emite el sobre al front.
+                const o = out as Record<string, unknown> | null;
+                if (o && o.status === 'pending_confirmation' && o.action_id) {
+                  controller.enqueue(encoder.encode(sseEvent({
+                    type: 'action_proposed',
+                    action_id: o.action_id,
+                    tool: tu.name,
+                    risk: o.risk ?? 'L1',
+                    summary: o.summary ?? '',
+                    effect: o.effect ?? null,
+                  })));
+                }
               } catch (e) {
                 const msg = e instanceof Error ? e.message : String(e);
                 toolsUsed.push({ name: tu.name, input: tu.input, output: { error: msg } });
@@ -438,7 +561,7 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           model, max_tokens: MAX_TOKENS,
           system: systemPrompt,
-          tools: toolsForAnthropic(),
+          tools: toolsForAnthropic(agent),
           messages,
         }),
       });
@@ -458,7 +581,7 @@ Deno.serve(async (req) => {
       messages.push({ role: 'assistant', content: aiData.content });
       const toolResults: any[] = [];
       for (const tu of toolUses) {
-        const tool = TOOLS.find(t => t.name === tu.name);
+        const tool = agent.tools.find(t => t.name === tu.name);
         if (!tool) {
           toolResults.push({ type: 'tool_result', tool_use_id: tu.id, is_error: true, content: `Tool desconocida: ${tu.name}` });
           continue;

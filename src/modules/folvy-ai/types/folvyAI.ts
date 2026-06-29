@@ -3,6 +3,18 @@
 // Tipos del módulo Folvy AI (chat flotante + AICards futuras).
 // Genéricos: sirven al chat y a cualquier consumidor de la Edge Function folvy-ai.
 
+/** Acción propuesta por el agente, pendiente de confirmación del usuario. */
+export interface PendingAction {
+  actionId: string;
+  tool: string;
+  risk: string;                     // 'L0' | 'L1' | 'L2'
+  summary: string;
+  effect?: unknown;
+  // Estado local de la tarjeta tras interacción del usuario:
+  state?: 'pending' | 'executing' | 'done' | 'cancelled' | 'failed';
+  resultMessage?: string;
+}
+
 /** Mensaje individual de la conversación. Local al cliente y al historial enviado. */
 export interface ChatMessage {
   id: string;                       // uuid generado en cliente para keys de React
@@ -11,6 +23,8 @@ export interface ChatMessage {
   createdAt: string;                // ISO timestamp
   // Solo para mensajes 'assistant', si la IA invocó tools en ese turno:
   toolsUsed?: Array<{ name: string }>;
+  // Solo para mensajes 'assistant', si la IA propuso una acción confirmable:
+  pendingAction?: PendingAction;
   // Solo para mensajes 'assistant', estado del turno:
   status?: 'ok' | 'error';
   errorMessage?: string;

@@ -223,7 +223,7 @@ export default function Shell() {
       {/* R1.3b: el chat de IA, controlado por el Shell. En móvil sin launcher
           flotante (lo abre el héroe de la barra); en escritorio, su botón
           flotante de siempre, ahora gobernado por el mismo estado. */}
-      <FolvyAIBubble open={aiOpen} onOpenChange={setAiOpen} hideLauncher={isMobile} />
+      <FolvyAIBubble open={aiOpen} onOpenChange={setAiOpen} hideLauncher={isMobile} module={activeModule?.id} />
 
       {/* R1.2/R1.3b: barra inferior solo en móvil, con la IA como héroe central. */}
       {isMobile && (

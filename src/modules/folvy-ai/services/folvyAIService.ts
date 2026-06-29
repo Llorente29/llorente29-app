@@ -45,6 +45,7 @@ export type FolvyAIStreamEvent =
   | { type: 'text'; content: string }
   | { type: 'tool_start'; name: string }
   | { type: 'tool_end'; name: string }
+  | { type: 'action_proposed'; actionId: string; tool: string; risk: string; summary: string; effect: unknown }
   | { type: 'done'; sessionId: string; usage: { tokens_in: number; tokens_out: number; duration_ms: number } }
   | { type: 'partial_end'; reason: 'timeout' | 'network' | 'aborted'; receivedText: string }
   | { type: 'error'; message: string; retryable: boolean };
@@ -219,6 +220,15 @@ async function tryOnce(
             onEvent({ type: 'tool_start', name: raw.name });
           } else if (raw.type === 'tool_end' && typeof raw.name === 'string') {
             onEvent({ type: 'tool_end', name: raw.name });
+          } else if (raw.type === 'action_proposed' && typeof raw.action_id === 'string') {
+            onEvent({
+              type: 'action_proposed',
+              actionId: raw.action_id,
+              tool: typeof raw.tool === 'string' ? raw.tool : '',
+              risk: typeof raw.risk === 'string' ? raw.risk : 'L1',
+              summary: typeof raw.summary === 'string' ? raw.summary : '',
+              effect: raw.effect ?? null,
+            });
           } else if (raw.type === 'done') {
             onEvent({ type: 'done', sessionId: raw.session_id, usage: raw.usage });
           } else if (raw.type === 'error' && typeof raw.message === 'string') {

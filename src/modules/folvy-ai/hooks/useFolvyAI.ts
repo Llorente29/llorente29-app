@@ -15,6 +15,7 @@
 //   - clear(): borra la conversación
 
 import { useCallback, useRef, useState } from 'react';
+import { supabase } from '../../../lib/supabase';
 import { streamMessage, type FolvyAIStreamEvent } from '../services/folvyAIService';
 import type { ChatMessage, FolvyAISurface } from '../types/folvyAI';
 
@@ -34,6 +35,8 @@ export interface UseFolvyAIReturn {
   regenerate: () => Promise<void>;
   abort: () => void;
   clear: () => void;
+  confirmAction: (messageId: string, editedArgs?: Record<string, unknown>) => Promise<void>;
+  cancelAction: (messageId: string) => void;
 }
 
 interface ExecuteOptions {
@@ -115,6 +118,15 @@ export function useFolvyAI(opts: UseFolvyAIOptions): UseFolvyAIReturn {
         toolsThisTurn.push({ name: evt.name });
       } else if (evt.type === 'tool_end') {
         setCurrentTool(null);
+      } else if (evt.type === 'action_proposed') {
+        setMessages(prev => prev.map(m =>
+          m.id === assistantMsgId
+            ? { ...m, pendingAction: {
+                actionId: evt.actionId, tool: evt.tool, risk: evt.risk,
+                summary: evt.summary, effect: evt.effect, state: 'pending',
+              } }
+            : m,
+        ));
       } else if (evt.type === 'done') {
         setMessages(prev => prev.map(m =>
           m.id === assistantMsgId ? { ...m, toolsUsed: toolsThisTurn } : m,
@@ -244,5 +256,52 @@ export function useFolvyAI(opts: UseFolvyAIOptions): UseFolvyAIReturn {
     lastUserMessageRef.current = null;
   }, []);
 
-  return { messages, isStreaming, currentTool, error, send, greet, retry, regenerate, abort, clear };
+  // Helper para actualizar el estado de la acción pendiente de un mensaje.
+  const patchPendingAction = useCallback((messageId: string, patch: Partial<NonNullable<ChatMessage['pendingAction']>>) => {
+    setMessages(prev => prev.map(m =>
+      m.id === messageId && m.pendingAction
+        ? { ...m, pendingAction: { ...m.pendingAction, ...patch } }
+        : m,
+    ));
+  }, []);
+
+  // Confirma la acción: llama a commit_ai_action, que ejecuta la escritura real.
+  const confirmAction = useCallback(async (messageId: string, editedArgs?: Record<string, unknown>) => {
+    const msg = messages.find(m => m.id === messageId);
+    const action = msg?.pendingAction;
+    if (!action || action.state !== 'pending') return;
+    if (!supabase) { patchPendingAction(messageId, { state: 'failed', resultMessage: 'Sin conexión.' }); return; }
+
+    patchPendingAction(messageId, { state: 'executing' });
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error: rpcErr } = await (supabase as any).rpc('commit_ai_action', {
+        p_action_id: action.actionId,
+        p_edited_args: editedArgs ?? null,
+      });
+      if (rpcErr) {
+        patchPendingAction(messageId, { state: 'failed', resultMessage: rpcErr.message });
+        return;
+      }
+      const status = (data && (data as Record<string, unknown>).status) as string | undefined;
+      if (status === 'executed') {
+        patchPendingAction(messageId, { state: 'done', resultMessage: 'Hecho.' });
+      } else if (status === 'failed') {
+        const errMsg = (data as Record<string, unknown>).error as string | undefined;
+        patchPendingAction(messageId, { state: 'failed', resultMessage: errMsg ?? 'No se pudo aplicar.' });
+      } else {
+        patchPendingAction(messageId, { state: 'done', resultMessage: 'Hecho.' });
+      }
+    } catch (e) {
+      const m = e instanceof Error ? e.message : 'Error al aplicar.';
+      patchPendingAction(messageId, { state: 'failed', resultMessage: m });
+    }
+  }, [messages, patchPendingAction]);
+
+  // Cancela la acción: solo estado local (la fila queda 'proposed' y caduca).
+  const cancelAction = useCallback((messageId: string) => {
+    patchPendingAction(messageId, { state: 'cancelled', resultMessage: 'Cancelado.' });
+  }, [patchPendingAction]);
+
+  return { messages, isStreaming, currentTool, error, send, greet, retry, regenerate, abort, clear, confirmAction, cancelAction };
 }
