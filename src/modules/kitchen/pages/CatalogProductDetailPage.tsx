@@ -56,6 +56,7 @@ import {
   listOptionsWithImpacts, confirmImpact, rejectImpact, requestAIProposals,
   type OptionWithImpact,
 } from '@/modules/kitchen/services/modifierImpactService'
+import { childVisual } from '@/modules/orders/services/ordersFeedService'
 import ProductPlacementSection from '@/modules/kitchen/components/ProductPlacementSection'
 import EditPricesModal from '@/modules/kitchen/components/EditPricesModal'
 import { supabase } from '@/lib/supabase'
@@ -416,6 +417,25 @@ function ComboEditorSection({
 
 // ─── Editor de modificadores: grupos (reutilizables) y opciones ─────────────
 
+/**
+ * Cómo se verá una opción de modificador en el TICKET DE COCINA.
+ * Espejo fiel de modifierLines() del ticketRenderer: reutiliza childVisual (la
+ * MISMA función que pinta el ticket real) → el preview no puede mentir.
+ * Construye el OrderFeedChild mínimo que childVisual necesita (line_type + group_type
+ * + name); el resto de campos no influye en el tono.
+ */
+function kitchenPreview(optName: string, groupType: string): { text: string; tone: string } {
+  const child = {
+    line_id: '', name: optName, qty: 1, line_type: 'modifier',
+    group_type: groupType as never, menu_item_id: null, family: null,
+    family_color: null, menu_category: null, customer_note: null,
+  }
+  const v = childVisual(child)
+  const prefix = v.tone === 'remove' ? 'SIN ' : v.tone === 'add' ? '+ ' : ''
+  const cleanName = optName.replace(/^\s*(sin|no|quitar|without|sans)\s+/i, '')
+  return { text: prefix + (v.tone === 'remove' ? cleanName : optName), tone: v.tone }
+}
+
 function ModifierEditorSection({
   accountId, brandId, menuItemId, recipeItemId,
 }: {
@@ -592,6 +612,20 @@ function ModifierEditorSection({
                 </label>
               </div>
             </div>
+
+            {/* Previsualización de cocina (capa D): cómo se verá en el ticket */}
+            {g.options.length > 0 && (
+              <div className="mx-3 mt-2 rounded-md bg-zinc-900 px-3 py-2 font-mono text-[12px] leading-relaxed">
+                <div className="text-zinc-500 text-[10px] uppercase tracking-wide mb-1">Así lo ve cocina</div>
+                {g.options.map((o) => {
+                  const kp = kitchenPreview(o.name, g.groupType)
+                  const color = kp.tone === 'remove' ? 'text-red-400 font-bold'
+                    : kp.tone === 'add' ? 'text-amber-300'
+                    : 'text-zinc-300'
+                  return <div key={o.id} className={`pl-3 ${color}`}>{kp.text}</div>
+                })}
+              </div>
+            )}
 
             {/* Opciones */}
             <div className="px-3 py-2 space-y-1.5">
