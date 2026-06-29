@@ -17,10 +17,11 @@
 // pendiente), Nutrición, Cortes y merma, Stock, Histórico.
 
 import { useEffect, useMemo, useState, type ReactNode, type ChangeEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Archive, Check, Loader2, Pencil, X, ChevronDown, ImagePlus, Trash2,
   ChefHat, AlertTriangle, Activity, Scissors, Boxes, Clock, Snowflake, Settings2,
-  TrendingUp, Tag,
+  TrendingUp, Tag, Scale,
 } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import {
@@ -33,6 +34,7 @@ import {
   deleteOrArchiveItem,
 } from '@/modules/kitchen/services/recipeItemService'
 import { listUnits } from '@/modules/kitchen/services/kitchenUnitService'
+import { listConversions, upsertConversion, removeConversion, type UnitConversion } from '@/modules/kitchen/services/unitConversionService'
 import { listSuppliers, listSuppliersByItem } from '@/modules/kitchen/services/purchaseFormatService'
 import { recomputeItemAndAncestors } from '@/modules/kitchen/services/costCascadeService'
 import {
@@ -202,10 +204,13 @@ const INPUT_CLS =
 interface KitchenItemDetailPageProps {
   itemId: string
   onBack: () => void
+  /** Si llegamos desde una línea bloqueada de un escandallo, su recipeId (para volver). */
+  returnTo?: string | null
 }
 
-export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDetailPageProps) {
+export default function KitchenItemDetailPage({ itemId, onBack, returnTo }: KitchenItemDetailPageProps) {
   const { userProfile, authUserId, activeLocationId } = useApp()
+  const navigate = useNavigate()
 
   const [item, setItem] = useState<RecipeItem | null>(null)
   const [units, setUnits] = useState<KitchenUnit[]>([])
@@ -256,6 +261,12 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
   const [deleteBusy, setDeleteBusy] = useState(false)
   // Disparador de recarga del item (tras aplicar el copiloto IA, etc.)
   const [reloadTick, setReloadTick] = useState(0)
+  // Conversiones de unidad amigables ("1 ud = 85 g") del ingrediente.
+  const [conversions, setConversions] = useState<UnitConversion[]>([])
+  const [convError, setConvError] = useState<string | null>(null)
+  const [convFromUnitId, setConvFromUnitId] = useState('')
+  const [convQty, setConvQty] = useState('')
+  const [convSaving, setConvSaving] = useState(false)
   // Datos cargados aparte del mapper de RecipeItem (para mostrar en la ficha).
   const [nutritionData, setNutritionData] = useState<Record<string, number>>({})
   const [menuTags, setMenuTags] = useState<string[]>([])
@@ -332,6 +343,23 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
     return () => { cancelled = true }
   }, [item?.id, item?.accountId])
 
+  // ── Conversiones de unidad amigables del ingrediente ──
+  useEffect(() => {
+    if (!item) { setConversions([]); return }
+    let cancelled = false
+    listConversions(item.id)
+      .then((cs) => { if (!cancelled) setConversions(cs) })
+      .catch(() => { if (!cancelled) setConversions([]) })
+    return () => { cancelled = true }
+  }, [item?.id, reloadTick])
+
+  // Al elegir una unidad ya con conversión, prefill el qty (la edita en vez de duplicar).
+  useEffect(() => {
+    if (!convFromUnitId) { return }
+    const existing = conversions.find((c) => c.fromUnitId === convFromUnitId)
+    setConvQty(existing ? String(existing.qtyInBase) : '')
+  }, [convFromUnitId, conversions])
+
   // ── URL firmada de la foto ──
   useEffect(() => {
     if (!item) { setPhotoUrl(null); return }
@@ -356,11 +384,47 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
     try { setLinks(await listSuppliersByItem(item.id)) } catch { /* no crítico */ }
   }
 
+  // ── Conversiones de unidad ──
+  async function handleSaveConversion() {
+    if (!item || !convFromUnitId) return
+    const qty = Number(convQty.replace(',', '.'))
+    if (!(qty > 0)) { setConvError('La equivalencia debe ser un número mayor que 0.'); return }
+    setConvSaving(true); setConvError(null)
+    try {
+      await upsertConversion(item.accountId, item.id, convFromUnitId, qty)
+      setConvFromUnitId(''); setConvQty('')
+      setReloadTick((t) => t + 1) // recarga conversiones + item (coste rehecho)
+    } catch (e) {
+      setConvError(e instanceof Error ? e.message : 'No se pudo guardar la equivalencia.')
+    } finally {
+      setConvSaving(false)
+    }
+  }
+  async function handleRemoveConversion(id: string) {
+    if (!item) return
+    setConvSaving(true); setConvError(null)
+    try {
+      await removeConversion(id, item.id)
+      setReloadTick((t) => t + 1)
+    } catch (e) {
+      setConvError(e instanceof Error ? e.message : 'No se pudo quitar la equivalencia.')
+    } finally {
+      setConvSaving(false)
+    }
+  }
+
   // ── Derivados ──
   const baseUnit = useMemo(
     () => (item ? units.find((u) => u.id === item.baseUnitId) ?? null : null),
     [units, item],
   )
+  // Unidades elegibles para una conversión: las de OTRA dimensión que la base
+  // (las de igual dimensión ya convierten solas por factor, no necesitan fila).
+  const convUnits = useMemo(
+    () => (baseUnit ? units.filter((u) => u.dimension !== baseUnit.dimension) : []),
+    [units, baseUnit],
+  )
+  const unitAbbrById = (id: string) => units.find((u) => u.id === id)?.abbreviation ?? '?'
   const unitsGrouped = useMemo(() => {
     const groups = new Map<string, KitchenUnit[]>()
     units.forEach((u) => {
@@ -621,9 +685,20 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
 
       {/* TOP BAR */}
       <div className="flex items-center justify-between mb-4">
-        <button type="button" onClick={onBack} className="inline-flex items-center gap-1.5 text-sm text-text-secondary hover:text-text-primary transition-base">
-          <ArrowLeft size={16} /> Ingredientes
-        </button>
+        <div className="flex items-center gap-3">
+          <button type="button" onClick={onBack} className="inline-flex items-center gap-1.5 text-sm text-text-secondary hover:text-text-primary transition-base">
+            <ArrowLeft size={16} /> Ingredientes
+          </button>
+          {returnTo && (
+            <button
+              type="button"
+              onClick={() => navigate('/kitchen/recetas?recipe=' + returnTo)}
+              className="inline-flex items-center gap-1.5 text-sm text-accent hover:opacity-80 transition-base font-medium"
+            >
+              <ArrowLeft size={16} /> Volver al escandallo
+            </button>
+          )}
+        </div>
       </div>
 
       {photoError && (
@@ -976,6 +1051,88 @@ export default function KitchenItemDetailPage({ itemId, onBack }: KitchenItemDet
                 <DataCell label="Actualizado" value={formatDateShort(item.costUpdatedAt)} />
               </div>
             </CollapsibleSection>
+
+            {(isRaw || item.type === 'recipe') && (
+            <CollapsibleSection
+              icon={<Scale size={16} />}
+              title="Unidades de uso"
+              badge={conversions.length === 0 ? 'Opcional' : undefined}
+              badgeTone="neutral"
+              defaultOpen={conversions.length > 0 || !!returnTo}
+            >
+              <p className="text-sm text-text-secondary mb-3">
+                Unidad base de este ingrediente: <strong className="text-text-primary">{baseUnit?.abbreviation ?? '—'}</strong>.
+                Añade equivalencias para poder usarlo en otras unidades en los escandallos
+                (1 ud, 1 loncha, 1 cazo…). Folvy guarda la conversión y recalcula coste y stock.
+              </p>
+
+              {conversions.length > 0 && (
+                <div className="flex flex-col gap-1.5 mb-3">
+                  {conversions.map((c) => (
+                    <div key={c.id} className="flex items-center gap-2 text-sm">
+                      <span className="font-mono text-text-primary">
+                        1 {unitAbbrById(c.fromUnitId)} = {new Intl.NumberFormat('es-ES', { maximumFractionDigits: 4 }).format(c.qtyInBase)} {baseUnit?.abbreviation ?? ''}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveConversion(c.id)}
+                        disabled={convSaving}
+                        title="Quitar esta equivalencia"
+                        className="text-text-tertiary hover:text-danger transition-base disabled:opacity-40"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {!baseUnit ? (
+                <p className="text-sm text-warning">Define primero la unidad base del ingrediente.</p>
+              ) : convUnits.length === 0 ? (
+                <p className="text-sm text-text-secondary">No hay otras unidades disponibles para convertir.</p>
+              ) : (
+                <div className="flex flex-wrap items-end gap-2">
+                  <div className="flex items-center gap-1.5 text-sm">
+                    <span className="text-text-secondary">1</span>
+                    <select
+                      value={convFromUnitId}
+                      onChange={(e) => setConvFromUnitId(e.target.value)}
+                      className="px-2 py-1.5 rounded border border-border-default bg-card text-text-primary text-sm focus:outline-none focus:ring-1 focus:ring-accent"
+                    >
+                      <option value="">unidad…</option>
+                      {convUnits.map((u) => (
+                        <option key={u.id} value={u.id}>{u.name} ({u.abbreviation})</option>
+                      ))}
+                    </select>
+                    <span className="text-text-secondary">=</span>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={convQty}
+                      onChange={(e) => setConvQty(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSaveConversion() } }}
+                      placeholder="cantidad"
+                      disabled={!convFromUnitId}
+                      className="w-[90px] px-2 py-1.5 rounded border border-border-default bg-card text-text-primary text-sm font-mono focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+                    />
+                    <span className="text-text-secondary font-mono">{baseUnit.abbreviation}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSaveConversion}
+                    disabled={convSaving || !convFromUnitId || !convQty}
+                    className="px-3 py-1.5 rounded bg-accent text-white text-sm font-medium hover:opacity-90 transition-base disabled:opacity-40 inline-flex items-center gap-1.5"
+                  >
+                    {convSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                    {conversions.some((c) => c.fromUnitId === convFromUnitId) ? 'Actualizar' : 'Guardar'}
+                  </button>
+                </div>
+              )}
+
+              {convError && <p className="text-sm text-danger mt-2">{convError}</p>}
+            </CollapsibleSection>
+            )}
 
             {isRaw && (
             <CollapsibleSection icon={<AlertTriangle size={16} />} title="Alérgenos" badge={allergens.length > 0 ? undefined : 'Sin declarar'} badgeTone="neutral" defaultOpen={allergens.length > 0}>

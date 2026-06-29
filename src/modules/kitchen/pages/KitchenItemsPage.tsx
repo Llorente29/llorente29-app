@@ -20,6 +20,7 @@
 // scroll horizontal. Mismo mecanismo y estilo que KitchenProfitabilityPage (R1.4).
 
 import { Component, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Plus, Soup, X, AlertTriangle, ChevronRight, Search, Sparkles, Tag, FolderTree, BookMarked, Check, Loader2, Wand2, RefreshCw, Coins } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
@@ -126,7 +127,30 @@ export default function KitchenItemsPage() {
   const [simpleCreateOpen, setSimpleCreateOpen] = useState(false)
   // null = vista lista; un id = vista detalle del ingrediente.
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
+  // Si llegamos desde una línea bloqueada de un escandallo, recordamos a qué
+  // escandallo volver (?return=<recipeId>) para el botón "Volver al escandallo".
+  const [returnTo, setReturnTo] = useState<string | null>(null)
+  const [searchParams, setSearchParams] = useSearchParams()
   const [reloadTick, setReloadTick] = useState(0)
+
+  // Navegación entrante desde el editor de escandallo: si la URL trae ?item=<id>
+  // abrimos su ficha directamente (calcado de ?recipe= en KitchenRecipesPage).
+  // ?return=<recipeId> habilita el botón de retorno. Limpiamos ambos params para
+  // que un "volver" a la lista no los reabra. Query param (no location.state)
+  // porque sobrevive al remontaje al cambiar de ruta.
+  useEffect(() => {
+    const incomingId = searchParams.get('item')
+    if (incomingId) {
+      setSelectedItemId(incomingId)
+      setReturnTo(searchParams.get('return'))
+      const next = new URLSearchParams(searchParams)
+      next.delete('item')
+      next.delete('return')
+      setSearchParams(next, { replace: true })
+    }
+    // Solo al montar / cambiar el param entrante.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // ── Completado masivo con IA (ingredientes pendientes) ──
   const [bulkRunning, setBulkRunning] = useState(false)
@@ -256,13 +280,16 @@ export default function KitchenItemsPage() {
         key={selectedItemId}
         onBack={() => {
           setSelectedItemId(null)
+          setReturnTo(null)
           setReloadTick(t => t + 1)
         }}
       >
         <KitchenItemDetailPage
           itemId={selectedItemId}
+          returnTo={returnTo}
           onBack={() => {
             setSelectedItemId(null)
+            setReturnTo(null)
             setReloadTick(t => t + 1)
           }}
         />

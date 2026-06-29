@@ -17,6 +17,7 @@
 // Patrón: useActiveAccount() (cuenta), igual que KitchenItemsPage.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent, ReactNode } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   ArrowLeft,
   ChefHat,
@@ -243,6 +244,7 @@ export default function RecipeEditorPage({
   const { activeAccountId, accountsLoading } = useActiveAccount()
   const { userProfile, authUserId } = useApp()
   const isMobile = useIsMobile()
+  const navigate = useNavigate()
   const recipeId = recipeIdProp
 
   const [recipe, setRecipe] = useState<RecipeItem | null>(null)
@@ -1372,13 +1374,25 @@ export default function RecipeEditorPage({
               </span>
             )}
             {line.needsReview && (
-              <span
-                title="Esta línea usa una unidad que no se puede convertir a la base del ingrediente: no mide coste ni descuenta stock. Falta definir la conversión."
-                className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-danger-bg text-danger inline-flex items-center gap-1 align-middle"
-              >
-                <AlertTriangle className="w-3 h-3" />
-                falta convertir la unidad
-              </span>
+              recipeId ? (
+                <button
+                  type="button"
+                  onClick={() => navigate('/kitchen?item=' + line.childItemId + '&return=' + recipeId)}
+                  title="Definir la conversión de este ingrediente para poder medir coste y stock"
+                  className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-danger-bg text-danger inline-flex items-center gap-1 align-middle hover:bg-danger hover:text-white transition-colors cursor-pointer"
+                >
+                  <AlertTriangle className="w-3 h-3" />
+                  falta convertir la unidad
+                </button>
+              ) : (
+                <span
+                  title="Esta línea usa una unidad que no se puede convertir a la base del ingrediente: no mide coste ni descuenta stock. Falta definir la conversión."
+                  className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-danger-bg text-danger inline-flex items-center gap-1 align-middle"
+                >
+                  <AlertTriangle className="w-3 h-3" />
+                  falta convertir la unidad
+                </span>
+              )
             )}
             {/* E3: chip de merma. Si hay merma → mostrar y permitir override.
                 Si no la hay → ofrecer sugerencia IA / añadir a mano. */}
