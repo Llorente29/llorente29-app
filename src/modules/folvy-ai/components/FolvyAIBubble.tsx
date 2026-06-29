@@ -22,8 +22,8 @@
 // barra → adiós al solapamiento naranja); en ese modo el panel lleva su propia
 // X de cierre en la cabecera.
 
-import { useEffect, useRef, useState } from 'react';
-import { X, RotateCcw, RefreshCw, ChevronDown, Volume2, VolumeX } from 'lucide-react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { X, RotateCcw, RefreshCw, ChevronDown, Volume2, VolumeX, BarChart3, AlertCircle, Wand2, Mic } from 'lucide-react';
 import { useApp } from '../../../context/AppContext';
 import { useFolvyAI } from '../hooks/useFolvyAI';
 import { useVoice } from '../hooks/useVoice';
@@ -41,7 +41,16 @@ const TOOL_HUMAN_LABEL: Record<string, string> = {
 const SUGGESTED_PROMPTS = [
   '¿Cómo está mi carta?',
   '¿Qué plato me deja menos margen?',
-  'Mapea mis ventas pendientes',
+  'Asígnale coste a un producto sin escandallo',
+];
+
+// Capacidades REALES del copiloto (las que de verdad hace hoy). Honestas: no
+// promete lo que no puede. Se amplían a medida que el agente gana herramientas.
+const AGENT_CAPABILITIES: Array<{ icon: ReactNode; text: string }> = [
+  { icon: <BarChart3 size={14} />, text: 'Veo el estado de tu carta, tus costes y tus márgenes en tiempo real' },
+  { icon: <AlertCircle size={14} />, text: 'Detecto los productos que vendes sin coste conocido y su impacto en euros' },
+  { icon: <Wand2 size={14} />, text: 'Asigno costes y aplico cambios contigo — siempre con tu confirmación' },
+  { icon: <Mic size={14} />, text: 'Puedes hablarme y, si quieres, te respondo en voz alta' },
 ];
 
 const STICKY_BOTTOM_THRESHOLD = 80;
@@ -160,7 +169,7 @@ export function FolvyAIBubble({ open: openProp, onOpenChange, hideLauncher = fal
       return TOOL_HUMAN_LABEL[currentTool] ?? `Usando ${currentTool}`;
     }
     if (isStreaming) return 'Pensando...';
-    return 'Tu asistente operativo';
+    return 'Tu copiloto operativo';
   })();
 
   if (!activeAccountId) return null;
@@ -206,7 +215,7 @@ export function FolvyAIBubble({ open: openProp, onOpenChange, hideLauncher = fal
         <button
           type="button"
           onClick={() => setOpen(v => !v)}
-          aria-label={open ? 'Cerrar Folvy AI' : 'Abrir Folvy AI'}
+          aria-label={open ? 'Cerrar Folvy Copiloto' : 'Abrir Folvy Copiloto'}
           className={
             'fixed bottom-6 right-6 z-40 rounded-full shadow-lg transition-all duration-base ' +
             'min-h-touch min-w-touch flex items-center justify-center ' +
@@ -233,7 +242,7 @@ export function FolvyAIBubble({ open: openProp, onOpenChange, hideLauncher = fal
             <div className="flex items-center gap-2 min-w-0">
               <FolvyAIIsotype size={24} />
               <div className="min-w-0">
-                <div className="font-display text-sm text-text-primary leading-none">Folvy AI</div>
+                <div className="font-display text-sm text-text-primary leading-none">Folvy Copiloto</div>
                 <div
                   className={
                     'text-xs mt-0.5 truncate transition-colors duration-fast ' +
@@ -292,15 +301,34 @@ export function FolvyAIBubble({ open: openProp, onOpenChange, hideLauncher = fal
             className="flex-1 overflow-y-auto px-3 py-3 bg-page relative"
           >
             {messages.length === 0 && !isStreaming && (
-              <div className="text-center py-8 px-4">
-                <div className="flex justify-center mb-3">
-                  <FolvyAIIsotype size={40} />
+              <div className="py-6 px-3">
+                {/* Identidad de marca */}
+                <div className="text-center mb-5">
+                  <div className="flex justify-center mb-3">
+                    <FolvyAIIsotype size={48} />
+                  </div>
+                  <p className="font-display text-base text-text-primary">Folvy Copiloto</p>
+                  <p className="text-xs text-text-secondary mt-1 leading-relaxed">
+                    Tu copiloto operativo. No solo te informa: actúa contigo, siempre con tu confirmación.
+                  </p>
                 </div>
-                <p className="text-sm text-text-primary font-medium">Folvy AI</p>
-                <p className="text-xs text-text-secondary mt-2 leading-relaxed mb-4">
-                  Tu asistente operativo. Pregúntame por tu carta, tus márgenes, tus ventas.
-                </p>
-                <div className="flex flex-col gap-2 max-w-xs mx-auto">
+
+                {/* Capacidades reales */}
+                <div className="rounded-lg border border-border-default bg-card px-3 py-3 mb-4">
+                  <p className="text-[11px] uppercase tracking-wide text-text-secondary mb-2 font-medium">Esto es lo que puedo hacer</p>
+                  <ul className="space-y-1.5">
+                    {AGENT_CAPABILITIES.map((cap, i) => (
+                      <li key={i} className="flex items-start gap-2 text-xs text-text-primary">
+                        <span className="text-terracota mt-0.5 shrink-0">{cap.icon}</span>
+                        <span>{cap.text}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {/* Sugerencias para empezar */}
+                <p className="text-[11px] uppercase tracking-wide text-text-secondary mb-2 font-medium px-1">Prueba a pedirme</p>
+                <div className="flex flex-col gap-2">
                   {SUGGESTED_PROMPTS.map(prompt => (
                     <button
                       key={prompt}

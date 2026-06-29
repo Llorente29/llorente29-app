@@ -14,6 +14,31 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 const LANG = 'es-ES';
 
+// Pistas de calidad en los nombres de voces del sistema. Las voces "neuronales"
+// modernas suelen incluir estas palabras; las robóticas antiguas (eSpeak, la
+// voz GPS por defecto) no. Priorizamos las primeras.
+const PREMIUM_HINTS = ['natural', 'neural', 'online', 'enhanced', 'premium', 'wavenet', 'studio'];
+// Nombres conocidos de voces españolas buenas por plataforma (Edge/Windows, macOS).
+const GOOD_VOICE_NAMES = ['helena', 'pablo', 'elvira', 'alvaro', 'dario', 'laura', 'mónica', 'monica', 'jorge'];
+
+/** Elige la mejor voz en español de las disponibles en el sistema. */
+function pickBestSpanishVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
+  const spanish = voices.filter(v => v.lang?.toLowerCase().startsWith('es'));
+  if (spanish.length === 0) return null;
+
+  const score = (v: SpeechSynthesisVoice): number => {
+    const name = (v.name ?? '').toLowerCase();
+    let s = 0;
+    if (PREMIUM_HINTS.some(h => name.includes(h))) s += 100;       // neuronal/premium
+    if (GOOD_VOICE_NAMES.some(n => name.includes(n))) s += 40;     // voz buena conocida
+    if (v.lang?.toLowerCase() === 'es-es') s += 10;                // castellano exacto
+    if (!v.localService) s += 5;                                   // voces "online" suelen ser mejores
+    return s;
+  };
+
+  return spanish.slice().sort((a, b) => score(b) - score(a))[0];
+}
+
 // Tipos mínimos de la Web Speech API (no están en lib.dom estándar de TS).
 interface SpeechRecognitionLike {
   lang: string;
@@ -67,6 +92,19 @@ export function useVoice(opts: UseVoiceOptions): UseVoiceReturn {
   const onTranscriptRef = useRef(opts.onTranscript);
   onTranscriptRef.current = opts.onTranscript;
 
+  // La mejor voz española disponible (se resuelve cuando el sistema carga voces).
+  const bestVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    const load = () => {
+      const v = pickBestSpanishVoice(window.speechSynthesis.getVoices());
+      if (v) bestVoiceRef.current = v;
+    };
+    load();
+    window.speechSynthesis.onvoiceschanged = load;
+    return () => { window.speechSynthesis.onvoiceschanged = null; };
+  }, []);
+
   // ── Reconocimiento (STT) ───────────────────────────────────────────────────
   const startListening = useCallback(() => {
     if (!recognitionCtor || isListening) return;
@@ -115,13 +153,13 @@ export function useVoice(opts: UseVoiceOptions): UseVoiceReturn {
     const utt = new SpeechSynthesisUtterance(clean);
     utt.lang = LANG;
     utt.rate = 1.05;
+    utt.pitch = 1.0;
     utt.onstart = () => setIsSpeaking(true);
     utt.onend = () => setIsSpeaking(false);
     utt.onerror = () => setIsSpeaking(false);
-    // Preferir una voz en español si el sistema la tiene.
-    const voices = window.speechSynthesis.getVoices();
-    const esVoice = voices.find(v => v.lang?.toLowerCase().startsWith('es'));
-    if (esVoice) utt.voice = esVoice;
+    // Mejor voz española disponible (cacheada). Si aún no cargó, resolver ahora.
+    const voice = bestVoiceRef.current ?? pickBestSpanishVoice(window.speechSynthesis.getVoices());
+    if (voice) utt.voice = voice;
     window.speechSynthesis.speak(utt);
   }, []);
 
