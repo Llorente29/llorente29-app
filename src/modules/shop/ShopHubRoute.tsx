@@ -336,10 +336,10 @@ const C = {
 }
 const S: Record<string, React.CSSProperties> = {
   page: { minHeight: '100vh', background: C.bg, color: C.ink, fontFamily: 'inherit' },
-  topbar: { position: 'sticky', top: 0, zIndex: 50, background: 'rgba(251,247,240,.92)', backdropFilter: 'blur(10px)', borderBottom: `1px solid ${C.line}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20, padding: '13px 28px' },
+  topbar: { position: 'sticky', top: 0, zIndex: 50, background: '#FFFFFF', borderBottom: `1px solid ${C.line}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20, padding: '16px 28px' },
   logo: { display: 'flex', alignItems: 'center', gap: 8, fontWeight: 900, fontSize: 20, letterSpacing: '-.03em' },
   logoDot: { width: 11, height: 11, borderRadius: '50%', background: C.accent },
-  logoImg: { height: 52, width: 'auto', maxWidth: 260, objectFit: 'contain', display: 'block' },
+  logoImg: { height: 50, width: 'auto', maxWidth: 260, objectFit: 'contain', display: 'block' },
   preTag: { fontSize: 12, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: C.amber, background: C.amberBg, border: `1px solid ${C.amberLine}`, padding: '6px 12px', borderRadius: 30 },
   preBanner: { display: 'flex', alignItems: 'center', gap: 10, margin: '14px 28px 0', padding: '11px 16px', background: C.amberBg, border: `1px solid ${C.amberLine}`, borderRadius: 12, fontSize: 13.5, color: C.amber, fontWeight: 600 },
   preIc: { display: 'flex', color: C.amber, flexShrink: 0 },
