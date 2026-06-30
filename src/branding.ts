@@ -4,54 +4,56 @@
  * Toda la identidad visual de la app vive aquí.
  * Cambiar valores en este archivo actualiza la marca en toda la aplicación.
  *
- * Decisiones de diseño (sesión 14/05/2026):
- * - Posicionamiento: premium + toque cercano español
- * - Paleta: warm white + azul tinta (sin granate vintage)
- * - Tipografía: Fraunces (display) + Inter (UI)
- * - Iconos: Lucide React
+ * Rebrand 30/06/2026 — dirección "instrumento / el color es dinero":
+ * - Terracota JUBILADO. Acción = tinta monocroma.
+ * - Semánticos = el trío del margen (verde gana / ámbar aprieta / rojo pierde).
+ * - Superficies frías y nítidas; las fotos del plato ponen el apetito.
+ * - Display: Fraunces → Space Grotesk. UI: Inter. Números: JetBrains Mono (tabular).
+ * - Símbolo: "El ciclo" (anillo + punto de margen verde).
+ * - Chrome: escritorio claro; oscuro solo en modo cocina (tablet).
  */
 
 export const BRAND = {
   // ---------------------------------------------------------------
   // IDENTIDAD
   // ---------------------------------------------------------------
-  name: 'TBD',                         // Pendiente: Garbim, Garbis, Garbiz, Garbin, Garbie
-  tagline: 'Tu cocina, en orden.',     // Slogan provisional
-  domain: 'tbd.app',                   // Pendiente
+  name: 'Folvy',
+  tagline: 'Una plataforma, toda tu operación.',
+  domain: 'folvy.app',
 
   // ---------------------------------------------------------------
-  // PALETA (8 colores definitivos)
+  // PALETA
   // ---------------------------------------------------------------
   colors: {
     // Superficies
-    bgPage:    '#F5F4F0',  // warm white — fondo general
+    bgPage:    '#F6F7F8',  // lienzo frío — fondo general
     bgCard:    '#FFFFFF',  // tarjetas, modales, inputs
-    border:    '#E0DDD6',  // bordes y separadores warm
+    border:    '#E9EBED',  // bordes y separadores
 
     // Texto
-    textPrimary:   '#0C0A09',  // títulos, datos importantes
-    textSecondary: '#6B6760',  // subtítulos, labels, hints (warm gray)
-    textOnAccent:  '#FFFFFF',  // texto sobre fondos azul tinta
+    textPrimary:   '#15171A',  // tinta — títulos, datos importantes
+    textSecondary: '#6B7077',  // subtítulos, labels, hints (gris frío)
+    textOnAccent:  '#FFFFFF',  // texto sobre tinta
 
-    // Marca
-    accent:        '#1E3A5F',  // azul tinta — botones primary, dots, focus
-    accentHover:   '#162E4A',  // hover de accent (un 12% más oscuro)
-    accentBg:      '#EDECE6',  // fondo claro para badges con texto accent
+    // Acción / marca
+    accent:        '#15171A',  // tinta — botones primary, dots, focus, tabs activos
+    accentHover:   '#2A2D33',  // hover de accent (lift)
+    accentBg:      '#EEEFF1',  // fondo claro para badges con texto accent
 
-    // Estados semánticos
-    success:       '#3F5C2F',  // verde tierra — completado, hecho
-    successBg:     '#E2E8DA',  // fondo claro para badges success
-    danger:        '#A32D2D',  // rojo terroso — incidencias, errores
-    dangerBg:      '#FAECEC',  // fondo claro para badges danger
-    warning:       '#BA7517',  // ámbar — atención, alertas suaves
-    warningBg:     '#FAEEDA',  // fondo claro para badges warning
+    // Estados semánticos = el trío del margen
+    success:       '#1F9D6B',  // verde — gana dinero / completado
+    successBg:     '#E7F4EE',
+    warning:       '#C2890F',  // ámbar — margen ajustado / atención
+    warningBg:     '#FAF0D8',
+    danger:        '#E0492E',  // rojo — pierde / error
+    dangerBg:      '#FBE8E3',
   } as const,
 
   // ---------------------------------------------------------------
   // TIPOGRAFÍA
   // ---------------------------------------------------------------
   fonts: {
-    display: '"Fraunces", "Iowan Old Style", "Charter", Georgia, serif',
+    display: '"Space Grotesk", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
     sans:    '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
     mono:    '"JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace',
   } as const,
@@ -99,12 +101,12 @@ export const BRAND = {
   } as const,
 
   // ---------------------------------------------------------------
-  // SOMBRAS (sutiles, sin elevación excesiva)
+  // SOMBRAS (sutiles, frías)
   // ---------------------------------------------------------------
   shadow: {
-    sm: '0 1px 2px rgba(12, 10, 9, 0.04)',
-    md: '0 2px 8px rgba(12, 10, 9, 0.06)',
-    lg: '0 8px 24px rgba(12, 10, 9, 0.08)',
+    sm: '0 1px 2px rgba(21, 23, 26, 0.04)',
+    md: '0 2px 8px rgba(21, 23, 26, 0.06)',
+    lg: '0 8px 24px rgba(21, 23, 26, 0.08)',
   } as const,
 
   // ---------------------------------------------------------------

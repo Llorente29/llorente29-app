@@ -8,32 +8,44 @@
   font-family: var(--font-display);
 }
 
-:root {
-  --color-bg-page: #F5F4F0;
-  --color-bg-card: #FFFFFF;
-  --color-border-default: #E0DDD6;
+/* Números siempre tabulares cuando se usa la utility mono (céntimos alineados,
+   "al céntimo" como seña de Folvy). */
+.font-mono {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
 
-  --color-text-primary: #0C0A09;
-  --color-text-secondary: #6B6760;
+:root {
+  /* Superficies */
+  --color-bg-page: #F6F7F8;
+  --color-bg-card: #FFFFFF;
+  --color-border-default: #E9EBED;
+
+  /* Texto */
+  --color-text-primary: #15171A;
+  --color-text-secondary: #6B7077;
   --color-text-on-accent: #FFFFFF;
 
-  --color-accent: #1E3A5F;
-  --color-accent-hover: #162E4A;
-  --color-accent-bg: #EDECE6;
+  /* Acción / marca (rebrand 30/06/2026: tinta monocroma) */
+  --color-accent: #15171A;
+  --color-accent-hover: #2A2D33;
+  --color-accent-bg: #EEEFF1;
 
-  /* Token de marca Folvy: terracota del arco del isotipo. Anadido Bloque H Sprint 3. */
-  --color-terracota: #D67442;
-  --color-terracota-hover: #C25F2E;
-  --color-terracota-bg: #FAEFE6;
+  /* Token 'terracota' conservado apuntando a tinta (herencia sin tocar JSX). */
+  --color-terracota: #15171A;
+  --color-terracota-hover: #2A2D33;
+  --color-terracota-bg: #F1F2F4;
 
-  --color-success: #3F5C2F;
-  --color-success-bg: #E2E8DA;
-  --color-danger: #A32D2D;
-  --color-danger-bg: #FAECEC;
-  --color-warning: #BA7517;
-  --color-warning-bg: #FAEEDA;
+  /* Semánticos = el trío del margen (el color es dinero) */
+  --color-success: #1F9D6B;
+  --color-success-bg: #E7F4EE;
+  --color-danger: #E0492E;
+  --color-danger-bg: #FBE8E3;
+  --color-warning: #C2890F;
+  --color-warning-bg: #FAF0D8;
 
-  --font-display: 'Fraunces', 'Iowan Old Style', Charter, Georgia, serif;
+  /* Tipografía */
+  --font-display: 'Space Grotesk', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
 
@@ -42,9 +54,9 @@
   --radius-lg: 10px;
   --radius-xl: 14px;
 
-  --shadow-sm: 0 1px 2px rgba(12, 10, 9, 0.04);
-  --shadow-md: 0 2px 8px rgba(12, 10, 9, 0.06);
-  --shadow-lg: 0 8px 24px rgba(12, 10, 9, 0.08);
+  --shadow-sm: 0 1px 2px rgba(21, 23, 26, 0.04);
+  --shadow-md: 0 2px 8px rgba(21, 23, 26, 0.06);
+  --shadow-lg: 0 8px 24px rgba(21, 23, 26, 0.08);
 }
 
 * {

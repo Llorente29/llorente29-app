@@ -4,42 +4,52 @@ export default {
   theme: {
     extend: {
       colors: {
-        'page': '#F5F4F0',
+        // ── Superficies (lienzo frío y nítido) ──
+        'page': '#F6F7F8',
         'card': '#FFFFFF',
-        'border-default': '#E0DDD6',
-        'text-primary': '#0C0A09',
-        'text-secondary': '#6B6760',
+        'border-default': '#E9EBED',
+
+        // ── Texto ──
+        'text-primary': '#15171A',   // tinta
+        'text-secondary': '#6B7077', // gris frío legible
         'text-on-accent': '#FFFFFF',
+
+        // ── Acción / marca (rebrand 30/06/2026: tinta monocroma) ──
+        // El acento de acción es la TINTA. Botones primary, tabs activos,
+        // focus, énfasis. Sustituye al azul tinta anterior.
         'accent': {
-          DEFAULT: '#1E3A5F',
-          hover: '#162E4A',
-          bg: '#EDECE6',
+          DEFAULT: '#15171A',
+          hover: '#2A2D33',
+          bg: '#EEEFF1',
         },
-        // Token de marca Folvy: color terracota del arco del isotipo y punto
-        // central del logo. Uso: enfasis visual, CTAs destacados, hover
-        // sobre elementos clave de marca. NO confundir con 'warning' (que
-        // es semantico, para alertas/avisos de validacion). Anadido Bloque H
-        // Sprint 3, 20/05/2026.
+        // 'terracota' se JUBILA como color, pero se conserva el TOKEN apuntando
+        // a tinta para que los cientos de usos existentes (bg-terracota,
+        // text-terracota, terracota-bg) hereden la marca nueva sin tocar JSX.
+        // Renombrado fino terracota→accent = pulido posterior, no urgente.
         'terracota': {
-          DEFAULT: '#D67442',
-          hover: '#C25F2E',
-          bg: '#FAEFE6',
+          DEFAULT: '#15171A',
+          hover: '#2A2D33',
+          bg: '#F1F2F4',
         },
-        'success': {
-          DEFAULT: '#3F5C2F',
-          bg: '#E2E8DA',
+
+        // ── Semánticos = el trío del MARGEN (la tesis: el color es dinero) ──
+        'success': {           // verde: gana dinero / hecho
+          DEFAULT: '#1F9D6B',
+          bg: '#E7F4EE',
         },
-        'danger': {
-          DEFAULT: '#A32D2D',
-          bg: '#FAECEC',
+        'warning': {           // ámbar: margen ajustado / atención
+          DEFAULT: '#C2890F',
+          bg: '#FAF0D8',
         },
-        'warning': {
-          DEFAULT: '#BA7517',
-          bg: '#FAEEDA',
+        'danger': {            // rojo: pierde / error
+          DEFAULT: '#E0492E',
+          bg: '#FBE8E3',
         },
       },
       fontFamily: {
-        display: ['Fraunces', '"Iowan Old Style"', 'Charter', 'Georgia', 'serif'],
+        // Display → Space Grotesk (grotesca moderna). Fallback a Inter para
+        // degradar limpio si la webfont aún no ha cargado (nunca a serif).
+        display: ['"Space Grotesk"', 'Inter', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'system-ui', 'sans-serif'],
         sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'system-ui', 'sans-serif'],
         mono: ['"JetBrains Mono"', '"SF Mono"', 'Menlo', 'Consolas', 'monospace'],
       },
@@ -60,9 +70,9 @@ export default {
         'xl': '14px',
       },
       boxShadow: {
-        'sm': '0 1px 2px rgba(12, 10, 9, 0.04)',
-        'md': '0 2px 8px rgba(12, 10, 9, 0.06)',
-        'lg': '0 8px 24px rgba(12, 10, 9, 0.08)',
+        'sm': '0 1px 2px rgba(21, 23, 26, 0.04)',
+        'md': '0 2px 8px rgba(21, 23, 26, 0.06)',
+        'lg': '0 8px 24px rgba(21, 23, 26, 0.08)',
       },
       transitionDuration: {
         'fast': '120ms',
