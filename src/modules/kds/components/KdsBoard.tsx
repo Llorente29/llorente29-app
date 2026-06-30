@@ -187,7 +187,7 @@ export default function KdsBoard({
       </div>
 
       {error && (
-        <div className="mx-4 mt-3 rounded-lg bg-red-500/15 text-red-200 ring-1 ring-red-500/40 px-3 py-2 text-sm shrink-0">
+        <div className="mx-4 mt-3 rounded-lg bg-[#E0492E]/15 text-[#F8C5B8] ring-1 ring-[#E0492E]/40 px-3 py-2 text-sm shrink-0">
           {error}
         </div>
       )}

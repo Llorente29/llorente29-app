@@ -100,6 +100,8 @@ export interface KdsTicket {
   external_tab_ref: string | null
   status: 'open' | 'closed'
   brand: string | null
+  brand_logo_url: string | null
+  brand_color: string | null
   channel: string | null
   minutos: number
   entro_at: string

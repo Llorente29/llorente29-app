@@ -24,15 +24,17 @@ export function timeLevel(minutos: number): TimeLevel {
   return 'late'
 }
 
-/** Clases Tailwind del chip de tiempo (tema oscuro, alto contraste). */
+/** Clases Tailwind del chip de tiempo (tema oscuro). Verde/ámbar/rojo de MARCA
+ *  (#1F9D6B / #C2890F / #E0492E), con texto aclarado para legibilidad sobre
+ *  fondo oscuro y buen contraste a distancia (cohesión con el feed de Pedidos). */
 export function timeChipClasses(level: TimeLevel): string {
   switch (level) {
     case 'fresh':
-      return 'bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-500/40'
+      return 'bg-[#1F9D6B]/20 text-[#5FD3A0] ring-1 ring-[#1F9D6B]/40'
     case 'warn':
-      return 'bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/40'
+      return 'bg-[#C2890F]/20 text-[#E8B84B] ring-1 ring-[#C2890F]/45'
     case 'late':
-      return 'bg-red-500/25 text-red-300 ring-1 ring-red-500/50 animate-pulse'
+      return 'bg-[#E0492E]/25 text-[#F4856E] ring-1 ring-[#E0492E]/55 animate-pulse'
   }
 }
 
@@ -54,6 +56,23 @@ export function channelLabel(channel: string | null): string | null {
     justeat: 'Just Eat',
   }
   return map[channel] ?? channel
+}
+
+// ── Logo + nombre de plataforma (bucket público connector-logos) ─────────────
+const LOGO_BASE =
+  'https://xzmpnchlguibclvxyynt.supabase.co/storage/v1/object/public/connector-logos'
+
+/** Devuelve logo (URL completa o null), color de plataforma y etiqueta para el
+ *  badge de canal del KDS. Mismo mapeo que el feed de Pedidos (consistencia). */
+export function channelBadge(channel: string | null): { logo: string | null; color: string; label: string } | null {
+  if (!channel) return null
+  const s = channel.toLowerCase()
+  if (s.includes('glovo')) return { logo: `${LOGO_BASE}/glovo.png`,    color: '#FFC244', label: 'Glovo' }
+  if (s.includes('uber'))  return { logo: `${LOGO_BASE}/ubereats.png`, color: '#06C167', label: 'Uber Eats' }
+  if (s.includes('just'))  return { logo: `${LOGO_BASE}/justeat.png`,  color: '#FF8000', label: 'Just Eat' }
+  if (s.includes('shop') || s.includes('folvy') || s.includes('tienda'))
+    return { logo: null, color: '#1F9D6B', label: 'Folvy Shop' }
+  return { logo: null, color: '#9CA0A6', label: channel }
 }
 
 /** Beep corto vía WebAudio para avisar de un ticket nuevo. Silencioso si el

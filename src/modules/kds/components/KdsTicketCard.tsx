@@ -6,23 +6,25 @@
 // NOMBRE abre el Cook Mode (los dos gestos no colisionan). Pie de tarjeta: botón
 // "Servir" (bump del Pase) que cierra el ticket en cocina.
 //
+// Rebrand 30/06/2026 (A+B): semáforos en verde/ámbar/rojo de MARCA
+// (#1F9D6B / #C2890F / #E0492E); AVATAR de marca (logo real o inicial) y badge
+// de PLATAFORMA con logo en la cabecera, para identificar de un vistazo en
+// cocina (clave con muchas marcas). Código del ticket en Space Grotesk.
+//
 // TICKET COMPLETO (Nivel 1a): cada línea puede traer `children` (componentes de
 // combo y/o modificadores) y `customer_note`. Combo → cabecera pequeña y gris
 // (contexto) con sus componentes en grande debajo (lo cocinable destaca).
 // Modificadores → sangrados y diferenciados bajo el plato. Nota de cliente →
-// chip ámbar-rojo MUY visible, pegado a la línea del plato (no banda global).
-// El marcado y el Cook Mode siguen en la línea producto; las hijas no tienen
-// check propio (se marcan con el padre).
+// chip rojo MUY visible, pegado a la línea del plato (no banda global).
 //
-// Cajón "Sin estación": ahora el backend rutea las líneas sin familia a la
-// estación por defecto del local (default_station_id), así que con datos
-// normales NO aparece. Se conserva por ROBUSTEZ: si algún día faltara la default,
-// las líneas con station_id null siguen siendo visibles (no se pierden).
+// Cajón "Sin estación": el backend rutea las líneas sin familia a la estación
+// por defecto del local, así que con datos normales NO aparece. Se conserva por
+// ROBUSTEZ: si faltara la default, las líneas con station_id null siguen visibles.
 
 import { useEffect, useRef, useState } from 'react'
 import { Check, ChefHat, Undo2, AlertTriangle } from 'lucide-react'
 import type { KdsTicket, KdsLine, KdsLineChild } from '../services/kdsService'
-import { ticketCode, channelLabel, timeLevel, timeChipClasses } from '../kdsUtils'
+import { ticketCode, channelBadge, timeLevel, timeChipClasses } from '../kdsUtils'
 
 const SIN_ESTACION = '__none__'
 
@@ -52,7 +54,6 @@ function groupByStation(ticket: KdsTicket, stationFilter: string[] | null): Stat
   const map = new Map<string, KdsLine[]>()
   for (const line of ticket.lineas) {
     const key = line.station_id ?? SIN_ESTACION
-    // Filtro del dispositivo: solo estaciones del filtro (+ cajón sin estación).
     if (stationFilter && line.station_id !== null && !stationFilter.includes(line.station_id)) {
       continue
     }
@@ -60,7 +61,6 @@ function groupByStation(ticket: KdsTicket, stationFilter: string[] | null): Stat
     if (arr) arr.push(line)
     else map.set(key, [line])
   }
-  // Estaciones reales primero (orden estable por nombre), "Sin estación" al final.
   const groups: StationGroup[] = []
   for (const [stationId, lines] of map) {
     if (stationId !== SIN_ESTACION) groups.push({ stationId, lines })
@@ -76,17 +76,51 @@ function stationLabel(stationId: string, names: Record<string, string>): string 
   return names[stationId] ?? `Estación ${stationId.slice(0, 4)}`
 }
 
+// ── Avatar de marca (logo real o inicial) ───────────────────────────────────
+function BrandAvatar({ name, logoUrl }: { name: string | null; logoUrl: string | null }) {
+  const [failed, setFailed] = useState(false)
+  const initial = (name ?? '?').trim().charAt(0).toUpperCase() || '?'
+  if (logoUrl && !failed) {
+    return (
+      <span className="w-8 h-8 rounded-lg overflow-hidden shrink-0 ring-1 ring-zinc-700 bg-white grid place-items-center">
+        <img src={logoUrl} alt="" className="w-full h-full object-cover" loading="lazy" onError={() => setFailed(true)} />
+      </span>
+    )
+  }
+  return (
+    <span className="w-8 h-8 rounded-lg shrink-0 grid place-items-center bg-zinc-700 text-zinc-100 font-display font-bold text-[14px]">
+      {initial}
+    </span>
+  )
+}
+
+// ── Badge de plataforma (logo en cajita blanca + nombre) ────────────────────
+function KdsChannelBadge({ channel }: { channel: string }) {
+  const [failed, setFailed] = useState(false)
+  const b = channelBadge(channel)
+  if (!b) return null
+  const showLogo = b.logo != null && !failed
+  return (
+    <span className="inline-flex items-center gap-1.5 pl-0.5 pr-2 py-0.5 rounded-md bg-zinc-900 ring-1 ring-zinc-700 text-zinc-200 text-[11px] font-semibold whitespace-nowrap shrink-0">
+      {showLogo ? (
+        <span className="w-5 h-5 rounded bg-white grid place-items-center overflow-hidden shrink-0">
+          <img src={b.logo!} alt="" className="w-full h-full object-contain" loading="lazy" onError={() => setFailed(true)} />
+        </span>
+      ) : (
+        <span className="w-2 h-2 rounded-full shrink-0 ml-1" style={{ backgroundColor: b.color }} />
+      )}
+      {b.label}
+    </span>
+  )
+}
+
 export default function KdsTicketCard({
   ticket, stationNames, stationFilter, expoStationId, isNew, busy,
   onBump, onUnbump, onMarkLine, onOpenCook,
 }: KdsTicketCardProps) {
   const level = timeLevel(ticket.minutos)
   const groups = groupByStation(ticket, stationFilter)
-  const channel = channelLabel(ticket.channel)
 
-  // Botón Servir con confirmación de DOS toques (anti-toque-fantasma): el 1er
-  // toque arma "¿Servir?" durante ~2 s; el 2º dentro de esa ventana confirma y
-  // hace bump del Pase (el ticket sale del board al refrescar). Sin modal.
   const [confirming, setConfirming] = useState(false)
   const timerRef = useRef<number | null>(null)
   useEffect(() => () => { if (timerRef.current) window.clearTimeout(timerRef.current) }, [])
@@ -110,27 +144,26 @@ export default function KdsTicketCard({
   return (
     <article
       className={`flex flex-col rounded-xl bg-zinc-800/70 ring-1 overflow-hidden transition-shadow ${
-        isNew ? 'ring-emerald-400 shadow-lg shadow-emerald-500/20' : 'ring-zinc-700'
-      } ${level === 'late' ? 'ring-red-500/40' : ''}`}
+        isNew ? 'ring-[#1F9D6B] shadow-lg shadow-[#1F9D6B]/25' : 'ring-zinc-700'
+      } ${level === 'late' ? 'ring-[#E0492E]/55' : ''}`}
     >
-      {/* Cabecera */}
-      <header className="flex items-center justify-between gap-2 px-3 py-2.5 bg-zinc-900/60 border-b border-zinc-700">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="text-lg font-extrabold tabular-nums text-zinc-100">
+      {/* Cabecera: avatar de marca + código + tiempo / badge de plataforma + marca */}
+      <header className="px-3 py-2.5 bg-zinc-900/60 border-b border-zinc-700">
+        <div className="flex items-center gap-2">
+          <BrandAvatar name={ticket.brand} logoUrl={ticket.brand_logo_url} />
+          <span className="text-lg font-extrabold tabular-nums text-zinc-100 font-display flex-1 min-w-0 truncate">
             {ticketCode(ticket.external_tab_ref, ticket.external_ref)}
           </span>
-          {channel && (
-            <span className="px-1.5 py-0.5 rounded text-[11px] font-semibold bg-violet-500/20 text-violet-200 ring-1 ring-violet-500/40 shrink-0">
-              {channel}
-            </span>
-          )}
-          {ticket.brand && (
-            <span className="text-xs text-zinc-400 truncate">{ticket.brand}</span>
-          )}
+          <span className={`px-2 py-0.5 rounded-md text-sm font-bold tabular-nums shrink-0 ${timeChipClasses(level)}`}>
+            {ticket.minutos}′
+          </span>
         </div>
-        <span className={`px-2 py-0.5 rounded-md text-sm font-bold tabular-nums shrink-0 ${timeChipClasses(level)}`}>
-          {ticket.minutos}′
-        </span>
+        {(ticket.channel || ticket.brand) && (
+          <div className="flex items-center gap-2 mt-1.5 min-w-0">
+            {ticket.channel && <KdsChannelBadge channel={ticket.channel} />}
+            {ticket.brand && <span className="text-xs text-zinc-400 truncate">{ticket.brand}</span>}
+          </div>
+        )}
       </header>
 
       {/* Estaciones */}
@@ -141,9 +174,8 @@ export default function KdsTicketCard({
           const done = state === 'done'
           return (
             <section key={group.stationId} className={done ? 'opacity-60' : ''}>
-              {/* Cabecera de estación + bump */}
               <div className="flex items-center justify-between gap-2 px-3 py-1.5 bg-zinc-800">
-                <span className={`text-xs font-semibold uppercase tracking-wide ${isSin ? 'text-amber-300' : 'text-zinc-400'}`}>
+                <span className={`text-xs font-semibold uppercase tracking-wide ${isSin ? 'text-[#E8B84B]' : 'text-zinc-400'}`}>
                   {isSin && <AlertTriangle size={12} className="inline mr-1 -mt-0.5" />}
                   {stationLabel(group.stationId, stationNames)}
                 </span>
@@ -160,7 +192,7 @@ export default function KdsTicketCard({
                     <button
                       disabled={busy}
                       onClick={() => onBump(ticket.sale_id, group.stationId)}
-                      className="flex items-center gap-1 px-3 py-1 rounded-md text-xs font-bold bg-emerald-500 text-zinc-950 hover:bg-emerald-400 disabled:opacity-50"
+                      className="flex items-center gap-1 px-3 py-1 rounded-md text-xs font-bold bg-[#1F9D6B] text-white hover:bg-[#23B07A] disabled:opacity-50"
                     >
                       <Check size={14} /> Listo
                     </button>
@@ -168,7 +200,6 @@ export default function KdsTicketCard({
                 )}
               </div>
 
-              {/* Líneas de la estación */}
               <ul>
                 {group.lines.map(line => (
                   <KdsLineRow
@@ -192,8 +223,8 @@ export default function KdsTicketCard({
           title={!expoStationId ? 'Configura una estación de Pase en Ajustes → Estaciones' : undefined}
           className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg font-bold text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
             confirming
-              ? 'bg-amber-500 text-zinc-950 hover:bg-amber-400 ring-2 ring-amber-300 animate-pulse'
-              : 'bg-emerald-500 text-zinc-950 hover:bg-emerald-400'
+              ? 'bg-[#C2890F] text-white hover:bg-[#D69A1F] ring-2 ring-[#E8B84B] animate-pulse'
+              : 'bg-[#1F9D6B] text-white hover:bg-[#23B07A]'
           }`}
         >
           {confirming
@@ -205,12 +236,11 @@ export default function KdsTicketCard({
   )
 }
 
-// Nota de cliente: chip muy visible (ámbar-rojo) pegado a la línea del plato.
-// Debe llamar la atención aunque sea la única en 200 tickets.
+// Nota de cliente: chip muy visible (rojo de marca) pegado a la línea del plato.
 function NoteChip({ note }: { note: string }) {
   return (
-    <div className="mt-1 flex items-start gap-1.5 rounded-md bg-red-500/25 ring-1 ring-red-500/60 px-2 py-1 text-[13px] font-semibold text-red-100">
-      <AlertTriangle size={14} className="shrink-0 mt-0.5 text-red-300" />
+    <div className="mt-1 flex items-start gap-1.5 rounded-md bg-[#E0492E]/25 ring-1 ring-[#E0492E]/60 px-2 py-1 text-[13px] font-semibold text-[#FCE0D8]">
+      <AlertTriangle size={14} className="shrink-0 mt-0.5 text-[#F4856E]" />
       <span className="leading-snug">{note}</span>
     </div>
   )
@@ -226,8 +256,6 @@ function KdsLineRow({ line, onMarkLine, onOpenCook }: {
   const comboItems = children.filter(c => c.line_type === 'combo_item')
   const modifiers = children.filter(c => c.line_type === 'modifier')
   const isCombo = comboItems.length > 0
-  // El Cook Mode se abre desde la línea producto cocinable. Un combo (contexto,
-  // sin receta propia) NO abre Cook Mode: sus componentes ya están en la tarjeta.
   const clickable = !isCombo && line.has_recipe
   const struck = line.marked
 
@@ -239,7 +267,7 @@ function KdsLineRow({ line, onMarkLine, onOpenCook }: {
           onClick={() => onMarkLine(line)}
           className={`shrink-0 w-9 h-9 rounded-md grid place-items-center ring-1 transition-colors ${
             struck
-              ? 'bg-emerald-500/30 ring-emerald-400 text-emerald-300'
+              ? 'bg-[#1F9D6B]/30 ring-[#1F9D6B] text-[#5FD3A0]'
               : 'bg-zinc-900/40 ring-zinc-600 text-zinc-500 hover:text-zinc-300'
           }`}
           aria-label={struck ? 'Desmarcar plato' : 'Marcar plato'}
@@ -255,11 +283,9 @@ function KdsLineRow({ line, onMarkLine, onOpenCook }: {
         <div className="flex-1 min-w-0">
           {isCombo ? (
             <>
-              {/* Cabecera de combo: pequeña y atenuada (contexto, no lo cocinable) */}
               <div className={`text-xs font-medium ${struck ? 'line-through text-zinc-600' : 'text-zinc-400'}`}>
                 ▸ {line.name}
               </div>
-              {/* Componentes: tamaño normal de línea (destacan) */}
               <ul className="mt-0.5 space-y-0.5">
                 {comboItems.map(c => (
                   <li key={c.line_id} className={`leading-tight ${struck ? 'line-through text-zinc-500' : 'text-zinc-100'}`}>
@@ -273,25 +299,23 @@ function KdsLineRow({ line, onMarkLine, onOpenCook }: {
               </ul>
             </>
           ) : (
-            /* Nombre del plato (gesto 2: abre Cook Mode si tiene receta) */
             <button
               onClick={() => { if (clickable) onOpenCook(line) }}
               disabled={!clickable}
               className={`text-left leading-tight ${
                 struck ? 'line-through text-zinc-500' : 'text-zinc-100'
-              } ${clickable ? 'hover:text-emerald-300 cursor-pointer' : 'cursor-default'}`}
+              } ${clickable ? 'hover:text-[#5FD3A0] cursor-pointer' : 'cursor-default'}`}
             >
               <span className="text-[15px] font-medium">{line.name}</span>
               {clickable && <ChefHat size={13} className="inline ml-1.5 -mt-0.5 text-zinc-500" />}
               {line.allergens.length > 0 && (
-                <span className="ml-1.5 text-amber-400/80 text-xs align-middle" title={line.allergens.join(', ')}>
+                <span className="ml-1.5 text-[#E8B84B] text-xs align-middle" title={line.allergens.join(', ')}>
                   ⚠ {line.allergens.length}
                 </span>
               )}
             </button>
           )}
 
-          {/* Modificadores: sangrados, diferenciados, más pequeños que el plato */}
           {modifiers.length > 0 && (
             <ul className="mt-0.5 pl-3 border-l border-zinc-700 space-y-0.5">
               {modifiers.map(m => (
@@ -303,7 +327,6 @@ function KdsLineRow({ line, onMarkLine, onOpenCook }: {
             </ul>
           )}
 
-          {/* Nota de cliente del plato: pegada a la línea, muy visible */}
           {line.customer_note && <NoteChip note={line.customer_note} />}
         </div>
       </div>
