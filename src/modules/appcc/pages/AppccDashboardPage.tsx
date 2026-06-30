@@ -43,10 +43,10 @@ const SEV_COLORS: Record<string, string> = {
   critical: '#DC2626',
   high: '#F59E0B',
   medium: '#FBBF24',
-  low: '#1E3A5F',
+  low: '#15171A',
 }
-const CATEGORY_COLOR = '#1E3A5F'
-const TREND_COLOR = '#1E3A5F'
+const CATEGORY_COLOR = '#15171A'
+const TREND_COLOR = '#15171A'
 
 const DAY_NAMES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 
@@ -608,7 +608,7 @@ function Heatmap({ cells }: { cells: HeatmapCell[] }) {
                     className="aspect-square rounded-sm"
                     style={{
                       backgroundColor: c.count === 0
-                        ? '#F5F4F0'
+                        ? '#F6F7F8'
                         : `rgba(220, 38, 38, ${0.15 + intensity * 0.85})`,
                     }}
                   />

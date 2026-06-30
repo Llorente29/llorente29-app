@@ -59,7 +59,7 @@ const PERIOD_LABELS: Record<PeriodKey, string> = {
   month: 'Este mes',
 }
 
-const TERRA = '#D67442'
+const TERRA = '#15171A'
 
 interface OptionRow {
   id: string
@@ -114,7 +114,7 @@ function Select({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="text-xs px-2.5 py-1.5 rounded-lg border border-stone-200 text-stone-600 bg-white hover:border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#D67442]/20"
+      className="text-xs px-2.5 py-1.5 rounded-lg border border-stone-200 text-stone-600 bg-white hover:border-stone-300 focus:outline-none focus:ring-2 focus:ring-accent/20"
     >
       {children}
     </select>

@@ -307,7 +307,7 @@ function ActionCard({ item, quadrant }: { item: MenuEngineeringItem; quadrant: M
 // Vista matriz (scatter en SVG nativo — sin dependencias de gráficos)
 // ─────────────────────────────────────────────────────────────────────
 function quadrantColor(q: MenuQuadrant): string {
-  return q === 'star' ? '#639922' : q === 'plowhorse' ? '#BA7517' : q === 'puzzle' ? '#1e3a5f' : '#A32D2D'
+  return q === 'star' ? '#639922' : q === 'plowhorse' ? '#BA7517' : q === 'puzzle' ? '#15171A' : '#A32D2D'
 }
 
 function MatrixView({ result }: { result: MenuEngineeringResult }) {
@@ -338,7 +338,7 @@ function MatrixView({ result }: { result: MenuEngineeringResult }) {
           aria-label="Matriz de platos por popularidad (eje X) y margen por unidad (eje Y), dividida en cuatro cuadrantes por las medias.">
           {/* Fondos de cuadrante (medias como divisorias) */}
           <rect x={mx} y={padT} width={padL + plotW - mx} height={my - padT} fill="#639922" opacity="0.06" />
-          <rect x={padL} y={padT} width={mx - padL} height={my - padT} fill="#1e3a5f" opacity="0.06" />
+          <rect x={padL} y={padT} width={mx - padL} height={my - padT} fill="#15171A" opacity="0.06" />
           <rect x={mx} y={my} width={padL + plotW - mx} height={padT + plotH - my} fill="#BA7517" opacity="0.06" />
           <rect x={padL} y={my} width={mx - padL} height={padT + plotH - my} fill="#A32D2D" opacity="0.06" />
 
@@ -388,7 +388,7 @@ function MatrixView({ result }: { result: MenuEngineeringResult }) {
       <div className="flex gap-4 flex-wrap mt-2 px-1 text-xs text-text-secondary">
         <Legend color="#639922" label="Estrella" />
         <Legend color="#BA7517" label="Caballo de batalla" />
-        <Legend color="#1e3a5f" label="Tesoro escondido" />
+        <Legend color="#15171A" label="Tesoro escondido" />
         <Legend color="#A32D2D" label="Lastre" />
       </div>
     </div>
