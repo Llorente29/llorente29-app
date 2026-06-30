@@ -349,7 +349,7 @@ const S: Record<string, React.CSSProperties> = {
   heroCopy: { padding: '46px 52px', maxWidth: 640, zIndex: 2, color: '#fff' },
   heroBrand: { display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 13, marginBottom: 22 },
   heroLogoBox: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center' },
-  heroLogoImg: { height: 96, width: 'auto', maxWidth: 380, objectFit: 'contain', display: 'block', filter: 'drop-shadow(0 4px 16px rgba(0,0,0,.5))' },
+  heroLogoImg: { height: 90, width: 'auto', maxWidth: 460, objectFit: 'contain', display: 'block', filter: 'drop-shadow(0 4px 16px rgba(0,0,0,.5))' },
   heroBrandText: { display: 'flex', flexDirection: 'column', gap: 4, lineHeight: 1.05 },
   heroBrandName: { fontWeight: 900, fontSize: 32, letterSpacing: '-.035em', color: '#fff' },
   heroBrandSub: { display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 14, fontWeight: 600, color: 'rgba(255,255,255,.92)' },
