@@ -18,6 +18,7 @@ import { Store, Image as ImageIcon, Check } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import StorefrontPreview from '@/modules/shop/components/StorefrontPreview'
 import { uploadShopHero, deleteShopHero } from '@/modules/shop/services/shopHeroService'
+import { getAccountLogo, uploadAccountLogo, deleteAccountLogo } from '@/modules/shop/services/shopAccountService'
 import {
   ensureThemesForAccount,
   listBrandsWithTheme,
@@ -58,6 +59,9 @@ export default function ShopDesignPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [savingId, setSavingId] = useState<string | null>(null)
+  const [hubLogo, setHubLogo] = useState<string | null>(null)
+  const [hubBusy, setHubBusy] = useState(false)
+  const hubLogoInputRef = useRef<HTMLInputElement | null>(null)
 
   const load = useCallback(async () => {
     if (!accountId) return
@@ -66,6 +70,7 @@ export default function ShopDesignPage() {
     try {
       await ensureThemesForAccount(accountId)        // siembra idempotente
       setRows(await listBrandsWithTheme(accountId))
+      try { setHubLogo(await getAccountLogo(accountId)) } catch { /* sin logo */ }
     } catch (e: any) {
       setError(e?.message ?? 'No se pudo cargar la tienda.')
     } finally {
@@ -128,6 +133,23 @@ export default function ShopDesignPage() {
     finally { setSavingId(null) }
   }
 
+  async function onPickHubLogo(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file || !accountId) return
+    setHubBusy(true)
+    try { setHubLogo(await uploadAccountLogo(accountId, file)) }
+    catch (err: any) { setError(err?.message ?? 'No se pudo subir el logo.') }
+    finally { setHubBusy(false) }
+  }
+  async function removeHubLogo() {
+    if (!accountId) return
+    setHubBusy(true)
+    try { await deleteAccountLogo(accountId); setHubLogo(null) }
+    catch (err: any) { setError(err?.message ?? 'No se pudo quitar el logo.') }
+    finally { setHubBusy(false) }
+  }
+
   if (loading) {
     return <div className="p-6 text-text-secondary">Cargando la tienda…</div>
   }
@@ -146,6 +168,34 @@ export default function ShopDesignPage() {
       </header>
 
       <input ref={heroInputRef} type="file" accept="image/*" onChange={onPickHero} className="hidden" />
+      <input ref={hubLogoInputRef} type="file" accept="image/png,image/webp,image/svg+xml,image/*" onChange={onPickHubLogo} className="hidden" />
+
+      {/* Identidad del hub: logo de la cuenta (cabecera del escaparate multimarca) */}
+      <div className="rounded-2xl border border-default bg-card p-5 mb-4 flex items-center gap-4 flex-wrap">
+        <span className="w-14 h-14 rounded-xl border border-default bg-page grid place-items-center overflow-hidden shrink-0">
+          {hubLogo
+            ? <img src={hubLogo} alt="" className="w-full h-full object-contain p-1.5" />
+            : <Store size={22} className="text-text-secondary" />}
+        </span>
+        <div className="flex-1 min-w-[200px]">
+          <div className="font-semibold text-[15px] text-text-primary">Logo del hub</div>
+          <div className="text-[13px] text-text-secondary mt-0.5">
+            Es el logo que ve el cliente en la cabecera de tu tienda multimarca. PNG con fondo transparente, recortado al logo.
+          </div>
+        </div>
+        <div className="flex gap-2 items-center">
+          <button onClick={() => hubLogoInputRef.current?.click()} disabled={hubBusy}
+            className="inline-flex items-center gap-1.5 text-[13px] rounded-lg px-3 py-2 border border-default text-text-primary hover:bg-page disabled:opacity-50">
+            <ImageIcon size={14} /> {hubLogo ? 'Cambiar logo' : 'Subir logo'}
+          </button>
+          {hubLogo && (
+            <button onClick={removeHubLogo} disabled={hubBusy}
+              className="text-xs rounded-lg px-2.5 py-2 border border-default text-text-secondary hover:text-text-primary disabled:opacity-50">
+              Quitar
+            </button>
+          )}
+        </div>
+      </div>
 
       {error && (
         <div className="rounded-xl bg-danger-bg text-danger border border-danger/30 px-4 py-3 text-sm mb-4">

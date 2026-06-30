@@ -28,6 +28,7 @@ export interface TopDish {
 
 export interface ShopHub {
   accountName: string
+  accountLogoUrl: string | null
   slug: string
   heroUrl: string | null
   tagline: string | null
@@ -43,6 +44,7 @@ export async function getShopHub(slug: string): Promise<ShopHub | null> {
 
   return {
     accountName: data.account_name ?? '',
+    accountLogoUrl: data.account_logo_url ?? null,
     slug: data.slug ?? slug,
     heroUrl: data.hero_url ?? null,
     tagline: data.tagline ?? null,
