@@ -18,7 +18,7 @@ import { Store, Image as ImageIcon, Check } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import StorefrontPreview from '@/modules/shop/components/StorefrontPreview'
 import { uploadShopHero, deleteShopHero } from '@/modules/shop/services/shopHeroService'
-import { getAccountLogo, uploadAccountLogo, deleteAccountLogo } from '@/modules/shop/services/shopAccountService'
+import { getAccountLogo, uploadAccountLogo, deleteAccountLogo, getAccountShopText, setAccountShopText } from '@/modules/shop/services/shopAccountService'
 import {
   ensureThemesForAccount,
   listBrandsWithTheme,
@@ -61,6 +61,10 @@ export default function ShopDesignPage() {
   const [savingId, setSavingId] = useState<string | null>(null)
   const [hubLogo, setHubLogo] = useState<string | null>(null)
   const [hubBusy, setHubBusy] = useState(false)
+  const [slogan, setSlogan] = useState('')
+  const [subtitle, setSubtitle] = useState('')
+  const [savingText, setSavingText] = useState(false)
+  const [textSaved, setTextSaved] = useState(false)
   const hubLogoInputRef = useRef<HTMLInputElement | null>(null)
 
   const load = useCallback(async () => {
@@ -71,6 +75,7 @@ export default function ShopDesignPage() {
       await ensureThemesForAccount(accountId)        // siembra idempotente
       setRows(await listBrandsWithTheme(accountId))
       try { setHubLogo(await getAccountLogo(accountId)) } catch { /* sin logo */ }
+      try { const t = await getAccountShopText(accountId); setSlogan(t.tagline ?? ''); setSubtitle(t.subtitle ?? '') } catch { /* sin textos */ }
     } catch (e: any) {
       setError(e?.message ?? 'No se pudo cargar la tienda.')
     } finally {
@@ -149,6 +154,13 @@ export default function ShopDesignPage() {
     catch (err: any) { setError(err?.message ?? 'No se pudo quitar el logo.') }
     finally { setHubBusy(false) }
   }
+  async function saveHubText() {
+    if (!accountId) return
+    setSavingText(true); setTextSaved(false)
+    try { await setAccountShopText(accountId, slogan, subtitle); setTextSaved(true); setTimeout(() => setTextSaved(false), 2500) }
+    catch (err: any) { setError(err?.message ?? 'No se pudieron guardar los textos.') }
+    finally { setSavingText(false) }
+  }
 
   if (loading) {
     return <div className="p-6 text-text-secondary">Cargando la tienda…</div>
@@ -170,30 +182,72 @@ export default function ShopDesignPage() {
       <input ref={heroInputRef} type="file" accept="image/*" onChange={onPickHero} className="hidden" />
       <input ref={hubLogoInputRef} type="file" accept="image/png,image/webp,image/svg+xml,image/*" onChange={onPickHubLogo} className="hidden" />
 
-      {/* Identidad del hub: logo de la cuenta (cabecera del escaparate multimarca) */}
-      <div className="rounded-2xl border border-default bg-card p-5 mb-4 flex items-center gap-4 flex-wrap">
-        <span className="h-16 min-w-[140px] px-3 rounded-xl border border-default bg-page grid place-items-center overflow-hidden shrink-0">
-          {hubLogo
-            ? <img src={hubLogo} alt="" className="max-h-12 w-auto object-contain" />
-            : <Store size={26} className="text-text-secondary" />}
-        </span>
-        <div className="flex-1 min-w-[200px]">
-          <div className="font-semibold text-[15px] text-text-primary">Logo del hub</div>
-          <div className="text-[13px] text-text-secondary mt-0.5">
-            Es el logo que ve el cliente en la cabecera de tu tienda multimarca. PNG con fondo transparente, recortado al logo.
+      {/* Identidad del hub: logo + slogans de la cuenta (cabecera del escaparate multimarca) */}
+      <div className="rounded-2xl border border-default bg-card p-5 mb-4">
+        <div className="font-semibold text-[15px] text-text-primary mb-1">Identidad del hub</div>
+        <div className="text-[13px] text-text-secondary mb-4">
+          Lo que ve el cliente en la portada de tu tienda multimarca: tu logo y tus frases.
+        </div>
+
+        {/* Logo */}
+        <div className="flex items-center gap-4 flex-wrap pb-4 border-b border-default">
+          <span className="h-16 min-w-[140px] px-3 rounded-xl border border-default bg-page grid place-items-center overflow-hidden shrink-0">
+            {hubLogo
+              ? <img src={hubLogo} alt="" className="max-h-12 w-auto object-contain" />
+              : <Store size={26} className="text-text-secondary" />}
+          </span>
+          <div className="flex-1 min-w-[200px]">
+            <div className="font-medium text-[14px] text-text-primary">Logo</div>
+            <div className="text-[13px] text-text-secondary mt-0.5">
+              PNG con fondo transparente, recortado al logo. Se ve grande sobre la portada.
+            </div>
+          </div>
+          <div className="flex gap-2 items-center">
+            <button onClick={() => hubLogoInputRef.current?.click()} disabled={hubBusy}
+              className="inline-flex items-center gap-1.5 text-[13px] rounded-lg px-3 py-2 border border-default text-text-primary hover:bg-page disabled:opacity-50">
+              <ImageIcon size={14} /> {hubLogo ? 'Cambiar logo' : 'Subir logo'}
+            </button>
+            {hubLogo && (
+              <button onClick={removeHubLogo} disabled={hubBusy}
+                className="text-xs rounded-lg px-2.5 py-2 border border-default text-text-secondary hover:text-text-primary disabled:opacity-50">
+                Quitar
+              </button>
+            )}
           </div>
         </div>
-        <div className="flex gap-2 items-center">
-          <button onClick={() => hubLogoInputRef.current?.click()} disabled={hubBusy}
-            className="inline-flex items-center gap-1.5 text-[13px] rounded-lg px-3 py-2 border border-default text-text-primary hover:bg-page disabled:opacity-50">
-            <ImageIcon size={14} /> {hubLogo ? 'Cambiar logo' : 'Subir logo'}
-          </button>
-          {hubLogo && (
-            <button onClick={removeHubLogo} disabled={hubBusy}
-              className="text-xs rounded-lg px-2.5 py-2 border border-default text-text-secondary hover:text-text-primary disabled:opacity-50">
-              Quitar
+
+        {/* Slogan + subtítulo */}
+        <div className="pt-4 grid gap-3">
+          <div>
+            <label className="block text-[13px] font-medium text-text-primary mb-1">Slogan (titular)</label>
+            <input
+              type="text"
+              value={slogan}
+              onChange={e => setSlogan(e.target.value)}
+              placeholder="Hazte un Multi. Pide de varias cocinas a la vez."
+              className="w-full rounded-lg border border-default bg-page px-3 py-2 text-[14px] text-text-primary placeholder:text-text-secondary"
+            />
+            <div className="text-[12px] text-text-secondary mt-1">
+              Lo que escribas tras el primer punto se resalta en amarillo. Ej: <span className="text-text-primary">Hazte un Multi.</span> <span className="bg-warning-bg text-warning px-1 rounded">Pide de varias cocinas.</span>
+            </div>
+          </div>
+          <div>
+            <label className="block text-[13px] font-medium text-text-primary mb-1">Subtítulo</label>
+            <input
+              type="text"
+              value={subtitle}
+              onChange={e => setSubtitle(e.target.value)}
+              placeholder="Pide de varias cocinas a la vez y te llega junto y calentito, en una sola entrega."
+              className="w-full rounded-lg border border-default bg-page px-3 py-2 text-[14px] text-text-primary placeholder:text-text-secondary"
+            />
+          </div>
+          <div className="flex items-center gap-3">
+            <button onClick={saveHubText} disabled={savingText}
+              className="inline-flex items-center gap-1.5 text-[13px] rounded-lg px-4 py-2 bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50">
+              {savingText ? 'Guardando…' : 'Guardar frases'}
             </button>
-          )}
+            {textSaved && <span className="text-[13px] text-success">Guardado</span>}
+          </div>
         </div>
       </div>
 

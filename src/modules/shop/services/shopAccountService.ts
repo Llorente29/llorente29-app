@@ -36,6 +36,28 @@ export async function getAccountLogo(accountId: string): Promise<string | null> 
   return (data?.shop_logo_url as string | null) ?? null
 }
 
+export interface AccountShopText { tagline: string | null; subtitle: string | null }
+
+/** Titular (slogan) y subtítulo del hub. */
+export async function getAccountShopText(accountId: string): Promise<AccountShopText> {
+  if (!supabase) throw new Error('Supabase no disponible')
+  const { data, error } = await (supabase as any)
+    .from('accounts').select('shop_tagline, shop_subtitle').eq('id', accountId).single()
+  if (error) throw new Error(`No se pudieron leer los textos: ${error.message}`)
+  return {
+    tagline: (data?.shop_tagline as string | null) ?? null,
+    subtitle: (data?.shop_subtitle as string | null) ?? null,
+  }
+}
+
+/** Guarda titular + subtítulo (RPC acotada que esquiva la RLS de accounts). */
+export async function setAccountShopText(accountId: string, tagline: string, subtitle: string): Promise<void> {
+  if (!supabase) throw new Error('Supabase no disponible')
+  const { error } = await (supabase as any)
+    .rpc('set_account_shop_text', { p_account_id: accountId, p_tagline: tagline, p_subtitle: subtitle })
+  if (error) throw new Error(`No se pudieron guardar los textos: ${error.message}`)
+}
+
 /** Sube el logo del hub: lo guarda tal cual (preserva transparencia), persiste
  *  accounts.shop_logo_url y borra el anterior. Devuelve la URL pública. */
 export async function uploadAccountLogo(accountId: string, file: File): Promise<string> {

@@ -32,6 +32,7 @@ export interface ShopHub {
   slug: string
   heroUrl: string | null
   tagline: string | null
+  subtitle: string | null
   brands: HubBrand[]
   topDishes: TopDish[]
 }
@@ -48,6 +49,7 @@ export async function getShopHub(slug: string): Promise<ShopHub | null> {
     slug: data.slug ?? slug,
     heroUrl: data.hero_url ?? null,
     tagline: data.tagline ?? null,
+    subtitle: data.subtitle ?? null,
     brands: (data.brands ?? []).map((b: any) => ({
       brandId: b.brand_id,
       name: b.name,

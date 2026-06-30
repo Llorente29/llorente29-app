@@ -130,6 +130,7 @@ function ShopHubInner({ slug, onCheckout }: { slug: string; onCheckout: () => vo
   const dot = tagline.indexOf('.')
   const taglineA = dot > 0 ? tagline.slice(0, dot + 1) : tagline
   const taglineB = dot > 0 ? tagline.slice(dot + 1).trim() : ''
+  const subtitle = hub.subtitle || 'Pide de varias cocinas a la vez y te llega junto y calentito, en una sola entrega.'
 
   // Filtro de marcas por cocina activa (null = todas).
   const visibleBrands = activeCuisine
@@ -138,13 +139,9 @@ function ShopHubInner({ slug, onCheckout }: { slug: string; onCheckout: () => vo
 
   return (
     <div style={S.page}>
-      {/* 1 · TOP BAR (sin dirección/buscar/entrar: no operativos en pre-lanzamiento) */}
+      {/* 1 · TOP BAR · la identidad de marca vive en el héroe (Opción C) */}
       <div style={S.topbar}>
-        <div style={S.logo}>
-          {hub.accountLogoUrl
-            ? <img src={hub.accountLogoUrl} alt={hub.accountName} style={S.logoImg} />
-            : <><span style={S.logoDot} />{hub.accountName}</>}
-        </div>
+        <span aria-hidden="true" />
         <span style={S.preTag}>Vista previa</span>
       </div>
 
@@ -162,12 +159,22 @@ function ShopHubInner({ slug, onCheckout }: { slug: string; onCheckout: () => vo
           : C.accent,
       }}>
         <div style={S.heroCopy}>
-          <span style={S.eyebrow}><Star size={13} /> {hub.brands.length} cocinas bajo un mismo techo</span>
+          <div style={S.heroBrand}>
+            {hub.accountLogoUrl && (
+              <span style={S.heroLogoBox}>
+                <img src={hub.accountLogoUrl} alt={hub.accountName} style={S.heroLogoImg} />
+              </span>
+            )}
+            <div style={S.heroBrandText}>
+              <div style={S.heroBrandName}>{hub.accountName}</div>
+              <div style={S.heroBrandSub}><Star size={13} /> {hub.brands.length} cocinas bajo un mismo techo</div>
+            </div>
+          </div>
           <h1 style={S.h1}>
             {taglineA}
             {taglineB && <><br /><span style={S.hl}>{taglineB}</span></>}
           </h1>
-          <p style={S.heroP}>Pide de varias cocinas a la vez y te llega junto y calentito, en una sola entrega.</p>
+          <p style={S.heroP}>{subtitle}</p>
         </div>
       </div>
 
@@ -336,7 +343,7 @@ const C = {
 }
 const S: Record<string, React.CSSProperties> = {
   page: { minHeight: '100vh', background: C.bg, color: C.ink, fontFamily: 'inherit' },
-  topbar: { position: 'sticky', top: 0, zIndex: 50, background: '#FFFFFF', borderBottom: `1px solid ${C.line}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20, padding: '16px 28px' },
+  topbar: { position: 'sticky', top: 0, zIndex: 50, background: '#FBF7F0', borderBottom: `1px solid ${C.line}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20, padding: '11px 28px' },
   logo: { display: 'flex', alignItems: 'center', gap: 8, fontWeight: 900, fontSize: 20, letterSpacing: '-.03em' },
   logoDot: { width: 11, height: 11, borderRadius: '50%', background: C.accent },
   logoImg: { height: 50, width: 'auto', maxWidth: 260, objectFit: 'contain', display: 'block' },
@@ -344,7 +351,13 @@ const S: Record<string, React.CSSProperties> = {
   preBanner: { display: 'flex', alignItems: 'center', gap: 10, margin: '14px 28px 0', padding: '11px 16px', background: C.amberBg, border: `1px solid ${C.amberLine}`, borderRadius: 12, fontSize: 13.5, color: C.amber, fontWeight: 600 },
   preIc: { display: 'flex', color: C.amber, flexShrink: 0 },
   hero: { margin: '16px 28px 0', borderRadius: 26, overflow: 'hidden', position: 'relative', minHeight: 330, display: 'flex', alignItems: 'center' },
-  heroCopy: { padding: '46px 52px', maxWidth: 600, zIndex: 2, color: '#fff' },
+  heroCopy: { padding: '46px 52px', maxWidth: 640, zIndex: 2, color: '#fff' },
+  heroBrand: { display: 'flex', alignItems: 'center', gap: 16, marginBottom: 22 },
+  heroLogoBox: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 64, height: 64, borderRadius: 18, background: '#fff', padding: 9, flexShrink: 0, boxShadow: '0 6px 22px rgba(0,0,0,.18)' },
+  heroLogoImg: { maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' },
+  heroBrandText: { display: 'flex', flexDirection: 'column', gap: 4, lineHeight: 1.05 },
+  heroBrandName: { fontWeight: 900, fontSize: 32, letterSpacing: '-.035em', color: '#fff' },
+  heroBrandSub: { display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13.5, fontWeight: 600, color: 'rgba(255,255,255,.9)' },
   eyebrow: { display: 'inline-flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,.16)', backdropFilter: 'blur(4px)', alignSelf: 'flex-start', padding: '7px 14px', borderRadius: 30, fontWeight: 800, fontSize: 12, letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 18 },
   h1: { fontSize: 46, lineHeight: 1.02, letterSpacing: '-.035em', fontWeight: 900, marginBottom: 14 },
   hl: { background: C.accent2, color: C.ink, padding: '0 10px', borderRadius: 8, display: 'inline-block', transform: 'rotate(-1.5deg)' },
