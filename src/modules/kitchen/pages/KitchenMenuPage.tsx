@@ -470,7 +470,7 @@ export default function KitchenMenuPage() {
             </button>
             <button
               onClick={() => setShowNewProduct(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg font-medium bg-[#1E3A5F] text-white hover:opacity-90"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg font-medium bg-accent text-text-on-accent hover:opacity-90"
             >
               <Plus className="w-4 h-4" /> Añadir producto
             </button>
@@ -559,7 +559,7 @@ export default function KitchenMenuPage() {
       {/* Barra de acción en bloque: aparece al seleccionar productos. Cubre mover
           uno o muchos a la vez (arranque en frío de los "Sin categoría"). */}
       {selectedIds.size > 0 && (
-        <div className="sticky top-2 z-20 mb-4 p-3 rounded-xl bg-[#1E3A5F] text-white flex items-center gap-3 flex-wrap shadow-lg">
+        <div className="sticky top-2 z-20 mb-4 p-3 rounded-xl bg-accent text-text-on-accent flex items-center gap-3 flex-wrap shadow-lg">
           <span className="text-sm font-medium">
             {selectedIds.size} seleccionado{selectedIds.size > 1 ? 's' : ''}
           </span>
@@ -579,7 +579,7 @@ export default function KitchenMenuPage() {
           <button
             onClick={applyBulkMove}
             disabled={moving || moveTarget === ''}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg font-medium bg-white text-[#1E3A5F] hover:opacity-90 disabled:opacity-40"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg font-medium bg-white text-accent hover:opacity-90 disabled:opacity-40"
           >
             <ArrowRightLeft className="w-4 h-4" /> {moving ? 'Moviendo…' : 'Mover'}
           </button>
@@ -649,7 +649,7 @@ export default function KitchenMenuPage() {
                     <div
                       key={p.id}
                       onClick={() => setSelectedProductId(p.id)}
-                      className={`flex items-center gap-3 px-4 py-3 cursor-pointer ${selectedIds.has(p.id) ? 'bg-[#1E3A5F]/5' : 'hover:bg-gray-50'} ${idx < cat.products.length - 1 ? 'border-b border-gray-100' : ''}`}
+                      className={`flex items-center gap-3 px-4 py-3 cursor-pointer ${selectedIds.has(p.id) ? 'bg-accent/5' : 'hover:bg-gray-50'} ${idx < cat.products.length - 1 ? 'border-b border-gray-100' : ''}`}
                     >
                       <input
                         type="checkbox"
@@ -849,7 +849,7 @@ export default function KitchenMenuPage() {
             </div>
             <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-gray-200 bg-gray-50 rounded-b-xl">
               <button onClick={() => setPublishResult(null)}
-                className="px-3.5 py-1.5 text-sm rounded-lg font-medium bg-[#1E3A5F] text-white hover:opacity-90">Entendido</button>
+                className="px-3.5 py-1.5 text-sm rounded-lg font-medium bg-accent text-text-on-accent hover:opacity-90">Entendido</button>
             </div>
           </div>
         </div>

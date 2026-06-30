@@ -13,7 +13,7 @@ import {
   type LocationOption, type SoldOutRow, type ProductPick, type ScopePreview,
 } from '@/modules/kitchen/services/availabilityService'
 
-const ACCENT = '#D67442'
+const ACCENT = '#15171A'
 
 function endOfTodayIso(): string {
   const d = new Date()

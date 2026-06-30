@@ -68,7 +68,7 @@ export default function NewCategoryModal({
               <input
                 type="text" value={emoji} maxLength={2}
                 onChange={(e) => setEmoji(e.target.value)} placeholder="🍔" disabled={submitting}
-                className="w-full px-3 py-2 text-center text-base border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#D67442]/20 focus:border-[#D67442]"
+                className="w-full px-3 py-2 text-center text-base border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
               />
             </div>
             <div className="flex-1">
@@ -76,7 +76,7 @@ export default function NewCategoryModal({
               <input
                 type="text" value={name} onChange={(e) => setName(e.target.value)}
                 placeholder="Ej: Hamburguesas" autoFocus disabled={submitting}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#D67442]/20 focus:border-[#D67442]"
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
               />
             </div>
           </div>
@@ -89,7 +89,7 @@ export default function NewCategoryModal({
             Cancelar
           </button>
           <button type="button" onClick={handleSubmit} disabled={submitting || name.trim() === ''}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm rounded-lg font-medium bg-[#1E3A5F] text-white hover:opacity-90 disabled:opacity-50">
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm rounded-lg font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50">
             {submitting ? <Loader2 size={14} className="animate-spin" /> : null}
             {submitting ? 'Creando…' : 'Crear categoría'}
           </button>

@@ -181,7 +181,7 @@ export default function EditPricesModal({
                         value={defaultPrice}
                         onChange={(e) => setDefaultPrice(e.target.value)}
                         inputMode="decimal"
-                        className="w-28 px-3 py-1.5 text-right font-mono text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#D67442]/20 focus:border-[#D67442]"
+                        className="w-28 px-3 py-1.5 text-right font-mono text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
                       />
                       <span className="text-[10px] text-gray-400 block text-right mt-0.5">sin IVA</span>
                     </div>
@@ -224,7 +224,7 @@ export default function EditPricesModal({
                             onChange={(e) => setPrices((p) => ({ ...p, [ch.channelId]: e.target.value }))}
                             placeholder={defNum !== null ? defNum.toFixed(2) : 'base'}
                             inputMode="decimal"
-                            className="w-28 px-2.5 py-1.5 text-right font-mono text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#D67442]/20 focus:border-[#D67442]"
+                            className="w-28 px-2.5 py-1.5 text-right font-mono text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
                           />
                           <span className="text-[10px] text-gray-400 block mt-0.5">
                             {inherits ? 'hereda base' : `PVP ${fmtEur(lv?.priceWithVat)}`}
@@ -232,7 +232,7 @@ export default function EditPricesModal({
                         </div>
                         {/* Margen neto */}
                         <div className="w-24 text-right">
-                          <div className={`font-mono text-sm font-medium ${margin == null ? 'text-gray-300' : margin >= 0 ? 'text-[#4A7A35]' : 'text-[#A32D2D]'}`}>
+                          <div className={`font-mono text-sm font-medium ${margin == null ? 'text-gray-300' : margin >= 0 ? 'text-success' : 'text-danger'}`}>
                             {fmtEur(margin)}
                           </div>
                           <span className="text-[10px] text-gray-400 block">
@@ -244,7 +244,7 @@ export default function EditPricesModal({
                           <button type="button"
                             onClick={() => setAvail((s) => ({ ...s, [ch.channelId]: !a }))}
                             role="switch" aria-checked={a}
-                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${a ? 'bg-[#4A7A35]' : 'bg-stone-300'}`}>
+                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${a ? 'bg-success' : 'bg-stone-300'}`}>
                             <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${a ? 'translate-x-[1.15rem]' : 'translate-x-0.5'}`} />
                           </button>
                         </div>
@@ -269,7 +269,7 @@ export default function EditPricesModal({
             Cancelar
           </button>
           <button type="button" onClick={handleSave} disabled={saving || loading}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm rounded-lg font-medium bg-[#1E3A5F] text-white hover:opacity-90 disabled:opacity-50">
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm rounded-lg font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50">
             {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
             Guardar
           </button>

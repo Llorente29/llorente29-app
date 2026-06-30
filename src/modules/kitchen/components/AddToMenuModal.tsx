@@ -13,7 +13,7 @@
 //      (frente transversal catálogo↔escandallo).
 //
 // Anti-invención: si no hay marca, se avisa, no se inventa. Nada toca histórico.
-// Paleta del proyecto: terracota #D67442 (foco), navy #1E3A5F (acción).
+// Paleta del proyecto: token `accent` (tinta) para acción y foco.
 
 import { useEffect, useMemo, useState } from 'react'
 import { X, Loader2, Plus, Link2, Store, Search, Check } from 'lucide-react'
@@ -232,7 +232,7 @@ export default function AddToMenuModal({
                 <label className="block text-xs font-medium text-gray-500 mb-1">Marca</label>
                 <select
                   value={createBrandId} onChange={(e) => setCreateBrandId(e.target.value)} disabled={submitting}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#D67442]/20 focus:border-[#D67442]"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
                 >
                   <option value="">Elige una marca…</option>
                   {brands.map((b) => (
@@ -249,7 +249,7 @@ export default function AddToMenuModal({
                 </label>
                 <input
                   type="text" value={nameText} onChange={(e) => setNameText(e.target.value)} disabled={submitting}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#D67442]/20 focus:border-[#D67442]"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
                 />
               </div>
 
@@ -260,7 +260,7 @@ export default function AddToMenuModal({
                     <input
                       type="text" inputMode="decimal" value={priceText}
                       onChange={(e) => setPriceText(e.target.value)} placeholder="9,90" disabled={submitting}
-                      className="w-full pl-3 pr-7 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#D67442]/20 focus:border-[#D67442]"
+                      className="w-full pl-3 pr-7 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
                     />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">€</span>
                   </div>
@@ -269,7 +269,7 @@ export default function AddToMenuModal({
                   <label className="block text-xs font-medium text-gray-500 mb-1">IVA</label>
                   <select
                     value={vatRate} onChange={(e) => setVatRate(Number(e.target.value))} disabled={submitting}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#D67442]/20 focus:border-[#D67442]"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
                   >
                     <option value={10}>10% (general hostelería)</option>
                     <option value={4}>4% (superreducido)</option>
@@ -286,7 +286,7 @@ export default function AddToMenuModal({
                 <select
                   value={categoryId} onChange={(e) => setCategoryId(e.target.value)}
                   disabled={submitting || createBrandId === ''}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#D67442]/20 focus:border-[#D67442] disabled:bg-gray-50"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent disabled:bg-gray-50"
                 >
                   <option value="">Sin categoría</option>
                   {categories.map((c) => (
@@ -310,7 +310,7 @@ export default function AddToMenuModal({
                 <input
                   type="text" value={linkSearch} onChange={(e) => setLinkSearch(e.target.value)}
                   placeholder="Buscar producto por nombre…" disabled={submitting}
-                  className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#D67442]/20 focus:border-[#D67442]"
+                  className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
                 />
               </div>
 
@@ -332,7 +332,7 @@ export default function AddToMenuModal({
                         onClick={() => setSelectedLinkId(c.id)}
                         className={
                           'w-full flex items-center justify-between gap-2 px-3 py-2.5 text-left transition-colors ' +
-                          (selected ? 'bg-[#D67442]/10' : 'hover:bg-gray-50')
+                          (selected ? 'bg-accent/10' : 'hover:bg-gray-50')
                         }
                       >
                         <div className="min-w-0">
@@ -341,7 +341,7 @@ export default function AddToMenuModal({
                             {brandNameById[c.brandId] ?? 'Marca'} · {fmtEur(c.price)}
                           </div>
                         </div>
-                        {selected && <Check size={16} className="text-[#D67442] shrink-0" />}
+                        {selected && <Check size={16} className="text-accent shrink-0" />}
                       </button>
                     )
                   })
@@ -365,7 +365,7 @@ export default function AddToMenuModal({
             <button
               type="button" onClick={handleCreate}
               disabled={submitting || brands.length === 0 || createBrandId === '' || priceText.trim() === ''}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm rounded-lg font-medium bg-[#1E3A5F] text-white hover:opacity-90 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm rounded-lg font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50"
             >
               {submitting ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
               {submitting ? 'Añadiendo…' : 'Añadir a la carta'}
@@ -374,7 +374,7 @@ export default function AddToMenuModal({
             <button
               type="button" onClick={handleLink}
               disabled={submitting || !selectedLinkId}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm rounded-lg font-medium bg-[#1E3A5F] text-white hover:opacity-90 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm rounded-lg font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50"
             >
               {submitting ? <Loader2 size={14} className="animate-spin" /> : <Link2 size={14} />}
               {submitting ? 'Enlazando…' : 'Enlazar producto'}

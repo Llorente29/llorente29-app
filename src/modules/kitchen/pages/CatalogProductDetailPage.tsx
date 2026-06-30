@@ -316,7 +316,7 @@ function ComboEditorSection({
                   className="flex-1 text-sm font-medium px-2 py-1 border border-stone-300 rounded"
                 />
               ) : (
-                <button onClick={() => startRename(s)} className="flex-1 text-left text-sm font-medium hover:text-[#D67442]" title="Renombrar grupo">
+                <button onClick={() => startRename(s)} className="flex-1 text-left text-sm font-medium hover:text-accent" title="Renombrar grupo">
                   {s.name}
                 </button>
               )}
@@ -398,7 +398,7 @@ function ComboEditorSection({
                 </div>
               ) : (
                 <button onClick={() => openAdd(s.id)} disabled={busy}
-                  className="inline-flex items-center gap-1 text-xs font-medium text-[#D67442] hover:underline mt-1">
+                  className="inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline mt-1">
                   <Plus size={12} /> Añadir opción
                 </button>
               )}
@@ -408,7 +408,7 @@ function ComboEditorSection({
       })}
 
       <button onClick={addSlot} disabled={busy}
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[#D67442] text-white hover:bg-[#C25F2E] transition-colors disabled:opacity-50">
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-accent text-text-on-accent hover:bg-accent-hover transition-colors disabled:opacity-50">
         <Plus size={13} /> Añadir grupo
       </button>
     </div>
@@ -576,7 +576,7 @@ function ModifierEditorSection({
                     onKeyDown={(e) => { if (e.key === 'Enter') saveRenameGroup(g.id); if (e.key === 'Escape') setEditingGroup(null) }}
                     className="flex-1 text-sm font-medium px-2 py-1 border border-stone-300 rounded" />
                 ) : (
-                  <button onClick={() => startRenameGroup(g)} className="flex-1 text-left text-sm font-medium hover:text-[#D67442]" title="Renombrar grupo">
+                  <button onClick={() => startRenameGroup(g)} className="flex-1 text-left text-sm font-medium hover:text-accent" title="Renombrar grupo">
                     {g.name}
                   </button>
                 )}
@@ -643,7 +643,7 @@ function ModifierEditorSection({
                       onKeyDown={(e) => { if (e.key === 'Enter') saveRenameOpt(o.id); if (e.key === 'Escape') setEditingOpt(null) }}
                       className="flex-1 px-2 py-0.5 border border-stone-300 rounded" />
                   ) : (
-                    <button onClick={() => startRenameOpt(o)} className="flex-1 text-left truncate hover:text-[#D67442]" title="Renombrar opción">
+                    <button onClick={() => startRenameOpt(o)} className="flex-1 text-left truncate hover:text-accent" title="Renombrar opción">
                       {o.name}
                     </button>
                   )}
@@ -691,7 +691,7 @@ function ModifierEditorSection({
                 )
               })}
               <button onClick={() => addOpt(g.id)} disabled={busy}
-                className="inline-flex items-center gap-1 text-xs font-medium text-[#D67442] hover:underline mt-1">
+                className="inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline mt-1">
                 <Plus size={12} /> Añadir opción
               </button>
             </div>
@@ -702,7 +702,7 @@ function ModifierEditorSection({
       {/* Acciones: crear grupo / asignar existente */}
       <div className="flex flex-wrap items-center gap-2">
         <button onClick={addGroup} disabled={busy || !brandId}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[#D67442] text-white hover:bg-[#C25F2E] transition-colors disabled:opacity-50">
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-accent text-text-on-accent hover:bg-accent-hover transition-colors disabled:opacity-50">
           <Plus size={13} /> Nuevo grupo
         </button>
         <button onClick={openAssign} disabled={busy || !brandId}
@@ -1172,7 +1172,7 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
 
             {/* Badge de marca (arriba izquierda) */}
             <div className="absolute top-4 left-4 bg-white/95 backdrop-blur-md px-4 py-2 rounded-xl shadow-md flex items-center gap-2">
-              <span className="w-6 h-6 rounded-md bg-[#D67442] flex items-center justify-center text-white text-[10px] font-bold">
+              <span className="w-6 h-6 rounded-md bg-accent flex items-center justify-center text-white text-[10px] font-bold">
                 {(brandName || item.category || 'P').charAt(0)}
               </span>
               <span className="text-sm font-medium text-stone-800">{brandName || item.category || 'Producto'}</span>
@@ -1195,7 +1195,7 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
                       onClick={() => setPhotoConfirmDelete(true)}
                       disabled={photoUploading || photoDeleting}
                       aria-label="Eliminar foto"
-                      className="inline-flex items-center justify-center w-9 h-9 bg-white/95 backdrop-blur-md rounded-xl shadow-md text-stone-600 hover:bg-white hover:text-[#A32D2D] transition-colors disabled:opacity-50"
+                      className="inline-flex items-center justify-center w-9 h-9 bg-white/95 backdrop-blur-md rounded-xl shadow-md text-stone-600 hover:bg-white hover:text-danger transition-colors disabled:opacity-50"
                     >
                       <Trash2 size={15} />
                     </button>
@@ -1262,7 +1262,7 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
                 </button>
                 <AiButton label="Mejorar descripción con IA" />
                 {!hasRecipe && (
-                  <button onClick={openRecipePicker} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium bg-[#D67442] text-white hover:bg-[#C25F2E] transition-colors">
+                  <button onClick={openRecipePicker} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium bg-accent text-text-on-accent hover:bg-accent-hover transition-colors">
                     <Link2 size={15} /> Vincular escandallo
                   </button>
                 )}
@@ -1273,24 +1273,24 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
               <div>
                 <label className="block text-xs font-medium text-stone-500 mb-1.5">Nombre</label>
                 <input type="text" value={name} onChange={(e) => setName(e.target.value)} disabled={saving}
-                  className="w-full px-3 py-2.5 text-sm border border-stone-200 rounded-lg bg-stone-50 focus:outline-none focus:ring-2 focus:ring-[#D67442]/20 focus:border-[#D67442] disabled:opacity-50" />
+                  className="w-full px-3 py-2.5 text-sm border border-stone-200 rounded-lg bg-stone-50 focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent disabled:opacity-50" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-stone-500 mb-1.5">Precio base (€ sin IVA)</label>
                 <input type="text" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} disabled={saving}
-                  className="w-44 px-3 py-2.5 text-sm border border-stone-200 rounded-lg bg-stone-50 focus:outline-none focus:ring-2 focus:ring-[#D67442]/20 focus:border-[#D67442] disabled:opacity-50" />
+                  className="w-44 px-3 py-2.5 text-sm border border-stone-200 rounded-lg bg-stone-50 focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent disabled:opacity-50" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-stone-500 mb-1.5">Descripción</label>
                 <textarea value={description} onChange={(e) => setDescription(e.target.value)} disabled={saving} rows={3}
-                  className="w-full px-3 py-2.5 text-sm border border-stone-200 rounded-lg bg-stone-50 focus:outline-none focus:ring-2 focus:ring-[#D67442]/20 focus:border-[#D67442] disabled:opacity-50" />
+                  className="w-full px-3 py-2.5 text-sm border border-stone-200 rounded-lg bg-stone-50 focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent disabled:opacity-50" />
               </div>
               {saveError && <div className="p-3 rounded-lg bg-red-50 text-red-700 border border-red-200 text-sm">{saveError}</div>}
               <div className="flex items-center justify-end gap-2.5 pt-1">
                 <button onClick={() => setEditing(false)} disabled={saving} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg text-stone-500 hover:bg-stone-50 transition-colors disabled:opacity-50">
                   <X size={15} /> Cancelar
                 </button>
-                <button onClick={save} disabled={saving} className="inline-flex items-center gap-1.5 px-5 py-2.5 text-sm rounded-lg font-medium bg-[#1E3A5F] text-white hover:opacity-90 disabled:opacity-50 transition-opacity">
+                <button onClick={save} disabled={saving} className="inline-flex items-center gap-1.5 px-5 py-2.5 text-sm rounded-lg font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 transition-opacity">
                   {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check size={15} />} {saving ? 'Guardando…' : 'Guardar'}
                 </button>
               </div>
@@ -1331,7 +1331,7 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
           badge={hasRecipe ? 'OK' : 'Sin escandallo'} badgeColor={hasRecipe ? 'ok' : 'warn'} defaultOpen={hasRecipe}>
           {!hasRecipe ? (
             <EmptyState text="Sin escandallo vinculado. Conecta una receta para ver costes, alérgenos y elaboración.">
-              <button onClick={openRecipePicker} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[#D67442] text-white hover:bg-[#C25F2E] transition-colors">
+              <button onClick={openRecipePicker} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-accent text-text-on-accent hover:bg-accent-hover transition-colors">
                 <Link2 size={13} /> Vincular escandallo
               </button>
               <AiButton label="Crear escandallo con IA" />
@@ -1353,7 +1353,7 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
                 ))}
               </div>
               <p className="text-xs text-stone-500 mb-3">Merma estimada incluida en el coste del escandallo.</p>
-              <button className="text-sm font-medium text-[#D67442] hover:underline">Ver escandallo completo →</button>
+              <button className="text-sm font-medium text-accent hover:underline">Ver escandallo completo →</button>
             </>
           )}
         </CollapsibleSection>
@@ -1375,7 +1375,7 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
             </div>
             <div className="bg-stone-50 rounded-lg px-4 py-3">
               <div className="text-[10px] font-medium text-stone-400 tracking-widest uppercase mb-1">Mejor margen</div>
-              <div className={`font-mono text-lg font-medium ${bestMargin != null ? 'text-[#4A7A35]' : 'text-stone-300'}`}>{bestMargin != null ? fmtEur(bestMargin) : '—'}</div>
+              <div className={`font-mono text-lg font-medium ${bestMargin != null ? 'text-success' : 'text-stone-300'}`}>{bestMargin != null ? fmtEur(bestMargin) : '—'}</div>
               <div className="text-[11px] text-stone-400">{bestChannel ? `${bestChannel} · ${bestMarginPct}%` : 'Configura un canal'}</div>
             </div>
             <div className="bg-stone-50 rounded-lg px-4 py-3">
@@ -1400,7 +1400,7 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
                       <div className="flex items-center gap-2.5 text-sm text-stone-400">
                         {badge} · sin configurar
                       </div>
-                      <span className="text-sm font-medium text-[#D67442] cursor-pointer hover:underline">Configurar en Ajustes</span>
+                      <span className="text-sm font-medium text-accent cursor-pointer hover:underline">Configurar en Ajustes</span>
                     </div>
                   )
                 }
@@ -1421,7 +1421,7 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
                     <div className="flex items-center justify-between mb-2.5">
                       <div className="flex items-center gap-2.5">{badge}</div>
                       <div className="text-right">
-                        <span className={`font-mono text-xl font-medium ${margin >= 0 ? 'text-[#4A7A35]' : 'text-[#A32D2D]'}`}>{fmtEur(margin)}</span>
+                        <span className={`font-mono text-xl font-medium ${margin >= 0 ? 'text-success' : 'text-danger'}`}>{fmtEur(margin)}</span>
                         <div className="text-[12px] text-stone-400">{marginPct}% del PVP{!e.costAvailable ? ' · sin food cost' : ''}</div>
                       </div>
                     </div>
@@ -1543,7 +1543,7 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
           {availError && (
             <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-[13px] text-red-700">{availError}</div>
           )}
-          <button onClick={() => setShowPrices(true)} className="mt-3 text-sm font-medium text-[#D67442] hover:underline">Editar precios</button>
+          <button onClick={() => setShowPrices(true)} className="mt-3 text-sm font-medium text-accent hover:underline">Editar precios</button>
         </CollapsibleSection>
 
         {showPrices && item && (
@@ -1597,11 +1597,11 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
         <CollapsibleSection id="s-notas" icon="note" title="Notas internas" defaultOpen={!!item.notesInternal}>
           <textarea value={notesVal} onChange={(e) => setNotesVal(e.target.value)} rows={3}
             placeholder="Notas del equipo (no visibles al cliente)…"
-            className="w-full px-3 py-2.5 text-sm border border-stone-200 rounded-lg bg-stone-50 focus:outline-none focus:ring-2 focus:ring-[#D67442]/20 focus:border-[#D67442]" />
+            className="w-full px-3 py-2.5 text-sm border border-stone-200 rounded-lg bg-stone-50 focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
           {notesVal !== (item.notesInternal ?? '') && (
             <button onClick={() => saveField('notes', { notesInternal: notesVal.trim() === '' ? null : notesVal })}
               disabled={fieldSaving === 'notes'}
-              className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[#1E3A5F] text-white hover:opacity-90 disabled:opacity-50 transition-opacity">
+              className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 transition-opacity">
               {fieldSaving === 'notes' ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} Guardar nota
             </button>
           )}
@@ -1621,19 +1621,19 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
               <label className="block text-xs font-medium text-stone-500 mb-1.5">Descripción del envase</label>
               <textarea value={packDesc} onChange={(e) => setPackDesc(e.target.value)} rows={2}
                 placeholder="Envase, bolsa, tapa…"
-                className="w-full px-3 py-2.5 text-sm border border-stone-200 rounded-lg bg-stone-50 focus:outline-none focus:ring-2 focus:ring-[#D67442]/20 focus:border-[#D67442]" />
+                className="w-full px-3 py-2.5 text-sm border border-stone-200 rounded-lg bg-stone-50 focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
             </div>
             <div>
               <label className="block text-xs font-medium text-stone-500 mb-1.5">Coste packaging (€/unidad)</label>
               <input type="text" inputMode="decimal" value={packCost} onChange={(e) => setPackCost(e.target.value)}
-                className="w-40 px-3 py-2.5 text-sm border border-stone-200 rounded-lg bg-stone-50 focus:outline-none focus:ring-2 focus:ring-[#D67442]/20 focus:border-[#D67442]" />
+                className="w-40 px-3 py-2.5 text-sm border border-stone-200 rounded-lg bg-stone-50 focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
             </div>
             {(packDesc !== (item.packagingDescription ?? '') || packCost !== (item.packagingCost != null ? String(item.packagingCost) : '')) && (
               <button onClick={() => saveField('pack', {
                 packagingDescription: packDesc.trim() === '' ? null : packDesc,
                 packagingCost: packCost.trim() === '' ? null : Number(packCost.replace(',', '.')),
               })} disabled={fieldSaving === 'pack'}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[#1E3A5F] text-white hover:opacity-90 disabled:opacity-50 transition-opacity">
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 transition-opacity">
                 {fieldSaving === 'pack' ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} Guardar packaging
               </button>
             )}
@@ -1659,11 +1659,11 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
             <div>
               <label className="block text-xs font-medium text-stone-500 mb-1.5">Nombre de cocina (kitchen name)</label>
               <input type="text" value={kitchenNameVal} onChange={(e) => setKitchenNameVal(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg bg-stone-50 focus:outline-none focus:ring-2 focus:ring-[#D67442]/20 focus:border-[#D67442]" />
+                className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg bg-stone-50 focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
               {kitchenNameVal !== (item.kitchenName ?? '') && (
                 <button onClick={() => saveField('kn', { kitchenName: kitchenNameVal.trim() === '' ? null : kitchenNameVal })}
                   disabled={fieldSaving === 'kn'}
-                  className="mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-[#1E3A5F] text-white hover:opacity-90 disabled:opacity-50">
+                  className="mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50">
                   {fieldSaving === 'kn' ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Guardar
                 </button>
               )}
@@ -1671,11 +1671,11 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
             <div>
               <label className="block text-xs font-medium text-stone-500 mb-1.5">Nombre corto (short name)</label>
               <input type="text" value={shortNameVal} onChange={(e) => setShortNameVal(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg bg-stone-50 focus:outline-none focus:ring-2 focus:ring-[#D67442]/20 focus:border-[#D67442]" />
+                className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg bg-stone-50 focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
               {shortNameVal !== (item.shortName ?? '') && (
                 <button onClick={() => saveField('sn', { shortName: shortNameVal.trim() === '' ? null : shortNameVal })}
                   disabled={fieldSaving === 'sn'}
-                  className="mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-[#1E3A5F] text-white hover:opacity-90 disabled:opacity-50">
+                  className="mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50">
                   {fieldSaving === 'sn' ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Guardar
                 </button>
               )}
@@ -1713,7 +1713,7 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
           <div className="bg-white rounded-xl w-full max-w-lg max-h-[80vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-3.5 border-b border-stone-200">
               <div className="flex items-center gap-2 text-stone-800">
-                <Link2 size={16} className="text-[#D67442]" />
+                <Link2 size={16} className="text-accent" />
                 <span className="text-sm font-medium">Vincular escandallo a «{item?.name}»</span>
               </div>
               <button onClick={() => !linking && setRecipePickerOpen(false)} className="text-stone-400 hover:text-stone-700 disabled:opacity-50" disabled={linking}>
@@ -1727,7 +1727,7 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
                 value={recipeSearch}
                 onChange={(e) => setRecipeSearch(e.target.value)}
                 placeholder="Buscar escandallo por nombre…"
-                className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg bg-stone-50 focus:outline-none focus:ring-2 focus:ring-[#D67442]/20 focus:border-[#D67442]"
+                className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg bg-stone-50 focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
               />
             </div>
             {linkError && (
@@ -1751,7 +1751,7 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
                         <button
                           onClick={() => linkRecipe(r.id)}
                           disabled={linking}
-                          className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg text-left hover:bg-[#D67442]/5 disabled:opacity-50 transition-colors group"
+                          className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg text-left hover:bg-accent/5 disabled:opacity-50 transition-colors group"
                         >
                           <div className="min-w-0">
                             <div className="text-sm text-stone-800 truncate">{r.name}</div>
@@ -1759,7 +1759,7 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
                             <span className="text-xs tabular-nums text-stone-500">{fmtEur(r.computedCost)}</span>
-                            <Link2 size={14} className="text-stone-300 group-hover:text-[#D67442]" />
+                            <Link2 size={14} className="text-stone-300 group-hover:text-accent" />
                           </div>
                         </button>
                       </li>

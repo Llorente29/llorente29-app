@@ -145,8 +145,8 @@ export default function ProductPlacementSection({
                 const isCurrent = p.brandId === currentBrandId
                 return (
                   <span key={p.menuItemId}
-                    className={`inline-flex items-center gap-2 text-sm pl-2.5 pr-1.5 py-1.5 rounded-lg ${isCurrent ? 'bg-[#D67442]/10 text-[#1E3A5F]' : 'bg-stone-100 text-stone-700'}`}>
-                    <span className="w-5 h-5 rounded bg-[#D67442] flex items-center justify-center text-white text-[10px] font-bold">
+                    className={`inline-flex items-center gap-2 text-sm pl-2.5 pr-1.5 py-1.5 rounded-lg ${isCurrent ? 'bg-accent/10 text-accent' : 'bg-stone-100 text-stone-700'}`}>
+                    <span className="w-5 h-5 rounded bg-accent flex items-center justify-center text-white text-[10px] font-bold">
                       {p.brandName.charAt(0)}
                     </span>
                     {p.brandName}
@@ -167,14 +167,14 @@ export default function ProductPlacementSection({
             {addableBrands.length > 0 ? (
               <div className="flex items-center gap-2">
                 <select value={addBrandId} onChange={(e) => setAddBrandId(e.target.value)} disabled={busy}
-                  className="text-sm border border-stone-200 rounded-lg px-2.5 py-1.5 bg-stone-50 focus:outline-none focus:ring-2 focus:ring-[#D67442]/20 focus:border-[#D67442]">
+                  className="text-sm border border-stone-200 rounded-lg px-2.5 py-1.5 bg-stone-50 focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent">
                   <option value="">añadir a marca…</option>
                   {addableBrands.map((b) => (
                     <option key={b.id} value={b.id}>{b.name}{b.ownershipType === 'licensed' ? ' (cedida)' : ''}</option>
                   ))}
                 </select>
                 <button onClick={handleAdd} disabled={busy || addBrandId === ''}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg font-medium bg-[#1E3A5F] text-white hover:opacity-90 disabled:opacity-40">
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-40">
                   {busy ? <Loader2 size={13} className="animate-spin" /> : <Plus size={14} />} Añadir
                 </button>
               </div>
@@ -201,7 +201,7 @@ export default function ProductPlacementSection({
           <Tag size={12} /> Categoría en esta marca
         </div>
         <select value={currentCatId} onChange={(e) => handleCategory(e.target.value)} disabled={busy}
-          className="text-sm border border-stone-200 rounded-lg px-2.5 py-1.5 bg-stone-50 focus:outline-none focus:ring-2 focus:ring-[#D67442]/20 focus:border-[#D67442]">
+          className="text-sm border border-stone-200 rounded-lg px-2.5 py-1.5 bg-stone-50 focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent">
           <option value="">Sin categoría</option>
           {cats.map((c) => (
             <option key={c.id} value={c.id}>{c.emoji ? `${c.emoji} ` : ''}{c.name}</option>
