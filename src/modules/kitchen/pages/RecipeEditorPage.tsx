@@ -40,6 +40,7 @@ import {
   Loader2,
   Copy,
   Pencil,
+  Scale,
 } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useApp } from '@/context/AppContext'
@@ -266,6 +267,9 @@ export default function RecipeEditorPage({
   const [dismissing, setDismissing] = useState(false)
   // "Añadir a carta": modal que crea/enlaza el menu_item de este escandallo.
   const [showAddToMenu, setShowAddToMenu] = useState(false)
+  // "Producción": escalado NO destructivo (vista de producción). factor=1 → apagado.
+  const [prodFactor, setProdFactor] = useState(1)
+  const [prodTargetText, setProdTargetText] = useState('')
   // ── Duplicar receta (copia plato + líneas + pasos y abre la copia) ──
   const [duplicating, setDuplicating] = useState(false)
   const [duplicateError, setDuplicateError] = useState<string | null>(null)
@@ -452,6 +456,36 @@ export default function RecipeEditorPage({
     () => lines.reduce((acc, l) => acc + (l.lineCost ?? 0), 0),
     [lines]
   )
+
+  // ── "Producción": escalar el escandallo a un volumen objetivo (NO destructivo) ──
+  // El coste es lineal en la cantidad → escalar = multiplicar lo que se muestra
+  // (cantidades y coste de línea + totales) por un factor. No escribe en BD.
+  const baseYield = recipe?.yieldPortions && recipe.yieldPortions > 0 ? recipe.yieldPortions : null
+
+  function applyProdTarget(text: string) {
+    setProdTargetText(text)
+    const n = parseFloat(text.replace(',', '.'))
+    if (!Number.isFinite(n) || n <= 0) { setProdFactor(1); return }
+    // Con raciones declaradas, el input es el OBJETIVO (raciones) → factor = objetivo / base.
+    // Sin raciones declaradas, el input es el MULTIPLICADOR directo.
+    setProdFactor(baseYield ? n / baseYield : n)
+  }
+
+  function applyProdMultiplier(mult: number) {
+    setProdFactor(mult)
+    setProdTargetText(baseYield ? String(Math.round(baseYield * mult)) : String(mult))
+  }
+
+  function resetProd() {
+    setProdFactor(1)
+    setProdTargetText('')
+  }
+
+  // Al cambiar de plato, salir de la vista de producción (no arrastrar el factor).
+  useEffect(() => {
+    setProdFactor(1)
+    setProdTargetText('')
+  }, [recipeId])
 
   const maxLineCost = useMemo(
     () => lines.reduce((max, l) => Math.max(max, l.lineCost ?? 0), 0),
@@ -1300,11 +1334,15 @@ export default function RecipeEditorPage({
   // (Ingredientes / Sub-recetas / Packaging): el tipo no cambia cómo se pinta.
   function renderLine(line: RecipeLineBreakdown) {
     const pct = maxLineCost > 0 ? Math.round(((line.lineCost ?? 0) / maxLineCost) * 100) : 0
-    const editing = editingLineId === line.lineId
+    // "Producción": mientras se escala (factor != 1), la línea es de SOLO LECTURA
+    // (vista de producción, no de edición) y cantidades/coste se multiplican.
+    const scaled = prodFactor !== 1
+    const editing = !scaled && editingLineId === line.lineId
     const saving = savingLineId === line.lineId
-    const wasteOpen = wasteOpenLineId === line.lineId
+    const wasteOpen = !scaled && wasteOpenLineId === line.lineId
     const waste = effectiveWastePct(line)
-    const netQty = line.quantityNet ?? line.quantity
+    const netQty = (line.quantityNet ?? line.quantity) * prodFactor
+    const dispCost = (line.lineCost ?? 0) * prodFactor
     const aiLoading = aiWasteLineId === line.lineId
     const aiSuggestion = aiWasteSuggestions[line.lineId]
     return (
@@ -1355,6 +1393,14 @@ export default function RecipeEditorPage({
                   {line.unitAbbr}
                 </span>
               </div>
+            ) : scaled ? (
+              <span
+                title="Cantidad escalada (vista de producción)"
+                className="font-mono text-sm text-text-primary px-1 -ml-1"
+              >
+                {formatQty(netQty)}{' '}
+                <span className="text-text-secondary">{line.unitAbbr}</span>
+              </span>
             ) : (
               <button
                 type="button"
@@ -1399,7 +1445,7 @@ export default function RecipeEditorPage({
             )}
             {/* E3: chip de merma. Si hay merma → mostrar y permitir override.
                 Si no la hay → ofrecer sugerencia IA / añadir a mano. */}
-            {waste > 0 ? (
+            {!scaled && (waste > 0 ? (
               <button
                 type="button"
                 onClick={() => openWaste(line)}
@@ -1432,7 +1478,7 @@ export default function RecipeEditorPage({
               >
                 + merma
               </button>
-            )}
+            ))}
           </span>
 
           {!isMobile && (
@@ -1461,22 +1507,24 @@ export default function RecipeEditorPage({
               line.needsReview
                 ? 'Falta convertir la unidad: no se puede medir el coste de esta línea'
                 : waste > 0
-                  ? `Coste sobre bruto ${formatQty(line.quantity)} ${line.unitAbbr}`
+                  ? `Coste sobre bruto ${formatQty(line.quantity * prodFactor)} ${line.unitAbbr}`
                   : undefined
             }
           >
-            {line.needsReview ? '—' : formatEur(line.lineCost)}
+            {line.needsReview ? '—' : formatEur(dispCost)}
           </span>
 
-          <button
-            type="button"
-            onClick={() => handleDelete(line)}
-            disabled={saving}
-            title="Eliminar línea"
-            className={'ml-0.5 w-6 h-6 rounded inline-flex items-center justify-center text-text-secondary ' + (isMobile ? 'opacity-100 ' : 'opacity-0 group-hover:opacity-100 focus:opacity-100 ') + 'hover:text-danger hover:bg-danger-bg transition-all disabled:opacity-30'}
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {!scaled && (
+            <button
+              type="button"
+              onClick={() => handleDelete(line)}
+              disabled={saving}
+              title="Eliminar línea"
+              className={'ml-0.5 w-6 h-6 rounded inline-flex items-center justify-center text-text-secondary ' + (isMobile ? 'opacity-100 ' : 'opacity-0 group-hover:opacity-100 focus:opacity-100 ') + 'hover:text-danger hover:bg-danger-bg transition-all disabled:opacity-30'}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
 
         {/* E3: panel de merma expandido (override por receta) */}
@@ -1878,6 +1926,55 @@ export default function RecipeEditorPage({
                     onChange={handleImportRecipe}
                   />
                 </div>
+              </div>
+
+              {/* Producción: escalar el escandallo a un volumen objetivo (no destructivo). */}
+              <div className="mb-3 flex flex-wrap items-center gap-2 px-3 py-2 rounded-lg bg-accent-bg">
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-text-secondary">
+                  <Scale className="w-3.5 h-3.5" /> Producción
+                </span>
+                {baseYield ? (
+                  <span className="text-xs text-text-secondary">
+                    Rinde {formatQty(baseYield)} raciones · para
+                  </span>
+                ) : (
+                  <span className="text-xs text-text-secondary">Multiplicar por</span>
+                )}
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={prodTargetText}
+                  onChange={(e) => applyProdTarget(e.target.value)}
+                  placeholder={baseYield ? String(baseYield) : '1'}
+                  className="w-[64px] px-2 py-1 font-mono text-sm text-text-primary bg-card border border-border-default rounded focus:outline-none focus:ring-1 focus:ring-accent"
+                />
+                <span className="text-xs text-text-secondary">{baseYield ? 'raciones' : '×'}</span>
+                <div className="flex items-center gap-1">
+                  {[2, 3, 0.5].map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => applyProdMultiplier(m)}
+                      className="text-[11px] px-2 py-1 rounded-md bg-card border border-border-default text-text-secondary hover:text-text-primary transition-colors"
+                    >
+                      {m === 0.5 ? '½' : `×${m}`}
+                    </button>
+                  ))}
+                </div>
+                {prodFactor !== 1 && (
+                  <span className="ml-auto inline-flex items-center gap-2">
+                    <span className="text-[11px] px-2 py-1 rounded-md bg-terracota-bg text-terracota font-medium">
+                      Producción {baseYield ? `· ${Math.round(baseYield * prodFactor)} raciones ` : ''}(×{formatQty(prodFactor)}) · solo lectura
+                    </span>
+                    <button
+                      type="button"
+                      onClick={resetProd}
+                      className="text-[11px] px-2 py-1 rounded-md text-text-secondary hover:text-text-primary underline"
+                    >
+                      Restaurar
+                    </button>
+                  </span>
+                )}
               </div>
 
               {/* Aviso de error de edición / IA */}
@@ -2286,11 +2383,11 @@ export default function RecipeEditorPage({
                   (flashHero ? 'scale-110' : 'scale-100')
                 }
               >
-                {formatEur(totalCost)}
+                {formatEur(totalCost * prodFactor)}
               </div>
               <div className="text-xs text-white/55 mt-0.5">
-                por porción · {recipe.yieldPortions ?? 1} ración
-                {(recipe.yieldPortions ?? 1) !== 1 ? 'es' : ''}
+                por porción · {Math.round((recipe.yieldPortions ?? 1) * prodFactor)} ración
+                {Math.round((recipe.yieldPortions ?? 1) * prodFactor) !== 1 ? 'es' : ''}
               </div>
               {unconvertibleLineCount > 0 && (
                 <div
@@ -2308,11 +2405,11 @@ export default function RecipeEditorPage({
                 <div className="mt-2.5 flex flex-col gap-1">
                   <div className="flex items-center justify-between text-[12px]">
                     <span className="text-white/55">Comida</span>
-                    <span className="font-mono text-white/85">{formatEur(foodCost)}</span>
+                    <span className="font-mono text-white/85">{formatEur(foodCost * prodFactor)}</span>
                   </div>
                   <div className="flex items-center justify-between text-[12px]">
                     <span className="text-white/55">Packaging</span>
-                    <span className="font-mono text-white/85">{formatEur(packagingCost)}</span>
+                    <span className="font-mono text-white/85">{formatEur(packagingCost * prodFactor)}</span>
                   </div>
                 </div>
               )}
