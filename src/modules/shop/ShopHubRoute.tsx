@@ -160,15 +160,10 @@ function ShopHubInner({ slug, onCheckout }: { slug: string; onCheckout: () => vo
       }}>
         <div style={S.heroCopy}>
           <div style={S.heroBrand}>
-            {hub.accountLogoUrl && (
-              <span style={S.heroLogoBox}>
-                <img src={hub.accountLogoUrl} alt={hub.accountName} style={S.heroLogoImg} />
-              </span>
-            )}
-            <div style={S.heroBrandText}>
-              <div style={S.heroBrandName}>{hub.accountName}</div>
-              <div style={S.heroBrandSub}><Star size={13} /> {hub.brands.length} cocinas bajo un mismo techo</div>
-            </div>
+            {hub.accountLogoUrl
+              ? <span style={S.heroLogoBox}><img src={hub.accountLogoUrl} alt={hub.accountName} style={S.heroLogoImg} /></span>
+              : <div style={S.heroBrandName}>{hub.accountName}</div>}
+            <div style={S.heroBrandSub}><Star size={13} /> {hub.brands.length} cocinas bajo un mismo techo</div>
           </div>
           <h1 style={S.h1}>
             {taglineA}
@@ -352,12 +347,12 @@ const S: Record<string, React.CSSProperties> = {
   preIc: { display: 'flex', color: C.amber, flexShrink: 0 },
   hero: { margin: '16px 28px 0', borderRadius: 26, overflow: 'hidden', position: 'relative', minHeight: 330, display: 'flex', alignItems: 'center' },
   heroCopy: { padding: '46px 52px', maxWidth: 640, zIndex: 2, color: '#fff' },
-  heroBrand: { display: 'flex', alignItems: 'center', gap: 16, marginBottom: 22 },
-  heroLogoBox: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 64, height: 64, borderRadius: 18, background: '#fff', padding: 9, flexShrink: 0, boxShadow: '0 6px 22px rgba(0,0,0,.18)' },
-  heroLogoImg: { maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' },
+  heroBrand: { display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 13, marginBottom: 22 },
+  heroLogoBox: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 16, background: '#fff', padding: '10px 16px', boxShadow: '0 6px 22px rgba(0,0,0,.2)' },
+  heroLogoImg: { height: 56, width: 'auto', maxWidth: 280, objectFit: 'contain', display: 'block' },
   heroBrandText: { display: 'flex', flexDirection: 'column', gap: 4, lineHeight: 1.05 },
   heroBrandName: { fontWeight: 900, fontSize: 32, letterSpacing: '-.035em', color: '#fff' },
-  heroBrandSub: { display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13.5, fontWeight: 600, color: 'rgba(255,255,255,.9)' },
+  heroBrandSub: { display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 14, fontWeight: 600, color: 'rgba(255,255,255,.92)' },
   eyebrow: { display: 'inline-flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,.16)', backdropFilter: 'blur(4px)', alignSelf: 'flex-start', padding: '7px 14px', borderRadius: 30, fontWeight: 800, fontSize: 12, letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 18 },
   h1: { fontSize: 46, lineHeight: 1.02, letterSpacing: '-.035em', fontWeight: 900, marginBottom: 14 },
   hl: { background: C.accent2, color: C.ink, padding: '0 10px', borderRadius: 8, display: 'inline-block', transform: 'rotate(-1.5deg)' },
