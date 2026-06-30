@@ -53,7 +53,7 @@ export async function uploadAccountLogo(accountId: string, file: File): Promise<
   const publicUrl = pub.publicUrl
 
   const { error: updErr } = await (supabase as any)
-    .from('accounts').update({ shop_logo_url: publicUrl }).eq('id', accountId)
+    .rpc('set_account_shop_logo', { p_account_id: accountId, p_url: publicUrl })
   if (updErr) {
     await supabase.storage.from(BUCKET).remove([path]).catch(() => {})
     throw new Error(`No se pudo guardar el logo: ${updErr.message}`)
@@ -73,7 +73,7 @@ export async function deleteAccountLogo(accountId: string): Promise<void> {
   try { current = await getAccountLogo(accountId) } catch { /* sigue */ }
 
   const { error: updErr } = await (supabase as any)
-    .from('accounts').update({ shop_logo_url: null }).eq('id', accountId)
+    .rpc('set_account_shop_logo', { p_account_id: accountId, p_url: null })
   if (updErr) throw new Error(`No se pudo quitar el logo: ${updErr.message}`)
 
   if (current) {
