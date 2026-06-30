@@ -172,10 +172,10 @@ export default function ShopDesignPage() {
 
       {/* Identidad del hub: logo de la cuenta (cabecera del escaparate multimarca) */}
       <div className="rounded-2xl border border-default bg-card p-5 mb-4 flex items-center gap-4 flex-wrap">
-        <span className="w-14 h-14 rounded-xl border border-default bg-page grid place-items-center overflow-hidden shrink-0">
+        <span className="h-16 min-w-[140px] px-3 rounded-xl border border-default bg-page grid place-items-center overflow-hidden shrink-0">
           {hubLogo
-            ? <img src={hubLogo} alt="" className="w-full h-full object-contain p-1.5" />
-            : <Store size={22} className="text-text-secondary" />}
+            ? <img src={hubLogo} alt="" className="max-h-12 w-auto object-contain" />
+            : <Store size={26} className="text-text-secondary" />}
         </span>
         <div className="flex-1 min-w-[200px]">
           <div className="font-semibold text-[15px] text-text-primary">Logo del hub</div>
