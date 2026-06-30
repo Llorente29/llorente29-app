@@ -32,6 +32,13 @@ import {
   ListOrdered,
   Eye,
   Pencil,
+  Image as ImageIcon,
+  Camera,
+  Video,
+  Upload,
+  Link2,
+  ExternalLink,
+  X,
 } from 'lucide-react'
 import {
   listStepsByRecipe,
@@ -39,6 +46,14 @@ import {
   updateStep,
   deleteStep,
   reorderSteps,
+  getRecipeAccountId,
+  getStepMediaMap,
+  uploadStepMedia,
+  getStepMediaSignedUrl,
+  removeStepMedia,
+  setStepMedia,
+  type StepMedia,
+  type StepMediaKind,
 } from '@/modules/kitchen/services/recipeStepService'
 import type { RecipeItemStep } from '@/types/kitchen'
 
@@ -58,6 +73,13 @@ export default function RecipeStepsTab({ recipeItemId }: RecipeStepsTabProps) {
   // Modo de la solapa: 'view' (lectura) o 'edit' (formularios). El valor por
   // defecto se fija al cargar: 'view' si ya hay pasos, 'edit' si está vacía.
   const [mode, setMode] = useState<'view' | 'edit'>('view')
+  // Media por paso (foto + vídeo). Atributo paralelo: no toca el tipo del paso.
+  const [accountId, setAccountId] = useState<string>('')
+  const [mediaByStep, setMediaByStep] = useState<Record<string, StepMedia>>({})
+  const [signedByStep, setSignedByStep] = useState<Record<string, { photo?: string; video?: string }>>({})
+  const [busyMedia, setBusyMedia] = useState<{ stepId: string; kind: StepMediaKind } | null>(null)
+  const [linkOpenId, setLinkOpenId] = useState<string | null>(null)
+  const [linkText, setLinkText] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -81,6 +103,34 @@ export default function RecipeStepsTab({ recipeItemId }: RecipeStepsTabProps) {
     return () => {
       cancelled = true
     }
+  }, [recipeItemId])
+
+  // Carga la cuenta y la media por paso; resuelve signed URLs para los archivos
+  // subidos (los enlaces externos se usan tal cual).
+  useEffect(() => {
+    let cancelled = false
+    getRecipeAccountId(recipeItemId).then((a) => { if (!cancelled) setAccountId(a) }).catch(() => {})
+    getStepMediaMap(recipeItemId)
+      .then(async (map) => {
+        if (cancelled) return
+        setMediaByStep(map)
+        const signed: Record<string, { photo?: string; video?: string }> = {}
+        for (const [sid, m] of Object.entries(map)) {
+          const entry: { photo?: string; video?: string } = {}
+          if (m.photo && !/^https?:\/\//i.test(m.photo)) {
+            const url = await getStepMediaSignedUrl(m.photo).catch(() => null)
+            if (url) entry.photo = url
+          }
+          if (m.video && !/^https?:\/\//i.test(m.video)) {
+            const url = await getStepMediaSignedUrl(m.video).catch(() => null)
+            if (url) entry.video = url
+          }
+          if (entry.photo || entry.video) signed[sid] = entry
+        }
+        if (!cancelled) setSignedByStep(signed)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
   }, [recipeItemId])
 
   // Cambia un campo en el estado local (sin persistir todavía).
@@ -164,6 +214,73 @@ export default function RecipeStepsTab({ recipeItemId }: RecipeStepsTabProps) {
       // Recargar para reflejar el estado real si el reorden falló a medias.
       const fresh = await listStepsByRecipe(recipeItemId).catch(() => null)
       if (fresh) setSteps(fresh)
+    }
+  }
+
+  // ── Media por paso (foto + vídeo) ──
+  function isExternal(v: string | null | undefined): boolean {
+    return !!v && /^https?:\/\//i.test(v)
+  }
+  function mediaBusy(stepId: string, kind: StepMediaKind): boolean {
+    return busyMedia?.stepId === stepId && busyMedia?.kind === kind
+  }
+
+  async function setSignedFor(stepId: string, kind: StepMediaKind, path: string) {
+    const url = await getStepMediaSignedUrl(path).catch(() => null)
+    if (url) setSignedByStep((p) => ({ ...p, [stepId]: { ...(p[stepId] ?? {}), [kind]: url } }))
+  }
+
+  async function handleUploadMedia(step: RecipeItemStep, kind: StepMediaKind, file: File) {
+    setError(null)
+    if (kind === 'photo') {
+      const ok = /^image\/(jpeg|png|webp)$/i.test(file.type) || /\.(jpe?g|png|webp)$/i.test(file.name)
+      if (!ok) { setError('Formato de imagen no admitido. Usa JPG, PNG o WebP.'); return }
+      if (file.size > 10 * 1024 * 1024) { setError('La foto no puede superar 10 MB.'); return }
+    } else {
+      const ok = /^video\/(mp4|webm|quicktime)$/i.test(file.type) || /\.(mp4|webm|mov)$/i.test(file.name)
+      if (!ok) { setError('Formato de vídeo no admitido. Usa MP4, WebM o MOV.'); return }
+      if (file.size > 50 * 1024 * 1024) { setError('El vídeo no puede superar 50 MB.'); return }
+    }
+    if (!accountId) { setError('No se pudo resolver la cuenta. Recarga e inténtalo de nuevo.'); return }
+    setBusyMedia({ stepId: step.id, kind })
+    try {
+      const path = await uploadStepMedia(accountId, step.id, kind, file)
+      setMediaByStep((p) => ({ ...p, [step.id]: { ...(p[step.id] ?? { photo: null, video: null }), [kind]: path } }))
+      await setSignedFor(step.id, kind, path)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `No se pudo subir ${kind === 'photo' ? 'la foto' : 'el vídeo'}`)
+    } finally {
+      setBusyMedia(null)
+    }
+  }
+
+  async function handleSaveVideoLink(step: RecipeItemStep) {
+    const url = linkText.trim()
+    if (url === '') { setLinkOpenId(null); return }
+    if (!/^https?:\/\//i.test(url)) { setError('El enlace debe empezar por http(s)://'); return }
+    setError(null); setBusyMedia({ stepId: step.id, kind: 'video' })
+    try {
+      await setStepMedia(step.id, 'video', url)
+      setMediaByStep((p) => ({ ...p, [step.id]: { ...(p[step.id] ?? { photo: null, video: null }), video: url } }))
+      setSignedByStep((p) => { const e = { ...(p[step.id] ?? {}) }; delete e.video; return { ...p, [step.id]: e } })
+      setLinkOpenId(null); setLinkText('')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo guardar el enlace')
+    } finally {
+      setBusyMedia(null)
+    }
+  }
+
+  async function handleRemoveMedia(step: RecipeItemStep, kind: StepMediaKind) {
+    setError(null); setBusyMedia({ stepId: step.id, kind })
+    try {
+      await removeStepMedia(step.id, kind, mediaByStep[step.id]?.[kind] ?? null)
+      setMediaByStep((p) => ({ ...p, [step.id]: { ...(p[step.id] ?? { photo: null, video: null }), [kind]: null } }))
+      setSignedByStep((p) => { const e = { ...(p[step.id] ?? {}) }; delete e[kind]; return { ...p, [step.id]: e } })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `No se pudo quitar ${kind === 'photo' ? 'la foto' : 'el vídeo'}`)
+    } finally {
+      setBusyMedia(null)
     }
   }
 
@@ -276,6 +393,40 @@ export default function RecipeStepsTab({ recipeItemId }: RecipeStepsTabProps) {
                     )}
                   </div>
                 )}
+                {(mediaByStep[step.id]?.photo || mediaByStep[step.id]?.video) && (
+                  <div className="flex flex-wrap items-center gap-3 mt-2">
+                    {mediaByStep[step.id]?.photo && (
+                      isExternal(mediaByStep[step.id]?.photo) ? (
+                        <a href={mediaByStep[step.id]?.photo ?? '#'} target="_blank" rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-xs text-terracota hover:underline">
+                          <ImageIcon className="w-3.5 h-3.5" /> Ver foto
+                        </a>
+                      ) : signedByStep[step.id]?.photo ? (
+                        <img src={signedByStep[step.id]?.photo} alt={`Foto del paso ${index + 1}`}
+                          className="w-28 h-28 object-cover rounded-lg border border-border-default" />
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 text-xs text-text-secondary">
+                          <ImageIcon className="w-3.5 h-3.5" /> Foto del paso
+                        </span>
+                      )
+                    )}
+                    {mediaByStep[step.id]?.video && (
+                      isExternal(mediaByStep[step.id]?.video) ? (
+                        <a href={mediaByStep[step.id]?.video ?? '#'} target="_blank" rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-xs text-terracota hover:underline">
+                          <ExternalLink className="w-3.5 h-3.5" /> Ver vídeo
+                        </a>
+                      ) : signedByStep[step.id]?.video ? (
+                        <video src={signedByStep[step.id]?.video} controls preload="metadata"
+                          className="w-full max-w-xs rounded-lg border border-border-default" />
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 text-xs text-text-secondary">
+                          <Video className="w-3.5 h-3.5" /> Vídeo del paso
+                        </span>
+                      )
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -366,6 +517,90 @@ export default function RecipeStepsTab({ recipeItemId }: RecipeStepsTabProps) {
                         Guardando…
                       </span>
                     )}
+                  </div>
+
+                  {/* Media del paso: foto (subir) y vídeo (subir o enlace) */}
+                  <div className="mt-2 space-y-1.5">
+                    {/* FOTO */}
+                    <div>
+                      {mediaByStep[step.id]?.photo ? (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {signedByStep[step.id]?.photo ? (
+                            <img src={signedByStep[step.id]?.photo} alt="Foto del paso"
+                              className="w-20 h-20 object-cover rounded-lg border border-border-default" />
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 text-xs text-text-secondary">
+                              <ImageIcon className="w-3.5 h-3.5" /> Foto cargada
+                            </span>
+                          )}
+                          <button type="button" onClick={() => handleRemoveMedia(step, 'photo')}
+                            disabled={mediaBusy(step.id, 'photo')}
+                            className="inline-flex items-center gap-1 text-xs text-text-secondary hover:text-danger disabled:opacity-50 transition-colors">
+                            <X className="w-3.5 h-3.5" /> Quitar foto
+                          </button>
+                        </div>
+                      ) : (
+                        <label className={'inline-flex items-center gap-1.5 text-xs cursor-pointer ' + (mediaBusy(step.id, 'photo') ? 'text-text-secondary opacity-60' : 'text-terracota hover:underline')}>
+                          {mediaBusy(step.id, 'photo') ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Camera className="w-3.5 h-3.5" />}
+                          {mediaBusy(step.id, 'photo') ? 'Subiendo…' : 'Añadir foto'}
+                          <input type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" className="hidden"
+                            disabled={mediaBusy(step.id, 'photo')}
+                            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUploadMedia(step, 'photo', f); e.target.value = '' }} />
+                        </label>
+                      )}
+                    </div>
+
+                    {/* VÍDEO */}
+                    <div>
+                      {mediaByStep[step.id]?.video ? (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {isExternal(mediaByStep[step.id]?.video) ? (
+                            <a href={mediaByStep[step.id]?.video ?? '#'} target="_blank" rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 text-xs text-terracota hover:underline">
+                              <ExternalLink className="w-3.5 h-3.5" /> Ver enlace
+                            </a>
+                          ) : signedByStep[step.id]?.video ? (
+                            <video src={signedByStep[step.id]?.video} controls preload="metadata"
+                              className="w-full max-w-xs rounded-lg border border-border-default" />
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 text-xs text-text-secondary">
+                              <Video className="w-3.5 h-3.5" /> Vídeo cargado
+                            </span>
+                          )}
+                          <button type="button" onClick={() => handleRemoveMedia(step, 'video')}
+                            disabled={mediaBusy(step.id, 'video')}
+                            className="inline-flex items-center gap-1 text-xs text-text-secondary hover:text-danger disabled:opacity-50 transition-colors">
+                            <X className="w-3.5 h-3.5" /> Quitar vídeo
+                          </button>
+                        </div>
+                      ) : linkOpenId === step.id ? (
+                        <div className="flex items-center gap-2">
+                          <input type="url" value={linkText} onChange={(e) => setLinkText(e.target.value)}
+                            placeholder="https://… (YouTube, Vimeo, enlace al vídeo)" autoFocus
+                            className="flex-1 px-2.5 py-1.5 text-xs border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent" />
+                          <button type="button" onClick={() => handleSaveVideoLink(step)} disabled={mediaBusy(step.id, 'video')}
+                            className="text-xs font-medium px-2.5 py-1.5 rounded-md bg-terracota text-white hover:opacity-90 disabled:opacity-50">
+                            Guardar
+                          </button>
+                          <button type="button" onClick={() => { setLinkOpenId(null); setLinkText('') }}
+                            className="text-xs text-text-secondary hover:text-text-primary">Cancelar</button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-3">
+                          <label className={'inline-flex items-center gap-1.5 text-xs cursor-pointer ' + (mediaBusy(step.id, 'video') ? 'text-text-secondary opacity-60' : 'text-terracota hover:underline')}>
+                            {mediaBusy(step.id, 'video') ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                            {mediaBusy(step.id, 'video') ? 'Subiendo…' : 'Subir vídeo'}
+                            <input type="file" accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov" className="hidden"
+                              disabled={mediaBusy(step.id, 'video')}
+                              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUploadMedia(step, 'video', f); e.target.value = '' }} />
+                          </label>
+                          <button type="button" onClick={() => { setLinkOpenId(step.id); setLinkText('') }}
+                            className="inline-flex items-center gap-1.5 text-xs text-text-secondary hover:text-text-primary transition-colors">
+                            <Link2 className="w-3.5 h-3.5" /> Pegar enlace
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 

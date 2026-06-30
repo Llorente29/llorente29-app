@@ -275,3 +275,119 @@ export async function setStepLines(
     }
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// MEDIA POR PASO (foto + vídeo). recipe_item_step ya tiene photo_url y video_url.
+// El valor es una RUTA de storage (archivo subido a recipe-uploads, se reproduce
+// con signed URL) o una URL externa (enlace; solo se ofrece para vídeo). El front
+// distingue por el prefijo http(s). database.ts puede no incluir aún video_url
+// (columna recién creada) → cliente sin tipar acotado, patrón del proyecto.
+// ─────────────────────────────────────────────────────────────────────
+
+export type StepMediaKind = 'photo' | 'video'
+
+const STEP_MEDIA_BUCKET = 'recipe-uploads'
+const MEDIA_COLUMN: Record<StepMediaKind, string> = { photo: 'photo_url', video: 'video_url' }
+const MEDIA_FOLDER: Record<StepMediaKind, string> = { photo: 'step-photo', video: 'step-video' }
+
+export interface StepMedia {
+  photo: string | null
+  video: string | null
+}
+
+// Cliente sin tipar para tocar photo_url/video_url + storage sin depender del
+// regen de database.ts.
+function sb(): {
+  from: (t: string) => {
+    select: (c: string) => {
+      eq: (col: string, val: string) => Promise<{ data: Record<string, unknown>[] | null; error: { message: string } | null }>
+    }
+    update: (row: Record<string, unknown>) => {
+      eq: (col: string, val: string) => Promise<{ error: { message: string } | null }>
+    }
+  }
+  storage: {
+    from: (b: string) => {
+      upload: (path: string, file: File, opts?: Record<string, unknown>) => Promise<{ error: { message: string } | null }>
+      createSignedUrl: (path: string, expiresIn: number) => Promise<{ data: { signedUrl: string } | null; error: { message: string } | null }>
+      remove: (paths: string[]) => Promise<{ error: { message: string } | null }>
+    }
+  }
+} {
+  requireSupabase()
+  return supabase as never
+}
+
+/** account_id del plato (lo necesita la ruta de storage por carpeta-de-cuenta). */
+export async function getRecipeAccountId(recipeItemId: string): Promise<string> {
+  requireSupabase()
+  const { data, error } = await supabase!
+    .from('recipe_item')
+    .select('account_id')
+    .eq('id', recipeItemId)
+    .single()
+  if (error) throw new Error(`Error obteniendo la cuenta de la receta: ${error.message}`)
+  return (data as { account_id: string }).account_id
+}
+
+/** Mapa stepId → { photo, video } (ruta o URL externa) de todos los pasos. */
+export async function getStepMediaMap(recipeItemId: string): Promise<Record<string, StepMedia>> {
+  const { data, error } = await sb()
+    .from('recipe_item_step')
+    .select('id, photo_url, video_url')
+    .eq('recipe_item_id', recipeItemId)
+  if (error) throw new Error(`Error leyendo media de los pasos: ${error.message}`)
+  const map: Record<string, StepMedia> = {}
+  for (const r of data ?? []) {
+    map[r.id as string] = {
+      photo: (r.photo_url as string) ?? null,
+      video: (r.video_url as string) ?? null,
+    }
+  }
+  return map
+}
+
+/** Fija (o limpia con null) la foto o el vídeo de un paso. */
+export async function setStepMedia(stepId: string, kind: StepMediaKind, value: string | null): Promise<void> {
+  const { error } = await sb()
+    .from('recipe_item_step')
+    .update({ [MEDIA_COLUMN[kind]]: value })
+    .eq('id', stepId)
+  if (error) throw new Error(`No se pudo guardar ${kind === 'photo' ? 'la foto' : 'el vídeo'} del paso: ${error.message}`)
+}
+
+/**
+ * Sube un archivo (foto o vídeo) a recipe-uploads/{accountId}/{carpeta}/{stepId}/…
+ * y guarda su RUTA en la columna correspondiente. Devuelve la ruta guardada.
+ */
+export async function uploadStepMedia(
+  accountId: string, stepId: string, kind: StepMediaKind, file: File,
+): Promise<string> {
+  const ext = (file.name.split('.').pop() || (kind === 'photo' ? 'jpg' : 'mp4')).toLowerCase().replace(/[^a-z0-9]/g, '')
+  const path = `${accountId}/${MEDIA_FOLDER[kind]}/${stepId}/${Date.now()}.${ext}`
+  const { error: upErr } = await sb().storage.from(STEP_MEDIA_BUCKET).upload(path, file, {
+    contentType: file.type || (kind === 'photo' ? 'image/jpeg' : 'video/mp4'),
+    upsert: true,
+  })
+  if (upErr) throw new Error(`No se pudo subir ${kind === 'photo' ? 'la foto' : 'el vídeo'}: ${upErr.message}`)
+  await setStepMedia(stepId, kind, path)
+  return path
+}
+
+/** Signed URL para mostrar/reproducir un archivo subido (ruta de storage). 1 h. */
+export async function getStepMediaSignedUrl(path: string): Promise<string | null> {
+  const { data, error } = await sb().storage.from(STEP_MEDIA_BUCKET).createSignedUrl(path, 3600)
+  if (error || !data) return null
+  return data.signedUrl
+}
+
+/**
+ * Quita la foto/vídeo de un paso: si era un archivo subido (ruta de storage) lo
+ * borra del bucket; si era enlace externo solo limpia el campo. Deja la columna null.
+ */
+export async function removeStepMedia(stepId: string, kind: StepMediaKind, currentValue: string | null): Promise<void> {
+  if (currentValue && !/^https?:\/\//i.test(currentValue)) {
+    try { await sb().storage.from(STEP_MEDIA_BUCKET).remove([currentValue]) } catch { /* no bloqueante */ }
+  }
+  await setStepMedia(stepId, kind, null)
+}
