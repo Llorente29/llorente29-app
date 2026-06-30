@@ -80,6 +80,7 @@ import {
   type ExtractedRecipeSession,
 } from '@/modules/kitchen/services/recipeImportService'
 import RecipeImportReviewModal from '@/modules/kitchen/components/RecipeImportReviewModal'
+import AddToMenuModal from '@/modules/kitchen/components/AddToMenuModal'
 import RecipeStepsTab from '@/modules/kitchen/components/RecipeStepsTab'
 import ModifierImpactsTab from '@/modules/kitchen/components/ModifierImpactsTab'
 import type { RecipeItem, MenuItemEconomics, KitchenUnit } from '@/types/kitchen'
@@ -263,6 +264,8 @@ export default function RecipeEditorPage({
   // Recarga del plato tras "dar por revisado" (baja la bandera needs_review).
   const [reloadTick, setReloadTick] = useState(0)
   const [dismissing, setDismissing] = useState(false)
+  // "Añadir a carta": modal que crea/enlaza el menu_item de este escandallo.
+  const [showAddToMenu, setShowAddToMenu] = useState(false)
   // ── Duplicar receta (copia plato + líneas + pasos y abre la copia) ──
   const [duplicating, setDuplicating] = useState(false)
   const [duplicateError, setDuplicateError] = useState<string | null>(null)
@@ -2327,7 +2330,11 @@ export default function RecipeEditorPage({
                     <AlertTriangle className="w-3.5 h-3.5 mt-px flex-shrink-0" />
                     <span>Este plato aún no está en ninguna carta. Añádelo para ver su food cost y margen.</span>
                   </div>
-                  <button className="w-full inline-flex items-center justify-center gap-1.5 text-xs px-3 py-2 rounded-md bg-white/10 hover:bg-white/15 text-white transition-colors">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddToMenu(true)}
+                    className="w-full inline-flex items-center justify-center gap-1.5 text-xs px-3 py-2 rounded-md bg-white/10 hover:bg-white/15 text-white transition-colors"
+                  >
                     <Plus className="w-3.5 h-3.5" />
                     Añadir a carta
                   </button>
@@ -2465,6 +2472,22 @@ export default function RecipeEditorPage({
             onClick={(e) => e.stopPropagation()}
           />
         </div>
+      )}
+
+      {/* ── Añadir a carta: crea/enlaza el menu_item de este escandallo ── */}
+      {showAddToMenu && activeAccountId && (
+        <AddToMenuModal
+          accountId={activeAccountId}
+          recipeId={recipe.id}
+          recipeName={recipe.name}
+          createdBy={authUserId ?? null}
+          createdByName={userProfile?.displayName ?? null}
+          onClose={() => setShowAddToMenu(false)}
+          onDone={() => {
+            setShowAddToMenu(false)
+            setEconReloadTick((t) => t + 1)
+          }}
+        />
       )}
     </div>
   )

@@ -478,6 +478,48 @@ export async function addRecipeToBrand(input: {
   return rowToMenuItem(data)
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// listLinkableMenuItems — productos de la carta SIN escandallo (candidatos a
+// enlazar a una receta desde el editor). recipe_item_id IS NULL, tipo 'item'
+// (NO combos: un combo nunca lleva escandallo propio), activos y no archivados.
+// Enlazar uno desbloquea su coste/consumo/AvT (frente transversal catálogo↔escandallo).
+// ─────────────────────────────────────────────────────────────────────
+
+export interface LinkableMenuItem {
+  id: string
+  name: string
+  brandId: string
+  price: number
+}
+
+export async function listLinkableMenuItems(
+  accountId: string,
+  search?: string,
+): Promise<LinkableMenuItem[]> {
+  requireSupabase()
+  let query = supabase!
+    .from('menu_item')
+    .select('id, name, brand_id, price')
+    .eq('account_id', accountId)
+    .is('recipe_item_id', null)
+    .eq('product_type', 'item')
+    .is('archived_at', null)
+    .eq('is_active', true)
+  if (search && search.trim() !== '') {
+    query = query.ilike('name', `%${search.trim()}%`)
+  }
+  query = query.order('name', { ascending: true }).limit(50)
+
+  const { data, error } = await query
+  if (error) throw new Error(`Error listando productos sin escandallo: ${error.message}`)
+  return (data ?? []).map((r) => ({
+    id: r.id as string,
+    name: r.name as string,
+    brandId: r.brand_id as string,
+    price: Number((r as { price: number | null }).price ?? 0),
+  }))
+}
+
 export async function getMenuItemCategoryId(menuItemId: string): Promise<string | null> {
   requireSupabase()
   const { data, error } = await supabase!
