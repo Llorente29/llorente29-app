@@ -96,7 +96,7 @@ export default function DeliveryMap({
     mapRef.current = map
     map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'top-right')
 
-    new mapboxgl.Marker({ color: '#1E3A5F' })
+    new mapboxgl.Marker({ color: '#15171A' })
       .setLngLat([lng, lat])
       .setPopup(new mapboxgl.Popup({ offset: 24 }).setText(locationName))
       .addTo(map)
@@ -180,15 +180,11 @@ export default function DeliveryMap({
 
   if (!hasMapbox()) {
     return (
-      <div style={{
-        height: 420, borderRadius: 12, border: '1px solid var(--color-border-default)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        textAlign: 'center', padding: 24, color: 'var(--color-text-secondary)',
-      }}>
+      <div className="h-[420px] rounded-xl border border-default grid place-items-center text-center p-6 text-text-secondary bg-card">
         Falta el token de Mapbox. Configura VITE_MAPBOX_TOKEN para ver el mapa.
       </div>
     )
   }
 
-  return <div ref={containerRef} style={{ height: 420, borderRadius: 12, overflow: 'hidden' }} />
+  return <div ref={containerRef} className="h-[420px] rounded-xl overflow-hidden" />
 }

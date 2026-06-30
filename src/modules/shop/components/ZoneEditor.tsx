@@ -1,13 +1,15 @@
 // src/modules/shop/components/ZoneEditor.tsx
 //
-// Editor de zona de entrega para HOSTELEROS (Capa 1) — rediseño cálido.
-// Flujo en dos preguntas claras en lenguaje de hostelero, no botones técnicos:
+// Editor de zona de entrega para HOSTELEROS (Capa 1) — chrome de gestión.
+// Rebrand 30/06/2026: reconstruido sobre TOKENS de Folvy (fuera inline-styles
+// y var(--color-*) con fallbacks viejos terracota/navy). Misma UX cálida y
+// MISMA lógica (radio / por carretera / CP / a mano), copiloto de avisos y
+// precio sugerido. Coherente con el resto de la app.
+//
+// Flujo en dos preguntas claras en lenguaje de hostelero:
 //   1) "¿Hasta dónde repartes?" → 4 tarjetas (radio / por carretera / CP / a mano)
 //   2) Solo si "por carretera": medio de reparto + distancia o tiempo
-// El precio y el copiloto de ayudas viven debajo con presencia visual.
-// PRECIO SUGERIDO: botón que propone el envío = MAX(mínimo, base + €/km × distancia),
-// protegiendo margen. El hostelero manda: rellena el campo, no lo impone.
-// Lógica intacta: radio→radio; isócrona y a mano→polígono; CP→lista.
+// PRECIO SUGERIDO: propone envío = MAX(suelo, base + €/km × distancia).
 
 import { useState } from 'react'
 import {
@@ -32,10 +34,8 @@ type Props = {
   onCancel: () => void
 }
 
-// Fórmula de precio sugerido (Paso 1, transparente). Valores de partida
-// sensatos para reparto urbano; el hostelero ve el resultado y puede editarlo.
-const SUGGEST_BASE = 2.99   // suelo real de un reparto (€ de salir)
-const SUGGEST_PER_KM = 0.45 // € por km de distancia
+const SUGGEST_BASE = 2.99
+const SUGGEST_PER_KM = 0.45
 
 function fmtNum(n: number | null): string { return n == null ? '' : String(n).replace('.', ',') }
 function approxMin(km: number): number { return Math.max(10, Math.round((km / 18) * 60 / 5) * 5) }
@@ -58,6 +58,11 @@ const PROFILES: { v: TravelProfile; label: string }[] = [
   { v: 'pie', label: '🚶 A pie' },
 ]
 
+// Estilos compartidos como clases Tailwind (tokens Folvy).
+const Q_LABEL = 'text-[13px] font-semibold text-text-primary mb-2 block'
+const INPUT = 'w-full px-3 py-2.5 rounded-lg text-[15px] border border-default bg-card text-text-primary outline-none focus:border-accent'
+const RANGE = 'w-full accent-[#15171A]'
+
 export default function ZoneEditor({
   locationId, centerLat, centerLng, zone, ticketMedio, drawnPolygon,
   onDraftRadius, onDraftPolygon, onDrawingChange, onSaved, onCancel,
@@ -72,7 +77,7 @@ export default function ZoneEditor({
   const [fee, setFee] = useState(zone ? fmtNum(zone.delivery_fee) : '2,50')
   const [minOrder, setMinOrder] = useState(zone ? fmtNum(zone.min_order) : '')
   const [eta, setEta] = useState(zone?.eta_min != null ? String(zone.eta_min) : '')
-  const [feeSuggested, setFeeSuggested] = useState(false) // ¿el fee actual lo propuso Folvy?
+  const [feeSuggested, setFeeSuggested] = useState(false)
 
   const [radiusM, setRadiusM] = useState(zone?.radius_m ?? 2000)
   const [routeKm, setRouteKm] = useState(3)
@@ -100,12 +105,10 @@ export default function ZoneEditor({
     if (f === 'radius') onDraftRadius(radiusM); else onDraftRadius(null)
   }
 
-  // Distancia representativa (km) de la zona, según método, para sugerir precio.
-  // CP y "a mano" no tienen distancia clara → no se puede sugerir por distancia.
   function zoneDistanceKm(): number | null {
     if (family === 'radius') return radiusM / 1000
     if (family === 'road' && roadBy === 'meters') return routeKm
-    if (family === 'road' && roadBy === 'minutes') return (minutes / 60) * 18 // ~18 km/h urbano
+    if (family === 'road' && roadBy === 'minutes') return (minutes / 60) * 18
     return null
   }
   const canSuggest = zoneDistanceKm() != null
@@ -115,12 +118,9 @@ export default function ZoneEditor({
     if (km == null) return
     const min = minOrder.trim() ? parseFloat(minOrder.replace(',', '.')) : 0
     const byDistance = SUGGEST_BASE + SUGGEST_PER_KM * km
-    // Suelo: nunca por debajo del mínimo de envío que el hostelero quiera fijar.
-    // (Aquí el "mínimo" suelo = SUGGEST_BASE; min_order es el mínimo de PEDIDO, distinto.)
     const suggested = Math.max(SUGGEST_BASE, byDistance)
-    setFee(fmtNum(Math.round(suggested * 20) / 20)) // redondeo a 0,05 €
+    setFee(fmtNum(Math.round(suggested * 20) / 20))
     setFeeSuggested(true)
-    // min_order no se toca; es decisión aparte del hostelero.
     void min
   }
 
@@ -204,39 +204,36 @@ export default function ZoneEditor({
     else tips.push({ icon: '💸', tone: 'warn', text: `El envío es el ${pct}% de tu ticket medio (${ticketMedio.toFixed(2)} €): se come buena parte del margen.` })
   }
 
-  const tipColor = (t: string) => t === 'warn' ? 'var(--color-warning, #854F0B)' : t === 'good' ? 'var(--color-success, #3F5C2F)' : 'var(--color-text-secondary)'
-  const tipBg = (t: string) => t === 'warn' ? 'var(--color-warning-bg, #FAEEDA)' : t === 'good' ? 'var(--color-success-bg, #E2E8DA)' : 'var(--color-accent-bg, #EDECE6)'
+  const tipCls = (t: 'info' | 'warn' | 'good') =>
+    t === 'warn' ? 'bg-warning-bg text-warning'
+    : t === 'good' ? 'bg-success-bg text-success'
+    : 'bg-accent-bg text-text-secondary'
+
+  const selectCls = (on: boolean) =>
+    on ? 'border-2 border-accent bg-accent-bg' : 'border border-default bg-transparent hover:bg-page'
 
   return (
-    <div style={{
-      border: '1px solid var(--color-border-default)', borderRadius: 16,
-      padding: 20, background: 'var(--color-bg-card, #FFFFFF)',
-      boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-        <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600 }}>{editing ? `Editar ${zone!.name}` : 'Nueva zona de reparto'}</h3>
-        <button onClick={() => finish(onCancel)} disabled={saving} title="Cerrar" style={{
-          border: 'none', background: 'transparent', cursor: 'pointer',
-          color: 'var(--color-text-secondary)', fontSize: 22, lineHeight: 1,
-        }}>×</button>
+    <div className="rounded-2xl border border-default bg-card p-5 shadow-sm">
+      <div className="flex items-center justify-between mb-5">
+        <h3 className="font-display text-[17px] font-semibold text-text-primary">
+          {editing ? `Editar ${zone!.name}` : 'Nueva zona de reparto'}
+        </h3>
+        <button onClick={() => finish(onCancel)} disabled={saving} title="Cerrar"
+          className="text-text-secondary hover:text-text-primary text-2xl leading-none">×</button>
       </div>
 
       {!editing && (
         <>
-          <div style={qLabel}>¿Hasta dónde repartes?</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 18 }}>
+          <span className={Q_LABEL}>¿Hasta dónde repartes?</span>
+          <div className="grid grid-cols-2 gap-2 mb-5">
             {FAMILIES.map(f => {
               const on = family === f.v
               return (
-                <button key={f.v} onClick={() => pickFamily(f.v)} style={{
-                  textAlign: 'left', padding: '12px 14px', borderRadius: 12, cursor: 'pointer',
-                  border: on ? '2px solid var(--color-terracota, #D67442)' : '1px solid var(--color-border-default)',
-                  background: on ? 'var(--color-warning-bg, #FAEEDA)' : 'transparent',
-                  transition: 'all .12s',
-                }}>
-                  <div style={{ fontSize: 18, marginBottom: 4 }}>{f.icon}</div>
-                  <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 2 }}>{f.title}</div>
-                  <div style={{ fontSize: 11.5, color: 'var(--color-text-secondary)', lineHeight: 1.3 }}>{f.hint}</div>
+                <button key={f.v} onClick={() => pickFamily(f.v)}
+                  className={`text-left p-3.5 rounded-xl transition-colors ${selectCls(on)}`}>
+                  <div className="text-lg mb-1">{f.icon}</div>
+                  <div className="text-sm font-semibold text-text-primary mb-0.5">{f.title}</div>
+                  <div className="text-[11.5px] text-text-secondary leading-tight">{f.hint}</div>
                 </button>
               )
             })}
@@ -244,87 +241,87 @@ export default function ZoneEditor({
         </>
       )}
 
-      <div style={qLabel}>¿Cómo se llama esta zona?</div>
-      <input style={{ ...bigInput, marginBottom: 18 }} value={name} onChange={e => setName(e.target.value)} placeholder="Ej. Centro, Barrio norte…" />
+      <span className={Q_LABEL}>¿Cómo se llama esta zona?</span>
+      <input className={`${INPUT} mb-5`} value={name} onChange={e => setName(e.target.value)} placeholder="Ej. Centro, Barrio norte…" />
 
       {family === 'radius' && (
-        <div style={{ marginBottom: 18 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-            <span style={qLabel}>Tamaño del radio</span>
-            <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-terracota, #D67442)' }}>{(radiusM / 1000).toFixed(1)} km</span>
+        <div className="mb-5">
+          <div className="flex justify-between mb-1.5">
+            <span className={Q_LABEL}>Tamaño del radio</span>
+            <span className="text-[15px] font-semibold text-text-primary">{(radiusM / 1000).toFixed(1)} km</span>
           </div>
-          <input type="range" min={500} max={6000} step={100} value={radiusM}
-            onChange={e => { refreshRadiusPreview(parseInt(e.target.value, 10)); setFeeSuggested(false) }} style={{ width: '100%' }} />
+          <input type="range" min={500} max={6000} step={100} value={radiusM} className={RANGE}
+            onChange={e => { refreshRadiusPreview(parseInt(e.target.value, 10)); setFeeSuggested(false) }} />
         </div>
       )}
 
       {family === 'road' && (
         <>
-          <div style={qLabel}>¿Cómo repartes?</div>
-          <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
+          <span className={Q_LABEL}>¿Cómo repartes?</span>
+          <div className="flex gap-1.5 mb-3.5">
             {PROFILES.map(p => {
               const on = profile === p.v
               return (
-                <button key={p.v} onClick={() => { setProfile(p.v); clearComputed() }} style={{
-                  flex: 1, padding: '9px 2px', borderRadius: 10, fontSize: 12.5, cursor: 'pointer', fontWeight: on ? 600 : 400,
-                  border: on ? '2px solid var(--color-accent, #1E3A5F)' : '1px solid var(--color-border-default)',
-                  background: on ? 'var(--color-accent-bg, #EDECE6)' : 'transparent',
-                }}>{p.label}</button>
+                <button key={p.v} onClick={() => { setProfile(p.v); clearComputed() }}
+                  className={`flex-1 px-0.5 py-2.5 rounded-lg text-[12.5px] ${on ? 'font-semibold' : ''} ${selectCls(on)}`}>
+                  {p.label}
+                </button>
               )
             })}
           </div>
 
-          <div style={qLabel}>¿Por distancia o por tiempo?</div>
-          <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
-            <button onClick={() => { setRoadBy('minutes'); clearComputed() }} style={toggle(roadBy === 'minutes')}>Por tiempo</button>
-            <button onClick={() => { setRoadBy('meters'); clearComputed() }} style={toggle(roadBy === 'meters')}>Por distancia</button>
+          <span className={Q_LABEL}>¿Por distancia o por tiempo?</span>
+          <div className="flex gap-1.5 mb-3.5">
+            <button onClick={() => { setRoadBy('minutes'); clearComputed() }}
+              className={`flex-1 py-2.5 rounded-lg text-[13px] ${roadBy === 'minutes' ? 'font-semibold' : ''} ${selectCls(roadBy === 'minutes')}`}>Por tiempo</button>
+            <button onClick={() => { setRoadBy('meters'); clearComputed() }}
+              className={`flex-1 py-2.5 rounded-lg text-[13px] ${roadBy === 'meters' ? 'font-semibold' : ''} ${selectCls(roadBy === 'meters')}`}>Por distancia</button>
           </div>
 
           {roadBy === 'minutes' ? (
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                <span style={qLabel}>Tiempo {profileWord}</span>
-                <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-terracota, #D67442)' }}>{minutes} min</span>
+            <div className="mb-3">
+              <div className="flex justify-between mb-1.5">
+                <span className={Q_LABEL}>Tiempo {profileWord}</span>
+                <span className="text-[15px] font-semibold text-text-primary">{minutes} min</span>
               </div>
-              <input type="range" min={5} max={45} step={5} value={minutes}
-                onChange={e => { setMinutes(parseInt(e.target.value, 10)); clearComputed(); setFeeSuggested(false) }} style={{ width: '100%' }} />
+              <input type="range" min={5} max={45} step={5} value={minutes} className={RANGE}
+                onChange={e => { setMinutes(parseInt(e.target.value, 10)); clearComputed(); setFeeSuggested(false) }} />
             </div>
           ) : (
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                <span style={qLabel}>Distancia de ruta</span>
-                <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-terracota, #D67442)' }}>{routeKm} km</span>
+            <div className="mb-3">
+              <div className="flex justify-between mb-1.5">
+                <span className={Q_LABEL}>Distancia de ruta</span>
+                <span className="text-[15px] font-semibold text-text-primary">{routeKm} km</span>
               </div>
-              <input type="range" min={1} max={15} step={1} value={routeKm}
-                onChange={e => { setRouteKm(parseInt(e.target.value, 10)); clearComputed(); setFeeSuggested(false) }} style={{ width: '100%' }} />
+              <input type="range" min={1} max={15} step={1} value={routeKm} className={RANGE}
+                onChange={e => { setRouteKm(parseInt(e.target.value, 10)); clearComputed(); setFeeSuggested(false) }} />
             </div>
           )}
-          <button onClick={handleCalc} disabled={calc} style={calcBtn}>{calc ? 'Calculando…' : '🗺️ Ver alcance en el mapa'}</button>
+          <button onClick={handleCalc} disabled={calc}
+            className="w-full py-2.5 rounded-xl mb-1 text-sm font-semibold border-2 border-accent text-text-primary bg-transparent hover:bg-page disabled:opacity-50">
+            {calc ? 'Calculando…' : '🗺️ Ver alcance en el mapa'}
+          </button>
         </>
       )}
 
       {family === 'postal' && (
-        <div style={{ marginBottom: 12 }}>
-          <div style={qLabel}>¿A qué códigos postales repartes?</div>
+        <div className="mb-3">
+          <span className={Q_LABEL}>¿A qué códigos postales repartes?</span>
           <textarea value={postalText} onChange={e => setPostalText(e.target.value)}
             placeholder="28027, 28022, 28002" rows={2}
-            style={{ ...bigInput, resize: 'vertical', fontFamily: 'inherit' }} />
+            className={`${INPUT} resize-y font-sans`} />
           {postalCodes.length > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+            <div className="flex flex-wrap gap-1.5 mt-2">
               {postalCodes.map(cp => {
                 const bad = !isValidEsCp(cp)
                 return (
-                  <span key={cp} style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 6,
-                    fontSize: 13, padding: '4px 10px', borderRadius: 20,
-                    background: bad ? 'var(--color-warning-bg, #FAEEDA)' : 'var(--color-accent-bg, #EDECE6)',
-                    color: bad ? 'var(--color-warning, #854F0B)' : 'var(--color-text-primary)',
-                    border: bad ? '1px solid var(--color-warning, #854F0B)' : '1px solid var(--color-border-default)',
-                  }}>
+                  <span key={cp}
+                    className={`inline-flex items-center gap-1.5 text-[13px] px-2.5 py-1 rounded-full border ${
+                      bad ? 'bg-warning-bg text-warning border-warning/40' : 'bg-accent-bg text-text-primary border-default'
+                    }`}>
                     {cp}
-                    <button onClick={() => setPostalText(postalCodes.filter(c => c !== cp).join(', '))} title="Quitar" style={{
-                      border: 'none', background: 'transparent', cursor: 'pointer', color: 'inherit', fontSize: 15, lineHeight: 1, padding: 0,
-                    }}>×</button>
+                    <button onClick={() => setPostalText(postalCodes.filter(c => c !== cp).join(', '))} title="Quitar"
+                      className="text-[15px] leading-none">×</button>
                   </span>
                 )
               })}
@@ -334,106 +331,70 @@ export default function ZoneEditor({
       )}
 
       {family === 'draw' && (
-        <div style={{
-          fontSize: 13, padding: '12px 14px', borderRadius: 12, marginBottom: 12,
-          background: 'var(--color-accent-bg, #EDECE6)', color: 'var(--color-text-secondary)', lineHeight: 1.4,
-        }}>
+        <div className="text-[13px] px-3.5 py-3 rounded-xl mb-3 bg-accent-bg text-text-secondary leading-relaxed">
           Dibuja tu zona en el mapa: haz clic para marcar cada esquina y doble clic
           para cerrarla. Luego puedes arrastrar los puntos para ajustarla.
         </div>
       )}
 
-      {/* Precio, en lenguaje humano + botón sugerir */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, margin: '18px 0 6px', minHeight: 30 }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)', lineHeight: 1.2 }}>Precio de envío</span>
+      {/* Precio + sugerir */}
+      <div className="flex items-center justify-between gap-2 mt-5 mb-1.5 min-h-[30px]">
+        <span className="text-[13px] font-semibold text-text-primary">Precio de envío</span>
         {canSuggest && (
-          <button onClick={suggestPrice} style={{
-            display: 'inline-flex', alignItems: 'center', gap: 5, lineHeight: 1, flexShrink: 0,
-            fontSize: 12.5, fontWeight: 600, padding: '5px 10px', borderRadius: 20, cursor: 'pointer',
-            border: '1px solid var(--color-terracota, #D67442)', background: 'transparent',
-            color: 'var(--color-terracota, #D67442)',
-          }}>✨ Sugerir precio</button>
+          <button onClick={suggestPrice}
+            className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold px-2.5 py-1.5 rounded-full border border-accent text-text-primary bg-transparent hover:bg-page shrink-0">
+            ✨ Sugerir precio
+          </button>
         )}
       </div>
-      <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
-        <div style={{ flex: 1.2 }}>
-          <div style={{ position: 'relative' }}>
-            <input style={{
-              ...bigInput, paddingRight: 26,
-              borderColor: feeSuggested ? 'var(--color-success, #3F5C2F)' : 'var(--color-border-default)',
-            }} value={fee} onChange={e => { setFee(e.target.value); setFeeSuggested(false) }} inputMode="decimal" />
-            <span style={euroSuffix}>€</span>
+      <div className="flex gap-2.5 mb-3.5">
+        <div className="flex-[1.2]">
+          <div className="relative">
+            <input
+              className={`${INPUT} pr-7 ${feeSuggested ? 'border-success' : ''}`}
+              value={fee} onChange={e => { setFee(e.target.value); setFeeSuggested(false) }} inputMode="decimal" />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-text-secondary pointer-events-none">€</span>
           </div>
         </div>
-        <div style={{ flex: 1 }}>
-          <span style={{ ...qLabel, fontWeight: 400, fontSize: 11.5 }}>Pedido mínimo</span>
-          <div style={{ position: 'relative' }}>
-            <input style={{ ...bigInput, paddingRight: 26 }} value={minOrder} onChange={e => setMinOrder(e.target.value)} inputMode="decimal" placeholder="—" />
-            <span style={euroSuffix}>€</span>
+        <div className="flex-1">
+          <span className="text-[11.5px] text-text-secondary block mb-1">Pedido mínimo</span>
+          <div className="relative">
+            <input className={`${INPUT} pr-7`} value={minOrder} onChange={e => setMinOrder(e.target.value)} inputMode="decimal" placeholder="—" />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-text-secondary pointer-events-none">€</span>
           </div>
         </div>
-        <div style={{ flex: 1 }}>
-          <span style={{ ...qLabel, fontWeight: 400, fontSize: 11.5 }}>Tiempo entrega</span>
-          <div style={{ position: 'relative' }}>
-            <input style={{ ...bigInput, paddingRight: 34 }} value={eta} onChange={e => setEta(e.target.value)} inputMode="numeric" placeholder="—" />
-            <span style={{ ...euroSuffix, right: 10 }}>min</span>
+        <div className="flex-1">
+          <span className="text-[11.5px] text-text-secondary block mb-1">Tiempo entrega</span>
+          <div className="relative">
+            <input className={`${INPUT} pr-9`} value={eta} onChange={e => setEta(e.target.value)} inputMode="numeric" placeholder="—" />
+            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-text-secondary pointer-events-none">min</span>
           </div>
         </div>
       </div>
 
       {tips.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 16 }}>
+        <div className="flex flex-col gap-1.5 mb-4">
           {tips.map((t, i) => (
-            <div key={i} style={{
-              display: 'flex', alignItems: 'flex-start', gap: 8,
-              fontSize: 13, padding: '9px 12px', borderRadius: 10,
-              background: tipBg(t.tone), color: tipColor(t.tone), lineHeight: 1.35,
-            }}>
-              <span style={{ flexShrink: 0 }}>{t.icon}</span>
+            <div key={i} className={`flex items-start gap-2 text-[13px] px-3 py-2 rounded-lg leading-snug ${tipCls(t.tone)}`}>
+              <span className="shrink-0">{t.icon}</span>
               <span>{t.text}</span>
             </div>
           ))}
         </div>
       )}
 
-      {err && <p style={{ color: 'var(--color-danger)', fontSize: 13.5, marginTop: 0 }}>{err}</p>}
+      {err && <p className="text-danger text-[13.5px] mt-0 mb-3">{err}</p>}
 
-      <div style={{ display: 'flex', gap: 10 }}>
-        <button onClick={handleSave} disabled={saving} style={{
-          flex: 1, padding: '12px 0', borderRadius: 12, border: 'none', fontSize: 15, fontWeight: 600,
-          background: 'var(--color-terracota, #D67442)', color: '#fff', cursor: 'pointer', opacity: saving ? 0.6 : 1,
-        }}>{saving ? 'Guardando…' : 'Guardar zona'}</button>
-        <button onClick={() => finish(onCancel)} disabled={saving} style={{
-          padding: '12px 20px', borderRadius: 12, border: '1px solid var(--color-border-default)',
-          background: 'transparent', cursor: 'pointer', fontSize: 15,
-        }}>Cancelar</button>
+      <div className="flex gap-2.5">
+        <button onClick={handleSave} disabled={saving}
+          className="flex-1 py-3 rounded-xl text-[15px] font-semibold bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-60">
+          {saving ? 'Guardando…' : 'Guardar zona'}
+        </button>
+        <button onClick={() => finish(onCancel)} disabled={saving}
+          className="px-5 py-3 rounded-xl border border-default text-text-primary bg-transparent hover:bg-page text-[15px]">
+          Cancelar
+        </button>
       </div>
     </div>
   )
-}
-
-const qLabel: React.CSSProperties = {
-  fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)',
-  marginBottom: 8, display: 'block',
-}
-const bigInput: React.CSSProperties = {
-  width: '100%', padding: '10px 12px', borderRadius: 10, fontSize: 15,
-  border: '1px solid var(--color-border-default)', background: 'var(--color-bg-card, #FFFFFF)',
-  boxSizing: 'border-box',
-}
-const euroSuffix: React.CSSProperties = {
-  position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
-  fontSize: 14, color: 'var(--color-text-secondary)', pointerEvents: 'none',
-}
-function toggle(on: boolean): React.CSSProperties {
-  return {
-    flex: 1, padding: '9px 0', borderRadius: 10, fontSize: 13, cursor: 'pointer', fontWeight: on ? 600 : 400,
-    border: on ? '2px solid var(--color-accent, #1E3A5F)' : '1px solid var(--color-border-default)',
-    background: on ? 'var(--color-accent-bg, #EDECE6)' : 'transparent',
-  }
-}
-const calcBtn: React.CSSProperties = {
-  width: '100%', padding: '11px 0', borderRadius: 12, marginBottom: 4, fontSize: 14, fontWeight: 600,
-  border: '2px solid var(--color-accent, #1E3A5F)', background: 'transparent',
-  color: 'var(--color-accent, #1E3A5F)', cursor: 'pointer',
 }

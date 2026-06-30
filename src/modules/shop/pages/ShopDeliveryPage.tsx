@@ -1,12 +1,17 @@
 // src/modules/shop/pages/ShopDeliveryPage.tsx
 //
-// Pestaña "Entrega" de Folvy Shop. Capa 1 del motor de envío.
-// Gestor de zonas para HOSTELEROS: mapa + tarjetas + editor unificado (radio /
-// por carretera por distancia / por carretera por tiempo) con copiloto de ayudas.
-// Carga el ticket medio real del local para el aviso de margen.
-// Casos límite: modo consolidado (elegir local) y local sin coordenadas.
+// Pestaña "Entrega" de Folvy Shop. Capa 1 del motor de envío — chrome de gestión.
+// Rebrand 30/06/2026: reconstruido sobre TOKENS de Folvy (fuera inline-styles y
+// var(--color-*) terracota/navy). El COLOR POR ZONA (zoneColor) se conserva: es
+// dato funcional del mapa, no marca.
+//
+// Gestor de zonas: mapa + tarjetas + editor unificado (radio / por carretera por
+// distancia / por carretera por tiempo) con copiloto de ayudas. Carga el ticket
+// medio real del local para el aviso de margen. Casos límite: consolidado y
+// local sin coordenadas.
 
 import { useEffect, useState, useCallback } from 'react'
+import { Plus, MapPin } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
 import DeliveryMap, { zoneColor, type DraftCircle, type DraftPolygon } from '@/modules/shop/components/DeliveryMap'
@@ -65,7 +70,6 @@ export default function ShopDeliveryPage() {
     return () => { alive = false }
   }, [resolvedLocationId])
 
-  // Ticket medio real del local (para aviso de margen). Honesto: ventas con total>0.
   useEffect(() => {
     if (!resolvedLocationId || !supabase) { setTicketMedio(null); return }
     let alive = true
@@ -107,27 +111,24 @@ export default function ShopDeliveryPage() {
 
   if (isConsolidated) {
     return (
-      <div style={{ padding: 24 }}>
-        <h2 style={{ marginTop: 0 }}>Entrega</h2>
-        <p style={{ color: 'var(--color-text-secondary)' }}>
+      <div className="p-6 max-w-5xl mx-auto">
+        <h2 className="font-display text-xl font-semibold text-text-primary mb-1">Entrega</h2>
+        <p className="text-text-secondary text-sm">
           Las zonas de entrega se configuran por local. Elige un local concreto
           en el selector de arriba para definir sus zonas.
         </p>
       </div>
     )
   }
-  if (loading) return <div style={{ padding: 24 }}>Cargando local…</div>
-  if (err) return <div style={{ padding: 24, color: 'var(--color-danger)' }}>Error: {err}</div>
-  if (!loc) return <div style={{ padding: 24 }}>No se encontró el local.</div>
+  if (loading) return <div className="p-6 text-text-secondary">Cargando local…</div>
+  if (err) return <div className="p-6 text-danger">Error: {err}</div>
+  if (!loc) return <div className="p-6 text-text-secondary">No se encontró el local.</div>
 
   if (loc.lat == null || loc.lng == null) {
     return (
-      <div style={{ padding: 24 }}>
-        <h2 style={{ marginTop: 0 }}>Entrega · {loc.name}</h2>
-        <div style={{
-          background: 'var(--color-warning-bg, #FAEEDA)', borderRadius: 12,
-          padding: 16, color: 'var(--color-warning, #854F0B)',
-        }}>
+      <div className="p-6 max-w-5xl mx-auto">
+        <h2 className="font-display text-xl font-semibold text-text-primary mb-3">Entrega · {loc.name}</h2>
+        <div className="rounded-xl bg-warning-bg text-warning border border-warning/30 p-4 text-sm">
           Este local aún no tiene ubicación en el mapa. Hay que geocodificar su
           dirección antes de poder definir zonas de entrega.
         </div>
@@ -142,14 +143,14 @@ export default function ShopDeliveryPage() {
   const highlightId = mode === 'edit' ? editingZone?.id ?? null : null
 
   return (
-    <div style={{ padding: 24 }}>
-      <h2 style={{ margin: 0 }}>Entrega · {loc.name}</h2>
-      <p style={{ color: 'var(--color-text-secondary)', marginTop: 4 }}>
+    <div className="p-6 max-w-5xl mx-auto">
+      <h2 className="font-display text-xl font-semibold text-text-primary">Entrega · {loc.name}</h2>
+      <p className="text-text-secondary text-sm mt-1 mb-4">
         Define dónde repartes a domicilio y a qué precio.
       </p>
 
-      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-        <div style={{ flex: '1 1 360px', minWidth: 0 }}>
+      <div className="flex gap-4 flex-wrap items-start">
+        <div className="flex-1 min-w-[360px]">
           <DeliveryMap
             key={loc.id}
             lat={loc.lat} lng={loc.lng} locationName={loc.name}
@@ -158,15 +159,14 @@ export default function ShopDeliveryPage() {
           />
         </div>
 
-        <div style={{ flex: '1 1 320px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div className="flex-1 min-w-[320px] flex flex-col gap-3">
           {!editorOpen && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 16, fontWeight: 500 }}>Tus zonas de reparto</span>
-              <button onClick={startNew} style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-                background: 'var(--color-terracota, #D67442)', color: '#fff', border: 'none',
-                padding: '9px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 14,
-              }}>+ Nueva zona</button>
+            <div className="flex items-center justify-between">
+              <span className="text-base font-medium text-text-primary">Tus zonas de reparto</span>
+              <button onClick={startNew}
+                className="inline-flex items-center gap-1.5 bg-accent text-text-on-accent px-3.5 py-2 rounded-lg text-sm font-semibold hover:opacity-90">
+                <Plus size={15} /> Nueva zona
+              </button>
             </div>
           )}
 
@@ -187,74 +187,49 @@ export default function ShopDeliveryPage() {
 
           {!editorOpen && (
             zones.length === 0 ? (
-              <div style={{
-                border: '1px dashed var(--color-border-default)', borderRadius: 12,
-                padding: 24, textAlign: 'center', color: 'var(--color-text-secondary)',
-              }}>
-                <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 4 }}>
-                  Aún no repartes a domicilio
-                </div>
-                <div style={{ fontSize: 13, marginBottom: 14 }}>
-                  Crea tu primera zona para empezar a recibir pedidos.
-                </div>
-                <button onClick={startNew} style={{
-                  background: 'var(--color-terracota, #D67442)', color: '#fff', border: 'none',
-                  padding: '9px 16px', borderRadius: 8, cursor: 'pointer', fontSize: 14,
-                }}>Crear mi primera zona</button>
+              <div className="border border-dashed border-default rounded-xl p-6 text-center text-text-secondary">
+                <MapPin size={28} className="mx-auto mb-3 text-text-secondary" />
+                <div className="text-[15px] font-medium text-text-primary mb-1">Aún no repartes a domicilio</div>
+                <div className="text-[13px] mb-3.5">Crea tu primera zona para empezar a recibir pedidos.</div>
+                <button onClick={startNew}
+                  className="bg-accent text-text-on-accent px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90">
+                  Crear mi primera zona
+                </button>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div className="flex flex-col gap-2.5">
                 {zones.map((z, i) => {
                   const canEdit = z.method === 'radius'
-                  const color = z.method === 'postal' ? 'var(--color-text-secondary)' : zoneColor(i)
+                  const spine = z.method === 'postal' ? '#9CA0A6' : zoneColor(i)
                   const time = timeLabel(z)
                   return (
-                    <div key={z.id} style={{
-                      display: 'flex', alignItems: 'stretch',
-                      border: '1px solid var(--color-border-default)', borderRadius: 12,
-                      overflow: 'hidden', background: 'var(--color-bg-card, #FFFFFF)',
-                    }}>
-                      <div style={{ width: 6, background: color, flexShrink: 0 }} />
-                      <div style={{ flex: 1, padding: '12px 14px', minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
-                          <span style={{ fontSize: 16, fontWeight: 500 }}>{z.name}</span>
+                    <div key={z.id} className="flex items-stretch border border-default rounded-xl overflow-hidden bg-card">
+                      <div className="w-1.5 shrink-0" style={{ background: spine }} />
+                      <div className="flex-1 px-3.5 py-3 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-base font-medium text-text-primary">{z.name}</span>
                           {i === 0 && (
-                            <span style={{
-                              fontSize: 11, background: 'var(--color-accent-bg, #EDECE6)',
-                              color: 'var(--color-text-secondary)', padding: '2px 8px', borderRadius: 20,
-                            }}>la más barata</span>
+                            <span className="text-[11px] bg-accent-bg text-text-secondary px-2 py-0.5 rounded-full">la más barata</span>
                           )}
                         </div>
-                        <div style={{
-                          display: 'flex', flexWrap: 'wrap', gap: '4px 14px',
-                          fontSize: 12.5, color: 'var(--color-text-secondary)',
-                        }}>
+                        <div className="flex flex-wrap gap-x-3.5 gap-y-1 text-[12.5px] text-text-secondary">
                           <span>{reachLabel(z)}</span>
                           {time && <span>· {time}</span>}
                           {z.min_order != null && <span>· pedido mínimo {z.min_order.toFixed(0)} €</span>}
                         </div>
                       </div>
-                      <div style={{
-                        display: 'flex', flexDirection: 'column', alignItems: 'flex-end',
-                        justifyContent: 'center', padding: '12px 14px',
-                      }}>
-                        <div style={{ fontSize: 20, fontWeight: 500, lineHeight: 1 }}>{z.delivery_fee.toFixed(2)} €</div>
-                        <div style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>de envío</div>
+                      <div className="flex flex-col items-end justify-center px-3.5 py-3">
+                        <div className="text-xl font-medium text-text-primary leading-none">{z.delivery_fee.toFixed(2)} €</div>
+                        <div className="text-[11px] text-text-secondary">de envío</div>
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', borderLeft: '1px solid var(--color-border-default)' }}>
+                      <div className="flex flex-col border-l border-default">
                         <button onClick={() => startEdit(z)} disabled={!canEdit}
                           title={canEdit ? 'Editar' : 'La edición de zonas por carretera llega pronto'}
-                          style={{
-                            flex: 1, border: 'none', background: 'transparent', padding: '0 16px',
-                            cursor: canEdit ? 'pointer' : 'not-allowed',
-                            color: canEdit ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
-                            fontSize: 13, borderBottom: '1px solid var(--color-border-default)',
-                            opacity: canEdit ? 1 : 0.5,
-                          }}>Editar</button>
-                        <button onClick={() => handleDelete(z.id, z.name)} title="Quitar" style={{
-                          flex: 1, border: 'none', background: 'transparent', padding: '0 16px',
-                          cursor: 'pointer', color: 'var(--color-text-secondary)', fontSize: 13,
-                        }}>Quitar</button>
+                          className={`flex-1 px-4 text-[13px] border-b border-default ${
+                            canEdit ? 'text-text-primary hover:bg-page cursor-pointer' : 'text-text-secondary opacity-50 cursor-not-allowed'
+                          }`}>Editar</button>
+                        <button onClick={() => handleDelete(z.id, z.name)} title="Quitar"
+                          className="flex-1 px-4 text-[13px] text-text-secondary hover:bg-page hover:text-text-primary">Quitar</button>
                       </div>
                     </div>
                   )
