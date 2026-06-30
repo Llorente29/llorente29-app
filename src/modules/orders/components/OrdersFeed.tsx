@@ -1,11 +1,13 @@
 // src/modules/orders/components/OrdersFeed.tsx
 //
-// El FEED de pedidos (lente "por pedido"). Tablero navy con:
+// El FEED de pedidos (lente "por pedido"). Rebrand 30/06/2026 — tema CLARO
+// (gestión moderna tipo Otter/Deliverect): panel blanco, filtros en píldoras de
+// tinta, contadores en Space Grotesk, kanban claro.
+//
 //   - Toggle CUADRÍCULA / POR ESTADO (kanban), filtros, contadores, polling + realtime.
 //   - Sonido al entrar cualquier pedido nuevo accionable.
 //   - RUTA COMPLETA: avanza el pedido vía advanceOrder (set_order_status). El empuje
-//     al canal lo dispara el trigger trg_sale_push_status (vía única, también desde
-//     cocina-kiosco).
+//     al canal lo dispara el trigger trg_sale_push_status.
 //   - ESCANDALLO: pulsar un plato con receta abre el Cook Mode (panel del KDS).
 //   - MARCAR LÍNEA: check por plato (kds_mark_line, compartido con el KDS).
 
@@ -40,10 +42,11 @@ const FILTER_LABEL: Record<FilterKey, string> = {
   activos: 'Activos', nuevos: 'Nuevos', curso: 'En curso', cerrados: 'Cerrados', incidencias: 'Incidencias',
 }
 
+// Semáforo de columnas kanban (marca nueva): verde fresco / ámbar en curso / tinta por aceptar.
 const KANBAN: { key: string; label: string; dot: string; match: (s: OrderStatus) => boolean }[] = [
-  { key: 'new',   label: 'Por aceptar',     dot: '#D67442', match: s => ['new','received'].includes(s) },
-  { key: 'prep',  label: 'En preparación',  dot: '#e0a33e', match: s => ['accepted','in_preparation'].includes(s) },
-  { key: 'ready', label: 'Listos / reparto', dot: '#3ba776', match: s => ['awaiting_collection','awaiting_shipment','in_delivery'].includes(s) },
+  { key: 'new',   label: 'Por aceptar',      dot: '#15171A', match: s => ['new','received'].includes(s) },
+  { key: 'prep',  label: 'En preparación',   dot: '#C2890F', match: s => ['accepted','in_preparation'].includes(s) },
+  { key: 'ready', label: 'Listos / reparto', dot: '#1F9D6B', match: s => ['awaiting_collection','awaiting_shipment','in_delivery'].includes(s) },
 ]
 
 function isNew(s: OrderStatus): boolean { return ['new','received'].includes(s) }
@@ -89,7 +92,6 @@ export default function OrdersFeed({ locationId, token }: OrdersFeedProps) {
     }
   }, [locationId, token])
 
-  // Avanza el estado interno; el empuje al canal lo dispara el trigger en BBDD.
   const advance = useCallback(async (saleId: string, next: OrderStatus) => {
     try {
       await advanceOrder(saleId, next, token)
@@ -158,61 +160,61 @@ export default function OrdersFeed({ locationId, token }: OrdersFeedProps) {
 
   return (
     <>
-      <div className="rounded-2xl overflow-hidden ring-1 ring-[#243a48] bg-[#0e1820] text-[#f2efe9] flex flex-col h-[calc(100vh-9rem)] min-h-[520px]">
+      <div className="rounded-2xl overflow-hidden border border-default bg-card text-text-primary flex flex-col h-[calc(100vh-9rem)] min-h-[520px]">
         {/* Cabecera */}
-        <div className="flex items-center gap-4 px-5 py-3.5 border-b border-[#243a48]">
+        <div className="flex items-center gap-4 px-5 py-3.5 border-b border-default">
           <div className="flex items-baseline gap-3 flex-1 min-w-0">
-            <h1 className="font-serif font-semibold text-[24px] leading-none" style={{ fontFamily: 'Fraunces, Georgia, serif' }}>Pedidos</h1>
+            <h1 className="font-display font-semibold text-[22px] leading-none tracking-tight">Pedidos</h1>
           </div>
-          <div className="hidden sm:flex gap-4 text-[#93a6b3]">
-            <span className="flex items-baseline gap-1.5"><b className="font-serif text-[19px] tabular-nums text-[#f2efe9]" style={{ fontFamily: 'Fraunces, serif' }}>{counts.nuevos}</b><span className="text-[11px] uppercase tracking-wide">nuevos</span></span>
-            <span className="flex items-baseline gap-1.5"><b className="font-serif text-[19px] tabular-nums text-[#f2efe9]" style={{ fontFamily: 'Fraunces, serif' }}>{counts.curso}</b><span className="text-[11px] uppercase tracking-wide">en curso</span></span>
+          <div className="hidden sm:flex gap-4 text-text-secondary">
+            <span className="flex items-baseline gap-1.5"><b className="font-display text-[19px] tabular-nums text-text-primary">{counts.nuevos}</b><span className="text-[11px] uppercase tracking-wide">nuevos</span></span>
+            <span className="flex items-baseline gap-1.5"><b className="font-display text-[19px] tabular-nums text-text-primary">{counts.curso}</b><span className="text-[11px] uppercase tracking-wide">en curso</span></span>
             {counts.incidencias > 0 && (
-              <span className="flex items-baseline gap-1.5"><b className="font-serif text-[19px] tabular-nums text-[#f4999c]" style={{ fontFamily: 'Fraunces, serif' }}>{counts.incidencias}</b><span className="text-[11px] uppercase tracking-wide">incidencias</span></span>
+              <span className="flex items-baseline gap-1.5"><b className="font-display text-[19px] tabular-nums text-danger">{counts.incidencias}</b><span className="text-[11px] uppercase tracking-wide">incidencias</span></span>
             )}
           </div>
           <button
             onClick={toggleSound}
             title={soundOn ? 'Sonido activado · tocar para silenciar' : 'Sonido silenciado · tocar para activar'}
-            className={`p-2 rounded-lg ring-1 ${soundOn ? 'bg-[#1d3242] text-[#f2efe9] ring-[#2c4a6e]' : 'bg-[#16242f] text-[#5f7280] ring-[#243a48]'}`}
+            className={`p-2 rounded-lg border ${soundOn ? 'bg-page text-text-primary border-default' : 'bg-card text-text-secondary border-default'}`}
           >
             {soundOn ? <Volume2 size={16} /> : <VolumeX size={16} />}
           </button>
-          <button onClick={() => void refresh()} title="Actualizar" className="p-2 rounded-lg bg-[#16242f] text-[#93a6b3] ring-1 ring-[#243a48] hover:text-[#f2efe9]">
+          <button onClick={() => void refresh()} title="Actualizar" className="p-2 rounded-lg bg-card text-text-secondary border border-default hover:text-text-primary hover:bg-page">
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
           </button>
-          <div className="flex bg-[#16242f] ring-1 ring-[#243a48] rounded-xl p-0.5 gap-0.5">
-            <button onClick={() => setView('grid')} className={`px-3 py-1.5 rounded-lg text-[13px] font-bold flex items-center gap-1.5 ${view === 'grid' ? 'bg-[#1d3242] text-[#f2efe9]' : 'text-[#93a6b3]'}`}><LayoutGrid size={15} /> Cuadrícula</button>
-            <button onClick={() => setView('kanban')} className={`px-3 py-1.5 rounded-lg text-[13px] font-bold flex items-center gap-1.5 ${view === 'kanban' ? 'bg-[#1d3242] text-[#f2efe9]' : 'text-[#93a6b3]'}`}><Columns3 size={15} /> Por estado</button>
+          <div className="flex bg-accent-bg rounded-xl p-0.5 gap-0.5">
+            <button onClick={() => setView('grid')} className={`px-3 py-1.5 rounded-lg text-[13px] font-bold flex items-center gap-1.5 ${view === 'grid' ? 'bg-card text-text-primary shadow-sm' : 'text-text-secondary'}`}><LayoutGrid size={15} /> Cuadrícula</button>
+            <button onClick={() => setView('kanban')} className={`px-3 py-1.5 rounded-lg text-[13px] font-bold flex items-center gap-1.5 ${view === 'kanban' ? 'bg-card text-text-primary shadow-sm' : 'text-text-secondary'}`}><Columns3 size={15} /> Por estado</button>
           </div>
         </div>
 
         {/* Filtros */}
-        <div className="flex gap-1.5 px-5 py-3 border-b border-[#243a48] overflow-x-auto">
+        <div className="flex gap-1.5 px-5 py-3 border-b border-default overflow-x-auto">
           {(Object.keys(FILTERS) as FilterKey[]).map(k => (
             <button
               key={k}
               onClick={() => setFilter(k)}
-              className={`px-3.5 py-2 rounded-full text-[13.5px] font-bold whitespace-nowrap flex items-center gap-2 ${filter === k ? 'bg-[#1E3A5F] text-[#f2efe9] ring-1 ring-[#2c4a6e]' : 'text-[#93a6b3] hover:text-[#f2efe9]'}`}
+              className={`px-3.5 py-2 rounded-full text-[13.5px] font-bold whitespace-nowrap flex items-center gap-2 ${filter === k ? 'bg-accent text-text-on-accent' : 'text-text-secondary hover:text-text-primary'}`}
             >
               {FILTER_LABEL[k]}
-              <span className={`text-[11px] font-extrabold px-1.5 py-px rounded-full tabular-nums ${filter === k ? 'bg-[#D67442] text-[#1a1208]' : 'bg-[#1d3242] text-[#93a6b3]'}`}>{filterCount(k)}</span>
+              <span className={`text-[11px] font-extrabold px-1.5 py-px rounded-full tabular-nums ${filter === k ? 'bg-white/20 text-text-on-accent' : 'bg-accent-bg text-text-secondary'}`}>{filterCount(k)}</span>
             </button>
           ))}
         </div>
 
         {/* Cuerpo */}
-        <div className="flex-1 overflow-y-auto p-5">
+        <div className="flex-1 overflow-y-auto p-5 bg-page">
           {error && (
-            <div className="text-[#f4999c] bg-[#e5484d]/[0.12] border border-[#e5484d]/30 rounded-xl px-4 py-3 text-sm mb-4">{error}</div>
+            <div className="text-danger bg-danger-bg border border-danger/30 rounded-xl px-4 py-3 text-sm mb-4">{error}</div>
           )}
 
           {loading && orders.length === 0 ? (
-            <div className="grid place-items-center h-[50vh] text-[#5f7280]">Cargando pedidos…</div>
+            <div className="grid place-items-center h-[50vh] text-text-secondary">Cargando pedidos…</div>
           ) : filtered.length === 0 ? (
-            <div className="grid place-items-center h-[50vh] text-center text-[#93a6b3]">
+            <div className="grid place-items-center h-[50vh] text-center text-text-secondary">
               <div>
-                <div className="font-serif text-[22px] text-[#f2efe9] mb-2" style={{ fontFamily: 'Fraunces, serif' }}>Sin pedidos ahora mismo</div>
+                <div className="font-display text-[22px] text-text-primary mb-2">Sin pedidos ahora mismo</div>
                 <div className="text-sm">Entran solos en cuanto lleguen. Los nuevos sin aceptar aparecen arriba.</div>
               </div>
             </div>
@@ -225,13 +227,13 @@ export default function OrdersFeed({ locationId, token }: OrdersFeedProps) {
               {KANBAN.map(col => {
                 const list = filtered.filter(o => col.match(o.order_status))
                 return (
-                  <div key={col.key} className="bg-black/[0.18] ring-1 ring-[#243a48] rounded-2xl flex flex-col min-h-0">
-                    <div className="px-4 py-3 border-b border-[#243a48] flex items-center gap-2.5 font-extrabold text-[14px]">
+                  <div key={col.key} className="bg-card border border-default rounded-2xl flex flex-col min-h-0">
+                    <div className="px-4 py-3 border-b border-default flex items-center gap-2.5 font-extrabold text-[14px] text-text-primary">
                       <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: col.dot }} />
                       {col.label}
-                      <span className="ml-auto bg-[#1d3242] text-[#93a6b3] text-[12px] font-extrabold px-2 py-px rounded-full tabular-nums">{list.length}</span>
+                      <span className="ml-auto bg-accent-bg text-text-secondary text-[12px] font-extrabold px-2 py-px rounded-full tabular-nums">{list.length}</span>
                     </div>
-                    <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3">
+                    <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3 bg-page">
                       {list.map(o => <OrderCard key={o.sale_id} order={o} allowGrow={false} onAdvance={advance} onOpenRecipe={openRecipe} onMarkLine={markLineHandler} />)}
                     </div>
                   </div>

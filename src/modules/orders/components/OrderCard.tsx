@@ -1,13 +1,16 @@
 // src/modules/orders/components/OrderCard.tsx
 //
-// Tarjeta de pedido del feed (lente "por pedido"). Principios del diseño aprobado:
+// Tarjeta de pedido del feed (lente "por pedido"). Rebrand 30/06/2026 — tema
+// CLARO moderno (patrón gestión Otter/Deliverect): tarjeta blanca, acción
+// primaria en tinta, semáforo de tiempo (verde fresco / ámbar aprieta / rojo
+// tarde) en spine + timer, AVATAR DE MARCA (logo real o inicial) y badge de
+// canal con logo de plataforma.
+//
+// Principios conservados:
 //   - A1: la COMANDA COMPLETA en la tarjeta.
-//   - Modificadores PROTAGONISTAS: rojo = quitar, ámbar = añadir, neutro = elección.
-//     Color por group_type del catálogo (verdad); texto como desempate; lo inferido
-//     se marca con un punto "sin confirmar". Bebidas/postres (cross_sell) al final.
+//   - Modificadores: rojo = quitar, ámbar = añadir, neutro = elección.
 //   - Alérgenos desde el escandallo. Nota del cliente = banda roja, nunca truncada.
 //   - B2: el pedido que NECESITA ACCIÓN es más grande + halo; crítico parpadea.
-//   - Tema navy Folvy.
 //
 // RUTA COMPLETA: el pie avanza el pedido. ESCANDALLO: pulsar el plato abre Cook Mode.
 // MARCAR LÍNEA: check por plato (kds_mark_line, compartido con el KDS).
@@ -42,9 +45,39 @@ const TERMINAL: OrderStatus[] = ['completed', 'rejected', 'cancelled', 'delivery
 function isNeedsAction(s: OrderStatus): boolean { return NEEDS_ACTION.includes(s) }
 function isTerminal(s: OrderStatus): boolean { return TERMINAL.includes(s) }
 
+// Semáforo de tiempo (marca nueva). 'late' rojo · 'warn' ámbar · resto verde.
+const INK = '#15171A'
+function timeColors(level: string): { spine: string; text: string } {
+  if (level === 'late') return { spine: '#E0492E', text: '#E0492E' }
+  if (level === 'warn') return { spine: '#C2890F', text: '#C2890F' }
+  return { spine: '#1F9D6B', text: '#1F9D6B' }
+}
+
 function fmt(n: number | null | undefined): string {
   if (n == null) return ''
   return n.toFixed(2).replace('.', ',') + ' €'
+}
+
+// ── Avatar de marca (logo real o inicial sobre su color) ────────────────────
+function BrandAvatar({ name, logoUrl, color }: { name: string | null; logoUrl: string | null; color: string | null }) {
+  const [failed, setFailed] = useState(false)
+  const initial = (name ?? '?').trim().charAt(0).toUpperCase() || '?'
+  const bg = color || INK
+  if (logoUrl && !failed) {
+    return (
+      <span className="w-[34px] h-[34px] rounded-[10px] overflow-hidden shrink-0 border border-default bg-card grid place-items-center">
+        <img src={logoUrl} alt="" className="w-full h-full object-cover" loading="lazy" onError={() => setFailed(true)} />
+      </span>
+    )
+  }
+  return (
+    <span
+      className="w-[34px] h-[34px] rounded-[10px] shrink-0 grid place-items-center text-white font-display font-bold text-[14px]"
+      style={{ backgroundColor: bg }}
+    >
+      {initial}
+    </span>
+  )
 }
 
 // ── Sub-render ──────────────────────────────────────────────────────────────
@@ -53,7 +86,7 @@ function ChildRow({ child }: { child: OrderFeedChild }) {
   // Componente de combo: neutro, sin signo (forma parte del plato).
   if (child.line_type === 'combo_item') {
     return (
-      <div className="flex items-center gap-2 text-[13px] font-semibold px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/10 text-[#dbe4ea]">
+      <div className="flex items-center gap-2 text-[13px] font-semibold px-2.5 py-1 rounded-lg bg-page border border-default text-text-secondary">
         <span className="opacity-60">·</span>{child.qty > 1 ? `${child.qty}× ` : ''}{child.name}
       </div>
     )
@@ -62,10 +95,10 @@ function ChildRow({ child }: { child: OrderFeedChild }) {
   const v = childVisual(child)
   const cls =
     v.tone === 'remove'
-      ? 'bg-[#e5484d]/[0.16] text-[#f7a9ab] border-[#e5484d]/[0.35]'
+      ? 'bg-danger-bg text-danger border-danger/30'
       : v.tone === 'add'
-        ? 'bg-[#e0a33e]/[0.16] text-[#f3cd86] border-[#e0a33e]/[0.32]'
-        : 'bg-white/[0.04] text-[#dbe4ea] border-white/10'
+        ? 'bg-warning-bg text-warning border-warning/30'
+        : 'bg-page text-text-secondary border-default'
   const prefix = v.tone === 'add' ? '+ ' : ''
 
   return (
@@ -93,39 +126,39 @@ function LineRow({
   const marked = line.marked
 
   return (
-    <div className={`py-2.5 border-b border-white/[0.07] last:border-b-0 ${marked ? 'opacity-55' : ''}`}>
+    <div className={`py-2.5 border-b border-default last:border-b-0 ${marked ? 'opacity-55' : ''}`}>
       <div className="flex items-baseline gap-2.5">
         {onMarkLine && (
           <button
             onClick={() => onMarkLine(line.line_id)}
             disabled={marking}
             title={marked ? 'Marcado · tocar para desmarcar' : 'Marcar como hecho'}
-            className={`shrink-0 self-center w-6 h-6 rounded-md grid place-items-center ring-1 disabled:opacity-50 ${
+            className={`shrink-0 self-center w-6 h-6 rounded-md grid place-items-center border disabled:opacity-50 ${
               marked
-                ? 'bg-[#3ba776] text-[#0e1d15] ring-[#3ba776]'
-                : 'bg-transparent text-[#5f7280] ring-[#3a5366] hover:ring-[#3ba776] hover:text-[#86e0b6]'
+                ? 'bg-success border-success text-white'
+                : 'bg-card text-text-secondary border-default hover:border-success hover:text-success'
             }`}
           >
             {marked && <Check size={15} strokeWidth={3} />}
           </button>
         )}
-        <span className="font-serif font-bold text-[17px] text-[#D67442] min-w-[28px]" style={{ fontFamily: 'Fraunces, Georgia, serif' }}>
+        <span className="font-display font-bold text-[16px] text-text-primary min-w-[28px]">
           {line.qty}×
         </span>
         {clickable ? (
           <button
             onClick={() => onOpenRecipe!(line)}
-            className={`text-[15px] font-bold flex-1 leading-tight text-left hover:text-[#86e0b6] flex items-center gap-1.5 min-w-0 ${marked ? 'line-through' : ''}`}
+            className={`text-[15px] font-bold flex-1 leading-tight text-left text-text-primary hover:text-success flex items-center gap-1.5 min-w-0 ${marked ? 'line-through' : ''}`}
             title="Ver ficha técnica"
           >
             <span className="truncate">{line.name}</span>
-            <ChefHat size={13} className="shrink-0 opacity-70" />
+            <ChefHat size={13} className="shrink-0 text-text-secondary" />
           </button>
         ) : (
-          <span className={`text-[15px] font-bold flex-1 leading-tight ${marked ? 'line-through' : ''}`}>{line.name}</span>
+          <span className={`text-[15px] font-bold flex-1 leading-tight text-text-primary ${marked ? 'line-through' : ''}`}>{line.name}</span>
         )}
         {line.line_total != null && (
-          <span className="text-[13px] text-[#93a6b3] tabular-nums">{fmt(line.line_total)}</span>
+          <span className="text-[13px] text-text-secondary tabular-nums font-mono">{fmt(line.line_total)}</span>
         )}
       </div>
 
@@ -137,15 +170,15 @@ function LineRow({
 
       {line.allergens.length > 0 && (
         <div className="mt-2 ml-[58px] flex items-center gap-1.5 flex-wrap">
-          <span className="text-[10.5px] font-extrabold uppercase tracking-wide text-[#5f7280]">Alérgenos</span>
+          <span className="text-[10.5px] font-extrabold uppercase tracking-wide text-text-secondary">Alérgenos</span>
           {line.allergens.map(a => (
-            <span key={a} className="text-[12px] font-bold px-2 py-0.5 rounded-md bg-[#e0a33e]/[0.14] text-[#f0c578] border border-[#e0a33e]/30">{a}</span>
+            <span key={a} className="text-[12px] font-bold px-2 py-0.5 rounded-md bg-warning-bg text-warning border border-warning/30">{a}</span>
           ))}
         </div>
       )}
 
       {line.customer_note && (
-        <div className="mt-2 ml-[58px] text-[13px] text-[#f7b9bb] bg-[#e5484d]/[0.12] border border-[#e5484d]/30 rounded-lg px-2.5 py-1.5">
+        <div className="mt-2 ml-[58px] text-[13px] text-danger bg-danger-bg border border-danger/30 rounded-lg px-2.5 py-1.5">
           ⚠ {line.customer_note}
         </div>
       )}
@@ -172,16 +205,14 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
   const terminal = isTerminal(order.order_status)
   const critical = needsAction && level === 'late'
 
-  const spine = level === 'late' ? '#e5484d' : level === 'warn' ? '#e0a33e' : '#3ba776'
+  const tc = timeColors(level)
 
   const grow = allowGrow && needsAction ? 'sm:col-span-2' : ''
   const halo = critical
-    ? 'ring-2 ring-[#e5484d] shadow-[0_14px_40px_rgba(229,72,77,0.3)] animate-pulse'
+    ? 'border-danger shadow-[0_10px_32px_rgba(224,73,46,0.18)] animate-pulse'
     : needsAction
-      ? 'ring-2 ring-[#D67442] shadow-[0_14px_40px_rgba(214,116,66,0.28)]'
-      : 'ring-1 ring-[#243a48]'
-
-  const timeColor = level === 'late' ? '#f4999c' : level === 'warn' ? '#f3cd86' : '#86e0b6'
+      ? 'border-[#DfE2E5] shadow-[0_8px_28px_rgba(21,23,26,0.08)]'
+      : 'border-default'
 
   const primary = primaryAction(order)
   const secondary = secondaryAction(order)
@@ -192,7 +223,6 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
 
   const run = async (next: OrderStatus) => {
     if (!onAdvance || busy) return
-    // #4 anti-faltantes: avisar (no bloquear) si se da por listo/cierra con líneas sin marcar
     if (READY_OR_CLOSE.includes(next) && unmarkedCount > 0) {
       const ok = window.confirm(
         `Quedan ${unmarkedCount} ${unmarkedCount === 1 ? 'línea sin marcar' : 'líneas sin marcar'}. ¿Continuar de todos modos?`
@@ -212,47 +242,48 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
   const secIsDanger = secondary != null && (secondary.next === 'cancelled' || secondary.next === 'rejected')
 
   return (
-    <div className={`relative rounded-2xl overflow-hidden bg-[#16242f] ${halo} ${grow} ${terminal ? 'opacity-70' : ''}`}>
-      <div className="absolute left-0 top-0 bottom-0 w-[5px]" style={{ backgroundColor: spine }} />
+    <div className={`relative rounded-2xl overflow-hidden bg-card border ${halo} ${grow} ${terminal ? 'opacity-70' : ''}`}>
+      <div className="absolute left-0 top-0 bottom-0 w-[4px]" style={{ backgroundColor: tc.spine }} />
 
       <div className="flex items-center gap-2.5 px-4 pt-3.5 pb-2.5 pl-5">
-        <span className="font-serif font-semibold text-[20px]" style={{ fontFamily: 'Fraunces, Georgia, serif' }}>
+        <BrandAvatar name={order.brand} logoUrl={order.brand_logo_url} color={order.brand_color} />
+        <span className="font-display font-bold text-[18px] text-text-primary tracking-tight">
           {ticketCode(order.external_tab_ref, order.external_ref)}
         </span>
         <ChannelBadge channel={order.channel ?? channelLabel(order.channel)} />
         <button
           onClick={() => setShowTickets(true)}
           title="Previsualizar tickets"
-          className="ml-auto shrink-0 w-7 h-7 rounded-lg grid place-items-center text-[#5f7280] ring-1 ring-[#243a48] hover:text-[#D67442] hover:ring-[#D67442]/50"
+          className="ml-auto shrink-0 w-7 h-7 rounded-lg grid place-items-center text-text-secondary border border-default hover:text-text-primary hover:bg-page"
         >
           <Printer size={15} />
         </button>
-        <span className="inline-flex items-center gap-1.5 font-extrabold text-[16px] tabular-nums" style={{ color: timeColor }}>
-          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: spine }} />
+        <span className="inline-flex items-center gap-1.5 font-extrabold text-[16px] tabular-nums font-mono" style={{ color: tc.text }}>
+          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: tc.spine }} />
           {order.minutos}′
         </span>
       </div>
 
-      <div className="px-4 pb-2.5 pl-5 text-[12.5px] font-bold text-[#93a6b3] flex items-center gap-2">
-        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: needsAction ? '#D67442' : terminal ? '#5f7280' : '#D67442' }} />
+      <div className="px-4 pb-2 pl-5 text-[12.5px] font-bold text-text-secondary flex items-center gap-2">
+        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: needsAction ? INK : terminal ? '#9CA0A6' : tc.spine }} />
         {STATUS_LABEL[order.order_status]}
       </div>
 
-      <div className="px-4 pb-2.5 pl-5 text-[12.5px] text-[#93a6b3]">
+      <div className="px-4 pb-2.5 pl-5 text-[12.5px] text-text-secondary">
         {order.brand || order.channel || '—'}
       </div>
 
       {order.customer_note && (
-        <div className="mx-4 mb-2 ml-5 bg-[#e5484d]/[0.13] border border-[#e5484d]/[0.34] border-l-4 border-l-[#e5484d] rounded-lg px-3 py-2.5 flex gap-2.5 items-start">
+        <div className="mx-4 mb-2 ml-5 bg-danger-bg border border-danger/30 border-l-4 border-l-danger rounded-lg px-3 py-2.5 flex gap-2.5 items-start">
           <span className="text-[16px] leading-none">⚠</span>
-          <div className="text-[13.5px] leading-snug text-[#f7b9bb]">
-            <b className="block text-[11px] uppercase tracking-wide text-[#f7a9ab] mb-0.5">Nota del cliente</b>
+          <div className="text-[13.5px] leading-snug text-danger">
+            <b className="block text-[11px] uppercase tracking-wide mb-0.5">Nota del cliente</b>
             {order.customer_note}
           </div>
         </div>
       )}
 
-      <div className="px-4 pl-5 border-t border-white/[0.07]">
+      <div className="px-4 pl-5 border-t border-default">
         {order.lineas.map(l => (
           <LineRow
             key={l.line_id}
@@ -264,16 +295,16 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
         ))}
       </div>
 
-      <div className="px-4 py-3 pl-5 border-t border-white/[0.07]">
+      <div className="px-4 py-3 pl-5 border-t border-default">
         <div className="flex items-center gap-3">
-          <span className="font-serif font-semibold text-[18px] tabular-nums" style={{ fontFamily: 'Fraunces, Georgia, serif' }}>
+          <span className="font-display font-semibold text-[18px] tabular-nums text-text-primary">
             {fmt(order.total)}
             {order.paid != null && order.paid > 0 && (
-              <span className="text-[11px] font-bold text-[#7fd6ab] bg-[#3ba776]/[0.14] border border-[#3ba776]/30 px-2 py-0.5 rounded-md ml-2 align-middle">Pagado</span>
+              <span className="text-[11px] font-bold text-success bg-success-bg border border-success/30 px-2 py-0.5 rounded-md ml-2 align-middle">Pagado</span>
             )}
           </span>
           {order.service_type && (
-            <span className="ml-auto text-[11.5px] text-[#5f7280] font-semibold uppercase tracking-wide">
+            <span className="ml-auto text-[11.5px] text-text-secondary font-semibold uppercase tracking-wide">
               {order.service_type.includes('collection') || order.service_type.includes('pickup') ? 'Recogida' : 'Entrega'}
             </span>
           )}
@@ -285,10 +316,10 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
               <button
                 onClick={() => run(secondary.next)}
                 disabled={busy}
-                className={`px-3 py-2 rounded-xl text-[13px] font-bold ring-1 disabled:opacity-50 ${
+                className={`px-3 py-2 rounded-xl text-[13px] font-bold border disabled:opacity-50 ${
                   secIsDanger
-                    ? 'text-[#f4999c] ring-[#e5484d]/40 hover:bg-[#e5484d]/[0.12]'
-                    : 'text-[#93a6b3] ring-[#243a48] hover:text-[#f2efe9]'
+                    ? 'text-danger border-danger/40 hover:bg-danger-bg'
+                    : 'text-text-secondary border-default hover:text-text-primary hover:bg-page'
                 }`}
               >
                 {secondary.label}
@@ -298,7 +329,7 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
               <button
                 onClick={() => run(primary.next)}
                 disabled={busy}
-                className="ml-auto flex-1 px-4 py-2.5 rounded-xl text-[14px] font-extrabold bg-[#D67442] text-[#1a1208] hover:bg-[#e08652] disabled:opacity-50"
+                className="ml-auto flex-1 px-4 py-2.5 rounded-xl text-[14px] font-extrabold bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50"
               >
                 {busy ? '…' : primary.label}
               </button>

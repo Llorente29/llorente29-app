@@ -211,7 +211,7 @@ export default function TabletStationRoute() {
         )}
 
         {tab === 'pedidos' && (
-          <div className="h-full overflow-y-auto p-4">
+          <div className="h-full overflow-y-auto p-4 bg-page">
             <OrdersFeed locationId={locInfo?.locationId ?? ''} token={token} />
           </div>
         )}

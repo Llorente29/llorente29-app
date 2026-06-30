@@ -70,9 +70,9 @@ export default function TicketPreviewModal({ order, fiscal, onClose }: Props) {
               onClick={() => setTab(k)}
               style={{
                 padding: '6px 14px', borderRadius: 8, fontSize: 13, cursor: 'pointer',
-                border: '1px solid ' + (tab === k ? '#D67442' : 'rgba(255,255,255,0.12)'),
-                background: tab === k ? '#D67442' : 'transparent',
-                color: tab === k ? '#241006' : '#cfdae3', fontWeight: 500,
+                border: '1px solid ' + (tab === k ? '#15171A' : 'rgba(255,255,255,0.12)'),
+                background: tab === k ? '#15171A' : 'transparent',
+                color: tab === k ? '#FFFFFF' : '#cfdae3', fontWeight: 500,
               }}
             >
               {label}
