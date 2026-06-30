@@ -1,13 +1,15 @@
 // src/modules/orders/components/ChannelBadge.tsx
 //
 // Chip de canal del feed de Pedidos (tema CLARO, rebrand 30/06/2026).
-// Muestra el LOGO OFICIAL de la plataforma (bucket público connector-logos en
-// Supabase) + el nombre. Si el logo no carga, cae a un punto del color de la
-// plataforma (sin logos inventados, sin depender del asset). Folvy Shop usa el
-// isotipo "El ciclo".
 //
-// Pill neutro (gris claro + tinta) para que el logo a todo color destaque, en
-// línea con los feeds de gestión modernos (Otter/Deliverect).
+// Plataformas con logo oficial (bucket público connector-logos): el logo se
+// muestra GRANDE dentro de una ficha blanca redondeada. Como los PNG oficiales
+// ya traen su propio marco/fondo blanco, la ficha blanca los integra sin
+// recortar (el blanco se funde) y respeta la imagen de marca de la plataforma.
+// No se duplica el nombre (Uber Eats ya lo lleva dentro de su logo).
+//
+// Folvy Shop y canales sin logo → pill con isotipo/punto de color + nombre.
+// Si el logo no carga → cae al pill de color con nombre.
 
 import { useState } from 'react'
 
@@ -20,12 +22,9 @@ interface ChannelBadgeProps {
 }
 
 interface ChannelStyle {
-  /** Fichero del logo en connector-logos, o null para usar el isotipo Folvy / punto de color. */
-  logo: string | null
-  /** Color de la plataforma (punto de fallback). */
-  color: string
+  logo: string | null   // fichero en connector-logos, o null
+  color: string         // color de la plataforma (punto de fallback)
   label: string
-  /** Folvy Shop: pinta el ciclo en vez de un logo externo. */
   isShop?: boolean
 }
 
@@ -43,21 +42,31 @@ export default function ChannelBadge({ channel, className = '' }: ChannelBadgePr
   const [imgFailed, setImgFailed] = useState(false)
   if (!channel) return null
   const st = styleFor(channel)
-  const showLogo = st.logo != null && !imgFailed
 
+  // Plataforma con logo: ficha blanca + logo grande (el marco blanco del PNG se funde).
+  if (st.logo && !imgFailed) {
+    return (
+      <span
+        title={st.label}
+        className={`inline-flex items-center bg-white border border-default rounded-lg p-0.5 shrink-0 ${className}`}
+      >
+        <img
+          src={`${LOGO_BASE}/${st.logo}`}
+          alt={st.label}
+          className="h-7 w-auto object-contain"
+          loading="lazy"
+          onError={() => setImgFailed(true)}
+        />
+      </span>
+    )
+  }
+
+  // Folvy Shop / canal sin logo / fallback: pill con isotipo o punto + nombre.
   return (
     <span
       className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[11.5px] font-bold tracking-wide whitespace-nowrap bg-page text-text-primary border border-default ${className}`}
     >
-      {showLogo ? (
-        <img
-          src={`${LOGO_BASE}/${st.logo}`}
-          alt=""
-          className="w-4 h-4 rounded-[3px] object-contain shrink-0"
-          loading="lazy"
-          onError={() => setImgFailed(true)}
-        />
-      ) : st.isShop ? (
+      {st.isShop ? (
         <svg width="15" height="15" viewBox="0 0 64 64" fill="none" aria-hidden="true" className="shrink-0">
           <path d="M42.5 13.8 A21 21 0 1 1 21.5 13.8" fill="none" stroke="#15171A" strokeWidth="7" strokeLinecap="round" />
           <circle cx="32" cy="11" r="7" fill="#1F9D6B" />
