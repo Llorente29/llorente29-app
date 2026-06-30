@@ -1,26 +1,15 @@
 // src/shell/ShellTopBar.tsx
 //
-// TopBar del Shell modular (Bloque G-4, Sprint 3). Patrón "Microsoft 365":
-// barra superior azul marino con wordmark Folvy + pestañas (Inicio + módulos
-// del registry) + selector de local + notificaciones + avatar.
+// TopBar del Shell modular. Rebrand 30/06/2026 — dirección "instrumento":
+// barra superior CLARA (blanco + hairline) con el logo "El ciclo" (anillo tinta
+// + punto de margen verde), wordmark Space Grotesk, y pestañas en tinta con
+// subrayado tinta en la activa. Sustituye a la barra azul marino anterior.
 //
-// Diseño aprobado por Julio (Sesión 14): marca azul marino #1E3A5F, wordmark
-// Fraunces, sección activa subrayada en terracota #D67442. Proporciones
-// validadas en maqueta: barra 68px, isotipo+wordmark inline (no .svg externo,
-// para clavar el tamaño), pestañas 15px con aire.
+// El logo se dibuja INLINE (anillo SVG + texto) para clavar proporciones.
 //
-// El logo se dibuja INLINE (isotipo SVG + texto) en vez de cargar un fichero
-// .svg, para controlar las proporciones al pixel y que coincidan con la maqueta.
-//
-// Sesión 16: el avatar es un menú desplegable (Administración / Cerrar sesión).
-//
-// R1.3a (responsive móvil): en < 768px el TopBar es MÍNIMO — sin pestañas de
-// módulos (van a la barra inferior) ni etiqueta de local; quedan wordmark +
-// engranaje + campana + avatar.
-//
-// R1.3b: en móvil, los módulos del overflow (ver shellMobileNav; hoy Team) que
-// NO caben en la barra inferior se listan en el menú del avatar, para que sigan
-// teniendo acceso por toque.
+// Lógica intacta respecto a la versión anterior: menú de avatar (Administración
+// / Ver como trabajador / Cerrar sesión), selector de cuenta (platform admin),
+// selector de local, notificaciones, comportamiento móvil (R1.3a/b).
 
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -40,10 +29,14 @@ import type { UserProfileRole, Account } from '@/types/multitenancy'
 // Clave especial del Home general (no es un módulo, es del Shell).
 export const HOME_KEY = '__home__'
 
-const INK = '#1E3A5F'
-const CREAM = '#F5F4F0'
-const TERRACOTA = '#D67442'
-const MUTED = '#9FB3C8'
+// Marca nueva: barra clara, acento de acción en tinta, punto de margen verde.
+const INK = '#15171A'        // texto/estructura, pestaña activa, avatar
+const MUTED = '#6B7077'      // texto inactivo (gris frío)
+const BAR_BG = '#FFFFFF'     // fondo de la barra (claro)
+const BORDER = '#E9EBED'     // hairline inferior
+const GREEN = '#1F9D6B'      // punto de margen del logo
+const PILL_BG = '#F1F2F4'    // fondo de pastilla (selector de cuenta)
+const DANGER = '#E0492E'     // cerrar sesión
 
 interface ShellTopBarProps {
   activeKey: string
@@ -157,16 +150,15 @@ export default function ShellTopBar({
   return (
     <header
       className="flex items-center shrink-0"
-      style={{ background: INK, height: 68, paddingLeft: isMobile ? 16 : 26, paddingRight: isMobile ? 16 : 26, gap: isMobile ? 0 : 34 }}
+      style={{ background: BAR_BG, height: 64, borderBottom: `1px solid ${BORDER}`, paddingLeft: isMobile ? 16 : 26, paddingRight: isMobile ? 16 : 26, gap: isMobile ? 0 : 34 }}
     >
-      {/* Wordmark inline (isotipo + texto), proporciones de maqueta */}
+      {/* Logo "El ciclo" inline (anillo tinta + punto de margen verde) + wordmark */}
       <div className="flex items-center shrink-0" style={{ gap: 11 }}>
-        <svg width="34" height="34" viewBox="0 0 100 100" aria-hidden="true">
-          <circle cx="50" cy="50" r="38" fill="none" stroke={CREAM} strokeWidth="6" />
-          <path d="M 50 12 A 38 38 0 0 1 76.9 76.9" fill="none" stroke={TERRACOTA} strokeWidth="10" strokeLinecap="round" />
-          <circle cx="50" cy="50" r="6" fill={TERRACOTA} />
+        <svg width="30" height="30" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+          <path d="M42.5 13.8 A21 21 0 1 1 21.5 13.8" fill="none" stroke={INK} strokeWidth="6" strokeLinecap="round" />
+          <circle cx="32" cy="11" r="6" fill={GREEN} />
         </svg>
-        <span style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 30, color: CREAM, fontWeight: 600, letterSpacing: '-0.5px', lineHeight: 1 }}>
+        <span style={{ fontFamily: '"Space Grotesk", Inter, sans-serif', fontSize: 26, color: INK, fontWeight: 600, letterSpacing: '-1px', lineHeight: 1 }}>
           folvy
         </span>
       </div>
@@ -198,15 +190,14 @@ export default function ShellTopBar({
 
       {/* Lado derecho: selector de cuenta (solo staff), local, notificaciones, avatar */}
       <div className="flex items-center shrink-0" style={{ marginLeft: 'auto', gap: 16 }}>
-        {/* Selector de cuenta — EXCLUSIVO platform admin. Marca qué cliente se
-            gestiona y permite saltar a otro (va al inicio del nuevo cliente). */}
+        {/* Selector de cuenta — EXCLUSIVO platform admin. */}
         {canSwitchAccount && !isMobile && (
           <div className="relative" ref={acctMenuRef}>
             <button
               type="button"
               onClick={() => setAcctMenuOpen(o => !o)}
               className="inline-flex items-center rounded-md"
-              style={{ background: 'rgba(255,255,255,0.12)', color: CREAM, fontSize: 14, gap: 6, padding: '6px 10px' }}
+              style={{ background: PILL_BG, color: INK, fontSize: 14, gap: 6, padding: '6px 10px' }}
             >
               <Building2 size={15} />
               <span style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -217,9 +208,9 @@ export default function ShellTopBar({
             {acctMenuOpen && (
               <div
                 className="absolute right-0 rounded-lg overflow-auto"
-                style={{ top: 40, minWidth: 240, maxHeight: 360, background: '#fff', border: '1px solid var(--color-border, #e5e5e5)', boxShadow: '0 6px 24px rgba(0,0,0,0.12)', zIndex: 50 }}
+                style={{ top: 40, minWidth: 240, maxHeight: 360, background: '#fff', border: `1px solid ${BORDER}`, boxShadow: '0 6px 24px rgba(21,23,26,0.10)', zIndex: 50 }}
               >
-                <div style={{ padding: '8px 12px', fontSize: 11, color: '#8a8a8a', borderBottom: '1px solid var(--color-border, #eee)' }}>
+                <div style={{ padding: '8px 12px', fontSize: 11, color: MUTED, borderBottom: `1px solid ${BORDER}` }}>
                   Cambiar de cliente
                 </div>
                 {accounts.map(a => {
@@ -230,11 +221,11 @@ export default function ShellTopBar({
                       type="button"
                       onClick={() => { setAcctMenuOpen(false); onSwitchAccount!(a.id) }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left"
-                      style={{ background: isActive ? 'var(--color-accent-bg, #eef2f7)' : 'transparent', color: isActive ? INK : '#1a1a1a', fontWeight: isActive ? 600 : 400 }}
+                      style={{ background: isActive ? PILL_BG : 'transparent', color: INK, fontWeight: isActive ? 600 : 400 }}
                     >
                       <Building2 size={14} style={{ opacity: 0.6, flexShrink: 0 }} />
                       <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</span>
-                      {isActive && <span style={{ fontSize: 10, color: INK }}>actual</span>}
+                      {isActive && <span style={{ fontSize: 10, color: MUTED }}>actual</span>}
                     </button>
                   )
                 })}
@@ -254,7 +245,7 @@ export default function ShellTopBar({
             aria-label="Configuración"
             onClick={onOpenSettings}
             className="inline-flex items-center"
-            style={{ color: settingsActive ? CREAM : MUTED }}
+            style={{ color: settingsActive ? INK : MUTED }}
           >
             <Settings size={19} />
           </button>
@@ -270,7 +261,7 @@ export default function ShellTopBar({
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen(o => !o)}
             className="rounded-full flex items-center justify-center text-white shrink-0"
-            style={{ width: 34, height: 34, background: TERRACOTA, fontSize: 13, fontWeight: 500, cursor: 'pointer' }}
+            style={{ width: 34, height: 34, background: INK, fontSize: 13, fontWeight: 500, cursor: 'pointer' }}
           >
             {userInitials}
           </button>
@@ -283,8 +274,8 @@ export default function ShellTopBar({
                 top: 44,
                 minWidth: 200,
                 background: '#fff',
-                border: '1px solid var(--color-border, #e5e5e5)',
-                boxShadow: '0 6px 24px rgba(0,0,0,0.12)',
+                border: `1px solid ${BORDER}`,
+                boxShadow: '0 6px 24px rgba(21,23,26,0.10)',
                 zIndex: 50,
               }}
             >
@@ -298,7 +289,7 @@ export default function ShellTopBar({
                     role="menuitem"
                     onClick={() => { setMenuOpen(false); onSelect(m.id) }}
                     className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left"
-                    style={{ color: 'var(--color-text-primary, #1a1a1a)' }}
+                    style={{ color: INK }}
                   >
                     <Icon size={16} style={{ color: INK }} />
                     {m.name}
@@ -306,7 +297,7 @@ export default function ShellTopBar({
                 )
               })}
               {overflowModules.length > 0 && (
-                <div style={{ borderTop: '1px solid var(--color-border, #eee)' }} />
+                <div style={{ borderTop: `1px solid ${BORDER}` }} />
               )}
 
               {isPlatformAdmin && (
@@ -315,7 +306,7 @@ export default function ShellTopBar({
                   role="menuitem"
                   onClick={goAdmin}
                   className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left"
-                  style={{ color: 'var(--color-text-primary, #1a1a1a)' }}
+                  style={{ color: INK }}
                 >
                   <Shield size={16} style={{ color: INK }} />
                   Administración
@@ -327,7 +318,7 @@ export default function ShellTopBar({
                   role="menuitem"
                   onClick={() => { setMenuOpen(false); onEnterWorkerMode() }}
                   className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left"
-                  style={{ color: 'var(--color-text-primary, #1a1a1a)', borderTop: isPlatformAdmin ? '1px solid var(--color-border, #eee)' : 'none' }}
+                  style={{ color: INK, borderTop: isPlatformAdmin ? `1px solid ${BORDER}` : 'none' }}
                 >
                   <User size={16} style={{ color: INK }} />
                   Ver como trabajador
@@ -338,7 +329,7 @@ export default function ShellTopBar({
                 role="menuitem"
                 onClick={handleSignOut}
                 className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left"
-                style={{ color: '#A12626', borderTop: (isPlatformAdmin || (currentEmployeeId && onEnterWorkerMode)) ? '1px solid var(--color-border, #eee)' : 'none' }}
+                style={{ color: DANGER, borderTop: (isPlatformAdmin || (currentEmployeeId && onEnterWorkerMode)) ? `1px solid ${BORDER}` : 'none' }}
               >
                 <LogOut size={16} />
                 Cerrar sesión
@@ -370,8 +361,9 @@ function TabButton({
         paddingLeft: 16,
         paddingRight: 16,
         fontSize: 15,
-        color: active ? CREAM : MUTED,
-        borderBottom: active ? `2px solid ${TERRACOTA}` : '2px solid transparent',
+        fontWeight: active ? 500 : 400,
+        color: active ? INK : MUTED,
+        borderBottom: active ? `2px solid ${INK}` : '2px solid transparent',
       }}
     >
       {icon}
