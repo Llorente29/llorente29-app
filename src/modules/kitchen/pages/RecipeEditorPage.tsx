@@ -2371,29 +2371,29 @@ export default function RecipeEditorPage({
               )}
             </div>
 
-            {/* Columna derecha: panel económico (azul Folvy) */}
-            <div className="p-4 bg-accent text-white">
-              <div className="text-[11px] font-medium tracking-wider text-white/60 uppercase mb-2.5">
+            {/* Columna derecha: raíl de economía (tarjeta clara, rebrand 30/06) */}
+            <div className="p-4 bg-page border-l border-default">
+              <div className="text-[11px] font-medium tracking-wider text-text-secondary uppercase mb-2.5">
                 Coste en vivo
               </div>
 
-              <div className="text-xs text-white/60">{packagingCost > 0 ? 'Plate cost' : 'Coste total'}</div>
+              <div className="text-xs text-text-secondary">{packagingCost > 0 ? 'Plate cost' : 'Coste total'}</div>
               <div
                 className={
-                  'font-mono font-medium text-white leading-tight text-[34px] origin-left transition-all duration-slow ' +
+                  'font-mono font-medium text-text-primary leading-tight text-[34px] origin-left transition-all duration-slow ' +
                   (flashHero ? 'scale-110' : 'scale-100')
                 }
               >
                 {formatEur(totalCost * prodFactor)}
               </div>
-              <div className="text-xs text-white/55 mt-0.5">
+              <div className="text-xs text-text-secondary mt-0.5">
                 por porción · {Math.round((recipe.yieldPortions ?? 1) * prodFactor)} ración
                 {Math.round((recipe.yieldPortions ?? 1) * prodFactor) !== 1 ? 'es' : ''}
               </div>
               {unconvertibleLineCount > 0 && (
                 <div
                   title="Una o más líneas usan una unidad sin conversión a la base del ingrediente: no entran en el coste ni descuentan stock. El total mostrado infra-cuenta hasta que las resuelvas."
-                  className="mt-2 inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-md bg-white/15 text-white"
+                  className="mt-2 inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-md bg-warning-bg text-warning"
                 >
                   <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
                   <span>
@@ -2405,33 +2405,33 @@ export default function RecipeEditorPage({
               {packagingCost > 0 && (
                 <div className="mt-2.5 flex flex-col gap-1">
                   <div className="flex items-center justify-between text-[12px]">
-                    <span className="text-white/55">Comida</span>
-                    <span className="font-mono text-white/85">{formatEur(foodCost * prodFactor)}</span>
+                    <span className="text-text-secondary">Comida</span>
+                    <span className="font-mono text-text-primary">{formatEur(foodCost * prodFactor)}</span>
                   </div>
                   <div className="flex items-center justify-between text-[12px]">
-                    <span className="text-white/55">Packaging</span>
-                    <span className="font-mono text-white/85">{formatEur(packagingCost * prodFactor)}</span>
+                    <span className="text-text-secondary">Packaging</span>
+                    <span className="font-mono text-text-primary">{formatEur(packagingCost * prodFactor)}</span>
                   </div>
                 </div>
               )}
 
-              <div className="h-px bg-white/15 my-3.5" />
+              <div className="border-t border-default my-3.5" />
 
               {econLoading ? (
-                <div className="text-[11px] text-white/55">Calculando food cost…</div>
+                <div className="text-[11px] text-text-secondary">Calculando food cost…</div>
               ) : economics.length === 0 ? (
                 <div>
-                  <div className="text-[11px] font-medium tracking-wide text-white/60 uppercase mb-2">
+                  <div className="text-[11px] font-medium tracking-wide text-text-secondary uppercase mb-2">
                     Food cost
                   </div>
-                  <div className="flex items-start gap-1.5 text-[11px] text-white/70 leading-relaxed mb-2.5">
-                    <AlertTriangle className="w-3.5 h-3.5 mt-px flex-shrink-0" />
+                  <div className="flex items-start gap-1.5 text-[11px] text-text-secondary leading-relaxed mb-2.5">
+                    <AlertTriangle className="w-3.5 h-3.5 mt-px flex-shrink-0 text-warning" />
                     <span>Este plato aún no está en ninguna carta. Añádelo para ver su food cost y margen.</span>
                   </div>
                   <button
                     type="button"
                     onClick={() => setShowAddToMenu(true)}
-                    className="w-full inline-flex items-center justify-center gap-1.5 text-xs px-3 py-2 rounded-md bg-white/10 hover:bg-white/15 text-white transition-colors"
+                    className="w-full inline-flex items-center justify-center gap-1.5 text-xs px-3 py-2 rounded-md bg-accent text-text-on-accent hover:opacity-90 transition-opacity"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     Añadir a carta
@@ -2456,25 +2456,25 @@ export default function RecipeEditorPage({
                         >
                           <ChevronDown
                             className={
-                              'w-3.5 h-3.5 text-white/50 transition-transform ' +
+                              'w-3.5 h-3.5 text-text-secondary transition-transform ' +
                               (collapsed ? '-rotate-90' : '')
                             }
                           />
-                          <span className="text-[11px] font-semibold tracking-wide uppercase text-white/90 truncate min-w-0">
+                          <span className="text-[11px] font-semibold tracking-wide uppercase text-text-primary truncate min-w-0">
                             {name}
                           </span>
                           <span
                             className={
                               'text-[9px] px-1.5 py-px rounded-full flex-shrink-0 ' +
                               (isLicensed
-                                ? 'bg-warning/30 text-warning-bg'
-                                : 'bg-success/30 text-success-bg')
+                                ? 'bg-warning-bg text-warning'
+                                : 'bg-success-bg text-success')
                             }
                           >
                             {isLicensed ? 'cedida' : 'propia'}
                           </span>
                           {collapsed && (
-                            <span className="text-[10px] text-white/40 ml-auto">
+                            <span className="text-[10px] text-text-secondary ml-auto">
                               {group.rows.length} canal{group.rows.length !== 1 ? 'es' : ''}
                             </span>
                           )}
@@ -2486,14 +2486,14 @@ export default function RecipeEditorPage({
                               const Icon = channelIcon(e.channelName)
                               const mainValue = isLicensed ? e.revenueSharePct : e.foodCostPct
                               const mainColor = isLicensed
-                                ? 'text-white'
-                                : statusColor(e.foodCostStatus).replace('text-text-secondary', 'text-white')
+                                ? 'text-text-primary'
+                                : statusColor(e.foodCostStatus)
                               return (
                                 <div key={`${e.menuItemId}-${e.channelId}`} className="flex items-center gap-2.5">
-                                  <span className="w-6 h-6 rounded-md bg-white/10 inline-flex items-center justify-center flex-shrink-0">
-                                    <Icon className="w-3.5 h-3.5 text-white/80" />
+                                  <span className="w-6 h-6 rounded-md bg-accent-bg inline-flex items-center justify-center flex-shrink-0">
+                                    <Icon className="w-3.5 h-3.5 text-text-secondary" />
                                   </span>
-                                  <span className="flex-1 min-w-0 text-[13px] text-white/85 truncate">
+                                  <span className="flex-1 min-w-0 text-[13px] text-text-primary truncate">
                                     {e.channelName}
                                   </span>
                                   <span className="text-right leading-tight flex-shrink-0">
@@ -2502,17 +2502,17 @@ export default function RecipeEditorPage({
                                         {isLicensed ? `${formatPct(mainValue)} cesión` : formatPct(mainValue)}
                                       </span>
                                     ) : (
-                                      <span className="block font-mono text-[13px] text-white/40">
+                                      <span className="block font-mono text-[13px] text-text-secondary">
                                         {e.costAvailable ? 's/objetivo' : 'sin coste'}
                                       </span>
                                     )}
                                     {e.netMargin !== null && e.netMargin !== undefined && (
-                                      <span className="block font-mono text-[10px] text-white/50">
+                                      <span className="block font-mono text-[10px] text-text-secondary">
                                         margen {formatEur(e.netMargin)}
                                       </span>
                                     )}
                                     {!isLicensed && e.plateCostPct !== null && e.plateCostPct !== undefined && packagingCost > 0 && (
-                                      <span className={'block font-mono text-[10px] ' + statusColor(e.plateCostStatus).replace('text-text-secondary', 'text-white/50')}>
+                                      <span className={'block font-mono text-[10px] ' + statusColor(e.plateCostStatus)}>
                                         plate {formatPct(e.plateCostPct)}
                                       </span>
                                     )}
