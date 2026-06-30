@@ -49,7 +49,7 @@ export default function ChannelBadge({ channel, className = '' }: ChannelBadgePr
     >
       {/* Marca de canal: logo en cajita blanca, isotipo Folvy o punto de color */}
       {showLogo ? (
-        <span className="w-6 h-6 rounded-md bg-white border border-default grid place-items-center overflow-hidden shrink-0">
+        <span className="w-7 h-7 rounded-md bg-white border border-default grid place-items-center overflow-hidden shrink-0">
           <img
             src={`${LOGO_BASE}/${st.logo}`}
             alt=""
@@ -59,7 +59,7 @@ export default function ChannelBadge({ channel, className = '' }: ChannelBadgePr
           />
         </span>
       ) : st.isShop ? (
-        <span className="w-6 h-6 rounded-md bg-white border border-default grid place-items-center shrink-0">
+        <span className="w-7 h-7 rounded-md bg-white border border-default grid place-items-center shrink-0">
           <svg width="15" height="15" viewBox="0 0 64 64" fill="none" aria-hidden="true">
             <path d="M42.5 13.8 A21 21 0 1 1 21.5 13.8" fill="none" stroke="#15171A" strokeWidth="7" strokeLinecap="round" />
             <circle cx="32" cy="11" r="7" fill="#1F9D6B" />
