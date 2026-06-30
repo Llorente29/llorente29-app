@@ -9,7 +9,7 @@
 // R1.3b — IA COMO HÉROE CENTRAL (patrón Instagram: 2 pestañas + acción central
 // elevada + 2 pestañas). El héroe abre Folvy AI (onOpenAI). Los módulos del
 // overflow (ver shellMobileNav) se alcanzan desde el menú del avatar del TopBar.
-// El héroe usa el ISOTIPO de Folvy (círculo + arco terracota + punto) con un
+// El héroe usa el ISOTIPO de Folvy "El ciclo" (anillo abierto + punto verde) con un
 // latido ligerísimo (punto que late + halo tenue), respetando reduced-motion.
 
 import { Home } from 'lucide-react'
@@ -23,9 +23,10 @@ import type { UserProfileRole } from '@/types/multitenancy'
 // Tipo de icono = el mismo que declara cada módulo (ModuleDefinition.icon).
 type IconType = ModuleDefinition['icon']
 
-// Azul apagado del TopBar (no hay var CSS para él aún) — hace juego con la barra
-// superior. INK y TERRACOTA viven como vars en index.css y se usan vía var().
-const MUTED = '#9FB3C8'
+// Gris neutro para pestañas inactivas sobre la barra de tinta. El verde de
+// marca (#1F9D6B) marca la pestaña activa. La barra usa var(--color-accent).
+const MUTED = '#9CA0A6'
+const GREEN = '#1F9D6B'
 
 interface ShellBottomNavProps {
   activeKey: string
@@ -128,8 +129,8 @@ function AIHero({ active, onClick }: { active: boolean; onClick: () => void }) {
           50%      { transform: scale(1.28); opacity: 0.6; }
         }
         @keyframes folvyHeroGlow {
-          0%, 100% { box-shadow: 0 4px 12px rgba(12,10,9,0.28), 0 0 0 0 rgba(214,116,66,0); }
-          50%      { box-shadow: 0 4px 12px rgba(12,10,9,0.28), 0 0 0 7px rgba(214,116,66,0.14); }
+          0%, 100% { box-shadow: 0 4px 12px rgba(12,10,9,0.28), 0 0 0 0 rgba(31,157,107,0); }
+          50%      { box-shadow: 0 4px 12px rgba(12,10,9,0.28), 0 0 0 7px rgba(31,157,107,0.16); }
         }
         .folvy-hero-btn { animation: folvyHeroGlow 2.6s ease-in-out infinite; }
         .folvy-hero-dot { transform-box: fill-box; transform-origin: center; animation: folvyHeroDot 1.8s ease-in-out infinite; }
@@ -146,17 +147,16 @@ function AIHero({ active, onClick }: { active: boolean; onClick: () => void }) {
         style={{
           width: 58, height: 58, borderRadius: 999,
           background: 'var(--color-accent)',
-          border: `3px solid ${active ? 'var(--color-terracota)' : 'var(--color-bg-page)'}`,
+          border: `3px solid ${active ? GREEN : 'var(--color-bg-page)'}`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           transform: 'translateY(-14px)',
           cursor: 'pointer',
           padding: 0,
         }}
       >
-        <svg width="32" height="32" viewBox="0 0 100 100" aria-hidden="true">
-          <circle cx="50" cy="50" r="38" fill="none" stroke="#F5F4F0" strokeWidth="6" />
-          <path d="M 50 12 A 38 38 0 0 1 76.9 76.9" fill="none" stroke="#D67442" strokeWidth="10" strokeLinecap="round" />
-          <circle className="folvy-hero-dot" cx="50" cy="50" r="6" fill="#D67442" />
+        <svg width="32" height="32" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+          <path d="M42.5 13.8 A21 21 0 1 1 21.5 13.8" fill="none" stroke="#FFFFFF" strokeWidth="6" strokeLinecap="round" />
+          <circle className="folvy-hero-dot" cx="32" cy="11" r="6" fill={GREEN} />
         </svg>
       </button>
     </div>
@@ -184,7 +184,7 @@ function BottomTab({
         height: 56,
         padding: '0 2px',
         background: 'transparent',
-        color: active ? 'var(--color-terracota)' : MUTED,
+        color: active ? GREEN : MUTED,
       }}
     >
       <Icon size={22} />
