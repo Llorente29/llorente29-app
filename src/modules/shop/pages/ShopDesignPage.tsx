@@ -1,14 +1,20 @@
 // src/modules/shop/pages/ShopDesignPage.tsx
 //
-// Asistente de marca (capa de diseño de la Folvy Shop).
+// Asistente de marca (capa de diseño de la Folvy Shop) — CHROME DE GESTIÓN.
+// Rebrand 30/06/2026: reconstruido sobre los TOKENS de Folvy (tinta/verde/
+// Space Grotesk), fuera estilos inline y fallbacks viejos (navy/#888). Fresco,
+// moderno y navegable, coherente con el resto de la app.
+//
 // - Al entrar, SIEMBRA temas por defecto (ensureThemesForAccount) → tienda
 //   presentable desde el minuto 0.
-// - Lista cada marca con su piel y deja tocar los 4 mandos núcleo
-//   (plantilla, acento, tipografía, modo) + publicar/despublicar.
+// - Lista cada marca con su piel y deja tocar los mandos núcleo (plantilla,
+//   acento, tipografía, modo, portada) + publicar/despublicar.
 // - La identidad (logo, color de marca) se LEE de brand, no se duplica.
-// El preview en vivo del storefront es el siguiente tramo; aquí va el panel
-// de configuración, que es lo que escribe en BD.
+// - El acento/fuente/modo que se eligen aquí son del STOREFRONT DEL CLIENTE
+//   (su escaparate); este panel es Folvy, pero lo que configura es del cliente.
+
 import { useEffect, useState, useCallback, useRef } from 'react'
+import { Store, Image as ImageIcon, Check } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import StorefrontPreview from '@/modules/shop/components/StorefrontPreview'
 import { uploadShopHero, deleteShopHero } from '@/modules/shop/services/shopHeroService'
@@ -38,7 +44,13 @@ const MODES: { v: ShopMode; label: string }[] = [
   { v: 'light', label: 'Claro' },
   { v: 'dark', label: 'Oscuro' },
 ]
-const PALETTE_PRESETS = ['#D67442', '#0e1820', '#2e7d4f', '#8e2f5a', '#e0a032', '#b5482e']
+
+// Paleta de ACENTO ofrecida al cliente para su escaparate (no es marca Folvy:
+// son opciones de color que el dueño elige para SU tienda).
+const PALETTE_PRESETS = ['#FF5436', '#E0492E', '#C2890F', '#1F9D6B', '#185FA5', '#8E2F5A']
+
+// Acento por defecto si una marca no tiene color: el coral del hub Folvy.
+const DEFAULT_ACCENT = '#FF5436'
 
 export default function ShopDesignPage() {
   const { activeAccountId: accountId } = useActiveAccount()
@@ -116,104 +128,140 @@ export default function ShopDesignPage() {
     finally { setSavingId(null) }
   }
 
-  if (loading) return <div style={{ padding: 24, color: 'var(--text-muted, #888)' }}>Cargando la tienda…</div>
+  if (loading) {
+    return <div className="p-6 text-text-secondary">Cargando la tienda…</div>
+  }
 
   return (
-    <div style={{ padding: 24, maxWidth: 920, margin: '0 auto' }}>
-      <header style={{ marginBottom: 8 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>Diseño de la tienda</h1>
-        <p style={{ color: 'var(--text-muted, #888)', fontSize: 14, marginTop: 4 }}>
+    <div className="max-w-5xl mx-auto p-6">
+      <header className="mb-6">
+        <h1 className="font-display text-2xl font-semibold text-text-primary flex items-center gap-2">
+          <Store size={22} className="text-text-secondary" />
+          Diseño de la tienda
+        </h1>
+        <p className="text-sm text-text-secondary mt-1.5 max-w-2xl">
           Cada marca tiene su escaparate. Elige plantilla, acento, tipografía y modo; el logo y los
           platos salen de tu carta. Publica cuando esté lista.
         </p>
       </header>
 
-      <input ref={heroInputRef} type="file" accept="image/*" onChange={onPickHero} style={{ display: 'none' }} />
+      <input ref={heroInputRef} type="file" accept="image/*" onChange={onPickHero} className="hidden" />
 
       {error && (
-        <div style={{ background: '#fcebeb', color: '#a32d2d', borderRadius: 8, padding: '10px 14px', fontSize: 14, margin: '12px 0' }}>
+        <div className="rounded-xl bg-danger-bg text-danger border border-danger/30 px-4 py-3 text-sm mb-4">
           {error}
         </div>
       )}
 
       {rows.length === 0 && (
-        <div style={{ color: 'var(--text-muted, #888)', padding: 24 }}>
+        <div className="rounded-2xl border border-default bg-card p-8 text-center text-text-secondary">
           No hay marcas activas en esta cuenta todavía.
         </div>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 12 }}>
+      <div className="flex flex-col gap-4">
         {rows.map(r => {
-          const accent = r.accent_color ?? r.brand?.color ?? '#D67442'
+          const accent = r.accent_color ?? r.brand?.color ?? DEFAULT_ACCENT
           const busy = savingId === r.id
+          const usingBrandColor = (r.accent_color ?? r.brand?.color) == null
           return (
-            <div key={r.id} style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-            <div style={{ flex: '1 1 420px', minWidth: 0, border: '0.5px solid rgba(0,0,0,.14)', borderRadius: 12, padding: 16, opacity: busy ? 0.7 : 1 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-                <div style={{ width: 40, height: 40, borderRadius: 10, background: accent, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flex: '0 0 auto' }}>
-                  {r.brand?.logo_url
-                    ? <img src={r.brand.logo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                    : <span style={{ color: '#fff', fontWeight: 600 }}>{(r.brand?.name ?? '?').charAt(0)}</span>}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 15 }}>{r.brand?.name ?? 'Marca'}</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted, #888)' }}>
-                    {r.is_published ? 'Publicada' : 'Borrador'}{r.brand?.slug ? ` · /${r.brand.slug}` : ''}
+            <div key={r.id} className="flex gap-5 items-start flex-wrap">
+              <div className={`flex-1 min-w-[420px] rounded-2xl border border-default bg-card p-5 transition-opacity ${busy ? 'opacity-60' : ''}`}>
+                {/* Cabecera de marca */}
+                <div className="flex items-center gap-3 mb-5">
+                  <span
+                    className="w-10 h-10 rounded-xl grid place-items-center overflow-hidden shrink-0 text-white font-display font-bold"
+                    style={{ backgroundColor: accent }}
+                  >
+                    {r.brand?.logo_url
+                      ? <img src={r.brand.logo_url} alt="" className="w-full h-full object-contain" />
+                      : (r.brand?.name ?? '?').charAt(0).toUpperCase()}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-[15px] text-text-primary truncate">{r.brand?.name ?? 'Marca'}</div>
+                    <div className="text-xs text-text-secondary">
+                      {r.is_published ? 'Publicada' : 'Borrador'}{r.brand?.slug ? ` · /${r.brand.slug}` : ''}
+                    </div>
                   </div>
+                  <button
+                    onClick={() => togglePublish(r)}
+                    disabled={busy}
+                    className={`rounded-lg px-3 py-2 text-[13px] font-bold border disabled:opacity-50 ${
+                      r.is_published
+                        ? 'bg-success-bg text-success border-success/30 hover:bg-success-bg/70'
+                        : 'border-default text-text-secondary hover:text-text-primary hover:bg-page'
+                    }`}
+                  >
+                    {r.is_published ? 'Despublicar' : 'Publicar'}
+                  </button>
                 </div>
-                <button
-                  onClick={() => togglePublish(r)}
-                  disabled={busy}
-                  style={{ border: '0.5px solid rgba(0,0,0,.2)', background: r.is_published ? '#e1f5ee' : 'transparent', color: r.is_published ? '#0f6e56' : 'inherit', borderRadius: 8, padding: '7px 12px', fontSize: 13, cursor: 'pointer' }}>
-                  {r.is_published ? 'Despublicar' : 'Publicar'}
-                </button>
+
+                <Field label="Plantilla">
+                  <Segmented options={TEMPLATES} value={r.template} onChange={v => patch(r.id, { template: v })} />
+                </Field>
+
+                <Field label="Acento">
+                  <div className="flex gap-2 items-center flex-wrap">
+                    {PALETTE_PRESETS.map(c => {
+                      const selected = (r.accent_color ?? r.brand?.color) === c
+                      return (
+                        <button
+                          key={c}
+                          aria-label={c}
+                          onClick={() => patch(r.id, { accent_color: c })}
+                          className={`w-7 h-7 rounded-full transition-transform hover:scale-110 ${selected ? 'ring-2 ring-[#15171A] ring-offset-2 ring-offset-white' : 'ring-1 ring-black/10'}`}
+                          style={{ backgroundColor: c }}
+                        />
+                      )
+                    })}
+                    <button
+                      onClick={() => patch(r.id, { accent_color: null })}
+                      className={`text-xs rounded-lg px-2.5 py-1.5 border ${usingBrandColor ? 'bg-accent text-text-on-accent border-transparent' : 'border-default text-text-secondary hover:text-text-primary'}`}
+                    >
+                      Color de marca
+                    </button>
+                  </div>
+                </Field>
+
+                <Field label="Tipografía">
+                  <Segmented options={FONTS} value={r.font} onChange={v => patch(r.id, { font: v })} />
+                </Field>
+
+                <Field label="Modo">
+                  <Segmented options={MODES} value={r.mode} onChange={v => patch(r.id, { mode: v })} />
+                </Field>
+
+                <Field label="Portada">
+                  <div className="flex gap-2 items-center flex-wrap">
+                    <button
+                      onClick={() => { setHeroForId(r.id); heroInputRef.current?.click() }}
+                      disabled={busy}
+                      className="inline-flex items-center gap-1.5 text-[13px] rounded-lg px-3 py-1.5 border border-default text-text-primary hover:bg-page disabled:opacity-50"
+                    >
+                      <ImageIcon size={14} /> {r.hero_url ? 'Cambiar foto' : 'Subir foto'}
+                    </button>
+                    {r.hero_url && (
+                      <button
+                        onClick={() => removeHero(r)}
+                        disabled={busy}
+                        className="text-xs rounded-lg px-2.5 py-1.5 border border-default text-text-secondary hover:text-text-primary disabled:opacity-50"
+                      >
+                        Quitar
+                      </button>
+                    )}
+                  </div>
+                </Field>
               </div>
 
-              <Field label="Plantilla">
-                <Segmented options={TEMPLATES} value={r.template} onChange={v => patch(r.id, { template: v })} />
-              </Field>
-              <Field label="Acento">
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                  {PALETTE_PRESETS.map(c => (
-                    <button key={c} aria-label={c} onClick={() => patch(r.id, { accent_color: c })}
-                      style={{ width: 28, height: 28, borderRadius: '50%', background: c, border: (r.accent_color ?? r.brand?.color) === c ? '2px solid var(--text, #111)' : '0.5px solid rgba(0,0,0,.2)', cursor: 'pointer', padding: 0 }} />
-                  ))}
-                  <button onClick={() => patch(r.id, { accent_color: null })}
-                    style={{ fontSize: 12, color: 'var(--text-muted, #888)', border: '0.5px solid rgba(0,0,0,.2)', borderRadius: 8, padding: '6px 10px', background: 'transparent', cursor: 'pointer' }}>
-                    Usar color de marca
-                  </button>
-                </div>
-              </Field>
-              <Field label="Tipografía">
-                <Segmented options={FONTS} value={r.font} onChange={v => patch(r.id, { font: v })} />
-              </Field>
-              <Field label="Modo">
-                <Segmented options={MODES} value={r.mode} onChange={v => patch(r.id, { mode: v })} />
-              </Field>
-              <Field label="Portada">
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <button onClick={() => { setHeroForId(r.id); heroInputRef.current?.click() }} disabled={busy}
-                    style={{ fontSize: 13, padding: '6px 12px', borderRadius: 8, cursor: 'pointer', border: '0.5px solid rgba(0,0,0,.2)', background: 'transparent', color: 'inherit' }}>
-                    {r.hero_url ? 'Cambiar foto' : 'Subir foto'}
-                  </button>
-                  {r.hero_url && (
-                    <button onClick={() => removeHero(r)} disabled={busy}
-                      style={{ fontSize: 12, color: 'var(--text-muted, #888)', border: '0.5px solid rgba(0,0,0,.2)', borderRadius: 8, padding: '6px 10px', background: 'transparent', cursor: 'pointer' }}>
-                      Quitar
-                    </button>
-                  )}
-                </div>
-              </Field>
-            </div>
-            {accountId && (
-              <StorefrontPreview
-                accountId={accountId}
-                brandId={r.brand_id as string}
-                brand={{ name: r.brand?.name ?? 'Marca', logo_url: r.brand?.logo_url ?? null }}
-                heroUrl={r.hero_url}
-                theme={{ template: r.template, accent, font: r.font, mode: r.mode }}
-              />
-            )}
+              {accountId && (
+                <StorefrontPreview
+                  accountId={accountId}
+                  brandId={r.brand_id as string}
+                  brand={{ name: r.brand?.name ?? 'Marca', logo_url: r.brand?.logo_url ?? null }}
+                  heroUrl={r.hero_url}
+                  theme={{ template: r.template, accent, font: r.font, mode: r.mode }}
+                />
+              )}
             </div>
           )
         })}
@@ -224,8 +272,8 @@ export default function ShopDesignPage() {
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '7px 0', flexWrap: 'wrap' }}>
-      <span style={{ fontSize: 13, color: 'var(--text-muted, #888)', width: 92, flex: '0 0 auto' }}>{label}</span>
+    <div className="flex items-center gap-3 py-2 flex-wrap">
+      <span className="text-[13px] text-text-secondary w-24 shrink-0">{label}</span>
       {children}
     </div>
   )
@@ -235,15 +283,24 @@ function Segmented<T extends string>({ options, value, onChange }: {
   options: { v: T; label: string }[]; value: T; onChange: (v: T) => void
 }) {
   return (
-    <div style={{ display: 'inline-flex', gap: 6, flexWrap: 'wrap' }}>
-      {options.map(o => (
-        <button key={o.v} onClick={() => onChange(o.v)}
-          style={{ fontSize: 13, padding: '6px 12px', borderRadius: 8, cursor: 'pointer',
-            border: value === o.v ? '2px solid var(--accent, #185fa5)' : '0.5px solid rgba(0,0,0,.2)',
-            background: value === o.v ? 'rgba(24,95,165,.08)' : 'transparent', color: 'inherit' }}>
-          {o.label}
-        </button>
-      ))}
+    <div className="inline-flex gap-1.5 flex-wrap">
+      {options.map(o => {
+        const active = value === o.v
+        return (
+          <button
+            key={o.v}
+            onClick={() => onChange(o.v)}
+            className={`inline-flex items-center gap-1.5 text-[13px] font-semibold rounded-lg px-3 py-1.5 border transition-colors ${
+              active
+                ? 'bg-accent text-text-on-accent border-transparent'
+                : 'bg-card text-text-secondary border-default hover:text-text-primary hover:bg-page'
+            }`}
+          >
+            {active && <Check size={13} />}
+            {o.label}
+          </button>
+        )
+      })}
     </div>
   )
 }
