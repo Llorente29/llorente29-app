@@ -252,7 +252,7 @@ export default function VentasDashboardPage() {
       {/* Cabecera */}
       <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
         <div>
-          <h1 className="text-2xl font-serif text-stone-800">Ventas</h1>
+          <h1 className="text-2xl font-display text-stone-800">Ventas</h1>
           <p className="text-sm text-stone-500">Resumen del negocio en tiempo real</p>
         </div>
         <div className="flex gap-1.5">
