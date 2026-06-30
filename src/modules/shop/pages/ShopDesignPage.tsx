@@ -191,15 +191,15 @@ export default function ShopDesignPage() {
 
         {/* Logo */}
         <div className="flex items-center gap-4 flex-wrap pb-4 border-b border-default">
-          <span className="h-16 min-w-[140px] px-3 rounded-xl border border-default bg-page grid place-items-center overflow-hidden shrink-0">
+          <span className="h-16 min-w-[140px] px-3 rounded-xl border border-default grid place-items-center overflow-hidden shrink-0" style={{ background: '#2B211C' }}>
             {hubLogo
               ? <img src={hubLogo} alt="" className="max-h-12 w-auto object-contain" />
-              : <Store size={26} className="text-text-secondary" />}
+              : <Store size={26} className="text-white/40" />}
           </span>
           <div className="flex-1 min-w-[200px]">
             <div className="font-medium text-[14px] text-text-primary">Logo</div>
             <div className="text-[13px] text-text-secondary mt-0.5">
-              PNG con fondo transparente, recortado al logo. Se ve grande sobre la portada.
+              PNG transparente pensado para fondo oscuro: se ve grande y directo sobre la portada.
             </div>
           </div>
           <div className="flex gap-2 items-center">
