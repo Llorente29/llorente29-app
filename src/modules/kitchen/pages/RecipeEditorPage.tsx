@@ -84,6 +84,7 @@ import RecipeImportReviewModal from '@/modules/kitchen/components/RecipeImportRe
 import AddToMenuModal from '@/modules/kitchen/components/AddToMenuModal'
 import RecipeStepsTab from '@/modules/kitchen/components/RecipeStepsTab'
 import ModifierImpactsTab from '@/modules/kitchen/components/ModifierImpactsTab'
+import RecipeHistoryTab from '@/modules/kitchen/components/RecipeHistoryTab'
 import type { RecipeItem, MenuItemEconomics, KitchenUnit } from '@/types/kitchen'
 import type { RecipeLineBreakdown } from '@/modules/kitchen/services/recipeLineService'
 
@@ -2535,6 +2536,15 @@ export default function RecipeEditorPage({
             recipeItemId={recipe.id}
             accountId={activeAccountId ?? ''}
             actorName={userProfile?.displayName ?? 'Usuario'}
+          />
+        ) : activeTab === 'historico' ? (
+          <RecipeHistoryTab
+            recipeItemId={recipe.id}
+            createdByName={userProfile?.displayName ?? null}
+            onRestored={() => {
+              setReloadTick((t) => t + 1)
+              setEconReloadTick((t) => t + 1)
+            }}
           />
         ) : (
           <div className="p-4 md:p-5">
