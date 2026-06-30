@@ -65,8 +65,8 @@ function BrandAvatar({ name, logoUrl, color }: { name: string | null; logoUrl: s
   const bg = color || INK
   if (logoUrl && !failed) {
     return (
-      <span className="w-[34px] h-[34px] rounded-[10px] overflow-hidden shrink-0 border border-default bg-card grid place-items-center">
-        <img src={logoUrl} alt="" className="w-full h-full object-cover" loading="lazy" onError={() => setFailed(true)} />
+      <span className="w-[34px] h-[34px] rounded-[10px] overflow-hidden shrink-0 border border-default bg-white grid place-items-center p-1">
+        <img src={logoUrl} alt="" className="w-full h-full object-contain" loading="lazy" onError={() => setFailed(true)} />
       </span>
     )
   }

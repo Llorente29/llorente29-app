@@ -233,12 +233,10 @@ export default function ShellTopBar({
             )}
           </div>
         )}
-        {!isMobile && (
-          <span className="inline-flex items-center" style={{ color: MUTED, fontSize: 14, gap: 5 }}>
-            <MapPin size={16} />
-            <LocationSelector />
-          </span>
-        )}
+        <span className="inline-flex items-center" style={{ color: MUTED, fontSize: 14, gap: 5 }}>
+          {!isMobile && <MapPin size={16} />}
+          <LocationSelector />
+        </span>
         {configVisible && (
           <button
             type="button"
