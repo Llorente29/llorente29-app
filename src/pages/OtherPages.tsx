@@ -6,6 +6,7 @@ import type { Location } from '../types'
 import { listLocationApprovals, setLocationReceiptApproval } from '@/modules/supply/services/supplierCatalogService'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import BusinessHoursEditor, { type CopyTarget } from '@/modules/multitenancy/components/hours/BusinessHoursEditor'
+import DispatchConfigSection from '@/modules/integrations/components/DispatchConfigSection'
 
 // DashboardPage se ha movido a su propia page: src/pages/DashboardPage.tsx
 // Re-exportar aquí para retrocompatibilidad con imports antiguos.
@@ -548,6 +549,9 @@ export function LocationsPage() {
                         />
                       )}
                     </div>
+
+                    {/* Despacho de reparto del local (auto/manual + broker) */}
+                    <DispatchConfigSection locationId={loc.id} />
                   </div>
                 )}
               </div>

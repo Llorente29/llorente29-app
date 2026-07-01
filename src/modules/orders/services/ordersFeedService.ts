@@ -96,6 +96,7 @@ export interface OrderFeedItem {
   eta_pickup: string | null
   eta_delivery: string | null
   transport_price: number | null
+  dispatch_error: string | null         // motivo del último fallo de despacho (null = sin fallo)
   lineas: OrderFeedLine[]
 }
 
@@ -280,6 +281,22 @@ export function deliveryView(order: OrderFeedItem): DeliveryView {
     }
   }
   return { kind: 'none', carrierLabel: null, stateLabel: null, stateTone: 'active', rider: null, phone: null, etaText: null, supportPhone: null }
+}
+
+// ¿Es un pedido de reparto propio pendiente de despachar (modo manual o tras fallo)?
+// Sirve para decidir si la fila muestra el botón "Despachar / Reintentar".
+export function isOwnDeliveryUndispatched(order: OrderFeedItem): boolean {
+  return (order.service_type === 'own_delivery') && !order.carrier_code
+}
+
+// Despacha un pedido a Catcher (invocación manual desde la tarjeta). Reusa la Edge
+// catcher-dispatch: acepta { sale_id } con JWT de usuario (sin secret interno) y es
+// idempotente. Lanza Error con el motivo si falla.
+export async function dispatchOrder(saleId: string): Promise<void> {
+  requireSupabase()
+  const { data, error } = await supabase!.functions.invoke('catcher-dispatch', { body: { sale_id: saleId } })
+  if (error) throw new Error(error.message)
+  if (data && data.ok === false) throw new Error(data.error ?? 'No se pudo despachar.')
 }
 
 // ── Llamadas a las RPC ──────────────────────────────────────────────────────

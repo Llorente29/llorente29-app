@@ -16,12 +16,13 @@
 // MARCAR LÍNEA: check por plato (kds_mark_line, compartido con el KDS).
 
 import { useState } from 'react'
-import { ChefHat, Check, Printer, Bike, Phone, ChevronDown, ChevronUp } from 'lucide-react'
+import { ChefHat, Check, Printer, Bike, Phone, ChevronDown, ChevronUp, RefreshCw, AlertTriangle } from 'lucide-react'
 import { timeLevel, channelLabel, ticketCode } from '@/modules/kds/kdsUtils'
 import ChannelBadge from './ChannelBadge'
 import TicketPreviewModal from './TicketPreviewModal'
 import {
   primaryAction, secondaryAction, childVisual, deliveryView,
+  isOwnDeliveryUndispatched, dispatchOrder,
   type OrderFeedItem, type OrderFeedLine, type OrderFeedChild, type OrderStatus,
 } from '../services/ordersFeedService'
 
@@ -186,10 +187,58 @@ function LineRow({
   )
 }
 
-// ── Fila de reparto (plegable). Broker + estado visibles; rider + tel al abrir. ──
-function DeliveryRow({ order }: { order: OrderFeedItem }) {
+// ── Fila de reparto. Tres caras según el estado del despacho propio. ──
+function DeliveryRow({ order, onDispatched }: { order: OrderFeedItem; onDispatched?: () => void }) {
   const [open, setOpen] = useState(false)
+  const [dispatching, setDispatching] = useState(false)
+  const [dispatchErr, setDispatchErr] = useState<string | null>(null)
   const d = deliveryView(order)
+
+  async function doDispatch() {
+    if (dispatching) return
+    setDispatching(true); setDispatchErr(null)
+    try {
+      await dispatchOrder(order.sale_id)
+      onDispatched?.()
+    } catch (e) {
+      setDispatchErr(e instanceof Error ? e.message : 'No se pudo despachar.')
+    } finally {
+      setDispatching(false)
+    }
+  }
+
+  // (A) Reparto propio SIN despachar (modo manual o tras fallo): botón en la fila.
+  if (isOwnDeliveryUndispatched(order)) {
+    const failed = !!order.dispatch_error
+    const errMsg = dispatchErr ?? order.dispatch_error
+    return (
+      <div className={`mx-4 mb-2.5 ml-5 rounded-xl border overflow-hidden ${failed ? 'border-danger/40 bg-danger-bg' : 'border-[#CFE4FA] bg-[#F0F7FF]'}`}>
+        {failed && errMsg && (
+          <div className="flex items-start gap-2 px-3 py-2.5 border-b border-danger/20">
+            <AlertTriangle size={15} className="text-danger shrink-0 mt-0.5" />
+            <span className="text-[12.5px] text-danger leading-snug">
+              <b className="block text-[11px] uppercase tracking-wide">No se pudo despachar</b>
+              {errMsg}
+            </span>
+          </div>
+        )}
+        <button
+          onClick={doDispatch}
+          disabled={dispatching}
+          className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 text-[13.5px] font-bold disabled:opacity-60 ${
+            failed ? 'text-white bg-danger' : 'text-[#2563A8]'
+          }`}
+        >
+          {dispatching
+            ? <><RefreshCw size={15} className="animate-spin" /> Despachando…</>
+            : failed
+              ? <><RefreshCw size={15} /> Reintentar despacho</>
+              : <><Bike size={16} /> Despachar a Catcher</>}
+        </button>
+      </div>
+    )
+  }
+
   if (d.kind === 'none') return null
 
   const toneCls =
@@ -197,7 +246,7 @@ function DeliveryRow({ order }: { order: OrderFeedItem }) {
     : d.stateTone === 'pending' ? 'text-warning bg-warning-bg border-warning/30'
     : 'text-success bg-success-bg border-success/30'
 
-  // Plataforma (Glovo/Uber/JE): informativo; si hay soporte, plegable con su teléfono.
+  // (B) Plataforma (Glovo/Uber/JE): informativo; si hay soporte, plegable con su teléfono.
   if (d.kind === 'platform') {
     const canOpen = !!d.supportPhone
     return (
@@ -229,7 +278,7 @@ function DeliveryRow({ order }: { order: OrderFeedItem }) {
     )
   }
 
-  // Reparto propio (Catcher/Jelp): plegable con rider + teléfono.
+  // (C) Reparto propio despachado (Catcher/Jelp): plegable con rider + teléfono.
   const hasDetail = !!(d.rider || d.phone || d.etaText)
   return (
     <div className="mx-4 mb-2.5 ml-5 rounded-xl border border-[#CFE4FA] bg-[#F0F7FF] overflow-hidden">
