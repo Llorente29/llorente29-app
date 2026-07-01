@@ -10,6 +10,9 @@
 //      PaymentIntent como DIRECT CHARGE sobre la cuenta conectada del restaurante
 //      y devuelve el client_secret + la cuenta conectada (para el Payment Element).
 //   3) El comensal paga con tarjeta/Bizum; el webhook confirma el pedido.
+//   4) getShopOrderStatus(token) → el front LEE el estado real del pedido (la
+//      verdad la escribe el webhook), por un token no adivinable propio del
+//      pedido. Es la base de la confirmación veraz y del seguimiento del cliente.
 // El precio SIEMPRE se recalcula en servidor; el front nunca lo fija.
 
 import { supabase } from '@/lib/supabase'
@@ -82,6 +85,7 @@ export interface PlaceOrderResult {
   dryRun?: boolean
   saleId?: string
   code?: string
+  publicToken?: string
   subtotal?: number
   deliveryFee?: number
   total?: number
@@ -103,6 +107,7 @@ export async function placeShopOrder(slug: string, payload: ShopOrderPayload, dr
     dryRun: data.dryRun === true,
     saleId: data.saleId ?? undefined,
     code: data.code ?? undefined,
+    publicToken: data.publicToken ?? undefined,
     subtotal: data.subtotal != null ? Number(data.subtotal) : undefined,
     deliveryFee: data.deliveryFee != null ? Number(data.deliveryFee) : undefined,
     total: data.total != null ? Number(data.total) : undefined,
@@ -136,6 +141,53 @@ export async function createShopPaymentIntent(saleId: string): Promise<PaymentIn
     connectedAccountId: data.connectedAccountId,
     amount: data.amount != null ? Number(data.amount) : undefined,
     paymentIntentId: data.paymentIntentId,
+  }
+}
+
+// ── Estado del pedido para el cliente (lectura anónima veraz) ────────────
+
+export interface ShopOrderStatus {
+  ok: boolean
+  reason?: string
+  code?: string
+  orderStatus?: string
+  /** 'pending' | 'paid' | 'failed' | 'refunded' — la verdad la escribe el webhook. */
+  paymentStatus?: string
+  /** 'stripe' | 'cash' | … */
+  payMethod?: string
+  mode?: 'pickup' | 'delivery'
+  total?: number
+  paidAt?: string | null
+  deliveryState?: string | null
+  etaAt?: string | null
+  riderName?: string | null
+}
+
+/**
+ * Lee el estado real de un pedido del Shop por su TOKEN (no adivinable). Canal
+ * anónimo, solo-lectura: expone únicamente estado + total, nada de PII de más.
+ * Es la fuente de verdad de la confirmación veraz y del seguimiento del cliente.
+ */
+export async function getShopOrderStatus(token: string): Promise<ShopOrderStatus> {
+  try {
+    const { data, error } = await db().rpc('shop_order_status', { p_token: token })
+    if (error) return { ok: false, reason: error.message }
+    if (!data || data.ok !== true) return { ok: false, reason: data?.reason ?? 'not_found' }
+    return {
+      ok: true,
+      code: data.code ?? undefined,
+      orderStatus: data.orderStatus ?? undefined,
+      paymentStatus: data.paymentStatus ?? undefined,
+      payMethod: data.payMethod ?? undefined,
+      mode: (data.mode ?? undefined) as 'pickup' | 'delivery' | undefined,
+      total: data.total != null ? Number(data.total) : undefined,
+      paidAt: data.paidAt ?? null,
+      deliveryState: data.deliveryState ?? null,
+      etaAt: data.etaAt ?? null,
+      riderName: data.riderName ?? null,
+    }
+  } catch (e: any) {
+    return { ok: false, reason: e?.message ?? 'error' }
   }
 }
 

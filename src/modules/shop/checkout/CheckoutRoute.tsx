@@ -8,8 +8,9 @@
 //
 // Flujo: confirmar -> place_shop_order (crea el pedido 'new') -> crear
 // PaymentIntent (direct charge sobre la cuenta del restaurante) -> Payment
-// Element (tarjeta + Bizum) -> pago -> confirmacion. El webhook confirma el
-// pedido server-side. El precio SIEMPRE se recalcula en servidor.
+// Element (tarjeta + Bizum) -> pago -> confirmacion VERAZ. El webhook confirma
+// el pedido server-side; el front LEE ese estado real por token (shop_order_status)
+// en vez de fiarse de senales del cliente. El precio SIEMPRE se recalcula en servidor.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { loadStripe } from '@stripe/stripe-js'
@@ -17,7 +18,7 @@ import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-
 import { useShopCart } from '@/modules/shop/cart/ShopCartContext'
 import {
   geocodeAddress, checkDelivery, getDeliverySlots, placeShopOrder, createShopPaymentIntent,
-  getShopPaymentConfig, getShopLocations,
+  getShopPaymentConfig, getShopLocations, getShopOrderStatus,
   type GeocodeHit, type DeliveryCheck, type DeliverySlot, type ShopOrderPayload, type ShopPaymentConfig, type ShopLocation,
 } from '@/modules/shop/checkout/checkoutService'
 
@@ -59,6 +60,21 @@ interface PayContext {
   saleId: string
   code: string
   total: number
+  token: string
+}
+
+// Resultado del pedido, dirigido por el ESTADO REAL de la venta (no por señales
+// del cliente). 'confirming' = esperando la verdad del webhook; 'confirmed' =
+// pagado/aceptado; 'failed' = pago rechazado; 'slow' = tarda (el pedido existe,
+// el webhook puede aterrizar) — honesto, nunca "confirmado" sin pago.
+type ConfirmStatus = 'confirming' | 'confirmed' | 'failed' | 'slow'
+interface OrderResult {
+  status: ConfirmStatus
+  payMethod: 'online' | 'cash'
+  mode: Mode
+  code?: string
+  total?: number
+  token?: string
 }
 
 export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: () => void }) {
@@ -88,7 +104,11 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
   const [placeError, setPlaceError] = useState<string | null>(null)
   const [stage, setStage] = useState<'form' | 'pay'>('form')
   const [pay, setPayCtx] = useState<PayContext | null>(null)
-  const [placed, setPlaced] = useState<{ code?: string; total?: number } | null>(null)
+  const [result, setResult] = useState<OrderResult | null>(null)
+
+  // Guarda de vida: cortamos cualquier polling en curso si el componente se va.
+  const aliveRef = useRef(true)
+  useEffect(() => () => { aliveRef.current = false }, [])
 
   // Métodos de pago que ofrece esta tienda (configurable por cuenta).
   const [payConfig, setPayConfig] = useState<ShopPaymentConfig>({ online: true, cashPickup: false, cashDelivery: false })
@@ -113,23 +133,62 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
 
   const debounceRef = useRef<number | null>(null)
 
+  // Confirmación VERAZ: leemos el estado real del pedido por token, con polling
+  // corto, en vez de fiarnos de que confirmPayment no diera error o del
+  // redirect_status de la URL (que en Bizum NO es la verdad del pago).
+  async function startOnlineConfirmation(token: string | undefined, code?: string, total?: number, m: Mode = mode) {
+    // Sin token no podemos confirmar contra BBDD: estado honesto de "procesando".
+    if (!token) { setResult({ status: 'slow', payMethod: 'online', mode: m, code, total }); return }
+    try { localStorage.removeItem(PENDING_KEY) } catch { /* ignore */ }
+    setResult({ status: 'confirming', payMethod: 'online', mode: m, code, total, token })
+
+    const started = Date.now()
+    const timeoutMs = 30000
+    const stepMs = 2000
+    while (Date.now() - started < timeoutMs) {
+      const st = await getShopOrderStatus(token)
+      if (!aliveRef.current) return
+      if (st.ok) {
+        if (st.paymentStatus === 'paid') {
+          setResult({ status: 'confirmed', payMethod: 'online', mode: m, code: st.code ?? code, total: st.total ?? total, token })
+          clear()
+          return
+        }
+        if (st.paymentStatus === 'failed') {
+          setResult({ status: 'failed', payMethod: 'online', mode: m, code: st.code ?? code, total: st.total ?? total, token })
+          return
+        }
+      }
+      await new Promise((r) => setTimeout(r, stepMs))
+      if (!aliveRef.current) return
+    }
+    // Se agotó la espera: el pedido existe y el webhook puede confirmar aún.
+    setResult({ status: 'slow', payMethod: 'online', mode: m, code, total, token })
+  }
+
   // Retorno de un pago con redirección (p.ej. Bizum): Stripe vuelve con
-  // ?redirect_status=succeeded. Recuperamos el pedido pendiente y confirmamos.
+  // ?redirect_status=... La VERDAD del pago NO es ese parámetro: la leemos de la
+  // BBDD por token (persistido antes de redirigir). El param solo nos dice que
+  // hemos vuelto.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const rs = params.get('redirect_status')
-    if (rs === 'succeeded') {
-      try {
-        const p = JSON.parse(localStorage.getItem(PENDING_KEY) || 'null')
-        if (p) { setPlaced({ code: p.code, total: p.total }); if (p.mode) setMode(p.mode) }
-        else setPlaced({})
-      } catch { setPlaced({}) }
-      try { localStorage.removeItem(PENDING_KEY) } catch { /* ignore */ }
-      clear()
+    if (!rs) return
+    // Limpiamos la query para que un refresh no re-dispare la confirmación.
+    try { window.history.replaceState({}, '', window.location.pathname) } catch { /* ignore */ }
+
+    let pending: any = null
+    try { pending = JSON.parse(localStorage.getItem(PENDING_KEY) || 'null') } catch { /* ignore */ }
+    const token = pending?.token as string | undefined
+    const m = (pending?.mode as Mode) || mode
+    if (token) {
+      startOnlineConfirmation(token, pending?.code, pending?.total, m)
     } else if (rs === 'failed') {
-      setPlaceError('El pago no se completó. Inténtalo de nuevo.')
-      try { localStorage.removeItem(PENDING_KEY) } catch { /* ignore */ }
+      setResult({ status: 'failed', payMethod: 'online', mode: m })
+    } else {
+      setResult({ status: 'slow', payMethod: 'online', mode: m })
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -222,9 +281,9 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
       if (!res.ok || !res.saleId) { setPlaceError('No se pudo crear el pedido. Inténtalo de nuevo.'); return }
 
       // EFECTIVO: el pedido nace aceptado (entra en cocina). No hay pago online;
-      // vamos directos a la confirmación.
+      // vamos directos a la confirmación (aceptado, no "pagado").
       if (method === 'cash') {
-        setPlaced({ code: res.code, total: res.total ?? grandTotal })
+        setResult({ status: 'confirmed', payMethod: 'cash', mode, code: res.code, total: res.total ?? grandTotal, token: res.publicToken })
         clear()
         return
       }
@@ -240,6 +299,7 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
         saleId: res.saleId,
         code: res.code ?? '',
         total: res.total ?? grandTotal,
+        token: res.publicToken ?? '',
       })
       setStage('pay')
     } catch {
@@ -249,12 +309,13 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
     }
   }
 
+  // Métodos SIN redirección (tarjeta): confirmPayment volvió sin error, pero la
+  // verdad la escribe el webhook -> arrancamos la confirmación veraz por token.
   function handlePaid() {
-    try { localStorage.removeItem(PENDING_KEY) } catch { /* ignore */ }
-    setPlaced({ code: pay?.code, total: pay?.total })
+    const p = pay
     setStage('form')
     setPayCtx(null)
-    clear()
+    startOnlineConfirmation(p?.token, p?.code, p?.total, mode)
   }
 
   const summaryLines = (
@@ -277,26 +338,73 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
     </>
   )
 
-  // Pantalla de confirmación (tras pagar)
-  if (placed) {
+  // Pantalla de confirmación (dirigida por el ESTADO REAL del pedido)
+  if (result) {
+    // Confirmando: esperando la verdad del webhook.
+    if (result.status === 'confirming') {
+      return (
+        <div style={s.page}>
+          <div style={s.successWrap}>
+            <div style={s.successCard}>
+              <div style={s.spinner} aria-hidden />
+              <h1 style={s.successTitle}>Confirmando tu pago…</h1>
+              <p style={s.successMsg}>Estamos verificando el pago con el banco. Suele tardar solo unos segundos.</p>
+            </div>
+          </div>
+          <style>{`@keyframes ck-spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      )
+    }
+
+    // Pago rechazado: nunca "confirmado". No hay cargo; se puede reintentar.
+    if (result.status === 'failed') {
+      return (
+        <div style={s.page}>
+          <div style={s.successWrap}>
+            <div style={s.successCard}>
+              <div style={s.failCheck}>{'\u2715'}</div>
+              <h1 style={s.successTitle}>El pago no se ha completado</h1>
+              <p style={s.successMsg}>No se ha realizado ningún cargo. Puedes intentarlo de nuevo.</p>
+              {result.code ? (
+                <div style={s.successCode}>
+                  <span style={s.successCodeLabel}>Código de pedido</span>
+                  <span style={s.successCodeNum}>{result.code}</span>
+                </div>
+              ) : null}
+              <button style={s.successBtn} onClick={() => { setResult(null); setStage('form') }}>Reintentar el pago</button>
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    // Confirmado (pagado / efectivo aceptado) o procesando (slow).
+    const confirmed = result.status === 'confirmed'
+    const cash = result.payMethod === 'cash'
     return (
       <div style={s.page}>
         <div style={s.successWrap}>
           <div style={s.successCard}>
-            <div style={s.successCheck}>{'\u2713'}</div>
-            <h1 style={s.successTitle}>¡Pedido confirmado!</h1>
+            <div style={confirmed ? s.successCheck : s.slowCheck}>{confirmed ? '\u2713' : '\u2026'}</div>
+            <h1 style={s.successTitle}>{confirmed ? '¡Pedido confirmado!' : 'Estamos procesando tu pago'}</h1>
             <p style={s.successMsg}>
-              {mode === 'pickup'
-                ? 'Te avisaremos cuando esté listo para recoger.'
-                : 'Lo estamos preparando y saldrá hacia tu dirección.'}
+              {!confirmed
+                ? 'Tu pago se está procesando. En cuanto se confirme, prepararemos tu pedido. Guarda tu código.'
+                : cash
+                  ? (result.mode === 'pickup'
+                      ? 'Pagarás en efectivo al recoger. Te avisaremos cuando esté listo.'
+                      : 'Pagarás en efectivo a la entrega. Lo estamos preparando.')
+                  : (result.mode === 'pickup'
+                      ? 'Te avisaremos cuando esté listo para recoger.'
+                      : 'Lo estamos preparando y saldrá hacia tu dirección.')}
             </p>
-            {placed.code ? (
+            {result.code ? (
               <div style={s.successCode}>
                 <span style={s.successCodeLabel}>Código de pedido</span>
-                <span style={s.successCodeNum}>{placed.code}</span>
+                <span style={s.successCodeNum}>{result.code}</span>
               </div>
             ) : null}
-            {placed.total != null && <div style={s.successTotal}>Total {eur(placed.total)}</div>}
+            {result.total != null && <div style={s.successTotal}>Total {eur(result.total)}</div>}
             <button style={s.successBtn} onClick={onBack}>Volver a la tienda</button>
           </div>
         </div>
@@ -642,9 +750,10 @@ function PaymentForm({ pay, mode, onPaid }: { pay: PayContext; mode: Mode; onPai
   async function doPay() {
     if (!stripe || !elements || paying) return
     setPaying(true); setErr(null)
-    // Persistimos el pedido pendiente por si el método redirige (Bizum).
+    // Persistimos el pedido pendiente (incluido el TOKEN) por si el método
+    // redirige (Bizum): al volver, confirmamos el estado real por token.
     try {
-      localStorage.setItem(PENDING_KEY, JSON.stringify({ code: pay.code, total: pay.total, mode }))
+      localStorage.setItem(PENDING_KEY, JSON.stringify({ code: pay.code, total: pay.total, mode, token: pay.token }))
     } catch { /* ignore */ }
 
     const { error } = await stripe.confirmPayment({
@@ -659,7 +768,8 @@ function PaymentForm({ pay, mode, onPaid }: { pay: PayContext; mode: Mode; onPai
       try { localStorage.removeItem(PENDING_KEY) } catch { /* ignore */ }
       return
     }
-    // Métodos sin redirección (tarjeta): éxito inline.
+    // Métodos sin redirección (tarjeta): confirmPayment volvió sin error, pero la
+    // VERDAD del pago la escribe el webhook -> el padre confirma por token (poll).
     onPaid()
   }
 
@@ -777,6 +887,9 @@ const s: Record<string, React.CSSProperties> = {
   successWrap: { maxWidth: 560, margin: '0 auto', padding: '48px 22px', display: 'flex', justifyContent: 'center' },
   successCard: { background: C.surface, border: `1px solid ${C.line}`, borderRadius: 20, padding: '36px 28px', textAlign: 'center', width: '100%' },
   successCheck: { width: 64, height: 64, borderRadius: '50%', background: C.greenBg, color: C.green, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 34, fontWeight: 800, margin: '0 auto 16px' },
+  slowCheck: { width: 64, height: 64, borderRadius: '50%', background: C.amberBg, color: C.amber, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 30, fontWeight: 800, margin: '0 auto 16px' },
+  failCheck: { width: 64, height: 64, borderRadius: '50%', background: C.redBg, color: C.red, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, fontWeight: 800, margin: '0 auto 16px' },
+  spinner: { width: 48, height: 48, borderRadius: '50%', border: `4px solid ${C.line}`, borderTopColor: C.accent, margin: '0 auto 18px', animation: 'ck-spin 0.8s linear infinite' },
   successTitle: { fontSize: 24, fontWeight: 900, letterSpacing: '-.02em', margin: '0 0 8px' },
   successMsg: { fontSize: 14, color: C.inkDim, lineHeight: 1.5, margin: '0 0 20px' },
   successCode: { display: 'flex', flexDirection: 'column', gap: 4, background: '#FAFAF8', border: `1px solid ${C.line}`, borderRadius: 14, padding: '14px 16px', marginBottom: 14 },
