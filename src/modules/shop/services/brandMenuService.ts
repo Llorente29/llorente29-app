@@ -22,6 +22,7 @@ export interface BrandMenu {
   name: string
   logoUrl: string | null
   accentColor: string | null
+  heroUrl: string | null
   cuisineCode: string | null
   rating: number | null
   ratingCount: number | null
@@ -44,6 +45,7 @@ export async function getBrandMenu(slug: string, brandId: string): Promise<Brand
     name: data.name ?? '',
     logoUrl: data.logo_url ?? null,
     accentColor: data.accent_color ?? null,
+    heroUrl: data.hero_url ?? null,
     cuisineCode: data.cuisine_code ?? null,
     rating: data.rating ?? null,
     ratingCount: data.rating_count ?? null,

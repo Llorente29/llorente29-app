@@ -101,26 +101,31 @@ export default function BrandMenuRoute({ slug, brandId, onBack, onCheckout }: { 
         </div>
       )}
 
-      {/* Cabecera de marca */}
-      <div style={S.brandHead}>
-        {menu.logoUrl
-          ? <img src={menu.logoUrl} alt={menu.name} style={S.brandLogo} />
-          : <div style={{ ...S.brandLogo, ...S.brandLogoText }}>{menu.name.slice(0, 2).toUpperCase()}</div>}
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <h1 style={S.brandName}>{menu.name}</h1>
-            <span style={menu.isOpen ? S.openPill : S.closedPill}>
-              {menu.isOpen ? 'Abierto ahora' : 'Cerrado ahora'}
-            </span>
-          </div>
-          {menu.rating != null && (
-            <div style={S.brandMeta}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: C.star, fontWeight: 800 }}>
-                <Star size={15} /> {menu.rating.toFixed(1)}
-                {menu.ratingCount != null && <span style={{ color: C.inkDim, fontWeight: 600 }}>({menu.ratingCount})</span>}
+      {/* Cabecera de la marca: su portada (o su acento) + logo + nombre */}
+      <div style={{ ...S.brandHero, ...(menu.heroUrl
+        ? { backgroundImage: `url(${menu.heroUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+        : { background: menu.accentColor || C.accent }) }}>
+        <div style={S.brandHeroOverlay} />
+        <div style={S.brandHeroInner}>
+          {menu.logoUrl
+            ? <img src={menu.logoUrl} alt={menu.name} style={S.brandLogo} />
+            : <div style={{ ...S.brandLogo, ...S.brandLogoText }}>{menu.name.slice(0, 2).toUpperCase()}</div>}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <h1 style={S.brandName}>{menu.name}</h1>
+              <span style={menu.isOpen ? S.openPill : S.closedPill}>
+                {menu.isOpen ? 'Abierto ahora' : 'Cerrado ahora'}
               </span>
             </div>
-          )}
+            {menu.rating != null && (
+              <div style={S.brandMeta}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: C.accent2, fontWeight: 800 }}>
+                  <Star size={15} /> {menu.rating.toFixed(1)}
+                  {menu.ratingCount != null && <span style={{ color: 'rgba(255,255,255,.82)', fontWeight: 600 }}>({menu.ratingCount})</span>}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -216,11 +221,13 @@ const S: Record<string, React.CSSProperties> = {
   closedBanner: { margin: '10px 28px 0', padding: '11px 16px', background: '#EFEDEA', border: `1px solid ${C.line}`, borderRadius: 12, fontSize: 13.5, color: C.ink, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 9 },
   openPill: { fontSize: 12.5, fontWeight: 800, color: C.green, background: C.greenBg, padding: '4px 11px', borderRadius: 999 },
   closedPill: { fontSize: 12.5, fontWeight: 800, color: '#fff', background: '#6B6661', padding: '4px 11px', borderRadius: 999 },
-  brandHead: { display: 'flex', alignItems: 'center', gap: 18, margin: '22px 28px 0' },
+  brandHero: { position: 'relative', margin: '18px 28px 0', borderRadius: 22, overflow: 'hidden', minHeight: 190, display: 'flex', alignItems: 'flex-end' },
+  brandHeroOverlay: { position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(0,0,0,.12), rgba(0,0,0,.62))' },
+  brandHeroInner: { position: 'relative', zIndex: 2, width: '100%', display: 'flex', alignItems: 'center', gap: 18, padding: '22px 26px' },
   brandLogo: { height: 72, width: 'auto', maxWidth: 160, objectFit: 'contain', display: 'block', borderRadius: 16, background: '#fff', boxShadow: '0 3px 12px rgba(0,0,0,.12)', padding: 6, boxSizing: 'border-box' },
   brandLogoText: { width: 72, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 24, color: C.ink },
-  brandName: { fontSize: 32, fontWeight: 900, letterSpacing: '-.03em', marginBottom: 4 },
-  brandMeta: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 },
+  brandName: { fontSize: 32, fontWeight: 900, letterSpacing: '-.03em', marginBottom: 4, color: '#fff', textShadow: '0 1px 14px rgba(0,0,0,.45)' },
+  brandMeta: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#fff' },
   menuWrap: { maxWidth: 1180, margin: '0 auto', padding: '28px' },
   catTitle: { fontSize: 22, fontWeight: 900, letterSpacing: '-.02em', marginBottom: 14 },
   dishGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 },
