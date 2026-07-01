@@ -65,6 +65,11 @@ const PERSONA_KITCHEN = `Eres el copiloto de COCINA de Folvy (Folvy Kitchen). Tu
 
 PUEDES ACTUAR, no solo informar. Tienes herramientas que PROPONEN cambios reales (por ejemplo, asignar el coste a un producto que se vende sin coste). Cuando el usuario acepte que hagas algo ("sí", "hazlo", "asígnalo"), usa la herramienta correspondiente: esta NO ejecuta el cambio directamente, sino que registra una propuesta que el usuario confirmará con un botón. Tras llamar a una herramienta de acción, di con naturalidad que has preparado la propuesta y que la confirme cuando quiera. NUNCA afirmes que un cambio ya se ha aplicado: solo se aplica cuando el usuario confirma.`;
 
+// Persona del agente de Supply: experto en COMPRAS y ALMACÉN (todo el módulo).
+const PERSONA_SUPPLY = `Eres el copiloto de COMPRAS Y ALMACÉN de Folvy (Folvy Supply). Tu especialidad es el aprovisionamiento (pedidos a proveedores, formatos y precios de compra), el stock y el inventario (niveles mínimo/par, bajo mínimo, mermas, teórico vs real) y la recepción. Tu trabajo es que al cliente NUNCA le falte género ni tenga dinero parado de más en cámara. Hablas como un jefe de compras que entiende de coste.
+
+Cuando el usuario pregunte qué pedir, usa purchase_suggestion (el motor calcula cuánto pedir para cubrir la semana, redondeado al formato de compra, con su fuente: por consumo real, por histórico de pedidos, o por par fijo). Cuando pregunte cómo va el almacén o qué le falta, usa stock_health y low_stock. Para explicar una sugerencia, usa item_consumption. Da siempre la cifra concreta y, si procede, su impacto. Si el motor marca una sugerencia como "por histórico", recuerda que es un proxy (confianza media); si es "por consumo", es dato real (alta). Si un artículo no tiene señal, dilo con honestidad ("no tengo consumo ni histórico para este artículo"), no inventes una cantidad.`;
+
 const OPENING_INSTRUCTION = `\n\nMODO SALUDO DE APERTURA:
 El usuario acaba de abrir el chat. Tu primer mensaje es el saludo de bienvenida.
 - Llama a catalog_health para conocer el estado actual de la carta del cliente.
@@ -270,6 +275,225 @@ const TOOL_ASSIGN_RESALE_COST: ToolDef = {
   },
 };
 
+// ── TOOLS DE LECTURA — AGENTE SUPPLY (compras + almacén) ──────────────
+// Todas usan clientWithUserJwt (RLS del usuario). Resuelven proveedor/local por
+// nombre (ilike) para poder llamar a los motores por id. Si falta un dato para
+// acotar, devuelven las opciones disponibles en vez de adivinar.
+
+async function resolveSupplierId(sb: any, accountId: string, name: string | null): Promise<{ id: string | null; options: Array<{ id: string; name: string }> }> {
+  const q = sb.from('supplier').select('id, name').eq('account_id', accountId).eq('is_active', true);
+  const { data, error } = name ? await q.ilike('name', `%${name}%`) : await q;
+  if (error) throw new Error(`No pude leer proveedores: ${error.message}`);
+  const opts = (data ?? []).map((r: any) => ({ id: r.id as string, name: r.name as string }));
+  return { id: opts.length === 1 ? opts[0].id : null, options: opts };
+}
+
+async function resolveLocationId(sb: any, accountId: string, name: string | null): Promise<{ id: string | null; options: Array<{ id: string; name: string }> }> {
+  const q = sb.from('locations').select('id, name').eq('account_id', accountId).eq('active', true);
+  const { data, error } = name ? await q.ilike('name', `%${name}%`) : await q;
+  if (error) throw new Error(`No pude leer locales: ${error.message}`);
+  const opts = (data ?? []).map((r: any) => ({ id: r.id as string, name: r.name as string }));
+  return { id: opts.length === 1 ? opts[0].id : null, options: opts };
+}
+
+const TOOL_PURCHASE_SUGGESTION: ToolDef = {
+  name: 'purchase_suggestion',
+  description:
+    'Devuelve QUÉ PEDIR a un proveedor para un local, calculado por el motor de repedido ' +
+    '(cubre la semana, redondeado al formato de compra). Cada línea trae la cantidad sugerida ' +
+    'y su fuente: "consumo" (dato real, confianza alta), "historico" (proxy por pedidos previos, ' +
+    'confianza media) o "par" (nivel fijado a mano). Úsala cuando el usuario pregunte qué pedir, ' +
+    'qué le falta de un proveedor, o quiera preparar un pedido. Si no se identifica el proveedor o ' +
+    'el local, devuelve la lista de opciones para que preguntes cuál.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      supplier_name: { type: 'string', description: 'Nombre (o parte) del proveedor. Ej: "Cloudtown".' },
+      location_name: { type: 'string', description: 'Nombre (o parte) del local. Ej: "Plaza Castilla".' },
+    },
+    required: [],
+  },
+  handler: async (args, ctx) => {
+    const sb = clientWithUserJwt(ctx);
+    const sup = await resolveSupplierId(sb, ctx.accountId, (args.supplier_name as string | undefined)?.trim() || null);
+    if (!sup.id) return { need: 'supplier', message: 'Indica el proveedor.', suppliers: sup.options.slice(0, 20) };
+    const loc = await resolveLocationId(sb, ctx.accountId, (args.location_name as string | undefined)?.trim() || null);
+    if (!loc.id) return { need: 'location', message: 'Indica el local.', locations: loc.options.slice(0, 20) };
+
+    const { data: rows, error } = await sb.rpc('suggest_purchase_qty', {
+      p_account: ctx.accountId, p_supplier: sup.id, p_location: loc.id,
+    });
+    if (error) throw new Error(`No pude calcular la sugerencia: ${error.message}`);
+
+    const withQty = (rows ?? []).filter((r: any) => r.suggested_qty != null && Number(r.suggested_qty) > 0);
+    const ids = withQty.map((r: any) => r.recipe_item_id);
+    const nameById = new Map<string, string>();
+    if (ids.length) {
+      const { data: items } = await sb.from('recipe_item').select('id, name').in('id', ids);
+      for (const it of (items ?? []) as any[]) nameById.set(it.id, it.name);
+    }
+    const lines = withQty
+      .map((r: any) => ({
+        name: nameById.get(r.recipe_item_id) ?? '(sin nombre)',
+        suggested_qty: Number(r.suggested_qty),
+        source: r.source, confidence: r.confidence,
+      }))
+      .sort((a: any, b: any) => b.suggested_qty - a.suggested_qty)
+      .slice(0, 25);
+
+    return {
+      supplier: sup.options.find(o => o.id === sup.id)?.name ?? null,
+      location: loc.options.find(o => o.id === loc.id)?.name ?? null,
+      horizon_days: 7,
+      total_lines: lines.length,
+      lines,
+      note: lines.length === 0 ? 'No hay nada que pedir a este proveedor para cubrir la semana (o no hay señal de consumo/histórico).' : null,
+    };
+  },
+};
+
+const TOOL_STOCK_HEALTH: ToolDef = {
+  name: 'stock_health',
+  description:
+    'Resumen del estado del almacén de un local: cuántos artículos están bajo mínimo, cuántos ' +
+    'tienen nivel definido, total de artículos con stock y valor aproximado del stock. Úsala cuando ' +
+    'el usuario pregunte cómo va el almacén, cuánto stock tiene, o qué salud tiene el inventario. ' +
+    'Si no se identifica el local, devuelve la lista para que preguntes.',
+  input_schema: {
+    type: 'object',
+    properties: { location_name: { type: 'string', description: 'Nombre (o parte) del local.' } },
+    required: [],
+  },
+  handler: async (args, ctx) => {
+    const sb = clientWithUserJwt(ctx);
+    const loc = await resolveLocationId(sb, ctx.accountId, (args.location_name as string | undefined)?.trim() || null);
+    if (!loc.id) return { need: 'location', message: 'Indica el local.', locations: loc.options.slice(0, 20) };
+
+    const { data, error } = await sb.rpc('stock_levels_overview', {
+      p_account: ctx.accountId, p_location: loc.id, p_only_with_level: false,
+    });
+    if (error) throw new Error(`No pude leer el almacén: ${error.message}`);
+    const items = ((data ?? {}).items ?? []) as any[];
+    let belowMin = 0, withLevel = 0, stockValue = 0;
+    for (const it of items) {
+      if (it.below_min) belowMin++;
+      if (it.has_level) withLevel++;
+      stockValue += Number(it.qty_on_hand ?? 0) * Number(it.unit_cost ?? 0);
+    }
+    return {
+      location: loc.options.find(o => o.id === loc.id)?.name ?? null,
+      total_items: items.length,
+      below_min_count: belowMin,
+      with_level_count: withLevel,
+      stock_value_eur: Math.round(stockValue * 100) / 100,
+    };
+  },
+};
+
+const TOOL_LOW_STOCK: ToolDef = {
+  name: 'low_stock',
+  description:
+    'Lista de artículos BAJO MÍNIMO en un local (los que hay que reponer), con su stock actual, ' +
+    'su mínimo, su par y cuánto falta para llegar al par. Úsala cuando el usuario pregunte qué le ' +
+    'falta, qué está bajo mínimo, o qué tiene que reponer.',
+  input_schema: {
+    type: 'object',
+    properties: { location_name: { type: 'string', description: 'Nombre (o parte) del local.' } },
+    required: [],
+  },
+  handler: async (args, ctx) => {
+    const sb = clientWithUserJwt(ctx);
+    const loc = await resolveLocationId(sb, ctx.accountId, (args.location_name as string | undefined)?.trim() || null);
+    if (!loc.id) return { need: 'location', message: 'Indica el local.', locations: loc.options.slice(0, 20) };
+
+    const { data, error } = await sb.rpc('stock_levels_overview', {
+      p_account: ctx.accountId, p_location: loc.id, p_only_with_level: true,
+    });
+    if (error) throw new Error(`No pude leer los niveles: ${error.message}`);
+    const items = (((data ?? {}).items ?? []) as any[])
+      .filter((it) => it.below_min)
+      .map((it) => ({
+        name: it.item_name ?? '(sin nombre)',
+        on_hand: Number(it.qty_on_hand ?? 0),
+        min: it.min_qty == null ? null : Number(it.min_qty),
+        par: it.par_qty == null ? null : Number(it.par_qty),
+        to_par: Number(it.to_par_qty ?? 0),
+        unit: it.unit_abbr ?? null,
+      }))
+      .sort((a, b) => b.to_par - a.to_par)
+      .slice(0, 30);
+    return {
+      location: loc.options.find(o => o.id === loc.id)?.name ?? null,
+      below_min_count: items.length,
+      items,
+    };
+  },
+};
+
+const TOOL_ITEM_CONSUMPTION: ToolDef = {
+  name: 'item_consumption',
+  description:
+    'Consumo real de un artículo (salidas de stock por venta) en los últimos N días, para un local ' +
+    'o para toda la cuenta. Devuelve el total y el consumo medio diario. Úsala para explicar por qué ' +
+    'se sugiere una cantidad, o cuando el usuario pregunte cuánto gasta de un artículo. Si el nombre ' +
+    'coincide con varios artículos, devuelve los candidatos para que preguntes cuál.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      item_name: { type: 'string', description: 'Nombre (o parte) del artículo. Ej: "Milanesa Ternera".' },
+      location_name: { type: 'string', description: 'Opcional. Local; si se omite, suma toda la cuenta.' },
+      days: { type: 'number', description: 'Ventana en días (por defecto 30).' },
+    },
+    required: ['item_name'],
+  },
+  handler: async (args, ctx) => {
+    const sb = clientWithUserJwt(ctx);
+    const itemName = String(args.item_name ?? '').trim();
+    if (!itemName) throw new Error('Falta el nombre del artículo.');
+    const days = Number.isFinite(Number(args.days)) && Number(args.days) > 0 ? Math.floor(Number(args.days)) : 30;
+
+    const { data: items, error: ei } = await sb
+      .from('recipe_item')
+      .select('id, name, kitchen_unit:base_unit_id ( abbreviation )')
+      .eq('account_id', ctx.accountId).eq('is_active', true).ilike('name', `%${itemName}%`);
+    if (ei) throw new Error(`No pude buscar el artículo: ${ei.message}`);
+    const cand = (items ?? []) as any[];
+    if (cand.length === 0) return { found: false, message: `No encuentro ningún artículo que se parezca a "${itemName}".` };
+    if (cand.length > 1) return { need: 'item', message: 'Hay varios artículos con ese nombre.', candidates: cand.slice(0, 10).map((c) => c.name) };
+
+    const item = cand[0];
+    let loc: { id: string | null; options: Array<{ id: string; name: string }> } = { id: null, options: [] };
+    const locName = (args.location_name as string | undefined)?.trim() || null;
+    if (locName) {
+      loc = await resolveLocationId(sb, ctx.accountId, locName);
+      if (!loc.id) return { need: 'location', message: 'Indica el local.', locations: loc.options.slice(0, 20) };
+    }
+
+    let q = sb.from('stock_movement')
+      .select('qty_base')
+      .eq('account_id', ctx.accountId)
+      .eq('recipe_item_id', item.id)
+      .eq('movement_type', 'consumo')
+      .gte('occurred_at', new Date(Date.now() - days * 86400_000).toISOString());
+    if (loc.id) q = q.eq('location_id', loc.id);
+    const { data: movs, error: em } = await q;
+    if (em) throw new Error(`No pude leer el consumo: ${em.message}`);
+
+    let total = 0;
+    for (const m of (movs ?? []) as any[]) total += Math.abs(Number(m.qty_base ?? 0));
+    const unit = item.kitchen_unit?.abbreviation ?? null;
+    return {
+      found: true,
+      item: item.name,
+      location: loc.id ? (loc.options.find(o => o.id === loc.id)?.name ?? null) : 'toda la cuenta',
+      days,
+      unit,
+      total_consumed: Math.round(total * 100) / 100,
+      daily_avg: Math.round((total / days) * 100) / 100,
+    };
+  },
+};
+
 // ── REGISTRY DE AGENTES ───────────────────────────────────────────────
 // Cada agente declara su persona y su conjunto de tools. El backend elige el
 // agente según `module`. Añadir un agente = una entrada aquí.
@@ -289,6 +513,13 @@ const AGENTS: Record<string, AgentDef> = {
   kitchen: {
     persona: PERSONA_KITCHEN,
     tools: [TOOL_CATALOG_HEALTH, TOOL_ASSIGN_RESALE_COST],
+    model: 'claude-sonnet-4-6',
+  },
+  // Agente de Compras y Almacén (segundo agente del marco). Razona sobre
+  // reposición, stock y consumo → Sonnet.
+  supply: {
+    persona: PERSONA_SUPPLY,
+    tools: [TOOL_PURCHASE_SUGGESTION, TOOL_STOCK_HEALTH, TOOL_LOW_STOCK, TOOL_ITEM_CONSUMPTION],
     model: 'claude-sonnet-4-6',
   },
   // Agente por defecto (chat global sin módulo concreto).
