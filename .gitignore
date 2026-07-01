@@ -1,4 +1,4 @@
-﻿node_modules/
+node_modules/
 dist/
 .env
 .env.backup
@@ -47,7 +47,6 @@ tspoon_*.json
 tspoon_*.txt
 tspoon_dump/
 *tspoon_vs_folvy*
-*folvy_competitive_map*
 regenerar_formatos.sql
 regenerar_formatos_informe.txt
 
