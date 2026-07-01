@@ -14,6 +14,12 @@
 //        (controlado). En móvil esconde el launcher flotante (hideLauncher) — lo
 //        abre el héroe de la barra. En escritorio NO cambia nada: la burbuja
 //        sigue con su botón flotante (controlado por el mismo estado).
+//
+// IMG-1 (pulido de imagen 01/07): el contenido de página se centra a un ANCHO
+//        MÁXIMO cómodo (CONTENT_MAX_PX). En monitores anchos evita que las
+//        tablas se estiren de borde a borde dejando columnas gigantes y océano
+//        gris (la sensación de "pantalla vacía"). En móvil no tiene efecto
+//        (el viewport es menor que el tope). Patrón de Toast/R365/Apicbase/Linear.
 
 import { useEffect, useState } from 'react'
 import { useNavigate, useLocation, Routes, Route } from 'react-router-dom'
@@ -33,6 +39,10 @@ import type { Account } from '@/types/multitenancy'
 import { FolvyAIBubble } from '../modules/folvy-ai/components/FolvyAIBubble'
 
 const SETTINGS_BASE = 'configuracion'
+
+// IMG-1: ancho máximo del contenido de página en escritorio. Centrado con
+// margin auto. En móvil/tablet estrecho no aplica (viewport < tope). Tuneable.
+const CONTENT_MAX_PX = 1560
 
 export default function Shell() {
   const navigate = useNavigate()
@@ -74,13 +84,27 @@ export default function Shell() {
   // héroe de la barra (móvil) como el launcher flotante (escritorio) lo abran.
   const [aiOpen, setAiOpen] = useState(false)
 
-  // Paddings del <main>. En móvil: laterales ajustados y abajo hueco para la
+  // Paddings del contenido. En móvil: laterales ajustados y abajo hueco para la
   // barra fija (56px) + safe-area. En escritorio: los de siempre (26 / 24 / 24).
   const mainPadX = isMobile ? 16 : 26
   const mainPadTop = isMobile ? 16 : 24
   const mainPaddingBottom = isMobile
     ? 'calc(56px + env(safe-area-inset-bottom) + 24px)'
     : 24
+
+  // IMG-1: estilo del contenedor de contenido — centrado a ancho máximo con los
+  // paddings de arriba. El <main> queda como flex-1 a ancho completo; este div
+  // interior es el que se centra y se limita.
+  const contentStyle: React.CSSProperties = {
+    width: '100%',
+    maxWidth: CONTENT_MAX_PX,
+    marginLeft: 'auto',
+    marginRight: 'auto',
+    paddingLeft: mainPadX,
+    paddingRight: mainPadX,
+    paddingTop: mainPadTop,
+    paddingBottom: mainPaddingBottom,
+  }
 
   // Modo trabajador del encargado dual (alterna Shell ↔ TrabajadorApp).
   const [workerMode, setWorkerMode] = useState(false)
@@ -174,7 +198,8 @@ export default function Shell() {
       />
 
       {/* Banda "Estás gestionando: [cliente]" — EXCLUSIVO platform admin. Deja
-          claro en qué cliente se está operando al saltar entre cuentas. */}
+          claro en qué cliente se está operando al saltar entre cuentas. Full-width
+          a propósito (banner global, no contenido de página). */}
       {isPlatformAdmin && shownAccount && (
         <div
           className="flex items-center gap-2"
@@ -197,8 +222,10 @@ export default function Shell() {
               activeItemId={activeItem?.id ?? ''}
               onSelectItem={handleSelectItem}
             />
-            <main className="flex-1" style={{ paddingLeft: mainPadX, paddingRight: mainPadX, paddingTop: mainPadTop, paddingBottom: mainPaddingBottom }}>
-              {moduleRoutesEl}
+            <main className="flex-1 w-full">
+              <div style={contentStyle}>
+                {moduleRoutesEl}
+              </div>
             </main>
           </div>
         ) : (
@@ -209,14 +236,18 @@ export default function Shell() {
               activeItemId={activeItem?.id ?? ''}
               onSelectItem={handleSelectItem}
             />
-            <main className="flex-1" style={{ paddingLeft: mainPadX, paddingRight: mainPadX, paddingTop: mainPadTop, paddingBottom: mainPaddingBottom }}>
-              {moduleRoutesEl}
+            <main className="flex-1 w-full">
+              <div style={contentStyle}>
+                {moduleRoutesEl}
+              </div>
             </main>
           </div>
         )
       ) : (
-        <main className="flex-1" style={{ paddingLeft: mainPadX, paddingRight: mainPadX, paddingTop: mainPadTop, paddingBottom: mainPaddingBottom }}>
-          <HomeGeneral userName={userName} onOpenModule={goToKey} />
+        <main className="flex-1 w-full">
+          <div style={contentStyle}>
+            <HomeGeneral userName={userName} onOpenModule={goToKey} />
+          </div>
         </main>
       )}
 
