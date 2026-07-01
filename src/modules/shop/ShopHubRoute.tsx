@@ -142,13 +142,6 @@ function ShopHubInner({ slug, onCheckout }: { slug: string; onCheckout: () => vo
       {/* 1 · TOP BAR · la identidad de marca vive en el héroe (Opción C) */}
       <div style={S.topbar}>
         <span aria-hidden="true" />
-        <span style={S.preTag}>Vista previa</span>
-      </div>
-
-      {/* 2 · BANNER PRE-LANZAMIENTO (honesto, visible) */}
-      <div style={S.preBanner}>
-        <span style={S.preIc}><Icon d={Ic.info} size={16} /></span>
-        <span>Estás viendo una <b>vista previa</b> de la tienda. Aún no puedes hacer pedidos online.</span>
       </div>
 
       {/* 3 · HERO */}
@@ -238,25 +231,6 @@ function ShopHubInner({ slug, onCheckout }: { slug: string; onCheckout: () => vo
             </div>
           )}
         </div>
-
-        {/* 6 · PANEL lateral: pre-lanzamiento (sustituye al carrito, que no opera todavía) */}
-        <aside style={S.side}>
-          <div style={S.sideHead}>
-            <span style={S.sideBag}><Icon d={Ic.bag} size={24} /></span>
-            <div style={{ fontSize: 16, fontWeight: 900, letterSpacing: '-.02em' }}>Pedidos online muy pronto</div>
-          </div>
-          <p style={S.sideP}>
-            Estamos preparando la tienda. Pronto podrás pedir de varias cocinas a la vez
-            y recibirlo todo en una sola entrega.
-          </p>
-          <div style={S.sideFeat}>
-            <span style={S.sideFeatIc}><Icon d={Ic.package} size={18} /></span>
-            <div>
-              <b style={{ display: 'block', fontSize: 14, fontWeight: 800 }}>Carrito cruzado</b>
-              <span style={{ fontSize: 12.5, color: C.inkDim }}>Mezcla marcas, un solo envío</span>
-            </div>
-          </div>
-        </aside>
       </div>
 
       {/* 7 · FOOTER */}

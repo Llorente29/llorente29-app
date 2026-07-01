@@ -86,12 +86,6 @@ export default function BrandMenuRoute({ slug, brandId, onBack, onCheckout }: { 
       {/* Topbar */}
       <div style={S.topbar}>
         <button style={S.backLink} onClick={onBack}>← Tienda</button>
-        <div style={S.preTag}>Vista previa</div>
-      </div>
-
-      {/* Banner pre-lanzamiento */}
-      <div style={S.preBanner}>
-        Estás viendo una vista previa de la carta. Aún no puedes hacer pedidos online.
       </div>
 
       {/* Banner: marca cerrada ahora (por horario) */}
