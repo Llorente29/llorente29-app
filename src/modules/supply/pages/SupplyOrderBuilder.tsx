@@ -1,21 +1,25 @@
 // src/modules/supply/pages/SupplyOrderBuilder.tsx
 //
-// CONSTRUCTOR DE PEDIDO (rediseño 03/06, flujo A): el pedido se construye SOBRE
-// EL CATÁLOGO DEL PROVEEDOR, no con líneas a mano. Eliges proveedor → aparece su
-// catálogo (article_supplier: artículo + código + formato + precio) → pones
-// cantidades → guardas. Solo las filas con cantidad > 0 entran en el pedido.
+// CONSTRUCTOR DE PEDIDO (rediseño 01/07): panel enfocado sobre el catálogo del
+// proveedor. Cada artículo es una FILA ENMARCADA con identidad: nombre grande,
+// stock real, sugerencia de repedido ("Pide N" con su fuente), y una casilla de
+// cantidad grande y protagonista. El pedido se construye poniendo cantidades;
+// solo las filas con cantidad > 0 entran.
 //
-// Calcado del patrón de página Kitchen (useApp + useActiveAccount, estados
-// load/error, tokens de estilo). Reemplaza el modal de "alta mínima" anterior.
+// Motor de sugerencia (suggest_purchase_qty, To-Par MRP II): la sugerencia llega
+// ya calculada en cada entrada del catálogo (suggestedQty en formato de compra +
+// fuente + confianza). Un clic en "Pide N" copia la cantidad sugerida.
 //
-// Capas que se enchufan después (huecos marcados):
-//   - Sugerencia por línea (consumo ventas×escandallo) → botón "sugerido: N"
-//   - Stock de referencia (cuando haya inventario)
-//   - Modos plantilla / a par
-//   - Envío email/WhatsApp + PDF (logo + datos fiscales + cuña Folvy)
+// Avisos de incongruencia (deterministas, no bloqueantes, ámbar): detectan al
+// vuelo si pides bastante más de lo sugerido o si el sugerido es 0 (ya cubierto).
+// El aviso de precio vs referencia CTB queda declarado: necesita traer el precio
+// de referencia del cedente al catálogo (dato aún no disponible aquí).
+//
+// Teclado: Enter en una casilla de cantidad salta a la siguiente fila (rellenar
+// pedidos largos sin ratón).
 
-import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, Search, Loader2, Check, Truck } from 'lucide-react'
+import { useEffect, useMemo, useState, type KeyboardEvent } from 'react'
+import { ArrowLeft, Search, Loader2, Check, Truck, MessageSquarePlus } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useOperativeLocation } from '@/modules/supply/hooks/useOperativeLocation'
@@ -44,6 +48,26 @@ interface SupplyOrderBuilderProps {
 interface DraftLine {
   qty: string
   note: string
+  showNote?: boolean
+}
+
+// Etiqueta legible de la fuente de la sugerencia.
+const SOURCE_LABEL: Record<string, string> = {
+  consumo: 'por consumo',
+  historico: 'por histórico',
+  par: 'par fijo',
+}
+
+function parseQty(v: string | undefined): number {
+  if (!v) return 0
+  const n = Number(v.replace(',', '.'))
+  return Number.isFinite(n) ? n : 0
+}
+
+// Unidad legible de la fila (formato "caja" o unidad base "kg").
+function unitLabel(e: SupplierCatalogEntry): string {
+  if (e.formatName) return e.formatName.toLowerCase()
+  return e.baseUnitAbbr ?? ''
 }
 
 export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuilderProps) {
@@ -67,7 +91,7 @@ export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuild
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Cargar proveedores al entrar.
+  // Cargar proveedores + locales al entrar.
   useEffect(() => {
     if (accountsLoading || !activeAccountId) return
     let cancelled = false
@@ -77,15 +101,13 @@ export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuild
         if (cancelled) return
         setSuppliers(sups)
         setLocations(locs)
-        // Si solo hay un local, lo preseleccionamos (caso single-local).
-        // el local operativo viene del hook, no se auto-selecciona aquí
       })
       .catch((err: unknown) => { if (!cancelled) setError(err instanceof Error ? err.message : 'Error cargando datos.') })
       .finally(() => { if (!cancelled) setLoadingSuppliers(false) })
     return () => { cancelled = true }
   }, [activeAccountId, accountsLoading])
 
-  // Cargar el catálogo del proveedor elegido.
+  // Cargar el catálogo del proveedor elegido (trae ya la sugerencia por artículo).
   useEffect(() => {
     if (!activeAccountId || !supplierId) {
       setCatalog([])
@@ -120,51 +142,66 @@ export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuild
   }, [catalog, search])
 
   function setQty(id: string, qty: string) {
-    setDraft(d => ({ ...d, [id]: { qty, note: d[id]?.note ?? '' } }))
+    setDraft(d => ({ ...d, [id]: { ...(d[id] ?? { qty: '', note: '' }), qty } }))
   }
   function setNote(id: string, note: string) {
-    setDraft(d => ({ ...d, [id]: { qty: d[id]?.qty ?? '', note } }))
+    setDraft(d => ({ ...d, [id]: { ...(d[id] ?? { qty: '', note: '' }), note } }))
+  }
+  function toggleNote(id: string) {
+    setDraft(d => ({ ...d, [id]: { ...(d[id] ?? { qty: '', note: '' }), showNote: !d[id]?.showNote } }))
+  }
+  // Copiar la cantidad sugerida a la casilla.
+  function useSuggested(e: SupplierCatalogEntry) {
+    if (e.suggestedQty == null) return
+    setQty(e.articleSupplierId, String(e.suggestedQty).replace('.', ','))
   }
 
-  // Cuántas líneas con cantidad > 0 hay (las que entrarán en el pedido).
+  // Enter en una casilla de cantidad → salta a la siguiente fila.
+  function onQtyKeyDown(ev: KeyboardEvent<HTMLInputElement>, index: number) {
+    if (ev.key !== 'Enter') return
+    ev.preventDefault()
+    const next = document.getElementById(`qty-${index + 1}`) as HTMLInputElement | null
+    next?.focus()
+    next?.select()
+  }
+
+  // Avisos de incongruencia deterministas por línea (ámbar, no bloqueante).
+  function warningFor(e: SupplierCatalogEntry, qty: number): string | null {
+    if (qty <= 0) return null
+    // El sugerido es 0 → ya hay stock para cubrir la semana.
+    if (e.suggestedQty === 0) return 'El sugerido es 0: ya tienes stock para la semana.'
+    // Pides bastante más de lo sugerido (más del doble y al menos 2 de diferencia).
+    if (e.suggestedQty != null && e.suggestedQty > 0 && qty >= e.suggestedQty * 2 && qty - e.suggestedQty >= 2) {
+      return `Pides bastante más de lo sugerido (${e.suggestedQty}).`
+    }
+    return null
+  }
+
   const filledCount = useMemo(() => {
-    return catalog.reduce((acc, e) => {
-      const v = draft[e.articleSupplierId]?.qty
-      const n = v ? Number(v.replace(',', '.')) : 0
-      return acc + (Number.isFinite(n) && n > 0 ? 1 : 0)
-    }, 0)
+    return catalog.reduce((acc, e) => acc + (parseQty(draft[e.articleSupplierId]?.qty) > 0 ? 1 : 0), 0)
   }, [catalog, draft])
 
-  // Total estimado = Σ (cantidad × €/caja) de las filas con cantidad. last_price
-  // es €/UNIDAD BASE → el €/caja se deriva con × formatQtyInBase (factor 1 si el
-  // artículo no tiene formato; degenerado, no peta).
+  // Total estimado = Σ (cantidad × €/caja). last_price es €/base → €/caja con × formatQtyInBase.
   const estTotal = useMemo(() => {
     return catalog.reduce((acc, e) => {
-      const v = draft[e.articleSupplierId]?.qty
-      const n = v ? Number(v.replace(',', '.')) : 0
-      if (!Number.isFinite(n) || n <= 0) return acc
+      const n = parseQty(draft[e.articleSupplierId]?.qty)
+      if (n <= 0) return acc
       return acc + n * (e.lastPrice ?? 0) * (e.formatQtyInBase ?? 1)
     }, 0)
   }, [catalog, draft])
 
+  const eur = (v: number) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(v)
+
   async function handleSave() {
-    if (!activeAccountId || !supplierId) {
-      setError('Elige un proveedor.')
-      return
-    }
-    // El local operativo debe estar resuelto (viene del contexto, no se elige a mano).
+    if (!activeAccountId || !supplierId) { setError('Elige un proveedor.'); return }
     if (!op.isResolved || !locationId) {
       setError('No hay un local operativo definido. Revisa el aviso de local arriba.')
       return
     }
-    if (filledCount === 0) {
-      setError('Pon cantidad en al menos un artículo.')
-      return
-    }
+    if (filledCount === 0) { setError('Pon cantidad en al menos un artículo.'); return }
     setSaving(true)
     setError(null)
     try {
-      // 1) Crear la cabecera del pedido (en borrador, origin manual).
       const order = await createPurchaseOrder({
         accountId: activeAccountId,
         supplierId,
@@ -179,18 +216,12 @@ export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuild
         createdByName: userProfile?.displayName ?? null,
       })
 
-      // 2) Crear una línea por cada artículo con cantidad > 0.
       let position = 0
       for (const e of catalog) {
-        const v = draft[e.articleSupplierId]?.qty
-        const n = v ? Number(v.replace(',', '.')) : 0
-        if (!Number.isFinite(n) || n <= 0) continue
+        const n = parseQty(draft[e.articleSupplierId]?.qty)
+        if (n <= 0) continue
         const note = draft[e.articleSupplierId]?.note?.trim() || null
-        // last_price es €/base → el €/caja se deriva con × formatQtyInBase (factor 1
-        // si el artículo no tiene formato; degenerado, deja el precio tal cual).
-        // Guardamos el €/caja en la línea para que el PDF lo pinte sin recalcular.
         const eurPorCaja = e.lastPrice !== null ? e.lastPrice * (e.formatQtyInBase ?? 1) : null
-        const unitPrice = eurPorCaja
         const lineTotal = eurPorCaja !== null ? Math.round(n * eurPorCaja * 100) / 100 : null
         await createPurchaseOrderLine({
           accountId: activeAccountId,
@@ -199,13 +230,12 @@ export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuild
           productName: e.itemName,
           qtyOrdered: n,
           purchaseFormatId: e.purchaseFormatId,
-          estUnitPrice: unitPrice,
+          estUnitPrice: eurPorCaja,
           estLineTotal: lineTotal,
           position: position++,
           notes: note,
         })
       }
-
       onSaved(order.id)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'No se pudo guardar el pedido.')
@@ -214,18 +244,16 @@ export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuild
   }
 
   return (
-    <div className="space-y-4">
+    <div className="mx-auto w-full max-w-3xl space-y-4">
       {/* Cabecera */}
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={onBack}
-          className="inline-flex items-center gap-1.5 text-sm text-text-secondary hover:text-text-primary transition-base"
-        >
-          <ArrowLeft size={16} />
-          Pedidos
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={onBack}
+        className="inline-flex items-center gap-1.5 text-sm text-text-secondary hover:text-text-primary transition-base"
+      >
+        <ArrowLeft size={16} />
+        Pedidos
+      </button>
 
       <div>
         <h2 className="text-xl font-display font-medium text-text-primary">Nuevo pedido</h2>
@@ -237,7 +265,7 @@ export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuild
       <OperativeLocationBanner op={op} locations={locations} />
 
       {/* Datos del pedido */}
-      <div className="rounded-lg border border-border-default bg-card p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="rounded-xl border border-border-default bg-card p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <div>
           <label className="block text-xs font-medium text-text-secondary mb-1">Local (entrega)</label>
           <p className="px-2 py-1.5 text-sm text-text-primary">
@@ -287,7 +315,7 @@ export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuild
 
       {/* Sin proveedor elegido */}
       {!supplierId && !loadingSuppliers && (
-        <div className="p-8 rounded-lg border border-dashed border-border-default text-center">
+        <div className="p-8 rounded-xl border border-dashed border-border-default text-center">
           <Truck size={28} className="mx-auto text-text-secondary mb-2" />
           <p className="text-sm text-text-secondary">
             Elige un proveedor para ver su catálogo y empezar a pedir.
@@ -301,7 +329,7 @@ export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuild
           {loadingCatalog && <p className="text-sm text-text-secondary">Cargando catálogo…</p>}
 
           {!loadingCatalog && catalog.length === 0 && (
-            <div className="p-6 rounded-lg border border-dashed border-border-default text-center">
+            <div className="p-6 rounded-xl border border-dashed border-border-default text-center">
               <p className="text-sm text-text-secondary">
                 Este proveedor aún no tiene artículos en su catálogo. Añádeselos desde
                 la ficha de cada ingrediente (sección Compra/Proveedores).
@@ -311,98 +339,151 @@ export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuild
 
           {!loadingCatalog && catalog.length > 0 && (
             <>
-              <div className="relative max-w-sm">
+              <div className="relative">
                 <Search size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-secondary" />
                 <input
                   type="text"
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                   placeholder="Buscar artículo o código"
-                  className="w-full pl-8 pr-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+                  className="w-full pl-8 pr-2 py-2 text-sm border border-border-default rounded-lg bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
                 />
               </div>
 
-              <div className="rounded-lg border border-border-default overflow-x-auto">
-                <table className="w-full text-sm" style={{ minWidth: 640 }}>
-                  <thead className="bg-page text-text-secondary">
-                    <tr>
-                      <th className="text-left font-medium px-3 py-2">Artículo</th>
-                      <th className="text-right font-medium px-3 py-2">Stock</th>
-                      <th className="text-center font-medium px-3 py-2" style={{ width: 90 }}>Cantidad</th>
-                      <th className="text-left font-medium px-3 py-2">Formato</th>
-                      <th className="text-left font-medium px-3 py-2">Comentario</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {visibleCatalog.map(e => {
-                      const d = draft[e.articleSupplierId]
-                      const hasQty = d?.qty && Number(d.qty.replace(',', '.')) > 0
-                      return (
-                        <tr
-                          key={e.articleSupplierId}
-                          className={`border-t border-border-default ${hasQty ? '' : 'opacity-90'}`}
-                        >
-                          <td className="px-3 py-2 text-text-primary">
-                            {e.itemName}
+              {/* Lista de artículos: una fila enmarcada por artículo */}
+              <div className="space-y-2">
+                {visibleCatalog.map((e, index) => {
+                  const d = draft[e.articleSupplierId]
+                  const qty = parseQty(d?.qty)
+                  const hasQty = qty > 0
+                  const warn = warningFor(e, qty)
+                  const srcLabel = e.suggestionSource ? SOURCE_LABEL[e.suggestionSource] : null
+                  const canSuggest = e.suggestedQty != null && e.suggestedQty > 0
+                  return (
+                    <div
+                      key={e.articleSupplierId}
+                      className={`rounded-xl border bg-card px-3 py-2.5 transition-base ${
+                        hasQty ? 'border-accent/50 ring-1 ring-accent/20' : 'border-border-default'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        {/* Nombre + meta (protagonista) */}
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[15px] font-medium text-text-primary truncate">{e.itemName}</div>
+                          <div className="flex items-center gap-2 mt-0.5">
                             {e.supplierCode && (
-                              <span className="text-text-tertiary text-[11px]"> · {e.supplierCode}</span>
+                              <span className="text-[11px] text-text-tertiary">{e.supplierCode}</span>
                             )}
                             {e.isPreferred && (
-                              <span className="ml-1.5 text-[10px] px-1 py-0.5 rounded bg-accent-bg text-accent border border-accent/20">preferente</span>
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent-bg text-accent">preferente</span>
                             )}
-                          </td>
-                          <td className="px-3 py-2 text-right text-text-tertiary tabular-nums">
+                          </div>
+                        </div>
+
+                        {/* Stock */}
+                        <div className="w-16 text-right shrink-0">
+                          <div className="text-[10px] text-text-tertiary">Stock</div>
+                          <div className="text-[13px] text-text-secondary tabular-nums">
                             {formatStockForOrder(e.stockOnHand, e.formatQtyInBase, e.formatName, e.baseUnitAbbr)}
-                          </td>
-                          <td className="px-3 py-2 text-center">
-                            <div className="inline-flex items-center gap-1.5">
-                              <input
-                                type="text"
-                                inputMode="decimal"
-                                value={d?.qty ?? ''}
-                                onChange={ev => setQty(e.articleSupplierId, ev.target.value)}
-                                disabled={saving}
-                                placeholder="0"
-                                className="w-16 px-2 py-1 text-sm text-center border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
-                              />
-                              {/* Unidad pedida: formato ("caja") o, si no tiene, la unidad base ("kg") */}
-                              {(e.formatName ?? e.baseUnitAbbr) && (
-                                <span className="text-[11px] text-text-tertiary whitespace-nowrap">
-                                  {e.formatName ? e.formatName.toLowerCase() : e.baseUnitAbbr}
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-3 py-2 text-text-primary">
-                            {e.formatLabel ?? e.formatName ?? '—'}
-                          </td>
-                          <td className="px-3 py-2">
-                            <input
-                              type="text"
-                              value={d?.note ?? ''}
-                              onChange={ev => setNote(e.articleSupplierId, ev.target.value)}
+                          </div>
+                        </div>
+
+                        {/* Sugerido: "Pide N" clicable con su fuente */}
+                        <div className="w-24 text-center shrink-0">
+                          <div className="text-[10px] text-text-tertiary mb-0.5">Sugerido</div>
+                          {canSuggest ? (
+                            <button
+                              type="button"
+                              onClick={() => useSuggested(e)}
                               disabled={saving}
-                              placeholder="Comentario…"
-                              className="w-full px-2 py-1 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+                              title={srcLabel ? `Sugerencia ${srcLabel}. Clic para usarla.` : 'Clic para usar la sugerencia.'}
+                              className="inline-flex flex-col items-center px-2 py-0.5 rounded-full bg-success-bg text-success hover:opacity-80 transition-base disabled:opacity-50"
+                            >
+                              <span className="text-[13px] font-medium leading-tight">Pide {e.suggestedQty}</span>
+                            </button>
+                          ) : (
+                            <div className="text-[13px] text-text-tertiary">—</div>
+                          )}
+                          {srcLabel && canSuggest && (
+                            <div className="text-[10px] text-text-tertiary mt-0.5">{srcLabel}</div>
+                          )}
+                        </div>
+
+                        {/* Cantidad: casilla grande y enmarcada, unidad pegada */}
+                        <div className="shrink-0">
+                          <div className={`flex items-stretch h-10 rounded-lg overflow-hidden border ${
+                            hasQty ? 'border-accent' : 'border-border-default'
+                          }`}>
+                            <input
+                              id={`qty-${index}`}
+                              type="text"
+                              inputMode="decimal"
+                              value={d?.qty ?? ''}
+                              onChange={ev => setQty(e.articleSupplierId, ev.target.value)}
+                              onKeyDown={ev => onQtyKeyDown(ev, index)}
+                              onFocus={ev => ev.currentTarget.select()}
+                              disabled={saving}
+                              placeholder="0"
+                              className="w-14 px-2 text-right text-[17px] font-medium bg-transparent text-text-primary focus:outline-none disabled:opacity-50"
                             />
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
+                            <div className="flex items-center px-2 bg-page border-l border-border-default text-[12px] text-text-secondary whitespace-nowrap">
+                              {unitLabel(e)}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Nota (icono, despliega campo) */}
+                        <button
+                          type="button"
+                          onClick={() => toggleNote(e.articleSupplierId)}
+                          disabled={saving}
+                          title="Añadir comentario"
+                          className={`shrink-0 p-1.5 rounded-md transition-base ${
+                            d?.note ? 'text-accent' : 'text-text-tertiary hover:text-text-secondary'
+                          }`}
+                        >
+                          <MessageSquarePlus size={17} />
+                        </button>
+                      </div>
+
+                      {/* Comentario desplegable */}
+                      {(d?.showNote || d?.note) && (
+                        <input
+                          type="text"
+                          value={d?.note ?? ''}
+                          onChange={ev => setNote(e.articleSupplierId, ev.target.value)}
+                          disabled={saving}
+                          placeholder="Comentario…"
+                          className="mt-2 w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+                        />
+                      )}
+
+                      {/* Aviso de incongruencia (ámbar, no bloqueante) */}
+                      {warn && (
+                        <div className="mt-2 text-[12px] text-warning bg-warning-bg rounded-md px-2 py-1">
+                          {warn}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
 
-              {/* Pie: resumen + guardar */}
-              <div className="flex items-center justify-between gap-3 flex-wrap">
-                <span className="text-sm text-text-secondary">
-                  {filledCount} {filledCount === 1 ? 'artículo' : 'artículos'} en el pedido
-                </span>
+              {/* Pie fijo: resumen + guardar */}
+              <div className="sticky bottom-0 -mx-1 mt-2 flex items-center justify-between gap-3 flex-wrap rounded-xl border border-border-default bg-card px-4 py-3">
+                <div>
+                  <div className="text-sm font-medium text-text-primary">
+                    {filledCount} {filledCount === 1 ? 'artículo' : 'artículos'} · {eur(estTotal)} est.
+                  </div>
+                  <div className="text-[11px] text-text-tertiary mt-0.5">
+                    Escribe la cantidad y pulsa Enter para bajar
+                  </div>
+                </div>
                 <button
                   type="button"
                   onClick={handleSave}
                   disabled={saving || filledCount === 0}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base"
                 >
                   {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check size={15} />}
                   {saving ? 'Guardando…' : 'Guardar pedido'}

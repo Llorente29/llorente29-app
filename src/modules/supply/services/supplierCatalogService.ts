@@ -35,7 +35,15 @@ export interface SupplierCatalogEntry {
   formats: SupplierFormatOption[]
   // Stock de referencia: vacío hoy (no hay inventario); gancho para cuando exista.
   stockOnHand: number | null
+  // ── Sugerencia de repedido (motor suggest_purchase_qty) ──
+  // suggestedQty en FORMATO de compra (cajas), techo, objetivo 7 días. null = sin señal ("—").
+  suggestedQty: number | null
+  suggestionSource: SuggestionSource | null      // de dónde sale (para la etiqueta)
+  suggestionConfidence: SuggestionConfidence | null
 }
+
+export type SuggestionSource = 'par' | 'consumo' | 'historico' | 'none'
+export type SuggestionConfidence = 'alta' | 'media'
 
 export interface SupplierFormatOption {
   id: string
@@ -233,6 +241,9 @@ export async function getSupplierCatalog(
       formatLabel: buildFormatLabel(fmt?.name ?? null, fmt?.qty_in_base ?? null, baseAbbr),
       formats: formatsByItem.get(r.recipe_item_id as string) ?? [],
       stockOnHand: null, // gancho inventario
+      suggestedQty: null,
+      suggestionSource: null,
+      suggestionConfidence: null,
     }
   })
 
@@ -254,6 +265,38 @@ export async function getSupplierCatalog(
     for (const e of entries) {
       const v = stockByItem.get(e.recipeItemId)
       e.stockOnHand = v === undefined ? null : v
+    }
+  }
+
+  // Sugerencia de repedido: una sola llamada a la RPC suggest_purchase_qty
+  // (motor To-Par MRP II). Devuelve por artículo cuánto pedir en formato de
+  // compra + de dónde sale (par/consumo/histórico) + confianza. Se fusiona por
+  // recipe_item_id. Requiere local (el motor mide stock/consumo por local). Si
+  // falla (RPC no disponible en un entorno), degrada a null sin tumbar el catálogo.
+  if (locationId && itemIds.length) {
+    try {
+      const { data: sugg, error: eg } = await (supabase! as unknown as {
+        rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: Row[] | null; error: { message: string } | null }>
+      }).rpc('suggest_purchase_qty', {
+        p_account: accountId,
+        p_supplier: supplierId,
+        p_location: locationId,
+      })
+      if (!eg && sugg) {
+        const byItem = new Map<string, Row>()
+        for (const s of sugg) byItem.set(s.recipe_item_id as string, s)
+        for (const e of entries) {
+          const s = byItem.get(e.recipeItemId)
+          if (!s) continue
+          e.suggestedQty = s.suggested_qty == null ? null : Number(s.suggested_qty)
+          const src = (s.source as string | null) ?? null
+          e.suggestionSource = (src as SuggestionSource | null)
+          const conf = (s.confidence as string | null) ?? null
+          e.suggestionConfidence = (conf as SuggestionConfidence | null)
+        }
+      }
+    } catch {
+      // sugerencia opcional: si la RPC no está, seguimos sin ella
     }
   }
 
