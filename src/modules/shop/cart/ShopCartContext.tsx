@@ -1,21 +1,15 @@
 // src/modules/shop/cart/ShopCartContext.tsx
 //
-// Estado del carrito de Folvy Shop. Multimarca con una sola entrega: el carrito
-// FIJA un local con el primer plato añadido; sólo admite marcas que operen en
-// ese local (regla dura "mismo local = una entrega", patrón Otter Multi-Store /
-// Glovo / Uber). Persistente en localStorage por slug.
+// Estado del carrito de Folvy Shop. Multimarca con una sola entrega. Regla dura
+// "mismo local = una entrega" (patrón Otter Multi-Store / Glovo / Uber).
 //
-// Cada línea conserva además su payload canónico de pedido (`order`), generado
-// al añadir desde (config + selección). Ese payload es lo que el checkout manda
-// a place_shop_order para REPRECIAR en servidor y crear las líneas canónicas.
+// MULTI-LOCAL (01/07): el carrito ya NO fija "el primer local de la marca". En su
+// lugar mantiene los LOCALES CANDIDATOS = intersección de los locales donde operan
+// TODAS las marcas del carrito. El local concreto (locationId) se ELIGE en el
+// checkout: en recogida lo elige el cliente entre los candidatos; a domicilio lo
+// resuelve la zona que cubre su dirección. Si solo hay un candidato, se fija solo.
 //
-// ANCLAS DE DISEÑO previstas (huecos estructurales, no construidos aún; aquí
-// para que enchufarlos luego no rompa nada):
-//   - descuentos/promos: CartTotals.discount + por línea line.discount
-//   - métodos de pago (Bizum, wallets) vía Stripe: se resuelven en el checkout,
-//     el carrito sólo aporta el importe.
-//   - cliente (invitado vs registrado / fidelización / datos guardados): el
-//     carrito no guarda cliente; lo añade el checkout. Campo reservado abajo.
+// Persistente en localStorage por slug.
 
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { ConfiguredLine } from '@/modules/shop/components/DishConfigModal'
@@ -24,49 +18,73 @@ import { toOrderLine, type OrderLine } from '@/modules/shop/services/dishConfigS
 // ── Modelo ──────────────────────────────────────────────────────────────
 
 export interface CartLine {
-  lineId: string                 // id único de la línea (no del plato: dos config distintas = 2 líneas)
+  lineId: string
   brandId: string
   brandName: string
+  brandLocationIds: string[]     // locales donde opera la marca de esta línea (para recalcular candidatos)
   menuItemId: string
   name: string
   photoUrl: string | null
   unitPrice: number
   quantity: number
-  summary: string[]              // configuración elegida, líneas legibles
+  summary: string[]
   allergens: { code: string; nameEs: string }[]
-  order: OrderLine               // payload canónico para place_shop_order (reprecio server-side)
-  discount?: number              // ANCLA promos: descuento € sobre esta línea (futuro)
+  order: OrderLine
+  discount?: number
 }
 
 export interface ShopCart {
   slug: string
-  locationId: string | null      // local fijado (null = carrito vacío)
+  locationId: string | null            // local ELEGIDO (null = aún sin elegir / carrito vacío)
+  candidateLocationIds: string[]       // locales posibles (intersección de las marcas del carrito)
   lines: CartLine[]
 }
 
 export interface CartTotals {
   itemsCount: number
   subtotal: number
-  discount: number               // ANCLA promos: descuento total (futuro)
-  deliveryFee: number            // se rellena en checkout cuando hay dirección/zona
+  discount: number
+  deliveryFee: number
   total: number
 }
 
 interface CartApi {
   cart: ShopCart
   totals: CartTotals
-  // brandLocationIds: locales activos de la marca que se intenta añadir (regla mismo local)
   addLine: (line: ConfiguredLine, brandId: string, brandName: string, brandLocationIds: string[]) => { ok: boolean; reason?: 'other_location' }
   setLineQty: (lineId: string, qty: number) => void
   removeLine: (lineId: string) => void
   clear: () => void
-  // utilidad para la UI: ¿puedo añadir de esta marca? (mismo local)
   canAddBrand: (brandLocationIds: string[]) => boolean
+  // Fija el local elegido (checkout). Debe ser uno de los candidatos.
+  setLocation: (locationId: string) => void
 }
 
 const ShopCartContext = createContext<CartApi | null>(null)
 
 function storageKey(slug: string): string { return `folvy-shop-cart:${slug}` }
+
+// Intersección de dos listas de ids (orden estable del primero).
+function intersect(a: string[], b: string[]): string[] {
+  const setB = new Set(b)
+  return a.filter((x) => setB.has(x))
+}
+
+// Candidatos = intersección de los brandLocationIds de todas las líneas.
+function computeCandidates(lines: CartLine[]): string[] {
+  if (lines.length === 0) return []
+  let acc = lines[0].brandLocationIds ?? []
+  for (let i = 1; i < lines.length; i++) acc = intersect(acc, lines[i].brandLocationIds ?? [])
+  return acc
+}
+
+// Local elegido válido: si el actual sigue entre candidatos, se mantiene; si solo
+// hay un candidato, ese; si no, null (a elegir en checkout).
+function resolveChosen(current: string | null, candidates: string[]): string | null {
+  if (current && candidates.includes(current)) return current
+  if (candidates.length === 1) return candidates[0]
+  return null
+}
 
 function loadCart(slug: string): ShopCart {
   try {
@@ -74,13 +92,14 @@ function loadCart(slug: string): ShopCart {
     if (raw) {
       const parsed = JSON.parse(raw) as ShopCart
       if (parsed && parsed.slug === slug && Array.isArray(parsed.lines)) {
-        // Descarta líneas de versiones antiguas sin payload canónico (no se pueden pedir).
-        const lines = parsed.lines.filter((l) => l && (l as CartLine).order != null)
-        return { slug, locationId: lines.length === 0 ? null : parsed.locationId, lines }
+        // Descarta líneas antiguas sin payload canónico o sin brandLocationIds (no pedibles/no enrutar).
+        const lines = parsed.lines.filter((l) => l && (l as CartLine).order != null && Array.isArray((l as CartLine).brandLocationIds))
+        const candidates = computeCandidates(lines)
+        return { slug, lines, candidateLocationIds: candidates, locationId: resolveChosen(parsed.locationId ?? null, candidates) }
       }
     }
   } catch { /* ignore */ }
-  return { slug, locationId: null, lines: [] }
+  return { slug, locationId: null, candidateLocationIds: [], lines: [] }
 }
 
 function saveCart(cart: ShopCart) {
@@ -93,28 +112,24 @@ function newLineId(): string { return `${Date.now()}-${lineSeq++}` }
 export function ShopCartProvider({ slug, children }: { slug: string; children: ReactNode }) {
   const [cart, setCart] = useState<ShopCart>(() => loadCart(slug))
 
-  // Persistir en cada cambio
   useEffect(() => { saveCart(cart) }, [cart])
-
-  // Si cambia el slug (otra tienda), recargar su carrito
   useEffect(() => { setCart(loadCart(slug)) }, [slug])
 
+  // ¿Comparte esta marca al menos un local con los candidatos actuales?
   function canAddBrand(brandLocationIds: string[]): boolean {
-    if (cart.locationId === null) return true               // carrito vacío: cualquier marca
-    return brandLocationIds.includes(cart.locationId)        // misma entrega: la marca opera en el local fijado
+    if (cart.lines.length === 0) return true
+    return intersect(cart.candidateLocationIds, brandLocationIds).length > 0
   }
 
   function addLine(line: ConfiguredLine, brandId: string, brandName: string, brandLocationIds: string[]) {
-    // Regla mismo local
-    if (cart.locationId !== null && !brandLocationIds.includes(cart.locationId)) {
+    if (cart.lines.length > 0 && intersect(cart.candidateLocationIds, brandLocationIds).length === 0) {
       return { ok: false, reason: 'other_location' as const }
     }
     setCart((prev) => {
-      // Fijar local si era el primer plato: usar el local ya fijado, o el primero de la marca
-      const locId = prev.locationId ?? brandLocationIds[0] ?? null
       const newLine: CartLine = {
         lineId: newLineId(),
         brandId, brandName,
+        brandLocationIds,
         menuItemId: line.menuItemId,
         name: line.name,
         photoUrl: line.photoUrl,
@@ -124,7 +139,9 @@ export function ShopCartProvider({ slug, children }: { slug: string; children: R
         allergens: line.allergens.map((a) => ({ code: a.code, nameEs: a.nameEs })),
         order: toOrderLine(line.config, line.selection),
       }
-      return { ...prev, locationId: locId, lines: [...prev.lines, newLine] }
+      const lines = [...prev.lines, newLine]
+      const candidates = computeCandidates(lines)
+      return { ...prev, lines, candidateLocationIds: candidates, locationId: resolveChosen(prev.locationId, candidates) }
     })
     return { ok: true }
   }
@@ -141,34 +158,30 @@ export function ShopCartProvider({ slug, children }: { slug: string; children: R
   function removeLine(lineId: string) {
     setCart((prev) => {
       const lines = prev.lines.filter((l) => l.lineId !== lineId)
-      return { ...prev, lines, locationId: lines.length === 0 ? null : prev.locationId }
+      const candidates = computeCandidates(lines)
+      return { ...prev, lines, candidateLocationIds: candidates, locationId: resolveChosen(prev.locationId, candidates) }
     })
   }
 
   function clear() {
-    setCart({ slug, locationId: null, lines: [] })
+    setCart({ slug, locationId: null, candidateLocationIds: [], lines: [] })
+  }
+
+  function setLocation(locationId: string) {
+    setCart((prev) => (prev.candidateLocationIds.includes(locationId) ? { ...prev, locationId } : prev))
   }
 
   const totals = useMemo<CartTotals>(() => {
-    let subtotal = 0
-    let discount = 0
-    let count = 0
+    let subtotal = 0, discount = 0, count = 0
     for (const l of cart.lines) {
       subtotal += l.unitPrice * l.quantity
       discount += (l.discount ?? 0)
       count += l.quantity
     }
-    const deliveryFee = 0  // se fija en checkout con la zona/dirección
-    return {
-      itemsCount: count,
-      subtotal,
-      discount,
-      deliveryFee,
-      total: subtotal - discount + deliveryFee,
-    }
+    return { itemsCount: count, subtotal, discount, deliveryFee: 0, total: subtotal - discount }
   }, [cart])
 
-  const api: CartApi = { cart, totals, addLine, setLineQty, removeLine, clear, canAddBrand }
+  const api: CartApi = { cart, totals, addLine, setLineQty, removeLine, clear, canAddBrand, setLocation }
   return <ShopCartContext.Provider value={api}>{children}</ShopCartContext.Provider>
 }
 

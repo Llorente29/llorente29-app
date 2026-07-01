@@ -139,6 +139,17 @@ export async function createShopPaymentIntent(saleId: string): Promise<PaymentIn
   }
 }
 
+// ── Locales de la tienda (para el selector de recogida, multi-local) ─────
+
+export interface ShopLocation { id: string; name: string; address: string | null }
+
+/** Locales activos de la cuenta dueña del slug (RPC pública shop_locations_by_slug). */
+export async function getShopLocations(slug: string): Promise<ShopLocation[]> {
+  const { data, error } = await db().rpc('shop_locations_by_slug', { p_slug: slug })
+  if (error || !Array.isArray(data)) return []
+  return (data as any[]).map((l) => ({ id: l.id, name: l.name ?? '', address: l.address ?? null }))
+}
+
 // ── Config de métodos de pago del Shop (tienda pública, por slug) ────────
 
 export interface ShopPaymentConfig {

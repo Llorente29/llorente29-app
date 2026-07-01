@@ -17,8 +17,8 @@ import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-
 import { useShopCart } from '@/modules/shop/cart/ShopCartContext'
 import {
   geocodeAddress, checkDelivery, getDeliverySlots, placeShopOrder, createShopPaymentIntent,
-  getShopPaymentConfig,
-  type GeocodeHit, type DeliveryCheck, type DeliverySlot, type ShopOrderPayload, type ShopPaymentConfig,
+  getShopPaymentConfig, getShopLocations,
+  type GeocodeHit, type DeliveryCheck, type DeliverySlot, type ShopOrderPayload, type ShopPaymentConfig, type ShopLocation,
 } from '@/modules/shop/checkout/checkoutService'
 
 const C = {
@@ -28,6 +28,26 @@ const C = {
   amber: '#7A5A12', amberBg: '#FFF3D6', red: '#C23B22', redBg: '#FDE7E2', pill: '#EEEEEB',
 }
 function eur(n: number): string { return n.toFixed(2).replace('.', ',') + ' \u20AC' }
+
+// Icono de ubicación (protagonista de la sección de entrega).
+function Pin({ size = 24, color = '#FF5436' }: { size?: number; color?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block', flexShrink: 0 }} aria-hidden>
+      <path d="M9 11a3 3 0 1 0 6 0 3 3 0 0 0-6 0" />
+      <path d="M17.657 16.657 13.414 20.9a2 2 0 0 1-2.827 0l-4.244-4.243a8 8 0 1 1 11.314 0z" />
+    </svg>
+  )
+}
+
+// Cabecera de sección con número de paso (jerarquía 1·2·3).
+function StepHead({ n, children }: { n: number; children: React.ReactNode }) {
+  return (
+    <div style={s.stepHead}>
+      <span style={s.stepNum}>{n}</span>
+      <span style={s.stepTitle}>{children}</span>
+    </div>
+  )
+}
 
 const PENDING_KEY = 'folvy-shop-pending'
 
@@ -42,7 +62,7 @@ interface PayContext {
 }
 
 export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: () => void }) {
-  const { cart, totals, clear } = useShopCart()
+  const { cart, totals, clear, setLocation } = useShopCart()
   const [mode, setMode] = useState<Mode>('delivery')
 
   const [query, setQuery] = useState('')
@@ -72,6 +92,18 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
 
   // Métodos de pago que ofrece esta tienda (configurable por cuenta).
   const [payConfig, setPayConfig] = useState<ShopPaymentConfig>({ online: true, cashPickup: false, cashDelivery: false })
+
+  // Locales de la tienda (para el selector de recogida y para mostrar dónde recoge).
+  const [locations, setLocations] = useState<ShopLocation[]>([])
+  useEffect(() => {
+    let alive = true
+    getShopLocations(slug).then((r) => { if (alive) setLocations(r) }).catch(() => {})
+    return () => { alive = false }
+  }, [slug])
+  const candidateLocs = cart.candidateLocationIds
+    .map((id) => locations.find((l) => l.id === id))
+    .filter(Boolean) as ShopLocation[]
+  const chosenLoc = cart.locationId ? (locations.find((l) => l.id === cart.locationId) ?? null) : null
 
   useEffect(() => {
     let alive = true
@@ -116,10 +148,23 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
 
   async function chooseHit(h: GeocodeHit) {
     setChosen(h); setHits([]); setShowHits(false); setQuery(h.label); setCheck(null)
-    if (!cart.locationId) return
+    const cands = cart.candidateLocationIds
+    if (cands.length === 0) return
     setChecking(true)
-    try { setCheck(await checkDelivery(slug, cart.locationId, h.lat, h.lng)) }
-    catch { setCheck({ ok: false, reason: 'error' }) }
+    try {
+      // Multi-local: probamos cada candidato y gana el que cubre la dirección
+      // (el más cercano si varios). Ese local queda fijado para el pedido.
+      let best: DeliveryCheck | null = null
+      let bestLoc: string | null = null
+      for (const locId of cands) {
+        const r = await checkDelivery(slug, locId, h.lat, h.lng)
+        if (r.ok && (best === null || best.ok !== true || r.distanceM < best.distanceM)) {
+          best = r; bestLoc = locId
+        }
+      }
+      if (best && best.ok && bestLoc) { setLocation(bestLoc); setCheck(best) }
+      else setCheck({ ok: false, reason: 'out_of_zone' })
+    } catch { setCheck({ ok: false, reason: 'error' }) }
     finally { setChecking(false) }
   }
 
@@ -142,7 +187,9 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
   const timeOk = timeMode === 'asap' || (timeMode === 'scheduled' && slotTs != null)
   const contactOk = name.trim().length > 1 && phone.replace(/\s+/g, '').length >= 7
   const canContinue = cart.lines.length > 0 && timeOk && contactOk && (
-    mode === 'pickup' || (check?.ok === true && !belowMin && detail.trim().length > 0)
+    mode === 'pickup'
+      ? cart.locationId != null
+      : (check?.ok === true && !belowMin && detail.trim().length > 0)
   )
 
   // ¿Qué métodos hay disponibles para el modo de entrega elegido?
@@ -286,7 +333,7 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
 
       <div className="ck-cols" style={s.cols}>
         <nav className="ck-timeline" style={s.timeline} aria-hidden>
-          {['Entrega', 'Hora', 'Pago'].map((t, i) => (
+          {['Entrega', 'Hora', 'Datos', 'Pago'].map((t, i) => (
             <div key={t} style={s.tStep}>
               <span style={s.tNum}>{i + 1}</span>
               <span style={s.tLabel}>{t}</span>
@@ -303,16 +350,19 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
 
             {mode === 'delivery' ? (
               <>
-                <h2 style={s.h2}>¿Dónde lo llevamos?</h2>
+                <StepHead n={1}>¿Dónde lo llevamos?</StepHead>
                 <div style={{ position: 'relative' }}>
-                  <input
-                    style={s.input}
-                    value={query}
-                    onChange={(e) => { setQuery(e.target.value); setChosen(null); setCheck(null) }}
-                    onFocus={() => hits.length > 0 && setShowHits(true)}
-                    placeholder="Empieza a escribir tu dirección…"
-                    autoComplete="off"
-                  />
+                  <div style={s.addrWrap}>
+                    <Pin size={24} />
+                    <input
+                      style={s.addrInput}
+                      value={query}
+                      onChange={(e) => { setQuery(e.target.value); setChosen(null); setCheck(null) }}
+                      onFocus={() => hits.length > 0 && setShowHits(true)}
+                      placeholder="Empieza a escribir tu dirección…"
+                      autoComplete="off"
+                    />
+                  </div>
                   {showHits && hits.length > 0 && (
                     <ul style={s.hits}>
                       {hits.map((h, i) => (
@@ -329,15 +379,15 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
                   <div style={s.okBox}>
                     <span style={s.okCheck}>{'\u2713'}</span>
                     <span>
-                      <span style={s.okTitle}>Llegamos a tu puerta</span>
-                      <span style={s.okSub}>Envío {eur(check.deliveryFee)}{check.etaMin != null && ` · unos ${check.etaMin} min`}</span>
+                      <span style={s.okTitle}>Llegamos a tu puerta · {eur(check.deliveryFee)}{check.etaMin != null && ` · ${check.etaMin} min`}</span>
+                      {chosenLoc && <span style={s.okSub}>Preparado en {chosenLoc.name}</span>}
                     </span>
                   </div>
                 )}
                 {check && !check.ok && (
                   <div style={s.noBox}>
                     {check.reason === 'out_of_zone'
-                      ? 'Este local no reparte en esa dirección. Prueba “Recoger en el local” u otra dirección.'
+                      ? 'No repartimos en esa dirección desde ningún local. Prueba “Recoger” u otra dirección.'
                       : 'No se pudo comprobar la dirección. Inténtalo de nuevo.'}
                   </div>
                 )}
@@ -351,14 +401,47 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
               </>
             ) : (
               <>
-                <h2 style={s.h2}>Recoger en el local</h2>
-                <p style={s.muted}>Recoges en el local. La dirección de recogida se mostrará al confirmar.</p>
+                <StepHead n={1}>¿Dónde recoges?</StepHead>
+                {candidateLocs.length > 1 ? (
+                  <>
+                    <p style={s.stepSub}>Elige el local donde pasarás a recoger.</p>
+                    <div style={s.detailRow}>
+                      {candidateLocs.map((l) => {
+                        const on = cart.locationId === l.id
+                        return (
+                          <button
+                            key={l.id}
+                            style={{ ...s.locOpt, ...(on ? s.locOptOn : {}) }}
+                            onClick={() => setLocation(l.id)}
+                          >
+                            <Pin size={22} color={on ? '#FF5436' : '#C9C5BD'} />
+                            <span style={s.locBody}>
+                              <span style={s.locName}>{l.name}</span>
+                              {l.address && <span style={s.locAddr}>{l.address}</span>}
+                            </span>
+                            {on && <span style={s.locTick}>{'\u2713'}</span>}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </>
+                ) : chosenLoc ? (
+                  <div style={s.okBox}>
+                    <span style={s.okCheck}>{'\u2713'}</span>
+                    <span>
+                      <span style={s.okTitle}>Recoges en {chosenLoc.name}</span>
+                      {chosenLoc.address && <span style={s.okSub}>{chosenLoc.address}</span>}
+                    </span>
+                  </div>
+                ) : (
+                  <p style={s.stepSub}>La dirección de recogida se mostrará al confirmar.</p>
+                )}
               </>
             )}
           </section>
 
           <section style={s.card}>
-            <h2 style={s.h2}>¿Cuándo?</h2>
+            <StepHead n={2}>¿Cuándo?</StepHead>
 
             {/* Lo antes posible — tarjeta protagonista */}
             <button
@@ -407,7 +490,7 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
           </section>
 
           <section style={s.card}>
-            <h2 style={s.h2}>¿Quién recibe?</h2>
+            <StepHead n={3}>¿Quién recibe?</StepHead>
             <div style={s.detailRow}>
               <input style={s.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre y apellidos" autoComplete="name" />
               <input style={s.input} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Teléfono de contacto" inputMode="tel" autoComplete="tel" />
@@ -415,7 +498,7 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
           </section>
 
           <section style={s.card}>
-            <h2 style={s.h2}>¿Cómo pagas?</h2>
+            <StepHead n={4}>¿Cómo pagas?</StepHead>
             {onlineAvailable && cashAvailable ? (
               <p style={s.muted}>Puedes pagar online (tarjeta o Bizum) de forma segura, o en efectivo {mode === 'pickup' ? 'al recoger' : 'a la entrega'}. Elige abajo.</p>
             ) : onlineAvailable ? (
@@ -611,6 +694,12 @@ const s: Record<string, React.CSSProperties> = {
   card: { background: C.surface, border: `1px solid ${C.line}`, borderRadius: 16, padding: '18px 20px' },
   next: { opacity: .5 },
   h2: { fontSize: 18, fontWeight: 900, letterSpacing: '-.02em', margin: '0 0 12px' },
+  stepHead: { display: 'flex', alignItems: 'center', gap: 9, marginBottom: 12 },
+  stepNum: { width: 24, height: 24, borderRadius: '50%', background: C.ink, color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, flexShrink: 0 },
+  stepTitle: { fontSize: 17.5, fontWeight: 900, letterSpacing: '-.02em', color: C.ink },
+  stepSub: { fontSize: 13, color: C.inkDim, lineHeight: 1.5, margin: '0 0 12px 33px' },
+  addrWrap: { display: 'flex', alignItems: 'center', gap: 11, border: `2px solid ${C.ink}`, borderRadius: 14, padding: '13px 15px', background: '#FAFAF8' },
+  addrInput: { flex: 1, minWidth: 0, border: 'none', background: 'transparent', outline: 'none', fontSize: 16, fontWeight: 600, color: C.ink },
   muted: { fontSize: 13, color: C.inkDim, lineHeight: 1.5, margin: 0 },
 
   modePill: { display: 'inline-flex', background: C.pill, borderRadius: 999, padding: 4, marginBottom: 14 },
@@ -629,6 +718,12 @@ const s: Record<string, React.CSSProperties> = {
   okSub: { display: 'block', fontSize: 12, color: C.greenMid },
   noBox: { marginTop: 12, fontSize: 13.5, fontWeight: 600, color: C.red, background: C.redBg, borderRadius: 12, padding: '12px 14px' },
   detailRow: { display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 },
+  locOpt: { display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', border: `1.5px solid ${C.lineInput}`, background: '#fff', borderRadius: 14, padding: '12px 14px', cursor: 'pointer' },
+  locOptOn: { border: `2px solid ${C.ink}`, background: '#FAFAF8' },
+  locBody: { flex: 1, minWidth: 0 },
+  locName: { display: 'block', fontSize: 14.5, fontWeight: 800, color: C.ink },
+  locAddr: { display: 'block', fontSize: 12.5, color: C.inkDim, marginTop: 2 },
+  locTick: { width: 22, height: 22, borderRadius: '50%', background: C.ink, color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, flexShrink: 0 },
 
   slotGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(72px, 1fr))', gap: 8, marginTop: 4 },
   timeCard: { width: '100%', display: 'flex', alignItems: 'center', gap: 13, border: `1.5px solid ${C.lineInput}`, background: '#fff', borderRadius: 14, padding: 14, cursor: 'pointer', textAlign: 'left' },
