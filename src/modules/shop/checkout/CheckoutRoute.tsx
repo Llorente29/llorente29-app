@@ -715,7 +715,7 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
 function PaymentSection({ pay, mode, onPaid }: { pay: PayContext; mode: Mode; onPaid: () => void }) {
   const pk = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY as string | undefined
   const stripePromise = useMemo(
-    () => (pk ? loadStripe(pk, { stripeAccount: pay.connectedAccountId }) : null),
+    () => (pk ? loadStripe(pk, { stripeAccount: pay.connectedAccountId, locale: 'es' }) : null),
     [pk, pay.connectedAccountId],
   )
 
