@@ -13,6 +13,14 @@ const C = {
 
 function eur(n: number): string { return n.toFixed(2).replace('.', ',') + ' €' }
 
+function Moon({ size = 15 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" style={{ display: 'block', flexShrink: 0 }}>
+      <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
+    </svg>
+  )
+}
+
 function Star({ size = 14 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" style={{ display: 'block' }}>
@@ -68,6 +76,13 @@ export default function BrandMenuRoute({ slug, brandId, onBack, onCheckout }: { 
 
   return (
     <div style={S.page}>
+      <style>{`
+        .fvdish { transition: transform .16s ease, box-shadow .16s ease; }
+        .fvdish:hover { transform: translateY(-3px); box-shadow: 0 12px 30px rgba(26,23,20,.13); }
+        .fvadd { transition: filter .14s ease, transform .14s ease; }
+        .fvadd:not(:disabled):hover { filter: brightness(.94); transform: translateY(-1px); }
+        .fvadd:not(:disabled):active { transform: translateY(0); }
+      `}</style>
       {/* Topbar */}
       <div style={S.topbar}>
         <button style={S.backLink} onClick={onBack}>← Tienda</button>
@@ -82,7 +97,7 @@ export default function BrandMenuRoute({ slug, brandId, onBack, onCheckout }: { 
       {/* Banner: marca cerrada ahora (por horario) */}
       {!menu.isOpen && (
         <div style={S.closedBanner}>
-          🌙 <strong>Cerrado ahora.</strong> Esta marca no está operando en este momento. Puedes ver la carta, pero no aceptará pedidos hasta que vuelva a abrir.
+          <Moon size={16} /><span><strong>Cerrado ahora.</strong> Esta marca no está operando en este momento. Puedes ver la carta, pero no aceptará pedidos hasta que vuelva a abrir.</span>
         </div>
       )}
 
@@ -119,7 +134,7 @@ export default function BrandMenuRoute({ slug, brandId, onBack, onCheckout }: { 
             <h2 style={S.catTitle}>{cat.emoji ? `${cat.emoji} ` : ''}{cat.name}</h2>
             <div style={S.dishGrid}>
               {cat.products.map(d => (
-                <div key={d.id} style={S.dish}>
+                <div key={d.id} className="fvdish" style={S.dish}>
                   {d.photoUrl
                     ? <div style={{ ...S.dishPhoto, background: `center/cover no-repeat url(${d.photoUrl})` }} />
                     : <div style={{ ...S.dishPhoto, background: C.accentBg }} />}
@@ -132,11 +147,13 @@ export default function BrandMenuRoute({ slug, brandId, onBack, onCheckout }: { 
                     <div style={S.dishFoot}>
                       <span style={S.dishPrice}>{eur(d.price)}</span>
                       <button
+                        className="fvadd"
                         style={{ ...S.addBtn, ...(menu.isOpen ? S.addBtnOn : {}) }}
                         disabled={!menu.isOpen}
                         title={menu.isOpen ? 'Configurar y añadir' : 'Cerrado ahora'}
                         onClick={() => menu.isOpen && setConfigItemId(d.id)}
                       >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" style={{ display: 'block' }}><path d="M12 5v14M5 12h14" /></svg>
                         Añadir
                       </button>
                     </div>
@@ -196,7 +213,7 @@ const S: Record<string, React.CSSProperties> = {
   backLink: { background: 'none', border: 'none', cursor: 'pointer', fontWeight: 800, fontSize: 15, color: C.ink, padding: 0 },
   preTag: { fontSize: 12, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: C.amber, background: C.amberBg, border: `1px solid ${C.amberLine}`, padding: '6px 12px', borderRadius: 30 },
   preBanner: { margin: '14px 28px 0', padding: '11px 16px', background: C.amberBg, border: `1px solid ${C.amberLine}`, borderRadius: 12, fontSize: 13.5, color: C.amber, fontWeight: 600 },
-  closedBanner: { margin: '10px 28px 0', padding: '11px 16px', background: '#EFEDEA', border: `1px solid ${C.line}`, borderRadius: 12, fontSize: 13.5, color: C.ink, fontWeight: 600 },
+  closedBanner: { margin: '10px 28px 0', padding: '11px 16px', background: '#EFEDEA', border: `1px solid ${C.line}`, borderRadius: 12, fontSize: 13.5, color: C.ink, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 9 },
   openPill: { fontSize: 12.5, fontWeight: 800, color: C.green, background: C.greenBg, padding: '4px 11px', borderRadius: 999 },
   closedPill: { fontSize: 12.5, fontWeight: 800, color: '#fff', background: '#6B6661', padding: '4px 11px', borderRadius: 999 },
   brandHead: { display: 'flex', alignItems: 'center', gap: 18, margin: '22px 28px 0' },
@@ -207,7 +224,7 @@ const S: Record<string, React.CSSProperties> = {
   menuWrap: { maxWidth: 1180, margin: '0 auto', padding: '28px' },
   catTitle: { fontSize: 22, fontWeight: 900, letterSpacing: '-.02em', marginBottom: 14 },
   dishGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 },
-  dish: { background: C.surface, border: `1px solid ${C.line}`, borderRadius: 16, overflow: 'hidden', display: 'flex', flexDirection: 'column' },
+  dish: { background: C.surface, border: `1px solid ${C.line}`, borderRadius: 16, overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 1px 3px rgba(26,23,20,.05)' },
   dishPhoto: { height: 150, width: '100%' },
   dishBody: { padding: '13px 15px 15px', display: 'flex', flexDirection: 'column', flex: 1 },
   dishTop: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 },
@@ -216,7 +233,7 @@ const S: Record<string, React.CSSProperties> = {
   dishDesc: { fontSize: 13, color: C.inkDim, lineHeight: 1.4, marginBottom: 12, flex: 1 },
   dishFoot: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto' },
   dishPrice: { fontWeight: 900, fontSize: 16 },
-  addBtn: { background: C.accent, color: '#fff', border: 'none', borderRadius: 10, padding: '8px 16px', fontWeight: 800, fontSize: 14, cursor: 'not-allowed', opacity: .45 },
+  addBtn: { background: C.accent, color: '#fff', border: 'none', borderRadius: 999, padding: '8px 15px', fontWeight: 800, fontSize: 14, cursor: 'not-allowed', opacity: .45, display: 'inline-flex', alignItems: 'center', gap: 5 },
   addBtnOn: { cursor: 'pointer', opacity: 1 },
   footer: { textAlign: 'center', padding: '26px', fontSize: 13, color: C.inkDim },
   backBtn: { background: C.accent, color: '#fff', border: 'none', borderRadius: 10, padding: '9px 18px', fontWeight: 800, fontSize: 14, cursor: 'pointer' },

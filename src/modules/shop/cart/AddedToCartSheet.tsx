@@ -34,7 +34,9 @@ export default function AddedToCartSheet({ info, onKeepInBrand, onOtherBrands, o
   return (
     <div style={S.overlay} onClick={onClose}>
       <div style={S.sheet} onClick={(e) => e.stopPropagation()}>
-        <div style={S.check}>✓</div>
+        <div style={S.check}>
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+        </div>
         <div style={S.title}>Añadido a tu pedido</div>
         <div style={S.sub}>{info.name}</div>
 
@@ -47,7 +49,10 @@ export default function AddedToCartSheet({ info, onKeepInBrand, onOtherBrands, o
             bebidas-postres de la marca). Vacío hasta tener el dato. */}
 
         <button style={S.payBtn} onClick={onCheckout}>Ir a pagar · {eur(info.total)}</button>
-        <button style={S.browseBtn} onClick={onOtherBrands}>🍽️ Ver otras marcas y completar tu pedido</button>
+        <button style={S.browseBtn} onClick={onOtherBrands}>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}><path d="M3 2v7a3 3 0 0 0 6 0V2" /><path d="M6 2v20" /><path d="M18 2v20" /><path d="M18 8c2 0 3-1 3-4 0-2-1-2-3-2" /></svg>
+          Ver otras marcas y completar tu pedido
+        </button>
         <button style={S.ghostBtn} onClick={onKeepInBrand}>Seguir en esta marca</button>
       </div>
     </div>
@@ -62,7 +67,7 @@ const S: Record<string, React.CSSProperties> = {
   sub: { fontSize: 14, color: C.inkDim, textAlign: 'center', marginBottom: 16 },
   cartLine: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#FBF7F0', border: `1px solid ${C.line}`, borderRadius: 12, padding: '12px 14px', fontSize: 14, marginBottom: 18 },
   payBtn: { width: '100%', background: C.accent, color: '#fff', border: 'none', borderRadius: 14, padding: '15px', fontWeight: 900, fontSize: 16, cursor: 'pointer', marginBottom: 10 },
-  browseBtn: { width: '100%', background: C.greenBg, color: '#0E6B38', border: `1.5px solid ${C.green}`, borderRadius: 14, padding: '13px', fontWeight: 800, fontSize: 15, cursor: 'pointer', marginBottom: 8 },
+  browseBtn: { width: '100%', background: '#FFF1EC', color: C.accent, border: `1.5px solid ${C.accent}`, borderRadius: 14, padding: '13px', fontWeight: 800, fontSize: 15, cursor: 'pointer', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 },
   secondaryBtn: { width: '100%', background: '#fff', color: C.ink, border: `1.5px solid ${C.line}`, borderRadius: 14, padding: '13px', fontWeight: 800, fontSize: 15, cursor: 'pointer', marginBottom: 8 },
   ghostBtn: { width: '100%', background: 'none', color: C.inkDim, border: 'none', padding: '8px', fontWeight: 700, fontSize: 14, cursor: 'pointer' },
 }

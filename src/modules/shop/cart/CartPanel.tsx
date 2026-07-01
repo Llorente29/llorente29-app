@@ -34,7 +34,9 @@ export default function CartPanel({ onCheckout }: { onCheckout?: () => void }) {
     <>
       {/* Botón flotante */}
       <button style={S.fab} onClick={() => setOpen(true)} aria-label="Ver el pedido">
-        <span style={S.fabIcon}>🛒</span>
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}>
+          <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" /><path d="M3 6h18" /><path d="M16 10a4 4 0 0 1-8 0" />
+        </svg>
         <span style={S.fabCount}>{totals.itemsCount}</span>
         <span style={S.fabTotal}>{eur(totals.total)}</span>
       </button>
