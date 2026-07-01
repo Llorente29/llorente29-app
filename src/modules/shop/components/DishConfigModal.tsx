@@ -159,7 +159,13 @@ export default function DishConfigModal({ slug, menuItemId, onClose, onAdd }: Pr
   return (
     <div style={S.overlay} onClick={onClose}>
       <div style={S.modal} onClick={(e) => e.stopPropagation()}>
-        <button style={S.closeX} onClick={onClose} aria-label="Cerrar">×</button>
+        <style>{`
+          .fvm-x:hover { background: #fff; }
+          .fvm-add:not([disabled]):hover { filter: brightness(.94); }
+        `}</style>
+        <button className="fvm-x" style={S.closeX} onClick={onClose} aria-label="Cerrar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" style={{ display: 'block' }}><path d="M18 6 6 18M6 6l12 12" /></svg>
+        </button>
 
         {/* Columna izquierda: configuración */}
         <div style={S.left}>
@@ -266,6 +272,7 @@ export default function DishConfigModal({ slug, menuItemId, onClose, onAdd }: Pr
           </div>
 
           <button
+            className="fvm-add"
             style={{ ...S.addBtn, ...(valid ? {} : S.addBtnDisabled) }}
             onClick={handleAdd}
           >
@@ -341,7 +348,7 @@ function GroupBlock({ group, keyId, nested, isChecked, onToggle, onQty, showErro
 const S: Record<string, React.CSSProperties> = {
   overlay: { position: 'fixed', inset: 0, background: C.overlay, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 },
   modal: { position: 'relative', background: C.surface, borderRadius: 20, width: 'min(920px, 96vw)', maxHeight: '90vh', display: 'flex', overflow: 'hidden', boxShadow: '0 24px 60px rgba(0,0,0,.3)' },
-  closeX: { position: 'absolute', top: 12, right: 14, zIndex: 5, background: 'rgba(255,255,255,.9)', border: `1px solid ${C.line}`, borderRadius: '50%', width: 32, height: 32, fontSize: 20, lineHeight: 1, cursor: 'pointer', color: C.ink },
+  closeX: { position: 'absolute', top: 12, right: 14, zIndex: 5, background: 'rgba(255,255,255,.9)', border: `1px solid ${C.line}`, borderRadius: '50%', width: 32, height: 32, cursor: 'pointer', color: C.ink, display: 'flex', alignItems: 'center', justifyContent: 'center' },
   left: { flex: '1 1 56%', padding: '26px 26px 26px', overflowY: 'auto' },
   right: { flex: '1 1 44%', padding: '26px 26px 22px', borderLeft: `1px solid ${C.line}`, display: 'flex', flexDirection: 'column', background: C.bg },
   center: { padding: '60px 28px', textAlign: 'center', color: C.inkDim, width: '100%' },
@@ -376,7 +383,7 @@ const S: Record<string, React.CSSProperties> = {
   qtyRow: { display: 'flex', alignItems: 'center', gap: 14, marginTop: 'auto', marginBottom: 14 },
   qtyBtn: { width: 38, height: 38, borderRadius: '50%', border: `1px solid ${C.line}`, background: '#fff', cursor: 'pointer', fontSize: 20, lineHeight: 1, color: C.ink },
   qtyNum: { minWidth: 24, textAlign: 'center', fontWeight: 900, fontSize: 18 },
-  addBtn: { background: C.accent, color: '#fff', border: 'none', borderRadius: 14, padding: '15px 18px', fontWeight: 900, fontSize: 16, cursor: 'pointer', width: '100%' },
+  addBtn: { background: C.accent, color: '#fff', border: 'none', borderRadius: 999, padding: '15px 18px', fontWeight: 900, fontSize: 16, cursor: 'pointer', width: '100%', transition: 'filter .14s ease' },
   addBtnDisabled: { background: '#C9C3BB', cursor: 'not-allowed' },
   addHint: { fontSize: 12, color: C.accent, fontWeight: 700, textAlign: 'center', marginTop: 8 },
 }
