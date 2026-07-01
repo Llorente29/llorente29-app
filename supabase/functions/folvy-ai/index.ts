@@ -68,7 +68,9 @@ PUEDES ACTUAR, no solo informar. Tienes herramientas que PROPONEN cambios reales
 // Persona del agente de Supply: experto en COMPRAS y ALMACÉN (todo el módulo).
 const PERSONA_SUPPLY = `Eres el copiloto de COMPRAS Y ALMACÉN de Folvy (Folvy Supply). Tu especialidad es el aprovisionamiento (pedidos a proveedores, formatos y precios de compra), el stock y el inventario (niveles mínimo/par, bajo mínimo, mermas, teórico vs real) y la recepción. Tu trabajo es que al cliente NUNCA le falte género ni tenga dinero parado de más en cámara. Hablas como un jefe de compras que entiende de coste.
 
-Cuando el usuario pregunte qué pedir, usa purchase_suggestion (el motor calcula cuánto pedir para cubrir la semana, redondeado al formato de compra, con su fuente: por consumo real, por histórico de pedidos, o por par fijo). Cuando pregunte cómo va el almacén o qué le falta, usa stock_health y low_stock. Para explicar una sugerencia, usa item_consumption. Da siempre la cifra concreta y, si procede, su impacto. Si el motor marca una sugerencia como "por histórico", recuerda que es un proxy (confianza media); si es "por consumo", es dato real (alta). Si un artículo no tiene señal, dilo con honestidad ("no tengo consumo ni histórico para este artículo"), no inventes una cantidad.`;
+Cuando el usuario pregunte qué pedir, usa purchase_suggestion (el motor calcula cuánto pedir para cubrir la semana, redondeado al formato de compra, con su fuente: por consumo real, por histórico de pedidos, o por par fijo). Cuando pregunte cómo va el almacén o qué le falta, usa stock_health y low_stock. Para explicar una sugerencia, usa item_consumption. Da siempre la cifra concreta y, si procede, su impacto. Si el motor marca una sugerencia como "por histórico", recuerda que es un proxy (confianza media); si es "por consumo", es dato real (alta). Si un artículo no tiene señal, dilo con honestidad ("no tengo consumo ni histórico para este artículo"), no inventes una cantidad.
+
+PUEDES ACTUAR, no solo informar. Con generate_purchase_order PREPARAS un pedido completo desde la sugerencia: la herramienta NO crea el pedido, registra una propuesta que el usuario confirma con un botón. Úsala cuando el usuario quiera generar/preparar el pedido de un proveedor. Tras llamarla, di con naturalidad que has dejado la propuesta lista para confirmar; NUNCA afirmes que el pedido ya está creado.`;
 
 const OPENING_INSTRUCTION = `\n\nMODO SALUDO DE APERTURA:
 El usuario acaba de abrir el chat. Tu primer mensaje es el saludo de bienvenida.
@@ -494,6 +496,103 @@ const TOOL_ITEM_CONSUMPTION: ToolDef = {
   },
 };
 
+// ── WRITE TOOL — AGENTE SUPPLY (contrato: PROPONE, no ejecuta) ─────────
+const TOOL_GENERATE_PURCHASE_ORDER: ToolDef = {
+  name: 'generate_purchase_order',
+  description:
+    'PROPONE crear un pedido borrador a un proveedor para un local, con las cantidades ' +
+    'sugeridas por el motor de repedido (cubre la semana). NO ejecuta: registra una propuesta ' +
+    'que el usuario confirma con un botón; solo al confirmar se crea el pedido. Úsala cuando el ' +
+    'usuario quiera preparar/generar el pedido de un proveedor ("prepárame el pedido de Cloudtown", ' +
+    '"genera el pedido de la semana"). Tras llamarla, di que has preparado la propuesta para que la ' +
+    'confirme; NUNCA afirmes que el pedido ya está creado.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      supplier_name: { type: 'string', description: 'Nombre (o parte) del proveedor.' },
+      location_name: { type: 'string', description: 'Nombre (o parte) del local.' },
+    },
+    required: [],
+  },
+  handler: async (args, ctx) => {
+    const sb = clientWithUserJwt(ctx);
+    const sup = await resolveSupplierId(sb, ctx.accountId, (args.supplier_name as string | undefined)?.trim() || null);
+    if (!sup.id) return { need: 'supplier', message: 'Indica el proveedor.', suppliers: sup.options.slice(0, 20) };
+    const loc = await resolveLocationId(sb, ctx.accountId, (args.location_name as string | undefined)?.trim() || null);
+    if (!loc.id) return { need: 'location', message: 'Indica el local.', locations: loc.options.slice(0, 20) };
+
+    // 1) Sugerencia del motor.
+    const { data: sugg, error: es } = await sb.rpc('suggest_purchase_qty', {
+      p_account: ctx.accountId, p_supplier: sup.id, p_location: loc.id,
+    });
+    if (es) throw new Error(`No pude calcular la sugerencia: ${es.message}`);
+    const withQty = (sugg ?? []).filter((r: any) => r.suggested_qty != null && Number(r.suggested_qty) > 0);
+    if (withQty.length === 0) {
+      return { status: 'nothing_to_order', message: 'No hay nada que pedir a este proveedor para cubrir la semana.' };
+    }
+
+    // 2) Catálogo del proveedor para precio + formato (misma lógica que el builder:
+    //    €/caja = last_price × qty_in_base; línea = qty × €/caja).
+    const suggIds = withQty.map((r: any) => r.recipe_item_id);
+    const { data: cat, error: ec } = await sb
+      .from('article_supplier')
+      .select('recipe_item_id, last_price, purchase_format_id, recipe_item:recipe_item_id(name), recipe_item_purchase_format:purchase_format_id(qty_in_base)')
+      .eq('account_id', ctx.accountId).eq('supplier_id', sup.id).eq('is_active', true)
+      .in('recipe_item_id', suggIds);
+    if (ec) throw new Error(`No pude leer el catálogo: ${ec.message}`);
+    const catById = new Map<string, any>();
+    for (const c of (cat ?? []) as any[]) catById.set(c.recipe_item_id, c);
+
+    // 3) Construir líneas con precio.
+    const lines: any[] = [];
+    let total = 0;
+    for (const r of withQty as any[]) {
+      const c = catById.get(r.recipe_item_id);
+      const qty = Number(r.suggested_qty);
+      const lastPrice = c?.last_price != null ? Number(c.last_price) : null;
+      const qtyInBase = c?.recipe_item_purchase_format?.qty_in_base != null ? Number(c.recipe_item_purchase_format.qty_in_base) : 1;
+      const unitPrice = lastPrice != null ? Math.round(lastPrice * qtyInBase * 100) / 100 : null;  // €/formato
+      const lineTotal = unitPrice != null ? Math.round(qty * unitPrice * 100) / 100 : null;
+      if (lineTotal != null) total += lineTotal;
+      lines.push({
+        recipe_item_id: r.recipe_item_id,
+        product_name: c?.recipe_item?.name ?? '(sin nombre)',
+        qty,
+        purchase_format_id: c?.purchase_format_id ?? null,
+        unit_price: unitPrice,
+        line_total: lineTotal,
+        source: r.source,
+      });
+    }
+    total = Math.round(total * 100) / 100;
+    const supplierName = sup.options.find(o => o.id === sup.id)?.name ?? '';
+    const locationName = loc.options.find(o => o.id === loc.id)?.name ?? '';
+    const summary = `Crear pedido a ${supplierName} (${locationName}) con ${lines.length} ${lines.length === 1 ? 'artículo' : 'artículos'} · ~${total.toFixed(2)}€`;
+
+    // 4) Registrar la propuesta (no ejecuta).
+    const { data: actionId, error: ep } = await sb.rpc('propose_ai_action', {
+      p_account_id: ctx.accountId,
+      p_agent: 'supply',
+      p_tool_name: 'generate_purchase_order',
+      p_summary: summary,
+      p_args: { supplier_id: sup.id, location_id: loc.id, est_total: total, lines },
+      p_risk: 'L1',
+      p_effect_preview: { kind: 'purchase_order', supplier: supplierName, location: locationName, n_lines: lines.length, total_eur: total },
+      p_rollback_hint: { note: 'Archivar el pedido borrador creado (queda sin efecto)' },
+    });
+    if (ep) throw new Error(`No pude registrar la propuesta: ${ep.message}`);
+
+    return {
+      status: 'pending_confirmation',
+      action_id: actionId,
+      risk: 'L1',
+      summary,
+      effect: { supplier: supplierName, location: locationName, n_lines: lines.length, total_eur: total },
+      message: 'Propuesta de pedido registrada. El usuario debe confirmarla para que se cree el borrador.',
+    };
+  },
+};
+
 // ── REGISTRY DE AGENTES ───────────────────────────────────────────────
 // Cada agente declara su persona y su conjunto de tools. El backend elige el
 // agente según `module`. Añadir un agente = una entrada aquí.
@@ -519,7 +618,7 @@ const AGENTS: Record<string, AgentDef> = {
   // reposición, stock y consumo → Sonnet.
   supply: {
     persona: PERSONA_SUPPLY,
-    tools: [TOOL_PURCHASE_SUGGESTION, TOOL_STOCK_HEALTH, TOOL_LOW_STOCK, TOOL_ITEM_CONSUMPTION],
+    tools: [TOOL_PURCHASE_SUGGESTION, TOOL_STOCK_HEALTH, TOOL_LOW_STOCK, TOOL_ITEM_CONSUMPTION, TOOL_GENERATE_PURCHASE_ORDER],
     model: 'claude-sonnet-4-6',
   },
   // Agente por defecto (chat global sin módulo concreto).
