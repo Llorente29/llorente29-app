@@ -16,12 +16,12 @@
 // MARCAR LÍNEA: check por plato (kds_mark_line, compartido con el KDS).
 
 import { useState } from 'react'
-import { ChefHat, Check, Printer } from 'lucide-react'
+import { ChefHat, Check, Printer, Bike, Phone, ChevronDown, ChevronUp } from 'lucide-react'
 import { timeLevel, channelLabel, ticketCode } from '@/modules/kds/kdsUtils'
 import ChannelBadge from './ChannelBadge'
 import TicketPreviewModal from './TicketPreviewModal'
 import {
-  primaryAction, secondaryAction, childVisual,
+  primaryAction, secondaryAction, childVisual, deliveryView,
   type OrderFeedItem, type OrderFeedLine, type OrderFeedChild, type OrderStatus,
 } from '../services/ordersFeedService'
 
@@ -186,6 +186,89 @@ function LineRow({
   )
 }
 
+// ── Fila de reparto (plegable). Broker + estado visibles; rider + tel al abrir. ──
+function DeliveryRow({ order }: { order: OrderFeedItem }) {
+  const [open, setOpen] = useState(false)
+  const d = deliveryView(order)
+  if (d.kind === 'none') return null
+
+  const toneCls =
+    d.stateTone === 'done' ? 'text-success bg-success-bg border-success/30'
+    : d.stateTone === 'pending' ? 'text-warning bg-warning-bg border-warning/30'
+    : 'text-success bg-success-bg border-success/30'
+
+  // Plataforma (Glovo/Uber/JE): informativo; si hay soporte, plegable con su teléfono.
+  if (d.kind === 'platform') {
+    const canOpen = !!d.supportPhone
+    return (
+      <div className="mx-4 mb-2.5 ml-5 rounded-xl border border-[#CFE4FA] bg-[#F0F7FF] overflow-hidden">
+        <button
+          onClick={() => canOpen && setOpen(o => !o)}
+          className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left ${canOpen ? 'cursor-pointer' : 'cursor-default'}`}
+        >
+          <Bike size={16} className="text-[#2563A8] shrink-0" />
+          <span className="text-[13px] font-bold text-[#2563A8]">Lo lleva {d.carrierLabel}</span>
+          {canOpen && (
+            <span className="ml-auto text-[#2563A8] shrink-0">
+              {open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </span>
+          )}
+        </button>
+        {open && canOpen && (
+          <div className="flex items-center justify-between gap-2 px-3 py-2.5 border-t border-[#DCEAFB]">
+            <span className="text-[12.5px] text-text-secondary">Soporte {d.carrierLabel}</span>
+            <a
+              href={`tel:${d.supportPhone!.replace(/\s+/g, '')}`}
+              className="shrink-0 inline-flex items-center gap-1.5 bg-[#15171A] text-white px-3 py-2 rounded-full text-[13px] font-bold no-underline"
+            >
+              <Phone size={13} /> {d.supportPhone}
+            </a>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Reparto propio (Catcher/Jelp): plegable con rider + teléfono.
+  const hasDetail = !!(d.rider || d.phone || d.etaText)
+  return (
+    <div className="mx-4 mb-2.5 ml-5 rounded-xl border border-[#CFE4FA] bg-[#F0F7FF] overflow-hidden">
+      <button
+        onClick={() => hasDetail && setOpen(o => !o)}
+        className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left ${hasDetail ? 'cursor-pointer' : 'cursor-default'}`}
+      >
+        <Bike size={16} className="text-[#2563A8] shrink-0" />
+        <span className="text-[13px] font-bold text-[#2563A8]">{d.carrierLabel}</span>
+        {d.stateLabel && (
+          <span className={`text-[11.5px] font-extrabold px-2.5 py-0.5 rounded-full border ${toneCls}`}>{d.stateLabel}</span>
+        )}
+        {hasDetail && (
+          <span className="ml-auto text-[#2563A8] shrink-0">
+            {open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </span>
+        )}
+      </button>
+      {open && hasDetail && (
+        <div className="flex items-center justify-between gap-2 px-3 py-2.5 border-t border-[#DCEAFB]">
+          <div className="min-w-0">
+            {d.rider && <div className="text-[14px] font-bold text-text-primary truncate">{d.rider}</div>}
+            {d.etaText && <div className="text-[12px] text-text-secondary">Llega en {d.etaText}</div>}
+            {!d.rider && !d.etaText && <div className="text-[12.5px] text-text-secondary">Sin datos del repartidor todavía</div>}
+          </div>
+          {d.phone && (
+            <a
+              href={`tel:${d.phone.replace(/\s+/g, '')}`}
+              className="shrink-0 inline-flex items-center gap-1.5 bg-[#15171A] text-white px-3 py-2 rounded-full text-[13px] font-bold no-underline"
+            >
+              <Phone size={13} /> {d.phone}
+            </a>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Tarjeta ─────────────────────────────────────────────────────────────────
 
 interface OrderCardProps {
@@ -294,6 +377,8 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
           />
         ))}
       </div>
+
+      <DeliveryRow order={order} />
 
       <div className="px-4 py-3 pl-5 border-t border-default">
         <div className="flex items-center gap-3">

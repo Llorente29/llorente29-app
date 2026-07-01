@@ -87,6 +87,15 @@ export interface OrderFeedItem {
   delivery_cost: number | null
   entro_at: string
   minutos: number
+  // ── Reparto (fila plegable). Sólo con contenido cuando hay transportista propio. ──
+  dispatch_mode: string | null          // 'auto' | 'manual' | null
+  carrier_code: string | null           // 'catcher' | 'jelp' | … ; null = sin transportista propio
+  delivery_state: string | null         // estado que reporta el broker (created/assigned/picked_up/delivered…)
+  rider_name: string | null
+  rider_phone: string | null
+  eta_pickup: string | null
+  eta_delivery: string | null
+  transport_price: number | null
   lineas: OrderFeedLine[]
 }
 
@@ -178,6 +187,99 @@ export function childVisual(child: OrderFeedChild): ChildVisual {
       // no casó con el catálogo: heurística por texto, sin confirmar
       return looksRemove ? { tone: 'remove', confirmed: false } : { tone: 'add', confirmed: false }
   }
+}
+
+// ── Fila de reparto de la tarjeta ───────────────────────────────────────────
+//
+// Decide qué enseñar según QUIÉN reparte (no según el canal de venta):
+//   - carrier propio (Catcher/Jelp) → fila completa (broker · estado · rider · tel),
+//     venga el pedido de Glovo/Uber/JE/Shop.
+//   - delivery de plataforma sin carrier propio → "Lo lleva {plataforma}", sin rider.
+//   - recogida u otros → sin fila.
+
+export type DeliveryRowKind = 'own' | 'platform' | 'none'
+export type DeliveryTone = 'pending' | 'active' | 'done'
+
+export interface DeliveryView {
+  kind: DeliveryRowKind
+  carrierLabel: string | null
+  stateLabel: string | null
+  stateTone: DeliveryTone
+  rider: string | null
+  phone: string | null
+  etaText: string | null
+  supportPhone: string | null   // soporte de la plataforma (Glovo/Uber/JE), sólo en kind='platform'
+}
+
+// Soporte de repartidores por plataforma (España). Fijos; si cambian, editar aquí
+// (o migrar a tabla platform_support cuando se quiera editar sin desplegar).
+const PLATFORM_SUPPORT: { match: RegExp; phone: string }[] = [
+  { match: /glovo/i,                phone: '931 22 72 62' },
+  { match: /uber/i,                 phone: '911 23 21 86' },
+  { match: /just\s*eat|justeat|je\b/i, phone: '910 50 73 94' },
+]
+function supportPhoneFor(channel: string | null): string | null {
+  if (!channel) return null
+  return PLATFORM_SUPPORT.find(p => p.match.test(channel))?.phone ?? null
+}
+
+const CARRIER_LABEL: Record<string, string> = {
+  catcher: 'Catcher', jelp: 'Jelp', jelp_delivery: 'Jelp',
+}
+function carrierPretty(code: string): string {
+  return CARRIER_LABEL[code.toLowerCase()] ?? (code.charAt(0).toUpperCase() + code.slice(1))
+}
+
+const DELIVERY_STATE: Record<string, { label: string; tone: DeliveryTone }> = {
+  created:    { label: 'Buscando repartidor', tone: 'pending' },
+  pending:    { label: 'Buscando repartidor', tone: 'pending' },
+  searching:  { label: 'Buscando repartidor', tone: 'pending' },
+  assigned:   { label: 'Repartidor asignado', tone: 'active' },
+  accepted:   { label: 'Repartidor asignado', tone: 'active' },
+  picked_up:  { label: 'En camino', tone: 'active' },
+  in_delivery:{ label: 'En camino', tone: 'active' },
+  on_the_way: { label: 'En camino', tone: 'active' },
+  delivered:  { label: 'Entregado', tone: 'done' },
+  completed:  { label: 'Entregado', tone: 'done' },
+  cancelled:  { label: 'Cancelado', tone: 'pending' },
+  failed:     { label: 'Entrega fallida', tone: 'pending' },
+}
+function stateView(state: string | null): { label: string; tone: DeliveryTone } {
+  if (!state) return { label: 'Reparto propio', tone: 'active' }
+  return DELIVERY_STATE[state.toLowerCase()] ?? { label: state, tone: 'active' }
+}
+
+function etaText(iso: string | null): string | null {
+  if (!iso) return null
+  const ms = new Date(iso).getTime() - Date.now()
+  if (isNaN(ms)) return null
+  const min = Math.round(ms / 60000)
+  if (min <= 0) return 'Llegando'
+  return `~${min} min`
+}
+
+export function deliveryView(order: OrderFeedItem): DeliveryView {
+  if (order.carrier_code) {
+    const st = stateView(order.delivery_state)
+    return {
+      kind: 'own',
+      carrierLabel: carrierPretty(order.carrier_code),
+      stateLabel: st.label, stateTone: st.tone,
+      rider: order.rider_name, phone: order.rider_phone,
+      etaText: etaText(order.eta_delivery),
+      supportPhone: null,
+    }
+  }
+  if (isPlatformDelivery(order.service_type)) {
+    return {
+      kind: 'platform',
+      carrierLabel: order.channel ?? 'la plataforma',
+      stateLabel: null, stateTone: 'active',
+      rider: null, phone: null, etaText: null,
+      supportPhone: supportPhoneFor(order.channel),
+    }
+  }
+  return { kind: 'none', carrierLabel: null, stateLabel: null, stateTone: 'active', rider: null, phone: null, etaText: null, supportPhone: null }
 }
 
 // ── Llamadas a las RPC ──────────────────────────────────────────────────────
