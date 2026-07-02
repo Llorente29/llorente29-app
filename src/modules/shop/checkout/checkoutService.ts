@@ -12,7 +12,8 @@
 //   3) El comensal paga con tarjeta/Bizum; el webhook confirma el pedido.
 //   4) getShopOrderStatus(token) → el front LEE el estado real del pedido (la
 //      verdad la escribe el webhook), por un token no adivinable propio del
-//      pedido. Es la base de la confirmación veraz y del seguimiento del cliente.
+//      pedido. Es la base de la confirmación veraz Y del seguimiento del cliente
+//      (marca, estado, detalle, dirección, repartidor/ETA).
 // El precio SIEMPRE se recalcula en servidor; el front nunca lo fija.
 
 import { supabase } from '@/lib/supabase'
@@ -146,6 +147,18 @@ export async function createShopPaymentIntent(saleId: string): Promise<PaymentIn
 
 // ── Estado del pedido para el cliente (lectura anónima veraz) ────────────
 
+export interface ShopOrderStatusLine {
+  name: string
+  quantity: number
+  lineTotal: number | null
+}
+
+export interface ShopOrderStatusBrand {
+  name?: string | null
+  logoUrl?: string | null
+  accentColor?: string | null
+}
+
 export interface ShopOrderStatus {
   ok: boolean
   reason?: string
@@ -157,22 +170,34 @@ export interface ShopOrderStatus {
   payMethod?: string
   mode?: 'pickup' | 'delivery'
   total?: number
+  deliveryFee?: number
   paidAt?: string | null
+  /** Estado del reparto (Catcher): matching→…→in_delivery→finish→canceled. */
   deliveryState?: string | null
   etaAt?: string | null
   riderName?: string | null
+  /** Identidad de la marca para pintar la página con su cara. */
+  brand?: ShopOrderStatusBrand
+  /** Dirección a mostrar: la de entrega (domicilio) o la del local (recogida). */
+  address?: string | null
+  /** Nombre del local (solo recogida). */
+  locationName?: string | null
+  /** Líneas de producto del pedido (sin modificadores ni hijos de combo). */
+  lines?: ShopOrderStatusLine[]
 }
 
 /**
  * Lee el estado real de un pedido del Shop por su TOKEN (no adivinable). Canal
- * anónimo, solo-lectura: expone únicamente estado + total, nada de PII de más.
- * Es la fuente de verdad de la confirmación veraz y del seguimiento del cliente.
+ * anónimo, solo-lectura: estado + total + marca + líneas + dirección, nada de
+ * PII de más. Fuente de verdad de la confirmación veraz y del seguimiento.
  */
 export async function getShopOrderStatus(token: string): Promise<ShopOrderStatus> {
   try {
     const { data, error } = await db().rpc('shop_order_status', { p_token: token })
     if (error) return { ok: false, reason: error.message }
     if (!data || data.ok !== true) return { ok: false, reason: data?.reason ?? 'not_found' }
+    const b = data.brand ?? null
+    const rawLines = Array.isArray(data.lines) ? data.lines : []
     return {
       ok: true,
       code: data.code ?? undefined,
@@ -181,10 +206,19 @@ export async function getShopOrderStatus(token: string): Promise<ShopOrderStatus
       payMethod: data.payMethod ?? undefined,
       mode: (data.mode ?? undefined) as 'pickup' | 'delivery' | undefined,
       total: data.total != null ? Number(data.total) : undefined,
+      deliveryFee: data.deliveryFee != null ? Number(data.deliveryFee) : undefined,
       paidAt: data.paidAt ?? null,
       deliveryState: data.deliveryState ?? null,
       etaAt: data.etaAt ?? null,
       riderName: data.riderName ?? null,
+      brand: b ? { name: b.name ?? null, logoUrl: b.logoUrl ?? null, accentColor: b.accentColor ?? null } : undefined,
+      address: data.address ?? null,
+      locationName: data.locationName ?? null,
+      lines: rawLines.map((l: any) => ({
+        name: l.name ?? '',
+        quantity: Number(l.quantity ?? 1),
+        lineTotal: l.lineTotal != null ? Number(l.lineTotal) : null,
+      })),
     }
   } catch (e: any) {
     return { ok: false, reason: e?.message ?? 'error' }

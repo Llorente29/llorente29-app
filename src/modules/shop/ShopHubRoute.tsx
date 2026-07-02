@@ -4,6 +4,7 @@ import BrandMenuRoute from '@/modules/shop/BrandMenuRoute'
 import { ShopCartProvider } from '@/modules/shop/cart/ShopCartContext'
 import CartPanel from '@/modules/shop/cart/CartPanel'
 import CheckoutRoute from '@/modules/shop/checkout/CheckoutRoute'
+import TrackOrderRoute from '@/modules/shop/track/TrackOrderRoute'
 
 function getSlugFromPath(): string | null {
   const m = window.location.pathname.match(/^\/t\/([^/]+)/)
@@ -13,6 +14,15 @@ function getSlugFromPath(): string | null {
 function getBrandIdFromPath(): string | null {
   const m = window.location.pathname.match(/^\/t\/[^/]+\/([^/]+)/)
   return m ? decodeURIComponent(m[1]) : null
+}
+
+// Ruta de seguimiento del pedido: /t/:slug/seguir?t=<token>. Se detecta ANTES
+// que el brandId (el 2º segmento "seguir" colisionaría con el parseo de marca).
+function getIsTrackPath(): boolean {
+  return /^\/t\/[^/]+\/seguir\/?$/.test(window.location.pathname)
+}
+function getTrackTokenFromQuery(): string | null {
+  return new URLSearchParams(window.location.search).get('t')
 }
 
 // Iconos SVG inline (sin librería externa).
@@ -242,21 +252,45 @@ function ShopHubInner({ slug, onCheckout }: { slug: string; onCheckout: () => vo
 }
 
 // Wrapper: lee el slug y envuelve el Shop con el carrito (persiste entre Hub y carta).
+// Rutea entre 3 vistas: seguimiento (/seguir, URL-driven, sobrevive a refresh y
+// al retorno de redirección de Bizum), checkout (estado interno) y hub/carta.
 export default function ShopHubRoute() {
   const [slug] = useState<string | null>(getSlugFromPath())
   const [checkout, setCheckout] = useState(false)
+  const [isTrack, setIsTrack] = useState(getIsTrackPath())
+  const [trackToken, setTrackToken] = useState<string | null>(getTrackTokenFromQuery())
+
+  // La ruta de seguimiento vive en la URL: atrás/adelante y refresh la respetan.
+  useEffect(() => {
+    const onPop = () => { setIsTrack(getIsTrackPath()); setTrackToken(getTrackTokenFromQuery()) }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
+
   if (!slug) {
     return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', color: C.inkDim }}>Tienda no encontrada</div>
   }
+
   const goToCheckout = () => { window.scrollTo(0, 0); setCheckout(true) }
+  const goToTrack = (token: string) => {
+    window.history.pushState({}, '', `/t/${slug}/seguir?t=${encodeURIComponent(token)}`)
+    setCheckout(false); setTrackToken(token); setIsTrack(true); window.scrollTo(0, 0)
+  }
+  const backFromTrack = () => {
+    window.history.pushState({}, '', `/t/${slug}`)
+    setIsTrack(false); setTrackToken(null); window.scrollTo(0, 0)
+  }
+
   return (
     <ShopCartProvider slug={slug}>
-      {checkout
-        ? <CheckoutRoute slug={slug} onBack={() => setCheckout(false)} />
-        : <>
-            <ShopHubInner slug={slug} onCheckout={goToCheckout} />
-            <CartPanel onCheckout={goToCheckout} />
-          </>}
+      {isTrack
+        ? <TrackOrderRoute slug={slug} token={trackToken} onBack={backFromTrack} />
+        : checkout
+          ? <CheckoutRoute slug={slug} onBack={() => setCheckout(false)} onTrack={goToTrack} />
+          : <>
+              <ShopHubInner slug={slug} onCheckout={goToCheckout} />
+              <CartPanel onCheckout={goToCheckout} />
+            </>}
     </ShopCartProvider>
   )
 }

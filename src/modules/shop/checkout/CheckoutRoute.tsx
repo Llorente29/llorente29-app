@@ -77,7 +77,7 @@ interface OrderResult {
   token?: string
 }
 
-export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: () => void }) {
+export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string; onBack: () => void; onTrack?: (token: string) => void }) {
   const { cart, totals, clear, setLocation } = useShopCart()
   const [mode, setMode] = useState<Mode>('delivery')
 
@@ -405,7 +405,14 @@ export default function CheckoutRoute({ slug, onBack }: { slug: string; onBack: 
               </div>
             ) : null}
             {result.total != null && <div style={s.successTotal}>Total {eur(result.total)}</div>}
-            <button style={s.successBtn} onClick={onBack}>Volver a la tienda</button>
+            {result.token && onTrack ? (
+              <>
+                <button style={s.successBtn} onClick={() => onTrack(result.token!)}>Seguir mi pedido</button>
+                <button style={s.successBtnGhost} onClick={onBack}>Volver a la tienda</button>
+              </>
+            ) : (
+              <button style={s.successBtn} onClick={onBack}>Volver a la tienda</button>
+            )}
           </div>
         </div>
       </div>
@@ -897,4 +904,5 @@ const s: Record<string, React.CSSProperties> = {
   successCodeNum: { fontSize: 22, fontWeight: 900, letterSpacing: '-.01em', color: C.ink },
   successTotal: { fontSize: 16, fontWeight: 900, marginBottom: 20 },
   successBtn: { background: C.accent, color: '#fff', border: 'none', borderRadius: 999, padding: '13px 22px', fontWeight: 800, fontSize: 14.5, cursor: 'pointer' },
+  successBtnGhost: { display: 'block', margin: '10px auto 0', background: 'none', border: 'none', color: C.inkDim, fontSize: 13.5, fontWeight: 700, cursor: 'pointer' },
 }
