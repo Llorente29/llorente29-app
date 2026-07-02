@@ -79,6 +79,18 @@ export interface ShopOrderPayload {
   expectedTime: string | null            // ISO; null = lo antes posible
   payment: { mode: 'simulated' | 'stripe' | 'cash' }
   lines: OrderLine[]
+  coupon?: { code?: string }             // código manual; el auto_apply no necesita código
+}
+
+// Desglose del cupón que devuelve place_shop_order (dry-run y real).
+export interface CouponResult {
+  applied: boolean
+  code?: string | null
+  label?: string | null
+  discount?: number
+  reason?: string | null        // null | min | not_first | exhausted | per_customer | margin
+  marginWarning?: boolean
+  isWelcome?: boolean
 }
 
 export interface PlaceOrderResult {
@@ -90,8 +102,10 @@ export interface PlaceOrderResult {
   publicToken?: string
   subtotal?: number
   deliveryFee?: number
+  discount?: number
   total?: number
   lines?: { name: string; quantity: number; unitPrice: number; lineTotal: number; valid: boolean }[]
+  coupon?: CouponResult
 }
 
 /**
@@ -112,8 +126,10 @@ export async function placeShopOrder(slug: string, payload: ShopOrderPayload, dr
     publicToken: data.publicToken ?? undefined,
     subtotal: data.subtotal != null ? Number(data.subtotal) : undefined,
     deliveryFee: data.deliveryFee != null ? Number(data.deliveryFee) : undefined,
+    discount: data.discount != null ? Number(data.discount) : undefined,
     total: data.total != null ? Number(data.total) : undefined,
     lines: data.lines ?? undefined,
+    coupon: data.coupon ?? undefined,
   }
 }
 

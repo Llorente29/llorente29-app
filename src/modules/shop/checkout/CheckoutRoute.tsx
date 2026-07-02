@@ -19,7 +19,7 @@ import { useShopCart } from '@/modules/shop/cart/ShopCartContext'
 import {
   geocodeAddress, checkDelivery, getDeliverySlots, placeShopOrder, createShopPaymentIntent,
   getShopPaymentConfig, getShopLocations, getShopOrderStatus,
-  type GeocodeHit, type DeliveryCheck, type DeliverySlot, type ShopOrderPayload, type ShopPaymentConfig, type ShopLocation,
+  type GeocodeHit, type DeliveryCheck, type DeliverySlot, type ShopOrderPayload, type ShopPaymentConfig, type ShopLocation, type CouponResult,
 } from '@/modules/shop/checkout/checkoutService'
 import { getShopHub, type ShopHub } from '@/modules/shop/services/shopHubService'
 
@@ -30,6 +30,17 @@ const C = {
   amber: '#7A5A12', amberBg: '#FFF3D6', red: '#C23B22', redBg: '#FDE7E2', pill: '#EEEEEB',
 }
 function eur(n: number): string { return n.toFixed(2).replace('.', ',') + ' \u20AC' }
+
+// Mensaje amable por el que un cupón no se aplicó (no expone el motivo de margen).
+function couponReasonMsg(reason: string): string {
+  switch (reason) {
+    case 'min':          return 'Tu pedido no llega al mínimo para este cupón.'
+    case 'not_first':    return 'Este cupón es solo para el primer pedido.'
+    case 'exhausted':    return 'Este cupón ya no está disponible.'
+    case 'per_customer': return 'Ya has usado este cupón.'
+    default:             return 'Cupón no válido.'
+  }
+}
 
 // Icono de ubicación (protagonista de la sección de entrega).
 function Pin({ size = 24, color = '#FF5436' }: { size?: number; color?: string }) {
@@ -123,6 +134,12 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
   const [marketingConsent, setMarketingConsent] = useState(false)
+  // Cupón: código manual + resultado del dry-run (fuente de verdad = servidor).
+  const [couponCode, setCouponCode] = useState('')
+  const [couponInput, setCouponInput] = useState('')       // lo que teclea antes de aplicar
+  const [showCouponField, setShowCouponField] = useState(false)
+  const [coupon, setCoupon] = useState<CouponResult | null>(null)
+  const [couponBusy, setCouponBusy] = useState(false)
   const [showPrivacy, setShowPrivacy] = useState(false)
   const [placing, setPlacing] = useState(false)
   const [placeError, setPlaceError] = useState<string | null>(null)
@@ -273,7 +290,9 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
   }, [timeMode, cart.locationId, check, slug])
 
   const deliveryFee = mode === 'delivery' && check?.ok ? check.deliveryFee : 0
-  const grandTotal = totals.subtotal - totals.discount + deliveryFee
+  // Descuento efectivo = el que devuelve el servidor (cupón), o 0.
+  const couponDiscount = coupon?.applied ? (coupon.discount ?? 0) : 0
+  const grandTotal = totals.subtotal - totals.discount - couponDiscount + deliveryFee
   const minOrder = check?.ok ? check.minOrder : null
   const belowMin = mode === 'delivery' && minOrder != null && totals.subtotal < minOrder
   const missingForMin = belowMin && minOrder != null ? minOrder - totals.subtotal : 0
@@ -288,6 +307,54 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
   // ¿Qué métodos hay disponibles para el modo de entrega elegido?
   const cashAvailable = mode === 'pickup' ? payConfig.cashPickup : payConfig.cashDelivery
   const onlineAvailable = payConfig.online
+
+  // ── Cupón: recalcular vía dry-run (el servidor es la fuente de verdad) ──
+  // Se dispara cuando cambian las líneas, el modo, el email o el código.
+  async function refreshCoupon(codeOverride?: string) {
+    if (!cart.locationId || cart.lines.length === 0) { setCoupon(null); return }
+    const code = codeOverride !== undefined ? codeOverride : couponCode
+    setCouponBusy(true)
+    try {
+      const payload: ShopOrderPayload = {
+        locationId: cart.locationId,
+        mode,
+        customer: { name: name.trim(), phone: phone.trim(), email: email.trim() || undefined },
+        delivery: {
+          address: '', detail: '', lat: null, lng: null, zoneId: null,
+          deliveryFee, note: '',
+        },
+        expectedTime: null,
+        payment: { mode: 'stripe' },
+        lines: cart.lines.map((l) => l.order),
+        coupon: code ? { code } : undefined,
+      }
+      const res = await placeShopOrder(slug, payload, true)   // dry-run
+      setCoupon(res.coupon ?? null)
+    } catch {
+      setCoupon(null)
+    } finally {
+      setCouponBusy(false)
+    }
+  }
+
+  // Recalcular el cupón cuando cambian las variables que le afectan.
+  // (email con debounce ligero para no llamar en cada tecla.)
+  useEffect(() => {
+    const t = setTimeout(() => { refreshCoupon() }, 400)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [email, mode, cart.lines.length, cart.locationId, couponCode, deliveryFee])
+
+  function applyCouponCode() {
+    const code = couponInput.trim()
+    if (!code || couponBusy) return
+    setCouponCode(code)
+    refreshCoupon(code)
+  }
+  function removeCoupon() {
+    setCouponCode(''); setCouponInput(''); setShowCouponField(false)
+    refreshCoupon('')
+  }
 
   // Confirmar el formulario. method = 'online' (Stripe) | 'cash' (efectivo).
   async function goToPayment(method: 'online' | 'cash' = 'online') {
@@ -310,6 +377,7 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
       expectedTime: timeMode === 'scheduled' ? slotTs : null,
       payment: { mode: method === 'cash' ? 'cash' : 'stripe' },
       lines: cart.lines.map((l) => l.order),
+      coupon: couponCode ? { code: couponCode } : undefined,
     }
     try {
       const res = await placeShopOrder(slug, payload, false)
@@ -366,6 +434,12 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
       </div>
       <div style={s.sumRow}><span>Subtotal</span><span>{eur(totals.subtotal)}</span></div>
       {totals.discount > 0 && <div style={{ ...s.sumRow, color: C.green }}><span>Descuento</span><span>-{eur(totals.discount)}</span></div>}
+      {couponDiscount > 0 && (
+        <div style={{ ...s.sumRow, color: C.green }}>
+          <span>{coupon?.isWelcome ? 'Bienvenida' : (coupon?.label ?? 'Descuento')}{coupon?.code ? ` (${coupon.code})` : ''}</span>
+          <span>-{eur(couponDiscount)}</span>
+        </div>
+      )}
       <div style={s.sumRow}>
         <span>Gastos de envío</span>
         <span>{mode === 'pickup' ? '-' : (check?.ok ? eur(deliveryFee) : 'Indica tu dirección')}</span>
@@ -718,6 +792,60 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
                 </span>
               </label>
             )}
+
+            {/* Bienvenida automática: se aplica sola en primer pedido (sin código) */}
+            {coupon?.isWelcome && coupon.applied && (
+              <div style={s.welcomeBanner}>
+                <span style={{ fontSize: 18 }} aria-hidden>{'\uD83C\uDF81'}</span>
+                <span>Te damos la bienvenida: <strong>{coupon.label}</strong> aplicado a este pedido.</span>
+              </div>
+            )}
+            {/* Gancho: invita a dejar el email para activar la bienvenida */}
+            {!email.trim() && (
+              <div style={s.welcomeHook}>
+                <span style={{ fontSize: 16 }} aria-hidden>{'\uD83C\uDF81'}</span>
+                <span>Deja tu email y llévate la <strong>oferta de bienvenida</strong> en tu primer pedido.</span>
+              </div>
+            )}
+
+            {/* Cupón con código (manual) */}
+            {couponDiscount > 0 && !coupon?.isWelcome ? (
+              <div style={s.welcomeBanner}>
+                <span>{'\u2713'} Cupón <strong>{coupon?.code}</strong> aplicado.</span>
+                <button type="button" style={s.couponRemove} onClick={removeCoupon}>Quitar</button>
+              </div>
+            ) : !coupon?.isWelcome && (
+              <div style={{ marginTop: 12 }}>
+                {!showCouponField ? (
+                  <button type="button" style={s.couponToggle} onClick={() => setShowCouponField(true)}>
+                    ¿Tienes un cupón?
+                  </button>
+                ) : (
+                  <div>
+                    <div style={s.couponRow}>
+                      <input
+                        style={s.couponInput}
+                        value={couponInput}
+                        onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                        onKeyDown={(e) => { if (e.key === 'Enter') applyCouponCode() }}
+                        placeholder="Código de cupón"
+                        autoCapitalize="characters"
+                      />
+                      <button
+                        type="button"
+                        style={{ ...s.couponApply, ...(couponInput.trim() && !couponBusy ? {} : { opacity: .5 }) }}
+                        onClick={applyCouponCode}
+                      >
+                        {couponBusy ? '…' : 'Aplicar'}
+                      </button>
+                    </div>
+                    {couponCode && coupon && !coupon.applied && coupon.reason && (
+                      <div style={s.couponError}>{couponReasonMsg(coupon.reason)}</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </section>
 
           <section style={s.card}>
@@ -976,6 +1104,14 @@ const s: Record<string, React.CSSProperties> = {
   consentBox: { width: 18, height: 18, marginTop: 1, flexShrink: 0, accentColor: C.green, cursor: 'pointer' },
   consentText: { fontSize: 12.5, color: C.inkDim, lineHeight: 1.5 },
   consentLink: { background: 'none', border: 'none', padding: 0, color: C.ink, fontWeight: 700, fontSize: 12.5, textDecoration: 'underline', cursor: 'pointer' },
+  welcomeBanner: { display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, padding: '11px 14px', background: C.greenBg, border: `1px solid ${C.green}`, borderRadius: 12, fontSize: 13.5, color: C.greenDeep, lineHeight: 1.4 },
+  welcomeHook: { display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, padding: '11px 14px', background: C.accentBg, border: `1px solid ${C.accent}`, borderRadius: 12, fontSize: 13.5, color: C.ink, lineHeight: 1.4 },
+  couponToggle: { background: 'none', border: 'none', padding: 0, color: C.ink, fontWeight: 700, fontSize: 13.5, textDecoration: 'underline', cursor: 'pointer' },
+  couponRow: { display: 'flex', gap: 8, alignItems: 'stretch' },
+  couponInput: { flex: 1, border: `1.5px solid ${C.lineInput}`, borderRadius: 10, padding: '10px 12px', fontSize: 14, color: C.ink, background: '#fff', boxSizing: 'border-box' as const, textTransform: 'uppercase' as const },
+  couponApply: { border: 'none', background: C.ink, color: '#fff', borderRadius: 10, padding: '0 18px', fontSize: 14, fontWeight: 700, cursor: 'pointer' },
+  couponRemove: { marginLeft: 'auto', background: 'none', border: 'none', color: C.greenDeep, fontSize: 12.5, fontWeight: 700, textDecoration: 'underline', cursor: 'pointer' },
+  couponError: { fontSize: 12.5, color: C.red, marginTop: 8, fontWeight: 600 },
   modalWrap: { position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(20,14,10,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18 },
   modalCard: { background: '#fff', borderRadius: 18, maxWidth: 560, width: '100%', maxHeight: '82vh', overflowY: 'auto', padding: '24px 26px', boxShadow: '0 24px 60px rgba(0,0,0,.3)' },
   modalTitle: { fontSize: 19, fontWeight: 900, letterSpacing: '-.02em', color: C.ink, margin: '0 0 14px' },
