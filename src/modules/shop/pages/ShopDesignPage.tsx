@@ -19,6 +19,7 @@ import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import StorefrontPreview from '@/modules/shop/components/StorefrontPreview'
 import { uploadShopHero, deleteShopHero } from '@/modules/shop/services/shopHeroService'
 import { getAccountLogo, uploadAccountLogo, deleteAccountLogo, getAccountShopText, setAccountShopText } from '@/modules/shop/services/shopAccountService'
+import WelcomeOfferSettings from '@/modules/shop/admin/WelcomeOfferSettings'
 import {
   ensureThemesForAccount,
   listBrandsWithTheme,
@@ -250,6 +251,13 @@ export default function ShopDesignPage() {
           </div>
         </div>
       </div>
+
+      {/* Oferta de bienvenida del Club (F3 sub-paso 5): valor + impacto de margen real */}
+      {accountId && (
+        <div className="mb-4">
+          <WelcomeOfferSettings accountId={accountId} />
+        </div>
+      )}
 
       {error && (
         <div className="rounded-xl bg-danger-bg text-danger border border-danger/30 px-4 py-3 text-sm mb-4">
