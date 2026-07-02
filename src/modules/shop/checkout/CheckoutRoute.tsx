@@ -716,7 +716,7 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
                   style={s.consentBox}
                 />
                 <span style={s.consentText}>
-                  Quiero unirme al club de {hub?.accountName || 'la tienda'} y recibir sus ofertas y novedades por email. Puedo darme de baja cuando quiera.{' '}
+                  Quiero unirme al club de {hub?.accountName || 'la tienda'} y recibir sus ofertas y novedades. Puedo darme de baja cuando quiera.{' '}
                   <button type="button" style={s.consentLink} onClick={() => setShowPrivacy(true)}>Política de privacidad</button>
                 </span>
               </label>
