@@ -22,6 +22,7 @@ import {
   type GeocodeHit, type DeliveryCheck, type DeliverySlot, type ShopOrderPayload, type ShopPaymentConfig, type ShopLocation, type CouponResult,
 } from '@/modules/shop/checkout/checkoutService'
 import { getShopHub, type ShopHub } from '@/modules/shop/services/shopHubService'
+import { getSessionCustomer } from '@/modules/shop/checkout/customerAuthService'
 
 const C = {
   page: '#F7F7F5', surface: '#FFFFFF', ink: '#16140F', inkDim: '#6E6960', inkFaint: '#8A857C',
@@ -31,6 +32,21 @@ const C = {
 }
 function eur(n: number): string { return n.toFixed(2).replace('.', ',') + ' \u20AC' }
 
+// Valor escueto de la promo ("10%" / "4 €"), para el titular grande de la tarjeta.
+// Cae a "10%" solo si faltara el tipo/valor (no debería con la migración T2100).
+function promoValue(c: CouponResult | null | undefined): string {
+  if (c?.discountType === 'percent' && c.discountValue != null) return `${String(c.discountValue).replace('.', ',')}%`
+  if (c?.discountType === 'fixed' && c.discountValue != null) return eur(c.discountValue)
+  return '10%'
+}
+
+// Nota gris cuando la bienvenida existe pero no aplica por un motivo distinto a
+// "falta contacto": ya usada (not_first/per_customer) o agotada (exhausted).
+function welcomeNoteMsg(reason: string | null | undefined): string {
+  if (reason === 'exhausted') return 'La oferta de bienvenida se ha agotado por ahora.'
+  return 'Esta bienvenida es solo para el primer pedido, pero pronto tendremos más para ti.'
+}
+
 // Mensaje amable por el que un cupón no se aplicó (no expone el motivo de margen).
 function couponReasonMsg(reason: string): string {
   switch (reason) {
@@ -38,6 +54,7 @@ function couponReasonMsg(reason: string): string {
     case 'not_first':    return 'Este cupón es solo para el primer pedido.'
     case 'exhausted':    return 'Este cupón ya no está disponible.'
     case 'per_customer': return 'Ya has usado este cupón.'
+    case 'needs_contact': return 'Deja tu email y únete al club para usar este cupón.'
     default:             return 'Cupón no válido.'
   }
 }
@@ -179,6 +196,19 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
   useEffect(() => {
     let alive = true
     getShopHub(slug).then((h) => { if (alive) setHub(h) }).catch(() => {})
+    return () => { alive = false }
+  }, [slug])
+
+  // Precarga F2: si el comensal entró con su cuenta, rellenamos sus datos. Así no
+  // le pedimos el correo que ya tenemos (solo campos vacíos; nunca pisa lo tecleado).
+  useEffect(() => {
+    let alive = true
+    getSessionCustomer(slug).then((c) => {
+      if (!alive || !c) return
+      if (c.name)  setName((v) => v.trim() ? v : c.name!)
+      if (c.phone) setPhone((v) => v.trim() ? v : c.phone!)
+      if (c.email) setEmail((v) => v.trim() ? v : c.email!)
+    }).catch(() => {})
     return () => { alive = false }
   }, [slug])
 
@@ -327,6 +357,9 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
         locationId: locId,
         mode,
         customer: { name: name.trim(), phone: phone.trim(), email: email.trim() || undefined },
+        // A2: la bienvenida solo aplica con email + consentimiento; el dry-run debe
+        // enviarlos para que el banner verde se muestre en la previsualización.
+        consent: { marketing: marketingConsent && email.trim().length > 0, termsVersion: 'shop-privacy-v1' },
         delivery: {
           address: '', detail: '', lat: null, lng: null, zoneId: null,
           deliveryFee, note: '',
@@ -351,7 +384,7 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
     const t = setTimeout(() => { refreshCoupon() }, 400)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [email, mode, cart.lines.length, cart.locationId, couponCode, deliveryFee, locations.length])
+  }, [email, marketingConsent, mode, cart.lines.length, cart.locationId, couponCode, deliveryFee, locations.length])
 
   function applyCouponCode() {
     const code = couponInput.trim()
@@ -784,7 +817,7 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
             <div style={s.detailRow}>
               <input style={s.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre y apellidos" autoComplete="name" />
               <input style={s.input} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Teléfono de contacto" inputMode="tel" autoComplete="tel" />
-              <input style={s.input} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email (opcional, para el recibo y ofertas)" inputMode="email" autoComplete="email" />
+              <input style={s.input} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Tu correo" inputMode="email" autoComplete="email" />
             </div>
             {email.trim().length > 0 && (
               <label style={s.consentRow}>
@@ -801,18 +834,50 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
               </label>
             )}
 
-            {/* Bienvenida automática: se aplica sola en primer pedido (sin código) */}
+            {/* Bienvenida APLICADA (correo + casilla del club marcada). */}
+            {/* Bienvenida APLICADA (correo + casilla del Club marcada) — verde. */}
             {coupon?.isWelcome && coupon.applied && (
-              <div style={s.welcomeBanner}>
-                <span style={{ fontSize: 18 }} aria-hidden>{'\uD83C\uDF81'}</span>
-                <span>Te damos la bienvenida: <strong>{coupon.label}</strong> aplicado a este pedido.</span>
+              <div style={s.welcomeCardGreen}>
+                <span style={s.welcomeChipGreen} aria-hidden>{'\uD83C\uDF89'}</span>
+                <div style={s.welcomeCol}>
+                  <div style={s.welcomeLabelGreen}>¡Ya eres del Club!</div>
+                  <div style={s.welcomeBig}>Un {promoValue(coupon)} aplicado</div>
+                  <div style={s.welcomeSubGreen}>Que aproveche. Te esperan más ofertas.</div>
+                </div>
               </div>
             )}
-            {/* Gancho: invita a dejar el email para activar la bienvenida */}
-            {!email.trim() && (
-              <div style={s.welcomeHook}>
-                <span style={{ fontSize: 16 }} aria-hidden>{'\uD83C\uDF81'}</span>
-                <span>Deja tu email y llévate la <strong>oferta de bienvenida</strong> en tu primer pedido.</span>
+            {/* Falta el contacto — dorado (regalo esperándote). El premio manda; el correo
+                no se nombra (vive en el campo), la casilla solo cuando es el paso que queda. */}
+            {coupon?.isWelcome && !coupon.applied && coupon.reason === 'needs_contact' && (
+              <div style={s.welcomeCardGold}>
+                {!email.trim() ? (
+                  <>
+                    <span style={s.welcomeChipGold} aria-hidden>{'\uD83C\uDF81'}</span>
+                    <div style={s.welcomeCol}>
+                      <div style={s.welcomeLabelGold}>Club {hub?.accountName || 'Foodint'}</div>
+                      <div style={s.welcomeBig}>Un {promoValue(coupon)} en tu primer pedido</div>
+                      <div style={s.welcomeSub}>Únete y disfruta de ofertas increíbles.</div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <span style={s.welcomeChipGold} aria-hidden>{'\u2728'}</span>
+                    <div style={s.welcomeCol}>
+                      <div style={s.welcomeLabelGold}>Ya casi es tuyo</div>
+                      <div style={s.welcomeBig}>Un {promoValue(coupon)} en tu primer pedido</div>
+                      <div style={s.welcomeSub}>Marca la casilla del Club y actívalo.</div>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {/* Bienvenida existe pero no aplica por estar ya usada o agotada: nota honesta,
+                cálida. Cubre not_first + per_customer + exhausted (antes solo not_first
+                → la tarjeta desaparecía en per_customer, hueco de pintado). */}
+            {coupon?.isWelcome && !coupon.applied &&
+              (coupon.reason === 'not_first' || coupon.reason === 'per_customer' || coupon.reason === 'exhausted') && (
+              <div style={s.welcomeNote}>
+                <span>{welcomeNoteMsg(coupon.reason)}</span>
               </div>
             )}
 
@@ -1112,8 +1177,18 @@ const s: Record<string, React.CSSProperties> = {
   consentBox: { width: 18, height: 18, marginTop: 1, flexShrink: 0, accentColor: C.green, cursor: 'pointer' },
   consentText: { fontSize: 12.5, color: C.inkDim, lineHeight: 1.5 },
   consentLink: { background: 'none', border: 'none', padding: 0, color: C.ink, fontWeight: 700, fontSize: 12.5, textDecoration: 'underline', cursor: 'pointer' },
+  welcomeCardGold: { display: 'flex', alignItems: 'center', gap: 13, marginTop: 14, padding: '14px 15px', background: '#FFF6E2', border: '1px solid #E9A81C', borderRadius: 14 },
+  welcomeCardGreen: { display: 'flex', alignItems: 'center', gap: 13, marginTop: 14, padding: '14px 15px', background: C.greenBg, border: `1px solid ${C.green}`, borderRadius: 14 },
+  welcomeChipGold: { flexShrink: 0, width: 46, height: 46, borderRadius: '50%', background: '#FFFFFF', border: '2px solid #E9A81C', boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, lineHeight: 1 },
+  welcomeChipGreen: { flexShrink: 0, width: 46, height: 46, borderRadius: '50%', background: '#FFFFFF', border: `2px solid ${C.green}`, boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, lineHeight: 1 },
+  welcomeCol: { lineHeight: 1.35, minWidth: 0 },
+  welcomeLabelGold: { fontSize: 12, fontWeight: 500, color: '#8A5B0A', letterSpacing: '.02em' },
+  welcomeLabelGreen: { fontSize: 12, fontWeight: 500, color: C.greenDeep, letterSpacing: '.02em' },
+  welcomeBig: { fontSize: 19, fontWeight: 500, color: C.ink, margin: '1px 0 3px' },
+  welcomeSub: { fontSize: 13, color: C.inkDim },
+  welcomeSubGreen: { fontSize: 13, color: C.greenDeep },
   welcomeBanner: { display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, padding: '11px 14px', background: C.greenBg, border: `1px solid ${C.green}`, borderRadius: 12, fontSize: 13.5, color: C.greenDeep, lineHeight: 1.4 },
-  welcomeHook: { display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, padding: '11px 14px', background: C.accentBg, border: `1px solid ${C.accent}`, borderRadius: 12, fontSize: 13.5, color: C.ink, lineHeight: 1.4 },
+  welcomeNote: { marginTop: 14, padding: '10px 14px', background: C.pill, border: `1px solid ${C.line}`, borderRadius: 12, fontSize: 12.5, color: C.inkDim, lineHeight: 1.4 },
   couponToggle: { background: 'none', border: 'none', padding: 0, color: C.ink, fontWeight: 700, fontSize: 13.5, textDecoration: 'underline', cursor: 'pointer' },
   couponRow: { display: 'flex', gap: 8, alignItems: 'stretch' },
   couponInput: { flex: 1, border: `1.5px solid ${C.lineInput}`, borderRadius: 10, padding: '10px 12px', fontSize: 14, color: C.ink, background: '#fff', boxSizing: 'border-box' as const, textTransform: 'uppercase' as const },

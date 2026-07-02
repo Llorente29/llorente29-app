@@ -88,9 +88,11 @@ export interface CouponResult {
   code?: string | null
   label?: string | null
   discount?: number
-  reason?: string | null        // null | min | not_first | exhausted | per_customer | margin
+  reason?: string | null        // null | min | needs_contact | not_first | exhausted | per_customer | margin
   marginWarning?: boolean
   isWelcome?: boolean
+  discountType?: 'percent' | 'fixed' | null   // para nombrar la promo en el gancho ("10%" / "4 €")
+  discountValue?: number | null
 }
 
 export interface PlaceOrderResult {
