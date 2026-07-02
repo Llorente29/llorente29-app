@@ -213,32 +213,32 @@ export default function SupplyOrdersPage() {
           </div>
         ) : (
           <div className="rounded-lg border border-border-default overflow-hidden">
-            <table className="w-full text-sm">
+            <table className="w-full text-[15px]">
               <thead className="bg-page text-text-secondary">
                 <tr>
-                  <th className="text-left font-medium px-3 py-2">Código</th>
-                  <th className="text-left font-medium px-3 py-2">Proveedor</th>
-                  <th className="text-left font-medium px-3 py-2">Fecha</th>
-                  <th className="text-left font-medium px-3 py-2">Entrega</th>
-                  <th className="text-right font-medium px-3 py-2">Total est.</th>
-                  <th className="text-left font-medium px-3 py-2">Estado</th>
+                  <th className="text-left text-xs font-semibold uppercase tracking-wide px-4 py-2.5">Código</th>
+                  <th className="text-left text-xs font-semibold uppercase tracking-wide px-4 py-2.5">Proveedor</th>
+                  <th className="text-left text-xs font-semibold uppercase tracking-wide px-4 py-2.5">Fecha</th>
+                  <th className="text-left text-xs font-semibold uppercase tracking-wide px-4 py-2.5">Entrega</th>
+                  <th className="text-right text-xs font-semibold uppercase tracking-wide px-4 py-2.5">Total est.</th>
+                  <th className="text-left text-xs font-semibold uppercase tracking-wide px-4 py-2.5">Estado</th>
                   <th className="w-8" />
                 </tr>
               </thead>
               <tbody>
                 {visibleOrders.map(o => (
                   <tr key={o.id} onClick={() => setSelectedOrderId(o.id)} className="border-t border-border-default hover:bg-page/50 cursor-pointer transition-base">
-                    <td className="px-3 py-2 text-text-primary">{o.code ?? '—'}</td>
-                    <td className="px-3 py-2 text-text-primary">{o.supplierId ? supplierNameById.get(o.supplierId) ?? '—' : '—'}</td>
-                    <td className="px-3 py-2 text-text-secondary">{formatDate(o.orderDate)}</td>
-                    <td className="px-3 py-2 text-text-secondary">{formatDate(o.expectedDate)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-text-primary">{formatEur(o.estTotal)}</td>
-                    <td className="px-3 py-2">
-                      <span className={`text-[11px] px-1.5 py-0.5 rounded border ${STATUS_CLASS[o.status]}`}>
+                    <td className="px-4 py-3 text-text-primary">{o.code ?? '—'}</td>
+                    <td className="px-4 py-3 text-text-primary">{o.supplierId ? supplierNameById.get(o.supplierId) ?? '—' : '—'}</td>
+                    <td className="px-4 py-3 text-text-secondary">{formatDate(o.orderDate)}</td>
+                    <td className="px-4 py-3 text-text-secondary">{formatDate(o.expectedDate)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-text-primary">{formatEur(o.estTotal)}</td>
+                    <td className="px-4 py-3">
+                      <span className={`text-xs px-2 py-0.5 rounded border ${STATUS_CLASS[o.status]}`}>
                         {STATUS_LABEL[o.status]}
                       </span>
                     </td>
-                    <td className="px-3 py-2 text-text-secondary"><ChevronRight size={16} /></td>
+                    <td className="px-4 py-3 text-text-secondary"><ChevronRight size={16} /></td>
                   </tr>
                 ))}
               </tbody>
