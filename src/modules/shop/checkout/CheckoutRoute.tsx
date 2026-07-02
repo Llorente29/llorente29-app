@@ -531,9 +531,6 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
               Conservamos tus datos mientras exista la relación comercial o hasta que retires tu consentimiento,
               y después durante los plazos legalmente exigibles.
             </p>
-            <p style={s.modalP} data-note>
-              (Texto informativo v1. Antes de su uso definitivo en producción debe ser revisado por un asesor legal.)
-            </p>
             <button style={s.modalClose} onClick={() => setShowPrivacy(false)}>Entendido</button>
           </div>
         </div>
