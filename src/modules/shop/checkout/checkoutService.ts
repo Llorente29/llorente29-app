@@ -66,6 +66,7 @@ export interface ShopOrderPayload {
   locationId: string
   mode: 'delivery' | 'pickup'
   customer: { name: string; phone: string; email?: string }
+  consent?: { marketing: boolean; termsVersion: string }
   delivery: {
     address: string
     detail: string

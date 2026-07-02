@@ -121,6 +121,9 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
   // Contacto + flujo de pago
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
+  const [email, setEmail] = useState('')
+  const [marketingConsent, setMarketingConsent] = useState(false)
+  const [showPrivacy, setShowPrivacy] = useState(false)
   const [placing, setPlacing] = useState(false)
   const [placeError, setPlaceError] = useState<string | null>(null)
   const [stage, setStage] = useState<'form' | 'pay'>('form')
@@ -293,7 +296,8 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
     const payload: ShopOrderPayload = {
       locationId: cart.locationId,
       mode,
-      customer: { name: name.trim(), phone: phone.trim() },
+      customer: { name: name.trim(), phone: phone.trim(), email: email.trim() || undefined },
+      consent: { marketing: marketingConsent && email.trim().length > 0, termsVersion: 'shop-privacy-v1' },
       delivery: {
         address: mode === 'delivery' ? (chosen?.label ?? '') : '',
         detail: mode === 'delivery' ? detail.trim() : '',
@@ -497,6 +501,43 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
 
   return (
     <div style={s.page}>
+      {showPrivacy && (
+        <div style={s.modalWrap} onClick={() => setShowPrivacy(false)}>
+          <div style={s.modalCard} onClick={(e) => e.stopPropagation()}>
+            <h2 style={s.modalTitle}>Política de privacidad</h2>
+            <p style={s.modalP}>
+              Responsable del tratamiento: <strong>{hub?.accountName || 'la tienda'}</strong>. Puedes consultar
+              sus datos fiscales completos en el local o solicitarlos por los medios de contacto de la tienda.
+            </p>
+            <p style={s.modalH}>¿Qué datos tratamos?</p>
+            <p style={s.modalP}>
+              Los que nos facilitas al hacer un pedido: nombre, teléfono, dirección de entrega y, si lo aportas,
+              email. También los datos de tus pedidos.
+            </p>
+            <p style={s.modalH}>¿Para qué?</p>
+            <p style={s.modalP}>
+              Para gestionar y entregar tu pedido. Si marcas la casilla de consentimiento, además usaremos tu
+              email para enviarte ofertas y novedades de la tienda. Este consentimiento es voluntario y no
+              condiciona la realización del pedido.
+            </p>
+            <p style={s.modalH}>Tus derechos</p>
+            <p style={s.modalP}>
+              Puedes acceder, rectificar o suprimir tus datos, oponerte a su tratamiento y retirar tu
+              consentimiento en cualquier momento, así como darte de baja de las comunicaciones comerciales
+              desde cualquier email que recibas. Para ejercer tus derechos, contacta con la tienda.
+            </p>
+            <p style={s.modalH}>Conservación</p>
+            <p style={s.modalP}>
+              Conservamos tus datos mientras exista la relación comercial o hasta que retires tu consentimiento,
+              y después durante los plazos legalmente exigibles.
+            </p>
+            <p style={s.modalP} data-note>
+              (Texto informativo v1. Antes de su uso definitivo en producción debe ser revisado por un asesor legal.)
+            </p>
+            <button style={s.modalClose} onClick={() => setShowPrivacy(false)}>Entendido</button>
+          </div>
+        </div>
+      )}
       <header style={s.header}>
         <button style={s.back} onClick={onBack}>{'\u2190'} Seguir comprando</button>
       </header>
@@ -664,7 +705,22 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
             <div style={s.detailRow}>
               <input style={s.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre y apellidos" autoComplete="name" />
               <input style={s.input} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Teléfono de contacto" inputMode="tel" autoComplete="tel" />
+              <input style={s.input} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email (opcional, para el recibo y ofertas)" inputMode="email" autoComplete="email" />
             </div>
+            {email.trim().length > 0 && (
+              <label style={s.consentRow}>
+                <input
+                  type="checkbox"
+                  checked={marketingConsent}
+                  onChange={(e) => setMarketingConsent(e.target.checked)}
+                  style={s.consentBox}
+                />
+                <span style={s.consentText}>
+                  Quiero unirme al club de {hub?.accountName || 'la tienda'} y recibir sus ofertas y novedades por email. Puedo darme de baja cuando quiera.{' '}
+                  <button type="button" style={s.consentLink} onClick={() => setShowPrivacy(true)}>Política de privacidad</button>
+                </span>
+              </label>
+            )}
           </section>
 
           <section style={s.card}>
@@ -919,6 +975,16 @@ const s: Record<string, React.CSSProperties> = {
   okSub: { display: 'block', fontSize: 12, color: C.greenMid },
   noBox: { marginTop: 12, fontSize: 13.5, fontWeight: 600, color: C.red, background: C.redBg, borderRadius: 12, padding: '12px 14px' },
   detailRow: { display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 },
+  consentRow: { display: 'flex', alignItems: 'flex-start', gap: 10, marginTop: 12, cursor: 'pointer' },
+  consentBox: { width: 18, height: 18, marginTop: 1, flexShrink: 0, accentColor: C.green, cursor: 'pointer' },
+  consentText: { fontSize: 12.5, color: C.inkDim, lineHeight: 1.5 },
+  consentLink: { background: 'none', border: 'none', padding: 0, color: C.ink, fontWeight: 700, fontSize: 12.5, textDecoration: 'underline', cursor: 'pointer' },
+  modalWrap: { position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(20,14,10,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18 },
+  modalCard: { background: '#fff', borderRadius: 18, maxWidth: 560, width: '100%', maxHeight: '82vh', overflowY: 'auto', padding: '24px 26px', boxShadow: '0 24px 60px rgba(0,0,0,.3)' },
+  modalTitle: { fontSize: 19, fontWeight: 900, letterSpacing: '-.02em', color: C.ink, margin: '0 0 14px' },
+  modalH: { fontSize: 14, fontWeight: 800, color: C.ink, margin: '16px 0 4px' },
+  modalP: { fontSize: 13, color: C.inkDim, lineHeight: 1.6, margin: '0 0 8px' },
+  modalClose: { marginTop: 18, width: '100%', border: 'none', background: C.ink, color: '#fff', borderRadius: 12, padding: '12px', fontSize: 14, fontWeight: 800, cursor: 'pointer' },
   locOpt: { display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', border: `1.5px solid ${C.lineInput}`, background: '#fff', borderRadius: 14, padding: '12px 14px', cursor: 'pointer' },
   locOptOn: { border: `2px solid ${C.ink}`, background: '#FAFAF8' },
   locBody: { flex: 1, minWidth: 0 },
