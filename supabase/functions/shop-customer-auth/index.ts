@@ -61,9 +61,9 @@ Deno.serve(async (req) => {
         return json({ ok: true })
       }
 
-      // Nombre comercial de la tienda para personalizar el correo.
+      // Nombre y logo comercial de la tienda para personalizar el correo.
       const { data: acc } = await supabase
-        .from('accounts').select('name').eq('slug', slug).single()
+        .from('accounts').select('name, logo_url').eq('slug', slug).single()
 
       // Enviar el código por email (send-email con service-role vía x-internal-key).
       const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -77,7 +77,12 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           to: email,
           template: 'shop_login_code',
-          data: { code: data.code, tienda: acc?.name ?? 'tu tienda', nombre: data.name ?? '' },
+          data: {
+            code: data.code,
+            tienda: acc?.name ?? 'tu tienda',
+            logoUrl: acc?.logo_url ?? '',
+            nombre: data.name ?? '',
+          },
         }),
       })
       if (!emailResp.ok) {

@@ -249,13 +249,17 @@ function sanitizeUrl(raw: unknown): string {
 }
 
 // ---- 6. SHOP LOGIN CODE (código de acceso del comensal a su tienda) ----
-// data esperada: { code, tienda?, nombre? }
-// El código es de un solo uso y caduca a los 10 min (lo fija la RPC).
+// data esperada: { code, tienda?, logoUrl?, nombre? }
+// A DIFERENCIA de las demás plantillas (que son de PLATAFORMA, marca Folvy),
+// esta la recibe un COMENSAL y va con la marca de SU TIENDA (white-label):
+// logo y nombre de la tienda en la cabecera, no los de Folvy.
 const shop_login_code: TemplateFn = (data) => {
   const code = escapeHtml(data.code ?? '------');
   const tienda = escapeHtml(data.tienda ?? 'tu tienda');
   const nombre = escapeHtml(data.nombre ?? '');
+  const logoUrl = sanitizeUrl(data.logoUrl);
   const saludo = nombre ? `Hola, <strong>${nombre}</strong>.` : 'Hola.';
+
   const bodyHtml = `
     ${heading('Tu código de acceso')}
     ${paragraph(saludo)}
@@ -266,9 +270,10 @@ const shop_login_code: TemplateFn = (data) => {
       </td></tr>
     </table>
     ${paragraph('El código caduca en 10 minutos. Si no has solicitado este acceso, puedes ignorar este correo.')}`;
+
   return {
     subject: `Tu código de acceso: ${sanitizeCode(data.code)}`,
-    html: layout('Tu código de acceso', bodyHtml),
+    html: brandLayout(tienda, logoUrl, bodyHtml),
     text:
       `${nombre ? `Hola, ${String(data.nombre)}.` : 'Hola.'}\n\n` +
       `Usa este código para entrar en ${String(data.tienda ?? 'tu tienda')}:\n\n` +
@@ -280,6 +285,38 @@ const shop_login_code: TemplateFn = (data) => {
 // Solo dígitos, máx 6, para el subject (defensa contra inyección de cabeceras).
 function sanitizeCode(raw: unknown): string {
   return String(raw ?? '').replace(/\D/g, '').slice(0, 6);
+}
+
+// Layout white-label (marca de la TIENDA, no de Folvy). Cabecera con el logo de
+// la tienda si lo hay; si no, su nombre en texto. Pie neutro sin marca Folvy.
+function brandLayout(tienda: string, logoUrl: string, bodyHtml: string): string {
+  const header = logoUrl
+    ? `<img src="${logoUrl}" alt="${escapeHtml(tienda)}" height="40"
+           style="display:block;height:40px;max-width:200px;border:0;outline:none;text-decoration:none;" />`
+    : `<span style="color:#1a1f2e;font-size:22px;font-weight:800;letter-spacing:-0.5px;">${escapeHtml(tienda)}</span>`;
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${escapeHtml(tienda)}</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1a1f2e;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f7;padding:32px 0;">
+    <tr><td align="center">
+      <table role="presentation" width="520" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+        <tr><td style="background:#f5f4f0;padding:22px 32px;border-bottom:1px solid #e6e4dd;">${header}</td></tr>
+        <tr><td style="padding:32px;">${bodyHtml}</td></tr>
+        <tr><td style="padding:20px 32px;background:#f4f5f7;border-top:1px solid #e6e8ec;">
+          <p style="margin:0;font-size:12px;color:#8a92a6;line-height:1.5;">
+            Este es un mensaje automático de ${escapeHtml(tienda)}. Si tienes dudas, responde a este correo.
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
 }
 
 // ---- Registro ----
