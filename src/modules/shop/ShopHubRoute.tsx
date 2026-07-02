@@ -6,6 +6,8 @@ import CartPanel from '@/modules/shop/cart/CartPanel'
 import CheckoutRoute from '@/modules/shop/checkout/CheckoutRoute'
 import TrackOrderRoute from '@/modules/shop/track/TrackOrderRoute'
 import { isShopHost, shopSlugFromHost } from '@/modules/shop/shopHost'
+import CustomerLoginModal from '@/modules/shop/checkout/CustomerLoginModal'
+import { getSessionCustomer, logoutCustomer } from '@/modules/shop/checkout/customerAuthService'
 
 // El Shop resuelve por HOSTNAME primero (<slug>.folvy.app) y por PATH como
 // fallback (/t/:slug). Retrocompatible: los enlaces app.folvy.app/t/foodint
@@ -88,6 +90,24 @@ function ShopHubInner({ slug, onCheckout }: { slug: string; onCheckout: () => vo
   const [status, setStatus] = useState<'loading' | 'ready' | 'notfound' | 'error'>('loading')
   const [error, setError] = useState<string | null>(null)
   const [activeCuisine, setActiveCuisine] = useState<string | null>(null) // null = "Todo"
+  // Sesión del comensal (login por código mágico, persistente por dispositivo).
+  const [customerName, setCustomerName] = useState<string | null>(null)
+  const [loggedIn, setLoggedIn] = useState(false)
+  const [showLogin, setShowLogin] = useState(false)
+
+  useEffect(() => {
+    let alive = true
+    getSessionCustomer(slug).then((c) => {
+      if (!alive) return
+      if (c) { setLoggedIn(true); setCustomerName(c.name) }
+    })
+    return () => { alive = false }
+  }, [slug])
+
+  async function doLogout() {
+    await logoutCustomer(slug)
+    setLoggedIn(false); setCustomerName(null)
+  }
 
   // Botón atrás/adelante del navegador → re-leer el brandId de la URL
   useEffect(() => {
@@ -175,7 +195,35 @@ function ShopHubInner({ slug, onCheckout }: { slug: string; onCheckout: () => vo
       {/* 1 · TOP BAR · la identidad de marca vive en el héroe (Opción C) */}
       <div style={S.topbar}>
         <span aria-hidden="true" />
+        {loggedIn ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color: C.ink }}>
+              {customerName ? `Hola, ${customerName.split(' ')[0]}` : 'Mi cuenta'}
+            </span>
+            <button
+              onClick={doLogout}
+              style={{ background: 'none', border: `1px solid ${C.line}`, borderRadius: 999, padding: '6px 14px', fontSize: 13, fontWeight: 700, color: C.inkDim, cursor: 'pointer' }}
+            >
+              Salir
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setShowLogin(true)}
+            style={{ background: C.ink, border: 'none', borderRadius: 999, padding: '8px 18px', fontSize: 14, fontWeight: 800, color: '#fff', cursor: 'pointer' }}
+          >
+            Entrar
+          </button>
+        )}
       </div>
+
+      {showLogin && (
+        <CustomerLoginModal
+          slug={slug}
+          onClose={() => setShowLogin(false)}
+          onLoggedIn={(name) => { setLoggedIn(true); setCustomerName(name); setShowLogin(false) }}
+        />
+      )}
 
       {/* 3 · HERO */}
       <div style={{

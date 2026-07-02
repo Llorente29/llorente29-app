@@ -248,6 +248,40 @@ function sanitizeUrl(raw: unknown): string {
   return s.replace(/"/g, '%22').replace(/'/g, '%27');
 }
 
+// ---- 6. SHOP LOGIN CODE (código de acceso del comensal a su tienda) ----
+// data esperada: { code, tienda?, nombre? }
+// El código es de un solo uso y caduca a los 10 min (lo fija la RPC).
+const shop_login_code: TemplateFn = (data) => {
+  const code = escapeHtml(data.code ?? '------');
+  const tienda = escapeHtml(data.tienda ?? 'tu tienda');
+  const nombre = escapeHtml(data.nombre ?? '');
+  const saludo = nombre ? `Hola, <strong>${nombre}</strong>.` : 'Hola.';
+  const bodyHtml = `
+    ${heading('Tu código de acceso')}
+    ${paragraph(saludo)}
+    ${paragraph(`Usa este código para entrar en <strong>${tienda}</strong>:`)}
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:18px 0;">
+      <tr><td style="background:#f5f4f0;border:1px solid #e6e4dd;border-radius:10px;padding:16px 28px;">
+        <span style="font-size:32px;font-weight:800;letter-spacing:8px;color:#1a1f2e;font-family:monospace;">${code}</span>
+      </td></tr>
+    </table>
+    ${paragraph('El código caduca en 10 minutos. Si no has solicitado este acceso, puedes ignorar este correo.')}`;
+  return {
+    subject: `Tu código de acceso: ${sanitizeCode(data.code)}`,
+    html: layout('Tu código de acceso', bodyHtml),
+    text:
+      `${nombre ? `Hola, ${String(data.nombre)}.` : 'Hola.'}\n\n` +
+      `Usa este código para entrar en ${String(data.tienda ?? 'tu tienda')}:\n\n` +
+      `${String(data.code ?? '------')}\n\n` +
+      `El código caduca en 10 minutos. Si no has solicitado este acceso, ignora este correo.`,
+  };
+};
+
+// Solo dígitos, máx 6, para el subject (defensa contra inyección de cabeceras).
+function sanitizeCode(raw: unknown): string {
+  return String(raw ?? '').replace(/\D/g, '').slice(0, 6);
+}
+
 // ---- Registro ----
 const TEMPLATES: Record<string, TemplateFn> = {
   test_ping,
@@ -256,6 +290,7 @@ const TEMPLATES: Record<string, TemplateFn> = {
   aviso_cancelacion,
   aviso_reactivacion,
   welcome,
+  shop_login_code,
 };
 
 export function renderTemplate(
