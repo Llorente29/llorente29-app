@@ -16,6 +16,7 @@ import { useAuth } from './modules/multitenancy/hooks/useAuth'
 import KdsKioskRoute from './modules/kds/KdsKioskRoute'
 import TabletStationRoute from './modules/tablet/TabletStationRoute'
 import ShopHubRoute from './modules/shop/ShopHubRoute'
+import { isShopHost } from './modules/shop/shopHost'
 
 // G-8.6 (Sprint 3): App.tsx reducido. El render autenticado es el Shell modular
 // (src/shell/Shell.tsx), que vive en la raíz y resuelve la cuenta por AppContext.
@@ -64,6 +65,14 @@ export default function App() {
         </div>
       </div>
     )
+  }
+
+  // Folvy Shop por SUBDOMINIO de tienda (<slug>.folvy.app). Un subdominio de
+  // tienda SIEMPRE sirve la tienda, con independencia del path (la tienda vive
+  // en la raíz de su host). Va lo primero: en app.folvy.app / localhost /
+  // previews isShopHost() es false y esto es un no-op (todo sigue igual).
+  if (isShopHost()) {
+    return <ShopHubRoute />
   }
 
   // 1-bis. PROTECCIÓN INTEGRAL DE RUTAS PÚBLICAS DE AUTH — Sesión 9.

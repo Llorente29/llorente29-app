@@ -5,20 +5,43 @@ import { ShopCartProvider } from '@/modules/shop/cart/ShopCartContext'
 import CartPanel from '@/modules/shop/cart/CartPanel'
 import CheckoutRoute from '@/modules/shop/checkout/CheckoutRoute'
 import TrackOrderRoute from '@/modules/shop/track/TrackOrderRoute'
+import { isShopHost, shopSlugFromHost } from '@/modules/shop/shopHost'
 
-function getSlugFromPath(): string | null {
+// El Shop resuelve por HOSTNAME primero (<slug>.folvy.app) y por PATH como
+// fallback (/t/:slug). Retrocompatible: los enlaces app.folvy.app/t/foodint
+// siguen funcionando. En modo host la tienda vive en la raíz (base ''); en modo
+// path la base es `/t/${slug}`. La navegación interna usa esa base para no
+// duplicar el slug (foodint.folvy.app/brandX, no foodint.folvy.app/t/foodint/brandX).
+
+function resolveShopSlug(): string | null {
+  const fromHost = shopSlugFromHost()
+  if (fromHost) return fromHost
   const m = window.location.pathname.match(/^\/t\/([^/]+)/)
   return m ? decodeURIComponent(m[1]) : null
 }
 
-function getBrandIdFromPath(): string | null {
-  const m = window.location.pathname.match(/^\/t\/[^/]+\/([^/]+)/)
-  return m ? decodeURIComponent(m[1]) : null
+/** Base de rutas del Shop según el modo (host vs path). */
+function shopBase(slug: string): string {
+  return isShopHost() ? '' : `/t/${slug}`
 }
 
-// Ruta de seguimiento del pedido: /t/:slug/seguir?t=<token>. Se detecta ANTES
-// que el brandId (el 2º segmento "seguir" colisionaría con el parseo de marca).
+function getBrandIdFromPath(): string | null {
+  if (isShopHost()) {
+    // Modo host: la marca es el 1er segmento (/brandX). 'seguir' está reservado.
+    const m = window.location.pathname.match(/^\/([^/]+)/)
+    const seg = m ? decodeURIComponent(m[1]) : null
+    return seg && seg !== 'seguir' ? seg : null
+  }
+  const m = window.location.pathname.match(/^\/t\/[^/]+\/([^/]+)/)
+  const seg = m ? decodeURIComponent(m[1]) : null
+  return seg && seg !== 'seguir' ? seg : null
+}
+
+// Ruta de seguimiento del pedido: /seguir (modo host) o /t/:slug/seguir (modo
+// path). Se detecta ANTES que el brandId (el segmento "seguir" colisionaría con
+// el parseo de marca).
 function getIsTrackPath(): boolean {
+  if (isShopHost()) return /^\/seguir\/?$/.test(window.location.pathname)
   return /^\/t\/[^/]+\/seguir\/?$/.test(window.location.pathname)
 }
 function getTrackTokenFromQuery(): string | null {
@@ -74,12 +97,12 @@ function ShopHubInner({ slug, onCheckout }: { slug: string; onCheckout: () => vo
   }, [])
 
   function openBrand(id: string) {
-    window.history.pushState({}, '', `/t/${slug}/${id}`)
+    window.history.pushState({}, '', `${shopBase(slug)}/${id}`)
     setBrandId(id)
     window.scrollTo(0, 0)
   }
   function backToHub() {
-    window.history.pushState({}, '', `/t/${slug}`)
+    window.history.pushState({}, '', shopBase(slug) || '/')
     setBrandId(null)
     window.scrollTo(0, 0)
   }
@@ -255,7 +278,7 @@ function ShopHubInner({ slug, onCheckout }: { slug: string; onCheckout: () => vo
 // Rutea entre 3 vistas: seguimiento (/seguir, URL-driven, sobrevive a refresh y
 // al retorno de redirección de Bizum), checkout (estado interno) y hub/carta.
 export default function ShopHubRoute() {
-  const [slug] = useState<string | null>(getSlugFromPath())
+  const [slug] = useState<string | null>(resolveShopSlug())
   const [checkout, setCheckout] = useState(false)
   const [isTrack, setIsTrack] = useState(getIsTrackPath())
   const [trackToken, setTrackToken] = useState<string | null>(getTrackTokenFromQuery())
@@ -273,11 +296,11 @@ export default function ShopHubRoute() {
 
   const goToCheckout = () => { window.scrollTo(0, 0); setCheckout(true) }
   const goToTrack = (token: string) => {
-    window.history.pushState({}, '', `/t/${slug}/seguir?t=${encodeURIComponent(token)}`)
+    window.history.pushState({}, '', `${shopBase(slug)}/seguir?t=${encodeURIComponent(token)}`)
     setCheckout(false); setTrackToken(token); setIsTrack(true); window.scrollTo(0, 0)
   }
   const backFromTrack = () => {
-    window.history.pushState({}, '', `/t/${slug}`)
+    window.history.pushState({}, '', shopBase(slug) || '/')
     setIsTrack(false); setTrackToken(null); window.scrollTo(0, 0)
   }
 
