@@ -22,7 +22,7 @@ import {
   type GeocodeHit, type DeliveryCheck, type DeliverySlot, type ShopOrderPayload, type ShopPaymentConfig, type ShopLocation, type CouponResult,
 } from '@/modules/shop/checkout/checkoutService'
 import { getShopHub, type ShopHub } from '@/modules/shop/services/shopHubService'
-import { getSessionCustomer } from '@/modules/shop/checkout/customerAuthService'
+import { getSessionCustomer, registerShopConsent } from '@/modules/shop/checkout/customerAuthService'
 
 const C = {
   page: '#F7F7F5', surface: '#FFFFFF', ink: '#16140F', inkDim: '#6E6960', inkFaint: '#8A857C',
@@ -151,6 +151,8 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
   const [marketingConsent, setMarketingConsent] = useState(false)
+  const [alreadyConsented, setAlreadyConsented] = useState(false)   // ya en el Club (F2) -> ocultar casilla
+  const consentTouchedRef = useRef(false)                           // el usuario tocó la casilla
   // Cupón: código manual + resultado del dry-run (fuente de verdad = servidor).
   const [couponCode, setCouponCode] = useState('')
   const [couponInput, setCouponInput] = useState('')       // lo que teclea antes de aplicar
@@ -208,9 +210,33 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
       if (c.name)  setName((v) => v.trim() ? v : c.name!)
       if (c.phone) setPhone((v) => v.trim() ? v : c.phone!)
       if (c.email) setEmail((v) => v.trim() ? v : c.email!)
+      // Ya en el Club: no re-preguntamos (casilla oculta) y la bienvenida aplica sola.
+      if (c.consented) { setAlreadyConsented(true); setMarketingConsent(true) }
     }).catch(() => {})
     return () => { alive = false }
   }, [slug])
+
+  // Captura ANTICIPADA de consentimiento: al marcar/desmarcar la casilla (con correo
+  // válido) registramos el permiso YA, sin esperar al pago. Solo tras interacción
+  // real del usuario y nunca para quien ya venía consentido de su cuenta (F2).
+  useEffect(() => {
+    if (!consentTouchedRef.current || alreadyConsented) return
+    const em = email.trim()
+    if (!em || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) return
+    const t = setTimeout(() => {
+      registerShopConsent({
+        slug, email: em,
+        name: name.trim() || undefined,
+        phone: phone.trim() || undefined,
+        consent: marketingConsent,
+      }).then((res) => {
+        // Ya consintió aquí y ahora: ocultamos la casilla (no pinta nada ya en el Club).
+        if (res.ok && res.consented) setAlreadyConsented(true)
+      }).catch(() => {})
+    }, 600)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [marketingConsent, email, alreadyConsented, slug])
 
   const debounceRef = useRef<number | null>(null)
 
@@ -819,12 +845,12 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
               <input style={s.input} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Teléfono de contacto" inputMode="tel" autoComplete="tel" />
               <input style={s.input} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Tu correo" inputMode="email" autoComplete="email" />
             </div>
-            {email.trim().length > 0 && (
+            {email.trim().length > 0 && !alreadyConsented && (
               <label style={s.consentRow}>
                 <input
                   type="checkbox"
                   checked={marketingConsent}
-                  onChange={(e) => setMarketingConsent(e.target.checked)}
+                  onChange={(e) => { consentTouchedRef.current = true; setMarketingConsent(e.target.checked) }}
                   style={s.consentBox}
                 />
                 <span style={s.consentText}>

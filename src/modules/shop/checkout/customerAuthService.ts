@@ -36,6 +36,7 @@ export interface SessionCustomer {
   name: string | null
   email: string | null
   phone: string | null
+  consented: boolean
 }
 
 /** Paso 1: pedir el código de acceso (se envía por email). */
@@ -82,6 +83,7 @@ export async function getSessionCustomer(slug: string): Promise<SessionCustomer 
       name: data.name ?? null,
       email: data.email ?? null,
       phone: data.phone ?? null,
+      consented: data.consented === true,
     }
   } catch {
     return null
@@ -94,4 +96,35 @@ export async function logoutCustomer(slug: string): Promise<void> {
   clearSessionToken(slug)
   if (!token) return
   try { await db().rpc('customer_logout', { p_token: token }) } catch { /* noop */ }
+}
+
+/**
+ * Registra (o retira) el consentimiento de marketing EN EL MOMENTO en que el
+ * comensal marca/desmarca la casilla del Club, sin esperar al pago. Pública por
+ * slug (el comensal no está autenticado). El servidor aplica las reglas legales:
+ * sin email válido no hace nada; desmarcar sin cliente previo no crea nada; solo
+ * marcar (acción afirmativa) crea el contacto; loguea solo los cambios.
+ */
+export async function registerShopConsent(args: {
+  slug: string
+  email: string
+  name?: string
+  phone?: string
+  consent: boolean
+}): Promise<{ ok: boolean; consented?: boolean; reason?: string }> {
+  try {
+    const { data, error } = await db().rpc('register_shop_consent', {
+      p_slug: args.slug,
+      p_email: args.email,
+      p_name: args.name ?? null,
+      p_phone: args.phone ?? null,
+      p_consent: args.consent,
+      p_terms_version: 'shop-privacy-v1',
+    })
+    if (error) return { ok: false, reason: error.message }
+    if (!data || data.ok !== true) return { ok: false, reason: data?.reason ?? 'error' }
+    return { ok: true, consented: data.consented === true }
+  } catch (e: any) {
+    return { ok: false, reason: e?.message ?? 'error' }
+  }
 }
