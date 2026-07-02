@@ -64,6 +64,8 @@ Cadencia: en cada paso, antes de cerrarlo, Claude para SOLO y aplica el control 
 
 Deuda del Shop consolidada en docs/folvy_shop_deuda.md.
 
+SHOP · SUBDOMINIO POR TIENDA EN PRODUCCIÓN (02/07): cada tienda resuelve por hostname <slug>.folvy.app (foodint.folvy.app live, SSL ok), navegación base-aware, retrocompatible con /t/slug. Nuevo módulo src/modules/shop/shopHost.ts (isShopHost/shopSlugFromHost); ShopHubRoute resuelve host-first + shopBase; App.tsx monta el Shop por hostname. Sin tocar nameservers ni correo (OVH intacto). Alta de tienda nueva = Add Existing en Vercel (OVH resuelve por CNAME wildcard *). Commit del subdominio en main.
+
 **Última actualización: 2026-06-29 (CIERRE 9 · noche). MARCO MULTI-AGENTE DE FOLVY + FOLVY COPILOTO — el agente ACTÚA, no informa. De chatbot a copiloto que ejecuta acciones reales con confirmación.**
 
 > Sesión larga y monotemática sobre el agente de IA. Mandato de Julio: "los agentes no solo informan, ACTÚAN y EJECUTAN; algo muy avanzado en agentes; que ayude de verdad, no figura decorativa para vender". Todo construido contra benchmark del estado del arte 2026 (Toast IQ, Amazon Bedrock HITL, DoD human-in/on/out-of-loop, EU AI Act art.14, casos de fallo en producción). Documentos de diseño versionados en `docs/`: `folvy_agent_framework.md`, `folvy_b3_contrato_ejecucion.md`, `folvy_kitchen_auditoria.md`, `folvy_kitchen_plan_superacion.md`.

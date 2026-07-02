@@ -61,6 +61,22 @@ queda abierto, con su disparador. Una línea = una deuda con condición de cierr
   fv_catdisp_ (secreto interno del trigger de Catcher), credenciales sandbox de
   Catcher, service_role/webhook tokens. Disparador: paso definitivo a producción.
 
+## Dominio de la tienda
+- **Wildcard automático + dominios propios del cliente (Capa 2)**: hoy cada tienda
+  nueva se da de alta a mano en Vercel (Add Existing <slug>.folvy.app); OVH resuelve
+  por el CNAME wildcard *. El wildcard automático (cero alta por cliente) y el dominio
+  100% propio del cliente (pedidos.sumarca.com, con verificación TXT + SSL) requieren
+  migrar el DNS a un proveedor con wildcard sin fricción. Se aborda JUNTO con la
+  migración de correo (OVH → mejor proveedor), como frente único. Disparador: escalar
+  clientes o migrar el correo.
+- **Aviso "DNS Change Recommended" de Vercel en foodint**: cosmético. Funciona por el
+  CNAME wildcard. Opcional: CNAME específico foodint → 9339610a59be5a0b.vercel-dns-016.com.
+  No urgente.
+- **Migración de correo OVH MXPLAN → mejor proveedor**: 2 buzones (hello@ sin correos,
+  y otro CON correos que no se pueden perder). Frente propio con estudio de coste +
+  plan de migración sin pérdida. Se junta con la migración de DNS/wildcard.
+- **www.folvy.app NXDOMAIN**: sigue pendiente, aparte.
+
 ## Migración a canal propio (frente estratégico, no del Shop en sí)
 - **Owned-channel migration**: NO se puede contactar por WhatsApp a clientes de
   Glovo/Uber (dato de plataforma = sin consentimiento = ilegal RGPD, multas hasta
