@@ -21,6 +21,7 @@ import {
   getShopPaymentConfig, getShopLocations, getShopOrderStatus,
   type GeocodeHit, type DeliveryCheck, type DeliverySlot, type ShopOrderPayload, type ShopPaymentConfig, type ShopLocation,
 } from '@/modules/shop/checkout/checkoutService'
+import { getShopHub, type ShopHub } from '@/modules/shop/services/shopHubService'
 
 const C = {
   page: '#F7F7F5', surface: '#FFFFFF', ink: '#16140F', inkDim: '#6E6960', inkFaint: '#8A857C',
@@ -36,6 +37,26 @@ function Pin({ size = 24, color = '#FF5436' }: { size?: number; color?: string }
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block', flexShrink: 0 }} aria-hidden>
       <path d="M9 11a3 3 0 1 0 6 0 3 3 0 0 0-6 0" />
       <path d="M17.657 16.657 13.414 20.9a2 2 0 0 1-2.827 0l-4.244-4.243a8 8 0 1 1 11.314 0z" />
+    </svg>
+  )
+}
+
+// Candado (sello de pago protegido).
+function Lock({ size = 15, color = 'currentColor' }: { size?: number; color?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block', flexShrink: 0 }} aria-hidden>
+      <rect x="4" y="11" width="16" height="10" rx="2" />
+      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+    </svg>
+  )
+}
+
+// Escudo con check (confianza).
+function Shield({ size = 14, color = 'currentColor' }: { size?: number; color?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block', flexShrink: 0 }} aria-hidden>
+      <path d="M12 3 5 6v5c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6l-7-3Z" />
+      <path d="m9 12 2 2 4-4" />
     </svg>
   )
 }
@@ -128,6 +149,16 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
   useEffect(() => {
     let alive = true
     getShopPaymentConfig(slug).then((c) => { if (alive) setPayConfig(c) }).catch(() => {})
+    return () => { alive = false }
+  }, [slug])
+
+  // Identidad de la tienda (nombre + logo) para la cabecera de la pantalla de
+  // pago. El carrito es multimarca (varias cocinas, una entrega): mostramos la
+  // TIENDA, no una marca suelta. Si falla, la cabecera degrada a algo neutro.
+  const [hub, setHub] = useState<ShopHub | null>(null)
+  useEffect(() => {
+    let alive = true
+    getShopHub(slug).then((h) => { if (alive) setHub(h) }).catch(() => {})
     return () => { alive = false }
   }, [slug])
 
@@ -428,11 +459,35 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
         </header>
         <div style={s.payWrap}>
           <div style={s.payCard}>
-            <h2 style={s.payTitle}>Pago seguro</h2>
-            <div style={s.payTotalRow}>
-              <span>Total a pagar</span>
-              <span style={s.payTotalNum}>{eur(pay.total)}</span>
+            {/* Identidad de la tienda + sello de confianza */}
+            <div style={s.payHead}>
+              <div style={s.payLogoBox}>
+                {hub?.accountLogoUrl
+                  ? <img src={hub.accountLogoUrl} alt={hub.accountName} style={s.payLogoImg} />
+                  : <span style={s.payLogoFallback}>{(hub?.accountName || 'F').slice(0, 1).toUpperCase()}</span>}
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={s.payStoreName}>{hub?.accountName || 'Finalizar pago'}</div>
+                <div style={s.payStoreSub}>Finalizar pago</div>
+              </div>
+              <span style={s.trustChip}><Lock size={13} color={C.greenDeep} /> Pago protegido</span>
             </div>
+
+            {/* Resumen de lo que pagas (contexto antes de la tarjeta) */}
+            <div style={s.payRecap}>
+              {cart.lines.map((l) => (
+                <div key={l.lineId} style={s.payRecapLine}>
+                  <span style={s.payRecapQty}>{l.quantity}x</span>
+                  <span style={s.payRecapName}>{l.name}</span>
+                  <span style={s.payRecapPrice}>{eur(l.unitPrice * l.quantity)}</span>
+                </div>
+              ))}
+              <div style={s.payRecapTotal}>
+                <span>Total a pagar</span>
+                <span style={s.payTotalNum}>{eur(pay.total)}</span>
+              </div>
+            </div>
+
             <PaymentSection pay={pay} mode={mode} onPaid={handlePaid} />
           </div>
         </div>
@@ -731,19 +786,43 @@ function PaymentSection({ pay, mode, onPaid }: { pay: PayContext; mode: Mode; on
   }
 
   return (
-    <Elements
-      stripe={stripePromise}
-      options={{
-        clientSecret: pay.clientSecret,
-        locale: 'es',
-        appearance: {
-          theme: 'stripe',
-          variables: { colorPrimary: C.accent, borderRadius: '12px', fontSizeBase: '15px' },
-        },
-      }}
-    >
-      <PaymentForm pay={pay} mode={mode} onPaid={onPaid} />
-    </Elements>
+    <div>
+      <div style={s.payMethodLabel}>Método de pago</div>
+      <Elements
+        stripe={stripePromise}
+        options={{
+          clientSecret: pay.clientSecret,
+          locale: 'es',
+          // Tematizado para que el bloque de Stripe combine con el resto (mismo
+          // radio, borde, tipografía) en vez de parecer pegado de otra web. El
+          // color primario va en VERDE, igual que el botón de pagar.
+          appearance: {
+            theme: 'stripe',
+            variables: {
+              colorPrimary: C.green,
+              colorText: C.ink,
+              colorTextPlaceholder: '#B4B2A9',
+              colorBackground: '#FFFFFF',
+              colorDanger: C.red,
+              fontFamily: 'inherit',
+              fontSizeBase: '15px',
+              borderRadius: '11px',
+              spacingUnit: '3px',
+            },
+            rules: {
+              '.Input': { border: `1.5px solid ${C.lineInput}`, boxShadow: 'none', padding: '11px 12px' },
+              '.Input:focus': { border: `1.5px solid ${C.green}`, boxShadow: `0 0 0 3px ${C.green}22` },
+              '.Label': { fontWeight: '600', color: C.inkDim, fontSize: '12.5px' },
+              '.Tab, .AccordionItem': { border: `1.5px solid ${C.lineInput}`, boxShadow: 'none' },
+              '.Tab:hover, .AccordionItem:hover': { border: `1.5px solid ${C.ink}` },
+              '.Tab--selected, .AccordionItem--selected': { border: `1.5px solid ${C.ink}`, boxShadow: 'none' },
+            },
+          },
+        }}
+      >
+        <PaymentForm pay={pay} mode={mode} onPaid={onPaid} />
+      </Elements>
+    </div>
   )
 }
 
@@ -782,16 +861,21 @@ function PaymentForm({ pay, mode, onPaid }: { pay: PayContext; mode: Mode; onPai
 
   return (
     <div>
-      <PaymentElement onReady={() => setReady(true)} />
+      <div style={s.payElementPad}>
+        <PaymentElement
+          onReady={() => setReady(true)}
+          options={{ layout: { type: 'accordion', defaultCollapsed: false } }}
+        />
+      </div>
       {err && <div style={s.payErr}>{err}</div>}
       <button
         style={{ ...s.payBtn, ...(ready && !paying ? {} : s.ctaOff) }}
         disabled={!ready || paying}
         onClick={doPay}
       >
-        {paying ? 'Procesando…' : `Pagar ${eur(pay.total)}`}
+        {paying ? 'Procesando…' : <><Lock size={16} color="#fff" /> Pagar {eur(pay.total)}</>}
       </button>
-      <p style={s.paySafe}>Pago cifrado y procesado por Stripe.</p>
+      <div style={s.paySafeRow}><Shield size={14} color={C.green} /> Pago cifrado y procesado por Stripe</div>
     </div>
   )
 }
@@ -881,14 +965,27 @@ const s: Record<string, React.CSSProperties> = {
   mobileCashLink: { width: '100%', marginTop: 8, background: '#fff', color: C.ink, border: `1.5px solid ${C.lineInput}`, borderRadius: 999, padding: '11px', fontWeight: 800, fontSize: 13.5, cursor: 'pointer' },
 
   // Pago
-  payWrap: { maxWidth: 560, margin: '0 auto', padding: '8px 22px 48px' },
-  payCard: { background: C.surface, border: `1px solid ${C.line}`, borderRadius: 20, padding: '24px 24px 28px' },
-  payTitle: { fontSize: 20, fontWeight: 900, letterSpacing: '-.02em', margin: '0 0 14px' },
-  payTotalRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 14, color: C.inkDim, paddingBottom: 16, marginBottom: 16, borderBottom: `1px solid ${C.line}` },
+  payWrap: { maxWidth: 480, margin: '0 auto', padding: '8px 22px 48px' },
+  payCard: { background: C.surface, border: `1px solid ${C.line}`, borderRadius: 20, overflow: 'hidden' },
+  payHead: { display: 'flex', alignItems: 'center', gap: 11, padding: '16px 18px', borderBottom: `1px solid ${C.line}` },
+  payLogoBox: { width: 38, height: 38, borderRadius: 11, background: C.ink, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' },
+  payLogoImg: { width: '100%', height: '100%', objectFit: 'contain', background: '#fff' },
+  payLogoFallback: { fontSize: 17, fontWeight: 800, color: '#fff' },
+  payStoreName: { fontSize: 14.5, fontWeight: 800, color: C.ink, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  payStoreSub: { fontSize: 12, color: C.inkFaint },
+  trustChip: { marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 5, background: C.greenBg, color: C.greenDeep, fontSize: 11.5, fontWeight: 700, padding: '5px 10px', borderRadius: 999, flexShrink: 0 },
+  payRecap: { padding: '14px 18px', background: '#FBFAF8', borderBottom: `1px solid ${C.line}` },
+  payRecapLine: { display: 'flex', gap: 8, fontSize: 13, marginBottom: 6, alignItems: 'baseline' },
+  payRecapQty: { color: C.inkFaint, fontWeight: 700 },
+  payRecapName: { flex: 1, color: C.ink },
+  payRecapPrice: { color: C.ink, whiteSpace: 'nowrap' },
+  payRecapTotal: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', borderTop: `1px solid ${C.line}`, paddingTop: 9, marginTop: 4 },
   payTotalNum: { fontSize: 22, fontWeight: 900, letterSpacing: '-.02em', color: C.ink },
-  payBtn: { width: '100%', background: C.accent, color: '#fff', border: 'none', borderRadius: 999, padding: '14px', fontWeight: 800, fontSize: 15, cursor: 'pointer', marginTop: 18 },
-  payErr: { marginTop: 14, fontSize: 13, fontWeight: 700, color: C.red, background: C.redBg, borderRadius: 11, padding: '11px 13px', textAlign: 'center' },
-  paySafe: { textAlign: 'center', fontSize: 11.5, color: C.inkFaint, marginTop: 12 },
+  payMethodLabel: { fontSize: 12, color: C.inkFaint, letterSpacing: '.03em', textTransform: 'uppercase', fontWeight: 700, padding: '16px 18px 10px' },
+  payBtn: { width: 'calc(100% - 36px)', margin: '14px 18px 0', background: C.green, color: '#fff', border: 'none', borderRadius: 13, padding: '15px', fontWeight: 800, fontSize: 15.5, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  payErr: { margin: '14px 18px 0', fontSize: 13, fontWeight: 700, color: C.red, background: C.redBg, borderRadius: 11, padding: '11px 13px', textAlign: 'center' },
+  paySafeRow: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 11.5, color: C.inkFaint, padding: '12px 18px 18px' },
+  payElementPad: { padding: '0 18px' },
 
   // Confirmación
   successWrap: { maxWidth: 560, margin: '0 auto', padding: '48px 22px', display: 'flex', justifyContent: 'center' },
