@@ -311,12 +311,20 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
   // ── Cupón: recalcular vía dry-run (el servidor es la fuente de verdad) ──
   // Se dispara cuando cambian las líneas, el modo, el email o el código.
   async function refreshCoupon(codeOverride?: string) {
-    if (!cart.locationId || cart.lines.length === 0) { setCoupon(null); return }
+    if (cart.lines.length === 0) { setCoupon(null); return }
+    // El cupón se calcula sobre el subtotal (no necesita el local). Usamos el
+    // local elegido, o el primero candidato/disponible como respaldo, solo para
+    // que el payload sea válido — el descuento no depende de él.
+    const locId = cart.locationId
+      ?? cart.candidateLocationIds?.[0]
+      ?? locations[0]?.id
+      ?? null
+    if (!locId) { setCoupon(null); return }
     const code = codeOverride !== undefined ? codeOverride : couponCode
     setCouponBusy(true)
     try {
       const payload: ShopOrderPayload = {
-        locationId: cart.locationId,
+        locationId: locId,
         mode,
         customer: { name: name.trim(), phone: phone.trim(), email: email.trim() || undefined },
         delivery: {
@@ -343,7 +351,7 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
     const t = setTimeout(() => { refreshCoupon() }, 400)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [email, mode, cart.lines.length, cart.locationId, couponCode, deliveryFee])
+  }, [email, mode, cart.lines.length, cart.locationId, couponCode, deliveryFee, locations.length])
 
   function applyCouponCode() {
     const code = couponInput.trim()
