@@ -340,6 +340,69 @@ export async function getCampaignsOverview(
   }
 }
 
+// ── Inicio del módulo Shop (G2e.4) — todo-en-una con ventana espejo ─────────
+export interface HomeSeries { day: string; withOffer: number; withoutOffer: number; orders: number }
+export interface HomeKind { kind: CampaignKind; redemptions: number; invested: number; marginReal: number | null }
+export interface HomeTop { id: string; name: string; kind: CampaignKind; redemptions: number; invested: number; roi: number | null }
+export interface HomeBrand { name: string; ventas: number; margin: number | null }
+export interface HomeDish { name: string; units: number }
+export interface ShopHomeOverview {
+  hasPrev: boolean
+  ventasCur: number; ventasPrev: number
+  pedidosCur: number; pedidosPrev: number
+  ticketCur: number | null; ticketPrev: number | null
+  marginCur: number | null; marginPrev: number | null
+  marginKnownCur: number; marginRedCur: number
+  newCur: number; newPrev: number
+  offerOrdersCur: number; offerOrdersPrev: number
+  series: HomeSeries[]; byKind: HomeKind[]; topCampaigns: HomeTop[]; brands: HomeBrand[]; topDishes: HomeDish[]
+}
+
+export async function getShopHomeOverview(
+  accountId: string, from: string | null, to: string | null,
+  locationIds: string[] | null, brandIds: string[] | null, kinds: CampaignKind[] | null,
+): Promise<ShopHomeOverview | null> {
+  try {
+    const { data, error } = await db().rpc('shop_home_overview', {
+      p_account: accountId, p_from: from, p_to: to,
+      p_location_ids: locationIds && locationIds.length ? locationIds : null,
+      p_brand_ids: brandIds && brandIds.length ? brandIds : null,
+      p_kinds: kinds && kinds.length ? kinds : null,
+    })
+    if (error || !data || data.ok !== true) return null
+    const n = (v: any) => (v != null ? Number(v) : null)
+    const N = (v: any) => Number(v ?? 0)
+    return {
+      hasPrev: data.hasPrev === true,
+      ventasCur: N(data.ventasCur), ventasPrev: N(data.ventasPrev),
+      pedidosCur: N(data.pedidosCur), pedidosPrev: N(data.pedidosPrev),
+      ticketCur: n(data.ticketCur), ticketPrev: n(data.ticketPrev),
+      marginCur: n(data.marginCur), marginPrev: n(data.marginPrev),
+      marginKnownCur: N(data.marginKnownCur), marginRedCur: N(data.marginRedCur),
+      newCur: N(data.newCur), newPrev: N(data.newPrev),
+      offerOrdersCur: N(data.offerOrdersCur), offerOrdersPrev: N(data.offerOrdersPrev),
+      series: (data.series ?? []).map((p: any) => ({ day: p.day, withOffer: N(p.withOffer), withoutOffer: N(p.withoutOffer), orders: N(p.orders) })),
+      byKind: (data.byKind ?? []).map((k: any) => ({ kind: k.kind, redemptions: N(k.redemptions), invested: N(k.invested), marginReal: n(k.marginReal) })),
+      topCampaigns: (data.topCampaigns ?? []).map((t: any) => ({ id: t.id, name: t.name ?? '', kind: t.kind, redemptions: N(t.redemptions), invested: N(t.invested), roi: n(t.roi) })),
+      brands: (data.brands ?? []).map((b: any) => ({ name: b.name ?? '', ventas: N(b.ventas), margin: n(b.margin) })),
+      topDishes: (data.topDishes ?? []).map((d: any) => ({ name: d.name ?? '', units: N(d.units) })),
+    }
+  } catch {
+    return null
+  }
+}
+
+export interface ShopAdminLocation { id: string; name: string }
+export async function getShopAdminLocations(accountId: string): Promise<ShopAdminLocation[]> {
+  try {
+    const { data, error } = await db().from('locations').select('id,name').eq('account_id', accountId).order('name')
+    if (error || !Array.isArray(data)) return []
+    return (data as any[]).map((l) => ({ id: l.id, name: l.name ?? '' }))
+  } catch {
+    return []
+  }
+}
+
 // Mensaje legible de por qué falló un guardado.
 export function saveCampaignError(reason: string | undefined): string {
   switch (reason) {

@@ -21,9 +21,8 @@ export const shopModule: ModuleDefinition = {
   requiredRole: 'manager',
   basePath: 'shop',
   routes: [
-    // Maqueta G2e.4 (paso 1). El default ('') seguirá en Diseño hasta aprobar la
-    // maqueta; el paso 7 hará que el módulo abra en Inicio y mueva las secciones.
-    { path: '',         element: <ShopDesignPage /> },
+    // G2e.4: el módulo abre en INICIO (dashboard de mando). Secciones detrás.
+    { path: '',         element: <ShopHomePage /> },
     { path: 'inicio',   element: <ShopHomePage /> },
     { path: 'diseno',   element: <ShopDesignPage /> },
     { path: 'campanas', element: <ShopCampaignsPage /> },

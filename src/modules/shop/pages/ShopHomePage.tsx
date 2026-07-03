@@ -1,19 +1,24 @@
 // src/modules/shop/pages/ShopHomePage.tsx
 //
-// G2e.4 — INICIO del módulo Folvy Shop (dashboard de mando). MAQUETA v2 (paso 1b):
-// layout aprobado + 3 correcciones de Julio: (1) filtros en DROPDOWNS multi-select,
-// (2) gráficas frescas (gradientes, barras redondeadas, grid casi invisible, tooltip
-// y leyenda custom Folvy, donut fino con total al centro), (3) botón Descargar
-// (CSV/XLSX). Datos FICTICIOS: sin fetch todavía. Toggle de densidad conservado.
+// G2e.4 — INICIO del módulo Folvy Shop (dashboard de mando). CABLEADO con datos
+// reales: shop_home_overview (todo-en-una, ventana espejo → Δ% vs periodo anterior).
+// Filtros en dropdowns (rango · locales · marcas · tipo de promo · canal Shop),
+// gráficas frescas (recharts custom), descargas CSV/XLSX reales. Densidad Aireada
+// (por defecto) / Compacta.
 
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
-  ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  PieChart, Pie, Cell,
+  ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell,
 } from 'recharts'
 import { Home, TrendingUp, Download, ChevronDown, Search, Check } from 'lucide-react'
 import * as XLSX from 'xlsx'
+import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import KpiCard from '@/modules/shop/admin/KpiCard'
+import {
+  getShopHomeOverview, getShopAdminLocations, getCampaignMenuTree,
+  type ShopHomeOverview, type CampaignKind, type ShopAdminLocation,
+} from '@/modules/shop/admin/campaignService'
 
 const C = {
   surface: '#FFFFFF', ink: '#16140F', inkDim: '#6E6960', inkFaint: '#8A857C',
@@ -22,44 +27,22 @@ const C = {
   amber: '#8A5B0A', amberBg: '#FFF6E2', gold: '#E9A81C', red: '#C23B22',
 }
 function eur(n: number): string { return `${Math.round(n).toLocaleString('es-ES')} €` }
-function roiColor(n: number): string { return n >= 2 ? C.greenDeep : n >= 1 ? C.amber : C.red }
+function eur2(n: number | null): string { return n == null ? '—' : `${n.toFixed(2).replace('.', ',')} €` }
+function roiColor(n: number | null): string { return n == null ? C.inkFaint : n >= 2 ? C.greenDeep : n >= 1 ? C.amber : C.red }
+function pctDelta(cur: number, prev: number, hasPrev: boolean): number | null {
+  if (!hasPrev || prev <= 0) return null
+  return Math.round(((cur - prev) / prev) * 100)
+}
 
-// ── Datos FICTICIOS (maqueta) ───────────────────────────────────────────────
-const SERIES = [
-  { day: '20 jun', conOferta: 120, sinOferta: 210, pedidos: 9 }, { day: '21 jun', conOferta: 180, sinOferta: 240, pedidos: 12 },
-  { day: '22 jun', conOferta: 95, sinOferta: 200, pedidos: 8 }, { day: '23 jun', conOferta: 210, sinOferta: 260, pedidos: 14 },
-  { day: '24 jun', conOferta: 240, sinOferta: 230, pedidos: 15 }, { day: '25 jun', conOferta: 300, sinOferta: 280, pedidos: 18 },
-  { day: '26 jun', conOferta: 260, sinOferta: 320, pedidos: 17 }, { day: '27 jun', conOferta: 150, sinOferta: 240, pedidos: 11 },
-  { day: '28 jun', conOferta: 190, sinOferta: 250, pedidos: 13 }, { day: '29 jun', conOferta: 220, sinOferta: 270, pedidos: 15 },
-  { day: '30 jun', conOferta: 280, sinOferta: 300, pedidos: 19 }, { day: '01 jul', conOferta: 340, sinOferta: 290, pedidos: 21 },
-  { day: '02 jul', conOferta: 310, sinOferta: 260, pedidos: 18 }, { day: '03 jul', conOferta: 360, sinOferta: 310, pedidos: 22 },
+const KIND_OPTS: { k: CampaignKind; l: string }[] = [
+  { k: 'bogo', l: '2x1' }, { k: 'item_percent', l: '% platos' }, { k: 'free_item', l: 'Regalo' },
+  { k: 'free_delivery', l: 'Envío' }, { k: 'standard', l: 'Código' }, { k: 'frequency', l: 'Fidelidad' },
 ]
-const BY_KIND = [
-  { name: '2x1', value: 520, color: '#16140F' }, { name: '% platos', value: 310, color: '#FF5436' },
-  { name: 'Regalo', value: 180, color: '#E9A81C' }, { name: 'Envío', value: 90, color: '#16A05B' },
-]
-const KIND_TOTAL = BY_KIND.reduce((a, k) => a + k.value, 0)
-const TOP_CAMPAIGNS = [
-  { name: '2x1 en Aguas', kind: '2x1', roi: 4.2 }, { name: 'BIENVENIDA10', kind: 'Código', roi: 3.1 },
-  { name: 'Martes −20% Pizzas', kind: '% platos', roi: 2.6 }, { name: 'Churro de regalo', kind: 'Regalo', roi: 1.8 },
-  { name: 'Envío gratis 15€', kind: 'Envío', roi: 1.3 },
-]
-const BRANDS = [
-  { name: 'Bendito Burrito', sales: 1980, margin: 620 }, { name: 'Pizza Loca', sales: 1340, margin: 410 },
-  { name: 'Wok & Roll', sales: 890, margin: 280 }, { name: 'Green Bowl', sales: 610, margin: 210 },
-]
-const LOCALES_SALES = [
-  { local: 'Centro', ventas: 2140, pedidos: 71 }, { local: 'Chamberí', ventas: 1560, pedidos: 49 }, { local: 'Salamanca', ventas: 1120, pedidos: 36 },
-]
-const TOP_DISHES = [
-  { name: 'Burrito XL', units: 210 }, { name: 'Coca-Cola 33cl', units: 340 }, { name: 'Nachos con queso', units: 180 },
-  { name: 'Pizza Diávola', units: 150 }, { name: 'Agua 50cl', units: 290 },
-]
-const LOCALES = ['Centro', 'Chamberí', 'Salamanca']
-const MARCAS = ['Bendito Burrito', 'Pizza Loca', 'Wok & Roll', 'Green Bowl', 'Sushi Now', 'Kebab House', 'Poke Bar', 'Vegan Kitchen', 'Ramen Ya', 'Taco Loco', 'Smash Burger', 'Pasta Fresca', 'Arepas Mil', 'Bao & Co', 'Falafel King', 'Crepe París', 'Helado Feliz']
-const PROMOS = ['2x1', '% platos', 'Regalo', 'Envío', 'Código', 'Fidelidad']
+const KIND_COLOR: Record<string, string> = {
+  bogo: '#16140F', item_percent: '#FF5436', free_item: '#E9A81C', free_delivery: '#16A05B', standard: '#6E6960', frequency: '#1D4ED8',
+}
+function kindLabel(k: string): string { return KIND_OPTS.find((o) => o.k === k)?.l ?? k }
 
-// ── Descargas (maqueta: ficheros de ejemplo con los datos ficticios) ────────
 function downloadCSV(rows: Record<string, unknown>[], filename: string) {
   if (!rows.length) return
   const cols = Object.keys(rows[0])
@@ -70,20 +53,13 @@ function downloadCSV(rows: Record<string, unknown>[], filename: string) {
   const a = document.createElement('a'); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url)
 }
 function downloadXLSX(rows: Record<string, unknown>[], filename: string, sheet = 'Datos') {
-  const ws = XLSX.utils.json_to_sheet(rows)
+  const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ '': '' }])
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, sheet)
   XLSX.writeFile(wb, filename)
 }
-const REPORTS: { key: string; label: string; rows: () => Record<string, unknown>[] }[] = [
-  { key: 'resumen', label: 'Resumen del periodo', rows: () => SERIES.map((p) => ({ Día: p.day, 'Con oferta (€)': p.conOferta, 'Sin oferta (€)': p.sinOferta, Pedidos: p.pedidos })) },
-  { key: 'campanas', label: 'Rendimiento por campaña', rows: () => TOP_CAMPAIGNS.map((t) => ({ Campaña: t.name, Tipo: t.kind, ROI: t.roi })) },
-  { key: 'marcas', label: 'Ventas por marca', rows: () => BRANDS.map((b) => ({ Marca: b.name, 'Ventas (€)': b.sales, 'Margen (€)': b.margin })) },
-  { key: 'locales', label: 'Ventas por local', rows: () => LOCALES_SALES.map((l) => ({ Local: l.local, 'Ventas (€)': l.ventas, Pedidos: l.pedidos })) },
-  { key: 'platos', label: 'Top platos', rows: () => TOP_DISHES.map((d) => ({ Plato: d.name, Unidades: d.units })) },
-]
 
-// ── Popover genérico (cierra al clicar fuera) ───────────────────────────────
+// ── Popover + filtros (reutilizados de la maqueta) ──────────────────────────
 function Popover({ button, children, width = 240 }: { button: (open: boolean) => ReactNode; children: (close: () => void) => ReactNode; width?: number }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -101,11 +77,14 @@ function Popover({ button, children, width = 240 }: { button: (open: boolean) =>
   )
 }
 
-function MultiSelect({ label, options, selected, onChange, searchable }: { label: string; options: string[]; selected: Set<string>; onChange: (s: Set<string>) => void; searchable?: boolean }) {
+function MultiSelect({ label, options, labelOf, selected, onChange, searchable }: {
+  label: string; options: string[]; labelOf?: (v: string) => string; selected: Set<string>; onChange: (s: Set<string>) => void; searchable?: boolean
+}) {
   const [q, setQ] = useState('')
+  const lab = (v: string) => (labelOf ? labelOf(v) : v)
   const all = selected.size === 0 || selected.size === options.length
   const summary = all ? 'Todas' : `${selected.size} sel.`
-  const shown = searchable && q ? options.filter((o) => o.toLowerCase().includes(q.toLowerCase())) : options
+  const shown = searchable && q ? options.filter((o) => lab(o).toLowerCase().includes(q.toLowerCase())) : options
   const toggle = (o: string) => { const n = new Set(selected); n.has(o) ? n.delete(o) : n.add(o); onChange(n) }
   return (
     <Popover width={searchable ? 260 : 220} button={(open) => (
@@ -115,21 +94,19 @@ function MultiSelect({ label, options, selected, onChange, searchable }: { label
     )}>
       {() => (
         <>
-          {searchable && (
-            <div style={styles.ddSearch}><Search size={14} color={C.inkFaint} /><input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar…" style={styles.ddSearchInput} /></div>
-          )}
+          {searchable && <div style={styles.ddSearch}><Search size={14} color={C.inkFaint} /><input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar…" style={styles.ddSearchInput} /></div>}
           <div style={styles.ddActions}>
             <button style={styles.ddAction} onClick={() => onChange(new Set(options))}>Todos</button>
             <button style={styles.ddAction} onClick={() => onChange(new Set())}>Ninguno</button>
           </div>
           <div style={styles.ddList}>
             {shown.map((o) => {
-              const on = selected.size === 0 ? false : selected.has(o)
+              const on = selected.size !== 0 && selected.has(o)
               return (
                 <label key={o} style={styles.ddItem}>
                   <span style={{ ...styles.ddCheck, ...(on ? styles.ddCheckOn : {}) }}>{on && <Check size={12} color="#fff" />}</span>
                   <input type="checkbox" checked={on} onChange={() => toggle(o)} style={{ display: 'none' }} />
-                  <span style={styles.ddItemName}>{o}</span>
+                  <span style={styles.ddItemName}>{lab(o)}</span>
                 </label>
               )
             })}
@@ -140,23 +117,25 @@ function MultiSelect({ label, options, selected, onChange, searchable }: { label
   )
 }
 
-const RANGE_OPTS = [{ k: '7d', l: '7 días' }, { k: '30d', l: '30 días' }, { k: '90d', l: '90 días' }, { k: 'custom', l: 'Personalizado' }]
-function RangeSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+const RANGE_OPTS = [{ k: '7d', l: '7 días' }, { k: '30d', l: '30 días' }, { k: '90d', l: '90 días' }, { k: 'all', l: 'Todo' }, { k: 'custom', l: 'Personalizado' }]
+function RangeSelect({ value, onChange, cFrom, cTo, setCFrom, setCTo }: {
+  value: string; onChange: (v: string) => void; cFrom: string; cTo: string; setCFrom: (v: string) => void; setCTo: (v: string) => void
+}) {
   const label = RANGE_OPTS.find((r) => r.k === value)?.l ?? '30 días'
   return (
-    <Popover width={220} button={(open) => (
+    <Popover width={230} button={(open) => (
       <button style={{ ...styles.ddBtn, ...(open ? styles.ddBtnOpen : {}) }}>
         <span style={styles.ddLabel}>Rango:</span> <span style={styles.ddValue}>{label}</span> <ChevronDown size={15} color={C.inkFaint} />
       </button>
     )}>
       {(close) => (
         <div style={styles.ddList}>
-          {RANGE_OPTS.map((r) => (
-            <button key={r.k} style={{ ...styles.ddRadio, ...(value === r.k ? styles.ddRadioOn : {}) }} onClick={() => { onChange(r.k); if (r.k !== 'custom') close() }}>{r.l}</button>
-          ))}
+          {RANGE_OPTS.map((r) => <button key={r.k} style={{ ...styles.ddRadio, ...(value === r.k ? styles.ddRadioOn : {}) }} onClick={() => { onChange(r.k); if (r.k !== 'custom') close() }}>{r.l}</button>)}
           {value === 'custom' && (
             <div style={styles.ddDates}>
-              <input type="date" style={styles.ddDate} /><span style={{ color: C.inkFaint }}>→</span><input type="date" style={styles.ddDate} />
+              <input type="date" value={cFrom} onChange={(e) => setCFrom(e.target.value)} style={styles.ddDate} />
+              <span style={{ color: C.inkFaint }}>→</span>
+              <input type="date" value={cTo} onChange={(e) => setCTo(e.target.value)} style={styles.ddDate} />
             </div>
           )}
         </div>
@@ -165,7 +144,6 @@ function RangeSelect({ value, onChange }: { value: string; onChange: (v: string)
   )
 }
 
-// Tooltip custom (paleta Folvy).
 function FTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
   return (
@@ -175,7 +153,7 @@ function FTooltip({ active, payload, label }: any) {
         <div key={p.name} style={styles.tipRow}>
           <span style={{ ...styles.tipDot, background: p.color || p.stroke }} />
           <span style={styles.tipName}>{p.name}</span>
-          <span style={styles.tipVal}>{p.dataKey === 'pedidos' ? `${p.value} ped.` : eur(Number(p.value))}</span>
+          <span style={styles.tipVal}>{p.dataKey === 'orders' ? `${p.value} ped.` : eur(Number(p.value))}</span>
         </div>
       ))}
     </div>
@@ -184,23 +162,71 @@ function FTooltip({ active, payload, label }: any) {
 
 export default function ShopHomePage() {
   const s = styles
+  const navigate = useNavigate()
+  const { activeAccountId: accountId } = useActiveAccount()
   const [dense, setDense] = useState(false)
   const [range, setRange] = useState('30d')
-  const [locs, setLocs] = useState<Set<string>>(new Set())
-  const [marcas, setMarcas] = useState<Set<string>>(new Set())
-  const [promos, setPromos] = useState<Set<string>>(new Set())
+  const [cFrom, setCFrom] = useState(''); const [cTo, setCTo] = useState('')
+  const [locSel, setLocSel] = useState<Set<string>>(new Set())
+  const [brandSel, setBrandSel] = useState<Set<string>>(new Set())
+  const [kindSel, setKindSel] = useState<Set<string>>(new Set())
+  const [locations, setLocations] = useState<ShopAdminLocation[]>([])
+  const [brands, setBrands] = useState<{ id: string; name: string }[]>([])
+  const [data, setData] = useState<ShopHomeOverview | null>(null)
+  const [loading, setLoading] = useState(true)
   const gap = dense ? 8 : 12
-  const maxBrand = Math.max(...BRANDS.map((b) => b.sales))
+
+  useEffect(() => {
+    if (!accountId) return
+    let alive = true
+    getShopAdminLocations(accountId).then((l) => { if (alive) setLocations(l) }).catch(() => {})
+    getCampaignMenuTree(accountId).then((t) => { if (alive) setBrands(t.brands.map((b) => ({ id: b.id, name: b.name }))) }).catch(() => {})
+    return () => { alive = false }
+  }, [accountId])
+
+  useEffect(() => {
+    if (!accountId) return
+    let alive = true
+    setLoading(true)
+    let from: string | null = null; let to: string | null = null
+    if (range === 'custom') {
+      from = cFrom ? new Date(cFrom).toISOString() : null
+      to = cTo ? new Date(new Date(cTo).getTime() + 86400000).toISOString() : null
+    } else if (range !== 'all') {
+      const days = range === '7d' ? 7 : range === '30d' ? 30 : 90
+      from = new Date(Date.now() - days * 86400000).toISOString()
+    }
+    const brandIds = brandSel.size ? [...brandSel] : null
+    const locationIds = locSel.size ? [...locSel] : null
+    const kinds = kindSel.size ? ([...kindSel] as CampaignKind[]) : null
+    getShopHomeOverview(accountId, from, to, locationIds, brandIds, kinds)
+      .then((d) => { if (alive) { setData(d); setLoading(false) } })
+    return () => { alive = false }
+  }, [accountId, range, cFrom, cTo, locSel, brandSel, kindSel])
 
   const chips: { label: string; clear: () => void }[] = []
-  if (locs.size > 0 && locs.size < LOCALES.length) chips.push({ label: `${locs.size} ${locs.size === 1 ? 'local' : 'locales'}`, clear: () => setLocs(new Set()) })
-  if (marcas.size > 0 && marcas.size < MARCAS.length) chips.push({ label: `${marcas.size} ${marcas.size === 1 ? 'marca' : 'marcas'}`, clear: () => setMarcas(new Set()) })
-  if (promos.size > 0 && promos.size < PROMOS.length) chips.push({ label: `${promos.size} ${promos.size === 1 ? 'tipo' : 'tipos'}`, clear: () => setPromos(new Set()) })
+  if (locSel.size > 0 && locSel.size < locations.length) chips.push({ label: `${locSel.size} ${locSel.size === 1 ? 'local' : 'locales'}`, clear: () => setLocSel(new Set()) })
+  if (brandSel.size > 0 && brandSel.size < brands.length) chips.push({ label: `${brandSel.size} ${brandSel.size === 1 ? 'marca' : 'marcas'}`, clear: () => setBrandSel(new Set()) })
+  if (kindSel.size > 0 && kindSel.size < KIND_OPTS.length) chips.push({ label: `${kindSel.size} ${kindSel.size === 1 ? 'tipo' : 'tipos'}`, clear: () => setKindSel(new Set()) })
+
+  const d = data
+  const dv = (cur: number, prev: number) => (d ? pctDelta(cur, prev, d.hasPrev) : null)
+  const invested = useMemo(() => (d?.byKind ?? []).reduce((a, k) => a + k.invested, 0), [d])
+  const pieData = useMemo(() => (d?.byKind ?? []).filter((k) => k.invested > 0).map((k) => ({ name: kindLabel(k.kind), value: k.invested, color: KIND_COLOR[k.kind] ?? '#888' })), [d])
+  const chartData = useMemo(() => (d?.series ?? []).map((p) => ({ day: p.day.slice(5), 'Con oferta': p.withOffer, 'Sin oferta': p.withoutOffer, orders: p.orders })), [d])
+  const maxBrand = Math.max(1, ...(d?.brands ?? []).map((b) => b.ventas))
+  const pctOffer = d && d.pedidosCur > 0 ? Math.round((d.offerOrdersCur / d.pedidosCur) * 100) : 0
+  const marginDelta = d ? dv(d.marginCur ?? 0, d.marginPrev ?? 0) : null
+
+  const reports = d ? [
+    { key: 'resumen', label: 'Resumen del periodo', rows: () => (d.series.map((p) => ({ Día: p.day, 'Con oferta (€)': p.withOffer, 'Sin oferta (€)': p.withoutOffer, Pedidos: p.orders }))) },
+    { key: 'campanas', label: 'Rendimiento por campaña', rows: () => d.topCampaigns.map((t) => ({ Campaña: t.name, Tipo: kindLabel(t.kind), Canjes: t.redemptions, 'Invertido (€)': t.invested, ROI: t.roi ?? '' })) },
+    { key: 'marcas', label: 'Ventas por marca', rows: () => d.brands.map((b) => ({ Marca: b.name, 'Ventas (€)': b.ventas, 'Margen (€)': b.margin ?? '' })) },
+    { key: 'platos', label: 'Top platos', rows: () => d.topDishes.map((x) => ({ Plato: x.name, Unidades: x.units })) },
+  ] : []
 
   return (
     <div style={s.page}>
-      <div style={s.mockBanner}>Maqueta v2 · datos de ejemplo — aprueba antes de cablear datos reales.</div>
-
       <div style={s.header}>
         <div style={s.titleRow}><Home size={22} color={C.accent} /><h1 style={s.h1}>Inicio</h1></div>
         <div style={s.headRight}>
@@ -208,13 +234,13 @@ export default function ShopHomePage() {
             <button style={{ ...s.densityBtn, ...(!dense ? s.densityOn : {}) }} onClick={() => setDense(false)}>Aireada</button>
             <button style={{ ...s.densityBtn, ...(dense ? s.densityOn : {}) }} onClick={() => setDense(true)}>Compacta</button>
           </div>
-          <Popover width={230} button={(open) => (
+          <Popover width={250} button={(open) => (
             <button style={{ ...s.downloadBtn, ...(open ? { background: C.ink } : {}) }}><Download size={16} /> Descargar <ChevronDown size={15} /></button>
           )}>
             {(close) => (
               <div style={s.dlMenu}>
-                <div style={s.dlHead}>Informe</div>
-                {REPORTS.map((r) => (
+                <div style={s.dlHead}>Informe del periodo</div>
+                {reports.length === 0 ? <div style={s.dlEmpty}>Sin datos que descargar.</div> : reports.map((r) => (
                   <div key={r.key} style={s.dlRow}>
                     <span style={s.dlName}>{r.label}</span>
                     <button style={s.dlFmt} onClick={() => { downloadCSV(r.rows(), `folvy-${r.key}.csv`); close() }}>CSV</button>
@@ -227,124 +253,132 @@ export default function ShopHomePage() {
         </div>
       </div>
 
-      {/* Barra de filtros sticky (dropdowns) */}
       <div style={s.filters}>
-        <RangeSelect value={range} onChange={setRange} />
-        <MultiSelect label="Locales" options={LOCALES} selected={locs} onChange={setLocs} />
-        <MultiSelect label="Marcas" options={MARCAS} selected={marcas} onChange={setMarcas} searchable />
-        <MultiSelect label="Promo" options={PROMOS} selected={promos} onChange={setPromos} />
+        <RangeSelect value={range} onChange={setRange} cFrom={cFrom} cTo={cTo} setCFrom={setCFrom} setCTo={setCTo} />
+        <MultiSelect label="Locales" options={locations.map((l) => l.id)} labelOf={(id) => locations.find((l) => l.id === id)?.name ?? id} selected={locSel} onChange={setLocSel} />
+        <MultiSelect label="Marcas" options={brands.map((b) => b.id)} labelOf={(id) => brands.find((b) => b.id === id)?.name ?? id} selected={brandSel} onChange={setBrandSel} searchable />
+        <MultiSelect label="Promo" options={KIND_OPTS.map((o) => o.k)} labelOf={(k) => kindLabel(k)} selected={kindSel} onChange={setKindSel} />
         <span style={s.channelFixed}>Canal: Shop</span>
         <span style={s.vsPrev}>· comparado vs periodo anterior</span>
       </div>
-      {chips.length > 0 && (
-        <div style={s.summaryChips}>
-          {chips.map((c, i) => <button key={i} style={s.sumChip} onClick={c.clear}>{c.label} <span style={s.sumX}>×</span></button>)}
+      {chips.length > 0 && <div style={s.summaryChips}>{chips.map((c, i) => <button key={i} style={s.sumChip} onClick={c.clear}>{c.label} <span style={s.sumX}>×</span></button>)}</div>}
+
+      {/* Insight */}
+      {d && (d.marginCur ?? 0) > 0 && (
+        <div style={s.insight}>
+          <TrendingUp size={17} color={C.greenDeep} />
+          <span>Tus ofertas generaron <b>{eur(d.marginCur ?? 0)}</b> de margen real{marginDelta != null ? <> — un <b style={{ color: marginDelta >= 0 ? C.greenDeep : C.red }}>{Math.abs(marginDelta)}% {marginDelta >= 0 ? 'más' : 'menos'}</b> que el periodo anterior</> : ''}.{d.topCampaigns[0] ? <> Tu campaña más rentable: <b>{d.topCampaigns[0].name}</b>{d.topCampaigns[0].roi != null ? ` (ROI ${d.topCampaigns[0].roi.toFixed(1).replace('.', ',')}×)` : ''}.</> : ''}</span>
         </div>
       )}
 
-      <div style={s.insight}>
-        <TrendingUp size={17} color={C.greenDeep} />
-        <span>Tus ofertas generaron <b>1.240 €</b> de margen real — un <b style={{ color: C.greenDeep }}>15% más</b> que el periodo anterior. El <b>2x1 en Aguas</b> es tu campaña más rentable (ROI 4,2×).</span>
-      </div>
-
-      <div style={{ ...s.heroGrid, gap }}>
-        <KpiCard label="Ventas Shop" value={eur(4820)} delta={12} dense={dense} />
-        <KpiCard label="Pedidos" value="156" delta={8} dense={dense} />
-        <KpiCard label="Ticket medio" value="30,90 €" delta={4} dense={dense} />
-        <KpiCard label="Margen real" value={eur(1240)} delta={15} dense={dense} valueColor={C.greenDeep} sub="78% de pedidos medibles" />
-        <KpiCard label="Clientes nuevos" value="42" delta={22} dense={dense} sub="por bienvenida" />
-        <KpiCard label="Pedidos con oferta" value="38%" delta={6} dense={dense} sub="59 de 156" />
-      </div>
-
-      {/* Gráfica principal (fresca) */}
-      <div style={{ ...s.card, ...(dense ? s.cardDense : {}), marginTop: gap + 6 }}>
-        <div style={s.chartHead}>
-          <div style={s.cardTitle}>Ventas por día · con oferta vs sin oferta</div>
-          <div style={s.chipLegend}>
-            <span style={s.legChip}><span style={{ ...s.legDot, background: C.accent }} /> Con oferta</span>
-            <span style={s.legChip}><span style={{ ...s.legDot, background: '#DFDAD0' }} /> Sin oferta</span>
-            <span style={s.legChip}><span style={{ ...s.legDot, background: C.ink }} /> Pedidos</span>
+      {loading && !d ? (
+        <div style={s.muted}>Cargando…</div>
+      ) : (
+        <>
+          <div style={{ ...s.heroGrid, gap }}>
+            <KpiCard label="Ventas Shop" value={eur(d?.ventasCur ?? 0)} delta={d ? dv(d.ventasCur, d.ventasPrev) : null} dense={dense} />
+            <KpiCard label="Pedidos" value={String(d?.pedidosCur ?? 0)} delta={d ? dv(d.pedidosCur, d.pedidosPrev) : null} dense={dense} />
+            <KpiCard label="Ticket medio" value={eur2(d?.ticketCur ?? null)} delta={d ? dv(d.ticketCur ?? 0, d.ticketPrev ?? 0) : null} dense={dense} />
+            <KpiCard label="Margen real" value={d?.marginCur != null ? eur(d.marginCur) : '—'} delta={marginDelta} dense={dense} valueColor={C.greenDeep}
+              sub={d && d.marginRedCur > 0 ? `${Math.round((d.marginKnownCur / d.marginRedCur) * 100)}% de canjes medibles` : undefined} />
+            <KpiCard label="Clientes nuevos" value={String(d?.newCur ?? 0)} delta={d ? dv(d.newCur, d.newPrev) : null} dense={dense} sub="por bienvenida" />
+            <KpiCard label="Pedidos con oferta" value={`${pctOffer}%`} delta={d ? dv(d.offerOrdersCur, d.offerOrdersPrev) : null} dense={dense} sub={d ? `${d.offerOrdersCur} de ${d.pedidosCur}` : undefined} />
           </div>
-        </div>
-        <ResponsiveContainer width="100%" height={dense ? 220 : 280}>
-          <ComposedChart data={SERIES} margin={{ top: 8, right: 6, left: -10, bottom: 0 }}>
-            <defs>
-              <linearGradient id="gOffer" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#FF6A4E" /><stop offset="100%" stopColor="#FF5436" /></linearGradient>
-              <linearGradient id="gPlain" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#E9E4DA" /><stop offset="100%" stopColor="#DAD4C8" /></linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="0" stroke={C.softGrid} vertical={false} />
-            <XAxis dataKey="day" tick={{ fontSize: 11, fill: C.inkFaint }} axisLine={false} tickLine={false} />
-            <YAxis yAxisId="eur" tick={{ fontSize: 11, fill: C.inkFaint }} axisLine={false} tickLine={false} />
-            <YAxis yAxisId="cnt" orientation="right" tick={{ fontSize: 11, fill: C.inkFaint }} axisLine={false} tickLine={false} />
-            <Tooltip cursor={{ fill: 'rgba(0,0,0,.03)' }} content={<FTooltip />} />
-            <Bar yAxisId="eur" dataKey="conOferta" name="Con oferta" stackId="a" fill="url(#gOffer)" maxBarSize={30} animationDuration={700} />
-            <Bar yAxisId="eur" dataKey="sinOferta" name="Sin oferta" stackId="a" fill="url(#gPlain)" radius={[5, 5, 0, 0]} maxBarSize={30} animationDuration={700} />
-            <Line yAxisId="cnt" dataKey="pedidos" name="Pedidos" type="monotone" stroke={C.ink} strokeWidth={2.5} dot={false} animationDuration={900} />
-          </ComposedChart>
-        </ResponsiveContainer>
-      </div>
 
-      {/* Fila de 4 tarjetas */}
-      <div style={{ ...s.grid4, gap, marginTop: gap }}>
-        <div style={{ ...s.card, ...(dense ? s.cardDense : {}) }}>
-          <div style={s.cardTitle}>¿Qué oferta te funciona?</div>
-          <div style={s.donutWrap}>
-            <ResponsiveContainer width="100%" height={168}>
-              <PieChart>
-                <Pie data={BY_KIND} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={56} outerRadius={72} paddingAngle={3} cornerRadius={6} stroke="none" animationDuration={700}>
-                  {BY_KIND.map((e, i) => <Cell key={i} fill={e.color} />)}
-                </Pie>
-                <Tooltip content={<FTooltip />} />
-              </PieChart>
-            </ResponsiveContainer>
-            <div style={s.donutCenter}><div style={s.donutTotal}>{eur(KIND_TOTAL)}</div><div style={s.donutCap}>invertido</div></div>
-          </div>
-          <div style={s.legend}>
-            {BY_KIND.map((k) => <div key={k.name} style={s.legendRow}><span style={{ ...s.dot, background: k.color }} /><span style={s.legendName}>{k.name}</span><span style={s.legendVal}>{eur(k.value)}</span></div>)}
-          </div>
-        </div>
-
-        <div style={{ ...s.card, ...(dense ? s.cardDense : {}) }}>
-          <div style={s.cardTitle}>Top campañas por ROI</div>
-          <div style={s.list}>
-            {TOP_CAMPAIGNS.map((t) => (
-              <div key={t.name} style={s.listRow} title="Abrirá el panel de la campaña">
-                <span style={s.listName}>{t.name}</span><span style={s.listTag}>{t.kind}</span>
-                <span style={{ ...s.listRoi, color: roiColor(t.roi) }}>{t.roi.toFixed(1).replace('.', ',')}×</span>
+          <div style={{ ...s.card, ...(dense ? s.cardDense : {}), marginTop: gap + 6 }}>
+            <div style={s.chartHead}>
+              <div style={s.cardTitle}>Ventas por día · con oferta vs sin oferta</div>
+              <div style={s.chipLegend}>
+                <span style={s.legChip}><span style={{ ...s.legDot, background: C.accent }} /> Con oferta</span>
+                <span style={s.legChip}><span style={{ ...s.legDot, background: '#DFDAD0' }} /> Sin oferta</span>
+                <span style={s.legChip}><span style={{ ...s.legDot, background: C.ink }} /> Pedidos</span>
               </div>
-            ))}
+            </div>
+            {chartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={dense ? 220 : 280}>
+                <ComposedChart data={chartData} margin={{ top: 8, right: 6, left: -10, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="gOffer" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#FF6A4E" /><stop offset="100%" stopColor="#FF5436" /></linearGradient>
+                    <linearGradient id="gPlain" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#E9E4DA" /><stop offset="100%" stopColor="#DAD4C8" /></linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="0" stroke={C.softGrid} vertical={false} />
+                  <XAxis dataKey="day" tick={{ fontSize: 11, fill: C.inkFaint }} axisLine={false} tickLine={false} />
+                  <YAxis yAxisId="eur" tick={{ fontSize: 11, fill: C.inkFaint }} axisLine={false} tickLine={false} />
+                  <YAxis yAxisId="cnt" orientation="right" tick={{ fontSize: 11, fill: C.inkFaint }} axisLine={false} tickLine={false} />
+                  <Tooltip cursor={{ fill: 'rgba(0,0,0,.03)' }} content={<FTooltip />} />
+                  <Bar yAxisId="eur" dataKey="Con oferta" stackId="a" fill="url(#gOffer)" maxBarSize={30} animationDuration={700} />
+                  <Bar yAxisId="eur" dataKey="Sin oferta" stackId="a" fill="url(#gPlain)" radius={[5, 5, 0, 0]} maxBarSize={30} animationDuration={700} />
+                  <Line yAxisId="cnt" dataKey="orders" name="Pedidos" type="monotone" stroke={C.ink} strokeWidth={2.5} dot={false} animationDuration={900} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            ) : <div style={s.emptyMini}>Aún no hay ventas en este periodo. En cuanto entren pedidos, verás la evolución aquí.</div>}
           </div>
-        </div>
 
-        <div style={{ ...s.card, ...(dense ? s.cardDense : {}) }}>
-          <div style={s.cardTitle}>Marcas por ventas</div>
-          <div style={s.list}>
-            {BRANDS.map((b) => (
-              <div key={b.name} style={s.brandRow}>
-                <div style={s.brandTop}><span style={s.listName}>{b.name}</span><span style={s.brandSales}>{eur(b.sales)}</span></div>
-                <div style={s.brandBarWrap}><span style={{ ...s.brandBar, width: `${Math.round((b.sales / maxBrand) * 100)}%` }} /></div>
-                <div style={s.brandMargin}>margen {eur(b.margin)}</div>
-              </div>
-            ))}
-          </div>
-        </div>
+          <div style={{ ...s.grid4, gap, marginTop: gap }}>
+            <div style={{ ...s.card, ...(dense ? s.cardDense : {}) }}>
+              <div style={s.cardTitle}>¿Qué oferta te funciona?</div>
+              {pieData.length > 0 ? (
+                <>
+                  <div style={s.donutWrap}>
+                    <ResponsiveContainer width="100%" height={168}>
+                      <PieChart>
+                        <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={56} outerRadius={72} paddingAngle={3} cornerRadius={6} stroke="none" animationDuration={700}>
+                          {pieData.map((e, i) => <Cell key={i} fill={e.color} />)}
+                        </Pie>
+                        <Tooltip content={<FTooltip />} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div style={s.donutCenter}><div style={s.donutTotal}>{eur(invested)}</div><div style={s.donutCap}>invertido</div></div>
+                  </div>
+                  <div style={s.legend}>{(d?.byKind ?? []).filter((k) => k.invested > 0).map((k) => <div key={k.kind} style={s.legendRow}><span style={{ ...s.dot, background: KIND_COLOR[k.kind] ?? '#888' }} /><span style={s.legendName}>{kindLabel(k.kind)}</span><span style={s.legendVal}>{eur(k.invested)}</span></div>)}</div>
+                </>
+              ) : <div style={s.emptyMini}>Sin inversión en oferta todavía.</div>}
+            </div>
 
-        <div style={{ ...s.card, ...(dense ? s.cardDense : {}) }}>
-          <div style={s.cardTitle}>Platos más vendidos</div>
-          <div style={s.list}>
-            {TOP_DISHES.map((d, i) => (
-              <div key={d.name} style={s.dishRow}><span style={s.dishRank}>{i + 1}</span><span style={s.listName}>{d.name}</span><span style={s.dishUnits}>{d.units} uds</span></div>
-            ))}
+            <div style={{ ...s.card, ...(dense ? s.cardDense : {}) }}>
+              <div style={s.cardTitle}>Top campañas por ROI</div>
+              {d && d.topCampaigns.length > 0 ? (
+                <div style={s.list}>
+                  {d.topCampaigns.map((t) => (
+                    <button key={t.id} type="button" style={s.listRow} onClick={() => navigate('../campanas')} title="Ver en Campañas">
+                      <span style={s.listName}>{t.name}</span><span style={s.listTag}>{kindLabel(t.kind)}</span>
+                      <span style={{ ...s.listRoi, color: roiColor(t.roi) }}>{t.roi != null ? `${t.roi.toFixed(1).replace('.', ',')}×` : '—'}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : <div style={s.emptyMini}>Aún no hay canjes que rankear.</div>}
+            </div>
+
+            <div style={{ ...s.card, ...(dense ? s.cardDense : {}) }}>
+              <div style={s.cardTitle}>Marcas por ventas</div>
+              {d && d.brands.length > 0 ? (
+                <div style={s.list}>{d.brands.map((b) => (
+                  <div key={b.name} style={s.brandRow}>
+                    <div style={s.brandTop}><span style={s.listName}>{b.name}</span><span style={s.brandSales}>{eur(b.ventas)}</span></div>
+                    <div style={s.brandBarWrap}><span style={{ ...s.brandBar, width: `${Math.round((b.ventas / maxBrand) * 100)}%` }} /></div>
+                    {b.margin != null && <div style={s.brandMargin}>margen {eur(b.margin)}</div>}
+                  </div>
+                ))}</div>
+              ) : <div style={s.emptyMini}>Sin ventas en el periodo.</div>}
+            </div>
+
+            <div style={{ ...s.card, ...(dense ? s.cardDense : {}) }}>
+              <div style={s.cardTitle}>Platos más vendidos</div>
+              {d && d.topDishes.length > 0 ? (
+                <div style={s.list}>{d.topDishes.map((x, i) => (
+                  <div key={x.name} style={s.dishRow}><span style={s.dishRank}>{i + 1}</span><span style={s.listName}>{x.name}</span><span style={s.dishUnits}>{x.units} uds</span></div>
+                ))}</div>
+              ) : <div style={s.emptyMini}>Sin platos vendidos en el periodo.</div>}
+            </div>
           </div>
-        </div>
-      </div>
+        </>
+      )}
     </div>
   )
 }
 
 const styles: Record<string, CSSProperties> = {
   page: { padding: '4px 4px 48px', maxWidth: 1100 },
-  mockBanner: { background: C.amberBg, border: `1px solid ${C.gold}55`, color: C.amber, fontSize: 12.5, fontWeight: 700, borderRadius: 10, padding: '8px 13px', marginBottom: 14 },
   header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 14 },
   titleRow: { display: 'flex', alignItems: 'center', gap: 9 },
   h1: { fontSize: 23, fontWeight: 800, letterSpacing: '-.02em', color: C.ink, margin: 0 },
@@ -353,24 +387,22 @@ const styles: Record<string, CSSProperties> = {
   densityBtn: { border: `1px solid ${C.lineInput}`, background: '#fff', color: C.inkDim, borderRadius: 999, padding: '6px 13px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' },
   densityOn: { background: C.ink, color: '#fff', border: `1px solid ${C.ink}` },
   downloadBtn: { display: 'inline-flex', alignItems: 'center', gap: 6, border: 'none', background: C.accent, color: '#fff', borderRadius: 999, padding: '9px 16px', fontSize: 13.5, fontWeight: 800, cursor: 'pointer' },
-
   dlMenu: { padding: 6 },
   dlHead: { fontSize: 11, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: C.inkFaint, padding: '6px 8px 8px' },
+  dlEmpty: { fontSize: 12.5, color: C.inkFaint, padding: '4px 8px 10px' },
   dlRow: { display: 'flex', alignItems: 'center', gap: 6, padding: '5px 8px' },
   dlName: { flex: 1, fontSize: 13, color: C.ink, fontWeight: 600 },
   dlFmt: { border: `1px solid ${C.lineInput}`, background: '#fff', color: C.inkDim, borderRadius: 8, padding: '3px 9px', fontSize: 11.5, fontWeight: 800, cursor: 'pointer' },
-
   filters: { position: 'sticky', top: 0, zIndex: 20, background: C.page, borderRadius: 14, border: `1px solid ${C.line}`, padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap', marginBottom: 10 },
   channelFixed: { fontSize: 12, color: C.inkFaint, fontWeight: 700, marginLeft: 2 },
   vsPrev: { fontSize: 12, color: C.greenDeep, fontWeight: 700 },
   summaryChips: { display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 14 },
   sumChip: { border: `1px solid ${C.accent}44`, background: '#FFF1EE', color: C.accent, borderRadius: 999, padding: '4px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer' },
   sumX: { fontWeight: 900, marginLeft: 2 },
-
+  muted: { color: C.inkDim, fontSize: 14, padding: '40px 0', textAlign: 'center' },
   ddBtn: { display: 'inline-flex', alignItems: 'center', gap: 5, border: `1px solid ${C.lineInput}`, background: '#fff', borderRadius: 10, padding: '8px 12px', fontSize: 12.5, cursor: 'pointer' },
   ddBtnOpen: { borderColor: C.ink },
-  ddLabel: { color: C.inkDim, fontWeight: 600 },
-  ddValue: { color: C.ink, fontWeight: 800 },
+  ddLabel: { color: C.inkDim, fontWeight: 600 }, ddValue: { color: C.ink, fontWeight: 800 },
   pop: { position: 'absolute', top: 'calc(100% + 6px)', left: 0, background: '#fff', border: `1px solid ${C.line}`, borderRadius: 12, boxShadow: '0 12px 34px rgba(0,0,0,.14)', zIndex: 40, padding: 6, maxHeight: 320, overflow: 'auto' },
   ddSearch: { display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', borderBottom: `1px solid ${C.line}` },
   ddSearchInput: { border: 'none', outline: 'none', fontSize: 13, width: '100%', color: C.ink },
@@ -385,9 +417,7 @@ const styles: Record<string, CSSProperties> = {
   ddRadioOn: { background: C.page, color: C.accent, fontWeight: 800 },
   ddDates: { display: 'flex', alignItems: 'center', gap: 6, padding: '8px 10px', borderTop: `1px solid ${C.line}` },
   ddDate: { border: `1px solid ${C.lineInput}`, borderRadius: 8, padding: '5px 8px', fontSize: 12.5, color: C.ink },
-
   insight: { display: 'flex', alignItems: 'flex-start', gap: 9, background: C.greenBg, border: `1px solid ${C.green}33`, borderRadius: 14, padding: '12px 15px', fontSize: 14, color: C.ink, lineHeight: 1.5, marginBottom: 16, marginTop: 4 },
-
   heroGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)' },
   card: { background: C.surface, border: `1px solid ${C.line}`, borderRadius: 16, padding: '16px 18px' },
   cardDense: { borderRadius: 12, padding: '12px 14px' },
@@ -397,38 +427,31 @@ const styles: Record<string, CSSProperties> = {
   legChip: { display: 'inline-flex', alignItems: 'center', gap: 5, background: C.page, border: `1px solid ${C.line}`, borderRadius: 999, padding: '3px 9px', fontSize: 11.5, fontWeight: 700, color: C.inkDim },
   legDot: { width: 9, height: 9, borderRadius: 3 },
   grid4: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)' },
-
+  emptyMini: { fontSize: 13, color: C.inkFaint, padding: '22px 4px', textAlign: 'center', lineHeight: 1.5 },
   tip: { background: '#fff', border: `1px solid ${C.line}`, borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,.12)', padding: '9px 11px', minWidth: 150 },
   tipDay: { fontSize: 11.5, fontWeight: 800, color: C.inkDim, marginBottom: 6 },
   tipRow: { display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, marginTop: 3 },
   tipDot: { width: 9, height: 9, borderRadius: 3, flexShrink: 0 },
-  tipName: { flex: 1, color: C.inkDim },
-  tipVal: { fontWeight: 800, color: C.ink },
-
+  tipName: { flex: 1, color: C.inkDim }, tipVal: { fontWeight: 800, color: C.ink },
   donutWrap: { position: 'relative' },
-  donutCenter: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' },
+  donutCenter: { position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' },
   donutTotal: { fontSize: 20, fontWeight: 800, color: C.ink, letterSpacing: '-.02em' },
   donutCap: { fontSize: 11, color: C.inkFaint, fontWeight: 600 },
-
   legend: { marginTop: 6, display: 'flex', flexDirection: 'column', gap: 5 },
   legendRow: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5 },
   dot: { width: 11, height: 11, borderRadius: 3, flexShrink: 0 },
-  legendName: { fontWeight: 700, color: C.ink, flex: 1 },
-  legendVal: { color: C.inkDim, fontWeight: 700 },
-
+  legendName: { fontWeight: 700, color: C.ink, flex: 1 }, legendVal: { color: C.inkDim, fontWeight: 700 },
   list: { display: 'flex', flexDirection: 'column', gap: 7, marginTop: 10 },
-  listRow: { display: 'flex', alignItems: 'center', gap: 9, background: C.page, border: `1px solid ${C.line}`, borderRadius: 10, padding: '8px 11px', cursor: 'pointer' },
+  listRow: { display: 'flex', alignItems: 'center', gap: 9, background: C.page, border: `1px solid ${C.line}`, borderRadius: 10, padding: '8px 11px', cursor: 'pointer', textAlign: 'left', width: '100%' },
   listName: { flex: 1, minWidth: 0, fontSize: 13, fontWeight: 700, color: C.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   listTag: { fontSize: 10.5, fontWeight: 800, color: C.inkDim, background: '#EEEEEB', padding: '2px 8px', borderRadius: 999, whiteSpace: 'nowrap' },
   listRoi: { fontSize: 13.5, fontWeight: 900, whiteSpace: 'nowrap', minWidth: 42, textAlign: 'right' },
-
   brandRow: { padding: '4px 0' },
   brandTop: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 },
   brandSales: { fontSize: 13, fontWeight: 800, color: C.ink },
   brandBarWrap: { height: 7, background: '#F0EEE9', borderRadius: 999, overflow: 'hidden' },
   brandBar: { display: 'block', height: '100%', background: C.accent, borderRadius: 999 },
   brandMargin: { fontSize: 11, color: C.greenDeep, fontWeight: 700, marginTop: 3 },
-
   dishRow: { display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, padding: '5px 0' },
   dishRank: { width: 20, height: 20, borderRadius: '50%', background: C.page, border: `1px solid ${C.line}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: C.inkDim, flexShrink: 0 },
   dishUnits: { fontSize: 12, fontWeight: 700, color: C.inkDim, whiteSpace: 'nowrap' },
