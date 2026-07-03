@@ -41,6 +41,10 @@ export interface CatalogProduct {
   modifierGroupCount: number
   comboSlotCount: number   // nº de slots si es combo (0 si es item)
   position: number
+  // Artículo espejo (versión promo)
+  mirrorOfItemId: string | null   // si != null, esta fila ES el espejo de ese original
+  hasMirror: boolean              // este original tiene un espejo
+  promoActive: boolean            // el espejo de este original está visible ahora (original oculto a propósito, NO agotado)
 }
 
 export interface CatalogCategory {
@@ -158,13 +162,15 @@ export async function listCategoriesWithProducts(
   if (catErr) throw new Error(`Error listando categorías: ${catErr.message}`)
 
   // Productos Y combos de la marca (los combos también viven en su categoría).
-  const { data: items, error: miErr } = await supabase!
+  // Cast puntual: mirror_of_item_id existe en BBDD (migración 2500) pero aún no en
+  // los tipos generados; se lee sin regenerar todo el fichero de tipos.
+  const { data: items, error: miErr } = await (supabase! as any)
     .from('menu_item')
-    .select('id, name, short_name, description, photo_url, price, product_type, menu_category_id, recipe_item_id, is_active, is_available, needs_review, position')
+    .select('id, name, short_name, description, photo_url, price, product_type, menu_category_id, recipe_item_id, is_active, is_available, needs_review, position, mirror_of_item_id')
     .eq('account_id', accountId)
     .eq('brand_id', brandId)
     .order('position', { ascending: true })
-    .order('name', { ascending: true })
+    .order('name', { ascending: true }) as { data: Record<string, unknown>[] | null; error: { message: string } | null }
   if (miErr) throw new Error(`Error listando productos: ${miErr.message}`)
 
   // Conteo de grupos modificadores por producto
@@ -199,6 +205,14 @@ export async function listCategoriesWithProducts(
     }
   }
 
+  // Par espejo: se calcula en memoria (los items ya contienen a original y espejo,
+  // misma marca). Para cada original: ¿tiene espejo y está el espejo visible?
+  const mirrorByOriginal = new Map<string, boolean>()   // originalId -> espejo visible
+  for (const i of items ?? []) {
+    const mo = (i.mirror_of_item_id as string) ?? null
+    if (mo) mirrorByOriginal.set(mo, i.is_available !== false)
+  }
+
   const toProduct = (i: Record<string, unknown>): CatalogProduct => ({
     id: i.id as string,
     name: i.name as string,
@@ -215,6 +229,9 @@ export async function listCategoriesWithProducts(
     modifierGroupCount: groupCountByItem.get(i.id as string) ?? 0,
     comboSlotCount: slotCountByCombo.get(i.id as string) ?? 0,
     position: Number(i.position ?? 0),
+    mirrorOfItemId: (i.mirror_of_item_id as string) ?? null,
+    hasMirror: mirrorByOriginal.has(i.id as string),
+    promoActive: mirrorByOriginal.get(i.id as string) === true,
   })
 
   const categories: CatalogCategory[] = (cats ?? []).map((c) => ({

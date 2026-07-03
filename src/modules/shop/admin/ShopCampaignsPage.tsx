@@ -362,6 +362,8 @@ function CampaignModal({ accountId, mode, source, onClose, onSaved }: {
   const [summaryOpen, setSummaryOpen] = useState(false)
   useEffect(() => { const t = setTimeout(() => setSearchDeb(searchQ), 220); return () => clearTimeout(t) }, [searchQ])
 
+  // El árbol se recarga cada vez que el modal SE ABRE (monta), no solo al cargar
+  // la página: así un plato recién creado en la Carta aparece en el buscador sin F5.
   useEffect(() => {
     let alive = true
     getCampaignMenuTree(accountId).then((t) => { if (alive) setTree(t) })
@@ -472,7 +474,13 @@ function CampaignModal({ accountId, mode, source, onClose, onSaved }: {
   async function onMirror() {
     if (!singleItemForMirror) return
     const r = await createMirrorItem(accountId, singleItemForMirror.id)
-    setMirrorMsg(r.ok ? 'Espejo creado (oculto). Actívalo desde la carta y ponle su precio agresivo.' : 'No se pudo crear el espejo.')
+    if (r.ok) {
+      // Recarga el árbol para que el par quede coherente sin F5.
+      getCampaignMenuTree(accountId).then((t) => setTree(t)).catch(() => {})
+      setMirrorMsg('Versión promo creada (oculta). En la Carta, ponle su precio y pulsa «Usar versión promo» para activarla.')
+    } else {
+      setMirrorMsg('No se pudo crear la versión promo.')
+    }
   }
 
   async function onSave() {
@@ -703,7 +711,7 @@ function CampaignModal({ accountId, mode, source, onClose, onSaved }: {
                 : <div style={s.warn}>{impact.noTachado} platos no mostrarán tachado (su precio de referencia de 30 días no supera el precio con descuento): se verá el badge sin precio anterior.</div>}
               {singleItemForMirror && (
                 <div style={s.mirrorBox}>
-                  <div style={s.mirrorText}>Para vender <b>{singleItemForMirror.name}</b> a precio agresivo con tachado limpio, crea una versión promo (artículo espejo): nace sin historial, así el tachado es legal.</div>
+                  <div style={s.mirrorText}>Para vender <b>{singleItemForMirror.name}</b> a precio promo, crea una versión promo (artículo espejo): nace sin historial, así se vende a precio limpio, <b>sin tachado</b> (no hay precio anterior que tachar).</div>
                   <button type="button" style={s.mirrorBtn} onClick={onMirror}>Crear versión promo (espejo)</button>
                   {mirrorMsg && <div style={s.mirrorMsg}>{mirrorMsg}</div>}
                 </div>

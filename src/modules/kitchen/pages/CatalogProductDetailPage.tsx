@@ -22,6 +22,7 @@ import {
   Trash2, TrendingUp, X, Plus,
 } from 'lucide-react'
 import { getMenuItemById, updateMenuItem } from '@/modules/kitchen/services/menuItemService'
+import { getMirrorState, swapMirror, type MirrorState } from '@/modules/kitchen/services/mirrorService'
 import { listRecipeItems } from '@/modules/kitchen/services/recipeItemService'
 import {
   getProductModifierGroups,
@@ -790,6 +791,10 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
   const [availConfirm, setAvailConfirm] = useState(false)
   const [availResult, setAvailResult] = useState<ProductAvailabilityResult | null>(null)
   const [availError, setAvailError] = useState<string | null>(null)
+  // Artículo espejo (versión promo)
+  const [mirror, setMirror] = useState<MirrorState | null>(null)
+  const [mirrorBusy, setMirrorBusy] = useState(false)
+  const [mirrorError, setMirrorError] = useState<string | null>(null)
   const [packDesc, setPackDesc] = useState('')
   const [packCost, setPackCost] = useState('')
   const [kitchenNameVal, setKitchenNameVal] = useState('')
@@ -832,6 +837,17 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
     getProductModifierGroups(item.accountId, item.id)
       .then((mgs) => { if (!cancelled) setGroups(mgs) })
       .catch(() => { if (!cancelled) setGroups([]) })
+    return () => { cancelled = true }
+  }, [item?.id, item?.accountId])
+
+  // Estado del par original/espejo (para el botón de swap y distinguir
+  // "oculto por espejo" de "agotado").
+  useEffect(() => {
+    if (!item) { setMirror(null); return }
+    let cancelled = false
+    getMirrorState(item.accountId, item.id)
+      .then((m) => { if (!cancelled) setMirror(m) })
+      .catch(() => { if (!cancelled) setMirror(null) })
     return () => { cancelled = true }
   }, [item?.id, item?.accountId])
 
@@ -921,6 +937,27 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
       setAvailError(err instanceof Error ? err.message : 'Error cambiando disponibilidad')
     } finally {
       setAvailSaving(false)
+    }
+  }
+
+  // Swap COMPLETO original <-> espejo (is_available de ambos, coherente en el
+  // servidor). El swap se ejecuta SIEMPRE sobre el id del original.
+  async function handleSwapMirror(useMirror: boolean) {
+    if (!item || !mirror || mirror.role === 'none') return
+    const originalId = mirror.role === 'mirror' ? mirror.originalId : item.id
+    if (!originalId) return
+    setMirrorBusy(true)
+    setMirrorError(null)
+    try {
+      const res = await swapMirror(item.accountId, originalId, useMirror)
+      if (!res.ok) { setMirrorError('No se pudo cambiar la versión.'); return }
+      await refreshItem()
+      const m = await getMirrorState(item.accountId, item.id)
+      setMirror(m)
+    } catch (err: unknown) {
+      setMirrorError(err instanceof Error ? err.message : 'No se pudo cambiar la versión.')
+    } finally {
+      setMirrorBusy(false)
     }
   }
 
@@ -1494,6 +1531,26 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
                         <span className="inline-block w-2.5 h-2.5 rounded-full bg-green-500" />
                         Disponible
                       </button>
+                    ) : (mirror?.role === 'original' && mirror.usingMirror) ? (
+                      // Original oculto A PROPÓSITO porque su versión promo está activa: NO es agotado.
+                      <button
+                        onClick={() => handleSwapMirror(false)}
+                        disabled={mirrorBusy}
+                        className="inline-flex items-center gap-1.5 text-[12px] font-medium text-amber-700 hover:text-amber-800 disabled:opacity-50"
+                      >
+                        <span className="inline-block w-2.5 h-2.5 rounded-full bg-amber-400" />
+                        {mirrorBusy ? 'Cambiando…' : 'Oculto · versión promo'}
+                      </button>
+                    ) : (mirror?.role === 'mirror' && !mirror.usingMirror) ? (
+                      // Esta ficha es el espejo en espera: su visibilidad la manda el swap, no el 86.
+                      <button
+                        onClick={() => handleSwapMirror(true)}
+                        disabled={mirrorBusy}
+                        className="inline-flex items-center gap-1.5 text-[12px] font-medium text-amber-700 hover:text-amber-800 disabled:opacity-50"
+                      >
+                        <span className="inline-block w-2.5 h-2.5 rounded-full bg-amber-400" />
+                        {mirrorBusy ? 'Cambiando…' : 'En espera · versión promo'}
+                      </button>
                     ) : (
                       <button
                         onClick={() => handleToggleAvailability(true)}
@@ -1509,6 +1566,46 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
               </tbody>
             </table>
           </div>
+          {mirror && mirror.role !== 'none' && (
+            <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3">
+              <div className="flex items-center gap-1.5 text-[13px] font-semibold text-amber-900">
+                <Sparkles className="w-4 h-4" />
+                {mirror.role === 'mirror' ? 'Esta ficha es la versión promo' : 'Versión promo (artículo espejo)'}
+              </div>
+              <p className="text-[12.5px] text-amber-800 mt-1 leading-snug">
+                {mirror.usingMirror
+                  ? 'Ahora se vende la versión promo; el original está oculto a propósito (no es agotado).'
+                  : 'Ahora se vende el original; la versión promo está en espera.'}
+              </p>
+              <div className="text-[12px] text-amber-700 mt-1.5">
+                Original: <strong>{mirror.originalAvailable ? 'visible' : 'oculto'}</strong>
+                {' · '}Promo: <strong>{mirror.mirrorAvailable ? 'visible' : 'oculto'}</strong>
+              </div>
+              <div className="flex items-center gap-2 mt-2.5 flex-wrap">
+                {mirror.usingMirror ? (
+                  <button
+                    onClick={() => handleSwapMirror(false)}
+                    disabled={mirrorBusy}
+                    className="px-3 py-1.5 rounded-md bg-stone-800 text-white text-[13px] font-medium hover:bg-stone-900 disabled:opacity-50"
+                  >
+                    {mirrorBusy ? 'Cambiando…' : 'Volver al original'}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleSwapMirror(true)}
+                    disabled={mirrorBusy}
+                    className="px-3 py-1.5 rounded-md bg-amber-600 text-white text-[13px] font-medium hover:bg-amber-700 disabled:opacity-50"
+                  >
+                    {mirrorBusy ? 'Cambiando…' : 'Usar versión promo'}
+                  </button>
+                )}
+                {mirror.role === 'mirror' && mirror.originalName && (
+                  <span className="text-[11.5px] text-amber-700">Promo de «{mirror.originalName}». Ponle aquí su precio promo.</span>
+                )}
+              </div>
+              {mirrorError && <p className="text-[12px] text-red-600 mt-2">{mirrorError}</p>}
+            </div>
+          )}
           {availConfirm && (
             <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm">
               <p className="font-medium text-amber-900">¿Marcar como agotado?</p>

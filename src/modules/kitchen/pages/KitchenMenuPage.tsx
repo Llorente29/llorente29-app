@@ -14,7 +14,7 @@
 // Patrón: useApp() + useActiveAccount() + useIsMobile(), igual que KitchenItemsPage.
 
 import { useEffect, useMemo, useState } from 'react'
-import { Search, ChevronDown, ChevronRight, CircleDashed, CheckCircle2, AlertTriangle, UtensilsCrossed, Package, Link2Off, Plus, FolderPlus, ArrowRightLeft, X, Undo2, Info, ArrowUp, ArrowDown, Trash2, UploadCloud, Loader2 } from 'lucide-react'
+import { Search, ChevronDown, ChevronRight, CircleDashed, CheckCircle2, AlertTriangle, UtensilsCrossed, Package, Link2Off, Plus, FolderPlus, ArrowRightLeft, X, Undo2, Info, ArrowUp, ArrowDown, Trash2, UploadCloud, Loader2, Sparkles } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import {
   listBrandsWithCatalog,
@@ -674,9 +674,17 @@ export default function KitchenMenuPage() {
                               <Package className="w-3 h-3" /> combo
                             </span>
                           )}
-                          {!p.isAvailable && (
+                          {p.mirrorOfItemId ? (
+                            <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 align-middle inline-flex items-center gap-1">
+                              <Sparkles className="w-3 h-3" /> versión promo{p.isAvailable ? ' · activa' : ' · en espera'}
+                            </span>
+                          ) : p.hasMirror && p.promoActive ? (
+                            <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 align-middle inline-flex items-center gap-1">
+                              <Sparkles className="w-3 h-3" /> en promo
+                            </span>
+                          ) : !p.isAvailable ? (
                             <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 align-middle">agotado</span>
-                          )}
+                          ) : null}
                         </div>
                         <div className="text-xs text-gray-500 truncate">
                           {p.shortName ? `${p.shortName} · ` : ''}
