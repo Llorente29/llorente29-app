@@ -274,8 +274,8 @@ Notas: meez **se declara "complementario, no competidor" de ERPs** — capa culi
 | Combinar oferta de plato + de cesta | Uber lo permite | ✅ coexistencia construida (lanes subtotal/envío + item en línea) | 🟢 |
 | Franjas horarias (happy hour) | Programación de plataforma | ✅ weekdays/time_from/time_to (TZ Madrid) | 🟢 |
 | Presupuesto máx. que apaga la campaña sola | Uber weekly budget | ✅ budget_max (canjes vivos) | 🟢 |
-| **2x1 / BOGO** | Glovo 2x1, Uber BOGO | 🔨 G2c en construcción (Code, spec entregada) | 🟡 en curso |
-| Plato de regalo desde X€ | Uber "free item over £X" | 🔨 G2c | 🟡 en curso |
+| **2x1 / BOGO** | Glovo 2x1, Uber BOGO | ✅ G2c (escalera de pares al céntimo; badge negro/amarillo en las 7 pantallas) | 🟢 |
+| Plato de regalo desde X€ | Uber "free item over £X" | ✅ G2c (línea REAL a 0€ que la cocina prepara + barrita de progreso) | 🟢 golea (el regalo entra a cocina/ticket/KDS; los paneles de plataforma solo descuentan) |
 | Menú/bundle a precio cerrado con coste real | nadie con coste real | ❌ declarado | 🔴 futuro |
 | Gestor de campañas (crear/pausar/clonar/eliminar/histórico) | Uber Eats Manager "All Campaigns", Glovo WebApp | ✅ G1+G2a-D (con impacto de margen y buscador multi-marca) | 🟢 |
 | Rendimiento por campaña (canjes, € invertido) | Uber/Glovo básico | ✅ G1 (canjes VIVOS + **margen medio real** de margin_after) · dashboard completo = G2e | 🟡→🟢 con G2e |
@@ -309,7 +309,7 @@ Notas: meez **se declara "complementario, no competidor" de ERPs** — capa culi
 | **Punchh/Paytronix AI** | Personalización 1-a-1 predictiva | Enterprise, estiman coste | F6 segmentos + margen real |
 | Escalera Folvy | **G1 manos (manual, hecho) → G2d reflejos (reglas) → F9 cerebro (agente)** — cada campaña nace con origin manual/rule/agent | | 🟡 G1 🟢 hecho; G2d/F9 declarados |
 
-**Cómo golea Folvy en el área:** el motor único Ómnibus-aware + margen-consciente sirve a CRM y a canal (decisión 02/07); ningún rival combina reglas de Pleez + agente de Toast + verdad de margen. **Deudas del área:** BOGO (en curso), dashboard G2e, reglas G2d, catálogo↔escandallo (el margen por plato es tan bueno como la cobertura de escandallos: 420/582 sin coste), cashback (decisión), A/B servido.
+**Cómo golea Folvy en el área:** el motor único Ómnibus-aware + margen-consciente sirve a CRM y a canal (decisión 02/07); ningún rival combina reglas de Pleez + agente de Toast + verdad de margen. **Deudas del área:** dashboard G2e, reglas G2d, catálogo↔escandallo (el margen por plato es tan bueno como la cobertura de escandallos: 420/582 sin coste), cashback (decisión), A/B servido.
 
 ---
 
