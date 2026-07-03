@@ -19,7 +19,7 @@ import { useShopCart } from '@/modules/shop/cart/ShopCartContext'
 import {
   geocodeAddress, checkDelivery, getDeliverySlots, placeShopOrder, createShopPaymentIntent,
   getShopPaymentConfig, getShopLocations, getShopOrderStatus,
-  type GeocodeHit, type DeliveryCheck, type DeliverySlot, type ShopOrderPayload, type ShopPaymentConfig, type ShopLocation, type CouponResult,
+  type GeocodeHit, type DeliveryCheck, type DeliverySlot, type ShopOrderPayload, type ShopPaymentConfig, type ShopLocation, type CouponResult, type PlaceOrderResult,
 } from '@/modules/shop/checkout/checkoutService'
 import { getShopHub, type ShopHub } from '@/modules/shop/services/shopHubService'
 import { getSessionCustomer, registerShopConsent } from '@/modules/shop/checkout/customerAuthService'
@@ -165,6 +165,9 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
   const [showCouponField, setShowCouponField] = useState(false)
   const [coupon, setCoupon] = useState<CouponResult | null>(null)
   const [couponBusy, setCouponBusy] = useState(false)
+  // Resultado completo del dry-run (server = verdad): sus líneas y subtotal mandan
+  // en el resumen cuando el carrito local tiene precios viejos (carrito-viejo).
+  const [preview, setPreview] = useState<PlaceOrderResult | null>(null)
   const [showPrivacy, setShowPrivacy] = useState(false)
   const [placing, setPlacing] = useState(false)
   const [placeError, setPlaceError] = useState<string | null>(null)
@@ -385,12 +388,18 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
   // cuando cambia cualquier línea O su cantidad, no solo el nº de líneas. Sin
   // esto, subir un plato de 1→2 uds no recalculaba la base de la bienvenida.
   const cartSig = JSON.stringify(cart.lines.map((l) => l.order))
+  // Carrito-viejo: si hay dry-run ALINEADO con el carrito (mismo nº de líneas, mismo
+  // orden que el payload), sus precios de HOY mandan sobre los del carrito local
+  // (que pueden ser viejos). Fallback al local mientras no haya dry-run.
+  const freshLines = preview?.ok && Array.isArray(preview.lines) && preview.lines.length === cart.lines.length
+    ? preview.lines : null
+  const displaySubtotal = freshLines && preview?.subtotal != null ? preview.subtotal : totals.subtotal
   // Descuento de SUBTOTAL efectivo = el que devuelve el servidor (cupón), o 0.
   const couponDiscount = coupon?.applied ? (coupon.discount ?? 0) : 0
-  const grandTotal = totals.subtotal - totals.discount - couponDiscount + effectiveDelivery
+  const grandTotal = displaySubtotal - totals.discount - couponDiscount + effectiveDelivery
   const minOrder = check?.ok ? check.minOrder : null
-  const belowMin = mode === 'delivery' && minOrder != null && totals.subtotal < minOrder
-  const missingForMin = belowMin && minOrder != null ? minOrder - totals.subtotal : 0
+  const belowMin = mode === 'delivery' && minOrder != null && displaySubtotal < minOrder
+  const missingForMin = belowMin && minOrder != null ? minOrder - displaySubtotal : 0
   const timeOk = timeMode === 'asap' || (timeMode === 'scheduled' && slotTs != null)
   const contactOk = name.trim().length > 1 && phone.replace(/\s+/g, '').length >= 7
   const canContinue = cart.lines.length > 0 && timeOk && contactOk && (
@@ -406,7 +415,7 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
   // ── Cupón: recalcular vía dry-run (el servidor es la fuente de verdad) ──
   // Se dispara cuando cambian las líneas, el modo, el email o el código.
   async function refreshCoupon(codeOverride?: string) {
-    if (cart.lines.length === 0) { setCoupon(null); return }
+    if (cart.lines.length === 0) { setCoupon(null); setPreview(null); return }
     // El cupón se calcula sobre el subtotal (no necesita el local). Usamos el
     // local elegido, o el primero candidato/disponible como respaldo, solo para
     // que el payload sea válido — el descuento no depende de él.
@@ -414,7 +423,7 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
       ?? cart.candidateLocationIds?.[0]
       ?? locations[0]?.id
       ?? null
-    if (!locId) { setCoupon(null); return }
+    if (!locId) { setCoupon(null); setPreview(null); return }
     const code = codeOverride !== undefined ? codeOverride : couponCode
     setCouponBusy(true)
     try {
@@ -436,8 +445,10 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
       }
       const res = await placeShopOrder(slug, payload, true)   // dry-run
       setCoupon(res.coupon ?? null)
+      setPreview(res.ok ? res : null)
     } catch {
       setCoupon(null)
+      setPreview(null)
     } finally {
       setCouponBusy(false)
     }
@@ -582,15 +593,19 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
   const summaryLines = (
     <>
       <div style={s.sumLines}>
-        {cart.lines.map((l) => (
-          <div key={l.lineId} style={s.sumLine}>
-            <span style={s.sumQty}>{l.quantity}x</span>
-            <span style={s.sumName}>{l.name}</span>
-            <span style={s.sumPrice}>{eur(l.unitPrice * l.quantity)}</span>
-          </div>
-        ))}
+        {cart.lines.map((l, idx) => {
+          const pv = freshLines ? freshLines[idx] : null
+          const lineEur = pv ? pv.lineTotal : l.unitPrice * l.quantity
+          return (
+            <div key={l.lineId} style={s.sumLine}>
+              <span style={s.sumQty}>{l.quantity}x</span>
+              <span style={s.sumName}>{l.name}</span>
+              <span style={s.sumPrice}>{eur(lineEur)}</span>
+            </div>
+          )
+        })}
       </div>
-      <div style={s.sumRow}><span>Subtotal</span><span>{eur(totals.subtotal)}</span></div>
+      <div style={s.sumRow}><span>Subtotal</span><span>{eur(displaySubtotal)}</span></div>
       {totals.discount > 0 && <div style={{ ...s.sumRow, color: C.green }}><span>Descuento</span><span>-{eur(totals.discount)}</span></div>}
       {/* Descuento AUTOMÁTICO (bienvenida/fidelidad): línea propia. El cupón de
           CÓDIGO tiene su fila tappable abajo (couponSummary). */}
@@ -720,13 +735,17 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
                   <span>{mode === 'pickup' ? `Recoges en ${chosenLoc.name}` : 'Entrega a domicilio'}</span>
                 </div>
               )}
-              {cart.lines.map((l) => (
-                <div key={l.lineId} style={s.payRecapLine}>
-                  <span style={s.payRecapQty}>{l.quantity}x</span>
-                  <span style={s.payRecapName}>{l.name}</span>
-                  <span style={s.payRecapPrice}>{eur(l.unitPrice * l.quantity)}</span>
-                </div>
-              ))}
+              {cart.lines.map((l, idx) => {
+                const pv = freshLines ? freshLines[idx] : null
+                const lineEur = pv ? pv.lineTotal : l.unitPrice * l.quantity
+                return (
+                  <div key={l.lineId} style={s.payRecapLine}>
+                    <span style={s.payRecapQty}>{l.quantity}x</span>
+                    <span style={s.payRecapName}>{l.name}</span>
+                    <span style={s.payRecapPrice}>{eur(lineEur)}</span>
+                  </div>
+                )
+              })}
               <div style={s.payRecapTotal}>
                 <span>Total a pagar</span>
                 <span style={s.payTotalNum}>{eur(pay.total)}</span>
