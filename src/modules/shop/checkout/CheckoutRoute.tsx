@@ -374,9 +374,12 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
   }, [timeMode, cart.locationId, check, slug])
 
   const deliveryFee = mode === 'delivery' && check?.ok ? check.deliveryFee : 0
-  // Descuento efectivo = el que devuelve el servidor (cupón), o 0.
+  // Envío gratis: lane propio del servidor (coexiste con el cupón de subtotal).
+  const freeShip = coupon?.freeDelivery === true
+  const effectiveDelivery = freeShip ? 0 : deliveryFee
+  // Descuento de SUBTOTAL efectivo = el que devuelve el servidor (cupón), o 0.
   const couponDiscount = coupon?.applied ? (coupon.discount ?? 0) : 0
-  const grandTotal = totals.subtotal - totals.discount - couponDiscount + deliveryFee
+  const grandTotal = totals.subtotal - totals.discount - couponDiscount + effectiveDelivery
   const minOrder = check?.ok ? check.minOrder : null
   const belowMin = mode === 'delivery' && minOrder != null && totals.subtotal < minOrder
   const missingForMin = belowMin && minOrder != null ? minOrder - totals.subtotal : 0
@@ -583,7 +586,7 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
       {totals.discount > 0 && <div style={{ ...s.sumRow, color: C.green }}><span>Descuento</span><span>-{eur(totals.discount)}</span></div>}
       {/* Descuento AUTOMÁTICO (bienvenida/fidelidad): línea propia. El cupón de
           CÓDIGO tiene su fila tappable abajo (couponSummary). */}
-      {couponDiscount > 0 && !couponCode && !coupon?.freeDelivery && (
+      {couponDiscount > 0 && !couponCode && (
         <div style={{ ...s.sumRow, color: C.green }}>
           <span>{coupon?.isWelcome ? 'Bienvenida' : (coupon?.label ?? 'Descuento')}</span>
           <span>-{eur(couponDiscount)}</span>
@@ -594,7 +597,7 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
         <span>
           {mode === 'pickup'
             ? '-'
-            : coupon?.freeDelivery && coupon.applied && deliveryFee > 0
+            : freeShip && deliveryFee > 0
               ? <span style={{ color: C.green, fontWeight: 800 }}>¡Gratis!</span>
               : (check?.ok ? eur(deliveryFee) : 'Indica tu dirección')}
         </span>
