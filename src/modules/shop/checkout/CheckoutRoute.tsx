@@ -381,6 +381,10 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
   // Envío gratis: lane propio del servidor (coexiste con el cupón de subtotal).
   const freeShip = coupon?.freeDelivery === true
   const effectiveDelivery = freeShip ? 0 : deliveryFee
+  // Firma del carrito (contenido + CANTIDADES): dispara el dry-run del cupón
+  // cuando cambia cualquier línea O su cantidad, no solo el nº de líneas. Sin
+  // esto, subir un plato de 1→2 uds no recalculaba la base de la bienvenida.
+  const cartSig = JSON.stringify(cart.lines.map((l) => l.order))
   // Descuento de SUBTOTAL efectivo = el que devuelve el servidor (cupón), o 0.
   const couponDiscount = coupon?.applied ? (coupon.discount ?? 0) : 0
   const grandTotal = totals.subtotal - totals.discount - couponDiscount + effectiveDelivery
@@ -445,7 +449,7 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
     const t = setTimeout(() => { refreshCoupon() }, 400)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [email, marketingConsent, mode, cart.lines.length, cart.locationId, couponCode, deliveryFee, locations.length])
+  }, [email, marketingConsent, mode, cartSig, cart.locationId, couponCode, deliveryFee, locations.length])
 
   function applyCouponCode() {
     const code = couponInput.trim().toUpperCase()
