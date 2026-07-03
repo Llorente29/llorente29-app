@@ -14,6 +14,8 @@ export interface HubBrand {
   cuisineLabel: string | null
   cuisineEmoji: string | null
   isOpen: boolean
+  // Mejor oferta item_percent activa ahora que toca esta marca (badge del hub).
+  offer: { pct: number; multi: boolean } | null
 }
 
 export interface TopDish {
@@ -64,6 +66,9 @@ export async function getShopHub(slug: string): Promise<ShopHub | null> {
       cuisineLabel: b.cuisine_label ?? null,
       cuisineEmoji: b.cuisine_emoji ?? null,
       isOpen: b.is_open === true,
+      offer: b.offer && b.offer.pct != null
+        ? { pct: Number(b.offer.pct), multi: b.offer.multi === true }
+        : null,
     })),
     topDishes: (data.top_dishes ?? []).map((t: any) => ({
       menuItemId: t.menu_item_id,

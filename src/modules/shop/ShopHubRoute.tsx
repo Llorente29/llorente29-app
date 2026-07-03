@@ -435,6 +435,11 @@ function BrandCard({ b, onOpen }: { b: HubBrand; onOpen: () => void }) {
             Cerrado ahora
           </span>
         )}
+        {b.offer && (
+          <span style={{ position: 'absolute', top: 12, left: 12, background: C.accent, color: '#fff', fontSize: 12.5, fontWeight: 800, padding: '5px 11px', borderRadius: 999, boxShadow: '0 2px 10px rgba(255,84,54,.4)' }}>
+            {b.offer.multi ? `Hasta −${Math.round(b.offer.pct)}%` : `−${Math.round(b.offer.pct)}%`}
+          </span>
+        )}
       </div>
       <div style={{ padding: '15px 16px 17px' }}>
         <div style={S.cardName}>{b.name}</div>

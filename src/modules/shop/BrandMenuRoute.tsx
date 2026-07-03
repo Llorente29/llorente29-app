@@ -125,15 +125,38 @@ export default function BrandMenuRoute({ slug, brandId, onBack, onCheckout }: { 
 
       {/* Categorías */}
       <div style={S.menuWrap}>
+        {/* Banner de oferta (derivado en cliente de los platos con offer) */}
+        {(() => {
+          const offerCats = menu.categories
+            .map((cat) => {
+              const pcts = cat.products.filter((p) => p.offer).map((p) => p.offer!.pct)
+              return pcts.length ? { id: cat.id, name: cat.name, maxPct: Math.max(...pcts) } : null
+            })
+            .filter(Boolean) as { id: string; name: string; maxPct: number }[]
+          if (!offerCats.length) return null
+          return (
+            <button
+              style={S.offerBanner}
+              onClick={() => document.getElementById(`fvcat-${offerCats[0].id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+            >
+              <span aria-hidden>🔥</span> Hoy: {offerCats.map((o) => `−${Math.round(o.maxPct)}% en ${o.name}`).join(' · ')}
+            </button>
+          )
+        })()}
         {menu.categories.length === 0 && (
           <div style={S.center}>Esta marca aún no tiene platos disponibles.</div>
         )}
         {menu.categories.map(cat => (
-          <section key={cat.id} style={{ marginBottom: 30 }}>
-            <h2 style={S.catTitle}>{cat.emoji ? `${cat.emoji} ` : ''}{cat.name}</h2>
+          <section key={cat.id} id={`fvcat-${cat.id}`} style={{ marginBottom: 30 }}>
+            <h2 style={S.catTitle}>
+              {cat.emoji ? `${cat.emoji} ` : ''}{cat.name}
+              {cat.products.length > 0 && cat.products.every((p) => p.offer) && (
+                <span style={S.catPill}>−{Math.round(Math.max(...cat.products.map((p) => p.offer!.pct)))}% hoy</span>
+              )}
+            </h2>
             <div style={S.dishGrid}>
               {cat.products.map(d => (
-                <div key={d.id} className="fvdish" style={S.dish}>
+                <div key={d.id} className="fvdish" style={{ ...S.dish, ...(d.offer ? S.dishOn : {}) }}>
                   <div style={{ ...S.dishPhoto, background: d.photoUrl ? `center/cover no-repeat url(${d.photoUrl})` : C.accentBg, position: 'relative' }}>
                     {d.offer && <span style={S.dishBadge}>−{Math.round(d.offer.pct)}% hoy</span>}
                   </div>
@@ -251,11 +274,14 @@ const S: Record<string, React.CSSProperties> = {
   dishDesc: { fontSize: 13, color: C.inkDim, lineHeight: 1.4, marginBottom: 12, flex: 1 },
   dishFoot: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto' },
   dishPrice: { fontWeight: 900, fontSize: 16 },
-  dishBadge: { position: 'absolute', top: 10, left: 10, background: C.accent, color: '#fff', fontSize: 12, fontWeight: 800, padding: '4px 9px', borderRadius: 999, boxShadow: '0 2px 8px rgba(0,0,0,.18)' },
+  dishBadge: { position: 'absolute', top: 10, left: 10, background: C.accent, color: '#fff', fontSize: 13, fontWeight: 800, padding: '4px 10px', borderRadius: 999, boxShadow: '0 2px 8px rgba(0,0,0,.18)' },
   priceWrap: { display: 'flex', alignItems: 'baseline', gap: 7 },
-  dishPriceNow: { fontWeight: 900, fontSize: 16, color: C.accent },
+  dishPriceNow: { fontWeight: 900, fontSize: 17.5, color: C.accent },
   dishPriceWas: { fontSize: 13, color: C.inkDim, textDecoration: 'line-through' },
   omnibusNote: { fontSize: 11, color: C.inkDim, marginTop: 6 },
+  dishOn: { border: `1.5px solid ${C.accent}` },
+  offerBanner: { display: 'block', width: '100%', textAlign: 'left', background: '#FFE9E3', color: C.accent, border: `1px solid ${C.accent}33`, borderRadius: 14, padding: '11px 16px', fontSize: 14, fontWeight: 800, letterSpacing: '-.01em', cursor: 'pointer', marginBottom: 22 },
+  catPill: { marginLeft: 10, verticalAlign: 'middle', background: C.accent, color: '#fff', fontSize: 12, fontWeight: 800, padding: '3px 10px', borderRadius: 999 },
   addBtn: { background: C.accent, color: '#fff', border: 'none', borderRadius: 999, padding: '8px 15px', fontWeight: 800, fontSize: 14, cursor: 'not-allowed', opacity: .45, display: 'inline-flex', alignItems: 'center', gap: 5 },
   addBtnOn: { cursor: 'pointer', opacity: 1 },
   footer: { textAlign: 'center', padding: '26px', fontSize: 13, color: C.inkDim },
