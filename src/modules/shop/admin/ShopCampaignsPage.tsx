@@ -21,6 +21,7 @@ import {
   type CampaignMenuTree, type TreeItem, type CampaignPerformance,
 } from '@/modules/shop/admin/campaignService'
 import CampaignsOverviewTab from '@/modules/shop/admin/CampaignsOverviewTab'
+import { countUnackedFirings, acknowledgeFirings } from '@/modules/shop/admin/campaignRulesService'
 
 const C = {
   surface: '#FFFFFF', ink: '#16140F', inkDim: '#6E6960', inkFaint: '#8A857C',
@@ -134,6 +135,7 @@ export default function ShopCampaignsPage() {
   const [modal, setModal] = useState<null | { mode: 'new' | 'edit' | 'clone'; c?: Campaign }>(null)
   const [perf, setPerf] = useState<Campaign | null>(null)
   const [tab, setTab] = useState<'list' | 'overview'>('list')
+  const [ruleFired, setRuleFired] = useState(0)   // campañas encendidas por reglas sin ver (visibilidad G2d)
   const [q, setQ] = useState('')
   const [typeF, setTypeF] = useState<TypeFilter>('all')
   const [statusF, setStatusF] = useState<StatusFilter>('all')
@@ -143,6 +145,13 @@ export default function ShopCampaignsPage() {
     setRows(await listCampaigns(accountId))
   }
   useEffect(() => { setRows(null); refresh() /* eslint-disable-next-line */ }, [accountId])
+  useEffect(() => { if (accountId) countUnackedFirings(accountId).then(setRuleFired).catch(() => {}) }, [accountId])
+
+  async function onSeeRules() {
+    if (accountId) await acknowledgeFirings(accountId)
+    setRuleFired(0)
+    navigate('../reglas')
+  }
 
   async function onToggle(c: Campaign) {
     if (!accountId || busyId) return
@@ -189,6 +198,12 @@ export default function ShopCampaignsPage() {
         <button type="button" style={{ ...s.tab, ...(tab === 'list' ? s.tabOn : {}) }} onClick={() => setTab('list')}>Lista</button>
         <button type="button" style={{ ...s.tab, ...(tab === 'overview' ? s.tabOn : {}) }} onClick={() => setTab('overview')}>Rendimiento</button>
       </div>
+
+      {ruleFired > 0 && (
+        <button type="button" style={s.ruleBanner} onClick={onSeeRules}>
+          ⚡ <b>{ruleFired}</b> {ruleFired === 1 ? 'campaña encendida' : 'campañas encendidas'} por tus reglas esta semana. <span style={s.ruleBannerLink}>Ver reglas →</span>
+        </button>
+      )}
 
       {tab === 'overview' ? (
         accountId ? (
@@ -301,6 +316,7 @@ function CampaignRow({ c, busy, onConfigure, onEdit, onClone, onDelete, onOpenPe
           <div style={s.rowTop}>
             <span style={s.rowName}>{c.name}</span>
             <span style={{ ...s.badge, ...(c.isSystem ? s.badgeSystem : s.badgeCode) }}>{kindLabel(c)}</span>
+            {c.origin === 'rule' && <span style={{ ...s.badge, ...s.badgeRule }}>⚡ Regla</span>}
             <span style={{ ...s.badge, ...st.style }}>{st.label}</span>
           </div>
           <div style={s.rowConfig}>{configLine(c)}</div>
@@ -946,6 +962,9 @@ const styles: Record<string, CSSProperties> = {
   badge: { fontSize: 11, fontWeight: 800, letterSpacing: '.02em', padding: '3px 9px', borderRadius: 999 },
   badgeSystem: { color: C.amber, background: C.gold, border: `1px solid ${C.goldLine}` },
   badgeCode: { color: C.inkDim, background: C.pill },
+  badgeRule: { color: '#1D4ED8', background: '#EAF0FF', border: '1px solid #1D4ED833' },
+  ruleBanner: { display: 'block', width: '100%', textAlign: 'left', background: '#EAF0FF', border: '1px solid #1D4ED833', color: C.ink, borderRadius: 12, padding: '11px 15px', fontSize: 13.5, fontWeight: 600, cursor: 'pointer', marginBottom: 16, lineHeight: 1.4 },
+  ruleBannerLink: { color: '#1D4ED8', fontWeight: 800, marginLeft: 4 },
   rowConfig: { fontSize: 12.5, color: C.inkDim, marginTop: 5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   rowPerf: { textAlign: 'right', flexShrink: 0, minWidth: 130 },
   perfMain: { fontSize: 15, fontWeight: 800, color: C.ink },
