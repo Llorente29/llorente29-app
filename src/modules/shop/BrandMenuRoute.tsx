@@ -13,6 +13,9 @@ const C = {
 
 function eur(n: number): string { return n.toFixed(2).replace('.', ',') + ' €' }
 
+// BOGO: 100% = 2x1 clásico; si no, "2ª al −X%".
+function bogoText(pct: number): string { return pct >= 100 ? '2x1' : `2ª al −${Math.round(pct)}%` }
+
 function Moon({ size = 15 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" style={{ display: 'block', flexShrink: 0 }}>
@@ -125,7 +128,7 @@ export default function BrandMenuRoute({ slug, brandId, onBack, onCheckout }: { 
 
       {/* Categorías */}
       <div style={S.menuWrap}>
-        {/* Banner de oferta (derivado en cliente de los platos con offer) */}
+        {/* Banner de oferta (derivado en cliente de los platos con offer/bogo) */}
         {(() => {
           const offerCats = menu.categories
             .map((cat) => {
@@ -133,15 +136,27 @@ export default function BrandMenuRoute({ slug, brandId, onBack, onCheckout }: { 
               return pcts.length ? { id: cat.id, name: cat.name, maxPct: Math.max(...pcts) } : null
             })
             .filter(Boolean) as { id: string; name: string; maxPct: number }[]
+          const bogoCats = menu.categories
+            .map((cat) => {
+              const pcts = cat.products.filter((p) => p.bogo).map((p) => p.bogo!.pct)
+              return pcts.length ? { id: cat.id, name: cat.name, maxPct: Math.max(...pcts) } : null
+            })
+            .filter(Boolean) as { id: string; name: string; maxPct: number }[]
           const fd = menu.freeDelivery
           const fdText = fd ? (fd.minSubtotal != null ? `🛵 Envío gratis desde ${eur(fd.minSubtotal)}` : '🛵 Envío gratis en todos los pedidos') : null
-          if (!offerCats.length && !fdText) return null
-          const offersText = offerCats.length ? `🔥 Hoy: ${offerCats.map((o) => `−${Math.round(o.maxPct)}% en ${o.name}`).join(' · ')}` : null
+          const promoParts = [
+            ...bogoCats.map((o) => `${bogoText(o.maxPct)} en ${o.name}`),
+            ...offerCats.map((o) => `−${Math.round(o.maxPct)}% en ${o.name}`),
+          ]
+          const hasPromo = promoParts.length > 0
+          if (!hasPromo && !fdText) return null
+          const offersText = hasPromo ? `🔥 Hoy: ${promoParts.join(' · ')}` : null
           const text = [offersText, fdText].filter(Boolean).join('  ·  ')
+          const jumpId = bogoCats[0]?.id ?? offerCats[0]?.id ?? null
           return (
             <button
-              style={offerCats.length ? S.offerBanner : S.freeShipBanner}
-              onClick={() => offerCats.length && document.getElementById(`fvcat-${offerCats[0].id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              style={hasPromo ? S.offerBanner : S.freeShipBanner}
+              onClick={() => jumpId && document.getElementById(`fvcat-${jumpId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
             >
               {text}
             </button>
@@ -159,10 +174,14 @@ export default function BrandMenuRoute({ slug, brandId, onBack, onCheckout }: { 
               )}
             </h2>
             <div style={S.dishGrid}>
-              {cat.products.map(d => (
-                <div key={d.id} className="fvdish" style={{ ...S.dish, ...(d.offer ? S.dishOn : {}) }}>
+              {cat.products.map(d => {
+                const off = d.bogo ? null : d.offer   // BOGO gana: con 2x1 no se pinta el % por unidad
+                return (
+                <div key={d.id} className="fvdish" style={{ ...S.dish, ...((off || d.bogo) ? S.dishOn : {}) }}>
                   <div style={{ ...S.dishPhoto, background: d.photoUrl ? `center/cover no-repeat url(${d.photoUrl})` : C.accentBg, position: 'relative' }}>
-                    {d.offer && <span style={S.dishBadge}>−{Math.round(d.offer.pct)}% hoy</span>}
+                    {d.bogo
+                      ? <span style={S.bogoBadge}>{bogoText(d.bogo.pct)}</span>
+                      : off && <span style={S.dishBadge}>−{Math.round(off.pct)}% hoy</span>}
                   </div>
                   <div style={S.dishBody}>
                     <div style={S.dishTop}>
@@ -171,10 +190,10 @@ export default function BrandMenuRoute({ slug, brandId, onBack, onCheckout }: { 
                     </div>
                     {d.description && <p style={S.dishDesc}>{d.description}</p>}
                     <div style={S.dishFoot}>
-                      {d.offer ? (
+                      {off ? (
                         <span style={S.priceWrap}>
-                          <span style={S.dishPriceNow}>{eur(d.offer.discountedPrice)}</span>
-                          {d.offer.wasPrice != null && <span style={S.dishPriceWas}>{eur(d.offer.wasPrice)}</span>}
+                          <span style={S.dishPriceNow}>{eur(off.discountedPrice)}</span>
+                          {off.wasPrice != null && <span style={S.dishPriceWas}>{eur(off.wasPrice)}</span>}
                         </span>
                       ) : (
                         <span style={S.dishPrice}>{eur(d.price)}</span>
@@ -190,12 +209,13 @@ export default function BrandMenuRoute({ slug, brandId, onBack, onCheckout }: { 
                         Añadir
                       </button>
                     </div>
-                    {d.offer?.wasPrice != null && (
-                      <div style={S.omnibusNote}>Precio más bajo de los últimos 30 días: {eur(d.offer.wasPrice)}</div>
+                    {off?.wasPrice != null && (
+                      <div style={S.omnibusNote}>Precio más bajo de los últimos 30 días: {eur(off.wasPrice)}</div>
                     )}
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
           </section>
         ))}
@@ -212,7 +232,14 @@ export default function BrandMenuRoute({ slug, brandId, onBack, onCheckout }: { 
           offer={(() => {
             for (const c of menu.categories) {
               const dd = c.products.find((p) => p.id === configItemId)
-              if (dd?.offer) return { pct: dd.offer.pct, wasPrice: dd.offer.wasPrice }
+              if (dd) return dd.bogo ? null : (dd.offer ? { pct: dd.offer.pct, wasPrice: dd.offer.wasPrice } : null)
+            }
+            return null
+          })()}
+          bogo={(() => {
+            for (const c of menu.categories) {
+              const dd = c.products.find((p) => p.id === configItemId)
+              if (dd) return dd.bogo ? { pct: dd.bogo.pct } : null
             }
             return null
           })()}
@@ -279,6 +306,7 @@ const S: Record<string, React.CSSProperties> = {
   dishFoot: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto' },
   dishPrice: { fontWeight: 900, fontSize: 16 },
   dishBadge: { position: 'absolute', top: 10, left: 10, background: C.accent, color: '#fff', fontSize: 13, fontWeight: 800, padding: '4px 10px', borderRadius: 999, boxShadow: '0 2px 8px rgba(0,0,0,.18)' },
+  bogoBadge: { position: 'absolute', top: 10, left: 10, background: '#16140F', color: C.accent2, fontSize: 13, fontWeight: 900, letterSpacing: '.02em', padding: '4px 10px', borderRadius: 999, boxShadow: '0 2px 8px rgba(0,0,0,.22)' },
   priceWrap: { display: 'flex', alignItems: 'baseline', gap: 7 },
   dishPriceNow: { fontWeight: 900, fontSize: 17.5, color: C.accent },
   dishPriceWas: { fontSize: 13, color: C.inkDim, textDecoration: 'line-through' },

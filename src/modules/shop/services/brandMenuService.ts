@@ -9,6 +9,13 @@ export interface DishOffer {
   wasPrice: number | null
 }
 
+// BOGO (2x1 / 2ª unidad): pct = % de la 2ª unidad (100 = 2x1). No cambia el precio
+// unitario (el descuento es de línea, por par); solo es un gancho visual en la carta.
+export interface DishBogo {
+  campaignId: string
+  pct: number
+}
+
 export interface MenuDish {
   id: string
   name: string
@@ -17,6 +24,7 @@ export interface MenuDish {
   price: number
   productType: 'item' | 'combo'
   offer: DishOffer | null
+  bogo: DishBogo | null
 }
 
 export interface MenuCategory {
@@ -84,6 +92,9 @@ export async function getBrandMenu(slug: string, brandId: string): Promise<Brand
               discountedPrice: Number(p.offer.discountedPrice ?? 0),
               wasPrice: p.offer.wasPrice != null ? Number(p.offer.wasPrice) : null,
             }
+          : null,
+        bogo: p.bogo
+          ? { campaignId: p.bogo.campaignId, pct: Number(p.bogo.pct ?? 0) }
           : null,
       })),
     })),

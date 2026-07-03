@@ -41,13 +41,16 @@ interface Props {
   // Oferta de carta activa (item_percent). Se aplica al precio final para que el
   // carrito y el checkout muestren y cobren lo mismo que la carta.
   offer?: { pct: number; wasPrice: number | null } | null
+  // BOGO (2x1 / 2ª unidad): gancho visual. NO cambia el precio unitario ni el total
+  // del modal; el descuento de la 2ª unidad se aplica en el resumen/cobro (servidor).
+  bogo?: { pct: number } | null
   onClose: () => void
   onAdd: (line: ConfiguredLine) => void
 }
 
 function round2(n: number): number { return Math.round(n * 100) / 100 }
 
-export default function DishConfigModal({ slug, menuItemId, offer, onClose, onAdd }: Props) {
+export default function DishConfigModal({ slug, menuItemId, offer, bogo, onClose, onAdd }: Props) {
   const [config, setConfig] = useState<DishConfig | null>(null)
   const [sel, setSel] = useState<DishSelection>(emptySelection())
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
@@ -79,6 +82,7 @@ export default function DishConfigModal({ slug, menuItemId, offer, onClose, onAd
   const errors = useMemo(() => (config ? validateSelection(config, sel) : []), [config, sel])
   const valid = config ? isValid(config, sel) : false
   const off = offer && offer.pct > 0 ? offer : null
+  const bg = bogo && bogo.pct > 0 ? bogo : null
   const baseTotal = config ? totalPrice(config, sel) : 0
   const total = off ? round2(baseTotal * (1 - off.pct / 100)) : baseTotal
 
@@ -286,6 +290,16 @@ export default function DishConfigModal({ slug, menuItemId, offer, onClose, onAd
               {off.wasPrice != null && <span style={S.offerOmni}>Precio más bajo 30 días: {eur(off.wasPrice)}</span>}
             </div>
           )}
+          {bg && (
+            <div style={S.offerRow}>
+              <span style={S.bogoBadge}>{bg.pct >= 100 ? '2x1' : `2ª al −${Math.round(bg.pct)}%`}</span>
+              <span style={S.bogoHint}>
+                {sel.quantity >= 2
+                  ? (bg.pct >= 100 ? 'La 2ª unidad sale gratis — se aplica en el pago.' : `La 2ª unidad, −${Math.round(bg.pct)}% — se aplica en el pago.`)
+                  : (bg.pct >= 100 ? 'Añade otra y la 2ª sale gratis.' : `Añade otra y la 2ª sale al −${Math.round(bg.pct)}%.`)}
+              </span>
+            </div>
+          )}
           <button
             className="fvm-add"
             style={{ ...S.addBtn, ...(valid ? {} : S.addBtnDisabled) }}
@@ -403,6 +417,8 @@ const S: Record<string, React.CSSProperties> = {
   addHint: { fontSize: 12, color: C.accent, fontWeight: 700, textAlign: 'center', marginTop: 8 },
   offerRow: { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 9, marginBottom: 10 },
   offerBadge: { background: C.accent, color: '#fff', fontSize: 12.5, fontWeight: 800, padding: '4px 10px', borderRadius: 999 },
+  bogoBadge: { background: '#16140F', color: '#FFB400', fontSize: 12.5, fontWeight: 900, letterSpacing: '.02em', padding: '4px 10px', borderRadius: 999 },
+  bogoHint: { fontSize: 12, color: C.inkDim, fontWeight: 600 },
   offerWas: { fontSize: 14, color: C.inkDim, textDecoration: 'line-through', fontWeight: 700 },
   offerOmni: { flexBasis: '100%', fontSize: 11, color: C.inkDim },
 }
