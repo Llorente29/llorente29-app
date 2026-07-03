@@ -8,6 +8,7 @@ import TrackOrderRoute from '@/modules/shop/track/TrackOrderRoute'
 import { isShopHost, shopSlugFromHost } from '@/modules/shop/shopHost'
 import CustomerLoginModal from '@/modules/shop/checkout/CustomerLoginModal'
 import { getSessionCustomer, logoutCustomer } from '@/modules/shop/checkout/customerAuthService'
+import MyAccountRoute from '@/modules/shop/account/MyAccountRoute'
 
 // El Shop resuelve por HOSTNAME primero (<slug>.folvy.app) y por PATH como
 // fallback (/t/:slug). Retrocompatible: los enlaces app.folvy.app/t/foodint
@@ -27,16 +28,19 @@ function shopBase(slug: string): string {
   return isShopHost() ? '' : `/t/${slug}`
 }
 
+// Segmentos reservados (no son marcas): seguimiento y Mi cuenta.
+const RESERVED_SEGMENTS = new Set(['seguir', 'cuenta'])
+
 function getBrandIdFromPath(): string | null {
   if (isShopHost()) {
-    // Modo host: la marca es el 1er segmento (/brandX). 'seguir' está reservado.
+    // Modo host: la marca es el 1er segmento (/brandX). 'seguir'/'cuenta' reservados.
     const m = window.location.pathname.match(/^\/([^/]+)/)
     const seg = m ? decodeURIComponent(m[1]) : null
-    return seg && seg !== 'seguir' ? seg : null
+    return seg && !RESERVED_SEGMENTS.has(seg) ? seg : null
   }
   const m = window.location.pathname.match(/^\/t\/[^/]+\/([^/]+)/)
   const seg = m ? decodeURIComponent(m[1]) : null
-  return seg && seg !== 'seguir' ? seg : null
+  return seg && !RESERVED_SEGMENTS.has(seg) ? seg : null
 }
 
 // Ruta de seguimiento del pedido: /seguir (modo host) o /t/:slug/seguir (modo
@@ -48,6 +52,13 @@ function getIsTrackPath(): boolean {
 }
 function getTrackTokenFromQuery(): string | null {
   return new URLSearchParams(window.location.search).get('t')
+}
+
+// Ruta de "Mi cuenta": /cuenta (modo host) o /t/:slug/cuenta (modo path). Hermana
+// de /seguir; se detecta ANTES que el brandId (segmento reservado, ver arriba).
+function getIsAccountPath(): boolean {
+  if (isShopHost()) return /^\/cuenta\/?$/.test(window.location.pathname)
+  return /^\/t\/[^/]+\/cuenta\/?$/.test(window.location.pathname)
 }
 
 // Iconos SVG inline (sin librería externa).
@@ -84,7 +95,7 @@ function shortName(name: string): string {
 // Cocina única (code/label/emoji) presente entre las marcas, para los chips de filtro.
 interface Cuisine { code: string; label: string; emoji: string | null }
 
-function ShopHubInner({ slug, onCheckout }: { slug: string; onCheckout: () => void }) {
+function ShopHubInner({ slug, onCheckout, onAccount }: { slug: string; onCheckout: () => void; onAccount: () => void }) {
   const [brandId, setBrandId] = useState<string | null>(getBrandIdFromPath())
   const [hub, setHub] = useState<ShopHub | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'notfound' | 'error'>('loading')
@@ -197,9 +208,12 @@ function ShopHubInner({ slug, onCheckout }: { slug: string; onCheckout: () => vo
         <span aria-hidden="true" />
         {loggedIn ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ fontSize: 14, fontWeight: 700, color: C.ink }}>
+            <button
+              onClick={onAccount}
+              style={{ background: 'none', border: 'none', padding: 0, fontSize: 14, fontWeight: 700, color: C.ink, cursor: 'pointer' }}
+            >
               {customerName ? `Hola, ${customerName.split(' ')[0]}` : 'Mi cuenta'}
-            </span>
+            </button>
             <button
               onClick={doLogout}
               style={{ background: 'none', border: `1px solid ${C.line}`, borderRadius: 999, padding: '6px 14px', fontSize: 13, fontWeight: 700, color: C.inkDim, cursor: 'pointer' }}
@@ -221,7 +235,7 @@ function ShopHubInner({ slug, onCheckout }: { slug: string; onCheckout: () => vo
         <CustomerLoginModal
           slug={slug}
           onClose={() => setShowLogin(false)}
-          onLoggedIn={(name) => { setLoggedIn(true); setCustomerName(name); setShowLogin(false) }}
+          onLoggedIn={(name) => { setLoggedIn(true); setCustomerName(name); setShowLogin(false); onAccount() }}
         />
       )}
 
@@ -330,10 +344,15 @@ export default function ShopHubRoute() {
   const [checkout, setCheckout] = useState(false)
   const [isTrack, setIsTrack] = useState(getIsTrackPath())
   const [trackToken, setTrackToken] = useState<string | null>(getTrackTokenFromQuery())
+  const [isAccount, setIsAccount] = useState(getIsAccountPath())
 
-  // La ruta de seguimiento vive en la URL: atrás/adelante y refresh la respetan.
+  // Seguimiento y "Mi cuenta" viven en la URL: atrás/adelante y refresh las respetan.
   useEffect(() => {
-    const onPop = () => { setIsTrack(getIsTrackPath()); setTrackToken(getTrackTokenFromQuery()) }
+    const onPop = () => {
+      setIsTrack(getIsTrackPath())
+      setTrackToken(getTrackTokenFromQuery())
+      setIsAccount(getIsAccountPath())
+    }
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
   }, [])
@@ -342,26 +361,38 @@ export default function ShopHubRoute() {
     return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', color: C.inkDim }}>Tienda no encontrada</div>
   }
 
-  const goToCheckout = () => { window.scrollTo(0, 0); setCheckout(true) }
+  const goToCheckout = () => { window.scrollTo(0, 0); setIsAccount(false); setCheckout(true) }
   const goToTrack = (token: string) => {
     window.history.pushState({}, '', `${shopBase(slug)}/seguir?t=${encodeURIComponent(token)}`)
-    setCheckout(false); setTrackToken(token); setIsTrack(true); window.scrollTo(0, 0)
+    setCheckout(false); setIsAccount(false); setTrackToken(token); setIsTrack(true); window.scrollTo(0, 0)
   }
   const backFromTrack = () => {
     window.history.pushState({}, '', shopBase(slug) || '/')
     setIsTrack(false); setTrackToken(null); window.scrollTo(0, 0)
   }
+  const goToAccount = () => {
+    window.history.pushState({}, '', `${shopBase(slug)}/cuenta`)
+    setCheckout(false); setIsTrack(false); setIsAccount(true); window.scrollTo(0, 0)
+  }
+  const backFromAccount = () => {
+    window.history.pushState({}, '', shopBase(slug) || '/')
+    setIsAccount(false); window.scrollTo(0, 0)
+  }
+  // Reorder desde Mi cuenta: el carrito ya se pobló (replaceCart); vamos al checkout.
+  const reorderToCheckout = () => { setIsAccount(false); goToCheckout() }
 
   return (
     <ShopCartProvider slug={slug}>
       {isTrack
         ? <TrackOrderRoute slug={slug} token={trackToken} onBack={backFromTrack} />
-        : checkout
-          ? <CheckoutRoute slug={slug} onBack={() => setCheckout(false)} onTrack={goToTrack} />
-          : <>
-              <ShopHubInner slug={slug} onCheckout={goToCheckout} />
-              <CartPanel onCheckout={goToCheckout} />
-            </>}
+        : isAccount
+          ? <MyAccountRoute slug={slug} onBack={backFromAccount} onReorder={reorderToCheckout} />
+          : checkout
+            ? <CheckoutRoute slug={slug} onBack={() => setCheckout(false)} onTrack={goToTrack} />
+            : <>
+                <ShopHubInner slug={slug} onCheckout={goToCheckout} onAccount={goToAccount} />
+                <CartPanel onCheckout={goToCheckout} />
+              </>}
     </ShopCartProvider>
   )
 }

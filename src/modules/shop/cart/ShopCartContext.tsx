@@ -58,6 +58,21 @@ interface CartApi {
   canAddBrand: (brandLocationIds: string[]) => boolean
   // Fija el local elegido (checkout). Debe ser uno de los candidatos.
   setLocation: (locationId: string) => void
+  // Reemplaza el carrito entero desde un reorder (Mi cuenta): fija el local del
+  // pedido original y crea líneas ligeras (precio de HOY vía dry-run). Ver F4·T1.
+  replaceCart: (locationId: string, items: ReorderCartItem[]) => void
+}
+
+// Ítem mínimo para reconstruir el carrito desde un reorder. El precio unitario
+// viene del dry-run (precio de hoy); el resto de metadatos de marca no viajan en
+// el payload canónico (OrderLine) y no hacen falta para el checkout.
+export interface ReorderCartItem {
+  order: OrderLine
+  name: string
+  quantity: number
+  unitPrice: number
+  brandName?: string
+  photoUrl?: string | null
 }
 
 const ShopCartContext = createContext<CartApi | null>(null)
@@ -171,6 +186,28 @@ export function ShopCartProvider({ slug, children }: { slug: string; children: R
     setCart((prev) => (prev.candidateLocationIds.includes(locationId) ? { ...prev, locationId } : prev))
   }
 
+  // Reorder (Mi cuenta): sustituye el carrito por las líneas del pedido original,
+  // fijando su local. Cada línea se ancla a ese local (brandLocationIds=[locationId])
+  // para que candidatos y la regla "mismo local" queden consistentes; el checkout
+  // revalida zona/precio como en un pedido normal.
+  function replaceCart(locationId: string, items: ReorderCartItem[]) {
+    const lines: CartLine[] = items.map((it) => ({
+      lineId: newLineId(),
+      brandId: '',
+      brandName: it.brandName ?? '',
+      brandLocationIds: [locationId],
+      menuItemId: it.order.menuItemId,
+      name: it.name,
+      photoUrl: it.photoUrl ?? null,
+      unitPrice: it.unitPrice,
+      quantity: it.quantity,
+      summary: [],
+      allergens: [],
+      order: { ...it.order, quantity: it.quantity },
+    }))
+    setCart({ slug, locationId, candidateLocationIds: [locationId], lines })
+  }
+
   const totals = useMemo<CartTotals>(() => {
     let subtotal = 0, discount = 0, count = 0
     for (const l of cart.lines) {
@@ -181,7 +218,7 @@ export function ShopCartProvider({ slug, children }: { slug: string; children: R
     return { itemsCount: count, subtotal, discount, deliveryFee: 0, total: subtotal - discount }
   }, [cart])
 
-  const api: CartApi = { cart, totals, addLine, setLineQty, removeLine, clear, canAddBrand, setLocation }
+  const api: CartApi = { cart, totals, addLine, setLineQty, removeLine, clear, canAddBrand, setLocation, replaceCart }
   return <ShopCartContext.Provider value={api}>{children}</ShopCartContext.Provider>
 }
 

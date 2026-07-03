@@ -23,6 +23,7 @@ import {
 } from '@/modules/shop/checkout/checkoutService'
 import { getShopHub, type ShopHub } from '@/modules/shop/services/shopHubService'
 import { getSessionCustomer, registerShopConsent } from '@/modules/shop/checkout/customerAuthService'
+import { getAddresses, type CustomerAddress } from '@/modules/shop/account/accountService'
 
 const C = {
   page: '#F7F7F5', surface: '#FFFFFF', ink: '#16140F', inkDim: '#6E6960', inkFaint: '#8A857C',
@@ -215,6 +216,22 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
     }).catch(() => {})
     return () => { alive = false }
   }, [slug])
+
+  // F4·T1: direcciones guardadas del comensal (si hay sesión). Se muestran como
+  // chips sobre el autocomplete; elegir una salta el geocode (ya trae lat/lng) pero
+  // sigue pasando por checkDelivery (la zona manda). Solo las que tienen coordenadas.
+  const [addresses, setAddresses] = useState<CustomerAddress[]>([])
+  useEffect(() => {
+    let alive = true
+    getAddresses(slug).then((r) => { if (alive) setAddresses(r.filter((a) => a.lat != null && a.lng != null)) }).catch(() => {})
+    return () => { alive = false }
+  }, [slug])
+
+  function pickSavedAddress(a: CustomerAddress) {
+    if (a.lat == null || a.lng == null) return
+    if (a.detail) setDetail(a.detail)
+    chooseHit({ label: a.address, lat: a.lat, lng: a.lng, postcode: null })
+  }
 
   // Captura ANTICIPADA de consentimiento: al marcar/desmarcar la casilla (con correo
   // válido) registramos el permiso YA, sin esperar al pago. Solo tras interacción
@@ -700,6 +717,21 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
             {mode === 'delivery' ? (
               <>
                 <StepHead n={1}>¿Dónde lo llevamos?</StepHead>
+                {addresses.length > 0 && (
+                  <div style={s.savedAddrRow}>
+                    {addresses.map((a) => (
+                      <button
+                        key={a.id}
+                        type="button"
+                        style={{ ...s.savedAddrChip, ...(chosen?.label === a.address ? s.savedAddrChipOn : {}) }}
+                        onClick={() => pickSavedAddress(a)}
+                      >
+                        <Pin size={14} color={chosen?.label === a.address ? '#fff' : C.accent} />
+                        <span style={s.savedAddrText}>{a.label || a.address}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <div style={{ position: 'relative' }}>
                   <div style={s.addrWrap}>
                     <Pin size={24} />
@@ -1179,6 +1211,10 @@ const s: Record<string, React.CSSProperties> = {
   stepNum: { width: 24, height: 24, borderRadius: '50%', background: C.ink, color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, flexShrink: 0 },
   stepTitle: { fontSize: 17.5, fontWeight: 900, letterSpacing: '-.02em', color: C.ink },
   stepSub: { fontSize: 13, color: C.inkDim, lineHeight: 1.5, margin: '0 0 12px 33px' },
+  savedAddrRow: { display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
+  savedAddrChip: { display: 'inline-flex', alignItems: 'center', gap: 7, maxWidth: '100%', border: `1.5px solid ${C.lineInput}`, background: '#fff', borderRadius: 999, padding: '7px 13px', fontSize: 13, fontWeight: 700, color: C.ink, cursor: 'pointer' },
+  savedAddrChipOn: { background: C.ink, color: '#fff', border: `1.5px solid ${C.ink}` },
+  savedAddrText: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 220 },
   addrWrap: { display: 'flex', alignItems: 'center', gap: 11, border: `2px solid ${C.ink}`, borderRadius: 14, padding: '13px 15px', background: '#FAFAF8' },
   addrInput: { flex: 1, minWidth: 0, border: 'none', background: 'transparent', outline: 'none', fontSize: 16, fontWeight: 600, color: C.ink },
   muted: { fontSize: 13, color: C.inkDim, lineHeight: 1.5, margin: 0 },
