@@ -35,6 +35,13 @@ export interface FreeDeliveryInfo {
   minSubtotal: number | null    // null = en todos los pedidos
 }
 
+// Plato de regalo a nivel TIENDA (cupón free_item auto activo ahora). null = no hay.
+export interface FreeGiftInfo {
+  name: string
+  min: number | null            // "desde X€"
+  value: number | null          // precio normal del regalo
+}
+
 export interface ShopHub {
   accountName: string
   accountLogoUrl: string | null
@@ -43,6 +50,7 @@ export interface ShopHub {
   tagline: string | null
   subtitle: string | null
   freeDelivery: FreeDeliveryInfo | null
+  freeGift: FreeGiftInfo | null
   brands: HubBrand[]
   topDishes: TopDish[]
 }
@@ -62,6 +70,9 @@ export async function getShopHub(slug: string): Promise<ShopHub | null> {
     subtitle: data.subtitle ?? null,
     freeDelivery: data.free_delivery && data.free_delivery.active
       ? { active: true, minSubtotal: data.free_delivery.minSubtotal != null ? Number(data.free_delivery.minSubtotal) : null }
+      : null,
+    freeGift: data.free_gift && data.free_gift.name
+      ? { name: String(data.free_gift.name), min: data.free_gift.min != null ? Number(data.free_gift.min) : null, value: data.free_gift.value != null ? Number(data.free_gift.value) : null }
       : null,
     brands: (data.brands ?? []).map((b: any) => ({
       brandId: b.brand_id,

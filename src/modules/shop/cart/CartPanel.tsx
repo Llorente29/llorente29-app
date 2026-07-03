@@ -7,7 +7,7 @@
 
 import { useEffect, useState } from 'react'
 import { useShopCart, bogoLineDiscount, type CartLine } from '@/modules/shop/cart/ShopCartContext'
-import { getShopHub, type FreeDeliveryInfo } from '@/modules/shop/services/shopHubService'
+import { getShopHub, type FreeDeliveryInfo, type FreeGiftInfo } from '@/modules/shop/services/shopHubService'
 
 const C = {
   bg: '#FBF7F0', surface: '#FFFFFF', ink: '#1A1714', inkDim: '#7A726A', line: '#ECE5DA',
@@ -23,9 +23,10 @@ export default function CartPanel({ onCheckout }: { onCheckout?: () => void }) {
   // El carrito no conoce el hub: resolvemos SOLO el envío gratis de tienda con un
   // fetch ligero por slug (mínimo acoplamiento; documentado, FIX G2·C4).
   const [freeDelivery, setFreeDelivery] = useState<FreeDeliveryInfo | null>(null)
+  const [freeGift, setFreeGift] = useState<FreeGiftInfo | null>(null)
   useEffect(() => {
     let alive = true
-    getShopHub(cart.slug).then((h) => { if (alive) setFreeDelivery(h?.freeDelivery ?? null) }).catch(() => {})
+    getShopHub(cart.slug).then((h) => { if (alive) { setFreeDelivery(h?.freeDelivery ?? null); setFreeGift(h?.freeGift ?? null) } }).catch(() => {})
     return () => { alive = false }
   }, [cart.slug])
 
@@ -138,6 +139,21 @@ export default function CartPanel({ onCheckout }: { onCheckout?: () => void }) {
                 )
               })()}
 
+              {/* Progreso hacia el PLATO DE REGALO (free_item) — patrón envío gratis */}
+              {freeGift && freeGift.min != null && freeGift.min > 0 && (() => {
+                const remaining = Math.max(0, freeGift.min - totals.subtotal)
+                if (remaining <= 0) {
+                  return <div style={S.giftDone}>{'🎁'} ¡{freeGift.name} de regalo añadido!</div>
+                }
+                const pctFill = Math.max(0, Math.min(100, (totals.subtotal / freeGift.min) * 100))
+                return (
+                  <div style={S.freeWrap}>
+                    <div style={S.freeText}>Te faltan <strong>{eur(remaining)}</strong> para tu <strong>{freeGift.name}</strong> de regalo {'🎁'}</div>
+                    <div style={S.freeBar}><span style={{ ...S.giftFill, width: `${pctFill}%` }} /></div>
+                  </div>
+                )
+              })()}
+
               <button
                 style={S.payBtn}
                 onClick={() => { setOpen(false); onCheckout?.() }}
@@ -197,4 +213,6 @@ const S: Record<string, React.CSSProperties> = {
   freeBar: { height: 8, borderRadius: 999, background: '#E9E4DB', overflow: 'hidden' },
   freeFill: { display: 'block', height: '100%', background: C.green, borderRadius: 999, transition: 'width .3s ease' },
   freeDone: { marginBottom: 14, textAlign: 'center', fontSize: 13.5, fontWeight: 800, color: C.green, background: '#E3F6EC', border: `1px solid ${C.green}33`, borderRadius: 12, padding: '9px 12px' },
+  giftFill: { display: 'block', height: '100%', background: '#E9A81C', borderRadius: 999, transition: 'width .3s ease' },
+  giftDone: { marginBottom: 14, textAlign: 'center', fontSize: 13.5, fontWeight: 800, color: '#8A5B0A', background: '#FFF3D6', border: '1px solid #E9A81C55', borderRadius: 12, padding: '9px 12px' },
 }

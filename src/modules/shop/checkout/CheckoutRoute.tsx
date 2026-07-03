@@ -391,8 +391,12 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
   // Carrito-viejo: si hay dry-run ALINEADO con el carrito (mismo nº de líneas, mismo
   // orden que el payload), sus precios de HOY mandan sobre los del carrito local
   // (que pueden ser viejos). Fallback al local mientras no haya dry-run.
-  const freshLines = preview?.ok && Array.isArray(preview.lines) && preview.lines.length === cart.lines.length
+  // >= porque el server puede AÑADIR líneas (p.ej. el plato de regalo a 0€ de
+  // free_item): las primeras N alinean 1:1 con el carrito (mismo orden del payload)
+  // y las extra (regalo) se pintan aparte.
+  const freshLines = preview?.ok && Array.isArray(preview.lines) && preview.lines.length >= cart.lines.length
     ? preview.lines : null
+  const giftLines = freshLines && freshLines.length > cart.lines.length ? freshLines.slice(cart.lines.length) : []
   const displaySubtotal = freshLines && preview?.subtotal != null ? preview.subtotal : totals.subtotal
   // Descuento de SUBTOTAL efectivo = el que devuelve el servidor (cupón), o 0.
   const couponDiscount = coupon?.applied ? (coupon.discount ?? 0) : 0
@@ -622,6 +626,14 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
             </div>
           )
         })}
+        {/* Líneas extra del server (plato de regalo free_item a 0€) */}
+        {giftLines.map((gl, i) => (
+          <div key={`gift-${i}`} style={s.sumLine}>
+            <span style={s.sumQty}>{gl.quantity}x</span>
+            <span style={s.sumName}>{gl.name}<span style={s.sumGiftTag}>🎁 Regalo</span></span>
+            <span style={{ ...s.sumPrice, color: C.green }}>Gratis</span>
+          </div>
+        ))}
       </div>
       <div style={s.sumRow}><span>Subtotal</span><span>{eur(displaySubtotal)}</span></div>
       {totals.discount > 0 && <div style={{ ...s.sumRow, color: C.green }}><span>Descuento</span><span>-{eur(totals.discount)}</span></div>}
@@ -764,6 +776,13 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
                   </div>
                 )
               })}
+              {giftLines.map((gl, i) => (
+                <div key={`gift-${i}`} style={s.payRecapLine}>
+                  <span style={s.payRecapQty}>{gl.quantity}x</span>
+                  <span style={s.payRecapName}>{gl.name} <span style={s.sumGiftTag}>🎁 Regalo</span></span>
+                  <span style={{ ...s.payRecapPrice, color: C.green }}>Gratis</span>
+                </div>
+              ))}
               <div style={s.payRecapTotal}>
                 <span>Total a pagar</span>
                 <span style={s.payTotalNum}>{eur(pay.total)}</span>
@@ -1389,6 +1408,7 @@ const s: Record<string, React.CSSProperties> = {
   sumName: { flex: 1 },
   sumPrice: { fontWeight: 800, whiteSpace: 'nowrap' },
   sumBogoTag: { marginLeft: 6, background: '#16140F', color: '#FFC400', fontSize: 10, fontWeight: 900, letterSpacing: '.02em', padding: '1px 6px', borderRadius: 999, verticalAlign: 'middle', whiteSpace: 'nowrap' },
+  sumGiftTag: { marginLeft: 6, background: '#FFF3D6', color: '#8A5B0A', fontSize: 10, fontWeight: 900, padding: '1px 6px', borderRadius: 999, verticalAlign: 'middle', whiteSpace: 'nowrap', border: '1px solid #E9A81C55' },
   sumPriceWrap: { display: 'inline-flex', alignItems: 'baseline', gap: 5, whiteSpace: 'nowrap' },
   sumPriceNow: { fontWeight: 800 },
   sumPriceWas: { fontSize: 11, color: C.inkDim, textDecoration: 'line-through', fontWeight: 700 },
