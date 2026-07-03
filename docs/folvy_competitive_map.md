@@ -317,11 +317,11 @@ Notas: meez **se declara "complementario, no competidor" de ERPs** — capa culi
 
 | Capacidad | Quién | Mecanismo | Folvy | Veredicto |
 |---|---|---|---|---|
-| Ads dentro de Glovo (posiciones patrocinadas) | Glovo partners autoservicio | Panel de partner; API no confirmada → **RECON F8 obligatorio** (¿API vs automatización con credenciales?) | ❌ | 🔴 F8 |
-| Uber Eats Sponsored Listings (puja CPC + presupuesto semanal) | Uber partners | Panel; misma incógnita de API | ❌ | 🔴 F8 |
+| Ads dentro de Glovo (Posicionamiento inteligente + palabras clave) | Glovo Manager Portal | **RECON hecho 03/07**: sin API pública; panel con anti-bot → automatización de navegador gestionada (mecanismo Pleez). Contrato de promo `deals` capturado, mapeo Folvy→Glovo casi 1:1 | ❌ (construible, F8) | 🔴 F8 |
+| Uber Eats Promotions + Sponsored Listings (Ads) | Uber partners | **RECON hecho 03/07**: APIs OFICIALES existen (Promotions suite + Ads APIs programáticas + Reporting). Solicitud de partner-integrador ENVIADA | ❌ (vía A viable, esperando partner) | 🟡 en trámite |
 | Meta Ads (Instagram/Facebook) | Toast IQ Grow lo automatiza | **Marketing API pública y robusta** — automatizable de verdad | ❌ | 🔴 frente "Adquisición social" post-F5 (necesita píxel/atribución al Shop) |
 | TikTok Ads | ídem | **Ads API pública** | ❌ | 🔴 ídem |
-| ROI de ads contra MARGEN real (no ventas brutas) | **nadie** | Folvy tiene la venta + el escandallo | ❌ | 🔮 la goleada del área cuando se construya |
+| ROI de ads/promos contra MARGEN real (no ventas brutas) | **nadie** — Glovo canta "ROI 3,69x Bueno" a Llorente29 sobre 8.043€/29.657€ BRUTOS | Folvy tiene venta + escandallo + comisión de canal (menu_item_channel_economics) | ❌ (construible ya) | 🔮 la goleada del área |
 | Dashboard unificado gasto (descuentos + ads) por canal | Toast IQ parcial | | G2e absorbe la parte de descuentos | 🟡 |
 
 **Nota de prudencia (vigente):** no prometer push/ads automatizados a Glovo/Uber hasta el RECON de F8 (Pleez casi seguro automatiza sobre paneles con credenciales, como tspoon). Las campañas ya nacen con `channels[]` para enchufarse sin rehacer.
