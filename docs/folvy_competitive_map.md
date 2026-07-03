@@ -196,7 +196,7 @@ Notas: meez **se declara "complementario, no competidor" de ERPs** — capa culi
 | Comisiones + precio/margen por canal | nadie lo modela | **EN PRODUCCIÓN (18/06)**: motor server-side `menu_item_channel_economics` (precio override‖base por canal, comisión por canal, margen neto real al céntimo) + modal "Editar precios" con margen en vivo por canal; cálculo cliente jubilado | 🟢 goleada (nadie juega) |
 | Margen real ponderado por mix vendido | meez (menu matrix), R365 | Base lista: coste real por venta × ventas reales del canónico | 🟡 deuda con plan (datos ya en canónico) |
 | Reparto propio (last-mile, coste real) | nadie lo integra en el ciclo de coste | **CONSTRUIDO Y VALIDADO EN SANDBOX (25/06)**: despacho a Catcher (`catcher-dispatch` auth+create order v1, envío real aceptado) + webhook de estado/rider/coste real + disparo automático por trigger; transversal, solo despacha donde Last no lo hace; el `transport_price` real entra al pedido | 🟢 golea (nadie mete el coste real de reparto propio en el ciclo) — falta tráfico real y registrar webhook en Catcher |
-| Tienda propia / canal directo (escaparate multimarca) | Olo (enterprise), ChowNow/Flipdish (DTC mono-marca), Zuppler (multi-marca supercart) | **NÚCLEO TRANSACCIONAL COMPLETO Y VERIFICADO EN VIVO (27/06)**: `/t/:slug` Hub + carta de marca (estado abierto/cerrado por horario real) + modal con **alérgenos legales por opción** + **carrito cross-brand con regla mismo-local=una entrega** + checkout (autocomplete + zona PostGIS + mínimo + franjas que respetan horario) + **PAGO Stripe Connect** (direct charges, application_fee, onboarding real, Payment Element, tarjeta probada) + **métodos configurables por cuenta** (online/efectivo) + ingesta→KDS+stock+AvT+Catcher + impresión verificada con hardware real. ÚNICO canal que sabe el margen real (escandallo+economía) | 🟢 golea en multimarca + alérgenos legales + margen real + cobra de verdad — falta solo loyalty/marketing/ofertas propias (roadmap) |
+| Tienda propia / canal directo (escaparate multimarca) | Olo (enterprise), ChowNow/Flipdish (DTC mono-marca), Zuppler (multi-marca supercart) | **NÚCLEO TRANSACCIONAL COMPLETO Y VERIFICADO EN VIVO (27/06)**: `/t/:slug` Hub + carta de marca (estado abierto/cerrado por horario real) + modal con **alérgenos legales por opción** + **carrito cross-brand con regla mismo-local=una entrega** + checkout (autocomplete + zona PostGIS + mínimo + franjas que respetan horario) + **PAGO Stripe Connect** (direct charges, application_fee, onboarding real, Payment Element, tarjeta probada) + **métodos configurables por cuenta** (online/efectivo) + ingesta→KDS+stock+AvT+Catcher + impresión verificada con hardware real. ÚNICO canal que sabe el margen real (escandallo+economía) | 🟢 golea en multimarca + alérgenos legales + margen real + cobra de verdad — el CRM/loyalty ya está EN CONSTRUCCIÓN y en producción (02/07): identidad+consentimiento, login de cliente por OTP, motor de cupones server-side, cupón de bienvenida con **impacto de margen real al configurarlo** (nadie lo hace: Cheerfy/Thanx estiman) y captura anticipada de consentimiento RGPD; siguiente F4 \"Mi cuenta\" (histórico+reorder). NORTE `docs/folvy_crm_diseno.md` v2 |
 | Menu engineering | meez (menu matrix), R365 | Parcial (Ingeniería de menús existe) | 🟡 verificar vs meez |
 | Motor de ofertas por plataforma (clima/deporte/margen) | **Pleez** (Madrid), Sapaad, Nory | Decisión 16/06: NO clonar; Folvy solo el guardarraíl de margen real | 🔴 Pleez incumbente · 🟡 Folvy solo aporta la verdad de margen |
 
@@ -257,9 +257,91 @@ Notas: meez **se declara "complementario, no competidor" de ERPs** — capa culi
 
 ---
 
+## ÁREA 10 — CRM / Loyalty / Ofertas (NUEVO 03/07 — el tablero exhaustivo tras la corrección de proceso)
+
+> **Origen de esta área:** Julio cazó (03/07) que pese a pedir benchmark a fondo, "lo básico" del mercado (2x1, % por plato, envío gratis) estaba sin tratar. Regla reforzada desde entonces: **el paso BENCHMARK produce la enumeración EXHAUSTIVA de capacidades del área con veredicto por fila** — lo que no está en el mapa no existe; lo 🔴 está declarado, no invisible. Fuente primaria: Uber Eats Offers, Glovo Promotool, Cheerfy, Punchh/Paytronix/Thanx, Pleez, Starbucks/Domino's (patrones), Just Eat.
+
+### 10.a — Catálogo de tipos de OFERTA (paridad con los paneles de partner)
+
+| Capacidad | Quién la tiene | Folvy (03/07) | Veredicto |
+|---|---|---|---|
+| % / € dto sobre el pedido (mín., fechas, topes) | Todos | ✅ F3+G1, con guardarraíl de margen | 🟢 golea (margen delante, nadie lo da) |
+| Solo clientes nuevos vs todos | Glovo, Uber | ✅ first_order_only | 🟢 |
+| % dto por plato/categoría/marca | Glovo "% producto", Uber "% off item" | ✅ G2a (server-side, fuente única carta=cobro) | 🟢 golea (impacto de margen POR PLATO antes de activar) |
+| Precio tachado por artículo + Ómnibus | Todo escaparate (Glovo lo exige) | ✅ G2a: `menu_item_price_history` + tachado SOLO legal + letra "precio más bajo 30 días" | 🟢 golea (Ómnibus POR CONSTRUCCIÓN; nadie valida, Folvy sí) |
+| **Artículo espejo** (precio agresivo legal sin tachado) | **nadie** (técnica manual de algunos operadores) | ✅ G2a: create_mirror_item + swap + oferta automática en el gestor cuando el tachado sería ilegal | 🟢 goleada única |
+| Envío gratis / con mínimo | Uber "£0 delivery", Glovo campañas de entrega | ✅ G2a (auto o código; coexiste con bienvenida; barrita "te faltan X€") | 🟢 |
+| Combinar oferta de plato + de cesta | Uber lo permite | ✅ coexistencia construida (lanes subtotal/envío + item en línea) | 🟢 |
+| Franjas horarias (happy hour) | Programación de plataforma | ✅ weekdays/time_from/time_to (TZ Madrid) | 🟢 |
+| Presupuesto máx. que apaga la campaña sola | Uber weekly budget | ✅ budget_max (canjes vivos) | 🟢 |
+| **2x1 / BOGO** | Glovo 2x1, Uber BOGO | 🔨 G2c en construcción (Code, spec entregada) | 🟡 en curso |
+| Plato de regalo desde X€ | Uber "free item over £X" | 🔨 G2c | 🟡 en curso |
+| Menú/bundle a precio cerrado con coste real | nadie con coste real | ❌ declarado | 🔴 futuro |
+| Gestor de campañas (crear/pausar/clonar/eliminar/histórico) | Uber Eats Manager "All Campaigns", Glovo WebApp | ✅ G1+G2a-D (con impacto de margen y buscador multi-marca) | 🟢 |
+| Rendimiento por campaña (canjes, € invertido) | Uber/Glovo básico | ✅ G1 (canjes VIVOS + **margen medio real** de margin_after) · dashboard completo = G2e | 🟡→🟢 con G2e |
+| Impacto de margen real ANTES de activar | **nadie** | ✅ preview_coupon_impact + impacto por plato del alcance | 🟢 goleada única |
+
+### 10.b — Loyalty / retención
+
+| Capacidad | Quién | Folvy (03/07) | Veredicto |
+|---|---|---|---|
+| Bienvenida que compra el consentimiento | Cheerfy y todos | ✅ A2 (email+consentimiento o no aplica) | 🟢 |
+| Área de cliente (histórico, reorder, datos) | Starbucks/Domino's (reorder 1-tap), Cheerfy básico | ✅ F4 (reorder EXACTO revalidado contra carta viva) | 🟢 |
+| Recompensa por frecuencia + progreso goal-gradient | Starbucks, Domino's, Just Eat Stampcards | ✅ T3 (progreso calculado, config con margen delante) | 🟢 golea (nadie configura el premio viendo el margen) |
+| Baja de consentimiento tan fácil como el alta (RGPD 7.3) | exigencia legal, pocos lo exhiben | ✅ F4 (toggle + log demostrable revoked/account_page) | 🟢 cumplimiento demostrable |
+| Cashback | Cheerfy (su estrella), Punchh Wallet | ❌ decisión estratégica pendiente (Julio, F6) | 🔴 decisión |
+| Cumpleaños / aniversario | Starbucks, todos | ❌ (ni se pide la fecha) → F5 | 🔴 anotado |
+| Referidos ("invita y gana") | Glovo, Uber, Domino's | ❌ → F5 | 🔴 anotado |
+| Upselling inteligente en el pedido | Cheerfy (+30% ticket), Uber | ❌ → F6 | 🔴 anotado |
+| Win-back / encuesta con recompensa / reseñas propias | Cheerfy, Thanx | F5 (diseñado, plato favorito nombrado) | 🟡 en plan |
+| Segmentación por comportamiento | Cheerfy, Punchh, Paytronix | F6 | 🟡 en plan |
+| Campañas email/SMS/WhatsApp automatizadas | todos | F5 (Resend listo; WhatsApp aparcado) | 🟡 en plan |
+| A/B de ofertas servido | Thanx | 🔴 deuda declarada (config+impacto ya existen) | 🔴 |
+| Tarjeta Apple/Google Wallet | Cheerfy, PAR | ❌ futuro no crítico | ⚪ |
+| Suscripciones tipo Prime / gift cards | Paytronix, Toast | ❌ no prioritario SMB | ⚪ |
+
+### 10.c — Automatización de campañas (la escalera, explícita desde 03/07)
+
+| Modelo | Cómo automatiza | Su límite | Folvy |
+|---|---|---|---|
+| **Pleez** (el listón) | Motor de REGLAS: caídas de demanda, valles, stock, competidores, clima, eventos; guardarraíles y ROI por promo | Margen sobre coste tecleado a mano; ve el escaparate (scraping), no la operación | **G2d** = mismo motor de reglas PERO contra histórico PROPIO (SELECT, no scraping) + margen real por disparo. coupon.origin='rule' ya existe |
+| **Toast IQ Grow** | Agente que propone acciones (499$/mes + humano al lado) | Ve ventas/labor, no margen de plato | **F9** agente-marketer sobre contrato B3 (ya en producción); propone reglas Y campañas con coste de margen |
+| **Punchh/Paytronix AI** | Personalización 1-a-1 predictiva | Enterprise, estiman coste | F6 segmentos + margen real |
+| Escalera Folvy | **G1 manos (manual, hecho) → G2d reflejos (reglas) → F9 cerebro (agente)** — cada campaña nace con origin manual/rule/agent | | 🟡 G1 🟢 hecho; G2d/F9 declarados |
+
+**Cómo golea Folvy en el área:** el motor único Ómnibus-aware + margen-consciente sirve a CRM y a canal (decisión 02/07); ningún rival combina reglas de Pleez + agente de Toast + verdad de margen. **Deudas del área:** BOGO (en curso), dashboard G2e, reglas G2d, catálogo↔escandallo (el margen por plato es tan bueno como la cobertura de escandallos: 420/582 sin coste), cashback (decisión), A/B servido.
+
+---
+
+## ÁREA 11 — Adquisición pagada / Ads (NUEVO 03/07 — declarada, sin construir)
+
+| Capacidad | Quién | Mecanismo | Folvy | Veredicto |
+|---|---|---|---|---|
+| Ads dentro de Glovo (posiciones patrocinadas) | Glovo partners autoservicio | Panel de partner; API no confirmada → **RECON F8 obligatorio** (¿API vs automatización con credenciales?) | ❌ | 🔴 F8 |
+| Uber Eats Sponsored Listings (puja CPC + presupuesto semanal) | Uber partners | Panel; misma incógnita de API | ❌ | 🔴 F8 |
+| Meta Ads (Instagram/Facebook) | Toast IQ Grow lo automatiza | **Marketing API pública y robusta** — automatizable de verdad | ❌ | 🔴 frente "Adquisición social" post-F5 (necesita píxel/atribución al Shop) |
+| TikTok Ads | ídem | **Ads API pública** | ❌ | 🔴 ídem |
+| ROI de ads contra MARGEN real (no ventas brutas) | **nadie** | Folvy tiene la venta + el escandallo | ❌ | 🔮 la goleada del área cuando se construya |
+| Dashboard unificado gasto (descuentos + ads) por canal | Toast IQ parcial | | G2e absorbe la parte de descuentos | 🟡 |
+
+**Nota de prudencia (vigente):** no prometer push/ads automatizados a Glovo/Uber hasta el RECON de F8 (Pleez casi seguro automatiza sobre paneles con credenciales, como tspoon). Las campañas ya nacen con `channels[]` para enchufarse sin rehacer.
+
+---
+
+## ÁREA 12 — Radar competitivo de precios y ofertas (NUEVO 03/07 — declarada, sin construir)
+
+| Capacidad | Pleez (el referente) | Folvy | Veredicto |
+|---|---|---|---|
+| Ver precios/ofertas de rivales en el radio de reparto (escaparates públicos Glovo/Uber) | ✅ competitor tracker | ❌ | 🔴 F8 |
+| Disparador de regla "movimiento de competidor" | ✅ | G2d lo prevé como trigger | 🟡 declarado |
+| **Cruce con margen propio** ("igualar al rival te deja al 31%; con espejo a 9,50 mantienes el 42%") | ❌ imposible para Pleez (no ve la operación) | diseño previsto | 🔮 la goleada del área |
+| Técnica | scraping de escaparates públicos (terreno conocido: tspoon) | | ⚪ legalmente defendible, datos públicos |
+
+---
+
 # RESUMEN — el tablero de una mirada
 
-**Folvy YA golea (6)**: formatos anidados, recepción anti-error + OCR sin humano, ventas delivery + comisiones, APPCC con corrección, IA multi-módulo + anti-invención, pasos enlazados (vs tspoon).
+**Folvy YA golea (9, act. 03/07)**: formatos anidados, recepción anti-error + OCR sin humano, ventas delivery + comisiones, APPCC con corrección, IA multi-módulo + anti-invención, pasos enlazados (vs tspoon), **CRM con margen real delante de cada oferta (bienvenida/frecuencia/campañas — nadie lo tiene)**, **Ómnibus por construcción + artículo espejo (goleada única, área 10)**, **baja RGPD 7.3 demostrable en un toggle**.
 
 **Oportunidades de goleada (nadie lo hace, Folvy diseñado)**: autoinventario IA, merma por diferencia, planificación MRP (compras y producción), importar escandallo por foto IA, foto IA de ficha, reparto propio.
 
