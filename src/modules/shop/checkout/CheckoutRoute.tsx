@@ -72,6 +72,25 @@ function Shield({ size = 14, color = 'currentColor' }: { size?: number; color?: 
   )
 }
 
+// Ticket (acceso al cupón, protagonista en el resumen).
+function Ticket({ size = 17, color = 'currentColor' }: { size?: number; color?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block', flexShrink: 0 }} aria-hidden>
+      <path d="M3 9a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v1a2 2 0 0 0 0 4v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1a2 2 0 0 0 0-4z" />
+      <path d="M13 7v10" strokeDasharray="1.5 3" />
+    </svg>
+  )
+}
+
+// Chevron derecho (afordancia de "desplegar").
+function Chevron({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block', flexShrink: 0 }} aria-hidden>
+      <path d="m9 18 6-6-6-6" />
+    </svg>
+  )
+}
+
 // Cabecera de sección con número de paso (jerarquía 1·2·3).
 function StepHead({ n, children }: { n: number; children: React.ReactNode }) {
   return (
@@ -499,6 +518,56 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
     startOnlineConfirmation(p?.token, p?.code, p?.total, mode)
   }
 
+  // Cupón de CÓDIGO: una sola casa, en el resumen (patrón Uber/Glovo). Tres estados:
+  // aplicado (línea verde + ✕), acceso tappable, o input desplegado. Vive dentro de
+  // summaryLines, así que aparece igual en el aside de escritorio y en la hoja móvil.
+  const isUserCodeApplied = !!couponCode && !!coupon?.applied && !coupon?.isWelcome
+  const couponSummary = (
+    isUserCodeApplied ? (
+      <div style={{ ...s.sumRow, color: C.greenDeep, alignItems: 'center' }}>
+        <span>{coupon?.label ?? 'Cupón'}{coupon?.code ? ` (${coupon.code})` : ''}</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}>
+          -{eur(couponDiscount)}
+          <button type="button" style={s.couponRemoveX} onClick={removeCoupon} aria-label="Quitar cupón">{'✕'}</button>
+        </span>
+      </div>
+    ) : !showCouponField ? (
+      <button type="button" className="ck-coupon-access" style={s.couponAccessRow} onClick={() => setShowCouponField(true)}>
+        <Ticket size={17} color={C.accent} />
+        <span style={s.couponAccessText}>¿Tienes un cupón?</span>
+        <Chevron size={16} color={C.inkFaint} />
+      </button>
+    ) : (
+      <div style={s.couponBox}>
+        <div style={s.couponRow}>
+          <input
+            style={s.couponInput}
+            value={couponInput}
+            onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+            onKeyDown={(e) => { if (e.key === 'Enter') applyCouponCode() }}
+            placeholder="Código"
+            autoCapitalize="characters"
+          />
+          <button
+            type="button"
+            style={{ ...s.couponApply, ...(couponInput.trim() && !couponBusy ? {} : { opacity: .5 }) }}
+            onClick={applyCouponCode}
+          >
+            {couponBusy ? '…' : 'Aplicar'}
+          </button>
+        </div>
+        {/* Voz humana: cupón que no entra = contratiempo, no error del cliente. Ámbar. */}
+        {couponCode && coupon && !coupon.applied && (
+          <div style={s.couponNote}>
+            {coupon.reason
+              ? couponReasonMsg(coupon.reason)
+              : 'Hmm, ese código no funciona. Revisa que esté bien escrito — o puede que la promo aún no haya empezado.'}
+          </div>
+        )}
+      </div>
+    )
+  )
+
   const summaryLines = (
     <>
       <div style={s.sumLines}>
@@ -512,9 +581,11 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
       </div>
       <div style={s.sumRow}><span>Subtotal</span><span>{eur(totals.subtotal)}</span></div>
       {totals.discount > 0 && <div style={{ ...s.sumRow, color: C.green }}><span>Descuento</span><span>-{eur(totals.discount)}</span></div>}
-      {couponDiscount > 0 && (
+      {/* Descuento AUTOMÁTICO (bienvenida/fidelidad): línea propia. El cupón de
+          CÓDIGO tiene su fila tappable abajo (couponSummary). */}
+      {couponDiscount > 0 && !couponCode && (
         <div style={{ ...s.sumRow, color: C.green }}>
-          <span>{coupon?.isWelcome ? 'Bienvenida' : (coupon?.label ?? 'Descuento')}{coupon?.code ? ` (${coupon.code})` : ''}</span>
+          <span>{coupon?.isWelcome ? 'Bienvenida' : (coupon?.label ?? 'Descuento')}</span>
           <span>-{eur(couponDiscount)}</span>
         </div>
       )}
@@ -522,6 +593,7 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
         <span>Gastos de envío</span>
         <span>{mode === 'pickup' ? '-' : (check?.ok ? eur(deliveryFee) : 'Indica tu dirección')}</span>
       </div>
+      {couponSummary}
     </>
   )
 
@@ -935,50 +1007,7 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
               </div>
             )}
 
-            {/* Cupón con código (manual) */}
-            {couponCode && coupon?.applied && !coupon?.isWelcome ? (
-              <div style={s.welcomeBanner}>
-                <span>{'\u2713'} <strong>{coupon.code}</strong> aplicado {'·'} {'−'}{eur(coupon.discount ?? 0)}</span>
-                <button type="button" style={s.couponRemoveX} onClick={removeCoupon} aria-label="Quitar cupón">{'✕'}</button>
-              </div>
-            ) : (
-              <div style={{ marginTop: 12 }}>
-                {!showCouponField ? (
-                  <button type="button" style={s.couponToggle} onClick={() => setShowCouponField(true)}>
-                    ¿Tienes un cupón?
-                  </button>
-                ) : (
-                  <div>
-                    <div style={s.couponRow}>
-                      <input
-                        style={s.couponInput}
-                        value={couponInput}
-                        onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
-                        onKeyDown={(e) => { if (e.key === 'Enter') applyCouponCode() }}
-                        placeholder="Código"
-                        autoCapitalize="characters"
-                      />
-                      <button
-                        type="button"
-                        style={{ ...s.couponApply, ...(couponInput.trim() && !couponBusy ? {} : { opacity: .5 }) }}
-                        onClick={applyCouponCode}
-                      >
-                        {couponBusy ? '…' : 'Aplicar'}
-                      </button>
-                    </div>
-                    {/* Rechazo: si hay reason, mensaje específico; si el servidor no
-                        encontró el cupón (applied:false SIN reason), fallback honesto.
-                        Solo con couponCode del usuario -> nunca en el estado normal de
-                        un anónimo sin código (bienvenida). No colapsa el input. */}
-                    {couponCode && coupon && !coupon.applied && (
-                      <div style={s.couponError}>
-                        {coupon.reason ? couponReasonMsg(coupon.reason) : 'Cupón no válido o fuera de fechas.'}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
+            {/* acceso al cupon movido al resumen (una sola casa) */}
           </section>
 
           <section style={s.card}>
@@ -1078,6 +1107,7 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
         @media (min-width: 861px) {
           .ck-mobilebar { display: none !important; }
         }
+        .ck-coupon-access:hover { background: #F1EFEA; }
       `}</style>
     </div>
   )
@@ -1260,6 +1290,12 @@ const s: Record<string, React.CSSProperties> = {
   couponRemove: { marginLeft: 'auto', background: 'none', border: 'none', color: C.greenDeep, fontSize: 12.5, fontWeight: 700, textDecoration: 'underline', cursor: 'pointer' },
   couponRemoveX: { marginLeft: 'auto', background: 'none', border: 'none', color: C.greenDeep, fontSize: 15, fontWeight: 800, lineHeight: 1, cursor: 'pointer', padding: 0 },
   couponError: { fontSize: 12.5, color: C.red, marginTop: 8, fontWeight: 600 },
+  // Fila tappable de acceso al cupón (protagonista, en el resumen).
+  couponAccessRow: { display: 'flex', alignItems: 'center', gap: 9, width: '100%', border: 'none', background: 'none', borderTop: `1px dashed ${C.line}`, padding: '11px 2px', margin: '2px 0', cursor: 'pointer', textAlign: 'left', color: C.ink, borderRadius: 8, transition: 'background .12s ease' },
+  couponAccessText: { flex: 1, fontSize: 14, fontWeight: 700, color: C.ink },
+  couponBox: { borderTop: `1px dashed ${C.line}`, paddingTop: 10, marginTop: 4 },
+  // Voz humana: contratiempo en ámbar cálido, nunca rojo-triste.
+  couponNote: { fontSize: 12.5, color: C.amber, background: C.amberBg, borderRadius: 10, padding: '9px 11px', marginTop: 8, lineHeight: 1.4, fontWeight: 600 },
   modalWrap: { position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(20,14,10,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18 },
   modalCard: { background: '#fff', borderRadius: 18, maxWidth: 560, width: '100%', maxHeight: '82vh', overflowY: 'auto', padding: '24px 26px', boxShadow: '0 24px 60px rgba(0,0,0,.3)' },
   modalTitle: { fontSize: 19, fontWeight: 900, letterSpacing: '-.02em', color: C.ink, margin: '0 0 14px' },
