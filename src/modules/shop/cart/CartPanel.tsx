@@ -5,8 +5,9 @@
 // precio. Total con hueco de descuento/envío (envío se fija en checkout).
 // El botón "Ir a pagar" es el punto de enganche del checkout (pieza siguiente).
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useShopCart, type CartLine } from '@/modules/shop/cart/ShopCartContext'
+import { getShopHub, type FreeDeliveryInfo } from '@/modules/shop/services/shopHubService'
 
 const C = {
   bg: '#FBF7F0', surface: '#FFFFFF', ink: '#1A1714', inkDim: '#7A726A', line: '#ECE5DA',
@@ -19,6 +20,14 @@ function eur(n: number): string { return n.toFixed(2).replace('.', ',') + ' €'
 export default function CartPanel({ onCheckout }: { onCheckout?: () => void }) {
   const { cart, totals, setLineQty, removeLine } = useShopCart()
   const [open, setOpen] = useState(false)
+  // El carrito no conoce el hub: resolvemos SOLO el envío gratis de tienda con un
+  // fetch ligero por slug (mínimo acoplamiento; documentado, FIX G2·C4).
+  const [freeDelivery, setFreeDelivery] = useState<FreeDeliveryInfo | null>(null)
+  useEffect(() => {
+    let alive = true
+    getShopHub(cart.slug).then((h) => { if (alive) setFreeDelivery(h?.freeDelivery ?? null) }).catch(() => {})
+    return () => { alive = false }
+  }, [cart.slug])
 
   if (cart.lines.length === 0) return null
 
@@ -96,6 +105,26 @@ export default function CartPanel({ onCheckout }: { onCheckout?: () => void }) {
               <div style={S.totalRowBig}>
                 <span>Total</span><span>{eur(totals.total)}</span>
               </div>
+
+              {/* Progreso hacia el envío gratis de tienda (el detalle que más vende) */}
+              {freeDelivery && (() => {
+                const min = freeDelivery.minSubtotal
+                if (min == null || min <= 0) {
+                  return <div style={S.freeDone}>{'🛵'} ¡Envío gratis en todos los pedidos!</div>
+                }
+                const remaining = Math.max(0, min - totals.subtotal)
+                if (remaining <= 0) {
+                  return <div style={S.freeDone}>{'🛵'} ¡Envío gratis conseguido!</div>
+                }
+                const pctFill = Math.max(0, Math.min(100, (totals.subtotal / min) * 100))
+                return (
+                  <div style={S.freeWrap}>
+                    <div style={S.freeText}>Te faltan <strong>{eur(remaining)}</strong> para el envío gratis</div>
+                    <div style={S.freeBar}><span style={{ ...S.freeFill, width: `${pctFill}%` }} /></div>
+                  </div>
+                )
+              })()}
+
               <button
                 style={S.payBtn}
                 onClick={() => { setOpen(false); onCheckout?.() }}
@@ -145,4 +174,9 @@ const S: Record<string, React.CSSProperties> = {
   totalRowBig: { display: 'flex', justifyContent: 'space-between', fontSize: 18, fontWeight: 900, marginBottom: 14 },
   payBtn: { width: '100%', background: C.accent, color: '#fff', border: 'none', borderRadius: 14, padding: '15px', fontWeight: 900, fontSize: 16, cursor: 'pointer' },
   note: { fontSize: 11.5, color: C.inkDim, textAlign: 'center', marginTop: 10 },
+  freeWrap: { marginBottom: 14 },
+  freeText: { fontSize: 13, color: C.ink, fontWeight: 600, marginBottom: 7, textAlign: 'center' },
+  freeBar: { height: 8, borderRadius: 999, background: '#E9E4DB', overflow: 'hidden' },
+  freeFill: { display: 'block', height: '100%', background: C.green, borderRadius: 999, transition: 'width .3s ease' },
+  freeDone: { marginBottom: 14, textAlign: 'center', fontSize: 13.5, fontWeight: 800, color: C.green, background: '#E3F6EC', border: `1px solid ${C.green}33`, borderRadius: 12, padding: '9px 12px' },
 }

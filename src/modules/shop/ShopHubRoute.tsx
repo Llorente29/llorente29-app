@@ -88,6 +88,23 @@ function Star({ size = 14 }: { size?: number }) {
 
 function eur(n: number): string { return n.toFixed(2).replace('.', ',') + ' €' }
 
+// Texto cálido del envío gratis de tienda.
+function freeShipLabel(fd: { minSubtotal: number | null }): string {
+  return fd.minSubtotal != null
+    ? `Envío gratis en pedidos desde ${eur(fd.minSubtotal)}`
+    : 'Envío gratis en todos los pedidos'
+}
+
+// Icono moto (SVG inline, estilo Ic del hub).
+function Moto({ size = 15, color = 'currentColor' }: { size?: number; color?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block', flexShrink: 0 }} aria-hidden>
+      <circle cx="5.5" cy="17.5" r="2.5" /><circle cx="18" cy="17.5" r="2.5" />
+      <path d="M8 17.5h7M14 6h2l2.5 6M6 10h6l3 5M6 10 5 13" />
+    </svg>
+  )
+}
+
 function shortName(name: string): string {
   return name.split(/[\s·-]/)[0].slice(0, 8).toUpperCase()
 }
@@ -252,6 +269,13 @@ function ShopHubInner({ slug, onCheckout, onAccount }: { slug: string; onCheckou
         )}
       </div>
 
+      {/* Franja de envío gratis de tienda (bajo la topbar) */}
+      {hub.freeDelivery && (
+        <div style={S.freeShipStrip}>
+          <Moto size={15} color={C.green} /> {freeShipLabel(hub.freeDelivery)}
+        </div>
+      )}
+
       {showLogin && (
         <CustomerLoginModal
           slug={slug}
@@ -343,7 +367,7 @@ function ShopHubInner({ slug, onCheckout, onAccount }: { slug: string; onCheckou
             </div>
           ) : (
             <div style={S.grid}>
-              {visibleBrands.map(b => <BrandCard key={b.brandId} b={b} onOpen={() => openBrand(b.brandId)} />)}
+              {visibleBrands.map(b => <BrandCard key={b.brandId} b={b} freeDelivery={!!hub.freeDelivery} onOpen={() => openBrand(b.brandId)} />)}
             </div>
           )}
         </div>
@@ -418,7 +442,7 @@ export default function ShopHubRoute() {
   )
 }
 
-function BrandCard({ b, onOpen }: { b: HubBrand; onOpen: () => void }) {
+function BrandCard({ b, freeDelivery, onOpen }: { b: HubBrand; freeDelivery?: boolean; onOpen: () => void }) {
   return (
     <div role="button" tabIndex={0} onClick={onOpen}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen() } }}
@@ -461,6 +485,9 @@ function BrandCard({ b, onOpen }: { b: HubBrand; onOpen: () => void }) {
             )}
           </div>
         )}
+        {freeDelivery && (
+          <div style={S.brandFreeTag}><Moto size={12} color={C.green} /> Envío gratis</div>
+        )}
       </div>
     </div>
   )
@@ -476,6 +503,8 @@ const S: Record<string, React.CSSProperties> = {
   page: { minHeight: '100vh', background: C.bg, color: C.ink, fontFamily: 'inherit' },
   topbar: { position: 'sticky', top: 0, zIndex: 50, background: '#FBF7F0', borderBottom: `1px solid ${C.line}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20, padding: '11px 28px' },
   couponBanner: { background: '#FFF3D6', color: '#7A5A12', borderBottom: '1px solid #F2DCA0', fontSize: 13.5, fontWeight: 700, textAlign: 'center', padding: '10px 16px' },
+  freeShipStrip: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: C.greenBg, color: C.green, borderBottom: `1px solid ${C.green}22`, fontSize: 13, fontWeight: 800, padding: '8px 16px' },
+  brandFreeTag: { display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 8, color: C.green, fontSize: 12.5, fontWeight: 700 },
   logo: { display: 'flex', alignItems: 'center', gap: 8, fontWeight: 900, fontSize: 20, letterSpacing: '-.03em' },
   logoDot: { width: 11, height: 11, borderRadius: '50%', background: C.accent },
   logoImg: { height: 50, width: 'auto', maxWidth: 260, objectFit: 'contain', display: 'block' },

@@ -28,6 +28,12 @@ export interface TopDish {
   units: number
 }
 
+// Envío gratis a nivel TIENDA (cupón free_delivery auto activo ahora). null = no hay.
+export interface FreeDeliveryInfo {
+  active: boolean
+  minSubtotal: number | null    // null = en todos los pedidos
+}
+
 export interface ShopHub {
   accountName: string
   accountLogoUrl: string | null
@@ -35,6 +41,7 @@ export interface ShopHub {
   heroUrl: string | null
   tagline: string | null
   subtitle: string | null
+  freeDelivery: FreeDeliveryInfo | null
   brands: HubBrand[]
   topDishes: TopDish[]
 }
@@ -52,6 +59,9 @@ export async function getShopHub(slug: string): Promise<ShopHub | null> {
     heroUrl: data.hero_url ?? null,
     tagline: data.tagline ?? null,
     subtitle: data.subtitle ?? null,
+    freeDelivery: data.free_delivery && data.free_delivery.active
+      ? { active: true, minSubtotal: data.free_delivery.minSubtotal != null ? Number(data.free_delivery.minSubtotal) : null }
+      : null,
     brands: (data.brands ?? []).map((b: any) => ({
       brandId: b.brand_id,
       name: b.name,

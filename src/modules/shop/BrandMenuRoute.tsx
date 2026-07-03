@@ -133,13 +133,17 @@ export default function BrandMenuRoute({ slug, brandId, onBack, onCheckout }: { 
               return pcts.length ? { id: cat.id, name: cat.name, maxPct: Math.max(...pcts) } : null
             })
             .filter(Boolean) as { id: string; name: string; maxPct: number }[]
-          if (!offerCats.length) return null
+          const fd = menu.freeDelivery
+          const fdText = fd ? (fd.minSubtotal != null ? `🛵 Envío gratis desde ${eur(fd.minSubtotal)}` : '🛵 Envío gratis en todos los pedidos') : null
+          if (!offerCats.length && !fdText) return null
+          const offersText = offerCats.length ? `🔥 Hoy: ${offerCats.map((o) => `−${Math.round(o.maxPct)}% en ${o.name}`).join(' · ')}` : null
+          const text = [offersText, fdText].filter(Boolean).join('  ·  ')
           return (
             <button
-              style={S.offerBanner}
-              onClick={() => document.getElementById(`fvcat-${offerCats[0].id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              style={offerCats.length ? S.offerBanner : S.freeShipBanner}
+              onClick={() => offerCats.length && document.getElementById(`fvcat-${offerCats[0].id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
             >
-              <span aria-hidden>🔥</span> Hoy: {offerCats.map((o) => `−${Math.round(o.maxPct)}% en ${o.name}`).join(' · ')}
+              {text}
             </button>
           )
         })()}
@@ -281,6 +285,7 @@ const S: Record<string, React.CSSProperties> = {
   omnibusNote: { fontSize: 11, color: C.inkDim, marginTop: 6 },
   dishOn: { border: `1.5px solid ${C.accent}` },
   offerBanner: { display: 'block', width: '100%', textAlign: 'left', background: '#FFE9E3', color: C.accent, border: `1px solid ${C.accent}33`, borderRadius: 14, padding: '11px 16px', fontSize: 14, fontWeight: 800, letterSpacing: '-.01em', cursor: 'pointer', marginBottom: 22 },
+  freeShipBanner: { display: 'block', width: '100%', textAlign: 'left', background: '#E3F6EC', color: '#1FA85B', border: '1px solid #1FA85B33', borderRadius: 14, padding: '11px 16px', fontSize: 14, fontWeight: 800, letterSpacing: '-.01em', cursor: 'default', marginBottom: 22 },
   catPill: { marginLeft: 10, verticalAlign: 'middle', background: C.accent, color: '#fff', fontSize: 12, fontWeight: 800, padding: '3px 10px', borderRadius: 999 },
   addBtn: { background: C.accent, color: '#fff', border: 'none', borderRadius: 999, padding: '8px 15px', fontWeight: 800, fontSize: 14, cursor: 'not-allowed', opacity: .45, display: 'inline-flex', alignItems: 'center', gap: 5 },
   addBtnOn: { cursor: 'pointer', opacity: 1 },

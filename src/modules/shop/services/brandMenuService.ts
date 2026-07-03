@@ -38,6 +38,7 @@ export interface BrandMenu {
   ratingCount: number | null
   isOpen: boolean
   locationIds: string[]
+  freeDelivery: { active: boolean; minSubtotal: number | null } | null
   categories: MenuCategory[]
 }
 
@@ -61,6 +62,9 @@ export async function getBrandMenu(slug: string, brandId: string): Promise<Brand
     ratingCount: data.rating_count ?? null,
     isOpen: data.is_open === true,
     locationIds: Array.isArray(data.location_ids) ? data.location_ids : [],
+    freeDelivery: data.free_delivery && data.free_delivery.active
+      ? { active: true, minSubtotal: data.free_delivery.minSubtotal != null ? Number(data.free_delivery.minSubtotal) : null }
+      : null,
     categories: (data.categories ?? []).map((c: any) => ({
       id: c.id,
       name: c.name,
