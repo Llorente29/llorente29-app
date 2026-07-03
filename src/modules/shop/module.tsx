@@ -6,10 +6,11 @@
 // reparto · Capa 1 del motor de envío). El resto (storefront público, checkout,
 // pedidos→ingesta canónica) se enchufa después como submódulos, sin reescribir
 // esta base.
-import { Store, Palette, MapPin } from 'lucide-react'
+import { Store, Palette, MapPin, Megaphone } from 'lucide-react'
 import type { ModuleDefinition } from '@/shell/types'
 import ShopDesignPage from '@/modules/shop/pages/ShopDesignPage'
 import ShopDeliveryPage from '@/modules/shop/pages/ShopDeliveryPage'
+import ShopCampaignsPage from '@/modules/shop/admin/ShopCampaignsPage'
 
 export const shopModule: ModuleDefinition = {
   id: 'shop',
@@ -19,14 +20,16 @@ export const shopModule: ModuleDefinition = {
   requiredRole: 'manager',
   basePath: 'shop',
   routes: [
-    { path: '',        element: <ShopDesignPage /> },
-    { path: 'diseno',  element: <ShopDesignPage /> },
-    { path: 'entrega', element: <ShopDeliveryPage /> },
+    { path: '',         element: <ShopDesignPage /> },
+    { path: 'diseno',   element: <ShopDesignPage /> },
+    { path: 'campanas', element: <ShopCampaignsPage /> },
+    { path: 'entrega',  element: <ShopDeliveryPage /> },
   ],
   sidebar: {
     items: [
-      { id: 'shop_design',   label: 'Diseño',  icon: Palette, path: 'diseno',  requiredRole: 'manager' },
-      { id: 'shop_delivery', label: 'Entrega', icon: MapPin,  path: 'entrega', requiredRole: 'manager' },
+      { id: 'shop_design',    label: 'Diseño',   icon: Palette,   path: 'diseno',   requiredRole: 'manager' },
+      { id: 'shop_campaigns', label: 'Campañas', icon: Megaphone, path: 'campanas', requiredRole: 'manager' },
+      { id: 'shop_delivery',  label: 'Entrega',  icon: MapPin,    path: 'entrega',  requiredRole: 'manager' },
     ],
   },
   publishes: [],
