@@ -278,7 +278,7 @@ Notas: meez **se declara "complementario, no competidor" de ERPs** — capa culi
 | Plato de regalo desde X€ | Uber "free item over £X" | ✅ G2c (línea REAL a 0€ que la cocina prepara + barrita de progreso) | 🟢 golea (el regalo entra a cocina/ticket/KDS; los paneles de plataforma solo descuentan) |
 | Menú/bundle a precio cerrado con coste real | nadie con coste real | ❌ declarado | 🔴 futuro |
 | Gestor de campañas (crear/pausar/clonar/eliminar/histórico) | Uber Eats Manager "All Campaigns", Glovo WebApp | ✅ G1+G2a-D (con impacto de margen y buscador multi-marca) | 🟢 |
-| Rendimiento por campaña (canjes, € invertido) | Uber/Glovo básico | ✅ G1 (canjes VIVOS + **margen medio real** de margin_after) · dashboard completo = G2e | 🟡→🟢 con G2e |
+| Rendimiento por campaña (canjes, € invertido) | Uber/Glovo básico; Otter Analytics (promoted vs un-promoted, ROI) | ✅ G2e completo: panel por campaña + margen real en TODOS los tipos + **dashboard "Folvy Shop→Inicio"** (Δ vs periodo anterior, filtros local/marca/promo, descargas CSV/XLSX patrón Otter) — con MARGEN REAL donde Otter da brutas | 🟢 golea |
 | Impacto de margen real ANTES de activar | **nadie** | ✅ preview_coupon_impact + impacto por plato del alcance | 🟢 goleada única |
 
 ### 10.b — Loyalty / retención
@@ -307,9 +307,9 @@ Notas: meez **se declara "complementario, no competidor" de ERPs** — capa culi
 | **Pleez** (el listón) | Motor de REGLAS: caídas de demanda, valles, stock, competidores, clima, eventos; guardarraíles y ROI por promo | Margen sobre coste tecleado a mano; ve el escaparate (scraping), no la operación | **G2d** = mismo motor de reglas PERO contra histórico PROPIO (SELECT, no scraping) + margen real por disparo. coupon.origin='rule' ya existe |
 | **Toast IQ Grow** | Agente que propone acciones (499$/mes + humano al lado) | Ve ventas/labor, no margen de plato | **F9** agente-marketer sobre contrato B3 (ya en producción); propone reglas Y campañas con coste de margen |
 | **Punchh/Paytronix AI** | Personalización 1-a-1 predictiva | Enterprise, estiman coste | F6 segmentos + margen real |
-| Escalera Folvy | **G1 manos (manual, hecho) → G2d reflejos (reglas) → F9 cerebro (agente)** — cada campaña nace con origin manual/rule/agent | | 🟡 G1 🟢 hecho; G2d/F9 declarados |
+| Escalera Folvy | **G1 manos (hecho) → G2d reflejos (reglas, EN CONSTRUCCIÓN con diseño v1 aprobado: 3 disparadores contra histórico propio + límites + kill switch) → F9 cerebro (agente)** | | 🟢 G1 · 🔨 G2d · F9 declarado |
 
-**Cómo golea Folvy en el área:** el motor único Ómnibus-aware + margen-consciente sirve a CRM y a canal (decisión 02/07); ningún rival combina reglas de Pleez + agente de Toast + verdad de margen. **Deudas del área:** dashboard G2e, reglas G2d, catálogo↔escandallo (el margen por plato es tan bueno como la cobertura de escandallos: 420/582 sin coste), cashback (decisión), A/B servido.
+**Cómo golea Folvy en el área:** el motor único Ómnibus-aware + margen-consciente sirve a CRM y a canal (decisión 02/07); ningún rival combina reglas de Pleez + agente de Toast + verdad de margen. **Deudas del área:** reglas G2d (en construcción), catálogo↔escandallo (el margen por plato es tan bueno como la cobertura de escandallos: 420/582 sin coste), cashback (decisión), A/B servido.
 
 ---
 
