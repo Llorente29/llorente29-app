@@ -108,7 +108,11 @@ export interface PlaceOrderResult {
   deliveryFee?: number
   discount?: number
   total?: number
-  lines?: { name: string; quantity: number; unitPrice: number; lineTotal: number; valid: boolean }[]
+  lines?: {
+    name: string; quantity: number; unitPrice: number; lineTotal: number; valid: boolean
+    // Oferta de la línea (del motor _shop_reprice_line): bogo lleva kind/pct/discountLine.
+    offer?: { kind?: string; pct?: number; discountLine?: number; freeUnits?: number } | null
+  }[]
   coupon?: CouponResult
 }
 

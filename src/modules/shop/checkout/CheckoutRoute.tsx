@@ -596,11 +596,29 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
         {cart.lines.map((l, idx) => {
           const pv = freshLines ? freshLines[idx] : null
           const lineEur = pv ? pv.lineTotal : l.unitPrice * l.quantity - bogoLineDiscount(l)
+          // BOGO: chip + tachado del bruto (mismo patrón que CartPanel). Datos del
+          // dry-run (pv.offer) o, en fallback, de la línea del carrito (l.bogoPct).
+          // Ídem futuro free_item: cuando el motor (B2) emita su línea, aquí caería igual.
+          const pvBogo = pv?.offer && pv.offer.kind === 'bogo' ? pv.offer : null
+          const bogoPct = pvBogo?.pct ?? l.bogoPct ?? null
+          const bogoDisc = pvBogo?.discountLine ?? bogoLineDiscount(l)
           return (
             <div key={l.lineId} style={s.sumLine}>
               <span style={s.sumQty}>{l.quantity}x</span>
-              <span style={s.sumName}>{l.name}</span>
-              <span style={s.sumPrice}>{eur(lineEur)}</span>
+              <span style={s.sumName}>
+                {l.name}
+                {bogoPct != null && bogoPct > 0 && (
+                  <span style={s.sumBogoTag}>{bogoPct >= 100 ? '2x1' : `2ª −${Math.round(bogoPct)}%`}</span>
+                )}
+              </span>
+              {bogoDisc > 0 ? (
+                <span style={s.sumPriceWrap}>
+                  <span style={s.sumPriceNow}>{eur(lineEur)}</span>
+                  <span style={s.sumPriceWas}>{eur(lineEur + bogoDisc)}</span>
+                </span>
+              ) : (
+                <span style={s.sumPrice}>{eur(lineEur)}</span>
+              )}
             </div>
           )
         })}
@@ -1370,6 +1388,10 @@ const s: Record<string, React.CSSProperties> = {
   sumQty: { fontWeight: 800, color: C.inkDim },
   sumName: { flex: 1 },
   sumPrice: { fontWeight: 800, whiteSpace: 'nowrap' },
+  sumBogoTag: { marginLeft: 6, background: '#16140F', color: '#FFC400', fontSize: 10, fontWeight: 900, letterSpacing: '.02em', padding: '1px 6px', borderRadius: 999, verticalAlign: 'middle', whiteSpace: 'nowrap' },
+  sumPriceWrap: { display: 'inline-flex', alignItems: 'baseline', gap: 5, whiteSpace: 'nowrap' },
+  sumPriceNow: { fontWeight: 800 },
+  sumPriceWas: { fontSize: 11, color: C.inkDim, textDecoration: 'line-through', fontWeight: 700 },
   sumRow: { display: 'flex', justifyContent: 'space-between', fontSize: 13, color: C.inkDim, marginBottom: 5 },
   sumTotal: { display: 'flex', justifyContent: 'space-between', fontSize: 19, fontWeight: 900, letterSpacing: '-.02em', margin: '8px 0 12px' },
   belowMin: { fontSize: 12.5, color: C.amber, background: C.amberBg, borderRadius: 11, padding: '10px 12px', marginBottom: 12 },
