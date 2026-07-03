@@ -134,9 +134,9 @@ export default function BrandMenuRoute({ slug, brandId, onBack, onCheckout }: { 
             <div style={S.dishGrid}>
               {cat.products.map(d => (
                 <div key={d.id} className="fvdish" style={S.dish}>
-                  {d.photoUrl
-                    ? <div style={{ ...S.dishPhoto, background: `center/cover no-repeat url(${d.photoUrl})` }} />
-                    : <div style={{ ...S.dishPhoto, background: C.accentBg }} />}
+                  <div style={{ ...S.dishPhoto, background: d.photoUrl ? `center/cover no-repeat url(${d.photoUrl})` : C.accentBg, position: 'relative' }}>
+                    {d.offer && <span style={S.dishBadge}>−{Math.round(d.offer.pct)}% hoy</span>}
+                  </div>
                   <div style={S.dishBody}>
                     <div style={S.dishTop}>
                       <span style={S.dishName}>{d.name}</span>
@@ -144,7 +144,14 @@ export default function BrandMenuRoute({ slug, brandId, onBack, onCheckout }: { 
                     </div>
                     {d.description && <p style={S.dishDesc}>{d.description}</p>}
                     <div style={S.dishFoot}>
-                      <span style={S.dishPrice}>{eur(d.price)}</span>
+                      {d.offer ? (
+                        <span style={S.priceWrap}>
+                          <span style={S.dishPriceNow}>{eur(d.offer.discountedPrice)}</span>
+                          {d.offer.wasPrice != null && <span style={S.dishPriceWas}>{eur(d.offer.wasPrice)}</span>}
+                        </span>
+                      ) : (
+                        <span style={S.dishPrice}>{eur(d.price)}</span>
+                      )}
                       <button
                         className="fvadd"
                         style={{ ...S.addBtn, ...(menu.isOpen ? S.addBtnOn : {}) }}
@@ -156,6 +163,9 @@ export default function BrandMenuRoute({ slug, brandId, onBack, onCheckout }: { 
                         Añadir
                       </button>
                     </div>
+                    {d.offer?.wasPrice != null && (
+                      <div style={S.omnibusNote}>Precio más bajo de los últimos 30 días: {eur(d.offer.wasPrice)}</div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -172,6 +182,13 @@ export default function BrandMenuRoute({ slug, brandId, onBack, onCheckout }: { 
         <DishConfigModal
           slug={slug}
           menuItemId={configItemId}
+          offer={(() => {
+            for (const c of menu.categories) {
+              const dd = c.products.find((p) => p.id === configItemId)
+              if (dd?.offer) return { pct: dd.offer.pct, wasPrice: dd.offer.wasPrice }
+            }
+            return null
+          })()}
           onClose={() => setConfigItemId(null)}
           onAdd={(line: ConfiguredLine) => {
             const res = cart.addLine(line, menu.brandId, menu.name, menu.locationIds)
@@ -234,6 +251,11 @@ const S: Record<string, React.CSSProperties> = {
   dishDesc: { fontSize: 13, color: C.inkDim, lineHeight: 1.4, marginBottom: 12, flex: 1 },
   dishFoot: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto' },
   dishPrice: { fontWeight: 900, fontSize: 16 },
+  dishBadge: { position: 'absolute', top: 10, left: 10, background: C.accent, color: '#fff', fontSize: 12, fontWeight: 800, padding: '4px 9px', borderRadius: 999, boxShadow: '0 2px 8px rgba(0,0,0,.18)' },
+  priceWrap: { display: 'flex', alignItems: 'baseline', gap: 7 },
+  dishPriceNow: { fontWeight: 900, fontSize: 16, color: C.accent },
+  dishPriceWas: { fontSize: 13, color: C.inkDim, textDecoration: 'line-through' },
+  omnibusNote: { fontSize: 11, color: C.inkDim, marginTop: 6 },
   addBtn: { background: C.accent, color: '#fff', border: 'none', borderRadius: 999, padding: '8px 15px', fontWeight: 800, fontSize: 14, cursor: 'not-allowed', opacity: .45, display: 'inline-flex', alignItems: 'center', gap: 5 },
   addBtnOn: { cursor: 'pointer', opacity: 1 },
   footer: { textAlign: 'center', padding: '26px', fontSize: 13, color: C.inkDim },

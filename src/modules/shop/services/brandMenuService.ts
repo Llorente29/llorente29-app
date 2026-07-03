@@ -1,5 +1,14 @@
 import { supabase } from '@/lib/supabase'
 
+// Oferta activa de carta (item_percent). wasPrice = ref Ómnibus (min 30d) SOLO si
+// hay reducción legal frente a ella; si no, null (no se pinta tachado).
+export interface DishOffer {
+  campaignId: string
+  pct: number
+  discountedPrice: number
+  wasPrice: number | null
+}
+
 export interface MenuDish {
   id: string
   name: string
@@ -7,6 +16,7 @@ export interface MenuDish {
   photoUrl: string | null
   price: number
   productType: 'item' | 'combo'
+  offer: DishOffer | null
 }
 
 export interface MenuCategory {
@@ -63,6 +73,14 @@ export async function getBrandMenu(slug: string, brandId: string): Promise<Brand
         photoUrl: p.photo_url ?? null,
         price: Number(p.price ?? 0),
         productType: p.product_type === 'combo' ? 'combo' : 'item',
+        offer: p.offer
+          ? {
+              campaignId: p.offer.campaignId,
+              pct: Number(p.offer.pct ?? 0),
+              discountedPrice: Number(p.offer.discountedPrice ?? 0),
+              wasPrice: p.offer.wasPrice != null ? Number(p.offer.wasPrice) : null,
+            }
+          : null,
       })),
     })),
   }

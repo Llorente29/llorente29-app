@@ -38,11 +38,16 @@ export interface ConfiguredLine {
 interface Props {
   slug: string
   menuItemId: string
+  // Oferta de carta activa (item_percent). Se aplica al precio final para que el
+  // carrito y el checkout muestren y cobren lo mismo que la carta.
+  offer?: { pct: number; wasPrice: number | null } | null
   onClose: () => void
   onAdd: (line: ConfiguredLine) => void
 }
 
-export default function DishConfigModal({ slug, menuItemId, onClose, onAdd }: Props) {
+function round2(n: number): number { return Math.round(n * 100) / 100 }
+
+export default function DishConfigModal({ slug, menuItemId, offer, onClose, onAdd }: Props) {
   const [config, setConfig] = useState<DishConfig | null>(null)
   const [sel, setSel] = useState<DishSelection>(emptySelection())
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
@@ -73,7 +78,9 @@ export default function DishConfigModal({ slug, menuItemId, onClose, onAdd }: Pr
 
   const errors = useMemo(() => (config ? validateSelection(config, sel) : []), [config, sel])
   const valid = config ? isValid(config, sel) : false
-  const total = config ? totalPrice(config, sel) : 0
+  const off = offer && offer.pct > 0 ? offer : null
+  const baseTotal = config ? totalPrice(config, sel) : 0
+  const total = off ? round2(baseTotal * (1 - off.pct / 100)) : baseTotal
 
   // ── Mutadores de selección ────────────────────────────────────────────
 
@@ -133,11 +140,12 @@ export default function DishConfigModal({ slug, menuItemId, onClose, onAdd }: Pr
   function handleAdd() {
     if (!config) return
     if (!valid) { setShowErrors(true); return }
+    const u = unitPrice(config, sel)
     onAdd({
       menuItemId: config.id,
       name: config.name,
       photoUrl: config.photoUrl,
-      unitPrice: unitPrice(config, sel),
+      unitPrice: off ? round2(u * (1 - off.pct / 100)) : u,
       quantity: sel.quantity,
       summary: selectionSummary(config, sel),
       allergens: selectionAllergens(config, sel),
@@ -271,6 +279,13 @@ export default function DishConfigModal({ slug, menuItemId, onClose, onAdd }: Pr
             <button style={S.qtyBtn} onClick={() => setQuantity(1)}>+</button>
           </div>
 
+          {off && (
+            <div style={S.offerRow}>
+              <span style={S.offerBadge}>−{Math.round(off.pct)}% hoy</span>
+              <span style={S.offerWas}>{eur(baseTotal)}</span>
+              {off.wasPrice != null && <span style={S.offerOmni}>Precio más bajo 30 días: {eur(off.wasPrice)}</span>}
+            </div>
+          )}
           <button
             className="fvm-add"
             style={{ ...S.addBtn, ...(valid ? {} : S.addBtnDisabled) }}
@@ -386,4 +401,8 @@ const S: Record<string, React.CSSProperties> = {
   addBtn: { background: C.accent, color: '#fff', border: 'none', borderRadius: 999, padding: '15px 18px', fontWeight: 900, fontSize: 16, cursor: 'pointer', width: '100%', transition: 'filter .14s ease' },
   addBtnDisabled: { background: '#C9C3BB', cursor: 'not-allowed' },
   addHint: { fontSize: 12, color: C.accent, fontWeight: 700, textAlign: 'center', marginTop: 8 },
+  offerRow: { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 9, marginBottom: 10 },
+  offerBadge: { background: C.accent, color: '#fff', fontSize: 12.5, fontWeight: 800, padding: '4px 10px', borderRadius: 999 },
+  offerWas: { fontSize: 14, color: C.inkDim, textDecoration: 'line-through', fontWeight: 700 },
+  offerOmni: { flexBasis: '100%', fontSize: 11, color: C.inkDim },
 }
