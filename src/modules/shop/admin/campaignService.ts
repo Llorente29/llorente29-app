@@ -282,6 +282,64 @@ export async function getCampaignPerformance(
   }
 }
 
+// ── Vista general de rendimiento (G2e.3) ────────────────────────────────────
+export interface OverviewKind { kind: CampaignKind; redemptions: number; invested: number; marginReal: number | null }
+export interface OverviewTop { id: string; name: string; kind: CampaignKind; redemptions: number; invested: number; marginReal: number | null; roi: number | null }
+export interface OverviewSeries { day: string; redemptions: number; invested: number; soldEur: number }
+export interface CampaignsOverview {
+  soldEur: number
+  invested: number
+  marginReal: number | null
+  marginKnown: number
+  marginMissing: number
+  redemptions: number
+  newCustomers: number
+  offerOrders: number
+  totalOrders: number
+  roi: number | null
+  byKind: OverviewKind[]
+  top: OverviewTop[]
+  series: OverviewSeries[]
+}
+
+export async function getCampaignsOverview(
+  accountId: string, from: string | null, to: string | null,
+  kinds: CampaignKind[] | null, brandId: string | null,
+): Promise<CampaignsOverview | null> {
+  try {
+    const { data, error } = await db().rpc('campaigns_overview', {
+      p_account: accountId, p_from: from, p_to: to,
+      p_kinds: kinds && kinds.length ? kinds : null, p_brand: brandId,
+    })
+    if (error || !data || data.ok !== true) return null
+    const num = (v: any) => (v != null ? Number(v) : null)
+    return {
+      soldEur: Number(data.soldEur ?? 0),
+      invested: Number(data.invested ?? 0),
+      marginReal: num(data.marginReal),
+      marginKnown: Number(data.marginKnown ?? 0),
+      marginMissing: Number(data.marginMissing ?? 0),
+      redemptions: Number(data.redemptions ?? 0),
+      newCustomers: Number(data.newCustomers ?? 0),
+      offerOrders: Number(data.offerOrders ?? 0),
+      totalOrders: Number(data.totalOrders ?? 0),
+      roi: num(data.roi),
+      byKind: Array.isArray(data.byKind) ? data.byKind.map((k: any) => ({
+        kind: k.kind, redemptions: Number(k.redemptions ?? 0), invested: Number(k.invested ?? 0), marginReal: num(k.marginReal),
+      })) : [],
+      top: Array.isArray(data.top) ? data.top.map((t: any) => ({
+        id: t.id, name: t.name ?? '', kind: t.kind, redemptions: Number(t.redemptions ?? 0),
+        invested: Number(t.invested ?? 0), marginReal: num(t.marginReal), roi: num(t.roi),
+      })) : [],
+      series: Array.isArray(data.series) ? data.series.map((p: any) => ({
+        day: p.day, redemptions: Number(p.redemptions ?? 0), invested: Number(p.invested ?? 0), soldEur: Number(p.soldEur ?? 0),
+      })) : [],
+    }
+  } catch {
+    return null
+  }
+}
+
 // Mensaje legible de por qué falló un guardado.
 export function saveCampaignError(reason: string | undefined): string {
   switch (reason) {

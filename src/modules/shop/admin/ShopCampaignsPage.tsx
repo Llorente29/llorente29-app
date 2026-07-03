@@ -20,6 +20,7 @@ import {
   type Campaign, type CampaignStatus, type CampaignKind, type ScopeRef,
   type CampaignMenuTree, type TreeItem, type CampaignPerformance,
 } from '@/modules/shop/admin/campaignService'
+import CampaignsOverviewTab from '@/modules/shop/admin/CampaignsOverviewTab'
 
 const C = {
   surface: '#FFFFFF', ink: '#16140F', inkDim: '#6E6960', inkFaint: '#8A857C',
@@ -132,6 +133,7 @@ export default function ShopCampaignsPage() {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [modal, setModal] = useState<null | { mode: 'new' | 'edit' | 'clone'; c?: Campaign }>(null)
   const [perf, setPerf] = useState<Campaign | null>(null)
+  const [tab, setTab] = useState<'list' | 'overview'>('list')
   const [q, setQ] = useState('')
   const [typeF, setTypeF] = useState<TypeFilter>('all')
   const [statusF, setStatusF] = useState<StatusFilter>('all')
@@ -183,7 +185,21 @@ export default function ShopCampaignsPage() {
         <button style={s.newBtn} onClick={() => setModal({ mode: 'new' })}>+ Nueva campaña</button>
       </div>
 
-      {rows === null ? (
+      <div style={s.tabs}>
+        <button type="button" style={{ ...s.tab, ...(tab === 'list' ? s.tabOn : {}) }} onClick={() => setTab('list')}>Lista</button>
+        <button type="button" style={{ ...s.tab, ...(tab === 'overview' ? s.tabOn : {}) }} onClick={() => setTab('overview')}>Rendimiento</button>
+      </div>
+
+      {tab === 'overview' ? (
+        accountId ? (
+          <CampaignsOverviewTab
+            accountId={accountId}
+            hasCampaigns={(rows?.length ?? 0) > 0}
+            onCreate={() => setModal({ mode: 'new' })}
+            onOpenCampaign={(id) => { const c = rows?.find((r) => r.id === id); if (c) setPerf(c) }}
+          />
+        ) : null
+      ) : rows === null ? (
         <div style={s.muted}>Cargando campañas…</div>
       ) : rows.length === 0 ? (
         <div style={s.empty}>Aún no hay campañas. Crea una con “+ Nueva campaña”.</div>
@@ -914,6 +930,9 @@ const styles: Record<string, CSSProperties> = {
   h1: { fontSize: 22, fontWeight: 800, letterSpacing: '-.02em', color: C.ink, margin: 0 },
   subtitle: { fontSize: 13.5, color: C.inkDim, marginTop: 4, maxWidth: 560, lineHeight: 1.45 },
   newBtn: { flexShrink: 0, border: 'none', background: C.accent, color: '#fff', borderRadius: 999, padding: '10px 18px', fontSize: 14, fontWeight: 700, cursor: 'pointer' },
+  tabs: { display: 'flex', gap: 4, marginBottom: 18, borderBottom: `1px solid ${C.line}` },
+  tab: { border: 'none', background: 'none', color: C.inkDim, padding: '9px 4px', marginRight: 16, fontSize: 14.5, fontWeight: 700, cursor: 'pointer', borderBottom: '2px solid transparent', marginBottom: -1 },
+  tabOn: { color: C.ink, borderBottom: `2px solid ${C.accent}` },
   muted: { color: C.inkDim, fontSize: 14, padding: '40px 0', textAlign: 'center' },
   sectionLabel: { fontSize: 12, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', color: C.inkFaint, margin: '18px 0 10px' },
   list: { display: 'flex', flexDirection: 'column', gap: 10 },
