@@ -16,7 +16,7 @@ function db() {
 
 export type CampaignStatus = 'active' | 'scheduled' | 'expired' | 'paused'
 
-export type CampaignKind = 'standard' | 'frequency' | 'item_percent' | 'free_delivery' | 'bogo'
+export type CampaignKind = 'standard' | 'frequency' | 'item_percent' | 'free_delivery' | 'bogo' | 'free_item'
 
 export interface Campaign {
   id: string
@@ -244,7 +244,10 @@ export function saveCampaignError(reason: string | undefined): string {
     case 'bad_budget':    return 'El presupuesto debe ser mayor que 0.'
     case 'bad_kind':      return 'Tipo de campaña no válido.'
     case 'scope_required': return 'Elige a qué platos se aplica (marca, categoría o platos).'
+    case 'min_required':    return 'Pon el mínimo del pedido para el regalo (“desde X €”).'
+    case 'gift_item_required': return 'Elige exactamente un plato de regalo.'
     case 'free_delivery_exists': return 'Ya tienes un envío gratis automático. Edítalo en lugar de crear otro.'
+    case 'free_item_exists': return 'Ya tienes un plato de regalo automático. Edítalo en lugar de crear otro.'
     case 'system':        return 'Esta campaña es de sistema: edítala en Diseño de la tienda.'
     case 'not_found':     return 'La campaña ya no existe.'
     default:              return 'No se pudo guardar. Inténtalo de nuevo.'

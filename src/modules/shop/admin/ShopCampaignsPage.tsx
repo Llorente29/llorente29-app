@@ -71,6 +71,7 @@ function kindLabel(c: Campaign): string {
     : c.kind === 'item_percent' ? 'Carta'
     : c.kind === 'free_delivery' ? 'Envío'
     : c.kind === 'bogo' ? '2x1'
+    : c.kind === 'free_item' ? 'Regalo'
     : 'Código'
 }
 
@@ -79,6 +80,7 @@ function configLine(c: Campaign): string {
   if (c.kind === 'free_delivery') parts.push('Envío gratis')
   else if (c.kind === 'item_percent') parts.push(`${promoText('percent', c.value)} en platos`)
   else if (c.kind === 'bogo') parts.push(`${bogoLabel(c.value)} en platos`)
+  else if (c.kind === 'free_item') parts.push('Plato de regalo')
   else parts.push(promoText(c.discountType, c.value))
   if (c.kind === 'frequency' && c.frequencyThreshold) parts.push(`cada ${c.frequencyThreshold} pedidos`)
   if (c.firstOrderOnly) parts.push('primer pedido')
@@ -329,6 +331,7 @@ const KIND_OPTS: { kind: CampaignKind; dt?: DiscountType; label: string; hint: s
   { kind: 'standard', dt: 'fixed', label: '€ del pedido', hint: 'Código con importe fijo' },
   { kind: 'item_percent', label: '% en platos', hint: 'Oferta de carta sobre marca/categoría/platos' },
   { kind: 'bogo', label: '2x1 / 2ª unidad', hint: 'La 2ª unidad del mismo plato con % de descuento' },
+  { kind: 'free_item', label: 'Plato de regalo', hint: 'Un plato gratis a partir de un mínimo' },
   { kind: 'free_delivery', label: 'Envío gratis', hint: 'Sin gastos de envío' },
 ]
 
@@ -373,14 +376,15 @@ function CampaignModal({ accountId, mode, source, onClose, onSaved }: {
   useEffect(() => {
     let alive = true
     getCampaignMenuTree(accountId).then((t) => { if (alive) setTree(t) })
-    if (source && (mode === 'edit' || mode === 'clone') && (source.kind === 'item_percent' || source.kind === 'bogo')) {
+    if (source && (mode === 'edit' || mode === 'clone') && (source.kind === 'item_percent' || source.kind === 'bogo' || source.kind === 'free_item')) {
       getCampaignScope(source.id).then((sc) => { if (alive) setScope(sc) })
     }
     return () => { alive = false }
   }, [accountId, source, mode])
 
   const isStd = kind === 'standard', isItem = kind === 'item_percent', isFree = kind === 'free_delivery', isBogo = kind === 'bogo'
-  const usesScope = isItem || isBogo   // item_percent y bogo comparten el picker de alcance
+  const isFreeItem = kind === 'free_item'
+  const usesScope = isItem || isBogo   // item_percent y bogo comparten el picker de alcance (multi)
 
   const affected: TreeItem[] = useMemo(() => {
     if (!tree || !usesScope) return []
@@ -500,7 +504,7 @@ function CampaignModal({ accountId, mode, source, onClose, onSaved }: {
       code: isStd ? code : null,
       discountType: isStd ? discountType : undefined,
       value: isStd || isItem || isBogo ? value : undefined,
-      minSubtotal: (isStd || isFree) ? minSubtotal : null,
+      minSubtotal: (isStd || isFree || isFreeItem) ? minSubtotal : null,
       startsAt: localToIso(startsAt),
       endsAt: localToIso(endsAt),
       maxRedemptions,
@@ -509,7 +513,7 @@ function CampaignModal({ accountId, mode, source, onClose, onSaved }: {
       timeFrom: timeFrom || null,
       timeTo: timeTo || null,
       budgetMax,
-      scope: usesScope ? scope : undefined,
+      scope: usesScope || isFreeItem ? scope : undefined,
     })
     setSaving(false)
     if (!res.ok) { setError(saveCampaignError(res.reason)); return }
@@ -675,7 +679,44 @@ function CampaignModal({ accountId, mode, source, onClose, onSaved }: {
             </div>
           )}
 
-          {(usesScope || isFree) && (
+          {isFreeItem && (
+            <>
+              <div style={s.field}>
+                <label style={s.label}>Regalo desde <span style={s.opt}>(mínimo del pedido)</span></label>
+                <div style={s.valueRow}>
+                  <input type="number" min={0} value={minSubtotal ?? ''} placeholder="15" onChange={(e) => setMinSubtotal(e.target.value === '' ? null : (parseFloat(e.target.value) || 0))} style={s.input} />
+                  <span style={s.unit}>€</span>
+                </div>
+              </div>
+              <label style={s.label}>¿Qué plato de regalo? <span style={s.opt}>(uno)</span></label>
+              <div style={s.brandChips}>
+                <button type="button" style={{ ...s.brandChip, ...(brandFilter === 'all' ? s.brandChipOn : {}) }} onClick={() => setBrandFilter('all')}>Todas las marcas</button>
+                {tree?.brands.map((b) => (
+                  <button key={b.id} type="button" style={{ ...s.brandChip, ...(brandFilter === b.id ? s.brandChipOn : {}) }} onClick={() => setBrandFilter(b.id)}>{b.name}</button>
+                ))}
+              </div>
+              <input style={{ ...s.input, marginTop: 8 }} value={searchQ} onChange={(e) => setSearchQ(e.target.value)} placeholder="Busca el plato de regalo…" />
+              <div style={s.pickBody}>
+                {(searchDeb.trim().length >= 2 ? results : (curBrand ? flat.items.filter((f) => f.brandId === curBrand.id) : [])).map((f) => {
+                  const on = scope.some((x) => x.type === 'item' && x.id === f.item.id)
+                  return (
+                    <label key={f.item.id} style={s.scRow}>
+                      <input type="radio" name="fv-gift" checked={on} onChange={() => setScope([{ type: 'item', id: f.item.id }])} style={s.checkBox} />
+                      <span style={s.pickName}>{f.item.name}</span>
+                      <span style={s.scHint}>{f.brandName} · {eur(f.item.price)}</span>
+                    </label>
+                  )
+                })}
+                {searchDeb.trim().length < 2 && !curBrand && <div style={s.pickEmpty}>Elige una marca o busca el plato de regalo.</div>}
+              </div>
+              {scope[0]?.type === 'item' && (() => {
+                const g = flat.items.find((x) => x.item.id === scope[0].id)
+                return g ? <div style={s.summaryWrap}><span style={s.summaryChip}>🎁 Regalo: {g.item.name} · {eur(g.item.price)}</span></div> : null
+              })()}
+            </>
+          )}
+
+          {(usesScope || isFree || isFreeItem) && (
             <>
               <label style={s.label}>Días <span style={s.opt}>(vacío = todos)</span></label>
               <div style={s.wdRow}>
