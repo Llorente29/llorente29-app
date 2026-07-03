@@ -493,6 +493,10 @@ function AddressesCard({ slug, addresses, onChanged }: { slug: string; addresses
   const [showHits, setShowHits] = useState(false)
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null)
   const debounceRef = useRef<number | null>(null)
+  // Anti-autofill de Chrome (tapa las sugerencias): name/id aleatorios sin semántica
+  // de dirección + autoComplete señuelo + readOnly que se quita al foco.
+  const [addrRoLock, setAddrRoLock] = useState(true)
+  const [addrFieldName] = useState(() => `fvq-${Math.random().toString(36).slice(2, 10)}`)
 
   function reset(v: { label: string; address: string; detail: string; isDefault: boolean; coords: { lat: number; lng: number } | null }) {
     setLabel(v.label); setAddress(v.address); setDetail(v.detail); setIsDefault(v.isDefault); setCoords(v.coords)
@@ -575,9 +579,13 @@ function AddressesCard({ slug, addresses, onChanged }: { slug: string; addresses
               style={S.input}
               value={address}
               onChange={(e) => { setAddress(e.target.value); setCoords(null) }}
-              onFocus={() => hits.length > 0 && setShowHits(true)}
-              placeholder="Dirección (elige una sugerencia)"
-              autoComplete="off"
+              onFocus={() => { setAddrRoLock(false); if (hits.length > 0) setShowHits(true) }}
+              placeholder="Escribe y elige una sugerencia"
+              name={addrFieldName}
+              id={addrFieldName}
+              autoComplete={addrFieldName}
+              readOnly={addrRoLock}
+              spellCheck={false}
             />
             {showHits && hits.length > 0 && (
               <ul style={S.hits}>
@@ -692,7 +700,7 @@ const S: Record<string, React.CSSProperties> = {
   emailNote: { fontSize: 11.5, color: C.inkFaint, marginTop: 6 },
   rowEnd: { display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 12, marginTop: 16 },
   profileMsg: { fontSize: 13, fontWeight: 700, color: C.green },
-  hits: { position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20, listStyle: 'none', margin: '4px 0 0', padding: 0, border: `1px solid ${C.line}`, borderRadius: 12, background: '#fff', overflow: 'hidden', boxShadow: '0 8px 24px rgba(0,0,0,.12)' },
+  hits: { position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, listStyle: 'none', margin: '4px 0 0', padding: 0, border: `1px solid ${C.line}`, borderRadius: 12, background: '#fff', overflow: 'hidden', boxShadow: '0 8px 24px rgba(0,0,0,.12)' },
   hit: { padding: '10px 13px', fontSize: 13, cursor: 'pointer', borderBottom: `1px solid ${C.line}` },
 
   addrEmpty: { fontSize: 13, color: C.inkDim, lineHeight: 1.5, marginBottom: 12 },

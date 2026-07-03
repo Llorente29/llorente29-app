@@ -135,6 +135,10 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
   const [query, setQuery] = useState('')
   const [hits, setHits] = useState<GeocodeHit[]>([])
   const [showHits, setShowHits] = useState(false)
+  // Anti-autofill de Chrome (que tapa las sugerencias de Mapbox): name/id aleatorios
+  // sin semántica de dirección + autoComplete señuelo + readOnly que se quita al foco.
+  const [addrRoLock, setAddrRoLock] = useState(true)
+  const [addrFieldName] = useState(() => `fvq-${Math.random().toString(36).slice(2, 10)}`)
   const [chosen, setChosen] = useState<GeocodeHit | null>(null)
   const [detail, setDetail] = useState('')
   const [notes, setNotes] = useState('')
@@ -814,9 +818,13 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
                       style={s.addrInput}
                       value={query}
                       onChange={(e) => { setQuery(e.target.value); setChosen(null); setCheck(null) }}
-                      onFocus={() => hits.length > 0 && setShowHits(true)}
-                      placeholder="Empieza a escribir tu dirección…"
-                      autoComplete="off"
+                      onFocus={() => { setAddrRoLock(false); if (hits.length > 0) setShowHits(true) }}
+                      placeholder="Escribe y elige una sugerencia"
+                      name={addrFieldName}
+                      id={addrFieldName}
+                      autoComplete={addrFieldName}
+                      readOnly={addrRoLock}
+                      spellCheck={false}
                     />
                   </div>
                   {showHits && hits.length > 0 && (
@@ -1265,7 +1273,7 @@ const s: Record<string, React.CSSProperties> = {
   modeOptOn: { background: '#fff', color: C.ink, boxShadow: '0 1px 3px rgba(0,0,0,.08)' },
 
   input: { width: '100%', border: `1.5px solid ${C.lineInput}`, borderRadius: 12, padding: '11px 14px', fontSize: 14, color: C.ink, background: '#fff', boxSizing: 'border-box' },
-  hits: { position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20, listStyle: 'none', margin: '4px 0 0', padding: 0, border: `1px solid ${C.lineInput}`, borderRadius: 12, background: '#fff', overflow: 'hidden', boxShadow: '0 8px 24px rgba(0,0,0,.12)' },
+  hits: { position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 60, listStyle: 'none', margin: '4px 0 0', padding: 0, border: `1px solid ${C.lineInput}`, borderRadius: 12, background: '#fff', overflow: 'hidden', boxShadow: '0 8px 24px rgba(0,0,0,.12)' },
   hit: { padding: '11px 14px', fontSize: 13.5, cursor: 'pointer', borderBottom: `1px solid ${C.line}` },
   hitDot: { color: C.accent, marginRight: 8, fontSize: 10 },
 
