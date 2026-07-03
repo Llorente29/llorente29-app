@@ -15,6 +15,7 @@ import {
   getCampaignsOverview, getCampaignMenuTree,
   type CampaignsOverview, type CampaignKind, type TreeBrand,
 } from '@/modules/shop/admin/campaignService'
+import KpiCard from '@/modules/shop/admin/KpiCard'
 
 const C = {
   surface: '#FFFFFF', ink: '#16140F', inkDim: '#6E6960', inkFaint: '#8A857C',
@@ -131,12 +132,12 @@ export default function CampaignsOverviewTab({ accountId, hasCampaigns, onCreate
 
           {/* HERO — 6 KPIs */}
           <div style={s.heroGrid}>
-            <Kpi label="Vendido con oferta" value={eur0(data.soldEur)} tone="ink" />
-            <Kpi label="Invertido" value={eur0(data.invested)} tone="ink" />
-            <Kpi label="Margen real" value={data.marginReal != null ? eur0(data.marginReal) : '—'} tone="green" />
-            <Kpi label="ROI global" value={roiText(data.roi)} color={roiColor(data.roi)} />
-            <Kpi label="Clientes nuevos" value={String(data.newCustomers)} tone="ink" sub="por bienvenida" />
-            <Kpi label="Pedidos con oferta" value={`${pctOffer}%`} tone="ink" sub={`${data.offerOrders} de ${data.totalOrders}`} />
+            <KpiCard label="Vendido con oferta" value={eur0(data.soldEur)} />
+            <KpiCard label="Invertido" value={eur0(data.invested)} />
+            <KpiCard label="Margen real" value={data.marginReal != null ? eur0(data.marginReal) : '—'} valueColor={C.greenDeep} />
+            <KpiCard label="ROI global" value={roiText(data.roi)} valueColor={roiColor(data.roi)} />
+            <KpiCard label="Clientes nuevos" value={String(data.newCustomers)} sub="por bienvenida" />
+            <KpiCard label="Pedidos con oferta" value={`${pctOffer}%`} sub={`${data.offerOrders} de ${data.totalOrders}`} />
           </div>
 
           {data.marginMissing > 0 && (
@@ -213,18 +214,6 @@ export default function CampaignsOverviewTab({ accountId, hasCampaigns, onCreate
   )
 }
 
-function Kpi({ label, value, sub, tone, color }: { label: string; value: string; sub?: string; tone?: 'ink' | 'green'; color?: string }) {
-  const s = styles
-  const c = color ?? (tone === 'green' ? C.greenDeep : C.ink)
-  return (
-    <div style={s.kpi}>
-      <div style={s.kpiLabel}>{label}</div>
-      <div style={{ ...s.kpiValue, color: c }}>{value}</div>
-      {sub && <div style={s.kpiSub}>{sub}</div>}
-    </div>
-  )
-}
-
 const styles: Record<string, CSSProperties> = {
   filters: { display: 'flex', flexDirection: 'column', gap: 9, marginBottom: 18 },
   chipRow: { display: 'flex', gap: 7, flexWrap: 'wrap', alignItems: 'center' },
@@ -235,10 +224,6 @@ const styles: Record<string, CSSProperties> = {
   headline: { fontSize: 15, color: C.ink, marginBottom: 14, lineHeight: 1.5 },
 
   heroGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 12 },
-  kpi: { background: C.surface, border: `1px solid ${C.line}`, borderRadius: 16, padding: '16px 18px' },
-  kpiLabel: { fontSize: 11.5, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: C.inkFaint },
-  kpiValue: { fontSize: 30, fontWeight: 800, letterSpacing: '-.02em', marginTop: 5, lineHeight: 1.05 },
-  kpiSub: { fontSize: 12, color: C.inkDim, marginTop: 3 },
   honesty: { fontSize: 12, color: C.amber, background: C.amberBg, borderRadius: 10, padding: '7px 12px', marginBottom: 16, display: 'inline-block' },
 
   card: { background: C.surface, border: `1px solid ${C.line}`, borderRadius: 16, padding: '16px 18px', marginBottom: 16 },
