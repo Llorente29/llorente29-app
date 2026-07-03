@@ -422,13 +422,15 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
   }, [email, marketingConsent, mode, cart.lines.length, cart.locationId, couponCode, deliveryFee, locations.length])
 
   function applyCouponCode() {
-    const code = couponInput.trim()
+    const code = couponInput.trim().toUpperCase()
     if (!code || couponBusy) return
     setCouponCode(code)
     refreshCoupon(code)
   }
   function removeCoupon() {
-    setCouponCode(''); setCouponInput(''); setShowCouponField(false)
+    // Quitar el código: vuelve el estado normal (reaparece la bienvenida) y dejamos
+    // el campo abierto por si quiere probar otro (punto 3 del fix G1).
+    setCouponCode(''); setCouponInput(''); setShowCouponField(true)
     refreshCoupon('')
   }
 
@@ -886,7 +888,9 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
 
             {/* Bienvenida APLICADA (correo + casilla del club marcada). */}
             {/* Bienvenida APLICADA (correo + casilla del Club marcada) — verde. */}
-            {coupon?.isWelcome && coupon.applied && (
+            {/* Mientras haya un código puesto, el servidor prioriza el código: ocultamos
+                la bienvenida para no competir con dos mensajes de promo (G1 fix). */}
+            {!couponCode && coupon?.isWelcome && coupon.applied && (
               <div style={s.welcomeCardGreen}>
                 <span style={s.welcomeChipGreen} aria-hidden>{'\uD83C\uDF89'}</span>
                 <div style={s.welcomeCol}>
@@ -898,7 +902,7 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
             )}
             {/* Falta el contacto — dorado (regalo esperándote). El premio manda; el correo
                 no se nombra (vive en el campo), la casilla solo cuando es el paso que queda. */}
-            {coupon?.isWelcome && !coupon.applied && coupon.reason === 'needs_contact' && (
+            {!couponCode && coupon?.isWelcome && !coupon.applied && coupon.reason === 'needs_contact' && (
               <div style={s.welcomeCardGold}>
                 {!email.trim() ? (
                   <>
@@ -924,7 +928,7 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
             {/* Bienvenida existe pero no aplica por estar ya usada o agotada: nota honesta,
                 cálida. Cubre not_first + per_customer + exhausted (antes solo not_first
                 → la tarjeta desaparecía en per_customer, hueco de pintado). */}
-            {coupon?.isWelcome && !coupon.applied &&
+            {!couponCode && coupon?.isWelcome && !coupon.applied &&
               (coupon.reason === 'not_first' || coupon.reason === 'per_customer' || coupon.reason === 'exhausted') && (
               <div style={s.welcomeNote}>
                 <span>{welcomeNoteMsg(coupon.reason)}</span>
@@ -932,12 +936,12 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
             )}
 
             {/* Cupón con código (manual) */}
-            {couponDiscount > 0 && !coupon?.isWelcome ? (
+            {couponCode && coupon?.applied && !coupon?.isWelcome ? (
               <div style={s.welcomeBanner}>
-                <span>{'\u2713'} Cupón <strong>{coupon?.code}</strong> aplicado.</span>
-                <button type="button" style={s.couponRemove} onClick={removeCoupon}>Quitar</button>
+                <span>{'\u2713'} <strong>{coupon.code}</strong> aplicado {'·'} {'−'}{eur(coupon.discount ?? 0)}</span>
+                <button type="button" style={s.couponRemoveX} onClick={removeCoupon} aria-label="Quitar cupón">{'✕'}</button>
               </div>
-            ) : !coupon?.isWelcome && (
+            ) : (
               <div style={{ marginTop: 12 }}>
                 {!showCouponField ? (
                   <button type="button" style={s.couponToggle} onClick={() => setShowCouponField(true)}>
@@ -951,7 +955,7 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
                         value={couponInput}
                         onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
                         onKeyDown={(e) => { if (e.key === 'Enter') applyCouponCode() }}
-                        placeholder="Código de cupón"
+                        placeholder="Código"
                         autoCapitalize="characters"
                       />
                       <button
@@ -1248,6 +1252,7 @@ const s: Record<string, React.CSSProperties> = {
   couponInput: { flex: 1, border: `1.5px solid ${C.lineInput}`, borderRadius: 10, padding: '10px 12px', fontSize: 14, color: C.ink, background: '#fff', boxSizing: 'border-box' as const, textTransform: 'uppercase' as const },
   couponApply: { border: 'none', background: C.ink, color: '#fff', borderRadius: 10, padding: '0 18px', fontSize: 14, fontWeight: 700, cursor: 'pointer' },
   couponRemove: { marginLeft: 'auto', background: 'none', border: 'none', color: C.greenDeep, fontSize: 12.5, fontWeight: 700, textDecoration: 'underline', cursor: 'pointer' },
+  couponRemoveX: { marginLeft: 'auto', background: 'none', border: 'none', color: C.greenDeep, fontSize: 15, fontWeight: 800, lineHeight: 1, cursor: 'pointer', padding: 0 },
   couponError: { fontSize: 12.5, color: C.red, marginTop: 8, fontWeight: 600 },
   modalWrap: { position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(20,14,10,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18 },
   modalCard: { background: '#fff', borderRadius: 18, maxWidth: 560, width: '100%', maxHeight: '82vh', overflowY: 'auto', padding: '24px 26px', boxShadow: '0 24px 60px rgba(0,0,0,.3)' },
