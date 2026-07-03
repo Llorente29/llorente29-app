@@ -527,7 +527,7 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
       <div style={{ ...s.sumRow, color: C.greenDeep, alignItems: 'center' }}>
         <span>{coupon?.label ?? 'Cupón'}{coupon?.code ? ` (${coupon.code})` : ''}</span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}>
-          -{eur(couponDiscount)}
+          {coupon?.freeDelivery ? 'Envío gratis' : `-${eur(couponDiscount)}`}
           <button type="button" style={s.couponRemoveX} onClick={removeCoupon} aria-label="Quitar cupón">{'✕'}</button>
         </span>
       </div>
@@ -583,7 +583,7 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
       {totals.discount > 0 && <div style={{ ...s.sumRow, color: C.green }}><span>Descuento</span><span>-{eur(totals.discount)}</span></div>}
       {/* Descuento AUTOMÁTICO (bienvenida/fidelidad): línea propia. El cupón de
           CÓDIGO tiene su fila tappable abajo (couponSummary). */}
-      {couponDiscount > 0 && !couponCode && (
+      {couponDiscount > 0 && !couponCode && !coupon?.freeDelivery && (
         <div style={{ ...s.sumRow, color: C.green }}>
           <span>{coupon?.isWelcome ? 'Bienvenida' : (coupon?.label ?? 'Descuento')}</span>
           <span>-{eur(couponDiscount)}</span>
@@ -591,7 +591,13 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
       )}
       <div style={s.sumRow}>
         <span>Gastos de envío</span>
-        <span>{mode === 'pickup' ? '-' : (check?.ok ? eur(deliveryFee) : 'Indica tu dirección')}</span>
+        <span>
+          {mode === 'pickup'
+            ? '-'
+            : coupon?.freeDelivery && coupon.applied && deliveryFee > 0
+              ? <span style={{ color: C.green, fontWeight: 800 }}>¡Gratis!</span>
+              : (check?.ok ? eur(deliveryFee) : 'Indica tu dirección')}
+        </span>
       </div>
       {couponSummary}
     </>

@@ -439,15 +439,18 @@ function FreqProgress({ p }: { p: CouponProgress }) {
 
 // ── Tarjeta de bono DORADA (disponible) ─────────────────────────────────────
 function GoldCouponCard({ c, onUse }: { c: AccountCouponAvailable; onUse: () => void }) {
+  const isFree = c.kind === 'free_delivery'
   const eyebrow = c.isFrequency ? '¡CONSEGUIDO!' : 'TE ESPERA'
-  const sub = c.isFrequency ? `${c.name} · tu recompensa por fidelidad` : `${c.name} · en tu próximo pedido`
+  const sub = isFree ? `${c.name} · en tu próximo pedido a domicilio`
+    : c.isFrequency ? `${c.name} · tu recompensa por fidelidad`
+    : `${c.name} · en tu próximo pedido`
   return (
     <div style={S.goldCard}>
       <div style={S.goldRow}>
-        <span style={S.goldChip} aria-hidden>{c.isFrequency ? '🎉' : '🎁'}</span>
+        <span style={S.goldChip} aria-hidden>{isFree ? '🛵' : c.isFrequency ? '🎉' : '🎁'}</span>
         <div style={{ minWidth: 0 }}>
           <div style={S.goldEyebrow}>{eyebrow}</div>
-          <div style={S.goldBig}>Un {promoValue(c)} de regalo</div>
+          <div style={S.goldBig}>{isFree ? 'Envío gratis' : `Un ${promoValue(c)} de regalo`}</div>
           <div style={S.goldSub}>{sub}</div>
           {c.endsAt && <div style={S.goldExpiry}>Caduca el {fmtDate(c.endsAt)}</div>}
         </div>
@@ -467,7 +470,7 @@ function LockedCouponCard({ c }: { c: AccountCouponAvailable }) {
         <span style={S.lockedChip} aria-hidden>{'🎁'}</span>
         <div style={{ minWidth: 0 }}>
           <div style={S.lockedEyebrow}>BONO</div>
-          <div style={S.lockedBig}>Un {promoValue(c)} de regalo</div>
+          <div style={S.lockedBig}>{c.kind === 'free_delivery' ? 'Envío gratis' : `Un ${promoValue(c)} de regalo`}</div>
           <div style={S.lockedSub}>{c.name}</div>
         </div>
       </div>

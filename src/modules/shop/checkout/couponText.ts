@@ -29,6 +29,8 @@ export function couponReasonMsg(reason: string): string {
     case 'per_customer':  return 'Ya has usado este cupón.'
     case 'needs_contact': return 'Deja tu email y únete al club para usar este cupón.'
     case 'needs_consent': return 'Únete al Club (activa las ofertas por email) para usar este cupón.'
+    case 'pickup_only':   return 'El envío gratis es solo para pedidos a domicilio.'
+    case 'no_delivery':   return 'Este pedido ya no tiene gastos de envío.'
     default:              return 'Cupón no válido.'
   }
 }

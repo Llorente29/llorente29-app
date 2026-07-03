@@ -55,6 +55,7 @@ export interface AccountCouponUsed {
   couponId: string
   name: string
   code: string | null
+  kind: string
   discountType: 'percent' | 'fixed' | null
   discountValue: number | null
   discountAmount: number
@@ -65,6 +66,7 @@ export interface AccountCouponAvailable {
   couponId: string
   name: string
   code: string | null
+  kind: string                  // standard | frequency | free_delivery (item_percent no llega aquí)
   discountType: 'percent' | 'fixed' | null
   discountValue: number | null
   minSubtotal: number | null
@@ -261,6 +263,7 @@ export async function getCustomerCoupons(slug: string): Promise<CustomerCoupons>
         couponId: c.couponId,
         name: c.name ?? '',
         code: c.code ?? null,
+        kind: c.kind ?? 'standard',
         discountType: (c.discountType ?? null) as 'percent' | 'fixed' | null,
         discountValue: num(c.discountValue),
         minSubtotal: num(c.minSubtotal),
@@ -275,6 +278,7 @@ export async function getCustomerCoupons(slug: string): Promise<CustomerCoupons>
         couponId: c.couponId,
         name: c.name ?? '',
         code: c.code ?? null,
+        kind: c.kind ?? 'standard',
         discountType: (c.discountType ?? null) as 'percent' | 'fixed' | null,
         discountValue: num(c.discountValue),
         discountAmount: c.discountAmount != null ? Number(c.discountAmount) : 0,
