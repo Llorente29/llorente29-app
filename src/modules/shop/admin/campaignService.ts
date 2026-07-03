@@ -204,6 +204,30 @@ export async function toggleCampaign(accountId: string, id: string, active: bool
   }
 }
 
+// Eliminar una campaña de código/oferta. El servidor rechaza sistema y, si tiene
+// canjes, devuelve reason 'has_redemptions' (el histórico es dato: solo se pausa).
+export async function deleteCampaign(accountId: string, id: string): Promise<{ ok: boolean; reason?: string }> {
+  try {
+    const { data, error } = await db().rpc('delete_campaign', { p_account: accountId, p_id: id })
+    if (error) return { ok: false, reason: error.message }
+    if (!data || data.ok !== true) return { ok: false, reason: data?.reason ?? 'error' }
+    return { ok: true }
+  } catch (e: any) {
+    return { ok: false, reason: e?.message ?? 'error' }
+  }
+}
+
+// Mensaje legible de por qué NO se pudo eliminar.
+export function deleteCampaignError(reason: string | undefined): string {
+  switch (reason) {
+    case 'has_redemptions': return 'Esta campaña tiene canjes: su rendimiento es historial y no se borra. Puedes pausarla.'
+    case 'system':          return 'Las campañas de sistema no se eliminan: se configuran en Diseño de la tienda.'
+    case 'not_found':       return 'La campaña ya no existe.'
+    case 'forbidden':       return 'No tienes permiso sobre esta campaña.'
+    default:                return 'No se pudo eliminar. Inténtalo de nuevo.'
+  }
+}
+
 // Mensaje legible de por qué falló un guardado.
 export function saveCampaignError(reason: string | undefined): string {
   switch (reason) {

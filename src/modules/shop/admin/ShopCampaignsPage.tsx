@@ -15,6 +15,7 @@ import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { type DiscountType } from '@/modules/shop/admin/couponAdminService'
 import {
   listCampaigns, saveCampaign, toggleCampaign, saveCampaignError,
+  deleteCampaign, deleteCampaignError,
   getCampaignMenuTree, getCampaignScope, createMirrorItem,
   type Campaign, type CampaignStatus, type CampaignKind, type ScopeRef,
   type CampaignMenuTree, type TreeItem,
@@ -88,12 +89,42 @@ function configLine(c: Campaign): string {
   return parts.join(' · ')
 }
 
+// ── Filtros de la lista ─────────────────────────────────────────────────────
+type TypeFilter = 'all' | 'order' | 'item' | 'free' | 'system'
+type StatusFilter = 'all' | CampaignStatus
+const TYPE_FILTERS: { key: TypeFilter; label: string }[] = [
+  { key: 'all', label: 'Todas' },
+  { key: 'order', label: '% pedido' },
+  { key: 'item', label: '% platos' },
+  { key: 'free', label: 'Envío' },
+  { key: 'system', label: 'Sistema' },
+]
+const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
+  { key: 'all', label: 'Todos' },
+  { key: 'active', label: 'Activas' },
+  { key: 'paused', label: 'Pausadas' },
+  { key: 'scheduled', label: 'Programadas' },
+  { key: 'expired', label: 'Caducadas' },
+]
+function matchType(c: Campaign, t: TypeFilter): boolean {
+  if (t === 'all') return true
+  if (t === 'system') return c.isSystem
+  if (c.isSystem) return false
+  if (t === 'order') return c.kind === 'standard'
+  if (t === 'item') return c.kind === 'item_percent'
+  if (t === 'free') return c.kind === 'free_delivery'
+  return true
+}
+
 export default function ShopCampaignsPage() {
   const { activeAccountId: accountId } = useActiveAccount()
   const navigate = useNavigate()
   const [rows, setRows] = useState<Campaign[] | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [modal, setModal] = useState<null | { mode: 'new' | 'edit' | 'clone'; c?: Campaign }>(null)
+  const [q, setQ] = useState('')
+  const [typeF, setTypeF] = useState<TypeFilter>('all')
+  const [statusF, setStatusF] = useState<StatusFilter>('all')
 
   async function refresh() {
     if (!accountId) return
@@ -110,8 +141,26 @@ export default function ShopCampaignsPage() {
     refresh()
   }
 
-  const system = useMemo(() => (rows ?? []).filter((c) => c.isSystem), [rows])
-  const code = useMemo(() => (rows ?? []).filter((c) => !c.isSystem), [rows])
+  async function onDelete(c: Campaign): Promise<{ ok: boolean; reason?: string }> {
+    if (!accountId) return { ok: false, reason: 'error' }
+    const res = await deleteCampaign(accountId, c.id)
+    if (res.ok) refresh()
+    return res
+  }
+
+  const filtersActive = q.trim() !== '' || typeF !== 'all' || statusF !== 'all'
+  function clearFilters() { setQ(''); setTypeF('all'); setStatusF('all') }
+
+  const filtered = useMemo(() => {
+    const needle = q.trim().toLowerCase()
+    return (rows ?? []).filter((c) =>
+      matchType(c, typeF) &&
+      (statusF === 'all' || c.status === statusF) &&
+      (needle === '' || c.name.toLowerCase().includes(needle) || (c.code ?? '').toLowerCase().includes(needle))
+    )
+  }, [rows, q, typeF, statusF])
+  const system = useMemo(() => filtered.filter((c) => c.isSystem), [filtered])
+  const code = useMemo(() => filtered.filter((c) => !c.isSystem), [filtered])
   const s = styles
 
   return (
@@ -126,8 +175,24 @@ export default function ShopCampaignsPage() {
 
       {rows === null ? (
         <div style={s.muted}>Cargando campañas…</div>
+      ) : rows.length === 0 ? (
+        <div style={s.empty}>Aún no hay campañas. Crea una con “+ Nueva campaña”.</div>
       ) : (
         <>
+          <div style={s.toolbar}>
+            <input style={s.search} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por nombre o código…" />
+            <div style={s.chipRow}>
+              {TYPE_FILTERS.map((t) => (
+                <button key={t.key} type="button" style={{ ...s.filterChip, ...(typeF === t.key ? s.filterChipOn : {}) }} onClick={() => setTypeF(t.key)}>{t.label}</button>
+              ))}
+            </div>
+            <div style={s.chipRow}>
+              {STATUS_FILTERS.map((t) => (
+                <button key={t.key} type="button" style={{ ...s.filterChip, ...(statusF === t.key ? s.filterChipOn : {}) }} onClick={() => setStatusF(t.key)}>{t.label}</button>
+              ))}
+            </div>
+          </div>
+
           {system.length > 0 && (
             <>
               <div style={s.sectionLabel}>Del sistema</div>
@@ -143,13 +208,18 @@ export default function ShopCampaignsPage() {
 
           <div style={s.sectionLabel}>Tus campañas</div>
           {code.length === 0 ? (
-            <div style={s.empty}>Aún no hay campañas propias. Crea una con “+ Nueva campaña”.</div>
+            <div style={s.empty}>
+              {filtersActive
+                ? <>Ninguna de tus campañas coincide con el filtro. <button type="button" style={s.linkBtn} onClick={clearFilters}>Quitar filtros</button></>
+                : 'Aún no hay campañas propias. Crea una con “+ Nueva campaña”.'}
+            </div>
           ) : (
             <div style={s.list}>
               {code.map((c) => (
                 <CampaignRow key={c.id} c={c} busy={busyId === c.id}
                   onEdit={() => setModal({ mode: 'edit', c })}
                   onClone={() => setModal({ mode: 'clone', c })}
+                  onDelete={() => onDelete(c)}
                   onToggle={() => onToggle(c)} />
               ))}
             </div>
@@ -171,44 +241,77 @@ export default function ShopCampaignsPage() {
 }
 
 // ── Fila de campaña ─────────────────────────────────────────────────────────
-function CampaignRow({ c, busy, onConfigure, onEdit, onClone, onToggle }: {
+function CampaignRow({ c, busy, onConfigure, onEdit, onClone, onDelete, onToggle }: {
   c: Campaign; busy: boolean
-  onConfigure?: () => void; onEdit?: () => void; onClone?: () => void; onToggle: () => void
+  onConfigure?: () => void; onEdit?: () => void; onClone?: () => void
+  onDelete?: () => Promise<{ ok: boolean; reason?: string }>; onToggle: () => void
 }) {
   const st = STATUS_META[c.status]
   const s = styles
+  const [confirming, setConfirming] = useState(false)
+  const [delBusy, setDelBusy] = useState(false)
+  const [delNote, setDelNote] = useState<string | null>(null)
+
+  async function confirmDelete() {
+    if (!onDelete) return
+    setDelBusy(true); setDelNote(null)
+    const res = await onDelete()
+    setDelBusy(false)
+    // Si ok, el padre refresca y la fila desaparece. Si no, explicamos por qué
+    // (típicamente: tiene canjes → solo se puede pausar).
+    if (!res.ok) { setDelNote(deleteCampaignError(res.reason)); setConfirming(false) }
+  }
+
   return (
     <div style={s.row}>
-      <div style={s.rowMain}>
-        <div style={s.rowTop}>
-          <span style={s.rowName}>{c.name}</span>
-          <span style={{ ...s.badge, ...(c.isSystem ? s.badgeSystem : s.badgeCode) }}>{kindLabel(c)}</span>
-          <span style={{ ...s.badge, ...st.style }}>{st.label}</span>
+      <div style={s.rowInner}>
+        <div style={s.rowMain}>
+          <div style={s.rowTop}>
+            <span style={s.rowName}>{c.name}</span>
+            <span style={{ ...s.badge, ...(c.isSystem ? s.badgeSystem : s.badgeCode) }}>{kindLabel(c)}</span>
+            <span style={{ ...s.badge, ...st.style }}>{st.label}</span>
+          </div>
+          <div style={s.rowConfig}>{configLine(c)}</div>
         </div>
-        <div style={s.rowConfig}>{configLine(c)}</div>
+
+        <div style={s.rowPerf}>
+          <div style={s.perfMain}>{c.redemptions} {c.redemptions === 1 ? 'canje' : 'canjes'}</div>
+          <div style={s.perfSub}>
+            <span style={{ color: c.discounted > 0 ? C.ink : C.inkFaint }}>−{eur(c.discounted)}</span>
+            {c.avgMarginPct != null && <span style={{ color: C.greenDeep }}> · margen {pct(c.avgMarginPct)}</span>}
+          </div>
+        </div>
+
+        <div style={s.rowActions}>
+          {c.isSystem ? (
+            <button style={s.actBtn} onClick={onConfigure}>Configurar</button>
+          ) : (
+            <>
+              <button style={s.actBtn} onClick={onEdit}>Editar</button>
+              <button style={s.actBtn} onClick={onClone}>Clonar</button>
+            </>
+          )}
+          <button style={{ ...s.actBtn, ...(busy ? s.actOff : {}) }} onClick={onToggle} disabled={busy}>
+            {c.status === 'paused' ? 'Reactivar' : 'Pausar'}
+          </button>
+          {!c.isSystem && onDelete && !confirming && (
+            <button style={s.delBtn} onClick={() => { setDelNote(null); setConfirming(true) }}>Eliminar</button>
+          )}
+        </div>
       </div>
 
-      <div style={s.rowPerf}>
-        <div style={s.perfMain}>{c.redemptions} {c.redemptions === 1 ? 'canje' : 'canjes'}</div>
-        <div style={s.perfSub}>
-          <span style={{ color: c.discounted > 0 ? C.ink : C.inkFaint }}>−{eur(c.discounted)}</span>
-          {c.avgMarginPct != null && <span style={{ color: C.greenDeep }}> · margen {pct(c.avgMarginPct)}</span>}
+      {confirming && (
+        <div style={s.confirmBar}>
+          <span style={s.confirmText}>¿Eliminar «{c.name}»? Esta acción no se puede deshacer.</span>
+          <div style={s.confirmActions}>
+            <button style={s.ghostSm} onClick={() => setConfirming(false)} disabled={delBusy}>Cancelar</button>
+            <button style={{ ...s.delConfirm, ...(delBusy ? s.actOff : {}) }} onClick={confirmDelete} disabled={delBusy}>
+              {delBusy ? 'Eliminando…' : 'Eliminar definitivamente'}
+            </button>
+          </div>
         </div>
-      </div>
-
-      <div style={s.rowActions}>
-        {c.isSystem ? (
-          <button style={s.actBtn} onClick={onConfigure}>Configurar</button>
-        ) : (
-          <>
-            <button style={s.actBtn} onClick={onEdit}>Editar</button>
-            <button style={s.actBtn} onClick={onClone}>Clonar</button>
-          </>
-        )}
-        <button style={{ ...s.actBtn, ...(busy ? s.actOff : {}) }} onClick={onToggle} disabled={busy}>
-          {c.status === 'paused' ? 'Reactivar' : 'Pausar'}
-        </button>
-      </div>
+      )}
+      {delNote && <div style={s.delNote}>{delNote}</div>}
     </div>
   )
 }
@@ -252,6 +355,12 @@ function CampaignModal({ accountId, mode, source, onClose, onSaved }: {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [mirrorMsg, setMirrorMsg] = useState<string | null>(null)
+  // Picker de alcance: marca activa + buscador (debounce) + resumen desplegable.
+  const [brandFilter, setBrandFilter] = useState<string>('all')
+  const [searchQ, setSearchQ] = useState('')
+  const [searchDeb, setSearchDeb] = useState('')
+  const [summaryOpen, setSummaryOpen] = useState(false)
+  useEffect(() => { const t = setTimeout(() => setSearchDeb(searchQ), 220); return () => clearTimeout(t) }, [searchQ])
 
   useEffect(() => {
     let alive = true
@@ -283,6 +392,46 @@ function CampaignModal({ accountId, mode, source, onClose, onSaved }: {
     }
     return [...out.values()]
   }, [tree, scope, isItem])
+
+  // Carta aplanada para el buscador. El árbol completo ya viene del servidor
+  // (campaign_menu_tree, reutilizado por el impacto de margen): con ~17 marcas son
+  // unos cientos de platos → filtrar en cliente es instantáneo. Si algún día crece
+  // demasiado, se movería la búsqueda al servidor; por ahora, cliente = inmediato.
+  const flat = useMemo(() => {
+    const items: { item: TreeItem; brandId: string; brandName: string; catName: string }[] = []
+    const brandOfItem = new Map<string, string>()
+    for (const b of tree?.brands ?? [])
+      for (const c of b.categories)
+        for (const it of c.items) { items.push({ item: it, brandId: b.id, brandName: b.name, catName: c.name }); brandOfItem.set(it.id, b.id) }
+    return { items, brandOfItem }
+  }, [tree])
+
+  const results = useMemo(() => {
+    const q = searchDeb.trim().toLowerCase()
+    if (q.length < 2) return []
+    return flat.items.filter((f) => (brandFilter === 'all' || f.brandId === brandFilter) && f.item.name.toLowerCase().includes(q))
+  }, [searchDeb, brandFilter, flat])
+
+  const resultsAllSel = results.length > 0 && results.every((r) => scope.some((x) => x.type === 'item' && x.id === r.item.id))
+  const marcas = useMemo(() => new Set(affected.map((i) => flat.brandOfItem.get(i.id)).filter(Boolean)).size, [affected, flat])
+  const curBrand = brandFilter === 'all' ? null : (tree?.brands.find((b) => b.id === brandFilter) ?? null)
+
+  function refLabel(r: ScopeRef): string {
+    if (r.type === 'brand') { const b = tree?.brands.find((x) => x.id === r.id); return `Toda la marca ${b?.name ?? ''}`.trim() }
+    if (r.type === 'category') {
+      for (const b of tree?.brands ?? []) { const c = b.categories.find((x) => x.id === r.id); if (c) return `${c.name} · ${b.name}` }
+      return 'Categoría'
+    }
+    const f = flat.items.find((x) => x.item.id === r.id); return f ? `${f.item.name} · ${f.brandName}` : 'Plato'
+  }
+
+  function selectAllResults() {
+    setScope((prev) => {
+      if (resultsAllSel) { const ids = new Set(results.map((r) => r.item.id)); return prev.filter((x) => !(x.type === 'item' && ids.has(x.id))) }
+      const have = new Set(prev.filter((x) => x.type === 'item').map((x) => x.id))
+      return [...prev, ...results.filter((r) => !have.has(r.item.id)).map((r) => ({ type: 'item' as const, id: r.item.id }))]
+    })
+  }
 
   const impact = useMemo(() => {
     const floor = tree?.floorPct ?? null
@@ -429,12 +578,42 @@ function CampaignModal({ accountId, mode, source, onClose, onSaved }: {
                   <span style={s.unit}>%</span>
                 </div>
               </div>
-              <label style={s.label}>¿A qué platos? <span style={s.opt}>({affected.length} platos)</span></label>
-              <div style={s.scopeTree}>
+              <label style={s.label}>¿A qué platos?</label>
+
+              {/* Selector de marca: acota categorías/platos a una marca (o todas). */}
+              <div style={s.brandChips}>
+                <button type="button" style={{ ...s.brandChip, ...(brandFilter === 'all' ? s.brandChipOn : {}) }} onClick={() => setBrandFilter('all')}>Todas las marcas</button>
                 {tree?.brands.map((b) => (
-                  <div key={b.id} style={s.scBrand}>
-                    <label style={s.scRow}><input type="checkbox" checked={scoped({ type: 'brand', id: b.id })} onChange={() => toggleScope({ type: 'brand', id: b.id })} style={s.checkBox} /><b>{b.name}</b> <span style={s.scHint}>(toda la marca)</span></label>
-                    {b.categories.map((c) => (
+                  <button key={b.id} type="button" style={{ ...s.brandChip, ...(brandFilter === b.id ? s.brandChipOn : {}) }} onClick={() => setBrandFilter(b.id)}>{b.name}</button>
+                ))}
+              </div>
+
+              {/* Buscador de platos: cruza todas las marcas (o la activa). */}
+              <input style={{ ...s.input, marginTop: 8 }} value={searchQ} onChange={(e) => setSearchQ(e.target.value)} placeholder="Busca un plato (ej. Coca Cola)…" />
+
+              <div style={s.pickBody}>
+                {searchDeb.trim().length >= 2 ? (
+                  results.length === 0 ? (
+                    <div style={s.pickEmpty}>Sin resultados para «{searchDeb.trim()}»{brandFilter !== 'all' ? ' en esta marca' : ''}.</div>
+                  ) : (
+                    <>
+                      <div style={s.pickHead}>
+                        <span>{results.length} {results.length === 1 ? 'resultado' : 'resultados'}</span>
+                        <button type="button" style={s.pickAll} onClick={selectAllResults}>{resultsAllSel ? `Quitar los ${results.length}` : `Seleccionar los ${results.length}`}</button>
+                      </div>
+                      {results.map((f) => (
+                        <label key={f.item.id} style={s.scRow}>
+                          <input type="checkbox" checked={scoped({ type: 'item', id: f.item.id })} onChange={() => toggleScope({ type: 'item', id: f.item.id })} style={s.checkBox} />
+                          <span style={s.pickName}>{f.item.name}</span>
+                          <span style={s.scHint}>{f.brandName} · {eur(f.item.price)}{!f.item.costed ? ' · sin escandallo' : ''}</span>
+                        </label>
+                      ))}
+                    </>
+                  )
+                ) : curBrand ? (
+                  <>
+                    <label style={s.scRow}><input type="checkbox" checked={scoped({ type: 'brand', id: curBrand.id })} onChange={() => toggleScope({ type: 'brand', id: curBrand.id })} style={s.checkBox} /><b>Toda la marca {curBrand.name}</b></label>
+                    {curBrand.categories.map((c) => (
                       <div key={c.id} style={s.scCat}>
                         <label style={s.scRow}><input type="checkbox" checked={scoped({ type: 'category', id: c.id })} onChange={() => toggleScope({ type: 'category', id: c.id })} style={s.checkBox} />{c.name} <span style={s.scHint}>({c.items.length})</span></label>
                         {c.items.map((it) => (
@@ -442,9 +621,31 @@ function CampaignModal({ accountId, mode, source, onClose, onSaved }: {
                         ))}
                       </div>
                     ))}
-                  </div>
-                ))}
+                  </>
+                ) : (
+                  <div style={s.pickEmpty}>Elige una marca arriba o busca un plato para empezar.</div>
+                )}
               </div>
+
+              {/* Resumen persistente: no se pierde al cambiar de marca o buscar. */}
+              {scope.length > 0 && (
+                <div style={s.summaryWrap}>
+                  <button type="button" style={s.summaryChip} onClick={() => setSummaryOpen((v) => !v)}>
+                    {affected.length} {affected.length === 1 ? 'plato' : 'platos'} de {marcas} {marcas === 1 ? 'marca' : 'marcas'} · {summaryOpen ? 'ocultar ▲' : 'ver ▼'}
+                  </button>
+                  {summaryOpen && (
+                    <div style={s.summaryList}>
+                      {scope.map((r) => (
+                        <div key={`${r.type}:${r.id}`} style={s.summaryItem}>
+                          <span style={s.summaryLbl}>{refLabel(r)}</span>
+                          <button type="button" style={s.summaryX} onClick={() => toggleScope(r)} aria-label="Quitar">×</button>
+                        </div>
+                      ))}
+                      <button type="button" style={s.summaryClear} onClick={() => setScope([])}>Vaciar selección</button>
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           )}
 
@@ -539,7 +740,8 @@ const styles: Record<string, CSSProperties> = {
   list: { display: 'flex', flexDirection: 'column', gap: 10 },
   empty: { border: `1px dashed ${C.lineInput}`, borderRadius: 12, padding: 24, textAlign: 'center', color: C.inkDim, fontSize: 13.5 },
 
-  row: { display: 'flex', alignItems: 'center', gap: 16, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 14, padding: '14px 16px' },
+  row: { display: 'flex', flexDirection: 'column', background: C.surface, border: `1px solid ${C.line}`, borderRadius: 14, padding: '14px 16px' },
+  rowInner: { display: 'flex', alignItems: 'center', gap: 16 },
   rowMain: { flex: 1, minWidth: 0 },
   rowTop: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   rowName: { fontSize: 15, fontWeight: 800, color: C.ink, letterSpacing: '-.01em' },
@@ -553,6 +755,23 @@ const styles: Record<string, CSSProperties> = {
   rowActions: { display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 },
   actBtn: { border: `1px solid ${C.lineInput}`, background: '#fff', color: C.ink, borderRadius: 999, padding: '7px 13px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' },
   actOff: { opacity: 0.5, cursor: 'default' },
+  linkBtn: { border: 'none', background: 'none', color: C.accent, fontSize: 13.5, fontWeight: 700, cursor: 'pointer', padding: 0, textDecoration: 'underline' },
+
+  // Buscador + filtros de la lista
+  toolbar: { display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 },
+  search: { width: '100%', border: `1px solid ${C.lineInput}`, borderRadius: 10, padding: '9px 12px', fontSize: 14, color: C.ink, background: '#fff', boxSizing: 'border-box' },
+  chipRow: { display: 'flex', gap: 7, flexWrap: 'wrap' },
+  filterChip: { border: `1px solid ${C.lineInput}`, background: '#fff', color: C.inkDim, borderRadius: 999, padding: '6px 13px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' },
+  filterChipOn: { background: C.ink, color: '#fff', border: `1px solid ${C.ink}` },
+
+  // Eliminar campaña
+  delBtn: { border: `1px solid ${C.lineInput}`, background: '#fff', color: C.red, borderRadius: 999, padding: '7px 13px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' },
+  confirmBar: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginTop: 12, padding: '10px 12px', background: '#FDF3F1', border: `1px solid ${C.red}33`, borderRadius: 10 },
+  confirmText: { fontSize: 12.5, color: C.red, fontWeight: 600, lineHeight: 1.4 },
+  confirmActions: { display: 'flex', gap: 8, flexShrink: 0 },
+  ghostSm: { border: `1px solid ${C.lineInput}`, background: '#fff', color: C.ink, borderRadius: 999, padding: '7px 13px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' },
+  delConfirm: { border: 'none', background: C.red, color: '#fff', borderRadius: 999, padding: '7px 14px', fontSize: 12.5, fontWeight: 800, cursor: 'pointer' },
+  delNote: { marginTop: 10, padding: '8px 11px', background: C.amberBg, border: `1px solid ${C.amberLine}`, borderRadius: 10, fontSize: 12, color: C.amber, lineHeight: 1.4 },
 
   modalWrap: { position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(20,14,10,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18 },
   modalCard: { background: '#fff', borderRadius: 18, maxWidth: 560, width: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 60px rgba(0,0,0,.3)' },
@@ -593,13 +812,28 @@ const styles: Record<string, CSSProperties> = {
   typeOn: { border: `2px solid ${C.accent}`, background: '#FFF7F5' },
   typeLabel: { fontSize: 13.5, fontWeight: 800, color: C.ink },
   typeHint: { fontSize: 11.5, color: C.inkFaint, lineHeight: 1.3 },
-  scopeTree: { maxHeight: 260, overflowY: 'auto', border: `1px solid ${C.lineInput}`, borderRadius: 10, padding: '8px 10px', marginTop: 4 },
-  scBrand: { marginBottom: 8 },
   scCat: { marginLeft: 16 },
   scItem: { marginLeft: 16, color: C.inkDim },
   scRow: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, padding: '3px 0', cursor: 'pointer' },
   scHint: { color: C.inkFaint, fontSize: 12, fontWeight: 400 },
   checkBox: { width: 15, height: 15, accentColor: C.accent, cursor: 'pointer', flexShrink: 0 },
+
+  // Picker rediseñado: marca + buscador + resumen
+  brandChips: { display: 'flex', gap: 7, flexWrap: 'wrap', marginTop: 6 },
+  brandChip: { border: `1px solid ${C.lineInput}`, background: '#fff', color: C.inkDim, borderRadius: 999, padding: '6px 12px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' },
+  brandChipOn: { background: C.accent, color: '#fff', border: `1px solid ${C.accent}` },
+  pickBody: { maxHeight: 240, overflowY: 'auto', border: `1px solid ${C.lineInput}`, borderRadius: 10, padding: '8px 10px', marginTop: 8 },
+  pickEmpty: { fontSize: 12.5, color: C.inkFaint, padding: '14px 4px', textAlign: 'center', lineHeight: 1.4 },
+  pickHead: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '2px 0 8px', borderBottom: `1px solid ${C.line}`, marginBottom: 6, fontSize: 12.5, fontWeight: 700, color: C.inkDim },
+  pickAll: { border: 'none', background: C.accent, color: '#fff', borderRadius: 999, padding: '5px 12px', fontSize: 12, fontWeight: 800, cursor: 'pointer' },
+  pickName: { fontSize: 13, color: C.ink, fontWeight: 500 },
+  summaryWrap: { marginTop: 10 },
+  summaryChip: { border: `1px solid ${C.goldLine}`, background: C.gold, color: C.amber, borderRadius: 999, padding: '7px 14px', fontSize: 12.5, fontWeight: 800, cursor: 'pointer' },
+  summaryList: { marginTop: 8, border: `1px solid ${C.lineInput}`, borderRadius: 10, padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 4 },
+  summaryItem: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '3px 0' },
+  summaryLbl: { fontSize: 12.5, color: C.ink, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  summaryX: { border: 'none', background: 'none', color: C.inkFaint, fontSize: 17, lineHeight: 1, cursor: 'pointer', padding: '0 4px', flexShrink: 0 },
+  summaryClear: { alignSelf: 'flex-start', border: 'none', background: 'none', color: C.red, fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: '4px 0 0', textDecoration: 'underline' },
   wdRow: { display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' },
   wdBtn: { width: 34, height: 34, borderRadius: '50%', border: `1px solid ${C.lineInput}`, background: '#fff', color: C.inkDim, fontSize: 13, fontWeight: 700, cursor: 'pointer' },
   wdOn: { background: C.ink, color: '#fff', border: `1px solid ${C.ink}` },
