@@ -15,10 +15,10 @@ import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { type DiscountType } from '@/modules/shop/admin/couponAdminService'
 import {
   listCampaigns, saveCampaign, toggleCampaign, saveCampaignError,
-  deleteCampaign, deleteCampaignError,
+  deleteCampaign, deleteCampaignError, getCampaignPerformance,
   getCampaignMenuTree, getCampaignScope, createMirrorItem,
   type Campaign, type CampaignStatus, type CampaignKind, type ScopeRef,
-  type CampaignMenuTree, type TreeItem,
+  type CampaignMenuTree, type TreeItem, type CampaignPerformance,
 } from '@/modules/shop/admin/campaignService'
 
 const C = {
@@ -39,6 +39,8 @@ function fmtDate(iso: string | null): string {
 function promoText(t: DiscountType, v: number): string {
   return t === 'percent' ? `${String(v).replace('.', ',')}%` : eur(v)
 }
+function roiText(n: number | null): string { return n == null ? '' : `ROI ${n.toFixed(1).replace('.', ',')}×` }
+function roiColor(n: number | null): string { return n == null ? '#8A857C' : n >= 2 ? '#0E6B38' : n >= 1 ? '#8A5B0A' : '#C23B22' }
 
 // datetime-local <-> ISO (respeta la hora local del operador).
 function pad(n: number): string { return String(n).padStart(2, '0') }
@@ -129,6 +131,7 @@ export default function ShopCampaignsPage() {
   const [rows, setRows] = useState<Campaign[] | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [modal, setModal] = useState<null | { mode: 'new' | 'edit' | 'clone'; c?: Campaign }>(null)
+  const [perf, setPerf] = useState<Campaign | null>(null)
   const [q, setQ] = useState('')
   const [typeF, setTypeF] = useState<TypeFilter>('all')
   const [statusF, setStatusF] = useState<StatusFilter>('all')
@@ -207,6 +210,7 @@ export default function ShopCampaignsPage() {
                 {system.map((c) => (
                   <CampaignRow key={c.id} c={c} busy={busyId === c.id}
                     onConfigure={() => navigate('../diseno')}
+                    onOpenPerf={() => setPerf(c)}
                     onToggle={() => onToggle(c)} />
                 ))}
               </div>
@@ -227,6 +231,7 @@ export default function ShopCampaignsPage() {
                   onEdit={() => setModal({ mode: 'edit', c })}
                   onClone={() => setModal({ mode: 'clone', c })}
                   onDelete={() => onDelete(c)}
+                  onOpenPerf={() => setPerf(c)}
                   onToggle={() => onToggle(c)} />
               ))}
             </div>
@@ -243,15 +248,19 @@ export default function ShopCampaignsPage() {
           onSaved={() => { setModal(null); refresh() }}
         />
       )}
+
+      {perf && accountId && (
+        <PerformancePanel accountId={accountId} campaign={perf} onClose={() => setPerf(null)} />
+      )}
     </div>
   )
 }
 
 // ── Fila de campaña ─────────────────────────────────────────────────────────
-function CampaignRow({ c, busy, onConfigure, onEdit, onClone, onDelete, onToggle }: {
+function CampaignRow({ c, busy, onConfigure, onEdit, onClone, onDelete, onOpenPerf, onToggle }: {
   c: Campaign; busy: boolean
   onConfigure?: () => void; onEdit?: () => void; onClone?: () => void
-  onDelete?: () => Promise<{ ok: boolean; reason?: string }>; onToggle: () => void
+  onDelete?: () => Promise<{ ok: boolean; reason?: string }>; onOpenPerf?: () => void; onToggle: () => void
 }) {
   const st = STATUS_META[c.status]
   const s = styles
@@ -272,7 +281,7 @@ function CampaignRow({ c, busy, onConfigure, onEdit, onClone, onDelete, onToggle
   return (
     <div style={s.row}>
       <div style={s.rowInner}>
-        <div style={s.rowMain}>
+        <div style={{ ...s.rowMain, cursor: onOpenPerf ? 'pointer' : 'default' }} onClick={onOpenPerf} title={onOpenPerf ? 'Ver rendimiento' : undefined}>
           <div style={s.rowTop}>
             <span style={s.rowName}>{c.name}</span>
             <span style={{ ...s.badge, ...(c.isSystem ? s.badgeSystem : s.badgeCode) }}>{kindLabel(c)}</span>
@@ -281,11 +290,13 @@ function CampaignRow({ c, busy, onConfigure, onEdit, onClone, onDelete, onToggle
           <div style={s.rowConfig}>{configLine(c)}</div>
         </div>
 
-        <div style={s.rowPerf}>
+        <div style={{ ...s.rowPerf, cursor: onOpenPerf ? 'pointer' : 'default' }} onClick={onOpenPerf}>
           <div style={s.perfMain}>{c.redemptions} {c.redemptions === 1 ? 'canje' : 'canjes'}</div>
           <div style={s.perfSub}>
             <span style={{ color: c.discounted > 0 ? C.ink : C.inkFaint }}>−{eur(c.discounted)}</span>
-            {c.avgMarginPct != null && <span style={{ color: C.greenDeep }}> · margen {pct(c.avgMarginPct)}</span>}
+            {c.roi != null
+              ? <span style={{ color: roiColor(c.roi), fontWeight: 800 }}> · {roiText(c.roi)}</span>
+              : c.avgMarginPct != null ? <span style={{ color: C.greenDeep }}> · margen {pct(c.avgMarginPct)}</span> : null}
           </div>
         </div>
 
@@ -799,6 +810,104 @@ function CampaignModal({ accountId, mode, source, onClose, onSaved }: {
   )
 }
 
+// ── Panel de rendimiento (G2e) ──────────────────────────────────────────────
+function PerfCard({ label, value, sub, valueColor, subColor }: { label: string; value: string; sub?: string; valueColor?: string; subColor?: string }) {
+  const s = styles
+  return (
+    <div style={s.perfCard}>
+      <div style={s.perfCardLabel}>{label}</div>
+      <div style={{ ...s.perfCardValue, ...(valueColor ? { color: valueColor } : {}) }}>{value}</div>
+      {sub && <div style={{ ...s.perfCardSub, ...(subColor ? { color: subColor } : {}) }}>{sub}</div>}
+    </div>
+  )
+}
+
+function PerformancePanel({ accountId, campaign, onClose }: { accountId: string; campaign: Campaign; onClose: () => void }) {
+  const s = styles
+  const [range, setRange] = useState<'7d' | '30d' | 'all'>('30d')
+  const [data, setData] = useState<CampaignPerformance | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let alive = true
+    setLoading(true)
+    const now = Date.now()
+    const from = range === 'all' ? null : new Date(now - (range === '7d' ? 7 : 30) * 86400000).toISOString()
+    getCampaignPerformance(accountId, campaign.id, from, null).then((d) => { if (alive) { setData(d); setLoading(false) } })
+    return () => { alive = false }
+  }, [accountId, campaign.id, range])
+
+  const ticketDelta = data && data.ticketWith != null && data.ticketWithout != null ? round2(data.ticketWith - data.ticketWithout) : null
+  const maxSeries = data && data.series.length ? Math.max(1, ...data.series.map((p) => p.redemptions)) : 1
+
+  return (
+    <div style={s.modalWrap} onClick={onClose}>
+      <div style={{ ...s.modalCard, maxWidth: 640 }} onClick={(e) => e.stopPropagation()}>
+        <div style={s.modalHead}>
+          <h2 style={s.modalTitle}>Rendimiento · {campaign.name}</h2>
+          <button style={s.modalX} onClick={onClose} aria-label="Cerrar">×</button>
+        </div>
+        <div style={s.modalBody}>
+          <div style={s.chipRow}>
+            {(['7d', '30d', 'all'] as const).map((r) => (
+              <button key={r} type="button" style={{ ...s.filterChip, ...(range === r ? s.filterChipOn : {}) }} onClick={() => setRange(r)}>
+                {r === '7d' ? '7 días' : r === '30d' ? '30 días' : 'Todo'}
+              </button>
+            ))}
+          </div>
+
+          {loading ? (
+            <div style={s.muted}>Cargando rendimiento…</div>
+          ) : !data ? (
+            <div style={s.muted}>No se pudo cargar el rendimiento.</div>
+          ) : (
+            <>
+              <div style={s.perfGrid}>
+                <PerfCard label="Canjes" value={String(data.redemptions)} />
+                <PerfCard label="Invertido" value={eur(data.cost)} sub={campaign.kind === 'free_item' && !data.giftCosted ? 'regalo sin escandallo' : undefined} />
+                <PerfCard label="Ventas atribuidas" value={String(data.salesCount)} sub={data.salesCount > 0 ? eur(data.salesEur) : undefined} />
+                <PerfCard label="Ticket medio" value={data.ticketWith != null ? eur(data.ticketWith) : '—'}
+                  sub={ticketDelta != null ? `${ticketDelta >= 0 ? '+' : ''}${eur(ticketDelta)} vs sin la campaña` : undefined}
+                  subColor={ticketDelta != null ? (ticketDelta >= 0 ? C.greenDeep : C.red) : undefined} />
+                <PerfCard label="Margen real" value={data.marginReal != null ? eur(data.marginReal) : '—'}
+                  sub={data.marginKnown > 0 ? `${data.marginKnown} ${data.marginKnown === 1 ? 'canje' : 'canjes'} con escandallo` : undefined} />
+                <PerfCard label="ROI" value={data.roi != null ? roiText(data.roi) : '—'} valueColor={roiColor(data.roi)} />
+              </div>
+
+              {ticketDelta != null && (
+                <div style={s.perfNote}>Ticket con la campaña <b>{eur(data.ticketWith!)}</b> · Shop sin ella <b>{eur(data.ticketWithout!)}</b>.</div>
+              )}
+
+              {data.marginMissing > 0 && (
+                <div style={s.warn}>{data.marginMissing} {data.marginMissing === 1 ? 'canje no cuenta' : 'canjes no cuentan'} en el margen (sin escandallo). El margen real es solo de los canjes con coste conocido — no lo maquillamos.</div>
+              )}
+
+              {data.series.length > 0 ? (
+                <div style={s.perfChart}>
+                  <div style={s.perfChartLabel}>Canjes por día</div>
+                  <div style={s.perfBars}>
+                    {data.series.map((p) => (
+                      <div key={p.day} style={s.perfBarCol} title={`${p.day}: ${p.redemptions} ${p.redemptions === 1 ? 'canje' : 'canjes'}`}>
+                        <div style={{ ...s.perfBar, height: `${Math.max(4, Math.round((p.redemptions / maxSeries) * 100))}%` }} />
+                        <span style={s.perfBarDay}>{p.day.slice(5)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div style={s.empty}>Aún no hay canjes en este periodo.</div>
+              )}
+            </>
+          )}
+        </div>
+        <div style={s.modalFoot}>
+          <button style={s.ghost} onClick={onClose}>Cerrar</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const styles: Record<string, CSSProperties> = {
   page: { padding: '4px 4px 40px', maxWidth: 960 },
   header: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 20 },
@@ -873,6 +982,20 @@ const styles: Record<string, CSSProperties> = {
   note: { fontSize: 13, color: C.inkDim, lineHeight: 1.45 },
   bogoHint: { fontSize: 11.5, color: C.inkFaint, lineHeight: 1.4, marginTop: 6 },
   warn: { marginTop: 10, padding: '8px 11px', background: C.amberBg, border: `1px solid ${C.amberLine}`, borderRadius: 10, fontSize: 12, color: C.amber, lineHeight: 1.4 },
+
+  // Panel de rendimiento (G2e)
+  perfGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginTop: 12 },
+  perfCard: { background: C.page, border: `1px solid ${C.line}`, borderRadius: 12, padding: '11px 13px' },
+  perfCardLabel: { fontSize: 11, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: C.inkFaint },
+  perfCardValue: { fontSize: 21, fontWeight: 800, color: C.ink, marginTop: 3, letterSpacing: '-.01em' },
+  perfCardSub: { fontSize: 11.5, color: C.inkDim, marginTop: 2 },
+  perfNote: { marginTop: 12, fontSize: 12.5, color: C.inkDim, lineHeight: 1.45 },
+  perfChart: { marginTop: 16 },
+  perfChartLabel: { fontSize: 12, fontWeight: 700, color: C.inkDim, marginBottom: 8 },
+  perfBars: { display: 'flex', alignItems: 'flex-end', gap: 4, height: 120, borderBottom: `1px solid ${C.line}`, paddingBottom: 2, overflowX: 'auto' },
+  perfBarCol: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', gap: 4, minWidth: 22, height: '100%' },
+  perfBar: { width: 16, background: C.accent, borderRadius: '4px 4px 0 0', minHeight: 3 },
+  perfBarDay: { fontSize: 9, color: C.inkFaint, whiteSpace: 'nowrap' },
   err: { fontSize: 13, color: C.red, fontWeight: 600, marginRight: 'auto' },
   ghost: { background: 'none', border: `1px solid ${C.lineInput}`, color: C.ink, borderRadius: 10, padding: '9px 18px', fontSize: 14, fontWeight: 700, cursor: 'pointer' },
   save: { border: 'none', background: C.accent, color: '#fff', borderRadius: 10, padding: '9px 20px', fontSize: 14, fontWeight: 700, cursor: 'pointer' },

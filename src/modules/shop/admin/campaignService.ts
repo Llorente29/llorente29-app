@@ -45,6 +45,7 @@ export interface Campaign {
   redemptions: number         // canjes VIVOS
   discounted: number          // € descontado (vivos)
   avgMarginPct: number | null // margen medio real de los canjes vivos
+  roi: number | null          // margen conocido / descuento (null si no hay margen)
 }
 
 export async function listCampaigns(accountId: string): Promise<Campaign[]> {
@@ -79,6 +80,7 @@ export async function listCampaigns(accountId: string): Promise<Campaign[]> {
       redemptions: Number(c.redemptions ?? 0),
       discounted: Number(c.discounted ?? 0),
       avgMarginPct: num(c.avgMarginPct),
+      roi: num(c.roi),
     })) as Campaign[]
   } catch {
     return []
@@ -225,6 +227,58 @@ export function deleteCampaignError(reason: string | undefined): string {
     case 'not_found':       return 'La campaña ya no existe.'
     case 'forbidden':       return 'No tienes permiso sobre esta campaña.'
     default:                return 'No se pudo eliminar. Inténtalo de nuevo.'
+  }
+}
+
+// ── Rendimiento de una campaña (G2e) ────────────────────────────────────────
+export interface PerfSeriesPoint { day: string; redemptions: number; discounted: number; salesEur: number }
+export interface CampaignPerformance {
+  kind: CampaignKind
+  redemptions: number
+  discounted: number
+  salesCount: number
+  salesEur: number
+  ticketWith: number | null
+  ticketWithout: number | null
+  marginReal: number | null      // sum margin_after conocido; null si ningún canje lo tiene
+  marginKnown: number            // canjes con margen
+  marginMissing: number          // canjes sin margen (deuda de escandallo)
+  giftCosted: boolean            // free_item: el regalo tiene escandallo
+  cost: number                   // descuentos (o coste real del regalo en free_item)
+  roi: number | null             // margen / coste
+  series: PerfSeriesPoint[]
+}
+
+export async function getCampaignPerformance(
+  accountId: string, couponId: string, from: string | null, to: string | null,
+): Promise<CampaignPerformance | null> {
+  try {
+    const { data, error } = await db().rpc('campaign_performance', {
+      p_account: accountId, p_coupon: couponId, p_from: from, p_to: to,
+    })
+    if (error || !data || data.ok !== true) return null
+    const num = (v: any) => (v != null ? Number(v) : null)
+    return {
+      kind: (data.kind ?? 'standard') as CampaignKind,
+      redemptions: Number(data.redemptions ?? 0),
+      discounted: Number(data.discounted ?? 0),
+      salesCount: Number(data.salesCount ?? 0),
+      salesEur: Number(data.salesEur ?? 0),
+      ticketWith: num(data.ticketWith),
+      ticketWithout: num(data.ticketWithout),
+      marginReal: num(data.marginReal),
+      marginKnown: Number(data.marginKnown ?? 0),
+      marginMissing: Number(data.marginMissing ?? 0),
+      giftCosted: data.giftCosted === true,
+      cost: Number(data.cost ?? 0),
+      roi: num(data.roi),
+      series: Array.isArray(data.series) ? data.series.map((p: any) => ({
+        day: p.day, redemptions: Number(p.redemptions ?? 0),
+        discounted: Number(p.discounted ?? 0), salesEur: Number(p.salesEur ?? 0),
+      })) : [],
+    }
+  } catch {
+    return null
   }
 }
 
