@@ -966,8 +966,14 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
                         {couponBusy ? '…' : 'Aplicar'}
                       </button>
                     </div>
-                    {couponCode && coupon && !coupon.applied && coupon.reason && (
-                      <div style={s.couponError}>{couponReasonMsg(coupon.reason)}</div>
+                    {/* Rechazo: si hay reason, mensaje específico; si el servidor no
+                        encontró el cupón (applied:false SIN reason), fallback honesto.
+                        Solo con couponCode del usuario -> nunca en el estado normal de
+                        un anónimo sin código (bienvenida). No colapsa el input. */}
+                    {couponCode && coupon && !coupon.applied && (
+                      <div style={s.couponError}>
+                        {coupon.reason ? couponReasonMsg(coupon.reason) : 'Cupón no válido o fuera de fechas.'}
+                      </div>
                     )}
                   </div>
                 )}
