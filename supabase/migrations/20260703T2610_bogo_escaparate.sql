@@ -1,17 +1,50 @@
 -- 20260703T2610_bogo_escaparate.sql
 -- Aplicada: (pendiente)
 --
--- G2c sub-lote A3 — ESCAPARATE BOGO (servidor). shop_brand_menu_by_slug emite,
--- por plato, 'bogo' = _shop_item_bogo(cuenta, plato) (o NULL), junto al 'offer'
--- item_percent ya existente. La carta/tarjeta de plato pinta el badge "2x1" /
--- "2ª al -X%" leyendo ese campo. El descuento real lo aplica el motor (A2) en el
--- checkout; esto es solo el gancho visual.
+-- G2c sub-lote A3 (ampliado) — ESCAPARATE BOGO unificado en el 'offer'.
 --
--- Reproducción FIEL del texto vivo + una línea. Misma firma (CREATE OR REPLACE,
--- sin DROP; permisos conservados). No se prueba en la tx que la crea.
+-- El feed emite UN solo 'offer' por plato, con discriminador 'kind':
+--   * bogo gana        -> {kind:'bogo', campaignId, pct}
+--   * si no, item_pct  -> {kind:'item_percent', campaignId, pct, discountedPrice, wasPrice}
+-- Así carta, modal y carrito leen la MISMA forma y el badge 2x1 se ve/cuenta en
+-- todas las pantallas (el checkout ya cobra vía _shop_reprice_line, A2).
+--
+--   (1) _shop_item_promo(cuenta, plato, precio): unifica bogo/item_percent (bogo
+--       gana, coherente con _shop_reprice_line).
+--   (2) shop_brand_menu_by_slug: 'offer' = _shop_item_promo(...) (reproducción fiel
+--       del texto vivo + esa línea). Misma firma (CREATE OR REPLACE, sin DROP).
+--
+-- Requiere 2600 (_shop_item_bogo). No se prueba en la tx que la crea.
 
 begin;
 
+-- (1) Promo unificada del plato (bogo gana sobre item_percent).
+create or replace function public._shop_item_promo(p_account uuid, p_menu_item_id uuid, p_price numeric)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path to 'public'
+as $function$
+declare
+  v_b jsonb;
+  v_o jsonb;
+begin
+  v_b := public._shop_item_bogo(p_account, p_menu_item_id);
+  if v_b is not null then
+    return jsonb_build_object('kind', 'bogo', 'campaignId', v_b->>'campaignId', 'pct', (v_b->>'pct')::numeric);
+  end if;
+  v_o := public._shop_item_offer(p_account, p_menu_item_id, p_price);
+  if v_o is not null then
+    return v_o || jsonb_build_object('kind', 'item_percent');
+  end if;
+  return null;
+end;
+$function$;
+
+grant execute on function public._shop_item_promo(uuid, uuid, numeric) to authenticated;
+
+-- (2) Feed de carta: 'offer' unificado.
 create or replace function public.shop_brand_menu_by_slug(p_slug text, p_brand_id uuid)
 returns jsonb
 language plpgsql
@@ -63,8 +96,7 @@ begin
                'photo_url', mi.photo_url,
                'price', mi.price,
                'product_type', mi.product_type,
-               'offer', public._shop_item_offer(v_account_id, mi.id, mi.price),
-               'bogo', public._shop_item_bogo(v_account_id, mi.id)
+               'offer', public._shop_item_promo(v_account_id, mi.id, mi.price)
              ) order by mi.position nulls last, mi.name
            ) filter (where mi.id is not null), '[]'::jsonb) as products
     from menu_category c

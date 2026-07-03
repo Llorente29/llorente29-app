@@ -6,7 +6,7 @@
 // El botón "Ir a pagar" es el punto de enganche del checkout (pieza siguiente).
 
 import { useEffect, useState } from 'react'
-import { useShopCart, type CartLine } from '@/modules/shop/cart/ShopCartContext'
+import { useShopCart, bogoLineDiscount, type CartLine } from '@/modules/shop/cart/ShopCartContext'
 import { getShopHub, type FreeDeliveryInfo } from '@/modules/shop/services/shopHubService'
 
 const C = {
@@ -66,8 +66,21 @@ export default function CartPanel({ onCheckout }: { onCheckout?: () => void }) {
                     <div key={l.lineId} style={S.line}>
                       <div style={S.lineTop}>
                         <span style={S.lineName}>{l.name}</span>
-                        <span style={S.linePrice}>{eur(l.unitPrice * l.quantity)}</span>
+                        {bogoLineDiscount(l) > 0 ? (
+                          <span style={S.linePriceWrap}>
+                            <span style={S.linePriceNow}>{eur(l.unitPrice * l.quantity - bogoLineDiscount(l))}</span>
+                            <span style={S.linePriceWas}>{eur(l.unitPrice * l.quantity)}</span>
+                          </span>
+                        ) : (
+                          <span style={S.linePrice}>{eur(l.unitPrice * l.quantity)}</span>
+                        )}
                       </div>
+                      {l.bogoPct != null && l.bogoPct > 0 && (
+                        <div style={S.bogoLine}>
+                          <span style={S.bogoTag}>{l.bogoPct >= 100 ? '2x1' : `2ª al −${Math.round(l.bogoPct)}%`}</span>
+                          {bogoLineDiscount(l) > 0 ? ` ahorras ${eur(bogoLineDiscount(l))}` : ' · añade otra y ahorra'}
+                        </div>
+                      )}
                       {l.summary.length > 0 && (
                         <ul style={S.summary}>
                           {l.summary.map((s, i) => <li key={i} style={S.summaryItem}>{s}</li>)}
@@ -159,6 +172,11 @@ const S: Record<string, React.CSSProperties> = {
   lineTop: { display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'baseline' },
   lineName: { fontWeight: 800, fontSize: 14.5, letterSpacing: '-.01em' },
   linePrice: { fontWeight: 900, fontSize: 14.5, whiteSpace: 'nowrap' },
+  linePriceWrap: { display: 'inline-flex', alignItems: 'baseline', gap: 6, whiteSpace: 'nowrap' },
+  linePriceNow: { fontWeight: 900, fontSize: 14.5, color: C.ink },
+  linePriceWas: { fontSize: 12.5, color: C.inkDim, textDecoration: 'line-through', fontWeight: 700 },
+  bogoLine: { marginTop: 3, fontSize: 11.5, color: '#7A5A12', fontWeight: 700 },
+  bogoTag: { background: '#16140F', color: '#FFB400', fontSize: 10.5, fontWeight: 900, letterSpacing: '.02em', padding: '2px 7px', borderRadius: 999, marginRight: 5 },
   summary: { listStyle: 'none', margin: '6px 0 0', padding: 0 },
   summaryItem: { fontSize: 12.5, color: C.inkDim, lineHeight: 1.5, paddingLeft: 10, position: 'relative' },
   allergens: { fontSize: 11.5, color: '#7A5A12', marginTop: 6, fontWeight: 600 },

@@ -15,7 +15,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { loadStripe } from '@stripe/stripe-js'
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js'
-import { useShopCart } from '@/modules/shop/cart/ShopCartContext'
+import { useShopCart, bogoLineDiscount } from '@/modules/shop/cart/ShopCartContext'
 import {
   geocodeAddress, checkDelivery, getDeliverySlots, placeShopOrder, createShopPaymentIntent,
   getShopPaymentConfig, getShopLocations, getShopOrderStatus,
@@ -595,7 +595,7 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
       <div style={s.sumLines}>
         {cart.lines.map((l, idx) => {
           const pv = freshLines ? freshLines[idx] : null
-          const lineEur = pv ? pv.lineTotal : l.unitPrice * l.quantity
+          const lineEur = pv ? pv.lineTotal : l.unitPrice * l.quantity - bogoLineDiscount(l)
           return (
             <div key={l.lineId} style={s.sumLine}>
               <span style={s.sumQty}>{l.quantity}x</span>
@@ -737,7 +737,7 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
               )}
               {cart.lines.map((l, idx) => {
                 const pv = freshLines ? freshLines[idx] : null
-                const lineEur = pv ? pv.lineTotal : l.unitPrice * l.quantity
+                const lineEur = pv ? pv.lineTotal : l.unitPrice * l.quantity - bogoLineDiscount(l)
                 return (
                   <div key={l.lineId} style={s.payRecapLine}>
                     <span style={s.payRecapQty}>{l.quantity}x</span>

@@ -132,13 +132,13 @@ export default function BrandMenuRoute({ slug, brandId, onBack, onCheckout }: { 
         {(() => {
           const offerCats = menu.categories
             .map((cat) => {
-              const pcts = cat.products.filter((p) => p.offer).map((p) => p.offer!.pct)
+              const pcts = cat.products.filter((p) => p.offer && p.offer.kind === 'item_percent').map((p) => p.offer!.pct)
               return pcts.length ? { id: cat.id, name: cat.name, maxPct: Math.max(...pcts) } : null
             })
             .filter(Boolean) as { id: string; name: string; maxPct: number }[]
           const bogoCats = menu.categories
             .map((cat) => {
-              const pcts = cat.products.filter((p) => p.bogo).map((p) => p.bogo!.pct)
+              const pcts = cat.products.filter((p) => p.offer && p.offer.kind === 'bogo').map((p) => p.offer!.pct)
               return pcts.length ? { id: cat.id, name: cat.name, maxPct: Math.max(...pcts) } : null
             })
             .filter(Boolean) as { id: string; name: string; maxPct: number }[]
@@ -169,18 +169,23 @@ export default function BrandMenuRoute({ slug, brandId, onBack, onCheckout }: { 
           <section key={cat.id} id={`fvcat-${cat.id}`} style={{ marginBottom: 30 }}>
             <h2 style={S.catTitle}>
               {cat.emoji ? `${cat.emoji} ` : ''}{cat.name}
-              {cat.products.length > 0 && cat.products.every((p) => p.offer) && (
-                <span style={S.catPill}>−{Math.round(Math.max(...cat.products.map((p) => p.offer!.pct)))}% hoy</span>
-              )}
+              {(() => {
+                const bogos = cat.products.filter((p) => p.offer?.kind === 'bogo')
+                const items = cat.products.filter((p) => p.offer?.kind === 'item_percent')
+                if (bogos.length) return <span style={S.catPillBogo}>⚡ {bogoText(Math.max(...bogos.map((p) => p.offer!.pct)))}</span>
+                if (items.length && items.length === cat.products.length) return <span style={S.catPill}>−{Math.round(Math.max(...items.map((p) => p.offer!.pct)))}% hoy</span>
+                return null
+              })()}
             </h2>
             <div style={S.dishGrid}>
               {cat.products.map(d => {
-                const off = d.bogo ? null : d.offer   // BOGO gana: con 2x1 no se pinta el % por unidad
+                const bg = d.offer?.kind === 'bogo' ? d.offer : null      // BOGO gana: badge 2x1, precio unitario intacto
+                const off = d.offer?.kind === 'item_percent' ? d.offer : null
                 return (
-                <div key={d.id} className="fvdish" style={{ ...S.dish, ...((off || d.bogo) ? S.dishOn : {}) }}>
+                <div key={d.id} className="fvdish" style={{ ...S.dish, ...(d.offer ? S.dishOn : {}) }}>
                   <div style={{ ...S.dishPhoto, background: d.photoUrl ? `center/cover no-repeat url(${d.photoUrl})` : C.accentBg, position: 'relative' }}>
-                    {d.bogo
-                      ? <span style={S.bogoBadge}>{bogoText(d.bogo.pct)}</span>
+                    {bg
+                      ? <span style={S.bogoBadge}>{bogoText(bg.pct)}</span>
                       : off && <span style={S.dishBadge}>−{Math.round(off.pct)}% hoy</span>}
                   </div>
                   <div style={S.dishBody}>
@@ -190,7 +195,7 @@ export default function BrandMenuRoute({ slug, brandId, onBack, onCheckout }: { 
                     </div>
                     {d.description && <p style={S.dishDesc}>{d.description}</p>}
                     <div style={S.dishFoot}>
-                      {off ? (
+                      {off && off.discountedPrice != null ? (
                         <span style={S.priceWrap}>
                           <span style={S.dishPriceNow}>{eur(off.discountedPrice)}</span>
                           {off.wasPrice != null && <span style={S.dishPriceWas}>{eur(off.wasPrice)}</span>}
@@ -232,14 +237,7 @@ export default function BrandMenuRoute({ slug, brandId, onBack, onCheckout }: { 
           offer={(() => {
             for (const c of menu.categories) {
               const dd = c.products.find((p) => p.id === configItemId)
-              if (dd) return dd.bogo ? null : (dd.offer ? { pct: dd.offer.pct, wasPrice: dd.offer.wasPrice } : null)
-            }
-            return null
-          })()}
-          bogo={(() => {
-            for (const c of menu.categories) {
-              const dd = c.products.find((p) => p.id === configItemId)
-              if (dd) return dd.bogo ? { pct: dd.bogo.pct } : null
+              if (dd) return dd.offer
             }
             return null
           })()}
@@ -315,6 +313,7 @@ const S: Record<string, React.CSSProperties> = {
   offerBanner: { display: 'block', width: '100%', textAlign: 'left', background: '#FFE9E3', color: C.accent, border: `1px solid ${C.accent}33`, borderRadius: 14, padding: '11px 16px', fontSize: 14, fontWeight: 800, letterSpacing: '-.01em', cursor: 'pointer', marginBottom: 22 },
   freeShipBanner: { display: 'block', width: '100%', textAlign: 'left', background: '#E3F6EC', color: '#1FA85B', border: '1px solid #1FA85B33', borderRadius: 14, padding: '11px 16px', fontSize: 14, fontWeight: 800, letterSpacing: '-.01em', cursor: 'default', marginBottom: 22 },
   catPill: { marginLeft: 10, verticalAlign: 'middle', background: C.accent, color: '#fff', fontSize: 12, fontWeight: 800, padding: '3px 10px', borderRadius: 999 },
+  catPillBogo: { marginLeft: 10, verticalAlign: 'middle', background: '#16140F', color: C.accent2, fontSize: 12, fontWeight: 900, padding: '3px 10px', borderRadius: 999 },
   addBtn: { background: C.accent, color: '#fff', border: 'none', borderRadius: 999, padding: '8px 15px', fontWeight: 800, fontSize: 14, cursor: 'not-allowed', opacity: .45, display: 'inline-flex', alignItems: 'center', gap: 5 },
   addBtnOn: { cursor: 'pointer', opacity: 1 },
   footer: { textAlign: 'center', padding: '26px', fontSize: 13, color: C.inkDim },

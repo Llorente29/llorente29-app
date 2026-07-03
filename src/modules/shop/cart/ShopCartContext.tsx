@@ -31,6 +31,17 @@ export interface CartLine {
   allergens: { code: string; nameEs: string }[]
   order: OrderLine
   discount?: number
+  bogoPct?: number | null        // BOGO (2x1/2ª al -X%): % de la 2ª unidad, guardado al añadir
+}
+
+function round2(n: number): number { return Math.round(n * 100) / 100 }
+
+// Descuento BOGO de una línea = ESPEJO de _shop_reprice_line (motor): por cada par
+// de unidades del mismo plato, la 2ª lleva bogoPct%. floor(qty/2) uds con descuento.
+// El checkout (dry-run) sigue mandando; esto es coherencia visual aguas arriba.
+export function bogoLineDiscount(l: { unitPrice: number; quantity: number; bogoPct?: number | null }): number {
+  if (!l.bogoPct || l.bogoPct <= 0) return 0
+  return round2(Math.floor(l.quantity / 2) * l.unitPrice * l.bogoPct / 100)
 }
 
 export interface ShopCart {
@@ -151,6 +162,7 @@ export function ShopCartProvider({ slug, children }: { slug: string; children: R
         photoUrl: line.photoUrl,
         unitPrice: line.unitPrice,
         quantity: line.quantity,
+        bogoPct: line.bogoPct ?? null,
         summary: line.summary,
         allergens: line.allergens.map((a) => ({ code: a.code, nameEs: a.nameEs })),
         order: toOrderLine(line.config, line.selection),
@@ -210,13 +222,16 @@ export function ShopCartProvider({ slug, children }: { slug: string; children: R
   }
 
   const totals = useMemo<CartTotals>(() => {
-    let subtotal = 0, discount = 0, count = 0
+    let gross = 0, bogo = 0, legacy = 0, count = 0
     for (const l of cart.lines) {
-      subtotal += l.unitPrice * l.quantity
-      discount += (l.discount ?? 0)
+      gross += l.unitPrice * l.quantity
+      bogo += bogoLineDiscount(l)
+      legacy += (l.discount ?? 0)
       count += l.quantity
     }
-    return { itemsCount: count, subtotal, discount, deliveryFee: 0, total: subtotal - discount }
+    // Subtotal NETO (bogo plegado en las líneas): cuadra con el subtotal del checkout.
+    const subtotal = round2(gross - bogo)
+    return { itemsCount: count, subtotal, discount: round2(legacy), deliveryFee: 0, total: round2(subtotal - legacy) }
   }, [cart])
 
   const api: CartApi = { cart, totals, addLine, setLineQty, removeLine, clear, canAddBrand, setLocation, replaceCart }

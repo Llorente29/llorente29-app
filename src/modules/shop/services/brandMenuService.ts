@@ -2,18 +2,16 @@ import { supabase } from '@/lib/supabase'
 
 // Oferta activa de carta (item_percent). wasPrice = ref Ómnibus (min 30d) SOLO si
 // hay reducción legal frente a ella; si no, null (no se pinta tachado).
+// Promo de carta UNIFICADA (un solo 'offer' con discriminador 'kind'):
+//   item_percent: pct por unidad; discountedPrice/wasPrice (tachado Ómnibus).
+//   bogo (2x1 / 2ª unidad): pct de la 2ª unidad (100 = 2x1). No cambia el precio
+//     unitario; el descuento es de línea, por par (floor(qty/2)). Sin tachado.
 export interface DishOffer {
+  kind: 'item_percent' | 'bogo'
   campaignId: string
   pct: number
-  discountedPrice: number
-  wasPrice: number | null
-}
-
-// BOGO (2x1 / 2ª unidad): pct = % de la 2ª unidad (100 = 2x1). No cambia el precio
-// unitario (el descuento es de línea, por par); solo es un gancho visual en la carta.
-export interface DishBogo {
-  campaignId: string
-  pct: number
+  discountedPrice: number | null   // solo item_percent
+  wasPrice: number | null          // solo item_percent
 }
 
 export interface MenuDish {
@@ -24,7 +22,6 @@ export interface MenuDish {
   price: number
   productType: 'item' | 'combo'
   offer: DishOffer | null
-  bogo: DishBogo | null
 }
 
 export interface MenuCategory {
@@ -87,14 +84,12 @@ export async function getBrandMenu(slug: string, brandId: string): Promise<Brand
         productType: p.product_type === 'combo' ? 'combo' : 'item',
         offer: p.offer
           ? {
+              kind: p.offer.kind === 'bogo' ? 'bogo' : 'item_percent',
               campaignId: p.offer.campaignId,
               pct: Number(p.offer.pct ?? 0),
-              discountedPrice: Number(p.offer.discountedPrice ?? 0),
+              discountedPrice: p.offer.discountedPrice != null ? Number(p.offer.discountedPrice) : null,
               wasPrice: p.offer.wasPrice != null ? Number(p.offer.wasPrice) : null,
             }
-          : null,
-        bogo: p.bogo
-          ? { campaignId: p.bogo.campaignId, pct: Number(p.bogo.pct ?? 0) }
           : null,
       })),
     })),

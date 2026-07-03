@@ -29,6 +29,7 @@ export interface ConfiguredLine {
   photoUrl: string | null
   unitPrice: number
   quantity: number
+  bogoPct?: number | null    // BOGO: % de la 2ª unidad (100 = 2x1). unitPrice queda full.
   summary: string[]
   allergens: Allergen[]
   config: DishConfig
@@ -40,17 +41,17 @@ interface Props {
   menuItemId: string
   // Oferta de carta activa (item_percent). Se aplica al precio final para que el
   // carrito y el checkout muestren y cobren lo mismo que la carta.
-  offer?: { pct: number; wasPrice: number | null } | null
-  // BOGO (2x1 / 2ª unidad): gancho visual. NO cambia el precio unitario ni el total
-  // del modal; el descuento de la 2ª unidad se aplica en el resumen/cobro (servidor).
-  bogo?: { pct: number } | null
+  // Promo de carta unificada (kind). item_percent: se aplica al precio final. bogo:
+  // 2x1 / 2ª al -X% -> el total del modal cuenta floor(qty/2) uds al pct (espejo de
+  // _shop_reprice_line); el precio unitario NO cambia.
+  offer?: { kind: 'item_percent' | 'bogo'; pct: number; discountedPrice: number | null; wasPrice: number | null } | null
   onClose: () => void
   onAdd: (line: ConfiguredLine) => void
 }
 
 function round2(n: number): number { return Math.round(n * 100) / 100 }
 
-export default function DishConfigModal({ slug, menuItemId, offer, bogo, onClose, onAdd }: Props) {
+export default function DishConfigModal({ slug, menuItemId, offer, onClose, onAdd }: Props) {
   const [config, setConfig] = useState<DishConfig | null>(null)
   const [sel, setSel] = useState<DishSelection>(emptySelection())
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
@@ -81,10 +82,12 @@ export default function DishConfigModal({ slug, menuItemId, offer, bogo, onClose
 
   const errors = useMemo(() => (config ? validateSelection(config, sel) : []), [config, sel])
   const valid = config ? isValid(config, sel) : false
-  const off = offer && offer.pct > 0 ? offer : null
-  const bg = bogo && bogo.pct > 0 ? bogo : null
-  const baseTotal = config ? totalPrice(config, sel) : 0
-  const total = off ? round2(baseTotal * (1 - off.pct / 100)) : baseTotal
+  const off = offer && offer.kind === 'item_percent' && offer.pct > 0 ? offer : null
+  const bg = offer && offer.kind === 'bogo' && offer.pct > 0 ? offer : null
+  const baseTotal = config ? totalPrice(config, sel) : 0   // unit × qty
+  // BOGO en cliente = ESPEJO de _shop_reprice_line: floor(qty/2) uds al pct%, descuento de línea.
+  const bogoDisc = bg && config ? round2(Math.floor(sel.quantity / 2) * unitPrice(config, sel) * bg.pct / 100) : 0
+  const total = off ? round2(baseTotal * (1 - off.pct / 100)) : round2(baseTotal - bogoDisc)
 
   // ── Mutadores de selección ────────────────────────────────────────────
 
@@ -151,6 +154,7 @@ export default function DishConfigModal({ slug, menuItemId, offer, bogo, onClose
       photoUrl: config.photoUrl,
       unitPrice: off ? round2(u * (1 - off.pct / 100)) : u,
       quantity: sel.quantity,
+      bogoPct: bg ? bg.pct : null,
       summary: selectionSummary(config, sel),
       allergens: selectionAllergens(config, sel),
       config, selection: sel,
@@ -294,9 +298,9 @@ export default function DishConfigModal({ slug, menuItemId, offer, bogo, onClose
             <div style={S.offerRow}>
               <span style={S.bogoBadge}>{bg.pct >= 100 ? '2x1' : `2ª al −${Math.round(bg.pct)}%`}</span>
               <span style={S.bogoHint}>
-                {sel.quantity >= 2
-                  ? (bg.pct >= 100 ? 'La 2ª unidad sale gratis — se aplica en el pago.' : `La 2ª unidad, −${Math.round(bg.pct)}% — se aplica en el pago.`)
-                  : (bg.pct >= 100 ? 'Añade otra y la 2ª sale gratis.' : `Añade otra y la 2ª sale al −${Math.round(bg.pct)}%.`)}
+                {bogoDisc > 0
+                  ? `Ahorras ${eur(bogoDisc)} — ${bg.pct >= 100 ? 'la 2ª unidad, gratis' : `la 2ª al −${Math.round(bg.pct)}%`}.`
+                  : (bg.pct >= 100 ? '¡Llévate 2 y la 2ª te sale gratis!' : `¡Llévate 2 y la 2ª al −${Math.round(bg.pct)}%!`)}
               </span>
             </div>
           )}
