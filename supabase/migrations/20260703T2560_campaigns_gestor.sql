@@ -16,7 +16,7 @@ begin;
 --   save_campaign(uuid, uuid, text, text, text, numeric, numeric, timestamptz, timestamptz, integer, integer)
 -- DROP IF EXISTS de AMBAS firmas (antigua 11-args y nueva 17-args) para re-ejecutabilidad.
 drop function if exists public.save_campaign(uuid, uuid, text, text, text, numeric, numeric, timestamptz, timestamptz, integer, integer);
-drop function if exists public.save_campaign(uuid, uuid, text, text, text, numeric, numeric, timestamptz, timestamptz, integer, integer, smallint[], time, time, numeric, jsonb);
+drop function if exists public.save_campaign(uuid, uuid, text, text, text, text, numeric, numeric, timestamptz, timestamptz, integer, integer, smallint[], time, time, numeric, jsonb);
 
 create or replace function public.save_campaign(
   p_account uuid, p_id uuid, p_kind text, p_name text, p_code text,
@@ -140,7 +140,7 @@ begin
 end;
 $fn$;
 
-grant execute on function public.save_campaign(uuid, uuid, text, text, text, numeric, numeric, timestamptz, timestamptz, integer, integer, smallint[], time, time, numeric, jsonb) to authenticated;
+grant execute on function public.save_campaign(uuid, uuid, text, text, text, text, numeric, numeric, timestamptz, timestamptz, integer, integer, smallint[], time, time, numeric, jsonb) to authenticated;
 
 -- ── campaign_menu_tree: marcas→categorías→platos + margen/Ómnibus para el modal ─
 create or replace function public.campaign_menu_tree(p_account uuid)
