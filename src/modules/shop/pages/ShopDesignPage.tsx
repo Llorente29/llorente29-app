@@ -20,6 +20,7 @@ import StorefrontPreview from '@/modules/shop/components/StorefrontPreview'
 import { uploadShopHero, deleteShopHero } from '@/modules/shop/services/shopHeroService'
 import { getAccountLogo, uploadAccountLogo, deleteAccountLogo, getAccountShopText, setAccountShopText } from '@/modules/shop/services/shopAccountService'
 import WelcomeOfferSettings from '@/modules/shop/admin/WelcomeOfferSettings'
+import FrequencyRewardSettings from '@/modules/shop/admin/FrequencyRewardSettings'
 import {
   ensureThemesForAccount,
   listBrandsWithTheme,
@@ -256,6 +257,13 @@ export default function ShopDesignPage() {
       {accountId && (
         <div className="mb-4">
           <WelcomeOfferSettings accountId={accountId} />
+        </div>
+      )}
+
+      {/* Motor de recompensa por frecuencia (F4·T3): cada N pedidos, un premio */}
+      {accountId && (
+        <div className="mb-4">
+          <FrequencyRewardSettings accountId={accountId} />
         </div>
       )}
 

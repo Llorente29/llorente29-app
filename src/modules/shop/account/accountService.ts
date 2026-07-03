@@ -71,13 +71,24 @@ export interface AccountCouponAvailable {
   endsAt: string | null
   autoApply: boolean
   isWelcome: boolean
+  isFrequency: boolean
   eligible: boolean
   reason: string | null         // null (eligible) | not_first | needs_consent | exhausted
+}
+
+// Progreso del motor de frecuencia (goal-gradient). active=false → no pintar nada.
+export interface CouponProgress {
+  active: boolean
+  threshold?: number
+  current?: number
+  reward?: { discountType: 'percent' | 'fixed' | null; discountValue: number | null; name: string }
+  earned?: boolean
 }
 
 export interface CustomerCoupons {
   available: AccountCouponAvailable[]
   used: AccountCouponUsed[]
+  progress: CouponProgress
 }
 
 export interface CustomerAddress {
@@ -238,11 +249,13 @@ export async function deleteAddress(slug: string, id: string): Promise<{ ok: boo
 
 export async function getCustomerCoupons(slug: string): Promise<CustomerCoupons> {
   const token = getStoredSessionToken(slug)
-  if (!token) return { available: [], used: [] }
+  const empty: CustomerCoupons = { available: [], used: [], progress: { active: false } }
+  if (!token) return empty
   try {
     const { data, error } = await db().rpc('customer_coupons', { p_token: token })
-    if (error || !data || data.ok !== true) return { available: [], used: [] }
+    if (error || !data || data.ok !== true) return empty
     const num = (v: any) => (v != null ? Number(v) : null)
+    const p = data.progress ?? { active: false }
     return {
       available: (data.available ?? []).map((c: any) => ({
         couponId: c.couponId,
@@ -254,6 +267,7 @@ export async function getCustomerCoupons(slug: string): Promise<CustomerCoupons>
         endsAt: c.endsAt ?? null,
         autoApply: c.autoApply === true,
         isWelcome: c.isWelcome === true,
+        isFrequency: c.isFrequency === true,
         eligible: c.eligible === true,
         reason: c.reason ?? null,
       })) as AccountCouponAvailable[],
@@ -266,8 +280,19 @@ export async function getCustomerCoupons(slug: string): Promise<CustomerCoupons>
         discountAmount: c.discountAmount != null ? Number(c.discountAmount) : 0,
         ts: c.ts,
       })) as AccountCouponUsed[],
+      progress: p.active === true ? {
+        active: true,
+        threshold: Number(p.threshold ?? 0),
+        current: Number(p.current ?? 0),
+        reward: p.reward ? {
+          discountType: (p.reward.discountType ?? null) as 'percent' | 'fixed' | null,
+          discountValue: num(p.reward.discountValue),
+          name: p.reward.name ?? '',
+        } : undefined,
+        earned: p.earned === true,
+      } : { active: false },
     }
   } catch {
-    return { available: [], used: [] }
+    return empty
   }
 }

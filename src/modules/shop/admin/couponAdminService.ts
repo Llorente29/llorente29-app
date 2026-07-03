@@ -102,3 +102,56 @@ export async function saveWelcomeOffer(args: {
   if (!data || data.ok !== true) return { ok: false, reason: data?.reason ?? 'error' }
   return { ok: true }
 }
+
+// ── Motor de recompensa por FRECUENCIA (F4·T3) ──────────────────────────────
+
+export interface FrequencyReward {
+  exists: boolean
+  active: boolean
+  threshold: number
+  discountType: DiscountType
+  value: number
+}
+
+/** Lee el motor de frecuencia actual de la cuenta (o defaults si no existe). */
+export async function getFrequencyReward(accountId: string): Promise<FrequencyReward> {
+  try {
+    const { data, error } = await db()
+      .from('coupon')
+      .select('discount_type,value,active,frequency_threshold')
+      .eq('account_id', accountId)
+      .eq('kind', 'frequency')
+      .limit(1)
+      .maybeSingle()
+    if (error || !data) return { exists: false, active: true, threshold: 5, discountType: 'percent', value: 10 }
+    return {
+      exists: true,
+      active: data.active !== false,
+      threshold: Number(data.frequency_threshold ?? 5),
+      discountType: (data.discount_type === 'fixed' ? 'fixed' : 'percent'),
+      value: Number(data.value ?? 10),
+    }
+  } catch {
+    return { exists: false, active: true, threshold: 5, discountType: 'percent', value: 10 }
+  }
+}
+
+/** Guarda el motor de frecuencia (upsert atómico server-side). */
+export async function saveFrequencyReward(args: {
+  accountId: string
+  active: boolean
+  threshold: number
+  discountType: DiscountType
+  value: number
+}): Promise<{ ok: boolean; reason?: string }> {
+  const { data, error } = await db().rpc('save_frequency_reward', {
+    p_account: args.accountId,
+    p_active: args.active,
+    p_threshold: args.threshold,
+    p_discount_type: args.discountType,
+    p_value: args.value,
+  })
+  if (error) return { ok: false, reason: error.message }
+  if (!data || data.ok !== true) return { ok: false, reason: data?.reason ?? 'error' }
+  return { ok: true }
+}

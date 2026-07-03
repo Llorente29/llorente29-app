@@ -23,7 +23,7 @@ import { promoValue, couponReasonMsg } from '@/modules/shop/checkout/couponText'
 import {
   getCustomerOrders, getReorderPayload, setAccountConsent, updateProfile,
   getAddresses, saveAddress, deleteAddress, getCustomerCoupons,
-  type AccountOrder, type CustomerAddress, type CustomerCoupons, type AccountCouponAvailable,
+  type AccountOrder, type CustomerAddress, type CustomerCoupons, type AccountCouponAvailable, type CouponProgress,
 } from '@/modules/shop/account/accountService'
 
 const C = {
@@ -117,7 +117,7 @@ export default function MyAccountRoute({ slug, onBack, onReorder }: {
     let alive = true
     getShopHub(slug).then((h) => { if (alive) setHub(h) }).catch(() => {})
     getCustomerOrders(slug).then((r) => { if (alive) setOrders(r) }).catch(() => { if (alive) setOrders([]) })
-    getCustomerCoupons(slug).then((r) => { if (alive) setCoupons(r) }).catch(() => { if (alive) setCoupons({ available: [], used: [] }) })
+    getCustomerCoupons(slug).then((r) => { if (alive) setCoupons(r) }).catch(() => { if (alive) setCoupons({ available: [], used: [], progress: { active: false } }) })
     getSessionCustomer(slug).then((c) => {
       if (!alive || !c) return
       setName(c.name ?? ''); setPhone(c.phone ?? ''); setEmail(c.email ?? ''); setConsent(c.consented)
@@ -228,6 +228,11 @@ export default function MyAccountRoute({ slug, onBack, onReorder }: {
           <div>
             <div style={S.greeting}>{firstName ? `Hola, ${firstName}` : 'Hola'}</div>
             <div style={S.memberTag}>{consent ? 'Miembro del Club' : 'Tu cuenta'}</div>
+            {coupons?.progress.active && (
+              <div style={S.progressMini}>
+                {Math.min(coupons.progress.current ?? 0, coupons.progress.threshold ?? 0)} de {coupons.progress.threshold} hacia tu próximo bono
+              </div>
+            )}
           </div>
         </div>
       </header>
@@ -267,32 +272,40 @@ export default function MyAccountRoute({ slug, onBack, onReorder }: {
         {tab === 'bonos' && (
           coupons === null ? (
             <div style={S.muted}>Cargando tus bonos…</div>
-          ) : (coupons.available.length === 0 && coupons.used.length === 0) ? (
-            <div style={S.empty}>
-              <div style={{ fontSize: 34, marginBottom: 8 }} aria-hidden>{'🎫'}</div>
-              <div style={S.emptyTitle}>Aún no tienes bonos</div>
-              <div style={S.emptySub}>Únete al Club y aprovecha las ofertas de bienvenida y las recompensas de tu tienda.</div>
-            </div>
           ) : (
-            <div style={S.grid}>
-              {coupons.available.filter((c) => c.eligible).map((c) => (
-                <GoldCouponCard key={c.couponId} c={c} onUse={() => useCoupon(c)} />
-              ))}
-              {coupons.available.filter((c) => !c.eligible).map((c) => (
-                <LockedCouponCard key={c.couponId} c={c} />
-              ))}
-              {coupons.used.map((u, i) => (
-                <div key={`${u.couponId}-${i}`} style={S.usedCard}>
-                  <div style={S.usedTop}>
-                    <span style={S.usedCheck}>{'✓'}</span>
-                    <span style={S.usedLabel}>Usado</span>
-                    <span style={S.usedAmount}>−{eur(u.discountAmount)}</span>
+            <>
+              {coupons.progress.active && <FreqProgress p={coupons.progress} />}
+
+              {(coupons.available.length === 0 && coupons.used.length === 0) ? (
+                !coupons.progress.active && (
+                  <div style={S.empty}>
+                    <div style={{ fontSize: 34, marginBottom: 8 }} aria-hidden>{'🎫'}</div>
+                    <div style={S.emptyTitle}>Aún no tienes bonos</div>
+                    <div style={S.emptySub}>Únete al Club y aprovecha las ofertas de bienvenida y las recompensas de tu tienda.</div>
                   </div>
-                  <div style={S.usedName}>{u.name}</div>
-                  <div style={S.usedDate}>{fmtDate(u.ts)}</div>
+                )
+              ) : (
+                <div style={S.grid}>
+                  {coupons.available.filter((c) => c.eligible).map((c) => (
+                    <GoldCouponCard key={c.couponId} c={c} onUse={() => useCoupon(c)} />
+                  ))}
+                  {coupons.available.filter((c) => !c.eligible).map((c) => (
+                    <LockedCouponCard key={c.couponId} c={c} />
+                  ))}
+                  {coupons.used.map((u, i) => (
+                    <div key={`${u.couponId}-${i}`} style={S.usedCard}>
+                      <div style={S.usedTop}>
+                        <span style={S.usedCheck}>{'✓'}</span>
+                        <span style={S.usedLabel}>Usado</span>
+                        <span style={S.usedAmount}>−{eur(u.discountAmount)}</span>
+                      </div>
+                      <div style={S.usedName}>{u.name}</div>
+                      <div style={S.usedDate}>{fmtDate(u.ts)}</div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           )
         )}
 
@@ -399,16 +412,43 @@ function OrderCard({ o, busy, onReorder }: { o: AccountOrder; busy: boolean; onR
   )
 }
 
+// ── Bloque de progreso por frecuencia (goal-gradient, sellos) ────────────────
+function FreqProgress({ p }: { p: CouponProgress }) {
+  const threshold = p.threshold ?? 0
+  const current = Math.min(p.current ?? 0, threshold)
+  const remaining = Math.max(0, threshold - current)
+  const rewardTxt = promoValue({ discountType: p.reward?.discountType, discountValue: p.reward?.discountValue })
+  return (
+    <div style={S.progWrap}>
+      <div style={S.progTop}>
+        <span style={S.progTitle}>
+          {p.earned
+            ? `¡Tu ${rewardTxt} está listo!`
+            : `Te ${remaining === 1 ? 'falta' : 'faltan'} ${remaining} ${remaining === 1 ? 'pedido' : 'pedidos'} para tu ${rewardTxt}`}
+        </span>
+        <span style={S.progCount}>{current}/{threshold}</span>
+      </div>
+      <div style={S.progBar}>
+        {Array.from({ length: Math.max(threshold, 1) }).map((_, i) => (
+          <span key={i} style={{ ...S.progSeg, ...(i < current ? S.progSegOn : {}) }} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ── Tarjeta de bono DORADA (disponible) ─────────────────────────────────────
 function GoldCouponCard({ c, onUse }: { c: AccountCouponAvailable; onUse: () => void }) {
+  const eyebrow = c.isFrequency ? '¡CONSEGUIDO!' : 'TE ESPERA'
+  const sub = c.isFrequency ? `${c.name} · tu recompensa por fidelidad` : `${c.name} · en tu próximo pedido`
   return (
     <div style={S.goldCard}>
       <div style={S.goldRow}>
-        <span style={S.goldChip} aria-hidden>{'🎁'}</span>
+        <span style={S.goldChip} aria-hidden>{c.isFrequency ? '🎉' : '🎁'}</span>
         <div style={{ minWidth: 0 }}>
-          <div style={S.goldEyebrow}>TE ESPERA</div>
+          <div style={S.goldEyebrow}>{eyebrow}</div>
           <div style={S.goldBig}>Un {promoValue(c)} de regalo</div>
-          <div style={S.goldSub}>{c.name} · en tu próximo pedido</div>
+          <div style={S.goldSub}>{sub}</div>
           {c.endsAt && <div style={S.goldExpiry}>Caduca el {fmtDate(c.endsAt)}</div>}
         </div>
       </div>
@@ -572,7 +612,17 @@ const S: Record<string, React.CSSProperties> = {
   avatar: { width: 52, height: 52, borderRadius: '50%', background: C.accent, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 19, fontWeight: 900, letterSpacing: '-.01em', flexShrink: 0 },
   greeting: { fontSize: 22, fontWeight: 900, letterSpacing: '-.02em', lineHeight: 1.1 },
   memberTag: { fontSize: 13, fontWeight: 700, color: C.inkDim, marginTop: 2 },
+  progressMini: { fontSize: 12.5, fontWeight: 600, color: C.accent, marginTop: 3 },
   wrap: { maxWidth: 900, margin: '0 auto', padding: '10px 22px 60px' },
+
+  // Progreso por frecuencia (sellos)
+  progWrap: { background: C.surface, border: `1px solid ${C.line}`, borderRadius: 16, padding: '16px 18px', marginBottom: 16, boxShadow: '0 2px 10px rgba(26,23,20,.05)' },
+  progTop: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 11 },
+  progTitle: { fontSize: 14.5, fontWeight: 800, color: C.ink, letterSpacing: '-.01em' },
+  progCount: { fontSize: 13, fontWeight: 800, color: C.inkDim, flexShrink: 0 },
+  progBar: { display: 'flex', gap: 6 },
+  progSeg: { flex: 1, height: 10, borderRadius: 999, background: C.pill },
+  progSegOn: { background: C.accent },
 
   tabs: { display: 'inline-flex', background: C.pill, borderRadius: 999, padding: 4, marginBottom: 20, gap: 2 },
   tab: { display: 'inline-flex', alignItems: 'center', gap: 7, border: 'none', background: 'none', borderRadius: 999, padding: '9px 16px', fontWeight: 800, fontSize: 13.5, cursor: 'pointer', color: C.inkDim },
