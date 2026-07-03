@@ -14,8 +14,9 @@ export interface HubBrand {
   cuisineLabel: string | null
   cuisineEmoji: string | null
   isOpen: boolean
-  // Mejor oferta item_percent activa ahora que toca esta marca (badge del hub).
-  offer: { pct: number; multi: boolean } | null
+  // Mejor oferta activa ahora que toca esta marca (badge del hub). kind: 'bogo'
+  // gana a 'item_percent' ("2x1" vende más que "−20%").
+  offer: { kind: 'bogo' | 'item_percent'; pct: number; multi: boolean } | null
 }
 
 export interface TopDish {
@@ -77,7 +78,7 @@ export async function getShopHub(slug: string): Promise<ShopHub | null> {
       cuisineEmoji: b.cuisine_emoji ?? null,
       isOpen: b.is_open === true,
       offer: b.offer && b.offer.pct != null
-        ? { pct: Number(b.offer.pct), multi: b.offer.multi === true }
+        ? { kind: b.offer.kind === 'bogo' ? 'bogo' : 'item_percent', pct: Number(b.offer.pct), multi: b.offer.multi === true }
         : null,
     })),
     topDishes: (data.top_dishes ?? []).map((t: any) => ({

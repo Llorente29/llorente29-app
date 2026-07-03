@@ -182,7 +182,7 @@ export default function BrandMenuRoute({ slug, brandId, onBack, onCheckout }: { 
                 const bg = d.offer?.kind === 'bogo' ? d.offer : null      // BOGO gana: badge 2x1, precio unitario intacto
                 const off = d.offer?.kind === 'item_percent' ? d.offer : null
                 return (
-                <div key={d.id} className="fvdish" style={{ ...S.dish, ...(d.offer ? S.dishOn : {}) }}>
+                <div key={d.id} className="fvdish" style={{ ...S.dish, ...(bg ? S.dishOnBogo : off ? S.dishOn : {}) }}>
                   <div style={{ ...S.dishPhoto, background: d.photoUrl ? `center/cover no-repeat url(${d.photoUrl})` : C.accentBg, position: 'relative' }}>
                     {bg
                       ? <span style={S.bogoBadge}>{bogoText(bg.pct)}</span>
@@ -303,15 +303,16 @@ const S: Record<string, React.CSSProperties> = {
   dishDesc: { fontSize: 13, color: C.inkDim, lineHeight: 1.4, marginBottom: 12, flex: 1 },
   dishFoot: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto' },
   dishPrice: { fontWeight: 900, fontSize: 16 },
-  dishBadge: { position: 'absolute', top: 10, left: 10, background: C.accent, color: '#fff', fontSize: 13, fontWeight: 800, padding: '4px 10px', borderRadius: 999, boxShadow: '0 2px 8px rgba(0,0,0,.18)' },
-  bogoBadge: { position: 'absolute', top: 10, left: 10, background: '#16140F', color: C.accent2, fontSize: 13, fontWeight: 900, letterSpacing: '.02em', padding: '4px 10px', borderRadius: 999, boxShadow: '0 2px 8px rgba(0,0,0,.22)' },
+  dishBadge: { position: 'absolute', top: 12, left: 12, background: C.accent, color: '#fff', fontSize: 17, fontWeight: 900, letterSpacing: '.01em', padding: '8px 15px', borderRadius: 12, boxShadow: '0 4px 14px rgba(255,84,54,.45)' },
+  bogoBadge: { position: 'absolute', top: 12, left: 12, background: '#16140F', color: '#FFC400', fontSize: 18, fontWeight: 900, letterSpacing: '.03em', padding: '8px 16px', borderRadius: 12, boxShadow: '0 4px 16px rgba(0,0,0,.4)', textTransform: 'uppercase' },
   priceWrap: { display: 'flex', alignItems: 'baseline', gap: 7 },
   dishPriceNow: { fontWeight: 900, fontSize: 17.5, color: C.accent },
   dishPriceWas: { fontSize: 13, color: C.inkDim, textDecoration: 'line-through' },
   omnibusNote: { fontSize: 11, color: C.inkDim, marginTop: 6 },
-  dishOn: { border: `1.5px solid ${C.accent}` },
-  offerBanner: { display: 'block', width: '100%', textAlign: 'left', background: '#FFE9E3', color: C.accent, border: `1px solid ${C.accent}33`, borderRadius: 14, padding: '11px 16px', fontSize: 14, fontWeight: 800, letterSpacing: '-.01em', cursor: 'pointer', marginBottom: 22 },
-  freeShipBanner: { display: 'block', width: '100%', textAlign: 'left', background: '#E3F6EC', color: '#1FA85B', border: '1px solid #1FA85B33', borderRadius: 14, padding: '11px 16px', fontSize: 14, fontWeight: 800, letterSpacing: '-.01em', cursor: 'default', marginBottom: 22 },
+  dishOn: { border: `2px solid ${C.accent}` },
+  dishOnBogo: { border: '2px solid #16140F', background: '#FFFBEB' },
+  offerBanner: { display: 'block', width: '100%', textAlign: 'left', background: '#FFDCD2', color: C.accent, border: `1.5px solid ${C.accent}66`, borderRadius: 16, padding: '15px 18px', fontSize: 15.5, fontWeight: 900, letterSpacing: '-.01em', cursor: 'pointer', marginBottom: 22, boxShadow: '0 3px 12px rgba(255,84,54,.12)' },
+  freeShipBanner: { display: 'block', width: '100%', textAlign: 'left', background: '#D8F2E4', color: '#1FA85B', border: '1.5px solid #1FA85B66', borderRadius: 16, padding: '15px 18px', fontSize: 15.5, fontWeight: 900, letterSpacing: '-.01em', cursor: 'default', marginBottom: 22 },
   catPill: { marginLeft: 10, verticalAlign: 'middle', background: C.accent, color: '#fff', fontSize: 12, fontWeight: 800, padding: '3px 10px', borderRadius: 999 },
   catPillBogo: { marginLeft: 10, verticalAlign: 'middle', background: '#16140F', color: C.accent2, fontSize: 12, fontWeight: 900, padding: '3px 10px', borderRadius: 999 },
   addBtn: { background: C.accent, color: '#fff', border: 'none', borderRadius: 999, padding: '8px 15px', fontWeight: 800, fontSize: 14, cursor: 'not-allowed', opacity: .45, display: 'inline-flex', alignItems: 'center', gap: 5 },

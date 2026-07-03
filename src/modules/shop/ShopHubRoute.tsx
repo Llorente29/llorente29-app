@@ -460,9 +460,15 @@ function BrandCard({ b, freeDelivery, onOpen }: { b: HubBrand; freeDelivery?: bo
           </span>
         )}
         {b.offer && (
-          <span style={{ position: 'absolute', top: 12, left: 12, background: C.accent, color: '#fff', fontSize: 12.5, fontWeight: 800, padding: '5px 11px', borderRadius: 999, boxShadow: '0 2px 10px rgba(255,84,54,.4)' }}>
-            {b.offer.multi ? `Hasta −${Math.round(b.offer.pct)}%` : `−${Math.round(b.offer.pct)}%`}
-          </span>
+          b.offer.kind === 'bogo' ? (
+            <span style={{ position: 'absolute', top: 12, left: 12, background: '#16140F', color: '#FFC400', fontSize: 17, fontWeight: 900, letterSpacing: '.02em', padding: '8px 15px', borderRadius: 12, boxShadow: '0 4px 14px rgba(0,0,0,.35)', textTransform: 'uppercase' }}>
+              {b.offer.pct >= 100 ? '2x1' : `2ª −${Math.round(b.offer.pct)}%`}
+            </span>
+          ) : (
+            <span style={{ position: 'absolute', top: 12, left: 12, background: C.accent, color: '#fff', fontSize: 16, fontWeight: 900, letterSpacing: '.01em', padding: '8px 15px', borderRadius: 12, boxShadow: '0 4px 14px rgba(255,84,54,.45)' }}>
+              {b.offer.multi ? `Hasta −${Math.round(b.offer.pct)}%` : `−${Math.round(b.offer.pct)}%`}
+            </span>
+          )
         )}
       </div>
       <div style={{ padding: '15px 16px 17px' }}>
