@@ -2,7 +2,7 @@
 // Service worker de Folvy — instalable + anti-bundle-viejo.
 //
 // Bump de versión para forzar byte-diff y que el navegador instale este SW.
-const SW_VERSION = 'folvy-2026-07-03-offers-v2-freeship';
+const SW_VERSION = 'folvy-2026-07-03-offers-v2-gestor';
 
 // Objetivo: cumplir el requisito de Chrome/Android para que la app sea
 // INSTALABLE (handler 'fetch' que llama de verdad a event.respondWith), y a la
