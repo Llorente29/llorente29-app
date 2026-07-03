@@ -24,6 +24,7 @@ import {
 import { getShopHub, type ShopHub } from '@/modules/shop/services/shopHubService'
 import { getSessionCustomer, registerShopConsent } from '@/modules/shop/checkout/customerAuthService'
 import { getAddresses, type CustomerAddress } from '@/modules/shop/account/accountService'
+import { promoValue, couponReasonMsg } from '@/modules/shop/checkout/couponText'
 
 const C = {
   page: '#F7F7F5', surface: '#FFFFFF', ink: '#16140F', inkDim: '#6E6960', inkFaint: '#8A857C',
@@ -33,32 +34,13 @@ const C = {
 }
 function eur(n: number): string { return n.toFixed(2).replace('.', ',') + ' \u20AC' }
 
-// Valor escueto de la promo ("10%" / "4 €"), para el titular grande de la tarjeta.
-// Cae a "10%" solo si faltara el tipo/valor (no debería con la migración T2100).
-function promoValue(c: CouponResult | null | undefined): string {
-  if (c?.discountType === 'percent' && c.discountValue != null) return `${String(c.discountValue).replace('.', ',')}%`
-  if (c?.discountType === 'fixed' && c.discountValue != null) return eur(c.discountValue)
-  return '10%'
-}
-
 // Nota gris cuando la bienvenida existe pero no aplica por un motivo distinto a
 // "falta contacto": ya usada (not_first/per_customer) o agotada (exhausted).
 function welcomeNoteMsg(reason: string | null | undefined): string {
   if (reason === 'exhausted') return 'La oferta de bienvenida se ha agotado por ahora.'
   return 'Esta bienvenida es solo para el primer pedido, pero pronto tendremos más para ti.'
 }
-
-// Mensaje amable por el que un cupón no se aplicó (no expone el motivo de margen).
-function couponReasonMsg(reason: string): string {
-  switch (reason) {
-    case 'min':          return 'Tu pedido no llega al mínimo para este cupón.'
-    case 'not_first':    return 'Este cupón es solo para el primer pedido.'
-    case 'exhausted':    return 'Este cupón ya no está disponible.'
-    case 'per_customer': return 'Ya has usado este cupón.'
-    case 'needs_contact': return 'Deja tu email y únete al club para usar este cupón.'
-    default:             return 'Cupón no válido.'
-  }
-}
+// promoValue + couponReasonMsg viven en couponText.ts (compartidos con Mi cuenta).
 
 // Icono de ubicación (protagonista de la sección de entrega).
 function Pin({ size = 24, color = '#FF5436' }: { size?: number; color?: string }) {
@@ -232,6 +214,16 @@ export default function CheckoutRoute({ slug, onBack, onTrack }: { slug: string;
     if (a.detail) setDetail(a.detail)
     chooseHit({ label: a.address, lat: a.lat, lng: a.lng, postcode: null })
   }
+
+  // F4·T2: cupón precargado desde "Mis bonos" (Usar ahora con código). Al montar
+  // el checkout lo aplicamos y limpiamos la clave; el dry-run existente hace el resto.
+  useEffect(() => {
+    try {
+      const k = `folvy-shop-pending-coupon:${slug}`
+      const code = sessionStorage.getItem(k)
+      if (code) { setCouponCode(code); sessionStorage.removeItem(k) }
+    } catch { /* ignore */ }
+  }, [slug])
 
   // Captura ANTICIPADA de consentimiento: al marcar/desmarcar la casilla (con correo
   // válido) registramos el permiso YA, sin esperar al pago. Solo tras interacción

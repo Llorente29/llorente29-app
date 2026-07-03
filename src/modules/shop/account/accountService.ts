@@ -45,6 +45,39 @@ export interface ReorderPayload {
   locationId: string | null
   mode: 'delivery' | 'pickup'
   lines: OrderLine[]
+  // menuItemId -> marca (para poblar el CartPanel tras el reorder).
+  brandById: Record<string, { brandId: string | null; brandName: string }>
+}
+
+// ── Cupones / bonos ────────────────────────────────────────────────────────
+
+export interface AccountCouponUsed {
+  couponId: string
+  name: string
+  code: string | null
+  discountType: 'percent' | 'fixed' | null
+  discountValue: number | null
+  discountAmount: number
+  ts: string                    // ISO
+}
+
+export interface AccountCouponAvailable {
+  couponId: string
+  name: string
+  code: string | null
+  discountType: 'percent' | 'fixed' | null
+  discountValue: number | null
+  minSubtotal: number | null
+  endsAt: string | null
+  autoApply: boolean
+  isWelcome: boolean
+  eligible: boolean
+  reason: string | null         // null (eligible) | not_first | needs_consent | exhausted
+}
+
+export interface CustomerCoupons {
+  available: AccountCouponAvailable[]
+  used: AccountCouponUsed[]
 }
 
 export interface CustomerAddress {
@@ -98,6 +131,7 @@ export async function getReorderPayload(slug: string, saleId: string): Promise<{
         locationId: p.locationId ?? null,
         mode: (p.mode === 'pickup' ? 'pickup' : 'delivery') as 'delivery' | 'pickup',
         lines: (p.lines ?? []) as OrderLine[],
+        brandById: (p.brandById ?? {}) as Record<string, { brandId: string | null; brandName: string }>,
       },
     }
   } catch (e: any) {
@@ -197,5 +231,43 @@ export async function deleteAddress(slug: string, id: string): Promise<{ ok: boo
     return { ok: true }
   } catch (e: any) {
     return { ok: false, reason: e?.message ?? 'error' }
+  }
+}
+
+// ── Cupones / bonos ────────────────────────────────────────────────────────
+
+export async function getCustomerCoupons(slug: string): Promise<CustomerCoupons> {
+  const token = getStoredSessionToken(slug)
+  if (!token) return { available: [], used: [] }
+  try {
+    const { data, error } = await db().rpc('customer_coupons', { p_token: token })
+    if (error || !data || data.ok !== true) return { available: [], used: [] }
+    const num = (v: any) => (v != null ? Number(v) : null)
+    return {
+      available: (data.available ?? []).map((c: any) => ({
+        couponId: c.couponId,
+        name: c.name ?? '',
+        code: c.code ?? null,
+        discountType: (c.discountType ?? null) as 'percent' | 'fixed' | null,
+        discountValue: num(c.discountValue),
+        minSubtotal: num(c.minSubtotal),
+        endsAt: c.endsAt ?? null,
+        autoApply: c.autoApply === true,
+        isWelcome: c.isWelcome === true,
+        eligible: c.eligible === true,
+        reason: c.reason ?? null,
+      })) as AccountCouponAvailable[],
+      used: (data.used ?? []).map((c: any) => ({
+        couponId: c.couponId,
+        name: c.name ?? '',
+        code: c.code ?? null,
+        discountType: (c.discountType ?? null) as 'percent' | 'fixed' | null,
+        discountValue: num(c.discountValue),
+        discountAmount: c.discountAmount != null ? Number(c.discountAmount) : 0,
+        ts: c.ts,
+      })) as AccountCouponUsed[],
+    }
+  } catch {
+    return { available: [], used: [] }
   }
 }

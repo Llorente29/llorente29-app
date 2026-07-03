@@ -105,6 +105,8 @@ function ShopHubInner({ slug, onCheckout, onAccount }: { slug: string; onCheckou
   const [customerName, setCustomerName] = useState<string | null>(null)
   const [loggedIn, setLoggedIn] = useState(false)
   const [showLogin, setShowLogin] = useState(false)
+  // Banner breve al aterrizar desde "Usar ahora" (Mi cuenta → bono).
+  const [couponBanner, setCouponBanner] = useState<string | null>(null)
 
   useEffect(() => {
     let alive = true
@@ -113,6 +115,20 @@ function ShopHubInner({ slug, onCheckout, onAccount }: { slug: string; onCheckou
       if (c) { setLoggedIn(true); setCustomerName(c.name) }
     })
     return () => { alive = false }
+  }, [slug])
+
+  // F4·T2: banner del bono precargado (lo deja Mi cuenta en sessionStorage).
+  useEffect(() => {
+    try {
+      const k = `folvy-shop-coupon-banner:${slug}`
+      const msg = sessionStorage.getItem(k)
+      if (msg) {
+        setCouponBanner(msg)
+        sessionStorage.removeItem(k)
+        const t = setTimeout(() => setCouponBanner(null), 6000)
+        return () => clearTimeout(t)
+      }
+    } catch { /* ignore */ }
   }, [slug])
 
   async function doLogout() {
@@ -203,6 +219,11 @@ function ShopHubInner({ slug, onCheckout, onAccount }: { slug: string; onCheckou
 
   return (
     <div style={S.page}>
+      {couponBanner && (
+        <div style={S.couponBanner}>
+          <span aria-hidden>{'🎁'}</span> {couponBanner}
+        </div>
+      )}
       {/* 1 · TOP BAR · la identidad de marca vive en el héroe (Opción C) */}
       <div style={S.topbar}>
         <span aria-hidden="true" />
@@ -449,6 +470,7 @@ const C = {
 const S: Record<string, React.CSSProperties> = {
   page: { minHeight: '100vh', background: C.bg, color: C.ink, fontFamily: 'inherit' },
   topbar: { position: 'sticky', top: 0, zIndex: 50, background: '#FBF7F0', borderBottom: `1px solid ${C.line}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20, padding: '11px 28px' },
+  couponBanner: { background: '#FFF3D6', color: '#7A5A12', borderBottom: '1px solid #F2DCA0', fontSize: 13.5, fontWeight: 700, textAlign: 'center', padding: '10px 16px' },
   logo: { display: 'flex', alignItems: 'center', gap: 8, fontWeight: 900, fontSize: 20, letterSpacing: '-.03em' },
   logoDot: { width: 11, height: 11, borderRadius: '50%', background: C.accent },
   logoImg: { height: 50, width: 'auto', maxWidth: 260, objectFit: 'contain', display: 'block' },

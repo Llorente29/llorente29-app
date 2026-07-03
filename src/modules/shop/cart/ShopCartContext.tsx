@@ -71,6 +71,7 @@ export interface ReorderCartItem {
   name: string
   quantity: number
   unitPrice: number
+  brandId?: string
   brandName?: string
   photoUrl?: string | null
 }
@@ -193,7 +194,7 @@ export function ShopCartProvider({ slug, children }: { slug: string; children: R
   function replaceCart(locationId: string, items: ReorderCartItem[]) {
     const lines: CartLine[] = items.map((it) => ({
       lineId: newLineId(),
-      brandId: '',
+      brandId: it.brandId ?? '',
       brandName: it.brandName ?? '',
       brandLocationIds: [locationId],
       menuItemId: it.order.menuItemId,
