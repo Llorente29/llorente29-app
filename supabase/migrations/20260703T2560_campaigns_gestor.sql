@@ -12,8 +12,11 @@
 
 begin;
 
--- Reemplazo de la firma antigua (G1, solo standard).
-drop function if exists public.save_campaign(uuid, uuid, text, text, text, numeric, numeric, timestamp with time zone, timestamp with time zone, integer, integer);
+-- Reemplazo de la firma antigua (G1, solo standard). Firma VIVA confirmada en pg_proc:
+--   save_campaign(uuid, uuid, text, text, text, numeric, numeric, timestamptz, timestamptz, integer, integer)
+-- DROP IF EXISTS de AMBAS firmas (antigua 11-args y nueva 17-args) para re-ejecutabilidad.
+drop function if exists public.save_campaign(uuid, uuid, text, text, text, numeric, numeric, timestamptz, timestamptz, integer, integer);
+drop function if exists public.save_campaign(uuid, uuid, text, text, text, numeric, numeric, timestamptz, timestamptz, integer, integer, smallint[], time, time, numeric, jsonb);
 
 create or replace function public.save_campaign(
   p_account uuid, p_id uuid, p_kind text, p_name text, p_code text,
