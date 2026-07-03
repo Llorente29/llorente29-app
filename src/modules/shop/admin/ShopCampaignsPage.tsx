@@ -63,10 +63,14 @@ const STATUS_META: Record<CampaignStatus, { label: string; style: CSSProperties 
 
 const WD_LABELS = ['', 'L', 'M', 'X', 'J', 'V', 'S', 'D']
 
+// value=100 en bogo = 2x1 clásico; si no, "2ª al -X%".
+function bogoLabel(v: number): string { return v >= 100 ? '2x1' : `2ª al -${String(v).replace('.', ',')}%` }
+
 function kindLabel(c: Campaign): string {
   return c.isSystem ? 'Sistema'
     : c.kind === 'item_percent' ? 'Carta'
     : c.kind === 'free_delivery' ? 'Envío'
+    : c.kind === 'bogo' ? '2x1'
     : 'Código'
 }
 
@@ -74,6 +78,7 @@ function configLine(c: Campaign): string {
   const parts: string[] = []
   if (c.kind === 'free_delivery') parts.push('Envío gratis')
   else if (c.kind === 'item_percent') parts.push(`${promoText('percent', c.value)} en platos`)
+  else if (c.kind === 'bogo') parts.push(`${bogoLabel(c.value)} en platos`)
   else parts.push(promoText(c.discountType, c.value))
   if (c.kind === 'frequency' && c.frequencyThreshold) parts.push(`cada ${c.frequencyThreshold} pedidos`)
   if (c.firstOrderOnly) parts.push('primer pedido')
@@ -111,7 +116,7 @@ function matchType(c: Campaign, t: TypeFilter): boolean {
   if (t === 'system') return c.isSystem
   if (c.isSystem) return false
   if (t === 'order') return c.kind === 'standard'
-  if (t === 'item') return c.kind === 'item_percent'
+  if (t === 'item') return c.kind === 'item_percent' || c.kind === 'bogo'
   if (t === 'free') return c.kind === 'free_delivery'
   return true
 }
@@ -323,6 +328,7 @@ const KIND_OPTS: { kind: CampaignKind; dt?: DiscountType; label: string; hint: s
   { kind: 'standard', dt: 'percent', label: '% del pedido', hint: 'Código con % sobre el subtotal' },
   { kind: 'standard', dt: 'fixed', label: '€ del pedido', hint: 'Código con importe fijo' },
   { kind: 'item_percent', label: '% en platos', hint: 'Oferta de carta sobre marca/categoría/platos' },
+  { kind: 'bogo', label: '2x1 / 2ª unidad', hint: 'La 2ª unidad del mismo plato con % de descuento' },
   { kind: 'free_delivery', label: 'Envío gratis', hint: 'Sin gastos de envío' },
 ]
 
@@ -367,16 +373,17 @@ function CampaignModal({ accountId, mode, source, onClose, onSaved }: {
   useEffect(() => {
     let alive = true
     getCampaignMenuTree(accountId).then((t) => { if (alive) setTree(t) })
-    if (source && (mode === 'edit' || mode === 'clone') && source.kind === 'item_percent') {
+    if (source && (mode === 'edit' || mode === 'clone') && (source.kind === 'item_percent' || source.kind === 'bogo')) {
       getCampaignScope(source.id).then((sc) => { if (alive) setScope(sc) })
     }
     return () => { alive = false }
   }, [accountId, source, mode])
 
-  const isStd = kind === 'standard', isItem = kind === 'item_percent', isFree = kind === 'free_delivery'
+  const isStd = kind === 'standard', isItem = kind === 'item_percent', isFree = kind === 'free_delivery', isBogo = kind === 'bogo'
+  const usesScope = isItem || isBogo   // item_percent y bogo comparten el picker de alcance
 
   const affected: TreeItem[] = useMemo(() => {
-    if (!tree || !isItem) return []
+    if (!tree || !usesScope) return []
     const byBrand = new Map<string, TreeItem[]>(), byCat = new Map<string, TreeItem[]>(), byItem = new Map<string, TreeItem>()
     for (const b of tree.brands) {
       const arr: TreeItem[] = []
@@ -393,7 +400,7 @@ function CampaignModal({ accountId, mode, source, onClose, onSaved }: {
       for (const it of (list ?? [])) out.set(it.id, it)
     }
     return [...out.values()]
-  }, [tree, scope, isItem])
+  }, [tree, scope, usesScope])
 
   // Carta aplanada para el buscador. El árbol completo ya viene del servidor
   // (campaign_menu_tree, reutilizado por el impacto de margen): con ~17 marcas son
@@ -492,7 +499,7 @@ function CampaignModal({ accountId, mode, source, onClose, onSaved }: {
       name,
       code: isStd ? code : null,
       discountType: isStd ? discountType : undefined,
-      value: isStd || isItem ? value : undefined,
+      value: isStd || isItem || isBogo ? value : undefined,
       minSubtotal: (isStd || isFree) ? minSubtotal : null,
       startsAt: localToIso(startsAt),
       endsAt: localToIso(endsAt),
@@ -502,7 +509,7 @@ function CampaignModal({ accountId, mode, source, onClose, onSaved }: {
       timeFrom: timeFrom || null,
       timeTo: timeTo || null,
       budgetMax,
-      scope: isItem ? scope : undefined,
+      scope: usesScope ? scope : undefined,
     })
     setSaving(false)
     if (!res.ok) { setError(saveCampaignError(res.reason)); return }
@@ -577,16 +584,17 @@ function CampaignModal({ accountId, mode, source, onClose, onSaved }: {
             </>
           )}
 
-          {isItem && (
+          {usesScope && (
             <>
               <div style={s.field}>
-                <label style={s.label}>Descuento por plato</label>
+                <label style={s.label}>{isBogo ? 'Descuento de la 2ª unidad' : 'Descuento por plato'}</label>
                 <div style={s.valueRow}>
                   <input type="number" min={0} max={100} value={Number.isFinite(value) ? value : 0} onChange={(e) => setValue(parseFloat(e.target.value) || 0)} style={s.input} />
                   <span style={s.unit}>%</span>
                 </div>
+                {isBogo && <div style={s.bogoHint}>100% = 2x1 (la 2ª gratis). 50% = la 2ª a mitad de precio. Se aplica a cada par de unidades del mismo plato.</div>}
               </div>
-              <label style={s.label}>¿A qué platos?</label>
+              <label style={s.label}>{isBogo ? '¿En qué platos el 2x1?' : '¿A qué platos?'}</label>
 
               {/* Selector de marca: acota categorías/platos a una marca (o todas). */}
               <div style={s.brandChips}>
@@ -667,7 +675,7 @@ function CampaignModal({ accountId, mode, source, onClose, onSaved }: {
             </div>
           )}
 
-          {(isItem || isFree) && (
+          {(usesScope || isFree) && (
             <>
               <label style={s.label}>Días <span style={s.opt}>(vacío = todos)</span></label>
               <div style={s.wdRow}>
@@ -685,13 +693,26 @@ function CampaignModal({ accountId, mode, source, onClose, onSaved }: {
             <div style={s.field}><label style={s.label}>Termina <span style={s.opt}>(opcional)</span></label><input type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} style={s.input} /></div>
           </div>
 
-          {(isItem || isFree) && (
+          {(usesScope || isFree) && (
             <div style={s.field}>
               <label style={s.label}>Presupuesto máx. <span style={s.opt}>(€ de descuento; opcional)</span></label>
               <div style={s.valueRow}>
                 <input type="number" min={0} value={budgetMax ?? ''} placeholder="sin tope" onChange={(e) => setBudgetMax(e.target.value === '' ? null : (parseFloat(e.target.value) || 0))} style={s.input} />
                 <span style={s.unit}>€</span>
               </div>
+            </div>
+          )}
+
+          {isBogo && affected.length > 0 && (
+            <div style={s.impact}>
+              <div style={s.impactHead}>Coste del {bogoLabel(value)} ({affected.length} {affected.length === 1 ? 'plato' : 'platos'} en la oferta)</div>
+              <div style={s.note}>Por cada 2 unidades del mismo plato, la 2ª lleva un <b>−{String(value).replace('.', ',')}%</b>. El coste por par = ese % del precio del plato.</div>
+              {(() => {
+                const costed = affected.filter((i) => i.price > 0)
+                if (!costed.length) return null
+                const avgPerPair = costed.reduce((sum, i) => sum + i.price * (value / 100), 0) / costed.length
+                return <div style={{ ...s.note, marginTop: 6 }}>Coste medio por par: <b>{eur(round2(avgPerPair))}</b> (media sobre {costed.length} {costed.length === 1 ? 'plato' : 'platos'}).</div>
+              })()}
             </div>
           )}
 
@@ -809,6 +830,7 @@ const styles: Record<string, CSSProperties> = {
   marginAfter: { fontSize: 24, fontWeight: 600 },
   marginCaption: { fontSize: 12, color: C.inkFaint },
   note: { fontSize: 13, color: C.inkDim, lineHeight: 1.45 },
+  bogoHint: { fontSize: 11.5, color: C.inkFaint, lineHeight: 1.4, marginTop: 6 },
   warn: { marginTop: 10, padding: '8px 11px', background: C.amberBg, border: `1px solid ${C.amberLine}`, borderRadius: 10, fontSize: 12, color: C.amber, lineHeight: 1.4 },
   err: { fontSize: 13, color: C.red, fontWeight: 600, marginRight: 'auto' },
   ghost: { background: 'none', border: `1px solid ${C.lineInput}`, color: C.ink, borderRadius: 10, padding: '9px 18px', fontSize: 14, fontWeight: 700, cursor: 'pointer' },

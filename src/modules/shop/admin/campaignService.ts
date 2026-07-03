@@ -16,7 +16,7 @@ function db() {
 
 export type CampaignStatus = 'active' | 'scheduled' | 'expired' | 'paused'
 
-export type CampaignKind = 'standard' | 'frequency' | 'item_percent' | 'free_delivery'
+export type CampaignKind = 'standard' | 'frequency' | 'item_percent' | 'free_delivery' | 'bogo'
 
 export interface Campaign {
   id: string
