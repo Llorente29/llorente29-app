@@ -5,7 +5,7 @@
 // acciones que lo alimentan: entrada directa, traspaso entre locales y merma.
 
 import { useEffect, useMemo, useState } from 'react'
-import { Loader2, Plus, ArrowLeftRight, Trash2, RefreshCw } from 'lucide-react'
+import { Loader2, Plus, ArrowLeftRight, Trash2, RefreshCw, Search, X } from 'lucide-react'
 import type { SupplyLocation } from '@/modules/supply/services/supplierCatalogService'
 import {
   listMovements, MOVEMENT_FILTERS, movementLabel, type MovementRow,
@@ -31,6 +31,9 @@ function rangeFor(key: RangeKey): { from: string | null; to: string | null } {
   }
 }
 
+// Normaliza para buscar: minúsculas y sin acentos ("limon" encuentra "Limón")
+const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+
 const fmtEur = (v: number | null) => v == null ? '—' : new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(v)
 const fmtQty = (v: number) => new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 }).format(v)
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
@@ -55,6 +58,7 @@ export default function MovementsSection({
 }) {
   const [filterKey, setFilterKey] = useState('all')
   const [rangeKey, setRangeKey] = useState<RangeKey>('30d')
+  const [q, setQ] = useState('')
   const [data, setData] = useState<{ total: number; items: MovementRow[] }>({ total: 0, items: [] })
   const [loading, setLoading] = useState(false)
   const [reloadTick, setReloadTick] = useState(0)
@@ -62,6 +66,13 @@ export default function MovementsSection({
 
   const types = useMemo(() => MOVEMENT_FILTERS.find(f => f.key === filterKey)?.types ?? null, [filterKey])
   const range = useMemo(() => rangeFor(rangeKey), [rangeKey])
+
+  // Filtro por artículo sobre las filas ya cargadas (hasta 300 del rango elegido)
+  const shown = useMemo(() => {
+    const term = norm(q.trim())
+    if (!term) return data.items
+    return data.items.filter(m => norm(m.itemName).includes(term))
+  }, [data.items, q])
 
   useEffect(() => {
     if (!accountId || !locationId) { setData({ total: 0, items: [] }); return }
@@ -108,6 +119,17 @@ export default function MovementsSection({
           </button>
         ))}
         <span className="mx-1 w-px h-4 bg-border-default" />
+        <div className="relative flex-1 min-w-[150px]">
+          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-tertiary" />
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar artículo…"
+            className="w-full h-7 pl-7 pr-7 text-xs rounded-md border border-border-default bg-card text-text-primary" />
+          {q && (
+            <button type="button" onClick={() => setQ('')} aria-label="Limpiar"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-text-tertiary hover:text-text-primary">
+              <X size={12} />
+            </button>
+          )}
+        </div>
         <select value={rangeKey} onChange={e => setRangeKey(e.target.value as RangeKey)}
           className="text-xs px-2 py-1 border border-border-default rounded-md bg-page text-text-secondary">
           {RANGES.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
@@ -121,9 +143,9 @@ export default function MovementsSection({
       {/* Histórico */}
       {loading ? (
         <div className="flex items-center gap-2 text-text-secondary text-sm p-4"><Loader2 size={15} className="animate-spin" /> Cargando histórico…</div>
-      ) : data.items.length === 0 ? (
+      ) : shown.length === 0 ? (
         <div className="text-center py-10 text-text-secondary text-sm border border-dashed border-border-default rounded-lg">
-          No hay movimientos en este filtro.
+          {q.trim() ? `Sin movimientos de "${q.trim()}" en este rango. Amplía el rango de fechas si buscas algo antiguo.` : 'No hay movimientos en este filtro.'}
         </div>
       ) : (
         <div className="border border-border-default rounded-lg overflow-hidden">
@@ -135,7 +157,7 @@ export default function MovementsSection({
             <span className="w-20 text-right">Coste</span>
             <span className="w-32">Quién / origen</span>
           </div>
-          {data.items.map(m => (
+          {shown.map(m => (
             <div key={m.id} className="flex items-center gap-3 px-3 py-2.5 border-t border-border-default first:border-t-0">
               <span className="w-24 text-xs text-text-tertiary">{fmtDate(m.occurredAt)}</span>
               <span className="flex-1 text-sm text-text-primary truncate">{m.itemName}</span>

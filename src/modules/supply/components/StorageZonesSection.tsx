@@ -48,6 +48,19 @@ type AssignTarget =
   | { mode: 'assign'; itemIds: string[]; label: string; fromZoneId?: undefined }
   | { mode: 'move'; itemIds: string[]; label: string; fromZoneId: string }
 
+// Resultado de la búsqueda global: artículo + en qué zona está (o sin zona)
+type GlobalHit = {
+  recipeItemId: string
+  name: string
+  zoneName: string | null
+  qty: number | null
+  unitAbbr: string | null
+  buyFormatName: string | null
+  buyFormatQtyInBase: number | null
+  valueEur: number | null
+  familyName?: string | null
+}
+
 export default function StorageZonesSection({
   accountId,
   locationId,
@@ -83,6 +96,11 @@ export default function StorageZonesSection({
   const [peek, setPeek] = useState<PeekItem | null>(null)
   const [exporting, setExporting] = useState(false)
 
+  // búsqueda GLOBAL del almacén (todas las zonas + sin zona)
+  const [globalQ, setGlobalQ] = useState('')
+  const [globalResults, setGlobalResults] = useState<GlobalHit[] | null>(null)
+  const [globalLoading, setGlobalLoading] = useState(false)
+
   async function loadCoverage() {
     setLoading(true)
     try {
@@ -109,6 +127,57 @@ export default function StorageZonesSection({
     setReloadKey(k => k + 1)
     onZonesChanged()
   }
+
+  // Un resultado global abre el mismo panel de artículo (con Ajuste) que el resto de la pantalla.
+  function onPeekGlobal(h: GlobalHit) {
+    setPeek({
+      recipeItemId: h.recipeItemId, name: h.name, valueEur: h.valueEur,
+      qty: h.qty, unitAbbr: h.unitAbbr, familyName: h.familyName ?? undefined,
+    })
+  }
+
+  // Búsqueda global: pregunta a TODAS las zonas y a "sin zona" a la vez.
+  // Debounce 250ms; se activa desde 2 caracteres; el reloadKey re-busca tras un cambio.
+  useEffect(() => {
+    const term = globalQ.trim()
+    if (term.length < 2) { setGlobalResults(null); setGlobalLoading(false); return }
+    if (!coverage) return
+    let cancelled = false
+    setGlobalLoading(true)
+    const t = setTimeout(async () => {
+      try {
+        const zones = coverage.zones
+        const perZone = await Promise.all(
+          zones.map(z =>
+            listZoneItems(accountId, z.id, { search: term, limit: 20 })
+              .then(res => res.items.map(it => ({
+                recipeItemId: it.recipeItemId, name: it.name, zoneName: z.name,
+                qty: it.qty, unitAbbr: it.unitAbbr,
+                buyFormatName: it.buyFormatName, buyFormatQtyInBase: it.buyFormatQtyInBase,
+                valueEur: it.valueEur,
+              } as GlobalHit)))
+              .catch(() => [] as GlobalHit[]),
+          ),
+        )
+        const orph = await listOrphans(accountId, locationId, { search: term, limit: 20 })
+          .then(res => res.items.map(o => ({
+            recipeItemId: o.recipeItemId, name: o.name, zoneName: null,
+            qty: o.qty, unitAbbr: o.unitAbbr,
+            buyFormatName: o.buyFormatName, buyFormatQtyInBase: o.buyFormatQtyInBase,
+            valueEur: o.valueEur, familyName: o.familyName,
+          } as GlobalHit)))
+          .catch(() => [] as GlobalHit[])
+        if (cancelled) return
+        // Un artículo puede estar en varias zonas: se muestra una fila por zona (es información útil).
+        const flat = [...perZone.flat(), ...orph]
+          .sort((a, b) => (b.valueEur ?? 0) - (a.valueEur ?? 0))
+        setGlobalResults(flat)
+      } finally {
+        if (!cancelled) setGlobalLoading(false)
+      }
+    }, 250)
+    return () => { cancelled = true; clearTimeout(t) }
+  }, [globalQ, coverage, accountId, locationId, reloadKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const rootZones = useMemo(
     () => (coverage?.zones ?? []).filter(z => !z.parentId).sort((a, b) => a.position - b.position),
@@ -230,6 +299,65 @@ export default function StorageZonesSection({
         <div className="h-full bg-accent transition-base" style={{ width: `${pct}%` }} />
       </div>
 
+      {/* Buscador GLOBAL del almacén: encuentra un artículo esté donde esté */}
+      <div className="relative">
+        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary" />
+        <input
+          type="text"
+          value={globalQ}
+          onChange={e => setGlobalQ(e.target.value)}
+          placeholder="Buscar un artículo en todo el almacén…"
+          className="w-full h-10 pl-10 pr-9 text-sm rounded-lg border border-border-default bg-card text-text-primary"
+        />
+        {globalQ && (
+          <button type="button" onClick={() => setGlobalQ('')} aria-label="Limpiar búsqueda"
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-tertiary hover:text-text-primary">
+            <X size={15} />
+          </button>
+        )}
+      </div>
+
+      {/* Resultados de la búsqueda global (sustituyen al árbol mientras se busca) */}
+      {globalResults !== null ? (
+        <div className="border border-border-default rounded-lg overflow-hidden bg-card">
+          {globalLoading ? (
+            <div className="flex items-center gap-2 text-text-secondary text-sm p-4">
+              <Loader2 size={15} className="animate-spin" /> Buscando en el almacén…
+            </div>
+          ) : globalResults.length === 0 ? (
+            <p className="text-sm text-text-tertiary p-5 text-center">
+              Nada con "{globalQ.trim()}" en este local. Prueba con menos letras — o el artículo aún no tiene stock aquí.
+            </p>
+          ) : (
+            <>
+              <div className="flex items-center gap-2.5 px-3.5 py-2 bg-page text-[11px] uppercase tracking-wide text-text-tertiary border-b border-border-default">
+                <span className="flex-1">Artículo</span>
+                <span className="w-32">Zona</span>
+                <span className="w-28 text-right">Stock</span>
+                <span className="w-16 text-right">Valor</span>
+              </div>
+              {globalResults.map((h, i) => (
+                <div key={`${h.recipeItemId}-${h.zoneName ?? 'sin'}-${i}`}
+                  className="flex items-center gap-2.5 px-3.5 py-2.5 border-t border-border-default first:border-t-0">
+                  <button type="button"
+                    onClick={() => onPeekGlobal(h)}
+                    className="flex-1 text-left text-sm text-text-primary hover:text-accent truncate">
+                    {h.name}
+                  </button>
+                  <span className="w-32 text-xs truncate">
+                    {h.zoneName
+                      ? <span className="text-text-secondary">{h.zoneName}</span>
+                      : <span className="text-warning inline-flex items-center gap-1"><AlertTriangle size={12} /> Sin zona</span>}
+                  </span>
+                  <QtyCell qty={h.qty} unitAbbr={h.unitAbbr} bfName={h.buyFormatName} bfQib={h.buyFormatQtyInBase} valueEur={h.valueEur} />
+                  <span className="w-16 text-right text-xs text-text-tertiary tabular-nums shrink-0">{fmtEur2(h.valueEur)}</span>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      ) : (
+      <>
       {/* Sin zona (huérfanos) */}
       <OrphansPanel
         accountId={accountId} locationId={locationId} families={families} reloadKey={reloadKey}
@@ -264,6 +392,8 @@ export default function StorageZonesSection({
           </div>
         ))}
       </div>
+      </>
+      )}
 
       {/* Modales */}
       {assignTarget && coverage && (
