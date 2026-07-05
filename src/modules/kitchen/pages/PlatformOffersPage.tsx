@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Percent, Plus, Loader2, ArrowLeft, Check, AlertTriangle, Pause, Play,
   CircleStop, Trash2, Search, Megaphone, Info, Target,
+  TrendingUp, TrendingDown, Minus, Zap,
 } from 'lucide-react'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
@@ -26,8 +27,10 @@ import {
   pauseCampaign, resumeCampaign, endCampaign, deleteDraft,
   platformOfChannel,
   getSalesSignal, getRecoveryTargetPct, upsertTarget, deleteTarget,
+  getGoalReport, getCampaignUplift,
   type Campaign, type CampaignDraft, type CampaignStatus, type PlatformChannel,
   type DiscountType, type ImpactRow, type ImpactAggregates, type SalesSignalRow,
+  type GoalReportRow, type CampaignUpliftRow,
 } from '@/modules/kitchen/services/platformOffersService'
 
 // ─────────────────────────────────────────────────────────────────────
@@ -133,7 +136,7 @@ function numOrNull(s: string): number | null {
 export default function PlatformOffersPage() {
   const { activeAccountId, accountsLoading } = useActiveAccount()
   const [view, setView] = useState<'list' | 'editor'>('list')
-  const [tab, setTab] = useState<'campanas' | 'objetivos'>('campanas')
+  const [tab, setTab] = useState<'campanas' | 'objetivos' | 'rendimiento'>('campanas')
 
   // Datos compartidos
   const [brands, setBrands] = useState<Brand[]>([])
@@ -222,6 +225,7 @@ export default function PlatformOffersPage() {
         <div className="flex items-center gap-1 border-b border-border-default">
           <TabButton active={tab === 'campanas'} onClick={() => setTab('campanas')} icon={<Megaphone size={15} />} label="Campañas" />
           <TabButton active={tab === 'objetivos'} onClick={() => setTab('objetivos')} icon={<Target size={15} />} label="Objetivos" />
+          <TabButton active={tab === 'rendimiento'} onClick={() => setTab('rendimiento')} icon={<TrendingUp size={15} />} label="Rendimiento" />
         </div>
       )}
 
@@ -236,6 +240,8 @@ export default function PlatformOffersPage() {
         />
       ) : tab === 'objetivos' ? (
         <TargetsSection accountId={activeAccountId!} brands={brands} channels={channels} />
+      ) : tab === 'rendimiento' ? (
+        <PerformanceSection accountId={activeAccountId!} />
       ) : (
         <CampaignList
           campaigns={campaigns}
@@ -1003,6 +1009,7 @@ function TargetsSection({
   const [locations, setLocations] = useState<LocationOption[]>([])
   const [recoveryPct, setRecoveryPct] = useState<number>(80)
   const [signal, setSignal] = useState<SalesSignalRow[]>([])
+  const [goal, setGoal] = useState<GoalReportRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [tick, setTick] = useState(0)
@@ -1020,12 +1027,13 @@ function TargetsSection({
     return () => { cancelled = true }
   }, [accountId])
 
-  // Señal (recargable tras cada guardado).
+  // Señal + informe de tendencia (recargables tras cada guardado). El informe es
+  // aditivo (solo la columna Tendencia): si falla, degradamos a '—' sin tumbar la tabla.
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    getSalesSignal(accountId)
-      .then((rows) => { if (!cancelled) setSignal(rows) })
+    Promise.all([getSalesSignal(accountId), getGoalReport(accountId).catch(() => [] as GoalReportRow[])])
+      .then(([sig, g]) => { if (!cancelled) { setSignal(sig); setGoal(g) } })
       .catch((e) => { if (!cancelled) setError(String(e?.message ?? e)) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
@@ -1043,6 +1051,18 @@ function TargetsSection({
     }
     return m
   }, [signal, channels])
+
+  // Tendencia WoW por (marca|canal|local) desde offers_goal_report.
+  const tendenciaByKey = useMemo(() => {
+    const m = new Map<string, number | null>()
+    for (const r of goal) {
+      const plat = platformOfChannel(r.channelName, null)
+      const ch = channels.find((c) => c.platform === plat)
+      if (!ch) continue
+      m.set(`${r.brandId}|${ch.id}|${r.locationId}`, r.tendenciaPct)
+    }
+    return m
+  }, [goal, channels])
 
   const cellKey = (brandId: string, channelId: string, locationId: string) =>
     `${brandId}|${channelId}|${locationId}`
@@ -1123,6 +1143,7 @@ function TargetsSection({
             brands={ownBrands}
             locations={locations}
             signalByKey={signalByKey}
+            tendenciaByKey={tendenciaByKey}
             recoveryPct={recoveryPct}
             saving={saving}
             displayVal={displayVal}
@@ -1148,12 +1169,13 @@ function TargetsSection({
 }
 
 function TargetsChannelTable({
-  channel, brands, locations, signalByKey, recoveryPct, saving, displayVal, cellKey, setDrafts, clearDraft, onCommit,
+  channel, brands, locations, signalByKey, tendenciaByKey, recoveryPct, saving, displayVal, cellKey, setDrafts, clearDraft, onCommit,
 }: {
   channel: ChannelOption
   brands: Brand[]
   locations: LocationOption[]
   signalByKey: Map<string, SalesSignalRow>
+  tendenciaByKey: Map<string, number | null>
   recoveryPct: number
   saving: string | null
   displayVal: (key: string) => string
@@ -1184,6 +1206,7 @@ function TargetsChannelTable({
               <th className="px-4 py-2 font-medium text-right">Objetivo</th>
               <th className="px-4 py-2 font-medium text-right">Ahora (7d)</th>
               <th className="px-4 py-2 font-medium text-right">% objetivo</th>
+              <th className="px-4 py-2 font-medium text-right">Tendencia</th>
               <th className="px-4 py-2 font-medium text-right">Pico 12m</th>
             </tr>
           </thead>
@@ -1195,6 +1218,7 @@ function TargetsChannelTable({
                 const target = sig?.targetDaily ?? null
                 const sales = sig?.sales7d ?? null
                 const peak = sig?.peakDaily ?? null
+                const tendencia = tendenciaByKey.get(key)
                 const sc = semaforo(target, sales, recoveryPct)
                 const isSaving = saving === key
                 return (
@@ -1236,6 +1260,9 @@ function TargetsChannelTable({
                         <span className="text-text-secondary/50">—</span>
                       )}
                     </td>
+                    <td className="px-4 py-2 text-right">
+                      <TendenciaCell pct={target != null ? tendencia : undefined} />
+                    </td>
                     <td className="px-4 py-2 text-right tabular-nums text-text-secondary/60">
                       {peak != null && peak > 0 ? fmtNum(peak) : '—'}
                     </td>
@@ -1247,5 +1274,175 @@ function TargetsChannelTable({
         </table>
       </div>
     </div>
+  )
+}
+
+// Celda de tendencia WoW: ↑ verde / ↓ rojo / — neutro. undefined|null → '—'.
+function TendenciaCell({ pct }: { pct: number | null | undefined }) {
+  if (pct == null) return <span className="text-text-secondary/50">—</span>
+  if (pct === 0) {
+    return (
+      <span className="inline-flex items-center gap-1 justify-end tabular-nums text-text-secondary">
+        <Minus size={13} /> 0%
+      </span>
+    )
+  }
+  const up = pct > 0
+  return (
+    <span className={`inline-flex items-center gap-1 justify-end tabular-nums ${up ? 'text-success' : 'text-danger'}`}>
+      {up ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
+      {up ? '+' : ''}{fmtNum(pct)}%
+    </span>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Rendimiento — uplift de las campañas del agente (agent_campaign_uplift)
+// Con HONESTIDAD DE VENTANA: sin un día completo NO se muestra el uplift (sería
+// mañana-sin-servicio vs. día-entero-previo = -100% falso).
+// ─────────────────────────────────────────────────────────────────────
+
+function cleanCampaignName(name: string): string {
+  return name.replace(/^\[Agente\]\s*/i, '').trim()
+}
+
+/** Celda de uplift con la regla de honestidad de ventana. */
+function UpliftCell({ r }: { r: CampaignUpliftRow }) {
+  // 1) Sin número comparable (antes=0 o sin datos).
+  if (r.upliftPct == null) {
+    if (r.arranqueDesdeCero) {
+      return (
+        <span className="inline-flex items-center gap-1 justify-end text-success text-xs font-medium">
+          <Zap size={12} /> Arranque desde cero
+          <span className="text-text-secondary font-normal">({fmtNum(r.pedDiaDurante ?? 0)}/día)</span>
+        </span>
+      )
+    }
+    return <span className="text-xs text-text-secondary">sin base de comparación</span>
+  }
+  // 2) Hay número, pero menos de 1 día completo → no es honesto mostrarlo.
+  const dias = r.diasCampana ?? 0
+  if (dias < 1) {
+    return (
+      <span className="inline-flex items-center text-[11px] text-text-secondary bg-page border border-border-default rounded-full px-2 py-0.5 whitespace-nowrap">
+        Midiendo — aún sin un día completo
+      </span>
+    )
+  }
+  // 3) Ventana honesta: color por magnitud, ⚠ si aún es corta (menos de 2 días).
+  const up = r.upliftPct
+  const cls = up > 15 ? 'text-success' : up < -15 ? 'text-danger' : 'text-text-primary'
+  return (
+    <span className="inline-flex items-center gap-1 justify-end tabular-nums">
+      <span className={`${cls} font-medium`}>{up > 0 ? '+' : ''}{fmtNum(up)}%</span>
+      {dias < 2 && (
+        <span title="Ventana corta (menos de 2 días)" className="inline-flex">
+          <AlertTriangle size={12} className="text-warning" />
+        </span>
+      )}
+    </span>
+  )
+}
+
+function PerformanceSection({ accountId }: { accountId: string }) {
+  const [rows, setRows] = useState<CampaignUpliftRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true); setError(null)
+    getCampaignUplift(accountId)
+      .then((r) => { if (!cancelled) setRows(r) })
+      .catch((e) => { if (!cancelled) setError(String(e?.message ?? e)) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [accountId])
+
+  if (loading) {
+    return (
+      <div className="p-6 text-sm text-text-secondary flex items-center gap-2">
+        <Loader2 size={14} className="animate-spin" /> Cargando rendimiento…
+      </div>
+    )
+  }
+
+  return (
+    <>
+      <div>
+        <h1 className="text-2xl font-display font-medium text-text-primary flex items-center gap-2">
+          <TrendingUp size={22} className="text-accent" /> Rendimiento
+        </h1>
+        <p className="text-sm text-text-secondary mt-1">
+          ¿Funcionan las campañas del agente? Pedidos/día en el ámbito de la campaña antes de
+          lanzarla vs. durante. El uplift solo se juzga cuando la ventana es honesta.
+        </p>
+      </div>
+
+      {error && <div className="p-3 rounded-md bg-danger-bg text-danger border border-danger/20 text-sm">{error}</div>}
+
+      <div className="rounded-lg border border-border-default bg-card overflow-hidden">
+        <div className="px-4 py-3 border-b border-border-default flex items-center gap-2">
+          <Zap size={16} className="text-text-secondary" />
+          <h2 className="text-sm font-medium text-text-primary">Campañas del agente</h2>
+          <span className="text-xs text-text-secondary">({rows.length})</span>
+        </div>
+        {rows.length === 0 ? (
+          <div className="px-4 py-10 text-center text-sm text-text-secondary">
+            El agente aún no ha lanzado campañas en los últimos 30 días.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-[11px] uppercase tracking-wide text-text-secondary border-b border-border-default">
+                  <th className="px-4 py-2 font-medium">Campaña</th>
+                  <th className="px-4 py-2 font-medium">Canal</th>
+                  <th className="px-4 py-2 font-medium">Ámbito</th>
+                  <th className="px-4 py-2 font-medium text-right">Días</th>
+                  <th className="px-4 py-2 font-medium text-right">Antes</th>
+                  <th className="px-4 py-2 font-medium text-right">Durante</th>
+                  <th className="px-4 py-2 font-medium text-right">Uplift</th>
+                  <th className="px-4 py-2 font-medium text-center">Estado</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border-default">
+                {rows.map((r) => (
+                  <tr key={r.couponId} className="hover:bg-page/60">
+                    <td className="px-4 py-3 font-medium text-text-primary">{cleanCampaignName(r.campaignName)}</td>
+                    <td className="px-4 py-3 text-text-secondary">{r.channelName}</td>
+                    <td className="px-4 py-3 text-text-secondary text-xs">{r.ambitoLocales}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-text-secondary">
+                      {r.diasCampana != null ? fmtNum(r.diasCampana) : '—'}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums text-text-secondary">{fmtNum(r.pedDiaAntes ?? 0)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-text-primary">{fmtNum(r.pedDiaDurante ?? 0)}</td>
+                    <td className="px-4 py-3 text-right"><UpliftCell r={r} /></td>
+                    <td className="px-4 py-3 text-center">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border ${
+                        r.activa ? 'bg-success-bg text-success border-success/40' : 'bg-page text-text-secondary border-border-default'
+                      }`}>
+                        {r.activa ? 'Activa' : 'Finalizada'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <p className="text-[11px] text-text-secondary flex items-start gap-1.5">
+        <Info size={12} className="shrink-0 mt-0.5" />
+        <span>
+          Honestidad de ventana: con menos de un día completo de campaña el uplift no es real (mañana
+          sin servicio vs. día entero previo), así que se muestra <span className="font-medium">“Midiendo”</span> en
+          vez de un % engañoso. Entre 1 y 2 días el % se marca con <AlertTriangle size={11} className="inline text-warning" /> ventana
+          corta. El color solo se aplica con ventana honesta: <span className="text-success font-medium">verde</span> &gt;+15% ·
+          neutro entre ±15% · <span className="text-danger font-medium">rojo</span> &lt;−15%.
+        </span>
+      </p>
+    </>
   )
 }

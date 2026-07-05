@@ -754,3 +754,88 @@ export async function deleteTarget(input: {
     .eq('location_id', input.locationId)
   if (error) throw new Error(`Error borrando objetivo: ${error.message}`)
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// RENDIMIENTO — informe de consecución (WoW) + uplift de campañas del agente
+// (RPCs offers_goal_report / agent_campaign_uplift; migración 20260705T2000).
+// Cimiento del autoaprendizaje. Solo lectura.
+// ─────────────────────────────────────────────────────────────────────
+
+/** Fila de offers_goal_report: consecución por marca×canal×local con tendencia WoW. */
+export interface GoalReportRow {
+  brandId: string
+  brandName: string
+  channelName: string
+  locationId: string
+  locationName: string
+  targetDaily: number | null
+  pedDia7d: number | null
+  pedDiaPrev7: number | null
+  pctObjetivo: number | null
+  /** Variación semana vs semana anterior (%). null si la previa fue 0. */
+  tendenciaPct: number | null
+}
+
+/**
+ * Informe de consecución de objetivos (WoW). Universo = combos con objetivo > 0
+ * (misma vara que la señal v2). Aporta la TENDENCIA que la señal v2 no tiene.
+ */
+export async function getGoalReport(accountId: string): Promise<GoalReportRow[]> {
+  const { data, error } = await db().rpc('offers_goal_report', { p_account_id: accountId })
+  if (error) throw new Error(`Error cargando el informe de objetivos: ${error.message}`)
+  return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+    brandId: r.brand_id as string,
+    brandName: (r.brand_name as string) ?? '',
+    channelName: (r.channel_name as string) ?? '',
+    locationId: r.location_id as string,
+    locationName: (r.location_name as string) ?? '',
+    targetDaily: num(r.target_daily),
+    pedDia7d: num(r.ped_dia_7d),
+    pedDiaPrev7: num(r.ped_dia_prev7),
+    pctObjetivo: num(r.pct_objetivo),
+    tendenciaPct: num(r.tendencia_pct),
+  }))
+}
+
+/** Fila de agent_campaign_uplift: pedidos/día antes vs. durante, por campaña del agente. */
+export interface CampaignUpliftRow {
+  couponId: string
+  campaignName: string
+  brandName: string
+  channelName: string
+  ambitoLocales: string
+  /** Días transcurridos de campaña (fraccionable; <1 = aún sin un día completo). */
+  diasCampana: number | null
+  pedDiaAntes: number | null
+  pedDiaDurante: number | null
+  /** Uplift %. null si no hay base de comparación (antes=0 o sin datos). */
+  upliftPct: number | null
+  /** true = la marca no vendía nada antes y ahora sí. */
+  arranqueDesdeCero: boolean
+  activa: boolean
+}
+
+/**
+ * Uplift de las campañas del agente (pedidos/día antes vs. durante). El caller
+ * aplica la HONESTIDAD DE VENTANA: con <1 día completo, uplift_pct es engañoso.
+ */
+export async function getCampaignUplift(accountId: string, daysBack = 30): Promise<CampaignUpliftRow[]> {
+  const { data, error } = await db().rpc('agent_campaign_uplift', {
+    p_account_id: accountId,
+    p_days_back: daysBack,
+  })
+  if (error) throw new Error(`Error cargando el rendimiento de campañas: ${error.message}`)
+  return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+    couponId: r.coupon_id as string,
+    campaignName: (r.campaign_name as string) ?? '',
+    brandName: (r.brand_name as string) ?? '',
+    channelName: (r.channel_name as string) ?? '',
+    ambitoLocales: (r.ambito_locales as string) ?? '',
+    diasCampana: num(r['dias_campaña']),
+    pedDiaAntes: num(r.ped_dia_antes),
+    pedDiaDurante: num(r.ped_dia_durante),
+    upliftPct: num(r.uplift_pct),
+    arranqueDesdeCero: r.arranque_desde_cero === true,
+    activa: r.activa === true,
+  }))
+}
