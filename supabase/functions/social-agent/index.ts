@@ -98,6 +98,10 @@ Deno.serve(async (req) => {
       const { count: livePush } = await supa.from("promo_push_job")
         .select("id", { count: "exact", head: true }).eq("coupon_id", p.id).eq("status", "done");
       if ((livePush ?? 0) === 0) continue;
+      // v1.0.1: anti-invencion — solo promos DE VERDAD publicadas (job done = verdad de Glovo)
+      const { count: livePush } = await supa.from("promo_push_job")
+        .select("id", { count: "exact", head: true }).eq("coupon_id", p.id).eq("status", "done");
+      if ((livePush ?? 0) === 0) continue;
       // idempotencia: esta promo ya anunciada en borrador/aprobado/publicado
       const { count } = await supa.from("social_post")
         .select("id", { count: "exact", head: true })
