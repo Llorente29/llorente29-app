@@ -339,6 +339,24 @@ Notas: meez **se declara "complementario, no competidor" de ERPs** — capa culi
 
 ---
 
+## ÁREA 13 — Motor de ofertas de PLATAFORMA / agente autónomo (NUEVO 05/07 — construido y medido)
+
+**Qué es**: el agente que decide, propone y (tras 1 clic humano) publica promociones EN las plataformas (Glovo hoy; Uber armado en seco; JustEat virgen), con margen real delante y ciclo cerrado propone→publica→mide→aprende.
+
+| Capacidad | Pleez | Toast IQ | Cheerfy | Glovo/Uber nativos | **Folvy (05/07)** |
+|---|---|---|---|---|---|
+| Decide contra margen real por plato (escandallo) | 🔴 ciego al coste (scraping) | 🔴 no ve margen | 🔴 | 🔴 (su "ROI 3,69x" es sobre BRUTAS) | 🟢 preview con comisión sobre base rebajada + suelo 45% que EXCLUYE platos |
+| Objetivos del negocio por marca×canal×LOCAL | 🔴 | 🔴 | 🔴 | 🔴 | 🟢 brand_channel_target (el cero es una fila; urgencia sin exigir pasado) |
+| Señales: clima real + día de semana + eventos | 🟡 parcial | 🟡 | 🔴 | 🔴 | 🟢 Open-Meteo diario (evento real 37,7°C el primer día) + DOW 12 semanas ±5 |
+| Aprendizaje del uplift MEDIDO (no caja negra) | 🔴 | 🟡 opaco | 🔴 | 🔴 | 🟢 determinista y auditable: solo con ≥2 medidas de ventana honesta; visible en el razonamiento |
+| Publicación automática en Glovo | 🟢 (su foso: navegador gestionado) | 🔴 | 🔴 | ⚪ | 🟢 robot residente v3.18: multi-local dirigido, idempotente contra la VERDAD de Glovo (adopta, no duplica), kill-switch, anti-upsell |
+| Publicación Uber por API oficial | 🔴 | 🔴 | 🔴 | ⚪ | 🟡 brazo construido EN SECO (Edge+cola+cron x7); esperando scopes Partner Engineering |
+| JustEat | 🔴 | 🔴 | 🔴 | ⚪ | 🔴 terreno virgen — es el frente activo (reorganización multi-plataforma) |
+| El PORQUÉ de cada campaña visible al operador | 🔴 | 🟡 | 🔴 | 🔴 | 🟢 dashboard: banner Señales de hoy + razón parseada con mini-chips en TODA campaña + uplift con regla de honestidad de ventana |
+| 2x1 con precio de espejo calculado (Ómnibus-correcto) | 🔴 | 🔴 | 🔴 | 🟡 (la promo existe, el precio lo pones a ojo) | 🟡 cerebro construido y validado + procedimiento + sistema DISEÑADO — CONGELADO por decisión (reabrir tras multi-plataforma) |
+
+**Veredicto (05/07): 🟢 golea en cerebro/señales/honestidad/Glovo; 🟡 Uber (esperando scopes) y 2x1 (congelado con diseño); 🔴 JustEat (frente activo).** La medición de uplift real necesita días de campañas vivas — el motor ya la registra solo.
+
 # RESUMEN — el tablero de una mirada
 
 **Folvy YA golea (9, act. 03/07)**: formatos anidados, recepción anti-error + OCR sin humano, ventas delivery + comisiones, APPCC con corrección, IA multi-módulo + anti-invención, pasos enlazados (vs tspoon), **CRM con margen real delante de cada oferta (bienvenida/frecuencia/campañas — nadie lo tiene)**, **Ómnibus por construcción + artículo espejo (goleada única, área 10)**, **baja RGPD 7.3 demostrable en un toggle**.
