@@ -2,3 +2,5 @@
 config.json
 screenshots/
 node_modules/
+glovo-profile/
+robot.log
