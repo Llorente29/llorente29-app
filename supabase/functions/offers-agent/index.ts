@@ -1,4 +1,5 @@
 // offers-agent — El agente de ofertas de Folvy (motor de reglas determinista y auditable)
+// v1.6.1: bogo nace con 30 días (procedimiento espejo: always-on de facto).
 // v1.6 (05/07/2026) — T6: AUTOAPRENDIZAJE determinista y auditable, sin estado oculto:
 //   en cada corrida se recalcula lo aprendido desde el uplift MEDIDO (agent_learning_signal,
 //   campañas de 45d con ventana honesta >=1 día). Solo actúa con >=2 medidas (jamás
@@ -285,7 +286,7 @@ Deno.serve(async (req) => {
       const mode = isShop ? cfg.shop_mode : cfg.platform_mode;
       if (mode === "off") continue;
       const autoPublish = isShop && mode === "auto";
-      const endDays = Math.min(cfg.max_campaign_days, 7);
+      let endDays = Math.min(cfg.max_campaign_days, 7);
       const locShort = String(o.row.location_name ?? "").replace(/^Foodint\s+/i, "");
 
       // ── R3 (v1.4): en URGENTES, 2x1-espejo primero (plataformas; el Shop tiene su BOGO propio)
@@ -313,6 +314,7 @@ Deno.serve(async (req) => {
             mirror_price: star.precio_sugerido,
             base_item: { id: star.menu_item_id, name: star.item_name, pvp: star.pvp_cliente },
           };
+          endDays = 30; // política del procedimiento espejo (05/07): bogo = always-on de facto
           reasonFinal = `${o.reason} → TÁCTICA 2x1-ESPEJO (validada ×6): estrella '${star.item_name}' ` +
             `(PVP ${star.pvp_cliente}€, ${star.units_30d} uds/30d). ESPEJO a ${star.precio_sugerido}€ ` +
             `(paridad ${star.precio_paridad}€ · suelo ${star.precio_min_suelo}€) → margen 2x1 ` +
