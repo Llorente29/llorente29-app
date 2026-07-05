@@ -247,7 +247,7 @@ Deno.serve(async (req) => {
         // Estrella = el top-seller 30d con escandallo y 2x1 viable (la RPC ya ordena por ventas)
         const star = ((bogo ?? []) as Array<any>).find((r) => r.status === "ok");
         if (star) {
-          kind = "bogo_mirror";
+          kind = "bogo"; // alineado al CHECK de coupon (G2c ya bautizó el 2x1: 'bogo'); el matiz espejo vive en scope.mirror_price
           value = 50; // semántica 2x1 (informativo; el precio que manda es el del espejo)
           name = `[Agente] 2x1 ${star.item_name} · ${o.row.channel_name} · ${locShort}`;
           scopeFinal = {
@@ -290,7 +290,7 @@ Deno.serve(async (req) => {
       busy.add(`${o.chKey}:${o.brand.id}:${o.row.location_id}`);
       decisions.push({
         brand: o.brand.name, channel: o.row.channel_name, location: o.row.location_name,
-        kind, pct: kind === "bogo_mirror" ? "2x1" : o.pct, reason: reasonFinal,
+        kind, pct: kind === "bogo" ? "2x1" : o.pct, reason: reasonFinal,
         verdict: autoPublish ? "PUBLICADA (Shop auto)" : "PROPUESTA (pendiente de aprobación)",
         excluded_under_floor: pv.under.map((r: any) => r.item_name),
         coupon_id: coupon?.id,
