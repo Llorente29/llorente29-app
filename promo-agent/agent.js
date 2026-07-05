@@ -1,4 +1,11 @@
-// folvy-promo-agent v3.14 — robot de promos (Glovo)
+// folvy-promo-agent v3.15 — robot de promos (Glovo)
+// v3.15 (05/07/2026): acción END (cancelar promo en Glovo) sobre la LISTA GLOBAL de
+//   Promociones (/promotion/vendor-deals/view-performance): matcher estricto
+//   (Activo + marca + Público 'Todos' + fecha de inicio del payload + allowlist),
+//   confirmación del modal 'Estás a punto de cancelar' (jamás Volver), VERIFICACIÓN
+//   contra la lista (la fila deja de estar Activo) y libro de a bordo por store ID.
+//   pause/resume -> NO EXISTEN en Glovo (la cancelación es irreversible): se reportan
+//   como no soportados con mensaje claro. Deuda de pantalla: ocultar esos botones.
 // v3.14 (05/07/2026): MULTI-LOCAL (publica en TODOS los establecimientos de la allowlist,
 //   con LIBRO DE A BORDO por job en screenshots/{job.id}-done.json: un reintento reanuda
 //   SOLO los pendientes, jamás duplica — lección v3.11) + DATEPICKER robusto (teclea la
@@ -402,6 +409,107 @@ async function publishAtPos(job, p, itemLevel, posName, posIdx) {
   return { ok: true, ref: page.url() };
 }
 
+// ── v3.15: FINALIZAR (end) una promo en Glovo — la única acción de ciclo de vida
+// que la plataforma ofrece (no hay pausar/reanudar; cancelar es irreversible).
+const PROMO_LIST_URL = "https://portal.glovoapp.com/promotion/vendor-deals/view-performance";
+
+async function endGlovoPromo(job) {
+  const p = job.payload;
+  const shot = async (tag) => {
+    const f = `./screenshots/${job.id}-${tag}.png`;
+    await page.screenshot({ path: f, fullPage: true }).catch(() => {}); log("  📸", f); return f;
+  };
+  const start = p.starts_at ? new Date(p.starts_at) : null;
+  const startTxt = start
+    ? `${String(start.getDate()).padStart(2, "0")}/${String(start.getMonth() + 1).padStart(2, "0")}/${start.getFullYear()}`
+    : null;
+  const want = Math.round(p.value ?? 0);
+  const chip = [60,55,50,45,40,35,30,25,20,15,10].filter(v => v <= want)[0] ?? want;
+  const allowed = (cfg.GLOVO_ALLOWED_POS ?? []).map(s => s.toLowerCase());
+
+  const openList = async () => {
+    await page.goto(PROMO_LIST_URL, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2500); await solveHumanCheck(); await killPopups();
+    const search = page.getByPlaceholder(/buscar/i).first();
+    if (await search.isVisible().catch(() => false)) {
+      await search.click(); await page.keyboard.press("Control+a").catch(() => {});
+      await page.keyboard.type(p.brand_name, { delay: 30 });
+      await page.waitForTimeout(1500);
+    }
+  };
+  // Candidatas: fila Activo + "Marca - MAD - " + Público Todos + fecha inicio + allowlist
+  const readCandidates = async () => {
+    const rows = page.locator("tr", { hasText: p.brand_name });
+    const n = await rows.count();
+    const cands = [];
+    for (let i = 0; i < n; i++) {
+      const txt = ((await rows.nth(i).innerText().catch(() => "")) ?? "").replace(/\s+/g, " ").trim();
+      if (!/activo/i.test(txt)) continue;
+      if (!txt.toLowerCase().includes(`${p.brand_name.toLowerCase()} - mad - `)) continue;
+      if (!/todos/i.test(txt)) continue;
+      if (startTxt && !txt.includes(startTxt)) continue;
+      if (allowed.length > 0 && !allowed.some(a => txt.toLowerCase().includes(a))) continue;
+      const m = txt.match(/\((\d{4,8})\)/);
+      cands.push({ storeId: m ? m[1] : txt.slice(0, 60), txt });
+    }
+    return cands;
+  };
+
+  await openList();
+  const cands = await readCandidates();
+  await shot("end-lista");
+  if (cands.length === 0)
+    return { ok: false, err: `end: ninguna promo ACTIVA casa (marca '${p.brand_name}' + Todos + inicio ${startTxt ?? "?"}) — nada que cancelar o ya cancelada` };
+  for (const c of cands) if (!c.txt.includes(`${chip}%`))
+    log(`  ⚠️ end: la fila del store ${c.storeId} muestra otro % (esperado ${chip}%) — se cancela igual (marca+fecha+Todos mandan)`);
+  if (cfg.DRY_RUN)
+    return { ok: false, err: `DRY_RUN OK — ${cands.length} promo(s) localizadas para cancelar: ${cands.map(c => c.storeId).join(", ")}. Screenshot: end-lista` };
+
+  const done = readLedger(job.id);
+  const okStores = [...done]; const failStores = [];
+  for (const c of cands) {
+    if (done.includes(c.storeId)) { log(`  ↷ store ${c.storeId} ya cancelado (libro de a bordo)`); continue; }
+    try {
+      await openList();
+      const row = page.locator("tr", { hasText: `(${c.storeId})` }).filter({ hasText: /activo/i }).first();
+      if (!(await row.isVisible().catch(() => false))) throw new Error("la fila ya no aparece como Activo (¿cancelada fuera?)");
+      await row.click(); await page.waitForTimeout(2000); await killPopups();
+      const cancelBtn = page.getByRole("button", { name: /cancelar/i }).first();
+      if (!(await cancelBtn.isVisible().catch(() => false))) throw new Error("no encontré el botón Cancelar en el detalle");
+      await cancelBtn.click(); await page.waitForTimeout(1500);
+      // Modal "Estás a punto de cancelar": confirmar (JAMÁS Volver/Atrás/Mantener)
+      const dialog = page.locator('[role="dialog"], [data-testid="scroll-marker"]').last();
+      const btns = dialog.getByRole("button");
+      const nb = await btns.count();
+      let clicked = false;
+      for (let b = nb - 1; b >= 0; b--) {
+        const label = ((await btns.nth(b).textContent().catch(() => "")) ?? "").trim();
+        if (/volver|atrás|cerrar|seguir|mantener|no,/i.test(label)) continue;
+        if (/cancelar|confirmar|sí/i.test(label)) {
+          await shot(`end-${c.storeId}-modal`);
+          log(`  end: confirmando con el botón '${label}'`);
+          await btns.nth(b).click(); clicked = true; break;
+        }
+      }
+      if (!clicked) throw new Error("no encontré el botón de confirmación del modal de cancelación");
+      await page.waitForTimeout(2500);
+      // VERIFICACIÓN contra la verdad de la lista: la fila de ese store ya NO está Activo
+      await openList();
+      let still = page.locator("tr", { hasText: `(${c.storeId})` }).filter({ hasText: /activo/i });
+      if (startTxt) still = still.filter({ hasText: startTxt });
+      if ((await still.count()) > 0) throw new Error("tras confirmar, la fila SIGUE Activo en la lista");
+      addLedger(job.id, c.storeId);
+      okStores.push(c.storeId);
+      log(`  ✅ cancelada en store ${c.storeId}`);
+    } catch (e) {
+      failStores.push(`${c.storeId} → ${e.message}`);
+      await shot(`end-${c.storeId}-ERROR`);
+    }
+  }
+  if (failStores.length === 0) return { ok: true, ref: `canceladas: ${okStores.join(", ")}` };
+  return { ok: false, err: `end PARCIAL — OK: ${okStores.join(", ") || "ninguno"} · FALLO: ${failStores.join(" · ")} — el reintento reanudará SOLO los pendientes` };
+}
+
 let running = false;
 async function tick() {
   if (running) return;
@@ -415,8 +523,10 @@ async function doTick() {
   for (const job of jobs) {
     log(`▶ job ${job.id} · ${job.action} · ${job.payload?.brand_name} · ${job.payload?.value}%`);
     try {
-      if (job.action !== "create") { await report(job.id, false, null, `acción '${job.action}' aún no soportada (v3.14: solo create; pause/resume/end pendientes)`); continue; }
-      const r = await createGlovoPromo(job);
+      let r;
+      if (job.action === "create") r = await createGlovoPromo(job);
+      else if (job.action === "end") r = await endGlovoPromo(job);
+      else { await report(job.id, false, null, `Glovo no ofrece '${job.action}': pausar/reanudar no existen en la plataforma (la cancelación es irreversible; usar Finalizar)`); continue; }
       await report(job.id, r.ok, r.ref, r.err);
       log(r.ok ? "  ✅ publicada" : "  ⏸ " + r.err);
     } catch (e) {
@@ -427,6 +537,6 @@ async function doTick() {
   }
 }
 
-log(`folvy-promo-agent v3.14 arrancado · DRY_RUN=${cfg.DRY_RUN} · poll ${cfg.POLL_SECONDS}s`);
+log(`folvy-promo-agent v3.15 arrancado · DRY_RUN=${cfg.DRY_RUN} · poll ${cfg.POLL_SECONDS}s`);
 await tick();
 setInterval(() => tick().catch(e => log("tick error:", e.message)), cfg.POLL_SECONDS * 1000);
