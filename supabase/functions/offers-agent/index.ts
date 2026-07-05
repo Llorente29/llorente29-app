@@ -1,4 +1,11 @@
 // offers-agent — El agente de ofertas de Folvy (motor de reglas determinista y auditable)
+// v1.6 (05/07/2026) — T6: AUTOAPRENDIZAJE determinista y auditable, sin estado oculto:
+//   en cada corrida se recalcula lo aprendido desde el uplift MEDIDO (agent_learning_signal,
+//   campañas de 45d con ventana honesta >=1 día). Solo actúa con >=2 medidas (jamás
+//   aprender de un solo dato): uplift medio <=0 sin arranques -> marca promo-insensible
+//   en ese canal: -5 de profundidad + sugerencia de cambiar de táctica (2x1); histórico
+//   favorable -> constancia en el razonamiento sin gastar más (lo que funciona no se
+//   sobrepaga). Cierra el ciclo propone -> publica -> mide -> aprende.
 // v1.5 (05/07/2026) — T4: SEÑAL POR DÍA DE SEMANA. Glovo solo admite promos por rango de
 //   fechas (no recurrencia semanal), así que el DOW informa el CUÁNDO y el CUÁNTO:
 //   si los 3 días por delante concentran >=50% de la semana de la marca en ese canal
@@ -113,6 +120,12 @@ Deno.serve(async (req) => {
       if (!dowMap.has(k)) dowMap.set(k, new Map());
       dowMap.get(k)!.set(Number(r.dow), Number(r.pct_share));
     }
+    // T6: lo aprendido del uplift medido (recalculado en cada corrida, cero estado oculto)
+    const { data: learnRows } = await supa.rpc("agent_learning_signal", { p_account_id: accountId });
+    const learnMap = new Map<string, any>();
+    for (const r of (learnRows ?? []) as Array<any>) learnMap.set(`${r.brand_id}:${r.channel_name}`, r);
+    signals.learning = learnRows;
+
     const jsDow = new Date().getDay();               // 0=Dom..6=Sáb
     const isoToday = jsDow === 0 ? 7 : jsDow;        // ISO 1=Lun..7=Dom
     const nextDows = [0, 1, 2].map(o => ((isoToday - 1 + o) % 7) + 1);
@@ -197,6 +210,18 @@ Deno.serve(async (req) => {
         } else if (ahead < 25) {
           pct = Math.max(10, pct - 5);
           reason += ` − días flojos por delante (${nextDowTxt}: ${Math.round(ahead)}% de la semana) — profundidad contenida`;
+        }
+      }
+      // T6: aprendizaje — solo con >=2 campañas medidas de esta marca×canal
+      const learn = learnMap.get(`${row.brand_id}:${row.channel_name}`);
+      if (learn && Number(learn.n_medidas) >= 2) {
+        const avg = Number(learn.uplift_medio ?? 0);
+        const arr = Number(learn.arranques ?? 0);
+        if (avg <= 0 && arr === 0) {
+          pct = Math.max(10, pct - 5);
+          reason += ` · aprendizaje: las últimas ${learn.n_medidas} promos aquí no movieron ventas (uplift medio ${avg}%) — profundidad contenida; considerar 2x1`;
+        } else if (avg >= 25 || arr > 0) {
+          reason += ` · aprendizaje: histórico favorable (uplift medio ${avg}%${arr > 0 ? `, ${arr} arranque(s) desde cero` : ""})`;
         }
       }
       // múltiplos de 5 (v1.2): pantalla = Glovo
