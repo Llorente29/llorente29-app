@@ -1,4 +1,11 @@
 // offers-agent — El agente de ofertas de Folvy (motor de reglas determinista y auditable)
+// v1.2 (05/07/2026):
+//   (e) BEBIDAS NUNCA EN PROMO (decisión Julio 05/07): las categorías cuyo nombre contiene
+//       'bebida' se excluyen del alcance ANTES del guardarraíl — descontar bebida es
+//       destruir margen sin tirón; la bebida es donde se recupera. De regalo: desaparecen
+//       los fallos de mapeo de nombres del robot (eran precisamente las bebidas).
+//   (f) % SIEMPRE EN MÚLTIPLOS DE 5: el robot ya ajustaba al chip de Glovo hacia abajo;
+//       ahora el agente propone directamente en múltiplos de 5 → pantalla = Glovo.
 // v1.1 (05/07/2026):
 //   (a) solo propone en plataformas CON BRAZO publicador (ARMED_PLATFORMS) — antes proponía
 //       en Uber sin nadie que publicara, quemando cupos y apilando propuestas inaccionables;
@@ -33,6 +40,11 @@ const PROFILES: Record<string, { maxPct: number; cooldownDays: number; proactive
 // los scopes eats.store.promotion.* (brazo por API oficial, OpenAPI ya en el repo).
 // Todo canal distinto de "Shop" se considera plataforma: sin brazo, ni se evalúa.
 const ARMED_PLATFORMS = ["Glovo"];
+
+// Categorías de carta VETADAS en promos del agente (match por 'contiene', case-insensitive).
+// Cubre "Bebidas" / "BEBIDAS" / "Nuestras Bebidas" (RECON 05/07: 99 items en 17 marcas).
+// Para vetar también postres algún día: añadir /postre/i.
+const EXCLUDED_CATEGORY_PATTERNS = [/bebida/i];
 
 type Opp = {
   row: any; brand: any; chKey: string; channelId: string;
@@ -153,6 +165,8 @@ Deno.serve(async (req) => {
         reason = `Evento con demanda al alza: ${eventUpNames}`;
       }
       if (pct === 0) continue;
+      // (f) múltiplos de 5: lo que la pantalla enseña = lo que Glovo publica (chips 10..60)
+      pct = Math.max(10, Math.min(prof.maxPct, Math.round(pct / 5) * 5));
 
       opps.push({ row, brand, chKey, channelId: channelId as string, pct, reason, urgent, gap });
     }
@@ -167,11 +181,28 @@ Deno.serve(async (req) => {
       const used = usedByChannel.get(o.chKey) ?? 0;
       if (used >= prof.maxNew) continue; // (c) cupo por canal, no global
 
+      // (e) BEBIDAS FUERA del alcance ANTES del guardarraíl (categorías vetadas)
+      const { data: items } = await supa.from("menu_item")
+        .select("id, menu_category:menu_category_id(name)")
+        .eq("account_id", accountId).eq("brand_id", o.brand.id)
+        .is("archived_at", null);
+      const banned = (items ?? []).filter((it: any) =>
+        EXCLUDED_CATEGORY_PATTERNS.some(rx => rx.test(it.menu_category?.name ?? "")));
+      const baseIds = banned.length > 0
+        ? (items ?? []).filter((it: any) => !banned.some((b: any) => b.id === it.id)).map((it: any) => it.id)
+        : null; // null = toda la carta (la marca no tiene categorías vetadas)
+      if (baseIds !== null && baseIds.length === 0) {
+        decisions.push({ brand: o.brand.name, channel: o.row.channel_name, pct: o.pct, reason: o.reason,
+          verdict: "DESCARTADA: la carta solo tiene categorías vetadas (bebidas)" });
+        continue;
+      }
+      if (banned.length > 0) decisions.push({ brand: o.brand.name, note: `bebidas excluidas del alcance: ${banned.length} items` });
+
       // GUARDARRAÍL DE MARGEN: preview real; platos bajo suelo se EXCLUYEN del alcance
       const { data: impact } = await supa.rpc("preview_platform_promo_impact", {
         p_account_id: accountId, p_channel_id: o.channelId,
         p_brand_ids: [o.brand.id], p_discount_type: "percent",
-        p_discount_value: o.pct, p_menu_item_ids: null,
+        p_discount_value: o.pct, p_menu_item_ids: baseIds,
         p_margin_floor_pct: cfg.margin_floor_pct,
       });
       const ok = (impact ?? []).filter((r: any) => r.status === "ok");
@@ -181,7 +212,8 @@ Deno.serve(async (req) => {
           verdict: "DESCARTADA: ningún plato aguanta el suelo", under: under.length });
         continue;
       }
-      const scopeItems = under.length > 0 ? ok.map((r: any) => r.menu_item_id) : null; // null = toda la carta
+      // alcance final: si hay bajo-suelo O hay bebidas vetadas, lista explícita; si no, toda la carta
+      const scopeItems = (under.length > 0 || baseIds !== null) ? ok.map((r: any) => r.menu_item_id) : null;
 
       // Shop auto / plataforma propuesta
       const isShop = o.row.channel_name === "Shop";
