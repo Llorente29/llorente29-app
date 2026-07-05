@@ -485,25 +485,39 @@ export async function approveCampaign(input: ApproveInput): Promise<void> {
   const platform = toPushPlatform(draft.channel)
   const menuItemIds =
     draft.scope.menuItemIds && draft.scope.menuItemIds.length > 0 ? draft.scope.menuItemIds : null
+  // El robot marca los platos EN GLOVO por NOMBRE (payload.menu_item_names). Sin los
+  // nombres, marca "0 de 0" y aborta con honestidad (bug cazado 05/07 en vivo).
+  let menuItemNames: string[] | null = null
+  if (menuItemIds) {
+    const { data: nRows } = await db().from('menu_item').select('name').in('id', menuItemIds)
+    const names = ((nRows ?? []) as Array<{ name: string }>).map((r) => r.name)
+    menuItemNames = names.length > 0 ? names : null
+  }
 
-  // 1) Persistir el estado final del coupon (por si venía de borrador con cambios)
-  //    y activarlo.
+  // 1) LEER ANTES DE PISAR (bug cazado 05/07 en vivo): el agente pone location_ids y
+  //    kind en el cupón, pero el draft de la pantalla NO los conoce — persistir el scope
+  //    del draft y leer el cupón DESPUÉS los borraba en el momento exacto de usarlos
+  //    (jobs con local/hint null). Orden correcto: leer -> persistir PRESERVANDO -> jobs.
+  const { data: cRow } = await db().from('coupon').select('scope, kind').eq('id', couponId).maybeSingle()
+  const couponKind: string = ((cRow as { kind?: string | null } | null)?.kind) ?? 'standard'
+  const scopeLocationIds: string[] = (((cRow as { scope?: { location_ids?: string[] } } | null)?.scope?.location_ids) ?? []) as string[]
+
+  // 2) Persistir el estado final del coupon y activarlo, preservando lo que el draft no sabe.
   const base = draftToCouponPayload(draft)
+  const scopePersist = {
+    ...(scopeToJson(draft.scope) as Record<string, unknown>),
+    ...(scopeLocationIds.length > 0 ? { location_ids: scopeLocationIds } : {}),
+  }
   const activate = async (payload: Record<string, unknown>) =>
     db().from('coupon').update({ ...payload, active: true, paused_at: null }).eq('id', couponId)
-  let { error: upErr } = await activate({ ...base, scope: scopeToJson(draft.scope) })
+  let { error: upErr } = await activate({ ...base, scope: scopePersist })
   if (upErr && isMissingScopeColumn(upErr)) {
     ;({ error: upErr } = await activate(base))
   }
   if (upErr) throw new Error(`Error activando campaña: ${upErr.message}`)
 
-  // 2) Un job por marca × LOCAL (v1.3): las campañas del agente traen scope.location_ids
-  //    — la promo de un local se publica SOLO en el POS de ese local (payload.pos_hint
-  //    restringe al robot). Sin location_ids (campaña manual de cuenta entera): un job
-  //    por marca con location null, como siempre.
-  const { data: cRow } = await db().from('coupon').select('scope, kind').eq('id', couponId).maybeSingle()
-  const couponKind: string = ((cRow as { kind?: string | null } | null)?.kind) ?? 'standard'
-  const scopeLocationIds: string[] = (((cRow as { scope?: { location_ids?: string[] } } | null)?.scope?.location_ids) ?? []) as string[]
+  // 3) Un job por marca × LOCAL: la promo de un local se publica SOLO en el POS de ese
+  //    local (payload.pos_hint restringe al robot). Sin location_ids: un job por marca.
   let locs: Array<{ id: string; name: string; glovo_pos_hint: string | null }> = []
   if (scopeLocationIds.length > 0) {
     const { data: lRows } = await db()
@@ -536,6 +550,7 @@ export async function approveCampaign(input: ApproveInput): Promise<void> {
         discount_type: draft.discountType,
         value: draft.value,
         menu_item_ids: menuItemIds,
+        menu_item_names: menuItemNames,
         weekdays: draft.weekdays && draft.weekdays.length > 0 ? draft.weekdays : null,
         time_from: draft.timeFrom || null,
         time_to: draft.timeTo || null,
@@ -640,100 +655,4 @@ export async function deleteDraft(couponId: string): Promise<void> {
   }
   const { error } = await db().from('coupon').delete().eq('id', couponId)
   if (error) throw new Error(`Error borrando borrador: ${error.message}`)
-}
-
-// ─────────────────────────────────────────────────────────────────────
-// ETAPA CRECIMIENTO — objetivos por marca × canal × local
-// (tabla brand_channel_target; la gobierna el operador y es la vara del
-// agente desde el 05/07/2026). NO está en database.ts → cast `as never`.
-// ─────────────────────────────────────────────────────────────────────
-
-/** Fila de la señal v2 del agente (una por combinación CON objetivo > 0). */
-export interface SalesSignalRow {
-  brandId: string
-  /** Nombre del canal tal cual en sales_channel ('Glovo' | 'Uber'). */
-  channelName: string
-  locationId: string
-  locationName: string
-  targetDaily: number | null
-  sales7d: number | null
-  avg28d: number | null
-  peakDaily: number | null
-}
-
-/**
- * Señal de ventas v2: `agent_sales_signal_v2(account)`. Devuelve SOLO las
- * combinaciones con objetivo > 0 (el universo del agente). Las combinaciones
- * sin objetivo se completan en cliente contra el catálogo (marcas×locales×canal).
- */
-export async function getSalesSignal(accountId: string): Promise<SalesSignalRow[]> {
-  const { data, error } = await db().rpc('agent_sales_signal_v2', { p_account_id: accountId })
-  if (error) throw new Error(`Error cargando la señal de ventas: ${error.message}`)
-  return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
-    brandId: r.brand_id as string,
-    channelName: (r.channel_name as string) ?? '',
-    locationId: r.location_id as string,
-    locationName: (r.location_name as string) ?? '',
-    targetDaily: num(r.target_daily),
-    sales7d: num(r.sales_7d),
-    avg28d: num(r.avg_28d),
-    peakDaily: num(r.peak_daily),
-  }))
-}
-
-/**
- * Umbral de recuperación del agente (%). Por encima de él el agente NO empuja
- * (verde). Vive en offers_agent_config; default de esquema 80 si no hay fila.
- */
-export async function getRecoveryTargetPct(accountId: string): Promise<number> {
-  const { data, error } = await db()
-    .from('offers_agent_config')
-    .select('recovery_target_pct')
-    .eq('account_id', accountId)
-    .maybeSingle()
-  if (error) throw new Error(`Error cargando la config del agente: ${error.message}`)
-  const v = num((data as Record<string, unknown> | null)?.recovery_target_pct)
-  return v ?? 80
-}
-
-/**
- * Fija el objetivo (pedidos/día) de una combinación marca×canal×local. Upsert
- * sobre la clave única. target_daily >= 0 (CHECK en BD; el caller ya evita <0).
- */
-export async function upsertTarget(input: {
-  accountId: string
-  brandId: string
-  channelId: string
-  locationId: string
-  targetDaily: number
-}): Promise<void> {
-  const row = {
-    account_id: input.accountId,
-    brand_id: input.brandId,
-    channel_id: input.channelId,
-    location_id: input.locationId,
-    target_daily: input.targetDaily,
-    updated_at: new Date().toISOString(),
-  }
-  const { error } = await db()
-    .from('brand_channel_target')
-    .upsert(row as never, { onConflict: 'account_id,brand_id,channel_id,location_id' })
-  if (error) throw new Error(`Error guardando objetivo: ${error.message}`)
-}
-
-/** Borra el objetivo de una combinación (al vaciar la celda). Idempotente. */
-export async function deleteTarget(input: {
-  accountId: string
-  brandId: string
-  channelId: string
-  locationId: string
-}): Promise<void> {
-  const { error } = await db()
-    .from('brand_channel_target')
-    .delete()
-    .eq('account_id', input.accountId)
-    .eq('brand_id', input.brandId)
-    .eq('channel_id', input.channelId)
-    .eq('location_id', input.locationId)
-  if (error) throw new Error(`Error borrando objetivo: ${error.message}`)
 }
