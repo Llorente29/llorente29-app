@@ -497,31 +497,52 @@ export async function approveCampaign(input: ApproveInput): Promise<void> {
   }
   if (upErr) throw new Error(`Error activando campaña: ${upErr.message}`)
 
-  // 2) Un job por marca.
-  const jobs = draft.scope.brandIds.map((brandId) => ({
-    account_id: draft.accountId,
-    coupon_id: couponId,
-    platform,
-    brand_id: brandId,
-    location_id: null,
-    action: 'create' as const,
-    status: 'pending' as const,
-    payload: {
-      name: draft.name.trim(),
+  // 2) Un job por marca × LOCAL (v1.3): las campañas del agente traen scope.location_ids
+  //    — la promo de un local se publica SOLO en el POS de ese local (payload.pos_hint
+  //    restringe al robot). Sin location_ids (campaña manual de cuenta entera): un job
+  //    por marca con location null, como siempre.
+  const { data: cRow } = await db().from('coupon').select('scope').eq('id', couponId).maybeSingle()
+  const scopeLocationIds: string[] = (((cRow as { scope?: { location_ids?: string[] } } | null)?.scope?.location_ids) ?? []) as string[]
+  let locs: Array<{ id: string; name: string; glovo_pos_hint: string | null }> = []
+  if (scopeLocationIds.length > 0) {
+    const { data: lRows } = await db()
+      .from('locations')
+      .select('id, name, glovo_pos_hint')
+      .in('id', scopeLocationIds)
+    locs = ((lRows ?? []) as never[]) as Array<{ id: string; name: string; glovo_pos_hint: string | null }>
+  }
+  const locTargets: Array<{ id: string; name: string; glovo_pos_hint: string | null } | null> =
+    locs.length > 0 ? locs : [null]
+
+  const jobs = draft.scope.brandIds.flatMap((brandId) =>
+    locTargets.map((loc) => ({
+      account_id: draft.accountId,
+      coupon_id: couponId,
       platform,
       brand_id: brandId,
-      brand_name: brandNames[brandId] ?? '',
-      discount_type: draft.discountType,
-      value: draft.value,
-      menu_item_ids: menuItemIds,
-      weekdays: draft.weekdays && draft.weekdays.length > 0 ? draft.weekdays : null,
-      time_from: draft.timeFrom || null,
-      time_to: draft.timeTo || null,
-      starts_at: draft.startsAt || null,
-      ends_at: draft.endsAt || null,
-      budget_max: draft.budgetMax,
-    },
-  }))
+      location_id: loc?.id ?? null,
+      action: 'create' as const,
+      status: 'pending' as const,
+      payload: {
+        name: draft.name.trim(),
+        platform,
+        brand_id: brandId,
+        brand_name: brandNames[brandId] ?? '',
+        location_id: loc?.id ?? null,
+        location_name: loc?.name ?? null,
+        pos_hint: loc?.glovo_pos_hint ?? null,
+        discount_type: draft.discountType,
+        value: draft.value,
+        menu_item_ids: menuItemIds,
+        weekdays: draft.weekdays && draft.weekdays.length > 0 ? draft.weekdays : null,
+        time_from: draft.timeFrom || null,
+        time_to: draft.timeTo || null,
+        starts_at: draft.startsAt || null,
+        ends_at: draft.endsAt || null,
+        budget_max: draft.budgetMax,
+      },
+    })),
+  )
   if (jobs.length === 0) throw new Error('La campaña no tiene ninguna marca en su alcance.')
 
   const { error: jobErr } = await db().from('promo_push_job').insert(jobs as never)
@@ -539,7 +560,7 @@ async function enqueueActionPerBrand(
 ): Promise<number> {
   const { data, error } = await db()
     .from('promo_push_job')
-    .select('account_id, brand_id, platform, payload, action')
+    .select('account_id, brand_id, location_id, platform, payload, action')
     .eq('coupon_id', couponId)
     .eq('action', 'create')
   if (error) throw new Error(`Error leyendo marcas publicadas: ${error.message}`)
@@ -547,15 +568,17 @@ async function enqueueActionPerBrand(
   const createJobs = (data ?? []) as Array<{
     account_id: string
     brand_id: string
+    location_id: string | null
     platform: PushPlatform
     payload: Record<string, unknown>
   }>
-  // Dedup por marca (una campaña publica una create por marca).
+  // Dedup por marca×LOCAL (v1.3: una campaña puede publicar un create por marca y local).
   const seen = new Set<string>()
   const rows = createJobs
     .filter((j) => {
-      if (seen.has(j.brand_id)) return false
-      seen.add(j.brand_id)
+      const key = `${j.brand_id}:${j.location_id ?? '-'}`
+      if (seen.has(key)) return false
+      seen.add(key)
       return true
     })
     .map((j) => ({
@@ -563,7 +586,7 @@ async function enqueueActionPerBrand(
       coupon_id: couponId,
       platform: j.platform,
       brand_id: j.brand_id,
-      location_id: null,
+      location_id: j.location_id ?? null,
       action,
       status: 'pending' as const,
       payload: { ...j.payload, action },

@@ -1,4 +1,9 @@
-// folvy-promo-agent v3.15 — robot de promos (Glovo)
+// folvy-promo-agent v3.16 — robot de promos (Glovo)
+// v3.16 (05/07/2026): POS DIRIGIDO POR LOCAL — si el job trae payload.pos_hint
+//   (locations.glovo_pos_hint: 'cañaveral'/'florencio'/'camichi'), el robot restringe
+//   sus objetivos SOLO a los establecimientos que casen el hint (además de la allowlist).
+//   La promo del local X se publica/cancela únicamente en el POS del local X.
+//   Sin pos_hint: comportamiento v3.15 (todos los POS de la allowlist).
 // v3.15 (05/07/2026): acción END (cancelar promo en Glovo) sobre la LISTA GLOBAL de
 //   Promociones (/promotion/vendor-deals/view-performance): matcher estricto
 //   (Activo + marca + Público 'Todos' + fecha de inicio del payload + allowlist),
@@ -177,6 +182,15 @@ async function listTargets(p) {
   await page.keyboard.press("Escape").catch(() => {});
   if (targets.length === 0)
     throw new Error(`ningún establecimiento de '${p.brand_name}' casa con GLOVO_ALLOWED_POS (${nCand} candidatos)`);
+  // v3.16: POS dirigido por local — el hint del payload restringe a SU establecimiento
+  if (p.pos_hint) {
+    const hint = String(p.pos_hint).toLowerCase();
+    const hinted = targets.filter(t => t.toLowerCase().includes(hint));
+    if (hinted.length === 0)
+      throw new Error(`pos_hint '${p.pos_hint}': ningún establecimiento de '${p.brand_name}' lo casa (candidatos: ${targets.join(" | ")})`);
+    log(`  pos_hint '${p.pos_hint}': ${hinted.length} de ${targets.length} establecimientos`);
+    return hinted;
+  }
   return targets;
 }
 
@@ -449,6 +463,7 @@ async function endGlovoPromo(job) {
       if (!/todos/i.test(txt)) continue;
       if (startTxt && !txt.includes(startTxt)) continue;
       if (allowed.length > 0 && !allowed.some(a => txt.toLowerCase().includes(a))) continue;
+      if (p.pos_hint && !txt.toLowerCase().includes(String(p.pos_hint).toLowerCase())) continue; // v3.16: solo SU local
       const m = txt.match(/\((\d{4,8})\)/);
       cands.push({ storeId: m ? m[1] : txt.slice(0, 60), txt });
     }
@@ -537,6 +552,6 @@ async function doTick() {
   }
 }
 
-log(`folvy-promo-agent v3.15 arrancado · DRY_RUN=${cfg.DRY_RUN} · poll ${cfg.POLL_SECONDS}s`);
+log(`folvy-promo-agent v3.16 arrancado · DRY_RUN=${cfg.DRY_RUN} · poll ${cfg.POLL_SECONDS}s`);
 await tick();
 setInterval(() => tick().catch(e => log("tick error:", e.message)), cfg.POLL_SECONDS * 1000);
