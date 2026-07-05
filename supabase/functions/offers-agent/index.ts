@@ -1,4 +1,10 @@
 // offers-agent — El agente de ofertas de Folvy (motor de reglas determinista y auditable)
+// v1.5 (05/07/2026) — T4: SEÑAL POR DÍA DE SEMANA. Glovo solo admite promos por rango de
+//   fechas (no recurrencia semanal), así que el DOW informa el CUÁNDO y el CUÁNTO:
+//   si los 3 días por delante concentran >=50% de la semana de la marca en ese canal
+//   (12 semanas, agent_dow_signal), la oportunidad gana prioridad y +5 de profundidad;
+//   si concentran <25% (días muertos por delante), se suaviza -5 (mínimo 10) y se ahorra
+//   margen. Siempre visible en el razonamiento ("+ días fuertes por delante ...").
 // v1.4 (05/07/2026) — R3: 2x1-ESPEJO (v2.1 T1, prioridad 1 de Julio; validado ×6 en Meraki):
 //   En oportunidades URGENTES (ventas ~0 con objetivo) el agente intenta PRIMERO un 2x1
 //   con artículo espejo: preview_bogo_mirror_price calcula el precio del espejo que
@@ -98,6 +104,20 @@ Deno.serve(async (req) => {
       .lte("starts_at", new Date(Date.now() + 7 * 864e5).toISOString());
     signals.events = events;
     const eventUp = (events ?? []).some(e => e.demand_effect === "up");
+
+    // T4: reparto por día de semana (12 semanas) por marca×canal + los 3 DOW por delante
+    const { data: dowRows } = await supa.rpc("agent_dow_signal", { p_account_id: accountId });
+    const dowMap = new Map<string, Map<number, number>>();
+    for (const r of (dowRows ?? []) as Array<any>) {
+      const k = `${r.brand_id}:${r.channel_name}`;
+      if (!dowMap.has(k)) dowMap.set(k, new Map());
+      dowMap.get(k)!.set(Number(r.dow), Number(r.pct_share));
+    }
+    const jsDow = new Date().getDay();               // 0=Dom..6=Sáb
+    const isoToday = jsDow === 0 ? 7 : jsDow;        // ISO 1=Lun..7=Dom
+    const nextDows = [0, 1, 2].map(o => ((isoToday - 1 + o) % 7) + 1);
+    const DOW_NAMES = ["", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+    const nextDowTxt = nextDows.map(d => DOW_NAMES[d]).join("-");
     const eventUpNames = (events ?? []).filter(e => e.demand_effect === "up").map(e => e.name).join(", ");
 
     // Campañas recientes: busy POR marca×canal×LOCAL. Una campaña sin location_ids
@@ -167,6 +187,18 @@ Deno.serve(async (req) => {
         reason = `Evento con demanda al alza en ${locShort}: ${eventUpNames}`;
       }
       if (pct === 0) continue;
+      // T4: los 3 días por delante, contra el reparto histórico de la marca en el canal
+      const shares = dowMap.get(`${row.brand_id}:${row.channel_name}`);
+      if (shares && shares.size >= 4) { // con menos de 4 DOW con datos, la señal no es fiable
+        const ahead = nextDows.reduce((s, d) => s + (shares.get(d) ?? 0), 0);
+        if (ahead >= 50) {
+          pct = Math.min(prof.maxPct, pct + 5); gap = Math.min(1, gap + 0.15);
+          reason += ` + días fuertes por delante (${nextDowTxt}: ${Math.round(ahead)}% de la semana)`;
+        } else if (ahead < 25) {
+          pct = Math.max(10, pct - 5);
+          reason += ` − días flojos por delante (${nextDowTxt}: ${Math.round(ahead)}% de la semana) — profundidad contenida`;
+        }
+      }
       // múltiplos de 5 (v1.2): pantalla = Glovo
       pct = Math.max(10, Math.min(prof.maxPct, Math.round(pct / 5) * 5));
 
