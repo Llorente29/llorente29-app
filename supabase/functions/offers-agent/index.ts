@@ -1,4 +1,5 @@
-// offers-agent — El agente de ofertas de Folvy (motor de reglas determinista y auditable)
+﻿// offers-agent — El agente de ofertas de Folvy (motor de reglas determinista y auditable)
+// v1.7: 2x1 CONGELADO (BOGO_ENABLED=false, decision Julio 05/07).
 // v1.6.1: bogo nace con 30 días (procedimiento espejo: always-on de facto).
 // v1.6 (05/07/2026) — T6: AUTOAPRENDIZAJE determinista y auditable, sin estado oculto:
 //   en cada corrida se recalcula lo aprendido desde el uplift MEDIDO (agent_learning_signal,
@@ -297,7 +298,8 @@ Deno.serve(async (req) => {
         brand_ids: [o.brand.id], menu_item_ids: scopeItems, location_ids: [o.row.location_id],
       };
       let reasonFinal = o.reason;
-      if (o.urgent && !isShop) {
+      const BOGO_ENABLED = false; // 2x1 CONGELADO 05/07 (decision Julio) - reabrir tras reorganizacion multi-plataforma
+      if (BOGO_ENABLED && o.urgent && !isShop) {
         const { data: bogo } = await supa.rpc("preview_bogo_mirror_price", {
           p_account_id: accountId, p_channel_id: o.channelId, p_brand_id: o.brand.id,
           p_margin_floor_pct: cfg.margin_floor_pct,
