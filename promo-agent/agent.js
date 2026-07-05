@@ -1,7 +1,13 @@
-// folvy-promo-agent v3.13 — robot de promos (Glovo)
+// folvy-promo-agent v3.14 — robot de promos (Glovo)
+// v3.14 (05/07/2026): MULTI-LOCAL (publica en TODOS los establecimientos de la allowlist,
+//   con LIBRO DE A BORDO por job en screenshots/{job.id}-done.json: un reintento reanuda
+//   SOLO los pendientes, jamás duplica — lección v3.11) + DATEPICKER robusto (teclea la
+//   fecha, fallback a clic de día con navegación de mes) con VERIFICACIÓN DURA del input:
+//   si la fecha fin de Glovo no coincide con la esperada, la autoauditoría tumba el job
+//   (fechas falsas rompen el relevo always-on y el bloqueo busy del agente).
 // v2: popups eliminados · botones Editar por índice de sección · autoauditoría del resumen
 import { chromium } from "playwright";
-import { readFileSync, mkdirSync } from "fs";
+import { readFileSync, mkdirSync, writeFileSync } from "fs";
 
 const cfg = JSON.parse(readFileSync("./config.json", "utf8"));
 mkdirSync("./screenshots", { recursive: true });
@@ -20,6 +26,11 @@ async function rpc(fn, body) {
 const claim  = () => rpc("claim_promo_push_jobs", { p_secret: cfg.PUSH_AGENT_SECRET, p_platform: "glovo", p_limit: 1 });
 const report = (id, ok, ref, err) => rpc("report_promo_push_job",
   { p_secret: cfg.PUSH_AGENT_SECRET, p_job_id: id, p_ok: ok, p_external_ref: ref ?? null, p_error: err ?? null });
+
+// LIBRO DE A BORDO por job: qué establecimientos ya se publicaron (anti-duplicados en reintentos)
+const ledgerPath = (jobId) => `./screenshots/${jobId}-done.json`;
+const readLedger = (jobId) => { try { return JSON.parse(readFileSync(ledgerPath(jobId), "utf8")); } catch { return []; } };
+const addLedger  = (jobId, pos) => { const l = readLedger(jobId); if (!l.includes(pos)) l.push(pos); writeFileSync(ledgerPath(jobId), JSON.stringify(l, null, 1)); };
 
 let ctx, page;
 async function ensureBrowser() {
@@ -139,27 +150,12 @@ async function assertEditorClosed(tag) {
   if (open) throw new Error(`paso '${tag}': el editor sigue abierto tras guardar`);
 }
 
-async function createGlovoPromo(job) {
-  const p = job.payload;
-  const itemLevel = Array.isArray(p.menu_item_ids) && p.menu_item_ids.length > 0;
-  const shot = async (tag) => {
-    const f = `./screenshots/${job.id}-${tag}.png`;
-    await page.screenshot({ path: f, fullPage: true }); log("  📸", f); return f;
-  };
-  const submitSection = async (tag) => {
-    await page.getByTestId("form-section-submit-button").click({ timeout: 8000 })
-      .catch(() => { throw new Error(`paso '${tag}': no encontré form-section-submit-button`); });
-    await page.waitForTimeout(1200);
-  };
-
-  // 0) ESTABLECIMIENTO en el header global (descubrimiento del codegen):
-  //    el asistente hereda el punto de venta elegido arriba.
+// Enumera los establecimientos de la marca que casan la ALLOWLIST (formato "Marca - MAD - Calle")
+async function listTargets(p) {
   await page.goto("https://portal.glovoapp.com/dashboard", { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(2500); await solveHumanCheck(); await killPopups();
   await page.getByTestId("desktop-brand-view-button").click({ timeout: 15000 });
   await page.waitForTimeout(1200);
-  // Establecimientos de la marca: TODOS los que casen la ALLOWLIST (una promo por local).
-  // Formato exigido: "Marca - MAD - Calle" (excluye entradas de formato viejo).
   const esc = p.brand_name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const candidates = page.getByText(new RegExp("^" + esc + "\\s+-\\s+MAD\\s+-\\s+", "i"));
   const nCand = await candidates.count();
@@ -167,17 +163,62 @@ async function createGlovoPromo(job) {
   const targets = [];
   for (let i = 0; i < nCand; i++) {
     const txt = ((await candidates.nth(i).textContent()) ?? "").trim();
-    if (allowed.length === 0 || allowed.some(a => txt.toLowerCase().includes(a))) targets.push(txt);
+    if (allowed.length === 0 || allowed.some(a => txt.toLowerCase().includes(a))) {
+      if (!targets.includes(txt)) targets.push(txt); // dedupe: el desplegable repite el texto
+    }
   }
+  await page.keyboard.press("Escape").catch(() => {});
   if (targets.length === 0)
     throw new Error(`ningún establecimiento de '${p.brand_name}' casa con GLOVO_ALLOWED_POS (${nCand} candidatos)`);
-  log(`  establecimientos objetivo (${targets.length}): ${targets.join(" | ")}`);
-  const posName = targets[0];
+  return targets;
+}
+
+// Selecciona un establecimiento en el header global (el asistente lo hereda)
+async function selectPos(posName) {
+  await page.goto("https://portal.glovoapp.com/dashboard", { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(2500); await solveHumanCheck(); await killPopups();
+  await page.getByTestId("desktop-brand-view-button").click({ timeout: 15000 });
+  await page.waitForTimeout(1200);
   await page.getByText(posName, { exact: true }).first().click();
   await page.waitForTimeout(1500);
   await page.keyboard.press("Escape").catch(() => {});
   await page.waitForTimeout(500);
-  log(`  punto de venta: ${posName}${targets.length > 1 ? ` (quedan ${targets.length - 1} — se iteran al publicar en real)` : ""}`);
+  log(`  punto de venta: ${posName}`);
+}
+
+// ORQUESTADOR multi-local: publica en TODOS los targets, con libro de a bordo anti-duplicados
+async function createGlovoPromo(job) {
+  const p = job.payload;
+  const itemLevel = Array.isArray(p.menu_item_ids) && p.menu_item_ids.length > 0;
+  const targets = await listTargets(p);
+  log(`  establecimientos objetivo (${targets.length}): ${targets.join(" | ")}`);
+  const done = readLedger(job.id);
+  const okPos = [...done]; const failPos = []; const refs = [];
+  for (let i = 0; i < targets.length; i++) {
+    const posName = targets[i];
+    if (done.includes(posName)) { log(`  ↷ '${posName}' ya publicada (libro de a bordo) — no se duplica`); continue; }
+    await selectPos(posName);
+    const r = await publishAtPos(job, p, itemLevel, posName, i + 1).catch(e => ({ ok: false, err: e.message }));
+    if (cfg.DRY_RUN) return r; // en DRY_RUN se evalúa solo el primer POS pendiente (humo rápido)
+    if (r.ok) { addLedger(job.id, posName); okPos.push(posName); refs.push(r.ref); log(`  ✅ publicada en '${posName}'`); }
+    else failPos.push(`${posName} → ${r.err}`);
+  }
+  if (failPos.length === 0)
+    return { ok: true, ref: refs.join(" | ") || "todas publicadas previamente (libro de a bordo)" };
+  return { ok: false, err: `PARCIAL — OK en: ${okPos.join(", ") || "ninguno"} · FALLO en: ${failPos.join(" · ")} — el reintento reanudará SOLO los pendientes` };
+}
+
+// Publica UNA promo en el establecimiento ya seleccionado (el asistente completo de Glovo)
+async function publishAtPos(job, p, itemLevel, posName, posIdx) {
+  const shot = async (tag) => {
+    const f = `./screenshots/${job.id}-pos${posIdx}-${tag}.png`;
+    await page.screenshot({ path: f, fullPage: true }); log("  📸", f); return f;
+  };
+  const submitSection = async (tag) => {
+    await page.getByTestId("form-section-submit-button").click({ timeout: 8000 })
+      .catch(() => { throw new Error(`paso '${tag}': no encontré form-section-submit-button`); });
+    await page.waitForTimeout(1200);
+  };
 
   // 1) Ir al asistente
   await page.getByTestId("vendor_deals-nav-item").click({ timeout: 10000 });
@@ -269,20 +310,43 @@ async function createGlovoPromo(job) {
     }
   }
 
-  // 4) CALENDARIO: fecha fin = ends_at del payload (fecha inicio: default hoy)
+  // 4) CALENDARIO: fecha fin = ends_at del payload (fecha inicio: default hoy).
+  //    v3.14: teclear la fecha directamente (más fiable que cazar botones de día),
+  //    fallback a clic de día CON navegación de mes, y VERIFICACIÓN DURA del valor
+  //    del input: si Glovo no tiene la fecha esperada, la autoauditoría tumba el job
+  //    (una fecha falsa rompe el relevo always-on y el bloqueo busy del agente).
+  let dateIssue = null;
   if (p.ends_at) {
     await page.getByTestId("schedule-section").getByText("Editar").click({ timeout: 10000 }).catch(() => {});
     await page.waitForTimeout(1200);
     const end = new Date(p.ends_at);
-    const dayName = end.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" });
-    // el botón del datepicker se llama "lunes, 6 de julio de"
+    const expected = `${String(end.getDate()).padStart(2, "0")}/${String(end.getMonth() + 1).padStart(2, "0")}/${end.getFullYear()}`;
     const endInput = page.getByRole("textbox", { name: "dd/MM/yyyy" }).nth(1);
     if (await endInput.isVisible().catch(() => false)) {
-      await endInput.click();
-      const dayBtn = page.getByRole("button", { name: new RegExp(dayName.split(",")[0] + ",? ?" + end.getDate() + " de", "i") }).first();
-      if (await dayBtn.isVisible().catch(() => false)) await dayBtn.click();
-      else log("  ⚠️ no encontré el día en el datepicker — calendario queda por defecto");
-    }
+      // Camino 1: teclear la fecha en el input
+      await endInput.click(); await page.waitForTimeout(300);
+      await page.keyboard.press("Control+a").catch(() => {});
+      await page.keyboard.type(expected, { delay: 40 }).catch(() => {});
+      await page.keyboard.press("Enter").catch(() => {});
+      await page.waitForTimeout(800);
+      let got = (await endInput.inputValue().catch(() => "")).trim();
+      if (got !== expected) {
+        // Camino 2: datepicker con navegación de mes (hasta 3 saltos por si ends_at cae en otro mes)
+        await endInput.click(); await page.waitForTimeout(500);
+        const dayRe = new RegExp(end.toLocaleDateString("es-ES", { weekday: "long" }) + ",? ?" + end.getDate() + " de", "i");
+        for (let hop = 0; hop < 3; hop++) {
+          const dayBtn = page.getByRole("button", { name: dayRe }).first();
+          if (await dayBtn.isVisible().catch(() => false)) { await dayBtn.click(); break; }
+          const next = page.getByRole("button", { name: /siguiente|next/i }).first();
+          if (!(await next.isVisible().catch(() => false))) break;
+          await next.click(); await page.waitForTimeout(500);
+        }
+        await page.waitForTimeout(600);
+        got = (await endInput.inputValue().catch(() => "")).trim();
+      }
+      if (got === expected) log(`  fecha fin VERIFICADA en el input: ${got}`);
+      else dateIssue = `fecha fin en Glovo '${got || "?"}' ≠ esperada '${expected}'`;
+    } else dateIssue = "no encontré el input de fecha fin (dd/MM/yyyy)";
     await shot("calendario"); await submitSection("calendario").catch(() => log("  ⚠️ calendario sin submit"));
   }
 
@@ -294,6 +358,7 @@ async function createGlovoPromo(job) {
   if (!resumen.includes(`${chip}%`)) issues.push(`el resumen no muestra ${chip}%`);
   if (/descuento extra para prime/i.test(resumen)) issues.push("el extra Prime sigue ACTIVO");
   if (itemLevel && /la selección debe contener/i.test(resumen)) issues.push("el Menú está vacío");
+  if (dateIssue) issues.push(dateIssue + " — una fecha falsa rompe el relevo del agente");
   const summaryShot = await shot("RESUMEN-FINAL");
 
   if (issues.length) return { ok: false, err: `Autoauditoría: ${issues.join(" · ")}. Screenshot: ${summaryShot}` };
@@ -350,7 +415,7 @@ async function doTick() {
   for (const job of jobs) {
     log(`▶ job ${job.id} · ${job.action} · ${job.payload?.brand_name} · ${job.payload?.value}%`);
     try {
-      if (job.action !== "create") { await report(job.id, false, null, `acción '${job.action}' aún no soportada (v1.1)`); continue; }
+      if (job.action !== "create") { await report(job.id, false, null, `acción '${job.action}' aún no soportada (v3.14: solo create; pause/resume/end pendientes)`); continue; }
       const r = await createGlovoPromo(job);
       await report(job.id, r.ok, r.ref, r.err);
       log(r.ok ? "  ✅ publicada" : "  ⏸ " + r.err);
@@ -362,6 +427,6 @@ async function doTick() {
   }
 }
 
-log(`folvy-promo-agent v3.13 arrancado · DRY_RUN=${cfg.DRY_RUN} · poll ${cfg.POLL_SECONDS}s`);
+log(`folvy-promo-agent v3.14 arrancado · DRY_RUN=${cfg.DRY_RUN} · poll ${cfg.POLL_SECONDS}s`);
 await tick();
 setInterval(() => tick().catch(e => log("tick error:", e.message)), cfg.POLL_SECONDS * 1000);
