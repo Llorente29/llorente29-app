@@ -1,4 +1,13 @@
 // offers-agent — El agente de ofertas de Folvy (motor de reglas determinista y auditable)
+// v1.4 (05/07/2026) — R3: 2x1-ESPEJO (v2.1 T1, prioridad 1 de Julio; validado ×6 en Meraki):
+//   En oportunidades URGENTES (ventas ~0 con objetivo) el agente intenta PRIMERO un 2x1
+//   con artículo espejo: preview_bogo_mirror_price calcula el precio del espejo que
+//   protege el margen (paridad de € con la venta normal + suelo %), sobre los top-sellers
+//   de la marca con escandallo. La propuesta nace kind='bogo_mirror' con el precio y la
+//   INSTRUCCIÓN exacta en el razonamiento ("crear espejo a X€ en Last") — la
+//   materialización del espejo en la carta pasa por Last (Folvy aún no publica artículos
+//   en Glovo) y las manos del robot para el asistente 2x1 llegan en T5 (capturas pendientes).
+//   Sin estrella costeable o 2x1 inviable -> fallback al % de siempre.
 // v1.3 (05/07/2026) — ETAPA CRECIMIENTO (decisión Julio):
 //   La vara de medir pasa del PICO HISTÓRICO al OBJETIVO POR MARCA×CANAL×LOCAL
 //   (tabla brand_channel_target, puesta por el operador). Motivo (verificado con datos):
@@ -222,19 +231,57 @@ Deno.serve(async (req) => {
       const endDays = Math.min(cfg.max_campaign_days, 7);
       const locShort = String(o.row.location_name ?? "").replace(/^Foodint\s+/i, "");
 
+      // ── R3 (v1.4): en URGENTES, 2x1-espejo primero (plataformas; el Shop tiene su BOGO propio)
+      let kind = "standard";
+      let name = `[Agente] ${o.pct}% ${o.brand.name} · ${o.row.channel_name} · ${locShort}`;
+      let value = o.pct;
+      let scopeFinal: Record<string, unknown> = {
+        brand_ids: [o.brand.id], menu_item_ids: scopeItems, location_ids: [o.row.location_id],
+      };
+      let reasonFinal = o.reason;
+      if (o.urgent && !isShop) {
+        const { data: bogo } = await supa.rpc("preview_bogo_mirror_price", {
+          p_account_id: accountId, p_channel_id: o.channelId, p_brand_id: o.brand.id,
+          p_margin_floor_pct: cfg.margin_floor_pct,
+        });
+        // Estrella = el top-seller 30d con escandallo y 2x1 viable (la RPC ya ordena por ventas)
+        const star = ((bogo ?? []) as Array<any>).find((r) => r.status === "ok");
+        if (star) {
+          kind = "bogo_mirror";
+          value = 50; // semántica 2x1 (informativo; el precio que manda es el del espejo)
+          name = `[Agente] 2x1 ${star.item_name} · ${o.row.channel_name} · ${locShort}`;
+          scopeFinal = {
+            brand_ids: [o.brand.id], location_ids: [o.row.location_id],
+            menu_item_ids: [star.menu_item_id],
+            mirror_price: star.precio_sugerido,
+            base_item: { id: star.menu_item_id, name: star.item_name, pvp: star.pvp_cliente },
+          };
+          reasonFinal = `${o.reason} → TÁCTICA 2x1-ESPEJO (validada ×6): estrella '${star.item_name}' ` +
+            `(PVP ${star.pvp_cliente}€, ${star.units_30d} uds/30d). ESPEJO a ${star.precio_sugerido}€ ` +
+            `(paridad ${star.precio_paridad}€ · suelo ${star.precio_min_suelo}€) → margen 2x1 ` +
+            `${star.margen_2x1}€ (${star.margen_pct_2x1}%), el cliente ahorra ${star.ahorro_cliente_pct}%. ` +
+            `ACCIÓN PREVIA: crear el artículo espejo a ${star.precio_sugerido}€ en Last (la carta de Glovo la publica Last).`;
+        } else {
+          const why = ((bogo ?? []) as Array<any>).slice(0, 3).map((r: any) => `${r.item_name}:${r.status}`).join(", ");
+          decisions.push({ brand: o.brand.name, location: o.row.location_name,
+            note: `2x1 descartado (${why || "sin datos"}) — fallback a ${o.pct}%` });
+        }
+      }
+
       const { data: coupon, error } = await supa.from("coupon").insert({
         account_id: accountId,
         code: `AGENT-${o.chKey.toUpperCase()}-${Date.now().toString(36)}`,
-        name: `[Agente] ${o.pct}% ${o.brand.name} · ${o.row.channel_name} · ${locShort}`,
-        discount_type: "percent", value: o.pct,
+        name,
+        discount_type: "percent", value,
         applies_to: "subtotal",
         channels: [o.chKey],
-        scope: { brand_ids: [o.brand.id], menu_item_ids: scopeItems, location_ids: [o.row.location_id] },
+        kind,
+        scope: scopeFinal,
         starts_at: nowIso,
         ends_at: new Date(Date.now() + endDays * 864e5).toISOString(),
         active: autoPublish,
         origin: "agent",
-        omnibus_ref_note: `Agente ${nowIso.slice(0, 10)}: ${o.reason}`,
+        omnibus_ref_note: `Agente ${nowIso.slice(0, 10)}: ${reasonFinal}`,
       }).select("id").single();
 
       if (error) { decisions.push({ brand: o.brand.name, location: o.row.location_name, error: error.message }); continue; }
@@ -243,7 +290,7 @@ Deno.serve(async (req) => {
       busy.add(`${o.chKey}:${o.brand.id}:${o.row.location_id}`);
       decisions.push({
         brand: o.brand.name, channel: o.row.channel_name, location: o.row.location_name,
-        pct: o.pct, reason: o.reason,
+        kind, pct: kind === "bogo_mirror" ? "2x1" : o.pct, reason: reasonFinal,
         verdict: autoPublish ? "PUBLICADA (Shop auto)" : "PROPUESTA (pendiente de aprobación)",
         excluded_under_floor: pv.under.map((r: any) => r.item_name),
         coupon_id: coupon?.id,

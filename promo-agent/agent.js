@@ -1,4 +1,8 @@
-// folvy-promo-agent v3.16 — robot de promos (Glovo)
+// folvy-promo-agent v3.17 — robot de promos (Glovo)
+// v3.17 (05/07/2026): GUARDIA DE KIND — un job con payload.kind != 'standard' (p.ej.
+//   'bogo_mirror', el 2x1-espejo de v2.1 T1) se RECHAZA con mensaje claro: el asistente
+//   2x1 de Glovo no está fotografiado aún (T5). Sin esta guardia, el robot publicaría el
+//   cupón como 50% de descuento REAL = agujero de margen, no promo.
 // v3.16 (05/07/2026): POS DIRIGIDO POR LOCAL — si el job trae payload.pos_hint
 //   (locations.glovo_pos_hint: 'cañaveral'/'florencio'/'camichi'), el robot restringe
 //   sus objetivos SOLO a los establecimientos que casen el hint (además de la allowlist).
@@ -538,6 +542,11 @@ async function doTick() {
   for (const job of jobs) {
     log(`▶ job ${job.id} · ${job.action} · ${job.payload?.brand_name} · ${job.payload?.value}%`);
     try {
+      const jKind = job.payload?.kind ?? "standard";
+      if (jKind !== "standard") {
+        await report(job.id, false, null, `kind '${jKind}' aún sin manos (T5: falta fotografiar el asistente 2x1 de Glovo) — NO se publica como % para no regalar el descuento`);
+        continue;
+      }
       let r;
       if (job.action === "create") r = await createGlovoPromo(job);
       else if (job.action === "end") r = await endGlovoPromo(job);
@@ -552,6 +561,6 @@ async function doTick() {
   }
 }
 
-log(`folvy-promo-agent v3.16 arrancado · DRY_RUN=${cfg.DRY_RUN} · poll ${cfg.POLL_SECONDS}s`);
+log(`folvy-promo-agent v3.17 arrancado · DRY_RUN=${cfg.DRY_RUN} · poll ${cfg.POLL_SECONDS}s`);
 await tick();
 setInterval(() => tick().catch(e => log("tick error:", e.message)), cfg.POLL_SECONDS * 1000);
