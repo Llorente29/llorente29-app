@@ -12,7 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Percent, Plus, Loader2, ArrowLeft, Check, AlertTriangle, Pause, Play,
   CircleStop, Trash2, Search, Megaphone, Info, Target,
-  TrendingUp, TrendingDown, Minus, Zap,
+  TrendingUp, TrendingDown, Minus, Zap, Sparkles,
 } from 'lucide-react'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
@@ -27,10 +27,10 @@ import {
   pauseCampaign, resumeCampaign, endCampaign, deleteDraft,
   platformOfChannel,
   getSalesSignal, getRecoveryTargetPct, upsertTarget, deleteTarget,
-  getGoalReport, getCampaignUplift,
+  getGoalReport, getCampaignUplift, getActiveLocalEvents,
   type Campaign, type CampaignDraft, type CampaignStatus, type PlatformChannel,
   type DiscountType, type ImpactRow, type ImpactAggregates, type SalesSignalRow,
-  type GoalReportRow, type CampaignUpliftRow,
+  type GoalReportRow, type CampaignUpliftRow, type LocalEventRow,
 } from '@/modules/kitchen/services/platformOffersService'
 
 // ─────────────────────────────────────────────────────────────────────
@@ -219,6 +219,9 @@ export default function PlatformOffersPage() {
 
   return (
     <div className="space-y-6 max-w-6xl">
+      {/* Señales del día (eventos que mueven la demanda) — el cuadro que pide Julio. */}
+      {view === 'list' && activeAccountId && <TodaySignalsBanner accountId={activeAccountId} />}
+
       {/* Pestañas — solo fuera del editor de una campaña. El objetivo y la
           campaña que lo persigue viven juntos: es su casa. */}
       {view === 'list' && (
@@ -363,14 +366,15 @@ function CampaignList({
               <tbody className="divide-y divide-border-default">
                 {campaigns.map((c) => {
                   const chip = statusChip(c)
-                  const isAgentProposal = c.origin === 'agent' && c.status === 'borrador'
-                  const reason = isAgentProposal ? agentReason(c.omnibusRefNote) : null
+                  // El porqué se muestra en TODA campaña del agente (no solo borradores).
+                  const reason = c.origin === 'agent' ? agentReason(c.omnibusRefNote) : null
                   const ch = CHANNEL_META[c.channel]
                   const busy = busyId === c.id
                   return (
                     <tr key={c.id} className="hover:bg-page/60">
                       <td className="px-4 py-3">
                         <div className="font-medium text-text-primary">{c.name}</div>
+                        {reason && <CampaignReason text={reason} />}
                         {c.hasError && c.lastError && (
                           <div className="text-[11px] text-danger flex items-center gap-1 mt-0.5">
                             <AlertTriangle size={11} /> {c.lastError}
@@ -397,19 +401,9 @@ function CampaignList({
                         {fmtDate(c.startsAt)} → {fmtDate(c.endsAt)}
                       </td>
                       <td className="px-4 py-3">
-                        <div className="space-y-1">
-                          <span
-                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border ${chip.cls}`}
-                            title={reason ?? undefined}
-                          >
-                            {chip.label}
-                          </span>
-                          {reason && (
-                            <div className="text-[11px] text-text-secondary leading-snug max-w-[240px]" title={reason}>
-                              {reason}
-                            </div>
-                          )}
-                        </div>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border ${chip.cls}`}>
+                          {chip.label}
+                        </span>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1.5">
@@ -1444,5 +1438,121 @@ function PerformanceSection({ accountId }: { accountId: string }) {
         </span>
       </p>
     </>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Señales de hoy — eventos que mueven la demanda (local_event)
+// ─────────────────────────────────────────────────────────────────────
+
+function eventIcon(eventType: string, name: string): string {
+  switch (eventType.toLowerCase()) {
+    case 'weather_alert': return /lluvia|rain|tormenta|nieve/i.test(name) ? '🌧️' : '🌡️'
+    case 'sports':        return '⚽'
+    case 'concert':       return '🎵'
+    case 'holiday':       return '📅'
+    default:              return '📌'
+  }
+}
+
+function TodaySignalsBanner({ accountId }: { accountId: string }) {
+  const [events, setEvents] = useState<LocalEventRow[]>([])
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    getActiveLocalEvents(accountId)
+      .then((ev) => { if (!cancelled) setEvents(ev) })
+      .catch(() => { if (!cancelled) setEvents([]) })
+      .finally(() => { if (!cancelled) setLoaded(true) })
+    return () => { cancelled = true }
+  }, [accountId])
+
+  if (!loaded) return null
+
+  if (events.length === 0) {
+    return (
+      <p className="text-[11px] text-text-secondary flex items-center gap-1.5">
+        <Info size={12} /> Sin señales especiales hoy.
+      </p>
+    )
+  }
+
+  const now = Date.now()
+  return (
+    <div className="rounded-lg border border-accent/30 bg-accent/5 p-3">
+      <div className="flex items-center gap-1.5 mb-2">
+        <Sparkles size={14} className="text-accent" />
+        <h2 className="text-sm font-medium text-text-primary">Señales de hoy</h2>
+      </div>
+      <ul className="space-y-1.5">
+        {events.map((e) => {
+          const vigente = new Date(e.startsAt).getTime() <= now && now <= new Date(e.endsAt).getTime()
+          const up = e.demandEffect === 'up'
+          return (
+            <li key={e.id} className="flex items-start gap-2 text-sm">
+              <span className="text-base leading-none mt-0.5" aria-hidden>{eventIcon(e.eventType, e.name)}</span>
+              <div className="min-w-0">
+                <span className="text-text-primary">{e.name}</span>{' '}
+                {vigente ? (
+                  <span className={`text-xs ${up ? 'text-success' : 'text-warning'}`}>
+                    — {up
+                      ? 'demanda al alza: el agente profundiza sus promos hoy'
+                      : 'demanda a la baja: el agente modera sus promos hoy'}
+                  </span>
+                ) : (
+                  <span className="text-xs text-text-secondary">
+                    — desde {fmtDate(e.startsAt)}{up ? ' · al alza' : ' · a la baja'}
+                  </span>
+                )}
+              </div>
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// El PORQUÉ de una campaña del agente (parseado de omnibus_ref_note)
+// ─────────────────────────────────────────────────────────────────────
+
+// Mini-chips por "sumando" detectado. NUNCA sustituyen al texto: el porqué
+// completo se muestra íntegro (colapsado a 2 líneas con "ver más" si es largo).
+const REASON_TAGS: { test: RegExp; icon: string; label: string }[] = [
+  { test: /urgente/i, icon: '🚨', label: 'urgente' },
+  { test: /evento|meteo|calor|lluvia|temperatura|°c|partido|concierto|festivo/i, icon: '🌡️', label: 'evento' },
+  { test: /días? fuertes|fin de semana/i, icon: '📅', label: 'días fuertes' },
+  { test: /aprendizaje/i, icon: '🎓', label: 'aprendizaje' },
+  { test: /2x1|espejo|bogo/i, icon: '🎯', label: '2x1' },
+]
+
+function CampaignReason({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false)
+  const tags = REASON_TAGS.filter((t) => t.test.test(text))
+  const long = text.length > 120
+  return (
+    <div className="mt-1 max-w-[440px] space-y-1">
+      {tags.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {tags.map((t) => (
+            <span key={t.label}
+              className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent border border-accent/20">
+              <span aria-hidden>{t.icon}</span> {t.label}
+            </span>
+          ))}
+        </div>
+      )}
+      <div className={`text-[11px] text-text-secondary leading-snug ${long && !expanded ? 'line-clamp-2' : ''}`}>
+        {text}
+      </div>
+      {long && (
+        <button type="button" onClick={() => setExpanded((v) => !v)}
+          className="text-[10px] text-accent hover:underline">
+          {expanded ? 'ver menos' : 'ver más'}
+        </button>
+      )}
+    </div>
   )
 }

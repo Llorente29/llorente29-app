@@ -839,3 +839,48 @@ export async function getCampaignUplift(accountId: string, daysBack = 30): Promi
     activa: r.activa === true,
   }))
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// SEÑALES DEL DÍA — eventos que mueven la demanda (tabla local_event)
+// Alcance de CUENTA (no hay location_id). El agente los lee para profundizar
+// o moderar sus promos; aquí solo los mostramos. Solo lectura.
+// ─────────────────────────────────────────────────────────────────────
+
+/** Un evento de demanda de la cuenta (local_event). */
+export interface LocalEventRow {
+  id: string
+  name: string
+  /** sports | holiday | concert | weather_alert | other */
+  eventType: string
+  /** 'up' | 'down' (efecto sobre la demanda). */
+  demandEffect: string
+  startsAt: string
+  endsAt: string
+  notes: string | null
+}
+
+/**
+ * Eventos vigentes hoy + los que arrancan en los próximos 3 días (para el banner
+ * "Señales de hoy"). Filtra `ends_at >= ahora` y `starts_at <= ahora + 3d`.
+ */
+export async function getActiveLocalEvents(accountId: string): Promise<LocalEventRow[]> {
+  const now = new Date()
+  const in3d = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000)
+  const { data, error } = await db()
+    .from('local_event')
+    .select('id, name, event_type, demand_effect, starts_at, ends_at, notes')
+    .eq('account_id', accountId)
+    .gte('ends_at', now.toISOString())
+    .lte('starts_at', in3d.toISOString())
+    .order('starts_at', { ascending: true })
+  if (error) throw new Error(`Error cargando las señales del día: ${error.message}`)
+  return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+    id: r.id as string,
+    name: (r.name as string) ?? '',
+    eventType: (r.event_type as string) ?? 'other',
+    demandEffect: (r.demand_effect as string) ?? 'up',
+    startsAt: r.starts_at as string,
+    endsAt: r.ends_at as string,
+    notes: (r.notes as string | null) ?? null,
+  }))
+}
