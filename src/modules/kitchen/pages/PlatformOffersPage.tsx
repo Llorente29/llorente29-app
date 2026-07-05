@@ -13,6 +13,7 @@ import {
   Percent, Plus, Loader2, ArrowLeft, Check, AlertTriangle, Pause, Play,
   CircleStop, Trash2, Search, Megaphone, Info,
 } from 'lucide-react'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { listBrands } from '@/modules/multitenancy/services/brandsService'
 import { listSalesChannels } from '@/modules/kitchen/services/channelRateService'
@@ -62,6 +63,24 @@ const STATUS_META: Record<CampaignStatus, { label: string; cls: string }> = {
 const CHANNEL_META: Record<PlatformChannel, { label: string; color: string }> = {
   glovo: { label: 'Glovo', color: '#FFC244' },
   uber:  { label: 'Uber Eats', color: '#06C167' },
+}
+
+// Chip de estado, con variante propia para las PROPUESTAS DEL AGENTE: un
+// borrador con origin='agent' no es un borrador humano, y debe verse distinto.
+function statusChip(c: Campaign): { label: string; cls: string } {
+  if (c.origin === 'agent' && c.status === 'borrador') {
+    return { label: 'Propuesta del agente', cls: 'bg-accent/10 text-accent border-accent/30' }
+  }
+  return STATUS_META[c.status]
+}
+
+// El porqué del agente vive en omnibus_ref_note como "Agente YYYY-MM-DD: <razón>".
+// Quitamos el prefijo para mostrar solo el razonamiento; si no casa, tal cual.
+function agentReason(note: string | null): string | null {
+  if (!note) return null
+  const m = note.match(/^Agente \d{4}-\d{2}-\d{2}:\s*(.*)$/s)
+  const reason = (m ? m[1] : note).trim()
+  return reason === '' ? null : reason
 }
 
 interface ChannelOption { id: string; name: string; platform: PlatformChannel }
@@ -233,6 +252,8 @@ function CampaignList({
 }) {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  // Campaña pendiente de confirmar su Finalización (abre ConfirmDialog).
+  const [endTarget, setEndTarget] = useState<Campaign | null>(null)
 
   async function run(id: string, fn: () => Promise<void>) {
     setBusyId(id)
@@ -240,6 +261,13 @@ function CampaignList({
     try { await fn(); onReload() }
     catch (e) { setActionError(String((e as Error)?.message ?? e)) }
     finally { setBusyId(null) }
+  }
+
+  async function confirmEnd() {
+    if (!endTarget) return
+    const target = endTarget
+    await run(target.id, () => endCampaign(target.id))
+    setEndTarget(null)
   }
 
   return (
@@ -300,7 +328,9 @@ function CampaignList({
               </thead>
               <tbody className="divide-y divide-border-default">
                 {campaigns.map((c) => {
-                  const meta = STATUS_META[c.status]
+                  const chip = statusChip(c)
+                  const isAgentProposal = c.origin === 'agent' && c.status === 'borrador'
+                  const reason = isAgentProposal ? agentReason(c.omnibusRefNote) : null
                   const ch = CHANNEL_META[c.channel]
                   const busy = busyId === c.id
                   return (
@@ -333,9 +363,19 @@ function CampaignList({
                         {fmtDate(c.startsAt)} → {fmtDate(c.endsAt)}
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border ${meta.cls}`}>
-                          {meta.label}
-                        </span>
+                        <div className="space-y-1">
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border ${chip.cls}`}
+                            title={reason ?? undefined}
+                          >
+                            {chip.label}
+                          </span>
+                          {reason && (
+                            <div className="text-[11px] text-text-secondary leading-snug max-w-[240px]" title={reason}>
+                              {reason}
+                            </div>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1.5">
@@ -352,20 +392,23 @@ function CampaignList({
                               </button>
                             </>
                           )}
-                          {(c.status === 'pendiente' || c.status === 'publicada') && (
+                          {/* Glovo NO soporta pausar/reanudar (su panel solo ofrece
+                              Cancelar, irreversible). Encolar ese job sería mentir:
+                              ocultamos ambos botones para canal glovo. */}
+                          {c.channel !== 'glovo' && (c.status === 'pendiente' || c.status === 'publicada') && (
                             <button type="button" disabled={busy} onClick={() => run(c.id, () => pauseCampaign(c.id))}
                               className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md border border-border-default text-text-secondary hover:text-warning transition-base">
                               <Pause size={13} /> Pausar
                             </button>
                           )}
-                          {c.status === 'pausada' && (
+                          {c.channel !== 'glovo' && c.status === 'pausada' && (
                             <button type="button" disabled={busy} onClick={() => run(c.id, () => resumeCampaign(c.id))}
                               className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md border border-border-default text-text-secondary hover:text-success transition-base">
                               <Play size={13} /> Reanudar
                             </button>
                           )}
                           {(c.status === 'pendiente' || c.status === 'publicada' || c.status === 'pausada') && (
-                            <button type="button" disabled={busy} onClick={() => run(c.id, () => endCampaign(c.id))}
+                            <button type="button" disabled={busy} onClick={() => setEndTarget(c)}
                               className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md border border-border-default text-text-secondary hover:text-danger transition-base">
                               <CircleStop size={13} /> Finalizar
                             </button>
@@ -386,6 +429,23 @@ function CampaignList({
         “Pendiente de publicar” = en cola. La publicación automática en el panel del canal
         se activa con el agente (siguiente tramo).
       </p>
+
+      {/* Finalizar = irreversible en Glovo. Confirmación con la verdad (nunca window.confirm). */}
+      <ConfirmDialog
+        open={endTarget !== null}
+        title={endTarget?.channel === 'glovo' ? 'Finalizar campaña en Glovo' : 'Finalizar campaña'}
+        message={
+          endTarget?.channel === 'glovo'
+            ? 'Glovo cancelará la promoción en todos los establecimientos. Esta acción es irreversible: Glovo no permite reactivar una promoción cancelada. Para volver a ofrecerla habrá que crear una campaña nueva.'
+            : 'Se finalizará la campaña: se encolará la retirada de la promoción en todos los establecimientos del canal.'
+        }
+        confirmLabel="Finalizar campaña"
+        cancelLabel="Cancelar"
+        tone="danger"
+        busy={endTarget !== null && busyId === endTarget.id}
+        onConfirm={confirmEnd}
+        onCancel={() => setEndTarget(null)}
+      />
     </>
   )
 }

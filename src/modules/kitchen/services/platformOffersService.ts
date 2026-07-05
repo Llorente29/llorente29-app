@@ -108,6 +108,8 @@ export interface Campaign {
   endsAt: string | null
   budgetMax: number | null
   omnibusRefNote: string | null
+  /** coupon.origin: 'agent' = la propuso el motor de ofertas; si no, borrador humano. */
+  origin: string | null
   active: boolean
   pausedAt: string | null
   createdAt: string | null
@@ -307,6 +309,7 @@ export async function listCampaigns(accountId: string): Promise<Campaign[]> {
       endsAt,
       budgetMax: num(r.budget_max),
       omnibusRefNote: (r.omnibus_ref_note as string | null) ?? null,
+      origin: (r.origin as string | null) ?? null,
       active,
       pausedAt,
       createdAt: (r.created_at as string | null) ?? null,
