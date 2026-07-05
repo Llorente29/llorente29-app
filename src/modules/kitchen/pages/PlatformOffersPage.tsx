@@ -11,21 +11,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Percent, Plus, Loader2, ArrowLeft, Check, AlertTriangle, Pause, Play,
-  CircleStop, Trash2, Search, Megaphone, Info,
+  CircleStop, Trash2, Search, Megaphone, Info, Target,
 } from 'lucide-react'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { listBrands } from '@/modules/multitenancy/services/brandsService'
 import { listSalesChannels } from '@/modules/kitchen/services/channelRateService'
 import { listMenuItems } from '@/modules/kitchen/services/menuItemService'
+import { listLocations, type LocationOption } from '@/modules/kitchen/services/availabilityService'
 import type { Brand } from '@/types/multitenancy'
 import type { MenuItem } from '@/types/kitchen'
 import {
   listCampaigns, previewImpact, saveCampaign, approveCampaign,
   pauseCampaign, resumeCampaign, endCampaign, deleteDraft,
   platformOfChannel,
+  getSalesSignal, getRecoveryTargetPct, upsertTarget, deleteTarget,
   type Campaign, type CampaignDraft, type CampaignStatus, type PlatformChannel,
-  type DiscountType, type ImpactRow, type ImpactAggregates,
+  type DiscountType, type ImpactRow, type ImpactAggregates, type SalesSignalRow,
 } from '@/modules/kitchen/services/platformOffersService'
 
 // ─────────────────────────────────────────────────────────────────────
@@ -131,6 +133,7 @@ function numOrNull(s: string): number | null {
 export default function PlatformOffersPage() {
   const { activeAccountId, accountsLoading } = useActiveAccount()
   const [view, setView] = useState<'list' | 'editor'>('list')
+  const [tab, setTab] = useState<'campanas' | 'objetivos'>('campanas')
 
   // Datos compartidos
   const [brands, setBrands] = useState<Brand[]>([])
@@ -213,16 +216,16 @@ export default function PlatformOffersPage() {
 
   return (
     <div className="space-y-6 max-w-6xl">
-      {view === 'list' ? (
-        <CampaignList
-          campaigns={campaigns}
-          error={error}
-          hasChannels={channels.length > 0}
-          onNew={openNew}
-          onEditDraft={openDraft}
-          onReload={loadAll}
-        />
-      ) : (
+      {/* Pestañas — solo fuera del editor de una campaña. El objetivo y la
+          campaña que lo persigue viven juntos: es su casa. */}
+      {view === 'list' && (
+        <div className="flex items-center gap-1 border-b border-border-default">
+          <TabButton active={tab === 'campanas'} onClick={() => setTab('campanas')} icon={<Megaphone size={15} />} label="Campañas" />
+          <TabButton active={tab === 'objetivos'} onClick={() => setTab('objetivos')} icon={<Target size={15} />} label="Objetivos" />
+        </div>
+      )}
+
+      {view === 'editor' ? (
         <CampaignEditor
           accountId={activeAccountId!}
           brands={brands}
@@ -231,8 +234,33 @@ export default function PlatformOffersPage() {
           setForm={setForm}
           onBack={backToList}
         />
+      ) : tab === 'objetivos' ? (
+        <TargetsSection accountId={activeAccountId!} brands={brands} channels={channels} />
+      ) : (
+        <CampaignList
+          campaigns={campaigns}
+          error={error}
+          hasChannels={channels.length > 0}
+          onNew={openNew}
+          onEditDraft={openDraft}
+          onReload={loadAll}
+        />
       )}
     </div>
+  )
+}
+
+function TabButton({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-base ${
+        active ? 'border-accent text-accent' : 'border-transparent text-text-secondary hover:text-text-primary'
+      }`}
+    >
+      {icon} {label}
+    </button>
   )
 }
 
@@ -918,4 +946,306 @@ function Semaforo({ status }: { status: ImpactRow['status'] }) {
     sin_escandallo:{ cls: 'bg-text-secondary/40', title: 'Sin escandallo' },
   }[status]
   return <span className={`inline-block w-2.5 h-2.5 rounded-full ${meta.cls}`} title={meta.title} />
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Objetivos por marca × canal × local (etapa Crecimiento)
+// La tabla que gobierna al agente, editable sin SQL. Fuente: agent_sales_signal_v2
+// (combos CON objetivo) + matriz completa marca-propia×local×canal (combos SIN).
+// ─────────────────────────────────────────────────────────────────────
+
+function shortLoc(name: string): string {
+  return name.replace(/^Foodint\s+/i, '').trim()
+}
+
+function fmtNum(v: number): string {
+  return new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 }).format(v)
+}
+
+/**
+ * Semáforo del objetivo, cuadrado con la REGLA REAL del agente (offers-agent):
+ *   rojo  = ventas casi a cero (<0,15 ped/día) → el agente saca la artillería.
+ *   ámbar = por debajo del umbral de recuperación (% del objetivo < recoveryPct).
+ *   verde = en objetivo (>= umbral) → el agente no empuja.
+ * Sin objetivo → null (celda vacía, sin semáforo).
+ */
+function semaforo(
+  target: number | null,
+  sales: number | null,
+  recoveryPct: number,
+): { pct: number; dot: string; text: string } | null {
+  if (target == null || target <= 0) return null
+  const s = sales ?? 0
+  const pct = Math.round((s / target) * 100)
+  if (s < 0.15) return { pct, dot: 'bg-danger', text: 'text-danger font-medium' }
+  if (pct < recoveryPct) return { pct, dot: 'bg-warning', text: 'text-warning' }
+  return { pct, dot: 'bg-success', text: 'text-success' }
+}
+
+function TargetsSection({
+  accountId, brands, channels,
+}: {
+  accountId: string
+  brands: Brand[]
+  channels: ChannelOption[]
+}) {
+  // Solo marcas PROPIAS (las cedidas jamás van a plataforma).
+  const ownBrands = useMemo(
+    () => brands.filter((b) => b.ownershipType === 'own').sort((a, b) => a.name.localeCompare(b.name, 'es')),
+    [brands],
+  )
+  // Canales de plataforma, Glovo primero.
+  const platChannels = useMemo(() => {
+    const order: PlatformChannel[] = ['glovo', 'uber']
+    return [...channels].sort((a, b) => order.indexOf(a.platform) - order.indexOf(b.platform))
+  }, [channels])
+
+  const [locations, setLocations] = useState<LocationOption[]>([])
+  const [recoveryPct, setRecoveryPct] = useState<number>(80)
+  const [signal, setSignal] = useState<SalesSignalRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [tick, setTick] = useState(0)
+
+  // Edición inline (patrón Niveles de Almacén): draft por celda, guarda en blur/Enter.
+  const [drafts, setDrafts] = useState<Record<string, string>>({})
+  const [saving, setSaving] = useState<string | null>(null)
+
+  // Estático: locales + umbral (una vez por cuenta).
+  useEffect(() => {
+    let cancelled = false
+    Promise.all([listLocations(accountId), getRecoveryTargetPct(accountId)])
+      .then(([locs, pct]) => { if (!cancelled) { setLocations(locs); setRecoveryPct(pct) } })
+      .catch((e) => { if (!cancelled) setError(String(e?.message ?? e)) })
+    return () => { cancelled = true }
+  }, [accountId])
+
+  // Señal (recargable tras cada guardado).
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    getSalesSignal(accountId)
+      .then((rows) => { if (!cancelled) setSignal(rows) })
+      .catch((e) => { if (!cancelled) setError(String(e?.message ?? e)) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [accountId, tick])
+
+  // Índice de la señal por (marca|canal|local): la señal trae el canal por nombre
+  // ('Glovo'), lo resolvemos a channelId vía la plataforma.
+  const signalByKey = useMemo(() => {
+    const m = new Map<string, SalesSignalRow>()
+    for (const r of signal) {
+      const plat = platformOfChannel(r.channelName, null)
+      const ch = channels.find((c) => c.platform === plat)
+      if (!ch) continue
+      m.set(`${r.brandId}|${ch.id}|${r.locationId}`, r)
+    }
+    return m
+  }, [signal, channels])
+
+  const cellKey = (brandId: string, channelId: string, locationId: string) =>
+    `${brandId}|${channelId}|${locationId}`
+
+  const displayVal = (key: string): string => {
+    if (drafts[key] !== undefined) return drafts[key]
+    const t = signalByKey.get(key)?.targetDaily
+    return t != null ? String(t) : ''
+  }
+
+  function clearDraft(key: string) {
+    setDrafts((d) => { const n = { ...d }; delete n[key]; return n })
+  }
+
+  async function commit(brandId: string, channelId: string, locationId: string) {
+    const key = cellKey(brandId, channelId, locationId)
+    const draft = drafts[key]
+    if (draft === undefined) return
+    const orig = signalByKey.get(key)?.targetDaily ?? null
+    const parsed = numOrNull(draft)
+    // Inválido (no numérico o negativo) → revertir sin tocar BD.
+    if (draft.trim() !== '' && (parsed === null || parsed < 0)) { clearDraft(key); return }
+    // Sin cambio real → limpiar draft.
+    const nowNothing = parsed === null || parsed === 0
+    if ((nowNothing && orig === null) || (parsed !== null && parsed === orig)) { clearDraft(key); return }
+    setSaving(key); setError(null)
+    try {
+      if (nowNothing) {
+        // Vacío o 0 = borrar la fila (preferible a acumular ceros).
+        if (orig !== null) await deleteTarget({ accountId, brandId, channelId, locationId })
+      } else {
+        await upsertTarget({ accountId, brandId, channelId, locationId, targetDaily: parsed! })
+      }
+      clearDraft(key)
+      setTick((t) => t + 1)
+    } catch (e) {
+      setError(String((e as Error)?.message ?? e))
+    } finally {
+      setSaving(null)
+    }
+  }
+
+  if (loading && signal.length === 0) {
+    return (
+      <div className="p-6 text-sm text-text-secondary flex items-center gap-2">
+        <Loader2 size={14} className="animate-spin" /> Cargando objetivos…
+      </div>
+    )
+  }
+
+  return (
+    <>
+      <div>
+        <h1 className="text-2xl font-display font-medium text-text-primary flex items-center gap-2">
+          <Target size={22} className="text-accent" /> Objetivos
+        </h1>
+        <p className="text-sm text-text-secondary mt-1">
+          Pedidos/día que quieres por marca, canal y local. Es la vara del agente de ofertas: por
+          debajo del objetivo propone promociones; a cero, saca la artillería.
+        </p>
+      </div>
+
+      {error && <div className="p-3 rounded-md bg-danger-bg text-danger border border-danger/20 text-sm">{error}</div>}
+
+      {ownBrands.length === 0 ? (
+        <div className="p-3 rounded-md bg-warning-bg text-warning border border-warning/30 text-sm">
+          No hay marcas propias activas en esta cuenta.
+        </div>
+      ) : platChannels.length === 0 ? (
+        <div className="p-3 rounded-md bg-warning-bg text-warning border border-warning/30 text-sm">
+          No hay canales de Glovo o Uber configurados en esta cuenta.
+        </div>
+      ) : (
+        platChannels.map((ch) => (
+          <TargetsChannelTable
+            key={ch.id}
+            channel={ch}
+            brands={ownBrands}
+            locations={locations}
+            signalByKey={signalByKey}
+            recoveryPct={recoveryPct}
+            saving={saving}
+            displayVal={displayVal}
+            cellKey={cellKey}
+            setDrafts={setDrafts}
+            clearDraft={clearDraft}
+            onCommit={commit}
+          />
+        ))
+      )}
+
+      <p className="text-[11px] text-text-secondary flex items-start gap-1.5">
+        <Info size={12} className="shrink-0 mt-0.5" />
+        <span>
+          Semáforo: <span className="text-danger font-medium">rojo</span> = casi a cero (&lt;0,15 ped/día,
+          el agente saca artillería) · <span className="text-warning font-medium">ámbar</span> = por debajo del
+          umbral de recuperación ({recoveryPct}% del objetivo) · <span className="text-success font-medium">verde</span> =
+          en objetivo. Escribe el objetivo y pulsa Enter; vaciarlo (o 0) lo borra y el agente ignora esa combinación.
+        </span>
+      </p>
+    </>
+  )
+}
+
+function TargetsChannelTable({
+  channel, brands, locations, signalByKey, recoveryPct, saving, displayVal, cellKey, setDrafts, clearDraft, onCommit,
+}: {
+  channel: ChannelOption
+  brands: Brand[]
+  locations: LocationOption[]
+  signalByKey: Map<string, SalesSignalRow>
+  recoveryPct: number
+  saving: string | null
+  displayVal: (key: string) => string
+  cellKey: (brandId: string, channelId: string, locationId: string) => string
+  setDrafts: React.Dispatch<React.SetStateAction<Record<string, string>>>
+  clearDraft: (key: string) => void
+  onCommit: (brandId: string, channelId: string, locationId: string) => void
+}) {
+  const chMeta = CHANNEL_META[channel.platform]
+  const isUber = channel.platform === 'uber'
+  return (
+    <div className="rounded-lg border border-border-default bg-card overflow-hidden">
+      <div className="px-4 py-3 border-b border-border-default flex items-center gap-2">
+        <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: chMeta.color }} />
+        <h2 className="text-sm font-medium text-text-primary">{chMeta.label}</h2>
+        {isUber && (
+          <span className="text-[11px] text-warning bg-warning-bg border border-warning/30 rounded-full px-2 py-0.5">
+            brazo pendiente de Uber
+          </span>
+        )}
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-[11px] uppercase tracking-wide text-text-secondary border-b border-border-default">
+              <th className="px-4 py-2 font-medium">Marca</th>
+              <th className="px-4 py-2 font-medium">Local</th>
+              <th className="px-4 py-2 font-medium text-right">Objetivo</th>
+              <th className="px-4 py-2 font-medium text-right">Ahora (7d)</th>
+              <th className="px-4 py-2 font-medium text-right">% objetivo</th>
+              <th className="px-4 py-2 font-medium text-right">Pico 12m</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border-default">
+            {brands.map((b) =>
+              locations.map((loc, li) => {
+                const key = cellKey(b.id, channel.id, loc.id)
+                const sig = signalByKey.get(key)
+                const target = sig?.targetDaily ?? null
+                const sales = sig?.sales7d ?? null
+                const peak = sig?.peakDaily ?? null
+                const sc = semaforo(target, sales, recoveryPct)
+                const isSaving = saving === key
+                return (
+                  <tr key={key} className="hover:bg-page/60">
+                    {li === 0 && (
+                      <td className="px-4 py-2 align-top font-medium text-text-primary" rowSpan={locations.length}>
+                        {b.name}
+                      </td>
+                    )}
+                    <td className="px-4 py-2 text-text-secondary">{shortLoc(loc.name)}</td>
+                    <td className="px-4 py-2 text-right">
+                      <span className="inline-flex items-center gap-1 justify-end">
+                        {isSaving && <Loader2 size={12} className="animate-spin text-text-secondary" />}
+                        <input
+                          value={displayVal(key)}
+                          inputMode="decimal"
+                          placeholder="—"
+                          disabled={isSaving}
+                          onChange={(e) => setDrafts((d) => ({ ...d, [key]: e.target.value }))}
+                          onBlur={() => onCommit(b.id, channel.id, loc.id)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') e.currentTarget.blur()
+                            else if (e.key === 'Escape') { clearDraft(key); e.currentTarget.blur() }
+                          }}
+                          className="w-16 h-7 px-1.5 text-xs text-right rounded-md border border-border-default bg-card text-text-primary tabular-nums focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+                        />
+                      </span>
+                    </td>
+                    <td className="px-4 py-2 text-right tabular-nums text-text-secondary">
+                      {target != null ? fmtNum(sales ?? 0) : '—'}
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      {sc ? (
+                        <span className="inline-flex items-center gap-1.5 justify-end tabular-nums">
+                          <span className={`inline-block w-2 h-2 rounded-full ${sc.dot}`} />
+                          <span className={sc.text}>{sc.pct}%</span>
+                        </span>
+                      ) : (
+                        <span className="text-text-secondary/50">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-right tabular-nums text-text-secondary/60">
+                      {peak != null && peak > 0 ? fmtNum(peak) : '—'}
+                    </td>
+                  </tr>
+                )
+              }),
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
 }

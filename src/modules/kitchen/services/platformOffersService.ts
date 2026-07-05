@@ -501,7 +501,8 @@ export async function approveCampaign(input: ApproveInput): Promise<void> {
   //    — la promo de un local se publica SOLO en el POS de ese local (payload.pos_hint
   //    restringe al robot). Sin location_ids (campaña manual de cuenta entera): un job
   //    por marca con location null, como siempre.
-  const { data: cRow } = await db().from('coupon').select('scope').eq('id', couponId).maybeSingle()
+  const { data: cRow } = await db().from('coupon').select('scope, kind').eq('id', couponId).maybeSingle()
+  const couponKind: string = ((cRow as { kind?: string | null } | null)?.kind) ?? 'standard'
   const scopeLocationIds: string[] = (((cRow as { scope?: { location_ids?: string[] } } | null)?.scope?.location_ids) ?? []) as string[]
   let locs: Array<{ id: string; name: string; glovo_pos_hint: string | null }> = []
   if (scopeLocationIds.length > 0) {
@@ -526,6 +527,7 @@ export async function approveCampaign(input: ApproveInput): Promise<void> {
       payload: {
         name: draft.name.trim(),
         platform,
+        kind: couponKind,
         brand_id: brandId,
         brand_name: brandNames[brandId] ?? '',
         location_id: loc?.id ?? null,
@@ -638,4 +640,100 @@ export async function deleteDraft(couponId: string): Promise<void> {
   }
   const { error } = await db().from('coupon').delete().eq('id', couponId)
   if (error) throw new Error(`Error borrando borrador: ${error.message}`)
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// ETAPA CRECIMIENTO — objetivos por marca × canal × local
+// (tabla brand_channel_target; la gobierna el operador y es la vara del
+// agente desde el 05/07/2026). NO está en database.ts → cast `as never`.
+// ─────────────────────────────────────────────────────────────────────
+
+/** Fila de la señal v2 del agente (una por combinación CON objetivo > 0). */
+export interface SalesSignalRow {
+  brandId: string
+  /** Nombre del canal tal cual en sales_channel ('Glovo' | 'Uber'). */
+  channelName: string
+  locationId: string
+  locationName: string
+  targetDaily: number | null
+  sales7d: number | null
+  avg28d: number | null
+  peakDaily: number | null
+}
+
+/**
+ * Señal de ventas v2: `agent_sales_signal_v2(account)`. Devuelve SOLO las
+ * combinaciones con objetivo > 0 (el universo del agente). Las combinaciones
+ * sin objetivo se completan en cliente contra el catálogo (marcas×locales×canal).
+ */
+export async function getSalesSignal(accountId: string): Promise<SalesSignalRow[]> {
+  const { data, error } = await db().rpc('agent_sales_signal_v2', { p_account_id: accountId })
+  if (error) throw new Error(`Error cargando la señal de ventas: ${error.message}`)
+  return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+    brandId: r.brand_id as string,
+    channelName: (r.channel_name as string) ?? '',
+    locationId: r.location_id as string,
+    locationName: (r.location_name as string) ?? '',
+    targetDaily: num(r.target_daily),
+    sales7d: num(r.sales_7d),
+    avg28d: num(r.avg_28d),
+    peakDaily: num(r.peak_daily),
+  }))
+}
+
+/**
+ * Umbral de recuperación del agente (%). Por encima de él el agente NO empuja
+ * (verde). Vive en offers_agent_config; default de esquema 80 si no hay fila.
+ */
+export async function getRecoveryTargetPct(accountId: string): Promise<number> {
+  const { data, error } = await db()
+    .from('offers_agent_config')
+    .select('recovery_target_pct')
+    .eq('account_id', accountId)
+    .maybeSingle()
+  if (error) throw new Error(`Error cargando la config del agente: ${error.message}`)
+  const v = num((data as Record<string, unknown> | null)?.recovery_target_pct)
+  return v ?? 80
+}
+
+/**
+ * Fija el objetivo (pedidos/día) de una combinación marca×canal×local. Upsert
+ * sobre la clave única. target_daily >= 0 (CHECK en BD; el caller ya evita <0).
+ */
+export async function upsertTarget(input: {
+  accountId: string
+  brandId: string
+  channelId: string
+  locationId: string
+  targetDaily: number
+}): Promise<void> {
+  const row = {
+    account_id: input.accountId,
+    brand_id: input.brandId,
+    channel_id: input.channelId,
+    location_id: input.locationId,
+    target_daily: input.targetDaily,
+    updated_at: new Date().toISOString(),
+  }
+  const { error } = await db()
+    .from('brand_channel_target')
+    .upsert(row as never, { onConflict: 'account_id,brand_id,channel_id,location_id' })
+  if (error) throw new Error(`Error guardando objetivo: ${error.message}`)
+}
+
+/** Borra el objetivo de una combinación (al vaciar la celda). Idempotente. */
+export async function deleteTarget(input: {
+  accountId: string
+  brandId: string
+  channelId: string
+  locationId: string
+}): Promise<void> {
+  const { error } = await db()
+    .from('brand_channel_target')
+    .delete()
+    .eq('account_id', input.accountId)
+    .eq('brand_id', input.brandId)
+    .eq('channel_id', input.channelId)
+    .eq('location_id', input.locationId)
+  if (error) throw new Error(`Error borrando objetivo: ${error.message}`)
 }
