@@ -1,0 +1,14 @@
+{
+  "name": "folvy-promo-agent",
+  "version": "3.13.0",
+  "private": true,
+  "description": "Robot publicador de promociones de Folvy (Glovo, vía panel). Reclama promo_push_job por secreto y publica con verificación real.",
+  "type": "module",
+  "main": "agent.js",
+  "scripts": {
+    "start": "node agent.js"
+  },
+  "dependencies": {
+    "playwright": "^1.45.0"
+  }
+}

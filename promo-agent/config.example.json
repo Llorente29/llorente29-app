@@ -1,0 +1,11 @@
+{
+  "SUPABASE_URL": "https://xzmpnchlguibclvxyynt.supabase.co",
+  "SUPABASE_ANON_KEY": "sb_publishable_XXXXXXXXXXXXXXXXXXXX",
+  "PUSH_AGENT_SECRET": "fv_push_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+  "GLOVO_EMAIL": "correo-del-panel@ejemplo.com",
+  "GLOVO_PASSWORD": "CAMBIAME",
+  "GLOVO_ALLOWED_POS": ["nombre exacto del establecimiento 1", "nombre exacto del establecimiento 2"],
+  "HEADLESS": false,
+  "DRY_RUN": true,
+  "POLL_SECONDS": 60
+}
