@@ -1,4 +1,16 @@
-// folvy-promo-agent v3.17 — robot de promos (Glovo)
+// folvy-promo-agent v3.18 — robot de promos (Glovo)
+// v3.18 (05/07/2026) — FIABILIDAD DE RAÍZ (veredicto Julio: "deja de ser fiable"):
+//   Toda la familia de fallos de hoy (duplicados, vuelos zombis, frenos ignorados) era
+//   una sola clase: crear sin comprobar la verdad. Tres invariantes la hacen imposible:
+//   (1) IDEMPOTENCIA DEL CREATE CONTRA GLOVO: antes de publicar en un POS se consulta la
+//       lista global de Promociones; si ya hay una Activa que casa (POS + % + Todos +
+//       fecha de hoy) NO se crea — se ADOPTA al libro de a bordo. Un reintento jamás
+//       duplica, pase lo que pase con la cola o el ledger local.
+//   (2) KILL-SWITCH OBEDIENTE: antes de cada POS y antes del clic final de Crear, el
+//       robot relee el estado del job en la BD; si ya no está 'sent' (el operador lo
+//       mató), ABORTA en el acto. El freno del operador es una orden, no un consejo.
+//   (3) [BD, migración T1800] report_promo_push_job solo actualiza jobs aún 'sent':
+//       un job matado queda matado aunque un vuelo viejo reporte encima.
 // v3.17 (05/07/2026): GUARDIA DE KIND — un job con payload.kind != 'standard' (p.ej.
 //   'bogo_mirror', el 2x1-espejo de v2.1 T1) se RECHAZA con mensaje claro: el asistente
 //   2x1 de Glovo no está fotografiado aún (T5). Sin esta guardia, el robot publicaría el
@@ -211,6 +223,37 @@ async function selectPos(posName) {
   log(`  punto de venta: ${posName}`);
 }
 
+// v3.18 (2): KILL-SWITCH — la BD manda. Si el job ya no está 'sent', se aborta en el acto.
+async function assertJobAlive(jobId, where) {
+  const st = await rpc("get_promo_push_job_status", { p_secret: cfg.PUSH_AGENT_SECRET, p_job_id: jobId })
+    .catch(() => null);
+  if (st !== "sent") {
+    throw new Error(`KILL-SWITCH: el job ya no está 'sent' en la BD (estado: ${st ?? "desconocido"}) — abortado en ${where} por orden del operador`);
+  }
+}
+
+// v3.18 (1): IDEMPOTENCIA CONTRA LA VERDAD DE GLOVO — ¿ya existe esta promo en este POS?
+// Casa: fila Activo + nombre del POS + `${pct}%` + Público Todos + fecha inicio de HOY.
+async function promoAlreadyActive(posName, chip) {
+  const today = new Date();
+  const todayTxt = `${String(today.getDate()).padStart(2, "0")}/${String(today.getMonth() + 1).padStart(2, "0")}/${today.getFullYear()}`;
+  await page.goto(PROMO_LIST_URL, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(2500); await solveHumanCheck(); await killPopups();
+  const search = page.getByPlaceholder(/buscar/i).first();
+  if (await search.isVisible().catch(() => false)) {
+    await search.click(); await page.keyboard.press("Control+a").catch(() => {});
+    await page.keyboard.type(posName.split(" - ")[0], { delay: 30 });
+    await page.waitForTimeout(1500);
+  }
+  const rows = page.locator("tr", { hasText: posName });
+  const n = await rows.count();
+  for (let i = 0; i < n; i++) {
+    const txt = ((await rows.nth(i).innerText().catch(() => "")) ?? "").replace(/\s+/g, " ").trim();
+    if (/activo/i.test(txt) && txt.includes(`${chip}%`) && /todos/i.test(txt) && txt.includes(todayTxt)) return true;
+  }
+  return false;
+}
+
 // ORQUESTADOR multi-local: publica en TODOS los targets, con libro de a bordo anti-duplicados
 async function createGlovoPromo(job) {
   const p = job.payload;
@@ -222,6 +265,12 @@ async function createGlovoPromo(job) {
   for (let i = 0; i < targets.length; i++) {
     const posName = targets[i];
     if (done.includes(posName)) { log(`  ↷ '${posName}' ya publicada (libro de a bordo) — no se duplica`); continue; }
+    await assertJobAlive(job.id, `antes del POS '${posName}'`); // v3.18: el freno del operador manda
+    const chipWanted = [60,55,50,45,40,35,30,25,20,15,10].filter(v => v <= Math.round(p.value ?? 0))[0] ?? Math.round(p.value ?? 0);
+    if (await promoAlreadyActive(posName, chipWanted)) { // v3.18: la verdad de Glovo manda
+      log(`  ↷ '${posName}' YA tiene esta promo Activa en Glovo — ADOPTADA al libro de a bordo, no se duplica`);
+      addLedger(job.id, posName); okPos.push(posName); continue;
+    }
     await selectPos(posName);
     const r = await publishAtPos(job, p, itemLevel, posName, i + 1).catch(e => ({ ok: false, err: e.message }));
     if (cfg.DRY_RUN) return r; // en DRY_RUN se evalúa solo el primer POS pendiente (humo rápido)
@@ -401,6 +450,7 @@ async function publishAtPos(job, p, itemLevel, posName, posIdx) {
   const createBtn = page.getByRole("button", { name: /crear promoción|lanzar/i }).last();
   if (!(await createBtn.isEnabled().catch(() => false)))
     throw new Error("el botón 'Crear promoción' sigue deshabilitado (¿términos sin marcar?)");
+  await assertJobAlive(job.id, "antes del clic final de Crear"); // v3.18: última puerta
   const urlBefore = page.url();
   await createBtn.click({ timeout: 8000 });
   // GUARDIÁN ANTI-UPSELL: Glovo ofrece "mejorar" la promo con ANUNCIOS DE PAGO.
@@ -561,6 +611,6 @@ async function doTick() {
   }
 }
 
-log(`folvy-promo-agent v3.17 arrancado · DRY_RUN=${cfg.DRY_RUN} · poll ${cfg.POLL_SECONDS}s`);
+log(`folvy-promo-agent v3.18 arrancado · DRY_RUN=${cfg.DRY_RUN} · poll ${cfg.POLL_SECONDS}s`);
 await tick();
 setInterval(() => tick().catch(e => log("tick error:", e.message)), cfg.POLL_SECONDS * 1000);
