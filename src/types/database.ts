@@ -14774,6 +14774,7 @@ export type Database = {
           movements_written: number
         }[]
       }
+      regenerate_social_copy: { Args: { p_post_id: string }; Returns: string }
       register_adjustment: {
         Args: {
           p_account_id: string
@@ -14873,6 +14874,7 @@ export type Database = {
         Returns: undefined
       }
       reprocess_sale: { Args: { p_sale_id: string }; Returns: number }
+      requeue_social_image: { Args: { p_post_id: string }; Returns: undefined }
       resolve_delivery_zone: {
         Args: {
           p_account_id: string
@@ -15163,6 +15165,10 @@ export type Database = {
           p_reason?: string
         }
         Returns: Json
+      }
+      set_social_post_status: {
+        Args: { p_post_id: string; p_status: string }
+        Returns: undefined
       }
       set_stock_level: {
         Args: {
@@ -15903,6 +15909,10 @@ export type Database = {
         }[]
       }
       unlockrows: { Args: { "": string }; Returns: number }
+      update_social_post_content: {
+        Args: { p_copy: string; p_hashtags: string[]; p_post_id: string }
+        Returns: undefined
+      }
       updategeometrysrid: {
         Args: {
           catalogn_name: string

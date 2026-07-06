@@ -1,12 +1,10 @@
 // src/modules/social/services/socialService.ts
 //
-// Service del módulo Folvy Social. Pieza 1: lectura de la cola.
-// El módulo lee social_post (borradores que propone el agente). La escritura
-// (aprobar/descartar/editar/regenerar) llega en la Pieza 2.
+// Service del módulo Folvy Social.
+// Pieza 1: lectura de la cola.  Pieza 2: acciones (todas por RPC admin-gated).
 
 import { supabase } from '@/lib/supabase'
 
-// Forma conocida del payload jsonb que escribe el agente (social-agent v2.4).
 export interface SocialPayload {
   copy?: string
   hashtags?: string[]
@@ -34,8 +32,6 @@ export interface SocialPostRow {
   created_at: string
 }
 
-// Estados que viven en la COLA (pendientes de decidir / en curso). Los publicados
-// y descartados no entran aquí (los publicados irán a la Parrilla en la Pieza 4).
 const QUEUE_STATUSES = ['draft', 'approved', 'scheduled', 'publishing', 'error']
 
 export async function listQueue(accountId: string): Promise<SocialPostRow[]> {
@@ -48,4 +44,41 @@ export async function listQueue(accountId: string): Promise<SocialPostRow[]> {
     .order('created_at', { ascending: false })
   if (error) throw error
   return (data ?? []) as unknown as SocialPostRow[]
+}
+
+// ── Acciones (Pieza 2). Cada una lanza si la RPC devuelve error. ─────────────
+
+function requireSupabase() {
+  if (!supabase) throw new Error('Supabase no está disponible')
+}
+
+export async function setStatus(postId: string, status: 'draft' | 'approved' | 'discarded'): Promise<void> {
+  requireSupabase()
+  const { error } = await supabase!.rpc('set_social_post_status', { p_post_id: postId, p_status: status })
+  if (error) throw error
+}
+export const approvePost   = (id: string) => setStatus(id, 'approved')
+export const unapprovePost = (id: string) => setStatus(id, 'draft')
+export const discardPost   = (id: string) => setStatus(id, 'discarded')
+
+export async function updateContent(postId: string, copy: string, hashtags: string[]): Promise<void> {
+  requireSupabase()
+  const { error } = await supabase!.rpc('update_social_post_content', {
+    p_post_id: postId, p_copy: copy, p_hashtags: hashtags,
+  })
+  if (error) throw error
+}
+
+export async function requeueImage(postId: string): Promise<void> {
+  requireSupabase()
+  const { error } = await supabase!.rpc('requeue_social_image', { p_post_id: postId })
+  if (error) throw error
+}
+
+// Devuelve el nuevo caption ya con {plato}/{marca}/{pct} rellenos.
+export async function regenerateCopy(postId: string): Promise<string> {
+  requireSupabase()
+  const { data, error } = await supabase!.rpc('regenerate_social_copy', { p_post_id: postId })
+  if (error) throw error
+  return (data as string) ?? ''
 }
