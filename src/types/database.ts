@@ -14879,6 +14879,10 @@ export type Database = {
         Returns: undefined
       }
       reprocess_sale: { Args: { p_sale_id: string }; Returns: number }
+      request_social_generation: {
+        Args: { p_account_id: string }
+        Returns: undefined
+      }
       requeue_social_image: { Args: { p_post_id: string }; Returns: undefined }
       resolve_delivery_zone: {
         Args: {

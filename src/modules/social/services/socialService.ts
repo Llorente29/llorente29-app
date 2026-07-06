@@ -1,7 +1,7 @@
 // src/modules/social/services/socialService.ts
 //
 // Service del módulo Folvy Social.
-// Pieza 1: cola · 2: acciones · 3: publicación · 4: parrilla · 5: fase · 6: directivas.
+// Cola · acciones · publicación · parrilla · fase · directivas · generar ahora.
 
 import { supabase } from '@/lib/supabase'
 
@@ -72,6 +72,13 @@ export async function markPublished(postId: string): Promise<void> {
   if (error) throw error
 }
 
+// ── Generar ahora ───────────────────────────────────────────────────────────
+export async function requestGeneration(accountId: string): Promise<void> {
+  requireSupabase()
+  const { error } = await supabase!.rpc('request_social_generation', { p_account_id: accountId })
+  if (error) throw error
+}
+
 // ── Fase ────────────────────────────────────────────────────────────────────
 export async function getPhase(accountId: string): Promise<LaunchPhase> {
   requireSupabase()
@@ -88,14 +95,9 @@ export async function setPhase(accountId: string, phase: LaunchPhase): Promise<v
 // ── Directivas del humano ───────────────────────────────────────────────────
 export type DirectiveKind = 'push' | 'context' | 'custom'
 export interface NewDirective {
-  kind: DirectiveKind
-  brand_id?: string | null
-  menu_item_id?: string | null
-  template?: string | null
-  theme?: string | null
-  caption?: string | null
-  hashtags?: string[] | null
-  photo_url?: string | null
+  kind: DirectiveKind; brand_id?: string | null; menu_item_id?: string | null
+  template?: string | null; theme?: string | null; caption?: string | null
+  hashtags?: string[] | null; photo_url?: string | null
 }
 export interface DirectiveRow {
   id: string; kind: DirectiveKind; status: string
@@ -129,7 +131,6 @@ export async function cancelDirective(id: string): Promise<void> {
   if (error) throw error
 }
 
-// ── Marcas y platos (para los selectores de directivas) ─────────────────────
 export interface BrandRow { id: string; name: string; ownership_type: string }
 export interface DishRow { id: string; name: string; photo_url: string | null }
 

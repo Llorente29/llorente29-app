@@ -1,25 +1,20 @@
 // src/modules/social/pages/SocialQueuePage.tsx
 //
-// Cola del módulo Folvy Social.
-// Pieza 1: lectura. Pieza 2: acciones. Pieza 3: publicación.
-//   Instagram → aprobar deja el post 'approved'; el cron social-publish lo saca solo.
-//     El módulo refleja el estado real (aprobado → publicando → publicado/error) por
-//     auto-refresco. En error muestra el motivo y permite Reintentar.
-//   TikTok / Facebook → asistido: Copiar caption · Descargar imagen · Marcar como publicado.
+// Cola del módulo Folvy Social (completa).
+// Lectura · acciones (aprobar/editar/regenerar/descartar) · publicación (IG auto +
+// reintentar; TikTok/FB asistido) · auto-refresco · "Generar ahora" (dispara el agente).
 
 import { useEffect, useRef, useState } from 'react'
 import { useApp } from '@/context/AppContext'
 import {
   listQueue, approvePost, unapprovePost, discardPost, retryPost,
   updateContent, requeueImage, regenerateCopy, markPublished,
-  copyCaption, downloadImage,
+  copyCaption, downloadImage, requestGeneration,
   type SocialPostRow,
 } from '@/modules/social/services/socialService'
 
 const NETWORK_LABEL: Record<string, string> = { instagram: 'Instagram', tiktok: 'TikTok', facebook: 'Facebook' }
-const STATUS_LABEL: Record<string, string> = {
-  draft: 'Borrador', approved: 'Aprobado', scheduled: 'Programado', publishing: 'Publicando', error: 'Error',
-}
+const STATUS_LABEL: Record<string, string> = { draft: 'Borrador', approved: 'Aprobado', scheduled: 'Programado', publishing: 'Publicando', error: 'Error' }
 
 function Badge({ children, tone = 'neutral' }: { children: React.ReactNode; tone?: 'neutral' | 'accent' | 'warn' | 'ok' }) {
   const bg = tone === 'accent' ? 'var(--color-accent-bg, #eef2f7)' : tone === 'warn' ? '#fdecea' : tone === 'ok' ? '#e7f5ec' : 'var(--color-bg-muted, #f2f2f2)'
@@ -51,14 +46,15 @@ export default function SocialQueuePage() {
   const [editCopy, setEditCopy] = useState('')
   const [editTags, setEditTags] = useState('')
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [generating, setGenerating] = useState(false)
 
   const editingRef = useRef<string | null>(null)
   editingRef.current = editingId
 
   async function refetch() {
     if (!activeAccountId) return
-    if (editingRef.current) return               // no pisar una edición en curso
-    try { setRows(await listQueue(activeAccountId)) } catch { /* silencioso en refresco */ }
+    if (editingRef.current) return
+    try { setRows(await listQueue(activeAccountId)) } catch { /* silencioso */ }
   }
 
   useEffect(() => {
@@ -69,20 +65,27 @@ export default function SocialQueuePage() {
       .then(r => { if (alive) setRows(r) })
       .catch(e => { if (alive) setError(e?.message ?? 'No se pudo cargar la cola') })
       .finally(() => { if (alive) setLoading(false) })
-    const iv = setInterval(() => { void refetch() }, 20000)   // refresco real (IG publica por cron)
+    const iv = setInterval(() => { void refetch() }, 20000)
     return () => { alive = false; clearInterval(iv) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeAccountId])
 
-  function patchRow(id: string, patch: Partial<SocialPostRow>) {
-    setRows(rs => rs.map(r => (r.id === id ? { ...r, ...patch } : r)))
-  }
-  function patchPayload(id: string, patch: Partial<SocialPostRow['payload']>) {
-    setRows(rs => rs.map(r => (r.id === id ? { ...r, payload: { ...r.payload, ...patch } } : r)))
-  }
+  function patchRow(id: string, patch: Partial<SocialPostRow>) { setRows(rs => rs.map(r => (r.id === id ? { ...r, ...patch } : r))) }
+  function patchPayload(id: string, patch: Partial<SocialPostRow['payload']>) { setRows(rs => rs.map(r => (r.id === id ? { ...r, payload: { ...r.payload, ...patch } } : r))) }
   async function run(id: string, fn: () => Promise<void>, revert?: () => void) {
     setBusyId(id); setActionError(null)
     try { await fn() } catch (e: any) { revert?.(); setActionError(e?.message ?? 'La acción falló') } finally { setBusyId(null) }
+  }
+
+  async function onGenerate() {
+    if (!activeAccountId || generating) return
+    setGenerating(true); setActionError(null)
+    try {
+      await requestGeneration(activeAccountId)
+      for (const ms of [2000, 3500]) { await new Promise(r => setTimeout(r, ms)); await refetch() }
+    } catch (e: any) {
+      setActionError(e?.message ?? 'No se pudo generar')
+    } finally { setGenerating(false) }
   }
 
   function onApprove(row: SocialPostRow) { const prev = row.status; patchRow(row.id, { status: 'approved' }); void run(row.id, () => approvePost(row.id), () => patchRow(row.id, { status: prev })) }
@@ -112,11 +115,18 @@ export default function SocialQueuePage() {
 
   return (
     <div>
-      <header style={{ marginBottom: 20 }}>
-        <h1 className="font-display" style={{ fontSize: 26, fontWeight: 600, color: 'var(--color-text-primary, #1a1a1a)' }}>Cola</h1>
-        <p style={{ fontSize: 14, color: 'var(--color-text-secondary, #666)', marginTop: 4 }}>
-          Contenido que propone el agente. Apruébalo, edítalo o descártalo. Instagram se publica solo al aprobar; en TikTok y Facebook, copia el caption y la imagen.
-        </p>
+      <header style={{ display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 20 }}>
+        <div style={{ flex: 1 }}>
+          <h1 className="font-display" style={{ fontSize: 26, fontWeight: 600, color: 'var(--color-text-primary, #1a1a1a)' }}>Cola</h1>
+          <p style={{ fontSize: 14, color: 'var(--color-text-secondary, #666)', marginTop: 4 }}>
+            Contenido que propone el agente. Apruébalo, edítalo o descártalo. Instagram se publica solo al aprobar; en TikTok y Facebook, copia el caption y la imagen.
+          </p>
+        </div>
+        <button onClick={() => void onGenerate()} disabled={generating} style={{
+          flex: '0 0 auto', fontSize: 14, fontWeight: 600, padding: '9px 16px', borderRadius: 8,
+          border: 'none', background: 'var(--color-accent, #1E3A5F)', color: '#fff',
+          cursor: generating ? 'default' : 'pointer', opacity: generating ? 0.6 : 1,
+        }}>{generating ? 'Generando…' : 'Generar ahora'}</button>
       </header>
 
       {actionError && <div style={{ marginBottom: 12, padding: 12, borderRadius: 10, background: '#fdecea', color: '#b3261e', fontSize: 13 }}>{actionError}</div>}
@@ -126,7 +136,7 @@ export default function SocialQueuePage() {
       {!loading && !error && rows.length === 0 && (
         <div style={{ padding: 40, borderRadius: 14, textAlign: 'center', border: '1px dashed var(--color-border-default, #e5e5e5)', color: 'var(--color-text-secondary, #666)' }}>
           <p style={{ fontSize: 15, fontWeight: 600, marginBottom: 6, color: 'var(--color-text-primary, #1a1a1a)' }}>Todavía no hay nada en la cola</p>
-          <p style={{ fontSize: 14 }}>Cuando el agente proponga contenido, aparecerá aquí para que lo revises.</p>
+          <p style={{ fontSize: 14 }}>Pulsa «Generar ahora» o espera a que el agente proponga contenido.</p>
         </div>
       )}
 
@@ -180,7 +190,6 @@ export default function SocialQueuePage() {
                       <p style={{ fontSize: 12, color: '#b3261e', marginTop: 8 }}>Error al publicar: {row.last_error}</p>
                     )}
 
-                    {/* Acciones según estado */}
                     {row.status === 'publishing' ? (
                       <p style={{ fontSize: 12, color: 'var(--color-text-secondary, #999)', marginTop: 12 }}>Publicándose…</p>
                     ) : row.status === 'error' ? (
@@ -204,7 +213,6 @@ export default function SocialQueuePage() {
                         <Btn variant="danger" onClick={() => onDiscard(row)} disabled={busy}>Descartar</Btn>
                       </div>
                     ) : (
-                      // draft
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
                         <Btn variant="primary" onClick={() => onApprove(row)} disabled={busy}>Aprobar</Btn>
                         <Btn onClick={() => startEdit(row)} disabled={busy}>Editar</Btn>
