@@ -1,44 +1,35 @@
 // src/modules/social/pages/SocialQueuePage.tsx
 //
 // Cola del módulo Folvy Social.
-// Pieza 1: lectura.  Pieza 2: acciones por tarjeta —
-//   Aprobar / Volver a borrador · Descartar (con confirmación) ·
-//   Editar caption + hashtags · Regenerar imagen · Regenerar texto.
-// Cambios optimistas con reversión si la RPC falla.
-// La publicación real (IG) y la asistida (TikTok/FB) llegan en la Pieza 3.
+// Pieza 1: lectura. Pieza 2: acciones. Pieza 3: publicación.
+//   Instagram → aprobar deja el post 'approved'; el cron social-publish lo saca solo.
+//     El módulo refleja el estado real (aprobado → publicando → publicado/error) por
+//     auto-refresco. En error muestra el motivo y permite Reintentar.
+//   TikTok / Facebook → asistido: Copiar caption · Descargar imagen · Marcar como publicado.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useApp } from '@/context/AppContext'
 import {
-  listQueue, approvePost, unapprovePost, discardPost,
-  updateContent, requeueImage, regenerateCopy,
+  listQueue, approvePost, unapprovePost, discardPost, retryPost,
+  updateContent, requeueImage, regenerateCopy, markPublished,
+  copyCaption, downloadImage,
   type SocialPostRow,
 } from '@/modules/social/services/socialService'
 
-const NETWORK_LABEL: Record<string, string> = {
-  instagram: 'Instagram', tiktok: 'TikTok', facebook: 'Facebook',
-}
+const NETWORK_LABEL: Record<string, string> = { instagram: 'Instagram', tiktok: 'TikTok', facebook: 'Facebook' }
 const STATUS_LABEL: Record<string, string> = {
-  draft: 'Borrador', approved: 'Aprobado', scheduled: 'Programado',
-  publishing: 'Publicando', error: 'Error',
+  draft: 'Borrador', approved: 'Aprobado', scheduled: 'Programado', publishing: 'Publicando', error: 'Error',
 }
 
 function Badge({ children, tone = 'neutral' }: { children: React.ReactNode; tone?: 'neutral' | 'accent' | 'warn' | 'ok' }) {
-  const bg = tone === 'accent' ? 'var(--color-accent-bg, #eef2f7)'
-    : tone === 'warn' ? '#fdecea' : tone === 'ok' ? '#e7f5ec' : 'var(--color-bg-muted, #f2f2f2)'
-  const fg = tone === 'accent' ? 'var(--color-accent, #1E3A5F)'
-    : tone === 'warn' ? '#b3261e' : tone === 'ok' ? '#1a7f4b' : 'var(--color-text-secondary, #666)'
+  const bg = tone === 'accent' ? 'var(--color-accent-bg, #eef2f7)' : tone === 'warn' ? '#fdecea' : tone === 'ok' ? '#e7f5ec' : 'var(--color-bg-muted, #f2f2f2)'
+  const fg = tone === 'accent' ? 'var(--color-accent, #1E3A5F)' : tone === 'warn' ? '#b3261e' : tone === 'ok' ? '#1a7f4b' : 'var(--color-text-secondary, #666)'
   return <span style={{ fontSize: 12, fontWeight: 600, padding: '2px 10px', borderRadius: 999, background: bg, color: fg }}>{children}</span>
 }
 
 type BtnVariant = 'primary' | 'ghost' | 'danger'
-function Btn({ children, onClick, variant = 'ghost', disabled }: {
-  children: React.ReactNode; onClick?: () => void; variant?: BtnVariant; disabled?: boolean
-}) {
-  const base: React.CSSProperties = {
-    fontSize: 13, fontWeight: 600, padding: '6px 12px', borderRadius: 8, cursor: disabled ? 'default' : 'pointer',
-    border: '1px solid transparent', opacity: disabled ? 0.5 : 1, background: 'transparent',
-  }
+function Btn({ children, onClick, variant = 'ghost', disabled }: { children: React.ReactNode; onClick?: () => void; variant?: BtnVariant; disabled?: boolean }) {
+  const base: React.CSSProperties = { fontSize: 13, fontWeight: 600, padding: '6px 12px', borderRadius: 8, cursor: disabled ? 'default' : 'pointer', border: '1px solid transparent', opacity: disabled ? 0.5 : 1, background: 'transparent' }
   const styles: Record<BtnVariant, React.CSSProperties> = {
     primary: { ...base, background: 'var(--color-accent, #1E3A5F)', color: '#fff' },
     ghost: { ...base, border: '1px solid var(--color-border-default, #ddd)', color: 'var(--color-text-primary, #333)' },
@@ -59,6 +50,16 @@ export default function SocialQueuePage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editCopy, setEditCopy] = useState('')
   const [editTags, setEditTags] = useState('')
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+
+  const editingRef = useRef<string | null>(null)
+  editingRef.current = editingId
+
+  async function refetch() {
+    if (!activeAccountId) return
+    if (editingRef.current) return               // no pisar una edición en curso
+    try { setRows(await listQueue(activeAccountId)) } catch { /* silencioso en refresco */ }
+  }
 
   useEffect(() => {
     if (!activeAccountId) return
@@ -68,7 +69,9 @@ export default function SocialQueuePage() {
       .then(r => { if (alive) setRows(r) })
       .catch(e => { if (alive) setError(e?.message ?? 'No se pudo cargar la cola') })
       .finally(() => { if (alive) setLoading(false) })
-    return () => { alive = false }
+    const iv = setInterval(() => { void refetch() }, 20000)   // refresco real (IG publica por cron)
+    return () => { alive = false; clearInterval(iv) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeAccountId])
 
   function patchRow(id: string, patch: Partial<SocialPostRow>) {
@@ -77,51 +80,34 @@ export default function SocialQueuePage() {
   function patchPayload(id: string, patch: Partial<SocialPostRow['payload']>) {
     setRows(rs => rs.map(r => (r.id === id ? { ...r, payload: { ...r.payload, ...patch } } : r)))
   }
-
   async function run(id: string, fn: () => Promise<void>, revert?: () => void) {
     setBusyId(id); setActionError(null)
-    try { await fn() }
-    catch (e: any) { revert?.(); setActionError(e?.message ?? 'La acción falló') }
-    finally { setBusyId(null) }
+    try { await fn() } catch (e: any) { revert?.(); setActionError(e?.message ?? 'La acción falló') } finally { setBusyId(null) }
   }
 
-  function onApprove(row: SocialPostRow) {
-    const prev = row.status
-    patchRow(row.id, { status: 'approved' })
-    void run(row.id, () => approvePost(row.id), () => patchRow(row.id, { status: prev }))
-  }
-  function onUnapprove(row: SocialPostRow) {
-    const prev = row.status
-    patchRow(row.id, { status: 'draft' })
-    void run(row.id, () => unapprovePost(row.id), () => patchRow(row.id, { status: prev }))
-  }
-  function onDiscard(row: SocialPostRow) {
-    setConfirmDiscardId(null)
-    const snapshot = rows
-    setRows(rs => rs.filter(r => r.id !== row.id))
-    void run(row.id, () => discardPost(row.id), () => setRows(snapshot))
-  }
-  function startEdit(row: SocialPostRow) {
-    setEditingId(row.id)
-    setEditCopy(row.payload.copy ?? '')
-    setEditTags((row.payload.hashtags ?? []).join(' '))
-  }
+  function onApprove(row: SocialPostRow) { const prev = row.status; patchRow(row.id, { status: 'approved' }); void run(row.id, () => approvePost(row.id), () => patchRow(row.id, { status: prev })) }
+  function onUnapprove(row: SocialPostRow) { const prev = row.status; patchRow(row.id, { status: 'draft' }); void run(row.id, () => unapprovePost(row.id), () => patchRow(row.id, { status: prev })) }
+  function onRetry(row: SocialPostRow) { const prev = row.status; patchRow(row.id, { status: 'approved', last_error: null }); void run(row.id, () => retryPost(row.id), () => patchRow(row.id, { status: prev })) }
+  function onDiscard(row: SocialPostRow) { setConfirmDiscardId(null); const snap = rows; setRows(rs => rs.filter(r => r.id !== row.id)); void run(row.id, () => discardPost(row.id), () => setRows(snap)) }
+  function onMarkPublished(row: SocialPostRow) { const snap = rows; setRows(rs => rs.filter(r => r.id !== row.id)); void run(row.id, () => markPublished(row.id), () => setRows(snap)) }
+
+  function startEdit(row: SocialPostRow) { setEditingId(row.id); setEditCopy(row.payload.copy ?? ''); setEditTags((row.payload.hashtags ?? []).join(' ')) }
   function onSaveEdit(row: SocialPostRow) {
     const tags = editTags.split(/\s+/).map(t => t.trim()).filter(Boolean)
     const copy = editCopy
-    patchPayload(row.id, { copy, hashtags: tags })
-    setEditingId(null)
+    patchPayload(row.id, { copy, hashtags: tags }); setEditingId(null)
     void run(row.id, () => updateContent(row.id, copy, tags))
   }
-  function onRequeueImage(row: SocialPostRow) {
-    patchPayload(row.id, { image_level: 'N1-pendiente' })
-    void run(row.id, () => requeueImage(row.id))
+  function onRequeueImage(row: SocialPostRow) { patchPayload(row.id, { image_level: 'N1-pendiente' }); void run(row.id, () => requeueImage(row.id)) }
+  function onRegenCopy(row: SocialPostRow) { void run(row.id, async () => { const nc = await regenerateCopy(row.id); patchPayload(row.id, { copy: nc }) }) }
+  async function onCopy(row: SocialPostRow) {
+    try { await copyCaption(row.payload); setCopiedId(row.id); setTimeout(() => setCopiedId(c => (c === row.id ? null : c)), 1500) }
+    catch { setActionError('No se pudo copiar el caption') }
   }
-  function onRegenCopy(row: SocialPostRow) {
-    void run(row.id, async () => {
-      const nc = await regenerateCopy(row.id)
-      patchPayload(row.id, { copy: nc })
-    })
+  function onDownload(row: SocialPostRow) {
+    if (!row.payload.image_url) { setActionError('Este post aún no tiene imagen'); return }
+    const name = `foodint-${(row.payload.star_item ?? 'post').toLowerCase().replace(/[^a-z0-9]+/g, '-')}.jpg`
+    void run(row.id, () => downloadImage(row.payload.image_url!, name))
   }
 
   return (
@@ -129,20 +115,14 @@ export default function SocialQueuePage() {
       <header style={{ marginBottom: 20 }}>
         <h1 className="font-display" style={{ fontSize: 26, fontWeight: 600, color: 'var(--color-text-primary, #1a1a1a)' }}>Cola</h1>
         <p style={{ fontSize: 14, color: 'var(--color-text-secondary, #666)', marginTop: 4 }}>
-          Contenido que propone el agente. Apruébalo, edítalo o descártalo.
+          Contenido que propone el agente. Apruébalo, edítalo o descártalo. Instagram se publica solo al aprobar; en TikTok y Facebook, copia el caption y la imagen.
         </p>
       </header>
 
-      {actionError && (
-        <div style={{ marginBottom: 12, padding: 12, borderRadius: 10, background: '#fdecea', color: '#b3261e', fontSize: 13 }}>
-          {actionError}
-        </div>
-      )}
+      {actionError && <div style={{ marginBottom: 12, padding: 12, borderRadius: 10, background: '#fdecea', color: '#b3261e', fontSize: 13 }}>{actionError}</div>}
 
       {loading && <p style={{ color: 'var(--color-text-secondary, #666)' }}>Cargando la cola…</p>}
-      {error && !loading && (
-        <div style={{ padding: 16, borderRadius: 12, background: '#fdecea', color: '#b3261e' }}>No se pudo cargar la cola: {error}</div>
-      )}
+      {error && !loading && <div style={{ padding: 16, borderRadius: 12, background: '#fdecea', color: '#b3261e' }}>No se pudo cargar la cola: {error}</div>}
       {!loading && !error && rows.length === 0 && (
         <div style={{ padding: 40, borderRadius: 14, textAlign: 'center', border: '1px dashed var(--color-border-default, #e5e5e5)', color: 'var(--color-text-secondary, #666)' }}>
           <p style={{ fontSize: 15, fontWeight: 600, marginBottom: 6, color: 'var(--color-text-primary, #1a1a1a)' }}>Todavía no hay nada en la cola</p>
@@ -154,7 +134,7 @@ export default function SocialQueuePage() {
         {rows.map(row => {
           const busy = busyId === row.id
           const editing = editingId === row.id
-          const locked = row.status === 'publishing'
+          const assisted = row.network !== 'instagram'
           return (
             <article key={row.id} style={{ display: 'flex', gap: 16, padding: 16, borderRadius: 14, background: 'var(--color-bg-surface, #fff)', border: '1px solid var(--color-border-default, #e5e5e5)' }}>
               <div style={{ flex: '0 0 168px' }}>
@@ -180,10 +160,8 @@ export default function SocialQueuePage() {
 
                 {editing ? (
                   <div>
-                    <textarea value={editCopy} onChange={e => setEditCopy(e.target.value)} rows={4}
-                      style={{ width: '100%', fontSize: 14, padding: 10, borderRadius: 8, border: '1px solid var(--color-border-default, #ddd)', resize: 'vertical' }} />
-                    <input value={editTags} onChange={e => setEditTags(e.target.value)} placeholder="#hashtags separados por espacios"
-                      style={{ width: '100%', marginTop: 8, fontSize: 13, padding: 8, borderRadius: 8, border: '1px solid var(--color-border-default, #ddd)' }} />
+                    <textarea value={editCopy} onChange={e => setEditCopy(e.target.value)} rows={4} style={{ width: '100%', fontSize: 14, padding: 10, borderRadius: 8, border: '1px solid var(--color-border-default, #ddd)', resize: 'vertical' }} />
+                    <input value={editTags} onChange={e => setEditTags(e.target.value)} placeholder="#hashtags separados por espacios" style={{ width: '100%', marginTop: 8, fontSize: 13, padding: 8, borderRadius: 8, border: '1px solid var(--color-border-default, #ddd)' }} />
                     <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
                       <Btn variant="primary" onClick={() => onSaveEdit(row)} disabled={busy}>Guardar</Btn>
                       <Btn onClick={() => setEditingId(null)} disabled={busy}>Cancelar</Btn>
@@ -198,13 +176,37 @@ export default function SocialQueuePage() {
                     {row.reason && (
                       <p style={{ fontSize: 12, color: 'var(--color-text-secondary, #888)', marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--color-border-default, #eee)', fontStyle: 'italic' }}>{row.reason}</p>
                     )}
+                    {row.status === 'error' && row.last_error && (
+                      <p style={{ fontSize: 12, color: '#b3261e', marginTop: 8 }}>Error al publicar: {row.last_error}</p>
+                    )}
 
-                    {/* Acciones */}
-                    {!locked && (
+                    {/* Acciones según estado */}
+                    {row.status === 'publishing' ? (
+                      <p style={{ fontSize: 12, color: 'var(--color-text-secondary, #999)', marginTop: 12 }}>Publicándose…</p>
+                    ) : row.status === 'error' ? (
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
-                        {row.status === 'approved'
-                          ? <Btn onClick={() => onUnapprove(row)} disabled={busy}>Volver a borrador</Btn>
-                          : <Btn variant="primary" onClick={() => onApprove(row)} disabled={busy}>Aprobar</Btn>}
+                        <Btn variant="primary" onClick={() => onRetry(row)} disabled={busy}>Reintentar</Btn>
+                        <Btn onClick={() => startEdit(row)} disabled={busy}>Editar</Btn>
+                        <Btn variant="danger" onClick={() => onDiscard(row)} disabled={busy}>Descartar</Btn>
+                      </div>
+                    ) : row.status === 'approved' ? (
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12, alignItems: 'center' }}>
+                        {assisted ? (
+                          <>
+                            <Btn variant="primary" onClick={() => onCopy(row)} disabled={busy}>{copiedId === row.id ? 'Copiado ✓' : 'Copiar caption'}</Btn>
+                            <Btn onClick={() => onDownload(row)} disabled={busy}>Descargar imagen</Btn>
+                            <Btn onClick={() => onMarkPublished(row)} disabled={busy}>Marcar como publicado</Btn>
+                          </>
+                        ) : (
+                          <span style={{ fontSize: 12, color: 'var(--color-text-secondary, #777)' }}>Se publicará en Instagram automáticamente.</span>
+                        )}
+                        <Btn onClick={() => onUnapprove(row)} disabled={busy}>Volver a borrador</Btn>
+                        <Btn variant="danger" onClick={() => onDiscard(row)} disabled={busy}>Descartar</Btn>
+                      </div>
+                    ) : (
+                      // draft
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+                        <Btn variant="primary" onClick={() => onApprove(row)} disabled={busy}>Aprobar</Btn>
                         <Btn onClick={() => startEdit(row)} disabled={busy}>Editar</Btn>
                         <Btn onClick={() => onRegenCopy(row)} disabled={busy}>Regenerar texto</Btn>
                         <Btn onClick={() => onRequeueImage(row)} disabled={busy}>Regenerar imagen</Btn>
@@ -219,7 +221,6 @@ export default function SocialQueuePage() {
                         )}
                       </div>
                     )}
-                    {locked && <p style={{ fontSize: 12, color: 'var(--color-text-secondary, #999)', marginTop: 12 }}>Publicándose…</p>}
                   </>
                 )}
               </div>

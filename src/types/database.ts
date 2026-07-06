@@ -14319,6 +14319,10 @@ export type Database = {
         Args: { p_amount_cents?: number; p_payment_intent_id: string }
         Returns: Json
       }
+      mark_social_post_published: {
+        Args: { p_post_id: string }
+        Returns: undefined
+      }
       materialize_recipe_session: {
         Args: { p_decisions?: Json; p_session_id: string }
         Returns: {
