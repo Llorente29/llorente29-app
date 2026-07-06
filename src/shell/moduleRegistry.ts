@@ -26,6 +26,7 @@ import { kitchenModule } from '@/modules/kitchen/module'
 import { integrationsModule } from '@/modules/integrations/module'
 import { supplyModule } from '@/modules/supply/module'
 import { ordersModule } from '@/modules/orders/module'
+import { socialModule } from '@/modules/social/module'
 import { shopModule } from '@/modules/shop/module'
 
 export const moduleRegistry: ModuleDefinition[] = [
@@ -36,6 +37,7 @@ export const moduleRegistry: ModuleDefinition[] = [
   integrationsModule, //       (Folvy Connect, topBarOrder 5)
   supplyModule,       //       (Folvy Supply, topBarOrder 6) — aprovisionamiento / MRP II
   ordersModule,       //       (Folvy Orders, topBarOrder 7) — pedidos + cocina (KDS) + ajustes
+  socialModule,       //       (Folvy Social, topBarOrder 8) — canal de contenido / RRSS
   shopModule,         //       (Folvy Shop, topBarOrder 9) — canal directo / capa de diseño
 ]
 

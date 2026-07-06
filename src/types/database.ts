@@ -699,14 +699,17 @@ export type Database = {
           metadata: Json | null
           name: string
           past_due_at: string | null
-          shop_hero_url: string | null
-          shop_tagline: string | null
-          slug: string
-          status: string
+          shop_coupon_margin_floor_pct: number | null
           shop_fee_bps: number
+          shop_hero_url: string | null
+          shop_logo_url: string | null
           shop_pay_cash_delivery: boolean
           shop_pay_cash_pickup: boolean
           shop_pay_online: boolean
+          shop_subtitle: string | null
+          shop_tagline: string | null
+          slug: string
+          status: string
           stripe_account_id: string | null
           stripe_charges_enabled: boolean
           stripe_customer_id: string | null
@@ -737,14 +740,17 @@ export type Database = {
           metadata?: Json | null
           name: string
           past_due_at?: string | null
-          shop_hero_url?: string | null
-          shop_tagline?: string | null
-          slug: string
-          status?: string
+          shop_coupon_margin_floor_pct?: number | null
           shop_fee_bps?: number
+          shop_hero_url?: string | null
+          shop_logo_url?: string | null
           shop_pay_cash_delivery?: boolean
           shop_pay_cash_pickup?: boolean
           shop_pay_online?: boolean
+          shop_subtitle?: string | null
+          shop_tagline?: string | null
+          slug: string
+          status?: string
           stripe_account_id?: string | null
           stripe_charges_enabled?: boolean
           stripe_customer_id?: string | null
@@ -775,14 +781,17 @@ export type Database = {
           metadata?: Json | null
           name?: string
           past_due_at?: string | null
-          shop_hero_url?: string | null
-          shop_tagline?: string | null
-          slug?: string
-          status?: string
+          shop_coupon_margin_floor_pct?: number | null
           shop_fee_bps?: number
+          shop_hero_url?: string | null
+          shop_logo_url?: string | null
           shop_pay_cash_delivery?: boolean
           shop_pay_cash_pickup?: boolean
           shop_pay_online?: boolean
+          shop_subtitle?: string | null
+          shop_tagline?: string | null
+          slug?: string
+          status?: string
           stripe_account_id?: string | null
           stripe_charges_enabled?: boolean
           stripe_customer_id?: string | null
@@ -795,6 +804,118 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      agent_run_log: {
+        Row: {
+          account_id: string
+          campaigns_created: number
+          decisions: Json
+          id: string
+          ran_at: string
+          signals: Json
+        }
+        Insert: {
+          account_id: string
+          campaigns_created?: number
+          decisions: Json
+          id?: string
+          ran_at?: string
+          signals: Json
+        }
+        Update: {
+          account_id?: string
+          campaigns_created?: number
+          decisions?: Json
+          id?: string
+          ran_at?: string
+          signals?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_run_log_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_action: {
+        Row: {
+          account_id: string
+          agent: string
+          args: Json
+          confirmed_at: string | null
+          confirmed_by: string | null
+          created_at: string
+          effect_preview: Json | null
+          error_message: string | null
+          executed_at: string | null
+          id: string
+          proposed_by: string | null
+          result: Json | null
+          risk: string
+          rollback_hint: Json | null
+          session_id: string | null
+          status: string
+          summary: string
+          target_id: string | null
+          target_table: string | null
+          tool_name: string
+        }
+        Insert: {
+          account_id: string
+          agent: string
+          args?: Json
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          effect_preview?: Json | null
+          error_message?: string | null
+          executed_at?: string | null
+          id?: string
+          proposed_by?: string | null
+          result?: Json | null
+          risk?: string
+          rollback_hint?: Json | null
+          session_id?: string | null
+          status?: string
+          summary: string
+          target_id?: string | null
+          target_table?: string | null
+          tool_name: string
+        }
+        Update: {
+          account_id?: string
+          agent?: string
+          args?: Json
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          effect_preview?: Json | null
+          error_message?: string | null
+          executed_at?: string | null
+          id?: string
+          proposed_by?: string | null
+          result?: Json | null
+          risk?: string
+          rollback_hint?: Json | null
+          session_id?: string | null
+          status?: string
+          summary?: string
+          target_id?: string | null
+          target_table?: string | null
+          tool_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_action_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ai_interaction: {
         Row: {
@@ -2810,6 +2931,65 @@ export type Database = {
           },
         ]
       }
+      brand_channel_target: {
+        Row: {
+          account_id: string
+          brand_id: string
+          channel_id: string
+          id: string
+          location_id: string
+          target_daily: number
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          brand_id: string
+          channel_id: string
+          id?: string
+          location_id: string
+          target_daily: number
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          brand_id?: string
+          channel_id?: string
+          id?: string
+          location_id?: string
+          target_daily?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_channel_target_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "brand_channel_target_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "brand_channel_target_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "sales_channel"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "brand_channel_target_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       brand_licensing_agreement: {
         Row: {
           account_id: string
@@ -2929,6 +3109,328 @@ export type Database = {
             columns: ["location_id"]
             isOneToOne: false
             referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      business_hours: {
+        Row: {
+          account_id: string
+          brand_id: string | null
+          close_time: string
+          created_at: string
+          id: string
+          location_id: string
+          open_time: string
+          updated_at: string
+          weekday: number
+        }
+        Insert: {
+          account_id: string
+          brand_id?: string | null
+          close_time: string
+          created_at?: string
+          id?: string
+          location_id: string
+          open_time: string
+          updated_at?: string
+          weekday: number
+        }
+        Update: {
+          account_id?: string
+          brand_id?: string | null
+          close_time?: string
+          created_at?: string
+          id?: string
+          location_id?: string
+          open_time?: string
+          updated_at?: string
+          weekday?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "business_hours_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "business_hours_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "business_hours_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      business_hours_exception: {
+        Row: {
+          account_id: string
+          brand_id: string | null
+          close_time: string | null
+          created_at: string
+          exception_date: string
+          id: string
+          is_closed: boolean
+          location_id: string
+          note: string | null
+          open_time: string | null
+        }
+        Insert: {
+          account_id: string
+          brand_id?: string | null
+          close_time?: string | null
+          created_at?: string
+          exception_date: string
+          id?: string
+          is_closed?: boolean
+          location_id: string
+          note?: string | null
+          open_time?: string | null
+        }
+        Update: {
+          account_id?: string
+          brand_id?: string | null
+          close_time?: string | null
+          created_at?: string
+          exception_date?: string
+          id?: string
+          is_closed?: boolean
+          location_id?: string
+          note?: string | null
+          open_time?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "business_hours_exception_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "business_hours_exception_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "business_hours_exception_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campaign_rule: {
+        Row: {
+          account_id: string
+          action_template: Json
+          active: boolean
+          brand_id: string | null
+          budget_max: number
+          condition: Json
+          cooldown_minutes: number
+          created_at: string
+          created_by: string | null
+          duration_minutes: number
+          id: string
+          last_fired_at: string | null
+          location_id: string | null
+          max_active: number
+          menu_item_id: string | null
+          name: string
+          trigger_type: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          action_template: Json
+          active?: boolean
+          brand_id?: string | null
+          budget_max: number
+          condition?: Json
+          cooldown_minutes?: number
+          created_at?: string
+          created_by?: string | null
+          duration_minutes?: number
+          id?: string
+          last_fired_at?: string | null
+          location_id?: string | null
+          max_active?: number
+          menu_item_id?: string | null
+          name: string
+          trigger_type: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          action_template?: Json
+          active?: boolean
+          brand_id?: string | null
+          budget_max?: number
+          condition?: Json
+          cooldown_minutes?: number
+          created_at?: string
+          created_by?: string | null
+          duration_minutes?: number
+          id?: string
+          last_fired_at?: string | null
+          location_id?: string | null
+          max_active?: number
+          menu_item_id?: string | null
+          name?: string
+          trigger_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_rule_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_rule_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_rule_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_rule_menu_item_id_fkey"
+            columns: ["menu_item_id"]
+            isOneToOne: false
+            referencedRelation: "menu_item"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campaign_rule_firing: {
+        Row: {
+          account_id: string
+          acknowledged_at: string | null
+          acknowledged_by: string | null
+          coupon_id: string | null
+          fired_at: string
+          id: string
+          reason: Json
+          rule_id: string
+        }
+        Insert: {
+          account_id: string
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          coupon_id?: string | null
+          fired_at?: string
+          id?: string
+          reason?: Json
+          rule_id: string
+        }
+        Update: {
+          account_id?: string
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          coupon_id?: string | null
+          fired_at?: string
+          id?: string
+          reason?: Json
+          rule_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_rule_firing_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_rule_firing_coupon_id_fkey"
+            columns: ["coupon_id"]
+            isOneToOne: false
+            referencedRelation: "coupon"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_rule_firing_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_rule"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campaign_scope: {
+        Row: {
+          brand_id: string | null
+          coupon_id: string
+          created_at: string
+          id: string
+          menu_category_id: string | null
+          menu_item_id: string | null
+        }
+        Insert: {
+          brand_id?: string | null
+          coupon_id: string
+          created_at?: string
+          id?: string
+          menu_category_id?: string | null
+          menu_item_id?: string | null
+        }
+        Update: {
+          brand_id?: string | null
+          coupon_id?: string
+          created_at?: string
+          id?: string
+          menu_category_id?: string | null
+          menu_item_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_scope_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_scope_coupon_id_fkey"
+            columns: ["coupon_id"]
+            isOneToOne: false
+            referencedRelation: "coupon"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_scope_menu_category_id_fkey"
+            columns: ["menu_category_id"]
+            isOneToOne: false
+            referencedRelation: "menu_category"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_scope_menu_item_id_fkey"
+            columns: ["menu_item_id"]
+            isOneToOne: false
+            referencedRelation: "menu_item"
             referencedColumns: ["id"]
           },
         ]
@@ -3450,6 +3952,184 @@ export type Database = {
           },
         ]
       }
+      coupon: {
+        Row: {
+          account_id: string
+          active: boolean
+          applies_to: string
+          auto_apply: boolean
+          budget_max: number | null
+          channels: string[]
+          code: string | null
+          created_at: string
+          created_by: string | null
+          discount_type: string
+          ends_at: string | null
+          first_order_only: boolean
+          frequency_threshold: number | null
+          id: string
+          kind: string
+          max_per_customer: number
+          max_redemptions: number | null
+          min_subtotal: number | null
+          name: string
+          omnibus_ref_note: string | null
+          origin: string
+          paused_at: string | null
+          scope: Json | null
+          starts_at: string | null
+          time_from: string | null
+          time_to: string | null
+          updated_at: string
+          value: number
+          weekdays: number[] | null
+        }
+        Insert: {
+          account_id: string
+          active?: boolean
+          applies_to?: string
+          auto_apply?: boolean
+          budget_max?: number | null
+          channels?: string[]
+          code?: string | null
+          created_at?: string
+          created_by?: string | null
+          discount_type: string
+          ends_at?: string | null
+          first_order_only?: boolean
+          frequency_threshold?: number | null
+          id?: string
+          kind?: string
+          max_per_customer?: number
+          max_redemptions?: number | null
+          min_subtotal?: number | null
+          name: string
+          omnibus_ref_note?: string | null
+          origin?: string
+          paused_at?: string | null
+          scope?: Json | null
+          starts_at?: string | null
+          time_from?: string | null
+          time_to?: string | null
+          updated_at?: string
+          value: number
+          weekdays?: number[] | null
+        }
+        Update: {
+          account_id?: string
+          active?: boolean
+          applies_to?: string
+          auto_apply?: boolean
+          budget_max?: number | null
+          channels?: string[]
+          code?: string | null
+          created_at?: string
+          created_by?: string | null
+          discount_type?: string
+          ends_at?: string | null
+          first_order_only?: boolean
+          frequency_threshold?: number | null
+          id?: string
+          kind?: string
+          max_per_customer?: number
+          max_redemptions?: number | null
+          min_subtotal?: number | null
+          name?: string
+          omnibus_ref_note?: string | null
+          origin?: string
+          paused_at?: string | null
+          scope?: Json | null
+          starts_at?: string | null
+          time_from?: string | null
+          time_to?: string | null
+          updated_at?: string
+          value?: number
+          weekdays?: number[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coupon_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      coupon_redemption: {
+        Row: {
+          account_id: string
+          coupon_id: string
+          customer_email: string | null
+          customer_id: string | null
+          customer_phone: string | null
+          discount_amount: number
+          id: string
+          is_cycle: boolean
+          margin_after: number | null
+          reference_subtotal: number
+          sale_id: string
+          ts: string
+        }
+        Insert: {
+          account_id: string
+          coupon_id: string
+          customer_email?: string | null
+          customer_id?: string | null
+          customer_phone?: string | null
+          discount_amount: number
+          id?: string
+          is_cycle?: boolean
+          margin_after?: number | null
+          reference_subtotal: number
+          sale_id: string
+          ts?: string
+        }
+        Update: {
+          account_id?: string
+          coupon_id?: string
+          customer_email?: string | null
+          customer_id?: string | null
+          customer_phone?: string | null
+          discount_amount?: number
+          id?: string
+          is_cycle?: boolean
+          margin_after?: number | null
+          reference_subtotal?: number
+          sale_id?: string
+          ts?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coupon_redemption_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coupon_redemption_coupon_id_fkey"
+            columns: ["coupon_id"]
+            isOneToOne: false
+            referencedRelation: "coupon"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coupon_redemption_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customer"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coupon_redemption_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sale"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ctb_notification_queue: {
         Row: {
           account_id: string
@@ -3523,6 +4203,304 @@ export type Database = {
             columns: ["supplier_id"]
             isOneToOne: false
             referencedRelation: "supplier"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      customer: {
+        Row: {
+          account_id: string
+          created_at: string
+          email: string | null
+          email_verified: boolean
+          first_brand_id: string | null
+          first_location_id: string | null
+          first_seen_at: string
+          id: string
+          last_login_at: string | null
+          last_seen_at: string
+          name: string | null
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          email?: string | null
+          email_verified?: boolean
+          first_brand_id?: string | null
+          first_location_id?: string | null
+          first_seen_at?: string
+          id?: string
+          last_login_at?: string | null
+          last_seen_at?: string
+          name?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          email?: string | null
+          email_verified?: boolean
+          first_brand_id?: string | null
+          first_location_id?: string | null
+          first_seen_at?: string
+          id?: string
+          last_login_at?: string | null
+          last_seen_at?: string
+          name?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      customer_address: {
+        Row: {
+          account_id: string
+          address: string
+          created_at: string
+          customer_id: string
+          detail: string | null
+          id: string
+          is_default: boolean
+          label: string | null
+          lat: number | null
+          lng: number | null
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          address: string
+          created_at?: string
+          customer_id: string
+          detail?: string | null
+          id?: string
+          is_default?: boolean
+          label?: string | null
+          lat?: number | null
+          lng?: number | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          address?: string
+          created_at?: string
+          customer_id?: string
+          detail?: string | null
+          id?: string
+          is_default?: boolean
+          label?: string | null
+          lat?: number | null
+          lng?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_address_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_address_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customer"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      customer_consent: {
+        Row: {
+          account_id: string
+          customer_id: string
+          marketing_email: boolean
+          marketing_sms: boolean
+          marketing_whatsapp: boolean
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          customer_id: string
+          marketing_email?: boolean
+          marketing_sms?: boolean
+          marketing_whatsapp?: boolean
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          customer_id?: string
+          marketing_email?: boolean
+          marketing_sms?: boolean
+          marketing_whatsapp?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_consent_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_consent_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: true
+            referencedRelation: "customer"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      customer_consent_log: {
+        Row: {
+          account_id: string
+          action: string
+          channel: string
+          customer_id: string
+          id: string
+          ip: string | null
+          source: string
+          terms_version: string | null
+          ts: string
+          user_agent: string | null
+        }
+        Insert: {
+          account_id: string
+          action: string
+          channel: string
+          customer_id: string
+          id?: string
+          ip?: string | null
+          source: string
+          terms_version?: string | null
+          ts?: string
+          user_agent?: string | null
+        }
+        Update: {
+          account_id?: string
+          action?: string
+          channel?: string
+          customer_id?: string
+          id?: string
+          ip?: string | null
+          source?: string
+          terms_version?: string | null
+          ts?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_consent_log_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_consent_log_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customer"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      customer_otp: {
+        Row: {
+          account_id: string
+          attempts: number
+          code_hash: string
+          consumed_at: string | null
+          created_at: string
+          email: string
+          expires_at: string
+          id: string
+        }
+        Insert: {
+          account_id: string
+          attempts?: number
+          code_hash: string
+          consumed_at?: string | null
+          created_at?: string
+          email: string
+          expires_at: string
+          id?: string
+        }
+        Update: {
+          account_id?: string
+          attempts?: number
+          code_hash?: string
+          consumed_at?: string | null
+          created_at?: string
+          email?: string
+          expires_at?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_otp_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      customer_session: {
+        Row: {
+          account_id: string
+          created_at: string
+          customer_id: string
+          expires_at: string
+          id: string
+          last_seen_at: string
+          revoked_at: string | null
+          token: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          customer_id: string
+          expires_at: string
+          id?: string
+          last_seen_at?: string
+          revoked_at?: string | null
+          token: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          customer_id?: string
+          expires_at?: string
+          id?: string
+          last_seen_at?: string
+          revoked_at?: string | null
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_session_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_session_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customer"
             referencedColumns: ["id"]
           },
         ]
@@ -5880,6 +6858,50 @@ export type Database = {
         }
         Relationships: []
       }
+      local_event: {
+        Row: {
+          account_id: string
+          created_at: string
+          demand_effect: string
+          ends_at: string
+          event_type: string
+          id: string
+          name: string
+          notes: string | null
+          starts_at: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          demand_effect?: string
+          ends_at: string
+          event_type?: string
+          id?: string
+          name: string
+          notes?: string | null
+          starts_at: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          demand_effect?: string
+          ends_at?: string
+          event_type?: string
+          id?: string
+          name?: string
+          notes?: string | null
+          starts_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "local_event_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       locations: {
         Row: {
           account_id: string | null
@@ -5888,6 +6910,9 @@ export type Database = {
           clock_geofence_mode: string
           clock_radius_m: number
           created_at: string
+          dispatch_broker: string
+          dispatch_mode: string
+          glovo_pos_hint: string | null
           hours_balance_close_day: number | null
           hours_balance_sync_with_gestoria: boolean | null
           id: string
@@ -5906,6 +6931,9 @@ export type Database = {
           clock_geofence_mode?: string
           clock_radius_m?: number
           created_at?: string
+          dispatch_broker?: string
+          dispatch_mode?: string
+          glovo_pos_hint?: string | null
           hours_balance_close_day?: number | null
           hours_balance_sync_with_gestoria?: boolean | null
           id?: string
@@ -5924,6 +6952,9 @@ export type Database = {
           clock_geofence_mode?: string
           clock_radius_m?: number
           created_at?: string
+          dispatch_broker?: string
+          dispatch_mode?: string
+          glovo_pos_hint?: string | null
           hours_balance_close_day?: number | null
           hours_balance_sync_with_gestoria?: boolean | null
           id?: string
@@ -6351,6 +7382,7 @@ export type Database = {
           is_available: boolean
           kitchen_name: string | null
           menu_category_id: string | null
+          mirror_of_item_id: string | null
           name: string
           needs_review: boolean
           notes_internal: string | null
@@ -6390,6 +7422,7 @@ export type Database = {
           is_available?: boolean
           kitchen_name?: string | null
           menu_category_id?: string | null
+          mirror_of_item_id?: string | null
           name: string
           needs_review?: boolean
           notes_internal?: string | null
@@ -6429,6 +7462,7 @@ export type Database = {
           is_available?: boolean
           kitchen_name?: string | null
           menu_category_id?: string | null
+          mirror_of_item_id?: string | null
           name?: string
           needs_review?: boolean
           notes_internal?: string | null
@@ -6466,6 +7500,13 @@ export type Database = {
             columns: ["menu_category_id"]
             isOneToOne: false
             referencedRelation: "menu_category"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "menu_item_mirror_of_item_id_fkey"
+            columns: ["mirror_of_item_id"]
+            isOneToOne: false
+            referencedRelation: "menu_item"
             referencedColumns: ["id"]
           },
           {
@@ -6553,6 +7594,45 @@ export type Database = {
           },
           {
             foreignKeyName: "menu_item_override_menu_item_id_fkey"
+            columns: ["menu_item_id"]
+            isOneToOne: false
+            referencedRelation: "menu_item"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      menu_item_price_history: {
+        Row: {
+          account_id: string
+          captured_at: string
+          id: string
+          menu_item_id: string
+          price: number
+        }
+        Insert: {
+          account_id: string
+          captured_at?: string
+          id?: string
+          menu_item_id: string
+          price: number
+        }
+        Update: {
+          account_id?: string
+          captured_at?: string
+          id?: string
+          menu_item_id?: string
+          price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "menu_item_price_history_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "menu_item_price_history_menu_item_id_fkey"
             columns: ["menu_item_id"]
             isOneToOne: false
             referencedRelation: "menu_item"
@@ -6947,6 +8027,59 @@ export type Database = {
             columns: ["location_id"]
             isOneToOne: false
             referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      offers_agent_config: {
+        Row: {
+          account_id: string
+          aggressiveness: string
+          enabled: boolean
+          growth_mode: boolean
+          margin_floor_pct: number
+          max_campaign_days: number
+          platform_mode: string
+          push_agent_secret: string | null
+          recovery_target_pct: number
+          shop_mode: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          account_id: string
+          aggressiveness?: string
+          enabled?: boolean
+          growth_mode?: boolean
+          margin_floor_pct?: number
+          max_campaign_days?: number
+          platform_mode?: string
+          push_agent_secret?: string | null
+          recovery_target_pct?: number
+          shop_mode?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          account_id?: string
+          aggressiveness?: string
+          enabled?: boolean
+          growth_mode?: boolean
+          margin_floor_pct?: number
+          max_campaign_days?: number
+          platform_mode?: string
+          push_agent_secret?: string | null
+          recovery_target_pct?: number
+          shop_mode?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "offers_agent_config_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: true
+            referencedRelation: "accounts"
             referencedColumns: ["id"]
           },
         ]
@@ -7356,6 +8489,27 @@ export type Database = {
         }
         Relationships: []
       }
+      platform_api_token: {
+        Row: {
+          access_token: string
+          expires_at: string
+          platform: string
+          updated_at: string
+        }
+        Insert: {
+          access_token: string
+          expires_at: string
+          platform: string
+          updated_at?: string
+        }
+        Update: {
+          access_token?: string
+          expires_at?: string
+          platform?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       platform_audit_log: {
         Row: {
           created_at: string
@@ -7609,6 +8763,86 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      promo_push_job: {
+        Row: {
+          account_id: string
+          action: string
+          attempts: number
+          brand_id: string
+          coupon_id: string
+          created_at: string
+          external_ref: string | null
+          id: string
+          last_error: string | null
+          location_id: string | null
+          payload: Json
+          platform: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          action: string
+          attempts?: number
+          brand_id: string
+          coupon_id: string
+          created_at?: string
+          external_ref?: string | null
+          id?: string
+          last_error?: string | null
+          location_id?: string | null
+          payload: Json
+          platform: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          action?: string
+          attempts?: number
+          brand_id?: string
+          coupon_id?: string
+          created_at?: string
+          external_ref?: string | null
+          id?: string
+          last_error?: string | null
+          location_id?: string | null
+          payload?: Json
+          platform?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "promo_push_job_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "promo_push_job_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "promo_push_job_coupon_id_fkey"
+            columns: ["coupon_id"]
+            isOneToOne: false
+            referencedRelation: "coupon"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "promo_push_job_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       purchase: {
         Row: {
@@ -8814,6 +10048,7 @@ export type Database = {
           temperature_c: number | null
           text: string
           updated_at: string
+          video_url: string | null
         }
         Insert: {
           created_at?: string
@@ -8826,6 +10061,7 @@ export type Database = {
           temperature_c?: number | null
           text: string
           updated_at?: string
+          video_url?: string | null
         }
         Update: {
           created_at?: string
@@ -8838,6 +10074,7 @@ export type Database = {
           temperature_c?: number | null
           text?: string
           updated_at?: string
+          video_url?: string | null
         }
         Relationships: [
           {
@@ -9204,6 +10441,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           created_by_name: string | null
+          customer_id: string | null
           customer_name: string | null
           customer_note: string | null
           customer_phone: string | null
@@ -9227,9 +10465,12 @@ export type Database = {
           opened_at: string | null
           order_status: string | null
           paid: number | null
+          paid_at: string | null
           payment_method: string | null
+          payment_status: string | null
           platform_order_code: string | null
           pos_short_code: string | null
+          public_token: string | null
           raw_products: string | null
           raw_tab: string | null
           refund_amount: number | null
@@ -9239,6 +10480,7 @@ export type Database = {
           sold_at: string
           source: string
           status: string
+          stripe_payment_intent_id: string | null
           tax: number | null
           taxable_base: number | null
           total: number
@@ -9258,6 +10500,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           created_by_name?: string | null
+          customer_id?: string | null
           customer_name?: string | null
           customer_note?: string | null
           customer_phone?: string | null
@@ -9281,9 +10524,12 @@ export type Database = {
           opened_at?: string | null
           order_status?: string | null
           paid?: number | null
+          paid_at?: string | null
           payment_method?: string | null
+          payment_status?: string | null
           platform_order_code?: string | null
           pos_short_code?: string | null
+          public_token?: string | null
           raw_products?: string | null
           raw_tab?: string | null
           refund_amount?: number | null
@@ -9293,6 +10539,7 @@ export type Database = {
           sold_at: string
           source?: string
           status?: string
+          stripe_payment_intent_id?: string | null
           tax?: number | null
           taxable_base?: number | null
           total?: number
@@ -9312,6 +10559,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           created_by_name?: string | null
+          customer_id?: string | null
           customer_name?: string | null
           customer_note?: string | null
           customer_phone?: string | null
@@ -9335,9 +10583,12 @@ export type Database = {
           opened_at?: string | null
           order_status?: string | null
           paid?: number | null
+          paid_at?: string | null
           payment_method?: string | null
+          payment_status?: string | null
           platform_order_code?: string | null
           pos_short_code?: string | null
+          public_token?: string | null
           raw_products?: string | null
           raw_tab?: string | null
           refund_amount?: number | null
@@ -9347,6 +10598,7 @@ export type Database = {
           sold_at?: string
           source?: string
           status?: string
+          stripe_payment_intent_id?: string | null
           tax?: number | null
           taxable_base?: number | null
           total?: number
@@ -9366,6 +10618,13 @@ export type Database = {
             columns: ["channel_id"]
             isOneToOne: false
             referencedRelation: "sales_channel"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sale_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customer"
             referencedColumns: ["id"]
           },
           {
@@ -9915,6 +11174,296 @@ export type Database = {
             columns: ["brand_id"]
             isOneToOne: false
             referencedRelation: "brand"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      social_account: {
+        Row: {
+          account_id: string
+          config: Json
+          created_at: string
+          display_name: string | null
+          handle: string
+          id: string
+          is_active: boolean
+          link_status: string
+          network: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          config?: Json
+          created_at?: string
+          display_name?: string | null
+          handle: string
+          id?: string
+          is_active?: boolean
+          link_status?: string
+          network: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          config?: Json
+          created_at?: string
+          display_name?: string | null
+          handle?: string
+          id?: string
+          is_active?: boolean
+          link_status?: string
+          network?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_account_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      social_config: {
+        Row: {
+          account_id: string
+          launch_phase: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          account_id: string
+          launch_phase?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          account_id?: string
+          launch_phase?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_config_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: true
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      social_copy: {
+        Row: {
+          account_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          lang: string
+          pillar: string
+          template: string
+          text: string
+          times_used: number
+          weight: number
+        }
+        Insert: {
+          account_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          lang?: string
+          pillar: string
+          template?: string
+          text: string
+          times_used?: number
+          weight?: number
+        }
+        Update: {
+          account_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          lang?: string
+          pillar?: string
+          template?: string
+          text?: string
+          times_used?: number
+          weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_copy_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      social_directive: {
+        Row: {
+          account_id: string
+          anonymous: boolean | null
+          brand_id: string | null
+          caption: string | null
+          consumed_at: string | null
+          created_at: string
+          created_by: string | null
+          hashtags: string[] | null
+          id: string
+          kind: string
+          menu_item_id: string | null
+          networks: string[] | null
+          photo_url: string | null
+          status: string
+          template: string | null
+          theme: string | null
+          valid_from: string
+          valid_until: string | null
+        }
+        Insert: {
+          account_id: string
+          anonymous?: boolean | null
+          brand_id?: string | null
+          caption?: string | null
+          consumed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          hashtags?: string[] | null
+          id?: string
+          kind: string
+          menu_item_id?: string | null
+          networks?: string[] | null
+          photo_url?: string | null
+          status?: string
+          template?: string | null
+          theme?: string | null
+          valid_from?: string
+          valid_until?: string | null
+        }
+        Update: {
+          account_id?: string
+          anonymous?: boolean | null
+          brand_id?: string | null
+          caption?: string | null
+          consumed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          hashtags?: string[] | null
+          id?: string
+          kind?: string
+          menu_item_id?: string | null
+          networks?: string[] | null
+          photo_url?: string | null
+          status?: string
+          template?: string | null
+          theme?: string | null
+          valid_from?: string
+          valid_until?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_directive_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_directive_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_directive_menu_item_id_fkey"
+            columns: ["menu_item_id"]
+            isOneToOne: false
+            referencedRelation: "menu_item"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      social_post: {
+        Row: {
+          account_id: string
+          attempts: number
+          brand_id: string | null
+          created_at: string
+          external_ref: string | null
+          id: string
+          last_error: string | null
+          network: string
+          origin: string
+          payload: Json
+          published_at: string | null
+          reason: string | null
+          scheduled_at: string | null
+          social_account_id: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          attempts?: number
+          brand_id?: string | null
+          created_at?: string
+          external_ref?: string | null
+          id?: string
+          last_error?: string | null
+          network: string
+          origin?: string
+          payload: Json
+          published_at?: string | null
+          reason?: string | null
+          scheduled_at?: string | null
+          social_account_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          attempts?: number
+          brand_id?: string | null
+          created_at?: string
+          external_ref?: string | null
+          id?: string
+          last_error?: string | null
+          network?: string
+          origin?: string
+          payload?: Json
+          published_at?: string | null
+          reason?: string | null
+          scheduled_at?: string | null
+          social_account_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_post_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_post_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_post_social_account_id_fkey"
+            columns: ["social_account_id"]
+            isOneToOne: false
+            referencedRelation: "social_account"
             referencedColumns: ["id"]
           },
         ]
@@ -11037,6 +12586,58 @@ export type Database = {
         }
         Relationships: []
       }
+      uber_store_map: {
+        Row: {
+          account_id: string
+          brand_id: string
+          created_at: string
+          id: string
+          location_id: string | null
+          store_id: string
+          store_name: string | null
+        }
+        Insert: {
+          account_id: string
+          brand_id: string
+          created_at?: string
+          id?: string
+          location_id?: string | null
+          store_id: string
+          store_name?: string | null
+        }
+        Update: {
+          account_id?: string
+          brand_id?: string
+          created_at?: string
+          id?: string
+          location_id?: string | null
+          store_id?: string
+          store_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "uber_store_map_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "uber_store_map_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "uber_store_map_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       usage_counters: {
         Row: {
           account_id: string
@@ -11395,6 +12996,10 @@ export type Database = {
     Views: {
     }
     Functions: {
+      _allergens_of_recipe: {
+        Args: { p_recipe_item_id: string }
+        Returns: Json
+      }
       _delivery_zone_account_of_location: {
         Args: { p_location_id: string }
         Returns: string
@@ -11429,6 +13034,7 @@ export type Database = {
         }
         Returns: number
       }
+      _modgroups_of_item: { Args: { p_menu_item_id: string }; Returns: Json }
       _postgis_deprecate: {
         Args: { newname: string; oldname: string; version: string }
         Returns: undefined
@@ -11466,6 +13072,31 @@ export type Database = {
           qty_base: number
           raw_item_id: string
         }[]
+      }
+      _shop_account_free_delivery: {
+        Args: { p_account: string }
+        Returns: Json
+      }
+      _shop_account_free_gift: { Args: { p_account: string }; Returns: Json }
+      _shop_brand_best_offer: {
+        Args: { p_account: string; p_brand: string }
+        Returns: Json
+      }
+      _shop_item_bogo: {
+        Args: { p_account: string; p_menu_item_id: string }
+        Returns: Json
+      }
+      _shop_item_offer: {
+        Args: { p_account: string; p_menu_item_id: string; p_price: number }
+        Returns: Json
+      }
+      _shop_item_promo: {
+        Args: { p_account: string; p_menu_item_id: string; p_price: number }
+        Returns: Json
+      }
+      _shop_reprice_line: {
+        Args: { p_account_id: string; p_line: Json }
+        Returns: Json
       }
       _st_3dintersects: {
         Args: { geom1: unknown; geom2: unknown }
@@ -11539,6 +13170,7 @@ export type Database = {
       }
       _st_within: { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
       _user_can_manage_admins: { Args: { p_user_id: string }; Returns: boolean }
+      adapt_folvy_shop_order: { Args: { p_sale_id: string }; Returns: number }
       adapt_hubrise_order: { Args: { p_sale_id: string }; Returns: number }
       adapt_lastapp_order: { Args: { p_sale_id: string }; Returns: number }
       add_ingredient_to_recipes: {
@@ -11593,6 +13225,64 @@ export type Database = {
             }
             Returns: string
           }
+      agent_campaign_uplift: {
+        Args: { p_account_id: string; p_days_back?: number }
+        Returns: {
+          activa: boolean
+          ambito_locales: string
+          arranque_desde_cero: boolean
+          brand_name: string
+          campaign_name: string
+          channel_name: string
+          coupon_id: string
+          dias_campaña: number
+          ped_dia_antes: number
+          ped_dia_durante: number
+          uplift_pct: number
+        }[]
+      }
+      agent_dow_signal: {
+        Args: { p_account_id: string }
+        Returns: {
+          brand_id: string
+          channel_name: string
+          dow: number
+          pct_share: number
+        }[]
+      }
+      agent_learning_signal: {
+        Args: { p_account_id: string }
+        Returns: {
+          arranques: number
+          brand_id: string
+          channel_name: string
+          n_medidas: number
+          uplift_medio: number
+        }[]
+      }
+      agent_sales_signal: {
+        Args: { p_account_id: string }
+        Returns: {
+          avg_28d: number
+          brand_id: string
+          channel_name: string
+          peak_daily: number
+          sales_7d: number
+        }[]
+      }
+      agent_sales_signal_v2: {
+        Args: { p_account_id: string }
+        Returns: {
+          avg_28d: number
+          brand_id: string
+          channel_name: string
+          location_id: string
+          location_name: string
+          peak_daily: number
+          sales_7d: number
+          target_daily: number
+        }[]
+      }
       appcc_mark_overdue: { Args: never; Returns: undefined }
       apply_appcc_assignment_moments: {
         Args: { p_account_id: string }
@@ -11695,6 +13385,18 @@ export type Database = {
         Args: { p_device_token: string }
         Returns: Json
       }
+      avt_incomplete_raws: {
+        Args: {
+          p_account: string
+          p_from?: string
+          p_location?: string
+          p_to?: string
+        }
+        Returns: {
+          location_id: string
+          recipe_item_id: string
+        }[]
+      }
       avt_period: {
         Args: {
           p_account: string
@@ -11709,6 +13411,26 @@ export type Database = {
         Args: { p_area_ids?: string[]; p_count_id: string; p_full?: boolean }
         Returns: number
       }
+      campaign_menu_tree: { Args: { p_account: string }; Returns: Json }
+      campaign_performance: {
+        Args: {
+          p_account: string
+          p_coupon: string
+          p_from: string
+          p_to: string
+        }
+        Returns: Json
+      }
+      campaigns_overview: {
+        Args: {
+          p_account: string
+          p_brand: string
+          p_from: string
+          p_kinds: string[]
+          p_to: string
+        }
+        Returns: Json
+      }
       cancel_sale: {
         Args: { p_reason?: string; p_sale_id: string }
         Returns: undefined
@@ -11717,18 +13439,111 @@ export type Database = {
         Args: { p_counted: number; p_line_id: string }
         Returns: string
       }
+      claim_next_image_job: {
+        Args: never
+        Returns: {
+          account_id: string
+          brand_anonymous: boolean
+          discount_pct: number
+          dish: string
+          hero_url: string
+          post_id: string
+          template: string
+        }[]
+      }
+      claim_pending_directive: {
+        Args: { p_account_id: string }
+        Returns: {
+          account_id: string
+          anonymous: boolean | null
+          brand_id: string | null
+          caption: string | null
+          consumed_at: string | null
+          created_at: string
+          created_by: string | null
+          hashtags: string[] | null
+          id: string
+          kind: string
+          menu_item_id: string | null
+          networks: string[] | null
+          photo_url: string | null
+          status: string
+          template: string | null
+          theme: string | null
+          valid_from: string
+          valid_until: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "social_directive"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       claim_print_jobs: {
         Args: { p_device_token: string; p_limit?: number }
         Returns: Json
+      }
+      claim_promo_push_jobs: {
+        Args: { p_limit?: number; p_platform: string; p_secret: string }
+        Returns: {
+          account_id: string
+          action: string
+          attempts: number
+          brand_id: string
+          coupon_id: string
+          created_at: string
+          external_ref: string | null
+          id: string
+          last_error: string | null
+          location_id: string | null
+          payload: Json
+          platform: string
+          status: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "promo_push_job"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      claim_promo_push_jobs_srv: {
+        Args: { p_limit?: number; p_platform: string }
+        Returns: {
+          account_id: string
+          action: string
+          attempts: number
+          brand_id: string
+          coupon_id: string
+          created_at: string
+          external_ref: string | null
+          id: string
+          last_error: string | null
+          location_id: string | null
+          payload: Json
+          platform: string
+          status: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "promo_push_job"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       classify_unmapped_product: {
         Args: {
           p_account_id: string
           p_action: string
           p_product_name: string
+          p_recipe_item_id?: string
           p_unit_cost?: number
         }
         Returns: {
+          candidatos: Json
           lineas_casadas: number
           marcas_creadas: number
           recipe_item_id: string
@@ -11769,6 +13584,25 @@ export type Database = {
         }[]
       }
       close_sale: { Args: { p_sale_id: string }; Returns: undefined }
+      commit_ai_action: {
+        Args: { p_action_id: string; p_edited_args?: Json }
+        Returns: Json
+      }
+      compute_combo_cost: {
+        Args: { p_combo_item_id: string }
+        Returns: {
+          cost: number
+          detail: Json
+          fc_pct: number
+          is_incomplete: boolean
+          margin: number
+          price: number
+          slots_incomplete: number
+          slots_provisional: number
+          slots_reliable: number
+          slots_total: number
+        }[]
+      }
       compute_sale_line_consumption: {
         Args: { p_sale_line_id: string }
         Returns: number
@@ -11845,12 +13679,26 @@ export type Database = {
           out_recipe_item_id: string
         }[]
       }
+      create_mirror_item: {
+        Args: { p_account: string; p_item: string }
+        Returns: Json
+      }
       create_platform_admin_tx: {
         Args: {
           p_created_by: string
           p_full_name: string
           p_role: string
           p_user_id: string
+        }
+        Returns: string
+      }
+      create_recipe_version: {
+        Args: {
+          p_created_by_name?: string
+          p_is_milestone?: boolean
+          p_item_id: string
+          p_label?: string
+          p_note?: string
         }
         Returns: string
       }
@@ -11874,10 +13722,64 @@ export type Database = {
         Returns: boolean
       }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
+      customer_addresses: { Args: { p_token: string }; Returns: Json }
+      customer_coupons: { Args: { p_token: string }; Returns: Json }
+      customer_delete_address: {
+        Args: { p_id: string; p_token: string }
+        Returns: Json
+      }
+      customer_logout: { Args: { p_token: string }; Returns: Json }
+      customer_orders: {
+        Args: { p_limit?: number; p_token: string }
+        Returns: Json
+      }
+      customer_reorder_payload: {
+        Args: { p_sale_id: string; p_token: string }
+        Returns: Json
+      }
+      customer_request_login: {
+        Args: { p_email: string; p_slug: string }
+        Returns: Json
+      }
+      customer_save_address: {
+        Args: {
+          p_address: string
+          p_detail: string
+          p_id: string
+          p_is_default: boolean
+          p_label: string
+          p_lat: number
+          p_lng: number
+          p_token: string
+        }
+        Returns: Json
+      }
+      customer_session_me: { Args: { p_token: string }; Returns: Json }
+      customer_set_consent: {
+        Args: { p_consent: boolean; p_token: string }
+        Returns: Json
+      }
+      customer_update_profile: {
+        Args: { p_name: string; p_phone: string; p_token: string }
+        Returns: Json
+      }
+      customer_verify_login: {
+        Args: {
+          p_code: string
+          p_email: string
+          p_slug: string
+          p_ttl_days?: number
+        }
+        Returns: Json
+      }
       default_permissions_for_role: { Args: { p_role: string }; Returns: Json }
       delete_account_tx: {
         Args: { p_account_id: string; p_admin_user_id: string }
         Returns: undefined
+      }
+      delete_campaign: {
+        Args: { p_account: string; p_id: string }
+        Returns: Json
       }
       delete_delivery_zone: { Args: { p_id: string }; Returns: undefined }
       device_location_by_token: {
@@ -11915,6 +13817,10 @@ export type Database = {
           }
         | { Args: { schema_name: string; table_name: string }; Returns: string }
         | { Args: { table_name: string }; Returns: string }
+      duplicate_recipe_item: {
+        Args: { p_new_name?: string; p_source_id: string }
+        Returns: string
+      }
       enablelongtransactions: { Args: never; Returns: string }
       enqueue_print_job: {
         Args: {
@@ -11928,6 +13834,11 @@ export type Database = {
         Returns: number
       }
       equals: { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
+      evaluate_campaign_rules: { Args: never; Returns: number }
+      expire_unpaid_shop_orders: {
+        Args: { p_minutes?: number }
+        Returns: number
+      }
       explode_recipe_to_raws: {
         Args: { p_item_id: string; p_multiplier: number }
         Returns: {
@@ -11935,7 +13846,15 @@ export type Database = {
           raw_item_id: string
         }[]
       }
+      fail_image_job: {
+        Args: { p_err: string; p_post_id: string }
+        Returns: undefined
+      }
       fill_line_discounts: { Args: { p_sale_id: string }; Returns: number }
+      finish_image_job: {
+        Args: { p_post_id: string; p_public_url: string }
+        Returns: undefined
+      }
       fiscal_for_print: {
         Args: { p_device_token: string; p_sale_id: string }
         Returns: Json
@@ -12082,13 +14001,29 @@ export type Database = {
         Args: { p_account_id: string }
         Returns: Json
       }
+      get_promo_push_job_status: {
+        Args: { p_job_id: string; p_secret: string }
+        Returns: string
+      }
       gettransactionid: { Args: never; Returns: unknown }
       has_permission: {
         Args: { p_account_id: string; p_permission_key: string }
         Returns: boolean
       }
+      hours_staffing_gaps: {
+        Args: { p_location_id: string }
+        Returns: {
+          gap_end: string
+          gap_start: string
+          weekday: number
+        }[]
+      }
       hubrise_money: { Args: { p: string }; Returns: number }
       invoice_required_role: { Args: { p_invoice_id: string }; Returns: string }
+      is_brand_open: {
+        Args: { p_brand_id: string; p_location_id: string; p_ts?: string }
+        Returns: boolean
+      }
       item_movements: {
         Args: {
           p_account: string
@@ -12231,6 +14166,7 @@ export type Database = {
       }
       learn_from_receipt: { Args: { p_receipt_id: string }; Returns: number }
       learn_supplier_alias: { Args: { p_receipt_id: string }; Returns: boolean }
+      list_campaigns: { Args: { p_account: string }; Returns: Json }
       list_costless_sold_products: {
         Args: { p_account_id: string; p_from?: string; p_to?: string }
         Returns: {
@@ -12375,8 +14311,16 @@ export type Database = {
         Args: { p_queue_id: string }
         Returns: undefined
       }
+      mark_shop_order_failed: {
+        Args: { p_payment_intent_id: string }
+        Returns: Json
+      }
+      mark_shop_order_paid: {
+        Args: { p_amount_cents?: number; p_payment_intent_id: string }
+        Returns: Json
+      }
       materialize_recipe_session: {
-        Args: { p_session_id: string }
+        Args: { p_decisions?: Json; p_session_id: string }
         Returns: {
           dish_name: string
           lines_created: number
@@ -12495,6 +14439,10 @@ export type Database = {
           moved: number
         }[]
       }
+      mirror_state: {
+        Args: { p_account: string; p_item: string }
+        Returns: Json
+      }
       move_items_to_zone: {
         Args: {
           p_account: string
@@ -12525,6 +14473,22 @@ export type Database = {
         Returns: string
       }
       normalize_ingredient_name: { Args: { p_text: string }; Returns: string }
+      offers_goal_report: {
+        Args: { p_account_id: string }
+        Returns: {
+          brand_id: string
+          brand_name: string
+          channel_name: string
+          location_id: string
+          location_name: string
+          pct_objetivo: number
+          ped_dia_7d: number
+          ped_dia_prev7: number
+          target_daily: number
+          tendencia_pct: number
+        }[]
+      }
+      omnibus_ref_price: { Args: { p_menu_item_id: string }; Returns: number }
       onboard_account: {
         Args: {
           p_account_id: string
@@ -12540,6 +14504,14 @@ export type Database = {
       }
       orders_feed: { Args: { p_location_id: string }; Returns: Json }
       orders_feed_by_token: { Args: { p_device_token: string }; Returns: Json }
+      pick_social_copy: {
+        Args: { p_account_id?: string; p_pillar: string }
+        Returns: string
+      }
+      place_shop_order: {
+        Args: { p_dry_run?: boolean; p_payload: Json; p_slug: string }
+        Returns: Json
+      }
       platform_metrics: { Args: never; Returns: Json }
       populate_geometry_columns:
         | { Args: { tbl_oid: unknown; use_typmod?: boolean }; Returns: number }
@@ -12609,6 +14581,45 @@ export type Database = {
           parent_name: string
         }[]
       }
+      preview_bogo_mirror_price: {
+        Args: {
+          p_account_id: string
+          p_brand_id: string
+          p_channel_id: string
+          p_margin_floor_pct?: number
+          p_menu_item_ids?: string[]
+        }
+        Returns: {
+          ahorro_cliente_pct: number
+          brand_name: string
+          food_cost: number
+          item_name: string
+          margen_2x1: number
+          margen_pct_2x1: number
+          menu_item_id: string
+          precio_min_suelo: number
+          precio_paridad: number
+          precio_sugerido: number
+          pvp_cliente: number
+          status: string
+          units_30d: number
+        }[]
+      }
+      preview_coupon_impact: {
+        Args: { p_account: string; p_discount_type: string; p_value: number }
+        Returns: {
+          avg_margin_after_pct: number
+          avg_margin_now_pct: number
+          avg_order: number
+          costed_items: number
+          effective_pct: number
+          floor_pct: number
+          items_below_floor_after: number
+          min_margin_after_pct: number
+          sellable_items: number
+          uncosted_items: number
+        }[]
+      }
       preview_modifier_impact_cost: {
         Args: {
           p_impact_type: string
@@ -12621,6 +14632,34 @@ export type Database = {
           base_cost: number
           delta: number
           total_cost: number
+        }[]
+      }
+      preview_platform_promo_impact: {
+        Args: {
+          p_account_id: string
+          p_brand_ids: string[]
+          p_channel_id: string
+          p_discount_type: string
+          p_discount_value: number
+          p_margin_floor_pct?: number
+          p_menu_item_ids?: string[]
+        }
+        Returns: {
+          brand_name: string
+          comision_antes: number
+          comision_despues: number
+          descuento: number
+          food_cost: number
+          item_name: string
+          margen_antes: number
+          margen_despues: number
+          margen_pct_antes: number
+          margen_pct_despues: number
+          menu_item_id: string
+          pvp_cliente: number
+          pvp_promo_cliente: number
+          status: string
+          units_30d: number
         }[]
       }
       preview_remove_ingredient: {
@@ -12673,6 +14712,22 @@ export type Database = {
           pct_vs_median: number
         }[]
       }
+      propose_ai_action: {
+        Args: {
+          p_account_id: string
+          p_agent: string
+          p_args: Json
+          p_effect_preview?: Json
+          p_risk?: string
+          p_rollback_hint?: Json
+          p_session_id?: string
+          p_summary: string
+          p_target_id?: string
+          p_target_table?: string
+          p_tool_name: string
+        }
+        Returns: string
+      }
       propose_vat_category: {
         Args: { p_recipe_item_id: string }
         Returns: string
@@ -12688,6 +14743,16 @@ export type Database = {
           lineas_respetadas: number
           lineas_total: number
           ventas_procesadas: number
+        }[]
+      }
+      recipe_item_has_unmeasurable_line: {
+        Args: { p_item_id: string }
+        Returns: boolean
+      }
+      recipe_item_unmeasurable_raws: {
+        Args: { p_item_id: string }
+        Returns: {
+          raw_item_id: string
         }[]
       }
       recompute_location_stock: {
@@ -12731,6 +14796,17 @@ export type Database = {
           cost_eur: number
           delta_base: number
         }[]
+      }
+      register_shop_consent: {
+        Args: {
+          p_consent: boolean
+          p_email: string
+          p_name: string
+          p_phone: string
+          p_slug: string
+          p_terms_version?: string
+        }
+        Returns: Json
       }
       register_transfer: {
         Args: {
@@ -12786,6 +14862,16 @@ export type Database = {
         }
         Returns: undefined
       }
+      report_promo_push_job: {
+        Args: {
+          p_error?: string
+          p_external_ref?: string
+          p_job_id: string
+          p_ok: boolean
+          p_secret: string
+        }
+        Returns: undefined
+      }
       reprocess_sale: { Args: { p_sale_id: string }; Returns: number }
       resolve_delivery_zone: {
         Args: {
@@ -12836,6 +14922,10 @@ export type Database = {
           recipe_item_id: string
           resultado: string
         }[]
+      }
+      restore_recipe_version: {
+        Args: { p_created_by_name?: string; p_version_id: string }
+        Returns: string
       }
       revert_sale_consumption: { Args: { p_sale_id: string }; Returns: number }
       run_invoice_match: {
@@ -12922,6 +15012,48 @@ export type Database = {
           threshold_pct: number
         }[]
       }
+      save_campaign: {
+        Args: {
+          p_account: string
+          p_budget_max: number
+          p_code: string
+          p_discount_type: string
+          p_ends_at: string
+          p_id: string
+          p_kind: string
+          p_max_per_customer: number
+          p_max_redemptions: number
+          p_min_subtotal: number
+          p_name: string
+          p_scope: Json
+          p_starts_at: string
+          p_time_from: string
+          p_time_to: string
+          p_value: number
+          p_weekdays: number[]
+        }
+        Returns: Json
+      }
+      save_frequency_reward: {
+        Args: {
+          p_account: string
+          p_active: boolean
+          p_discount_type: string
+          p_threshold: number
+          p_value: number
+        }
+        Returns: Json
+      }
+      save_welcome_offer: {
+        Args: {
+          p_account: string
+          p_active: boolean
+          p_discount_type: string
+          p_floor_pct: number
+          p_value: number
+        }
+        Returns: Json
+      }
       search_products_by_token: {
         Args: { p_device_token: string; p_query: string }
         Returns: Json
@@ -12955,6 +15087,18 @@ export type Database = {
           p_valid_until?: string
           p_value: number
         }
+        Returns: undefined
+      }
+      set_account_shop_logo: {
+        Args: { p_account_id: string; p_url: string }
+        Returns: undefined
+      }
+      set_account_shop_text: {
+        Args: { p_account_id: string; p_subtitle: string; p_tagline: string }
+        Returns: undefined
+      }
+      set_launch_phase: {
+        Args: { p_account_id: string; p_phase: string }
         Returns: undefined
       }
       set_menu_item_override: {
@@ -13036,9 +15180,50 @@ export type Database = {
         Args: { p_price_eur: number; p_submodule_id: string }
         Returns: undefined
       }
+      shop_brand_menu_by_slug: {
+        Args: { p_brand_id: string; p_slug: string }
+        Returns: Json
+      }
+      shop_check_delivery: {
+        Args: {
+          p_lat: number
+          p_lng: number
+          p_location_id: string
+          p_slug: string
+        }
+        Returns: Json
+      }
+      shop_delivery_slots: {
+        Args: {
+          p_eta_min?: number
+          p_location_id: string
+          p_slug: string
+          p_step_min?: number
+        }
+        Returns: Json
+      }
+      shop_home_overview: {
+        Args: {
+          p_account: string
+          p_brand_ids: string[]
+          p_from: string
+          p_kinds: string[]
+          p_location_ids: string[]
+          p_to: string
+        }
+        Returns: Json
+      }
       shop_hub_by_slug: { Args: { p_slug: string }; Returns: Json }
+      shop_item_config: {
+        Args: { p_menu_item_id: string; p_slug: string }
+        Returns: Json
+      }
+      shop_locations_by_slug: { Args: { p_slug: string }; Returns: Json }
+      shop_order_status: { Args: { p_token: string }; Returns: Json }
+      shop_payment_config: { Args: { p_slug: string }; Returns: Json }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      social_secret_read: { Args: { p_name: string }; Returns: string }
       st_3dclosestpoint: {
         Args: { geom1: unknown; geom2: unknown }
         Returns: unknown
@@ -13663,12 +15848,38 @@ export type Database = {
           skipped_cycle: number
         }[]
       }
+      suggest_purchase_qty: {
+        Args: {
+          p_account: string
+          p_consumo_days?: number
+          p_hist_days?: number
+          p_horizon_days?: number
+          p_location: string
+          p_supplier: string
+        }
+        Returns: {
+          confidence: string
+          format_qty_base: number
+          needed_base: number
+          recipe_item_id: string
+          source: string
+          suggested_qty: number
+        }[]
+      }
       supplier_format_prices: {
         Args: { p_account_id: string; p_supplier_id: string }
         Returns: {
           eur_per_base: number
           format_id: string
         }[]
+      }
+      swap_mirror: {
+        Args: { p_account: string; p_item: string; p_use_mirror: boolean }
+        Returns: Json
+      }
+      toggle_campaign: {
+        Args: { p_account: string; p_active: boolean; p_id: string }
+        Returns: Json
       }
       unaccent: { Args: { "": string }; Returns: string }
       unassign_items_from_zones: {
