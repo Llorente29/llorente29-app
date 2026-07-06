@@ -1,36 +1,32 @@
-// social-agent — El agente de contenido de Folvy (v2.3, 06/07/2026)
+// social-agent — El agente de contenido de Folvy (v2.4, 06/07/2026)
 // Gemelo del offers-agent: motor de reglas DETERMINISTA Y AUDITABLE. Propone, jamás
 // publica (modo b: el humano aprueba en la pantalla Social). Diseño: docs/folvy_rrss_diseno.md
 // + docs/folvy_rrss_estrategia_lanzamiento.md.
 //
-// VOZ VIVA (v2.3): las frases NO viven en el código. Se piden a pick_social_copy(pillar) —
-// tabla social_copy editable (rotación justa ponderada, voz propia > global). El agente solo
-// rellena {plato}/{marca}/{pct}. Añadir/quitar voz = editar la tabla, sin redesplegar.
+// DIRECTIVAS DEL HUMANO (v2.4): antes de R1/R2/R3, el agente consume una directiva pendiente
+// (social_directive) y la respeta — empujar marca/plato (push), tematizar (context) o a medida
+// (custom). Tú diriges, la máquina ejecuta con su calidad (foto, voz, margen). Blindaje: una
+// CEDIDA empujada por ti sigue SIEMPRE anónima (línea roja invariable). Marca payload.directive.
 //
-// FASE DEL PLAN (social_config.launch_phase): 'apetito' | 'comunidad' | 'conversion'.
-//   · apetito/comunidad → NO se vende: R1 (ofertas) APAGADA; solo contenido de apetito.
-//   · conversion        → R1 activa (anuncia la promo real, verdad de Glovo).
+// PARÁMETROS (body): { account_id?, force? }. account_id → generar solo para esa cuenta;
+// force → saltar el cupo diario (lo usa "Generar ahora"). El cron no envía nada → igual que antes.
 //
-// Reglas (prioridad): [R1 promo activa SOLO en conversion, SOLO propias] → R3 evento
-// demand-up (tema del día, apetito) → R2 rotación justa (apetito).
+// VOZ VIVA: frases desde pick_social_copy(pillar) — tabla social_copy editable. Rellena
+// {plato}/{marca}/{pct}.
 //
-// MARCAS: propias y cedidas rotan EN IGUALDAD (mismo pool, por "más días sin salir").
-//   · Propias  → se NOMBRAN (protagonistas), pilar apetito/curiosidad/evento_*.
-//   · Cedidas  → SIEMPRE ANÓNIMAS: pilar 'cedida' (frases sin {marca}), su plato + su foto,
-//     JAMÁS la marca / logo / hashtag de marca. R1 (ofertas) nunca incluye cedidas.
-//
-// Guardarraíles: solo platos con foto real · cupo 1 borrador/día/red · anti-invención
-// · idempotente por día y por cupón. Cron diario (10:00 UTC). Frontera x-agent-secret.
+// FASE (social_config.launch_phase): apetito/comunidad → no vende (R1 off); conversion → R1 on.
+// Reglas: [R0 directiva] → [R1 promo, solo conversion, solo propias] → R3 evento → R2 rotación justa.
+// MARCAS: propias nombradas; cedidas SIEMPRE anónimas (sin marca/logo/hashtag). R1 nunca cedidas.
+// Guardarraíles: solo platos con foto real · cupo 1/día/red (salvo force) · anti-invención.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const AGENT_SECRET = Deno.env.get("OFFERS_AGENT_SECRET")!;
 const supa = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-const SHOP_URL = "https://foodint.es";                 // canal propio (antes app.folvy.app/t/foodint)
+const SHOP_URL = "https://foodint.es";
 const BASE_TAGS = ["#foodint", "#madrid", "#fooddelivery", "#comidaadomicilio"];
 
-// Fallback mínimo si la tabla no devuelve frase (nunca se queda sin caption).
 const FALLBACK: Record<string, string> = {
   apetito: "{plato} de {marca} 🔥 Directo de cocina, sin intermediarios — link en la bio.",
   curiosidad: "Ojito 👀 {plato} de {marca}. Link en la bio.",
@@ -46,6 +42,11 @@ async function pickCopy(pillar: string, accountId: string): Promise<string> {
   if (error || !data) return FALLBACK[pillar] ?? "{plato} — pídelo en foodint.es 🔥";
   return data as string;
 }
+async function claimDirective(accountId: string): Promise<any | null> {
+  const { data, error } = await supa.rpc("claim_pending_directive", { p_account_id: accountId });
+  if (error || !data) return null;
+  return data; // fila de social_directive (o null)
+}
 
 function fill(tpl: string, vars: { plato?: string; marca?: string; pct?: number | string }): string {
   return (tpl || "")
@@ -53,7 +54,6 @@ function fill(tpl: string, vars: { plato?: string; marca?: string; pct?: number 
     .replaceAll("{marca}", vars.marca ?? "")
     .replaceAll("{pct}", vars.pct != null ? String(vars.pct) : "");
 }
-
 function slugTag(name: string) {
   return "#" + name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
 }
@@ -72,6 +72,13 @@ function oldestBrand(ids: string[], lastByBrand: Map<string, string>): string | 
 
 Deno.serve(async (req) => {
   if (req.headers.get("x-agent-secret") !== AGENT_SECRET) return new Response("forbidden", { status: 403 });
+
+  // Parámetros opcionales (el cron no envía cuerpo → valores por defecto = comportamiento clásico).
+  let body: any = {};
+  try { body = await req.json(); } catch { /* sin cuerpo */ }
+  const onlyAccount: string | null = body?.account_id ?? null;
+  const force: boolean = body?.force === true;
+
   const today = new Date().toISOString().slice(0, 10);
   const nowIso = new Date().toISOString();
   const out: Array<Record<string, unknown>> = [];
@@ -85,6 +92,8 @@ Deno.serve(async (req) => {
   }
 
   for (const [accountId, nets] of byAccount) {
+    if (onlyAccount && accountId !== onlyAccount) continue;
+
     const { data: cfg } = await supa.from("social_config")
       .select("launch_phase").eq("account_id", accountId).maybeSingle();
     const phase: string = cfg?.launch_phase ?? "apetito";
@@ -116,7 +125,9 @@ Deno.serve(async (req) => {
       .eq("account_id", accountId).is("archived_at", null).not("photo_url", "is", null)
       .is("mirror_of_item_id", null);
     const starByBrand = new Map<string, any>();
+    const itemById = new Map<string, any>();
     for (const it of (items ?? []) as any[]) {
+      itemById.set(it.id, it);
       if (!ownById.has(it.brand_id) && !cededById.has(it.brand_id)) continue;
       const n = countByItem.get(it.id) ?? 0;
       const cur = starByBrand.get(it.brand_id);
@@ -138,11 +149,41 @@ Deno.serve(async (req) => {
     type Chosen = {
       brandId: string; star: any; copy: string; reason: string;
       template: "oferta" | "apetito" | "curiosidad"; anonymous: boolean; couponId?: string | null;
+      photoOverride?: string | null; hashtagsOverride?: string[] | null;
+      directive?: { kind: string; theme?: string | null } | null;
     };
     let chosen: Chosen | null = null;
 
+    // R0 — DIRECTIVA DEL HUMANO (máxima prioridad; tú diriges, la máquina ejecuta con su calidad)
+    const dir: any = await claimDirective(accountId);
+    if (dir && dir.id) {
+      const bId = (dir.brand_id && (ownById.has(dir.brand_id) || cededById.has(dir.brand_id)))
+        ? dir.brand_id : oldestBrand(rotationPool, lastByBrand);
+      if (bId) {
+        const anon = isAnon(bId) ? true : (dir.anonymous ?? false); // cedida SIEMPRE anónima (línea roja)
+        const star = (dir.menu_item_id ? itemById.get(dir.menu_item_id) : null) ?? starByBrand.get(bId);
+        const brand = anon ? "" : (ownById.get(bId) ?? "");
+        const isCalor = /calor/i.test(dir.theme ?? ""), isLluvia = /lluvia/i.test(dir.theme ?? "");
+        const pillar = dir.kind === "context"
+          ? (anon ? "cedida" : (isCalor ? "evento_calor" : isLluvia ? "evento_lluvia" : "evento_generico"))
+          : (anon ? "cedida" : (dir.template === "curiosidad" ? "curiosidad" : "apetito"));
+        const baseCopy = (dir.caption && String(dir.caption).trim().length > 0)
+          ? String(dir.caption) : await pickCopy(pillar, accountId);
+        chosen = {
+          brandId: bId, star,
+          template: (dir.template === "curiosidad" || dir.template === "oferta") ? dir.template : "apetito",
+          anonymous: anon, couponId: null,
+          copy: fill(baseCopy, { plato: star?.name ?? "", marca: brand }),
+          photoOverride: dir.photo_url ?? null,
+          hashtagsOverride: (Array.isArray(dir.hashtags) && dir.hashtags.length) ? dir.hashtags : null,
+          directive: { kind: dir.kind, theme: dir.theme ?? null },
+          reason: `Directiva del humano (${dir.kind})${dir.theme ? ` · ${dir.theme}` : ""}: ${anon ? "plato anónimo (cedida oculta)" : (brand || "marca")} — ${star?.name ?? "a medida"}.`,
+        };
+      }
+    }
+
     // R1 — promo activa (SOLO conversión; SOLO propias; verdad de Glovo)
-    if (sellingPhase) {
+    if (!chosen && sellingPhase) {
       const { data: promos } = await supa.from("coupon")
         .select("id, name, value, kind, scope, channels, ends_at")
         .eq("account_id", accountId).eq("origin", "agent").eq("active", true)
@@ -181,7 +222,6 @@ Deno.serve(async (req) => {
         const star = starByBrand.get(bId);
         const brand = anon ? "" : ownById.get(bId)!;
         const isCalor = /calor/i.test(eventUp.name), isLluvia = /lluvia/i.test(eventUp.name);
-        // cedida durante evento → pilar 'cedida' (sin {marca}) para no romper la anonimia
         const pillar = anon ? "cedida"
           : (isCalor ? "evento_calor" : isLluvia ? "evento_lluvia" : "evento_generico");
         chosen = {
@@ -219,36 +259,39 @@ Deno.serve(async (req) => {
 
     if (!chosen) { out.push({ accountId, skipped: "sin contenido elegible (¿fotos/ventas?)" }); continue; }
 
-    // ── crear 1 borrador por red (cupo: si ya hay post de hoy en esa red, silencio)
+    // ── crear 1 borrador por red (cupo: 1/día/red salvo force)
     for (const net of nets) {
-      const { count: todayCount } = await supa.from("social_post")
-        .select("id", { count: "exact", head: true })
-        .eq("account_id", accountId).eq("network", net.network)
-        .gte("created_at", `${today}T00:00:00Z`);
-      if ((todayCount ?? 0) > 0) { out.push({ accountId, network: net.network, skipped: "cupo diario cubierto" }); continue; }
+      if (!force) {
+        const { count: todayCount } = await supa.from("social_post")
+          .select("id", { count: "exact", head: true })
+          .eq("account_id", accountId).eq("network", net.network)
+          .gte("created_at", `${today}T00:00:00Z`);
+        if ((todayCount ?? 0) > 0) { out.push({ accountId, network: net.network, skipped: "cupo diario cubierto" }); continue; }
+      }
 
       const brandTag = chosen.anonymous ? [] : [slugTag(ownById.get(chosen.brandId)!)];
       const payload = {
         copy: chosen.copy,
-        hashtags: [...BASE_TAGS, ...brandTag],
-        image_url: chosen.star.photo_url,
+        hashtags: chosen.hashtagsOverride ?? [...BASE_TAGS, ...brandTag],
+        image_url: chosen.photoOverride ?? chosen.star?.photo_url ?? null,
         image_level: "N1-pendiente",
         template: chosen.template,
         brand_anonymous: chosen.anonymous,
-        star_item: chosen.star.name,
+        star_item: chosen.star?.name ?? "",
         brand_name: chosen.anonymous ? null : ownById.get(chosen.brandId),
         link: utm(net.network),
         format: net.network === "tiktok" ? "photo_carousel" : "feed_4_5",
         coupon_id: chosen.couponId ?? null,
+        directive: chosen.directive ?? null,       // "Dirigido por ti" (badge en la cola)
         phase,
       };
       const { error } = await supa.from("social_post").insert({
         account_id: accountId, social_account_id: net.id, network: net.network,
         status: "draft", payload, reason: chosen.reason, origin: "agent", brand_id: chosen.brandId,
       });
-      out.push({ accountId, network: net.network, created: !error, anonymous: chosen.anonymous, error: error?.message ?? null });
+      out.push({ accountId, network: net.network, created: !error, anonymous: chosen.anonymous, directed: !!chosen.directive, error: error?.message ?? null });
     }
   }
 
-  return Response.json({ ok: true, date: today, results: out });
+  return Response.json({ ok: true, date: today, forced: force, results: out });
 });
