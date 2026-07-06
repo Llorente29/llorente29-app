@@ -1,8 +1,7 @@
 // social-image-sink — Recibe la imagen compuesta, la sube al bucket y parchea el post.
-// Body JSON: { post_id, account_id, image_base64 }.
-// Sube a social-media/{account_id}/{post_id}.jpg (service_role), obtiene la URL pública
-// (con cache-buster) y llama a finish_image_job → image_url = compuesta, image_level = 'N1'.
-// Si falla la subida, marca fail_image_job para no dejar el post colgado en 'N1-procesando'.
+// Body JSON normal:  { post_id, account_id, image_base64 }  -> sube + finish_image_job (N1).
+// Body JSON de fallo: { post_id, error }                    -> fail_image_job (N1-error).
+// Sube a social-media/{account_id}/{post_id}.jpg (service_role), URL pública con cache-buster.
 // Frontera = x-agent-secret (OFFERS_AGENT_SECRET). DESPLIEGUE: --no-verify-jwt.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -20,9 +19,18 @@ function b64ToBytes(b64: string): Uint8Array {
 Deno.serve(async (req) => {
   if (req.headers.get("x-agent-secret") !== AGENT_SECRET) return new Response("forbidden", { status: 403 });
   try {
-    const { post_id, account_id, image_base64 } = await req.json();
-    if (!post_id || !account_id || !image_base64)
-      return Response.json({ ok: false, error: "faltan campos (post_id, account_id, image_base64)" }, { status: 400 });
+    const { post_id, account_id, image_base64, error } = await req.json();
+    if (!post_id) return Response.json({ ok: false, error: "falta post_id" }, { status: 400 });
+
+    // Caso de fallo del worker: marcar el post para no dejarlo colgado en 'N1-procesando'
+    if (!image_base64) {
+      if (error) {
+        await supa.rpc("fail_image_job", { p_post_id: post_id, p_err: String(error).slice(0, 300) });
+        return Response.json({ ok: true, failed: true });
+      }
+      return Response.json({ ok: false, error: "falta image_base64" }, { status: 400 });
+    }
+    if (!account_id) return Response.json({ ok: false, error: "falta account_id" }, { status: 400 });
 
     const bytes = b64ToBytes(image_base64);
     const path = `${account_id}/${post_id}.jpg`;
