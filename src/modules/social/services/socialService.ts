@@ -1,7 +1,7 @@
 // src/modules/social/services/socialService.ts
 //
 // Service del módulo Folvy Social.
-// Pieza 1: lectura cola. Pieza 2: acciones. Pieza 3: publicación. Pieza 4: parrilla.
+// Pieza 1: cola · 2: acciones · 3: publicación · 4: parrilla · 5: fase.
 
 import { supabase } from '@/lib/supabase'
 
@@ -34,9 +34,10 @@ export interface SocialPostRow {
   created_at: string
 }
 
+export type LaunchPhase = 'apetito' | 'comunidad' | 'conversion'
+
 const QUEUE_STATUSES = ['draft', 'approved', 'scheduled', 'publishing', 'error']
 const GRID_STATUSES = ['published', 'scheduled']
-
 const SELECT = 'id, network, status, payload, reason, last_error, scheduled_at, published_at, external_ref, created_at'
 
 export async function listQueue(accountId: string): Promise<SocialPostRow[]> {
@@ -49,14 +50,12 @@ export async function listQueue(accountId: string): Promise<SocialPostRow[]> {
   return (data ?? []) as unknown as SocialPostRow[]
 }
 
-// Parrilla: el feed real (publicados) + lo que viene (programados). Orden: por fecha
-// de publicación/programación, más reciente arriba (como el grid de Instagram).
 export async function listGrid(accountId: string): Promise<SocialPostRow[]> {
   if (!supabase) return []
   const { data, error } = await supabase
     .from('social_post').select(SELECT)
     .eq('account_id', accountId).in('status', GRID_STATUSES)
-    .order('published_at', { ascending: false, nullsFirst: true })   // programados (sin published_at) arriba
+    .order('published_at', { ascending: false, nullsFirst: true })
     .order('created_at', { ascending: false })
   if (error) throw error
   return (data ?? []) as unknown as SocialPostRow[]
@@ -96,6 +95,20 @@ export async function markPublished(postId: string): Promise<void> {
   if (error) throw error
 }
 
+// ── Palanca de fase ─────────────────────────────────────────────────────────
+export async function getPhase(accountId: string): Promise<LaunchPhase> {
+  requireSupabase()
+  const { data, error } = await supabase!.rpc('get_launch_phase', { p_account_id: accountId })
+  if (error) throw error
+  return ((data as string) ?? 'apetito') as LaunchPhase
+}
+export async function setPhase(accountId: string, phase: LaunchPhase): Promise<void> {
+  requireSupabase()
+  const { error } = await supabase!.rpc('set_launch_phase', { p_account_id: accountId, p_phase: phase })
+  if (error) throw error
+}
+
+// ── Helpers de publicación asistida ─────────────────────────────────────────
 export function captionText(p: SocialPayload): string {
   return [p.copy, (p.hashtags ?? []).join(' ')].filter(Boolean).join('\n\n')
 }

@@ -14001,6 +14001,7 @@ export type Database = {
         Args: { p_account_id: string }
         Returns: Json
       }
+      get_launch_phase: { Args: { p_account_id: string }; Returns: string }
       get_promo_push_job_status: {
         Args: { p_job_id: string; p_secret: string }
         Returns: string
