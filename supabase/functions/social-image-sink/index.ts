@@ -2,11 +2,11 @@
 // Body JSON normal:  { post_id, account_id, image_base64 }  -> sube + finish_image_job (N1).
 // Body JSON de fallo: { post_id, error }                    -> fail_image_job (N1-error).
 // Sube a social-media/{account_id}/{post_id}.jpg (service_role), URL pública con cache-buster.
-// Frontera = x-agent-secret (OFFERS_AGENT_SECRET). DESPLIEGUE: --no-verify-jwt.
+// Frontera = x-agent-secret (IMAGE_AGENT_SECRET). DESPLIEGUE: --no-verify-jwt.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const AGENT_SECRET = Deno.env.get("OFFERS_AGENT_SECRET")!;
+const AGENT_SECRET = Deno.env.get("IMAGE_AGENT_SECRET")!;
 const supa = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
 function b64ToBytes(b64: string): Uint8Array {

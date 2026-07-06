@@ -2,11 +2,11 @@
 // El worker residente pide trabajo aquí (no toca la BD). Llama a claim_next_image_job()
 // con service_role, que coge atómico el siguiente 'N1-pendiente', lo marca 'N1-procesando'
 // y devuelve lo necesario para componer (post, cuenta, foto héroe, plantilla, plato, % , anon).
-// Frontera = x-agent-secret (OFFERS_AGENT_SECRET). DESPLIEGUE: --no-verify-jwt (lo llama el worker).
+// Frontera = x-agent-secret (IMAGE_AGENT_SECRET). DESPLIEGUE: --no-verify-jwt (lo llama el worker).
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const AGENT_SECRET = Deno.env.get("OFFERS_AGENT_SECRET")!;
+const AGENT_SECRET = Deno.env.get("IMAGE_AGENT_SECRET")!;
 const supa = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
 Deno.serve(async (req) => {
