@@ -355,7 +355,7 @@ Notas: meez **se declara "complementario, no competidor" de ERPs** — capa culi
 | El PORQUÉ de cada campaña visible al operador | 🔴 | 🟡 | 🔴 | 🔴 | 🟢 dashboard: banner Señales de hoy + razón parseada con mini-chips en TODA campaña + uplift con regla de honestidad de ventana |
 | 2x1 con precio de espejo calculado (Ómnibus-correcto) | 🔴 | 🔴 | 🔴 | 🟡 (la promo existe, el precio lo pones a ojo) | 🟡 cerebro construido y validado + procedimiento + sistema DISEÑADO — CONGELADO por decisión (reabrir tras multi-plataforma) |
 
-**Veredicto (05/07): 🟢 golea en cerebro/señales/honestidad/Glovo; 🟡 Uber (esperando scopes) y 2x1 (congelado con diseño); 🔴 JustEat (frente activo).** La medición de uplift real necesita días de campañas vivas — el motor ya la registra solo.
+**Veredicto (05/07): 🟢 golea en cerebro/señales/honestidad/Glovo; 🟡 Uber (esperando scopes) y 2x1 (congelado con diseño); 🔴 JustEat (frente activo).** **[+ FRENTE RRSS abierto 05/07 noche: agente de contenido Foodint→Shop con margen real por post — ninguna herramienta de RRSS (Later, Buffer, Hootsuite, Cheerfy) puede atribuir margen real a una publicación porque no tienen el escandallo debajo. TR1+TR2 vivos, brazo IG publicando por Graph API, fábrica de imágenes N1 en industrialización. Ver docs/folvy_rrss_diseno.md.]** La medición de uplift real necesita días de campañas vivas — el motor ya la registra solo.
 
 # RESUMEN — el tablero de una mirada
 

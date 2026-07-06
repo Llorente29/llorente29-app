@@ -8,7 +8,15 @@
 
 ## AHORA (el frente activo y los 2-3 siguientes)
 
-### 🔴 REORGANIZACIÓN DEL MOTOR MULTI-PLATAFORMA (Glovo + Uber + JustEat) — FRENTE ACTIVO (declarado por Julio 05/07)
+### 🔴 SISTEMA RRSS — INDUSTRIALIZAR IMÁGENES (N1 → N2) — FRENTE ACTIVO (en curso, cierre 05/07 noche)
+**PUNTO EXACTO DE RETOMA** (Julio pidió recuperar en este punto exacto). TR1 (núcleo+agente) y TR2 (brazo IG publicador) VIVOS; Meta conectado con token en Vault; borradores reales dormidos en draft (nada publicado sin Julio). Falta la FÁBRICA DE IMÁGENES antes del primer post (decisión de Julio: "no publicar hasta que la imagen esté perfecta"):
+1. **Industrializar N1** (composición de marca, DISEÑO YA APROBADO en maqueta — v_final_url.jpg): convertir el script Pillow de maqueta en generador de PRODUCCIÓN — Edge/función que compone foto real + banda inferior con contraste automático + logo Foodint + '-30%' discreto en coral + CTA "Consíguelo en foodint.es", sube la imagen a storage, mete la URL final en payload.image_url, y el brazo la usa antes de publicar. Formato 4:5. (Burbuja gritona RECHAZADA; coral solo como acento; el kit de marca —SVG/PNG light/dark/mono— ya está.)
+2. **N2 — IA que viste la foto** (Google Gemini 2.5 Flash Image, clave ya sacada por Julio → meter en Vault como google_ai_key; ojo billing): plato real de héroe + ambiente urbano generado. Previsualización+confirmación SIEMPRE, jamás autopublicado.
+3. **Rematar copys + enlace**: llevar al agente las plantillas de copy nuevas (aprobadas con Julio: mezcla de tonos, emojis, calle — el copy de máquina fue rechazado por "seco/frío") + migrar SHOP_URL del agente de app.folvy.app/t/foodint a **foodint.es** (existe y apunta al Shop).
+4. Después: encargo pantalla Social a Code (ENCARGO_CODE_social_ui.md ya escrito) + TR3 TikTok (brazo Content Posting API) + TR5 medición UTM→Shop→margen por post.
+Diseño norte: docs/folvy_rrss_diseno.md. Maquetas: /outputs/n1-maqueta.
+
+### 🟠 REORGANIZACIÓN DEL MOTOR MULTI-PLATAFORMA (Glovo + Uber + JustEat) — FRENTE DECLARADO (Julio 05/07, detrás de RRSS)
 Decisión de Julio al congelar el 2x1: antes de más tácticas, el motor debe servir a LAS TRES plataformas de forma coherente — no un motor de Glovo con apéndices. Frente de DISEÑO con ritual completo (conversation_search → RECON → BENCHMARK → diseño aprobable → construir → MEDIR):
 - **RECON por plataforma**: qué ofrece cada una (Glovo panel/robot ya dominado · Uber API oficial esperando scopes de Partner Engineering, brazo ya construido en seco · JustEat = terreno VIRGEN: ni objetivos ni brazo ni RECON de su panel/API de promos).
 - **Unificar el modelo**: objetivos (brand_channel_target ya es por canal), armado por plataforma (ARMED_PLATFORMS), cupos, tarifas (channel_rate ya carga las 3), razonamientos y dashboard — que añadir una plataforma sea 1 brazo nuevo, no retocar el cerebro (principio frontera+adaptador de la casa).
