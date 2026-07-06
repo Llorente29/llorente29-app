@@ -1,13 +1,13 @@
 // src/modules/social/pages/SocialSettingsPage.tsx
 //
-// Ajustes del módulo Folvy Social (Pieza 5). Palanca de fase del lanzamiento:
-// apetito → comunidad → conversión. Gatea la venta: el agente solo anuncia
-// ofertas en 'conversión'. Cambiar a conversión pide confirmación (a partir de
-// ahí se vende de verdad).
+// Ajustes del módulo Folvy Social.
+//  - Palanca de fase del lanzamiento (apetito → comunidad → conversión).
+//  - Panel N2 (imagen con IA): encender/tope/peso mood + biblioteca de escenas editable.
 
 import { useEffect, useState } from 'react'
 import { useApp } from '@/context/AppContext'
 import { getPhase, setPhase, type LaunchPhase } from '@/modules/social/services/socialService'
+import N2SettingsPanel from '@/modules/social/components/N2SettingsPanel'
 
 const PHASES: { key: LaunchPhase; title: string; desc: string }[] = [
   { key: 'apetito', title: 'Apetito', desc: 'Solo despiertas hambre. El agente publica contenido, pero no vende. Ideal para arrancar.' },
@@ -52,18 +52,23 @@ export default function SocialSettingsPage() {
 
   function onPick(target: LaunchPhase) {
     if (target === phase || saving) return
-    if (target === 'conversion') { setConfirmTo(target); return }  // vender = confirmar
+    if (target === 'conversion') { setConfirmTo(target); return }
     void apply(target)
   }
 
   return (
-    <div style={{ maxWidth: 640 }}>
+    <div style={{ maxWidth: 720 }}>
       <header style={{ marginBottom: 20 }}>
         <h1 className="font-display" style={{ fontSize: 26, fontWeight: 600, color: 'var(--color-text-primary, #1a1a1a)' }}>Ajustes</h1>
         <p style={{ fontSize: 14, color: 'var(--color-text-secondary, #666)', marginTop: 4 }}>
-          Fase del lanzamiento. Decide cuánto empuja el canal: desde solo dar hambre hasta vender.
+          Fase del lanzamiento y ajustes de imagen con IA.
         </p>
       </header>
+
+      <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--color-text-primary, #1a1a1a)', marginBottom: 4 }}>Fase del lanzamiento</h2>
+      <p style={{ fontSize: 13, color: 'var(--color-text-secondary, #666)', marginTop: 0, marginBottom: 14 }}>
+        Decide cuánto empuja el canal: desde solo dar hambre hasta vender.
+      </p>
 
       {error && <div style={{ marginBottom: 12, padding: 12, borderRadius: 10, background: '#fdecea', color: '#b3261e', fontSize: 13 }}>{error}</div>}
       {loading && <p style={{ color: 'var(--color-text-secondary, #666)' }}>Cargando…</p>}
@@ -103,6 +108,9 @@ export default function SocialSettingsPage() {
           </div>
         </div>
       )}
+
+      {/* N2 · imagen con IA */}
+      <N2SettingsPanel />
     </div>
   )
 }

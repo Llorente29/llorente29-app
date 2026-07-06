@@ -11229,18 +11229,27 @@ export type Database = {
         Row: {
           account_id: string
           launch_phase: string
+          n2_daily_cap: number
+          n2_enabled: boolean
+          n2_mood_ratio: number
           updated_at: string
           updated_by: string | null
         }
         Insert: {
           account_id: string
           launch_phase?: string
+          n2_daily_cap?: number
+          n2_enabled?: boolean
+          n2_mood_ratio?: number
           updated_at?: string
           updated_by?: string | null
         }
         Update: {
           account_id?: string
           launch_phase?: string
+          n2_daily_cap?: number
+          n2_enabled?: boolean
+          n2_mood_ratio?: number
           updated_at?: string
           updated_by?: string | null
         }
@@ -11389,6 +11398,32 @@ export type Database = {
           },
         ]
       }
+      social_n2_usage: {
+        Row: {
+          account_id: string
+          count: number
+          day: string
+        }
+        Insert: {
+          account_id: string
+          count?: number
+          day?: string
+        }
+        Update: {
+          account_id?: string
+          count?: number
+          day?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_n2_usage_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       social_post: {
         Row: {
           account_id: string
@@ -11464,6 +11499,56 @@ export type Database = {
             columns: ["social_account_id"]
             isOneToOne: false
             referencedRelation: "social_account"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      social_scene: {
+        Row: {
+          account_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          label: string
+          lang: string
+          mode: string
+          prompt: string
+          times_used: number
+          weight: number
+        }
+        Insert: {
+          account_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          label: string
+          lang?: string
+          mode: string
+          prompt: string
+          times_used?: number
+          weight?: number
+        }
+        Update: {
+          account_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          label?: string
+          lang?: string
+          mode?: string
+          prompt?: string
+          times_used?: number
+          weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_scene_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
             referencedColumns: ["id"]
           },
         ]
@@ -13439,6 +13524,7 @@ export type Database = {
         Args: { p_counted: number; p_line_id: string }
         Returns: string
       }
+      claim_n2_budget: { Args: { p_account_id: string }; Returns: boolean }
       claim_next_image_job: {
         Args: never
         Returns: {
@@ -14002,6 +14088,14 @@ export type Database = {
         Returns: Json
       }
       get_launch_phase: { Args: { p_account_id: string }; Returns: string }
+      get_n2_config: {
+        Args: { p_account_id: string }
+        Returns: {
+          n2_daily_cap: number
+          n2_enabled: boolean
+          n2_mood_ratio: number
+        }[]
+      }
       get_promo_push_job_status: {
         Args: { p_job_id: string; p_secret: string }
         Returns: string
@@ -14511,6 +14605,10 @@ export type Database = {
       orders_feed_by_token: { Args: { p_device_token: string }; Returns: Json }
       pick_social_copy: {
         Args: { p_account_id?: string; p_pillar: string }
+        Returns: string
+      }
+      pick_social_scene: {
+        Args: { p_account_id?: string; p_mode: string }
         Returns: string
       }
       place_shop_order: {
@@ -15069,6 +15167,7 @@ export type Database = {
         Args: { p_device_token: string; p_query: string }
         Returns: Json
       }
+      seed_account_scenes: { Args: { p_account_id: string }; Returns: number }
       seed_appcc_for_account: {
         Args: { p_account_id: string }
         Returns: undefined
@@ -15119,6 +15218,15 @@ export type Database = {
           p_location_id?: string
           p_menu_item_id: string
           p_price?: number
+        }
+        Returns: undefined
+      }
+      set_n2_config: {
+        Args: {
+          p_account_id: string
+          p_cap: number
+          p_enabled: boolean
+          p_ratio: number
         }
         Returns: undefined
       }
