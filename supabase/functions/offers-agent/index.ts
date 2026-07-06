@@ -1,45 +1,25 @@
-﻿// offers-agent — El agente de ofertas de Folvy (motor de reglas determinista y auditable)
-// v1.7: 2x1 CONGELADO (BOGO_ENABLED=false, decision Julio 05/07).
-// v1.6.1: bogo nace con 30 días (procedimiento espejo: always-on de facto).
-// v1.6 (05/07/2026) — T6: AUTOAPRENDIZAJE determinista y auditable, sin estado oculto:
-//   en cada corrida se recalcula lo aprendido desde el uplift MEDIDO (agent_learning_signal,
-//   campañas de 45d con ventana honesta >=1 día). Solo actúa con >=2 medidas (jamás
-//   aprender de un solo dato): uplift medio <=0 sin arranques -> marca promo-insensible
-//   en ese canal: -5 de profundidad + sugerencia de cambiar de táctica (2x1); histórico
-//   favorable -> constancia en el razonamiento sin gastar más (lo que funciona no se
-//   sobrepaga). Cierra el ciclo propone -> publica -> mide -> aprende.
-// v1.5 (05/07/2026) — T4: SEÑAL POR DÍA DE SEMANA. Glovo solo admite promos por rango de
-//   fechas (no recurrencia semanal), así que el DOW informa el CUÁNDO y el CUÁNTO:
-//   si los 3 días por delante concentran >=50% de la semana de la marca en ese canal
-//   (12 semanas, agent_dow_signal), la oportunidad gana prioridad y +5 de profundidad;
-//   si concentran <25% (días muertos por delante), se suaviza -5 (mínimo 10) y se ahorra
-//   margen. Siempre visible en el razonamiento ("+ días fuertes por delante ...").
-// v1.4 (05/07/2026) — R3: 2x1-ESPEJO (v2.1 T1, prioridad 1 de Julio; validado ×6 en Meraki):
-//   En oportunidades URGENTES (ventas ~0 con objetivo) el agente intenta PRIMERO un 2x1
-//   con artículo espejo: preview_bogo_mirror_price calcula el precio del espejo que
-//   protege el margen (paridad de € con la venta normal + suelo %), sobre los top-sellers
-//   de la marca con escandallo. La propuesta nace kind='bogo_mirror' con el precio y la
-//   INSTRUCCIÓN exacta en el razonamiento ("crear espejo a X€ en Last") — la
-//   materialización del espejo en la carta pasa por Last (Folvy aún no publica artículos
-//   en Glovo) y las manos del robot para el asistente 2x1 llegan en T5 (capturas pendientes).
-//   Sin estrella costeable o 2x1 inviable -> fallback al % de siempre.
-// v1.3 (05/07/2026) — ETAPA CRECIMIENTO (decisión Julio):
-//   La vara de medir pasa del PICO HISTÓRICO al OBJETIVO POR MARCA×CANAL×LOCAL
-//   (tabla brand_channel_target, puesta por el operador). Motivo (verificado con datos):
-//   el pico del backfill nov-2025 era una vara falsa (Meraki "al 106%" de un pico enano),
-//   el umbral peak>=0.1 excluía marcas sin historia (Urban Kebab), y una marca a cero en
-//   28d NI GENERABA FILA (Dirty Burger invisible). Ahora: el universo son los objetivos
-//   (señal v2, el cero es una fila), la reactivación urgente NO exige pasado, la
-//   profundidad es proporcional al hueco contra TU objetivo, y la decisión + la campaña
-//   son POR LOCAL (scope.location_ids; el robot publica solo en el POS de ese local).
-//   El pico queda como dato informativo en el razonamiento.
-// v1.2: bebidas jamás en promo (categorías con 'bebida' vetadas) + % en múltiplos de 5.
-// v1.1: solo canales con brazo (ARMED_PLATFORMS) + priorización + cupo por canal + higiene.
-// Corre cada hora vía pg_cron (job 'offers-agent-hourly') -> net.http_post con secreto del Vault.
-// Guardarraíl de margen REAL (preview_platform_promo_impact) plato a plato.
-// Shop: publica solo (shop_mode=auto). Plataformas: PROPUESTAS (origin='agent', active=false).
-// REGLA INNEGOCIABLE: cedidas (ownership_type='licensed') JAMÁS en campañas de plataforma.
-// DESPLIEGUE: SIEMPRE --no-verify-jwt (lo llama pg_cron SIN JWT; la frontera es x-agent-secret).
+// offers-agent — El agente de ofertas de Folvy (motor de reglas determinista y auditable)
+// v2.0 (06/07/2026) — COBERTURA TOTAL + INTENSIDAD INTELIGENTE (decisión Julio):
+//   Sin ofertas, los algoritmos de Glovo/Uber te bajan de posición → pierdes visibilidad y
+//   ventas. Por eso la política cambia de "creo donde hay oportunidad" a "SIEMPRE cubro, y la
+//   señal decide la INTENSIDAD":
+//     · va mal / a cero (con objetivo) → ARTILLERÍA (hasta maxPct).
+//     · va regular (bajo objetivo)     → proporcional al hueco.
+//     · va bien / sin objetivo         → MANTENIMIENTO: visibilidad mínima (5%), y si la
+//                                        tendencia baja (7d < 28d) sube un escalón (10%).
+//   Nunca 'pct=0 → continue': todo marca×canal×local habilitado tiene oferta. El equilibrio se
+//   busca solo: si un mantenimiento al 5% empieza a resentirse, cae al tramo de crecimiento y
+//   sube en rondas siguientes hasta estabilizar. Suelo de % ahora 5 (antes 10).
+//   UBER: ahora se PROPONE (no solo Glovo). Nace active=false = "pendiente de publicar";
+//   como el brazo de Uber aún no está aprobado, se sube a mano en Uber Eats Manager. Glovo
+//   sigue con robot. Cupo por canal ampliado (COVERAGE_CAP) para cubrir todo en la 1ª ronda.
+// --- historial previo (intacto) ---
+// v1.7: 2x1 CONGELADO (BOGO_ENABLED=false). v1.6: autoaprendizaje del uplift medido.
+// v1.5: señal por día de semana. v1.4: 2x1-espejo. v1.3: vara = OBJETIVO por marca×canal×local.
+// v1.2: bebidas fuera + múltiplos de 5. v1.1: solo canales con brazo + cupo + higiene.
+// Corre cada hora vía pg_cron -> net.http_post con secreto del Vault. Guardarraíl de margen
+// REAL (preview_platform_promo_impact) plato a plato. REGLA INNEGOCIABLE: cedidas JAMÁS en
+// plataforma. DESPLIEGUE: SIEMPRE --no-verify-jwt (frontera x-agent-secret).
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -56,12 +36,17 @@ const PROFILES: Record<string, { maxPct: number; cooldownDays: number; proactive
   max:    { maxPct: 30, cooldownDays: 3,  proactive: true,  maxNew: 4 },
 };
 
-// Plataformas con brazo publicador VIVO. Añadir "Uber" cuando Partner Engineering apruebe
-// los scopes eats.store.promotion.* (brazo uber-promo-push ya desplegado en seco).
+// Plataformas con brazo publicador VIVO (robot). Uber entra cuando Partner Engineering apruebe.
 const ARMED_PLATFORMS = ["Glovo"];
+// Plataformas donde el agente PROPONE campañas (Glovo con robot; Uber pendiente = manual).
+const PROPOSABLE_PLATFORMS = ["Glovo", "Uber"];
 
-// Categorías de carta VETADAS en promos del agente (decisión Julio 05/07: descontar bebida
-// es destruir margen sin tirón). Para vetar postres algún día: añadir /postre/i.
+// Suelo de visibilidad (múltiplos de 5): mantener el mínimo para no perder ranking.
+const MAINT_FLOOR = 5;
+const ABS_FLOOR = 5;
+// Cupo por canal y ronda: alto para lograr cobertura total (el 'busy' evita duplicar).
+const COVERAGE_CAP = 60;
+
 const EXCLUDED_CATEGORY_PATTERNS = [/bebida/i];
 
 type Opp = {
@@ -81,11 +66,13 @@ Deno.serve(async (req) => {
     const accountId = cfg.account_id as string;
     const prof = PROFILES[cfg.aggressiveness] ?? PROFILES.medium;
     const nowIso = new Date().toISOString();
-    const signals: Record<string, unknown> = { armed_platforms: ARMED_PLATFORMS, signal: "v2_targets" };
+    const signals: Record<string, unknown> = {
+      armed_platforms: ARMED_PLATFORMS, proposable: PROPOSABLE_PLATFORMS, signal: "v2_targets", policy: "cobertura_total",
+    };
     const decisions: Array<Record<string, unknown>> = [];
     let created = 0;
 
-    // ── 1. HIGIENE de la corrida (v1.1)
+    // ── 1. HIGIENE de la corrida
     await supa.from("coupon").update({ active: false })
       .eq("account_id", accountId).eq("origin", "agent")
       .eq("active", true).lt("ends_at", nowIso);
@@ -102,7 +89,6 @@ Deno.serve(async (req) => {
       .select("id,name").eq("account_id", accountId);
     const chanByName = new Map((channels ?? []).map(c => [c.name, c.id]));
 
-    // v2: universo = objetivos por marca×canal×LOCAL (el cero es una fila)
     const { data: sales } = await supa.rpc("agent_sales_signal_v2", { p_account_id: accountId });
     signals.sales = sales;
 
@@ -114,7 +100,6 @@ Deno.serve(async (req) => {
     signals.events = events;
     const eventUp = (events ?? []).some(e => e.demand_effect === "up");
 
-    // T4: reparto por día de semana (12 semanas) por marca×canal + los 3 DOW por delante
     const { data: dowRows } = await supa.rpc("agent_dow_signal", { p_account_id: accountId });
     const dowMap = new Map<string, Map<number, number>>();
     for (const r of (dowRows ?? []) as Array<any>) {
@@ -122,27 +107,24 @@ Deno.serve(async (req) => {
       if (!dowMap.has(k)) dowMap.set(k, new Map());
       dowMap.get(k)!.set(Number(r.dow), Number(r.pct_share));
     }
-    // T6: lo aprendido del uplift medido (recalculado en cada corrida, cero estado oculto)
     const { data: learnRows } = await supa.rpc("agent_learning_signal", { p_account_id: accountId });
     const learnMap = new Map<string, any>();
     for (const r of (learnRows ?? []) as Array<any>) learnMap.set(`${r.brand_id}:${r.channel_name}`, r);
     signals.learning = learnRows;
 
-    const jsDow = new Date().getDay();               // 0=Dom..6=Sáb
-    const isoToday = jsDow === 0 ? 7 : jsDow;        // ISO 1=Lun..7=Dom
+    const jsDow = new Date().getDay();
+    const isoToday = jsDow === 0 ? 7 : jsDow;
     const nextDows = [0, 1, 2].map(o => ((isoToday - 1 + o) % 7) + 1);
     const DOW_NAMES = ["", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
     const nextDowTxt = nextDows.map(d => DOW_NAMES[d]).join("-");
     const eventUpNames = (events ?? []).filter(e => e.demand_effect === "up").map(e => e.name).join(", ");
 
-    // Campañas recientes: busy POR marca×canal×LOCAL. Una campaña sin location_ids
-    // (alcance cuenta entera, p.ej. manual) bloquea la marca×canal en TODOS los locales.
     const { data: recent } = await supa.from("coupon")
       .select("id,name,channels,scope,active,created_at,ends_at")
       .eq("account_id", accountId)
       .gte("created_at", new Date(Date.now() - prof.cooldownDays * 864e5).toISOString());
     const busy = new Set<string>();
-    const busyAllLoc = new Set<string>(); // marca×canal bloqueada en todos los locales
+    const busyAllLoc = new Set<string>();
     for (const c of recent ?? []) {
       const notExpired = !c.ends_at || c.ends_at > nowIso;
       const alive = c.active === true && notExpired;
@@ -156,15 +138,15 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ── 3. OPORTUNIDADES por marca×canal×local (calcular TODAS antes de crear)
+    // ── 3. OPORTUNIDADES por marca×canal×local — COBERTURA TOTAL (todas tienen oferta)
     const opps: Opp[] = [];
     for (const row of (sales ?? []) as Array<any>) {
       const brand = (brands ?? []).find(b => b.id === row.brand_id);
       if (!brand) continue;
 
       const isPlatform = row.channel_name !== "Shop";
-      if (isPlatform && !ARMED_PLATFORMS.includes(row.channel_name)) continue; // sin brazo
-      if (isPlatform && brand.ownership_type === "licensed") continue;         // GUARDARRAÍL cedidas
+      if (isPlatform && !PROPOSABLE_PLATFORMS.includes(row.channel_name)) continue; // fuera de las proponibles
+      if (isPlatform && brand.ownership_type === "licensed") continue;              // GUARDARRAÍL cedidas
       const chKey = row.channel_name.toLowerCase();
       if (busyAllLoc.has(`${chKey}:${brand.id}`)) continue;
       if (busy.has(`${chKey}:${brand.id}:${row.location_id}`)) continue;
@@ -173,61 +155,73 @@ Deno.serve(async (req) => {
       if (!channelId) continue;
 
       const target = Number(row.target_daily ?? 0);
-      if (target <= 0) continue;
       const s7 = Number(row.sales_7d ?? 0);
+      const avg28 = Number(row.avg_28d ?? 0);
       const peak = Number(row.peak_daily ?? 0);
       const locShort = String(row.location_name ?? "").replace(/^Foodint\s+/i, "");
-      const pctOfTarget = (s7 / target) * 100;
+      const hasTarget = target > 0;
+      const pctOfTarget = hasTarget ? (s7 / target) * 100 : 100; // sin objetivo → tratar como "va bien"
 
       let pct = 0; let reason = ""; let urgent = false; let gap = 0;
-      if (s7 < 0.15) {
-        // REACTIVACIÓN/LANZAMIENTO URGENTE: hay objetivo y las ventas están a cero.
-        // v1.3: SIN exigir pasado (el pico ya no veta; solo informa).
+
+      if (hasTarget && s7 < 0.15) {
+        // ARTILLERÍA: objetivo y ventas a cero.
         pct = prof.maxPct; urgent = true; gap = 1;
         reason = `URGENTE ${locShort}: ${s7.toFixed(1)} ped/día con objetivo ${target}. ` +
-          (peak > 0 ? `(pico histórico ${peak.toFixed(1)}) ` : `(sin historia en este canal — lanzamiento) `) +
-          `Promo máxima (${pct}%) para arrancar la marca.`;
-      } else if (pctOfTarget < Number(cfg.recovery_target_pct)) {
+          (peak > 0 ? `(pico histórico ${peak.toFixed(1)}) ` : `(sin historia — lanzamiento) `) +
+          `Artillería (${pct}%) para arrancar la marca.`;
+      } else if (hasTarget && pctOfTarget < Number(cfg.recovery_target_pct)) {
+        // CRECIMIENTO: proporcional al hueco contra el objetivo.
         gap = (Number(cfg.recovery_target_pct) - pctOfTarget) / Number(cfg.recovery_target_pct);
-        pct = Math.max(10, Math.min(prof.maxPct, Math.round(prof.maxPct * Math.min(1, gap * 2))));
+        pct = Math.max(ABS_FLOOR, Math.min(prof.maxPct, Math.round(prof.maxPct * Math.min(1, gap * 2))));
         reason = `CRECIMIENTO ${locShort}: ${s7.toFixed(1)} ped/día = ${Math.round(pctOfTarget)}% del objetivo (${target}). ` +
-          `Umbral ${cfg.recovery_target_pct}%. ` + (peak > 0 ? `Pico histórico: ${peak.toFixed(1)}. ` : "") +
-          `Promo always-on proporcional al hueco.`;
+          `Umbral ${cfg.recovery_target_pct}%. ` + (peak > 0 ? `Pico ${peak.toFixed(1)}. ` : "") +
+          `Promo proporcional al hueco.`;
+      } else {
+        // MANTENIMIENTO: va bien (o sin objetivo). Visibilidad mínima adaptativa por tendencia.
+        gap = 0;
+        const declining = avg28 > 0 && s7 < avg28;              // empieza a resentirse
+        pct = declining ? MAINT_FLOOR + 5 : MAINT_FLOOR;         // 5%, o 10% si baja
+        reason = hasTarget
+          ? `MANTENIMIENTO ${locShort}: ${Math.round(pctOfTarget)}% del objetivo — visibilidad mínima (${pct}%) para no perder ranking` +
+            (declining ? `, subida por tendencia a la baja (7d ${s7.toFixed(1)} < 28d ${avg28.toFixed(1)})` : "") + `.`
+          : `MANTENIMIENTO ${locShort}: sin objetivo fijado — visibilidad mínima (${pct}%) para no perder ranking.`;
       }
-      if (pct > 0 && prof.proactive && eventUp) {
+
+      // Evento demanda-up: profundiza (sobre cualquier tramo)
+      if (prof.proactive && eventUp) {
         pct = Math.min(prof.maxPct, pct + 5);
         reason += ` + evento demanda-up: ${eventUpNames}`;
-      } else if (pct === 0 && prof.proactive && eventUp) {
-        pct = Math.min(10, prof.maxPct); gap = 0.1;
-        reason = `Evento con demanda al alza en ${locShort}: ${eventUpNames}`;
       }
-      if (pct === 0) continue;
-      // T4: los 3 días por delante, contra el reparto histórico de la marca en el canal
+
+      // T4: los 3 días por delante vs reparto histórico
       const shares = dowMap.get(`${row.brand_id}:${row.channel_name}`);
-      if (shares && shares.size >= 4) { // con menos de 4 DOW con datos, la señal no es fiable
+      if (shares && shares.size >= 4) {
         const ahead = nextDows.reduce((s, d) => s + (shares.get(d) ?? 0), 0);
         if (ahead >= 50) {
           pct = Math.min(prof.maxPct, pct + 5); gap = Math.min(1, gap + 0.15);
-          reason += ` + días fuertes por delante (${nextDowTxt}: ${Math.round(ahead)}% de la semana)`;
+          reason += ` + días fuertes por delante (${nextDowTxt}: ${Math.round(ahead)}%)`;
         } else if (ahead < 25) {
-          pct = Math.max(10, pct - 5);
-          reason += ` − días flojos por delante (${nextDowTxt}: ${Math.round(ahead)}% de la semana) — profundidad contenida`;
+          pct = Math.max(ABS_FLOOR, pct - 5);
+          reason += ` − días flojos por delante (${nextDowTxt}: ${Math.round(ahead)}%) — contenida`;
         }
       }
-      // T6: aprendizaje — solo con >=2 campañas medidas de esta marca×canal
+
+      // T6: aprendizaje del uplift medido (>=2 medidas)
       const learn = learnMap.get(`${row.brand_id}:${row.channel_name}`);
       if (learn && Number(learn.n_medidas) >= 2) {
         const avg = Number(learn.uplift_medio ?? 0);
         const arr = Number(learn.arranques ?? 0);
         if (avg <= 0 && arr === 0) {
-          pct = Math.max(10, pct - 5);
-          reason += ` · aprendizaje: las últimas ${learn.n_medidas} promos aquí no movieron ventas (uplift medio ${avg}%) — profundidad contenida; considerar 2x1`;
+          pct = Math.max(ABS_FLOOR, pct - 5);
+          reason += ` · aprendizaje: últimas ${learn.n_medidas} promos sin efecto (uplift ${avg}%) — contenida; considerar 2x1`;
         } else if (avg >= 25 || arr > 0) {
-          reason += ` · aprendizaje: histórico favorable (uplift medio ${avg}%${arr > 0 ? `, ${arr} arranque(s) desde cero` : ""})`;
+          reason += ` · aprendizaje: histórico favorable (uplift ${avg}%${arr > 0 ? `, ${arr} arranque(s)` : ""})`;
         }
       }
-      // múltiplos de 5 (v1.2): pantalla = Glovo
-      pct = Math.max(10, Math.min(prof.maxPct, Math.round(pct / 5) * 5));
+
+      // múltiplos de 5, suelo 5
+      pct = Math.max(ABS_FLOOR, Math.min(prof.maxPct, Math.round(pct / 5) * 5));
 
       opps.push({ row, brand, chKey, channelId: channelId as string, pct, reason, urgent, gap });
     }
@@ -236,15 +230,13 @@ Deno.serve(async (req) => {
     opps.sort((a, b) =>
       (b.urgent ? 1 : 0) - (a.urgent ? 1 : 0) || b.gap - a.gap || b.pct - a.pct);
 
-    // ── 5. CREAR con cupo POR CANAL + bebidas fuera + guardarraíl de margen
+    // ── 5. CREAR con cobertura + bebidas fuera + guardarraíl de margen
     const usedByChannel = new Map<string, number>();
     const previewCache = new Map<string, { ok: any[]; under: any[]; baseIds: string[] | null; bannedCount: number }>();
     for (const o of opps) {
       const used = usedByChannel.get(o.chKey) ?? 0;
-      if (used >= prof.maxNew) continue;
+      if (used >= COVERAGE_CAP) continue;
 
-      // Bebidas fuera + guardarraíl: la carta es por marca (igual en los 3 locales),
-      // así que se cachea por marca×canal×pct para no repetir el preview por local.
       const cacheKey = `${o.brand.id}:${o.channelId}:${o.pct}`;
       let pv = previewCache.get(cacheKey);
       if (!pv) {
@@ -287,47 +279,20 @@ Deno.serve(async (req) => {
       const mode = isShop ? cfg.shop_mode : cfg.platform_mode;
       if (mode === "off") continue;
       const autoPublish = isShop && mode === "auto";
-      let endDays = Math.min(cfg.max_campaign_days, 7);
+      const armed = ARMED_PLATFORMS.includes(o.row.channel_name);
+      const endDays = Math.min(cfg.max_campaign_days, 7);
       const locShort = String(o.row.location_name ?? "").replace(/^Foodint\s+/i, "");
 
-      // ── R3 (v1.4): en URGENTES, 2x1-espejo primero (plataformas; el Shop tiene su BOGO propio)
-      let kind = "standard";
-      let name = `[Agente] ${o.pct}% ${o.brand.name} · ${o.row.channel_name} · ${locShort}`;
-      let value = o.pct;
-      let scopeFinal: Record<string, unknown> = {
+      const kind = "standard";
+      const name = `[Agente] ${o.pct}% ${o.brand.name} · ${o.row.channel_name} · ${locShort}`;
+      const value = o.pct;
+      const scopeFinal: Record<string, unknown> = {
         brand_ids: [o.brand.id], menu_item_ids: scopeItems, location_ids: [o.row.location_id],
       };
-      let reasonFinal = o.reason;
-      const BOGO_ENABLED = false; // 2x1 CONGELADO 05/07 (decision Julio) - reabrir tras reorganizacion multi-plataforma
-      if (BOGO_ENABLED && o.urgent && !isShop) {
-        const { data: bogo } = await supa.rpc("preview_bogo_mirror_price", {
-          p_account_id: accountId, p_channel_id: o.channelId, p_brand_id: o.brand.id,
-          p_margin_floor_pct: cfg.margin_floor_pct,
-        });
-        // Estrella = el top-seller 30d con escandallo y 2x1 viable (la RPC ya ordena por ventas)
-        const star = ((bogo ?? []) as Array<any>).find((r) => r.status === "ok");
-        if (star) {
-          kind = "bogo"; // alineado al CHECK de coupon (G2c ya bautizó el 2x1: 'bogo'); el matiz espejo vive en scope.mirror_price
-          value = 50; // semántica 2x1 (informativo; el precio que manda es el del espejo)
-          name = `[Agente] 2x1 ${star.item_name} · ${o.row.channel_name} · ${locShort}`;
-          scopeFinal = {
-            brand_ids: [o.brand.id], location_ids: [o.row.location_id],
-            menu_item_ids: [star.menu_item_id],
-            mirror_price: star.precio_sugerido,
-            base_item: { id: star.menu_item_id, name: star.item_name, pvp: star.pvp_cliente },
-          };
-          endDays = 30; // política del procedimiento espejo (05/07): bogo = always-on de facto
-          reasonFinal = `${o.reason} → TÁCTICA 2x1-ESPEJO (validada ×6): estrella '${star.item_name}' ` +
-            `(PVP ${star.pvp_cliente}€, ${star.units_30d} uds/30d). ESPEJO a ${star.precio_sugerido}€ ` +
-            `(paridad ${star.precio_paridad}€ · suelo ${star.precio_min_suelo}€) → margen 2x1 ` +
-            `${star.margen_2x1}€ (${star.margen_pct_2x1}%), el cliente ahorra ${star.ahorro_cliente_pct}%. ` +
-            `ACCIÓN PREVIA: crear el artículo espejo a ${star.precio_sugerido}€ en Last (la carta de Glovo la publica Last).`;
-        } else {
-          const why = ((bogo ?? []) as Array<any>).slice(0, 3).map((r: any) => `${r.item_name}:${r.status}`).join(", ");
-          decisions.push({ brand: o.brand.name, location: o.row.location_name,
-            note: `2x1 descartado (${why || "sin datos"}) — fallback a ${o.pct}%` });
-        }
-      }
+      // Uber (o cualquier plataforma sin brazo): marcar que se publica a mano.
+      const manualNote = (!isShop && !armed)
+        ? ` [PUBLICAR A MANO en ${o.row.channel_name} Manager — brazo automático pendiente de aprobación]` : "";
+      const reasonFinal = o.reason + manualNote;
 
       const { data: coupon, error } = await supa.from("coupon").insert({
         account_id: accountId,
@@ -351,14 +316,17 @@ Deno.serve(async (req) => {
       busy.add(`${o.chKey}:${o.brand.id}:${o.row.location_id}`);
       decisions.push({
         brand: o.brand.name, channel: o.row.channel_name, location: o.row.location_name,
-        kind, pct: kind === "bogo" ? "2x1" : o.pct, reason: reasonFinal,
-        verdict: autoPublish ? "PUBLICADA (Shop auto)" : "PROPUESTA (pendiente de aprobación)",
+        kind, pct: o.pct, reason: reasonFinal,
+        manual: (!isShop && !armed),
+        verdict: autoPublish ? "PUBLICADA (Shop auto)"
+          : armed ? "PROPUESTA (aprobar → robot publica)"
+          : "PROPUESTA (subir a mano)",
         excluded_under_floor: pv.under.map((r: any) => r.item_name),
         coupon_id: coupon?.id,
       });
     }
 
-    // ── 6. Log auditable de la corrida (por cuenta)
+    // ── 6. Log auditable
     await supa.from("agent_run_log").insert({
       account_id: accountId, signals, decisions, campaigns_created: created,
     });
