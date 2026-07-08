@@ -16,6 +16,10 @@ import KitchenRecipesPage from '@/modules/kitchen/pages/KitchenRecipesPage'
 import KitchenProfitabilityPage from '@/modules/kitchen/pages/KitchenProfitabilityPage'
 import KitchenMenuEngineeringPage from '@/modules/kitchen/pages/KitchenMenuEngineeringPage'
 import KitchenSettingsPage from '@/modules/kitchen/pages/KitchenSettingsPage'
+// OFERTAS DEL AGENTE (08/07): board unificado de los 4 canales. Sustituye a
+// PlatformOffersPage (glovo/uber) como pantalla principal de 'ofertas'. La vieja se
+// conserva accesible por URL en 'ofertas-clasico' hasta validar la nueva en vivo.
+import AgentOffersPage from '@/modules/kitchen/pages/AgentOffersPage'
 import PlatformOffersPage from '@/modules/kitchen/pages/PlatformOffersPage'
 import KitchenAvailabilityPage from '@/modules/kitchen/pages/KitchenAvailabilityPage'
 import SuppliersPage from '@/modules/kitchen/pages/SuppliersPage'
@@ -40,7 +44,8 @@ export const kitchenModule: ModuleDefinition = {
     { path: 'recetas',           element: <KitchenRecipesPage /> },
     { path: 'rentabilidad',      element: <KitchenProfitabilityPage /> },
     { path: 'ingenieria-menus',  element: <KitchenMenuEngineeringPage /> },
-    { path: 'ofertas',           element: <PlatformOffersPage /> },
+    { path: 'ofertas',           element: <AgentOffersPage /> },
+    { path: 'ofertas-clasico',   element: <PlatformOffersPage /> },
     { path: 'ajustes',           element: <KitchenSettingsPage /> },
   ],
   // Navegación interna del módulo (ModuleSidebar).
@@ -54,7 +59,7 @@ export const kitchenModule: ModuleDefinition = {
       { id: 'kitchen_recipes',       label: 'Recetas',             icon: BookOpen,          path: 'recetas',          requiredRole: 'manager' },
       { id: 'kitchen_profitability', label: 'Rentabilidad',        icon: TrendingUp,        path: 'rentabilidad',     requiredRole: 'manager' },
       { id: 'kitchen_menu_eng',      label: 'Ingeniería de menús', icon: Target,            path: 'ingenieria-menus', requiredRole: 'manager' },
-      { id: 'kitchen_offers',        label: 'Ofertas',             icon: Megaphone,         path: 'ofertas',          requiredRole: 'manager' },
+      { id: 'kitchen_offers',        label: 'Ofertas del agente',  icon: Megaphone,         path: 'ofertas',          requiredRole: 'manager' },
       { id: 'kitchen_settings',      label: 'Ajustes',             icon: SlidersHorizontal, path: 'ajustes',          requiredRole: 'manager' },
     ],
   },

@@ -1,5 +1,15 @@
 // offers-agent — El agente de ofertas de Folvy (motor de reglas determinista y auditable)
-// v2.0 (06/07/2026) — COBERTURA TOTAL + INTENSIDAD INTELIGENTE (decisión Julio):
+// v2.1 (08/07/2026) — TODOS LOS CANALES + CASCADA DE ALTERNATIVAS + ALERTAS (decisión Julio):
+//   (1) La señal (agent_sales_signal_v2) ya trae los 4 canales: Shop y JustEat entran (antes solo
+//       Glovo/Uber). Cedidas solo en Shop. El Shop (comisión 5%) es el canal de más margen.
+//   (2) JustEat pasa a PROPOSABLE (nace propuesta, sin robot aún = manual, como Uber).
+//   (3) CASCADA (opción 3 de Julio): si el % propuesto no aguanta el margen, el agente BAJA el %
+//       de 5 en 5 hasta el mayor que aguante ≥1 plato — cada canal a su máximo rentable. El margen
+//       mínimo (cfg.margin_floor_pct) es SAGRADO e igual en todos los canales; el Shop aguanta %
+//       más altos SOLO porque su comisión es menor (el preview resta menos). Ya no se rinde al 1er no.
+//   (4) ALERTA en vez de silencio: si NI el 5% aguanta ningún plato, registra un verdict "⚠️ ALERTA"
+//       visible (marca a cero sin oferta rentable posible) en vez del 'continue' mudo anterior.
+// --- v2.0 (06/07/2026) — COBERTURA TOTAL + INTENSIDAD INTELIGENTE (decisión Julio):
 //   Sin ofertas, los algoritmos de Glovo/Uber te bajan de posición → pierdes visibilidad y
 //   ventas. Por eso la política cambia de "creo donde hay oportunidad" a "SIEMPRE cubro, y la
 //   señal decide la INTENSIDAD":
@@ -38,8 +48,8 @@ const PROFILES: Record<string, { maxPct: number; cooldownDays: number; proactive
 
 // Plataformas con brazo publicador VIVO (robot). Uber entra cuando Partner Engineering apruebe.
 const ARMED_PLATFORMS = ["Glovo"];
-// Plataformas donde el agente PROPONE campañas (Glovo con robot; Uber pendiente = manual).
-const PROPOSABLE_PLATFORMS = ["Glovo", "Uber"];
+// Plataformas donde el agente PROPONE campañas (Glovo con robot; Uber/JustEat pendiente = manual).
+const PROPOSABLE_PLATFORMS = ["Glovo", "Uber", "JustEat"];
 
 // Suelo de visibilidad (múltiplos de 5): mantener el mínimo para no perder ranking.
 const MAINT_FLOOR = 5;
@@ -232,14 +242,15 @@ Deno.serve(async (req) => {
 
     // ── 5. CREAR con cobertura + bebidas fuera + guardarraíl de margen
     const usedByChannel = new Map<string, number>();
-    const previewCache = new Map<string, { ok: any[]; under: any[]; baseIds: string[] | null; bannedCount: number }>();
+    const previewCache = new Map<string, any>();
     for (const o of opps) {
       const used = usedByChannel.get(o.chKey) ?? 0;
       if (used >= COVERAGE_CAP) continue;
 
-      const cacheKey = `${o.brand.id}:${o.channelId}:${o.pct}`;
-      let pv = previewCache.get(cacheKey);
-      if (!pv) {
+      // Carta base de la marca (bebidas fuera), una sola vez por marca — cacheada.
+      const baseKey = `base:${o.brand.id}`;
+      let baseInfo = previewCache.get(baseKey) as any;
+      if (!baseInfo) {
         const { data: items } = await supa.from("menu_item")
           .select("id, menu_category:menu_category_id(name)")
           .eq("account_id", accountId).eq("brand_id", o.brand.id)
@@ -249,31 +260,64 @@ Deno.serve(async (req) => {
         const baseIds = banned.length > 0
           ? (items ?? []).filter((it: any) => !banned.some((b: any) => b.id === it.id)).map((it: any) => it.id)
           : null;
-        if (baseIds !== null && baseIds.length === 0) {
-          decisions.push({ brand: o.brand.name, channel: o.row.channel_name,
-            verdict: "DESCARTADA: la carta solo tiene categorías vetadas (bebidas)" });
-          previewCache.set(cacheKey, { ok: [], under: [], baseIds, bannedCount: banned.length });
-          continue;
-        }
-        const { data: impact } = await supa.rpc("preview_platform_promo_impact", {
-          p_account_id: accountId, p_channel_id: o.channelId,
-          p_brand_ids: [o.brand.id], p_discount_type: "percent",
-          p_discount_value: o.pct, p_menu_item_ids: baseIds,
-          p_margin_floor_pct: cfg.margin_floor_pct,
-        });
-        pv = {
-          ok: (impact ?? []).filter((r: any) => r.status === "ok"),
-          under: (impact ?? []).filter((r: any) => r.status === "bajo_suelo"),
-          baseIds, bannedCount: banned.length,
-        };
-        previewCache.set(cacheKey, pv);
+        baseInfo = { baseIds, bannedCount: banned.length, empty: baseIds !== null && baseIds.length === 0 };
+        previewCache.set(baseKey, baseInfo);
       }
-      if (pv.ok.length === 0) {
-        decisions.push({ brand: o.brand.name, channel: o.row.channel_name, location: o.row.location_name,
-          pct: o.pct, reason: o.reason, verdict: "DESCARTADA: ningún plato aguanta el suelo", under: pv.under.length });
+      if (baseInfo.empty) {
+        decisions.push({ brand: o.brand.name, channel: o.row.channel_name,
+          verdict: "DESCARTADA: la carta solo tiene categorías vetadas (bebidas)" });
         continue;
       }
-      const scopeItems = (pv.under.length > 0 || pv.baseIds !== null) ? pv.ok.map((r: any) => r.menu_item_id) : null;
+
+      // ── CASCADA DE ALTERNATIVAS (opción 3 de Julio): en vez de rendirse al primer %,
+      //    baja el descuento de 5 en 5 desde el propuesto hasta ABS_FLOOR y se queda con el
+      //    MAYOR % que aguante ≥1 plato con el margen sagrado (cfg.margin_floor_pct, 45%).
+      //    El margen NO se toca: es el mismo suelo en todos los canales. Pero como el Shop
+      //    solo se lleva 5% de comisión (vs Uber 27%), el preview resta menos y el Shop
+      //    aguanta % más altos SOLO → cada canal exprimido a su máximo rentable.
+      const tried: number[] = [];
+      let chosenPct = 0;
+      let pv: { ok: any[]; under: any[] } | null = null;
+      for (let tryPct = o.pct; tryPct >= ABS_FLOOR; tryPct -= 5) {
+        tried.push(tryPct);
+        const cacheKey = `${o.brand.id}:${o.channelId}:${tryPct}`;
+        let cand = previewCache.get(cacheKey) as any;
+        if (!cand) {
+          const { data: impact } = await supa.rpc("preview_platform_promo_impact", {
+            p_account_id: accountId, p_channel_id: o.channelId,
+            p_brand_ids: [o.brand.id], p_discount_type: "percent",
+            p_discount_value: tryPct, p_menu_item_ids: baseInfo.baseIds,
+            p_margin_floor_pct: cfg.margin_floor_pct,
+          });
+          cand = {
+            ok: (impact ?? []).filter((r: any) => r.status === "ok"),
+            under: (impact ?? []).filter((r: any) => r.status === "bajo_suelo"),
+          };
+          previewCache.set(cacheKey, cand);
+        }
+        if (cand.ok.length > 0) { chosenPct = tryPct; pv = cand; break; }  // el 1º que aguanta (el más alto) gana
+      }
+
+      // ── ARREGLO 4: si NI el 5% aguanta ningún plato → ALERTA visible, no silencio.
+      if (!pv || chosenPct === 0) {
+        const worst = previewCache.get(`${o.brand.id}:${o.channelId}:${ABS_FLOOR}`) as any;
+        decisions.push({
+          brand: o.brand.name, channel: o.row.channel_name, location: o.row.location_name,
+          reason: o.reason,
+          verdict: `⚠️ ALERTA: ${o.brand.name} en ${o.row.channel_name} — ningún descuento rentable (probé ${tried.join("/")}%) mantiene el margen mínimo (${cfg.margin_floor_pct}%). Revisa escandallo, precio o suelo.`,
+          alert: true,
+          tried_pcts: tried,
+          under_at_floor: worst?.under?.length ?? null,
+        });
+        continue;
+      }
+
+      // Si el % bajó respecto al propuesto, dejar rastro del ajuste en el motivo.
+      if (chosenPct < o.pct) {
+        o.reason += ` · ajustado ${o.pct}%→${chosenPct}% para respetar margen ${cfg.margin_floor_pct}% en ${o.row.channel_name}`;
+      }
+      o.pct = chosenPct;  // el % final es el que aguantó
+      const scopeItems = (pv.under.length > 0 || baseInfo.baseIds !== null) ? pv.ok.map((r: any) => r.menu_item_id) : null;
 
       const isShop = o.row.channel_name === "Shop";
       const mode = isShop ? cfg.shop_mode : cfg.platform_mode;
