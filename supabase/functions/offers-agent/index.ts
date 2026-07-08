@@ -72,6 +72,22 @@ const CHANNEL_ARSENAL: Record<string, { kinds: string[]; perBrand: boolean }> = 
   JustEat: { kinds: ["standard"],     perBrand: false },
 };
 
+// Bandas de % del Shop por ESTADO (v3 · 3a). El agente ROTA dentro de la banda por
+// marca+día → variedad entre marcas y cambio diario, pero SIEMPRE dentro de la
+// estrategia (nunca "todo 30 plano"). El margen 45% recorta después si no aguanta.
+//   lanzamiento = marca fuerte (vende en plataforma) con storefront nuevo → base
+//   moderada que deja hueco a la Happy Hour. urgente = a cero en todo → artillería.
+const SHOP_BANDS: Record<string, number[]> = {
+  lanzamiento:   [25, 20, 15],
+  urgente:       [30, 25],
+  crecimiento:   [25, 20, 15],
+  mantenimiento: [20, 15, 10],
+};
+// Tope de la Happy Hour: puede ir por ENCIMA del maxPct del perfil (es un empujón
+// puntual del valle), siempre gateado por el margen. El agente decide el incremento
+// (el % más profundo que aguante, por encima de la base).
+const HH_MAX = 40;
+
 type Opp = {
   row: any; brand: any; chKey: string; channelId: string;
   pct: number; reason: string; urgent: boolean; gap: number;
@@ -84,6 +100,19 @@ Deno.serve(async (req) => {
   }
 
   const runs: Array<Record<string, unknown>> = [];
+
+  // Día del año (hora UTC) para la rotación diaria determinista del Shop.
+  const _now = new Date();
+  const dayOfYear = Math.floor(
+    (Date.UTC(_now.getUTCFullYear(), _now.getUTCMonth(), _now.getUTCDate()) - Date.UTC(_now.getUTCFullYear(), 0, 1)) / 864e5);
+  // % del día para una marca: rota dentro de la banda del estado por marca+fecha.
+  // Marcas distintas → índice distinto el mismo día; misma marca → cambia día a día.
+  const brandDayPct = (brandId: string, state: string): number => {
+    const band = SHOP_BANDS[state] ?? SHOP_BANDS.mantenimiento;
+    let hash = 0;
+    for (let i = 0; i < brandId.length; i++) hash = (hash * 31 + brandId.charCodeAt(i)) & 0x7fffffff;
+    return band[(hash + dayOfYear) % band.length];
+  };
 
   const { data: configs } = await supa.from("offers_agent_config").select("*").eq("enabled", true);
   for (const cfg of configs ?? []) {
@@ -104,6 +133,10 @@ Deno.serve(async (req) => {
     await supa.from("coupon").update({ ends_at: nowIso })
       .eq("account_id", accountId).eq("origin", "agent").eq("active", false)
       .lt("created_at", staleIso).gt("ends_at", nowIso);
+
+    // Rotación diaria del Shop (v3 · 3a): retira las propuestas de Shop del agente de
+    // días anteriores para presentar una tanda fresca cada día (se acabó el borrado manual).
+    await supa.rpc("retire_stale_agent_shop_offers", { p_account_id: accountId });
 
     // ── 2. SEÑALES
     const { data: brands } = await supa.from("brand")
@@ -135,6 +168,12 @@ Deno.serve(async (req) => {
     const learnMap = new Map<string, any>();
     for (const r of (learnRows ?? []) as Array<any>) learnMap.set(`${r.brand_id}:${r.channel_name}`, r);
     signals.learning = learnRows;
+
+    // Señal horaria (v3 · pieza 2): valle de la tarde por marca → Happy Hour en Shop.
+    const { data: hourlyRows } = await supa.rpc("agent_hourly_signal", { p_account_id: accountId });
+    const hourlyMap = new Map<string, any>();
+    for (const r of (hourlyRows ?? []) as Array<any>) hourlyMap.set(r.brand_id, r);
+    signals.hourly = hourlyRows;
 
     const jsDow = new Date().getDay();
     const isoToday = jsDow === 0 ? 7 : jsDow;
@@ -184,6 +223,14 @@ Deno.serve(async (req) => {
       }
     }
     for (const a of shopAgg.values()) units.push(a);
+
+    // Ventas de plataforma por marca (7d): una marca que vende en plataforma pero con
+    // Shop a cero = LANZAMIENTO de storefront (no urgencia ciega) → base moderada + HH.
+    const platformS7ByBrand = new Map<string, number>();
+    for (const row of (sales ?? []) as Array<any>) {
+      if (row.channel_name === "Shop") continue;
+      platformS7ByBrand.set(row.brand_id, (platformS7ByBrand.get(row.brand_id) ?? 0) + Number(row.sales_7d ?? 0));
+    }
 
     const opps: Opp[] = [];
     for (const row of units) {
@@ -237,6 +284,21 @@ Deno.serve(async (req) => {
           ? `MANTENIMIENTO ${locShort}: ${Math.round(pctOfTarget)}% del objetivo — visibilidad mínima (${pct}%) para no perder ranking` +
             (declining ? `, subida por tendencia a la baja (7d ${s7.toFixed(1)} < 28d ${avg28.toFixed(1)})` : "") + `.`
           : `MANTENIMIENTO ${locShort}: sin objetivo fijado — visibilidad mínima (${pct}%) para no perder ranking.`;
+      }
+
+      // SHOP · rotación diaria de % (v3 · 3a): reemplaza el pct fijo por uno que ROTA
+      // por marca+día dentro de la banda del estado (variedad entre marcas, cambio a
+      // diario). Marca fuerte en plataforma con Shop a cero = LANZAMIENTO (base moderada
+      // que deja hueco a la Happy Hour), no artillería ciega. El evento/DOW/aprendizaje
+      // y el guardarraíl de margen ajustan encima.
+      if (!isPlatform) {
+        const platS7 = platformS7ByBrand.get(row.brand_id) ?? 0;
+        const shopState = platS7 >= 5 ? "lanzamiento" : "urgente";
+        pct = brandDayPct(row.brand_id, shopState);
+        urgent = shopState === "urgente";
+        gap = urgent ? 1 : 0.5;
+        reason = `${shopState === "lanzamiento" ? "LANZAMIENTO" : "URGENTE"} ${brand.name} (Shop): ${pct}% del día ` +
+          `(rota por marca y fecha en banda ${SHOP_BANDS[shopState].join("/")}%; storefront ${platS7 >= 5 ? "nuevo de marca con ventas en plataforma" : "sin ventas en ningún canal"}).`;
       }
 
       // Evento demanda-up: profundiza (sobre cualquier tramo)
@@ -430,6 +492,73 @@ Deno.serve(async (req) => {
         excluded_under_floor: pv.under.map((r: any) => r.item_name),
         coupon_id: coupon?.id,
       });
+
+      // ── HAPPY HOUR (v3 · pieza 2): sobre una base item_percent de Shop, si la marca
+      //    tiene un valle fiable y hay margen para ir MÁS profundo que la base, se crea
+      //    una 2ª oferta con franja en el valle. Concurrencia resuelta por el motor:
+      //    _shop_item_offer elige la de mayor value → en el valle gana la Happy Hour.
+      const hv = isItemPct && isShop ? hourlyMap.get(o.brand.id) : null;
+      const dayOrders = hv ? Number(hv.day_orders ?? 0) : 0;
+      if (hv && coupon?.id && dayOrders >= 30 && o.pct < HH_MAX) {
+        // Cascada desde HH_MAX hacia abajo: el % más profundo que aguante y > base
+        // (la Happy Hour es ADITIVA sobre la base; el agente decide el incremento).
+        let hhPct = 0; let hhScope: string[] | null = null;
+        for (let t = HH_MAX; t > o.pct; t -= 5) {
+          const ck = `${o.brand.id}:${o.channelId}:${t}`;
+          let cand = previewCache.get(ck) as any;
+          if (!cand) {
+            const { data: impact } = await supa.rpc("preview_platform_promo_impact", {
+              p_account_id: accountId, p_channel_id: o.channelId, p_brand_ids: [o.brand.id],
+              p_discount_type: "percent", p_discount_value: t, p_menu_item_ids: baseInfo.baseIds,
+              p_margin_floor_pct: cfg.margin_floor_pct,
+            });
+            cand = { ok: (impact ?? []).filter((r: any) => r.status === "ok"),
+                     under: (impact ?? []).filter((r: any) => r.status === "bajo_suelo") };
+            previewCache.set(ck, cand);
+          }
+          if (cand.ok.length > 0) {
+            hhPct = t;
+            hhScope = (cand.under.length > 0 || baseInfo.baseIds !== null) ? cand.ok.map((r: any) => r.menu_item_id) : null;
+            break;
+          }
+        }
+        // Aprendizaje: si el histórico de la marca en Shop es malo, contener un escalón.
+        const hhLearn = learnMap.get(`${o.brand.id}:Shop`);
+        if (hhLearn && Number(hhLearn.uplift_medio ?? 0) < 0 && Number(hhLearn.arranques ?? 0) === 0 && hhPct - 5 > o.pct) hhPct -= 5;
+
+        if (hhPct > o.pct) {
+          const vf = `${String(hv.valley_from).padStart(2, "0")}:00`;
+          const vt = `${String(hv.valley_to).padStart(2, "0")}:00`;
+          const hhReason = `HAPPY HOUR ${o.brand.name}: valle ${vf}-${vt} (${hv.valley_orders} pedidos vs día ${dayOrders}, 60d) → ${hhPct}% en la franja floja para llenarla.`;
+          const { data: hhC, error: hhErr } = await supa.from("coupon").insert({
+            account_id: accountId,
+            code: `AGENT-SHOP-HH-${o.brand.id.slice(0, 8)}-${Date.now().toString(36)}`,
+            name: `[Agente] Happy Hour ${hhPct}% carta ${o.brand.name} · Shop · ${vf}-${vt}`,
+            discount_type: "percent", value: hhPct, applies_to: "subtotal",
+            channels: ["shop"], kind: "item_percent",
+            scope: { brand_ids: [o.brand.id], menu_item_ids: hhScope, location_ids: null },
+            time_from: vf, time_to: vt,
+            starts_at: nowIso, ends_at: new Date(Date.now() + endDays * 864e5).toISOString(),
+            active: autoPublish, origin: "agent",
+            omnibus_ref_note: `Agente ${nowIso.slice(0, 10)}: ${hhReason}`,
+          }).select("id").single();
+          if (!hhErr && hhC?.id) {
+            const hhRows = (hhScope && hhScope.length > 0)
+              ? hhScope.map((iid) => ({ coupon_id: hhC.id, menu_item_id: iid }))
+              : [{ coupon_id: hhC.id, brand_id: o.brand.id }];
+            await supa.from("campaign_scope").insert(hhRows);
+            created++;
+            decisions.push({
+              brand: o.brand.name, channel: "Shop", location: "Shop",
+              kind: "item_percent", pct: hhPct, franja: `${vf}-${vt}`, reason: hhReason,
+              verdict: autoPublish ? "PUBLICADA (Shop auto · Happy Hour)" : "PROPUESTA (Happy Hour)",
+              coupon_id: hhC.id,
+            });
+          } else if (hhErr) {
+            decisions.push({ brand: o.brand.name, warn: `happy_hour: ${hhErr.message}` });
+          }
+        }
+      }
     }
 
     // ── 6. Log auditable
