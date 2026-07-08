@@ -23,6 +23,7 @@ import {
   type CampaignDraft,
 } from '@/modules/kitchen/services/platformOffersService'
 import { toggleCampaign, deleteCampaign } from '@/modules/shop/admin/campaignService'
+import { listMenuItems } from '@/modules/kitchen/services/menuItemService'
 
 function db(): any {
   if (!supabase) throw new Error('Supabase no está configurado.')
@@ -433,4 +434,122 @@ export async function discardOffer(accountId: string, o: AgentOffer): Promise<Ac
     await deleteDraft(o.id)
     return { ok: true }
   } catch (e) { return { ok: false, reason: emsg(e) } }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// EDITAR una oferta (pieza 2) — canal y marca FIJOS; editable valor, platos,
+// días/franja, presupuesto y fecha de fin. Guarda actualizando el cupón (columnas
+// + scope). Preview de margen en vivo para plataforma (Shop no estima).
+// ─────────────────────────────────────────────────────────────────────
+
+export interface OfferDish { id: string; name: string }
+
+export interface OfferEditData {
+  brandIds: string[]
+  locationIds: string[]
+  menuItemIds: string[]      // platos ya elegidos (vacío = toda la carta)
+  channelId: string | null   // para el preview (null en Shop)
+  dishes: OfferDish[]         // carta de la(s) marca(s) de la oferta
+}
+
+export interface OfferEditInput {
+  discountType: DiscountType
+  value: number
+  menuItemIds: string[] | null   // null = toda la carta
+  weekdays: number[] | null
+  timeFrom: string | null        // 'HH:MM'
+  timeTo: string | null
+  startsAt: string | null        // ISO
+  endsAt: string | null          // ISO
+  budgetMax: number | null
+}
+
+/** channel_id de la oferta (Glovo/Uber/JustEat) por nombre. null en Shop. */
+async function resolveChannelId(accountId: string, channel: OfferChannel): Promise<string | null> {
+  if (channel === 'shop') return null
+  const { data: chans } = await db()
+    .from('sales_channel').select('id, name').eq('account_id', accountId).eq('is_active', true)
+  return ((chans ?? []) as Array<{ id: string; name: string }>)
+    .find((c) => (c.name ?? '').toLowerCase().replace(/\s+/g, '') === channel)?.id ?? null
+}
+
+/** Carga scope actual + carta de la marca + channelId, para prefill del editor. */
+export async function getOfferEditData(accountId: string, offer: AgentOffer): Promise<OfferEditData> {
+  const { data: c } = await db().from('coupon').select('scope').eq('id', offer.id).maybeSingle()
+  const scope = ((c as { scope?: Record<string, unknown> } | null)?.scope ?? {}) as Record<string, unknown>
+  const brandIds = Array.isArray(scope.brand_ids) ? (scope.brand_ids as string[]) : []
+  const locationIds = Array.isArray(scope.location_ids) ? (scope.location_ids as string[]) : []
+  const menuItemIds = Array.isArray(scope.menu_item_ids) ? (scope.menu_item_ids as string[]) : []
+  const channelId = await resolveChannelId(accountId, offer.channel)
+
+  const dishes: OfferDish[] = []
+  try {
+    const lists = await Promise.all(
+      brandIds.map((bid) => listMenuItems({ accountId, brandId: bid, includeInactive: false })),
+    )
+    const seen = new Set<string>()
+    for (const list of lists) {
+      for (const mi of (list as Array<{ id: string; name: string }>)) {
+        if (!seen.has(mi.id)) { seen.add(mi.id); dishes.push({ id: mi.id, name: mi.name }) }
+      }
+    }
+    dishes.sort((a, b) => a.name.localeCompare(b.name))
+  } catch { /* carta vacía = solo "toda la carta" */ }
+
+  return { brandIds, locationIds, menuItemIds, channelId, dishes }
+}
+
+/** Guarda la edición: columnas del cupón + scope (conserva marca/local, cambia platos). */
+export async function saveOfferEdit(offer: AgentOffer, input: OfferEditInput): Promise<ActionResult> {
+  try {
+    const { data: c } = await db().from('coupon').select('scope').eq('id', offer.id).maybeSingle()
+    const scope: Record<string, unknown> = { ...(((c as { scope?: Record<string, unknown> } | null)?.scope) ?? {}) }
+    scope.menu_item_ids = input.menuItemIds && input.menuItemIds.length > 0 ? input.menuItemIds : null
+
+    const { error } = await db().from('coupon').update({
+      discount_type: input.discountType,
+      value: input.value,
+      weekdays: input.weekdays && input.weekdays.length > 0 ? input.weekdays : null,
+      time_from: input.timeFrom || null,
+      time_to: input.timeTo || null,
+      starts_at: input.startsAt,
+      ends_at: input.endsAt,
+      budget_max: input.budgetMax,
+      scope,
+    }).eq('id', offer.id)
+    if (error) return { ok: false, reason: error.message }
+    return { ok: true }
+  } catch (e) { return { ok: false, reason: emsg(e) } }
+}
+
+/** Preview de margen con valores EN EDICIÓN (plataforma). null en Shop o sin datos. */
+export async function previewOfferMarginWith(input: {
+  accountId: string
+  channelId: string | null
+  brandIds: string[]
+  discountType: DiscountType
+  value: number
+  menuItemIds: string[] | null
+}): Promise<OfferMargin | null> {
+  if (!input.channelId || input.brandIds.length === 0 || !(input.value > 0)) return null
+  try {
+    const { aggregates } = await previewImpact({
+      accountId: input.accountId,
+      channelId: input.channelId,
+      brandIds: input.brandIds,
+      discountType: input.discountType,
+      discountValue: input.value,
+      menuItemIds: input.menuItemIds,
+      marginFloorPct: null,
+    })
+    return {
+      marginPctBefore: aggregates.margenPctAntes,
+      marginPctAfter: aggregates.margenPctDespues,
+      itemsBelowFloor: aggregates.itemsBajoSuelo,
+      itemsNoCost: aggregates.itemsSinEscandallo,
+      totalItems: aggregates.totalItems,
+    }
+  } catch {
+    return null
+  }
 }

@@ -16,16 +16,17 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Loader2, RefreshCw, Megaphone, Zap, Bot, Hand, Target, AlertTriangle,
   ChevronDown, ChevronRight, Sparkles, Filter, Rocket, CheckCircle2, X,
-  Pause, Play, CircleStop, Trash2,
+  Pause, Play, CircleStop, Trash2, Pencil, Search,
 } from 'lucide-react'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import {
   listAgentOffers, getLastRunAt, groupByChannel, previewOfferMargin, publishOffers,
   publishOne, pauseOffer, resumeOffer, endOffer, discardOffer,
+  getOfferEditData, saveOfferEdit, previewOfferMarginWith,
   OFFER_CHANNELS, CHANNEL_LABEL,
   type AgentOffer, type OfferChannel, type OfferStatus, type PublishMode, type OfferMargin,
-  type PublishResult,
+  type PublishResult, type OfferEditData, type OfferEditInput, type DiscountType,
 } from '@/modules/kitchen/services/agentOffersService'
 
 // ─────────────────────────────────────────────────────────────────────
@@ -147,6 +148,7 @@ export default function AgentOffersPage() {
   // Acciones por oferta.
   const [actionBusyId, setActionBusyId] = useState<string | null>(null)
   const [confirmAction, setConfirmAction] = useState<{ offer: AgentOffer; kind: 'end' | 'discard' } | null>(null)
+  const [editOffer, setEditOffer] = useState<AgentOffer | null>(null)
 
   const runAction = useCallback(async (offer: AgentOffer, kind: 'publish' | 'pause' | 'resume' | 'end' | 'discard') => {
     if (!accountId) return
@@ -255,6 +257,7 @@ export default function AgentOffersPage() {
               onPublish={() => setPublishTarget(ch)}
               onAction={runAction}
               actionBusyId={actionBusyId}
+              onEdit={setEditOffer}
             />
           ))}
         </div>
@@ -298,6 +301,15 @@ export default function AgentOffersPage() {
         onConfirm={() => void doConfirmedAction()}
         onCancel={() => setConfirmAction(null)}
       />
+
+      {editOffer && (
+        <OfferEditorModal
+          offer={editOffer}
+          accountId={accountId}
+          onClose={() => setEditOffer(null)}
+          onSaved={async () => { setEditOffer(null); await load() }}
+        />
+      )}
     </div>
   )
 }
@@ -365,7 +377,7 @@ function Legend({ cls, label }: { cls: string; label: string }) {
 // Columna de canal
 // ─────────────────────────────────────────────────────────────────────
 
-function ChannelColumn({ channel, offers, expanded, onToggleExpand, accountId, proposalCount, onPublish, onAction, actionBusyId }: {
+function ChannelColumn({ channel, offers, expanded, onToggleExpand, accountId, proposalCount, onPublish, onAction, actionBusyId, onEdit }: {
   channel: OfferChannel
   offers: AgentOffer[]
   expanded: boolean
@@ -375,6 +387,7 @@ function ChannelColumn({ channel, offers, expanded, onToggleExpand, accountId, p
   onPublish: () => void
   onAction: (offer: AgentOffer, kind: 'publish' | 'pause' | 'resume' | 'end' | 'discard') => void
   actionBusyId: string | null
+  onEdit: (offer: AgentOffer) => void
 }) {
   const pub = PUBLISH_META[
     channel === 'shop' ? 'auto' : channel === 'glovo' ? 'robot' : 'manual'
@@ -408,7 +421,7 @@ function ChannelColumn({ channel, offers, expanded, onToggleExpand, accountId, p
         <div className="text-xs text-text-secondary/60 px-1 py-6 text-center">Sin ofertas.</div>
       ) : (
         <div className="flex flex-col gap-2">
-          {visible.map((o) => <OfferCard key={o.id} offer={o} accountId={accountId} onAction={onAction} actionBusyId={actionBusyId} />)}
+          {visible.map((o) => <OfferCard key={o.id} offer={o} accountId={accountId} onAction={onAction} actionBusyId={actionBusyId} onEdit={onEdit} />)}
           {rest > 0 && (
             <button
               type="button"
@@ -433,11 +446,12 @@ function ChannelColumn({ channel, offers, expanded, onToggleExpand, accountId, p
 // Tarjeta de oferta (+ expand con detalle y margen real)
 // ─────────────────────────────────────────────────────────────────────
 
-function OfferCard({ offer, accountId, onAction, actionBusyId }: {
+function OfferCard({ offer, accountId, onAction, actionBusyId, onEdit }: {
   offer: AgentOffer
   accountId: string
   onAction: (offer: AgentOffer, kind: 'publish' | 'pause' | 'resume' | 'end' | 'discard') => void
   actionBusyId: string | null
+  onEdit: (offer: AgentOffer) => void
 }) {
   const [open, setOpen] = useState(false)
   const [margin, setMargin] = useState<OfferMargin | null | 'loading'>(null)
@@ -569,8 +583,8 @@ function OfferCard({ offer, accountId, onAction, actionBusyId }: {
             </div>
           )}
 
-          {/* Acciones por oferta (según estado). "Editar" llega en la pieza 2. */}
-          <OfferActions offer={offer} onAction={onAction} busy={actionBusyId === offer.id} />
+          {/* Acciones por oferta (según estado). Editar solo en propuestas/borradores. */}
+          <OfferActions offer={offer} onAction={onAction} onEdit={onEdit} busy={actionBusyId === offer.id} />
         </div>
       )}
     </div>
@@ -600,9 +614,10 @@ function ActionBtn({ onClick, busy, icon: Icon, label, danger }: {
   )
 }
 
-function OfferActions({ offer, onAction, busy }: {
+function OfferActions({ offer, onAction, onEdit, busy }: {
   offer: AgentOffer
   onAction: (offer: AgentOffer, kind: 'publish' | 'pause' | 'resume' | 'end' | 'discard') => void
+  onEdit: (offer: AgentOffer) => void
   busy: boolean
 }) {
   const s = offer.status
@@ -616,6 +631,7 @@ function OfferActions({ offer, onAction, busy }: {
       {isProposal && (
         <>
           <ActionBtn onClick={() => onAction(offer, 'publish')} busy={busy} icon={Rocket} label="Publicar" />
+          <ActionBtn onClick={() => onEdit(offer)} busy={busy} icon={Pencil} label="Editar" />
           <ActionBtn onClick={() => onAction(offer, 'discard')} busy={busy} icon={Trash2} label="Descartar" danger />
         </>
       )}
@@ -635,6 +651,261 @@ function OfferActions({ offer, onAction, busy }: {
           )}
         </>
       )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Editor enfocado de una oferta (pieza 2). Canal y marca FIJOS.
+// ─────────────────────────────────────────────────────────────────────
+
+const WEEKDAY_TOGGLES: { n: number; label: string }[] = [
+  { n: 1, label: 'L' }, { n: 2, label: 'M' }, { n: 3, label: 'X' },
+  { n: 4, label: 'J' }, { n: 5, label: 'V' }, { n: 6, label: 'S' }, { n: 0, label: 'D' },
+]
+
+function numOrNull(s: string): number | null {
+  const t = s.trim().replace(',', '.')
+  if (t === '') return null
+  const n = Number(t)
+  return Number.isFinite(n) ? n : null
+}
+function isoToDate(iso: string | null): string {
+  if (!iso) return ''
+  try { const d = new Date(iso); return isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10) } catch { return '' }
+}
+
+function OfferEditorModal({ offer, accountId, onClose, onSaved }: {
+  offer: AgentOffer
+  accountId: string
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [data, setData] = useState<OfferEditData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  const [discountType, setDiscountType] = useState<DiscountType>(offer.discountType)
+  const [value, setValue] = useState(String(offer.value ?? ''))
+  const [scopeMode, setScopeMode] = useState<'all' | 'pick'>('all')
+  const [picked, setPicked] = useState<string[]>([])
+  const [weekdays, setWeekdays] = useState<number[]>(offer.weekdays ?? [])
+  const [timeFrom, setTimeFrom] = useState((offer.timeFrom ?? '').slice(0, 5))
+  const [timeTo, setTimeTo] = useState((offer.timeTo ?? '').slice(0, 5))
+  const [startsAt, setStartsAt] = useState(isoToDate(offer.startsAt))
+  const [endsAt, setEndsAt] = useState(isoToDate(offer.endsAt))
+  const [budgetMax, setBudgetMax] = useState(offer.budgetMax != null ? String(offer.budgetMax) : '')
+  const [dishSearch, setDishSearch] = useState('')
+
+  const [margin, setMargin] = useState<OfferMargin | null | 'loading'>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    getOfferEditData(accountId, offer)
+      .then((d) => {
+        if (cancelled) return
+        setData(d)
+        if (d.menuItemIds.length > 0) { setScopeMode('pick'); setPicked(d.menuItemIds) }
+      })
+      .catch((e) => { if (!cancelled) setErr(e instanceof Error ? e.message : 'Error cargando la oferta.') })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [accountId, offer])
+
+  const num = numOrNull(value)
+  const menuItemIds = scopeMode === 'pick' && picked.length > 0 ? picked : null
+
+  // Margen en vivo (plataforma), debounced.
+  useEffect(() => {
+    if (!data || offer.channel === 'shop' || !(num && num > 0) || data.brandIds.length === 0) { setMargin(null); return }
+    let cancelled = false
+    setMargin('loading')
+    const t = setTimeout(() => {
+      previewOfferMarginWith({
+        accountId, channelId: data.channelId, brandIds: data.brandIds,
+        discountType, value: num, menuItemIds,
+      }).then((m) => { if (!cancelled) setMargin(m) })
+    }, 400)
+    return () => { cancelled = true; clearTimeout(t) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, discountType, value, scopeMode, picked.join(',')])
+
+  const validation = (): string | null => {
+    if (num === null || num <= 0) return 'Introduce un descuento válido.'
+    if (discountType === 'percent' && num > 100) return 'El porcentaje no puede superar 100.'
+    if (!endsAt) return 'Pon una fecha de fin antes de lanzar la oferta.'
+    if (startsAt && endsAt < startsAt) return 'La fecha de fin es anterior a la de inicio.'
+    if (scopeMode === 'pick' && picked.length === 0) return 'Elige al menos un plato, o cambia a "Toda la carta".'
+    return null
+  }
+
+  async function handleSave() {
+    const v = validation()
+    if (v) { setErr(v); return }
+    setSaving(true); setErr(null)
+    const input: OfferEditInput = {
+      discountType,
+      value: num!,
+      menuItemIds,
+      weekdays: weekdays.length > 0 ? weekdays : null,
+      timeFrom: timeFrom || null,
+      timeTo: timeTo || null,
+      startsAt: startsAt ? new Date(startsAt + 'T00:00:00').toISOString() : null,
+      endsAt: endsAt ? new Date(endsAt + 'T23:59:59').toISOString() : null,
+      budgetMax: numOrNull(budgetMax),
+    }
+    const r = await saveOfferEdit(offer, input)
+    setSaving(false)
+    if (!r.ok) { setErr(r.reason ?? 'No se pudo guardar.'); return }
+    onSaved()
+  }
+
+  const toggleWeekday = (n: number) =>
+    setWeekdays((w) => (w.includes(n) ? w.filter((x) => x !== n) : [...w, n]))
+  const togglePick = (id: string) =>
+    setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]))
+
+  const filteredDishes = (data?.dishes ?? []).filter((d) =>
+    dishSearch.trim() === '' ? true : d.name.toLowerCase().includes(dishSearch.trim().toLowerCase()),
+  )
+  const inputCls = 'w-full px-2.5 py-1.5 text-sm border border-border-default rounded-md bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-accent'
+  const labelCls = 'block text-[11px] font-medium text-text-secondary mb-1'
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4" onClick={onClose}>
+      <div className="w-full max-w-lg max-h-[90vh] overflow-auto rounded-xl bg-card border border-border-default p-4" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <div className="text-base font-medium text-text-primary">Editar oferta</div>
+            <div className="text-xs text-text-secondary">{CHANNEL_LABEL[offer.channel]} · {offer.brandNames[0] ?? offer.name}{offer.locationNames[0] ? ` · ${offer.locationNames[0]}` : ''}</div>
+          </div>
+          <button type="button" onClick={onClose} className="text-text-secondary hover:text-text-primary"><X size={18} /></button>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center gap-2 py-10 justify-center text-text-secondary"><Loader2 size={16} className="animate-spin" /> Cargando…</div>
+        ) : (
+          <div className="space-y-4">
+            {/* Descuento */}
+            <div>
+              <label className={labelCls}>Descuento</label>
+              <div className="flex gap-2">
+                <select className={`${inputCls} w-20`} value={discountType} onChange={(e) => setDiscountType(e.target.value as DiscountType)}>
+                  <option value="percent">%</option>
+                  <option value="fixed">€</option>
+                </select>
+                <input className={inputCls} inputMode="decimal" value={value} placeholder="10" onChange={(e) => setValue(e.target.value)} />
+              </div>
+            </div>
+
+            {/* Vigencia */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelCls}>Desde (opcional)</label>
+                <input type="date" className={inputCls} value={startsAt} onChange={(e) => setStartsAt(e.target.value)} />
+              </div>
+              <div>
+                <label className={labelCls}>Hasta (obligatoria)</label>
+                <input type="date" className={`${inputCls} ${!endsAt ? 'border-warning/60' : ''}`} value={endsAt} onChange={(e) => setEndsAt(e.target.value)} />
+              </div>
+            </div>
+
+            {/* Días + franja */}
+            <div>
+              <label className={labelCls}>Días (vacío = todos)</label>
+              <div className="flex gap-1">
+                {WEEKDAY_TOGGLES.map((d) => (
+                  <button key={d.n} type="button" onClick={() => toggleWeekday(d.n)}
+                    className={`w-8 h-8 rounded-md text-xs border ${weekdays.includes(d.n) ? 'bg-accent text-white border-accent' : 'bg-card text-text-secondary border-border-default hover:bg-page/60'}`}>
+                    {d.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelCls}>Franja desde (opcional)</label>
+                <input type="time" className={inputCls} value={timeFrom} onChange={(e) => setTimeFrom(e.target.value)} />
+              </div>
+              <div>
+                <label className={labelCls}>Franja hasta (opcional)</label>
+                <input type="time" className={inputCls} value={timeTo} onChange={(e) => setTimeTo(e.target.value)} />
+              </div>
+            </div>
+
+            {/* Presupuesto */}
+            <div>
+              <label className={labelCls}>Presupuesto máx € (opcional — se apaga sola al agotarse)</label>
+              <input className={inputCls} inputMode="decimal" value={budgetMax} placeholder="sin tope" onChange={(e) => setBudgetMax(e.target.value)} />
+            </div>
+
+            {/* Alcance de platos */}
+            <div>
+              <label className={labelCls}>A qué platos se aplica</label>
+              <div className="flex gap-2 mb-2">
+                <button type="button" onClick={() => setScopeMode('all')}
+                  className={`flex-1 rounded-md border px-2 py-1.5 text-xs ${scopeMode === 'all' ? 'bg-accent/10 text-accent border-accent/40' : 'bg-card text-text-secondary border-border-default'}`}>
+                  Toda la carta
+                </button>
+                <button type="button" onClick={() => setScopeMode('pick')}
+                  className={`flex-1 rounded-md border px-2 py-1.5 text-xs ${scopeMode === 'pick' ? 'bg-accent/10 text-accent border-accent/40' : 'bg-card text-text-secondary border-border-default'}`}>
+                  Elegir platos {picked.length > 0 ? `(${picked.length})` : ''}
+                </button>
+              </div>
+
+              {scopeMode === 'pick' && (
+                <div className="rounded-md border border-border-default">
+                  <div className="flex items-center gap-2 p-2 border-b border-border-default">
+                    <Search size={13} className="text-text-secondary" />
+                    <input className="flex-1 bg-transparent text-sm outline-none text-text-primary" placeholder="Buscar plato…" value={dishSearch} onChange={(e) => setDishSearch(e.target.value)} />
+                    <button type="button" className="text-xs text-accent" onClick={() => setPicked(filteredDishes.map((d) => d.id))}>Todos</button>
+                    <button type="button" className="text-xs text-text-secondary" onClick={() => setPicked([])}>Ninguno</button>
+                  </div>
+                  <div className="max-h-48 overflow-auto p-1">
+                    {filteredDishes.length === 0 ? (
+                      <div className="text-xs text-text-secondary/60 py-4 text-center">Sin platos.</div>
+                    ) : filteredDishes.map((d) => (
+                      <label key={d.id} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-page/60 cursor-pointer text-sm text-text-primary">
+                        <input type="checkbox" checked={picked.includes(d.id)} onChange={() => togglePick(d.id)} />
+                        <span className="truncate">{d.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Margen en vivo (plataforma) */}
+            {offer.channel !== 'shop' && (
+              <div className="rounded-md bg-page/70 border border-border-default px-2.5 py-2 text-xs">
+                {margin === 'loading' ? (
+                  <span className="flex items-center gap-1.5 text-text-secondary/70"><Loader2 size={12} className="animate-spin" /> Calculando margen…</span>
+                ) : margin ? (
+                  <span className="text-text-primary">
+                    Margen medio: <b>{margin.marginPctBefore != null ? `${margin.marginPctBefore}%` : '—'}</b> → <b className={margin.marginPctAfter != null && margin.marginPctAfter < 45 ? 'text-warning' : 'text-success'}>{margin.marginPctAfter != null ? `${margin.marginPctAfter}%` : '—'}</b>
+                    {(margin.itemsBelowFloor > 0 || margin.itemsNoCost > 0) && (
+                      <span className="text-text-secondary/70"> · {margin.itemsBelowFloor > 0 ? `${margin.itemsBelowFloor} bajo suelo` : ''}{margin.itemsBelowFloor > 0 && margin.itemsNoCost > 0 ? ' · ' : ''}{margin.itemsNoCost > 0 ? `${margin.itemsNoCost} sin escandallo` : ''}</span>
+                    )}
+                  </span>
+                ) : (
+                  <span className="text-text-secondary/60">Margen no disponible.</span>
+                )}
+              </div>
+            )}
+
+            {err && <div className="rounded-md border border-danger/30 bg-danger-bg px-2.5 py-1.5 text-sm text-danger">{err}</div>}
+
+            <div className="flex justify-end gap-2 pt-1">
+              <button type="button" onClick={onClose} className="rounded-lg border border-border-default bg-card px-3 py-1.5 text-sm text-text-secondary hover:bg-page/60">Cancelar</button>
+              <button type="button" disabled={saving} onClick={() => void handleSave()} className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-sm text-white hover:bg-accent/90 disabled:opacity-50">
+                {saving ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />} Guardar
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
