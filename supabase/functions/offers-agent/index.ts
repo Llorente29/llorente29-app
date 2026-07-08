@@ -59,9 +59,23 @@ const COVERAGE_CAP = 60;
 
 const EXCLUDED_CATEGORY_PATTERNS = [/bebida/i];
 
+// Arsenal por canal (v3 · pieza 1): qué kinds propone el agente en cada canal y si la
+// oferta es POR MARCA (Shop: las ofertas de carta son por marca, sin local) o por
+// marca×local (plataforma). Añadir un arma = añadir un string; añadir un canal = una entrada.
+//   Shop: item_percent = promo de carta VISIBLE y AUTOMÁTICA en el storefront. El "standard"
+//   del Shop es un CÓDIGO que el cliente teclea → no empuja la tienda, no es arma del agente.
+//   Más armas del Shop (bogo / envío gratis / regalo) entran en la pieza 3.
+const CHANNEL_ARSENAL: Record<string, { kinds: string[]; perBrand: boolean }> = {
+  Shop:    { kinds: ["item_percent"], perBrand: true },
+  Glovo:   { kinds: ["standard"],     perBrand: false },
+  Uber:    { kinds: ["standard"],     perBrand: false },
+  JustEat: { kinds: ["standard"],     perBrand: false },
+};
+
 type Opp = {
   row: any; brand: any; chKey: string; channelId: string;
   pct: number; reason: string; urgent: boolean; gap: number;
+  kind: string; perBrand: boolean;
 };
 
 Deno.serve(async (req) => {
@@ -148,9 +162,31 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ── 3. OPORTUNIDADES por marca×canal×local — COBERTURA TOTAL (todas tienen oferta)
-    const opps: Opp[] = [];
+    // ── 3. OPORTUNIDADES — plataforma por marca×canal×local; Shop POR MARCA.
+    //    Las ofertas de carta del Shop son por marca (sin local): se colapsan los
+    //    locales SUMANDO objetivo y ventas (opción A aprobada por Julio).
+    const units: Array<any> = [];
+    const shopAgg = new Map<string, any>();
     for (const row of (sales ?? []) as Array<any>) {
+      if (row.channel_name === "Shop") {
+        const a = shopAgg.get(row.brand_id) ?? {
+          brand_id: row.brand_id, channel_name: "Shop", location_id: null,
+          location_name: "Shop", ownership_type: row.ownership_type,
+          target_daily: 0, sales_7d: 0, avg_28d: 0, peak_daily: 0,
+        };
+        a.target_daily += Number(row.target_daily ?? 0);
+        a.sales_7d     += Number(row.sales_7d ?? 0);
+        a.avg_28d      += Number(row.avg_28d ?? 0);
+        a.peak_daily    = Math.max(a.peak_daily, Number(row.peak_daily ?? 0));
+        shopAgg.set(row.brand_id, a);
+      } else {
+        units.push(row);
+      }
+    }
+    for (const a of shopAgg.values()) units.push(a);
+
+    const opps: Opp[] = [];
+    for (const row of units) {
       const brand = (brands ?? []).find(b => b.id === row.brand_id);
       if (!brand) continue;
 
@@ -238,7 +274,12 @@ Deno.serve(async (req) => {
       // múltiplos de 5, suelo 5
       pct = Math.max(ABS_FLOOR, Math.min(prof.maxPct, Math.round(pct / 5) * 5));
 
-      opps.push({ row, brand, chKey, channelId: channelId as string, pct, reason, urgent, gap });
+      // TIPO (arsenal v3 · pieza 1): Shop = item_percent (% carta, visible+automática);
+      // plataforma = standard. La profundidad (pct) ya la fija el estado más arriba.
+      const arsenal = CHANNEL_ARSENAL[row.channel_name] ?? { kinds: ["standard"], perBrand: false };
+      const kind = row.channel_name === "Shop" ? "item_percent" : "standard";
+
+      opps.push({ row, brand, chKey, channelId: channelId as string, pct, reason, urgent, gap, kind, perBrand: arsenal.perBrand });
     }
 
     // ── 4. PRIORIZAR: urgentes primero, luego mayor hueco, luego mayor %
@@ -332,11 +373,14 @@ Deno.serve(async (req) => {
       const endDays = Math.min(cfg.max_campaign_days, 7);
       const locShort = String(o.row.location_name ?? "").replace(/^Foodint\s+/i, "");
 
-      const kind = "standard";
-      const name = `[Agente] ${o.pct}% ${o.brand.name} · ${o.row.channel_name} · ${locShort}`;
+      const kind = o.kind;
+      const isItemPct = kind === "item_percent";
+      const name = `[Agente] ${o.pct}%${isItemPct ? " carta" : ""} ${o.brand.name} · ${o.row.channel_name}${isShop ? "" : " · " + locShort}`;
       const value = o.pct;
       const scopeFinal: Record<string, unknown> = {
-        brand_ids: [o.brand.id], menu_item_ids: scopeItems, location_ids: [o.row.location_id],
+        brand_ids: [o.brand.id],
+        menu_item_ids: scopeItems,
+        location_ids: isShop ? null : [o.row.location_id],  // Shop = por marca, sin local
       };
       // Uber (o cualquier plataforma sin brazo): marcar que se publica a mano.
       const manualNote = (!isShop && !armed)
@@ -360,9 +404,22 @@ Deno.serve(async (req) => {
       }).select("id").single();
 
       if (error) { decisions.push({ brand: o.brand.name, location: o.row.location_name, error: error.message }); continue; }
+
+      // item_percent: el alcance vive en campaign_scope (NO en coupon.scope). Si hubo
+      // exclusiones por margen → una fila por plato OK; si toda la carta aguanta → una
+      // fila de marca. Así el guardarraíl se respeta (los platos bajo suelo quedan fuera).
+      if (isItemPct && coupon?.id) {
+        const scRows = (scopeItems && (scopeItems as string[]).length > 0)
+          ? (scopeItems as string[]).map((iid) => ({ coupon_id: coupon.id, menu_item_id: iid }))
+          : [{ coupon_id: coupon.id, brand_id: o.brand.id }];
+        const { error: scErr } = await supa.from("campaign_scope").insert(scRows);
+        if (scErr) decisions.push({ brand: o.brand.name, warn: `campaign_scope: ${scErr.message}` });
+      }
+
       created++;
       usedByChannel.set(o.chKey, used + 1);
-      busy.add(`${o.chKey}:${o.brand.id}:${o.row.location_id}`);
+      if (isShop) busyAllLoc.add(`${o.chKey}:${o.brand.id}`);
+      else busy.add(`${o.chKey}:${o.brand.id}:${o.row.location_id}`);
       decisions.push({
         brand: o.brand.name, channel: o.row.channel_name, location: o.row.location_name,
         kind, pct: o.pct, reason: reasonFinal,
