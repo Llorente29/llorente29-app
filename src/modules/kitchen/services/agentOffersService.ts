@@ -47,6 +47,17 @@ export const CHANNEL_LABEL: Record<OfferChannel, string> = {
   shop: 'Shop', glovo: 'Glovo', uber: 'Uber', justeat: 'JustEat',
 }
 
+/** Plato de regalo por marca (solo en ofertas kind='free_item'). null en el resto.
+ *  Misma forma que _shop_brand_free_gift / _shop_account_free_gift del storefront. */
+export interface OfferGift {
+  /** Nombre del plato regalado. */
+  name: string
+  /** Umbral de subtotal para desbloquear el regalo (coupon.min_subtotal). null = sin mínimo. */
+  min: number | null
+  /** Valor de mercado del plato (menu_item.price). null si no consta. */
+  value: number | null
+}
+
 /** El porqué del agente, parseado del texto libre de omnibus_ref_note. */
 export interface ParsedReason {
   /** Motivo corto y limpio para el chip ("Mantenimiento · sin objetivo"). */
@@ -82,6 +93,8 @@ export interface AgentOffer {
   budgetMax: number | null
   reasonRaw: string | null
   reason: ParsedReason
+  /** Plato de regalo por marca (free_item) o null. */
+  gift: OfferGift | null
   jobsTotal: number
   jobsDone: number
   jobsPending: number
@@ -169,6 +182,10 @@ function mapOffer(r: Record<string, unknown>): AgentOffer {
   const channel: OfferChannel = (OFFER_CHANNELS as string[]).includes(channelRaw)
     ? (channelRaw as OfferChannel) : 'shop'
   const reasonRaw = (r.reason as string | null) ?? null
+  const giftRaw = (r.gift && typeof r.gift === 'object') ? (r.gift as Record<string, unknown>) : null
+  const gift: OfferGift | null = giftRaw
+    ? { name: String(giftRaw.name ?? ''), min: num(giftRaw.min), value: num(giftRaw.value) }
+    : null
   return {
     id: r.id as string,
     name: (r.name as string) ?? '(sin nombre)',
@@ -190,6 +207,7 @@ function mapOffer(r: Record<string, unknown>): AgentOffer {
     budgetMax: num(r.budgetMax),
     reasonRaw,
     reason: parseReason(reasonRaw),
+    gift,
     jobsTotal: Number(r.jobsTotal ?? 0),
     jobsDone: Number(r.jobsDone ?? 0),
     jobsPending: Number(r.jobsPending ?? 0),

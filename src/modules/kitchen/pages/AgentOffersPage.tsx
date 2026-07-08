@@ -16,7 +16,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Loader2, RefreshCw, Megaphone, Zap, Bot, Hand, Target, AlertTriangle,
   ChevronDown, ChevronRight, Sparkles, Filter, Rocket, CheckCircle2, X,
-  Pause, Play, CircleStop, Trash2, Pencil, Search,
+  Pause, Play, CircleStop, Trash2, Pencil, Search, Gift,
 } from 'lucide-react'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
@@ -483,6 +483,17 @@ function OfferCard({ offer, accountId, onAction, actionBusyId, onEdit }: {
 
         <div className="text-sm text-text-secondary mt-1">{offerLine(offer)}</div>
 
+        {/* Regalo por marca (free_item): qué plato y desde cuánto. El badge honesto. */}
+        {offer.gift && (
+          <div className="mt-1 flex items-center gap-1 text-xs text-accent">
+            <Gift size={11} className="shrink-0" />
+            <span className="truncate font-medium">{offer.gift.name || 'Plato de regalo'}</span>
+            {offer.gift.min != null && (
+              <span className="text-text-secondary/80 shrink-0">· desde {fmtEur(offer.gift.min)}</span>
+            )}
+          </div>
+        )}
+
         {/* Porqué (una línea) */}
         {(offer.reason.headline || offer.reason.adjusted || offer.reason.eventUp) && (
           <div className="flex items-center gap-1 mt-1.5 text-xs">
@@ -535,6 +546,18 @@ function OfferCard({ offer, accountId, onAction, actionBusyId, onEdit }: {
             <div>
               <div className="text-text-secondary/60 mb-0.5">Por qué esta oferta</div>
               <div className="text-text-primary leading-relaxed">{offer.reason.fullText}</div>
+            </div>
+          )}
+
+          {/* Regalo por marca — detalle: plato, umbral y valor de mercado. */}
+          {offer.gift && (
+            <div className="rounded-md bg-accent/5 border border-accent/20 px-2 py-1.5 text-text-primary flex items-center gap-1.5">
+              <Gift size={12} className="text-accent shrink-0" />
+              <span>
+                Regalo: <b>{offer.gift.name || 'plato de regalo'}</b>
+                {offer.gift.min != null && <> desde <b>{fmtEur(offer.gift.min)}</b></>}
+                {offer.gift.value != null && <span className="text-text-secondary/80"> · valor {fmtEur(offer.gift.value)}</span>}
+              </span>
             </div>
           )}
 
