@@ -107,8 +107,7 @@ Deno.serve(async (req) => {
     (Date.UTC(_now.getUTCFullYear(), _now.getUTCMonth(), _now.getUTCDate()) - Date.UTC(_now.getUTCFullYear(), 0, 1)) / 864e5);
   // % del día para una marca: rota dentro de la banda del estado por marca+fecha.
   // Marcas distintas → índice distinto el mismo día; misma marca → cambia día a día.
-  const brandDayPct = (brandId: string, state: string): number => {
-    const band = SHOP_BANDS[state] ?? SHOP_BANDS.mantenimiento;
+  const brandDayPct = (brandId: string, band: number[]): number => {
     let hash = 0;
     for (let i = 0; i < brandId.length; i++) hash = (hash * 31 + brandId.charCodeAt(i)) & 0x7fffffff;
     return band[(hash + dayOfYear) % band.length];
@@ -117,6 +116,27 @@ Deno.serve(async (req) => {
   const { data: configs } = await supa.from("offers_agent_config").select("*").eq("enabled", true);
   for (const cfg of configs ?? []) {
     const accountId = cfg.account_id as string;
+
+    // ── REGLAS del Shop (v3 · paso 4): "automático pero con reglas". El agente lee
+    //    offers_agent_config.shop_rules (jsonb). Estructura: { default:{bands,happy_hour,gift},
+    //    brands:{ <brand_id>:{...override...} } }. Donde hay regla se respeta; donde no,
+    //    los defaults de hoy. El suelo de margen 45% es INTOCABLE por encima de cualquier regla.
+    const rules = (cfg.shop_rules ?? {}) as any;
+    const rDefault = (rules.default ?? {}) as any;
+    const rBrands = (rules.brands ?? {}) as any;
+    const bandsFor = (brandId: string, state: string): number[] => {
+      const b = rBrands[brandId]?.bands?.[state] ?? rDefault.bands?.[state] ?? SHOP_BANDS[state] ?? SHOP_BANDS.mantenimiento;
+      return Array.isArray(b) && b.length > 0 ? b : (SHOP_BANDS[state] ?? SHOP_BANDS.mantenimiento);
+    };
+    const hhFor = (brandId: string) => ({
+      enabled: rBrands[brandId]?.happy_hour?.enabled ?? rDefault.happy_hour?.enabled ?? true,
+      maxPct:  Number(rBrands[brandId]?.happy_hour?.max_pct ?? rDefault.happy_hour?.max_pct ?? HH_MAX),
+    });
+    const giftFor = (brandId: string) => ({
+      enabled:  rBrands[brandId]?.gift?.enabled ?? rDefault.gift?.enabled ?? true,
+      minFloor: Number(rBrands[brandId]?.gift?.min_floor ?? rDefault.gift?.min_floor ?? 12),
+      minCap:   Number(rBrands[brandId]?.gift?.min_cap ?? rDefault.gift?.min_cap ?? 30),
+    });
     const prof = PROFILES[cfg.aggressiveness] ?? PROFILES.medium;
     const nowIso = new Date().toISOString();
     const signals: Record<string, unknown> = {
@@ -164,10 +184,31 @@ Deno.serve(async (req) => {
       if (!dowMap.has(k)) dowMap.set(k, new Map());
       dowMap.get(k)!.set(Number(r.dow), Number(r.pct_share));
     }
-    const { data: learnRows } = await supa.rpc("agent_learning_signal", { p_account_id: accountId });
-    const learnMap = new Map<string, any>();
-    for (const r of (learnRows ?? []) as Array<any>) learnMap.set(`${r.brand_id}:${r.channel_name}`, r);
-    signals.learning = learnRows;
+    // Aprendizaje transversal (frente #2): uplift por marca×canal×MECÁNICA (4 canales).
+    // Jubila agent_learning_signal + la lógica parcial de Shop → una sola verdad.
+    const { data: mechRows } = await supa.rpc("agent_mechanic_signal", { p_account_id: accountId });
+    const mechMap = new Map<string, any>();      // clave brand:channel:mechanic
+    const learnMap = new Map<string, any>();     // clave brand:channel = mecánica 'pct' (compat con el ajuste de %)
+    for (const r of (mechRows ?? []) as Array<any>) {
+      mechMap.set(`${r.brand_id}:${r.channel_name}:${r.mechanic}`, r);
+      if (r.mechanic === "pct") learnMap.set(`${r.brand_id}:${r.channel_name}`, r);
+    }
+    signals.learning = mechRows;
+    // Rotación PONDERADA de mecánica: rota por marca+día entre las viables, pesando hacia la
+    // de mayor uplift medido (≥2 medidas). Sin datos → rotación equilibrada ("rotar", Julio).
+    const pickMechanic = (brandId: string, channel: string, viable: string[]): string => {
+      if (viable.length <= 1) return viable[0] ?? "pct";
+      const bag: string[] = [];
+      for (const m of viable) {
+        const e = mechMap.get(`${brandId}:${channel}:${m}`);
+        const up = e && Number(e.n_medidas) >= 2 ? Number(e.uplift_medio ?? 0) : 0;
+        const w = Math.max(1, 1 + Math.round(Math.max(0, up) / 10));   // peso: 1 + uplift/10
+        for (let k = 0; k < w; k++) bag.push(m);
+      }
+      let hash = 0;
+      for (let i = 0; i < brandId.length; i++) hash = (hash * 31 + brandId.charCodeAt(i)) & 0x7fffffff;
+      return bag[(hash + dayOfYear) % bag.length];
+    };
 
     // Señal horaria (v3 · pieza 2): valle de la tarde por marca → Happy Hour en Shop.
     const { data: hourlyRows } = await supa.rpc("agent_hourly_signal", { p_account_id: accountId });
@@ -301,11 +342,12 @@ Deno.serve(async (req) => {
       if (!isPlatform) {
         const platS7 = platformS7ByBrand.get(row.brand_id) ?? 0;
         const shopState = platS7 >= 5 ? "lanzamiento" : "urgente";
-        pct = brandDayPct(row.brand_id, shopState);
+        const band = bandsFor(row.brand_id, shopState);
+        pct = brandDayPct(row.brand_id, band);
         urgent = shopState === "urgente";
         gap = urgent ? 1 : 0.5;
         reason = `${shopState === "lanzamiento" ? "LANZAMIENTO" : "URGENTE"} ${brand.name} (Shop): ${pct}% del día ` +
-          `(rota por marca y fecha en banda ${SHOP_BANDS[shopState].join("/")}%; storefront ${platS7 >= 5 ? "nuevo de marca con ventas en plataforma" : "sin ventas en ningún canal"}).`;
+          `(rota por marca y fecha en banda ${band.join("/")}%; storefront ${platS7 >= 5 ? "nuevo de marca con ventas en plataforma" : "sin ventas en ningún canal"}).`;
       }
 
       // Evento demanda-up: profundiza (sobre cualquier tramo)
@@ -451,7 +493,8 @@ Deno.serve(async (req) => {
       //    Si no cabe regalo → jugada A (% fuerte + Happy Hour), como estaba.
       let giftPlay = false, giftBasePct = 0, giftMin = 0, giftInfo: any = null;
       if (isShop && isItemPct) {
-        const gi = giftMap.get(o.brand.id);
+        const gr = giftFor(o.brand.id);
+        const gi = gr.enabled ? giftMap.get(o.brand.id) : null;
         const fcr = gi ? Number(gi.fcr) : NaN;
         if (gi && gi.gift_item_id && Number.isFinite(fcr) && fcr > 0) {
           const floorR = Number(cfg.margin_floor_pct) / 100;
@@ -460,12 +503,25 @@ Deno.serve(async (req) => {
             const denom = (1 - cand / 100) * (1 - floorR) - fcr;
             if (denom > 0) {
               let m = Math.ceil(Number(gi.gift_cost) / denom);
-              if (m < 12) m = 12;                                       // mínimo razonable (solo mejora margen)
-              if (m <= 30) { giftPlay = true; giftBasePct = cand; giftMin = m; giftInfo = gi; break; }
+              if (m < gr.minFloor) m = gr.minFloor;                    // mínimo razonable (solo mejora margen)
+              if (m <= gr.minCap) { giftPlay = true; giftBasePct = cand; giftMin = m; giftInfo = gi; break; }
             }
           }
         }
       }
+
+      // ── ELECCIÓN DE MECÁNICA (frente #2, rotación ponderada): si la marca puede hacer
+      //    REGALO (jugada B) Y tiene valle para HAPPY HOUR (jugada A), el agente rota entre
+      //    ambas pesando por lo que mejor ha funcionado (uplift medido). Si solo una es
+      //    viable, esa. Sin datos → rotación equilibrada por marca+día.
+      if (giftPlay) {
+        const h = hourlyMap.get(o.brand.id);
+        const hhViable = hhFor(o.brand.id).enabled && !!h && Number(h.day_orders ?? 0) >= 30;
+        if (hhViable && pickMechanic(o.brand.id, "Shop", ["gift", "happy_hour"]) === "happy_hour") {
+          giftPlay = false;   // jugada A: base fuerte + Happy Hour (el agente aprendió/rotó a ella)
+        }
+      }
+
       if (giftPlay && giftBasePct !== o.pct) {
         // Recomputar el alcance al % moderado (a menor %, aguantan más platos).
         const gk = `${o.brand.id}:${o.channelId}:${giftBasePct}`;
@@ -548,13 +604,14 @@ Deno.serve(async (req) => {
       //    tiene un valle fiable y hay margen para ir MÁS profundo que la base, se crea
       //    una 2ª oferta con franja en el valle. Concurrencia resuelta por el motor:
       //    _shop_item_offer elige la de mayor value → en el valle gana la Happy Hour.
-      const hv = isItemPct && isShop && !giftPlay ? hourlyMap.get(o.brand.id) : null;
+      const hhCfg = hhFor(o.brand.id);
+      const hv = isItemPct && isShop && !giftPlay && hhCfg.enabled ? hourlyMap.get(o.brand.id) : null;
       const dayOrders = hv ? Number(hv.day_orders ?? 0) : 0;
-      if (hv && coupon?.id && dayOrders >= 30 && o.pct < HH_MAX) {
-        // Cascada desde HH_MAX hacia abajo: el % más profundo que aguante y > base
+      if (hv && coupon?.id && dayOrders >= 30 && o.pct < hhCfg.maxPct) {
+        // Cascada desde el tope (reglas) hacia abajo: el % más profundo que aguante y > base
         // (la Happy Hour es ADITIVA sobre la base; el agente decide el incremento).
         let hhPct = 0; let hhScope: string[] | null = null;
-        for (let t = HH_MAX; t > o.pct; t -= 5) {
+        for (let t = hhCfg.maxPct; t > o.pct; t -= 5) {
           const ck = `${o.brand.id}:${o.channelId}:${t}`;
           let cand = previewCache.get(ck) as any;
           if (!cand) {
