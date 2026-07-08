@@ -23,7 +23,7 @@ import {
   coordsForLocation, distanceMeters,
 } from '../services/fichajeKiosko'
 
-type Step = 'select-employee' | 'enter-pin' | 'confirming' | 'success' | 'error'
+type Step = 'select-employee' | 'enter-pin' | 'confirming' | 'warn-confirm' | 'success' | 'error'
 
 export default function KioskoFichajePage() {
   // TODO scope-local: NO se conecta al selector global de local a propósito.
@@ -39,6 +39,8 @@ export default function KioskoFichajePage() {
   const [pin, setPin] = useState('')
   const [pinError, setPinError] = useState('')
   const [resultMsg, setResultMsg] = useState('')
+  const [pendingDist, setPendingDist] = useState(0)
+  const [pendingEntry, setPendingEntry] = useState<ReturnType<typeof buildClockEntry>['entry'] | null>(null)
   const [now, setNow] = useState(new Date())
 
   // Tick reloj
@@ -134,28 +136,39 @@ export default function KioskoFichajePage() {
     let position: GeolocationPosition | null = null
     try {
       position = await getCurrentPosition()
-    } catch (e: unknown) {
-      // Si geofencing es obligatorio y no podemos obtener posición, fallar
-      if (config.blockOutsideGeofence) {
-        setResultMsg('No se pudo obtener tu ubicación. ' + (e instanceof Error ? e.message : ''))
-        setStep('error')
-        return
-      }
+    } catch {
+      // GPS no disponible (permiso denegado / timeout): NO bloqueamos. Se ficha igual
+      // y se deja marcado para revisión. El GPS de navegador falla a menudo (WiFi/red).
+      await writeEntry(null, 'Sin ubicación (GPS no disponible)')
+      return
     }
 
     const result = buildClockEntry(selectedEmp, activeLocation, config, position)
 
-    if (config.blockOutsideGeofence && !result.withinGeofence) {
-      const distStr = result.distanceM > 0 ? `${Math.round(result.distanceM)}m del local` : 'fuera de zona'
-      setResultMsg(`Fichaje bloqueado: estás a ${distStr}. Acércate al local para fichar.`)
-      setStep('error')
+    // Fuera de zona: NO se bloquea. Aviso rojo muy visible + confirmación explícita.
+    if (!result.withinGeofence) {
+      setPendingDist(Math.round(result.distanceM))
+      setPendingEntry(result.entry)
+      setStep('warn-confirm')
       return
     }
 
-    // Guardar fichaje (sincroniza con Supabase)
-    await addClockEntry(selectedEmp.id, result.entry)
+    // Dentro de zona: fichaje normal.
+    await writeEntry(result.entry, null)
+  }
 
-    const verb = result.entry.type === 'entrada' ? 'Entrada' : 'Salida'
+  // Escribe el fichaje. Si `mark` viene, sobrescribe el address para auditoría.
+  async function writeEntry(entryArg: ReturnType<typeof buildClockEntry>['entry'] | null, mark: string | null) {
+    if (!selectedEmp || !activeLocation || !config) return
+    setStep('confirming')
+    let entry = entryArg
+    if (!entry) {
+      const r = buildClockEntry(selectedEmp, activeLocation, config, null)
+      entry = r.entry
+    }
+    if (mark) entry = { ...entry, address: mark }
+    await addClockEntry(selectedEmp.id, entry)
+    const verb = entry.type === 'entrada' ? 'Entrada' : 'Salida'
     setResultMsg(`${verb} registrada — ${selectedEmp.name}`)
     setStep('success')
   }
@@ -237,6 +250,29 @@ export default function KioskoFichajePage() {
         )}
         {step === 'confirming' && (
           <CenteredMessage Icon={MapPin} title="Comprobando ubicación..." color="text-accent" />
+        )}
+        {step === 'warn-confirm' && (
+          <div className="mt-12 text-center max-w-md mx-auto px-4">
+            <div className="flex justify-center mb-3">
+              <AlertCircle size={64} className="text-danger" strokeWidth={2} />
+            </div>
+            <p className="font-bold text-danger text-2xl">Estás fichando FUERA del local</p>
+            <p className="text-4xl font-extrabold text-danger mt-2">a {pendingDist} m</p>
+            <p className="text-sm text-text-secondary mt-3">
+              Estás a {pendingDist} metros de <b>{activeLocation?.name}</b>. El fichaje se registrará
+              con esta distancia y el encargado podrá verlo. Ficha solo si de verdad estás en el local.
+            </p>
+            <div className="flex gap-3 mt-6">
+              <button onClick={() => { setPendingEntry(null); setStep('select-employee') }}
+                className="flex-1 py-4 rounded-xl bg-accent-bg text-text-primary font-medium hover:bg-page transition-base">
+                Cancelar
+              </button>
+              <button onClick={() => writeEntry(pendingEntry, `Fuera de zona · ${pendingDist}m`)}
+                className="flex-1 py-4 rounded-xl bg-danger text-text-on-accent font-bold hover:opacity-90 transition-base">
+                Fichar igualmente
+              </button>
+            </div>
+          </div>
         )}
         {step === 'success' && (
           <CenteredMessage Icon={CheckCircle2} title={resultMsg} sub="Volviendo al inicio..." color="text-success" />

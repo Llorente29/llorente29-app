@@ -72,9 +72,18 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
           setErrorMsg('No tienes ningún local asignado. Contacta con tu encargado.')
         }
       })
-      .catch(e => {
-        setStep('error')
-        setErrorMsg('No se pudo obtener tu ubicación. ' + (e instanceof Error ? e.message : 'Activa el GPS y permite la ubicación en el navegador.'))
+      .catch(() => {
+        // GPS no disponible (permiso denegado / timeout): NO bloqueamos. Dejamos elegir
+        // local y fichar igual, marcando "sin ubicación" para revisión. El GPS de
+        // navegador falla a menudo (WiFi/red); bloquear dejaría al empleado sin fichar.
+        setPosition(null)
+        if (allowedLocations.length === 1) setSelectedLocId(allowedLocations[0].id)
+        if (allowedLocations.length === 0) {
+          setStep('error')
+          setErrorMsg('No tienes ningún local asignado. Contacta con tu encargado.')
+        } else {
+          setStep('idle')
+        }
       })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -95,7 +104,14 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
   const canClock = !!selectedLoc && (inZone || geofenceMode === 'warn')
 
   function doClockAction() {
-    if (!selectedLoc || !position) return
+    if (!selectedLoc) return
+
+    // Sin GPS (permiso denegado / timeout): en warn se ficha igual, marcando "sin
+    // ubicación". Nunca bloquea.
+    if (!position) {
+      void writeEntry('nogps', 0)
+      return
+    }
 
     const config = { ...defaultKioskoConfig(selectedLoc.id), geofenceRadiusM: radiusForLoc(selectedLoc) }
     const result = buildClockEntry(currentEmp, selectedLoc, config, position)
@@ -116,18 +132,19 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
     }
 
     // Dentro de zona: fichaje normal, directo.
-    void writeEntry(false, 0)
+    void writeEntry('in', 0)
   }
 
-  // Escribe el fichaje. `outside` marca la distancia en el registro para auditoría.
-  async function writeEntry(outside: boolean, distM: number) {
-    if (!selectedLoc || !position) return
+  // Escribe el fichaje. mode: 'in' (en zona) · 'outside' (fuera, marca distancia) ·
+  // 'nogps' (sin ubicación, marca para revisión).
+  async function writeEntry(mode: 'in' | 'outside' | 'nogps', distM: number) {
+    if (!selectedLoc) return
     setStep('confirming')
     const config = { ...defaultKioskoConfig(selectedLoc.id), geofenceRadiusM: radiusForLoc(selectedLoc) }
     const result = buildClockEntry(currentEmp, selectedLoc, config, position)
-    const entry = outside
-      ? { ...result.entry, address: `Fuera de zona · ${distM}m` }
-      : result.entry
+    let entry = result.entry
+    if (mode === 'outside') entry = { ...entry, address: `Fuera de zona · ${distM}m` }
+    else if (mode === 'nogps') entry = { ...entry, address: 'Sin ubicación (GPS no disponible)' }
     await addClockEntry(currentEmp.id, entry)
     setStep('success')
   }
@@ -193,7 +210,7 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
                 Cancelar
               </button>
               <button
-                onClick={() => writeEntry(true, pendingDist)}
+                onClick={() => writeEntry('outside', pendingDist)}
                 className="flex-1 py-3 rounded-xl bg-danger text-text-on-accent font-bold hover:opacity-90 transition-base">
                 Fichar igualmente
               </button>
