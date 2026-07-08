@@ -4,6 +4,16 @@ import { useApp } from '../context/AppContext'
 import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
 import { Badge, Card } from '../components/ui'
 
+const DEFAULT_RADIUS_M = 200
+
+// Distancia en metros entre dos coordenadas (Haversine).
+function haversineM(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000, rad = Math.PI / 180
+  const dLat = (lat2 - lat1) * rad, dLng = (lng2 - lng1) * rad
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLng / 2) ** 2
+  return R * 2 * Math.asin(Math.sqrt(a))
+}
+
 export default function FichajesGlobalPage() {
   const { staff, locations } = useApp()
   const today = new Date()
@@ -26,7 +36,7 @@ export default function FichajesGlobalPage() {
   const allEntries = filtered
     .flatMap(e => e.clockEntries
       .filter(c => c.datetime >= dateFrom && c.datetime <= dateTo + 'T23:59:59')
-      .map(c => ({ ...c, employeeName: e.name, employeePos: e.position, employeeId: e.id }))
+      .map(c => ({ ...c, employeeName: e.name, employeePos: e.position, employeeId: e.id, employeeLocationId: e.locationId }))
     )
     .sort((a, b) => b.datetime.localeCompare(a.datetime))
 
@@ -113,7 +123,7 @@ export default function FichajesGlobalPage() {
               <th className="p-3 text-left text-xs font-semibold text-text-secondary">Tipo</th>
               <th className="p-3 text-left text-xs font-semibold text-text-secondary">Fecha y hora</th>
               <th className="p-3 text-left text-xs font-semibold text-text-secondary hidden sm:table-cell">Turno</th>
-              <th className="p-3 text-left text-xs font-semibold text-text-secondary hidden sm:table-cell">GPS</th>
+              <th className="p-3 text-left text-xs font-semibold text-text-secondary hidden sm:table-cell">Distancia</th>
             </tr></thead>
             <tbody>
               {allEntries.length === 0 ? (
@@ -138,7 +148,24 @@ export default function FichajesGlobalPage() {
                     {!e.roundingApplied && (e.diffMinutes || 0) > 10 && <Badge color="red" className="ml-1">+{e.diffMinutes}min</Badge>}
                   </td>
                   <td className="p-3 text-xs text-text-secondary hidden sm:table-cell">{e.scheduled || '—'}</td>
-                  <td className="p-3 text-xs text-text-secondary hidden sm:table-cell">{e.address || '—'}</td>
+                  <td className="p-3 text-xs hidden sm:table-cell">
+                    {(() => {
+                      const loc = locations.find(l => l.id === (e.locationIdAtClock || e.employeeLocationId))
+                      if (e.lat == null || e.lng == null || !loc || loc.lat == null || loc.lng == null) {
+                        return <span className="text-text-secondary">sin GPS</span>
+                      }
+                      const dist = Math.round(haversineM(e.lat, e.lng, loc.lat, loc.lng))
+                      const radius = loc.clockRadiusM ?? DEFAULT_RADIUS_M
+                      const lejos = dist > radius
+                      return (
+                        <span className={`inline-flex items-center gap-1 font-semibold ${lejos ? 'text-danger' : 'text-success'}`}>
+                          {lejos && <span aria-hidden>⚠️</span>}
+                          {dist} m
+                          {lejos && <span className="font-normal text-text-secondary">· fuera</span>}
+                        </span>
+                      )
+                    })()}
+                  </td>
                 </tr>
               ))}
             </tbody>
