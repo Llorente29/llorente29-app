@@ -170,16 +170,21 @@ Deno.serve(async (req) => {
       const peak = Number(row.peak_daily ?? 0);
       const locShort = String(row.location_name ?? "").replace(/^Foodint\s+/i, "");
       const hasTarget = target > 0;
-      const pctOfTarget = hasTarget ? (s7 / target) * 100 : 100; // sin objetivo → tratar como "va bien"
+      const pctOfTarget = hasTarget ? (s7 / target) * 100 : 100; // con objetivo, % de consecución
 
       let pct = 0; let reason = ""; let urgent = false; let gap = 0;
 
-      if (hasTarget && s7 < 0.15) {
-        // ARTILLERÍA: objetivo y ventas a cero.
+      if (s7 < 0.15) {
+        // ARTILLERÍA: ventas a CERO → arrancar la marca, CON o SIN objetivo.
+        // (Fix 08/07: antes exigía objetivo → las cedidas y el Shop sin objetivo
+        //  caían en mantenimiento 10%. En Shop cedidas=propias: a cero = agresivo.)
         pct = prof.maxPct; urgent = true; gap = 1;
-        reason = `URGENTE ${locShort}: ${s7.toFixed(1)} ped/día con objetivo ${target}. ` +
-          (peak > 0 ? `(pico histórico ${peak.toFixed(1)}) ` : `(sin historia — lanzamiento) `) +
-          `Artillería (${pct}%) para arrancar la marca.`;
+        reason = hasTarget
+          ? `URGENTE ${locShort}: ${s7.toFixed(1)} ped/día con objetivo ${target}. ` +
+            (peak > 0 ? `(pico histórico ${peak.toFixed(1)}) ` : `(sin historia — lanzamiento) `) +
+            `Artillería (${pct}%) para arrancar la marca.`
+          : `URGENTE ${locShort}: ${s7.toFixed(1)} ped/día, canal a cero sin objetivo — crecimiento agresivo. ` +
+            `Artillería (${pct}%) para arrancar la marca.`;
       } else if (hasTarget && pctOfTarget < Number(cfg.recovery_target_pct)) {
         // CRECIMIENTO: proporcional al hueco contra el objetivo.
         gap = (Number(cfg.recovery_target_pct) - pctOfTarget) / Number(cfg.recovery_target_pct);
