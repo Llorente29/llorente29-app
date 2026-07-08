@@ -15,13 +15,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Loader2, RefreshCw, Megaphone, Zap, Bot, Hand, Target, AlertTriangle,
-  ChevronDown, ChevronRight, Sparkles, Filter,
+  ChevronDown, ChevronRight, Sparkles, Filter, Rocket, CheckCircle2, X,
 } from 'lucide-react'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import {
-  listAgentOffers, getLastRunAt, groupByChannel, previewOfferMargin,
+  listAgentOffers, getLastRunAt, groupByChannel, previewOfferMargin, publishOffers,
   OFFER_CHANNELS, CHANNEL_LABEL,
   type AgentOffer, type OfferChannel, type OfferStatus, type PublishMode, type OfferMargin,
+  type PublishResult,
 } from '@/modules/kitchen/services/agentOffersService'
 
 // ─────────────────────────────────────────────────────────────────────
@@ -84,6 +86,11 @@ export default function AgentOffersPage() {
   const [onlyProposals, setOnlyProposals] = useState(false)
   const [expandedCols, setExpandedCols] = useState<Record<string, boolean>>({})
 
+  // T3 — publicación por lotes.
+  const [publishTarget, setPublishTarget] = useState<'all' | OfferChannel | null>(null)
+  const [publishing, setPublishing] = useState(false)
+  const [result, setResult] = useState<PublishResult | null>(null)
+
   const load = useCallback(async () => {
     if (!accountId) return
     setLoading(true)
@@ -109,7 +116,31 @@ export default function AgentOffersPage() {
     [offers, onlyProposals],
   )
   const grouped = useMemo(() => groupByChannel(filtered), [filtered])
-  const proposalCount = useMemo(() => offers.filter((o) => o.status === 'propuesta').length, [offers])
+  const proposals = useMemo(() => offers.filter((o) => o.status === 'propuesta'), [offers])
+  const proposalCount = proposals.length
+  const proposalsByChannel = useMemo(() => groupByChannel(proposals), [proposals])
+
+  // Ofertas objetivo de la confirmación abierta (todas o de un canal).
+  const targetOffers = useMemo(() => {
+    if (publishTarget === null) return []
+    return publishTarget === 'all' ? proposals : proposalsByChannel[publishTarget]
+  }, [publishTarget, proposals, proposalsByChannel])
+
+  const doPublish = useCallback(async () => {
+    if (!accountId || targetOffers.length === 0) { setPublishTarget(null); return }
+    setPublishing(true)
+    try {
+      const r = await publishOffers(accountId, targetOffers)
+      setResult(r)
+      setPublishTarget(null)
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error publicando.')
+      setPublishTarget(null)
+    } finally {
+      setPublishing(false)
+    }
+  }, [accountId, targetOffers, load])
 
   if (!accountId) {
     return <div className="p-6 text-sm text-text-secondary">Selecciona una cuenta para ver las ofertas.</div>
@@ -145,18 +176,28 @@ export default function AgentOffersPage() {
           >
             <RefreshCw size={14} /> Actualizar
           </button>
+          {proposalCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setPublishTarget('all')}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-sm text-white hover:bg-accent/90"
+            >
+              <Rocket size={14} /> Publicar todas ({proposalCount})
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Nota T3 (honesta, sin botón muerto) */}
+      {/* Nota honesta de publicación por canal */}
       <div className="mb-4 rounded-lg border border-border-default bg-page/60 px-3 py-2 text-xs text-text-secondary">
-        Aquí ves las propuestas del agente en los 4 canales. Publicar en lote (Shop se
-        publica solo · Glovo por robot · Uber/JustEat a mano) llega en el siguiente tramo.
+        Al publicar: <b className="text-success">Shop</b> se publica solo · <b className="text-success">Glovo</b> lo publica el robot · <b className="text-warning">Uber</b> y <b className="text-warning">JustEat</b> se activan y te doy la lista para publicarlas a mano en su panel.
       </div>
 
       {error && (
         <div className="mb-4 rounded-lg border border-danger/30 bg-danger-bg px-3 py-2 text-sm text-danger">{error}</div>
       )}
+
+      {result && <PublishResultBanner result={result} onClose={() => setResult(null)} />}
 
       {loading ? (
         <div className="flex items-center gap-2 py-16 justify-center text-text-secondary">
@@ -172,6 +213,8 @@ export default function AgentOffersPage() {
               expanded={!!expandedCols[ch]}
               onToggleExpand={() => setExpandedCols((p) => ({ ...p, [ch]: !p[ch] }))}
               accountId={accountId}
+              proposalCount={proposalsByChannel[ch].length}
+              onPublish={() => setPublishTarget(ch)}
             />
           ))}
         </div>
@@ -184,6 +227,68 @@ export default function AgentOffersPage() {
         <Legend cls="bg-warning" label="pendiente / ajustada" />
         <Legend cls="bg-text-secondary/40" label="pausada / borrador" />
       </div>
+
+      <ConfirmDialog
+        open={publishTarget !== null}
+        title={publishTarget === 'all' ? 'Publicar todas las propuestas' : `Publicar propuestas de ${publishTarget ? CHANNEL_LABEL[publishTarget] : ''}`}
+        message={publishConfirmMessage(targetOffers)}
+        confirmLabel={`Publicar ${targetOffers.length}`}
+        cancelLabel="Cancelar"
+        busy={publishing}
+        onConfirm={() => void doPublish()}
+        onCancel={() => setPublishTarget(null)}
+      />
+    </div>
+  )
+}
+
+/** Desglose honesto por canal para la confirmación. */
+function publishConfirmMessage(offers: AgentOffer[]): string {
+  const n = { shop: 0, glovo: 0, uber: 0, justeat: 0 } as Record<OfferChannel, number>
+  for (const o of offers) n[o.channel]++
+  const parts: string[] = []
+  if (n.shop) parts.push(`${n.shop} en Shop (se publican solas)`)
+  if (n.glovo) parts.push(`${n.glovo} en Glovo (las publica el robot)`)
+  if (n.uber) parts.push(`${n.uber} en Uber (se activan; publícalas a mano en Uber Manager)`)
+  if (n.justeat) parts.push(`${n.justeat} en JustEat (se activan; publícalas a mano en JustEat)`)
+  if (parts.length === 0) return 'No hay propuestas que publicar.'
+  return `Vas a publicar ${offers.length} ${offers.length === 1 ? 'oferta' : 'ofertas'}: ${parts.join(' · ')}.`
+}
+
+/** Panel de resultado tras publicar: qué salió de verdad + deberes "a mano". */
+function PublishResultBanner({ result, onClose }: { result: PublishResult; onClose: () => void }) {
+  const manual = result.manualUber.length + result.manualJustEat.length
+  return (
+    <div className="mb-4 rounded-lg border border-success/40 bg-success-bg px-3 py-2.5 text-sm">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2 text-success">
+          <CheckCircle2 size={16} />
+          <span className="font-medium">
+            Publicadas: {result.shopPublished} en Shop · {result.glovoQueued} en Glovo (al robot)
+          </span>
+        </div>
+        <button type="button" onClick={onClose} className="text-text-secondary hover:text-text-primary"><X size={14} /></button>
+      </div>
+
+      {manual > 0 && (
+        <div className="mt-2 text-text-secondary">
+          <div className="flex items-center gap-1.5 text-warning mb-1">
+            <Hand size={13} /> Pendientes de publicar a mano ({manual}):
+          </div>
+          {result.manualUber.length > 0 && (
+            <div className="ml-4"><b className="text-text-primary">Uber Manager:</b> {result.manualUber.join(' · ')}</div>
+          )}
+          {result.manualJustEat.length > 0 && (
+            <div className="ml-4"><b className="text-text-primary">JustEat:</b> {result.manualJustEat.join(' · ')}</div>
+          )}
+        </div>
+      )}
+
+      {result.errors.length > 0 && (
+        <div className="mt-2 text-danger">
+          {result.errors.length} con error: {result.errors.map((e) => e.name).join(', ')}
+        </div>
+      )}
     </div>
   )
 }
@@ -200,12 +305,14 @@ function Legend({ cls, label }: { cls: string; label: string }) {
 // Columna de canal
 // ─────────────────────────────────────────────────────────────────────
 
-function ChannelColumn({ channel, offers, expanded, onToggleExpand, accountId }: {
+function ChannelColumn({ channel, offers, expanded, onToggleExpand, accountId, proposalCount, onPublish }: {
   channel: OfferChannel
   offers: AgentOffer[]
   expanded: boolean
   onToggleExpand: () => void
   accountId: string
+  proposalCount: number
+  onPublish: () => void
 }) {
   const pub = PUBLISH_META[
     channel === 'shop' ? 'auto' : channel === 'glovo' ? 'robot' : 'manual'
@@ -220,8 +327,19 @@ function ChannelColumn({ channel, offers, expanded, onToggleExpand, accountId }:
         <span className="text-sm font-medium text-text-primary">{CHANNEL_LABEL[channel]}</span>
         <span className="text-xs text-text-secondary">{offers.length}</span>
       </div>
-      <div className={`flex items-center gap-1 px-1 mb-2.5 text-xs ${pub.cls}`}>
-        <PubIcon size={12} /> {pub.label}
+      <div className="flex items-center justify-between px-1 mb-2.5">
+        <span className={`flex items-center gap-1 text-xs ${pub.cls}`}>
+          <PubIcon size={12} /> {pub.label}
+        </span>
+        {proposalCount > 0 && (
+          <button
+            type="button"
+            onClick={onPublish}
+            className="inline-flex items-center gap-1 rounded-md border border-accent/40 bg-accent/10 px-2 py-0.5 text-xs text-accent hover:bg-accent/15"
+          >
+            <Rocket size={11} /> Publicar {proposalCount}
+          </button>
+        )}
       </div>
 
       {offers.length === 0 ? (

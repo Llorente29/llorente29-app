@@ -17,7 +17,7 @@
 // `coupon` no está en database.ts → cast `supabase as any` (db()).
 
 import { supabase } from '@/lib/supabase'
-import { previewImpact } from '@/modules/kitchen/services/platformOffersService'
+import { previewImpact, approveCampaign, type CampaignDraft } from '@/modules/kitchen/services/platformOffersService'
 
 function db(): any {
   if (!supabase) throw new Error('Supabase no está configurado.')
@@ -277,4 +277,98 @@ export async function previewOfferMargin(
   } catch {
     return null
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// PUBLICAR (T3) — despachador HONESTO por canal
+//   - Shop     → active=true (publica de verdad; es la tienda propia)
+//   - Glovo    → active=true + encola promo_push_job (approveCampaign) → robot
+//   - Uber     → active=true, sin job (no hay robot) → lista "a mano en Uber Manager"
+//   - JustEat  → active=true, sin job (el CHECK ni admite el job) → lista "a mano en JustEat"
+// Nunca finge que Uber/JustEat salieron solas: devuelve la lista de deberes por canal.
+// ─────────────────────────────────────────────────────────────────────
+
+export interface PublishResult {
+  shopPublished: number
+  glovoQueued: number
+  manualUber: string[]
+  manualJustEat: string[]
+  errors: { id: string; name: string; error: string }[]
+}
+
+function offerLabel(o: AgentOffer): string {
+  const b = o.brandNames[0] ?? o.name
+  const l = o.locationNames[0]
+  return l ? `${b} · ${l}` : b
+}
+
+/**
+ * Publica un conjunto de ofertas del board, con verdad por canal. Devuelve el
+ * desglose (publicadas de verdad + pendientes "a mano" + errores). No recalcula
+ * margen: publicar = confiar en la propuesta del agente (su guardarraíl ya corrió).
+ */
+export async function publishOffers(accountId: string, offers: AgentOffer[]): Promise<PublishResult> {
+  const res: PublishResult = { shopPublished: 0, glovoQueued: 0, manualUber: [], manualJustEat: [], errors: [] }
+
+  // channel_id de Glovo (para el draft del approve). Se resuelve una sola vez.
+  const { data: chans } = await db()
+    .from('sales_channel').select('id, name').eq('account_id', accountId).eq('is_active', true)
+  const glovoId = ((chans ?? []) as Array<{ id: string; name: string }>)
+    .find((c) => (c.name ?? '').toLowerCase().replace(/\s+/g, '') === 'glovo')?.id ?? null
+
+  for (const o of offers) {
+    try {
+      if (o.channel === 'shop') {
+        const { error } = await db().from('coupon').update({ active: true, paused_at: null }).eq('id', o.id)
+        if (error) throw new Error(error.message)
+        res.shopPublished++
+      } else if (o.channel === 'glovo') {
+        if (!glovoId) throw new Error('Canal Glovo no encontrado en la cuenta.')
+        // El cupón ya trae su scope (marcas/locales/platos): construimos el draft mínimo
+        // y delegamos en approveCampaign (activa + encola jobs con pos_hint y nombres —
+        // el path del robot, ya probado).
+        const { data: c } = await db().from('coupon').select('scope').eq('id', o.id).maybeSingle()
+        const scope = ((c as { scope?: Record<string, unknown> } | null)?.scope ?? {}) as Record<string, unknown>
+        const brandIds = Array.isArray(scope.brand_ids) ? (scope.brand_ids as string[]) : []
+        const menuItemIdsRaw = Array.isArray(scope.menu_item_ids) ? (scope.menu_item_ids as string[]) : []
+        const menuItemIds = menuItemIdsRaw.length > 0 ? menuItemIdsRaw : null
+        if (brandIds.length === 0) throw new Error('La oferta no tiene marcas en su alcance.')
+
+        const { data: brs } = await db().from('brand').select('id, name').in('id', brandIds)
+        const brandNames: Record<string, string> = {}
+        for (const b of ((brs ?? []) as Array<{ id: string; name: string }>)) brandNames[b.id] = b.name
+
+        const draft: CampaignDraft = {
+          id: o.id,
+          accountId,
+          name: o.name,
+          channel: 'glovo',
+          channelId: glovoId,
+          discountType: o.discountType,
+          value: o.value,
+          scope: { brandIds, menuItemIds },
+          weekdays: o.weekdays,
+          timeFrom: o.timeFrom,
+          timeTo: o.timeTo,
+          startsAt: o.startsAt,
+          endsAt: o.endsAt,
+          budgetMax: o.budgetMax,
+          marginFloorPct: null,
+          omnibusRefNote: o.reasonRaw,
+        }
+        await approveCampaign({ couponId: o.id, draft, brandNames })
+        res.glovoQueued++
+      } else {
+        // uber / justeat → activar y marcar "a mano" (no hay publicación automática).
+        const { error } = await db().from('coupon').update({ active: true, paused_at: null }).eq('id', o.id)
+        if (error) throw new Error(error.message)
+        if (o.channel === 'uber') res.manualUber.push(offerLabel(o))
+        else res.manualJustEat.push(offerLabel(o))
+      }
+    } catch (e) {
+      res.errors.push({ id: o.id, name: o.name, error: e instanceof Error ? e.message : 'error' })
+    }
+  }
+
+  return res
 }
