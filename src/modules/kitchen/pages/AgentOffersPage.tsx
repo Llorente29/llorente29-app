@@ -16,11 +16,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Loader2, RefreshCw, Megaphone, Zap, Bot, Hand, Target, AlertTriangle,
   ChevronDown, ChevronRight, Sparkles, Filter, Rocket, CheckCircle2, X,
+  Pause, Play, CircleStop, Trash2,
 } from 'lucide-react'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import {
   listAgentOffers, getLastRunAt, groupByChannel, previewOfferMargin, publishOffers,
+  publishOne, pauseOffer, resumeOffer, endOffer, discardOffer,
   OFFER_CHANNELS, CHANNEL_LABEL,
   type AgentOffer, type OfferChannel, type OfferStatus, type PublishMode, type OfferMargin,
   type PublishResult,
@@ -142,6 +144,42 @@ export default function AgentOffersPage() {
     }
   }, [accountId, targetOffers, load])
 
+  // Acciones por oferta.
+  const [actionBusyId, setActionBusyId] = useState<string | null>(null)
+  const [confirmAction, setConfirmAction] = useState<{ offer: AgentOffer; kind: 'end' | 'discard' } | null>(null)
+
+  const runAction = useCallback(async (offer: AgentOffer, kind: 'publish' | 'pause' | 'resume' | 'end' | 'discard') => {
+    if (!accountId) return
+    // Finalizar y descartar piden confirmación.
+    if (kind === 'end' || kind === 'discard') { setConfirmAction({ offer, kind }); return }
+    setActionBusyId(offer.id)
+    setError(null)
+    try {
+      const r = kind === 'publish' ? await publishOne(accountId, offer)
+        : kind === 'pause' ? await pauseOffer(accountId, offer)
+        : await resumeOffer(accountId, offer)
+      if (!r.ok) setError(r.reason ?? 'No se pudo completar la acción.')
+      await load()
+    } finally {
+      setActionBusyId(null)
+    }
+  }, [accountId, load])
+
+  const doConfirmedAction = useCallback(async () => {
+    if (!accountId || !confirmAction) return
+    const { offer, kind } = confirmAction
+    setActionBusyId(offer.id)
+    setError(null)
+    try {
+      const r = kind === 'end' ? await endOffer(accountId, offer) : await discardOffer(accountId, offer)
+      if (!r.ok) setError(r.reason ?? 'No se pudo completar la acción.')
+      setConfirmAction(null)
+      await load()
+    } finally {
+      setActionBusyId(null)
+    }
+  }, [accountId, confirmAction, load])
+
   if (!accountId) {
     return <div className="p-6 text-sm text-text-secondary">Selecciona una cuenta para ver las ofertas.</div>
   }
@@ -215,6 +253,8 @@ export default function AgentOffersPage() {
               accountId={accountId}
               proposalCount={proposalsByChannel[ch].length}
               onPublish={() => setPublishTarget(ch)}
+              onAction={runAction}
+              actionBusyId={actionBusyId}
             />
           ))}
         </div>
@@ -237,6 +277,26 @@ export default function AgentOffersPage() {
         busy={publishing}
         onConfirm={() => void doPublish()}
         onCancel={() => setPublishTarget(null)}
+      />
+
+      <ConfirmDialog
+        open={confirmAction !== null}
+        title={confirmAction?.kind === 'end'
+          ? (confirmAction.offer.channel === 'glovo' ? 'Finalizar en Glovo (irreversible)' : 'Finalizar oferta')
+          : 'Descartar propuesta'}
+        message={confirmAction?.kind === 'end'
+          ? (confirmAction.offer.channel === 'glovo'
+              ? 'Glovo cancelará la promoción en todos los establecimientos. Es IRREVERSIBLE: para volver a ofrecerla habrá que crear una nueva.'
+              : confirmAction.offer.channel === 'shop'
+                ? 'Se desactivará la oferta en tu tienda. Podrás reactivarla cuando quieras.'
+                : 'Se retirará la oferta del canal.')
+          : 'Se eliminará esta propuesta del agente. No afecta a nada publicado.'}
+        confirmLabel={confirmAction?.kind === 'end' ? 'Finalizar' : 'Descartar'}
+        cancelLabel="Cancelar"
+        tone="danger"
+        busy={actionBusyId === confirmAction?.offer.id}
+        onConfirm={() => void doConfirmedAction()}
+        onCancel={() => setConfirmAction(null)}
       />
     </div>
   )
@@ -305,7 +365,7 @@ function Legend({ cls, label }: { cls: string; label: string }) {
 // Columna de canal
 // ─────────────────────────────────────────────────────────────────────
 
-function ChannelColumn({ channel, offers, expanded, onToggleExpand, accountId, proposalCount, onPublish }: {
+function ChannelColumn({ channel, offers, expanded, onToggleExpand, accountId, proposalCount, onPublish, onAction, actionBusyId }: {
   channel: OfferChannel
   offers: AgentOffer[]
   expanded: boolean
@@ -313,6 +373,8 @@ function ChannelColumn({ channel, offers, expanded, onToggleExpand, accountId, p
   accountId: string
   proposalCount: number
   onPublish: () => void
+  onAction: (offer: AgentOffer, kind: 'publish' | 'pause' | 'resume' | 'end' | 'discard') => void
+  actionBusyId: string | null
 }) {
   const pub = PUBLISH_META[
     channel === 'shop' ? 'auto' : channel === 'glovo' ? 'robot' : 'manual'
@@ -346,7 +408,7 @@ function ChannelColumn({ channel, offers, expanded, onToggleExpand, accountId, p
         <div className="text-xs text-text-secondary/60 px-1 py-6 text-center">Sin ofertas.</div>
       ) : (
         <div className="flex flex-col gap-2">
-          {visible.map((o) => <OfferCard key={o.id} offer={o} accountId={accountId} />)}
+          {visible.map((o) => <OfferCard key={o.id} offer={o} accountId={accountId} onAction={onAction} actionBusyId={actionBusyId} />)}
           {rest > 0 && (
             <button
               type="button"
@@ -371,7 +433,12 @@ function ChannelColumn({ channel, offers, expanded, onToggleExpand, accountId, p
 // Tarjeta de oferta (+ expand con detalle y margen real)
 // ─────────────────────────────────────────────────────────────────────
 
-function OfferCard({ offer, accountId }: { offer: AgentOffer; accountId: string }) {
+function OfferCard({ offer, accountId, onAction, actionBusyId }: {
+  offer: AgentOffer
+  accountId: string
+  onAction: (offer: AgentOffer, kind: 'publish' | 'pause' | 'resume' | 'end' | 'discard') => void
+  actionBusyId: string | null
+}) {
   const [open, setOpen] = useState(false)
   const [margin, setMargin] = useState<OfferMargin | null | 'loading'>(null)
 
@@ -501,7 +568,72 @@ function OfferCard({ offer, accountId }: { offer: AgentOffer; accountId: string 
               <Hand size={12} className="shrink-0 mt-0.5" /> {offer.reason.manualNote}
             </div>
           )}
+
+          {/* Acciones por oferta (según estado). "Editar" llega en la pieza 2. */}
+          <OfferActions offer={offer} onAction={onAction} busy={actionBusyId === offer.id} />
         </div>
+      )}
+    </div>
+  )
+}
+
+function ActionBtn({ onClick, busy, icon: Icon, label, danger }: {
+  onClick: () => void
+  busy: boolean
+  icon: typeof Rocket
+  label: string
+  danger?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={(e) => { e.stopPropagation(); onClick() }}
+      className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs disabled:opacity-50 ${
+        danger
+          ? 'border-danger/30 bg-danger-bg text-danger hover:bg-danger/10'
+          : 'border-border-default bg-card text-text-secondary hover:bg-page/60'
+      }`}
+    >
+      {busy ? <Loader2 size={11} className="animate-spin" /> : <Icon size={11} />} {label}
+    </button>
+  )
+}
+
+function OfferActions({ offer, onAction, busy }: {
+  offer: AgentOffer
+  onAction: (offer: AgentOffer, kind: 'publish' | 'pause' | 'resume' | 'end' | 'discard') => void
+  busy: boolean
+}) {
+  const s = offer.status
+  const isProposal = s === 'propuesta' || s === 'borrador'
+  const isLive = s === 'publicada' || s === 'pendiente'
+  const isPaused = s === 'pausada'
+  if (!isProposal && !isLive && !isPaused) return null
+
+  return (
+    <div className="flex flex-wrap gap-1.5 pt-1">
+      {isProposal && (
+        <>
+          <ActionBtn onClick={() => onAction(offer, 'publish')} busy={busy} icon={Rocket} label="Publicar" />
+          <ActionBtn onClick={() => onAction(offer, 'discard')} busy={busy} icon={Trash2} label="Descartar" danger />
+        </>
+      )}
+      {isLive && (
+        <>
+          <ActionBtn onClick={() => onAction(offer, 'pause')} busy={busy} icon={Pause} label="Pausar" />
+          {offer.channel !== 'shop' && (
+            <ActionBtn onClick={() => onAction(offer, 'end')} busy={busy} icon={CircleStop} label="Finalizar" danger />
+          )}
+        </>
+      )}
+      {isPaused && (
+        <>
+          <ActionBtn onClick={() => onAction(offer, 'resume')} busy={busy} icon={Play} label="Reanudar" />
+          {offer.channel !== 'shop' && (
+            <ActionBtn onClick={() => onAction(offer, 'end')} busy={busy} icon={CircleStop} label="Finalizar" danger />
+          )}
+        </>
       )}
     </div>
   )

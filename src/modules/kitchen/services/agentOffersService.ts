@@ -17,7 +17,12 @@
 // `coupon` no está en database.ts → cast `supabase as any` (db()).
 
 import { supabase } from '@/lib/supabase'
-import { previewImpact, approveCampaign, type CampaignDraft } from '@/modules/kitchen/services/platformOffersService'
+import {
+  previewImpact, approveCampaign,
+  pauseCampaign, resumeCampaign, endCampaign, deleteDraft,
+  type CampaignDraft,
+} from '@/modules/kitchen/services/platformOffersService'
+import { toggleCampaign, deleteCampaign } from '@/modules/shop/admin/campaignService'
 
 function db(): any {
   if (!supabase) throw new Error('Supabase no está configurado.')
@@ -371,4 +376,61 @@ export async function publishOffers(accountId: string, offers: AgentOffer[]): Pr
   }
 
   return res
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// ACCIONES POR OFERTA (individuales, channel-aware). Reutilizan lo probado:
+// plataforma → pause/resume/end/deleteDraft (encolan job para Glovo); Shop →
+// toggle_campaign / delete_campaign (RPC con guard de canjes/sistema).
+// ─────────────────────────────────────────────────────────────────────
+
+export type ActionResult = { ok: boolean; reason?: string }
+const emsg = (e: unknown): string => (e instanceof Error ? e.message : 'error')
+
+/** Publica UNA oferta (misma verdad por canal que "Publicar todas"). */
+export async function publishOne(accountId: string, o: AgentOffer): Promise<ActionResult> {
+  const r = await publishOffers(accountId, [o])
+  return { ok: r.errors.length === 0, reason: r.errors[0]?.error }
+}
+
+/** Pausa una oferta publicada. Plataforma encola 'pause' (Glovo) + paused_at; Shop desactiva. */
+export async function pauseOffer(accountId: string, o: AgentOffer): Promise<ActionResult> {
+  try {
+    if (o.channel === 'shop') return await toggleCampaign(accountId, o.id, false)
+    await pauseCampaign(o.id)
+    return { ok: true }
+  } catch (e) { return { ok: false, reason: emsg(e) } }
+}
+
+/** Reanuda una oferta pausada. */
+export async function resumeOffer(accountId: string, o: AgentOffer): Promise<ActionResult> {
+  try {
+    if (o.channel === 'shop') return await toggleCampaign(accountId, o.id, true)
+    await resumeCampaign(o.id)
+    return { ok: true }
+  } catch (e) { return { ok: false, reason: emsg(e) } }
+}
+
+/**
+ * Finaliza una oferta. En plataforma es IRREVERSIBLE (Glovo cancela y no permite
+ * reactivar). En Shop no hay "finalizar": equivale a desactivar (pausar).
+ */
+export async function endOffer(accountId: string, o: AgentOffer): Promise<ActionResult> {
+  try {
+    if (o.channel === 'shop') return await toggleCampaign(accountId, o.id, false)
+    await endCampaign(o.id)
+    return { ok: true }
+  } catch (e) { return { ok: false, reason: emsg(e) } }
+}
+
+/**
+ * Descarta una propuesta/borrador (sin publicaciones). Plataforma usa deleteDraft
+ * (rechaza si ya tiene jobs). Shop usa delete_campaign (rechaza sistema/canjes).
+ */
+export async function discardOffer(accountId: string, o: AgentOffer): Promise<ActionResult> {
+  try {
+    if (o.channel === 'shop') return await deleteCampaign(accountId, o.id)
+    await deleteDraft(o.id)
+    return { ok: true }
+  } catch (e) { return { ok: false, reason: emsg(e) } }
 }
