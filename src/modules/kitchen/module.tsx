@@ -2,7 +2,7 @@
 //
 // ModuleDefinition del módulo Folvy Kitchen (escandallo de cocina).
 // Sigue el patrón canónico de appcc/module.tsx.
-import { LayoutDashboard, ChefHat, BookOpen, TrendingUp, Target, Truck, UtensilsCrossed, SlidersHorizontal, CircleSlash, Megaphone } from 'lucide-react'
+import { LayoutDashboard, ChefHat, BookOpen, TrendingUp, Target, Truck, UtensilsCrossed, SlidersHorizontal, CircleSlash, Megaphone, Sliders } from 'lucide-react'
 import type { ModuleDefinition } from '@/shell/types'
 import KitchenDashboardPage from '@/modules/kitchen/pages/KitchenDashboardPage'
 import KitchenItemsPage from '@/modules/kitchen/pages/KitchenItemsPage'
@@ -20,6 +20,7 @@ import KitchenSettingsPage from '@/modules/kitchen/pages/KitchenSettingsPage'
 // PlatformOffersPage (glovo/uber) como pantalla principal de 'ofertas'. La vieja se
 // conserva accesible por URL en 'ofertas-clasico' hasta validar la nueva en vivo.
 import AgentOffersPage from '@/modules/kitchen/pages/AgentOffersPage'
+import OfferRulesPage from '@/modules/kitchen/pages/OfferRulesPage'
 import PlatformOffersPage from '@/modules/kitchen/pages/PlatformOffersPage'
 import KitchenAvailabilityPage from '@/modules/kitchen/pages/KitchenAvailabilityPage'
 import SuppliersPage from '@/modules/kitchen/pages/SuppliersPage'
@@ -45,6 +46,7 @@ export const kitchenModule: ModuleDefinition = {
     { path: 'rentabilidad',      element: <KitchenProfitabilityPage /> },
     { path: 'ingenieria-menus',  element: <KitchenMenuEngineeringPage /> },
     { path: 'ofertas',           element: <AgentOffersPage /> },
+    { path: 'ofertas-reglas',    element: <OfferRulesPage /> },
     { path: 'ofertas-clasico',   element: <PlatformOffersPage /> },
     { path: 'ajustes',           element: <KitchenSettingsPage /> },
   ],
@@ -60,6 +62,7 @@ export const kitchenModule: ModuleDefinition = {
       { id: 'kitchen_profitability', label: 'Rentabilidad',        icon: TrendingUp,        path: 'rentabilidad',     requiredRole: 'manager' },
       { id: 'kitchen_menu_eng',      label: 'Ingeniería de menús', icon: Target,            path: 'ingenieria-menus', requiredRole: 'manager' },
       { id: 'kitchen_offers',        label: 'Ofertas del agente',  icon: Megaphone,         path: 'ofertas',          requiredRole: 'manager' },
+      { id: 'kitchen_offer_rules',   label: 'Reglas de ofertas',   icon: Sliders,           path: 'ofertas-reglas',   requiredRole: 'manager' },
       { id: 'kitchen_settings',      label: 'Ajustes',             icon: SlidersHorizontal, path: 'ajustes',          requiredRole: 'manager' },
     ],
   },
