@@ -22,9 +22,10 @@ interface Props {
 
 export default function FichajeEmpleado({ employee, onBack }: Props) {
   const { locations, addClockEntry, staff } = useApp()
-  const [step, setStep] = useState<'idle' | 'fetching-gps' | 'choosing-location' | 'confirming' | 'success' | 'error'>('idle')
+  const [step, setStep] = useState<'idle' | 'fetching-gps' | 'choosing-location' | 'confirming' | 'warn-confirm' | 'success' | 'error'>('idle')
   const [position, setPosition] = useState<GeolocationPosition | null>(null)
   const [errorMsg, setErrorMsg] = useState('')
+  const [pendingDist, setPendingDist] = useState(0)
   const [selectedLocId, setSelectedLocId] = useState<string | null>(null)
 
   // Locales donde puede fichar
@@ -93,11 +94,9 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
   // En modo 'warn' se puede fichar aunque esté fuera de zona (GPS caprichoso / sin coords).
   const canClock = !!selectedLoc && (inZone || geofenceMode === 'warn')
 
-  async function doClockAction() {
+  function doClockAction() {
     if (!selectedLoc || !position) return
-    setStep('confirming')
 
-    // El radio efectivo viene del local (no del kiosko fijo).
     const config = { ...defaultKioskoConfig(selectedLoc.id), geofenceRadiusM: radiusForLoc(selectedLoc) }
     const result = buildClockEntry(currentEmp, selectedLoc, config, position)
 
@@ -107,12 +106,28 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
       return
     }
 
-    // Modo 'warn': se ficha aunque esté fuera de zona, pero queda marcado con la
-    // distancia para que el manager pueda revisarlo (GPS caprichoso / sin coords).
-    const entry = (!result.withinGeofence && geofenceMode === 'warn')
-      ? { ...result.entry, address: `Fuera de zona · ${Math.round(result.distanceM)}m` }
-      : result.entry
+    // Modo 'warn' y FUERA de zona: no fichamos directo. Mostramos un aviso rojo muy
+    // visible y exigimos confirmación explícita (fricción + transparencia). El fichaje
+    // queda igualmente marcado con la distancia para el manager.
+    if (!result.withinGeofence && geofenceMode === 'warn') {
+      setPendingDist(Math.round(result.distanceM))
+      setStep('warn-confirm')
+      return
+    }
 
+    // Dentro de zona: fichaje normal, directo.
+    void writeEntry(false, 0)
+  }
+
+  // Escribe el fichaje. `outside` marca la distancia en el registro para auditoría.
+  async function writeEntry(outside: boolean, distM: number) {
+    if (!selectedLoc || !position) return
+    setStep('confirming')
+    const config = { ...defaultKioskoConfig(selectedLoc.id), geofenceRadiusM: radiusForLoc(selectedLoc) }
+    const result = buildClockEntry(currentEmp, selectedLoc, config, position)
+    const entry = outside
+      ? { ...result.entry, address: `Fuera de zona · ${distM}m` }
+      : result.entry
     await addClockEntry(currentEmp.id, entry)
     setStep('success')
   }
@@ -149,6 +164,38 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
               <button onClick={() => { setStep('idle'); setErrorMsg('') }}
                 className="flex-1 py-3 rounded-xl bg-accent text-text-on-accent font-medium hover:bg-accent-hover transition-base">
                 Reintentar
+              </button>
+            </div>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
+  if (step === 'warn-confirm') {
+    return (
+      <div className="min-h-screen bg-page p-4">
+        <div className="max-w-md mx-auto pt-12">
+          <Card className="p-6 text-center border-2 border-danger">
+            <div className="flex justify-center mb-3">
+              <AlertTriangle size={56} className="text-danger" />
+            </div>
+            <p className="font-bold text-danger text-xl">Estás fichando FUERA del local</p>
+            <p className="text-3xl font-extrabold text-danger mt-2">a {pendingDist} m</p>
+            <p className="text-sm text-text-secondary mt-3">
+              Estás a {pendingDist} metros de <b>{selectedLoc?.name}</b>. El fichaje se registrará
+              con esta distancia y tu encargado podrá verlo. Ficha solo si de verdad estás en el local.
+            </p>
+            <div className="flex gap-2 mt-6">
+              <button
+                onClick={() => setStep('idle')}
+                className="flex-1 py-3 rounded-xl bg-accent-bg text-text-primary font-medium hover:bg-page transition-base">
+                Cancelar
+              </button>
+              <button
+                onClick={() => writeEntry(true, pendingDist)}
+                className="flex-1 py-3 rounded-xl bg-danger text-text-on-accent font-bold hover:opacity-90 transition-base">
+                Fichar igualmente
               </button>
             </div>
           </Card>
