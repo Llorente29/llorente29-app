@@ -32,6 +32,14 @@ export interface MenuCategory {
   products: MenuDish[]
 }
 
+// Plato de regalo activo ahora de ESTA marca (banner del menú). null = no hay.
+// Misma forma que el free_gift de cuenta del hub: { name, min, value }.
+export interface MenuGiftInfo {
+  name: string
+  min: number | null            // "desde X€"; null = sin mínimo
+  value: number | null          // precio normal del regalo
+}
+
 export interface BrandMenu {
   brandId: string
   name: string
@@ -44,6 +52,7 @@ export interface BrandMenu {
   isOpen: boolean
   locationIds: string[]
   freeDelivery: { active: boolean; minSubtotal: number | null } | null
+  gift: MenuGiftInfo | null
   categories: MenuCategory[]
 }
 
@@ -69,6 +78,9 @@ export async function getBrandMenu(slug: string, brandId: string): Promise<Brand
     locationIds: Array.isArray(data.location_ids) ? data.location_ids : [],
     freeDelivery: data.free_delivery && data.free_delivery.active
       ? { active: true, minSubtotal: data.free_delivery.minSubtotal != null ? Number(data.free_delivery.minSubtotal) : null }
+      : null,
+    gift: data.gift && data.gift.name
+      ? { name: String(data.gift.name), min: data.gift.min != null ? Number(data.gift.min) : null, value: data.gift.value != null ? Number(data.gift.value) : null }
       : null,
     categories: (data.categories ?? []).map((c: any) => ({
       id: c.id,

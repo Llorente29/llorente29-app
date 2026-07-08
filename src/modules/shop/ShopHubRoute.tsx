@@ -494,6 +494,11 @@ function BrandCard({ b, freeDelivery, onOpen }: { b: HubBrand; freeDelivery?: bo
         {freeDelivery && (
           <div style={S.brandFreeTag}><Moto size={12} color={C.green} /> Envío gratis</div>
         )}
+        {b.gift && (
+          <div style={S.brandGiftTag}>
+            <span aria-hidden>🎁</span> {b.gift.name} gratis{b.gift.min != null ? ` desde ${eur(b.gift.min)}` : ''}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -511,6 +516,7 @@ const S: Record<string, React.CSSProperties> = {
   couponBanner: { background: '#FFF3D6', color: '#7A5A12', borderBottom: '1px solid #F2DCA0', fontSize: 13.5, fontWeight: 700, textAlign: 'center', padding: '10px 16px' },
   freeShipStrip: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: C.greenBg, color: C.green, borderBottom: `1px solid ${C.green}22`, fontSize: 13, fontWeight: 800, padding: '8px 16px' },
   brandFreeTag: { display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 8, color: C.green, fontSize: 12.5, fontWeight: 700 },
+  brandGiftTag: { display: 'flex', alignItems: 'center', gap: 5, marginTop: 8, color: C.amber, fontSize: 12.5, fontWeight: 700 },
   logo: { display: 'flex', alignItems: 'center', gap: 8, fontWeight: 900, fontSize: 20, letterSpacing: '-.03em' },
   logoDot: { width: 11, height: 11, borderRadius: '50%', background: C.accent },
   logoImg: { height: 50, width: 'auto', maxWidth: 260, objectFit: 'contain', display: 'block' },

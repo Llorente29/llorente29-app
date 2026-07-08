@@ -162,6 +162,13 @@ export default function BrandMenuRoute({ slug, brandId, onBack, onCheckout }: { 
             </button>
           )
         })()}
+        {/* Banner del plato de regalo por marca (solo si esta marca lo tiene activo). */}
+        {menu.gift && (
+          <div style={S.giftBanner}>
+            <span aria-hidden>🎁</span>{' '}
+            {menu.gift.name} gratis{menu.gift.min != null ? ` desde ${eur(menu.gift.min)}` : ' con tu pedido'}
+          </div>
+        )}
         {menu.categories.length === 0 && (
           <div style={S.center}>Esta marca aún no tiene platos disponibles.</div>
         )}
