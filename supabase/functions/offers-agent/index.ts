@@ -175,6 +175,13 @@ Deno.serve(async (req) => {
     for (const r of (hourlyRows ?? []) as Array<any>) hourlyMap.set(r.brand_id, r);
     signals.hourly = hourlyRows;
 
+    // Señal del regalo (v3 · 3b): plato más barato de regalar + food-cost-ratio real por
+    // marca → el agente calcula el mínimo que mantiene el margen tras regalar.
+    const { data: giftRows } = await supa.rpc("agent_gift_signal", { p_account_id: accountId });
+    const giftMap = new Map<string, any>();
+    for (const r of (giftRows ?? []) as Array<any>) giftMap.set(r.brand_id, r);
+    signals.gift = giftRows;
+
     const jsDow = new Date().getDay();
     const isoToday = jsDow === 0 ? 7 : jsDow;
     const nextDows = [0, 1, 2].map(o => ((isoToday - 1 + o) % 7) + 1);
@@ -425,7 +432,7 @@ Deno.serve(async (req) => {
         o.reason += ` · ajustado ${o.pct}%→${chosenPct}% para respetar margen ${cfg.margin_floor_pct}% en ${o.row.channel_name}`;
       }
       o.pct = chosenPct;  // el % final es el que aguantó
-      const scopeItems = (pv.under.length > 0 || baseInfo.baseIds !== null) ? pv.ok.map((r: any) => r.menu_item_id) : null;
+      let scopeItems = (pv.under.length > 0 || baseInfo.baseIds !== null) ? pv.ok.map((r: any) => r.menu_item_id) : null;
 
       const isShop = o.row.channel_name === "Shop";
       const mode = isShop ? cfg.shop_mode : cfg.platform_mode;
@@ -437,6 +444,50 @@ Deno.serve(async (req) => {
 
       const kind = o.kind;
       const isItemPct = kind === "item_percent";
+
+      // ── JUGADA A/B (v3 · 3b): si la marca puede permitirse REGALO, se baja a un %
+      //    MODERADO que deja sitio al regalo (acumulable) y esa marca NO lleva Happy Hour
+      //    (el regalo es su gancho; así no se acumulan descuentos que revienten el 45%).
+      //    Si no cabe regalo → jugada A (% fuerte + Happy Hour), como estaba.
+      let giftPlay = false, giftBasePct = 0, giftMin = 0, giftInfo: any = null;
+      if (isShop && isItemPct) {
+        const gi = giftMap.get(o.brand.id);
+        const fcr = gi ? Number(gi.fcr) : NaN;
+        if (gi && gi.gift_item_id && Number.isFinite(fcr) && fcr > 0) {
+          const floorR = Number(cfg.margin_floor_pct) / 100;
+          for (const cand of [20, 15, 10, 5]) {
+            if (cand > o.pct) continue;                                // no subir sobre el % ya elegido
+            const denom = (1 - cand / 100) * (1 - floorR) - fcr;
+            if (denom > 0) {
+              let m = Math.ceil(Number(gi.gift_cost) / denom);
+              if (m < 12) m = 12;                                       // mínimo razonable (solo mejora margen)
+              if (m <= 30) { giftPlay = true; giftBasePct = cand; giftMin = m; giftInfo = gi; break; }
+            }
+          }
+        }
+      }
+      if (giftPlay && giftBasePct !== o.pct) {
+        // Recomputar el alcance al % moderado (a menor %, aguantan más platos).
+        const gk = `${o.brand.id}:${o.channelId}:${giftBasePct}`;
+        let gcand = previewCache.get(gk) as any;
+        if (!gcand) {
+          const { data: gimp } = await supa.rpc("preview_platform_promo_impact", {
+            p_account_id: accountId, p_channel_id: o.channelId, p_brand_ids: [o.brand.id],
+            p_discount_type: "percent", p_discount_value: giftBasePct, p_menu_item_ids: baseInfo.baseIds,
+            p_margin_floor_pct: cfg.margin_floor_pct,
+          });
+          gcand = { ok: (gimp ?? []).filter((r: any) => r.status === "ok"), under: (gimp ?? []).filter((r: any) => r.status === "bajo_suelo") };
+          previewCache.set(gk, gcand);
+        }
+        if (gcand.ok.length > 0) {
+          o.pct = giftBasePct;
+          scopeItems = (gcand.under.length > 0 || baseInfo.baseIds !== null) ? gcand.ok.map((r: any) => r.menu_item_id) : null;
+          o.reason += ` · jugada regalo: base moderada ${giftBasePct}% + ${giftInfo.gift_name} gratis desde ${giftMin}€`;
+        } else {
+          giftPlay = false;  // si al % moderado no aguanta nada, cae a jugada A
+        }
+      }
+
       const name = `[Agente] ${o.pct}%${isItemPct ? " carta" : ""} ${o.brand.name} · ${o.row.channel_name}${isShop ? "" : " · " + locShort}`;
       const value = o.pct;
       const scopeFinal: Record<string, unknown> = {
@@ -497,7 +548,7 @@ Deno.serve(async (req) => {
       //    tiene un valle fiable y hay margen para ir MÁS profundo que la base, se crea
       //    una 2ª oferta con franja en el valle. Concurrencia resuelta por el motor:
       //    _shop_item_offer elige la de mayor value → en el valle gana la Happy Hour.
-      const hv = isItemPct && isShop ? hourlyMap.get(o.brand.id) : null;
+      const hv = isItemPct && isShop && !giftPlay ? hourlyMap.get(o.brand.id) : null;
       const dayOrders = hv ? Number(hv.day_orders ?? 0) : 0;
       if (hv && coupon?.id && dayOrders >= 30 && o.pct < HH_MAX) {
         // Cascada desde HH_MAX hacia abajo: el % más profundo que aguante y > base
@@ -557,6 +608,39 @@ Deno.serve(async (req) => {
           } else if (hhErr) {
             decisions.push({ brand: o.brand.name, warn: `happy_hour: ${hhErr.message}` });
           }
+        }
+      }
+
+      // ── PLATO DE REGALO (v3 · 3b): se crea si la marca entró en JUGADA B (base moderada
+      //    con hueco para el regalo). El margen ≥ suelo ya está garantizado por el cálculo
+      //    del mínimo. Reglas de BD: free_item con code=null, value>0 y auto_apply=true.
+      if (giftPlay && coupon?.id && giftInfo) {
+        const giftReason = `REGALO ${o.brand.name}: ${giftInfo.gift_name} gratis desde ${giftMin}€ (acumulable al ${o.pct}% de carta). Coste regalo ${Number(giftInfo.gift_cost).toFixed(2)}€; margen ≥ ${cfg.margin_floor_pct}% garantizado.`;
+        const { data: giftC, error: giftErr } = await supa.from("coupon").insert({
+          account_id: accountId,
+          code: null,
+          name: `[Agente] Regalo ${giftInfo.gift_name} · ${o.brand.name} · Shop · desde ${giftMin}€`,
+          discount_type: "fixed", value: 1,
+          applies_to: "subtotal",
+          channels: ["shop"], kind: "free_item",
+          auto_apply: true,
+          min_subtotal: giftMin,
+          scope: { brand_ids: [o.brand.id], location_ids: null },
+          starts_at: nowIso, ends_at: new Date(Date.now() + endDays * 864e5).toISOString(),
+          active: autoPublish, origin: "agent",
+          omnibus_ref_note: `Agente ${nowIso.slice(0, 10)}: ${giftReason}`,
+        }).select("id").single();
+        if (!giftErr && giftC?.id) {
+          await supa.from("campaign_scope").insert([{ coupon_id: giftC.id, menu_item_id: giftInfo.gift_item_id }]);
+          created++;
+          decisions.push({
+            brand: o.brand.name, channel: "Shop", location: "Shop",
+            kind: "free_item", min_subtotal: giftMin, gift: giftInfo.gift_name, reason: giftReason,
+            verdict: autoPublish ? "PUBLICADA (Shop auto · regalo)" : "PROPUESTA (regalo)",
+            coupon_id: giftC.id,
+          });
+        } else if (giftErr) {
+          decisions.push({ brand: o.brand.name, warn: `gift: ${giftErr.message}` });
         }
       }
     }
