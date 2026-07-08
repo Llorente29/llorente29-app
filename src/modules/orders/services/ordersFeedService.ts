@@ -97,6 +97,12 @@ export interface OrderFeedItem {
   eta_delivery: string | null
   transport_price: number | null
   dispatch_error: string | null         // motivo del último fallo de despacho (null = sin fallo)
+  // ── Rider de Catcher (webhook catcher-webhook; poblados en sale). ──
+  rider_transport_type: string | null   // 'moto' | 'bici' | 'coche'… → icono + etiqueta
+  rider_seen_at: string | null          // cuándo se vio esa posición/estado → "visto a las HH:MM"
+  has_courier: boolean | null           // ¿hay repartidor asignado?
+  rider_lat: number | null              // última posición (no streaming); de momento no se pinta
+  rider_lng: number | null
   lineas: OrderFeedLine[]
 }
 
@@ -199,7 +205,7 @@ export function childVisual(child: OrderFeedChild): ChildVisual {
 //   - recogida u otros → sin fila.
 
 export type DeliveryRowKind = 'own' | 'platform' | 'none'
-export type DeliveryTone = 'pending' | 'active' | 'done'
+export type DeliveryTone = 'pending' | 'active' | 'done' | 'failed' | 'canceled'
 
 export interface DeliveryView {
   kind: DeliveryRowKind
@@ -209,6 +215,9 @@ export interface DeliveryView {
   rider: string | null
   phone: string | null
   etaText: string | null
+  transport: string | null      // rider_transport_type (icono + etiqueta en el front)
+  seenText: string | null       // "visto a las HH:MM" (Europe/Madrid) desde rider_seen_at
+  hasCourier: boolean           // ¿hay repartidor asignado? (has_courier o rider_name)
   supportPhone: string | null   // soporte de la plataforma (Glovo/Uber/JE), sólo en kind='platform'
 }
 
@@ -232,22 +241,38 @@ function carrierPretty(code: string): string {
 }
 
 const DELIVERY_STATE: Record<string, { label: string; tone: DeliveryTone }> = {
+  // Estados NORMALIZADOS de Catcher (docs/catcher_webhook_contrato.md).
+  matching:            { label: 'Buscando repartidor', tone: 'pending' },
+  matched:             { label: 'Repartidor asignado', tone: 'active' },
+  picking:             { label: 'Recogiendo en local', tone: 'active' },
+  in_picking_location: { label: 'Recogiendo en local', tone: 'active' },
+  in_delivery:         { label: 'En camino', tone: 'active' },
+  delivered:           { label: 'Entregado', tone: 'done' },
+  failed:              { label: 'No entregado', tone: 'failed' },
+  canceled:            { label: 'Cancelado', tone: 'canceled' },
+  // Sinónimos/estados heredados de otros brokers (se conservan por robustez).
   created:    { label: 'Buscando repartidor', tone: 'pending' },
   pending:    { label: 'Buscando repartidor', tone: 'pending' },
   searching:  { label: 'Buscando repartidor', tone: 'pending' },
   assigned:   { label: 'Repartidor asignado', tone: 'active' },
   accepted:   { label: 'Repartidor asignado', tone: 'active' },
   picked_up:  { label: 'En camino', tone: 'active' },
-  in_delivery:{ label: 'En camino', tone: 'active' },
   on_the_way: { label: 'En camino', tone: 'active' },
-  delivered:  { label: 'Entregado', tone: 'done' },
   completed:  { label: 'Entregado', tone: 'done' },
-  cancelled:  { label: 'Cancelado', tone: 'pending' },
-  failed:     { label: 'Entrega fallida', tone: 'pending' },
+  cancelled:  { label: 'Cancelado', tone: 'canceled' },
 }
 function stateView(state: string | null): { label: string; tone: DeliveryTone } {
   if (!state) return { label: 'Reparto propio', tone: 'active' }
   return DELIVERY_STATE[state.toLowerCase()] ?? { label: state, tone: 'active' }
+}
+
+// "visto a las HH:MM" (hora local Europe/Madrid) desde rider_seen_at. null si no hay.
+function seenText(iso: string | null): string | null {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return null
+  const hhmm = d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' })
+  return `visto a las ${hhmm}`
 }
 
 function etaText(iso: string | null): string | null {
@@ -268,6 +293,9 @@ export function deliveryView(order: OrderFeedItem): DeliveryView {
       stateLabel: st.label, stateTone: st.tone,
       rider: order.rider_name, phone: order.rider_phone,
       etaText: etaText(order.eta_delivery),
+      transport: order.rider_transport_type ?? null,
+      seenText: seenText(order.rider_seen_at),
+      hasCourier: order.has_courier === true || !!order.rider_name,
       supportPhone: null,
     }
   }
@@ -277,10 +305,11 @@ export function deliveryView(order: OrderFeedItem): DeliveryView {
       carrierLabel: order.channel ?? 'la plataforma',
       stateLabel: null, stateTone: 'active',
       rider: null, phone: null, etaText: null,
+      transport: null, seenText: null, hasCourier: false,
       supportPhone: supportPhoneFor(order.channel),
     }
   }
-  return { kind: 'none', carrierLabel: null, stateLabel: null, stateTone: 'active', rider: null, phone: null, etaText: null, supportPhone: null }
+  return { kind: 'none', carrierLabel: null, stateLabel: null, stateTone: 'active', rider: null, phone: null, etaText: null, transport: null, seenText: null, hasCourier: false, supportPhone: null }
 }
 
 // ¿Es un pedido de reparto propio pendiente de despachar (modo manual o tras fallo)?

@@ -16,7 +16,7 @@
 // MARCAR LÍNEA: check por plato (kds_mark_line, compartido con el KDS).
 
 import { useState } from 'react'
-import { ChefHat, Check, Printer, Bike, Phone, ChevronDown, ChevronUp, RefreshCw, AlertTriangle } from 'lucide-react'
+import { ChefHat, Check, Printer, Bike, Car, Phone, ChevronDown, ChevronUp, RefreshCw, AlertTriangle } from 'lucide-react'
 import { timeLevel, channelLabel, ticketCode } from '@/modules/kds/kdsUtils'
 import ChannelBadge from './ChannelBadge'
 import TicketPreviewModal from './TicketPreviewModal'
@@ -187,6 +187,16 @@ function LineRow({
   )
 }
 
+// Vehículo del rider (Catcher): emoji + etiqueta + icono lucide para la cabecera.
+function transportMeta(t: string | null): { emoji: string; label: string; car: boolean } | null {
+  const v = (t ?? '').toLowerCase()
+  if (!v) return null
+  if (v.includes('bici') || v.includes('bike') || v.includes('cycl')) return { emoji: '🚲', label: 'Bici', car: false }
+  if (v.includes('coche') || v.includes('car')) return { emoji: '🚗', label: 'Coche', car: true }
+  if (v.includes('moto') || v.includes('scooter') || v.includes('vespa')) return { emoji: '🛵', label: 'Moto', car: false }
+  return { emoji: '🛵', label: t as string, car: false }
+}
+
 // ── Fila de reparto. Tres caras según el estado del despacho propio. ──
 function DeliveryRow({ order, onDispatched }: { order: OrderFeedItem; onDispatched?: () => void }) {
   const [open, setOpen] = useState(false)
@@ -243,6 +253,8 @@ function DeliveryRow({ order, onDispatched }: { order: OrderFeedItem; onDispatch
 
   const toneCls =
     d.stateTone === 'done' ? 'text-success bg-success-bg border-success/30'
+    : d.stateTone === 'failed' ? 'text-danger bg-danger-bg border-danger/30'
+    : d.stateTone === 'canceled' ? 'text-text-secondary bg-page border-border-default'
     : d.stateTone === 'pending' ? 'text-warning bg-warning-bg border-warning/30'
     : 'text-success bg-success-bg border-success/30'
 
@@ -279,17 +291,22 @@ function DeliveryRow({ order, onDispatched }: { order: OrderFeedItem; onDispatch
   }
 
   // (C) Reparto propio despachado (Catcher/Jelp): plegable con rider + teléfono.
-  const hasDetail = !!(d.rider || d.phone || d.etaText)
+  const tp = transportMeta(d.transport)
+  const HeadIcon = tp?.car ? Car : Bike
+  const hasDetail = !!(d.rider || d.phone || d.etaText || d.seenText || tp)
   return (
     <div className="mx-4 mb-2.5 ml-5 rounded-xl border border-[#CFE4FA] bg-[#F0F7FF] overflow-hidden">
       <button
         onClick={() => hasDetail && setOpen(o => !o)}
         className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left ${hasDetail ? 'cursor-pointer' : 'cursor-default'}`}
       >
-        <Bike size={16} className="text-[#2563A8] shrink-0" />
+        <HeadIcon size={16} className="text-[#2563A8] shrink-0" />
         <span className="text-[13px] font-bold text-[#2563A8]">{d.carrierLabel}</span>
         {d.stateLabel && (
           <span className={`text-[11.5px] font-extrabold px-2.5 py-0.5 rounded-full border ${toneCls}`}>{d.stateLabel}</span>
+        )}
+        {d.seenText && (
+          <span className="text-[11px] text-text-secondary truncate hidden sm:inline">· {d.seenText}</span>
         )}
         {hasDetail && (
           <span className="ml-auto text-[#2563A8] shrink-0">
@@ -300,9 +317,18 @@ function DeliveryRow({ order, onDispatched }: { order: OrderFeedItem; onDispatch
       {open && hasDetail && (
         <div className="flex items-center justify-between gap-2 px-3 py-2.5 border-t border-[#DCEAFB]">
           <div className="min-w-0">
-            {d.rider && <div className="text-[14px] font-bold text-text-primary truncate">{d.rider}</div>}
+            {d.rider && (
+              <div className="text-[14px] font-bold text-text-primary truncate">
+                {tp && <span className="mr-1" aria-label={tp.label} title={tp.label}>{tp.emoji}</span>}{d.rider}
+              </div>
+            )}
             {d.etaText && <div className="text-[12px] text-text-secondary">Llega en {d.etaText}</div>}
-            {!d.rider && !d.etaText && <div className="text-[12.5px] text-text-secondary">Sin datos del repartidor todavía</div>}
+            {d.seenText && <div className="text-[11px] text-text-secondary/80">{d.seenText}</div>}
+            {!d.rider && !d.etaText && (
+              <div className="text-[12.5px] text-text-secondary">
+                {d.hasCourier ? 'Repartidor asignado' : 'Sin datos del repartidor todavía'}
+              </div>
+            )}
           </div>
           {d.phone && (
             <a
