@@ -107,6 +107,7 @@ export interface ClockEntry {
   source?: 'kiosko' | 'movil' | 'manual'
   locationIdAtClock?: string         // local en el que fichó (puede no ser el principal)
   photoDataUrl?: string              // foto opcional al fichar (base64)
+  voided?: boolean                   // borrado lógico: el fichaje anulado se conserva para el rastro legal
 }
 
 export interface StaffDocument {

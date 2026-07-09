@@ -353,6 +353,7 @@ interface ClockRow {
   source: 'kiosko' | 'movil' | 'manual'
   location_id_at_clock: string | null
   photo_data_url: string | null
+  voided: boolean | null
 }
 
 function rowToClock(r: ClockRow): ClockEntry & { employeeId: string } {
@@ -370,6 +371,7 @@ function rowToClock(r: ClockRow): ClockEntry & { employeeId: string } {
     source: r.source,
     locationIdAtClock: r.location_id_at_clock || undefined,
     photoDataUrl: r.photo_data_url || undefined,
+    voided: r.voided ?? false,
     employeeId: r.employee_id,
   }
 }
@@ -411,7 +413,8 @@ export async function fetchClockEntries(accountId: string | null): Promise<{ emp
     .in('employee_id', employeeIds)
     .order('datetime', { ascending: false })
   if (error) { console.error('Supabase fetchClockEntries (clock_entries):', error); return null }
-  return (data as ClockRow[]).map(r => {
+  // database.ts aún no incluye `voided` (deuda: regenerar). Cast vía unknown.
+  return (data as unknown as ClockRow[]).map(r => {
     const ce = rowToClock(r)
     return { employeeId: ce.employeeId, entry: ce }
   })
