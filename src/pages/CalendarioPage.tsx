@@ -10,8 +10,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   Wand2, Save, Check, Megaphone, X, Plus,
-  AlertTriangle, Copy, Euro, Clock, TrendingUp, TrendingDown, CalendarDays, Leaf, Users, SlidersHorizontal,
-  Settings, ChevronDown, MoreHorizontal, Trash2,
+  AlertTriangle, Copy, Euro, TrendingUp, TrendingDown, CalendarDays, Leaf, Users, SlidersHorizontal,
+  Settings, ChevronDown, MoreHorizontal, Trash2, Sparkles,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import {
@@ -259,6 +259,64 @@ export default function CalendarioPage() {
     const pct = weekSales && weekSales > 0 ? (cost / weekSales) * 100 : null
     return { hours: Math.round(hours * 10) / 10, cost: Math.round(cost * 100) / 100, pct }
   }, [workloads, hourlyCost, weekSales])
+
+  // Personal necesario por (día,hora) desde la RPC del modelo de trabajo (Fase A).
+  const [laborReq, setLaborReq] = useState<LaborRequirementRow[]>([])
+  useEffect(() => {
+    if (!activeAccountId || !locationId) { setLaborReq([]); return }
+    let cancel = false
+    fetchLaborRequirement(activeAccountId, locationId, weekStart).then(r => { if (!cancel) setLaborReq(r) })
+    return () => { cancel = true }
+  }, [activeAccountId, locationId, weekStart])
+
+  // Cobertura HONESTA hora a hora: personal asignado vs necesario por franja.
+  const coverage = useMemo(() => {
+    const reqHour: number[][] = Array.from({ length: 7 }, () => new Array(24).fill(0))
+    for (const r of laborReq) if (r.dow >= 0 && r.dow <= 6 && r.hora >= 0 && r.hora < 24) reqHour[r.dow][r.hora] += r.required
+    const asgHour: number[][] = Array.from({ length: 7 }, () => new Array(24).fill(0))
+    const tById = new Map(templates.map(t => [t.id, t]))
+    for (const tid of Object.keys(cells)) {
+      const t = tById.get(tid); if (!t) continue
+      const sh = Number(t.start_time.slice(0, 2))
+      const eh0 = Number(t.end_time.slice(0, 2))
+      const end = eh0 <= sh ? eh0 + 24 : eh0
+      for (const dk of Object.keys(cells[tid])) {
+        const d = parseInt(dk, 10)
+        const n = cells[tid][dk]?.length || 0
+        if (!n) continue
+        for (let x = sh; x < end; x++) asgHour[d][x % 24] += n
+      }
+    }
+    let covSum = 0, reqSum = 0, gapHours = 0
+    const covByDay = new Array(7).fill(1) as number[]
+    const dayHasReq = new Array(7).fill(false) as boolean[]
+    for (let d = 0; d < 7; d++) {
+      let dc = 0, dr = 0
+      for (let h = 0; h < 24; h++) {
+        const req = reqHour[d][h]
+        if (req > 0) {
+          dayHasReq[d] = true
+          const cov = Math.min(asgHour[d][h], req)
+          covSum += cov; reqSum += req; dc += cov; dr += req
+          if (asgHour[d][h] < req) gapHours += req - asgHour[d][h]
+        }
+      }
+      covByDay[d] = dr > 0 ? dc / dr : 1
+    }
+    const weekCov = reqSum > 0 ? covSum / reqSum : 1
+    const gapDays = covByDay.filter((c, i) => dayHasReq[i] && c < 0.95).length
+    return { covByDay, weekCov, gapDays, gapHours, hasReq: reqSum > 0 }
+  }, [laborReq, cells, templates])
+
+  const heroStats = useMemo(() => {
+    const perDay = demandLevels.perDay
+    const weekPlatos = Math.round(perDay.reduce((a, b) => a + b, 0))
+    let peakIdx = 0
+    for (let i = 1; i < 7; i++) if (perDay[i] > perDay[peakIdx]) peakIdx = i
+    const altaDays = demandLevels.level.filter(l => l === 'alta').length
+    const weekWord = altaDays >= 3 ? 'alta' : altaDays >= 1 ? 'media-alta' : 'media'
+    return { weekPlatos, peakIdx, peakPlatos: Math.round(perDay[peakIdx]), weekWord }
+  }, [demandLevels])
 
   const eur0 = (n: number) => n.toLocaleString('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })
 
@@ -534,26 +592,48 @@ export default function CalendarioPage() {
         </div>
       </div>
 
-      {/* Coste en vivo del cuadrante (se recalcula al editar) */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="rounded-lg p-3 bg-page border border-border-default">
-          <div className="flex items-center gap-1.5 text-xs text-text-secondary"><Clock size={13} /> Horas asignadas</div>
-          <div className="text-2xl font-bold text-text-primary mt-0.5">{costLive.hours} h</div>
+      {/* Hero inteligente: demanda → cobertura → coste (la historia de la semana) */}
+      <div className="bg-card border border-border-default rounded-2xl overflow-hidden">
+        <div className="flex items-start gap-2.5 px-4 py-3 border-b border-border-default" style={{ background: 'linear-gradient(90deg,#f3faf8,#ffffff)' }}>
+          <span className="w-7 h-7 rounded-lg grid place-items-center shrink-0" style={{ background: '#e4f0ee', color: '#2f6f6b' }}><Sparkles size={15} /></span>
+          <p className="text-[13px] text-text-primary leading-snug m-0">
+            {forecast.length === 0
+              ? 'Aún no hay previsión de demanda para esta semana en este local.'
+              : <>Demanda <b>{heroStats.weekWord}</b> esta semana{coverage.hasReq && <>, cobertura <b>{Math.round(coverage.weekCov * 100)}%</b> — {coverage.gapDays > 0 ? <>faltan <b>{coverage.gapDays} día(s)</b> por reforzar</> : 'todo cubierto'}</>}{costLive.pct != null && <>. Coste <b>{costLive.pct.toFixed(1)}%</b> sobre ventas {costLive.pct > 30 ? `(${(costLive.pct - 30).toFixed(1)} pts sobre objetivo)` : '(dentro de objetivo)'}</>}.
+            </>}
+          </p>
         </div>
-        <div className="rounded-lg p-3 bg-page border border-border-default">
-          <div className="flex items-center gap-1.5 text-xs text-text-secondary"><Euro size={13} /> Coste semana (real)</div>
-          <div className="text-2xl font-bold text-text-primary mt-0.5">{eur0(costLive.cost)}</div>
-        </div>
-        <div className={`rounded-lg p-3 border ${costLive.pct == null ? 'bg-page border-border-default' : costLive.pct <= 30 ? 'bg-success-bg border-success/40' : 'bg-warning-bg border-warning/40'}`}>
-          <div className={`flex items-center gap-1.5 text-xs ${costLive.pct == null ? 'text-text-secondary' : costLive.pct <= 30 ? 'text-success' : 'text-warning'}`}><TrendingUp size={13} /> % personal / ventas</div>
-          <div className={`text-2xl font-bold mt-0.5 ${costLive.pct == null ? 'text-text-secondary' : costLive.pct <= 30 ? 'text-success' : 'text-warning'}`}>
-            {costLive.pct == null ? '—' : `${costLive.pct.toFixed(1)}%`}
+        <div className="grid grid-cols-3">
+          <div className="p-4 border-r border-border-default">
+            <div className="text-[11px] font-bold uppercase tracking-wide text-text-secondary flex items-center gap-1.5"><TrendingUp size={13} /> Demanda prevista</div>
+            <div className="text-2xl font-extrabold text-text-primary mt-1">~{heroStats.weekPlatos} <span className="text-sm font-semibold text-text-secondary">platos</span></div>
+            <div className="text-xs text-text-secondary mt-0.5">{heroStats.weekPlatos > 0 ? `Pico el ${DAY_LABELS_SHORT[heroStats.peakIdx as DayOfWeek]} (${heroStats.peakPlatos})` : 'Sin datos aún'}</div>
+            <div className="flex items-end gap-1 h-8 mt-2">
+              {DAYS.map(d => {
+                const u = demandLevels.perDay[d], r = u / (demandLevels.max || 1)
+                const c = demandLevels.level[d] === 'alta' ? '#12564f' : demandLevels.level[d] === 'media' ? '#2f8f86' : '#b7ddd7'
+                return <span key={d} className="flex-1 rounded-t" style={{ height: `${Math.max(6, r * 100)}%`, background: u > 0 ? c : '#eceae6' }} />
+              })}
+            </div>
+          </div>
+          <div className="p-4 border-r border-border-default">
+            <div className="text-[11px] font-bold uppercase tracking-wide text-text-secondary flex items-center gap-1.5"><Users size={13} /> Personal cubierto</div>
+            <div className="text-2xl font-extrabold text-text-primary mt-1">{coverage.hasReq ? `${Math.round(coverage.weekCov * 100)}%` : '—'}</div>
+            <div className="h-2 rounded-full mt-2 overflow-hidden" style={{ background: '#fbe8e3' }}>
+              <div className="h-full rounded-full" style={{ width: `${coverage.hasReq ? Math.round(coverage.weekCov * 100) : 0}%`, background: '#1f9d6b' }} />
+            </div>
+            <div className="text-xs text-text-secondary mt-1.5">{!coverage.hasReq ? 'Configura el modelo de trabajo' : coverage.gapHours > 0 ? `Faltan ${Math.round(coverage.gapHours)} h · ${coverage.gapDays} día(s)` : 'Todo cubierto'}</div>
+          </div>
+          <div className="p-4">
+            <div className="text-[11px] font-bold uppercase tracking-wide text-text-secondary flex items-center gap-1.5"><Euro size={13} /> Coste / ventas</div>
+            <div className="text-2xl font-extrabold text-text-primary mt-1 flex items-center gap-2">
+              {costLive.pct == null ? '—' : `${costLive.pct.toFixed(1)}%`}
+              {costLive.pct != null && <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-full" style={costLive.pct > 30 ? { background: '#faf0d8', color: '#c2890f' } : { background: '#e7f4ee', color: '#1f9d6b' }}>objetivo 30%</span>}
+            </div>
+            <div className="text-xs text-text-secondary mt-1.5">{eur0(costLive.cost)} · {costLive.hours} h · ventas {weekSales == null ? '—' : eur0(weekSales)}</div>
           </div>
         </div>
       </div>
-      <p className="text-[11px] text-text-secondary -mt-2">
-        Coste = horas asignadas × coste/hora real de cada empleado (nóminas). % sobre ventas de esa semana en el local ({weekSales == null ? '—' : eur0(weekSales)}). Se actualiza al mover turnos.
-      </p>
 
       <div className="flex items-center gap-3 text-xs text-text-secondary empty:hidden">
         {employees.length === 0 && locationId && (
@@ -603,25 +683,16 @@ export default function CalendarioPage() {
         </div>
       )}
 
-      {/* Aviso: horario comercial abierto sin personal asignado */}
+      {/* Aviso discreto: horario comercial abierto sin personal */}
       {staffingGaps.length > 0 && (
-        <div className="rounded-lg p-3 mb-3" style={{ background: '#FFF3D6', border: '1px solid #F2DCA0' }}>
-          <div className="flex items-center gap-1.5 text-sm font-semibold mb-1.5" style={{ color: '#7A5A12' }}>
-            <AlertTriangle size={16} /> Horario comercial abierto sin personal asignado
-          </div>
-          <p className="text-xs mb-2" style={{ color: '#7A5A12' }}>
-            Este local figura abierto al público pero no hay ningún turno con personal en:
-          </p>
-          <div className="flex flex-wrap gap-x-4 gap-y-0.5">
-            {staffingGaps.map((g, i) => {
+        <div className="flex items-center gap-2 text-xs px-0.5" style={{ color: '#7A5A12' }}>
+          <AlertTriangle size={13} className="shrink-0" />
+          <span><span className="font-semibold">Sin personal en horario comercial:</span>{' '}
+            {staffingGaps.slice(0, 6).map(g => {
               const dl: Record<number, string> = { 1: 'Lun', 2: 'Mar', 3: 'Mié', 4: 'Jue', 5: 'Vie', 6: 'Sáb', 0: 'Dom' }
-              return (
-                <span key={i} className="text-xs" style={{ color: '#7A5A12' }}>
-                  <span className="font-semibold">{dl[g.weekday]}</span> {g.gapStart}–{g.gapEnd}
-                </span>
-              )
-            })}
-          </div>
+              return `${dl[g.weekday]} ${g.gapStart}–${g.gapEnd}`
+            }).join(' · ')}{staffingGaps.length > 6 ? ` +${staffingGaps.length - 6}` : ''}
+          </span>
         </div>
       )}
 
@@ -715,6 +786,13 @@ export default function CalendarioPage() {
                             )}
                           </span>
                         </button>
+                      )}
+                      {coverage.hasReq && units > 0 && (
+                        <div className="mt-1.5 px-0.5" title={`Cobertura ${Math.round(coverage.covByDay[d] * 100)}%`}>
+                          <div className="h-1 rounded-full overflow-hidden" style={{ background: '#fbe8e3' }}>
+                            <div className="h-full rounded-full" style={{ width: `${Math.round(coverage.covByDay[d] * 100)}%`, background: coverage.covByDay[d] >= 0.95 ? '#1f9d6b' : coverage.covByDay[d] >= 0.6 ? '#c2890f' : '#e0492e' }} />
+                          </div>
+                        </div>
                       )}
                     </th>
                   )
