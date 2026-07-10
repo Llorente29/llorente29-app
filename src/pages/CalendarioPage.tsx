@@ -11,6 +11,7 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   Wand2, Save, Check, Megaphone, X, Plus,
   AlertTriangle, Copy, Euro, Clock, TrendingUp, TrendingDown, CalendarDays, Leaf, Users, SlidersHorizontal,
+  Settings, ChevronDown, MoreHorizontal, Trash2,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import {
@@ -266,6 +267,8 @@ export default function CalendarioPage() {
   const [roles, setRoles] = useState<StaffRole[]>([])
   const [rolesModalOpen, setRolesModalOpen] = useState(false)
   const [laborModalOpen, setLaborModalOpen] = useState(false)
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false)
+  const [configMenuOpen, setConfigMenuOpen] = useState(false)
   const reloadRoles = () => { if (activeAccountId) fetchStaffRoles(activeAccountId).then(setRoles) }
   useEffect(() => {
     if (!activeAccountId) return
@@ -468,52 +471,67 @@ export default function CalendarioPage() {
 
         <div className="flex-1" />
 
+        {/* Estado del cuadrante (informa, no compite) */}
+        {scheduleRow?.status === 'published' ? (
+          <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-success-bg text-success"><span className="w-1.5 h-1.5 rounded-full bg-success" /> Publicado</span>
+        ) : (dirty || !scheduleRow) ? (
+          <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-warning-bg text-warning"><span className="w-1.5 h-1.5 rounded-full bg-warning" /> Borrador · sin guardar</span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-page text-text-secondary"><Check size={12} /> Guardado</span>
+        )}
+
+        <div className="w-px h-6 bg-border-default mx-1" />
+
+        {/* Primaria */}
         <button
           onClick={doGenerate}
           disabled={loading || templates.length === 0 || employees.length === 0}
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded text-text-on-accent text-sm font-medium disabled:opacity-40 bg-accent hover:bg-accent-hover transition-base"
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-text-on-accent text-sm font-semibold disabled:opacity-40 bg-accent hover:bg-accent-hover shadow-sm transition-base"
           title="Genera la matriz automáticamente respetando las reglas"
         >
-          <Wand2 size={14} /> Generar automático
+          <Wand2 size={15} /> Generar automático
         </button>
+
+        {/* Secundaria fuerte */}
         <button
-          onClick={clearCells}
-          className="px-3 py-2 rounded border border-border-default bg-card text-text-primary text-sm hover:bg-page transition-base"
+          onClick={doPublish}
+          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-accent text-accent bg-card text-sm font-semibold hover:bg-accent-bg transition-base"
+          title="Publicar para que los empleados lo vean en su móvil"
         >
-          Vaciar
+          <Megaphone size={15} /> Publicar
         </button>
+
+        {/* Secundaria */}
         <button
           onClick={doSave}
           disabled={!dirty}
-          className={`inline-flex items-center gap-1.5 px-3 py-2 rounded text-text-on-accent text-sm font-medium disabled:opacity-40 transition-base ${
-            dirty ? 'bg-warning hover:opacity-90' : 'bg-text-secondary'
-          }`}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border-default bg-card text-text-secondary text-sm font-medium hover:border-accent hover:text-text-primary disabled:opacity-40 transition-base"
         >
-          {dirty ? <><Save size={14} /> Guardar borrador</> : <><Check size={14} /> Guardado</>}
+          <Save size={14} /> Guardar
         </button>
-        <button
-          onClick={doValidate}
-          disabled={templates.length === 0 || employees.length === 0}
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded border border-border-default bg-card text-text-primary text-sm hover:bg-page disabled:opacity-40 transition-base"
-          title="Comprueba horas extras, descansos y solapes en el cuadrante actual"
-        >
-          <AlertTriangle size={14} /> Validar
-        </button>
-        <button
-          onClick={doPublish}
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded border-2 border-accent text-accent bg-card text-sm font-medium hover:bg-accent-bg transition-base"
-          title="Publicar para que los empleados lo vean en su móvil"
-        >
-          <Megaphone size={14} /> Publicar
-        </button>
-        <button
-          onClick={() => setCopyModalOpen(true)}
-          disabled={Object.keys(cells).length === 0}
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded border border-border-default bg-card text-text-primary text-sm hover:bg-page disabled:opacity-40 transition-base"
-          title="Copiar este horario a la semana siguiente, al resto del mes o a un rango"
-        >
-          <Copy size={14} /> Copiar
-        </button>
+
+        {/* Terciaria: más acciones */}
+        <div className="relative">
+          <button onClick={() => setMoreMenuOpen(o => !o)}
+            className="p-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-accent-bg transition-base" title="Más acciones">
+            <MoreHorizontal size={18} />
+          </button>
+          {moreMenuOpen && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setMoreMenuOpen(false)} />
+              <div className="absolute right-0 mt-1 z-50 w-48 bg-card border border-border-default rounded-xl shadow-lg overflow-hidden py-1">
+                <button onClick={() => { setMoreMenuOpen(false); doValidate() }}
+                  disabled={templates.length === 0 || employees.length === 0}
+                  className="w-full text-left px-3 py-2 text-sm text-text-primary hover:bg-page inline-flex items-center gap-2 disabled:opacity-40"><AlertTriangle size={14} /> Validar</button>
+                <button onClick={() => { setMoreMenuOpen(false); setCopyModalOpen(true) }}
+                  disabled={Object.keys(cells).length === 0}
+                  className="w-full text-left px-3 py-2 text-sm text-text-primary hover:bg-page inline-flex items-center gap-2 disabled:opacity-40"><Copy size={14} /> Copiar</button>
+                <button onClick={() => { setMoreMenuOpen(false); clearCells() }}
+                  className="w-full text-left px-3 py-2 text-sm text-danger hover:bg-danger-bg inline-flex items-center gap-2"><Trash2 size={14} /> Vaciar</button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Coste en vivo del cuadrante (se recalcula al editar) */}
@@ -537,22 +555,7 @@ export default function CalendarioPage() {
         Coste = horas asignadas × coste/hora real de cada empleado (nóminas). % sobre ventas de esa semana en el local ({weekSales == null ? '—' : eur0(weekSales)}). Se actualiza al mover turnos.
       </p>
 
-      <div className="flex items-center gap-3 text-xs text-text-secondary">
-        {scheduleRow?.status === 'published' && (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-success-bg text-success font-medium">
-            ● Publicado
-          </span>
-        )}
-        {scheduleRow?.status === 'draft' && (
-          <span className="px-2 py-0.5 rounded-full bg-warning-bg text-warning font-medium">
-            ● Borrador
-          </span>
-        )}
-        {!scheduleRow && (
-          <span className="px-2 py-0.5 rounded-full bg-accent-bg text-text-primary font-medium">
-            ● Sin guardar
-          </span>
-        )}
+      <div className="flex items-center gap-3 text-xs text-text-secondary empty:hidden">
         {employees.length === 0 && locationId && (
           <span className="inline-flex items-center gap-1 text-warning"><AlertTriangle size={12} /> No hay empleados activos en este local</span>
         )}
@@ -623,24 +626,41 @@ export default function CalendarioPage() {
       )}
 
       {templates.length > 0 && (
-        <div className="flex items-center gap-1">
-          <span className="text-xs text-text-secondary mr-1">Vista:</span>
-          <button onClick={() => setViewMode('empleado')}
-            className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-base ${viewMode === 'empleado' ? 'bg-accent text-text-on-accent' : 'bg-card border border-border-default text-text-secondary hover:border-accent'}`}>
-            Por empleado
-          </button>
-          <button onClick={() => setViewMode('turno')}
-            className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-base ${viewMode === 'turno' ? 'bg-accent text-text-on-accent' : 'bg-card border border-border-default text-text-secondary hover:border-accent'}`}>
-            Por turno
-          </button>
-          <button onClick={() => setLaborModalOpen(true)}
-            className="ml-auto text-xs px-3 py-1.5 rounded-lg font-medium bg-card border border-border-default text-text-secondary hover:border-accent transition-base inline-flex items-center gap-1.5">
-            <SlidersHorizontal size={13} /> Modelo de trabajo
-          </button>
-          <button onClick={() => setRolesModalOpen(true)}
-            className="text-xs px-3 py-1.5 rounded-lg font-medium bg-card border border-border-default text-text-secondary hover:border-accent transition-base">
-            Áreas
-          </button>
+        <div className="flex items-center gap-2">
+          <div className="inline-flex bg-accent-bg rounded-lg p-0.5">
+            <button onClick={() => setViewMode('empleado')}
+              className={`text-xs font-semibold px-3 py-1.5 rounded-md transition-base ${viewMode === 'empleado' ? 'bg-card text-text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary'}`}>
+              Por empleado
+            </button>
+            <button onClick={() => setViewMode('turno')}
+              className={`text-xs font-semibold px-3 py-1.5 rounded-md transition-base ${viewMode === 'turno' ? 'bg-card text-text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary'}`}>
+              Por turno
+            </button>
+          </div>
+          <div className="flex-1" />
+          <div className="relative">
+            <button onClick={() => setConfigMenuOpen(o => !o)}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-border-default bg-card text-text-primary hover:border-accent transition-base">
+              <Settings size={14} /> Configurar <ChevronDown size={13} className={`transition-base ${configMenuOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {configMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setConfigMenuOpen(false)} />
+                <div className="absolute right-0 mt-1 z-50 w-80 bg-card border border-border-default rounded-xl shadow-lg overflow-hidden">
+                  <button onClick={() => { setConfigMenuOpen(false); setLaborModalOpen(true) }}
+                    className="w-full text-left px-3 py-2.5 hover:bg-page flex items-start gap-3">
+                    <span className="w-8 h-8 rounded-lg bg-accent-bg grid place-items-center shrink-0 text-text-primary"><SlidersHorizontal size={15} /></span>
+                    <span><span className="block text-sm font-semibold text-text-primary">Modelo de trabajo</span><span className="block text-[11.5px] text-text-secondary leading-snug">Cuánta gente hace falta por hora y rol según la demanda. La cocina la dirigen los platos.</span></span>
+                  </button>
+                  <button onClick={() => { setConfigMenuOpen(false); setRolesModalOpen(true) }}
+                    className="w-full text-left px-3 py-2.5 hover:bg-page flex items-start gap-3 border-t border-border-default">
+                    <span className="w-8 h-8 rounded-lg bg-accent-bg grid place-items-center shrink-0 text-text-primary"><Users size={15} /></span>
+                    <span><span className="block text-sm font-semibold text-text-primary">Áreas del personal</span><span className="block text-[11.5px] text-text-secondary leading-snug">Cocina, sala, reparto… dan color a los turnos y dicen qué área produce platos.</span></span>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
 
