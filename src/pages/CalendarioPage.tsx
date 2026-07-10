@@ -10,7 +10,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   Wand2, Save, Check, Megaphone, X, Plus,
-  AlertTriangle, Copy, Euro, Clock, TrendingUp,
+  AlertTriangle, Copy, Euro, Clock, TrendingUp, TrendingDown, CalendarDays, Leaf,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import {
@@ -55,6 +55,19 @@ const DAYS: DayOfWeek[] = [0, 1, 2, 3, 4, 5, 6]
 
 const MONTH_LABELS = ['', 'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
 const MONTH_SHORT = ['', 'ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
+
+// Escala de DEMANDA: un solo tono (teal), claro→oscuro = más carga. Distinta del
+// accent (acciones, casi negro) y del semáforo success/danger/warning (estado de
+// cobertura). Para reskin del módulo, cambia solo este bloque.
+const DEMAND_STEP: Record<'baja' | 'media' | 'alta', {
+  bg: string; border: string; ink: string; sub: string; therm: string; track: string; chipBg: string; chipInk: string; word: string
+}> = {
+  baja:  { bg: '#EDF7F4', border: '#D3E9E5', ink: '#12433D', sub: '#4B6E68', therm: '#8FC7C0', track: '#DCECE9', chipBg: '#FFFFFF', chipInk: '#2F8F86', word: 'Baja' },
+  media: { bg: '#A9D8D0', border: '#8BC7BD', ink: '#0E433D', sub: '#2E5751', therm: '#1F7A70', track: '#8CC6BD', chipBg: '#FFFFFF', chipInk: '#155E57', word: 'Media' },
+  alta:  { bg: '#12564F', border: '#0E4842', ink: '#FFFFFF', sub: 'rgba(255,255,255,0.8)', therm: '#EAFFFB', track: 'rgba(255,255,255,0.25)', chipBg: 'rgba(255,255,255,0.16)', chipInk: '#EAFFFB', word: 'Alta' },
+}
+// Curva horaria intradía (misma familia teal, 3 intensidades).
+const HOUR_TEAL = { low: '#B7DDD7', mid: '#2F8F86', high: '#155E57' }
 
 // Desglose humano de la previsión ajustada (cuadrante y panel horario).
 function forecastDesglose(f: DemandForecast): string {
@@ -638,28 +651,43 @@ export default function CalendarioPage() {
                   const units = demandLevels.perDay[d]
                   const lv = demandLevels.level[d]
                   const f = forecastByDow[d]
-                  const style = lv === 'alta' ? 'bg-danger-bg text-danger border-danger/30'
-                    : lv === 'media' ? 'bg-warning-bg text-warning border-warning/30'
-                    : lv === 'baja' ? 'bg-success-bg text-success border-success/30'
-                    : 'bg-page text-text-secondary border-border-default'
-                  const label = lv === 'alta' ? 'Alta' : lv === 'media' ? 'Media' : lv === 'baja' ? 'Baja' : '—'
-                  // Ajuste de mes visible a simple vista (p.ej. "ago −35%") cuando pesa.
-                  const mesPct = f ? Math.round((f.idxMes - 1) * 100) : 0
-                  const showMes = f && Math.abs(f.idxMes - 1) >= 0.10
+                  const step = lv === 'none' ? null : DEMAND_STEP[lv]
+                  const cellMesPct = f ? Math.round((f.idxMes - 1) * 100) : 0
+                  const cellTPct = f ? Math.round((f.tendencia - 1) * 100) : 0
+                  const showMes = !!f && Math.abs((f?.idxMes ?? 1) - 1) >= 0.10
+                  const fillPct = Math.min(100, Math.round((units / (demandLevels.max || 1)) * 100))
                   return (
-                    <th key={d} className="px-2 py-2 text-center w-32 text-text-secondary font-medium align-top">
-                      {DAY_LABELS_SHORT[d]}<br />
-                      <span className="text-[10px] opacity-70 font-normal">{addDays(weekStart, d).slice(8, 10)}/{addDays(weekStart, d).slice(5, 7)}</span>
-                      {units > 0 && f && (
+                    <th key={d} className="px-1.5 py-2 align-top w-32">
+                      <div className="text-center text-text-secondary font-medium leading-tight">
+                        {DAY_LABELS_SHORT[d]}
+                        <span className="block text-[10px] opacity-70 font-normal">{addDays(weekStart, d).slice(8, 10)}/{addDays(weekStart, d).slice(5, 7)}</span>
+                      </div>
+                      {units > 0 && f && step && (
                         <button onClick={() => setDemandDayOpen(d)}
-                          className={`mt-1 w-full rounded-md border px-1.5 py-1 flex flex-col items-center leading-tight hover:opacity-80 transition-base ${style}`}
+                          className="mt-1.5 w-full rounded-xl border px-2 py-2 flex flex-col items-start leading-tight hover:brightness-[1.03] transition-base"
+                          style={{ background: step.bg, borderColor: step.border, color: step.ink }}
                           title={`Previsión ajustada · ${forecastDesglose(f)}`}>
-                          <span className="text-[10px] font-semibold">{label}</span>
-                          <span className="text-[11px] font-bold">{Math.round(units)}</span>
-                          <span className="text-[8px] font-normal opacity-70">platos prev.</span>
-                          {showMes && (
-                            <span className="text-[8px] font-semibold opacity-80">{MONTH_SHORT[f.mes]} {mesPct >= 0 ? '+' : ''}{mesPct}%</span>
-                          )}
+                          <span className="inline-flex items-center gap-1 text-[9px] font-extrabold uppercase tracking-wide px-1.5 py-0.5 rounded-full"
+                            style={{ background: step.chipBg, color: step.chipInk }}>
+                            <span className="w-1.5 h-1.5 rounded-full" style={{ background: step.chipInk }} />{step.word}
+                          </span>
+                          <span className="text-2xl font-extrabold leading-none mt-1">{Math.round(units)}</span>
+                          <span className="text-[10px] font-semibold" style={{ color: step.sub }}>platos prev.</span>
+                          <span className="w-full h-1.5 rounded-full mt-1.5 overflow-hidden" style={{ background: step.track }}>
+                            <span className="block h-full rounded-full" style={{ width: `${fillPct}%`, background: step.therm }} />
+                          </span>
+                          <span className="flex flex-wrap gap-1 mt-1.5">
+                            <span className="inline-flex items-center gap-0.5 text-[9.5px] font-bold px-1.5 py-0.5 rounded-md"
+                              style={{ background: step.chipBg, color: step.chipInk }}>
+                              {cellTPct >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}{cellTPct >= 0 ? '+' : ''}{cellTPct}%
+                            </span>
+                            {showMes && (
+                              <span className="inline-flex items-center gap-0.5 text-[9.5px] font-bold px-1.5 py-0.5 rounded-md"
+                                style={{ background: step.chipBg, color: step.chipInk }}>
+                                <Leaf size={10} />{MONTH_SHORT[f.mes]} {cellMesPct >= 0 ? '+' : ''}{cellMesPct}%
+                              </span>
+                            )}
+                          </span>
                         </button>
                       )}
                     </th>
@@ -864,6 +892,8 @@ function DemandDayPanel({ dow, hourly, forecast, onClose }: {
   const comida = fcHourly.slice(13, 16).reduce((a, b) => a + b, 0)
   const cena = fcHourly.slice(20, 23).reduce((a, b) => a + b, 0)
   const hours = fcHourly.map((_, h) => h).filter(h => h >= 7 && h <= 23)
+  const mesPct = forecast ? Math.round((forecast.idxMes - 1) * 100) : 0
+  const tPct = forecast ? Math.round((forecast.tendencia - 1) * 100) : 0
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
@@ -871,19 +901,46 @@ function DemandDayPanel({ dow, hourly, forecast, onClose }: {
         <div className="p-4 border-b border-border-default flex items-center justify-between">
           <div>
             <h3 className="font-semibold text-text-primary">Previsión de cocina · {dayName}</h3>
-            <p className="text-xs text-text-secondary mt-0.5">
-              ~{Math.round(total)} platos previstos · pico a las {peak}h · comida {Math.round(comida)} · cena {Math.round(cena)}
-            </p>
+            <p className="text-xs text-text-secondary mt-0.5">pico a las {peak}h · comida {Math.round(comida)} · cena {Math.round(cena)}</p>
           </div>
           <button onClick={onClose} className="text-text-secondary hover:text-text-primary"><X size={18} /></button>
         </div>
+        <div className="flex items-baseline gap-2 px-5 pt-4">
+          <span className="text-4xl font-extrabold" style={{ color: '#12564F' }}>{Math.round(total)}</span>
+          <span className="text-sm text-text-secondary font-semibold">platos previstos</span>
+        </div>
         {forecast && (
-          <div className="px-4 pt-3">
-            <div className="rounded-lg bg-page border border-border-default p-2.5 text-[11px] text-text-primary">
-              <span className="font-semibold">Cómo sale este número:</span> {forecastDesglose(forecast)}
-              {forecast.diasDatos < 21 && <span className="text-text-secondary"> · tendencia neutra (pocos datos aún)</span>}
+          <>
+            <div className="flex items-stretch gap-1.5 flex-wrap px-5 pt-3">
+              <div className="rounded-xl border px-2.5 py-1.5" style={{ background: '#FAF9F6', borderColor: '#ECE9E3' }}>
+                <div className="text-[10px] font-bold uppercase tracking-wide text-text-secondary">Base local</div>
+                <div className="text-base font-extrabold text-text-primary mt-0.5">{Math.round(forecast.baseAnual)}</div>
+              </div>
+              <div className="flex items-center text-text-secondary font-bold">×</div>
+              <div className="rounded-xl border px-2.5 py-1.5" style={{ background: '#FAF9F6', borderColor: '#ECE9E3' }}>
+                <div className="text-[10px] font-bold uppercase tracking-wide text-text-secondary flex items-center gap-1"><CalendarDays size={11} />{dayName}</div>
+                <div className="text-base font-extrabold text-text-primary mt-0.5">×{forecast.idxDow.toFixed(2)}</div>
+              </div>
+              <div className="flex items-center text-text-secondary font-bold">×</div>
+              <div className="rounded-xl border px-2.5 py-1.5" style={{ background: '#FAF9F6', borderColor: '#ECE9E3' }}>
+                <div className="text-[10px] font-bold uppercase tracking-wide text-text-secondary flex items-center gap-1"><Leaf size={11} />{MONTH_LABELS[forecast.mes]}</div>
+                <div className="text-base font-extrabold mt-0.5" style={{ color: mesPct < 0 ? '#C2890F' : '#1F9D6B' }}>{mesPct >= 0 ? '+' : ''}{mesPct}%</div>
+              </div>
+              <div className="flex items-center text-text-secondary font-bold">×</div>
+              <div className="rounded-xl border px-2.5 py-1.5" style={{ background: '#FAF9F6', borderColor: '#ECE9E3' }}>
+                <div className="text-[10px] font-bold uppercase tracking-wide text-text-secondary flex items-center gap-1">{tPct >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}Tendencia</div>
+                <div className="text-base font-extrabold mt-0.5" style={{ color: tPct >= 0 ? '#1F9D6B' : '#E0492E' }}>{tPct >= 0 ? '+' : ''}{tPct}%</div>
+              </div>
+              <div className="flex items-center text-text-secondary font-bold">=</div>
+              <div className="rounded-xl border px-2.5 py-1.5" style={{ background: '#D3E8E4', borderColor: '#9FCCC4' }}>
+                <div className="text-[10px] font-bold uppercase tracking-wide" style={{ color: '#155E57' }}>Previsión</div>
+                <div className="text-lg font-extrabold mt-0.5" style={{ color: '#155E57' }}>{Math.round(forecast.prevision)}</div>
+              </div>
             </div>
-          </div>
+            {forecast.diasDatos < 21 && (
+              <p className="px-5 pt-1.5 text-[11px] text-text-secondary">Tendencia neutra por ahora (pocos datos aún; se afina al acumular semanas).</p>
+            )}
+          </>
         )}
         <div className="p-5">
           <div className="flex items-end gap-1 h-52">
@@ -891,11 +948,11 @@ function DemandDayPanel({ dow, hourly, forecast, onClose }: {
               const u = fcHourly[h]
               const pct = (u / max) * 100
               const ratio = u / max
-              // Color sólido por intensidad: verde (flojo) → ámbar (medio) → rojo (punta).
-              const barColor = u <= 0 ? '#E5E5E0'
-                : ratio >= 0.66 ? '#E24B4A'
-                : ratio >= 0.33 ? '#EF9F27'
-                : '#639922'
+              // Un solo tono (teal), 3 intensidades: flojo (claro) → punta (oscuro).
+              const barColor = u <= 0 ? '#E5E7EB'
+                : ratio >= 0.66 ? HOUR_TEAL.high
+                : ratio >= 0.33 ? HOUR_TEAL.mid
+                : HOUR_TEAL.low
               return (
                 <div key={h} className="flex-1 flex flex-col items-center justify-end h-full group">
                   <div className="text-[10px] text-text-secondary mb-1 opacity-0 group-hover:opacity-100 transition-base">{Math.round(u)}</div>
@@ -907,12 +964,12 @@ function DemandDayPanel({ dow, hourly, forecast, onClose }: {
             })}
           </div>
           <div className="flex items-center gap-4 mt-3 text-[11px] text-text-secondary">
-            <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: '#639922' }} /> Carga baja</span>
-            <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: '#EF9F27' }} /> Media</span>
-            <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: '#E24B4A' }} /> Hora punta</span>
+            <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: HOUR_TEAL.low }} /> Horas flojas</span>
+            <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: HOUR_TEAL.mid }} /> Media</span>
+            <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: HOUR_TEAL.high }} /> Hora punta</span>
           </div>
           <p className="text-[11px] text-text-secondary mt-3">
-            La curva es la forma horaria de las últimas semanas (excluye bebidas y postres), escalada al total previsto del día (previsión ajustada = base del local × día de la semana × mes × tendencia). Clima y eventos aún no entran (hacen falta 20-30 locales para calibrarlos). Úsalo para poner más gente donde se concentra la carga.
+            La curva es la forma horaria de las últimas semanas (excluye bebidas y postres), escalada al total previsto del día. La barra más oscura es tu hora punta. Clima y eventos aún no entran (hacen falta 20-30 locales para calibrarlos). Pon más gente donde se concentra la carga.
           </p>
         </div>
       </div>
