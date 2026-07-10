@@ -96,6 +96,42 @@ export async function fetchDemandProfile(accountId: string, from: string, to: st
   }))
 }
 
+// Previsión ajustada de platos/día por local y semana.
+// previsión = (base_reciente / factor_estacional_base) × idx_dow × idx_mes × tendencia.
+// Sale de la RPC team_demand_forecast (reutiliza team_demand_coefficients + prior).
+export interface DemandForecast {
+  fecha: string
+  dow: number       // 0=Lunes .. 6=Domingo
+  mes: number       // 1..12
+  baseReciente: number   // media platos/día del local (cruda)
+  baseAnual: number      // base desestacionalizada (la que se multiplica)
+  idxDow: number
+  idxMes: number
+  factorBase: number     // factor estacional del periodo base
+  tendencia: number
+  prevision: number
+  diasDatos: number
+}
+
+export async function fetchDemandForecast(accountId: string, locationId: string, weekStart: string): Promise<DemandForecast[]> {
+  const { data, error } = await db().rpc('team_demand_forecast', { p_account: accountId, p_location: locationId, p_week_start: weekStart })
+  if (error) { console.error('team_demand_forecast:', error); return [] }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data as any[]).map(r => ({
+    fecha: r.fecha,
+    dow: Number(r.dow) || 0,
+    mes: Number(r.mes) || 0,
+    baseReciente: Number(r.base_reciente) || 0,
+    baseAnual: Number(r.base_anual) || 0,
+    idxDow: Number(r.idx_dow) || 0,
+    idxMes: Number(r.idx_mes) || 0,
+    factorBase: Number(r.factor_base) || 0,
+    tendencia: Number(r.tendencia) || 0,
+    prevision: Number(r.prevision) || 0,
+    diasDatos: Number(r.dias_datos) || 0,
+  }))
+}
+
 export interface DemandByHour {
   locationId: string
   hour: number

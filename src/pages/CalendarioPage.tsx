@@ -48,10 +48,24 @@ import {
 import type { Employee } from '../types'
 import { getStaffingGaps, type StaffingGap } from '../modules/multitenancy/services/businessHoursService'
 import { fetchPayrollCosts } from '../services/payrollService'
-import { fetchSalesByLocation, fetchDemandProfile, type DemandProfile } from '../services/teamReportsService'
+import { fetchSalesByLocation, fetchDemandProfile, fetchDemandForecast, type DemandProfile, type DemandForecast } from '../services/teamReportsService'
 import { fetchStaffRoles, roleColor, upsertStaffRole, deleteStaffRole, ROLE_COLOR_KEYS, type StaffRole, type RoleKind } from '../services/staffRoleService'
 
 const DAYS: DayOfWeek[] = [0, 1, 2, 3, 4, 5, 6]
+
+const MONTH_LABELS = ['', 'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+const MONTH_SHORT = ['', 'ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
+
+// Desglose humano de la previsión ajustada (cuadrante y panel horario).
+function forecastDesglose(f: DemandForecast): string {
+  const parts: string[] = [`${DAY_LABELS[f.dow as DayOfWeek]} tipo ×${f.idxDow.toFixed(2)}`]
+  const mesPct = Math.round((f.idxMes - 1) * 100)
+  parts.push(`${MONTH_LABELS[f.mes]} ${mesPct >= 0 ? '+' : ''}${mesPct}%`)
+  const tPct = Math.round((f.tendencia - 1) * 100)
+  if (tPct !== 0) parts.push(`tendencia ${tPct >= 0 ? '+' : ''}${tPct}%`)
+  parts.push(`base ${Math.round(f.baseAnual)} platos/día`)
+  return parts.join(' · ')
+}
 
 function addDays(iso: string, days: number): string {
   const [y, m, d] = iso.split('-').map(Number)
@@ -167,7 +181,7 @@ export default function CalendarioPage() {
     return () => { cancel = true }
   }, [activeAccountId, locationId, weekStart])
 
-  // Perfil de demanda (día×hora) de las últimas ~8 semanas → barra por día + curva.
+  // Perfil de demanda (día×hora) de las últimas ~8 semanas → SOLO la forma horaria (curva).
   const [demand, setDemand] = useState<DemandProfile[]>([])
   useEffect(() => {
     if (!activeAccountId) { setDemand([]); return }
@@ -178,18 +192,36 @@ export default function CalendarioPage() {
     return () => { cancel = true }
   }, [activeAccountId, weekStart])
 
-  // Demanda por día (respetando el local filtrado): total de platos + curva horaria.
-  const demandByDay = useMemo(() => {
-    const perDay = new Array(7).fill(0)
+  // Previsión AJUSTADA por día del local y semana: base × coef_día × coef_mes × tendencia.
+  const [forecast, setForecast] = useState<DemandForecast[]>([])
+  useEffect(() => {
+    if (!activeAccountId || !locationId) { setForecast([]); return }
+    let cancel = false
+    fetchDemandForecast(activeAccountId, locationId, weekStart).then(f => { if (!cancel) setForecast(f) })
+    return () => { cancel = true }
+  }, [activeAccountId, locationId, weekStart])
+
+  const forecastByDow = useMemo(() => {
+    const m: Record<number, DemandForecast> = {}
+    for (const f of forecast) m[f.dow] = f
+    return m
+  }, [forecast])
+
+  // Curva horaria histórica por día (forma intradía; el total lo pone la previsión).
+  const hourlyByDow = useMemo(() => {
     const hourly: number[][] = Array.from({ length: 7 }, () => new Array(24).fill(0))
     for (const r of demand) {
       if (locationId && r.locationId !== locationId) continue
       if (r.dow < 0 || r.dow > 6) continue
-      perDay[r.dow] += r.units
       hourly[r.dow][r.hour] += r.units
     }
+    return hourly
+  }, [demand, locationId])
+
+  // Nivel Alta/Media/Baja relativo a la propia semana, sobre la PREVISIÓN.
+  const demandLevels = useMemo(() => {
+    const perDay = DAYS.map(d => forecastByDow[d]?.prevision ?? 0)
     const max = Math.max(1, ...perDay)
-    // Nivel relativo a la propia semana del local: Alta / Media / Baja.
     const level = perDay.map(u => {
       if (u <= 0) return 'none' as const
       const ratio = u / max
@@ -197,8 +229,8 @@ export default function CalendarioPage() {
       if (ratio >= 0.33) return 'media' as const
       return 'baja' as const
     })
-    return { perDay, hourly, max, level }
-  }, [demand, locationId])
+    return { perDay, max, level }
+  }, [forecastByDow])
 
   const [demandDayOpen, setDemandDayOpen] = useState<number | null>(null)
 
@@ -603,24 +635,31 @@ export default function CalendarioPage() {
               <tr>
                 <th className="px-3 py-2 text-left sticky left-0 z-20 bg-page border-r border-border-default">Empleado</th>
                 {DAYS.map(d => {
-                  const units = demandByDay.perDay[d]
-                  const lv = demandByDay.level[d]
+                  const units = demandLevels.perDay[d]
+                  const lv = demandLevels.level[d]
+                  const f = forecastByDow[d]
                   const style = lv === 'alta' ? 'bg-danger-bg text-danger border-danger/30'
                     : lv === 'media' ? 'bg-warning-bg text-warning border-warning/30'
                     : lv === 'baja' ? 'bg-success-bg text-success border-success/30'
                     : 'bg-page text-text-secondary border-border-default'
                   const label = lv === 'alta' ? 'Alta' : lv === 'media' ? 'Media' : lv === 'baja' ? 'Baja' : '—'
+                  // Ajuste de mes visible a simple vista (p.ej. "ago −35%") cuando pesa.
+                  const mesPct = f ? Math.round((f.idxMes - 1) * 100) : 0
+                  const showMes = f && Math.abs(f.idxMes - 1) >= 0.10
                   return (
                     <th key={d} className="px-2 py-2 text-center w-32 text-text-secondary font-medium align-top">
                       {DAY_LABELS_SHORT[d]}<br />
                       <span className="text-[10px] opacity-70 font-normal">{addDays(weekStart, d).slice(8, 10)}/{addDays(weekStart, d).slice(5, 7)}</span>
-                      {units > 0 && (
+                      {units > 0 && f && (
                         <button onClick={() => setDemandDayOpen(d)}
                           className={`mt-1 w-full rounded-md border px-1.5 py-1 flex flex-col items-center leading-tight hover:opacity-80 transition-base ${style}`}
-                          title="Ver demanda por hora">
+                          title={`Previsión ajustada · ${forecastDesglose(f)}`}>
                           <span className="text-[10px] font-semibold">{label}</span>
                           <span className="text-[11px] font-bold">{Math.round(units)}</span>
-                          <span className="text-[8px] font-normal opacity-70">platos</span>
+                          <span className="text-[8px] font-normal opacity-70">platos prev.</span>
+                          {showMes && (
+                            <span className="text-[8px] font-semibold opacity-80">{MONTH_SHORT[f.mes]} {mesPct >= 0 ? '+' : ''}{mesPct}%</span>
+                          )}
                         </button>
                       )}
                     </th>
@@ -795,8 +834,8 @@ export default function CalendarioPage() {
       {demandDayOpen !== null && (
         <DemandDayPanel
           dow={demandDayOpen}
-          hourly={demandByDay.hourly[demandDayOpen]}
-          total={demandByDay.perDay[demandDayOpen]}
+          hourly={hourlyByDow[demandDayOpen]}
+          forecast={forecastByDow[demandDayOpen] || null}
           onClose={() => setDemandDayOpen(null)}
         />
       )}
@@ -808,35 +847,48 @@ export default function CalendarioPage() {
    Panel: curva de demanda por hora de un día
    ===================================================== */
 
-function DemandDayPanel({ dow, hourly, total, onClose }: {
+function DemandDayPanel({ dow, hourly, forecast, onClose }: {
   dow: number
   hourly: number[]
-  total: number
+  forecast: DemandForecast | null
   onClose: () => void
 }) {
   const dayName = DAY_LABELS[dow as DayOfWeek]
-  const max = Math.max(1, ...hourly)
-  const peak = hourly.indexOf(max)
-  const comida = hourly.slice(13, 16).reduce((a, b) => a + b, 0)
-  const cena = hourly.slice(20, 23).reduce((a, b) => a + b, 0)
-  const hours = hourly.map((_, h) => h).filter(h => h >= 7 && h <= 23)
+  // La forma intradía es histórica; el TOTAL lo pone la previsión ajustada.
+  const histTotal = hourly.reduce((a, b) => a + b, 0)
+  const scale = histTotal > 0 && forecast ? forecast.prevision / histTotal : (histTotal > 0 ? 1 : 0)
+  const fcHourly = hourly.map(u => u * scale)
+  const total = forecast ? forecast.prevision : histTotal
+  const max = Math.max(1, ...fcHourly)
+  const peak = fcHourly.indexOf(max)
+  const comida = fcHourly.slice(13, 16).reduce((a, b) => a + b, 0)
+  const cena = fcHourly.slice(20, 23).reduce((a, b) => a + b, 0)
+  const hours = fcHourly.map((_, h) => h).filter(h => h >= 7 && h <= 23)
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-card rounded-xl border border-border-default w-full max-w-2xl" onClick={e => e.stopPropagation()}>
         <div className="p-4 border-b border-border-default flex items-center justify-between">
           <div>
-            <h3 className="font-semibold text-text-primary">Demanda de cocina · {dayName}</h3>
+            <h3 className="font-semibold text-text-primary">Previsión de cocina · {dayName}</h3>
             <p className="text-xs text-text-secondary mt-0.5">
-              ~{Math.round(total)} platos/día · pico a las {peak}h · comida {Math.round(comida)} · cena {Math.round(cena)}
+              ~{Math.round(total)} platos previstos · pico a las {peak}h · comida {Math.round(comida)} · cena {Math.round(cena)}
             </p>
           </div>
           <button onClick={onClose} className="text-text-secondary hover:text-text-primary"><X size={18} /></button>
         </div>
+        {forecast && (
+          <div className="px-4 pt-3">
+            <div className="rounded-lg bg-page border border-border-default p-2.5 text-[11px] text-text-primary">
+              <span className="font-semibold">Cómo sale este número:</span> {forecastDesglose(forecast)}
+              {forecast.diasDatos < 21 && <span className="text-text-secondary"> · tendencia neutra (pocos datos aún)</span>}
+            </div>
+          </div>
+        )}
         <div className="p-5">
           <div className="flex items-end gap-1 h-52">
             {hours.map(h => {
-              const u = hourly[h]
+              const u = fcHourly[h]
               const pct = (u / max) * 100
               const ratio = u / max
               // Color sólido por intensidad: verde (flojo) → ámbar (medio) → rojo (punta).
@@ -860,7 +912,7 @@ function DemandDayPanel({ dow, hourly, total, onClose }: {
             <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: '#E24B4A' }} /> Hora punta</span>
           </div>
           <p className="text-[11px] text-text-secondary mt-3">
-            Platos de cocina por hora (excluye bebidas y postres), media de las últimas semanas. La barra más oscura es tu hora punta. Úsalo para poner más gente donde se concentra la carga.
+            La curva es la forma horaria de las últimas semanas (excluye bebidas y postres), escalada al total previsto del día (previsión ajustada = base del local × día de la semana × mes × tendencia). Clima y eventos aún no entran (hacen falta 20-30 locales para calibrarlos). Úsalo para poner más gente donde se concentra la carga.
           </p>
         </div>
       </div>
