@@ -116,6 +116,7 @@ function isoForDay(weekStartISO: string, dayIdx: DayOfWeek): string {
    ===================================================== */
 
 const ANY_ROLE = '*'
+const MAX_DAILY_HOURS = 9   // tope de jornada diaria (permite turno partido, no maratones)
 
 // Horas [inicio, fin) que cubre un turno (0-23), con cruce de medianoche.
 function templateHours(t: ShiftTemplate): number[] {
@@ -211,6 +212,30 @@ export function generateSchedule(input: GeneratorInput): GeneratorResult {
     const cur = assignedHours.get(emp.id) || 0
     const contracted = emp.weeklyHours || 40
     if (cur + shiftHours(t) > contracted * (1 + HOURS_OVERTIME_TOLERANCE)) return false
+    // Tope de jornada diaria (permite turno partido comida+cena, no maratones de 12-16 h).
+    let dayHours = 0
+    for (const tid of Object.keys(cells)) {
+      if (!(cells[tid]?.[dk] || []).includes(emp.id)) continue
+      const ot = templateById.get(tid); if (ot) dayHours += shiftDurationHours(ot.start_time, ot.end_time)
+    }
+    if (dayHours + shiftHours(t) > MAX_DAILY_HOURS) return false
+    // Descanso de 12 h entre jornadas de días distintos.
+    const startMin = timeToMin(t.start_time.slice(0, 5))
+    let endMin = timeToMin(t.end_time.slice(0, 5)); if (endMin <= startMin) endMin += 1440
+    const s = d * 1440 + startMin, e = d * 1440 + endMin
+    for (const tid of Object.keys(cells)) {
+      const dmap = cells[tid]; if (!dmap) continue
+      for (const odk of Object.keys(dmap)) {
+        if (Number(odk) === d) continue
+        if (!(dmap[odk] || []).includes(emp.id)) continue
+        const ot = templateById.get(tid); if (!ot) continue
+        const osm = timeToMin(ot.start_time.slice(0, 5))
+        let oem = timeToMin(ot.end_time.slice(0, 5)); if (oem <= osm) oem += 1440
+        const os = Number(odk) * 1440 + osm, oe = Number(odk) * 1440 + oem
+        const gap = s >= oe ? s - oe : (os >= e ? os - e : -1)
+        if (gap >= 0 && gap < 720) return false
+      }
+    }
     return true
   }
 
@@ -219,9 +244,14 @@ export function generateSchedule(input: GeneratorInput): GeneratorResult {
     for (const h of templateHours(t)) if (remaining(d, h, role) > 0) cov++
     return cov
   }
+  // Coste MARGINAL: las horas contratadas ya están pagadas (coste ~0); solo la hora EXTRA cuesta.
+  // Así el motor LLENA los contratos antes de dejar hueco o pagar horas extra.
   function costOf(emp: Employee, t: ShiftTemplate): number {
+    const cur = assignedHours.get(emp.id) || 0
+    const contracted = emp.weeklyHours || 40
+    const overtime = Math.max(0, (cur + shiftHours(t)) - contracted)
     const rate = hourlyCost[emp.id]
-    return shiftHours(t) * (rate && rate > 0 ? rate : 12)
+    return 0.01 * shiftHours(t) + overtime * (rate && rate > 0 ? rate : 12)
   }
   function assign(emp: Employee, t: ShiftTemplate, d: DayOfWeek, role: string) {
     if (!cells[t.id]) cells[t.id] = {}
@@ -245,12 +275,13 @@ export function generateSchedule(input: GeneratorInput): GeneratorResult {
               const score = cov / costOf(emp, t)
               const cur = assignedHours.get(emp.id) || 0
               const contracted = emp.weeklyHours || 40
-              const underContract = cur < contracted ? 1 : 0
+              const fillRatio = contracted > 0 ? Math.min(1, cur / contracted) : 1
               const period = slotPeriodOf(t.start_time.slice(0, 5))
               const prefPeriod = emp.shiftPeriod && emp.shiftPeriod !== 'partido'
                 ? (((emp.shiftPeriod === 'manana' && period === 'morning') || (emp.shiftPeriod === 'tarde' && period === 'evening')) ? 1 : 0)
                 : 0.5
-              const adj = score * (1 + 0.15 * underContract + 0.05 * prefPeriod)
+              // Reparte justo: quien va MÁS por debajo de su contrato tiene prioridad.
+              const adj = score * (1 + 0.30 * (1 - fillRatio) + 0.05 * prefPeriod)
               if (!best || adj > best.adj) best = { emp, t, d, role, adj }
             }
           }
