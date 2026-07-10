@@ -439,12 +439,22 @@ export default function CalendarioPage() {
     if (Object.keys(cells).length > 0) {
       if (!confirm('Esto sobreescribirá los turnos actuales. ¿Continuar?')) return
     }
+    // Mapa empleado → área (role_kind) desde staff_role + department.
+    const kindByName = new Map(roles.map(r => [r.name.toLowerCase().trim(), r.kind as string]))
+    const roleKindByEmployee: Record<string, string> = {}
+    for (const e of staff) {
+      const k = kindByName.get((e.department || '').toLowerCase().trim())
+      if (k) roleKindByEmployee[e.id] = k
+    }
     const result = generateSchedule({
       locationId,
       weekStart,
       templates,
       employees,
       overrides,
+      requirement: laborReq,
+      roleKindByEmployee,
+      hourlyCost,
     })
     setCells(result.cells)
     setDirty(true)

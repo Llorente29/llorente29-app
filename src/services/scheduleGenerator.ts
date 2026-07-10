@@ -24,6 +24,7 @@ import type {
   GeneratorResult,
 } from '../types/scheduler'
 import { shiftDurationHours, coverageForDay, DAY_LABELS } from '../types/scheduler'
+import type { LaborRequirementRow } from './teamLaborService'
 
 // Helper de etiqueta de día por índice (0=Lun..6=Dom)
 function dayLabel(d: DayOfWeek): string {
@@ -111,92 +112,19 @@ function isoForDay(weekStartISO: string, dayIdx: DayOfWeek): string {
 }
 
 /* =====================================================
-   Estructura de slot a cubrir
+   Helpers del generador dirigido por demanda (Fase B)
    ===================================================== */
 
-interface Slot {
-  templateId: string
-  templateLabel: string
-  day: DayOfWeek
-  startTime: string
-  endTime: string
-  hours: number
-  period: 'morning' | 'evening'
-  needed: number
-}
+const ANY_ROLE = '*'
 
-function buildSlots(
-  templates: ShiftTemplate[],
-  overrides: CoverageOverrides
-): Slot[] {
-  const slots: Slot[] = []
-  for (const t of templates) {
-    for (let d = 0 as DayOfWeek; d <= 6; d = (d + 1) as DayOfWeek) {
-      const baseCoverage = coverageForDay(t, d)
-      const override = overrides[t.id]?.[String(d)]
-      const needed = override !== undefined ? override : baseCoverage
-      if (needed > 0) {
-        slots.push({
-          templateId: t.id,
-          templateLabel: t.label,
-          day: d,
-          startTime: t.start_time.slice(0, 5),
-          endTime: t.end_time.slice(0, 5),
-          hours: shiftDurationHours(t.start_time, t.end_time),
-          period: slotPeriodOf(t.start_time.slice(0, 5)),
-          needed,
-        })
-      }
-      if (d === 6) break
-    }
-  }
-  return slots
-}
-
-/* =====================================================
-   Score de un candidato para un slot
-   ===================================================== */
-
-interface CandidateScore {
-  employeeId: string
-  score: number
-  wouldExceedTolerance: boolean
-  newHours: number
-}
-
-function scoreCandidate(
-  emp: Employee,
-  slot: Slot,
-  currentAssignedHours: number
-): CandidateScore | null {
-  const newHours = currentAssignedHours + slot.hours
-  const contracted = emp.weeklyHours || 40
-  const maxAllowed = contracted * (1 + HOURS_OVERTIME_TOLERANCE)
-  const wouldExceedTolerance = newHours > maxAllowed
-
-  const deltaToContract = newHours - contracted
-  let score = Math.abs(deltaToContract) * 10
-  if (deltaToContract > 0) score *= 1.5
-
-  if (emp.shiftPeriod) {
-    if (emp.shiftPeriod === 'partido') {
-      // ambos le valen igual
-    } else if (
-      (emp.shiftPeriod === 'manana' && slot.period === 'morning') ||
-      (emp.shiftPeriod === 'tarde' && slot.period === 'evening')
-    ) {
-      score -= 5
-    } else {
-      score += 15
-    }
-  }
-
-  return {
-    employeeId: emp.id,
-    score,
-    wouldExceedTolerance,
-    newHours,
-  }
+// Horas [inicio, fin) que cubre un turno (0-23), con cruce de medianoche.
+function templateHours(t: ShiftTemplate): number[] {
+  const sh = Number(t.start_time.slice(0, 2))
+  const eh0 = Number(t.end_time.slice(0, 2))
+  const end = eh0 <= sh ? eh0 + 24 : eh0
+  const out: number[] = []
+  for (let x = sh; x < end; x++) out.push(x % 24)
+  return out
 }
 
 /* =====================================================
@@ -209,269 +137,187 @@ export interface GeneratorInput {
   templates: ShiftTemplate[]
   employees: Employee[]
   overrides?: CoverageOverrides
+  // Fase B — dirigido por demanda (nivel líder mundial):
+  requirement?: LaborRequirementRow[]          // personal necesario por (dow, hora, rol)
+  roleKindByEmployee?: Record<string, string>  // employee.id → role_kind (área)
+  hourlyCost?: Record<string, number>          // employee.id → €/hora real (nóminas)
 }
 
+// Motor que CUBRE LA CURVA DE DEMANDA por rol al menor coste (Fase B / Opción 2).
+// Para cada rol y hora mira cuánta gente falta y añade el (empleado, turno) que más
+// hueco tapa por euro, respetando rol, disponibilidad, vacaciones, descanso, solapes
+// y tope de horas. Sin curva de demanda cae a la cobertura clásica de la plantilla.
 export function generateSchedule(input: GeneratorInput): GeneratorResult {
-  const { weekStart, templates, employees, overrides = {} } = input
+  const {
+    weekStart, templates, employees, overrides = {},
+    requirement = [], roleKindByEmployee = {}, hourlyCost = {},
+  } = input
+
   const warnings: string[] = []
-
-  console.group(`🪄 [scheduler] generateSchedule — semana del ${weekStart}`)
-  console.log(`  Empleados: ${employees.length}`, employees.map(e => `${e.shiftCode || '?'} ${e.name} (${e.weeklyHours || 40}h, ${e.shiftPeriod || 'sin franja'}, ${e.restPattern || 'sin descanso'})`))
-  console.log(`  Turnos definidos: ${templates.length}`)
-
-  const slots = buildSlots(templates, overrides)
-
-  const assignedHours = new Map<string, number>()
   const cells: ScheduleCells = {}
-  const uncovered: UncoveredSlot[] = []
-
+  const assignedHours = new Map<string, number>()
   const restCache = new Map<string, Set<string>>()
   for (const e of employees) restCache.set(e.id, restSlotsOf(e))
+  const templateById = new Map(templates.map(t => [t.id, t]))
 
-  const ordered = [...slots].sort((a, b) => {
-    if (a.period !== b.period) return a.period === 'evening' ? -1 : 1
-    return b.hours - a.hours
-  })
+  const demandMode = requirement.length > 0
 
-  // Asignación en 3 pasadas:
-  //   Pasada 1 — normal (respeta franja habitual + descanso + tope)
-  //   Pasada 2 — fuera de franja habitual (rescate suave)
-  //   Pasada 3 — viola descanso fijo (rescate fuerte, con warning)
-
-  interface SlotState {
-    slot: Slot
-    needed: number
+  // need[dow][hora][rol] = personas necesarias todavía sin cubrir.
+  const need: Record<number, Record<number, Record<string, number>>> = {}
+  const setNeed = (d: number, h: number, role: string, n: number) => {
+    if (n <= 0) return
+    if (!need[d]) need[d] = {}
+    if (!need[d][h]) need[d][h] = {}
+    need[d][h][role] = Math.max(need[d][h][role] || 0, n)
   }
-  const slotStates: SlotState[] = ordered.map(s => ({ slot: s, needed: s.needed }))
-
-  for (const ss of slotStates) {
-    if (!cells[ss.slot.templateId]) cells[ss.slot.templateId] = {}
-    const dk = String(ss.slot.day)
-    if (!cells[ss.slot.templateId][dk]) cells[ss.slot.templateId][dk] = []
+  if (demandMode) {
+    for (const r of requirement) {
+      if (r.dow < 0 || r.dow > 6) continue
+      setNeed(r.dow, r.hora, r.roleKind, r.required)
+    }
+  } else {
+    for (const t of templates) {
+      for (let d = 0 as DayOfWeek; d <= 6; d = (d + 1) as DayOfWeek) {
+        const base = coverageForDay(t, d)
+        const ov = overrides[t.id]?.[String(d)]
+        const nn = ov !== undefined ? ov : base
+        if (nn > 0) for (const h of templateHours(t)) setNeed(d, h, ANY_ROLE, nn)
+        if (d === 6) break
+      }
+    }
   }
 
-  const slotAssignedCount = (s: Slot) => {
-    return (cells[s.templateId]?.[String(s.day)] || []).length
-  }
+  const roleSet = new Set<string>()
+  for (const ds of Object.keys(need)) for (const hs of Object.keys(need[Number(ds)])) for (const role of Object.keys(need[Number(ds)][Number(hs)])) roleSet.add(role)
 
-  function tryAssignSlot(
-    slotIdx: number,
-    relax: { ignoreShiftPeriod: boolean; ignoreRest: boolean }
-  ): boolean {
-    const ss = slotStates[slotIdx]
-    const slot = ss.slot
-    const dayKey = String(slot.day)
-    const isoDate = isoForDay(weekStart, slot.day)
-    const currentAssigned = cells[slot.templateId][dayKey]
+  const remaining = (d: number, h: number, role: string) => need[d]?.[h]?.[role] || 0
+  const shiftHours = (t: ShiftTemplate) => shiftDurationHours(t.start_time, t.end_time)
 
-    if (slotAssignedCount(slot) >= slot.needed) return false
-
-    const pasadaName = relax.ignoreRest
-      ? 'PASADA 3 (rescate fuerte)'
-      : relax.ignoreShiftPeriod
-        ? 'PASADA 2 (rescate suave)'
-        : 'PASADA 1 (normal)'
-
-    const diagnostics: { empName: string; reason: string }[] = []
-
-    const candidates: (CandidateScore & { violatesRest: boolean })[] = []
-    const templateById = new Map(templates.map(t => [t.id, t]))
-    for (const emp of employees) {
-      const empName = `${emp.shiftCode || '?'} ${emp.name}`
-      if (currentAssigned.includes(emp.id)) {
-        diagnostics.push({ empName, reason: 'ya asignado a este slot' })
-        continue
-      }
-      if (isOnVacation(emp, isoDate)) {
-        diagnostics.push({ empName, reason: 'vacaciones aprobadas' })
-        continue
-      }
-      let hasOverlap = false
-      let overlapWith = ''
-      for (const otherTid of Object.keys(cells)) {
-        const otherIds = cells[otherTid]?.[dayKey] || []
-        if (!otherIds.includes(emp.id)) continue
-        const otherT = templateById.get(otherTid)
-        if (!otherT) continue
-        if (shiftsOverlap(
-          slot.startTime, slot.endTime,
-          otherT.start_time.slice(0, 5), otherT.end_time.slice(0, 5)
-        )) {
-          hasOverlap = true
-          overlapWith = `${otherT.label} (${otherT.start_time.slice(0,5)}-${otherT.end_time.slice(0,5)})`
-          break
-        }
-      }
-      if (hasOverlap) {
-        diagnostics.push({ empName, reason: `solape con ${overlapWith}` })
-        continue
-      }
-      const rest = restCache.get(emp.id)
-      const violatesRest = rest ? rest.has(`${slot.day}:${slot.period}`) : false
-      if (violatesRest && !relax.ignoreRest) {
-        diagnostics.push({ empName, reason: `descanso fijo (${slot.period === 'morning' ? 'mañana' : 'tarde'} de ${dayLabel(slot.day)})` })
-        continue
-      }
-
-      const cur = assignedHours.get(emp.id) || 0
-      const sc = scoreCandidate(emp, slot, cur)
-      if (!sc) continue
-
-      if (!relax.ignoreShiftPeriod) {
-        if (
-          emp.shiftPeriod &&
-          emp.shiftPeriod !== 'partido' &&
-          ((emp.shiftPeriod === 'manana' && slot.period !== 'morning') ||
-            (emp.shiftPeriod === 'tarde' && slot.period !== 'evening'))
-        ) {
-          diagnostics.push({ empName, reason: `franja habitual=${emp.shiftPeriod} no encaja con turno ${slot.period === 'morning' ? 'mañana' : 'tarde'}` })
-          continue
-        }
-      }
-
-      if (sc.wouldExceedTolerance) {
-        diagnostics.push({ empName, reason: `excede tope 10% (pasaría a ${sc.newHours.toFixed(2)}h, contratadas ${emp.weeklyHours || 40}h)` })
-      }
-
-      candidates.push({ ...sc, violatesRest })
+  function feasible(emp: Employee, t: ShiftTemplate, d: DayOfWeek, role: string): boolean {
+    if (role !== ANY_ROLE) {
+      const k = roleKindByEmployee[emp.id]
+      if (k && k !== role) return false            // rol distinto → no; sin rol conocido → flexible
     }
-
-    if (candidates.length === 0) {
-      logSlotFailure(slot, pasadaName, diagnostics)
-      return false
+    if (isOnVacation(emp, isoForDay(weekStart, d))) return false
+    const rest = restCache.get(emp.id)
+    if (rest && rest.has(`${d}:${slotPeriodOf(t.start_time.slice(0, 5))}`)) return false
+    const dk = String(d)
+    if ((cells[t.id]?.[dk] || []).includes(emp.id)) return false
+    for (const otherTid of Object.keys(cells)) {
+      if (!(cells[otherTid]?.[dk] || []).includes(emp.id)) continue
+      const ot = templateById.get(otherTid)
+      if (ot && shiftsOverlap(t.start_time.slice(0, 5), t.end_time.slice(0, 5), ot.start_time.slice(0, 5), ot.end_time.slice(0, 5))) return false
     }
-
-    const safe = candidates.filter(c => !c.wouldExceedTolerance)
-    if (safe.length === 0) {
-      logSlotFailure(slot, pasadaName, diagnostics)
-      return false
-    }
-
-    let winner: (typeof safe)[number]
-    if (relax.ignoreShiftPeriod || relax.ignoreRest) {
-      safe.sort((a, b) => {
-        const empA = employees.find(e => e.id === a.employeeId)!
-        const empB = employees.find(e => e.id === b.employeeId)!
-        const cA = empA.weeklyHours || 40
-        const cB = empB.weeklyHours || 40
-        const ratioA = a.newHours / cA
-        const ratioB = b.newHours / cB
-        if (a.violatesRest !== b.violatesRest) return a.violatesRest ? 1 : -1
-        return ratioA - ratioB
-      })
-      winner = safe[0]
-    } else {
-      safe.sort((a, b) => a.score - b.score)
-      winner = safe[0]
-    }
-
-    cells[slot.templateId][dayKey].push(winner.employeeId)
-    assignedHours.set(winner.employeeId, winner.newHours)
-    if (winner.violatesRest) {
-      const emp = employees.find(e => e.id === winner.employeeId)
-      warnings.push(
-        `⚠️ ${emp?.name || winner.employeeId} asignado en su descanso fijo (${slot.templateLabel}, ${dayLabel(slot.day)})`
-      )
-    }
+    const cur = assignedHours.get(emp.id) || 0
+    const contracted = emp.weeklyHours || 40
+    if (cur + shiftHours(t) > contracted * (1 + HOURS_OVERTIME_TOLERANCE)) return false
     return true
   }
 
-  function logSlotFailure(
-    slot: Slot,
-    pasada: string,
-    diagnostics: { empName: string; reason: string }[]
-  ) {
-    if (diagnostics.length === 0) return
-    console.groupCollapsed(
-      `❌ [scheduler] ${pasada} — Hueco en ${slot.templateLabel} ${dayLabel(slot.day)} (${slot.startTime}-${slot.endTime}, ${slot.hours}h)`
-    )
-    for (const d of diagnostics) {
-      console.log(`  ${d.empName} → ${d.reason}`)
-    }
-    console.groupEnd()
+  function marginalCoverage(t: ShiftTemplate, d: DayOfWeek, role: string): number {
+    let cov = 0
+    for (const h of templateHours(t)) if (remaining(d, h, role) > 0) cov++
+    return cov
+  }
+  function costOf(emp: Employee, t: ShiftTemplate): number {
+    const rate = hourlyCost[emp.id]
+    return shiftHours(t) * (rate && rate > 0 ? rate : 12)
+  }
+  function assign(emp: Employee, t: ShiftTemplate, d: DayOfWeek, role: string) {
+    if (!cells[t.id]) cells[t.id] = {}
+    if (!cells[t.id][String(d)]) cells[t.id][String(d)] = []
+    cells[t.id][String(d)].push(emp.id)
+    assignedHours.set(emp.id, (assignedHours.get(emp.id) || 0) + shiftHours(t))
+    for (const h of templateHours(t)) if ((need[d]?.[h]?.[role] || 0) > 0) need[d][h][role] -= 1
   }
 
-  // ─── PASADA 1 ───
-  console.log('▶️ Pasada 1: normal (respeta franja + descanso)')
-  for (let i = 0; i < slotStates.length; i++) {
-    while (slotAssignedCount(slotStates[i].slot) < slotStates[i].needed) {
-      const ok = tryAssignSlot(i, { ignoreShiftPeriod: false, ignoreRest: false })
-      if (!ok) break
+  // GREEDY: mejor cobertura por euro, hasta cubrir la curva.
+  const MAX_ITERS = 4000
+  for (let iter = 0; iter < MAX_ITERS; iter++) {
+    let best: { emp: Employee; t: ShiftTemplate; d: DayOfWeek; role: string; adj: number } | null = null
+    for (const role of roleSet) {
+      for (let d = 0 as DayOfWeek; d <= 6; d = (d + 1) as DayOfWeek) {
+        for (const t of templates) {
+          if (marginalCoverage(t, d, role) > 0) {
+            const cov = marginalCoverage(t, d, role)
+            for (const emp of employees) {
+              if (!feasible(emp, t, d, role)) continue
+              const score = cov / costOf(emp, t)
+              const cur = assignedHours.get(emp.id) || 0
+              const contracted = emp.weeklyHours || 40
+              const underContract = cur < contracted ? 1 : 0
+              const period = slotPeriodOf(t.start_time.slice(0, 5))
+              const prefPeriod = emp.shiftPeriod && emp.shiftPeriod !== 'partido'
+                ? (((emp.shiftPeriod === 'manana' && period === 'morning') || (emp.shiftPeriod === 'tarde' && period === 'evening')) ? 1 : 0)
+                : 0.5
+              const adj = score * (1 + 0.15 * underContract + 0.05 * prefPeriod)
+              if (!best || adj > best.adj) best = { emp, t, d, role, adj }
+            }
+          }
+        }
+        if (d === 6) break
+      }
+    }
+    if (!best) break
+    assign(best.emp, best.t, best.d, best.role)
+  }
+
+  // Override manual = SUELO por bloque (role-agnóstico): fuerza al menos N personas.
+  for (const t of templates) {
+    for (let d = 0 as DayOfWeek; d <= 6; d = (d + 1) as DayOfWeek) {
+      const ov = overrides[t.id]?.[String(d)]
+      if (ov !== undefined && ov > 0) {
+        while ((cells[t.id]?.[String(d)] || []).length < ov) {
+          let pick: Employee | null = null; let pickCost = Infinity
+          for (const emp of employees) {
+            if (!feasible(emp, t, d, ANY_ROLE)) continue
+            const c = costOf(emp, t)
+            if (c < pickCost) { pickCost = c; pick = emp }
+          }
+          if (!pick) break
+          assign(pick, t, d, ANY_ROLE)
+        }
+      }
+      if (d === 6) break
     }
   }
 
-  // ─── PASADA 2 ───
-  console.log('▶️ Pasada 2: rescate suave (ignora franja habitual)')
-  for (let i = 0; i < slotStates.length; i++) {
-    while (slotAssignedCount(slotStates[i].slot) < slotStates[i].needed) {
-      const ok = tryAssignSlot(i, { ignoreShiftPeriod: true, ignoreRest: false })
-      if (!ok) break
+  // Huecos por (turno, día): pico de personas concurrentes que quedó sin cubrir.
+  const uncovered: UncoveredSlot[] = []
+  for (const t of templates) {
+    for (let d = 0 as DayOfWeek; d <= 6; d = (d + 1) as DayOfWeek) {
+      let peakRemaining = 0
+      for (const h of templateHours(t)) {
+        let s = 0
+        for (const role of roleSet) s += remaining(d, h, role)
+        if (s > peakRemaining) peakRemaining = s
+      }
+      const assigned = (cells[t.id]?.[String(d)] || []).length
+      if (peakRemaining > 0) {
+        uncovered.push({
+          template_id: t.id,
+          template_label: t.label,
+          day_of_week: d,
+          needed: assigned + peakRemaining,
+          assigned,
+          reason: 'demanda no cubierta con el personal disponible',
+        })
+      }
+      if (d === 6) break
     }
   }
 
-  // ─── PASADA 3 ───
-  console.log('▶️ Pasada 3: rescate fuerte (ignora descanso fijo)')
-  for (let i = 0; i < slotStates.length; i++) {
-    while (slotAssignedCount(slotStates[i].slot) < slotStates[i].needed) {
-      const ok = tryAssignSlot(i, { ignoreShiftPeriod: true, ignoreRest: true })
-      if (!ok) break
-    }
-  }
+  const workloads: EmployeeWorkload[] = computeWorkloads(cells, templates, employees)
 
-  for (const ss of slotStates) {
-    const assignedFinal = slotAssignedCount(ss.slot)
-    if (assignedFinal < ss.needed) {
-      uncovered.push({
-        template_id: ss.slot.templateId,
-        template_label: ss.slot.templateLabel,
-        day_of_week: ss.slot.day,
-        needed: ss.needed,
-        assigned: assignedFinal,
-        reason: 'todos los empleados al tope del 10% o en vacaciones',
-      })
-    }
-  }
-
-  console.log(`✅ Asignación terminada. Huecos: ${uncovered.length}`)
-  for (const emp of employees) {
-    const h = assignedHours.get(emp.id) || 0
-    const c = emp.weeklyHours || 40
-    console.log(`  ${emp.shiftCode || '?'} ${emp.name}: ${h.toFixed(2)}h / ${c}h (${(h - c >= 0 ? '+' : '')}${(h - c).toFixed(2)}h)`)
-  }
-  console.groupEnd()
-
-  // 7) Calcular workloads finales
-  const workloads: EmployeeWorkload[] = employees.map(emp => {
-    const assigned = assignedHours.get(emp.id) || 0
-    const contracted = emp.weeklyHours || 40
-    return {
-      employee_id: emp.id,
-      employee_name: emp.name,
-      shift_code: emp.shiftCode,
-      contracted_hours: contracted,
-      assigned_hours: assigned,
-      delta: Math.round((assigned - contracted) * 100) / 100,
-    }
-  })
-
-  // 8) Warnings
   for (const w of workloads) {
     const max = w.contracted_hours * (1 + HOURS_OVERTIME_TOLERANCE)
     if (w.assigned_hours > max) {
-      warnings.push(`${w.employee_name} excede el tope del 10% (${w.assigned_hours.toFixed(2)}h asignadas, contratadas ${w.contracted_hours}h)`)
-    } else if (w.assigned_hours < w.contracted_hours - 2) {
-      warnings.push(`${w.employee_name} está a ${w.assigned_hours.toFixed(2)}h, faltan ${(w.contracted_hours - w.assigned_hours).toFixed(2)}h para su contrato`)
+      warnings.push(`${w.employee_name} excede el tope del 10% (${w.assigned_hours.toFixed(1)}h asignadas, contratadas ${w.contracted_hours}h)`)
+    } else if (w.assigned_hours > 0 && w.assigned_hours < w.contracted_hours - 2) {
+      warnings.push(`${w.employee_name} está a ${w.assigned_hours.toFixed(1)}h, faltan ${(w.contracted_hours - w.assigned_hours).toFixed(1)}h para su contrato`)
     }
   }
-
-  if (uncovered.length > 0) {
-    const totalGapH = uncovered.reduce((acc, u) => {
-      const t = templates.find(x => x.id === u.template_id)
-      const h = t ? shiftDurationHours(t.start_time, t.end_time) : 0
-      return acc + (u.needed - u.assigned) * h
-    }, 0)
-    warnings.push(`${uncovered.length} huecos sin cubrir (${totalGapH.toFixed(1)}h en total)`)
-  }
+  if (uncovered.length > 0) warnings.push(`${uncovered.length} franja(s) con demanda sin cubrir`)
 
   return { cells, uncovered, workloads, warnings }
 }
