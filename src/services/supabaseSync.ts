@@ -146,6 +146,7 @@ interface EmployeeRow {
   start_date: string | null
   end_date: string | null
   salary: number | null
+  employer_ss_annual?: number | null
   weekly_hours: number | null
   schedule: string | null
   active: boolean
@@ -183,6 +184,7 @@ function rowToEmployee(r: EmployeeRow): Employee {
     startDate: r.start_date || '',
     endDate: r.end_date || '',
     salary: r.salary ?? 0,
+    employerSsAnnual: r.employer_ss_annual != null ? Number(r.employer_ss_annual) : undefined,
     weeklyHours: r.weekly_hours ?? 40,
     schedule: r.schedule || '',
     active: r.active,
@@ -223,7 +225,7 @@ function rowToEmployee(r: EmployeeRow): Employee {
  * weekly_schedule y availability se castean con doble cast (as unknown as Json)
  * porque WeeklySchedule/Availability son interfaces con shape rígido, no maps.
  */
-function employeeToRow(e: Employee): EmployeeInsert {
+function employeeToRow(e: Employee): EmployeeInsert & { employer_ss_annual?: number | null } {
   const isUuid = e.id && e.id.length === 36 && e.id.includes('-')
   return {
     ...(isUuid ? { id: e.id } : {}),
@@ -239,6 +241,7 @@ function employeeToRow(e: Employee): EmployeeInsert {
     start_date: e.startDate || null,
     end_date: e.endDate || null,
     salary: e.salary || 0,
+    employer_ss_annual: e.employerSsAnnual ?? null,
     weekly_hours: e.weeklyHours || 40,
     schedule: e.schedule || null,
     active: e.active,
@@ -321,7 +324,9 @@ export async function fetchColleagues(locationIds: string[]): Promise<Employee[]
 export async function upsertEmployee(e: Employee): Promise<Employee | null> {
   if (!supabase) return null
   const row = employeeToRow(e)
-  const { data, error } = await supabase.from('employees').upsert(row).select().single()
+  // employer_ss_annual aún no está en database.ts (deuda: regenerar). El cliente
+  // tipado rechaza columnas desconocidas; casteamos el row. La columna existe en BD.
+  const { data, error } = await supabase.from('employees').upsert(row as EmployeeInsert).select().single()
   if (error) { console.error('Supabase upsertEmployee:', error); return null }
   return rowToEmployee(data as EmployeeRow)
 }

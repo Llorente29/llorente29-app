@@ -9,8 +9,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import {
-  Wand2, Save, Check, Megaphone, ChevronLeft, ChevronRight, X, Plus,
-  Users, AlertTriangle, CalendarDays, Copy,
+  Wand2, Save, Check, Megaphone, X, Plus,
+  AlertTriangle, Copy, Euro, Clock, TrendingUp,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import {
@@ -47,6 +47,9 @@ import {
 } from '../types/scheduler'
 import type { Employee } from '../types'
 import { getStaffingGaps, type StaffingGap } from '../modules/multitenancy/services/businessHoursService'
+import { fetchPayrollCosts } from '../services/payrollService'
+import { fetchSalesByLocation, fetchDemandProfile, type DemandProfile } from '../services/teamReportsService'
+import { fetchStaffRoles, roleColor, upsertStaffRole, deleteStaffRole, ROLE_COLOR_KEYS, type StaffRole, type RoleKind } from '../services/staffRoleService'
 
 const DAYS: DayOfWeek[] = [0, 1, 2, 3, 4, 5, 6]
 
@@ -67,7 +70,7 @@ function formatWeekLabel(weekStartISO: string): string {
 }
 
 export default function CalendarioPage() {
-  const { locations, staff } = useApp()
+  const { locations, staff, activeAccountId } = useApp()
   const [locationId, setLocationId] = useState<string>('')
   const [weekStart, setWeekStart] = useState<string>(() => toISODate(getMondayOfWeek(new Date())))
   const [templates, setTemplates] = useState<ShiftTemplate[]>([])
@@ -117,6 +120,157 @@ export default function CalendarioPage() {
     () => computeWorkloads(cells, templates, employees),
     [cells, templates, employees]
   )
+
+  // ── Coste en vivo del cuadrante ─────────────────────────────────────────
+  const ANNUAL_HOURS = 1770  // horas efectivas de convenio/año (mismo criterio que Informes)
+  const [hourlyCost, setHourlyCost] = useState<Record<string, number>>({})
+  const [weekSales, setWeekSales] = useState<number | null>(null)
+
+  // Coste/hora por empleado: nómina real (definitiva más reciente × 12 ÷ horas año);
+  // si no hay nómina, se estima desde la ficha (bruto + SS real o 30%).
+  useEffect(() => {
+    if (!activeAccountId) return
+    let cancel = false
+    ;(async () => {
+      const costs = await fetchPayrollCosts(activeAccountId, new Date().getFullYear())
+      const latest = new Map<string, number>()
+      for (const c of costs) {
+        if (c.status !== 'definitiva' || c.totalCost == null) continue
+        const key = c.employeeId
+        if (!latest.has(key)) latest.set(key, c.totalCost)  // fetch viene ordenado desc
+      }
+      const map: Record<string, number> = {}
+      for (const e of staff) {
+        const monthly = latest.get(e.id)
+        if (monthly != null) map[e.id] = (monthly * 12) / ANNUAL_HOURS
+        else {
+          const gross = e.salary || 0
+          const ss = e.employerSsAnnual != null ? e.employerSsAnnual : gross * 0.30
+          map[e.id] = gross > 0 ? (gross + ss) / ANNUAL_HOURS : 0
+        }
+      }
+      if (!cancel) setHourlyCost(map)
+    })()
+    return () => { cancel = true }
+  }, [activeAccountId, staff])
+
+  // Ventas de la semana del cuadrante (histórico del local) → base del % personal.
+  useEffect(() => {
+    if (!activeAccountId || !locationId) { setWeekSales(null); return }
+    let cancel = false
+    ;(async () => {
+      const end = addDays(weekStart, 7)
+      const rows = await fetchSalesByLocation(activeAccountId, weekStart, end)
+      const row = rows.find(r => r.locationId === locationId)
+      if (!cancel) setWeekSales(row ? row.ventas : 0)
+    })()
+    return () => { cancel = true }
+  }, [activeAccountId, locationId, weekStart])
+
+  // Perfil de demanda (día×hora) de las últimas ~8 semanas → barra por día + curva.
+  const [demand, setDemand] = useState<DemandProfile[]>([])
+  useEffect(() => {
+    if (!activeAccountId) { setDemand([]); return }
+    let cancel = false
+    const from = addDays(weekStart, -56)
+    const to = addDays(weekStart, 7)
+    fetchDemandProfile(activeAccountId, from, to).then(d => { if (!cancel) setDemand(d) })
+    return () => { cancel = true }
+  }, [activeAccountId, weekStart])
+
+  // Demanda por día (respetando el local filtrado): total de platos + curva horaria.
+  const demandByDay = useMemo(() => {
+    const perDay = new Array(7).fill(0)
+    const hourly: number[][] = Array.from({ length: 7 }, () => new Array(24).fill(0))
+    for (const r of demand) {
+      if (locationId && r.locationId !== locationId) continue
+      if (r.dow < 0 || r.dow > 6) continue
+      perDay[r.dow] += r.units
+      hourly[r.dow][r.hour] += r.units
+    }
+    const max = Math.max(1, ...perDay)
+    // Nivel relativo a la propia semana del local: Alta / Media / Baja.
+    const level = perDay.map(u => {
+      if (u <= 0) return 'none' as const
+      const ratio = u / max
+      if (ratio >= 0.66) return 'alta' as const
+      if (ratio >= 0.33) return 'media' as const
+      return 'baja' as const
+    })
+    return { perDay, hourly, max, level }
+  }, [demand, locationId])
+
+  const [demandDayOpen, setDemandDayOpen] = useState<number | null>(null)
+
+  // Totales que se recalculan solos al editar la rejilla (workloads depende de cells).
+  const costLive = useMemo(() => {
+    let hours = 0, cost = 0
+    for (const w of workloads) {
+      hours += w.assigned_hours
+      cost += w.assigned_hours * (hourlyCost[w.employee_id] ?? 0)
+    }
+    const pct = weekSales && weekSales > 0 ? (cost / weekSales) * 100 : null
+    return { hours: Math.round(hours * 10) / 10, cost: Math.round(cost * 100) / 100, pct }
+  }, [workloads, hourlyCost, weekSales])
+
+  const eur0 = (n: number) => n.toLocaleString('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })
+
+  // ── Vista visual "por empleado" con pastillas por área ──────────────────
+  const [viewMode, setViewMode] = useState<'turno' | 'empleado'>('empleado')
+  const [roles, setRoles] = useState<StaffRole[]>([])
+  const [rolesModalOpen, setRolesModalOpen] = useState(false)
+  const reloadRoles = () => { if (activeAccountId) fetchStaffRoles(activeAccountId).then(setRoles) }
+  useEffect(() => {
+    if (!activeAccountId) return
+    let cancel = false
+    fetchStaffRoles(activeAccountId).then(r => { if (!cancel) setRoles(r) })
+    return () => { cancel = true }
+  }, [activeAccountId])
+
+  // Color por área: casa employees.department (texto) con staff_role.name.
+  const colorByDept = useMemo(() => {
+    const m: Record<string, string> = {}
+    for (const r of roles) m[r.name.toLowerCase().trim()] = r.color
+    return m
+  }, [roles])
+  const empColor = (e: Employee) => roleColor(colorByDept[(e.department || '').toLowerCase().trim()])
+
+  // Inversión: por empleado y día, los turnos que tiene asignados esa semana.
+  const empSchedule = useMemo(() => {
+    const map: Record<string, Record<number, ShiftTemplate[]>> = {}
+    for (const t of templates) {
+      for (const d of DAYS) {
+        const ids = cells[t.id]?.[String(d)] || []
+        for (const id of ids) {
+          if (!map[id]) map[id] = {}
+          if (!map[id][d]) map[id][d] = []
+          map[id][d].push(t)
+        }
+      }
+    }
+    return map
+  }, [cells, templates])
+
+  const hoursByEmp = useMemo(() => {
+    const m: Record<string, number> = {}
+    for (const w of workloads) m[w.employee_id] = w.assigned_hours
+    return m
+  }, [workloads])
+  const wlByEmp = useMemo(() => {
+    const m: Record<string, { contracted: number; delta: number }> = {}
+    for (const w of workloads) m[w.employee_id] = { contracted: w.contracted_hours, delta: w.delta }
+    return m
+  }, [workloads])
+
+  // Añadir/quitar un empleado de un turno concreto en un día (reusa setCellAssign).
+  function addToShift(templateId: string, day: DayOfWeek, empId: string) {
+    const cur = cells[templateId]?.[String(day)] || []
+    if (!cur.includes(empId)) setCellAssign(templateId, day, [...cur, empId])
+  }
+  function removeFromShift(templateId: string, day: DayOfWeek, empId: string) {
+    const cur = cells[templateId]?.[String(day)] || []
+    setCellAssign(templateId, day, cur.filter(x => x !== empId))
+  }
 
   const uncovered = useMemo<UncoveredSlot[]>(() => {
     const list: UncoveredSlot[] = []
@@ -315,6 +469,27 @@ export default function CalendarioPage() {
         </button>
       </div>
 
+      {/* Coste en vivo del cuadrante (se recalcula al editar) */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="rounded-lg p-3 bg-page border border-border-default">
+          <div className="flex items-center gap-1.5 text-xs text-text-secondary"><Clock size={13} /> Horas asignadas</div>
+          <div className="text-2xl font-bold text-text-primary mt-0.5">{costLive.hours} h</div>
+        </div>
+        <div className="rounded-lg p-3 bg-page border border-border-default">
+          <div className="flex items-center gap-1.5 text-xs text-text-secondary"><Euro size={13} /> Coste semana (real)</div>
+          <div className="text-2xl font-bold text-text-primary mt-0.5">{eur0(costLive.cost)}</div>
+        </div>
+        <div className={`rounded-lg p-3 border ${costLive.pct == null ? 'bg-page border-border-default' : costLive.pct <= 30 ? 'bg-success-bg border-success/40' : 'bg-warning-bg border-warning/40'}`}>
+          <div className={`flex items-center gap-1.5 text-xs ${costLive.pct == null ? 'text-text-secondary' : costLive.pct <= 30 ? 'text-success' : 'text-warning'}`}><TrendingUp size={13} /> % personal / ventas</div>
+          <div className={`text-2xl font-bold mt-0.5 ${costLive.pct == null ? 'text-text-secondary' : costLive.pct <= 30 ? 'text-success' : 'text-warning'}`}>
+            {costLive.pct == null ? '—' : `${costLive.pct.toFixed(1)}%`}
+          </div>
+        </div>
+      </div>
+      <p className="text-[11px] text-text-secondary -mt-2">
+        Coste = horas asignadas × coste/hora real de cada empleado (nóminas). % sobre ventas de esa semana en el local ({weekSales == null ? '—' : eur0(weekSales)}). Se actualiza al mover turnos.
+      </p>
+
       <div className="flex items-center gap-3 text-xs text-text-secondary">
         {scheduleRow?.status === 'published' && (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-success-bg text-success font-medium">
@@ -401,6 +576,112 @@ export default function CalendarioPage() {
       )}
 
       {templates.length > 0 && (
+        <div className="flex items-center gap-1">
+          <span className="text-xs text-text-secondary mr-1">Vista:</span>
+          <button onClick={() => setViewMode('empleado')}
+            className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-base ${viewMode === 'empleado' ? 'bg-accent text-text-on-accent' : 'bg-card border border-border-default text-text-secondary hover:border-accent'}`}>
+            Por empleado
+          </button>
+          <button onClick={() => setViewMode('turno')}
+            className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-base ${viewMode === 'turno' ? 'bg-accent text-text-on-accent' : 'bg-card border border-border-default text-text-secondary hover:border-accent'}`}>
+            Por turno
+          </button>
+          <button onClick={() => setRolesModalOpen(true)}
+            className="ml-auto text-xs px-3 py-1.5 rounded-lg font-medium bg-card border border-border-default text-text-secondary hover:border-accent transition-base">
+            Áreas
+          </button>
+        </div>
+      )}
+
+      {templates.length > 0 && (viewMode === 'empleado' ? (
+        employees.length === 0 ? (
+          <div className="bg-card border border-border-default rounded-lg p-6 text-center text-sm text-text-secondary">No hay empleados en este local.</div>
+        ) : (
+        <div className="bg-card border border-border-default rounded-lg overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-page">
+              <tr>
+                <th className="px-3 py-2 text-left sticky left-0 z-20 bg-page border-r border-border-default">Empleado</th>
+                {DAYS.map(d => {
+                  const units = demandByDay.perDay[d]
+                  const lv = demandByDay.level[d]
+                  const style = lv === 'alta' ? 'bg-danger-bg text-danger border-danger/30'
+                    : lv === 'media' ? 'bg-warning-bg text-warning border-warning/30'
+                    : lv === 'baja' ? 'bg-success-bg text-success border-success/30'
+                    : 'bg-page text-text-secondary border-border-default'
+                  const label = lv === 'alta' ? 'Alta' : lv === 'media' ? 'Media' : lv === 'baja' ? 'Baja' : '—'
+                  return (
+                    <th key={d} className="px-2 py-2 text-center w-32 text-text-secondary font-medium align-top">
+                      {DAY_LABELS_SHORT[d]}<br />
+                      <span className="text-[10px] opacity-70 font-normal">{addDays(weekStart, d).slice(8, 10)}/{addDays(weekStart, d).slice(5, 7)}</span>
+                      {units > 0 && (
+                        <button onClick={() => setDemandDayOpen(d)}
+                          className={`mt-1 w-full rounded-md border px-1.5 py-1 flex flex-col items-center leading-tight hover:opacity-80 transition-base ${style}`}
+                          title="Ver demanda por hora">
+                          <span className="text-[10px] font-semibold">{label}</span>
+                          <span className="text-[11px] font-bold">{Math.round(units)}</span>
+                          <span className="text-[8px] font-normal opacity-70">platos</span>
+                        </button>
+                      )}
+                    </th>
+                  )
+                })}
+                <th className="px-2 py-2 text-center w-16 text-text-secondary font-medium">h</th>
+              </tr>
+            </thead>
+            <tbody>
+              {employees.map(e => {
+                const col = empColor(e)
+                const initials = e.name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
+                return (
+                  <tr key={e.id} className="border-b border-border-default">
+                    <td className="px-3 py-2 align-top sticky left-0 z-10 bg-card border-r border-border-default">
+                      <div className="flex items-center gap-2">
+                        <span className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-semibold shrink-0 ${col.bg} ${col.text}`}>{initials}</span>
+                        <div className="min-w-0">
+                          <div className="font-medium leading-tight truncate">{e.name}</div>
+                          <div className="text-[10px] text-text-secondary flex items-center gap-1 flex-wrap">
+                            <span className={`w-2 h-2 rounded-full ${col.dot}`}></span>{e.department || 'sin área'} ·
+                            <span className={wlByEmp[e.id] && wlByEmp[e.id].delta > 0.5 ? 'text-warning font-medium' : 'text-text-primary'}>{Math.round((hoursByEmp[e.id] || 0) * 10) / 10}h</span>
+                            {wlByEmp[e.id] && wlByEmp[e.id].contracted > 0 && <span className="text-text-tertiary">/ {wlByEmp[e.id].contracted}h</span>}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    {DAYS.map(d => {
+                      const shifts = empSchedule[e.id]?.[d] || []
+                      const avail = templates.filter(t => coverageForDay(t, d) > 0 && !shifts.some(s => s.id === t.id))
+                      return (
+                        <td key={d} className="px-1.5 py-1.5 align-top border-l border-border-default">
+                          <div className="space-y-1">
+                            {shifts.map(t => (
+                              <button key={t.id} onClick={() => removeFromShift(t.id, d, e.id)}
+                                className={`w-full text-left rounded-md px-1.5 py-1 text-[11px] font-medium ${col.bg} ${col.text} hover:opacity-80 transition-base group`}
+                                title={`${t.label} · clic para quitar`}>
+                                {t.start_time.slice(0, 5)}–{t.end_time.slice(0, 5)}
+                                <X size={10} className="inline ml-1 opacity-0 group-hover:opacity-100" />
+                              </button>
+                            ))}
+                            {avail.length > 0 && (
+                              <select value="" onChange={ev => { if (ev.target.value) addToShift(ev.target.value, d, e.id) }}
+                                className="w-full text-[10px] text-text-secondary border border-dashed border-border-default rounded-md px-1 py-0.5 bg-transparent hover:border-accent cursor-pointer">
+                                <option value="">+ turno</option>
+                                {avail.map(t => <option key={t.id} value={t.id}>{t.label} {t.start_time.slice(0, 5)}</option>)}
+                              </select>
+                            )}
+                          </div>
+                        </td>
+                      )
+                    })}
+                    <td className="px-2 py-2 text-center text-xs font-mono text-text-secondary align-top">{Math.round((hoursByEmp[e.id] || 0) * 10) / 10}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+        )
+      ) : (
         <div className="bg-card border border-border-default rounded-lg overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-accent text-text-on-accent">
@@ -462,20 +743,7 @@ export default function CalendarioPage() {
             </tbody>
           </table>
         </div>
-      )}
-
-      {employees.length > 0 && templates.length > 0 && (
-        <WorkloadSummary workloads={workloads} />
-      )}
-
-      {employees.length > 0 && templates.length > 0 && (
-        <EmployeeSchedules
-          employees={employees}
-          templates={templates}
-          cells={cells}
-          weekStart={weekStart}
-        />
-      )}
+      ))}
 
       {uncovered.length > 0 && (
         <UncoveredPanel
@@ -514,6 +782,177 @@ export default function CalendarioPage() {
           onDone={refresh}
         />
       )}
+
+      {rolesModalOpen && activeAccountId && (
+        <RolesModal
+          accountId={activeAccountId}
+          roles={roles}
+          onClose={() => setRolesModalOpen(false)}
+          onChanged={reloadRoles}
+        />
+      )}
+
+      {demandDayOpen !== null && (
+        <DemandDayPanel
+          dow={demandDayOpen}
+          hourly={demandByDay.hourly[demandDayOpen]}
+          total={demandByDay.perDay[demandDayOpen]}
+          onClose={() => setDemandDayOpen(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+/* =====================================================
+   Panel: curva de demanda por hora de un día
+   ===================================================== */
+
+function DemandDayPanel({ dow, hourly, total, onClose }: {
+  dow: number
+  hourly: number[]
+  total: number
+  onClose: () => void
+}) {
+  const dayName = DAY_LABELS[dow as DayOfWeek]
+  const max = Math.max(1, ...hourly)
+  const peak = hourly.indexOf(max)
+  const comida = hourly.slice(13, 16).reduce((a, b) => a + b, 0)
+  const cena = hourly.slice(20, 23).reduce((a, b) => a + b, 0)
+  const hours = hourly.map((_, h) => h).filter(h => h >= 7 && h <= 23)
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-card rounded-xl border border-border-default w-full max-w-2xl" onClick={e => e.stopPropagation()}>
+        <div className="p-4 border-b border-border-default flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold text-text-primary">Demanda de cocina · {dayName}</h3>
+            <p className="text-xs text-text-secondary mt-0.5">
+              ~{Math.round(total)} platos/día · pico a las {peak}h · comida {Math.round(comida)} · cena {Math.round(cena)}
+            </p>
+          </div>
+          <button onClick={onClose} className="text-text-secondary hover:text-text-primary"><X size={18} /></button>
+        </div>
+        <div className="p-5">
+          <div className="flex items-end gap-1 h-52">
+            {hours.map(h => {
+              const u = hourly[h]
+              const pct = (u / max) * 100
+              const ratio = u / max
+              // Color sólido por intensidad: verde (flojo) → ámbar (medio) → rojo (punta).
+              const barColor = u <= 0 ? '#E5E5E0'
+                : ratio >= 0.66 ? '#E24B4A'
+                : ratio >= 0.33 ? '#EF9F27'
+                : '#639922'
+              return (
+                <div key={h} className="flex-1 flex flex-col items-center justify-end h-full group">
+                  <div className="text-[10px] text-text-secondary mb-1 opacity-0 group-hover:opacity-100 transition-base">{Math.round(u)}</div>
+                  <div className="w-full rounded-t transition-base"
+                    style={{ height: `${Math.max(1, pct)}%`, backgroundColor: barColor }} title={`${h}h · ${Math.round(u)} platos`} />
+                  <span className="text-[9px] text-text-secondary mt-1">{h}</span>
+                </div>
+              )
+            })}
+          </div>
+          <div className="flex items-center gap-4 mt-3 text-[11px] text-text-secondary">
+            <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: '#639922' }} /> Carga baja</span>
+            <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: '#EF9F27' }} /> Media</span>
+            <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: '#E24B4A' }} /> Hora punta</span>
+          </div>
+          <p className="text-[11px] text-text-secondary mt-3">
+            Platos de cocina por hora (excluye bebidas y postres), media de las últimas semanas. La barra más oscura es tu hora punta. Úsalo para poner más gente donde se concentra la carga.
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* =====================================================
+   Modal: gestión de áreas/roles del personal
+   ===================================================== */
+
+function RolesModal({ accountId, roles, onClose, onChanged }: {
+  accountId: string
+  roles: StaffRole[]
+  onClose: () => void
+  onChanged: () => void
+}) {
+  const [items, setItems] = useState<StaffRole[]>(roles)
+  const [newName, setNewName] = useState('')
+  const [busy, setBusy] = useState(false)
+  const KINDS: { v: RoleKind; label: string }[] = [
+    { v: 'cocina', label: 'Cocina (produce platos)' },
+    { v: 'servicio', label: 'Servicio (sala/barra)' },
+    { v: 'reparto', label: 'Reparto' },
+    { v: 'otro', label: 'Otro' },
+  ]
+
+  async function patch(r: StaffRole, changes: Partial<StaffRole>) {
+    setItems(prev => prev.map(x => x.id === r.id ? { ...x, ...changes } : x))
+    await upsertStaffRole(accountId, { ...r, ...changes })
+    onChanged()
+  }
+  async function addRole() {
+    const name = newName.trim()
+    if (!name) return
+    setBusy(true)
+    const created = await upsertStaffRole(accountId, { name, color: 'gray', kind: 'otro', sort: items.length + 1 })
+    setBusy(false)
+    if (created) { setItems(prev => [...prev, created]); setNewName(''); onChanged() }
+  }
+  async function remove(r: StaffRole) {
+    if (!confirm(`¿Eliminar el área "${r.name}"? Los empleados que la tengan quedarán sin color hasta reasignarlos.`)) return
+    setItems(prev => prev.filter(x => x.id !== r.id))
+    await deleteStaffRole(r.id)
+    onChanged()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-card rounded-xl border border-border-default w-full max-w-lg max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="p-4 border-b border-border-default flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold text-text-primary">Áreas del personal</h3>
+            <p className="text-xs text-text-secondary mt-0.5">Dan color a los turnos y dicen a la IA qué área produce platos. Cada negocio las ajusta.</p>
+          </div>
+          <button onClick={onClose} className="text-text-secondary hover:text-text-primary"><X size={18} /></button>
+        </div>
+
+        <div className="p-4 space-y-2">
+          {items.map(r => {
+            const c = roleColor(r.color)
+            return (
+              <div key={r.id} className="flex items-center gap-2 border border-border-default rounded-lg p-2">
+                <span className={`w-4 h-4 rounded-full shrink-0 ${c.dot}`} />
+                <input value={r.name} onChange={e => setItems(prev => prev.map(x => x.id === r.id ? { ...x, name: e.target.value } : x))}
+                  onBlur={e => patch(r, { name: e.target.value.trim() || r.name })}
+                  className="flex-1 min-w-0 bg-transparent text-sm text-text-primary border-b border-transparent focus:border-border-default outline-none" />
+                <select value={r.color} onChange={e => patch(r, { color: e.target.value })}
+                  className="text-xs border border-border-default rounded px-1 py-1 bg-card">
+                  {ROLE_COLOR_KEYS.map(k => <option key={k} value={k}>{k}</option>)}
+                </select>
+                <select value={r.kind} onChange={e => patch(r, { kind: e.target.value as RoleKind })}
+                  className="text-xs border border-border-default rounded px-1 py-1 bg-card max-w-[130px]">
+                  {KINDS.map(k => <option key={k.v} value={k.v}>{k.label}</option>)}
+                </select>
+                <button onClick={() => remove(r)} className="text-danger hover:opacity-70 shrink-0" title="Eliminar área"><X size={15} /></button>
+              </div>
+            )
+          })}
+          {items.length === 0 && <p className="text-sm text-text-secondary text-center py-4">No hay áreas. Añade la primera abajo.</p>}
+        </div>
+
+        <div className="p-4 border-t border-border-default flex gap-2">
+          <input value={newName} onChange={e => setNewName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addRole() }}
+            placeholder="Nueva área (ej. Terraza, Pisos…)"
+            className="flex-1 border border-border-default rounded-lg px-3 py-2 text-sm bg-card" />
+          <button onClick={addRole} disabled={busy || !newName.trim()}
+            className="px-4 py-2 rounded-lg bg-accent text-text-on-accent text-sm font-medium disabled:opacity-40">
+            <Plus size={14} className="inline mr-1" />Añadir
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -652,54 +1091,6 @@ function Cell({
         )}
       </div>
     </td>
-  )
-}
-
-/* =====================================================
-   Resumen de carga por empleado
-   ===================================================== */
-
-function WorkloadSummary({ workloads }: { workloads: EmployeeWorkload[] }) {
-  return (
-    <div className="bg-card border border-border-default rounded-lg p-4">
-      <h3 className="font-display font-semibold mb-3 text-accent inline-flex items-center gap-1.5">
-        <Users size={16} /> Carga por empleado
-      </h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-        {workloads.map(w => {
-          const pct = w.contracted_hours > 0 ? (w.assigned_hours / w.contracted_hours) * 100 : 0
-          const exceedsTol = w.assigned_hours > w.contracted_hours * 1.10
-          const underContract = w.assigned_hours < w.contracted_hours - 0.5
-          let barColor = 'bg-success'
-          if (exceedsTol) barColor = 'bg-danger'
-          else if (underContract) barColor = 'bg-warning'
-          else if (pct > 100) barColor = 'bg-warning'
-          const widthPct = Math.min(100, pct)
-          return (
-            <div key={w.employee_id} className="border border-border-default rounded-lg p-3">
-              <div className="flex items-center justify-between mb-1">
-                <div>
-                  <span className="font-bold text-sm text-accent">
-                    {w.shift_code || '–'}
-                  </span>
-                  <span className="ml-2 text-sm text-text-primary">{w.employee_name}</span>
-                </div>
-                <span className={`text-xs font-mono ${exceedsTol ? 'text-danger font-bold' : 'text-text-secondary'}`}>
-                  {w.assigned_hours.toFixed(2)} / {w.contracted_hours}h
-                </span>
-              </div>
-              <div className="h-2 bg-accent-bg rounded-full overflow-hidden">
-                <div className={`h-full ${barColor}`} style={{ width: `${widthPct}%` }} />
-              </div>
-              <div className="text-[10px] text-text-secondary mt-1">
-                {w.delta > 0 ? '+' : ''}{w.delta.toFixed(2)}h vs contrato
-                {exceedsTol && <span className="ml-2 text-danger font-bold">excede tope 10%</span>}
-              </div>
-            </div>
-          )
-        })}
-      </div>
-    </div>
   )
 }
 
@@ -854,157 +1245,6 @@ function SuggestionsModal({ gap, template, weekStart, cells, employees, onClose,
   )
 }
 
-/* =====================================================
-   Horario individualizado por empleado
-   ===================================================== */
-
-interface EmployeeSchedulesProps {
-  employees: Employee[]
-  templates: ShiftTemplate[]
-  cells: ScheduleCells
-  weekStart: string
-}
-
-interface EmpDayShift {
-  templateId: string
-  label: string
-  start: string
-  end: string
-  hours: number
-  crossesMidnight: boolean
-}
-
-function EmployeeSchedules({ employees, templates, cells }: EmployeeSchedulesProps) {
-  const [openId, setOpenId] = useState<string | null>(null)
-  const tplById = useMemo(() => new Map(templates.map(t => [t.id, t])), [templates])
-
-  const detailByEmp = useMemo(() => {
-    const map = new Map<string, { shifts: Record<string, EmpDayShift[]>; total: number }>()
-    for (const emp of employees) {
-      const shifts: Record<string, EmpDayShift[]> = {}
-      let total = 0
-      for (const tid of Object.keys(cells)) {
-        const t = tplById.get(tid)
-        if (!t) continue
-        for (const dk of Object.keys(cells[tid])) {
-          if (!cells[tid][dk].includes(emp.id)) continue
-          const start = t.start_time.slice(0, 5)
-          const end = t.end_time.slice(0, 5)
-          const [sh, sm] = start.split(':').map(Number)
-          const [eh, em] = end.split(':').map(Number)
-          const crossesMidnight = (eh * 60 + em) <= (sh * 60 + sm)
-          const hours = shiftDurationHours(start, end)
-          if (!shifts[dk]) shifts[dk] = []
-          shifts[dk].push({ templateId: tid, label: t.label, start, end, hours, crossesMidnight })
-          total += hours
-        }
-      }
-      for (const k of Object.keys(shifts)) {
-        shifts[k].sort((a, b) => a.start.localeCompare(b.start))
-      }
-      map.set(emp.id, { shifts, total: Math.round(total * 100) / 100 })
-    }
-    return map
-  }, [employees, cells, tplById])
-
-  return (
-    <div className="bg-card border border-border-default rounded-lg p-4">
-      <h3 className="font-display font-semibold mb-3 text-accent inline-flex items-center gap-1.5">
-        <CalendarDays size={16} /> Horario por empleado
-      </h3>
-      <div className="space-y-2">
-        {employees.map(emp => {
-          const detail = detailByEmp.get(emp.id) || { shifts: {}, total: 0 }
-          const isOpen = openId === emp.id
-          const contracted = emp.weeklyHours || 40
-          const delta = detail.total - contracted
-          const exceeds = detail.total > contracted * 1.10
-          return (
-            <div key={emp.id} className="border border-border-default rounded-lg">
-              <button
-                onClick={() => setOpenId(isOpen ? null : emp.id)}
-                className="w-full flex items-center justify-between px-3 py-2 hover:bg-page transition-base"
-              >
-                <div className="flex items-center gap-3">
-                  {isOpen
-                    ? <ChevronLeft size={14} className="text-text-secondary rotate-[-90deg]" />
-                    : <ChevronRight size={14} className="text-text-secondary" />}
-                  <span className="font-bold text-sm text-accent">
-                    {emp.shiftCode || '–'}
-                  </span>
-                  <span className="text-sm text-text-primary">{emp.name}</span>
-                  {emp.shiftPeriod && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent-bg text-text-secondary">
-                      {emp.shiftPeriod === 'manana' ? 'mañanas' : emp.shiftPeriod === 'tarde' ? 'tardes' : 'partido'}
-                    </span>
-                  )}
-                  {emp.restPattern && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent-bg text-accent">
-                      libra: {humanRestPattern(emp.restPattern)}
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className={`text-xs font-mono ${exceeds ? 'text-danger font-bold' : 'text-text-secondary'}`}>
-                    {detail.total.toFixed(2)} / {contracted}h
-                  </span>
-                  <span className={`text-[10px] ${exceeds ? 'text-danger' : delta < -0.5 ? 'text-warning' : 'text-success'}`}>
-                    {delta > 0 ? '+' : ''}{delta.toFixed(2)}h
-                  </span>
-                </div>
-              </button>
-              {isOpen && (
-                <div className="border-t border-border-default p-3 grid grid-cols-1 md:grid-cols-7 gap-2">
-                  {[0, 1, 2, 3, 4, 5, 6].map(d => {
-                    const dk = String(d)
-                    const list = detail.shifts[dk] || []
-                    const dayTotal = list.reduce((acc, s) => acc + s.hours, 0)
-                    return (
-                      <div key={d} className="border border-border-default rounded p-2 text-xs">
-                        <div className="font-semibold mb-1 flex items-center justify-between text-text-primary">
-                          <span>{DAY_LABELS_SHORT[d as DayOfWeek]}</span>
-                          {list.length > 0 && (
-                            <span className="text-[10px] text-text-secondary font-mono">{dayTotal.toFixed(2)}h</span>
-                          )}
-                        </div>
-                        {list.length === 0 ? (
-                          <div className="text-[10px] text-text-secondary italic">Libre</div>
-                        ) : (
-                          <div className="space-y-1">
-                            {list.map((s, i) => (
-                              <div key={i} className="bg-accent-bg rounded px-1.5 py-1">
-                                <div className="font-mono text-[10px] text-accent">
-                                  {s.start}–{s.end}
-                                  {s.crossesMidnight && <span className="ml-1 text-text-secondary">+1d</span>}
-                                </div>
-                                <div className="text-[9px] text-text-secondary">{s.label}</div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-function humanRestPattern(p: string): string {
-  const [d, kind] = p.split(':')
-  const dayMap: Record<string, string> = { lun: 'Lun', mar: 'Mar', mie: 'Mié' }
-  const nextMap: Record<string, string> = { lun: 'Mar', mar: 'Mié', mie: 'Jue' }
-  const d1 = dayMap[d] || d
-  const d2 = nextMap[d] || ''
-  if (kind === 'tarde_dia') return `${d1} tarde + ${d2} día`
-  if (kind === 'dia_manana') return `${d1} día + ${d2} mañana`
-  return p
-}
 
 /* =====================================================
    Modal: Copiar horario a otras semanas

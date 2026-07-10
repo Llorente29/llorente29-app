@@ -9,6 +9,7 @@ import FormacionesTab from '../components/personal/FormacionesTab'
 import SendMessageModal from '../components/personal/SendMessageModal'
 import AccesoTrabajadorPanel from '../components/personal/AccesoTrabajadorPanel'
 import InsightsPage from './InsightsPage'
+import { fetchStaffRoles, type StaffRole } from '../services/staffRoleService'
 import {
   createEmployeeWithAccount,
   deactivateEmployeeAccount,
@@ -337,6 +338,13 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
   addClockEntry: (employeeId: string, entry: ClockEntry) => Promise<void>
 }) {
   const [emp, setEmp] = useState<Employee>({ ...employee, clockEntries: [...employee.clockEntries] })
+  const [staffRoles, setStaffRoles] = useState<StaffRole[]>([])
+  useEffect(() => {
+    if (!accountId) return
+    let cancel = false
+    fetchStaffRoles(accountId).then(r => { if (!cancel) setStaffRoles(r.filter(x => x.active)) })
+    return () => { cancel = true }
+  }, [accountId])
   const [tab, setTab] = useState('info')
   const [clocking, setClocking] = useState(false)
   const [clockWarn, setClockWarn] = useState<{ type: 'blocked' | 'rounded' | 'real'; msg: string } | null>(null)
@@ -493,6 +501,17 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
               <Select className="mt-1" value={emp.position} onChange={e => update('position', e.target.value)}>
                 {POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
               </Select>
+            </div>
+            <div>
+              <Label>Área</Label>
+              <Select className="mt-1" value={emp.department || ''} onChange={e => update('department', e.target.value)}>
+                <option value="">(sin área)</option>
+                {staffRoles.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
+                {emp.department && !staffRoles.some(r => r.name === emp.department) && (
+                  <option value={emp.department}>{emp.department} (no configurada)</option>
+                )}
+              </Select>
+              <p className="text-[11px] text-text-secondary mt-1">Da color a sus turnos en el cuadrante. Gestiona las áreas desde el Calendario.</p>
             </div>
             <div>
               <Label>Local principal</Label>
@@ -743,6 +762,30 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
                 <div>
                   <Label>Salario bruto anual (€)</Label>
                   <Input className="mt-1" type="number" value={emp.salary} onChange={e => update('salary', parseFloat(e.target.value) || 0)} />
+                </div>
+              )}
+              {canSeeSalaries && (
+                <div>
+                  <Label>Coste SS empresa (anual) (€)</Label>
+                  <Input
+                    className="mt-1"
+                    type="number"
+                    value={emp.employerSsAnnual ?? ''}
+                    onChange={e => update('employerSsAnnual', e.target.value === '' ? undefined : (parseFloat(e.target.value) || 0))}
+                    placeholder="Cotización a cargo de la empresa"
+                  />
+                  <p className="text-xs text-text-secondary mt-1">
+                    {(() => {
+                      const gross = emp.salary || 0
+                      const ss = emp.employerSsAnnual
+                      const fmt = (n: number) => n.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })
+                      if (ss != null) {
+                        const total = gross + ss
+                        return <>Coste empresa: <strong>{fmt(total)}</strong>/año · ≈ {fmt(total / 12)}/mes</>
+                      }
+                      return <>Vacío → se estima SS al 30% (coste empresa ≈ {fmt(gross * 1.3)}/año). Rellénalo con la nómina para que sea exacto.</>
+                    })()}
+                  </p>
                 </div>
               )}
               <div>

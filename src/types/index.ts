@@ -15,6 +15,7 @@ export interface Employee {
   birthDate?: string                 // fecha de nacimiento ISO (YYYY-MM-DD)
   locationId: string; position: string; department: string; contractType: string
   startDate: string; endDate: string; salary: number; weeklyHours: number
+  employerSsAnnual?: number         // coste SS empresa ANUAL (nómina). Con salary (bruto anual) = coste empresa real
   trialPeriodDays?: number           // duración del periodo de prueba en días
   schedule: string; weeklySchedule: WeeklySchedule; active: boolean; notes: string
   clockEntries: ClockEntry[]; documents: StaffDocument[]; vacations: Vacation[]

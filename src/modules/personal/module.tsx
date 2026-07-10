@@ -17,7 +17,7 @@
 
 import {
   Users, Activity, Clock, Smartphone, Inbox, Armchair,
-  RefreshCw, Calendar, FolderOpen, FileText, Wallet,
+  RefreshCw, Calendar, FolderOpen, FileText, Wallet, BarChart3, Receipt,
 } from 'lucide-react'
 import type { ModuleDefinition } from '@/shell/types'
 
@@ -31,6 +31,8 @@ import CambiosPendientesPage from '@/pages/CambiosPendientesPage'
 import CalendarioPage from '@/pages/CalendarioPage'
 import PlantillaTurnosPage from '@/pages/PlantillaTurnosPage'
 import InformesPage from '@/pages/InformesPage'
+import InformesTeamPage from '@/pages/InformesTeamPage'
+import NominasPage from '@/pages/NominasPage'
 import BolsaHorasPage from '@/pages/BolsaHorasPage'
 
 export const personalModule: ModuleDefinition = {
@@ -42,32 +44,36 @@ export const personalModule: ModuleDefinition = {
 
   basePath: 'personal',
   routes: [
-    { path: '',                element: <StaffPage /> },
-    { path: 'ahora-mismo',     element: <AhoraMismoPage /> },
-    { path: 'control-horario', element: <FichajesGlobalPage /> },
-    { path: 'kiosko',          element: <KioskoFichajePage /> },
-    { path: 'solicitudes',     element: <SolicitudesPendientesPage /> },
-    { path: 'turnos-abiertos', element: <TurnosAbiertosPage /> },
-    { path: 'cambios',         element: <CambiosPendientesPage /> },
-    { path: 'calendario',      element: <CalendarioPage /> },
+    { path: '',                 element: <StaffPage /> },
+    { path: 'ahora-mismo',      element: <AhoraMismoPage /> },
+    { path: 'control-horario',  element: <FichajesGlobalPage /> },
+    { path: 'kiosko',           element: <KioskoFichajePage /> },
+    { path: 'solicitudes',      element: <SolicitudesPendientesPage /> },
+    { path: 'turnos-abiertos',  element: <TurnosAbiertosPage /> },
+    { path: 'cambios',          element: <CambiosPendientesPage /> },
+    { path: 'calendario',       element: <CalendarioPage /> },
     { path: 'plantilla-turnos', element: <PlantillaTurnosPage /> },
-    { path: 'informes',        element: <InformesPage /> },
-    { path: 'bolsa-horas',     element: <BolsaHorasPage /> },
+    { path: 'informes-analitica', element: <InformesTeamPage /> },
+    { path: 'nominas',          element: <NominasPage /> },
+    { path: 'informes',         element: <InformesPage /> },
+    { path: 'bolsa-horas',      element: <BolsaHorasPage /> },
   ],
 
   sidebar: {
     items: [
-      { id: 'personal_staff',       label: 'Empleados',         icon: Users,      path: '',                  requiredPermission: 'show_staff' },
-      { id: 'personal_ahora',       label: 'Ahora mismo',       icon: Activity,   path: 'ahora-mismo',       requiredPermission: 'show_ahora_mismo' },
-      { id: 'personal_horario',     label: 'Control horario',   icon: Clock,      path: 'control-horario',   requiredPermission: 'show_fichajes_global' },
-      { id: 'personal_kiosko',      label: 'Kiosko fichaje',    icon: Smartphone, path: 'kiosko',            requiredPermission: 'show_kiosko_fichaje' },
-      { id: 'personal_solicitudes', label: 'Solicitudes',       icon: Inbox,      path: 'solicitudes',       requiredPermission: 'show_solicitudes_pendientes' },
-      { id: 'personal_turnos',      label: 'Turnos abiertos',   icon: Armchair,   path: 'turnos-abiertos',   requiredPermission: 'show_turnos_abiertos' },
-      { id: 'personal_cambios',     label: 'Cambios de turno',  icon: RefreshCw,  path: 'cambios',           requiredPermission: 'show_cambios_pendientes' },
-      { id: 'personal_calendario',  label: 'Calendario',        icon: Calendar,   path: 'calendario',        requiredPermission: 'show_calendario' },
-      { id: 'personal_plantilla',   label: 'Plantilla turnos',  icon: FolderOpen, path: 'plantilla-turnos',  requiredPermission: 'show_plantilla_turnos' },
-      { id: 'personal_informes',    label: 'Informes Gestoría', icon: FileText,   path: 'informes',          requiredPermission: 'show_informes_personal' },
-      { id: 'personal_bolsa',       label: 'Bolsa de horas',    icon: Wallet,     path: 'bolsa-horas',       requiredPermission: 'show_bolsa_horas' },
+      { id: 'personal_staff',        label: 'Empleados',         icon: Users,      path: '',                    requiredPermission: 'show_staff' },
+      { id: 'personal_ahora',        label: 'Ahora mismo',       icon: Activity,   path: 'ahora-mismo',         requiredPermission: 'show_ahora_mismo' },
+      { id: 'personal_horario',      label: 'Control horario',   icon: Clock,      path: 'control-horario',     requiredPermission: 'show_fichajes_global' },
+      { id: 'personal_kiosko',       label: 'Kiosko fichaje',    icon: Smartphone, path: 'kiosko',              requiredPermission: 'show_kiosko_fichaje' },
+      { id: 'personal_solicitudes',  label: 'Solicitudes',       icon: Inbox,      path: 'solicitudes',         requiredPermission: 'show_solicitudes_pendientes' },
+      { id: 'personal_turnos',       label: 'Turnos abiertos',   icon: Armchair,   path: 'turnos-abiertos',     requiredPermission: 'show_turnos_abiertos' },
+      { id: 'personal_cambios',      label: 'Cambios de turno',  icon: RefreshCw,  path: 'cambios',             requiredPermission: 'show_cambios_pendientes' },
+      { id: 'personal_calendario',   label: 'Calendario',        icon: Calendar,   path: 'calendario',          requiredPermission: 'show_calendario' },
+      { id: 'personal_plantilla',    label: 'Plantilla turnos',  icon: FolderOpen, path: 'plantilla-turnos',    requiredPermission: 'show_plantilla_turnos' },
+      { id: 'personal_informes_team', label: 'Informes',         icon: BarChart3,  path: 'informes-analitica',  requiredPermission: 'show_informes_personal' },
+      { id: 'personal_nominas',      label: 'Nóminas',           icon: Receipt,    path: 'nominas',             requiredPermission: 'show_informes_personal' },
+      { id: 'personal_informes',     label: 'Informes Gestoría', icon: FileText,   path: 'informes',            requiredPermission: 'show_informes_personal' },
+      { id: 'personal_bolsa',        label: 'Bolsa de horas',    icon: Wallet,     path: 'bolsa-horas',         requiredPermission: 'show_bolsa_horas' },
     ],
   },
 

@@ -170,12 +170,22 @@ Deno.serve(async (req) => {
     signals.sales = sales;
 
     const { data: events } = await supa.from("local_event")
-      .select("name,event_type,starts_at,ends_at,demand_effect")
+      .select("name,event_type,starts_at,ends_at,demand_effect,location_id")
       .eq("account_id", accountId)
       .gte("ends_at", nowIso)
       .lte("starts_at", new Date(Date.now() + 7 * 864e5).toISOString());
     signals.events = events;
-    const eventUp = (events ?? []).some(e => e.demand_effect === "up");
+    // Eventos demanda-up separados por alcance (frente #3): los de CUENTA (location_id null)
+    // aplican a todo; los de LOCAL solo a su local. Un partido en Madrid ya no empuja el
+    // local de otra ciudad.
+    const acctUpNames = (events ?? []).filter(e => e.demand_effect === "up" && !e.location_id).map(e => e.name);
+    const eventUpByLoc = new Map<string, string[]>();
+    for (const e of (events ?? []) as Array<any>) {
+      if (e.demand_effect === "up" && e.location_id) {
+        const arr = eventUpByLoc.get(e.location_id) ?? [];
+        arr.push(e.name); eventUpByLoc.set(e.location_id, arr);
+      }
+    }
 
     const { data: dowRows } = await supa.rpc("agent_dow_signal", { p_account_id: accountId });
     const dowMap = new Map<string, Map<number, number>>();
@@ -228,7 +238,6 @@ Deno.serve(async (req) => {
     const nextDows = [0, 1, 2].map(o => ((isoToday - 1 + o) % 7) + 1);
     const DOW_NAMES = ["", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
     const nextDowTxt = nextDows.map(d => DOW_NAMES[d]).join("-");
-    const eventUpNames = (events ?? []).filter(e => e.demand_effect === "up").map(e => e.name).join(", ");
 
     const { data: recent } = await supa.from("coupon")
       .select("id,name,channels,scope,active,created_at,ends_at")
@@ -350,10 +359,14 @@ Deno.serve(async (req) => {
           `(rota por marca y fecha en banda ${band.join("/")}%; storefront ${platS7 >= 5 ? "nuevo de marca con ventas en plataforma" : "sin ventas en ningún canal"}).`;
       }
 
-      // Evento demanda-up: profundiza (sobre cualquier tramo)
-      if (prof.proactive && eventUp) {
+      // Evento demanda-up (frente #3, por LOCAL): los de cuenta aplican a todo; los de
+      // local, solo a su local. El Shop es per-marca (multi-local) → aplica si hay evento
+      // de cuenta o en cualquier local (su storefront sirve a todas las zonas).
+      const locEvNames = isPlatform ? (eventUpByLoc.get(o.row.location_id) ?? []) : [...new Set(([] as string[]).concat(...eventUpByLoc.values()))];
+      const evNames = [...acctUpNames, ...locEvNames];
+      if (prof.proactive && evNames.length > 0) {
         pct = Math.min(prof.maxPct, pct + 5);
-        reason += ` + evento demanda-up: ${eventUpNames}`;
+        reason += ` + evento demanda-up: ${evNames.join(", ")}`;
       }
 
       // T4: los 3 días por delante vs reparto histórico
