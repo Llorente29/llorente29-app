@@ -10,7 +10,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   Wand2, Save, Check, Megaphone, X, Plus,
-  AlertTriangle, Copy, Euro, Clock, TrendingUp, TrendingDown, CalendarDays, Leaf,
+  AlertTriangle, Copy, Euro, Clock, TrendingUp, TrendingDown, CalendarDays, Leaf, Users, SlidersHorizontal,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import {
@@ -50,6 +50,7 @@ import { getStaffingGaps, type StaffingGap } from '../modules/multitenancy/servi
 import { fetchPayrollCosts } from '../services/payrollService'
 import { fetchSalesByLocation, fetchDemandProfile, fetchDemandForecast, type DemandProfile, type DemandForecast } from '../services/teamReportsService'
 import { fetchStaffRoles, roleColor, upsertStaffRole, deleteStaffRole, ROLE_COLOR_KEYS, type StaffRole, type RoleKind } from '../services/staffRoleService'
+import { fetchLaborModel, saveLaborModelRow, fetchLaborIntensity, setLaborIntensity, fetchLaborRequirement, type LaborModelRow, type LaborDriver, type LaborRequirementRow } from '../services/teamLaborService'
 
 const DAYS: DayOfWeek[] = [0, 1, 2, 3, 4, 5, 6]
 
@@ -264,6 +265,7 @@ export default function CalendarioPage() {
   const [viewMode, setViewMode] = useState<'turno' | 'empleado'>('empleado')
   const [roles, setRoles] = useState<StaffRole[]>([])
   const [rolesModalOpen, setRolesModalOpen] = useState(false)
+  const [laborModalOpen, setLaborModalOpen] = useState(false)
   const reloadRoles = () => { if (activeAccountId) fetchStaffRoles(activeAccountId).then(setRoles) }
   useEffect(() => {
     if (!activeAccountId) return
@@ -631,8 +633,12 @@ export default function CalendarioPage() {
             className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-base ${viewMode === 'turno' ? 'bg-accent text-text-on-accent' : 'bg-card border border-border-default text-text-secondary hover:border-accent'}`}>
             Por turno
           </button>
+          <button onClick={() => setLaborModalOpen(true)}
+            className="ml-auto text-xs px-3 py-1.5 rounded-lg font-medium bg-card border border-border-default text-text-secondary hover:border-accent transition-base inline-flex items-center gap-1.5">
+            <SlidersHorizontal size={13} /> Modelo de trabajo
+          </button>
           <button onClick={() => setRolesModalOpen(true)}
-            className="ml-auto text-xs px-3 py-1.5 rounded-lg font-medium bg-card border border-border-default text-text-secondary hover:border-accent transition-base">
+            className="text-xs px-3 py-1.5 rounded-lg font-medium bg-card border border-border-default text-text-secondary hover:border-accent transition-base">
             Áreas
           </button>
         </div>
@@ -859,6 +865,16 @@ export default function CalendarioPage() {
         />
       )}
 
+      {laborModalOpen && activeAccountId && locationId && (
+        <LaborModelModal
+          accountId={activeAccountId}
+          locationId={locationId}
+          weekStart={weekStart}
+          roleKinds={[...new Set(roles.map(r => r.kind))]}
+          onClose={() => setLaborModalOpen(false)}
+        />
+      )}
+
       {demandDayOpen !== null && (
         <DemandDayPanel
           dow={demandDayOpen}
@@ -1060,6 +1076,171 @@ function RolesModal({ accountId, roles, onClose, onChanged }: {
             className="px-4 py-2 rounded-lg bg-accent text-text-on-accent text-sm font-medium disabled:opacity-40">
             <Plus size={14} className="inline mr-1" />Añadir
           </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* =====================================================
+   Modal: Modelo de trabajo (Fase A) — drivers por rol + intensidad + preview
+   ===================================================== */
+
+function LaborModelModal({ accountId, locationId, weekStart, roleKinds, onClose }: {
+  accountId: string
+  locationId: string
+  weekStart: string
+  roleKinds: string[]
+  onClose: () => void
+}) {
+  const [rows, setRows] = useState<LaborModelRow[]>([])
+  const [intensity, setIntensityState] = useState<string>('normal')
+  const [req, setReq] = useState<LaborRequirementRow[]>([])
+  const [busy, setBusy] = useState(false)
+  const [loading, setLoading] = useState(true)
+
+  const reloadReq = () => fetchLaborRequirement(accountId, locationId, weekStart).then(setReq)
+
+  useEffect(() => {
+    let cancel = false
+    ;(async () => {
+      const [m, inten] = await Promise.all([
+        fetchLaborModel(accountId, roleKinds.length ? roleKinds : ['cocina']),
+        fetchLaborIntensity(accountId),
+      ])
+      if (cancel) return
+      setRows(m)
+      setIntensityState(inten)
+      await reloadReq()
+      if (!cancel) setLoading(false)
+    })()
+    return () => { cancel = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  function patchRow(kind: string, changes: Partial<LaborModelRow>) {
+    setRows(prev => prev.map(r => r.roleKind === kind ? { ...r, ...changes } : r))
+  }
+  async function saveRow(r: LaborModelRow) {
+    setBusy(true)
+    await saveLaborModelRow(accountId, r)
+    setRows(prev => prev.map(x => x.roleKind === r.roleKind ? { ...x, isEstimate: false } : x))
+    await reloadReq()
+    setBusy(false)
+  }
+  async function changeIntensity(v: string) {
+    setIntensityState(v)
+    await setLaborIntensity(accountId, v)
+    await reloadReq()
+  }
+
+  const summary = useMemo(() => {
+    const m: Record<string, { max: number; peak: number }> = {}
+    for (const r of req) {
+      const cur = m[r.roleKind] || { max: 0, peak: 0 }
+      if (r.required > cur.max) { cur.max = r.required; cur.peak = r.hora }
+      m[r.roleKind] = cur
+    }
+    return m
+  }, [req])
+
+  const KIND_LABEL: Record<string, string> = { cocina: 'Cocina', servicio: 'Servicio', reparto: 'Reparto', otro: 'Otro' }
+  const DRIVERS: { v: LaborDriver; label: string }[] = [
+    { v: 'platos', label: 'Platos (carga de cocina)' },
+    { v: 'tickets', label: 'Tickets (pedidos)' },
+    { v: 'fixed', label: 'Fijo mientras abre' },
+  ]
+  const INTENS = [
+    { v: 'holgado', label: 'Holgado' }, { v: 'normal', label: 'Normal' }, { v: 'ajustado', label: 'Ajustado' },
+  ]
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-card rounded-xl border border-border-default w-full max-w-2xl max-h-[88vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="p-4 border-b border-border-default flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold text-text-primary inline-flex items-center gap-2"><SlidersHorizontal size={16} /> Modelo de trabajo</h3>
+            <p className="text-xs text-text-secondary mt-0.5">Cuánta gente hace falta por hora según la demanda prevista, por rol. La cocina la dirigen los platos reales.</p>
+          </div>
+          <button onClick={onClose} className="text-text-secondary hover:text-text-primary"><X size={18} /></button>
+        </div>
+
+        <div className="px-4 pt-3">
+          <div className="text-xs font-semibold text-text-secondary mb-1.5">Intensidad general</div>
+          <div className="flex gap-1.5">
+            {INTENS.map(it => (
+              <button key={it.v} onClick={() => changeIntensity(it.v)}
+                className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-base border ${intensity === it.v ? 'bg-accent text-text-on-accent border-accent' : 'bg-card border-border-default text-text-secondary hover:border-accent'}`}>
+                {it.label}
+              </button>
+            ))}
+          </div>
+          <p className="text-[11px] text-text-secondary mt-1.5">Holgado = más margen de personal; Ajustado = corres más fino.</p>
+        </div>
+
+        <div className="p-4 space-y-2.5">
+          {loading ? (
+            <p className="text-sm text-text-secondary text-center py-4">Cargando…</p>
+          ) : rows.length === 0 ? (
+            <p className="text-sm text-text-secondary text-center py-4">Configura primero las áreas del personal (botón "Áreas").</p>
+          ) : rows.map(r => {
+            const s = summary[r.roleKind]
+            const isFixed = r.driver === 'fixed'
+            return (
+              <div key={r.roleKind} className="border border-border-default rounded-lg p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="font-medium text-text-primary inline-flex items-center gap-2">
+                    {KIND_LABEL[r.roleKind] || r.roleKind}
+                    {r.isEstimate && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-warning-bg text-warning">estimación</span>}
+                  </div>
+                  {s && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-text-secondary">
+                      <Users size={12} /> hasta {s.max}{s.max > 0 ? ` · pico ${s.peak}h` : ''}
+                    </span>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-2 items-end">
+                  <label className="text-[11px] text-text-secondary">
+                    Lo dirige
+                    <select value={r.driver} onChange={e => patchRow(r.roleKind, { driver: e.target.value as LaborDriver })}
+                      className="mt-0.5 w-full border border-border-default rounded px-2 py-1.5 text-sm bg-card">
+                      {DRIVERS.map(d => <option key={d.v} value={d.v}>{d.label}</option>)}
+                    </select>
+                  </label>
+                  {!isFixed && (
+                    <label className="text-[11px] text-text-secondary">
+                      {r.driver === 'platos' ? 'Platos' : 'Tickets'}/persona-hora
+                      <input type="number" min={1} value={r.perPersonHour}
+                        onChange={e => patchRow(r.roleKind, { perPersonHour: Math.max(1, Number(e.target.value) || 1) })}
+                        className="mt-0.5 w-full border border-border-default rounded px-2 py-1.5 text-sm bg-card" />
+                    </label>
+                  )}
+                  <label className="text-[11px] text-text-secondary">
+                    Mínimo mientras abre
+                    <input type="number" min={0} value={r.minOnOpen}
+                      onChange={e => patchRow(r.roleKind, { minOnOpen: Math.max(0, Number(e.target.value) || 0) })}
+                      className="mt-0.5 w-full border border-border-default rounded px-2 py-1.5 text-sm bg-card" />
+                  </label>
+                  <label className="text-[11px] text-text-secondary">
+                    Extra apertura/cierre
+                    <input type="number" min={0} value={r.openCloseExtra}
+                      onChange={e => patchRow(r.roleKind, { openCloseExtra: Math.max(0, Number(e.target.value) || 0) })}
+                      className="mt-0.5 w-full border border-border-default rounded px-2 py-1.5 text-sm bg-card" />
+                  </label>
+                </div>
+                <div className="flex justify-end mt-2">
+                  <button onClick={() => saveRow(r)} disabled={busy}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-accent text-text-on-accent font-medium disabled:opacity-40 inline-flex items-center gap-1.5">
+                    <Save size={13} /> Guardar
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        <div className="px-4 pb-4 text-[11px] text-text-secondary">
+          Vista previa sobre la semana del cuadrante y este local. "estimación" = usa el prior de hostelería hasta que lo afines. Clima y eventos aún no entran (hacen falta 20-30 locales).
         </div>
       </div>
     </div>
