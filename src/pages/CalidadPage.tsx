@@ -126,6 +126,33 @@ export default function CalidadPage() {
         </div>
       </div>
 
+      {/* Tiempos */}
+      {d.tiempos && (
+        <div style={card}>
+          <h3 style={h3}>Tiempos de preparación y entrega</h3>
+          <div style={cd}>Del histórico de pedidos de Uber. La <b>espera evitable del rider en tienda</b> es tiempo que penaliza tu ranking y enfría la comida.</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, marginBottom: 8 }}>
+            <Kpi l="Preparación" v={`${d.tiempos.prep_avg ?? '—'} min`} s={`${d.tiempos.n} pedidos`} />
+            <Kpi l="Entrega total" v={`${d.tiempos.delivery_avg ?? '—'} min`} />
+            <Kpi l="Espera evitable rider" v={`${d.tiempos.wait_avoidable_total_h ?? '—'} h`} s="el mes · rider parado" color={RED} />
+            <Kpi l="Prep + entrega" v={`${d.tiempos.total_avg ?? '—'} min`} s={`${d.tiempos.completion_pct ?? '—'}% completados`} />
+          </div>
+          {(() => {
+            const bt = d.tiempos.by_brand
+            const tmax = Math.max(1, ...bt.map(x => x.total ?? 0))
+            return (
+              <>
+                <div style={{ fontSize: 12, fontWeight: 700, color: MUT, margin: '10px 0 2px' }}>Prep + entrega por marca (más lento = revisar cocina/montaje)</div>
+                {bt.map((x, i) => (
+                  <BarRow key={i} label={`${x.brand}`} v={x.total ?? 0} max={tmax}
+                    color={(x.total ?? 0) > 28 ? RED : (x.total ?? 0) > 24 ? AMBER : GREEN} suffix=" min" />
+                ))}
+              </>
+            )
+          })()}
+        </div>
+      )}
+
       {/* Valoración por marca */}
       <div style={card}>
         <h3 style={h3}>Valoración por marca</h3>
@@ -177,11 +204,11 @@ function TagCol(props: { title: string; color: string; tags: { tag: string; n: n
   )
 }
 
-function BarRow(props: { label: string; v: number; max: number; color: string }) {
+function BarRow(props: { label: string; v: number; max: number; color: string; suffix?: string }) {
   return (
     <div style={{ margin: '7px 0' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, marginBottom: 3 }}>
-        <span>{props.label}</span><span style={{ fontVariantNumeric: 'tabular-nums', color: props.color, fontWeight: 700 }}>{props.v}</span>
+        <span>{props.label}</span><span style={{ fontVariantNumeric: 'tabular-nums', color: props.color, fontWeight: 700 }}>{props.v}{props.suffix ?? ''}</span>
       </div>
       <div style={{ height: 9, borderRadius: 6, background: LINE, overflow: 'hidden' }}>
         <i style={{ display: 'block', height: '100%', width: `${props.v / props.max * 100}%`, background: props.color, borderRadius: 6 }} />

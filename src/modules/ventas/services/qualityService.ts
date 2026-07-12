@@ -17,6 +17,15 @@ export interface QualityBrand { brand: string; avg: number | null; n: number; ne
 export interface QualityComment { stars: number | null; brand: string | null; txt: string; tags: string | null }
 export interface QualityTag { tag: string; n: number }
 export interface QualityCount { type?: string; item?: string; n: number }
+export interface QualityTimes {
+  n: number
+  prep_avg: number | null
+  delivery_avg: number | null
+  total_avg: number | null
+  wait_avoidable_total_h: number | null
+  completion_pct: number | null
+  by_brand: { brand: string; total: number | null; n: number }[]
+}
 export interface QualityDashboard {
   ratings: QualityRatings
   by_brand: QualityBrand[]
@@ -26,6 +35,7 @@ export interface QualityDashboard {
   top_fail: { item: string; n: number }[]
   refund: { total: number; own: number }
   incidencias: number
+  tiempos: QualityTimes | null
 }
 
 export interface QualityFilters {
@@ -38,7 +48,7 @@ export interface QualityFilters {
 
 const EMPTY: QualityDashboard = {
   ratings: { n: 0, avg: null, dist: {} }, by_brand: [], comments: [], tags: [],
-  err_types: [], top_fail: [], refund: { total: 0, own: 0 }, incidencias: 0,
+  err_types: [], top_fail: [], refund: { total: 0, own: 0 }, incidencias: 0, tiempos: null,
 }
 
 export async function getQuality(f: QualityFilters): Promise<QualityDashboard> {
@@ -58,6 +68,7 @@ export async function getQuality(f: QualityFilters): Promise<QualityDashboard> {
     ratings: d.ratings ?? EMPTY.ratings, by_brand: d.by_brand ?? [], comments: d.comments ?? [],
     tags: d.tags ?? [], err_types: d.err_types ?? [], top_fail: d.top_fail ?? [],
     refund: d.refund ?? { total: 0, own: 0 }, incidencias: d.incidencias ?? 0,
+    tiempos: d.tiempos ?? null,
   }
 }
 
