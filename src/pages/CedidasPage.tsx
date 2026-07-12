@@ -13,7 +13,7 @@ import {
   type LicensedDashboard, type LocationOpt,
 } from '@/modules/ventas/services/licensedService'
 
-const NAVY = '#1E3A5F', GREEN = '#0F7A54', MUT = '#6b7686', LINE = '#e6e9ef'
+const NAVY = '#1E3A5F', GREEN = '#0F7A54', RED = '#C0392B', AMBER = '#B87400', MUT = '#6b7686', LINE = '#e6e9ef'
 const CH_COLOR: Record<string, string> = { glovo: '#FF8000', uber: '#000000', justeat: '#FF8000' }
 const eur = (n: number | null | undefined) =>
   new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n ?? 0)
@@ -51,6 +51,11 @@ export default function CedidasPage() {
 
   const t = data.total
   const maxBrand = Math.max(1, ...data.by_brand.map(b => b.ingreso))
+  const contrib = t.contrib ?? 0
+  const hasCost = (t.coste ?? 0) > 0
+  const vGood = contrib >= 0
+  const vcol = !hasCost ? MUT : vGood ? GREEN : RED
+  const vbg = !hasCost ? '#f1f5f9' : vGood ? '#e3f3ea' : '#fbe6e3'
 
   return (
     <div style={{ maxWidth: 1080, margin: '0 auto', padding: '18px 18px 80px' }}>
@@ -76,13 +81,46 @@ export default function CedidasPage() {
         La promo y la comisión de plataforma son de CTB — por eso aquí no las pagas tú.
       </div>
 
+      {/* Veredicto gana/pierde cedidas */}
+      {hasCost && (
+        <div style={{ border: `2px solid ${vcol}`, background: vbg, borderRadius: 14, padding: '14px 18px', margin: '14px 0' }}>
+          <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.5px', color: vcol }}>LAS CEDIDAS</div>
+          <div style={{ fontSize: 28, fontWeight: 900, color: vcol, margin: '2px 0' }}>
+            {vGood ? 'APORTAN MARGEN' : 'NO CUBREN SU MATERIA PRIMA'}
+          </div>
+          <div style={{ fontSize: 13, color: '#334', lineHeight: 1.5 }}>
+            Tu revenue share <b>{eur(t.ingreso)}</b> frente a <b>{eur(t.coste)}</b> de materia prima + packaging consumidos
+            = <b style={{ color: vcol }}>{eur(contrib)}</b> de contribución, <b>y esto es antes de personal</b>.
+            {!vGood && ' El modelo de cesión, tal como está, te cuesta dinero a nivel de cocina.'}
+          </div>
+        </div>
+      )}
+
       {/* KPIs */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 12, margin: '14px 0' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(165px,1fr))', gap: 12, margin: '14px 0' }}>
         <Kpi l="Venta bruta cedida" v={eur(t.gross)} s="la mueven las marcas en plataforma" />
         <Kpi l="Tu ingreso (revenue share)" v={eur(t.ingreso)} s={`${pct(t.share_pct)} de la venta bruta`} color={GREEN} />
-        <Kpi l="Se queda CTB" v={eur(t.corte)} s="comisión+promo+margen de Cloudtown" color={MUT} />
-        <Kpi l="Marcas cedidas activas" v={`${t.marcas ?? 0}`} s="con venta en el periodo" color={NAVY} />
+        {hasCost ? (
+          <>
+            <Kpi l="Materia prima + packaging" v={eur(t.coste)} s="coste de cocina de las cedidas" color={AMBER} />
+            <Kpi l="Contribución (sin personal)" v={eur(contrib)} s="ingreso − coste de cocina" color={vGood ? GREEN : RED} />
+          </>
+        ) : (
+          <>
+            <Kpi l="Se queda CTB" v={eur(t.corte)} s="comisión+promo+margen de Cloudtown" color={MUT} />
+            <Kpi l="Marcas cedidas activas" v={`${t.marcas ?? 0}`} s="con venta en el periodo" color={NAVY} />
+          </>
+        )}
       </div>
+
+      {!hasCost && (
+        <div style={{ background: '#fdf6e6', border: `1px solid #f0e2bf`, borderRadius: 12, padding: '11px 14px', margin: '0 0 14px', fontSize: 12.5, color: '#7a5c00', lineHeight: 1.5 }}>
+          <b>Falta el coste de cocina de las cedidas para cerrar su margen.</b> No sale de los papeles de CTB:
+          para las cedidas tú aportas material de tus <b>proveedores propios</b> (Mercaderías Aportadas), así que su
+          coste vive en tus compras / escandallo, no en la Compras y Ventas de Cloudtown. En cuanto tengamos ese
+          dato, cada cedida tendrá su “gana o pierde”.
+        </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 15 }}>
         {/* Ingreso por marca */}
@@ -121,18 +159,54 @@ export default function CedidasPage() {
             ))}
           </div>
           <div style={card}>
-            <h3 style={h3}>Por local</h3>
-            <div style={cd}>Ingreso cedido que aporta cada cocina.</div>
+            <h3 style={h3}>Saldo neto en caja</h3>
+            <div style={cd}>Lo que CTB te transfiere cada mes (AutoFactura − Factura Stock, con IVA).</div>
             {data.by_location.map((l, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '6px 0', borderBottom: i < data.by_location.length - 1 ? `1px solid ${LINE}` : 'none' }}>
                 <span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>{l.location.replace('Foodint ', '')}</span>
-                <span style={{ fontSize: 13, fontVariantNumeric: 'tabular-nums' }}><b>{eur(l.ingreso)}</b></span>
-                <span style={{ fontSize: 11.5, color: MUT, width: 78, textAlign: 'right' }}>de {eur(l.gross)}</span>
+                <span style={{ fontSize: 13, fontVariantNumeric: 'tabular-nums' }}><b>{eur(l.saldo)}</b></span>
               </div>
             ))}
           </div>
         </div>
       </div>
+
+      {/* Gana o pierde por local */}
+      {hasCost && (
+        <div style={card}>
+          <h3 style={h3}>Gana o pierde por local (cedidas)</h3>
+          <div style={cd}>Revenue share menos la materia prima y packaging que consume esa cocina. Sin personal todavía.</div>
+          <table style={table}>
+            <thead><tr>
+              {['Local', 'Tu ingreso', 'Materia + pack.', 'Contribución', 'Neto material'].map((hh, i) => (
+                <th key={i} style={{ ...th, textAlign: i === 0 ? 'left' : 'right' }}>{hh}</th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {data.by_location.map((l, i) => (
+                <tr key={i}>
+                  <td style={{ ...td, textAlign: 'left', fontWeight: 600 }}>{l.location.replace('Foodint ', '')}</td>
+                  <td style={tdm}>{eur2(l.ingreso)}</td>
+                  <td style={{ ...tdm, color: AMBER }}>{eur2(l.coste)}</td>
+                  <td style={{ ...tdm, fontWeight: 800, color: l.contrib >= 0 ? GREEN : RED }}>{eur2(l.contrib)}</td>
+                  <td style={{ ...tdm, color: MUT }}>{eur2(l.material_net)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot><tr>
+              <td style={{ ...td, textAlign: 'left', fontWeight: 800, borderTop: `2px solid ${LINE}` }}>Total</td>
+              <td style={{ ...tdm, fontWeight: 800, borderTop: `2px solid ${LINE}` }}>{eur2(t.ingreso)}</td>
+              <td style={{ ...tdm, fontWeight: 800, color: AMBER, borderTop: `2px solid ${LINE}` }}>{eur2(t.coste)}</td>
+              <td style={{ ...tdm, fontWeight: 800, color: contrib >= 0 ? GREEN : RED, borderTop: `2px solid ${LINE}` }}>{eur2(contrib)}</td>
+              <td style={{ ...tdm, fontWeight: 800, color: MUT, borderTop: `2px solid ${LINE}` }}>{eur2(t.material_net)}</td>
+            </tr></tfoot>
+          </table>
+          <div style={{ fontSize: 11.5, color: MUT, marginTop: 10, lineHeight: 1.5 }}>
+            <b>Neto material</b> = Mercaderías Aportadas − Factura Stock (el lazo de inventario Llorente↔CTB, que casi se anula).
+            Falta repartir <b>personal</b> para el margen final; la contribución ya sale negativa antes de eso.
+          </div>
+        </div>
+      )}
 
       {/* Detalle tabla */}
       <div style={card}>
@@ -161,8 +235,8 @@ export default function CedidasPage() {
           </tr></tfoot>
         </table>
         <div style={{ fontSize: 11.5, color: MUT, marginTop: 10, lineHeight: 1.5 }}>
-          Falta el coste de materia prima de las cedidas para cerrar su margen (viene de la relación
-          Compras y Ventas de CTB / escandallo). Con eso, cada marca cedida tendrá su “gana o pierde” igual que las propias.
+          Esto es el <b>ingreso</b> por marca cedida (revenue share). El coste de cocina de las cedidas —
+          material que aportas de tus proveedores propios — se cruzará por escandallo para cerrar su margen.
         </div>
       </div>
     </div>

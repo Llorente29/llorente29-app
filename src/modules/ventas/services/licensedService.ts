@@ -20,6 +20,9 @@ export interface LicensedTotal {
   corte: number | null
   share_pct: number | null
   marcas: number | null
+  coste: number | null
+  contrib: number | null
+  material_net: number | null
 }
 export interface LicensedBrand {
   brand: string
@@ -35,8 +38,13 @@ export interface LicensedChannel {
 }
 export interface LicensedLocation {
   location: string
-  gross: number
-  ingreso: number
+  ingreso: number       // revenue share (servicio)
+  coste: number         // food + packaging consumidos
+  food: number
+  packaging: number
+  contrib: number        // ingreso - coste (sin personal, sin lazo de material)
+  material_net: number   // Mercaderías Aportadas - Factura Stock
+  saldo: number          // Saldo a Ingresar (caja neta con IVA)
 }
 export interface LicensedDashboard {
   total: LicensedTotal
@@ -46,7 +54,7 @@ export interface LicensedDashboard {
 }
 
 const EMPTY: LicensedDashboard = {
-  total: { gross: 0, ingreso: 0, corte: 0, share_pct: null, marcas: 0 },
+  total: { gross: 0, ingreso: 0, corte: 0, share_pct: null, marcas: 0, coste: 0, contrib: 0, material_net: 0 },
   by_brand: [], by_channel: [], by_location: [],
 }
 
