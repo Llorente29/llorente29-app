@@ -2,7 +2,7 @@
 //
 // Configuración de tarifas de canal: comisiones por canal (defecto) y override
 // por marca y local. Escribe en channel_rate + brand_channel_rate (con location_id).
-// Multi-tenant: cada cuenta ve/edita solo lo suyo (RLS). La resolución en cascada
+// Multi-tenant: cada cuenta ve/edita solo lo suyo (RLS). Resolución en cascada
 // (marca+local > marca > defecto) la calcula SQL: resolve_channel_commission.
 
 import { useEffect, useMemo, useState } from 'react'
@@ -14,7 +14,9 @@ import {
   type TariffsData, type ServiceType, type RateOverride,
 } from '@/modules/ventas/services/channelRatesService'
 
-const NAVY = '#1E3A5F', CORAL = '#FF5436', AMBER = '#B87400', MUT = '#6b7686', LINE = '#e6e9ef'
+const NAVY = '#1E3A5F', CORAL = '#FF5436', GREEN = '#0F7A54', AMBER = '#B87400', MUT = '#6b7686', LINE = '#e6e9ef'
+const CHANNEL_COLOR: Record<string, string> = { uber: '#111', glovo: NAVY, justeat: CORAL, shop: '#6C5CE7' }
+const chColor = (slug: string) => CHANNEL_COLOR[slug] ?? '#2D80B8'
 const pctStr = (n: number | null | undefined) => (n == null ? '—' : `${n}%`)
 
 export default function TarifasCanalPage() {
@@ -38,33 +40,41 @@ export default function TarifasCanalPage() {
   }
   useEffect(() => { reload() /* eslint-disable-next-line */ }, [activeAccountId])
 
-  const channel = useMemo(
-    () => data?.channels.find(c => c.id === channelId) ?? null,
-    [data, channelId],
-  )
+  const channel = useMemo(() => data?.channels.find(c => c.id === channelId) ?? null, [data, channelId])
 
   if (loading) return <div style={{ padding: 24, color: MUT }}>Cargando tarifas…</div>
   if (err) return <div style={{ padding: 24, color: '#C0392B' }}>Error: {err}</div>
   if (!data || !channel) return <div style={{ padding: 24, color: MUT }}>Sin canales configurados.</div>
 
   return (
-    <div style={{ maxWidth: 1080, margin: '0 auto', padding: '18px 18px 80px', fontFamily: 'inherit' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-        <div>
-          <h1 style={{ fontSize: 19, margin: 0, fontWeight: 700 }}>Configuración de tarifas de canal</h1>
-          <div style={{ color: MUT, fontSize: 12.5, marginTop: 2 }}>Comisiones por canal, marca y local · alimenta el módulo de Ventas</div>
-        </div>
+    <div style={{ maxWidth: 1080, margin: '0 auto', padding: '18px 18px 80px' }}>
+      <div>
+        <h1 style={{ fontSize: 19, margin: 0, fontWeight: 700 }}>Configuración de tarifas de canal</h1>
+        <div style={{ color: MUT, fontSize: 12.5, marginTop: 2 }}>Comisiones por canal, marca y local · alimenta el módulo de Ventas</div>
       </div>
 
-      {/* Selector de canal */}
-      <div style={{ display: 'flex', gap: 7, margin: '16px 0 14px', flexWrap: 'wrap' }}>
-        {data.channels.map(c => (
-          <button key={c.id} onClick={() => setChannelId(c.id)}
-            style={{
-              border: `1px solid ${LINE}`, borderRadius: 10, padding: '8px 15px', fontSize: 13, fontWeight: 600,
-              cursor: 'pointer', background: c.id === channelId ? NAVY : '#fff', color: c.id === channelId ? '#fff' : '#475569',
-            }}>{c.name}</button>
-        ))}
+      {/* Banner multi-tenant */}
+      <div style={{ background: '#eef4fb', border: '1px solid #dbe6f2', borderRadius: 12, padding: '10px 14px', margin: '14px 0', fontSize: 12.5, color: '#334', display: 'flex', alignItems: 'center', gap: 9 }}>
+        <span style={{ width: 9, height: 9, borderRadius: '50%', background: GREEN, display: 'inline-block', flex: 'none' }} />
+        <span><b>Multi-tenant:</b> cada cuenta configura las suyas, aisladas por RLS. Estas tarifas alimentan el margen real del módulo de Ventas.</span>
+      </div>
+
+      {/* Selector de canal con color */}
+      <div style={{ display: 'flex', gap: 7, margin: '4px 0 14px', flexWrap: 'wrap' }}>
+        {data.channels.map(c => {
+          const on = c.id === channelId
+          return (
+            <button key={c.id} onClick={() => setChannelId(c.id)}
+              style={{
+                border: `1px solid ${LINE}`, borderRadius: 10, padding: '8px 15px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 8,
+                background: on ? NAVY : '#fff', color: on ? '#fff' : '#475569',
+              }}>
+              <span style={{ width: 9, height: 9, borderRadius: '50%', background: chColor(c.slug), display: 'inline-block' }} />
+              {c.name}
+            </button>
+          )
+        })}
       </div>
 
       <ChannelDefaults key={channel.id} accountId={activeAccountId!} data={data} channelId={channel.id}
@@ -99,10 +109,7 @@ function ChannelDefaults(props: {
     try {
       for (const st of SERVICE_TYPES) {
         const v = parseFloat(draft[st])
-        if (!isNaN(v)) {
-          await saveChannelDefault(accountId, channelId, st, v,
-            st === 'own_delivery' ? (parseFloat(rider) || null) : null)
-        }
+        if (!isNaN(v)) await saveChannelDefault(accountId, channelId, st, v, st === 'own_delivery' ? (parseFloat(rider) || null) : null)
       }
       props.onSaved()
     } catch (e) { alert(e instanceof Error ? e.message : 'Error guardando') }
@@ -118,16 +125,15 @@ function ChannelDefaults(props: {
           <div key={d.st} style={{ border: `1px solid ${LINE}`, borderRadius: 11, padding: '12px 14px', background: '#fafbfd' }}>
             <div style={{ fontWeight: 600, fontSize: 13 }}>{SERVICE_LABEL[d.st]}</div>
             <div style={{ fontSize: 11.5, color: MUT, margin: '2px 0 8px' }}>{d.st}</div>
-            <input value={draft[d.st] ?? ''} onChange={e => setDraft({ ...draft, [d.st]: e.target.value })}
-              style={numInp} inputMode="decimal" />
-            <span style={{ fontSize: 12.5, color: MUT, marginLeft: 5, fontWeight: 600 }}>% comisión</span>
+            <input value={draft[d.st] ?? ''} onChange={e => setDraft({ ...draft, [d.st]: e.target.value })} style={numInp} inputMode="decimal" />
+            <span style={unit}>% comisión</span>
           </div>
         ))}
         <div style={{ border: '1px solid #cfe8db', borderRadius: 11, padding: '12px 14px', background: '#f0f8f4' }}>
           <div style={{ fontWeight: 600, fontSize: 13 }}>Coste de tu repartidor</div>
           <div style={{ fontSize: 11.5, color: MUT, margin: '2px 0 8px' }}>Reparto propio · para comparar propio vs plataforma</div>
           <input value={rider} onChange={e => setRider(e.target.value)} style={numInp} inputMode="decimal" />
-          <span style={{ fontSize: 12.5, color: MUT, marginLeft: 5, fontWeight: 600 }}>€ / pedido</span>
+          <span style={unit}>€ / pedido</span>
         </div>
       </div>
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
@@ -143,7 +149,6 @@ function OverridesCard(props: { accountId: string; data: TariffsData; channelId:
   const { accountId, data, channelId } = props
   const [adding, setAdding] = useState(false)
 
-  // Agrupamos overrides del canal por (marca, local) para mostrar una fila con sus 3 modos
   const rows = useMemo(() => {
     const map = new Map<string, { brandId: string; locationId: string | null; items: RateOverride[] }>()
     for (const o of data.overrides.filter(o => o.channelId === channelId)) {
@@ -159,43 +164,42 @@ function OverridesCard(props: { accountId: string; data: TariffsData; channelId:
 
   return (
     <div style={card}>
-      <h3 style={h3}>Override por marca y local</h3>
-      <div style={cd}>Cada marca hereda el defecto del canal. Solo defines las que difieran. Puedes fijar una marca entera o solo un local.</div>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+        <div><h3 style={h3}>Override por marca y local</h3>
+          <div style={cd}>Cada marca hereda el defecto del canal. Solo defines las que difieran. Ámbar = personalizado. Puedes fijar una marca entera o solo un local.</div></div>
+      </div>
+      <table style={table}>
         <thead><tr>
-          {['Marca', 'Local', 'Reparto plataforma', 'Recogida', 'Reparto propio', ''].map((h, i) => (
-            <th key={i} style={{ ...th, textAlign: i < 2 ? 'left' : 'right' }}>{h}</th>
+          {['Marca', 'Local', SERVICE_LABEL.platform_delivery, SERVICE_LABEL.pickup, SERVICE_LABEL.own_delivery, 'Estado'].map((hh, i) => (
+            <th key={i} style={{ ...th, textAlign: i < 2 ? 'left' : (i === 5 ? 'right' : 'right') }}>{hh}</th>
           ))}
         </tr></thead>
         <tbody>
           {rows.length === 0 && (
             <tr><td colSpan={6} style={{ textAlign: 'center', color: MUT, padding: 22 }}>
-              Sin overrides — todas las marcas usan el defecto del canal.
+              Sin overrides — todas las marcas usan el defecto del canal. Añade una excepción abajo.
             </td></tr>
           )}
           {rows.map((r, i) => {
             const cell = (st: ServiceType) => r.items.find(x => x.serviceType === st)?.commissionPct
             return (
               <tr key={i}>
-                <td style={td}>{brandName(r.brandId)}</td>
-                <td style={{ ...td, color: MUT }}>{locName(r.locationId)}</td>
+                <td style={{ ...td, textAlign: 'left', fontWeight: 600 }}>{brandName(r.brandId)}</td>
+                <td style={{ ...td, textAlign: 'left', color: MUT }}>{locName(r.locationId)}</td>
                 {SERVICE_TYPES.map(st => (
-                  <td key={st} style={{ ...td, textAlign: 'right', fontWeight: 700, color: cell(st) != null ? AMBER : '#c9ced8' }}>
+                  <td key={st} style={{ ...tdm, fontWeight: 700, color: cell(st) != null ? AMBER : '#c9ced8' }}>
                     {cell(st) != null ? pctStr(cell(st)) : '—'}
                   </td>
                 ))}
                 <td style={{ ...td, textAlign: 'right' }}>
-                  <button style={btnLink} onClick={async () => {
-                    for (const it of r.items) await deleteOverride(it.id)
-                    props.onChanged()
-                  }}>Quitar</button>
+                  <span style={pill(AMBER, '#fdf1dd')}>Personalizado</span>
+                  <button style={btnLink} onClick={async () => { for (const it of r.items) await deleteOverride(it.id); props.onChanged() }}>Quitar</button>
                 </td>
               </tr>
             )
           })}
         </tbody>
       </table>
-
       {adding
         ? <AddOverrideForm accountId={accountId} data={data} channelId={channelId}
             onDone={() => { setAdding(false); props.onChanged() }} onCancel={() => setAdding(false)} />
@@ -209,7 +213,7 @@ function AddOverrideForm(props: {
 }) {
   const { accountId, data, channelId } = props
   const [brandId, setBrandId] = useState(data.brands[0]?.id ?? '')
-  const [locationId, setLocationId] = useState('') // '' = todos
+  const [locationId, setLocationId] = useState('')
   const [pct, setPct] = useState<Record<ServiceType, string>>({ platform_delivery: '', pickup: '', own_delivery: '' })
   const [busy, setBusy] = useState(false)
 
@@ -218,12 +222,7 @@ function AddOverrideForm(props: {
     try {
       for (const st of SERVICE_TYPES) {
         const v = parseFloat(pct[st])
-        if (!isNaN(v)) {
-          await saveOverride({
-            accountId, brandId, channelId, locationId: locationId || null,
-            serviceType: st, commissionPct: v, ownCourierCost: null,
-          })
-        }
+        if (!isNaN(v)) await saveOverride({ accountId, brandId, channelId, locationId: locationId || null, serviceType: st, commissionPct: v, ownCourierCost: null })
       }
       props.onDone()
     } catch (e) { alert(e instanceof Error ? e.message : 'Error guardando') }
@@ -246,8 +245,7 @@ function AddOverrideForm(props: {
         </label>
         {SERVICE_TYPES.map(st => (
           <label key={st} style={lbl}>{SERVICE_LABEL[st]}
-            <input value={pct[st]} onChange={e => setPct({ ...pct, [st]: e.target.value })}
-              placeholder="%" style={{ ...numInp, width: 64 }} inputMode="decimal" />
+            <input value={pct[st]} onChange={e => setPct({ ...pct, [st]: e.target.value })} placeholder="%" style={{ ...numInp, width: 64 }} inputMode="decimal" />
           </label>
         ))}
       </div>
@@ -276,15 +274,19 @@ function ResolutionCard() {
 
 // estilos
 const card: CSSProperties = { background: '#fff', border: `1px solid ${LINE}`, borderRadius: 14, padding: '18px 20px', marginBottom: 15 }
+const table: CSSProperties = { width: '100%', borderCollapse: 'collapse', fontSize: 13 }
 const h3: CSSProperties = { margin: '0 0 3px', fontSize: 15 }
 const cd: CSSProperties = { color: MUT, fontSize: 12, marginBottom: 14, lineHeight: 1.4 }
 const th: CSSProperties = { fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.3px', color: MUT, fontWeight: 600, background: '#fafbfd', padding: '8px 9px', borderBottom: `1px solid ${LINE}` }
 const td: CSSProperties = { padding: '8px 9px', borderBottom: `1px solid ${LINE}` }
+const tdm: CSSProperties = { ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }
 const numInp: CSSProperties = { border: `1px solid ${LINE}`, borderRadius: 8, padding: '6px 9px', fontSize: 14, width: 74, fontWeight: 700, color: NAVY, textAlign: 'right' }
+const unit: CSSProperties = { fontSize: 12.5, color: MUT, marginLeft: 5, fontWeight: 600 }
 const sel: CSSProperties = { display: 'block', marginTop: 4, border: `1px solid ${LINE}`, borderRadius: 8, padding: '7px 9px', fontSize: 13, minWidth: 150 }
 const lbl: CSSProperties = { fontSize: 11.5, color: MUT, fontWeight: 600 }
 const btn: CSSProperties = { border: `1px solid ${LINE}`, background: '#fff', borderRadius: 9, padding: '8px 13px', fontSize: 12.5, color: NAVY, fontWeight: 600, cursor: 'pointer' }
 const btnPrimary: CSSProperties = { ...btn, background: NAVY, color: '#fff', borderColor: 'transparent' }
-const btnLink: CSSProperties = { border: 'none', background: 'none', color: CORAL, fontWeight: 600, fontSize: 12.5, cursor: 'pointer' }
+const btnLink: CSSProperties = { border: 'none', background: 'none', color: CORAL, fontWeight: 600, fontSize: 12.5, cursor: 'pointer', marginLeft: 8 }
 const addBtn: CSSProperties = { marginTop: 10, fontSize: 12.5, color: NAVY, fontWeight: 600, cursor: 'pointer', background: 'none', border: `1px dashed ${LINE}`, borderRadius: 9, padding: '8px 12px', width: '100%' }
 const step: CSSProperties = { background: '#fff', border: `1px solid ${LINE}`, borderRadius: 20, padding: '4px 11px', fontWeight: 600 }
+function pill(fg: string, bg: string): CSSProperties { return { display: 'inline-block', padding: '2px 9px', borderRadius: 20, fontWeight: 700, fontSize: 11, background: bg, color: fg } }
