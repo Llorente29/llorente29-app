@@ -1,14 +1,14 @@
 // src/pages/MargenFinalPage.tsx
 //
 // Margen final por marca: venta − comisión − promo − food cost − personal − otros.
-// Reusa food_cost_dashboard (food cost REAL por marca). El coste de canal, personal
-// y otros son palancas ajustables (supuestos abiertos) hasta cruzar la comisión
-// exacta por pedido y enganchar nóminas del módulo Team.
+// COMISIÓN REAL (margin_by_brand → resolve_channel_commission, tu tabla de tarifas,
+// asume reparto plataforma) + FOOD COST REAL (escandallo). Promo, personal y otros
+// son palancas ajustables hasta cargar promo por marca y nóminas del módulo Team.
 
 import { useEffect, useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
-import { getFoodCost, type FoodCostDashboard } from '@/modules/ventas/services/foodCostService'
+import { getMarginByBrand, type MarginByBrand } from '@/modules/ventas/services/foodCostService'
 
 const NAVY = '#1E3A5F', CORAL = '#FF5436', GREEN = '#0F7A54', AMBER = '#B87400', RED = '#C0392B', MUT = '#6b7686', LINE = '#e6e9ef'
 const eur = (n: number | null | undefined) =>
@@ -26,11 +26,11 @@ const PERIODS: { k: string; label: string; days: number | null }[] = [
 
 export default function MargenFinalPage() {
   const { activeAccountId } = useActiveAccount()
-  const [data, setData] = useState<FoodCostDashboard | null>(null)
+  const [data, setData] = useState<MarginByBrand | null>(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
   const [period, setPeriod] = useState('todo')
-  const [chPct, setChPct] = useState(40)
+  const [promoPct, setPromoPct] = useState(15)
   const [persPct, setPersPct] = useState(17)
   const [otrosPct, setOtrosPct] = useState(8)
 
@@ -40,7 +40,7 @@ export default function MargenFinalPage() {
     setLoading(true); setErr(null)
     const p = PERIODS.find(x => x.k === period)!
     const from = p.days ? new Date(Date.now() - p.days * 864e5) : null
-    getFoodCost({ accountId: activeAccountId, from, to: null })
+    getMarginByBrand({ accountId: activeAccountId, from, to: null })
       .then(d => { if (alive) setData(d) })
       .catch(e => { if (alive) setErr(e instanceof Error ? e.message : 'Error') })
       .finally(() => { if (alive) setLoading(false) })
@@ -49,23 +49,23 @@ export default function MargenFinalPage() {
 
   const model = useMemo(() => {
     if (!data) return null
-    const ch = chPct / 100, pe = persPct / 100, ot = otrosPct / 100
+    const pr = promoPct / 100, pe = persPct / 100, ot = otrosPct / 100
     const rows = data.by_brand.map(b => {
-      const canal = b.ingreso * ch, caja = b.ingreso - canal
-      const personal = b.ingreso * pe, otro = b.ingreso * ot
-      const final = caja - b.food_cost - personal - otro
-      const pctf = b.ingreso ? (final / b.ingreso) * 100 : 0
+      const promo = b.venta * pr, personal = b.venta * pe, otro = b.venta * ot
+      const caja = b.venta - b.comision - promo
+      const final = caja - b.food - personal - otro
+      const pctf = b.venta ? (final / b.venta) * 100 : 0
       const verdict: Verdict = pctf >= 10 ? 'gana' : pctf >= 0 ? 'ajustado' : 'pierde'
-      return { ...b, canal, caja, personal, otro, final, pctf, verdict }
+      return { ...b, promo, personal, otro, caja, final, pctf, verdict }
     }).sort((a, b) => b.final - a.final)
     const T = rows.reduce((a, r) => ({
-      v: a.v + r.ingreso, food: a.food + r.food_cost, canal: a.canal + r.canal,
-      personal: a.personal + r.personal, otro: a.otro + r.otro, final: a.final + r.final,
-    }), { v: 0, food: 0, canal: 0, personal: 0, otro: 0, final: 0 })
-    const caja = T.v - T.canal
+      v: a.v + r.venta, comision: a.comision + r.comision, promo: a.promo + r.promo,
+      food: a.food + r.food, personal: a.personal + r.personal, otro: a.otro + r.otro, final: a.final + r.final,
+    }), { v: 0, comision: 0, promo: 0, food: 0, personal: 0, otro: 0, final: 0 })
+    const caja = T.v - T.comision - T.promo
     const mpct = T.v ? (T.final / T.v) * 100 : 0
     return { rows, T, caja, mpct }
-  }, [data, chPct, persPct, otrosPct])
+  }, [data, promoPct, persPct, otrosPct])
 
   return (
     <div style={{ maxWidth: 1120, margin: '0 auto', padding: '18px 18px 80px' }}>
@@ -85,7 +85,7 @@ export default function MargenFinalPage() {
       </div>
 
       <div style={{ background: '#f5f8fc', border: '1px solid #dbe6f2', borderRadius: 14, padding: '12px 16px', margin: '14px 0', fontSize: 12.5, color: '#445' }}>
-        <b style={{ color: '#223' }}>Salud del dato:</b> el <b style={{ color: GREEN }}>food cost es real</b> (escandallo, cobertura {pct(data?.salud.cobertura_pct)}). El <b>coste de canal</b>, <b>personal</b> y <b>otros</b> son supuestos ajustables (abajo) hasta cruzar la comisión exacta por pedido y enganchar nóminas del módulo Team.
+        <b style={{ color: '#223' }}>Salud del dato:</b> <b style={{ color: GREEN }}>comisión real</b> (tu tabla de tarifas, asume reparto plataforma) y <b style={{ color: GREEN }}>food cost real</b> (escandallo). Base: ventas con canal y coste conocido. <b>Promo</b>, <b>personal</b> y <b>otros</b> son supuestos ajustables abajo hasta cargar la promo por marca y las nóminas del módulo Team.
       </div>
 
       {loading && <div style={{ padding: 24, color: MUT }}>Cargando margen…</div>}
@@ -93,9 +93,9 @@ export default function MargenFinalPage() {
 
       {model && !loading && (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(165px,1fr))', gap: 12, marginBottom: 14 }}>
-            <Kpi l="Venta (coste conocido)" v={eur(model.T.v)} s="base con food cost real" />
-            <Kpi l="Llega a caja" v={eur(model.caja)} s="tras comisión + promo" />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 12, marginBottom: 14 }}>
+            <Kpi l="Venta (coste conocido)" v={eur(model.T.v)} s="base con comisión + food reales" />
+            <Kpi l="Comisión (real)" v={eur(model.T.comision)} color={CORAL} s={`${pct(model.T.v ? model.T.comision / model.T.v * 100 : 0)} · de tu tarifa`} />
             <Kpi l="Food cost (real)" v={eur(model.T.food)} color={CORAL} s={`${pct(model.T.v ? model.T.food / model.T.v * 100 : 0)} de la venta`} />
             <Kpi l="Margen final" v={eur(model.T.final)}
               color={model.mpct >= 10 ? GREEN : model.mpct >= 0 ? AMBER : RED}
@@ -103,16 +103,16 @@ export default function MargenFinalPage() {
               s={`${pct(model.mpct)} sobre venta`} />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1.05fr .95fr', gap: 15 }} className="mf-grid">
+          <div style={{ display: 'grid', gridTemplateColumns: '1.05fr .95fr', gap: 15 }}>
             <div style={card}>
               <h3 style={h3}>De la venta al margen final</h3>
-              <div style={cd}>Consolidado del negocio. Cada escalón: cuánto se va (rojo) hasta lo que te queda (verde).</div>
-              <Waterfall T={model.T} caja={model.caja} mpct={model.mpct} />
+              <div style={cd}>Consolidado del negocio. Cada escalón: cuánto se va (rojo) hasta lo que te queda (verde). Comisión y food cost reales.</div>
+              <Waterfall T={model.T} mpct={model.mpct} />
             </div>
             <div style={card}>
               <h3 style={h3}>Palancas</h3>
-              <div style={cd}>Food cost es real; aquí ajustas los supuestos abiertos para ver la sensibilidad.</div>
-              <Lever label="Coste de canal medio (comisión + promo)" v={chPct} min={20} max={55} onChange={setChPct} unit="%" />
+              <div style={cd}>Comisión y food cost son reales. Aquí ajustas los supuestos abiertos.</div>
+              <Lever label="Promo (sobre venta)" v={promoPct} min={0} max={45} onChange={setPromoPct} unit="%" />
               <Lever label="Personal (sobre venta) · estimado" v={persPct} min={0} max={35} onChange={setPersPct} unit="%" />
               <Lever label="Otros (alquiler, suministros…)" v={otrosPct} min={0} max={20} onChange={setOtrosPct} unit="%" />
               <div style={note}>
@@ -124,23 +124,21 @@ export default function MargenFinalPage() {
 
           <div style={card}>
             <h3 style={h3}>Veredicto por marca — ¿gana o pierde?</h3>
-            <div style={cd}>Venta − comisión − promo − food cost − personal − otros. Food cost real; el resto con tus palancas. Ordenado por lo que aporta.</div>
+            <div style={cd}>Comisión y food cost reales; promo/personal/otros con tus palancas. Ordenado por lo que aporta.</div>
             <table style={table}>
               <thead><tr>
-                {['Marca', 'Venta', 'Caja', 'Food', 'Food %', 'Margen final', '%', 'Veredicto'].map((hh, i) => (
+                {['Marca', 'Venta', 'Comisión', 'Food', 'Food %', 'Margen final', '%', 'Veredicto'].map((hh, i) => (
                   <th key={i} style={{ ...th, textAlign: i === 0 ? 'left' : 'right' }}>{hh}</th>
                 ))}
               </tr></thead>
               <tbody>
                 {model.rows.map((r, i) => (
                   <tr key={i}>
-                    <td style={{ ...td, textAlign: 'left' }}>
-                      {r.brand}{r.sospechoso && <span style={flag}>receta a revisar</span>}
-                    </td>
-                    <td style={tdm}>{eur(r.ingreso)}</td>
-                    <td style={{ ...tdm, color: MUT }}>{eur(r.caja)}</td>
-                    <td style={{ ...tdm, color: MUT }}>{eur(r.food_cost)}</td>
-                    <td style={{ ...tdm, color: (r.food_cost_pct ?? 0) > 38 || (r.food_cost_pct ?? 0) < 8 ? RED : (r.food_cost_pct ?? 0) > 30 ? AMBER : GREEN }}>{pct(r.food_cost_pct)}</td>
+                    <td style={{ ...td, textAlign: 'left' }}>{r.brand}</td>
+                    <td style={tdm}>{eur(r.venta)}</td>
+                    <td style={{ ...tdm, color: MUT }}>{eur(r.comision)} <span style={{ fontSize: 11 }}>({pct(r.comision_pct)})</span></td>
+                    <td style={{ ...tdm, color: MUT }}>{eur(r.food)}</td>
+                    <td style={{ ...tdm, color: (r.food_pct ?? 0) > 38 || (r.food_pct ?? 0) < 8 ? RED : (r.food_pct ?? 0) > 30 ? AMBER : GREEN }}>{pct(r.food_pct)}</td>
                     <td style={{ ...tdm, fontWeight: 700, color: r.final > 0 ? GREEN : RED }}>{eur(r.final)}</td>
                     <td style={tdm}>{pct(r.pctf)}</td>
                     <td style={{ ...td, textAlign: 'right' }}><span style={pill(r.verdict)}>{r.verdict.toUpperCase()}</span></td>
@@ -177,14 +175,15 @@ function Lever(props: { label: string; v: number; min: number; max: number; unit
   )
 }
 
-function Waterfall(props: { T: { v: number; canal: number; food: number; personal: number; otro: number; final: number }; caja: number; mpct: number }) {
+function Waterfall(props: { T: { v: number; comision: number; promo: number; food: number; personal: number; otro: number; final: number }; mpct: number }) {
   const { T } = props
   const mx = T.v || 1
   const fg = props.mpct >= 10 ? GREEN : props.mpct >= 0 ? AMBER : RED
   const steps: [string, number, string, boolean][] = [
     ['Venta bruta', T.v, NAVY, false],
-    ['− Comisión + promo (canal)', T.canal, CORAL, true],
-    ['− Food cost (real)', T.food, '#E4572E', true],
+    ['− Comisión (real)', T.comision, CORAL, true],
+    ['− Promo (est.)', T.promo, '#E4572E', true],
+    ['− Food cost (real)', T.food, '#C0392B', true],
     ['− Personal (est.)', T.personal, AMBER, true],
     ['− Otros', T.otro, '#B0752B', true],
   ]
@@ -216,5 +215,4 @@ const tdm: CSSProperties = { ...td, textAlign: 'right', fontVariantNumeric: 'tab
 const wfrow: CSSProperties = { display: 'grid', gridTemplateColumns: '170px 1fr 92px', alignItems: 'center', gap: 11, fontSize: 12.5, margin: '6px 0' }
 const barWrap: CSSProperties = { height: 18, borderRadius: 5, background: LINE, overflow: 'hidden' }
 const note: CSSProperties = { background: '#f0f4fb', borderLeft: `3px solid ${NAVY}`, borderRadius: 6, padding: '9px 12px', fontSize: 12, color: '#334', marginTop: 11 }
-const flag: CSSProperties = { display: 'inline-block', fontSize: 9.5, fontWeight: 800, letterSpacing: '.4px', color: RED, background: '#fbe6e3', borderRadius: 5, padding: '2px 6px', marginLeft: 7 }
 function pill(v: Verdict): CSSProperties { const [fg, bg] = VC[v]; return { display: 'inline-block', padding: '2px 9px', borderRadius: 20, fontWeight: 700, fontSize: 11, background: bg, color: fg } }

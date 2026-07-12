@@ -60,6 +60,36 @@ const EMPTY: FoodCostDashboard = {
   by_brand: [], by_dish: [],
 }
 
+// ── Margen por marca: comisión REAL (tarifa) + food cost REAL ────────────────
+
+export interface MarginBrand {
+  brand: string
+  venta: number
+  comision: number
+  comision_pct: number | null
+  food: number
+  food_pct: number | null
+  cobertura_pct: number | null
+}
+export interface MarginByBrand {
+  total: { venta: number; comision: number; food: number }
+  by_brand: MarginBrand[]
+}
+
+export async function getMarginByBrand(f: FoodCostFilters): Promise<MarginByBrand> {
+  requireSupabase()
+  const iso = (d?: Date | null) => (d ? d.toISOString() : null)
+  const { data, error } = await (
+    supabase!.rpc as unknown as (fn: string, args: Record<string, unknown>) =>
+      Promise<{ data: unknown; error: { message: string } | null }>
+  )('margin_by_brand', {
+    p_account: f.accountId, p_from: iso(f.from), p_to: iso(f.to), p_location: f.locationId ?? null,
+  })
+  if (error) throw new Error(`Error cargando margen: ${error.message}`)
+  const d = (data ?? {}) as Partial<MarginByBrand>
+  return { total: d.total ?? { venta: 0, comision: 0, food: 0 }, by_brand: d.by_brand ?? [] }
+}
+
 export async function getFoodCost(f: FoodCostFilters): Promise<FoodCostDashboard> {
   requireSupabase()
   const iso = (d?: Date | null) => (d ? d.toISOString() : null)
