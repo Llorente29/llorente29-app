@@ -69,10 +69,11 @@ export interface MarginBrand {
   comision_pct: number | null
   food: number
   food_pct: number | null
+  promo_pct: number | null
   cobertura_pct: number | null
 }
 export interface MarginByBrand {
-  total: { venta: number; comision: number; food: number }
+  total: { venta: number; comision: number; food: number; promo: number }
   by_brand: MarginBrand[]
 }
 
@@ -87,7 +88,7 @@ export async function getMarginByBrand(f: FoodCostFilters): Promise<MarginByBran
   })
   if (error) throw new Error(`Error cargando margen: ${error.message}`)
   const d = (data ?? {}) as Partial<MarginByBrand>
-  return { total: d.total ?? { venta: 0, comision: 0, food: 0 }, by_brand: d.by_brand ?? [] }
+  return { total: d.total ?? { venta: 0, comision: 0, food: 0, promo: 0 }, by_brand: d.by_brand ?? [] }
 }
 
 export async function getFoodCost(f: FoodCostFilters): Promise<FoodCostDashboard> {

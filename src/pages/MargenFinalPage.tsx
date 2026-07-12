@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
-import { getMarginByBrand, type MarginByBrand } from '@/modules/ventas/services/foodCostService'
+import { getMarginByBrand, type MarginByBrand, type MarginBrand } from '@/modules/ventas/services/foodCostService'
 
 const NAVY = '#1E3A5F', CORAL = '#FF5436', GREEN = '#0F7A54', AMBER = '#B87400', RED = '#C0392B', MUT = '#6b7686', LINE = '#e6e9ef'
 const eur = (n: number | null | undefined) =>
@@ -30,7 +30,6 @@ export default function MargenFinalPage() {
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
   const [period, setPeriod] = useState('todo')
-  const [promoPct, setPromoPct] = useState(15)
   const [persPct, setPersPct] = useState(17)
   const [otrosPct, setOtrosPct] = useState(8)
 
@@ -49,9 +48,10 @@ export default function MargenFinalPage() {
 
   const model = useMemo(() => {
     if (!data) return null
-    const pr = promoPct / 100, pe = persPct / 100, ot = otrosPct / 100
-    const rows = data.by_brand.map(b => {
-      const promo = b.venta * pr, personal = b.venta * pe, otro = b.venta * ot
+    const pe = persPct / 100, ot = otrosPct / 100
+    const rows = data.by_brand.map((b: MarginBrand) => {
+      const promo = b.venta * ((b.promo_pct ?? 0) / 100)   // promo REAL por marca
+      const personal = b.venta * pe, otro = b.venta * ot
       const caja = b.venta - b.comision - promo
       const final = caja - b.food - personal - otro
       const pctf = b.venta ? (final / b.venta) * 100 : 0
@@ -65,7 +65,7 @@ export default function MargenFinalPage() {
     const caja = T.v - T.comision - T.promo
     const mpct = T.v ? (T.final / T.v) * 100 : 0
     return { rows, T, caja, mpct }
-  }, [data, promoPct, persPct, otrosPct])
+  }, [data, persPct, otrosPct])
 
   return (
     <div style={{ maxWidth: 1120, margin: '0 auto', padding: '18px 18px 80px' }}>
@@ -85,7 +85,7 @@ export default function MargenFinalPage() {
       </div>
 
       <div style={{ background: '#f5f8fc', border: '1px solid #dbe6f2', borderRadius: 14, padding: '12px 16px', margin: '14px 0', fontSize: 12.5, color: '#445' }}>
-        <b style={{ color: '#223' }}>Salud del dato:</b> <b style={{ color: GREEN }}>comisión real</b> (tu tabla de tarifas, asume reparto plataforma) y <b style={{ color: GREEN }}>food cost real</b> (escandallo). Base: ventas con canal y coste conocido. <b>Promo</b>, <b>personal</b> y <b>otros</b> son supuestos ajustables abajo hasta cargar la promo por marca y las nóminas del módulo Team.
+        <b style={{ color: '#223' }}>Salud del dato:</b> <b style={{ color: GREEN }}>comisión real</b> (tu tabla de tarifas), <b style={{ color: GREEN }}>food cost real</b> (escandallo) y <b style={{ color: GREEN }}>promo real por marca</b> (liquidaciones Glovo+Uber). <b>Personal</b> y <b>otros</b> siguen como supuestos ajustables. Nota: las marcas <b>cedidas</b> muestran promo 0 hasta cargar CTB (su promo va por Cloudtown, no por tu liquidación).
       </div>
 
       {loading && <div style={{ padding: 24, color: MUT }}>Cargando margen…</div>}
@@ -111,8 +111,7 @@ export default function MargenFinalPage() {
             </div>
             <div style={card}>
               <h3 style={h3}>Palancas</h3>
-              <div style={cd}>Comisión y food cost son reales. Aquí ajustas los supuestos abiertos.</div>
-              <Lever label="Promo (sobre venta)" v={promoPct} min={0} max={45} onChange={setPromoPct} unit="%" />
+              <div style={cd}>Comisión, food cost y promo son reales por marca. Aquí ajustas solo lo que aún no es dato.</div>
               <Lever label="Personal (sobre venta) · estimado" v={persPct} min={0} max={35} onChange={setPersPct} unit="%" />
               <Lever label="Otros (alquiler, suministros…)" v={otrosPct} min={0} max={20} onChange={setOtrosPct} unit="%" />
               <div style={note}>
@@ -127,7 +126,7 @@ export default function MargenFinalPage() {
             <div style={cd}>Comisión y food cost reales; promo/personal/otros con tus palancas. Ordenado por lo que aporta.</div>
             <table style={table}>
               <thead><tr>
-                {['Marca', 'Venta', 'Comisión', 'Food', 'Food %', 'Margen final', '%', 'Veredicto'].map((hh, i) => (
+                {['Marca', 'Venta', 'Comisión', 'Promo', 'Food', 'Food %', 'Margen final', '%', 'Veredicto'].map((hh, i) => (
                   <th key={i} style={{ ...th, textAlign: i === 0 ? 'left' : 'right' }}>{hh}</th>
                 ))}
               </tr></thead>
@@ -137,6 +136,7 @@ export default function MargenFinalPage() {
                     <td style={{ ...td, textAlign: 'left' }}>{r.brand}</td>
                     <td style={tdm}>{eur(r.venta)}</td>
                     <td style={{ ...tdm, color: MUT }}>{eur(r.comision)} <span style={{ fontSize: 11 }}>({pct(r.comision_pct)})</span></td>
+                    <td style={{ ...tdm, color: (r.promo_pct ?? 0) > 25 ? RED : (r.promo_pct ?? 0) > 12 ? AMBER : MUT }}>{eur(r.promo)} <span style={{ fontSize: 11 }}>({pct(r.promo_pct)})</span></td>
                     <td style={{ ...tdm, color: MUT }}>{eur(r.food)}</td>
                     <td style={{ ...tdm, color: (r.food_pct ?? 0) > 38 || (r.food_pct ?? 0) < 8 ? RED : (r.food_pct ?? 0) > 30 ? AMBER : GREEN }}>{pct(r.food_pct)}</td>
                     <td style={{ ...tdm, fontWeight: 700, color: r.final > 0 ? GREEN : RED }}>{eur(r.final)}</td>
@@ -182,7 +182,7 @@ function Waterfall(props: { T: { v: number; comision: number; promo: number; foo
   const steps: [string, number, string, boolean][] = [
     ['Venta bruta', T.v, NAVY, false],
     ['− Comisión (real)', T.comision, CORAL, true],
-    ['− Promo (est.)', T.promo, '#E4572E', true],
+    ['− Promo (real)', T.promo, '#E4572E', true],
     ['− Food cost (real)', T.food, '#C0392B', true],
     ['− Personal (est.)', T.personal, AMBER, true],
     ['− Otros', T.otro, '#B0752B', true],
