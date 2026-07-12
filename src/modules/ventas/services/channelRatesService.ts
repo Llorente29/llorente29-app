@@ -69,7 +69,9 @@ export interface TariffsData {
 
 export async function loadTariffs(accountId: string): Promise<TariffsData> {
   requireSupabase()
-  const sb = supabase!
+  // Los tipos autogenerados de Supabase (database.ts) aún no incluyen location_id
+  // ni algunas columnas nuevas; casteamos a any (igual que channelEconomicsService).
+  const sb = supabase! as any
 
   const [chRes, brRes, locRes, defRes, ovrRes] = await Promise.all([
     sb.from('sales_channel').select('id,name,slug,channel_type')
@@ -116,7 +118,7 @@ export async function saveChannelDefault(
   commissionPct: number, ownCourierCost: number | null,
 ): Promise<void> {
   requireSupabase()
-  const { error } = await supabase!
+  const { error } = await (supabase! as any)
     .from('channel_rate')
     .upsert({
       account_id: accountId, sales_channel_id: channelId, service_type: serviceType,
@@ -130,7 +132,7 @@ export async function saveChannelDefault(
 
 // Devuelve el brand_channel_id (lo crea si no existe).
 async function ensureBrandChannel(accountId: string, brandId: string, channelId: string): Promise<string> {
-  const sb = supabase!
+  const sb = supabase! as any
   const found = await sb.from('brand_channel').select('id')
     .eq('account_id', accountId).eq('brand_id', brandId).eq('channel_id', channelId).maybeSingle()
   if (found.error) throw new Error(found.error.message)
@@ -150,7 +152,7 @@ export async function saveOverride(params: {
 }): Promise<void> {
   requireSupabase()
   const brandChannelId = await ensureBrandChannel(params.accountId, params.brandId, params.channelId)
-  const { error } = await supabase!
+  const { error } = await (supabase! as any)
     .from('brand_channel_rate')
     .upsert({
       account_id: params.accountId, brand_channel_id: brandChannelId,
@@ -163,7 +165,7 @@ export async function saveOverride(params: {
 
 export async function deleteOverride(overrideId: string): Promise<void> {
   requireSupabase()
-  const { error } = await supabase!.from('brand_channel_rate').delete().eq('id', overrideId)
+  const { error } = await (supabase! as any).from('brand_channel_rate').delete().eq('id', overrideId)
   if (error) throw new Error(`Error borrando override: ${error.message}`)
 }
 
