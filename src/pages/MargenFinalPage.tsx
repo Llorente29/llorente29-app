@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
-import { getMarginByBrand, type MarginByBrand, type MarginBrand } from '@/modules/ventas/services/foodCostService'
+import { getMarginByBrand, getLocations, type MarginByBrand, type MarginBrand, type LocationOpt } from '@/modules/ventas/services/foodCostService'
 
 const NAVY = '#1E3A5F', CORAL = '#FF5436', GREEN = '#0F7A54', AMBER = '#B87400', RED = '#C0392B', MUT = '#6b7686', LINE = '#e6e9ef'
 const eur = (n: number | null | undefined) =>
@@ -30,8 +30,15 @@ export default function MargenFinalPage() {
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
   const [period, setPeriod] = useState('todo')
+  const [locations, setLocations] = useState<LocationOpt[]>([])
+  const [locationId, setLocationId] = useState<string | null>(null)
   const [persPct, setPersPct] = useState(17)
   const [otrosPct, setOtrosPct] = useState(8)
+
+  useEffect(() => {
+    if (!activeAccountId) return
+    getLocations(activeAccountId).then(setLocations).catch(() => {})
+  }, [activeAccountId])
 
   useEffect(() => {
     if (!activeAccountId) return
@@ -39,12 +46,12 @@ export default function MargenFinalPage() {
     setLoading(true); setErr(null)
     const p = PERIODS.find(x => x.k === period)!
     const from = p.days ? new Date(Date.now() - p.days * 864e5) : null
-    getMarginByBrand({ accountId: activeAccountId, from, to: null })
+    getMarginByBrand({ accountId: activeAccountId, from, to: null, locationId })
       .then(d => { if (alive) setData(d) })
       .catch(e => { if (alive) setErr(e instanceof Error ? e.message : 'Error') })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
-  }, [activeAccountId, period])
+  }, [activeAccountId, period, locationId])
 
   const model = useMemo(() => {
     if (!data) return null
@@ -82,6 +89,15 @@ export default function MargenFinalPage() {
             }}>{p.label}</button>
           ))}
         </div>
+      </div>
+
+      {/* Selector de local */}
+      <div style={{ display: 'flex', gap: 7, alignItems: 'center', margin: '14px 0 0', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12, color: MUT, fontWeight: 600 }}>Local:</span>
+        <button onClick={() => setLocationId(null)} style={chip(locationId === null)}>Todos</button>
+        {locations.map(l => (
+          <button key={l.id} onClick={() => setLocationId(l.id)} style={chip(locationId === l.id)}>{l.name.replace('Foodint ', '')}</button>
+        ))}
       </div>
 
       <div style={{ background: '#f5f8fc', border: '1px solid #dbe6f2', borderRadius: 14, padding: '12px 16px', margin: '14px 0', fontSize: 12.5, color: '#445' }}>
@@ -216,3 +232,4 @@ const wfrow: CSSProperties = { display: 'grid', gridTemplateColumns: '170px 1fr 
 const barWrap: CSSProperties = { height: 18, borderRadius: 5, background: LINE, overflow: 'hidden' }
 const note: CSSProperties = { background: '#f0f4fb', borderLeft: `3px solid ${NAVY}`, borderRadius: 6, padding: '9px 12px', fontSize: 12, color: '#334', marginTop: 11 }
 function pill(v: Verdict): CSSProperties { const [fg, bg] = VC[v]; return { display: 'inline-block', padding: '2px 9px', borderRadius: 20, fontWeight: 700, fontSize: 11, background: bg, color: fg } }
+function chip(on: boolean): CSSProperties { return { border: `1px solid ${on ? 'transparent' : LINE}`, borderRadius: 20, padding: '5px 13px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', background: on ? NAVY : '#fff', color: on ? '#fff' : '#475569' } }

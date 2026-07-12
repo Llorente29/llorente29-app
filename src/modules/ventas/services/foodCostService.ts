@@ -77,6 +77,15 @@ export interface MarginByBrand {
   by_brand: MarginBrand[]
 }
 
+export interface LocationOpt { id: string; name: string }
+export async function getLocations(accountId: string): Promise<LocationOpt[]> {
+  requireSupabase()
+  const { data, error } = await (supabase! as any)
+    .from('locations').select('id,name').eq('account_id', accountId).order('name')
+  if (error) throw new Error(error.message)
+  return (data ?? []).map((l: any) => ({ id: l.id, name: l.name }))
+}
+
 export async function getMarginByBrand(f: FoodCostFilters): Promise<MarginByBrand> {
   requireSupabase()
   const iso = (d?: Date | null) => (d ? d.toISOString() : null)
