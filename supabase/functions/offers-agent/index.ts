@@ -112,6 +112,7 @@ Deno.serve(async (req) => {
 
   const runs: Array<Record<string, unknown>> = [];
 
+  try {
   // Día del año (hora UTC) para la rotación diaria determinista del Shop.
   const _now = new Date();
   const dayOfYear = Math.floor(
@@ -434,7 +435,7 @@ Deno.serve(async (req) => {
       // Evento demanda-up (frente #3, por LOCAL): los de cuenta aplican a todo; los de
       // local, solo a su local. El Shop es per-marca (multi-local) → aplica si hay evento
       // de cuenta o en cualquier local (su storefront sirve a todas las zonas).
-      const locEvNames = isPlatform ? (eventUpByLoc.get(o.row.location_id) ?? []) : [...new Set(([] as string[]).concat(...eventUpByLoc.values()))];
+      const locEvNames = isPlatform ? (eventUpByLoc.get(row.location_id) ?? []) : [...new Set(([] as string[]).concat(...eventUpByLoc.values()))];
       const evNames = [...acctUpNames, ...locEvNames];
       if (prof.proactive && evNames.length > 0) {
         pct = Math.min(prof.maxPct, pct + 5);
@@ -826,4 +827,18 @@ Deno.serve(async (req) => {
   return new Response(JSON.stringify({ ok: true, runs }), {
     headers: { "content-type": "application/json" },
   });
+  } catch (e) {
+    // Sin manejo de errores, un fallo daba un 500 mudo (invisible, sin log). Ahora el error
+    // queda registrado y se devuelve 200 con el detalle para no dejar el agente ciego.
+    const err = String((e as any)?.message ?? e);
+    const stack = String((e as any)?.stack ?? "").split("\n").slice(0, 8).join(" | ");
+    try {
+      await supa.from("agent_run_log").insert({
+        account_id: null, signals: { error: true }, decisions: [{ error: err, stack }], campaigns_created: 0,
+      });
+    } catch (_) { /* si ni el log entra, al menos devolvemos el error abajo */ }
+    return new Response(JSON.stringify({ ok: false, error: err, stack }), {
+      status: 200, headers: { "content-type": "application/json" },
+    });
+  }
 });
