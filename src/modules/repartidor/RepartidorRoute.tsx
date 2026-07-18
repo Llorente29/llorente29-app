@@ -1,11 +1,12 @@
 // src/modules/repartidor/RepartidorRoute.tsx
 // PWA del REPARTIDOR - ruta publica /repartidor. Token = courier.access_token.
-// T3b.1 nav - T3b.2 distancia+ganancia+rechazar - T3c foto+firma - tema claro/oscuro.
+// T3b nav/distancia/ganancia/rechazar - T3c foto+firma - tema claro/oscuro
+// T3d: ajuste "abrir ruta al aceptar" + codigo de recogida destacado.
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import {
   Loader2, Power, Phone, Navigation, Package, CheckCircle2, XCircle, Bike, RefreshCw,
-  Sun, Moon, Camera, PenLine, X,
+  Sun, Moon, Camera, PenLine, X, Settings,
 } from 'lucide-react'
 import {
   courierSession, courierSetShift, courierFeed, courierClaim, courierDecline, courierAdvance,
@@ -15,6 +16,7 @@ import {
 const TOKEN_KEY = 'courier_token'
 const readToken = () => { try { return localStorage.getItem(TOKEN_KEY) } catch { return null } }
 const storeToken = (t: string) => { try { localStorage.setItem(TOKEN_KEY, t) } catch { /* modo privado */ } }
+const AUTOROUTE_KEY = 'courier_autoroute'
 
 const ACTIVE = ['accepted', 'picked_up', 'in_delivery']
 const eur = (n: number | null) => (n == null ? '' : n.toFixed(2).replace('.', ',') + ' \u20AC')
@@ -35,14 +37,14 @@ function palette(dark: boolean) {
     sub: 'text-zinc-500', body: 'text-zinc-300',
     soft: 'bg-zinc-800 text-zinc-200 hover:bg-zinc-700',
     input: 'bg-zinc-900 ring-1 ring-zinc-700 text-zinc-100 placeholder:text-zinc-600',
-    sheet: 'bg-zinc-900', sig: 'bg-zinc-800',
+    sheet: 'bg-zinc-900',
   } : {
     app: 'bg-zinc-50 text-zinc-900', head: 'bg-white border-b border-zinc-200',
     card: 'bg-white ring-1 ring-zinc-200 shadow-sm', cardActive: 'bg-white ring-1 ring-emerald-400/60 shadow-sm',
     sub: 'text-zinc-500', body: 'text-zinc-700',
     soft: 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200',
     input: 'bg-white ring-1 ring-zinc-300 text-zinc-900 placeholder:text-zinc-400',
-    sheet: 'bg-white', sig: 'bg-zinc-100',
+    sheet: 'bg-white',
   }
 }
 
@@ -70,10 +72,14 @@ export default function RepartidorRoute() {
   const [busy, setBusy] = useState<string | null>(null)
   const [theme, setTheme] = useState<Theme>(initialTheme)
   const [delivering, setDelivering] = useState<CourierJob | null>(null)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [autoRoute, setAutoRoute] = useState<boolean>(() => { try { return localStorage.getItem(AUTOROUTE_KEY) === '1' } catch { return false } })
   const lastPing = useRef<number>(0)
   const watchId = useRef<number | null>(null)
   const dark = theme === 'dark'
   const c = palette(dark)
+
+  function toggleAuto() { setAutoRoute(v => { const nv = !v; try { localStorage.setItem(AUTOROUTE_KEY, nv ? '1' : '0') } catch { /* */ } return nv }) }
 
   useEffect(() => {
     const u = new URLSearchParams(window.location.search).get('token')
@@ -136,6 +142,10 @@ export default function RepartidorRoute() {
     setBusy(key); setErr(null)
     try { await fn(); await loadFeed() } catch (e) { setErr(e instanceof Error ? e.message : 'Error') } finally { setBusy(null) }
   }
+  function claimOffer(j: CourierJob) {
+    if (autoRoute) openNav(readNavPref() ?? 'gmaps', j.pickup_lat, j.pickup_lng, j.pickup_address)
+    void act(() => courierClaim(token!, j.assignment_id), j.assignment_id + ':c')
+  }
   async function confirmDelivery(job: CourierJob, note: string, dataUrl: string | null, kind: 'photo' | 'signature') {
     if (!token) return
     setBusy(job.assignment_id + ':d'); setErr(null)
@@ -174,17 +184,18 @@ export default function RepartidorRoute() {
 
   return (
     <div className={`fixed inset-0 ${c.app} flex flex-col`}>
-      <header className={`shrink-0 ${c.head} px-4 py-3 flex items-center gap-3`}>
+      <header className={`shrink-0 ${c.head} px-4 py-3 flex items-center gap-2`}>
         <div className="w-9 h-9 rounded-xl bg-emerald-500 grid place-items-center shrink-0"><Bike size={18} className="text-zinc-950" /></div>
         <div className="min-w-0">
           <p className="font-bold leading-tight truncate">{sess.name}</p>
           <p className={`text-xs ${c.sub}`}>{sess.on_shift ? 'En turno' : 'Fuera de turno'}</p>
         </div>
-        <button onClick={() => setTheme(dark ? 'light' : 'dark')} className={`ml-auto p-2 rounded-lg ${c.soft}`} title="Claro / oscuro">
+        <button onClick={() => setSettingsOpen(true)} className={`ml-auto p-2 rounded-lg ${c.soft}`} title="Ajustes"><Settings size={18} /></button>
+        <button onClick={() => setTheme(dark ? 'light' : 'dark')} className={`p-2 rounded-lg ${c.soft}`} title="Claro / oscuro">
           {dark ? <Sun size={18} /> : <Moon size={18} />}
         </button>
         <button onClick={toggleShift} disabled={busy === 'shift'}
-          className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold ${sess.on_shift ? 'bg-emerald-500 text-zinc-950' : c.soft}`}>
+          className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-bold ${sess.on_shift ? 'bg-emerald-500 text-zinc-950' : c.soft}`}>
           <Power size={16} /> {sess.on_shift ? 'En turno' : 'Turno'}
         </button>
       </header>
@@ -206,7 +217,7 @@ export default function RepartidorRoute() {
               {offers.map(j => (
                 <OfferCard key={j.assignment_id} j={j} c={c}
                   claiming={busy === j.assignment_id + ':c'} declining={busy === j.assignment_id + ':x'}
-                  onClaim={() => act(() => courierClaim(token, j.assignment_id), j.assignment_id + ':c')}
+                  onClaim={() => claimOffer(j)}
                   onDecline={() => act(() => courierDecline(token, j.assignment_id), j.assignment_id + ':x')} />
               ))}
             </div>
@@ -225,6 +236,26 @@ export default function RepartidorRoute() {
         <DeliverySheet job={delivering} c={c} dark={dark} saving={busy === delivering.assignment_id + ':d'}
           onCancel={() => setDelivering(null)}
           onConfirm={(note, dataUrl, kind) => confirmDelivery(delivering, note, dataUrl, kind)} />
+      )}
+
+      {settingsOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center">
+          <div className={`w-full sm:max-w-md ${c.sheet} rounded-t-2xl sm:rounded-2xl p-4`}>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="font-bold text-lg">Ajustes</span>
+              <button onClick={() => setSettingsOpen(false)} className={`ml-auto p-2 rounded-lg ${c.soft}`}><X size={18} /></button>
+            </div>
+            <div className="flex items-center gap-3 py-2">
+              <div className="flex-1">
+                <p className="font-semibold text-sm">Abrir ruta al aceptar</p>
+                <p className={`text-xs ${c.sub}`}>Al aceptar un pedido, abre la navegacion al local de recogida.</p>
+              </div>
+              <button onClick={toggleAuto} className={`w-12 h-7 rounded-full relative transition-colors shrink-0 ${autoRoute ? 'bg-emerald-500' : c.soft}`}>
+                <span className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-all ${autoRoute ? 'left-6' : 'left-1'}`} />
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
@@ -284,8 +315,16 @@ function ActiveCard({ j, c, busy, onPicked, onDelivered, onFailed }: {
         {j.distance_km != null && <span className={`text-xs ${c.sub}`}>{DOT} {km(j.distance_km)}</span>}
         <span className={`ml-auto text-sm ${c.body}`}>{eur(j.total)}</span>
       </div>
-      <p className="font-bold mt-2">{j.brand ?? 'Pedido'} <span className={`text-xs ${c.sub}`}>#{j.order_code}</span></p>
-      <p className={`text-sm ${c.body} mt-1`}>
+      <p className="font-bold mt-2">{j.brand ?? 'Pedido'}</p>
+
+      {!enroute && (
+        <div className={`mt-2 rounded-xl px-3 py-2 flex items-center ${c.card}`}>
+          <span className={`text-xs ${c.sub}`}>Codigo de recogida</span>
+          <span className="ml-auto font-mono font-extrabold text-xl">#{j.order_code}</span>
+        </div>
+      )}
+
+      <p className={`text-sm ${c.body} mt-2`}>
         {enroute
           ? `${j.delivery_address ?? 'Sin direccion'}${j.delivery_details ? ` ${DOT} ${j.delivery_details}` : ''}`
           : `Recoger en ${j.pickup_name ?? 'el local'}${j.pickup_address ? ` ${DOT} ${j.pickup_address}` : ''}`}
