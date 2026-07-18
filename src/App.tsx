@@ -16,29 +16,30 @@ import { useAuth } from './modules/multitenancy/hooks/useAuth'
 import KdsKioskRoute from './modules/kds/KdsKioskRoute'
 import TabletStationRoute from './modules/tablet/TabletStationRoute'
 import RepartidorRoute from './modules/repartidor/RepartidorRoute'
+import SeguimientoRoute from './modules/seguimiento/SeguimientoRoute'
 import ShopHubRoute from './modules/shop/ShopHubRoute'
 import { isShopHost } from './modules/shop/shopHost'
 
 // G-8.6 (Sprint 3): App.tsx reducido. El render autenticado es el Shell modular
-// (src/shell/Shell.tsx), que vive en la raíz y resuelve la cuenta por AppContext.
+// (src/shell/Shell.tsx), que vive en la raÃ­z y resuelve la cuenta por AppContext.
 // El antiguo AuthenticatedApp + Sidebar legacy + mapeo PAGE_COMPONENTS se
-// retiraron en la limpieza G-8.7 (este commit). La lógica de auth (rutas
-// públicas, welcome, loading) se conserva intacta.
+// retiraron en la limpieza G-8.7 (este commit). La lÃ³gica de auth (rutas
+// pÃºblicas, welcome, loading) se conserva intacta.
 
 export default function App() {
-  // Bloque B-6b: App raíz consume AppContext (sin query duplicada de perfil).
-  // Feature flags (gate.load) se cargan/limpian según userProfile.
+  // Bloque B-6b: App raÃ­z consume AppContext (sin query duplicada de perfil).
+  // Feature flags (gate.load) se cargan/limpian segÃºn userProfile.
   const { authResolved, authUserId, userProfile, accountsLoading } = useApp()
   const location = useLocation()
-  // Sesión 15 (Porteria/Panel Admin): platform-admin para gating de /_admin.
+  // SesiÃ³n 15 (Porteria/Panel Admin): platform-admin para gating de /_admin.
   // Hook independiente que lee el claim folvy.is_platform_admin del JWT.
-  // Se llama aquí arriba (no dentro de un if) para respetar las reglas de hooks.
+  // Se llama aquÃ­ arriba (no dentro de un if) para respetar las reglas de hooks.
   const { isPlatformAdmin, loading: platformAdminLoading } = usePlatformAdmin()
   // Frente "Acceso del trabajador" (Modelo C1): signOut para el onExitMode
-  // del TrabajadorApp en el caso de worker puro. Ver gate 3-quater más abajo.
+  // del TrabajadorApp en el caso de worker puro. Ver gate 3-quater mÃ¡s abajo.
   const { signOut } = useAuth()
 
-  // Cargar/limpiar feature flags según userProfile.
+  // Cargar/limpiar feature flags segÃºn userProfile.
   useEffect(() => {
     if (userProfile) {
       void gate.load().then(state => {
@@ -54,7 +55,7 @@ export default function App() {
     }
   }, [userProfile])
 
-  // 1. Auth aún sin resolver (Supabase tarda ~50ms en saber si hay sesión).
+  // 1. Auth aÃºn sin resolver (Supabase tarda ~50ms en saber si hay sesiÃ³n).
   if (!authResolved) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-page">
@@ -70,52 +71,55 @@ export default function App() {
 
   // Folvy Shop por SUBDOMINIO de tienda (<slug>.folvy.app). Un subdominio de
   // tienda SIEMPRE sirve la tienda, con independencia del path (la tienda vive
-  // en la raíz de su host). Va lo primero: en app.folvy.app / localhost /
+  // en la raÃ­z de su host). Va lo primero: en app.folvy.app / localhost /
   // previews isShopHost() es false y esto es un no-op (todo sigue igual).
   if (isShopHost()) {
     return <ShopHubRoute />
   }
 
-  // 1-bis. PROTECCIÓN INTEGRAL DE RUTAS PÚBLICAS DE AUTH — Sesión 9.
+  // 1-bis. PROTECCIÃ“N INTEGRAL DE RUTAS PÃšBLICAS DE AUTH â€” SesiÃ³n 9.
   //        /login, /welcome, /reset-password, /reset-password/confirm viven
-  //        FUERA del namespace de cuenta. Con sesión activa NO se mete al user
-  //        automáticamente al Shell.
+  //        FUERA del namespace de cuenta. Con sesiÃ³n activa NO se mete al user
+  //        automÃ¡ticamente al Shell.
   //          - /reset-password/confirm: SECURITY-CRITICAL. Renderiza siempre el
-  //            componente; si no, alguien que intercepte el email entraría sin
-  //            cambiar password (vulnerabilidad Sesión 9).
-  //          - /login, /welcome, /reset-password → AuthRouter (respeta sesión).
+  //            componente; si no, alguien que intercepte el email entrarÃ­a sin
+  //            cambiar password (vulnerabilidad SesiÃ³n 9).
+  //          - /login, /welcome, /reset-password â†’ AuthRouter (respeta sesiÃ³n).
   if (location.pathname === '/reset-password/confirm') {
     return <ResetPasswordConfirmPage />
   }
-  // Aterrizaje del enlace de acceso del trabajador (Modelo C1). Ruta pública:
-  // canjea el token y establece sesión antes de cualquier gate.
+  // Aterrizaje del enlace de acceso del trabajador (Modelo C1). Ruta pÃºblica:
+  // canjea el token y establece sesiÃ³n antes de cualquier gate.
   if (location.pathname === '/acceso') {
     return <AccesoClaimPage />
   }
-  // Modo COCINA-TV del KDS (frontera de token, sin sesión). Ruta pública propia,
-  // separada del módulo KDS del Shell (/kds, /kds/ajustes) para no colisionar:
-  // el Shell monta los módulos en la raíz (/kds), así que el kiosco NO puede
+  // Modo COCINA-TV del KDS (frontera de token, sin sesiÃ³n). Ruta pÃºblica propia,
+  // separada del mÃ³dulo KDS del Shell (/kds, /kds/ajustes) para no colisionar:
+  // el Shell monta los mÃ³dulos en la raÃ­z (/kds), asÃ­ que el kiosco NO puede
   // compartir ese prefijo. El dispositivo se identifica con su token (?token= o
   // localStorage) y la RPC kds_board deriva el local. Va ANTES de los gates.
   if (location.pathname.startsWith('/cocina-tv')) {
     return <KdsKioskRoute />
   }
-  // Modo ESTACIÓN DE TABLET (frontera de token, sin sesión). Ruta pública propia,
-  // hermana de /cocina-tv: un terminal a pantalla completa con pestañas
-  // (Pedidos · Cocina · Disponibilidad). Mismo token de dispositivo. Va ANTES
-  // de los gates de sesión por la misma razón que el kiosco.
+  // Modo ESTACIÃ“N DE TABLET (frontera de token, sin sesiÃ³n). Ruta pÃºblica propia,
+  // hermana de /cocina-tv: un terminal a pantalla completa con pestaÃ±as
+  // (Pedidos Â· Cocina Â· Disponibilidad). Mismo token de dispositivo. Va ANTES
+  // de los gates de sesiÃ³n por la misma razÃ³n que el kiosco.
   if (location.pathname.startsWith('/estacion')) {
     return <TabletStationRoute />
   }
-  // PWA del REPARTIDOR (frontera de token, sin sesión). Ruta pública propia,
+  // PWA del REPARTIDOR (frontera de token, sin sesiÃ³n). Ruta pÃºblica propia,
   // hermana de /estacion: el repartidor entra por su enlace personal
   // /repartidor?token=cour_... El token identifica al courier (courier.access_token).
-  // Va ANTES de los gates de sesión por la misma razón que el kiosco/estación.
+  // Va ANTES de los gates de sesiÃ³n por la misma razÃ³n que el kiosco/estaciÃ³n.
   if (location.pathname.startsWith('/repartidor')) {
     return <RepartidorRoute />
   }
-  // Hub público de Folvy Shop (tienda multi-marca, sin sesión). Ruta /t/:slug,
-  // hermana de /cocina-tv y /estacion. Va antes de los gates de sesión.
+  // Hub pÃºblico de Folvy Shop (tienda multi-marca, sin sesiÃ³n). Ruta /t/:slug,
+  // hermana de /cocina-tv y /estacion. Va antes de los gates de sesiÃ³n.
+  if (location.pathname.startsWith('/seguir')) {
+    return <SeguimientoRoute />
+  }
   if (location.pathname.startsWith('/t/')) {
     return <ShopHubRoute />
   }
@@ -123,12 +127,12 @@ export default function App() {
     return <AuthRouter />
   }
 
-  // 2. Sin sesión → AuthRouter (maneja /login, /welcome, /reset-password).
+  // 2. Sin sesiÃ³n â†’ AuthRouter (maneja /login, /welcome, /reset-password).
   if (!authUserId) {
     return <AuthRouter />
   }
 
-  // 3. Hay sesión, AppContext aún cargando accounts/userProfile.
+  // 3. Hay sesiÃ³n, AppContext aÃºn cargando accounts/userProfile.
   if (accountsLoading || !userProfile) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-page">
@@ -142,8 +146,8 @@ export default function App() {
     )
   }
 
-  // 3-bis. Sesión válida pero welcome_completed_at IS NULL → forzar /welcome
-  //        (user invitado que aún no completó activación: password + T&C).
+  // 3-bis. SesiÃ³n vÃ¡lida pero welcome_completed_at IS NULL â†’ forzar /welcome
+  //        (user invitado que aÃºn no completÃ³ activaciÃ³n: password + T&C).
   if (!userProfile.welcomeCompletedAt) {
     return (
       <Routes>
@@ -153,14 +157,14 @@ export default function App() {
     )
   }
 
-  // 3-ter. PANEL SUPERADMIN FOLVY (/_admin) — Sesión 15.
-  //        Plano de control separado del plano de cliente (Opción A: el panel
-  //        NO es un módulo del Shell, es una rama de render propia con su
+  // 3-ter. PANEL SUPERADMIN FOLVY (/_admin) â€” SesiÃ³n 15.
+  //        Plano de control separado del plano de cliente (OpciÃ³n A: el panel
+  //        NO es un mÃ³dulo del Shell, es una rama de render propia con su
   //        AdminShell). Gating estricto por platform-admin (claim del JWT).
-  //          - Si aún resolviendo el claim → loading.
-  //          - Si platform-admin → AdminShell (layout y routing propios).
-  //          - Si NO platform-admin → fuera, al Shell de cliente (no se filtra
-  //            la existencia del panel: simplemente redirige a la raíz).
+  //          - Si aÃºn resolviendo el claim â†’ loading.
+  //          - Si platform-admin â†’ AdminShell (layout y routing propios).
+  //          - Si NO platform-admin â†’ fuera, al Shell de cliente (no se filtra
+  //            la existencia del panel: simplemente redirige a la raÃ­z).
   if (isAdminRoute(location.pathname)) {
     if (platformAdminLoading) {
       return (
@@ -180,13 +184,13 @@ export default function App() {
     return <AdminShell />
   }
 
-  // 3-quater. GATE DE ROL WORKER — Frente "Acceso del trabajador" (Modelo C1).
-  //           Worker puro (role='worker' con employeeId) → TrabajadorApp en vez
+  // 3-quater. GATE DE ROL WORKER â€” Frente "Acceso del trabajador" (Modelo C1).
+  //           Worker puro (role='worker' con employeeId) â†’ TrabajadorApp en vez
   //           del Shell. NO afecta al encargado dual (role='manager' con
-  //           employeeId): éste cae al Shell por defecto y entrará al portal
-  //           vía el botón "Ver como trabajador" del Shell (paso 5 del frente).
+  //           employeeId): Ã©ste cae al Shell por defecto y entrarÃ¡ al portal
+  //           vÃ­a el botÃ³n "Ver como trabajador" del Shell (paso 5 del frente).
   //           onExitMode = signOut: para el worker puro, "salir" es cerrar
-  //           sesión (no tiene vista de Gestión a la que volver).
+  //           sesiÃ³n (no tiene vista de GestiÃ³n a la que volver).
   if (userProfile.role === 'worker' && userProfile.employeeId) {
     return (
       <TrabajadorApp
@@ -196,8 +200,8 @@ export default function App() {
     )
   }
 
-  // 4. Sesión válida + welcome completado → Shell modular (render por defecto).
-  //    G-8.6: el Shell vive en la raíz (sin slug, opción C) y resuelve la
+  // 4. SesiÃ³n vÃ¡lida + welcome completado â†’ Shell modular (render por defecto).
+  //    G-8.6: el Shell vive en la raÃ­z (sin slug, opciÃ³n C) y resuelve la
   //    cuenta activa por AppContext.
   return (
     <AccountStatusGate>
