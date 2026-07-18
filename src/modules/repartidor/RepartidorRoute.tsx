@@ -230,7 +230,6 @@ function ActiveCard({ j, busy, onPicked, onDelivered, onFailed }: {
   const enroute = j.state !== 'accepted'
   const label = enroute ? 'En ruta al cliente' : 'Recoger en el local'
 
-  // Destino de navegación según el estado: recoger→local, en ruta→cliente.
   const destLat = enroute ? j.delivery_lat : j.pickup_lat
   const destLng = enroute ? j.delivery_lng : j.pickup_lng
   const destAddr = enroute ? j.delivery_address : j.pickup_address
@@ -245,8 +244,6 @@ function ActiveCard({ j, busy, onPicked, onDelivered, onFailed }: {
     else setChoosing(true)
   }
   function handlePicked() {
-    // Abrir la ruta AL CLIENTE dentro del gesto del toque (antes del await),
-    // así el navegador no bloquea la apertura de la app de mapas.
     openNav(pref ?? 'gmaps', j.delivery_lat, j.delivery_lng, j.delivery_address)
     onPicked()
   }
@@ -268,7 +265,6 @@ function ActiveCard({ j, busy, onPicked, onDelivered, onFailed }: {
         {j.customer_phone && <a href={`tel:${j.customer_phone.replace(/\s+/g, '')}`} className="inline-flex items-center gap-1 text-emerald-400 text-sm"><Phone size={14} /> Llamar</a>}
       </div>
 
-      {/* Navegar: botón grande + elección Waze/Google Maps (recordada). */}
       {canNav && (
         <div className="mt-3">
           {choosing || !pref ? (
