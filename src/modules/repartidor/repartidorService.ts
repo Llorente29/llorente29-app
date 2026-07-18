@@ -3,7 +3,7 @@
 import { supabase, isSupabaseEnabled } from '../../lib/supabase'
 
 function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
-  if (!isSupabaseEnabled || !supabase) throw new Error('Supabase no está configurado.')
+  if (!isSupabaseEnabled || !supabase) throw new Error('Supabase no est\u00E1 configurado.')
   return (supabase.rpc as unknown as (f: string, a: Record<string, unknown>)
     => Promise<{ data: unknown; error: { message: string } | null }>)(fn, args)
     .then(({ data, error }) => { if (error) throw new Error(error.message); return data as T })
@@ -22,8 +22,7 @@ export interface CourierJob {
   total: number | null; items_count: number
   delivery_address: string | null; delivery_details: string | null
   delivery_lat: number | null; delivery_lng: number | null
-  pickup_name: string | null; pickup_address: string | null
-  pickup_lat: number | null; pickup_lng: number | null
+  pickup_name: string | null; pickup_address: string | null; pickup_lat: number | null; pickup_lng: number | null
   distance_km: number | null; payout: number | null
   offered_at: string | null
 }
@@ -45,7 +44,7 @@ export const courierPing = (t: string, lat: number, lng: number) =>
   rpc<{ ok: boolean }>('courier_ping_by_token', { p_token: t, p_lat: lat, p_lng: lng })
 
 export async function courierProofUpload(token: string, saleId: string, kind: 'photo' | 'signature', imageBase64: string): Promise<string> {
-  if (!isSupabaseEnabled || !supabase) throw new Error('Supabase no está configurado.')
+  if (!isSupabaseEnabled || !supabase) throw new Error('Supabase no est\u00E1 configurado.')
   const { data, error } = await supabase.functions.invoke('courier-proof-upload', {
     body: { token, sale_id: saleId, kind, image_base64: imageBase64 },
   })

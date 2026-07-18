@@ -1,8 +1,6 @@
 // src/modules/repartidor/RepartidorRoute.tsx
-//
-// PWA del REPARTIDOR â€” ruta pÃºblica /repartidor (App.tsx la monta ANTES de los
-// gates, como /estacion). Token = credencial (courier.access_token).
-// T3b.1 navegaciÃ³n Â· T3b.2 distancia+ganancia+rechazar Â· T3c foto+firma Â· tema claro/oscuro.
+// PWA del REPARTIDOR - ruta publica /repartidor. Token = courier.access_token.
+// T3b.1 nav - T3b.2 distancia+ganancia+rechazar - T3c foto+firma - tema claro/oscuro.
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import {
@@ -19,10 +17,10 @@ const readToken = () => { try { return localStorage.getItem(TOKEN_KEY) } catch {
 const storeToken = (t: string) => { try { localStorage.setItem(TOKEN_KEY, t) } catch { /* modo privado */ } }
 
 const ACTIVE = ['accepted', 'picked_up', 'in_delivery']
-const eur = (n: number | null) => (n == null ? '' : n.toFixed(2).replace('.', ',') + ' â‚¬')
+const eur = (n: number | null) => (n == null ? '' : n.toFixed(2).replace('.', ',') + ' \u20AC')
 const km = (n: number | null) => (n == null ? '' : n.toString().replace('.', ',') + ' km')
+const DOT = '\u00B7'
 
-// â”€â”€ Tema (claro/oscuro), elegido por el repartidor, recordado por dispositivo â”€â”€
 type Theme = 'light' | 'dark'
 const THEME_KEY = 'courier_theme'
 function initialTheme(): Theme {
@@ -48,7 +46,6 @@ function palette(dark: boolean) {
   }
 }
 
-// â”€â”€ NavegaciÃ³n (Waze / Google Maps), recordada por dispositivo â”€â”€
 type NavApp = 'waze' | 'gmaps'
 const NAV_KEY = 'courier_nav_pref'
 const NAV_LABEL: Record<NavApp, string> = { waze: 'Waze', gmaps: 'Google Maps' }
@@ -101,7 +98,7 @@ export default function RepartidorRoute() {
     let cancel = false; setStatus('checking'); setErr(null)
     courierSession(token)
       .then(s => { if (!cancel) { setSess(s); setStatus('valid') } })
-      .catch(e => { if (!cancel) { setStatus('invalid'); setErr(e instanceof Error ? e.message : 'Token no vÃ¡lido') } })
+      .catch(e => { if (!cancel) { setStatus('invalid'); setErr(e instanceof Error ? e.message : 'Token no valido') } })
     return () => { cancel = true }
   }, [token])
 
@@ -156,11 +153,11 @@ export default function RepartidorRoute() {
         <div className="w-full max-w-sm text-center">
           <img src="/folvy-icon-192.png" className="h-14 w-14 mx-auto mb-3 rounded-2xl" alt="Folvy" />
           <h1 className="text-2xl font-bold">Reparto Folvy</h1>
-          <p className={`text-sm ${c.sub} mt-2`}>Abre el enlace que te pasÃ³ tu encargado, o pega tu cÃ³digo de repartidor.</p>
+          <p className={`text-sm ${c.sub} mt-2`}>Abre el enlace que te paso tu encargado, o pega tu codigo de repartidor.</p>
           {status === 'invalid' && err && (
-            <div className="mt-4 rounded-lg bg-red-500/15 text-red-500 ring-1 ring-red-500/40 px-3 py-2 text-sm">CÃ³digo no vÃ¡lido. {err}</div>
+            <div className="mt-4 rounded-lg bg-red-500/15 text-red-500 ring-1 ring-red-500/40 px-3 py-2 text-sm">Codigo no valido. {err}</div>
           )}
-          <input value={paste} onChange={e => setPaste(e.target.value)} placeholder="cour_â€¦"
+          <input value={paste} onChange={e => setPaste(e.target.value)} placeholder="cour_..."
             className={`mt-6 w-full rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-400 ${c.input}`} />
           <button onClick={() => { const t = paste.trim(); if (t) { storeToken(t); setToken(t); setPaste('') } }} disabled={!paste.trim()}
             className="mt-2 w-full rounded-xl bg-emerald-500 text-zinc-950 font-bold py-3 hover:bg-emerald-400 disabled:opacity-50">Entrar</button>
@@ -169,7 +166,7 @@ export default function RepartidorRoute() {
     )
   }
   if (status === 'checking' || !sess) {
-    return <div className={`fixed inset-0 ${c.app} flex items-center justify-center gap-2`}><Loader2 className="animate-spin" size={20} /> Conectandoâ€¦</div>
+    return <div className={`fixed inset-0 ${c.app} flex items-center justify-center gap-2`}><Loader2 className="animate-spin" size={20} /> Conectando...</div>
   }
 
   const mine = jobs.filter(j => j.mine && ACTIVE.includes(j.state))
@@ -199,7 +196,7 @@ export default function RepartidorRoute() {
           <ActiveCard key={j.assignment_id} j={j} c={c} busy={busy}
             onPicked={() => act(() => courierAdvance(token, j.assignment_id, 'picked_up'), j.assignment_id + ':p')}
             onDelivered={() => setDelivering(j)}
-            onFailed={() => { const r = window.prompt('Â¿QuÃ© pasÃ³? (motivo del fallo)'); if (r) void act(() => courierAdvance(token, j.assignment_id, 'failed', r), j.assignment_id + ':f') }} />
+            onFailed={() => { const r = window.prompt('\u00BFQue paso? (motivo del fallo)'); if (r) void act(() => courierAdvance(token, j.assignment_id, 'failed', r), j.assignment_id + ':f') }} />
         ))}
 
         {sess.on_shift && offers.length > 0 && (
@@ -219,7 +216,7 @@ export default function RepartidorRoute() {
         {mine.length === 0 && (!sess.on_shift || offers.length === 0) && (
           <div className={`text-center ${c.sub} pt-16`}>
             <Package size={40} className="mx-auto mb-3 opacity-40" />
-            {sess.on_shift ? 'Sin pedidos ahora mismo. Te avisaremos aquÃ­.' : 'Ponte en turno para recibir pedidos.'}
+            {sess.on_shift ? 'Sin pedidos ahora mismo. Te avisaremos aqui.' : 'Ponte en turno para recibir pedidos.'}
           </div>
         )}
       </main>
@@ -244,20 +241,20 @@ function OfferCard({ j, c, claiming, declining, onClaim, onDecline }: {
         <span className={`text-xs ${c.sub}`}>#{j.order_code}</span>
         <span className={`ml-auto text-sm ${c.body}`}>{eur(j.total)}</span>
       </div>
-      <p className={`text-sm ${c.body} mt-2`}>{j.delivery_address ?? 'Sin direcciÃ³n'}</p>
+      <p className={`text-sm ${c.body} mt-2`}>{j.delivery_address ?? 'Sin direccion'}</p>
       {j.delivery_details && <p className={`text-xs ${c.sub}`}>{j.delivery_details}</p>}
       <div className="flex items-center gap-3 mt-2">
         {j.distance_km != null && <span className={`text-xs ${c.sub} inline-flex items-center gap-1`}><Navigation size={12} /> {km(j.distance_km)}</span>}
-        <span className={`text-xs ${c.sub}`}>{j.items_count} art. Â· {j.pickup_name ?? 'el local'}</span>
+        <span className={`text-xs ${c.sub}`}>{j.items_count} art. {DOT} {j.pickup_name ?? 'el local'}</span>
         {j.payout != null && <span className="ml-auto text-sm text-emerald-500 font-bold">Ganas {eur(j.payout)}</span>}
       </div>
       <div className="grid grid-cols-3 gap-2 mt-3">
         <button onClick={onDecline} disabled={busy} className={`rounded-xl font-bold py-2.5 disabled:opacity-50 ${c.soft}`}>
-          {declining ? 'â€¦' : 'Rechazar'}
+          {declining ? '...' : 'Rechazar'}
         </button>
         <button onClick={onClaim} disabled={busy}
           className="col-span-2 rounded-xl bg-emerald-500 text-zinc-950 font-bold py-2.5 hover:bg-emerald-400 disabled:opacity-50 inline-flex items-center justify-center gap-2">
-          {claiming ? <><RefreshCw size={16} className="animate-spin" /> Aceptandoâ€¦</> : 'Aceptar pedido'}
+          {claiming ? <><RefreshCw size={16} className="animate-spin" /> Aceptando...</> : 'Aceptar pedido'}
         </button>
       </div>
     </div>
@@ -284,14 +281,14 @@ function ActiveCard({ j, c, busy, onPicked, onDelivered, onFailed }: {
     <div className={`rounded-2xl ${c.cardActive} p-4`}>
       <div className="flex items-center gap-2">
         <span className="text-xs font-bold uppercase tracking-wide text-emerald-500">{label}</span>
-        {j.distance_km != null && <span className={`text-xs ${c.sub}`}>Â· {km(j.distance_km)}</span>}
+        {j.distance_km != null && <span className={`text-xs ${c.sub}`}>{DOT} {km(j.distance_km)}</span>}
         <span className={`ml-auto text-sm ${c.body}`}>{eur(j.total)}</span>
       </div>
       <p className="font-bold mt-2">{j.brand ?? 'Pedido'} <span className={`text-xs ${c.sub}`}>#{j.order_code}</span></p>
       <p className={`text-sm ${c.body} mt-1`}>
         {enroute
-          ? `${j.delivery_address ?? 'Sin direcciÃ³n'}${j.delivery_details ? ` Â· ${j.delivery_details}` : ''}`
-          : `Recoger en ${j.pickup_name ?? 'el local'}${j.pickup_address ? ` Â· ${j.pickup_address}` : ''}`}
+          ? `${j.delivery_address ?? 'Sin direccion'}${j.delivery_details ? ` ${DOT} ${j.delivery_details}` : ''}`
+          : `Recoger en ${j.pickup_name ?? 'el local'}${j.pickup_address ? ` ${DOT} ${j.pickup_address}` : ''}`}
       </p>
       <div className="flex items-center gap-3 mt-2">
         {j.customer_name && <span className={`text-sm ${c.sub}`}>{j.customer_name}</span>}
@@ -309,7 +306,7 @@ function ActiveCard({ j, c, busy, onPicked, onDelivered, onFailed }: {
           ) : (
             <div className="flex items-center gap-2">
               <button onClick={navigate} className="flex-1 rounded-xl bg-sky-500 text-zinc-950 font-bold py-3 inline-flex items-center justify-center gap-2"><Navigation size={18} /> Navegar</button>
-              <button onClick={() => setChoosing(true)} className={`text-xs ${c.sub} px-2 py-2 whitespace-nowrap`}>{NAV_LABEL[pref]} Â· cambiar</button>
+              <button onClick={() => setChoosing(true)} className={`text-xs ${c.sub} px-2 py-2 whitespace-nowrap`}>{NAV_LABEL[pref]} {DOT} cambiar</button>
             </div>
           )}
         </div>
@@ -379,11 +376,11 @@ function DeliverySheet({ job, c, dark, saving, onCancel, onConfirm }: {
           <span className="font-bold text-lg">Confirmar entrega</span>
           <button onClick={onCancel} className={`ml-auto p-2 rounded-lg ${c.soft}`}><X size={18} /></button>
         </div>
-        <p className={`text-sm ${c.sub} mb-3`}>{job.brand ?? 'Pedido'} Â· #{job.order_code}</p>
+        <p className={`text-sm ${c.sub} mb-3`}>{job.brand ?? 'Pedido'} {DOT} #{job.order_code}</p>
 
         <label className={`flex items-center gap-3 rounded-xl p-3 ${c.card} cursor-pointer`}>
           <Camera size={20} className="text-emerald-500 shrink-0" />
-          <span className="text-sm font-semibold flex-1">{photo ? 'Foto aÃ±adida' : 'Hacer foto de la entrega'}</span>
+          <span className="text-sm font-semibold flex-1">{photo ? 'Foto anadida' : 'Hacer foto de la entrega'}</span>
           {photo && <img src={photo} className="w-12 h-12 rounded-lg object-cover" alt="" />}
           <input type="file" accept="image/*" capture="environment" onChange={onFile} className="hidden" />
         </label>
@@ -397,14 +394,14 @@ function DeliverySheet({ job, c, dark, saving, onCancel, onConfirm }: {
         </div>
 
         <textarea value={note} onChange={e => setNote(e.target.value)} rows={2}
-          placeholder="Nota (opcional): dejado en porterÃ­a, entregado en manoâ€¦"
+          placeholder="Nota (opcional): dejado en porteria, entregado en mano..."
           className={`w-full rounded-xl px-3 py-2 mt-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 ${c.input}`} />
 
         <div className="grid grid-cols-2 gap-2 mt-4">
           <button onClick={onCancel} className={`rounded-xl font-bold py-3 ${c.soft}`}>Cancelar</button>
           <button onClick={confirm} disabled={saving}
             className="rounded-xl bg-emerald-500 text-zinc-950 font-bold py-3 hover:bg-emerald-400 disabled:opacity-50 inline-flex items-center justify-center gap-2">
-            {saving ? <><RefreshCw size={16} className="animate-spin" /> Enviandoâ€¦</> : 'Confirmar entrega'}
+            {saving ? <><RefreshCw size={16} className="animate-spin" /> Enviando...</> : 'Confirmar entrega'}
           </button>
         </div>
       </div>
