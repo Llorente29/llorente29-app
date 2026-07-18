@@ -3,7 +3,7 @@
 // courier (no hay sesión) y sube con service_role a un bucket público de solo
 // lectura. Frontera: el token + que el pedido sea suyo.
 import { corsHeaders } from "../_shared/cors.ts";
-import { createClient } from "@supabase/supabase-js";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 function json(status: number, payload: unknown): Response {
   return new Response(JSON.stringify(payload), {
