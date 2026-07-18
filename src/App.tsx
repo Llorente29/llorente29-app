@@ -15,6 +15,7 @@ import TrabajadorApp from './pages/trabajador/TrabajadorApp'
 import { useAuth } from './modules/multitenancy/hooks/useAuth'
 import KdsKioskRoute from './modules/kds/KdsKioskRoute'
 import TabletStationRoute from './modules/tablet/TabletStationRoute'
+import RepartidorRoute from './modules/repartidor/RepartidorRoute'
 import ShopHubRoute from './modules/shop/ShopHubRoute'
 import { isShopHost } from './modules/shop/shopHost'
 
@@ -105,6 +106,13 @@ export default function App() {
   // de los gates de sesión por la misma razón que el kiosco.
   if (location.pathname.startsWith('/estacion')) {
     return <TabletStationRoute />
+  }
+  // PWA del REPARTIDOR (frontera de token, sin sesión). Ruta pública propia,
+  // hermana de /estacion: el repartidor entra por su enlace personal
+  // /repartidor?token=cour_... El token identifica al courier (courier.access_token).
+  // Va ANTES de los gates de sesión por la misma razón que el kiosco/estación.
+  if (location.pathname.startsWith('/repartidor')) {
+    return <RepartidorRoute />
   }
   // Hub público de Folvy Shop (tienda multi-marca, sin sesión). Ruta /t/:slug,
   // hermana de /cocina-tv y /estacion. Va antes de los gates de sesión.
