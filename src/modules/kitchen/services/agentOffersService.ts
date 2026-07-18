@@ -306,15 +306,18 @@ export async function previewOfferMargin(
 // ─────────────────────────────────────────────────────────────────────
 // PUBLICAR (T3) — despachador HONESTO por canal
 //   - Shop     → active=true (publica de verdad; es la tienda propia)
-//   - Glovo    → active=true + encola promo_push_job (approveCampaign) → robot
-//   - Uber     → active=true, sin job (no hay robot) → lista "a mano en Uber Manager"
-//   - JustEat  → active=true, sin job (el CHECK ni admite el job) → lista "a mano en JustEat"
-// Nunca finge que Uber/JustEat salieron solas: devuelve la lista de deberes por canal.
+//   - Glovo    → active=true + encola promo_push_job (approveCampaign) → robot Glovo
+//   - Uber     → active=true + encola promo_push_job (platform='ubereats') → brazo Uber
+//                (18/07: antes caía en "a mano" y no encolaba nada — el brazo existe y sabe
+//                 publicar; el hueco era ESTE despachador, que no lo enrutaba al robot.)
+//   - JustEat  → active=true, sin job (no hay robot) → lista "a mano en JustEat"
+// Nunca finge que JustEat salió sola: devuelve la lista de deberes por canal.
 // ─────────────────────────────────────────────────────────────────────
 
 export interface PublishResult {
   shopPublished: number
   glovoQueued: number
+  uberQueued: number
   manualUber: string[]
   manualJustEat: string[]
   errors: { id: string; name: string; error: string }[]
@@ -332,13 +335,16 @@ function offerLabel(o: AgentOffer): string {
  * margen: publicar = confiar en la propuesta del agente (su guardarraíl ya corrió).
  */
 export async function publishOffers(accountId: string, offers: AgentOffer[]): Promise<PublishResult> {
-  const res: PublishResult = { shopPublished: 0, glovoQueued: 0, manualUber: [], manualJustEat: [], errors: [] }
+  const res: PublishResult = { shopPublished: 0, glovoQueued: 0, uberQueued: 0, manualUber: [], manualJustEat: [], errors: [] }
 
-  // channel_id de Glovo (para el draft del approve). Se resuelve una sola vez.
+  // channel_id de las plataformas con brazo robot (Glovo y Uber). Se resuelven una vez.
   const { data: chans } = await db()
     .from('sales_channel').select('id, name').eq('account_id', accountId).eq('is_active', true)
-  const glovoId = ((chans ?? []) as Array<{ id: string; name: string }>)
-    .find((c) => (c.name ?? '').toLowerCase().replace(/\s+/g, '') === 'glovo')?.id ?? null
+  const chanId = (want: string): string | null =>
+    ((chans ?? []) as Array<{ id: string; name: string }>)
+      .find((c) => (c.name ?? '').toLowerCase().replace(/\s+/g, '') === want)?.id ?? null
+  const glovoId = chanId('glovo')
+  const uberId = chanId('uber')
 
   for (const o of offers) {
     try {
@@ -346,11 +352,14 @@ export async function publishOffers(accountId: string, offers: AgentOffer[]): Pr
         const { error } = await db().from('coupon').update({ active: true, paused_at: null }).eq('id', o.id)
         if (error) throw new Error(error.message)
         res.shopPublished++
-      } else if (o.channel === 'glovo') {
-        if (!glovoId) throw new Error('Canal Glovo no encontrado en la cuenta.')
-        // El cupón ya trae su scope (marcas/locales/platos): construimos el draft mínimo
-        // y delegamos en approveCampaign (activa + encola jobs con pos_hint y nombres —
-        // el path del robot, ya probado).
+      } else if (o.channel === 'glovo' || o.channel === 'uber') {
+        // Glovo Y Uber tienen brazo robot: MISMO camino. approveCampaign encola el
+        // promo_push_job; toPushPlatform manda 'glovo'|'ubereats' → cada brazo reclama
+        // el suyo. El cupón ya trae su scope (marcas/locales/platos); construimos el
+        // draft mínimo y delegamos (activa + encola con pos_hint y nombres — path probado).
+        const channelId = o.channel === 'glovo' ? glovoId : uberId
+        if (!channelId) throw new Error(`Canal ${o.channel === 'glovo' ? 'Glovo' : 'Uber'} no encontrado en la cuenta.`)
+
         const { data: c } = await db().from('coupon').select('scope').eq('id', o.id).maybeSingle()
         const scope = ((c as { scope?: Record<string, unknown> } | null)?.scope ?? {}) as Record<string, unknown>
         const brandIds = Array.isArray(scope.brand_ids) ? (scope.brand_ids as string[]) : []
@@ -366,8 +375,8 @@ export async function publishOffers(accountId: string, offers: AgentOffer[]): Pr
           id: o.id,
           accountId,
           name: o.name,
-          channel: 'glovo',
-          channelId: glovoId,
+          channel: o.channel, // 'glovo' | 'uber' (narrowed) → PlatformChannel
+          channelId,
           discountType: o.discountType,
           value: o.value,
           scope: { brandIds, menuItemIds },
@@ -381,13 +390,13 @@ export async function publishOffers(accountId: string, offers: AgentOffer[]): Pr
           omnibusRefNote: o.reasonRaw,
         }
         await approveCampaign({ couponId: o.id, draft, brandNames })
-        res.glovoQueued++
+        if (o.channel === 'glovo') res.glovoQueued++
+        else res.uberQueued++
       } else {
-        // uber / justeat → activar y marcar "a mano" (no hay publicación automática).
+        // justeat → activar y marcar "a mano" (no hay brazo de JustEat todavía).
         const { error } = await db().from('coupon').update({ active: true, paused_at: null }).eq('id', o.id)
         if (error) throw new Error(error.message)
-        if (o.channel === 'uber') res.manualUber.push(offerLabel(o))
-        else res.manualJustEat.push(offerLabel(o))
+        res.manualJustEat.push(offerLabel(o))
       }
     } catch (e) {
       res.errors.push({ id: o.id, name: o.name, error: e instanceof Error ? e.message : 'error' })
