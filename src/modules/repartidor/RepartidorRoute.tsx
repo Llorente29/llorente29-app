@@ -4,19 +4,13 @@
 // gates, como /estacion). FRONTERA DE TOKEN: sin login; el repartidor entra por
 // su enlace personal /repartidor?token=cour_... (su "enlace mágico"/QR).
 //
-// Bucle: EN TURNO → ver ofertas → RECLAMAR → recoger → EN RUTA (GPS en vivo por
-// watchPosition → courier_ping) → ENTREGAR. El estado se refleja en sale
-// (trigger espejo) → oficina y cliente lo ven.
-//
-// Navegación (T3b.1): botón "Navegar" grande con elección Waze/Google Maps
-// (recordada por dispositivo); al pulsar "He recogido y salgo" se abre la ruta
-// al cliente automáticamente (dentro del gesto del toque, no lo bloquea el
-// navegador). Destino según estado: recoger→local, en ruta→cliente.
+// T3b.1: navegación (Waze/Google Maps, recordada) + ruta auto al recoger.
+// T3b.2: oferta con distancia + ganancia (autónomo) + aceptar/rechazar.
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { Loader2, Power, Phone, Navigation, Package, CheckCircle2, XCircle, Bike, RefreshCw } from 'lucide-react'
 import {
-  courierSession, courierSetShift, courierFeed, courierClaim, courierAdvance, courierPing,
+  courierSession, courierSetShift, courierFeed, courierClaim, courierDecline, courierAdvance, courierPing,
   type CourierSession, type CourierJob,
 } from './repartidorService'
 
@@ -26,6 +20,7 @@ const storeToken = (t: string) => { try { localStorage.setItem(TOKEN_KEY, t) } c
 
 const ACTIVE = ['accepted', 'picked_up', 'in_delivery']
 const eur = (n: number | null) => (n == null ? '' : n.toFixed(2).replace('.', ',') + ' €')
+const km = (n: number | null) => (n == null ? '' : n.toString().replace('.', ',') + ' km')
 
 // ── Navegación (Waze / Google Maps), preferencia recordada por dispositivo ──
 type NavApp = 'waze' | 'gmaps'
@@ -185,8 +180,11 @@ export default function RepartidorRoute() {
             <p className="text-xs uppercase tracking-wide text-zinc-500 mb-2">Ofertas ({offers.length})</p>
             <div className="space-y-3">
               {offers.map(j => (
-                <OfferCard key={j.assignment_id} j={j} busy={busy === j.assignment_id + ':c'}
-                  onClaim={() => act(() => courierClaim(token, j.assignment_id), j.assignment_id + ':c')} />
+                <OfferCard key={j.assignment_id} j={j}
+                  claiming={busy === j.assignment_id + ':c'}
+                  declining={busy === j.assignment_id + ':x'}
+                  onClaim={() => act(() => courierClaim(token, j.assignment_id), j.assignment_id + ':c')}
+                  onDecline={() => act(() => courierDecline(token, j.assignment_id), j.assignment_id + ':x')} />
               ))}
             </div>
           </div>
@@ -203,7 +201,10 @@ export default function RepartidorRoute() {
   )
 }
 
-function OfferCard({ j, busy, onClaim }: { j: CourierJob; busy: boolean; onClaim: () => void }) {
+function OfferCard({ j, claiming, declining, onClaim, onDecline }: {
+  j: CourierJob; claiming: boolean; declining: boolean; onClaim: () => void; onDecline: () => void
+}) {
+  const busy = claiming || declining
   return (
     <div className="rounded-xl bg-zinc-900 ring-1 ring-zinc-800 p-4">
       <div className="flex items-center gap-2">
@@ -213,11 +214,21 @@ function OfferCard({ j, busy, onClaim }: { j: CourierJob; busy: boolean; onClaim
       </div>
       <p className="text-sm text-zinc-300 mt-2">{j.delivery_address ?? 'Sin dirección'}</p>
       {j.delivery_details && <p className="text-xs text-zinc-500">{j.delivery_details}</p>}
-      <p className="text-xs text-zinc-500 mt-1">{j.items_count} artículo(s) · recoger en {j.pickup_name ?? 'el local'}</p>
-      <button onClick={onClaim} disabled={busy}
-        className="mt-3 w-full rounded-lg bg-emerald-500 text-zinc-950 font-bold py-2.5 hover:bg-emerald-400 disabled:opacity-50 inline-flex items-center justify-center gap-2">
-        {busy ? <><RefreshCw size={16} className="animate-spin" /> Aceptando…</> : 'Aceptar pedido'}
-      </button>
+      <div className="flex items-center gap-3 mt-2">
+        {j.distance_km != null && <span className="text-xs text-zinc-400 inline-flex items-center gap-1"><Navigation size={12} /> {km(j.distance_km)}</span>}
+        <span className="text-xs text-zinc-500">{j.items_count} art. · {j.pickup_name ?? 'el local'}</span>
+        {j.payout != null && <span className="ml-auto text-sm text-emerald-400 font-bold">Ganas {eur(j.payout)}</span>}
+      </div>
+      <div className="grid grid-cols-3 gap-2 mt-3">
+        <button onClick={onDecline} disabled={busy}
+          className="rounded-lg bg-zinc-800 text-zinc-300 font-bold py-2.5 hover:bg-zinc-700 disabled:opacity-50">
+          {declining ? '…' : 'Rechazar'}
+        </button>
+        <button onClick={onClaim} disabled={busy}
+          className="col-span-2 rounded-lg bg-emerald-500 text-zinc-950 font-bold py-2.5 hover:bg-emerald-400 disabled:opacity-50 inline-flex items-center justify-center gap-2">
+          {claiming ? <><RefreshCw size={16} className="animate-spin" /> Aceptando…</> : 'Aceptar pedido'}
+        </button>
+      </div>
     </div>
   )
 }
@@ -252,6 +263,7 @@ function ActiveCard({ j, busy, onPicked, onDelivered, onFailed }: {
     <div className="rounded-xl bg-zinc-900 ring-1 ring-emerald-500/30 p-4">
       <div className="flex items-center gap-2">
         <span className="text-xs font-bold uppercase tracking-wide text-emerald-400">{label}</span>
+        {j.distance_km != null && <span className="text-xs text-zinc-500">· {km(j.distance_km)}</span>}
         <span className="ml-auto text-sm text-zinc-400">{eur(j.total)}</span>
       </div>
       <p className="font-bold mt-2">{j.brand ?? 'Pedido'} <span className="text-xs text-zinc-500">#{j.order_code}</span></p>
@@ -263,6 +275,7 @@ function ActiveCard({ j, busy, onPicked, onDelivered, onFailed }: {
       <div className="flex items-center gap-3 mt-2">
         {j.customer_name && <span className="text-sm text-zinc-400">{j.customer_name}</span>}
         {j.customer_phone && <a href={`tel:${j.customer_phone.replace(/\s+/g, '')}`} className="inline-flex items-center gap-1 text-emerald-400 text-sm"><Phone size={14} /> Llamar</a>}
+        {j.payout != null && <span className="ml-auto text-sm text-emerald-400 font-bold">Ganas {eur(j.payout)}</span>}
       </div>
 
       {canNav && (

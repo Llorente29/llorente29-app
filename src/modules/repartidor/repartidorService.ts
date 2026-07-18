@@ -1,5 +1,5 @@
 // src/modules/repartidor/repartidorService.ts
-// Servicio de la PWA del repartidor: llamadas a las RPC por token (T3a).
+// Servicio de la PWA del repartidor: llamadas a las RPC por token (T3a/T3b.2).
 import { supabase, isSupabaseEnabled } from '../../lib/supabase'
 
 function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
@@ -24,6 +24,7 @@ export interface CourierJob {
   delivery_lat: number | null; delivery_lng: number | null
   pickup_name: string | null; pickup_address: string | null
   pickup_lat: number | null; pickup_lng: number | null
+  distance_km: number | null; payout: number | null
   offered_at: string | null
 }
 
@@ -35,6 +36,8 @@ export const courierFeed = (t: string) =>
   rpc<CourierJob[]>('courier_feed_by_token', { p_token: t })
 export const courierClaim = (t: string, id: string) =>
   rpc<{ assignment_id: string; state: string }>('courier_claim_by_token', { p_token: t, p_assignment_id: id })
+export const courierDecline = (t: string, id: string) =>
+  rpc<{ ok: boolean }>('courier_decline_by_token', { p_token: t, p_assignment_id: id })
 export const courierAdvance = (t: string, id: string, state: string, note?: string, proofUrl?: string) =>
   rpc<{ assignment_id: string; state: string }>('courier_advance_by_token',
     { p_token: t, p_assignment_id: id, p_state: state, p_note: note ?? null, p_proof_url: proofUrl ?? null })
