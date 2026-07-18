@@ -59,6 +59,17 @@ const COVERAGE_CAP = 60;
 
 const EXCLUDED_CATEGORY_PATTERNS = [/bebida/i];
 
+// SUELO DE PLATAFORMA (regla del 5% de Glovo · RECON 18/07/2026): un descuento SOLO se aplica
+// si el precio con oferta es al menos thresholdPct% inferior al precio MÁS BAJO de los últimos
+// windowDays días del artículo. Ese mínimo lo hunden NUESTRAS promos previas (efecto trinquete),
+// no el precio de carta. Modelamos el suelo por artículo y solo proponemos lo que la plataforma
+// aceptará (si no, publica "fantasma": Folvy dice "Publicada" y Glovo no aplica nada).
+// Solo Glovo por ahora (única regla confirmada contra fuente primaria). Añadir una plataforma
+// con la misma mecánica = una entrada más aquí (chKey en minúsculas, como en coupon.channels).
+const PLATFORM_FLOOR_RULE: Record<string, { thresholdPct: number; windowDays: number }> = {
+  glovo: { thresholdPct: 5, windowDays: 35 },
+};
+
 // Arsenal por canal (v3 · pieza 1): qué kinds propone el agente en cada canal y si la
 // oferta es POR MARCA (Shop: las ofertas de carta son por marca, sin local) o por
 // marca×local (plataforma). Añadir un arma = añadir un string; añadir un canal = una entrada.
@@ -257,6 +268,67 @@ Deno.serve(async (req) => {
         else for (const l of lids) busy.add(`${ch}:${b}:${l}`);
       }
     }
+
+    // ── SUELO DE 35 DÍAS POR ARTÍCULO (regla del 5% de Glovo) ──────────────────────────
+    //    Dos fuentes que se combinan (gana la MÁS PROFUNDA):
+    //    (a) RECONSTRUCCIÓN desde nuestro histórico de coupon: el % más profundo que corrió
+    //        en el artículo×canal dentro de la ventana → hunde el suelo en esa proporción.
+    //    (b) REAL: lo que el robot leyó del tooltip de Glovo (platform_promo_floor) — más
+    //        fiable porque incluye también las flash cofinanciadas por Glovo.
+    //    H = ese % hundido. floorReqPct = thresholdPct + (1-thresholdPct/100)*H  (= 5 + 0.95*H
+    //    en Glovo) = descuento MÍNIMO que la plataforma aceptará, redondeado al chip de 5.
+    const floorItemH  = new Map<string, Map<string, number>>();  // chKey -> (menu_item_id -> H%)
+    const floorBrandH = new Map<string, Map<string, number>>();  // chKey -> (brand_id     -> H%)
+    for (const chKey of Object.keys(PLATFORM_FLOOR_RULE)) {
+      const rule = PLATFORM_FLOOR_RULE[chKey];
+      const sinceIso = new Date(Date.now() - rule.windowDays * 864e5).toISOString();
+      const { data: hist } = await supa.from("coupon")
+        .select("value,scope,discount_type,ends_at,channels")
+        .eq("account_id", accountId)
+        .contains("channels", [chKey])
+        .eq("discount_type", "percent")
+        .gte("ends_at", sinceIso);          // siguió vivo dentro de la ventana → cuenta al suelo
+      const itemMap = new Map<string, number>();
+      const brandMap = new Map<string, number>();
+      for (const c of hist ?? []) {
+        const v = Number((c as any).value ?? 0);
+        if (!(v > 0)) continue;
+        const sc = ((c as any).scope ?? {}) as any;
+        const items: string[] = sc.menu_item_ids ?? [];
+        const bids: string[] = sc.brand_ids ?? [];
+        if (items.length > 0) for (const id of items) itemMap.set(id, Math.max(itemMap.get(id) ?? 0, v));
+        else for (const b of bids) brandMap.set(b, Math.max(brandMap.get(b) ?? 0, v));
+      }
+      floorItemH.set(chKey, itemMap);
+      floorBrandH.set(chKey, brandMap);
+    }
+    // Suelo REAL leído por el robot (Capa 1). channel_id -> chKey para casar con la regla.
+    const floorRealPct = new Map<string, Map<string, number>>(); // chKey -> (menu_item_id -> floor_pct)
+    {
+      const { data: floors } = await supa.from("platform_promo_floor")
+        .select("menu_item_id,floor_pct,channel_id").eq("account_id", accountId);
+      const chIdToKey = new Map<string, string>();
+      for (const [name, id] of chanByName) chIdToKey.set(id as string, String(name).toLowerCase());
+      for (const f of floors ?? []) {
+        const chKey = chIdToKey.get((f as any).channel_id);
+        if (!chKey || !PLATFORM_FLOOR_RULE[chKey]) continue;
+        if (!floorRealPct.has(chKey)) floorRealPct.set(chKey, new Map());
+        const m = floorRealPct.get(chKey)!;
+        m.set((f as any).menu_item_id, Math.max(m.get((f as any).menu_item_id) ?? 0, Number((f as any).floor_pct ?? 0)));
+      }
+    }
+    // Descuento mínimo (en % ya redondeado a chip de 5) que la plataforma aceptará por artículo.
+    const floorReqPct = (chKey: string, brandId: string, itemId: string): number => {
+      const rule = PLATFORM_FLOOR_RULE[chKey];
+      if (!rule) return 0;                       // canal sin regla de suelo → sin restricción
+      const H = Math.max(
+        floorItemH.get(chKey)?.get(itemId) ?? 0,
+        floorBrandH.get(chKey)?.get(brandId) ?? 0,
+        floorRealPct.get(chKey)?.get(itemId) ?? 0,
+      );
+      const req = rule.thresholdPct + (1 - rule.thresholdPct / 100) * H;   // 5 + 0.95*H en Glovo
+      return Math.min(60, Math.ceil(req / 5) * 5);
+    };
 
     // ── 3. OPORTUNIDADES — plataforma por marca×canal×local; Shop POR MARCA.
     //    Las ofertas de carta del Shop son por marca (sin local): se colapsan los
@@ -489,6 +561,34 @@ Deno.serve(async (req) => {
       o.pct = chosenPct;  // el % final es el que aguantó
       let scopeItems = (pv.under.length > 0 || baseInfo.baseIds !== null) ? pv.ok.map((r: any) => r.menu_item_id) : null;
 
+      // ── SUELO DE PLATAFORMA (Capa 2): quitar del alcance los platos cuyo % NO baja el
+      //    thresholdPct% bajo su mínimo de la ventana — la plataforma los rechazaría en
+      //    silencio (promo fantasma). Si el suelo bloquea TODOS → no publicar; ALERTA +
+      //    candidatos a ESPEJO. Subir el % para batir un suelo que tú mismo hundiste es el
+      //    trinquete: se PARA aquí (el artículo descansa y su suelo se recupera en la ventana).
+      let floorBlockedNames: string[] = [];
+      const floorRule = PLATFORM_FLOOR_RULE[o.chKey];
+      if (floorRule) {
+        const okById = new Map<string, any>((pv.ok as any[]).map((r: any) => [r.menu_item_id, r]));
+        const okIds: string[] = (pv.ok as any[]).map((r: any) => r.menu_item_id);
+        const blocked = okIds.filter((id) => o.pct < floorReqPct(o.chKey, o.brand.id, id));
+        const cleared = okIds.filter((id) => o.pct >= floorReqPct(o.chKey, o.brand.id, id));
+        floorBlockedNames = blocked.map((id) => okById.get(id)?.item_name ?? id);
+        if (cleared.length === 0) {
+          decisions.push({
+            brand: o.brand.name, channel: o.row.channel_name, location: o.row.location_name,
+            reason: o.reason,
+            verdict: `⚠️ SUELO ${o.row.channel_name}: ${o.pct}% no queda ${floorRule.thresholdPct}% por debajo del mínimo de ${floorRule.windowDays} días en NINGÚN plato (suelo hundido por promos previas = trinquete). No se publica para no crear una oferta fantasma. Candidatos a ESPEJO (historial virgen): ${floorBlockedNames.slice(0, 8).join(", ")}${floorBlockedNames.length > 8 ? "…" : ""}.`,
+            alert: true, platform_floor: floorRule, espejo_candidates: floorBlockedNames,
+          });
+          continue;
+        }
+        if (blocked.length > 0) {
+          scopeItems = cleared;   // publicamos SOLO lo que la plataforma aceptará
+          o.reason += ` · ${blocked.length} plato(s) fuera por suelo ${o.row.channel_name} ${floorRule.windowDays}d (candidatos a espejo): ${floorBlockedNames.slice(0, 6).join(", ")}${floorBlockedNames.length > 6 ? "…" : ""}`;
+        }
+      }
+
       const isShop = o.row.channel_name === "Shop";
       const mode = isShop ? cfg.shop_mode : cfg.platform_mode;
       if (mode === "off") continue;
@@ -610,6 +710,7 @@ Deno.serve(async (req) => {
           : armed ? "PROPUESTA (aprobar → robot publica)"
           : "PROPUESTA (subir a mano)",
         excluded_under_floor: pv.under.map((r: any) => r.item_name),
+        excluded_by_platform_floor: floorBlockedNames,
         coupon_id: coupon?.id,
       });
 
