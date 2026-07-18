@@ -1,5 +1,5 @@
 // src/modules/repartidor/repartidorService.ts
-// Servicio de la PWA del repartidor: llamadas a las RPC por token (T3a/T3b.2).
+// Servicio de la PWA del repartidor: RPC por token (T3a/T3b.2) + subida de prueba (T3c).
 import { supabase, isSupabaseEnabled } from '../../lib/supabase'
 
 function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
@@ -43,3 +43,14 @@ export const courierAdvance = (t: string, id: string, state: string, note?: stri
     { p_token: t, p_assignment_id: id, p_state: state, p_note: note ?? null, p_proof_url: proofUrl ?? null })
 export const courierPing = (t: string, lat: number, lng: number) =>
   rpc<{ ok: boolean }>('courier_ping_by_token', { p_token: t, p_lat: lat, p_lng: lng })
+
+export async function courierProofUpload(token: string, saleId: string, kind: 'photo' | 'signature', imageBase64: string): Promise<string> {
+  if (!isSupabaseEnabled || !supabase) throw new Error('Supabase no está configurado.')
+  const { data, error } = await supabase.functions.invoke('courier-proof-upload', {
+    body: { token, sale_id: saleId, kind, image_base64: imageBase64 },
+  })
+  if (error) throw new Error(error.message)
+  const d = data as { ok?: boolean; url?: string; error?: string }
+  if (!d?.ok || !d.url) throw new Error(d?.error ?? 'No se pudo subir la prueba')
+  return d.url
+}
