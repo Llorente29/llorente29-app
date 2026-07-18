@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState } from 'react'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
-import { Bike, CheckCircle2, AlertTriangle } from 'lucide-react'
+import { Bike, CheckCircle2, AlertTriangle, Phone } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined
@@ -13,7 +13,7 @@ const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined
 interface TrackData {
   found: boolean; stage?: string
   brand?: string | null; customer_name?: string | null; delivery_address?: string | null
-  rider_name?: string | null; rider_transport?: string | null
+  rider_name?: string | null; rider_phone?: string | null; rider_transport?: string | null
   rider_lat?: number | null; rider_lng?: number | null; rider_seen_at?: string | null
   eta_delivery?: string | null
   dest_lat?: number | null; dest_lng?: number | null
@@ -172,6 +172,12 @@ export default function SeguimientoRoute() {
               {entregado ? 'Que aproveche' : data.rider_seen_at ? `En camino \u00B7 visto ${seenAgo(data.rider_seen_at)}` : 'Preparando tu pedido'}
             </p>
           </div>
+          {data.rider_phone && !entregado && (
+            <a href={`tel:${data.rider_phone.replace(/\s+/g, '')}`}
+              className="ml-auto shrink-0 inline-flex items-center gap-2 rounded-full bg-emerald-500 text-white font-bold px-4 py-2.5 text-sm hover:bg-emerald-600">
+              <Phone size={16} /> Llamar
+            </a>
+          )}
         </div>
         {data.delivery_address && <p className="text-xs text-zinc-400 text-center mt-3">Entrega en {data.delivery_address}</p>}
       </div>
