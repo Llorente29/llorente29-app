@@ -7,6 +7,11 @@
 // Bucle: EN TURNO → ver ofertas → RECLAMAR → recoger → EN RUTA (GPS en vivo por
 // watchPosition → courier_ping) → ENTREGAR. El estado se refleja en sale
 // (trigger espejo) → oficina y cliente lo ven.
+//
+// Navegación (T3b.1): botón "Navegar" grande con elección Waze/Google Maps
+// (recordada por dispositivo); al pulsar "He recogido y salgo" se abre la ruta
+// al cliente automáticamente (dentro del gesto del toque, no lo bloquea el
+// navegador). Destino según estado: recoger→local, en ruta→cliente.
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { Loader2, Power, Phone, Navigation, Package, CheckCircle2, XCircle, Bike, RefreshCw } from 'lucide-react'
@@ -21,10 +26,26 @@ const storeToken = (t: string) => { try { localStorage.setItem(TOKEN_KEY, t) } c
 
 const ACTIVE = ['accepted', 'picked_up', 'in_delivery']
 const eur = (n: number | null) => (n == null ? '' : n.toFixed(2).replace('.', ',') + ' €')
-function mapsUrl(lat: number | null, lng: number | null, addr: string | null): string | null {
-  if (lat != null && lng != null) return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`
-  if (addr) return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(addr)}`
-  return null
+
+// ── Navegación (Waze / Google Maps), preferencia recordada por dispositivo ──
+type NavApp = 'waze' | 'gmaps'
+const NAV_KEY = 'courier_nav_pref'
+const NAV_LABEL: Record<NavApp, string> = { waze: 'Waze', gmaps: 'Google Maps' }
+const readNavPref = (): NavApp | null => { try { const v = localStorage.getItem(NAV_KEY); return v === 'waze' || v === 'gmaps' ? v : null } catch { return null } }
+const storeNavPref = (p: NavApp) => { try { localStorage.setItem(NAV_KEY, p) } catch { /* noop */ } }
+
+function navUrl(app: NavApp, lat: number | null, lng: number | null, addr: string | null): string | null {
+  const coord = lat != null && lng != null
+  if (app === 'waze') {
+    return coord ? `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`
+      : addr ? `https://waze.com/ul?q=${encodeURIComponent(addr)}&navigate=yes` : null
+  }
+  return coord ? `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`
+    : addr ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(addr)}` : null
+}
+function openNav(app: NavApp, lat: number | null, lng: number | null, addr: string | null) {
+  const u = navUrl(app, lat, lng, addr)
+  if (u) window.open(u, '_blank')
 }
 
 export default function RepartidorRoute() {
@@ -204,8 +225,32 @@ function OfferCard({ j, busy, onClaim }: { j: CourierJob; busy: boolean; onClaim
 function ActiveCard({ j, busy, onPicked, onDelivered, onFailed }: {
   j: CourierJob; busy: string | null; onPicked: () => void; onDelivered: () => void; onFailed: () => void
 }) {
-  const nav = mapsUrl(j.delivery_lat, j.delivery_lng, j.delivery_address)
-  const label = j.state === 'accepted' ? 'Recoger en el local' : 'En ruta al cliente'
+  const [pref, setPref] = useState<NavApp | null>(readNavPref())
+  const [choosing, setChoosing] = useState(false)
+  const enroute = j.state !== 'accepted'
+  const label = enroute ? 'En ruta al cliente' : 'Recoger en el local'
+
+  // Destino de navegación según el estado: recoger→local, en ruta→cliente.
+  const destLat = enroute ? j.delivery_lat : j.pickup_lat
+  const destLng = enroute ? j.delivery_lng : j.pickup_lng
+  const destAddr = enroute ? j.delivery_address : j.pickup_address
+  const canNav = destLat != null || !!destAddr
+
+  function pick(app: NavApp) {
+    setPref(app); storeNavPref(app); setChoosing(false)
+    openNav(app, destLat, destLng, destAddr)
+  }
+  function navigate() {
+    if (pref && !choosing) openNav(pref, destLat, destLng, destAddr)
+    else setChoosing(true)
+  }
+  function handlePicked() {
+    // Abrir la ruta AL CLIENTE dentro del gesto del toque (antes del await),
+    // así el navegador no bloquea la apertura de la app de mapas.
+    openNav(pref ?? 'gmaps', j.delivery_lat, j.delivery_lng, j.delivery_address)
+    onPicked()
+  }
+
   return (
     <div className="rounded-xl bg-zinc-900 ring-1 ring-emerald-500/30 p-4">
       <div className="flex items-center gap-2">
@@ -213,24 +258,46 @@ function ActiveCard({ j, busy, onPicked, onDelivered, onFailed }: {
         <span className="ml-auto text-sm text-zinc-400">{eur(j.total)}</span>
       </div>
       <p className="font-bold mt-2">{j.brand ?? 'Pedido'} <span className="text-xs text-zinc-500">#{j.order_code}</span></p>
-      {j.state === 'accepted'
-        ? <p className="text-sm text-zinc-300 mt-1">Recoger en {j.pickup_name ?? 'el local'}{j.pickup_address ? ` · ${j.pickup_address}` : ''}</p>
-        : <p className="text-sm text-zinc-300 mt-1">{j.delivery_address ?? 'Sin dirección'}{j.delivery_details ? ` · ${j.delivery_details}` : ''}</p>}
+      <p className="text-sm text-zinc-300 mt-1">
+        {enroute
+          ? `${j.delivery_address ?? 'Sin dirección'}${j.delivery_details ? ` · ${j.delivery_details}` : ''}`
+          : `Recoger en ${j.pickup_name ?? 'el local'}${j.pickup_address ? ` · ${j.pickup_address}` : ''}`}
+      </p>
       <div className="flex items-center gap-3 mt-2">
         {j.customer_name && <span className="text-sm text-zinc-400">{j.customer_name}</span>}
         {j.customer_phone && <a href={`tel:${j.customer_phone.replace(/\s+/g, '')}`} className="inline-flex items-center gap-1 text-emerald-400 text-sm"><Phone size={14} /> Llamar</a>}
-        {nav && <a href={nav} target="_blank" rel="noreferrer" className="ml-auto inline-flex items-center gap-1 text-sky-400 text-sm"><Navigation size={14} /> Ir</a>}
       </div>
+
+      {/* Navegar: botón grande + elección Waze/Google Maps (recordada). */}
+      {canNav && (
+        <div className="mt-3">
+          {choosing || !pref ? (
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => pick('waze')}
+                className="rounded-lg bg-sky-500 text-zinc-950 font-bold py-3 inline-flex items-center justify-center gap-2"><Navigation size={16} /> Waze</button>
+              <button onClick={() => pick('gmaps')}
+                className="rounded-lg bg-zinc-100 text-zinc-950 font-bold py-3 inline-flex items-center justify-center gap-2"><Navigation size={16} /> Google Maps</button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <button onClick={navigate}
+                className="flex-1 rounded-lg bg-sky-500 text-zinc-950 font-bold py-3 inline-flex items-center justify-center gap-2"><Navigation size={18} /> Navegar</button>
+              <button onClick={() => setChoosing(true)} className="text-xs text-zinc-500 px-2 py-2 whitespace-nowrap">{NAV_LABEL[pref]} · cambiar</button>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-2 mt-3">
         {j.state === 'accepted' ? (
-          <button onClick={onPicked} disabled={!!busy}
-            className="col-span-2 rounded-lg bg-emerald-500 text-zinc-950 font-bold py-2.5 hover:bg-emerald-400 disabled:opacity-50 inline-flex items-center justify-center gap-2"><Package size={16} /> He recogido</button>
+          <button onClick={handlePicked} disabled={!!busy}
+            className="col-span-2 rounded-lg bg-emerald-500 text-zinc-950 font-bold py-3 hover:bg-emerald-400 disabled:opacity-50 inline-flex items-center justify-center gap-2"><Package size={18} /> He recogido y salgo</button>
         ) : (
           <>
             <button onClick={onDelivered} disabled={!!busy}
-              className="rounded-lg bg-emerald-500 text-zinc-950 font-bold py-2.5 hover:bg-emerald-400 disabled:opacity-50 inline-flex items-center justify-center gap-2"><CheckCircle2 size={16} /> Entregado</button>
+              className="rounded-lg bg-emerald-500 text-zinc-950 font-bold py-3 hover:bg-emerald-400 disabled:opacity-50 inline-flex items-center justify-center gap-2"><CheckCircle2 size={18} /> Entregado</button>
             <button onClick={onFailed} disabled={!!busy}
-              className="rounded-lg bg-zinc-800 text-red-300 font-bold py-2.5 hover:bg-zinc-700 disabled:opacity-50 inline-flex items-center justify-center gap-2"><XCircle size={16} /> No entregado</button>
+              className="rounded-lg bg-zinc-800 text-red-300 font-bold py-3 hover:bg-zinc-700 disabled:opacity-50 inline-flex items-center justify-center gap-2"><XCircle size={18} /> No entregado</button>
           </>
         )}
       </div>
