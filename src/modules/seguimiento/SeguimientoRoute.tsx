@@ -2,12 +2,12 @@
 // Pagina publica de seguimiento del cliente: /seguir/<public_token>.
 // Mapa Mapbox con la moto en vivo + estado + destino (RPC track_by_token, solo lectura)
 // + CAPA COMERCIAL "Hazte un Multi": teaser suave en camino y arma completa al Entregar
-//   (cupon directo MULTI + repetir en la tienda + cross-sell del hub multimarca).
+//   (cupon-ticket de descuento directo MULTI + repetir en la tienda + cross-sell del hub).
 
 import { useEffect, useRef, useState } from 'react'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
-import { Bike, CheckCircle2, AlertTriangle, Phone, Gift, ArrowRight } from 'lucide-react'
+import { Bike, CheckCircle2, AlertTriangle, Phone, ArrowRight } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined
@@ -106,7 +106,7 @@ export default function SeguimientoRoute() {
       const { data: h } = await (supabase!.rpc as unknown as (f: string, a: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>)('shop_hub_by_slug', { p_slug: slug })
       if (stop || !h) return
       const brands = ((h as Record<string, unknown>).brands as HubBrand[] | undefined) ?? []
-      setHub(brands.filter(b => b.brand_id && b.brand_id !== data?.brand_id).slice(0, 3))
+      setHub(brands.filter(b => b.brand_id && b.brand_id !== data?.brand_id).slice(0, 6))
     })()
     return () => { stop = true }
   }, [data?.shop_slug, data?.brand_id, hub.length])
@@ -160,6 +160,7 @@ export default function SeguimientoRoute() {
   const incidencia = data.stage === 'incidencia'
   const entregado = data.stage === 'entregado'
   const offer = data.offer
+  const pct = Math.round(Number(offer?.pct) || 0)
   const bUrl = brandUrl(data.shop_slug, data.brand_id)
   const hUrl = hubUrl(data.shop_slug)
 
@@ -167,8 +168,8 @@ export default function SeguimientoRoute() {
   const Header = (
     <header className="shrink-0 px-5 pt-5 pb-3">
       <div className="flex items-center gap-2">
-        <div className="w-9 h-9 rounded-xl bg-emerald-500 grid place-items-center overflow-hidden">
-          {data.brand_logo ? <img src={data.brand_logo} alt={data.brand ?? ''} className="w-full h-full object-cover" /> : <Bike size={18} className="text-white" />}
+        <div className="w-9 h-9 rounded-xl bg-white ring-1 ring-zinc-200 grid place-items-center overflow-hidden">
+          {data.brand_logo ? <img src={data.brand_logo} alt={data.brand ?? ''} className="w-full h-full object-contain p-0.5" /> : <div className="w-full h-full bg-emerald-500 grid place-items-center"><Bike size={18} className="text-white" /></div>}
         </div>
         <div>
           <p className="text-xs text-zinc-500 leading-none">Tu pedido</p>
@@ -198,7 +199,51 @@ export default function SeguimientoRoute() {
     </header>
   )
 
-  // ── Bloque comercial "Hazte un Multi" (cross-sell del hub) ──────────────
+  // ── CUPON-TICKET de descuento (lee al instante como "dinero para tu proxima") ──
+  const CouponCard = offer?.code ? (
+    <div className="rounded-2xl bg-white ring-1 ring-zinc-200 shadow-sm overflow-hidden">
+      <div className="flex items-stretch">
+        {/* Stub izquierdo: el -X% GIGANTE */}
+        <div className="bg-emerald-500 text-white px-4 py-3 flex flex-col items-center justify-center min-w-[92px]">
+          <span className="text-3xl font-black leading-none">-{pct}%</span>
+          <span className="text-[9px] font-extrabold tracking-[0.15em] mt-1 text-emerald-50">DESCUENTO</span>
+        </div>
+        {/* Detalle derecho */}
+        <div className="flex-1 p-3">
+          <p className="text-[10px] font-extrabold text-emerald-600 tracking-[0.12em]">CUPÓN · SOLO EN LA TIENDA</p>
+          <p className="text-sm font-bold leading-tight mt-1">Para tu próximo pedido directo</p>
+          <p className="text-xs text-zinc-500 mt-0.5">{offer.min_subtotal ? `Mínimo ${Math.round(Number(offer.min_subtotal))}€ · ` : ''}Por tiempo limitado</p>
+        </div>
+      </div>
+      {/* Perforado */}
+      <div className="relative">
+        <div className="border-t border-dashed border-zinc-300 mx-3" />
+        <span className="absolute -left-2 -top-2 w-4 h-4 rounded-full bg-zinc-50 ring-1 ring-zinc-200" />
+        <span className="absolute -right-2 -top-2 w-4 h-4 rounded-full bg-zinc-50 ring-1 ring-zinc-200" />
+      </div>
+      {/* Codigo + copiar */}
+      <div className="p-3 flex items-center gap-2">
+        <div className="flex-1 rounded-lg border-2 border-dashed border-emerald-400 bg-emerald-50 px-3 py-2 text-center">
+          <span className="text-[10px] text-emerald-600 font-bold block leading-none mb-0.5">TU CÓDIGO</span>
+          <span className="font-black tracking-[0.3em] text-lg text-emerald-700">{offer.code}</span>
+        </div>
+        <button onClick={() => copyCode(offer.code as string)}
+          className="shrink-0 rounded-lg bg-zinc-900 text-white text-xs font-bold px-4 py-3">
+          {copied ? '¡Copiado!' : 'Copiar'}
+        </button>
+      </div>
+      {/* CTA */}
+      {bUrl && (
+        <div className="px-3 pb-3">
+          <a href={bUrl} className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 text-white font-bold px-4 py-3 text-sm hover:bg-emerald-600">
+            Usar en {data.brand ?? 'la tienda'} <ArrowRight size={16} />
+          </a>
+        </div>
+      )}
+    </div>
+  ) : null
+
+  // ── Cross-sell "Hazte un Multi" (logos ENTEROS, hasta 6, deslizable) ─────
   const CrossSell = (hub.length > 0 || hUrl) ? (
     <div className="rounded-2xl bg-white ring-1 ring-zinc-200 shadow-sm p-4">
       <p className="font-extrabold text-lg leading-tight tracking-tight">Hazte un Multi</p>
@@ -206,12 +251,11 @@ export default function SeguimientoRoute() {
       {hub.length > 0 && (
         <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1">
           {hub.map(b => (
-            <a key={b.brand_id} href={brandUrl(data.shop_slug, b.brand_id) ?? '#'}
-              className="shrink-0 w-24 text-center">
-              <div className="w-24 h-24 rounded-2xl bg-zinc-100 ring-1 ring-zinc-200 grid place-items-center overflow-hidden">
-                {b.logo_url ? <img src={b.logo_url} alt={b.name} className="w-full h-full object-cover" /> : <span className="text-2xl">{b.cuisine_emoji ?? '\u{1F374}'}</span>}
+            <a key={b.brand_id} href={brandUrl(data.shop_slug, b.brand_id) ?? '#'} className="shrink-0 w-[86px] text-center">
+              <div className="w-[86px] h-[86px] rounded-2xl bg-white ring-1 ring-zinc-200 grid place-items-center overflow-hidden">
+                {b.logo_url ? <img src={b.logo_url} alt={b.name} className="w-full h-full object-contain p-2" /> : <span className="text-2xl">{b.cuisine_emoji ?? '\u{1F374}'}</span>}
               </div>
-              <p className="text-xs font-semibold mt-1.5 leading-tight line-clamp-2">{b.name}</p>
+              <p className="text-[11px] font-semibold mt-1.5 leading-tight line-clamp-2">{b.name}</p>
             </a>
           ))}
         </div>
@@ -219,30 +263,6 @@ export default function SeguimientoRoute() {
       {hUrl && (
         <a href={hUrl} className="mt-3 inline-flex items-center gap-1 text-sm font-bold text-emerald-600">
           Ver todas las cocinas <ArrowRight size={15} />
-        </a>
-      )}
-    </div>
-  ) : null
-
-  // ── Cupon directo (arma de captacion al canal propio) ───────────────────
-  const CouponCard = offer?.code ? (
-    <div className="rounded-2xl bg-emerald-500 text-white shadow-sm p-4">
-      <div className="flex items-center gap-2">
-        <Gift size={18} /><p className="font-extrabold text-lg leading-none">¿Repetimos?</p>
-      </div>
-      <p className="text-sm/5 mt-1.5 text-emerald-50">
-        <span className="font-extrabold text-white">-{Math.round(Number(offer.pct) || 0)}%</span> en tu próximo pedido, pidiendo directo en la tienda.
-        {offer.min_subtotal ? <> Pedido mínimo {Math.round(Number(offer.min_subtotal))}€.</> : null} Por tiempo limitado.
-      </p>
-      <button onClick={() => copyCode(offer.code as string)}
-        className="mt-3 w-full flex items-center justify-between rounded-xl bg-white/15 ring-1 ring-white/30 px-3 py-2.5">
-        <span className="text-xs text-emerald-50">Tu código</span>
-        <span className="font-black tracking-widest text-lg">{offer.code}</span>
-        <span className="text-xs font-bold">{copied ? '¡Copiado!' : 'Copiar'}</span>
-      </button>
-      {bUrl && (
-        <a href={bUrl} className="mt-2.5 w-full inline-flex items-center justify-center gap-2 rounded-xl bg-white text-emerald-700 font-bold px-4 py-3 text-sm">
-          Pedir en {data.brand ?? 'la tienda'} <ArrowRight size={16} />
         </a>
       )}
     </div>
@@ -258,7 +278,7 @@ export default function SeguimientoRoute() {
             <div className="w-11 h-11 rounded-full bg-emerald-500 grid place-items-center text-white text-xl">{'\u{2705}'}</div>
             <div>
               <p className="font-bold leading-tight">Pedido entregado</p>
-              <p className="text-sm text-zinc-500">Que aproveche {data.customer_name ? `, ${String(data.customer_name).split(' ')[0]}` : ''} 🙌</p>
+              <p className="text-sm text-zinc-500">Que aproveche{data.customer_name ? `, ${String(data.customer_name).split(' ')[0]}` : ''} 🙌</p>
             </div>
           </div>
           {CouponCard}
@@ -297,9 +317,9 @@ export default function SeguimientoRoute() {
 
         {/* Teaser comercial suave: planta la semilla sin robar protagonismo al mapa */}
         {offer?.code && (
-          <div className="rounded-xl bg-emerald-500/10 ring-1 ring-emerald-500/25 text-emerald-700 px-3 py-2 text-[13px] flex items-center gap-2">
-            <Gift size={15} className="shrink-0" />
-            <span>Al recibirlo: <b>-{Math.round(Number(offer.pct) || 0)}%</b> para tu próxima con el código <b>{offer.code}</b> en la tienda.</span>
+          <div className="rounded-xl bg-emerald-500/10 ring-1 ring-emerald-500/25 text-emerald-700 px-3 py-2.5 text-[13px] flex items-center gap-2">
+            <span className="shrink-0 font-black text-emerald-600 text-base">-{pct}%</span>
+            <span>Al recibirlo, tienes <b>-{pct}%</b> para tu próxima con el código <b>{offer.code}</b> en la tienda.</span>
           </div>
         )}
         {data.delivery_address && <p className="text-xs text-zinc-400 text-center">Entrega en {data.delivery_address}</p>}
