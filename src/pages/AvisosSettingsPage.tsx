@@ -1,18 +1,9 @@
 // src/pages/AvisosSettingsPage.tsx
-// Configuración global de avisos y settings de Personal + Aviso al cliente (reparto).
+// Configuración global de avisos y settings de Personal.
 import { useState, useEffect } from 'react'
 import { CheckCircle2 } from 'lucide-react'
 import { Card, Button } from '../components/ui'
 import { fetchAppSettings, updateAppSettings, type AppSettings } from '../services/appSettingsService'
-import { supabase } from '../lib/supabase'
-
-// Helper: llamada RPC sin tipos (el cliente supabase no tiene el esquema tipado aqui).
-async function rpc<T = unknown>(fn: string, args: Record<string, unknown>): Promise<{ data: T | null; error: { message: string } | null }> {
-  if (!supabase) return { data: null, error: { message: 'Supabase no configurado' } }
-  return await (supabase.rpc as unknown as (f: string, a: Record<string, unknown>) => Promise<{ data: T | null; error: { message: string } | null }>)(fn, args)
-}
-
-interface RepartoLoc { id: string; name: string; notify: boolean }
 
 export default function AvisosSettingsPage() {
   const [settings, setSettings] = useState<AppSettings | null>(null)
@@ -20,18 +11,11 @@ export default function AvisosSettingsPage() {
   const [saving, setSaving] = useState(false)
   const [savedAt, setSavedAt] = useState<Date | null>(null)
 
-  // Estado local del formulario (Personal)
+  // Estado local del formulario
   const [showHourBank, setShowHourBank] = useState(false)
   const [tolerance, setTolerance] = useState(8)
   const [lateAlert, setLateAlert] = useState(15)
   const [forgotMin, setForgotMin] = useState(30)
-
-  // Estado: aviso al cliente por WhatsApp (reparto)
-  const [locs, setLocs] = useState<RepartoLoc[]>([])
-  const [trackUrl, setTrackUrl] = useState('')
-  const [trackUrlSaved, setTrackUrlSaved] = useState('')
-  const [savingDomain, setSavingDomain] = useState(false)
-  const [domainOk, setDomainOk] = useState(false)
 
   useEffect(() => {
     fetchAppSettings().then(s => {
@@ -41,13 +25,6 @@ export default function AvisosSettingsPage() {
       setLateAlert(s.lateAlertMin)
       setForgotMin(s.forgotClockoutMin)
       setLoading(false)
-    })
-    // Ajustes de reparto (aviso al cliente)
-    rpc<{ track_base_url: string | null; locations: RepartoLoc[] }>('reparto_settings', {}).then(({ data }) => {
-      if (!data) return
-      setLocs(data.locations ?? [])
-      setTrackUrl(data.track_base_url ?? '')
-      setTrackUrlSaved(data.track_base_url ?? '')
     })
   }, [])
 
@@ -66,35 +43,12 @@ export default function AvisosSettingsPage() {
     }
   }
 
-  // Toggle de aviso por local: guarda al instante (optimista, revierte si falla).
-  async function toggleLoc(id: string, next: boolean) {
-    setLocs(prev => prev.map(l => l.id === id ? { ...l, notify: next } : l))
-    const { error } = await rpc('set_customer_notify', { p_location_id: id, p_enabled: next })
-    if (error) {
-      setLocs(prev => prev.map(l => l.id === id ? { ...l, notify: !next } : l))
-      alert('No se pudo guardar el aviso de este local: ' + error.message)
-    }
-  }
-
-  async function saveDomain() {
-    setSavingDomain(true)
-    const { error } = await rpc('set_track_base_url', { p_url: trackUrl })
-    setSavingDomain(false)
-    if (!error) {
-      setTrackUrlSaved(trackUrl)
-      setDomainOk(true); setTimeout(() => setDomainOk(false), 3000)
-    } else {
-      alert('No se pudo guardar el dominio: ' + error.message)
-    }
-  }
-
   const isDirty = settings && (
     settings.showHourBankToEmployee !== showHourBank ||
     settings.roundingToleranceMin !== tolerance ||
     settings.lateAlertMin !== lateAlert ||
     settings.forgotClockoutMin !== forgotMin
   )
-  const domainDirty = trackUrl.trim() !== (trackUrlSaved ?? '').trim()
 
   if (loading) {
     return <Card className="p-6 text-center"><p className="text-sm text-text-secondary">Cargando...</p></Card>
@@ -179,58 +133,7 @@ export default function AvisosSettingsPage() {
         </div>
       </Card>
 
-      {/* Aviso al cliente por WhatsApp (reparto propio) */}
-      <Card className="p-5">
-        <p className="text-xs uppercase tracking-wide text-text-secondary mb-3">Reparto propio</p>
-        <h3 className="font-semibold text-text-primary mb-1">Aviso al cliente por WhatsApp</h3>
-        <p className="text-xs text-text-secondary mb-4">
-          Cuando un pedido de reparto propio sale "en camino", el cliente recibe un WhatsApp con el enlace de seguimiento en vivo. Actívalo en los locales que quieras.
-        </p>
-
-        {/* Dominio del enlace de seguimiento */}
-        <div className="mb-5">
-          <label className="text-sm font-medium text-text-primary block mb-1">Dominio del enlace de seguimiento</label>
-          <p className="text-xs text-text-secondary mb-2">
-            La dirección del enlace <span className="font-mono">/seguir</span> que recibe el cliente. Déjalo vacío para el predeterminado, o pon tu dominio propio.
-          </p>
-          <div className="flex items-center gap-2">
-            <input
-              type="text" value={trackUrl} onChange={e => setTrackUrl(e.target.value)}
-              placeholder="https://foodint.es"
-              className="flex-1 border border-border-default rounded-lg px-3 py-2 text-sm bg-card text-text-primary"
-            />
-            <Button onClick={saveDomain} disabled={!domainDirty || savingDomain}>
-              {savingDomain ? 'Guardando...' : 'Guardar'}
-            </Button>
-          </div>
-          {domainOk && (
-            <p className="text-xs text-success inline-flex items-center gap-1 mt-2">
-              <CheckCircle2 size={12} /> Dominio guardado
-            </p>
-          )}
-        </div>
-
-        {/* Toggle por local */}
-        <p className="text-sm font-medium text-text-primary mb-1">Locales</p>
-        {locs.length === 0 ? (
-          <p className="text-xs text-text-secondary">No hay locales.</p>
-        ) : (
-          <div>
-            {locs.map(l => (
-              <label key={l.id} className="flex items-center justify-between gap-3 py-2.5 border-t border-border-default cursor-pointer">
-                <span className="text-sm text-text-primary">{l.name}</span>
-                <input
-                  type="checkbox" checked={l.notify}
-                  onChange={e => toggleLoc(l.id, e.target.checked)}
-                  className="w-4 h-4 accent-accent"
-                />
-              </label>
-            ))}
-          </div>
-        )}
-      </Card>
-
-      {/* Guardar (Personal) */}
+      {/* Guardar */}
       <div className="flex items-center justify-between pt-2">
         <p className="text-xs text-text-secondary inline-flex items-center gap-1">
           {savedAt

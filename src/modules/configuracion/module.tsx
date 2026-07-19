@@ -5,8 +5,8 @@
 // DIFERENCIA con los módulos de negocio (Team/Safety/Sales): Configuración NO
 // es una pestaña del TopBar. Se accede por el icono de ENGRANAJE (derecha del
 // TopBar) y se monta en /shell/configuracion. Internamente reutiliza la misma
-// maquinaria (ModuleSidebar) porque crecerá (Locales, Marcas, Avisos, Usuarios,
-// datos fiscales, plan/facturación, API keys, activación de módulos...).
+// maquinaria (ModuleSidebar) porque crecerá (Locales, Marcas, Avisos, Reparto,
+// Usuarios, datos fiscales, plan/facturación, API keys, activación de módulos...).
 //
 // Por eso este módulo NO se registra en moduleRegistry (que alimenta el
 // TopBar). El Shell lo trata como sección especial accesible por el engranaje.
@@ -17,12 +17,13 @@
 //
 // Fichero .tsx porque los `element` de las rutas son JSX.
 
-import { MapPin, Tag, Bell, UserCog } from 'lucide-react'
+import { MapPin, Tag, Bell, UserCog, Bike } from 'lucide-react'
 import type { ModuleDefinition } from '@/shell/types'
 
 import { LocationsPage } from '@/pages/OtherPages'
 import BrandsPage from '@/modules/multitenancy/pages/BrandsPage'
 import AvisosSettingsPage from '@/pages/AvisosSettingsPage'
+import RepartoSettingsPage from '@/pages/RepartoSettingsPage'
 import UsuariosAccesosPage from '@/pages/UsuariosAccesosPage'
 
 export const configuracionModule: ModuleDefinition = {
@@ -37,6 +38,7 @@ export const configuracionModule: ModuleDefinition = {
     { path: 'locales',   element: <LocationsPage /> },
     { path: 'marcas',    element: <BrandsPage /> },
     { path: 'avisos',    element: <AvisosSettingsPage /> },
+    { path: 'reparto',   element: <RepartoSettingsPage /> },
     { path: 'usuarios',  element: <UsuariosAccesosPage /> },
   ],
 
@@ -45,6 +47,7 @@ export const configuracionModule: ModuleDefinition = {
       { id: 'config_locales',  label: 'Locales',            icon: MapPin,  path: 'locales',  requiredPermission: 'show_locations' },
       { id: 'config_marcas',   label: 'Marcas',             icon: Tag,     path: 'marcas',   requiredRole: 'admin' },
       { id: 'config_avisos',   label: 'Avisos',             icon: Bell,    path: 'avisos',   requiredPermission: 'show_tspoon_settings' },
+      { id: 'config_reparto',  label: 'Reparto',            icon: Bike,    path: 'reparto',  requiredRole: 'admin' },
       { id: 'config_usuarios', label: 'Usuarios y accesos', icon: UserCog, path: 'usuarios', requiredRole: 'admin' },
     ],
   },
