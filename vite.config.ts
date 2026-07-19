@@ -10,4 +10,10 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  build: {
+    // Compatibilidad con navegadores antiguos (Sunmi T2 / Android 7.1 y tablets viejas):
+    // transpila la sintaxis moderna a un nivel que esos Chrome sí entienden.
+    // Si el build fallara mencionando "top-level await", subir a 'es2022'.
+    target: 'es2020',
+  },
 })
