@@ -16,12 +16,15 @@
 // GUARDARRAÍL: el worker SOLO imprime en la app nativa (Capacitor). En el
 // navegador web NO reclama la cola, para no interferir con producción.
 //
-// NOTA: la bolsa sale en TEXTO por ahora (la versión imagen se porta después).
+// RENDER: la BOLSA y la COCINA salen como IMAGEN (canvas→ráster), con el
+// renderer APROBADO portado a ticketImage.ts (idéntico al agente Node / Milanesa
+// House). Las pegatinas siguen por TEXTO por ahora (renderForType/renderDoc).
 
 import { Capacitor } from '@capacitor/core';
 import { supabase } from '@/lib/supabase';
 import { renderForType } from './ticketRenderer';
 import { renderDoc } from './escpos';
+import { renderBagImage, renderKitchenImage, canvasToEscpos } from './ticketImage';
 import { EscposPrinter } from './EscposPrinter';
 
 const TOKEN_KEY = 'folvy_print_device_token';
@@ -102,11 +105,16 @@ async function tick() {
         if (payload && payload.mode === 'by_order' && payload.sale_id) {
           const order = await rpc('order_for_print', { p_device_token: deviceToken, p_sale_id: payload.sale_id });
           if (!order) throw new Error(`pedido ${payload.sale_id} no encontrado`);
-          let fiscal: any = null;
           if (doc_type === 'bag') {
+            let fiscal: any = null;
             try { fiscal = await rpc('fiscal_for_print', { p_device_token: deviceToken, p_sale_id: payload.sale_id }); } catch { /* sin fiscal */ }
+            buffers.push(canvasToEscpos(await renderBagImage(order, fiscal || undefined)));
+          } else if (doc_type === 'kitchen') {
+            buffers.push(canvasToEscpos(await renderKitchenImage(order)));
+          } else {
+            // pegatinas (labels) siguen por texto de momento
+            for (const doc of renderForType(order, doc_type)) buffers.push(renderDoc(doc));
           }
-          for (const doc of renderForType(order, doc_type, fiscal || undefined)) buffers.push(renderDoc(doc));
         } else {
           const docs = Array.isArray(payload) ? payload : [payload];
           for (const doc of docs) buffers.push(renderDoc(doc));
