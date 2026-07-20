@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { AppProvider } from './context/AppContext'
 import App from './App'
+import UpdateGate from './components/UpdateGate'
 import './index.css'
 // Worker de impresión nativo (app Capacitor): reclama la cola print_job por
 // token de dispositivo e imprime por socket a la impresora de red. Import de
@@ -62,6 +63,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <BrowserRouter>
       <AppProvider>
         <App />
+        {/* Auto-actualización forzada (sólo app nativa; no-op en web). */}
+        <UpdateGate />
       </AppProvider>
     </BrowserRouter>
   </React.StrictMode>

@@ -27,6 +27,12 @@ export interface EscposPrinterPlugin {
    * si se cancela). Sólo app nativa; en web no existe → llamarlo rechaza.
    */
   scanQr(): Promise<{ value: string | null; cancelled: boolean }>;
+  /** versionCode/versionName instalados (auto-update). Sólo app nativa. */
+  getVersionCode(): Promise<{ versionCode: number; versionName: string }>;
+  /** Descarga el APK y lanza el instalador de Android (sideload). Sólo app nativa. */
+  installApk(options: { url: string }): Promise<{ ok: boolean }>;
+  /** Modo inmersivo (oculta barras de sistema). Sólo app nativa. */
+  setImmersive(options: { enabled: boolean }): Promise<{ ok: boolean }>;
 }
 
 export const EscposPrinter = registerPlugin<EscposPrinterPlugin>('EscposPrinter');

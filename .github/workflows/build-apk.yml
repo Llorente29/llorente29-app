@@ -1,0 +1,84 @@
+name: Build & publish Android APK
+
+# Cada push a main (que toque código de la app) → APK release firmado + version.json
+# subidos al bucket público `apps` de Supabase. Las tablets se actualizan solas
+# (ver src/native/appUpdate.ts + UpdateGate). Cero Android Studio, cero cables.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - 'supabase/**'
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Build web bundle
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+
+      - name: Capacitor sync (android)
+        run: npx cap sync android
+
+      - name: Decode signing keystore
+        run: echo "${{ secrets.FOLVY_KEYSTORE_B64 }}" | base64 -d > android/app/folvy-release.jks
+
+      - name: Build signed release APK
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon
+        env:
+          FOLVY_KEYSTORE_FILE: folvy-release.jks
+          FOLVY_KEYSTORE_PWD: ${{ secrets.FOLVY_KEYSTORE_PWD }}
+          FOLVY_KEY_ALIAS: ${{ secrets.FOLVY_KEY_ALIAS }}
+          FOLVY_KEY_PWD: ${{ secrets.FOLVY_KEY_PWD }}
+          FOLVY_VERSION_CODE: ${{ github.run_number }}
+
+      - name: Prepare version.json
+        run: |
+          VC="${{ github.run_number }}"
+          cat > version.json <<EOF
+          { "versionCode": ${VC}, "versionName": "1.0.${VC}", "apkUrl": "${{ secrets.VITE_SUPABASE_URL }}/storage/v1/object/public/apps/folvy.apk", "mandatory": true }
+          EOF
+          echo "version.json:" && cat version.json
+
+      - name: Upload APK + version.json to Supabase Storage (bucket apps, upsert)
+        env:
+          SB_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SB_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          APK="android/app/build/outputs/apk/release/app-release.apk"
+          test -f "$APK" || { echo "APK no encontrado en $APK"; exit 1; }
+          echo "Subiendo folvy.apk ($(du -h "$APK" | cut -f1))…"
+          curl -sSf -X POST "$SB_URL/storage/v1/object/apps/folvy.apk" \
+            -H "Authorization: Bearer $SB_KEY" \
+            -H "x-upsert: true" \
+            -H "Content-Type: application/vnd.android.package-archive" \
+            --data-binary "@$APK"
+          echo "Subiendo version.json…"
+          curl -sSf -X POST "$SB_URL/storage/v1/object/apps/version.json" \
+            -H "Authorization: Bearer $SB_KEY" \
+            -H "x-upsert: true" \
+            -H "Content-Type: application/json" \
+            --data-binary "@version.json"
+          echo "OK · versionCode=${{ github.run_number }}"

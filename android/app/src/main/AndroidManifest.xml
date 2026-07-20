@@ -38,4 +38,8 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Instalar el APK de actualización (sideload). En Android 8+ el usuario da
+         el permiso "instalar apps desconocidas" una vez; Android muestra siempre
+         un toque de confirmación al instalar (inevitable fuera de Play/MDM). -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 </manifest>

@@ -56,6 +56,15 @@ export function setDeviceMode(mode: DeviceMode): void {
   writeStored(MODE_KEY, mode);
 }
 
+// Modo inmersivo (oculta barras de sistema) SOLO en modo estación. Reaplicar
+// en cada cambio de vinculación/arranque; el nativo lo re-aplica al recuperar
+// foco. No-op en web / plugin viejo.
+function applyImmersiveForMode(): void {
+  if (!Capacitor.isNativePlatform()) return;
+  const on = getDeviceMode() === 'estacion';
+  void EscposPrinter.setImmersive({ enabled: on }).catch(() => { /* plugin viejo/web */ });
+}
+
 /** Token efectivo del dispositivo: el del worker o, si no, el de la Estación. */
 function resolveToken(): string {
   return readStored(TOKEN_KEY) || readStored(ESTACION_TOKEN_KEY);
@@ -174,6 +183,7 @@ export function pairEstacion(token: string, opts?: { pollMs?: number }) {
   const t = token.trim();
   if (!t) return;
   setDeviceMode('estacion');
+  applyImmersiveForMode();
   // Compartimos el token también con la clave de la Estación, para que ambos
   // (worker y /estacion) lean lo mismo tras un único emparejamiento.
   writeStored(ESTACION_TOKEN_KEY, t);
@@ -189,6 +199,7 @@ export function unpairDevice() {
   clearPrintWorker();
   removeStored(ESTACION_TOKEN_KEY);
   removeStored(MODE_KEY);
+  applyImmersiveForMode();  // modo ya no es estacion → restaura barras
   console.log('[folvy-print] dispositivo desvinculado');
 }
 
@@ -197,6 +208,7 @@ export function unpairDevice() {
 // Un móvil de trabajador (modo 'equipo') no arranca el worker.
 function autostart() {
   if (!Capacitor.isNativePlatform()) return;
+  applyImmersiveForMode();  // aplica inmersivo si la tablet ya es estación
   const saved = resolveToken();
   if (!saved) return;
   const mode = getDeviceMode();

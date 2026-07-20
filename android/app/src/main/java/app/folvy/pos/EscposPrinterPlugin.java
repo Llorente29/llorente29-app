@@ -12,14 +12,28 @@ import com.google.mlkit.vision.codescanner.GmsBarcodeScanner;
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions;
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning;
 
+import android.app.Activity;
+import android.content.Context;
+import android.content.Intent;
+import android.content.pm.PackageInfo;
+import android.net.Uri;
+import android.os.Build;
+import android.provider.Settings;
 import android.util.Base64;
 
+import androidx.core.content.FileProvider;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.HttpURLConnection;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.NetworkInterface;
 import java.net.Socket;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
@@ -161,6 +175,89 @@ public class EscposPrinterPlugin extends Plugin {
                 call.reject("scanQr: " + e.getMessage());
             }
         });
+    }
+
+    // Auto-update: versionCode/versionName instalados (para comparar con version.json).
+    @PluginMethod
+    public void getVersionCode(PluginCall call) {
+        try {
+            Context ctx = getContext();
+            PackageInfo pi = ctx.getPackageManager().getPackageInfo(ctx.getPackageName(), 0);
+            long vc = (Build.VERSION.SDK_INT >= 28) ? pi.getLongVersionCode() : (long) pi.versionCode;
+            JSObject ret = new JSObject();
+            ret.put("versionCode", vc);
+            ret.put("versionName", pi.versionName);
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("getVersionCode: " + e.getMessage());
+        }
+    }
+
+    // Auto-update: descarga el APK indicado y lanza el instalador de Android.
+    // En Android 8+ exige el permiso "instalar apps desconocidas"; si falta, abre
+    // los ajustes para concederlo. Android muestra siempre un toque de confirmación
+    // al instalar (inevitable fuera de Play/MDM).
+    @PluginMethod
+    public void installApk(PluginCall call) {
+        final String url = call.getString("url");
+        if (url == null) { call.reject("installApk: falta url"); return; }
+        final Context ctx = getContext();
+
+        new Thread(() -> {
+            try {
+                // Permiso de instalar apps desconocidas (Android O+).
+                if (Build.VERSION.SDK_INT >= 26 && !ctx.getPackageManager().canRequestPackageInstalls()) {
+                    Intent settings = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                            Uri.parse("package:" + ctx.getPackageName()));
+                    settings.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    ctx.startActivity(settings);
+                    call.reject("Concede 'Instalar apps desconocidas' a Folvy y vuelve a pulsar Actualizar.");
+                    return;
+                }
+
+                File out = new File(ctx.getCacheDir(), "folvy.apk");
+                HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+                conn.setConnectTimeout(20000);
+                conn.setReadTimeout(120000);
+                conn.connect();
+                if (conn.getResponseCode() != 200) {
+                    call.reject("installApk: HTTP " + conn.getResponseCode());
+                    return;
+                }
+                try (InputStream in = conn.getInputStream(); FileOutputStream fos = new FileOutputStream(out)) {
+                    byte[] buf = new byte[8192];
+                    int n;
+                    while ((n = in.read(buf)) != -1) fos.write(buf, 0, n);
+                    fos.flush();
+                }
+
+                Uri uri = FileProvider.getUriForFile(ctx, ctx.getPackageName() + ".fileprovider", out);
+                Intent intent = new Intent(Intent.ACTION_VIEW);
+                intent.setDataAndType(uri, "application/vnd.android.package-archive");
+                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+                ctx.startActivity(intent);
+
+                JSObject ret = new JSObject();
+                ret.put("ok", true);
+                call.resolve(ret);
+            } catch (Exception e) {
+                call.reject("installApk: " + e.getMessage());
+            }
+        }).start();
+    }
+
+    // Modo inmersivo (Estación): oculta las barras de sistema. Delega en MainActivity,
+    // que además lo reaplica al recuperar el foco (Android las restaura).
+    @PluginMethod
+    public void setImmersive(PluginCall call) {
+        final boolean enabled = Boolean.TRUE.equals(call.getBoolean("enabled", false));
+        Activity act = getActivity();
+        if (act instanceof MainActivity) {
+            ((MainActivity) act).setImmersive(enabled);
+        }
+        JSObject ret = new JSObject();
+        ret.put("ok", true);
+        call.resolve(ret);
     }
 
     // IPv4 site-local del dispositivo (192.168.x / 10.x / 172.16-31.x).
