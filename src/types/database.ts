@@ -16892,6 +16892,11 @@ export type Database = {
         }
         Returns: undefined
       }
+      reprint_order: { Args: { p_sale_id: string }; Returns: number }
+      reprint_order_by_token: {
+        Args: { p_device_token: string; p_sale_id: string }
+        Returns: number
+      }
       reprocess_sale: { Args: { p_sale_id: string }; Returns: number }
       request_clock_correction: {
         Args: {

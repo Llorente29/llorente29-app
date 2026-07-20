@@ -352,9 +352,11 @@ interface OrderCardProps {
   onAdvance?: (saleId: string, next: OrderStatus) => void | Promise<void>
   onOpenRecipe?: (line: OrderFeedLine) => void
   onMarkLine?: (lineId: string) => void | Promise<void>
+  /** Reimprime el pedido (encola a las impresoras). Devuelve el nº de jobs. */
+  onReprint?: (saleId: string) => Promise<number>
 }
 
-export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRecipe, onMarkLine }: OrderCardProps) {
+export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRecipe, onMarkLine, onReprint }: OrderCardProps) {
   const [busy, setBusy] = useState(false)
   const [markingId, setMarkingId] = useState<string | null>(null)
   const [showTickets, setShowTickets] = useState(false)
@@ -411,7 +413,7 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
         <ChannelBadge channel={order.channel ?? channelLabel(order.channel)} />
         <button
           onClick={() => setShowTickets(true)}
-          title="Previsualizar tickets"
+          title="Tickets · reimprimir"
           className="ml-auto shrink-0 w-7 h-7 rounded-lg grid place-items-center text-text-secondary border border-default hover:text-text-primary hover:bg-page"
         >
           <Printer size={15} />
@@ -499,7 +501,7 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
       </div>
 
       {showTickets && (
-        <TicketPreviewModal order={order} onClose={() => setShowTickets(false)} />
+        <TicketPreviewModal order={order} onClose={() => setShowTickets(false)} onReprint={onReprint} />
       )}
     </div>
   )

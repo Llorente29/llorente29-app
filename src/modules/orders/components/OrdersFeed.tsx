@@ -18,7 +18,7 @@ import { playNewTicketSound } from '@/modules/kds/kdsUtils'
 import { markLine as kdsMarkLine } from '@/modules/kds/services/kdsService'
 import CookModePanel from '@/modules/kds/components/CookModePanel'
 import {
-  getOrdersFeed, advanceOrder, isTerminalStatus,
+  getOrdersFeed, advanceOrder, reprintOrder, isTerminalStatus,
   type OrderFeedItem, type OrderFeedLine, type OrderStatus,
 } from '../services/ordersFeedService'
 import OrderCard from './OrderCard'
@@ -100,6 +100,13 @@ export default function OrdersFeed({ locationId, token }: OrdersFeedProps) {
       setError(e instanceof Error ? e.message : 'No se pudo actualizar el pedido')
     }
   }, [refresh])
+
+  // Reimpresión: encola los tickets del pedido a las impresoras del local. Con
+  // token (Estación) sale por la puerta by-token. Devuelve el nº de jobs (0 = el
+  // local no tiene impresoras). No refresca: no cambia el estado del pedido.
+  const reprint = useCallback(async (saleId: string): Promise<number> => {
+    return reprintOrder(saleId, token)
+  }, [token])
 
   const openRecipe = useCallback((line: OrderFeedLine) => {
     if (!line.menu_item_id) return
@@ -220,7 +227,7 @@ export default function OrdersFeed({ locationId, token }: OrdersFeedProps) {
             </div>
           ) : view === 'grid' ? (
             <div className="grid gap-4 items-start" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(330px, 1fr))' }}>
-              {filtered.map(o => <OrderCard key={o.sale_id} order={o} allowGrow onAdvance={advance} onOpenRecipe={openRecipe} onMarkLine={markLineHandler} />)}
+              {filtered.map(o => <OrderCard key={o.sale_id} order={o} allowGrow onAdvance={advance} onOpenRecipe={openRecipe} onMarkLine={markLineHandler} onReprint={reprint} />)}
             </div>
           ) : (
             <div className="grid gap-4 h-full" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
@@ -234,7 +241,7 @@ export default function OrdersFeed({ locationId, token }: OrdersFeedProps) {
                       <span className="ml-auto bg-accent-bg text-text-secondary text-[12px] font-extrabold px-2 py-px rounded-full tabular-nums">{list.length}</span>
                     </div>
                     <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3 bg-page">
-                      {list.map(o => <OrderCard key={o.sale_id} order={o} allowGrow={false} onAdvance={advance} onOpenRecipe={openRecipe} onMarkLine={markLineHandler} />)}
+                      {list.map(o => <OrderCard key={o.sale_id} order={o} allowGrow={false} onAdvance={advance} onOpenRecipe={openRecipe} onMarkLine={markLineHandler} onReprint={reprint} />)}
                     </div>
                   </div>
                 )

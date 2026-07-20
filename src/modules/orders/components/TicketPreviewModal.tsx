@@ -8,7 +8,7 @@
 // impresora real será el comando ESC/POS nativo (capa de transporte, después).
 
 import { useEffect, useMemo, useState } from 'react'
-import { X } from 'lucide-react'
+import { X, Printer, Loader2, Check, AlertCircle } from 'lucide-react'
 import QRCode from 'qrcode'
 import type { OrderFeedItem } from '../services/ordersFeedService'
 import {
@@ -20,12 +20,31 @@ interface Props {
   order: OrderFeedItem
   fiscal?: { legalName?: string; taxId?: string; address?: string }
   onClose: () => void
+  /** Reimprime el pedido (encola a las impresoras). Devuelve el nº de jobs. */
+  onReprint?: (saleId: string) => Promise<number>
 }
 
 type Tab = 'bag' | 'kitchen' | 'labels'
 
-export default function TicketPreviewModal({ order, fiscal, onClose }: Props) {
+export default function TicketPreviewModal({ order, fiscal, onClose, onReprint }: Props) {
   const [tab, setTab] = useState<Tab>('bag')
+  const [reprinting, setReprinting] = useState(false)
+  const [reprintMsg, setReprintMsg] = useState<{ ok: boolean; text: string } | null>(null)
+
+  async function handleReprint() {
+    if (!onReprint || reprinting) return
+    setReprinting(true); setReprintMsg(null)
+    try {
+      const n = await onReprint(order.sale_id)
+      setReprintMsg(n > 0
+        ? { ok: true, text: `Enviado a impresión (${n} ${n === 1 ? 'ticket' : 'tickets'}). Sale por la impresora si la estación está encendida.` }
+        : { ok: false, text: 'Este local no tiene impresoras configuradas. Añádelas en Ajustes → Impresoras.' })
+    } catch (e) {
+      setReprintMsg({ ok: false, text: e instanceof Error ? e.message : 'No se pudo reimprimir.' })
+    } finally {
+      setReprinting(false)
+    }
+  }
 
   const docs = useMemo(() => ({
     bag: [renderBagTicket(order, fiscal)],
@@ -84,6 +103,33 @@ export default function TicketPreviewModal({ order, fiscal, onClose }: Props) {
         <div style={{ overflowY: 'auto', padding: 18, display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center', background: '#0a1219' }}>
           {current.map((doc, i) => <PaperTicket key={i} doc={doc} />)}
         </div>
+
+        {/* Pie: REIMPRIMIR (saca papel de verdad) */}
+        {onReprint && (
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', padding: '12px 18px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <button
+              onClick={handleReprint}
+              disabled={reprinting}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 18px',
+                borderRadius: 10, border: 'none', cursor: reprinting ? 'default' : 'pointer',
+                background: '#1F9D6B', color: '#fff', fontWeight: 700, fontSize: 14, opacity: reprinting ? 0.7 : 1,
+              }}
+            >
+              {reprinting
+                ? <><Loader2 size={16} className="animate-spin" /> Enviando…</>
+                : <><Printer size={16} /> Reimprimir</>}
+            </button>
+            {reprintMsg && (
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13,
+                color: reprintMsg.ok ? '#7EE0B4' : '#F2B8AE',
+              }}>
+                {reprintMsg.ok ? <Check size={15} /> : <AlertCircle size={15} />} {reprintMsg.text}
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
