@@ -4,6 +4,10 @@ import { BrowserRouter } from 'react-router-dom'
 import { AppProvider } from './context/AppContext'
 import App from './App'
 import './index.css'
+// Worker de impresión nativo (app Capacitor): reclama la cola print_job por
+// token de dispositivo e imprime por socket a la impresora de red. Import de
+// efecto: al cargar deja disponible window.folvyPrint para arrancarlo/probarlo.
+import './native/print/printWorker'
 
 // Bloque C completo Fase 1 (17/05/2026):
 //   Envolvemos toda la app en BrowserRouter. El AppProvider va DENTRO del

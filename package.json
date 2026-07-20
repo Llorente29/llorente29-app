@@ -17,6 +17,9 @@
     "tspoon:explore": "tsx scripts/exploreTspoon.ts"
   },
   "dependencies": {
+    "@capacitor/android": "^8.4.2",
+    "@capacitor/cli": "^8.4.2",
+    "@capacitor/core": "^8.4.2",
     "@mapbox/mapbox-gl-draw": "^1.5.1",
     "@napi-rs/canvas": "^1.0.1",
     "@stripe/react-stripe-js": "^6.6.0",

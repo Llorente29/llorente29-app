@@ -12,12 +12,16 @@
 // mantiene aparte como modo "solo tablero".
 
 import { useEffect, useState } from 'react'
-import { ClipboardList, MonitorPlay, CircleOff, Loader2, LogOut } from 'lucide-react'
+import { ClipboardList, MonitorPlay, CircleOff, Printer as PrinterIcon, Loader2, LogOut } from 'lucide-react'
 import KdsBoard from '../kds/components/KdsBoard'
 import { getBoard } from '../kds/services/kdsService'
 import { getDeviceLocation, type TabletLocationInfo } from './services/tabletAvailabilityService'
 import TabletAvailabilityTab from './TabletAvailabilityTab'
 import OrdersFeed from '../orders/components/OrdersFeed'
+import PrintersSettingsPage from '../printing/components/PrintersSettingsPage'
+import QrScanButton from '../printing/components/QrScanButton'
+import { extractToken } from '../printing/pairingUtils'
+import { pairEstacion, unpairDevice } from '../../native/print/printWorker'
 
 const TOKEN_KEY = 'kds_device_token' // mismo token que el kiosco
 
@@ -32,7 +36,7 @@ function clearToken(): void {
 }
 
 type Status = 'idle' | 'checking' | 'valid' | 'invalid'
-type Tab = 'pedidos' | 'cocina' | 'disponibilidad'
+type Tab = 'pedidos' | 'cocina' | 'disponibilidad' | 'impresoras'
 
 export default function TabletStationRoute() {
   const [token, setToken] = useState<string | null>(null)
@@ -50,6 +54,8 @@ export default function TabletStationRoute() {
       storeToken(fromUrl)
       window.history.replaceState({}, '', '/estacion')
       setToken(fromUrl)
+      // Vincula también el worker de impresión y fija modo=estacion (sin consola).
+      pairEstacion(fromUrl)
       return
     }
     setToken(readStoredToken())
@@ -92,16 +98,24 @@ export default function TabletStationRoute() {
     return () => { cancelled = true }
   }, [token])
 
-  function handleLink() {
-    const t = pasteValue.trim()
+  // Vincula la tablet: guarda el token (de un pegado o de un QR), arranca el
+  // worker de impresión y fija el modo del dispositivo = estacion.
+  function linkWith(rawTokenOrUrl: string) {
+    const t = extractToken(rawTokenOrUrl)
     if (!t) return
     storeToken(t)
     setToken(t)
     setPasteValue('')
+    pairEstacion(t)
+  }
+
+  function handleLink() {
+    linkWith(pasteValue)
   }
 
   function handleUnlink() {
     clearToken()
+    unpairDevice()      // para el worker y borra token(s) + modo del dispositivo
     setToken(null)
     setStatus('idle')
     setError(null)
@@ -117,8 +131,8 @@ export default function TabletStationRoute() {
           <p className="text-xl font-bold text-zinc-100 mb-4">Folvy</p>
           <h1 className="text-2xl font-bold">Vincular esta tablet</h1>
           <p className="text-sm text-zinc-400 mt-2">
-            Pega el token del dispositivo (lo generas en Ajustes de cocina → Dispositivos) o abre la
-            URL de la estación que copiaste allí.
+            Escanea el <strong>QR de la estación</strong> (Ajustes de cocina → Dispositivos → QR) o
+            pega el token del dispositivo. Al vincular, esta tablet queda como estación e imprime sola.
           </p>
           {status === 'invalid' && error && (
             <div className="mt-4 rounded-lg bg-red-500/15 text-red-200 ring-1 ring-red-500/40 px-3 py-2 text-sm">
@@ -126,13 +140,16 @@ export default function TabletStationRoute() {
             </div>
           )}
           <div className="mt-6 flex flex-col gap-2">
+            <QrScanButton onToken={linkWith} className="w-full" />
+            <div className="flex items-center gap-3 my-1 text-xs text-zinc-600">
+              <span className="flex-1 h-px bg-zinc-800" /> o pega el token <span className="flex-1 h-px bg-zinc-800" />
+            </div>
             <input
               value={pasteValue}
               onChange={e => setPasteValue(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') handleLink() }}
               placeholder="kdsdev_…"
               className="w-full rounded-lg bg-zinc-900 ring-1 ring-zinc-700 px-4 py-3 text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-400"
-              autoFocus
             />
             <button
               onClick={handleLink}
@@ -161,6 +178,7 @@ export default function TabletStationRoute() {
     { id: 'pedidos', label: 'Pedidos', icon: ClipboardList },
     { id: 'cocina', label: 'Cocina', icon: MonitorPlay },
     { id: 'disponibilidad', label: 'Disponibilidad', icon: CircleOff },
+    { id: 'impresoras', label: 'Impresoras', icon: PrinterIcon },
   ]
   const locationName = locInfo?.locationName ?? 'Local'
 
@@ -213,6 +231,14 @@ export default function TabletStationRoute() {
         {tab === 'pedidos' && (
           <div className="h-full overflow-y-auto p-4 bg-page">
             <OrdersFeed locationId={locInfo?.locationId ?? ''} token={token} />
+          </div>
+        )}
+
+        {tab === 'impresoras' && (
+          <div className="h-full overflow-y-auto p-4 bg-page">
+            <div className="max-w-2xl mx-auto">
+              <PrintersSettingsPage token={token} />
+            </div>
           </div>
         )}
       </main>
