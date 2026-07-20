@@ -367,20 +367,21 @@ export async function advanceOrder(
   if (error) throw new Error(`Orders · set_order_status: ${error.message}`)
 }
 
-/** Reimprime un pedido: encola sus tickets (bolsa/cocina/pegatinas) a las
- *  impresoras del local. El worker de la Estación los saca en papel. Con token
- *  (Estación) → RPC by-token; sin token (admin) → RPC de sesión. Devuelve el nº
- *  de jobs encolados (impresoras × doc_types). 0 = el local no tiene impresoras. */
+/** Reimprime un pedido. `docType` opcional: si se pasa ('bag'|'kitchen'|'labels')
+ *  reimprime SOLO ese documento (la pestaña activa del modal); si se omite, todos.
+ *  Con token (Estación) → RPC by-token; sin token (admin) → RPC de sesión.
+ *  Devuelve el nº de jobs encolados. 0 = el local no tiene impresoras (para ese doc). */
 export async function reprintOrder(
   saleId: string,
   token?: string | null,
+  docType?: string | null,
 ): Promise<number> {
   requireSupabase()
   const { data, error } = token
     ? await (supabase!.rpc as unknown as (fn: string, args: Record<string, unknown>)
         => Promise<{ data: unknown; error: { message: string } | null }>)(
-        'reprint_order_by_token', { p_device_token: token, p_sale_id: saleId })
-    : await supabase!.rpc('reprint_order', { p_sale_id: saleId })
+        'reprint_order_by_token', { p_device_token: token, p_sale_id: saleId, p_doc_type: docType ?? undefined })
+    : await supabase!.rpc('reprint_order', { p_sale_id: saleId, p_doc_type: docType ?? undefined })
   if (error) throw new Error(`Orders · reprint_order: ${error.message}`)
   return Number(data ?? 0)
 }

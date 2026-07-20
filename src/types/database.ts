@@ -10100,6 +10100,7 @@ export type Database = {
         Row: {
           account_id: string
           config: Json
+          copies: number
           created_at: string
           doc_types: string[]
           id: string
@@ -10112,6 +10113,7 @@ export type Database = {
         Insert: {
           account_id: string
           config?: Json
+          copies?: number
           created_at?: string
           doc_types?: string[]
           id?: string
@@ -10124,6 +10126,7 @@ export type Database = {
         Update: {
           account_id?: string
           config?: Json
+          copies?: number
           created_at?: string
           doc_types?: string[]
           id?: string
@@ -16892,9 +16895,12 @@ export type Database = {
         }
         Returns: undefined
       }
-      reprint_order: { Args: { p_sale_id: string }; Returns: number }
+      reprint_order: {
+        Args: { p_doc_type?: string; p_sale_id: string }
+        Returns: number
+      }
       reprint_order_by_token: {
-        Args: { p_device_token: string; p_sale_id: string }
+        Args: { p_device_token: string; p_doc_type?: string; p_sale_id: string }
         Returns: number
       }
       reprocess_sale: { Args: { p_sale_id: string }; Returns: number }
@@ -18204,6 +18210,7 @@ export type Database = {
         Args: {
           p_account_id: string
           p_config: Json
+          p_copies?: number
           p_doc_types: string[]
           p_id: string
           p_is_active: boolean
@@ -18216,6 +18223,7 @@ export type Database = {
       upsert_printer_by_token: {
         Args: {
           p_config: Json
+          p_copies?: number
           p_device_token: string
           p_doc_types: string[]
           p_id: string

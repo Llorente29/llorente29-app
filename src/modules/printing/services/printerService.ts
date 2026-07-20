@@ -63,6 +63,8 @@ export interface Printer {
   /** Puerto TCP (config->>'port'), por defecto 9100. */
   port: number
   docTypes: DocType[]
+  /** Nº de copias por documento que saca esta impresora (1-9). */
+  copies: number
   isActive: boolean
 }
 
@@ -74,6 +76,7 @@ type PrinterRow = {
   ip: string | null
   port: number | null
   doc_types: DocType[] | null
+  copies: number | null
   is_active: boolean
 }
 
@@ -85,6 +88,7 @@ function rowToPrinter(r: PrinterRow): Printer {
     ip: r.ip ?? null,
     port: r.port ?? 9100,
     docTypes: Array.isArray(r.doc_types) ? r.doc_types : [],
+    copies: r.copies ?? 1,
     isActive: Boolean(r.is_active),
   }
 }
@@ -108,6 +112,7 @@ export interface UpsertPrinterInput {
   ip: string
   port: number
   docTypes: DocType[]
+  copies: number
   isActive: boolean
 }
 
@@ -122,6 +127,7 @@ export async function upsertPrinter(input: UpsertPrinterInput): Promise<string> 
     p_config:      { ip: input.ip.trim(), port: input.port },
     p_doc_types:   input.docTypes,
     p_is_active:   input.isActive,
+    p_copies:      input.copies,
   })
 }
 
@@ -147,7 +153,7 @@ export async function listPrintersByToken(token: string): Promise<Printer[]> {
 /** Alta/edición por token (cuenta+local salen del dispositivo). Devuelve el id. */
 export async function upsertPrinterByToken(
   token: string,
-  input: { id?: string | null; name: string; ip: string; port: number; docTypes: DocType[]; isActive: boolean }
+  input: { id?: string | null; name: string; ip: string; port: number; docTypes: DocType[]; copies: number; isActive: boolean }
 ): Promise<string> {
   return rpc<string>('upsert_printer_by_token', {
     p_device_token: token,
@@ -156,6 +162,7 @@ export async function upsertPrinterByToken(
     p_config:    { ip: input.ip.trim(), port: input.port },
     p_doc_types: input.docTypes,
     p_is_active: input.isActive,
+    p_copies:    input.copies,
   })
 }
 

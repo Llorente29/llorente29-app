@@ -20,25 +20,28 @@ interface Props {
   order: OrderFeedItem
   fiscal?: { legalName?: string; taxId?: string; address?: string }
   onClose: () => void
-  /** Reimprime el pedido (encola a las impresoras). Devuelve el nº de jobs. */
-  onReprint?: (saleId: string) => Promise<number>
+  /** Reimprime el pedido. docType = solo ese documento. Devuelve el nº de jobs. */
+  onReprint?: (saleId: string, docType?: string) => Promise<number>
 }
 
 type Tab = 'bag' | 'kitchen' | 'labels'
+
+const TAB_LABEL: Record<Tab, string> = { bag: 'bolsa', kitchen: 'cocina', labels: 'pegatinas' }
 
 export default function TicketPreviewModal({ order, fiscal, onClose, onReprint }: Props) {
   const [tab, setTab] = useState<Tab>('bag')
   const [reprinting, setReprinting] = useState(false)
   const [reprintMsg, setReprintMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
+  // Reimprime SOLO el documento de la pestaña activa (bag/kitchen/labels).
   async function handleReprint() {
     if (!onReprint || reprinting) return
     setReprinting(true); setReprintMsg(null)
     try {
-      const n = await onReprint(order.sale_id)
+      const n = await onReprint(order.sale_id, tab)
       setReprintMsg(n > 0
-        ? { ok: true, text: `Enviado a impresión (${n} ${n === 1 ? 'ticket' : 'tickets'}). Sale por la impresora si la estación está encendida.` }
-        : { ok: false, text: 'Este local no tiene impresoras configuradas. Añádelas en Ajustes → Impresoras.' })
+        ? { ok: true, text: `${TAB_LABEL[tab][0].toUpperCase()}${TAB_LABEL[tab].slice(1)} enviada a impresión (${n} ${n === 1 ? 'copia' : 'copias'}). Sale por la impresora si la estación está encendida.` }
+        : { ok: false, text: `Ninguna impresora de este local saca "${TAB_LABEL[tab]}". Configúralo en Ajustes → Impresoras.` })
     } catch (e) {
       setReprintMsg({ ok: false, text: e instanceof Error ? e.message : 'No se pudo reimprimir.' })
     } finally {
@@ -86,7 +89,7 @@ export default function TicketPreviewModal({ order, fiscal, onClose, onReprint }
           {([['bag', 'Bolsa / cliente'], ['kitchen', 'Cocina'], ['labels', 'Pegatinas']] as [Tab, string][]).map(([k, label]) => (
             <button
               key={k}
-              onClick={() => setTab(k)}
+              onClick={() => { setTab(k); setReprintMsg(null) }}
               style={{
                 padding: '6px 14px', borderRadius: 8, fontSize: 13, cursor: 'pointer',
                 border: '1px solid ' + (tab === k ? '#15171A' : 'rgba(255,255,255,0.12)'),
@@ -118,7 +121,7 @@ export default function TicketPreviewModal({ order, fiscal, onClose, onReprint }
             >
               {reprinting
                 ? <><Loader2 size={16} className="animate-spin" /> Enviando…</>
-                : <><Printer size={16} /> Reimprimir</>}
+                : <><Printer size={16} /> Reimprimir {TAB_LABEL[tab]}</>}
             </button>
             {reprintMsg && (
               <span style={{

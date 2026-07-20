@@ -41,6 +41,7 @@ interface FormState {
   ip: string
   port: string        // texto en el input; se parsea al guardar
   docTypes: DocType[]
+  copies: string      // texto en el input; se parsea al guardar (1-9)
   isActive: boolean
 }
 
@@ -50,6 +51,7 @@ const EMPTY_FORM: FormState = {
   ip: '',
   port: '9100',
   docTypes: [...ALL_DOCS],
+  copies: '1',
   isActive: true,
 }
 
@@ -93,6 +95,10 @@ export default function PrintersSettingsPage({ accountId, locationId, token }: P
     const n = parseInt(form.port, 10)
     return Number.isFinite(n) && n > 0 ? n : 9100
   }, [form.port])
+  const copiesNum = useMemo(() => {
+    const n = parseInt(form.copies, 10)
+    return Number.isFinite(n) ? Math.max(1, Math.min(9, n)) : 1
+  }, [form.copies])
 
   const canSave =
     form.name.trim().length > 0 &&
@@ -110,6 +116,7 @@ export default function PrintersSettingsPage({ accountId, locationId, token }: P
       ip: p.ip ?? '',
       port: String(p.port || 9100),
       docTypes: p.docTypes.length > 0 ? p.docTypes : [...ALL_DOCS],
+      copies: String(p.copies || 1),
       isActive: p.isActive,
     })
   }
@@ -138,6 +145,7 @@ export default function PrintersSettingsPage({ accountId, locationId, token }: P
           ip: form.ip,
           port: portNum,
           docTypes: form.docTypes,
+          copies: copiesNum,
           isActive: form.isActive,
         })
       } else {
@@ -149,6 +157,7 @@ export default function PrintersSettingsPage({ accountId, locationId, token }: P
           ip: form.ip,
           port: portNum,
           docTypes: form.docTypes,
+          copies: copiesNum,
           isActive: form.isActive,
         })
       }
@@ -284,6 +293,16 @@ export default function PrintersSettingsPage({ accountId, locationId, token }: P
                 inputMode="numeric"
               />
             </div>
+            <div className="w-[80px]">
+              <label className="text-xs font-medium text-text-secondary">Copias</label>
+              <Input
+                value={form.copies}
+                onChange={e => setForm(f => ({ ...f, copies: e.target.value.replace(/[^0-9]/g, '').slice(0, 1) }))}
+                placeholder="1"
+                inputMode="numeric"
+                title="Nº de copias por documento (1-9)"
+              />
+            </div>
           </div>
 
           {/* Autodescubrimiento LAN (sólo app nativa; en web se escribe la IP a mano) */}
@@ -384,6 +403,7 @@ export default function PrintersSettingsPage({ accountId, locationId, token }: P
                     {p.docTypes.length > 0 && (
                       <> · {p.docTypes.map(docLabel).join(' · ')}</>
                     )}
+                    {p.copies > 1 && <> · {p.copies} copias</>}
                   </div>
                 </div>
                 <Button

@@ -352,8 +352,9 @@ interface OrderCardProps {
   onAdvance?: (saleId: string, next: OrderStatus) => void | Promise<void>
   onOpenRecipe?: (line: OrderFeedLine) => void
   onMarkLine?: (lineId: string) => void | Promise<void>
-  /** Reimprime el pedido (encola a las impresoras). Devuelve el nº de jobs. */
-  onReprint?: (saleId: string) => Promise<number>
+  /** Reimprime el pedido (encola a las impresoras). docType opcional = solo ese
+   *  documento. Devuelve el nº de jobs. */
+  onReprint?: (saleId: string, docType?: string) => Promise<number>
 }
 
 export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRecipe, onMarkLine, onReprint }: OrderCardProps) {

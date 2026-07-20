@@ -104,8 +104,8 @@ export default function OrdersFeed({ locationId, token }: OrdersFeedProps) {
   // Reimpresión: encola los tickets del pedido a las impresoras del local. Con
   // token (Estación) sale por la puerta by-token. Devuelve el nº de jobs (0 = el
   // local no tiene impresoras). No refresca: no cambia el estado del pedido.
-  const reprint = useCallback(async (saleId: string): Promise<number> => {
-    return reprintOrder(saleId, token)
+  const reprint = useCallback(async (saleId: string, docType?: string): Promise<number> => {
+    return reprintOrder(saleId, token, docType)
   }, [token])
 
   const openRecipe = useCallback((line: OrderFeedLine) => {
