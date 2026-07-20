@@ -33,10 +33,11 @@
 
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { Capacitor } from '@capacitor/core'
 import { useAuth } from '../modules/multitenancy/hooks/useAuth'
 import Logo from '../components/Logo'
 import { checkAccountStatus } from '../services/accountStatusService'
-import { Lock, Mail, AlertCircle, LogIn } from 'lucide-react'
+import { Lock, Mail, AlertCircle, LogIn, Tablet } from 'lucide-react'
 
 interface Props {
   /**
@@ -254,6 +255,18 @@ export default function LoginPage({ onCheckSession: _onCheckSession }: Props) {
             </>
           )}
         </div>
+
+        {/* Entrada de ESTACIÓN (solo app nativa): una tablet de cocina no hace
+            login; se vincula por QR y queda lista para Pedidos e impresión. */}
+        {Capacitor.isNativePlatform() && (
+          <button
+            type="button"
+            onClick={() => navigate('/estacion')}
+            className="mt-4 w-full py-3 rounded-md border border-border-default bg-card text-text-primary font-medium inline-flex items-center justify-center gap-2 hover:bg-page transition-base active:scale-[0.98]"
+          >
+            <Tablet size={16} /> ¿Es una tablet de cocina? · Vincular Estación
+          </button>
+        )}
 
         {/* Pie */}
         <p className="text-center text-xs text-text-secondary mt-4">

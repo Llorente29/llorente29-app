@@ -17,8 +17,17 @@ import LoginPage from '../pages/LoginPage'
 import WelcomePage from '../pages/WelcomePage'
 import ResetPasswordPage from '../pages/ResetPasswordPage'
 import AccesoTrabajadorPage from '../pages/AccesoTrabajadorPage'
+import { isPairedEstacion } from '../native/print/printWorker'
 
 export default function AuthRouter() {
+  // PERSISTENCIA DE ESTACIÓN (tablet de cocina): si esta app nativa ya está
+  // vinculada como Estación (token + device_mode=estacion), abre DIRECTO en
+  // /estacion en vez del login. Sólo nativo; en web nunca secuestra el login.
+  // Si el token estuviera revocado, /estacion muestra la pantalla de vincular.
+  if (isPairedEstacion()) {
+    return <Navigate to="/estacion" replace />
+  }
+
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/login" replace />} />

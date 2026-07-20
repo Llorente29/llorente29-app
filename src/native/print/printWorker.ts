@@ -58,6 +58,14 @@ function resolveToken(): string {
   return readStored(TOKEN_KEY) || readStored(ESTACION_TOKEN_KEY);
 }
 
+/** ¿Esta app nativa ya está vinculada como Estación? (token + modo=estacion).
+ *  Lo usa el arranque para abrir directo en /estacion en vez del login. Sólo
+ *  nativo: en el navegador web nunca secuestra el login. */
+export function isPairedEstacion(): boolean {
+  if (!Capacitor.isNativePlatform()) return false;
+  return getDeviceMode() === 'estacion' && resolveToken().length > 0;
+}
+
 function bytesToBase64(bytes: Uint8Array): string {
   let bin = '';
   const chunk = 0x8000;

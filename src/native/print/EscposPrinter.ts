@@ -21,6 +21,12 @@ export interface EscposPrinterPlugin {
    *   · baseIp: IP base para derivar el prefijo /24 (def. IP local del device)
    */
   discover(options?: { port?: number; timeoutMs?: number; baseIp?: string }): Promise<{ printers: DiscoveredPrinter[] }>;
+  /**
+   * Escáner de QR nativo (Google Code Scanner de ML Kit). Lanza la UI de Google,
+   * sin permiso de cámara ni preview propio. `value` = texto crudo del QR (null
+   * si se cancela). Sólo app nativa; en web no existe → llamarlo rechaza.
+   */
+  scanQr(): Promise<{ value: string | null; cancelled: boolean }>;
 }
 
 export const EscposPrinter = registerPlugin<EscposPrinterPlugin>('EscposPrinter');

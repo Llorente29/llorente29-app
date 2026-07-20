@@ -1,26 +1,32 @@
 // src/modules/printing/components/QrScanButton.tsx
 //
-// Escaneo de QR IN-APP para vincular la tablet (F3). Usa la API nativa del
-// navegador BarcodeDetector + getUserMedia — SIN dependencia nueva ni plugin
-// nativo (que obligaría a tocar Gradle). Es progresivo: si el WebView no
-// soporta BarcodeDetector, el botón no se muestra (qrScanSupported() = false) y
-// queda el pegado manual del token como fallback, que nunca falla (paridad Last).
+// Escaneo de QR para vincular la Estación. DOS caminos:
+//  · NATIVO (app Capacitor): usa el Google Code Scanner de ML Kit vía el plugin
+//    EscposPrinter.scanQr — UI de Google, sin permiso de cámara ni preview. Es
+//    lo que funciona en la Teclast (el BarcodeDetector del WebView no está).
+//  · WEB (navegador con soporte): BarcodeDetector + getUserMedia (overlay propio).
+//  · Si ninguno está disponible, el botón NO se muestra y queda el pegado del
+//    token como fallback (nunca falla).
 //
-// Emite el texto crudo del QR. El QR de la Estación (DevicesSettings) codifica
-// `${origin}/estacion?token=…`; extractToken() saca el token tanto de esa URL
-// como de un token pegado en crudo (kdsdev_…).
+// El QR de la Estación (DevicesSettings) codifica `${origin}/estacion?token=…`;
+// extractToken() saca el token tanto de esa URL como de un token en crudo.
 
 import { useEffect, useRef, useState } from 'react'
 import { QrCode, X, Loader2, AlertCircle } from 'lucide-react'
+import { Capacitor } from '@capacitor/core'
+import { EscposPrinter } from '../../../native/print/EscposPrinter'
 import { extractToken } from '../pairingUtils'
 
-// BarcodeDetector no está en las libs de TS; tipado mínimo.
+// BarcodeDetector no está en las libs de TS; tipado mínimo (camino web).
 interface DetectedBarcode { rawValue: string }
 interface BarcodeDetectorLike { detect(source: CanvasImageSource): Promise<DetectedBarcode[]> }
 type BarcodeDetectorCtor = new (opts?: { formats?: string[] }) => BarcodeDetectorLike
 function getCtor(): BarcodeDetectorCtor | null {
   const w = window as unknown as { BarcodeDetector?: BarcodeDetectorCtor }
   return w.BarcodeDetector ?? null
+}
+function webScanSupported(): boolean {
+  return getCtor() !== null && typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia
 }
 
 interface Props {
@@ -29,25 +35,42 @@ interface Props {
 }
 
 export default function QrScanButton({ onToken, className = '' }: Props) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(false)      // overlay web
   const [error, setError] = useState<string | null>(null)
   const [starting, setStarting] = useState(false)
+  const [scanning, setScanning] = useState(false) // escaneo nativo en curso
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const rafRef = useRef<number | null>(null)
 
-  // No renderizamos nada si el dispositivo no soporta escaneo in-app.
-  const supported = getCtor() !== null && typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia
+  const native = Capacitor.isNativePlatform()
+  const supported = native || webScanSupported()
 
+  // ── Camino NATIVO: Google Code Scanner ──────────────────────────────────────
+  async function handleNativeScan() {
+    setError(null)
+    setScanning(true)
+    try {
+      const { value, cancelled } = await EscposPrinter.scanQr()
+      if (cancelled || !value) return
+      const token = extractToken(value)
+      if (token) onToken(token)
+      else setError('El QR no contiene un token válido.')
+    } catch {
+      setError('No se pudo abrir el escáner. Pega el token a mano.')
+    } finally {
+      setScanning(false)
+    }
+  }
+
+  // ── Camino WEB: overlay con BarcodeDetector ─────────────────────────────────
   function stopCamera() {
     if (rafRef.current !== null) { cancelAnimationFrame(rafRef.current); rafRef.current = null }
     if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null }
   }
-
-  function close() {
+  function closeOverlay() {
     stopCamera()
     setOpen(false)
-    setError(null)
     setStarting(false)
   }
 
@@ -69,7 +92,7 @@ export default function QrScanButton({ onToken, className = '' }: Props) {
         const video = videoRef.current
         if (!video) return
         video.srcObject = stream
-        await video.play().catch(() => { /* autoplay puede requerir gesto; ya venimos de un click */ })
+        await video.play().catch(() => { /* ya venimos de un click */ })
         setStarting(false)
 
         const scan = async () => {
@@ -79,7 +102,7 @@ export default function QrScanButton({ onToken, className = '' }: Props) {
             const hit = codes.find(c => c.rawValue?.trim())
             if (hit) {
               const token = extractToken(hit.rawValue)
-              if (token) { close(); onToken(token); return }
+              if (token) { closeOverlay(); onToken(token); return }
             }
           } catch { /* frame no legible; seguimos */ }
           rafRef.current = requestAnimationFrame(() => { void scan() })
@@ -109,11 +132,20 @@ export default function QrScanButton({ onToken, className = '' }: Props) {
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
-        className={`inline-flex items-center justify-center gap-2 rounded-lg bg-zinc-800 text-zinc-100 font-medium py-3 hover:bg-zinc-700 ${className}`}
+        onClick={() => (native ? void handleNativeScan() : setOpen(true))}
+        disabled={scanning}
+        className={`inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-500 text-zinc-950 font-bold py-3 hover:bg-emerald-400 disabled:opacity-60 ${className}`}
       >
-        <QrCode size={18} /> Escanear QR
+        {scanning
+          ? <><Loader2 size={18} className="animate-spin" /> Abriendo escáner…</>
+          : <><QrCode size={18} /> Escanear QR</>}
       </button>
+
+      {error && (
+        <div className="mt-2 rounded-lg bg-red-500/15 text-red-200 ring-1 ring-red-500/40 px-3 py-2 text-sm inline-flex items-start gap-2">
+          <AlertCircle size={15} className="mt-0.5 shrink-0" /> {error}
+        </div>
+      )}
 
       {open && (
         <div className="fixed inset-0 z-50 bg-black flex flex-col">
@@ -121,14 +153,13 @@ export default function QrScanButton({ onToken, className = '' }: Props) {
             <span className="text-sm font-semibold inline-flex items-center gap-2">
               <QrCode size={18} /> Apunta al QR de la estación
             </span>
-            <button onClick={close} className="p-2 rounded-md hover:bg-zinc-800" title="Cerrar">
+            <button onClick={closeOverlay} className="p-2 rounded-md hover:bg-zinc-800" title="Cerrar">
               <X size={20} />
             </button>
           </div>
 
           <div className="flex-1 min-h-0 relative grid place-items-center">
             <video ref={videoRef} playsInline muted className="max-h-full max-w-full object-contain" />
-            {/* Marco guía */}
             <div className="pointer-events-none absolute inset-0 grid place-items-center">
               <div className="w-56 h-56 rounded-2xl ring-2 ring-emerald-400/80" />
             </div>
@@ -138,12 +169,6 @@ export default function QrScanButton({ onToken, className = '' }: Props) {
               </div>
             )}
           </div>
-
-          {error && (
-            <div className="shrink-0 m-4 rounded-lg bg-red-500/15 text-red-200 ring-1 ring-red-500/40 px-3 py-2 text-sm inline-flex items-start gap-2">
-              <AlertCircle size={15} className="mt-0.5 shrink-0" /> {error}
-            </div>
-          )}
         </div>
       )}
     </>

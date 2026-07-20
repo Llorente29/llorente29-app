@@ -49,10 +49,23 @@ basta; la IP local del descubrimiento se obtiene por `NetworkInterface`.
    bundle firmado, invitas la cuenta del cliente, se instala como app normal y
    se autoactualiza. Mejor para flota y actualizaciones.
 
-En ambos casos el **onboarding en la tablet** es el mismo (F3): abrir Folvy →
-`/estacion` → escanear el **QR de la estación** (Ajustes de cocina → Dispositivos
-→ QR) → la tablet queda vinculada como Estación e imprime sola, **sin consola ni
-SQL**.
+En ambos casos el **onboarding en la tablet** es (sin login):
+
+1. Abrir Folvy → aparece la pantalla de login. Como es una tablet de cocina,
+   pulsar **"¿Es una tablet de cocina? · Vincular Estación"** (botón visible bajo
+   el formulario; **solo aparece en la app nativa**).
+2. Se abre el **escáner de QR nativo** (Google Code Scanner de ML Kit — sin
+   permiso de cámara ni preview propio). Escanear el **QR de la estación**
+   (Ajustes de cocina → Dispositivos → QR).
+3. La tablet queda vinculada como Estación (`device_mode='estacion'`), arranca el
+   worker de impresión y entra en **Pedidos**. Sin usuario ni contraseña.
+4. **Al reabrir la app**, si ya está vinculada, abre **directa en la Estación**
+   (no vuelve al login).
+5. Para reconfigurar: dentro de la Estación, **Desvincular** (borra el token y
+   vuelve a la pantalla de vincular).
+
+Fallback si el escáner nativo no estuviera disponible: en la pantalla de vincular
+también se puede **pegar el token** a mano (el que se copia en Dispositivos).
 
 ## Notas de compatibilidad
 

@@ -7,6 +7,11 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
+import com.google.mlkit.vision.barcode.common.Barcode;
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanner;
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions;
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning;
+
 import android.util.Base64;
 
 import java.io.OutputStream;
@@ -124,6 +129,38 @@ public class EscposPrinterPlugin extends Plugin {
                 call.reject("discover: " + e.getMessage());
             }
         }).start();
+    }
+
+    // Escáner de QR nativo (Google Code Scanner de ML Kit). Lanza la UI de
+    // escaneo de Google (sin permiso de cámara, sin preview propio) y devuelve
+    // el texto crudo del QR. Para vincular la Estación desde la pantalla de
+    // login/emparejamiento, sin login. Requiere Google Play Services.
+    @PluginMethod
+    public void scanQr(PluginCall call) {
+        getActivity().runOnUiThread(() -> {
+            try {
+                GmsBarcodeScannerOptions options = new GmsBarcodeScannerOptions.Builder()
+                        .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
+                        .build();
+                GmsBarcodeScanner scanner = GmsBarcodeScanning.getClient(getContext(), options);
+                scanner.startScan()
+                        .addOnSuccessListener(barcode -> {
+                            JSObject ret = new JSObject();
+                            ret.put("value", barcode.getRawValue());
+                            ret.put("cancelled", false);
+                            call.resolve(ret);
+                        })
+                        .addOnCanceledListener(() -> {
+                            JSObject ret = new JSObject();
+                            ret.put("value", (String) null);
+                            ret.put("cancelled", true);
+                            call.resolve(ret);
+                        })
+                        .addOnFailureListener(e -> call.reject("scanQr: " + e.getMessage()));
+            } catch (Exception e) {
+                call.reject("scanQr: " + e.getMessage());
+            }
+        });
     }
 
     // IPv4 site-local del dispositivo (192.168.x / 10.x / 172.16-31.x).
