@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import {
   Loader2, Power, Phone, Navigation, Package, CheckCircle2, XCircle, Bike, RefreshCw,
-  Sun, Moon, Camera, PenLine, X, Settings,
+  Sun, Moon, Camera, PenLine, X, Settings, Wallet,
 } from 'lucide-react'
 import {
   courierSession, courierSetShift, courierFeed, courierClaim, courierDecline, courierAdvance,
@@ -19,6 +19,12 @@ import { supabase } from '../../lib/supabase'
 interface Quest {
   id: string; name: string; period: string; target: number; reward: number
   done: number; completed: boolean; location_id: string | null
+}
+interface Earnings {
+  today: { deliveries: number; earnings: number; km: number }
+  week: { deliveries: number; earnings: number; km: number }
+  quests: Quest[]; quest_reward: number; week_total: number
+  history: { date: string; deliveries: number; earnings: number }[]
 }
 
 const TOKEN_KEY = 'courier_token'
@@ -82,6 +88,8 @@ export default function RepartidorRoute() {
   const [theme, setTheme] = useState<Theme>(initialTheme)
   const [delivering, setDelivering] = useState<CourierJob | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [earnings, setEarnings] = useState<Earnings | null>(null)
+  const [earningsOpen, setEarningsOpen] = useState(false)
   const [autoRoute, setAutoRoute] = useState<boolean>(() => { try { return localStorage.getItem(AUTOROUTE_KEY) === '1' } catch { return false } })
   const lastPing = useRef<number>(0)
   const watchId = useRef<number | null>(null)
@@ -137,6 +145,15 @@ export default function RepartidorRoute() {
     if (status !== 'valid') return
     void loadQuests(); const id = setInterval(loadQuests, 30000); return () => clearInterval(id)
   }, [status, loadQuests])
+
+  const loadEarnings = useCallback(async () => {
+    if (!token || !supabase) return
+    try {
+      const { data } = await (supabase.rpc as unknown as (f: string, a: Record<string, unknown>) => Promise<{ data: Earnings | null }>)('courier_earnings_by_token', { p_token: token })
+      setEarnings(data ?? null)
+    } catch { /* silencioso */ }
+  }, [token])
+  function openEarnings() { setEarningsOpen(true); void loadEarnings() }
 
   const hasActive = jobs.some(j => j.mine && ACTIVE.includes(j.state))
   useEffect(() => {
@@ -211,7 +228,8 @@ export default function RepartidorRoute() {
           <p className="font-bold leading-tight truncate">{sess.name}</p>
           <p className={`text-xs ${c.sub}`}>{sess.on_shift ? 'En turno' : 'Fuera de turno'}</p>
         </div>
-        <button onClick={() => setSettingsOpen(true)} className={`ml-auto p-2 rounded-lg ${c.soft}`} title="Ajustes"><Settings size={18} /></button>
+        <button onClick={openEarnings} className={`ml-auto p-2 rounded-lg ${c.soft}`} title="Ganancias"><Wallet size={18} /></button>
+        <button onClick={() => setSettingsOpen(true)} className={`p-2 rounded-lg ${c.soft}`} title="Ajustes"><Settings size={18} /></button>
         <button onClick={() => setTheme(dark ? 'light' : 'dark')} className={`p-2 rounded-lg ${c.soft}`} title="Claro / oscuro">
           {dark ? <Sun size={18} /> : <Moon size={18} />}
         </button>
@@ -301,6 +319,67 @@ export default function RepartidorRoute() {
           </div>
         </div>
       )}
+
+      {earningsOpen && <EarningsSheet e={earnings} c={c} onClose={() => setEarningsOpen(false)} />}
+    </div>
+  )
+}
+
+function EarningsSheet({ e, c, onClose }: { e: Earnings | null; c: Palette; onClose: () => void }) {
+  const dias = ['dom', 'lun', 'mar', 'mie', 'jue', 'vie', 'sab']
+  const dayLabel = (iso: string) => { const d = new Date(iso + 'T00:00:00'); return `${dias[d.getDay()]} ${d.getDate()}` }
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center">
+      <div className={`w-full sm:max-w-md ${c.sheet} rounded-t-2xl sm:rounded-2xl p-4 max-h-[92vh] overflow-y-auto`}>
+        <div className="flex items-center gap-2 mb-3">
+          <Wallet size={20} className="text-emerald-500" />
+          <span className="font-bold text-lg">Mis ganancias</span>
+          <button onClick={onClose} className={`ml-auto p-2 rounded-lg ${c.soft}`}><X size={18} /></button>
+        </div>
+        {!e ? <div className={`text-center ${c.sub} py-8`}><Loader2 className="animate-spin mx-auto mb-2" size={20} /> Cargando...</div> : (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <div className={`rounded-2xl ${c.card} p-3`}>
+                <p className={`text-xs ${c.sub}`}>Hoy</p>
+                <p className="text-2xl font-extrabold text-emerald-500">{eur(e.today.earnings)}</p>
+                <p className={`text-xs ${c.sub} mt-1`}>{e.today.deliveries} entregas {DOT} {km(e.today.km)}</p>
+              </div>
+              <div className={`rounded-2xl ${c.card} p-3`}>
+                <p className={`text-xs ${c.sub}`}>Esta semana</p>
+                <p className="text-2xl font-extrabold">{eur(e.week.earnings)}</p>
+                <p className={`text-xs ${c.sub} mt-1`}>{e.week.deliveries} entregas {DOT} {km(e.week.km)}</p>
+              </div>
+            </div>
+
+            {e.quest_reward > 0 && (
+              <div className={`mt-3 rounded-2xl ${c.card} p-3 flex items-center gap-2`}>
+                <span className="text-sm font-semibold">Bonos de retos</span>
+                <span className="ml-auto font-bold text-emerald-500">+{eur(e.quest_reward)}</span>
+              </div>
+            )}
+
+            <div className={`mt-3 rounded-2xl ${c.card} p-3 flex items-center gap-2`}>
+              <span className="text-sm font-semibold">Total semana a cobrar</span>
+              <span className="ml-auto text-xl font-extrabold text-emerald-500">{eur(e.week_total)}</span>
+            </div>
+
+            {e.history.length > 0 && (
+              <div className="mt-4">
+                <p className={`text-xs uppercase tracking-wide ${c.sub} mb-2`}>Últimos días</p>
+                <div className="space-y-1.5">
+                  {e.history.map(h => (
+                    <div key={h.date} className="flex items-center gap-2 text-sm">
+                      <span className={c.body}>{dayLabel(h.date)}</span>
+                      <span className={`text-xs ${c.sub}`}>{DOT} {h.deliveries} entregas</span>
+                      <span className="ml-auto font-semibold">{eur(h.earnings)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   )
 }
