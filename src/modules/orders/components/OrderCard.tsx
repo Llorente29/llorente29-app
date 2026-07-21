@@ -15,7 +15,8 @@
 // RUTA COMPLETA: el pie avanza el pedido. ESCANDALLO: pulsar el plato abre Cook Mode.
 // MARCAR LÍNEA: check por plato (kds_mark_line, compartido con el KDS).
 //
-// FILA DE REPARTO PROPIO (Catcher) POR FASES (operativa de cocina, 21/07/2026):
+// FILA DE REPARTO PROPIO POR FASES (operativa de cocina, 21/07/2026):
+// El transportista lo decide el motor de despacho por cuenta (Catcher, Jelp, Uber Direct…); la UI no lo nombra.
 // la fila sube de intensidad según la urgencia real. Callada al buscar rider;
 // nombre + llamar A LA VISTA (sin desplegar) al asignar/en camino; y al llegar el
 // rider al local (`in_picking_location`) salta la cara ★ de HANDOFF, resaltada,
@@ -195,7 +196,7 @@ function LineRow({
   )
 }
 
-// Vehículo del rider (Catcher): emoji + etiqueta + icono lucide para la cabecera.
+// Vehículo del rider: emoji + etiqueta + icono lucide para la cabecera.
 function transportMeta(t: string | null): { emoji: string; label: string; car: boolean } | null {
   const v = (t ?? '').toLowerCase()
   if (!v) return null
@@ -264,7 +265,7 @@ function DeliveryRow({ order, onDispatched }: { order: OrderFeedItem; onDispatch
   }
 
   // (A) Reparto propio SIN despachar (modo manual o tras fallo): botón en la fila.
-  // En modo 'off' (lo despacha Last/externo) NO se muestra botón: Folvy no despacha.
+  // En modo 'off' (lo despacha un sistema externo) NO se muestra botón: Folvy no despacha.
   if (isOwnDeliveryUndispatched(order) && order.dispatch_mode !== 'off') {
     const failed = !!order.dispatch_error
     const errMsg = dispatchErr ?? order.dispatch_error
@@ -290,7 +291,7 @@ function DeliveryRow({ order, onDispatched }: { order: OrderFeedItem; onDispatch
             ? <><RefreshCw size={15} className="animate-spin" /> Despachando…</>
             : failed
               ? <><RefreshCw size={15} /> Reintentar despacho</>
-              : <><Bike size={16} /> Despachar a Catcher</>}
+              : <><Bike size={16} /> Despachar reparto</>}
         </button>
       </div>
     )
@@ -301,7 +302,7 @@ function DeliveryRow({ order, onDispatched }: { order: OrderFeedItem; onDispatch
   // (B) Plataforma (Glovo/Uber/JE): informativo; si hay soporte, plegable con su teléfono.
   if (d.kind === 'platform') return <PlatformDeliveryRow view={d} />
 
-  // (C) Reparto propio despachado (Catcher/Jelp): prominencia POR FASE.
+  // (C) Reparto propio despachado: prominencia POR FASE.
   const tp = transportMeta(d.transport)
   const HeadIcon = tp?.car ? Car : Bike
   const riderName = d.rider

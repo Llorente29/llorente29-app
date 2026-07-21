@@ -2,6 +2,11 @@
 // Configuración del reparto (dispatcher). Todo en una pantalla:
 //  A) Enlace de seguimiento (dominio)   B) Por local (modo/transportista/aviso)
 //  C) Reglas de despacho (con margen)   D) Flota propia (repartidores)   E) Zonas (enlace)
+//
+// MULTI-TENANT: los TRANSPORTISTAS no se hardcodean. La lista `carriers` la da la
+// RPC reparto_settings desde los conectores de logística CONECTADOS por la cuenta
+// (+ Flota propia). El cliente 2 verá los suyos (Jelp, Uber Direct, Shipday…), no
+// los de nadie más.
 import { useState, useEffect, useCallback } from 'react'
 import { CheckCircle2, Plus, Trash2, Pencil, X } from 'lucide-react'
 import { Card, Button } from '../components/ui'
@@ -12,7 +17,8 @@ async function rpc<T = unknown>(fn: string, args: Record<string, unknown>): Prom
   return await (supabase.rpc as unknown as (f: string, a: Record<string, unknown>) => Promise<{ data: T | null; error: { message: string } | null }>)(fn, args)
 }
 
-interface Loc { id: string; name: string; mode: string; broker: string; notify: boolean }
+interface Loc { id: string; name: string; mode: string; broker: string | null; notify: boolean }
+interface Carrier { code: string; name: string }
 interface Rule {
   id?: string; priority?: number; location_id?: string | null; weekdays?: number[] | null
   time_from?: string | null; time_to?: string | null; min_total?: number | null; max_total?: number | null
@@ -25,19 +31,20 @@ interface Courier {
   active?: boolean; on_shift?: boolean
 }
 
-const CARRIERS: Record<string, string> = { catcher: 'Catcher', own_fleet: 'Flota propia' }
 const DOW = ['L', 'M', 'X', 'J', 'V', 'S', 'D'] // 0=Lunes..6=Domingo (convención Folvy)
 
-// Interruptor de despacho de Folvy (3 posiciones). Off = Folvy no despacha; lo hace Last.
+// Interruptor de despacho de Folvy (3 posiciones). Off = Folvy no despacha; lo hace
+// un sistema externo (el TPV/agregador que use la cuenta).
 const DISPATCH_MODES: { val: string; label: string }[] = [
   { val: 'auto', label: 'Automático' },
   { val: 'manual', label: 'Manual' },
-  { val: 'off', label: 'Off · lo lleva Last' },
+  { val: 'off', label: 'Off · externo' },
 ]
 
 export default function RepartoSettingsPage() {
   const [loading, setLoading] = useState(true)
   const [locs, setLocs] = useState<Loc[]>([])
+  const [carriers, setCarriers] = useState<Carrier[]>([])
   const [rules, setRules] = useState<Rule[]>([])
   const [couriers, setCouriers] = useState<Courier[]>([])
   const [trackUrl, setTrackUrl] = useState('')
@@ -48,8 +55,9 @@ export default function RepartoSettingsPage() {
   const [editCourier, setEditCourier] = useState<Courier | null>(null)
 
   const reload = useCallback(async () => {
-    const { data } = await rpc<{ track_base_url: string | null; locations: Loc[]; rules: Rule[]; couriers: Courier[] }>('reparto_settings', {})
+    const { data } = await rpc<{ track_base_url: string | null; carriers: Carrier[]; locations: Loc[]; rules: Rule[]; couriers: Courier[] }>('reparto_settings', {})
     if (!data) return
+    setCarriers(data.carriers ?? [])
     setLocs(data.locations ?? [])
     setRules(data.rules ?? [])
     setCouriers(data.couriers ?? [])
@@ -75,7 +83,7 @@ export default function RepartoSettingsPage() {
     setLocs(prev => prev.map(l => l.id === id ? { ...l, ...patch } : l))
     let error = null
     if ('notify' in patch) ({ error } = await rpc('set_customer_notify', { p_location_id: id, p_enabled: patch.notify }))
-    else ({ error } = await rpc('set_location_dispatch', { p_location_id: id, p_mode: patch.mode ?? before?.mode, p_broker: patch.broker ?? before?.broker }))
+    else ({ error } = await rpc('set_location_dispatch', { p_location_id: id, p_mode: patch.mode ?? before?.mode, p_broker: ('broker' in patch ? patch.broker : before?.broker) }))
     if (error) { setLocs(prev => prev.map(l => l.id === id ? { ...l, ...before } : l)); alert('No se pudo guardar: ' + error.message) }
   }
 
@@ -108,6 +116,14 @@ export default function RepartoSettingsPage() {
 
   const domainDirty = trackUrl.trim() !== (trackUrlSaved ?? '').trim()
   const locName = (id?: string | null) => locs.find(l => l.id === id)?.name ?? 'Todos los locales'
+  const carrierName = (code?: string | null) => carriers.find(c => c.code === code)?.name ?? (code ?? '—')
+  // Opciones de un select de transportista; incluye el valor actual aunque ya no
+  // esté conectado, para no perderlo de vista.
+  const carrierOptions = (current?: string | null): Carrier[] => {
+    const list = [...carriers]
+    if (current && !list.some(c => c.code === current)) list.unshift({ code: current, name: carrierName(current) })
+    return list
+  }
   const input = 'border border-border-default rounded-lg px-3 py-2 text-sm bg-card text-text-primary'
 
   if (loading) return <Card className="p-6 text-center"><p className="text-sm text-text-secondary">Cargando...</p></Card>
@@ -120,7 +136,7 @@ export default function RepartoSettingsPage() {
         <h3 className="font-semibold text-text-primary mb-1">Dominio del enlace de seguimiento</h3>
         <p className="text-xs text-text-secondary mb-2">La dirección del enlace <span className="font-mono">/seguir</span> que recibe el cliente por WhatsApp. Vacío = predeterminado.</p>
         <div className="flex items-center gap-2">
-          <input type="text" value={trackUrl} onChange={e => setTrackUrl(e.target.value)} placeholder="https://foodint.es" className={`flex-1 ${input}`} />
+          <input type="text" value={trackUrl} onChange={e => setTrackUrl(e.target.value)} placeholder="https://tudominio.com" className={`flex-1 ${input}`} />
           <Button onClick={saveDomain} disabled={!domainDirty || savingDomain}>{savingDomain ? 'Guardando...' : 'Guardar'}</Button>
         </div>
         {domainOk && <p className="text-xs text-success inline-flex items-center gap-1 mt-2"><CheckCircle2 size={12} /> Guardado</p>}
@@ -131,7 +147,7 @@ export default function RepartoSettingsPage() {
         <p className="text-xs uppercase tracking-wide text-text-secondary mb-3">Por local</p>
         <h3 className="font-semibold text-text-primary mb-2">Modo, transportista y aviso</h3>
         <p className="text-xs text-text-secondary mb-4">
-          <b>Automático</b>: Folvy avisa a Catcher solo al aceptar. · <b>Manual</b>: solo al pulsar el botón en el pedido. · <b>Off</b>: Folvy no despacha (lo hace Last) y se oculta el botón.
+          <b>Automático</b>: Folvy despacha solo al aceptar. · <b>Manual</b>: solo al pulsar el botón en el pedido. · <b>Off</b>: Folvy no despacha; lo gestiona un sistema externo (tu TPV o agregador) y se oculta el botón.
         </p>
         <div className="space-y-3">
           {locs.map(l => (
@@ -149,8 +165,9 @@ export default function RepartoSettingsPage() {
                 </div>
               </div>
               <label className="text-xs text-text-secondary">Transportista
-                <select value={l.broker} onChange={e => saveLoc(l.id, { broker: e.target.value })} className={`ml-1 ${input} py-1`}>
-                  <option value="catcher">Catcher</option><option value="own_fleet">Flota propia</option>
+                <select value={l.broker ?? ''} onChange={e => saveLoc(l.id, { broker: e.target.value || null })} className={`ml-1 ${input} py-1`}>
+                  {!l.broker && <option value="">— elige —</option>}
+                  {carrierOptions(l.broker).map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
                 </select>
               </label>
               <label className="text-xs text-text-secondary inline-flex items-center gap-1.5 cursor-pointer">
@@ -169,7 +186,7 @@ export default function RepartoSettingsPage() {
             <p className="text-xs uppercase tracking-wide text-text-secondary mb-1">Reglas de despacho</p>
             <h3 className="font-semibold text-text-primary">Quién reparte, según franja, importe y margen</h3>
           </div>
-          <Button onClick={() => setEditRule({ priority: (rules.length + 1) * 10, then_carrier: 'own_fleet', fallback_carrier: 'catcher', is_active: true })}>
+          <Button onClick={() => setEditRule({ priority: (rules.length + 1) * 10, then_carrier: 'own_fleet', fallback_carrier: null, is_active: true })}>
             <Plus size={15} className="inline -mt-0.5 mr-1" />Regla
           </Button>
         </div>
@@ -186,7 +203,7 @@ export default function RepartoSettingsPage() {
                     {(r.min_total != null || r.max_total != null) ? ` · ${r.min_total ?? 0}–${r.max_total ?? '∞'}€` : ''}
                     {r.margin_floor_pct != null ? ` · margen ≥${r.margin_floor_pct}%` : ''}
                   </p>
-                  <p className="text-xs text-text-secondary">→ {CARRIERS[r.then_carrier ?? ''] ?? r.then_carrier}{r.fallback_carrier ? ` (si no, ${CARRIERS[r.fallback_carrier] ?? r.fallback_carrier})` : ''}{!r.is_active ? ' · inactiva' : ''}</p>
+                  <p className="text-xs text-text-secondary">→ {carrierName(r.then_carrier)}{r.fallback_carrier ? ` (si no, ${carrierName(r.fallback_carrier)})` : ''}{!r.is_active ? ' · inactiva' : ''}</p>
                 </div>
                 <button onClick={() => setEditRule(r)} className="text-text-secondary hover:text-text-primary p-1"><Pencil size={15} /></button>
                 <button onClick={() => removeRule(r.id)} className="text-danger hover:opacity-80 p-1"><Trash2 size={15} /></button>
@@ -216,12 +233,12 @@ export default function RepartoSettingsPage() {
               <div />
               <label className="text-xs text-text-secondary">Transportista
                 <select value={editRule.then_carrier ?? ''} onChange={e => setEditRule({ ...editRule, then_carrier: e.target.value })} className={`block mt-1 w-full ${input}`}>
-                  <option value="own_fleet">Flota propia</option><option value="catcher">Catcher</option>
+                  {carrierOptions(editRule.then_carrier).map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
                 </select>
               </label>
               <label className="text-xs text-text-secondary">Si no hay → fallback
                 <select value={editRule.fallback_carrier ?? ''} onChange={e => setEditRule({ ...editRule, fallback_carrier: e.target.value || null })} className={`block mt-1 w-full ${input}`}>
-                  <option value="">—</option><option value="catcher">Catcher</option><option value="own_fleet">Flota propia</option>
+                  <option value="">—</option>{carrierOptions(editRule.fallback_carrier).map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
                 </select>
               </label>
             </div>
