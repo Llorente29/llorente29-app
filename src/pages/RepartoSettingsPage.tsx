@@ -24,7 +24,8 @@ async function rpc<T = unknown>(fn: string, args: Record<string, unknown>): Prom
 interface Loc {
   id: string; name: string; mode: string; broker: string | null; notify: boolean
   bonus_rain_pct?: number | null; bonus_demand_max_pct?: number | null
-  bonus_combined_cap_pct?: number | null; weather_is_raining?: boolean | null; surge_pct?: number | null
+  bonus_combined_cap_pct?: number | null; weather_is_raining?: boolean | null
+  weather_auto?: boolean | null; surge_pct?: number | null
 }
 interface Carrier { code: string; name: string }
 interface Rule {
@@ -124,9 +125,16 @@ export default function RepartoSettingsPage() {
     if (error) { alert('No se pudo guardar el bono: ' + error.message); await reload() }
   }
   async function toggleRain(id: string, v: boolean) {
-    setLocs(prev => prev.map(l => l.id === id ? { ...l, weather_is_raining: v } : l))
-    const { error } = await rpc('set_location_weather', { p_location_id: id, p_is_raining: v })
+    setLocs(prev => prev.map(l => l.id === id ? { ...l, weather_is_raining: v, weather_auto: false } : l))
+    const { error } = await rpc('set_location_weather', { p_location_id: id, p_is_raining: v, p_auto: false })
     if (error) { await reload(); alert('No se pudo cambiar el clima: ' + error.message) }
+  }
+  async function toggleWeatherAuto(id: string, auto: boolean) {
+    const cur = locs.find(l => l.id === id)
+    setLocs(prev => prev.map(l => l.id === id ? { ...l, weather_auto: auto } : l))
+    const { error } = await rpc('set_location_weather', { p_location_id: id, p_is_raining: cur?.weather_is_raining ?? false, p_auto: auto })
+    if (error) { await reload(); alert('No se pudo cambiar el modo de clima: ' + error.message) }
+    else await reload()
   }
   const patchLoc = (id: string, patch: Partial<Loc>) => setLocs(prev => prev.map(l => l.id === id ? { ...l, ...patch } : l))
 
@@ -300,14 +308,18 @@ export default function RepartoSettingsPage() {
               <label className="text-xs text-text-secondary">% tope comb.
                 <input type="number" value={l.bonus_combined_cap_pct ?? ''} onChange={e => patchLoc(l.id, { bonus_combined_cap_pct: e.target.value === '' ? null : Number(e.target.value) })} onBlur={() => { const cur = locs.find(x => x.id === l.id); if (cur) void saveBonus(l.id, cur) }} className={`ml-1 w-16 ${input} py-1`} placeholder="—" />
               </label>
-              <label className="text-xs text-text-secondary inline-flex items-center gap-1.5 cursor-pointer">
-                <input type="checkbox" checked={!!l.weather_is_raining} onChange={e => toggleRain(l.id, e.target.checked)} className="w-4 h-4 accent-accent" />
-                Lluvia ahora
+              <label className="text-xs text-text-secondary inline-flex items-center gap-1.5 cursor-pointer" title="Detecta la lluvia solo por el GPS del local (Open-Meteo)">
+                <input type="checkbox" checked={l.weather_auto !== false} onChange={e => toggleWeatherAuto(l.id, e.target.checked)} className="w-4 h-4 accent-accent" />
+                Clima auto
+              </label>
+              <label className={`text-xs inline-flex items-center gap-1.5 ${l.weather_auto !== false ? 'text-text-secondary/50' : 'text-text-secondary cursor-pointer'}`} title={l.weather_auto !== false ? 'En modo auto lo decide el clima real; desactiva "Clima auto" para forzarlo' : 'Forzar lluvia manualmente'}>
+                <input type="checkbox" checked={!!l.weather_is_raining} disabled={l.weather_auto !== false} onChange={e => toggleRain(l.id, e.target.checked)} className="w-4 h-4 accent-accent disabled:opacity-40" />
+                {l.weather_is_raining ? '🌧 lluvia' : 'lluvia'}
               </label>
             </div>
           ))}
         </div>
-        <p className="text-[11px] text-text-secondary mt-3">El interruptor "Lluvia ahora" es manual de momento; el clima automático (por GPS del local) llega en el próximo paso.</p>
+        <p className="text-[11px] text-text-secondary mt-3">Con <b>Clima auto</b> la lluvia se detecta sola por el GPS del local (se revisa cada ~10 min). Desactívalo para forzarla a mano si el pronóstico falla.</p>
       </Card>
 
       {/* C) Reglas de despacho */}
