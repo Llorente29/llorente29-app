@@ -31,10 +31,21 @@ interface Rule {
   strategy?: string | null; is_active?: boolean
 }
 interface Courier {
-  id?: string; name?: string; phone?: string | null; transport_type?: string | null
+  id?: string; name?: string; phone?: string | null; kind?: string | null; transport_type?: string | null
   assigned_locations?: string[] | null; cost_model?: string | null; cost_value?: number | null
+  rate_base?: number | null; rate_per_km?: number | null; rate_min_pickup?: number | null
+  rate_pickup_fee?: number | null; rate_tiers?: { to_km: number; price: number }[] | null
   active?: boolean; on_shift?: boolean
 }
+
+// Modelos de coste del repartidor. 'tariff' = base + €/km + mínimo de recogida
+// (estilo Stuart/Glovo). salary/hourly = empleado (se imputa por horas).
+const COST_MODELS: { val: string; label: string }[] = [
+  { val: 'per_order', label: 'Fijo por entrega' },
+  { val: 'per_km', label: 'Por km' },
+  { val: 'tariff', label: 'Tarifa (base + km + mínimo)' },
+  { val: 'hourly', label: 'Por hora' },
+]
 
 const DOW = ['L', 'M', 'X', 'J', 'V', 'S', 'D'] // 0=Lunes..6=Domingo (convención Folvy)
 
@@ -152,6 +163,20 @@ export default function RepartoSettingsPage() {
   const ruleChain = (r: Rule): string[] => {
     if (r.carrier_chain && r.carrier_chain.length) return r.carrier_chain
     return [r.then_carrier, r.fallback_carrier].filter(Boolean) as string[]
+  }
+  // Resumen legible de la tarifa de un repartidor.
+  const costLabel = (c: Courier): string => {
+    if (c.cost_model === 'tariff') {
+      const parts: string[] = []
+      if (c.rate_base != null) parts.push(`${c.rate_base}€ base`)
+      if (c.rate_per_km != null) parts.push(`${c.rate_per_km}€/km`)
+      if (c.rate_min_pickup != null) parts.push(`mín ${c.rate_min_pickup}€`)
+      return parts.length ? `tarifa · ${parts.join(' + ')}` : 'tarifa'
+    }
+    if (c.cost_value == null) return ''
+    if (c.cost_model === 'per_km') return `${c.cost_value}€/km`
+    if (c.cost_model === 'hourly') return `${c.cost_value}€/h`
+    return `${c.cost_value}€/entrega`
   }
   const input = 'border border-border-default rounded-lg px-3 py-2 text-sm bg-card text-text-primary'
 
@@ -314,7 +339,7 @@ export default function RepartoSettingsPage() {
             <p className="text-xs uppercase tracking-wide text-text-secondary mb-1">Flota propia</p>
             <h3 className="font-semibold text-text-primary">Repartidores</h3>
           </div>
-          <Button onClick={() => setEditCourier({ transport_type: 'moto', cost_model: 'per_delivery', active: true, on_shift: false, assigned_locations: [] })}>
+          <Button onClick={() => setEditCourier({ kind: 'freelance', transport_type: 'moto', cost_model: 'per_order', active: true, on_shift: false, assigned_locations: [] })}>
             <Plus size={15} className="inline -mt-0.5 mr-1" />Repartidor
           </Button>
         </div>
@@ -323,7 +348,7 @@ export default function RepartoSettingsPage() {
             {couriers.map(c => (
               <div key={c.id} className="flex items-center gap-2 text-sm border-t border-border-default pt-2">
                 <div className="flex-1 min-w-0">
-                  <p className="text-text-primary truncate">{c.name} <span className="text-xs text-text-secondary">· {c.transport_type ?? ''}{c.cost_value != null ? ` · ${c.cost_value}€ ${c.cost_model === 'per_hour' ? '/h' : '/entrega'}` : ''}</span></p>
+                  <p className="text-text-primary truncate">{c.name} <span className="text-xs text-text-secondary">· {c.transport_type ?? ''}{costLabel(c) ? ` · ${costLabel(c)}` : ''}</span></p>
                   <p className="text-xs text-text-secondary">{(c.assigned_locations?.length ?? 0) === 0 ? 'Todos los locales' : c.assigned_locations!.map(locName).join(', ')}</p>
                 </div>
                 <label className="text-[11px] text-text-secondary inline-flex items-center gap-1"><input type="checkbox" checked={!!c.on_shift} onChange={e => toggleCourier(c, 'on_shift', e.target.checked)} className="w-4 h-4 accent-accent" />En turno</label>
@@ -342,20 +367,41 @@ export default function RepartoSettingsPage() {
             <div className="grid grid-cols-2 gap-3">
               <label className="text-xs text-text-secondary">Nombre<input type="text" value={editCourier.name ?? ''} onChange={e => setEditCourier({ ...editCourier, name: e.target.value })} className={`block mt-1 w-full ${input}`} /></label>
               <label className="text-xs text-text-secondary">Teléfono<input type="text" value={editCourier.phone ?? ''} onChange={e => setEditCourier({ ...editCourier, phone: e.target.value })} className={`block mt-1 w-full ${input}`} /></label>
-              <label className="text-xs text-text-secondary">Vehículo
-                <select value={editCourier.transport_type ?? 'moto'} onChange={e => setEditCourier({ ...editCourier, transport_type: e.target.value })} className={`block mt-1 w-full ${input}`}>
-                  <option value="moto">Moto</option><option value="bici">Bici</option><option value="coche">Coche</option><option value="pie">A pie</option>
+              <label className="text-xs text-text-secondary">Tipo
+                <select value={editCourier.kind ?? 'freelance'} onChange={e => setEditCourier({ ...editCourier, kind: e.target.value })} className={`block mt-1 w-full ${input}`}>
+                  <option value="freelance">Autónomo</option><option value="employee">Empleado</option>
                 </select>
               </label>
-              <label className="text-xs text-text-secondary">Coste
-                <div className="flex gap-1 mt-1">
-                  <input type="number" value={editCourier.cost_value ?? ''} onChange={e => setEditCourier({ ...editCourier, cost_value: e.target.value === '' ? null : Number(e.target.value) })} className={`w-20 ${input}`} placeholder="€" />
-                  <select value={editCourier.cost_model ?? 'per_delivery'} onChange={e => setEditCourier({ ...editCourier, cost_model: e.target.value })} className={input}>
-                    <option value="per_delivery">/entrega</option><option value="per_hour">/hora</option>
-                  </select>
-                </div>
+              <label className="text-xs text-text-secondary">Vehículo
+                <select value={editCourier.transport_type ?? 'moto'} onChange={e => setEditCourier({ ...editCourier, transport_type: e.target.value })} className={`block mt-1 w-full ${input}`}>
+                  <option value="moto">Moto</option><option value="bici">Bici</option><option value="coche">Coche</option><option value="a_pie">A pie</option>
+                </select>
               </label>
+              <label className="text-xs text-text-secondary">Modelo de coste
+                <select value={editCourier.cost_model ?? 'per_order'} onChange={e => setEditCourier({ ...editCourier, cost_model: e.target.value })} className={`block mt-1 w-full ${input}`}>
+                  {COST_MODELS.map(m => <option key={m.val} value={m.val}>{m.label}</option>)}
+                </select>
+              </label>
+              {editCourier.cost_model !== 'tariff' && (
+                <label className="text-xs text-text-secondary">
+                  {editCourier.cost_model === 'per_km' ? 'Precio por km (€)' : editCourier.cost_model === 'hourly' ? 'Precio por hora (€)' : 'Precio por entrega (€)'}
+                  <input type="number" value={editCourier.cost_value ?? ''} onChange={e => setEditCourier({ ...editCourier, cost_value: e.target.value === '' ? null : Number(e.target.value) })} className={`block mt-1 w-full ${input}`} placeholder="€" />
+                </label>
+              )}
             </div>
+
+            {/* Tarifa rica: base + €/km + mínimo de recogida + fijo de recogida */}
+            {editCourier.cost_model === 'tariff' && (
+              <div className="border border-border-default rounded-lg p-3 bg-card/50">
+                <p className="text-xs text-text-secondary mb-2">Tarifa por pedido · <span className="text-text-secondary/70">payout = máx(mínimo, base + fijo recogida + €/km × distancia)</span></p>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="text-xs text-text-secondary">Base por pedido (€)<input type="number" value={editCourier.rate_base ?? ''} onChange={e => setEditCourier({ ...editCourier, rate_base: e.target.value === '' ? null : Number(e.target.value) })} className={`block mt-1 w-full ${input}`} placeholder="0" /></label>
+                  <label className="text-xs text-text-secondary">Precio por km (€)<input type="number" value={editCourier.rate_per_km ?? ''} onChange={e => setEditCourier({ ...editCourier, rate_per_km: e.target.value === '' ? null : Number(e.target.value) })} className={`block mt-1 w-full ${input}`} placeholder="0" /></label>
+                  <label className="text-xs text-text-secondary">Mínimo de recogida (€)<input type="number" value={editCourier.rate_min_pickup ?? ''} onChange={e => setEditCourier({ ...editCourier, rate_min_pickup: e.target.value === '' ? null : Number(e.target.value) })} className={`block mt-1 w-full ${input}`} placeholder="0" /></label>
+                  <label className="text-xs text-text-secondary">Fijo por recogida (€)<input type="number" value={editCourier.rate_pickup_fee ?? ''} onChange={e => setEditCourier({ ...editCourier, rate_pickup_fee: e.target.value === '' ? null : Number(e.target.value) })} className={`block mt-1 w-full ${input}`} placeholder="0" /></label>
+                </div>
+              </div>
+            )}
             <div>
               <p className="text-xs text-text-secondary mb-1">Locales asignados (vacío = todos)</p>
               <div className="flex flex-wrap gap-2">
