@@ -26,6 +26,7 @@ interface Loc {
   bonus_rain_pct?: number | null; bonus_demand_max_pct?: number | null
   bonus_combined_cap_pct?: number | null; weather_is_raining?: boolean | null
   weather_auto?: boolean | null; surge_pct?: number | null
+  assignment_strategy?: string | null; offer_timeout_s?: number | null
 }
 interface Carrier { code: string; name: string }
 interface Rule {
@@ -179,6 +180,10 @@ export default function RepartoSettingsPage() {
     else await reload()
   }
   const patchLoc = (id: string, patch: Partial<Loc>) => setLocs(prev => prev.map(l => l.id === id ? { ...l, ...patch } : l))
+  async function saveAssignment(id: string, next: Loc) {
+    const { error } = await rpc('set_location_assignment', { p_location_id: id, p_strategy: next.assignment_strategy ?? 'broadcast', p_timeout_s: next.offer_timeout_s ?? 60 })
+    if (error) { alert('No se pudo guardar la asignación: ' + error.message); await reload() }
+  }
 
   // ── C) Reglas ──────────────────────────────────────────────────────────
   async function saveRule() {
@@ -430,9 +435,21 @@ export default function RepartoSettingsPage() {
                 <input type="checkbox" checked={l.notify} onChange={e => saveLoc(l.id, { notify: e.target.checked })} className="w-4 h-4 accent-accent" />
                 Aviso WhatsApp
               </label>
+              <label className="text-xs text-text-secondary">Asignación
+                <select value={l.assignment_strategy ?? 'broadcast'} onChange={e => { patchLoc(l.id, { assignment_strategy: e.target.value }); void saveAssignment(l.id, { ...l, assignment_strategy: e.target.value }) }} className={`ml-1 ${input} py-1`}>
+                  <option value="broadcast">A todos</option>
+                  <option value="nearest">Al más cercano</option>
+                </select>
+              </label>
+              {l.assignment_strategy === 'nearest' && (
+                <label className="text-xs text-text-secondary">Espera
+                  <input type="number" value={l.offer_timeout_s ?? 60} onChange={e => patchLoc(l.id, { offer_timeout_s: e.target.value === '' ? null : Number(e.target.value) })} onBlur={() => { const cur = locs.find(x => x.id === l.id); if (cur) void saveAssignment(l.id, cur) }} className={`ml-1 w-14 ${input} py-1`} /> s
+                </label>
+              )}
             </div>
           ))}
         </div>
+        <p className="text-[11px] text-text-secondary mt-3"><b>A todos</b>: el pedido se ofrece a la vez a todos los repartidores en turno. <b>Al más cercano</b>: se ofrece primero al más próximo al local; si no acepta en el tiempo de espera, pasa solo al siguiente.</p>
       </Card>
 
       {/* B2) Bonos por local (surge) */}
