@@ -3,6 +3,13 @@
 // Mapa Mapbox con la moto en vivo + estado + destino (RPC track_by_token, solo lectura)
 // + CAPA COMERCIAL "Hazte un Multi": teaser suave en camino y arma completa al Entregar
 //   (cupon-ticket de descuento directo MULTI + repetir en la tienda + cross-sell del hub).
+//
+// CONTACTO DEL LOCAL (21/07/2026): ademas del repartidor (primario), se ofrece
+// "Llamar al restaurante" para problemas del PEDIDO (falta algo, alergia) y como red.
+//   - Normal (en camino / preparando): linea SECUNDARIA tenue, para no invitar a
+//     saturar la cocina en pleno servicio.
+//   - Incidencia (rider fallo / no hay rider): pasa a PRIMARIO, es el contacto que salva.
+//   - Solo aparece si el local tiene telefono cargado (pickup_phone).
 
 import { useEffect, useRef, useState } from 'react'
 import mapboxgl from 'mapbox-gl'
@@ -25,7 +32,7 @@ interface TrackData {
   rider_lat?: number | null; rider_lng?: number | null; rider_seen_at?: string | null
   eta_delivery?: string | null
   dest_lat?: number | null; dest_lng?: number | null
-  pickup_name?: string | null; pickup_lat?: number | null; pickup_lng?: number | null
+  pickup_name?: string | null; pickup_lat?: number | null; pickup_lng?: number | null; pickup_phone?: string | null
   shop_slug?: string | null; shop_logo?: string | null
   offer?: Offer | null
 }
@@ -51,6 +58,7 @@ function seenAgo(iso?: string | null): string {
   if (min < 60) return `hace ${min} min`
   return 'hace un rato'
 }
+function telHref(phone: string): string { return `tel:${phone.replace(/\s+/g, '')}` }
 function markerEl(bg: string, emoji: string): HTMLDivElement {
   const el = document.createElement('div')
   el.style.cssText = `width:36px;height:36px;border-radius:50%;background:${bg};display:grid;place-items:center;box-shadow:0 2px 10px rgba(0,0,0,.35);font-size:18px;border:2px solid #fff`
@@ -163,6 +171,24 @@ export default function SeguimientoRoute() {
   const pct = Math.round(Number(offer?.pct) || 0)
   const bUrl = brandUrl(data.shop_slug, data.brand_id)
   const hUrl = hubUrl(data.shop_slug)
+
+  // ── Contacto del LOCAL (solo si hay telefono cargado) ──────────────────
+  // Incidencia -> primario (boton); normal -> secundario tenue.
+  const RestaurantContact = data.pickup_phone ? (
+    incidencia ? (
+      <a href={telHref(data.pickup_phone)}
+        className="w-full inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-500 text-white font-bold px-4 py-3 text-sm hover:bg-emerald-600">
+        <Phone size={16} /> Llamar al restaurante
+      </a>
+    ) : (
+      <div className="flex items-center justify-center gap-1.5 text-[13px] text-zinc-400">
+        <span>¿Un problema con el pedido?</span>
+        <a href={telHref(data.pickup_phone)} className="inline-flex items-center gap-1 text-zinc-600 font-semibold hover:text-zinc-900">
+          <Phone size={13} /> Llamar al restaurante
+        </a>
+      </div>
+    )
+  ) : null
 
   // ── Cabecera de marca (comun) ──────────────────────────────────────────
   const Header = (
@@ -308,12 +334,15 @@ export default function SeguimientoRoute() {
             <p className="text-sm text-zinc-500">{data.rider_seen_at ? `En camino · visto ${seenAgo(data.rider_seen_at)}` : 'Preparando tu pedido'}</p>
           </div>
           {data.rider_phone && (
-            <a href={`tel:${data.rider_phone.replace(/\s+/g, '')}`}
+            <a href={telHref(data.rider_phone)}
               className="ml-auto shrink-0 inline-flex items-center gap-2 rounded-full bg-emerald-500 text-white font-bold px-4 py-2.5 text-sm hover:bg-emerald-600">
               <Phone size={16} /> Llamar
             </a>
           )}
         </div>
+
+        {/* Contacto del local: tenue en normal, primario en incidencia. */}
+        {RestaurantContact}
 
         {/* Teaser comercial suave: planta la semilla sin robar protagonismo al mapa */}
         {offer?.code && (
