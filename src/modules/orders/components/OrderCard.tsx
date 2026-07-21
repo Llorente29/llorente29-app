@@ -264,7 +264,8 @@ function DeliveryRow({ order, onDispatched }: { order: OrderFeedItem; onDispatch
   }
 
   // (A) Reparto propio SIN despachar (modo manual o tras fallo): botón en la fila.
-  if (isOwnDeliveryUndispatched(order)) {
+  // En modo 'off' (lo despacha Last/externo) NO se muestra botón: Folvy no despacha.
+  if (isOwnDeliveryUndispatched(order) && order.dispatch_mode !== 'off') {
     const failed = !!order.dispatch_error
     const errMsg = dispatchErr ?? order.dispatch_error
     return (

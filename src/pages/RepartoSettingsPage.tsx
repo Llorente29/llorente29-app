@@ -28,6 +28,13 @@ interface Courier {
 const CARRIERS: Record<string, string> = { catcher: 'Catcher', own_fleet: 'Flota propia' }
 const DOW = ['L', 'M', 'X', 'J', 'V', 'S', 'D'] // 0=Lunes..6=Domingo (convención Folvy)
 
+// Interruptor de despacho de Folvy (3 posiciones). Off = Folvy no despacha; lo hace Last.
+const DISPATCH_MODES: { val: string; label: string }[] = [
+  { val: 'auto', label: 'Automático' },
+  { val: 'manual', label: 'Manual' },
+  { val: 'off', label: 'Off · lo lleva Last' },
+]
+
 export default function RepartoSettingsPage() {
   const [loading, setLoading] = useState(true)
   const [locs, setLocs] = useState<Loc[]>([])
@@ -122,16 +129,25 @@ export default function RepartoSettingsPage() {
       {/* B) Por local */}
       <Card className="p-5">
         <p className="text-xs uppercase tracking-wide text-text-secondary mb-3">Por local</p>
-        <h3 className="font-semibold text-text-primary mb-4">Modo, transportista y aviso</h3>
+        <h3 className="font-semibold text-text-primary mb-2">Modo, transportista y aviso</h3>
+        <p className="text-xs text-text-secondary mb-4">
+          <b>Automático</b>: Folvy avisa a Catcher solo al aceptar. · <b>Manual</b>: solo al pulsar el botón en el pedido. · <b>Off</b>: Folvy no despacha (lo hace Last) y se oculta el botón.
+        </p>
         <div className="space-y-3">
           {locs.map(l => (
             <div key={l.id} className="flex flex-wrap items-center gap-3 border-t border-border-default pt-3">
               <span className="text-sm font-medium text-text-primary flex-1 min-w-[140px]">{l.name}</span>
-              <label className="text-xs text-text-secondary">Modo
-                <select value={l.mode} onChange={e => saveLoc(l.id, { mode: e.target.value })} className={`ml-1 ${input} py-1`}>
-                  <option value="auto">Automático</option><option value="manual">Manual</option>
-                </select>
-              </label>
+              <div className="text-xs text-text-secondary">
+                <span className="block mb-1">Despacho de Folvy</span>
+                <div className="inline-flex rounded-lg border border-border-default overflow-hidden">
+                  {DISPATCH_MODES.map(m => (
+                    <button key={m.val} type="button" onClick={() => saveLoc(l.id, { mode: m.val })}
+                      className={`px-3 py-1.5 text-xs font-medium border-r border-border-default last:border-r-0 ${l.mode === m.val ? 'bg-accent text-white' : 'bg-card text-text-secondary hover:text-text-primary'}`}>
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <label className="text-xs text-text-secondary">Transportista
                 <select value={l.broker} onChange={e => saveLoc(l.id, { broker: e.target.value })} className={`ml-1 ${input} py-1`}>
                   <option value="catcher">Catcher</option><option value="own_fleet">Flota propia</option>
