@@ -343,13 +343,15 @@ export async function renderKitchenImage(order: any): Promise<HTMLCanvasElement>
   const ctx = canvas.getContext('2d')!
   ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H)
   ctx.fillStyle = INK; ctx.textBaseline = 'top'
-  let y = PAD
+  let y = PAD + 30   // más aire arriba (antes del código)
 
   const centerT = (t: string, size: number, bold?: boolean, fill = INK) => {
     ctx.font = fnt(size, bold); ctx.fillStyle = fill; ctx.textAlign = 'center'
     ctx.fillText(t || '', W / 2, y); ctx.textAlign = 'left'; y += size + 8
   }
   const rule = () => { y += 6; ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.setLineDash([]); ctx.beginPath(); ctx.moveTo(PAD, y); ctx.lineTo(W - PAD, y); ctx.stroke(); y += 16 }
+  // Separador fino entre platos (que no se amontonen).
+  const thinRule = () => { y += 6; ctx.strokeStyle = '#bbbbbb'; ctx.lineWidth = 1; ctx.setLineDash([]); ctx.beginPath(); ctx.moveTo(PAD, y); ctx.lineTo(W - PAD, y); ctx.stroke(); y += 14 }
   const band = (t: string, size: number) => {
     const h = size + 18
     ctx.fillStyle = INK; ctx.fillRect(PAD - 6, y - 2, (W - PAD + 6) - (PAD - 6), h + 2)
@@ -386,16 +388,44 @@ export async function renderKitchenImage(order: any): Promise<HTMLCanvasElement>
     for (const l of lines) { ctx.fillStyle = INK; ctx.font = fnt(24, true); ctx.fillText(l, PAD + 10, yy); yy += 30 }
     y += boxH + 10
   }
+  // Plato PROTAGONISTA: cantidad en CAJA NEGRA + nombre grande al lado.
+  const dishWithQty = (qty: any, name: string) => {
+    const qtyText = `${qty}×`
+    const qFont = fnt(30, true)
+    ctx.font = qFont
+    const qtW = ctx.measureText(qtyText).width
+    const boxW = Math.round(qtW + 26)
+    const boxH = 48
+    const boxY = y
+    const r = 8
+    ctx.fillStyle = INK
+    ctx.beginPath()
+    ctx.moveTo(PAD + r, boxY)
+    ctx.arcTo(PAD + boxW, boxY, PAD + boxW, boxY + boxH, r)
+    ctx.arcTo(PAD + boxW, boxY + boxH, PAD, boxY + boxH, r)
+    ctx.arcTo(PAD, boxY + boxH, PAD, boxY, r)
+    ctx.arcTo(PAD, boxY, PAD + boxW, boxY, r)
+    ctx.closePath(); ctx.fill()
+    ctx.fillStyle = '#ffffff'; ctx.font = qFont; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.fillText(qtyText, PAD + boxW / 2, boxY + boxH / 2 + 1)
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillStyle = INK
+    // Nombre grande a la derecha; envuelve alineado bajo sí mismo.
+    const nameX = PAD + boxW + 16
+    wrapLeft(name, 42, true, nameX)
+    if (y < boxY + boxH + 4) y = boxY + boxH + 4
+  }
+  // Quita un código de marca al final del nombre (p.ej. " (BB)"): 2-4 mayúsculas.
+  const cleanName = (n: string) => (n || '').replace(/\s*\([A-ZÑ]{2,4}\)\s*$/, '').trim()
 
-  // Cabecera
+  // Cabecera (reducida a su papel; el código de recogida sigue grande).
   band(pickupCode(order), 46)
-  centerT((order.brand ?? '').toUpperCase(), 30, true)
+  centerT((order.brand ?? '').toUpperCase(), 26, true)
   const kref = platformRef(order)
   if (kref) centerT(kref, 20, false, MUT)
   centerT(fmtDate(order.entro_at), 20, false, MUT)
-  y += 6
-  centerT(deliveryLabel(order.service_type), 28, true)
-  if (order.customer_name) centerT((order.customer_name || '').split(' ')[0], 28, true)
+  y += 4
+  centerT(deliveryLabel(order.service_type), 24, true)
+  if (order.customer_name) centerT((order.customer_name || '').split(' ')[0], 24, true)
   if (order.expected_time) centerT('Recogida ' + fmtDate(order.expected_time), 22, false, MUT)
   rule()
 
@@ -410,25 +440,31 @@ export async function renderKitchenImage(order: any): Promise<HTMLCanvasElement>
       nofam.push(line)
     }
   }
+  let firstLine = true
   const drawLine = (line: any) => {
-    wrapLeft(`${line.qty}x ${line.name}`, 32, true)
+    if (!firstLine) thinRule()
+    firstLine = false
+    dishWithQty(line.qty, cleanName(line.name))
     for (const m of modifierLines(line.children)) {
-      wrapLeft('   ' + m.text, m.tone === 'remove' ? 24 : 22, m.tone === 'remove', PAD + 12, m.tone === 'remove' ? INK : MUT)
+      const rem = m.tone === 'remove'
+      wrapLeft(m.text, rem ? 26 : 24, rem, PAD + 20, rem ? INK : MUT)
     }
     const al = (line.allergens || [])
-    if (al.length) wrapLeft('! ' + al.join(' · '), 22, true, PAD + 12)
+    if (al.length) wrapLeft('! ' + al.join(' · '), 24, true, PAD + 20)
     if (line.customer_note) noteBox(line.customer_note)
-    y += 12
+    y += 14
   }
   const famKeys = [...groups.keys()].sort((a, z) => a.localeCompare(z, 'es'))
   for (const key of famKeys) {
     band(key, 26)
+    firstLine = true
     for (const line of groups.get(key)!) drawLine(line)
   }
   // Sin familia: sin cabecera, directo.
+  if (famKeys.length && nofam.length) firstLine = true
   for (const line of nofam) drawLine(line)
 
-  const out = newCanvas(W, y)
+  const out = newCanvas(W, y + 48)   // más aire abajo (antes del corte)
   out.getContext('2d')!.drawImage(canvas, 0, 0)
   return out
 }
