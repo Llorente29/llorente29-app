@@ -2,6 +2,7 @@
 // PWA del REPARTIDOR - ruta publica /repartidor. Token = courier.access_token.
 // T3b nav/distancia/ganancia/rechazar - T3c foto+firma - tema claro/oscuro
 // T3d: ajuste "abrir ruta al aceptar" + codigo de recogida destacado.
+// CFG-4c: barra de progreso de RETOS (courier_quests_by_token).
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import {
@@ -12,6 +13,13 @@ import {
   courierSession, courierSetShift, courierFeed, courierClaim, courierDecline, courierAdvance,
   courierPing, courierProofUpload, type CourierSession, type CourierJob,
 } from './repartidorService'
+import { supabase } from '../../lib/supabase'
+
+// Reto (quest) con progreso calculado en vivo por courier_quests_by_token.
+interface Quest {
+  id: string; name: string; period: string; target: number; reward: number
+  done: number; completed: boolean; location_id: string | null
+}
 
 const TOKEN_KEY = 'courier_token'
 const readToken = () => { try { return localStorage.getItem(TOKEN_KEY) } catch { return null } }
@@ -19,9 +27,9 @@ const storeToken = (t: string) => { try { localStorage.setItem(TOKEN_KEY, t) } c
 const AUTOROUTE_KEY = 'courier_autoroute'
 
 const ACTIVE = ['accepted', 'picked_up', 'in_delivery']
-const eur = (n: number | null) => (n == null ? '' : n.toFixed(2).replace('.', ',') + ' \u20AC')
+const eur = (n: number | null) => (n == null ? '' : n.toFixed(2).replace('.', ',') + ' €')
 const km = (n: number | null) => (n == null ? '' : n.toString().replace('.', ',') + ' km')
-const DOT = '\u00B7'
+const DOT = '·'
 
 type Theme = 'light' | 'dark'
 const THEME_KEY = 'courier_theme'
@@ -68,6 +76,7 @@ export default function RepartidorRoute() {
   const [paste, setPaste] = useState('')
   const [sess, setSess] = useState<CourierSession | null>(null)
   const [jobs, setJobs] = useState<CourierJob[]>([])
+  const [quests, setQuests] = useState<Quest[]>([])
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [theme, setTheme] = useState<Theme>(initialTheme)
@@ -117,6 +126,18 @@ export default function RepartidorRoute() {
     void loadFeed(); const id = setInterval(loadFeed, 8000); return () => clearInterval(id)
   }, [status, loadFeed])
 
+  const loadQuests = useCallback(async () => {
+    if (!token || !supabase) return
+    try {
+      const { data } = await (supabase.rpc as unknown as (f: string, a: Record<string, unknown>) => Promise<{ data: Quest[] | null }>)('courier_quests_by_token', { p_token: token })
+      setQuests(Array.isArray(data) ? data : [])
+    } catch { /* silencioso */ }
+  }, [token])
+  useEffect(() => {
+    if (status !== 'valid') return
+    void loadQuests(); const id = setInterval(loadQuests, 30000); return () => clearInterval(id)
+  }, [status, loadQuests])
+
   const hasActive = jobs.some(j => j.mine && ACTIVE.includes(j.state))
   useEffect(() => {
     const on = status === 'valid' && sess?.on_shift && hasActive && 'geolocation' in navigator
@@ -140,7 +161,7 @@ export default function RepartidorRoute() {
   }
   async function act(fn: () => Promise<unknown>, key: string) {
     setBusy(key); setErr(null)
-    try { await fn(); await loadFeed() } catch (e) { setErr(e instanceof Error ? e.message : 'Error') } finally { setBusy(null) }
+    try { await fn(); await loadFeed(); await loadQuests() } catch (e) { setErr(e instanceof Error ? e.message : 'Error') } finally { setBusy(null) }
   }
   function claimOffer(j: CourierJob) {
     if (autoRoute) openNav(readNavPref() ?? 'gmaps', j.pickup_lat, j.pickup_lng, j.pickup_address)
@@ -153,7 +174,7 @@ export default function RepartidorRoute() {
       let url: string | undefined
       if (dataUrl) url = await courierProofUpload(token, job.sale_id, kind, dataUrl)
       await courierAdvance(token, job.assignment_id, 'delivered', note || undefined, url)
-      setDelivering(null); await loadFeed()
+      setDelivering(null); await loadFeed(); await loadQuests()
     } catch (e) { setErr(e instanceof Error ? e.message : 'No se pudo confirmar la entrega') } finally { setBusy(null) }
   }
 
@@ -203,11 +224,34 @@ export default function RepartidorRoute() {
       {err && <div className="bg-red-500/15 text-red-500 text-sm px-4 py-2">{err}</div>}
 
       <main className="flex-1 overflow-y-auto p-4 space-y-4">
+        {sess.on_shift && quests.length > 0 && (
+          <div className={`rounded-2xl ${c.card} p-4`}>
+            <p className={`text-xs uppercase tracking-wide ${c.sub} mb-2`}>Retos</p>
+            <div className="space-y-3">
+              {quests.map(q => {
+                const pct = q.target > 0 ? Math.min(100, Math.round((q.done / q.target) * 100)) : 0
+                return (
+                  <div key={q.id}>
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="font-semibold">{q.name}</span>
+                      <span className={`ml-auto font-bold ${q.completed ? 'text-emerald-500' : c.body}`}>{q.completed ? '¡' : ''}+{eur(q.reward)}{q.completed ? '!' : ''}</span>
+                    </div>
+                    <div className={`mt-1 h-2 rounded-full overflow-hidden ${dark ? 'bg-zinc-800' : 'bg-zinc-200'}`}>
+                      <div className="h-full bg-emerald-500 transition-all" style={{ width: `${pct}%` }} />
+                    </div>
+                    <p className={`text-xs ${c.sub} mt-1`}>{q.done}/{q.target} {q.period === 'day' ? 'hoy' : 'esta semana'}{q.completed ? ` ${DOT} conseguido` : ''}</p>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         {mine.map(j => (
           <ActiveCard key={j.assignment_id} j={j} c={c} busy={busy}
             onPicked={() => act(() => courierAdvance(token, j.assignment_id, 'picked_up'), j.assignment_id + ':p')}
             onDelivered={() => setDelivering(j)}
-            onFailed={() => { const r = window.prompt('\u00BFQue paso? (motivo del fallo)'); if (r) void act(() => courierAdvance(token, j.assignment_id, 'failed', r), j.assignment_id + ':f') }} />
+            onFailed={() => { const r = window.prompt('¿Que paso? (motivo del fallo)'); if (r) void act(() => courierAdvance(token, j.assignment_id, 'failed', r), j.assignment_id + ':f') }} />
         ))}
 
         {sess.on_shift && offers.length > 0 && (
