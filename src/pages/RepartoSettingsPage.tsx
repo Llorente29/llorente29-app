@@ -36,6 +36,10 @@ interface Rule {
   strategy?: string | null; is_active?: boolean
 }
 interface Employee { id: string; name: string }
+interface Quest {
+  id?: string; name?: string; period?: string; target_count?: number | null; reward?: number | null
+  location_id?: string | null; valid_from?: string | null; valid_to?: string | null; is_active?: boolean
+}
 interface Courier {
   id?: string; name?: string; phone?: string | null; kind?: string | null; employee_id?: string | null
   transport_type?: string | null; vehicle_plate?: string | null; nif?: string | null; iban?: string | null
@@ -72,6 +76,8 @@ export default function RepartoSettingsPage() {
   const [rules, setRules] = useState<Rule[]>([])
   const [couriers, setCouriers] = useState<Courier[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
+  const [quests, setQuests] = useState<Quest[]>([])
+  const [editQuest, setEditQuest] = useState<Quest | null>(null)
   const [copiedTok, setCopiedTok] = useState(false)
   const [trackUrl, setTrackUrl] = useState('')
   const [trackUrlSaved, setTrackUrlSaved] = useState('')
@@ -81,12 +87,13 @@ export default function RepartoSettingsPage() {
   const [editCourier, setEditCourier] = useState<Courier | null>(null)
 
   const reload = useCallback(async () => {
-    const { data } = await rpc<{ track_base_url: string | null; carriers: Carrier[]; employees: Employee[]; locations: Loc[]; rules: Rule[]; couriers: Courier[] }>('reparto_settings', {})
+    const { data } = await rpc<{ track_base_url: string | null; carriers: Carrier[]; employees: Employee[]; locations: Loc[]; rules: Rule[]; bonuses: Quest[]; couriers: Courier[] }>('reparto_settings', {})
     if (!data) return
     setCarriers(data.carriers ?? [])
     setEmployees(data.employees ?? [])
     setLocs(data.locations ?? [])
     setRules(data.rules ?? [])
+    setQuests(data.bonuses ?? [])
     setCouriers(data.couriers ?? [])
     setTrackUrl(data.track_base_url ?? '')
     setTrackUrlSaved(data.track_base_url ?? '')
@@ -170,6 +177,22 @@ export default function RepartoSettingsPage() {
     ;[next[idx], next[j]] = [next[j], next[idx]]
     setEditRule({ ...editRule, carrier_chain: next })
   }
+
+  // ── Retos (quests) ─────────────────────────────────────────────────────
+  async function saveQuest() {
+    if (!editQuest) return
+    if (!editQuest.name || !(editQuest.target_count) || !(editQuest.reward)) { alert('El reto necesita nombre, nº de entregas y bono'); return }
+    const { error } = await rpc('upsert_courier_bonus', { p: editQuest })
+    if (error) { alert('No se pudo guardar el reto: ' + error.message); return }
+    setEditQuest(null); await reload()
+  }
+  async function removeQuest(id?: string) {
+    if (!id || !confirm('¿Eliminar este reto?')) return
+    const { error } = await rpc('delete_courier_bonus', { p_id: id })
+    if (error) { alert('No se pudo eliminar: ' + error.message); return }
+    await reload()
+  }
+  const periodLabel = (p?: string | null) => p === 'day' ? 'al día' : 'a la semana'
 
   // ── D) Flota ───────────────────────────────────────────────────────────
   async function saveCourier() {
@@ -547,6 +570,64 @@ export default function RepartoSettingsPage() {
               </div>
             )}
             <div className="flex justify-end gap-2 pt-1"><Button onClick={saveCourier}>Guardar repartidor</Button></div>
+          </div>
+        )}
+      </Card>
+
+      {/* D2) Retos (quests) */}
+      <Card className="p-5">
+        <div className="flex items-center justify-between mb-1">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-text-secondary mb-1">Retos</p>
+            <h3 className="font-semibold text-text-primary">Bonos por objetivo de entregas</h3>
+          </div>
+          <Button onClick={() => setEditQuest({ name: '', period: 'week', target_count: null, reward: null, is_active: true })}>
+            <Plus size={15} className="inline -mt-0.5 mr-1" />Reto
+          </Button>
+        </div>
+        <p className="text-xs text-text-secondary mb-3">"Haz N entregas → bono €". El repartidor ve su progreso en la app. Es la palanca de fidelización que la flota contratada no ofrece.</p>
+
+        {quests.length === 0 ? <p className="text-xs text-text-secondary">Aún no hay retos.</p> : (
+          <div className="space-y-2">
+            {quests.map(q => (
+              <div key={q.id} className="flex items-center gap-2 text-sm border-t border-border-default pt-2">
+                <div className="flex-1 min-w-0">
+                  <p className="text-text-primary truncate">{q.name} <span className="text-xs text-text-secondary">· {q.target_count} entregas {periodLabel(q.period)} → <b className="text-accent">+{q.reward}€</b></span></p>
+                  <p className="text-xs text-text-secondary">{q.location_id ? locName(q.location_id) : 'Todos los locales'}{!q.is_active ? ' · inactivo' : ''}</p>
+                </div>
+                <button onClick={() => setEditQuest(q)} className="text-text-secondary hover:text-text-primary p-1"><Pencil size={15} /></button>
+                <button onClick={() => removeQuest(q.id)} className="text-danger hover:opacity-80 p-1"><Trash2 size={15} /></button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {editQuest && (
+          <div className="mt-4 border border-border-default rounded-xl p-4 bg-card space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-text-primary">{editQuest.id ? 'Editar reto' : 'Nuevo reto'}</p>
+              <button onClick={() => setEditQuest(null)} className="text-text-secondary"><X size={16} /></button>
+            </div>
+            <label className="text-xs text-text-secondary block">Nombre<input type="text" value={editQuest.name ?? ''} onChange={e => setEditQuest({ ...editQuest, name: e.target.value })} className={`block mt-1 w-full ${input}`} placeholder="Ej. Reto de la semana" /></label>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="text-xs text-text-secondary">Nº entregas<input type="number" value={editQuest.target_count ?? ''} onChange={e => setEditQuest({ ...editQuest, target_count: e.target.value === '' ? null : Number(e.target.value) })} className={`block mt-1 w-full ${input}`} /></label>
+              <label className="text-xs text-text-secondary">Bono (€)<input type="number" value={editQuest.reward ?? ''} onChange={e => setEditQuest({ ...editQuest, reward: e.target.value === '' ? null : Number(e.target.value) })} className={`block mt-1 w-full ${input}`} /></label>
+              <label className="text-xs text-text-secondary">Periodo
+                <select value={editQuest.period ?? 'week'} onChange={e => setEditQuest({ ...editQuest, period: e.target.value })} className={`block mt-1 w-full ${input}`}>
+                  <option value="week">Por semana</option><option value="day">Por día</option>
+                </select>
+              </label>
+              <label className="text-xs text-text-secondary">Local
+                <select value={editQuest.location_id ?? ''} onChange={e => setEditQuest({ ...editQuest, location_id: e.target.value || null })} className={`block mt-1 w-full ${input}`}>
+                  <option value="">Todos</option>{locs.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                </select>
+              </label>
+              <label className="text-xs text-text-secondary">Desde (opcional)<input type="date" value={editQuest.valid_from ?? ''} onChange={e => setEditQuest({ ...editQuest, valid_from: e.target.value || null })} className={`block mt-1 w-full ${input}`} /></label>
+              <label className="text-xs text-text-secondary">Hasta (opcional)<input type="date" value={editQuest.valid_to ?? ''} onChange={e => setEditQuest({ ...editQuest, valid_to: e.target.value || null })} className={`block mt-1 w-full ${input}`} /></label>
+            </div>
+            {(editQuest.target_count && editQuest.reward) ? <p className="text-[11px] text-text-secondary">Vista previa: <b>{editQuest.target_count} entregas {periodLabel(editQuest.period)} → +{editQuest.reward}€</b> (≈ {(Number(editQuest.reward) / Number(editQuest.target_count)).toFixed(2)}€ por entrega extra).</p> : null}
+            <label className="text-xs text-text-secondary inline-flex items-center gap-1.5"><input type="checkbox" checked={editQuest.is_active ?? true} onChange={e => setEditQuest({ ...editQuest, is_active: e.target.checked })} className="w-4 h-4 accent-accent" /> Activo</label>
+            <div className="flex justify-end gap-2 pt-1"><Button onClick={saveQuest}>Guardar reto</Button></div>
           </div>
         )}
       </Card>
