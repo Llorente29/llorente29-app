@@ -12,7 +12,7 @@
 // (p.ej. Flota propia → Catcher → Jelp). El motor prueba el 1º; si no puede
 // (sin repartidor en turno o más lejos del tope de km), pasa al siguiente.
 import { useState, useEffect, useCallback } from 'react'
-import { CheckCircle2, Plus, Trash2, Pencil, X, ChevronUp, ChevronDown, Copy, Link2, RefreshCw } from 'lucide-react'
+import { CheckCircle2, Plus, Trash2, Pencil, X, ChevronUp, ChevronDown, Copy, Link2, RefreshCw, Download } from 'lucide-react'
 import { Card, Button } from '../components/ui'
 import { supabase } from '../lib/supabase'
 
@@ -39,6 +39,10 @@ interface Employee { id: string; name: string }
 interface Quest {
   id?: string; name?: string; period?: string; target_count?: number | null; reward?: number | null
   location_id?: string | null; valid_from?: string | null; valid_to?: string | null; is_active?: boolean
+}
+interface LiqRow {
+  courier_id: string; name: string; kind: string | null; nif: string | null; iban: string | null
+  deliveries: number; km: number; delivery_earnings: number; quest_bonus: number; total: number
 }
 interface Courier {
   id?: string; name?: string; phone?: string | null; kind?: string | null; employee_id?: string | null
@@ -79,6 +83,13 @@ export default function RepartoSettingsPage() {
   const [quests, setQuests] = useState<Quest[]>([])
   const [editQuest, setEditQuest] = useState<Quest | null>(null)
   const [copiedTok, setCopiedTok] = useState(false)
+  const mondayISO = () => { const d = new Date(); const day = (d.getDay() + 6) % 7; d.setDate(d.getDate() - day); return d.toISOString().slice(0, 10) }
+  const todayISO = () => new Date().toISOString().slice(0, 10)
+  const [liqFrom, setLiqFrom] = useState(mondayISO())
+  const [liqTo, setLiqTo] = useState(todayISO())
+  const [liqLoc, setLiqLoc] = useState<string>('')
+  const [liqRows, setLiqRows] = useState<LiqRow[] | null>(null)
+  const [liqLoading, setLiqLoading] = useState(false)
   const [trackUrl, setTrackUrl] = useState('')
   const [trackUrlSaved, setTrackUrlSaved] = useState('')
   const [savingDomain, setSavingDomain] = useState(false)
@@ -193,6 +204,29 @@ export default function RepartoSettingsPage() {
     await reload()
   }
   const periodLabel = (p?: string | null) => p === 'day' ? 'al día' : 'a la semana'
+
+  // ── Liquidación ────────────────────────────────────────────────────────
+  async function genLiquidacion() {
+    setLiqLoading(true)
+    const { data, error } = await rpc<LiqRow[]>('reparto_liquidacion', { p_from: liqFrom, p_to: liqTo, p_location_id: liqLoc || null })
+    setLiqLoading(false)
+    if (error) { alert('No se pudo generar: ' + error.message); return }
+    setLiqRows(data ?? [])
+  }
+  function downloadLiquidacionCSV() {
+    if (!liqRows || liqRows.length === 0) return
+    const head = ['Repartidor', 'Tipo', 'NIF', 'IBAN', 'Entregas', 'Km', 'Reparto (€)', 'Retos (€)', 'Total (€)']
+    const esc = (v: string | number | null) => `"${String(v ?? '').replace(/"/g, '""')}"`
+    const lines = liqRows.map(r => [r.name, r.kind === 'employee' ? 'Empleado' : 'Autónomo', r.nif, r.iban, r.deliveries, r.km, r.delivery_earnings, r.quest_bonus, r.total].map(esc).join(';'))
+    const totalGen = liqRows.reduce((s, r) => s + Number(r.total || 0), 0)
+    lines.push(['TOTAL', '', '', '', '', '', '', '', totalGen.toFixed(2)].map(esc).join(';'))
+    const csv = '﻿' + [head.map(esc).join(';'), ...lines].join('\r\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url; a.download = `liquidacion_${liqFrom}_${liqTo}.csv`; a.click()
+    URL.revokeObjectURL(url)
+  }
+  const liqTotal = (liqRows ?? []).reduce((s, r) => s + Number(r.total || 0), 0)
 
   // ── D) Flota ───────────────────────────────────────────────────────────
   async function saveCourier() {
@@ -630,6 +664,49 @@ export default function RepartoSettingsPage() {
             <div className="flex justify-end gap-2 pt-1"><Button onClick={saveQuest}>Guardar reto</Button></div>
           </div>
         )}
+      </Card>
+
+      {/* D3) Liquidación */}
+      <Card className="p-5">
+        <p className="text-xs uppercase tracking-wide text-text-secondary mb-1">Liquidación</p>
+        <h3 className="font-semibold text-text-primary mb-1">Pago a repartidores por periodo</h3>
+        <p className="text-xs text-text-secondary mb-3">Suma el reparto de cada repartidor (payout por entrega, ya con surge) más los retos conseguidos. Descárgalo en CSV para tu gestoría.</p>
+        <div className="flex flex-wrap items-end gap-2 mb-3">
+          <label className="text-xs text-text-secondary">Desde<input type="date" value={liqFrom} onChange={e => setLiqFrom(e.target.value)} className={`block mt-1 ${input}`} /></label>
+          <label className="text-xs text-text-secondary">Hasta<input type="date" value={liqTo} onChange={e => setLiqTo(e.target.value)} className={`block mt-1 ${input}`} /></label>
+          <label className="text-xs text-text-secondary">Local
+            <select value={liqLoc} onChange={e => setLiqLoc(e.target.value)} className={`block mt-1 ${input} py-2`}>
+              <option value="">Todos</option>{locs.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+            </select>
+          </label>
+          <Button onClick={genLiquidacion} disabled={liqLoading}>{liqLoading ? 'Generando...' : 'Generar'}</Button>
+          {liqRows && liqRows.length > 0 && <button onClick={downloadLiquidacionCSV} className="text-sm text-accent font-medium px-2 py-2 inline-flex items-center gap-1"><Download size={14} /> CSV</button>}
+        </div>
+
+        {liqRows && (liqRows.length === 0
+          ? <p className="text-xs text-text-secondary">Sin entregas ni retos en ese periodo.</p>
+          : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead><tr className="text-left text-xs text-text-secondary border-b border-border-default">
+                  <th className="py-1.5 pr-2">Repartidor</th><th className="py-1.5 px-2 text-right">Entregas</th><th className="py-1.5 px-2 text-right">Km</th><th className="py-1.5 px-2 text-right">Reparto</th><th className="py-1.5 px-2 text-right">Retos</th><th className="py-1.5 pl-2 text-right">Total</th>
+                </tr></thead>
+                <tbody>
+                  {liqRows.map(r => (
+                    <tr key={r.courier_id} className="border-b border-border-default/60">
+                      <td className="py-1.5 pr-2"><span className="text-text-primary">{r.name}</span> <span className="text-xs text-text-secondary">· {r.kind === 'employee' ? 'empleado' : 'autónomo'}</span></td>
+                      <td className="py-1.5 px-2 text-right text-text-secondary">{r.deliveries}</td>
+                      <td className="py-1.5 px-2 text-right text-text-secondary">{r.km}</td>
+                      <td className="py-1.5 px-2 text-right text-text-secondary">{r.delivery_earnings}€</td>
+                      <td className="py-1.5 px-2 text-right text-text-secondary">{r.quest_bonus > 0 ? `${r.quest_bonus}€` : '—'}</td>
+                      <td className="py-1.5 pl-2 text-right font-bold text-text-primary">{r.total}€</td>
+                    </tr>
+                  ))}
+                  <tr><td className="py-2 pr-2 font-semibold" colSpan={5}>Total a liquidar</td><td className="py-2 pl-2 text-right font-extrabold text-accent">{liqTotal.toFixed(2)}€</td></tr>
+                </tbody>
+              </table>
+            </div>
+          ))}
       </Card>
 
       {/* E) Zonas (enlace) */}
