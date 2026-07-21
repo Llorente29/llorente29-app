@@ -12,7 +12,7 @@
 // (p.ej. Flota propia → Catcher → Jelp). El motor prueba el 1º; si no puede
 // (sin repartidor en turno o más lejos del tope de km), pasa al siguiente.
 import { useState, useEffect, useCallback } from 'react'
-import { CheckCircle2, Plus, Trash2, Pencil, X, ChevronUp, ChevronDown } from 'lucide-react'
+import { CheckCircle2, Plus, Trash2, Pencil, X, ChevronUp, ChevronDown, Copy, Link2, RefreshCw } from 'lucide-react'
 import { Card, Button } from '../components/ui'
 import { supabase } from '../lib/supabase'
 
@@ -30,8 +30,11 @@ interface Rule {
   carrier_chain?: string[] | null; max_distance_km?: number | null
   strategy?: string | null; is_active?: boolean
 }
+interface Employee { id: string; name: string }
 interface Courier {
-  id?: string; name?: string; phone?: string | null; kind?: string | null; transport_type?: string | null
+  id?: string; name?: string; phone?: string | null; kind?: string | null; employee_id?: string | null
+  transport_type?: string | null; vehicle_plate?: string | null; nif?: string | null; iban?: string | null
+  access_token?: string | null
   assigned_locations?: string[] | null; cost_model?: string | null; cost_value?: number | null
   rate_base?: number | null; rate_per_km?: number | null; rate_min_pickup?: number | null
   rate_pickup_fee?: number | null; rate_tiers?: { to_km: number; price: number }[] | null
@@ -63,6 +66,8 @@ export default function RepartoSettingsPage() {
   const [carriers, setCarriers] = useState<Carrier[]>([])
   const [rules, setRules] = useState<Rule[]>([])
   const [couriers, setCouriers] = useState<Courier[]>([])
+  const [employees, setEmployees] = useState<Employee[]>([])
+  const [copiedTok, setCopiedTok] = useState(false)
   const [trackUrl, setTrackUrl] = useState('')
   const [trackUrlSaved, setTrackUrlSaved] = useState('')
   const [savingDomain, setSavingDomain] = useState(false)
@@ -71,9 +76,10 @@ export default function RepartoSettingsPage() {
   const [editCourier, setEditCourier] = useState<Courier | null>(null)
 
   const reload = useCallback(async () => {
-    const { data } = await rpc<{ track_base_url: string | null; carriers: Carrier[]; locations: Loc[]; rules: Rule[]; couriers: Courier[] }>('reparto_settings', {})
+    const { data } = await rpc<{ track_base_url: string | null; carriers: Carrier[]; employees: Employee[]; locations: Loc[]; rules: Rule[]; couriers: Courier[] }>('reparto_settings', {})
     if (!data) return
     setCarriers(data.carriers ?? [])
+    setEmployees(data.employees ?? [])
     setLocs(data.locations ?? [])
     setRules(data.rules ?? [])
     setCouriers(data.couriers ?? [])
@@ -146,6 +152,20 @@ export default function RepartoSettingsPage() {
   async function toggleCourier(c: Courier, field: 'active' | 'on_shift', v: boolean) {
     const { error } = await rpc('upsert_courier', { p: { ...c, [field]: v } })
     if (error) { alert('No se pudo guardar: ' + error.message); return }
+    await reload()
+  }
+  // Enlace mágico a la PWA del repartidor (sin login). Se sirve en el mismo dominio de la app.
+  const courierLink = (token?: string | null) => token ? `${window.location.origin}/repartidor?token=${token}` : ''
+  async function copyLink(token?: string | null) {
+    const url = courierLink(token); if (!url) return
+    try { await navigator.clipboard.writeText(url); setCopiedTok(true); setTimeout(() => setCopiedTok(false), 2000) }
+    catch { alert('Copia manual: ' + url) }
+  }
+  async function resetToken(id?: string) {
+    if (!id || !confirm('¿Regenerar el enlace? El anterior dejará de funcionar.')) return
+    const { data, error } = await rpc<string>('courier_reset_token', { p_id: id })
+    if (error) { alert('No se pudo regenerar: ' + error.message); return }
+    setEditCourier(prev => prev ? { ...prev, access_token: data ?? prev.access_token } : prev)
     await reload()
   }
 
@@ -377,6 +397,7 @@ export default function RepartoSettingsPage() {
                   <option value="moto">Moto</option><option value="bici">Bici</option><option value="coche">Coche</option><option value="a_pie">A pie</option>
                 </select>
               </label>
+              <label className="text-xs text-text-secondary">Matrícula<input type="text" value={editCourier.vehicle_plate ?? ''} onChange={e => setEditCourier({ ...editCourier, vehicle_plate: e.target.value })} className={`block mt-1 w-full ${input}`} placeholder="0000 XXX" /></label>
               <label className="text-xs text-text-secondary">Modelo de coste
                 <select value={editCourier.cost_model ?? 'per_order'} onChange={e => setEditCourier({ ...editCourier, cost_model: e.target.value })} className={`block mt-1 w-full ${input}`}>
                   {COST_MODELS.map(m => <option key={m.val} value={m.val}>{m.label}</option>)}
@@ -402,6 +423,25 @@ export default function RepartoSettingsPage() {
                 </div>
               </div>
             )}
+
+            {/* Identidad según tipo: empleado de plantilla o datos de liquidación del autónomo */}
+            {editCourier.kind === 'employee' ? (
+              <label className="text-xs text-text-secondary block">Empleado vinculado
+                <select value={editCourier.employee_id ?? ''} onChange={e => {
+                  const emp = employees.find(x => x.id === e.target.value)
+                  setEditCourier({ ...editCourier, employee_id: e.target.value || null, name: emp?.name ?? editCourier.name })
+                }} className={`block mt-1 w-full ${input}`}>
+                  <option value="">— elige empleado —</option>
+                  {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
+                </select>
+              </label>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <label className="text-xs text-text-secondary">NIF / DNI<input type="text" value={editCourier.nif ?? ''} onChange={e => setEditCourier({ ...editCourier, nif: e.target.value })} className={`block mt-1 w-full ${input}`} placeholder="Para la liquidación" /></label>
+                <label className="text-xs text-text-secondary">IBAN<input type="text" value={editCourier.iban ?? ''} onChange={e => setEditCourier({ ...editCourier, iban: e.target.value })} className={`block mt-1 w-full ${input}`} placeholder="ES..." /></label>
+              </div>
+            )}
+
             <div>
               <p className="text-xs text-text-secondary mb-1">Locales asignados (vacío = todos)</p>
               <div className="flex flex-wrap gap-2">
@@ -419,6 +459,23 @@ export default function RepartoSettingsPage() {
               <label className="text-xs text-text-secondary inline-flex items-center gap-1.5"><input type="checkbox" checked={editCourier.active ?? true} onChange={e => setEditCourier({ ...editCourier, active: e.target.checked })} className="w-4 h-4 accent-accent" /> Activo</label>
               <label className="text-xs text-text-secondary inline-flex items-center gap-1.5"><input type="checkbox" checked={editCourier.on_shift ?? false} onChange={e => setEditCourier({ ...editCourier, on_shift: e.target.checked })} className="w-4 h-4 accent-accent" /> En turno</label>
             </div>
+            {/* Enlace mágico a la PWA del repartidor (sin instalar ni registrarse) */}
+            {editCourier.id && (
+              <div className="border border-border-default rounded-lg p-3 bg-card/50">
+                <p className="text-xs text-text-secondary mb-1.5 inline-flex items-center gap-1"><Link2 size={13} /> Enlace de acceso del repartidor</p>
+                {editCourier.access_token ? (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <input readOnly value={courierLink(editCourier.access_token)} onFocus={e => e.currentTarget.select()} className={`flex-1 text-xs ${input}`} />
+                      <button type="button" onClick={() => copyLink(editCourier.access_token)} className="p-2 text-text-secondary hover:text-text-primary" title="Copiar"><Copy size={15} /></button>
+                      <button type="button" onClick={() => resetToken(editCourier.id)} className="p-2 text-text-secondary hover:text-text-primary" title="Regenerar"><RefreshCw size={15} /></button>
+                    </div>
+                    {copiedTok && <p className="text-xs text-success mt-1 inline-flex items-center gap-1"><CheckCircle2 size={12} /> Copiado</p>}
+                    <p className="text-[11px] text-text-secondary mt-1">Envíaselo por WhatsApp: entra sin instalar nada ni crear cuenta.</p>
+                  </>
+                ) : <p className="text-xs text-text-secondary">Guarda el repartidor para generar su enlace.</p>}
+              </div>
+            )}
             <div className="flex justify-end gap-2 pt-1"><Button onClick={saveCourier}>Guardar repartidor</Button></div>
           </div>
         )}
