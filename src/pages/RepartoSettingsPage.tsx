@@ -11,7 +11,7 @@
 // CFG-1: cada regla lleva una CADENA de transportistas por orden de prioridad
 // (p.ej. Flota propia → Catcher → Jelp). El motor prueba el 1º; si no puede
 // (sin repartidor en turno o más lejos del tope de km), pasa al siguiente.
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { CheckCircle2, Plus, Trash2, Pencil, X, ChevronUp, ChevronDown, Copy, Link2, RefreshCw, Download } from 'lucide-react'
 import { Card, Button } from '../components/ui'
 import { supabase } from '../lib/supabase'
@@ -39,6 +39,23 @@ interface Employee { id: string; name: string }
 interface Quest {
   id?: string; name?: string; period?: string; target_count?: number | null; reward?: number | null
   location_id?: string | null; valid_from?: string | null; valid_to?: string | null; is_active?: boolean
+}
+interface Fleet {
+  id: string; name: string; transport_type: string | null; lat: number | null; lng: number | null
+  seen_at: string | null; status: string; order_code: string | null; pickup_lat: number | null; pickup_lng: number | null
+}
+// Carga Leaflet una sola vez desde CDN (sin dependencia de build).
+let leafletPromise: Promise<unknown> | null = null
+function loadLeaflet(): Promise<unknown> {
+  const w = window as unknown as { L?: unknown }
+  if (w.L) return Promise.resolve(w.L)
+  if (leafletPromise) return leafletPromise
+  leafletPromise = new Promise((resolve, reject) => {
+    const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'; document.head.appendChild(css)
+    const s = document.createElement('script'); s.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
+    s.onload = () => resolve((window as unknown as { L: unknown }).L); s.onerror = reject; document.head.appendChild(s)
+  })
+  return leafletPromise
 }
 interface LiqRow {
   courier_id: string; name: string; kind: string | null; nif: string | null; iban: string | null
@@ -79,6 +96,7 @@ export default function RepartoSettingsPage() {
   const [carriers, setCarriers] = useState<Carrier[]>([])
   const [rules, setRules] = useState<Rule[]>([])
   const [couriers, setCouriers] = useState<Courier[]>([])
+  const [fleet, setFleet] = useState<Fleet[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
   const [quests, setQuests] = useState<Quest[]>([])
   const [editQuest, setEditQuest] = useState<Quest | null>(null)
@@ -112,6 +130,12 @@ export default function RepartoSettingsPage() {
   }, [])
 
   useEffect(() => { void reload() }, [reload])
+
+  const loadFleet = useCallback(async () => {
+    const { data } = await rpc<Fleet[]>('reparto_fleet', {})
+    setFleet(Array.isArray(data) ? data : [])
+  }, [])
+  useEffect(() => { void loadFleet(); const id = setInterval(loadFleet, 15000); return () => clearInterval(id) }, [loadFleet])
 
   // ── A) Dominio ─────────────────────────────────────────────────────────
   async function saveDomain() {
@@ -341,6 +365,27 @@ export default function RepartoSettingsPage() {
 
   return (
     <div className="space-y-4 max-w-3xl">
+      {/* Flota en el mapa (en vivo) */}
+      <Card className="p-5">
+        <div className="flex items-center justify-between mb-2">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-text-secondary mb-1">Flota</p>
+            <h3 className="font-semibold text-text-primary">En el mapa (en vivo)</h3>
+          </div>
+          <span className="text-xs text-text-secondary">{fleet.filter(f => f.lat != null).length} en turno con GPS</span>
+        </div>
+        {fleet.length === 0 ? <p className="text-xs text-text-secondary">Ningún repartidor en turno ahora mismo.</p> : (
+          <>
+            <FleetMap fleet={fleet} />
+            <div className="flex items-center gap-3 mt-2 text-[11px] text-text-secondary">
+              <span className="inline-flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: '#10b981' }} />Libre</span>
+              <span className="inline-flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: '#f59e0b' }} />Recogiendo</span>
+              <span className="inline-flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: '#0ea5e9' }} />En reparto</span>
+            </div>
+          </>
+        )}
+      </Card>
+
       {/* A) Enlace de seguimiento */}
       <Card className="p-5">
         <p className="text-xs uppercase tracking-wide text-text-secondary mb-3">Seguimiento</p>
@@ -770,4 +815,46 @@ export default function RepartoSettingsPage() {
       </Card>
     </div>
   )
+}
+
+// Mapa de flota (Leaflet cargado desde CDN). Solo lectura; se refresca con `fleet`.
+function FleetMap({ fleet }: { fleet: Fleet[] }) {
+  const elRef = useRef<HTMLDivElement | null>(null)
+  const mapRef = useRef<unknown>(null)
+  const layerRef = useRef<unknown>(null)
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    loadLeaflet().then(L2 => {
+      const L = L2 as any // eslint-disable-line @typescript-eslint/no-explicit-any
+      if (cancelled || !elRef.current || mapRef.current) return
+      const map = L.map(elRef.current).setView([40.4168, -3.7038], 12)
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap', maxZoom: 19 }).addTo(map)
+      mapRef.current = map
+      layerRef.current = L.layerGroup().addTo(map)
+    }).catch(() => setFailed(true))
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    const L = (window as unknown as { L?: any }).L // eslint-disable-line @typescript-eslint/no-explicit-any
+    const map = mapRef.current as any // eslint-disable-line @typescript-eslint/no-explicit-any
+    const layer = layerRef.current as any // eslint-disable-line @typescript-eslint/no-explicit-any
+    if (!L || !map || !layer) return
+    layer.clearLayers()
+    const pts: [number, number][] = []
+    fleet.forEach(f => {
+      if (f.lat == null || f.lng == null) return
+      const color = f.status === 'free' ? '#10b981' : f.status === 'in_delivery' ? '#0ea5e9' : '#f59e0b'
+      const icon = L.divIcon({ className: '', iconSize: [16, 16], html: `<div style="background:${color};width:16px;height:16px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.35)"></div>` })
+      const estado = f.status === 'free' ? 'Libre' : f.status === 'in_delivery' ? 'En reparto' : 'Recogiendo'
+      L.marker([f.lat, f.lng], { icon }).bindPopup(`<b>${f.name}</b><br>${estado}${f.order_code ? ' · #' + f.order_code : ''}`).addTo(layer)
+      pts.push([f.lat, f.lng])
+    })
+    if (pts.length) map.fitBounds(pts, { padding: [30, 30], maxZoom: 15 })
+  }, [fleet])
+
+  if (failed) return <p className="text-xs text-text-secondary">No se pudo cargar el mapa. Hay {fleet.filter(f => f.lat != null).length} repartidor(es) en turno con posición.</p>
+  return <div ref={elRef} className="w-full rounded-xl overflow-hidden" style={{ height: '18rem' }} />
 }
