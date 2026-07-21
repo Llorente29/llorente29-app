@@ -203,12 +203,26 @@ export function childVisual(child: OrderFeedChild): ChildVisual {
 //     venga el pedido de Glovo/Uber/JE/Shop.
 //   - delivery de plataforma sin carrier propio → "Lo lleva {plataforma}", sin rider.
 //   - recogida u otros → sin fila.
+//
+// PROMINENCIA POR ESTADO (operativa de cocina): la fila sube de intensidad según
+// la urgencia real del momento. `phase` la calcula el servicio en UN solo sitio a
+// partir de delivery_state; el componente solo la pinta.
+//   searching  → discreto (aún no hay nada que hacer).
+//   assigned   → nombre del rider + llamar A LA VISTA (sin desplegar).
+//   enroute    → ídem, con estado "En camino".
+//   at_pickup  → ★ REPARTIDOR EN EL LOCAL: handoff, resaltado (+ sonido opcional).
+//   delivered  → se apaga a check verde.
+//   failed / canceled / unknown → rojo / gris / fallback.
 
 export type DeliveryRowKind = 'own' | 'platform' | 'none'
 export type DeliveryTone = 'pending' | 'active' | 'done' | 'failed' | 'canceled'
+export type DeliveryPhase =
+  | 'searching' | 'assigned' | 'enroute' | 'at_pickup'
+  | 'delivered' | 'failed' | 'canceled' | 'unknown'
 
 export interface DeliveryView {
   kind: DeliveryRowKind
+  phase: DeliveryPhase           // fase operativa derivada de delivery_state (prominencia)
   carrierLabel: string | null
   stateLabel: string | null
   stateTone: DeliveryTone
@@ -245,7 +259,7 @@ const DELIVERY_STATE: Record<string, { label: string; tone: DeliveryTone }> = {
   matching:            { label: 'Buscando repartidor', tone: 'pending' },
   matched:             { label: 'Repartidor asignado', tone: 'active' },
   picking:             { label: 'Recogiendo en local', tone: 'active' },
-  in_picking_location: { label: 'Recogiendo en local', tone: 'active' },
+  in_picking_location: { label: 'Repartidor en el local', tone: 'active' },
   in_delivery:         { label: 'En camino', tone: 'active' },
   delivered:           { label: 'Entregado', tone: 'done' },
   failed:              { label: 'No entregado', tone: 'failed' },
@@ -264,6 +278,27 @@ const DELIVERY_STATE: Record<string, { label: string; tone: DeliveryTone }> = {
 function stateView(state: string | null): { label: string; tone: DeliveryTone } {
   if (!state) return { label: 'Reparto propio', tone: 'active' }
   return DELIVERY_STATE[state.toLowerCase()] ?? { label: state, tone: 'active' }
+}
+
+// Fase operativa a partir del estado normalizado del broker. Gobierna la
+// prominencia de la fila (ver arriba). El handoff (`at_pickup`) es el único
+// estado que "grita": el rider está EN el local esperando la bolsa.
+//   NOTA: 'picking' = va de camino al local (aún no ha llegado) → enroute;
+//         'in_picking_location' = ya está en el local → at_pickup (el grito).
+//   Si en producción Catcher no emite in_picking_location, se remapea 'picking'
+//   a at_pickup con el dato del primer despacho real (deuda-0, ver guion).
+const PHASE_BY_STATE: Record<string, DeliveryPhase> = {
+  matching: 'searching', created: 'searching', pending: 'searching', searching: 'searching',
+  matched: 'assigned', assigned: 'assigned', accepted: 'assigned',
+  picking: 'enroute', picked_up: 'enroute', on_the_way: 'enroute', in_delivery: 'enroute',
+  in_picking_location: 'at_pickup',
+  delivered: 'delivered', completed: 'delivered',
+  failed: 'failed',
+  canceled: 'canceled', cancelled: 'canceled',
+}
+function deliveryPhase(state: string | null, hasCourier: boolean): DeliveryPhase {
+  if (!state) return hasCourier ? 'assigned' : 'unknown'
+  return PHASE_BY_STATE[state.toLowerCase()] ?? (hasCourier ? 'assigned' : 'unknown')
 }
 
 // "visto a las HH:MM" (hora local Europe/Madrid) desde rider_seen_at. null si no hay.
@@ -287,21 +322,24 @@ function etaText(iso: string | null): string | null {
 export function deliveryView(order: OrderFeedItem): DeliveryView {
   if (order.carrier_code) {
     const st = stateView(order.delivery_state)
+    const hasCourier = order.has_courier === true || !!order.rider_name
     return {
       kind: 'own',
+      phase: deliveryPhase(order.delivery_state, hasCourier),
       carrierLabel: carrierPretty(order.carrier_code),
       stateLabel: st.label, stateTone: st.tone,
       rider: order.rider_name, phone: order.rider_phone,
       etaText: etaText(order.eta_delivery),
       transport: order.rider_transport_type ?? null,
       seenText: seenText(order.rider_seen_at),
-      hasCourier: order.has_courier === true || !!order.rider_name,
+      hasCourier,
       supportPhone: null,
     }
   }
   if (isPlatformDelivery(order.service_type)) {
     return {
       kind: 'platform',
+      phase: 'unknown',
       carrierLabel: order.channel ?? 'la plataforma',
       stateLabel: null, stateTone: 'active',
       rider: null, phone: null, etaText: null,
@@ -309,7 +347,7 @@ export function deliveryView(order: OrderFeedItem): DeliveryView {
       supportPhone: supportPhoneFor(order.channel),
     }
   }
-  return { kind: 'none', carrierLabel: null, stateLabel: null, stateTone: 'active', rider: null, phone: null, etaText: null, transport: null, seenText: null, hasCourier: false, supportPhone: null }
+  return { kind: 'none', phase: 'unknown', carrierLabel: null, stateLabel: null, stateTone: 'active', rider: null, phone: null, etaText: null, transport: null, seenText: null, hasCourier: false, supportPhone: null }
 }
 
 // ¿Es un pedido de reparto propio pendiente de despachar (modo manual o tras fallo)?

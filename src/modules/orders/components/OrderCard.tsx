@@ -14,9 +14,16 @@
 //
 // RUTA COMPLETA: el pie avanza el pedido. ESCANDALLO: pulsar el plato abre Cook Mode.
 // MARCAR LÍNEA: check por plato (kds_mark_line, compartido con el KDS).
+//
+// FILA DE REPARTO PROPIO (Catcher) POR FASES (operativa de cocina, 21/07/2026):
+// la fila sube de intensidad según la urgencia real. Callada al buscar rider;
+// nombre + llamar A LA VISTA (sin desplegar) al asignar/en camino; y al llegar el
+// rider al local (`in_picking_location`) salta la cara ★ de HANDOFF, resaltada,
+// para que el pase entregue la bolsa sin tener que mirar la pantalla. La prominencia
+// la decide `deliveryView().phase` en el servicio; aquí solo se pinta.
 
 import { useState } from 'react'
-import { ChefHat, Check, Printer, Bike, Car, Phone, ChevronDown, ChevronUp, RefreshCw, AlertTriangle } from 'lucide-react'
+import { ChefHat, Check, Printer, Bike, Car, Phone, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, ShoppingBag } from 'lucide-react'
 import { timeLevel, channelLabel, ticketCode } from '@/modules/kds/kdsUtils'
 import ChannelBadge from './ChannelBadge'
 import TicketPreviewModal from './TicketPreviewModal'
@@ -24,6 +31,7 @@ import {
   primaryAction, secondaryAction, childVisual, deliveryView,
   isOwnDeliveryUndispatched, dispatchOrder,
   type OrderFeedItem, type OrderFeedLine, type OrderFeedChild, type OrderStatus,
+  type DeliveryView, type DeliveryTone,
 } from '../services/ordersFeedService'
 
 const STATUS_LABEL: Record<OrderStatus, string> = {
@@ -197,12 +205,50 @@ function transportMeta(t: string | null): { emoji: string; label: string; car: b
   return { emoji: '🛵', label: t as string, car: false }
 }
 
-// ── Fila de reparto. Tres caras según el estado del despacho propio. ──
+// Clases de la píldora de estado según el tono (borde `canceled` corregido).
+function statePillCls(tone: DeliveryTone): string {
+  switch (tone) {
+    case 'done':     return 'text-success bg-success-bg border-success/30'
+    case 'failed':   return 'text-danger bg-danger-bg border-danger/30'
+    case 'canceled': return 'text-text-secondary bg-page border-default'
+    case 'pending':  return 'text-warning bg-warning-bg border-warning/30'
+    default:         return 'text-success bg-success-bg border-success/30'
+  }
+}
+
+// Botón redondo "llamar de un toque" (rider). tel: real; para de propagar el clic
+// para no plegar/desplegar contenedores.
+function CallIconButton({ phone }: { phone: string }) {
+  return (
+    <a
+      href={`tel:${phone.replace(/\s+/g, '')}`}
+      onClick={e => e.stopPropagation()}
+      title={`Llamar al repartidor · ${phone}`}
+      className="ml-auto shrink-0 w-9 h-9 rounded-full bg-[#15171A] text-white grid place-items-center no-underline"
+    >
+      <Phone size={15} />
+    </a>
+  )
+}
+
+// Píldora "llamar" con el número visible (handoff / soporte).
+function CallPill({ phone, big = false }: { phone: string; big?: boolean }) {
+  return (
+    <a
+      href={`tel:${phone.replace(/\s+/g, '')}`}
+      onClick={e => e.stopPropagation()}
+      className={`shrink-0 inline-flex items-center gap-1.5 bg-[#15171A] text-white rounded-full font-bold no-underline ${big ? 'px-3.5 py-2.5 text-[14px]' : 'px-3 py-2 text-[13px]'}`}
+    >
+      <Phone size={big ? 14 : 13} /> {phone}
+    </a>
+  )
+}
+
+// ── Fila de reparto. Caras según el estado del despacho propio. ──
 function DeliveryRow({ order, onDispatched }: { order: OrderFeedItem; onDispatched?: () => void }) {
-  const [open, setOpen] = useState(false)
   const [dispatching, setDispatching] = useState(false)
   const [dispatchErr, setDispatchErr] = useState<string | null>(null)
-  const d = deliveryView(order)
+  const d: DeliveryView = deliveryView(order)
 
   async function doDispatch() {
     if (dispatching) return
@@ -251,93 +297,131 @@ function DeliveryRow({ order, onDispatched }: { order: OrderFeedItem; onDispatch
 
   if (d.kind === 'none') return null
 
-  const toneCls =
-    d.stateTone === 'done' ? 'text-success bg-success-bg border-success/30'
-    : d.stateTone === 'failed' ? 'text-danger bg-danger-bg border-danger/30'
-    : d.stateTone === 'canceled' ? 'text-text-secondary bg-page border-border-default'
-    : d.stateTone === 'pending' ? 'text-warning bg-warning-bg border-warning/30'
-    : 'text-success bg-success-bg border-success/30'
-
   // (B) Plataforma (Glovo/Uber/JE): informativo; si hay soporte, plegable con su teléfono.
-  if (d.kind === 'platform') {
-    const canOpen = !!d.supportPhone
+  if (d.kind === 'platform') return <PlatformDeliveryRow view={d} />
+
+  // (C) Reparto propio despachado (Catcher/Jelp): prominencia POR FASE.
+  const tp = transportMeta(d.transport)
+  const HeadIcon = tp?.car ? Car : Bike
+  const riderName = d.rider
+    ? <span className="text-[14px] font-bold text-text-primary truncate">{tp && <span className="mr-1" aria-label={tp.label} title={tp.label}>{tp.emoji}</span>}{d.rider}</span>
+    : null
+
+  // ★ HANDOFF — repartidor EN el local: el momento de entregar la bolsa. Resaltado.
+  if (d.phase === 'at_pickup') {
     return (
-      <div className="mx-4 mb-2.5 ml-5 rounded-xl border border-[#CFE4FA] bg-[#F0F7FF] overflow-hidden">
-        <button
-          onClick={() => canOpen && setOpen(o => !o)}
-          className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left ${canOpen ? 'cursor-pointer' : 'cursor-default'}`}
-        >
-          <Bike size={16} className="text-[#2563A8] shrink-0" />
-          <span className="text-[13px] font-bold text-[#2563A8]">Lo lleva {d.carrierLabel}</span>
-          {canOpen && (
-            <span className="ml-auto text-[#2563A8] shrink-0">
-              {open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-            </span>
-          )}
-        </button>
-        {open && canOpen && (
-          <div className="flex items-center justify-between gap-2 px-3 py-2.5 border-t border-[#DCEAFB]">
-            <span className="text-[12.5px] text-text-secondary">Soporte {d.carrierLabel}</span>
-            <a
-              href={`tel:${d.supportPhone!.replace(/\s+/g, '')}`}
-              className="shrink-0 inline-flex items-center gap-1.5 bg-[#15171A] text-white px-3 py-2 rounded-full text-[13px] font-bold no-underline"
-            >
-              <Phone size={13} /> {d.supportPhone}
-            </a>
+      <div className="mx-4 mb-2.5 ml-5 rounded-2xl border-2 border-success bg-success-bg overflow-hidden shadow-[0_8px_22px_rgba(31,157,107,0.18)]">
+        <div className="flex items-center gap-3 px-3.5 py-3">
+          <span className="w-11 h-11 rounded-xl bg-success text-white grid place-items-center shrink-0">
+            <ShoppingBag size={22} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 text-[14.5px] font-extrabold text-success leading-tight">
+              <span className="w-2.5 h-2.5 rounded-full bg-success animate-pulse shrink-0" />
+              Repartidor en el local — entrega el pedido
+            </div>
+            <div className="text-[12.5px] text-success/90 mt-1 truncate">
+              {tp && <span className="mr-1">{tp.emoji}</span>}{d.rider ?? d.carrierLabel} · {d.carrierLabel} · esperando la bolsa
+            </div>
           </div>
-        )}
+          {d.phone && <CallPill phone={d.phone} big />}
+        </div>
       </div>
     )
   }
 
-  // (C) Reparto propio despachado (Catcher/Jelp): plegable con rider + teléfono.
-  const tp = transportMeta(d.transport)
-  const HeadIcon = tp?.car ? Car : Bike
-  const hasDetail = !!(d.rider || d.phone || d.etaText || d.seenText || tp)
+  // Buscando repartidor — discreto (aún no hay nada que hacer).
+  if (d.phase === 'searching') {
+    return (
+      <div className="mx-4 mb-2.5 ml-5 rounded-xl border border-[#CFE4FA] bg-[#F0F7FF] px-3 py-2.5 flex items-center gap-2.5">
+        <Bike size={16} className="text-[#2563A8] shrink-0" />
+        <span className="text-[13px] font-bold text-[#2563A8]">{d.carrierLabel}</span>
+        <span className={`text-[11.5px] font-extrabold px-2.5 py-0.5 rounded-full border ${statePillCls('pending')}`}>
+          {d.stateLabel ?? 'Buscando repartidor'}
+        </span>
+      </div>
+    )
+  }
+
+  // Entregado — se apaga a un check verde.
+  if (d.phase === 'delivered') {
+    return (
+      <div className="mx-4 mb-2.5 ml-5 rounded-xl border border-success/30 bg-success-bg px-3 py-2.5 flex items-center gap-2.5">
+        <Check size={16} className="text-success shrink-0" strokeWidth={2.4} />
+        <span className="text-[13px] font-bold text-success">Entregado</span>
+        {d.rider && <span className="text-[12px] text-success/90 truncate">· {d.rider}</span>}
+        {d.seenText && <span className="ml-auto text-[11px] text-success/80 shrink-0 hidden sm:inline">{d.seenText}</span>}
+      </div>
+    )
+  }
+
+  // No entregado (fallo).
+  if (d.phase === 'failed') {
+    return (
+      <div className="mx-4 mb-2.5 ml-5 rounded-xl border border-danger/30 bg-danger-bg px-3 py-2.5 flex items-center gap-2.5">
+        <AlertTriangle size={16} className="text-danger shrink-0" />
+        <span className="text-[13px] font-bold text-danger">No entregado</span>
+        {d.rider && <span className="text-[12px] text-danger/90 truncate">· {d.rider}</span>}
+        {d.phone && <CallIconButton phone={d.phone} />}
+      </div>
+    )
+  }
+
+  // Cancelado.
+  if (d.phase === 'canceled') {
+    return (
+      <div className="mx-4 mb-2.5 ml-5 rounded-xl border border-default bg-page px-3 py-2.5 flex items-center gap-2.5">
+        <Bike size={16} className="text-text-secondary shrink-0" />
+        <span className="text-[13px] font-bold text-text-secondary">{d.carrierLabel} · Cancelado</span>
+      </div>
+    )
+  }
+
+  // Asignado / En camino / (fallback) — NOMBRE + LLAMAR a la vista, sin desplegar.
+  return (
+    <div className="mx-4 mb-2.5 ml-5 rounded-xl border border-[#CFE4FA] bg-[#F0F7FF] px-3 py-2.5 flex items-center gap-2.5">
+      <HeadIcon size={16} className="text-[#2563A8] shrink-0" />
+      {riderName ?? <span className="text-[13px] font-bold text-[#2563A8]">{d.carrierLabel}</span>}
+      {d.stateLabel && (
+        <span className={`text-[11.5px] font-extrabold px-2.5 py-0.5 rounded-full border shrink-0 ${statePillCls(d.stateTone)}`}>
+          {d.stateLabel}
+        </span>
+      )}
+      {d.etaText && <span className="text-[11px] text-text-secondary shrink-0">{d.etaText}</span>}
+      {d.seenText && <span className="text-[11px] text-text-secondary truncate hidden sm:inline">· {d.seenText}</span>}
+      {d.phone
+        ? <CallIconButton phone={d.phone} />
+        : (
+          <span className="ml-auto text-[12px] text-text-secondary shrink-0">
+            {d.hasCourier ? 'Repartidor asignado' : 'Sin datos del rider'}
+          </span>
+        )}
+    </div>
+  )
+}
+
+// Fila de plataforma (Glovo/Uber/JE): "Lo lleva {plataforma}", plegable con soporte.
+function PlatformDeliveryRow({ view }: { view: DeliveryView }) {
+  const [open, setOpen] = useState(false)
+  const canOpen = !!view.supportPhone
   return (
     <div className="mx-4 mb-2.5 ml-5 rounded-xl border border-[#CFE4FA] bg-[#F0F7FF] overflow-hidden">
       <button
-        onClick={() => hasDetail && setOpen(o => !o)}
-        className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left ${hasDetail ? 'cursor-pointer' : 'cursor-default'}`}
+        onClick={() => canOpen && setOpen(o => !o)}
+        className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left ${canOpen ? 'cursor-pointer' : 'cursor-default'}`}
       >
-        <HeadIcon size={16} className="text-[#2563A8] shrink-0" />
-        <span className="text-[13px] font-bold text-[#2563A8]">{d.carrierLabel}</span>
-        {d.stateLabel && (
-          <span className={`text-[11.5px] font-extrabold px-2.5 py-0.5 rounded-full border ${toneCls}`}>{d.stateLabel}</span>
-        )}
-        {d.seenText && (
-          <span className="text-[11px] text-text-secondary truncate hidden sm:inline">· {d.seenText}</span>
-        )}
-        {hasDetail && (
+        <Bike size={16} className="text-[#2563A8] shrink-0" />
+        <span className="text-[13px] font-bold text-[#2563A8]">Lo lleva {view.carrierLabel}</span>
+        {canOpen && (
           <span className="ml-auto text-[#2563A8] shrink-0">
             {open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
           </span>
         )}
       </button>
-      {open && hasDetail && (
+      {open && canOpen && (
         <div className="flex items-center justify-between gap-2 px-3 py-2.5 border-t border-[#DCEAFB]">
-          <div className="min-w-0">
-            {d.rider && (
-              <div className="text-[14px] font-bold text-text-primary truncate">
-                {tp && <span className="mr-1" aria-label={tp.label} title={tp.label}>{tp.emoji}</span>}{d.rider}
-              </div>
-            )}
-            {d.etaText && <div className="text-[12px] text-text-secondary">Llega en {d.etaText}</div>}
-            {d.seenText && <div className="text-[11px] text-text-secondary/80">{d.seenText}</div>}
-            {!d.rider && !d.etaText && (
-              <div className="text-[12.5px] text-text-secondary">
-                {d.hasCourier ? 'Repartidor asignado' : 'Sin datos del repartidor todavía'}
-              </div>
-            )}
-          </div>
-          {d.phone && (
-            <a
-              href={`tel:${d.phone.replace(/\s+/g, '')}`}
-              className="shrink-0 inline-flex items-center gap-1.5 bg-[#15171A] text-white px-3 py-2 rounded-full text-[13px] font-bold no-underline"
-            >
-              <Phone size={13} /> {d.phone}
-            </a>
-          )}
+          <span className="text-[12.5px] text-text-secondary">Soporte {view.carrierLabel}</span>
+          <CallPill phone={view.supportPhone!} />
         </div>
       )}
     </div>
