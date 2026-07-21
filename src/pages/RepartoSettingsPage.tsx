@@ -227,6 +227,52 @@ export default function RepartoSettingsPage() {
     URL.revokeObjectURL(url)
   }
   const liqTotal = (liqRows ?? []).reduce((s, r) => s + Number(r.total || 0), 0)
+  const money = (n: number | null) => Number(n || 0).toFixed(2)
+  const kindLabel = (k: string | null) => k === 'employee' ? 'Empleado' : 'Autónomo'
+
+  async function downloadLiquidacionXLSX() {
+    if (!liqRows || liqRows.length === 0) return
+    const XLSX = await import('xlsx')
+    const head = ['Repartidor', 'Tipo', 'NIF', 'IBAN', 'Entregas', 'Km', 'Reparto (€)', 'Retos (€)', 'Total (€)']
+    const rows = liqRows.map(r => [r.name, kindLabel(r.kind), r.nif ?? '', r.iban ?? '', r.deliveries, Number(r.km), Number(r.delivery_earnings), Number(r.quest_bonus), Number(r.total)])
+    rows.push(['TOTAL', '', '', '', '', '', '', '', Number(liqTotal.toFixed(2))])
+    const ws = XLSX.utils.aoa_to_sheet([[`Liquidacion de reparto — ${liqFrom} a ${liqTo}`], [], head, ...rows])
+    ws['!cols'] = [{ wch: 26 }, { wch: 10 }, { wch: 12 }, { wch: 26 }, { wch: 9 }, { wch: 8 }, { wch: 11 }, { wch: 10 }, { wch: 11 }]
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Liquidacion')
+    XLSX.writeFile(wb, `liquidacion_${liqFrom}_${liqTo}.xlsx`)
+  }
+
+  function printLiquidacionPDF() {
+    if (!liqRows || liqRows.length === 0) return
+    const rowsHtml = liqRows.map(r => `<tr><td>${r.name}</td><td>${kindLabel(r.kind)}</td><td>${r.nif ?? ''}</td><td class="r">${r.deliveries}</td><td class="r">${money(r.km)}</td><td class="r">${money(r.delivery_earnings)} €</td><td class="r">${r.quest_bonus > 0 ? money(r.quest_bonus) + ' €' : '—'}</td><td class="r b">${money(r.total)} €</td></tr>`).join('')
+    const w = window.open('', '_blank'); if (!w) return
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Liquidación ${liqFrom} a ${liqTo}</title>
+      <style>
+        body{font-family:Arial,Helvetica,sans-serif;color:#18181b;padding:32px;font-size:13px}
+        h1{font-size:19px;margin:0 0 2px} .meta{color:#666;font-size:12px;margin-bottom:18px}
+        table{width:100%;border-collapse:collapse} th,td{padding:7px 8px;border-bottom:1px solid #e5e5e5;text-align:left}
+        th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#666;border-bottom:2px solid #ccc}
+        td.r,th.r{text-align:right} td.b{font-weight:700}
+        tr.total td{border-top:2px solid #333;font-weight:800;font-size:14px}
+        .foot{margin-top:22px;color:#999;font-size:11px}
+      </style></head><body>
+      <h1>Liquidación de reparto</h1>
+      <div class="meta">Periodo ${liqFrom} a ${liqTo}${liqLoc ? ' · ' + (locs.find(l => l.id === liqLoc)?.name ?? '') : ' · Todos los locales'}</div>
+      <table><thead><tr><th>Repartidor</th><th>Tipo</th><th>NIF</th><th class="r">Entregas</th><th class="r">Km</th><th class="r">Reparto</th><th class="r">Retos</th><th class="r">Total</th></tr></thead>
+      <tbody>${rowsHtml}<tr class="total"><td colspan="7">Total a liquidar</td><td class="r">${liqTotal.toFixed(2)} €</td></tr></tbody></table>
+      <div class="foot">Generado por Folvy · el reparto incluye el surge congelado en cada entrega; los retos son bonos conseguidos en el periodo.</div>
+      </body></html>`)
+    w.document.close(); w.focus(); setTimeout(() => w.print(), 300)
+  }
+
+  function cargarEjemploLiquidacion() {
+    setLiqRows([
+      { courier_id: 'ej1', name: 'Marlón Mafla Rivera', kind: 'freelance', nif: '12345678Z', iban: 'ES91 2100 0418 4502 0005 1332', deliveries: 42, km: 96.4, delivery_earnings: 178.60, quest_bonus: 35, total: 213.60 },
+      { courier_id: 'ej2', name: 'Keilymar Araujo Lobo', kind: 'freelance', nif: 'Y1234567X', iban: 'ES79 0049 1500 0512 3456 7892', deliveries: 31, km: 71.2, delivery_earnings: 131.20, quest_bonus: 10, total: 141.20 },
+      { courier_id: 'ej3', name: 'Johanny Garzón Rodríguez', kind: 'freelance', nif: '87654321X', iban: 'ES60 0081 0900 1234 5678 9012', deliveries: 27, km: 60.8, delivery_earnings: 112.45, quest_bonus: 0, total: 112.45 },
+    ])
+  }
 
   // ── D) Flota ───────────────────────────────────────────────────────────
   async function saveCourier() {
@@ -680,7 +726,15 @@ export default function RepartoSettingsPage() {
             </select>
           </label>
           <Button onClick={genLiquidacion} disabled={liqLoading}>{liqLoading ? 'Generando...' : 'Generar'}</Button>
-          {liqRows && liqRows.length > 0 && <button onClick={downloadLiquidacionCSV} className="text-sm text-accent font-medium px-2 py-2 inline-flex items-center gap-1"><Download size={14} /> CSV</button>}
+          <button onClick={cargarEjemploLiquidacion} className="text-sm text-text-secondary hover:text-text-primary font-medium px-2 py-2">Ver ejemplo</button>
+          {liqRows && liqRows.length > 0 && (
+            <div className="inline-flex items-center gap-1 ml-auto">
+              <span className="text-xs text-text-secondary mr-1">Descargar:</span>
+              <button onClick={downloadLiquidacionCSV} className="text-sm text-accent font-medium px-2 py-2 inline-flex items-center gap-1"><Download size={14} /> CSV</button>
+              <button onClick={downloadLiquidacionXLSX} className="text-sm text-accent font-medium px-2 py-2 inline-flex items-center gap-1"><Download size={14} /> Excel</button>
+              <button onClick={printLiquidacionPDF} className="text-sm text-accent font-medium px-2 py-2 inline-flex items-center gap-1"><Download size={14} /> PDF</button>
+            </div>
+          )}
         </div>
 
         {liqRows && (liqRows.length === 0
