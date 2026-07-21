@@ -3,21 +3,32 @@
 // Despacha un pedido (sale) al broker de reparto Catcher.
 // Invocación manual de prueba: POST { sale_id, dry_run? }.
 //   - dry_run:true  → construye y DEVUELVE el payload SIN enviarlo a Catcher.
-//   - dry_run:false → autentica, llama a /pitcher/v2/order y guarda el resultado.
+//   - dry_run:false → autentica, llama a /pitcher/v1/order y guarda el resultado.
 //
 // Lee credenciales (cifradas en Vault) vía connector_secret_read (service_role).
 // Dirección del cliente: del raw_tab.delivery del pedido (lat/long/dirección).
 // Recogida: del local (locations.address + lat/lng).
 // Idempotente: si el sale ya tiene carrier_order_id, no re-despacha.
 //
-// SANDBOX: base URL de staging por defecto (credenciales de prueba de Catcher).
+// PRODUCCIÓN: base URL api.catcher.es (cutover 2026-07-20).
+//
+// ── FIABILIDAD DE DIRECCIÓN (F2, 21/07) ──────────────────────────────────────
+// El cliente es responsable de su dirección → al rider le mandamos:
+//   TEXTO = lo que escribió el cliente (delivery.address), NUNCA el geocodedAddress
+//           de la plataforma (mal en ~6%).
+//   PIN   = si el geocoded de la plataforma COINCIDE con lo que escribió el cliente,
+//           se usan sus coords (delivery.latitude/longitude). Si DISCREPA, se
+//           re-geocodea el texto del cliente con Mapbox → coords correctas. Nunca se
+//           manda el pin dudoso de Glovo en la discrepancia.
+// Requiere el secreto MAPBOX_TOKEN (mismo pk.* del front). Sin él, el re-geocode se
+// omite y caen las coords de Glovo (no peor que antes); con él, se corrige el ~6%.
 
 import { corsHeaders } from "../_shared/cors.ts";
 import { createClient } from "@supabase/supabase-js";
 
 // Base URLs de Catcher. Sandbox = staging. Producción = api.catcher.es.
-const CATCHER_AUTH_URL = "https://staging-api.catcher.es/auth/v1/authorize";
-const CATCHER_ORDER_URL = "https://staging-api.catcher.es/pitcher/v1/order";
+const CATCHER_AUTH_URL = "https://api.catcher.es/auth/v1/authorize";
+const CATCHER_ORDER_URL = "https://api.catcher.es/pitcher/v1/order";
 
 const CATCHER_CONNECTOR_CODE = "catcher";
 
@@ -47,6 +58,49 @@ function extractDelivery(rawTab: string | null): DeliveryInfo | null {
     }
     return null;
   } catch {
+    return null;
+  }
+}
+
+// ── Fiabilidad de dirección: detección de discrepancia address vs geocoded ──
+function normStreet(s: string | null | undefined): string {
+  return (s ?? "")
+    .normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+}
+function streetLastWord(addr: string | null | undefined): string {
+  const street = (addr ?? "").split(",")[0];
+  const words = normStreet(street).split(" ").filter(Boolean);
+  return words.length ? words[words.length - 1] : "";
+}
+// true = la calle que escribió el cliente NO aparece en el geocoded → discrepancia.
+function addressMismatch(rawAddr: string | null | undefined, geo: string | null | undefined): boolean {
+  if (!rawAddr || !geo) return false;
+  const lw = streetLastWord(rawAddr);
+  if (lw.length < 4) return false;
+  return normStreet(geo).indexOf(lw) === -1;
+}
+
+// Re-geocode del texto del cliente con Mapbox (sesgo Madrid). null si no resuelve.
+async function mapboxGeocode(query: string): Promise<{ lat: number; lng: number } | null> {
+  const token = Deno.env.get("MAPBOX_TOKEN") ?? "";
+  if (!token || !query.trim()) return null;
+  try {
+    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json`
+      + `?access_token=${token}&country=es&language=es&limit=1&proximity=-3.70,40.42`;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 6000);
+    const res = await fetch(url, { signal: ctrl.signal });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const f = data?.features?.[0];
+    if (!f || !Array.isArray(f.center)) return null;
+    const [lng, lat] = f.center;
+    if (typeof lat !== "number" || typeof lng !== "number") return null;
+    return { lat, lng };
+  } catch (e) {
+    console.log("MAPBOX_GEOCODE_ERR", String(e));
     return null;
   }
 }
@@ -147,16 +201,35 @@ Deno.serve(async (req: Request) => {
     return json(400, { ok: false, error: "el pedido no tiene dirección de cliente (raw_tab.delivery)" });
   }
 
-  // 6. Construir el payload de Catcher (/pitcher/v2/order).
+  // ── F2: TEXTO = lo que escribió el cliente (nunca el geocoded). PIN = si el
+  // geocoded coincide, sus coords; si discrepa, re-geocode Mapbox del texto. ──
+  const typedText = (delivery.address ?? "").trim() || (delivery.geocodedAddress ?? "").trim();
+  const mism = addressMismatch(delivery.address, delivery.geocodedAddress);
+  let dLat = delivery.latitude;
+  let dLng = delivery.longitude;
+  let coordsSource = "platform";
+  if (mism) {
+    const q = [delivery.address, delivery.postalCode, "Madrid", "España"]
+      .map(x => (x ?? "").toString().trim()).filter(Boolean).join(", ");
+    const mb = await mapboxGeocode(q);
+    if (mb) {
+      dLat = mb.lat; dLng = mb.lng; coordsSource = "mapbox";
+    } else {
+      coordsSource = "platform_fallback_mismatch"; // Mapbox no resolvió; último recurso.
+    }
+    console.log("CATCHER_ADDR_MISMATCH", { saleId, typed: delivery.address, geo: delivery.geocodedAddress, coordsSource });
+  }
+
+  // 6. Construir el payload de Catcher (/pitcher/v1/order).
   const orderPayload = {
     locationId: locationIdCatcher,
     orderPickupLocName: loc.name,
     orderPickupTime: new Date(Date.now() + 10 * 60 * 1000).toISOString().slice(0, 19).replace("T", " "),
     orderPaymentMethod: "card",
-    orderDeliveryLocation: delivery.geocodedAddress ?? delivery.address ?? "",
+    orderDeliveryLocation: typedText,                 // ⟵ F2: dirección del CLIENTE, no el geocoded
     addressDetails: delivery.details ?? "",
-    orderDeliveryLat: String(delivery.latitude),
-    orderDeliveryLong: String(delivery.longitude),
+    orderDeliveryLat: String(dLat),                   // ⟵ F2: pin re-geocodeado si discrepaba
+    orderDeliveryLong: String(dLng),
     orderPickupLocation: loc.address ?? "",
     orderPickupLat: String(loc.lat),
     orderPickupLong: String(loc.lng),
@@ -171,7 +244,7 @@ Deno.serve(async (req: Request) => {
 
   // DRY RUN: devolver el payload sin enviarlo.
   if (dryRun) {
-    return json(200, { ok: true, dryRun: true, wouldSendTo: CATCHER_ORDER_URL, payload: orderPayload });
+    return json(200, { ok: true, dryRun: true, wouldSendTo: CATCHER_ORDER_URL, coordsSource, addressMismatch: mism, payload: orderPayload });
   }
 
   // 7. Autenticar contra Catcher.
@@ -234,7 +307,7 @@ Deno.serve(async (req: Request) => {
       dispatch_error: null,
     }).eq("id", saleId);
 
-    return json(200, { ok: true, carrier_order_id: carrierOrderId, catcherResponse: orderJson ?? orderText.slice(0, 500) });
+    return json(200, { ok: true, carrier_order_id: carrierOrderId, coordsSource, catcherResponse: orderJson ?? orderText.slice(0, 500) });
   } catch (e) {
     return json(502, { ok: false, error: `Catcher order error: ${e instanceof Error ? e.message : String(e)}` });
   }
