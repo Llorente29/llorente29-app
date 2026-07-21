@@ -28,6 +28,13 @@
 //       las MISMAS columnas que rellena HubRise. La pantalla los lee agnóstica.
 // El adaptador adapt_lastapp_order NO se toca (solo arma líneas).
 //
+// ── FIABILIDAD DE DIRECCIÓN (21/07) ──────────────────────────────────────────
+// La dirección CANÓNICA es lo que ESCRIBIÓ el cliente (address+details+CP), NO el
+// geocodedAddress de la plataforma (que falla ~6%: el rider iba al sitio malo). El
+// cliente es responsable de su dirección. Se calcula address_status ('ok' |
+// 'needs_review') comparando la calle del cliente con la del geocoded → marca
+// interna, sin bloqueo. El pin correcto para el rider (re-geocode) es F2.
+//
 // Idempotencia: external_ref = bill.id. Cancelación idempotente (no re-cancela).
 //
 // SEGURIDAD: Last NO firma; manda un `authorization` fijo -> LASTAPP_WEBHOOK_TOKEN.
@@ -106,16 +113,42 @@ interface LastTab {
   code?: string | null;
 }
 
+// ── Fiabilidad de dirección (21/07) ──
+// El cliente es responsable de su dirección → la canónica es lo que ESCRIBIÓ, no el
+// geocodedAddress (mal en ~6%). Marcamos la discrepancia en address_status.
+function normStreet(s: string | null | undefined): string {
+  return (s ?? "")
+    .normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+}
+// Última palabra del nombre de calle (antes de la 1ª coma) = la más distintiva y
+// robusta a la abreviatura "Calle"->"C." que hace el geocoder.
+function streetLastWord(addr: string | null | undefined): string {
+  const street = (addr ?? "").split(",")[0];
+  const words = normStreet(street).split(" ").filter(Boolean);
+  return words.length ? words[words.length - 1] : "";
+}
+// true = la calle que escribió el cliente NO aparece en el geocoded → discrepancia.
+function addressMismatch(rawAddr: string | null | undefined, geo: string | null | undefined): boolean {
+  if (!rawAddr || !geo) return false;   // sin ambos, nada que comparar
+  const lw = streetLastWord(rawAddr);
+  if (lw.length < 4) return false;      // palabra corta, poco fiable
+  return normStreet(geo).indexOf(lw) === -1;
+}
+
 // ── NUEVO (19/06): compone los campos CANÓNICOS del pedido desde el tab ──
 // Mismas columnas que rellena el adaptador HubRise. Agnóstico para la pantalla.
 // (20/06) Añade los DOS códigos de pedido: platform_order_code = nº real de la
 // plataforma (portable: cada frontera lo rellena desde su payload; el ticket lo
 // pinta sin saber de Last) y pos_short_code = corto interno de Last (referencia;
 // quedará null en pedidos que NO entren por Last, p.ej. HubRise — y eso es correcto).
+// (21/07) delivery_address = lo que ESCRIBIÓ el cliente (address+details+CP), NO el
+// geocodedAddress; + address_status para la marca interna de discrepancia.
 function buildCanonicalFields(tab: LastTab): {
   customer_name: string | null;
   customer_phone: string | null;
   delivery_address: string | null;
+  address_status: string;
   expected_time: string | null;
   customer_note: string | null;
   platform_order_code: string | null;
@@ -126,21 +159,24 @@ function buildCanonicalFields(tab: LastTab): {
 
   const name = [ci?.name, ci?.surname].filter(Boolean).join(" ").trim();
 
-  // dirección: prioriza la geocodificada (más completa); si no, compone partes.
+  // Dirección CANÓNICA = lo que escribió el cliente (address + details + CP). El
+  // geocodedAddress de la plataforma NO manda (el cliente es responsable de su
+  // dirección; el geocoder falla ~6%). Si el cliente no escribió nada, cae al geocoded.
   let addr: string | null = null;
+  let addressStatus = "ok";
   if (d) {
-    const geo = (d.geocodedAddress ?? "").trim();
-    if (geo) addr = geo;
-    else {
-      const parts = [d.address, d.details, d.postalCode].map(x => (x ?? "").trim()).filter(Boolean);
-      addr = parts.length ? parts.join(", ") : null;
-    }
+    const typed = [d.address, d.details, d.postalCode].map(x => (x ?? "").trim()).filter(Boolean);
+    const typedAddr = typed.length ? typed.join(", ") : null;
+    const geo = (d.geocodedAddress ?? "").trim() || null;
+    addr = typedAddr ?? geo;
+    addressStatus = addressMismatch(d.address, geo) ? "needs_review" : "ok";
   }
 
   return {
     customer_name: name || null,
     customer_phone: (ci?.phoneNumber ?? "").trim() || null,
     delivery_address: addr,
+    address_status: addressStatus,
     expected_time: (tab.schedulingTime ?? "").trim() || null,  // ISO de Last (programado); null = ASAP
     customer_note: (tab.customerNote ?? "").trim() || null,
     platform_order_code: (tab.name ?? "").trim() || null,      // ⟵ nº real de plataforma
@@ -285,7 +321,7 @@ async function upsertSale(
     taxable_base: typeof bill.taxableBase === "number" ? bill.taxableBase / 100 : null,
     service_type: mapServiceType(tab.pickupType),
     order_status: "accepted",                 // ⟵ Last entra ya aceptado (decisión A)
-    ...buildCanonicalFields(tab),             // ⟵ cliente/teléfono/dirección/hora/nota
+    ...buildCanonicalFields(tab),             // ⟵ cliente/teléfono/dirección/address_status/hora/nota
     raw_products: JSON.stringify(products),
     raw_tab: JSON.stringify(tab),
   };
