@@ -1,14 +1,18 @@
 // src/pages/RepartoSettingsPage.tsx
 // Configuración del reparto (dispatcher). Todo en una pantalla:
 //  A) Enlace de seguimiento (dominio)   B) Por local (modo/transportista/aviso)
-//  C) Reglas de despacho (con margen)   D) Flota propia (repartidores)   E) Zonas (enlace)
+//  C) Reglas de despacho (cadena + margen)   D) Flota propia (repartidores)   E) Zonas (enlace)
 //
 // MULTI-TENANT: los TRANSPORTISTAS no se hardcodean. La lista `carriers` la da la
 // RPC reparto_settings desde los conectores de logística CONECTADOS por la cuenta
 // (+ Flota propia). El cliente 2 verá los suyos (Jelp, Uber Direct, Shipday…), no
 // los de nadie más.
+//
+// CFG-1: cada regla lleva una CADENA de transportistas por orden de prioridad
+// (p.ej. Flota propia → Catcher → Jelp). El motor prueba el 1º; si no puede
+// (sin repartidor en turno o más lejos del tope de km), pasa al siguiente.
 import { useState, useEffect, useCallback } from 'react'
-import { CheckCircle2, Plus, Trash2, Pencil, X } from 'lucide-react'
+import { CheckCircle2, Plus, Trash2, Pencil, X, ChevronUp, ChevronDown } from 'lucide-react'
 import { Card, Button } from '../components/ui'
 import { supabase } from '../lib/supabase'
 
@@ -23,6 +27,7 @@ interface Rule {
   id?: string; priority?: number; location_id?: string | null; weekdays?: number[] | null
   time_from?: string | null; time_to?: string | null; min_total?: number | null; max_total?: number | null
   margin_floor_pct?: number | null; then_carrier?: string | null; fallback_carrier?: string | null
+  carrier_chain?: string[] | null; max_distance_km?: number | null
   strategy?: string | null; is_active?: boolean
 }
 interface Courier {
@@ -90,6 +95,7 @@ export default function RepartoSettingsPage() {
   // ── C) Reglas ──────────────────────────────────────────────────────────
   async function saveRule() {
     if (!editRule) return
+    if (!(editRule.carrier_chain?.length)) { alert('La regla necesita al menos un transportista en la cadena'); return }
     const { error } = await rpc('upsert_dispatch_rule', { p: editRule })
     if (error) { alert('No se pudo guardar la regla: ' + error.message); return }
     setEditRule(null); await reload()
@@ -99,6 +105,24 @@ export default function RepartoSettingsPage() {
     const { error } = await rpc('delete_dispatch_rule', { p_id: id })
     if (error) { alert('No se pudo eliminar: ' + error.message); return }
     await reload()
+  }
+  // Editor de la cadena de transportistas (por orden de prioridad).
+  const chainAdd = (code: string) => {
+    if (!editRule || !code) return
+    if ((editRule.carrier_chain ?? []).includes(code)) return
+    setEditRule({ ...editRule, carrier_chain: [...(editRule.carrier_chain ?? []), code] })
+  }
+  const chainRemove = (idx: number) => {
+    if (!editRule) return
+    const next = [...(editRule.carrier_chain ?? [])]; next.splice(idx, 1)
+    setEditRule({ ...editRule, carrier_chain: next })
+  }
+  const chainMove = (idx: number, dir: -1 | 1) => {
+    if (!editRule) return
+    const next = [...(editRule.carrier_chain ?? [])]
+    const j = idx + dir; if (j < 0 || j >= next.length) return
+    ;[next[idx], next[j]] = [next[j], next[idx]]
+    setEditRule({ ...editRule, carrier_chain: next })
   }
 
   // ── D) Flota ───────────────────────────────────────────────────────────
@@ -123,6 +147,11 @@ export default function RepartoSettingsPage() {
     const list = [...carriers]
     if (current && !list.some(c => c.code === current)) list.unshift({ code: current, name: carrierName(current) })
     return list
+  }
+  // Cadena visible de una regla (con compat de reglas antiguas then/fallback).
+  const ruleChain = (r: Rule): string[] => {
+    if (r.carrier_chain && r.carrier_chain.length) return r.carrier_chain
+    return [r.then_carrier, r.fallback_carrier].filter(Boolean) as string[]
   }
   const input = 'border border-border-default rounded-lg px-3 py-2 text-sm bg-card text-text-primary'
 
@@ -186,29 +215,32 @@ export default function RepartoSettingsPage() {
             <p className="text-xs uppercase tracking-wide text-text-secondary mb-1">Reglas de despacho</p>
             <h3 className="font-semibold text-text-primary">Quién reparte, según franja, importe y margen</h3>
           </div>
-          <Button onClick={() => setEditRule({ priority: (rules.length + 1) * 10, then_carrier: 'own_fleet', fallback_carrier: null, is_active: true })}>
+          <Button onClick={() => setEditRule({ priority: (rules.length + 1) * 10, carrier_chain: ['own_fleet'], is_active: true })}>
             <Plus size={15} className="inline -mt-0.5 mr-1" />Regla
           </Button>
         </div>
-        <p className="text-xs text-text-secondary mb-3">Se evalúan por prioridad (menor primero). Sin reglas → transportista por defecto del local. <b>El margen mínimo protege que un reparto no se coma la rentabilidad del pedido</b> — nadie más lo cruza.</p>
+        <p className="text-xs text-text-secondary mb-3">Se evalúan por prioridad (menor primero). Sin reglas → transportista por defecto del local. Cada regla lleva una <b>cadena de transportistas</b>: se prueba el 1º y, si no puede, pasa al siguiente. <b>El margen mínimo protege que un reparto no se coma la rentabilidad del pedido.</b></p>
 
         {rules.length === 0 ? <p className="text-xs text-text-secondary">Aún no hay reglas.</p> : (
           <div className="space-y-2">
-            {rules.map(r => (
-              <div key={r.id} className="flex items-center gap-2 text-sm border-t border-border-default pt-2">
-                <span className="text-xs font-mono text-text-secondary w-8">#{r.priority}</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-text-primary truncate">
-                    {locName(r.location_id)} · {(r.time_from && r.time_to) ? `${r.time_from}-${r.time_to}` : 'todo el día'}
-                    {(r.min_total != null || r.max_total != null) ? ` · ${r.min_total ?? 0}–${r.max_total ?? '∞'}€` : ''}
-                    {r.margin_floor_pct != null ? ` · margen ≥${r.margin_floor_pct}%` : ''}
-                  </p>
-                  <p className="text-xs text-text-secondary">→ {carrierName(r.then_carrier)}{r.fallback_carrier ? ` (si no, ${carrierName(r.fallback_carrier)})` : ''}{!r.is_active ? ' · inactiva' : ''}</p>
+            {rules.map(r => {
+              const chainStr = ruleChain(r).map(c => carrierName(c)).join(' → ') || '—'
+              return (
+                <div key={r.id} className="flex items-center gap-2 text-sm border-t border-border-default pt-2">
+                  <span className="text-xs font-mono text-text-secondary w-8">#{r.priority}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-text-primary truncate">
+                      {locName(r.location_id)} · {(r.time_from && r.time_to) ? `${r.time_from}-${r.time_to}` : 'todo el día'}
+                      {(r.min_total != null || r.max_total != null) ? ` · ${r.min_total ?? 0}–${r.max_total ?? '∞'}€` : ''}
+                      {r.margin_floor_pct != null ? ` · margen ≥${r.margin_floor_pct}%` : ''}
+                    </p>
+                    <p className="text-xs text-text-secondary">→ {chainStr}{r.max_distance_km != null ? ` · propio ≤${r.max_distance_km} km` : ''}{!r.is_active ? ' · inactiva' : ''}</p>
+                  </div>
+                  <button onClick={() => setEditRule(r)} className="text-text-secondary hover:text-text-primary p-1"><Pencil size={15} /></button>
+                  <button onClick={() => removeRule(r.id)} className="text-danger hover:opacity-80 p-1"><Trash2 size={15} /></button>
                 </div>
-                <button onClick={() => setEditRule(r)} className="text-text-secondary hover:text-text-primary p-1"><Pencil size={15} /></button>
-                <button onClick={() => removeRule(r.id)} className="text-danger hover:opacity-80 p-1"><Trash2 size={15} /></button>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
 
@@ -230,18 +262,33 @@ export default function RepartoSettingsPage() {
               <label className="text-xs text-text-secondary">Importe mín (€)<input type="number" value={editRule.min_total ?? ''} onChange={e => setEditRule({ ...editRule, min_total: e.target.value === '' ? null : Number(e.target.value) })} className={`block mt-1 w-full ${input}`} /></label>
               <label className="text-xs text-text-secondary">Importe máx (€)<input type="number" value={editRule.max_total ?? ''} onChange={e => setEditRule({ ...editRule, max_total: e.target.value === '' ? null : Number(e.target.value) })} className={`block mt-1 w-full ${input}`} /></label>
               <label className="text-xs text-text-secondary">Margen mínimo (%)<input type="number" value={editRule.margin_floor_pct ?? ''} onChange={e => setEditRule({ ...editRule, margin_floor_pct: e.target.value === '' ? null : Number(e.target.value) })} className={`block mt-1 w-full ${input}`} /></label>
-              <div />
-              <label className="text-xs text-text-secondary">Transportista
-                <select value={editRule.then_carrier ?? ''} onChange={e => setEditRule({ ...editRule, then_carrier: e.target.value })} className={`block mt-1 w-full ${input}`}>
-                  {carrierOptions(editRule.then_carrier).map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
-                </select>
-              </label>
-              <label className="text-xs text-text-secondary">Si no hay → fallback
-                <select value={editRule.fallback_carrier ?? ''} onChange={e => setEditRule({ ...editRule, fallback_carrier: e.target.value || null })} className={`block mt-1 w-full ${input}`}>
-                  <option value="">—</option>{carrierOptions(editRule.fallback_carrier).map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
-                </select>
-              </label>
+              <label className="text-xs text-text-secondary">Máx. km flota propia<input type="number" value={editRule.max_distance_km ?? ''} onChange={e => setEditRule({ ...editRule, max_distance_km: e.target.value === '' ? null : Number(e.target.value) })} placeholder="sin límite" className={`block mt-1 w-full ${input}`} /></label>
             </div>
+
+            {/* Cadena de transportistas por orden de prioridad */}
+            <div>
+              <p className="text-xs text-text-secondary mb-1">Cadena de transportistas <span className="text-text-secondary/70">(orden de prioridad · se prueba de arriba abajo)</span></p>
+              <div className="space-y-1.5">
+                {(editRule.carrier_chain ?? []).map((code, idx) => (
+                  <div key={code} className="flex items-center gap-2 bg-card border border-border-default rounded-lg px-2 py-1.5">
+                    <span className="text-xs font-mono text-text-secondary w-5 text-center">{idx + 1}</span>
+                    <span className="flex-1 text-sm text-text-primary">{carrierName(code)}</span>
+                    <button type="button" onClick={() => chainMove(idx, -1)} disabled={idx === 0} className="p-1 text-text-secondary hover:text-text-primary disabled:opacity-30"><ChevronUp size={14} /></button>
+                    <button type="button" onClick={() => chainMove(idx, 1)} disabled={idx === (editRule.carrier_chain?.length ?? 0) - 1} className="p-1 text-text-secondary hover:text-text-primary disabled:opacity-30"><ChevronDown size={14} /></button>
+                    <button type="button" onClick={() => chainRemove(idx)} className="p-1 text-danger hover:opacity-80"><X size={14} /></button>
+                  </div>
+                ))}
+                {(editRule.carrier_chain ?? []).length === 0 && <p className="text-xs text-danger">Añade al menos un transportista.</p>}
+              </div>
+              <div className="flex items-center gap-2 mt-2">
+                <select value="" onChange={e => { chainAdd(e.target.value); e.currentTarget.value = '' }} className={`${input} py-1.5 text-sm`}>
+                  <option value="">+ Añadir transportista…</option>
+                  {carrierOptions().filter(c => !(editRule.carrier_chain ?? []).includes(c.code)).map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
+                </select>
+                <span className="text-[11px] text-text-secondary">La flota propia se salta si no hay repartidor en turno o el cliente supera el máx. km.</span>
+              </div>
+            </div>
+
             <div className="flex items-center gap-2">
               <span className="text-xs text-text-secondary">Días:</span>
               {DOW.map((d, i) => {
