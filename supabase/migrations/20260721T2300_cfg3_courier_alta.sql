@@ -83,8 +83,14 @@ AS $function$
             and co.category = 'logistics'
         ) t
       ), '[]'::jsonb),
+    -- employees no tiene account_id: se escopa por sus locales (location_id / assigned_locations).
     'employees', coalesce((select jsonb_agg(jsonb_build_object('id',e.id,'name',e.name) order by e.name)
-      from employees e where e.account_id in (select id from acc) and coalesce(e.active,true)),'[]'::jsonb),
+      from employees e
+      where coalesce(e.active,true)
+        and exists (select 1 from locations l
+                    where l.account_id in (select id from acc)
+                      and (e.location_id = l.id or l.id = any(e.assigned_locations)))
+      ),'[]'::jsonb),
     'locations', coalesce((select jsonb_agg(jsonb_build_object(
         'id',l.id,'name',l.name,'mode',coalesce(l.dispatch_mode,'auto'),
         'broker',l.dispatch_broker,'notify',coalesce(l.customer_notify_enabled,false)) order by l.name)

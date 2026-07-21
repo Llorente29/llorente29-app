@@ -21,7 +21,11 @@ async function rpc<T = unknown>(fn: string, args: Record<string, unknown>): Prom
   return await (supabase.rpc as unknown as (f: string, a: Record<string, unknown>) => Promise<{ data: T | null; error: { message: string } | null }>)(fn, args)
 }
 
-interface Loc { id: string; name: string; mode: string; broker: string | null; notify: boolean }
+interface Loc {
+  id: string; name: string; mode: string; broker: string | null; notify: boolean
+  bonus_rain_pct?: number | null; bonus_demand_max_pct?: number | null
+  bonus_combined_cap_pct?: number | null; weather_is_raining?: boolean | null; surge_pct?: number | null
+}
 interface Carrier { code: string; name: string }
 interface Rule {
   id?: string; priority?: number; location_id?: string | null; weekdays?: number[] | null
@@ -37,7 +41,7 @@ interface Courier {
   access_token?: string | null
   assigned_locations?: string[] | null; cost_model?: string | null; cost_value?: number | null
   rate_base?: number | null; rate_per_km?: number | null; rate_min_pickup?: number | null
-  rate_pickup_fee?: number | null; rate_tiers?: { to_km: number; price: number }[] | null
+  rate_pickup_fee?: number | null; rate_max?: number | null; rate_tiers?: { to_km: number; price: number }[] | null
   active?: boolean; on_shift?: boolean
 }
 
@@ -108,6 +112,23 @@ export default function RepartoSettingsPage() {
     else ({ error } = await rpc('set_location_dispatch', { p_location_id: id, p_mode: patch.mode ?? before?.mode, p_broker: ('broker' in patch ? patch.broker : before?.broker) }))
     if (error) { setLocs(prev => prev.map(l => l.id === id ? { ...l, ...before } : l)); alert('No se pudo guardar: ' + error.message) }
   }
+
+  // ── B2) Bonos por local (surge) ────────────────────────────────────────
+  async function saveBonus(id: string, next: Loc) {
+    const { error } = await rpc('set_location_bonus', {
+      p_location_id: id,
+      p_rain_pct: next.bonus_rain_pct ?? 0,
+      p_demand_max_pct: next.bonus_demand_max_pct ?? 0,
+      p_combined_cap_pct: next.bonus_combined_cap_pct ?? null,
+    })
+    if (error) { alert('No se pudo guardar el bono: ' + error.message); await reload() }
+  }
+  async function toggleRain(id: string, v: boolean) {
+    setLocs(prev => prev.map(l => l.id === id ? { ...l, weather_is_raining: v } : l))
+    const { error } = await rpc('set_location_weather', { p_location_id: id, p_is_raining: v })
+    if (error) { await reload(); alert('No se pudo cambiar el clima: ' + error.message) }
+  }
+  const patchLoc = (id: string, patch: Partial<Loc>) => setLocs(prev => prev.map(l => l.id === id ? { ...l, ...patch } : l))
 
   // ── C) Reglas ──────────────────────────────────────────────────────────
   async function saveRule() {
@@ -198,6 +219,11 @@ export default function RepartoSettingsPage() {
     if (c.cost_model === 'hourly') return `${c.cost_value}€/h`
     return `${c.cost_value}€/entrega`
   }
+  // Tope al que puede llegar el surge de un local con su config (lluvia + demanda máx, con tope combinado).
+  const surgeCeil = (l: Loc): number => {
+    const raw = (l.bonus_rain_pct ?? 0) + (l.bonus_demand_max_pct ?? 0)
+    return l.bonus_combined_cap_pct != null ? Math.min(raw, l.bonus_combined_cap_pct) : raw
+  }
   const input = 'border border-border-default rounded-lg px-3 py-2 text-sm bg-card text-text-primary'
 
   if (loading) return <Card className="p-6 text-center"><p className="text-sm text-text-secondary">Cargando...</p></Card>
@@ -251,6 +277,37 @@ export default function RepartoSettingsPage() {
             </div>
           ))}
         </div>
+      </Card>
+
+      {/* B2) Bonos por local (surge) */}
+      <Card className="p-5">
+        <p className="text-xs uppercase tracking-wide text-text-secondary mb-1">Bonos por local</p>
+        <h3 className="font-semibold text-text-primary mb-1">Lluvia y alta demanda</h3>
+        <p className="text-xs text-text-secondary mb-4">El extra se suma al pago del repartidor. La <b>alta demanda es dinámica</b> (pedidos pendientes ÷ repartidores en turno), no un % fijo como en otros. El repartidor ve el motivo en su app.</p>
+        <div className="space-y-3">
+          {locs.map(l => (
+            <div key={l.id} className="flex flex-wrap items-center gap-3 border-t border-border-default pt-3">
+              <span className="text-sm font-medium text-text-primary flex-1 min-w-[120px]">{l.name}
+                {(l.surge_pct ?? 0) > 0 && <span className="ml-2 text-[11px] font-bold text-accent">+{l.surge_pct}% ahora</span>}
+                <span className="block text-[11px] text-text-secondary font-normal">tope +{surgeCeil(l)}% · ej. pedido 5€ → hasta {(5 * (1 + surgeCeil(l) / 100)).toFixed(2)}€</span>
+              </span>
+              <label className="text-xs text-text-secondary">% lluvia
+                <input type="number" value={l.bonus_rain_pct ?? ''} onChange={e => patchLoc(l.id, { bonus_rain_pct: e.target.value === '' ? null : Number(e.target.value) })} onBlur={() => { const cur = locs.find(x => x.id === l.id); if (cur) void saveBonus(l.id, cur) }} className={`ml-1 w-16 ${input} py-1`} placeholder="0" />
+              </label>
+              <label className="text-xs text-text-secondary">% demanda máx
+                <input type="number" value={l.bonus_demand_max_pct ?? ''} onChange={e => patchLoc(l.id, { bonus_demand_max_pct: e.target.value === '' ? null : Number(e.target.value) })} onBlur={() => { const cur = locs.find(x => x.id === l.id); if (cur) void saveBonus(l.id, cur) }} className={`ml-1 w-16 ${input} py-1`} placeholder="0" />
+              </label>
+              <label className="text-xs text-text-secondary">% tope comb.
+                <input type="number" value={l.bonus_combined_cap_pct ?? ''} onChange={e => patchLoc(l.id, { bonus_combined_cap_pct: e.target.value === '' ? null : Number(e.target.value) })} onBlur={() => { const cur = locs.find(x => x.id === l.id); if (cur) void saveBonus(l.id, cur) }} className={`ml-1 w-16 ${input} py-1`} placeholder="—" />
+              </label>
+              <label className="text-xs text-text-secondary inline-flex items-center gap-1.5 cursor-pointer">
+                <input type="checkbox" checked={!!l.weather_is_raining} onChange={e => toggleRain(l.id, e.target.checked)} className="w-4 h-4 accent-accent" />
+                Lluvia ahora
+              </label>
+            </div>
+          ))}
+        </div>
+        <p className="text-[11px] text-text-secondary mt-3">El interruptor "Lluvia ahora" es manual de momento; el clima automático (por GPS del local) llega en el próximo paso.</p>
       </Card>
 
       {/* C) Reglas de despacho */}
@@ -420,6 +477,7 @@ export default function RepartoSettingsPage() {
                   <label className="text-xs text-text-secondary">Precio por km (€)<input type="number" value={editCourier.rate_per_km ?? ''} onChange={e => setEditCourier({ ...editCourier, rate_per_km: e.target.value === '' ? null : Number(e.target.value) })} className={`block mt-1 w-full ${input}`} placeholder="0" /></label>
                   <label className="text-xs text-text-secondary">Mínimo de recogida (€)<input type="number" value={editCourier.rate_min_pickup ?? ''} onChange={e => setEditCourier({ ...editCourier, rate_min_pickup: e.target.value === '' ? null : Number(e.target.value) })} className={`block mt-1 w-full ${input}`} placeholder="0" /></label>
                   <label className="text-xs text-text-secondary">Fijo por recogida (€)<input type="number" value={editCourier.rate_pickup_fee ?? ''} onChange={e => setEditCourier({ ...editCourier, rate_pickup_fee: e.target.value === '' ? null : Number(e.target.value) })} className={`block mt-1 w-full ${input}`} placeholder="0" /></label>
+                  <label className="text-xs text-text-secondary">Precio máximo (€)<input type="number" value={editCourier.rate_max ?? ''} onChange={e => setEditCourier({ ...editCourier, rate_max: e.target.value === '' ? null : Number(e.target.value) })} className={`block mt-1 w-full ${input}`} placeholder="sin tope" /></label>
                 </div>
               </div>
             )}
