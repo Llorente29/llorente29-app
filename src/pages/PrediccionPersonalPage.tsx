@@ -13,6 +13,8 @@ import {
   generateFromPrediction, DAY_CODES, createDefaultParams,
   type PredictionMode
 } from '../services/scheduler'
+import { fetchVacations } from '../services/vacationsService'
+import type { VacationRequest } from '../types/personal'
 
 const DAY_SHORT = ['L','M','X','J','V','S','D']
 const MONTH_NAMES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
@@ -31,7 +33,7 @@ function ConfBadge({ c }: { c: 'alta'|'media'|'baja' }) {
 }
 
 export default function PrediccionPersonalPage() {
-  const { locations, staff, setSchedules } = useApp()
+  const { locations, staff, setSchedules, activeAccountId } = useApp()
   const [locId, setLocId] = useState(locations[0]?.id || '')
   const [tab, setTab] = useState<'prediccion'|'historico'|'ajustes'>('prediccion')
   const [weekOffset, setWeekOffset] = useState(1)
@@ -48,6 +50,9 @@ export default function PrediccionPersonalPage() {
   const [filterMonth, setFilterMonth] = useState<number>(0)
   const [genMode, setGenMode] = useState<PredictionMode>('generate')
   const [genResult, setGenResult] = useState<any>(null)
+  // Vacaciones de la cuenta: emp.vacations no se puebla al cargar el staff, así que
+  // se cargan aparte y se pasan explícitas al scheduler (excluye ausencias aprobadas).
+  const [vacations, setVacations] = useState<VacationRequest[]>([])
 
   const hasSalesData = !!loadSavedAnalysis(locId)?.records?.length
   const weekStart = getWeekStart(weekOffset)
@@ -63,6 +68,15 @@ export default function PrediccionPersonalPage() {
     setGenResult(null)
     setLog([])
   }, [locId])
+
+  // Vacaciones de la cuenta (RLS acota). Se recargan al cambiar de cuenta.
+  useEffect(() => {
+    let cancelled = false
+    fetchVacations()
+      .then((vs) => { if (!cancelled && vs) setVacations(vs) })
+      .catch(() => { if (!cancelled) setVacations([]) })
+    return () => { cancelled = true }
+  }, [activeAccountId])
 
   async function buildPatterns() {
     const saved = loadSavedAnalysis(locId)
@@ -136,7 +150,7 @@ export default function PrediccionPersonalPage() {
       staffNeeds[DAY_CODES[p.dayOfWeek]] = { manana: p.staffMediadia, noche: p.staffNoche }
     })
     const baseParams = createDefaultParams(locStaff)
-    const result = generateFromPrediction(locStaff, weekStart, baseParams, staffNeeds as any, genMode)
+    const result = generateFromPrediction(locStaff, weekStart, baseParams, staffNeeds as any, genMode, vacations)
     setGenResult(result)
     if (genMode !== 'alert' || !result.coverageIssues.length) {
       const plan = {

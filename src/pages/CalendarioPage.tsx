@@ -47,6 +47,8 @@ import {
   DAY_LABELS,
 } from '../types/scheduler'
 import type { Employee } from '../types'
+import { fetchVacations } from '../services/vacationsService'
+import type { VacationRequest } from '../types/personal'
 import { getStaffingGaps, type StaffingGap } from '../modules/multitenancy/services/businessHoursService'
 import { fetchPayrollCosts } from '../services/payrollService'
 import { fetchSalesByLocation, fetchDemandProfile, fetchDemandForecast, type DemandProfile, type DemandForecast } from '../services/teamReportsService'
@@ -113,6 +115,10 @@ export default function CalendarioPage() {
   const [staffingGaps, setStaffingGaps] = useState<StaffingGap[]>([])
   const [issuesShown, setIssuesShown] = useState(false)
   const [copyModalOpen, setCopyModalOpen] = useState(false)
+  // Vacaciones de la cuenta (para excluir a quien tenga vacación APROBADA al
+  // generar/rellenar). emp.vacations no se puebla al cargar el staff, así que se
+  // cargan aparte y se pasan explícitas al generador.
+  const [vacations, setVacations] = useState<VacationRequest[]>([])
 
   const employees = useMemo(
     () => staff.filter(e => e.active && (e.locationId === locationId || (e.assignedLocations || []).includes(locationId))),
@@ -122,6 +128,15 @@ export default function CalendarioPage() {
   useEffect(() => {
     if (!locationId && locations.length > 0) setLocationId(locations[0].id)
   }, [locations, locationId])
+
+  // Vacaciones de la cuenta (RLS acota). Se recargan al cambiar de cuenta.
+  useEffect(() => {
+    let cancelled = false
+    fetchVacations()
+      .then((vs) => { if (!cancelled && vs) setVacations(vs) })
+      .catch(() => { if (!cancelled) setVacations([]) })
+    return () => { cancelled = true }
+  }, [activeAccountId])
 
   async function refresh() {
     if (!locationId) return
@@ -455,6 +470,7 @@ export default function CalendarioPage() {
       requirement: laborReq,
       roleKindByEmployee,
       hourlyCost,
+      vacations,
     })
     setCells(result.cells)
     setDirty(true)
@@ -946,6 +962,7 @@ export default function CalendarioPage() {
           weekStart={weekStart}
           cells={cells}
           employees={employees}
+          vacations={vacations}
           onClose={() => setGapModal(null)}
           onApply={(empId) => {
             const cur = cells[gapModal.template_id]?.[String(gapModal.day_of_week)] || []
@@ -1552,14 +1569,15 @@ interface SuggestionsModalProps {
   weekStart: string
   cells: ScheduleCells
   employees: Employee[]
+  vacations: VacationRequest[]
   onClose: () => void
   onApply: (empId: string) => void
 }
 
-function SuggestionsModal({ gap, template, weekStart, cells, employees, onClose, onApply }: SuggestionsModalProps) {
+function SuggestionsModal({ gap, template, weekStart, cells, employees, vacations, onClose, onApply }: SuggestionsModalProps) {
   const suggestions: FillSuggestion[] = useMemo(
-    () => suggestFillForGap({ gap, template, weekStart, cells, employees }),
-    [gap, template, weekStart, cells, employees]
+    () => suggestFillForGap({ gap, template, weekStart, cells, employees, vacations }),
+    [gap, template, weekStart, cells, employees, vacations]
   )
 
   return (

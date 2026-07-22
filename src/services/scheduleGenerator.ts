@@ -92,13 +92,50 @@ function restSlotsOf(emp: Employee): Set<string> {
    Helpers de vacaciones / disponibilidad
    ===================================================== */
 
-function isOnVacation(emp: Employee, isoDate: string): boolean {
-  const vacs: Vacation[] = emp.vacations || []
-  return vacs.some(v =>
-    v.status === 'aprobada' &&
-    v.startDate <= isoDate &&
-    isoDate <= v.endDate
-  )
+// Forma mínima de una vacación para el generador (la satisface VacationRequest
+// de types/personal, que sí trae employeeId — a diferencia de Vacation, que va
+// embebida en el empleado). Se pasa EXPLÍCITAMENTE al generador porque hoy
+// emp.vacations no se puebla al cargar el staff (AppContext solo adjunta
+// clockEntries) → si dependiéramos solo de emp.vacations, la exclusión nunca
+// bloquearía. Ver GeneratorInput.vacations.
+export interface GeneratorVacation {
+  employeeId: string
+  status: string
+  startDate: string
+  endDate: string
+}
+
+// Mapa empleado → tramos de vacación APROBADA. Une la fuente explícita (fiable)
+// con emp.vacations (por si viniera poblada), quedándose solo con las aprobadas.
+function buildApprovedVacByEmp(
+  employees: Employee[],
+  extra: GeneratorVacation[] = [],
+): Map<string, { start: string; end: string }[]> {
+  const m = new Map<string, { start: string; end: string }[]>()
+  const add = (empId: string, start: string, end: string) => {
+    const arr = m.get(empId) ?? []
+    arr.push({ start, end })
+    m.set(empId, arr)
+  }
+  for (const v of extra) {
+    if (v.status === 'aprobada') add(v.employeeId, v.startDate, v.endDate)
+  }
+  for (const e of employees) {
+    for (const v of (e.vacations || []) as Vacation[]) {
+      if (v.status === 'aprobada') add(e.id, v.startDate, v.endDate)
+    }
+  }
+  return m
+}
+
+// Exclusión DURA: ¿el empleado está en vacación aprobada ese día? (fechas inclusive)
+function isEmpOnVacation(
+  map: Map<string, { start: string; end: string }[]>,
+  empId: string,
+  isoDate: string,
+): boolean {
+  const list = map.get(empId)
+  return !!list && list.some(v => v.start <= isoDate && isoDate <= v.end)
 }
 
 function isoForDay(weekStartISO: string, dayIdx: DayOfWeek): string {
@@ -142,6 +179,9 @@ export interface GeneratorInput {
   requirement?: LaborRequirementRow[]          // personal necesario por (dow, hora, rol)
   roleKindByEmployee?: Record<string, string>  // employee.id → role_kind (área)
   hourlyCost?: Record<string, number>          // employee.id → €/hora real (nóminas)
+  // Vacaciones de la cuenta. Las de status='aprobada' son exclusión DURA (ningún
+  // turno ese día). Se pasan explícitas porque emp.vacations no viene poblado.
+  vacations?: GeneratorVacation[]
 }
 
 // Motor que CUBRE LA CURVA DE DEMANDA por rol al menor coste (Fase B / Opción 2).
@@ -151,7 +191,7 @@ export interface GeneratorInput {
 export function generateSchedule(input: GeneratorInput): GeneratorResult {
   const {
     weekStart, templates, employees, overrides = {},
-    requirement = [], roleKindByEmployee = {}, hourlyCost = {},
+    requirement = [], roleKindByEmployee = {}, hourlyCost = {}, vacations = [],
   } = input
 
   const warnings: string[] = []
@@ -159,6 +199,8 @@ export function generateSchedule(input: GeneratorInput): GeneratorResult {
   const assignedHours = new Map<string, number>()
   const restCache = new Map<string, Set<string>>()
   for (const e of employees) restCache.set(e.id, restSlotsOf(e))
+  // Vacaciones aprobadas → exclusión dura (se consulta en feasible()).
+  const approvedVacByEmp = buildApprovedVacByEmp(employees, vacations)
   const templateById = new Map(templates.map(t => [t.id, t]))
 
   const demandMode = requirement.length > 0
@@ -199,7 +241,7 @@ export function generateSchedule(input: GeneratorInput): GeneratorResult {
       const k = roleKindByEmployee[emp.id]
       if (k && k !== role) return false            // rol distinto → no; sin rol conocido → flexible
     }
-    if (isOnVacation(emp, isoForDay(weekStart, d))) return false
+    if (isEmpOnVacation(approvedVacByEmp, emp.id, isoForDay(weekStart, d))) return false
     const rest = restCache.get(emp.id)
     if (rest && rest.has(`${d}:${slotPeriodOf(t.start_time.slice(0, 5))}`)) return false
     const dk = String(d)
@@ -375,14 +417,17 @@ export interface SuggestFillInput {
   weekStart: string
   cells: ScheduleCells
   employees: Employee[]
+  // Igual que en el generador: las aprobadas bloquean; se pasan explícitas.
+  vacations?: GeneratorVacation[]
 }
 
 export function suggestFillForGap(input: SuggestFillInput): FillSuggestion[] {
-  const { gap, template, weekStart, cells, employees } = input
+  const { gap, template, weekStart, cells, employees, vacations = [] } = input
   const slotHours = shiftDurationHours(template.start_time, template.end_time)
   const slotPeriod = slotPeriodOf(template.start_time.slice(0, 5))
   const isoDate = isoForDay(weekStart, gap.day_of_week)
   const dayKey = String(gap.day_of_week)
+  const approvedVacByEmp = buildApprovedVacByEmp(employees, vacations)
 
   const out: FillSuggestion[] = []
   const assignedToThisSlot = new Set(cells[gap.template_id]?.[dayKey] ?? [])
@@ -392,7 +437,7 @@ export function suggestFillForGap(input: SuggestFillInput): FillSuggestion[] {
 
     let blocked: string | undefined
 
-    if (isOnVacation(emp, isoDate)) {
+    if (isEmpOnVacation(approvedVacByEmp, emp.id, isoDate)) {
       blocked = 'En vacaciones aprobadas'
     } else {
       const rest = restSlotsOf(emp)

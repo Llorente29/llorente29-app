@@ -118,8 +118,48 @@ function addDaysStr(date: string, n: number): string {
   return d.toISOString().slice(0, 10)
 }
 
-function isAbsent(emp: Employee, date: string): { absent: true; type: VacationType } | { absent: false; type: null } {
-  const v = emp.vacations.find(v => v.status === 'aprobada' && v.startDate <= date && v.endDate >= date)
+// Forma mínima de una vacación para este scheduler (la satisface VacationRequest
+// de types/personal). Se pasan EXPLÍCITAS a generateSmartSchedule/generateFromPrediction
+// porque emp.vacations NO se puebla al cargar el staff (AppContext solo adjunta
+// clockEntries) → si dependiéramos de emp.vacations, la ausencia nunca bloquearía.
+export interface SchedulerVacation {
+  employeeId: string
+  status: string
+  type: VacationType
+  startDate: string
+  endDate: string
+}
+
+// Mapa empleado → tramos de ausencia APROBADA (con tipo, para etiqueta/severidad).
+// Une la fuente explícita (fiable) con emp.vacations (por si viniera poblada).
+function buildAbsenceMap(
+  employees: Employee[],
+  extra: SchedulerVacation[] = [],
+): Map<string, { start: string; end: string; type: VacationType }[]> {
+  const m = new Map<string, { start: string; end: string; type: VacationType }[]>()
+  const add = (id: string, start: string, end: string, type: VacationType) => {
+    const arr = m.get(id) ?? []
+    arr.push({ start, end, type })
+    m.set(id, arr)
+  }
+  for (const v of extra) {
+    if (v.status === 'aprobada') add(v.employeeId, v.startDate, v.endDate, v.type)
+  }
+  for (const e of employees) {
+    for (const v of (e.vacations || [])) {
+      if (v.status === 'aprobada') add(e.id, v.startDate, v.endDate, v.type as VacationType)
+    }
+  }
+  return m
+}
+
+function isAbsent(
+  map: Map<string, { start: string; end: string; type: VacationType }[]>,
+  empId: string,
+  date: string,
+): { absent: true; type: VacationType } | { absent: false; type: null } {
+  const list = map.get(empId)
+  const v = list?.find(x => x.start <= date && date <= x.end)
   return v ? { absent: true, type: v.type } : { absent: false, type: null }
 }
 
@@ -132,9 +172,16 @@ export function createDefaultParams(employees: Employee[]): WeekParams {
 }
 
 // ─── Motor principal ──────────────────────────────────────────────────────────
-export function generateSmartSchedule(employees: Employee[], weekStartDate: string, params: WeekParams): GeneratedSchedule {
+export function generateSmartSchedule(
+  employees: Employee[],
+  weekStartDate: string,
+  params: WeekParams,
+  vacations: SchedulerVacation[] = [],
+): GeneratedSchedule {
   const alerts: ScheduleAlert[] = []
   const adjustments: string[] = []
+  // Ausencias aprobadas → exclusión dura (se consulta en isAbsent()).
+  const absenceMap = buildAbsenceMap(employees, vacations)
 
   const active = employees.filter(e => e.active && params.workers.some(w => w.employeeId === e.id))
   if (active.length === 0) {
@@ -162,7 +209,7 @@ export function generateSmartSchedule(employees: Employee[], weekStartDate: stri
   active.forEach(emp => {
     absences[emp.id] = {}
     DAY_CODES.forEach((day, di) => {
-      const result = isAbsent(emp, addDaysStr(weekStartDate, di))
+      const result = isAbsent(absenceMap, emp.id, addDaysStr(weekStartDate, di))
       if (result.absent) {
         const type = result.type
         const typeLabel = VACATION_LABEL_BY_TYPE[type]
@@ -589,7 +636,8 @@ export function generateFromPrediction(
   weekStartDate: string,
   params: WeekParams,
   staffNeeds: Record<DayCode, { manana: number; noche: number }>,
-  mode: PredictionMode
+  mode: PredictionMode,
+  vacations: SchedulerVacation[] = [],
 ): PredictionScheduleResult {
   const issues: PredictionScheduleResult['coverageIssues'] = []
   const reorganizations: string[] = []
@@ -641,7 +689,7 @@ export function generateFromPrediction(
 
   if (mode === 'alert') {
     // Solo generar con los mínimos base sin reorganizar
-    const schedule = generateSmartSchedule(employees, weekStartDate, params)
+    const schedule = generateSmartSchedule(employees, weekStartDate, params, vacations)
     return { schedule, mode, coverageIssues: issues, reorganizationsApplied: [] }
   }
 
@@ -663,11 +711,11 @@ export function generateFromPrediction(
       return w
     })
     const reorganizedParams = { ...adjustedParams, workers: adjustedWorkers }
-    const schedule = generateSmartSchedule(employees, weekStartDate, reorganizedParams)
+    const schedule = generateSmartSchedule(employees, weekStartDate, reorganizedParams, vacations)
     return { schedule, mode, coverageIssues: issues, reorganizationsApplied: reorganizations }
   }
 
   // mode === 'generate': generar con los mínimos de la predicción, marcar problemas en rojo
-  const schedule = generateSmartSchedule(employees, weekStartDate, adjustedParams)
+  const schedule = generateSmartSchedule(employees, weekStartDate, adjustedParams, vacations)
   return { schedule, mode, coverageIssues: issues, reorganizationsApplied: [] }
 }
