@@ -4747,16 +4747,25 @@ export type Database = {
           cost_value: number | null
           created_at: string
           employee_id: string | null
+          iban: string | null
           id: string
           kind: string
           last_lat: number | null
           last_lng: number | null
           last_seen_at: string | null
           name: string
+          nif: string | null
           on_shift: boolean
           phone: string | null
+          rate_base: number | null
+          rate_max: number | null
+          rate_min_pickup: number | null
+          rate_per_km: number | null
+          rate_pickup_fee: number | null
+          rate_tiers: Json | null
           transport_type: string | null
           updated_at: string
+          vehicle_plate: string | null
         }
         Insert: {
           access_token?: string | null
@@ -4767,16 +4776,25 @@ export type Database = {
           cost_value?: number | null
           created_at?: string
           employee_id?: string | null
+          iban?: string | null
           id?: string
           kind: string
           last_lat?: number | null
           last_lng?: number | null
           last_seen_at?: string | null
           name: string
+          nif?: string | null
           on_shift?: boolean
           phone?: string | null
+          rate_base?: number | null
+          rate_max?: number | null
+          rate_min_pickup?: number | null
+          rate_per_km?: number | null
+          rate_pickup_fee?: number | null
+          rate_tiers?: Json | null
           transport_type?: string | null
           updated_at?: string
+          vehicle_plate?: string | null
         }
         Update: {
           access_token?: string | null
@@ -4787,16 +4805,25 @@ export type Database = {
           cost_value?: number | null
           created_at?: string
           employee_id?: string | null
+          iban?: string | null
           id?: string
           kind?: string
           last_lat?: number | null
           last_lng?: number | null
           last_seen_at?: string | null
           name?: string
+          nif?: string | null
           on_shift?: boolean
           phone?: string | null
+          rate_base?: number | null
+          rate_max?: number | null
+          rate_min_pickup?: number | null
+          rate_per_km?: number | null
+          rate_pickup_fee?: number | null
+          rate_tiers?: Json | null
           transport_type?: string | null
           updated_at?: string
+          vehicle_plate?: string | null
         }
         Relationships: [
           {
@@ -4811,6 +4838,107 @@ export type Database = {
             columns: ["employee_id"]
             isOneToOne: false
             referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      courier_bonus: {
+        Row: {
+          account_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          kind: string
+          location_id: string | null
+          name: string
+          period: string
+          reward: number
+          target_count: number
+          updated_at: string
+          valid_from: string | null
+          valid_to: string | null
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          kind?: string
+          location_id?: string | null
+          name: string
+          period?: string
+          reward: number
+          target_count: number
+          updated_at?: string
+          valid_from?: string | null
+          valid_to?: string | null
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          kind?: string
+          location_id?: string | null
+          name?: string
+          period?: string
+          reward?: number
+          target_count?: number
+          updated_at?: string
+          valid_from?: string | null
+          valid_to?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "courier_bonus_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      courier_bonus_award: {
+        Row: {
+          account_id: string
+          awarded_at: string
+          bonus_id: string
+          courier_id: string
+          id: string
+          period_key: string
+          reward: number
+        }
+        Insert: {
+          account_id: string
+          awarded_at?: string
+          bonus_id: string
+          courier_id: string
+          id?: string
+          period_key: string
+          reward: number
+        }
+        Update: {
+          account_id?: string
+          awarded_at?: string
+          bonus_id?: string
+          courier_id?: string
+          id?: string
+          period_key?: string
+          reward?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "courier_bonus_award_bonus_id_fkey"
+            columns: ["bonus_id"]
+            isOneToOne: false
+            referencedRelation: "courier_bonus"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "courier_bonus_award_courier_id_fkey"
+            columns: ["courier_id"]
+            isOneToOne: false
+            referencedRelation: "courier"
             referencedColumns: ["id"]
           },
         ]
@@ -5278,7 +5406,9 @@ export type Database = {
           id: string
           in_delivery_at: string | null
           location_id: string | null
+          offer_expires_at: string | null
           offered_at: string | null
+          offered_to: string | null
           picked_up_at: string | null
           proof_note: string | null
           proof_type: string | null
@@ -5302,7 +5432,9 @@ export type Database = {
           id?: string
           in_delivery_at?: string | null
           location_id?: string | null
+          offer_expires_at?: string | null
           offered_at?: string | null
+          offered_to?: string | null
           picked_up_at?: string | null
           proof_note?: string | null
           proof_type?: string | null
@@ -5326,7 +5458,9 @@ export type Database = {
           id?: string
           in_delivery_at?: string | null
           location_id?: string | null
+          offer_expires_at?: string | null
           offered_at?: string | null
+          offered_to?: string | null
           picked_up_at?: string | null
           proof_note?: string | null
           proof_type?: string | null
@@ -5566,12 +5700,14 @@ export type Database = {
       dispatch_rule: {
         Row: {
           account_id: string
+          carrier_chain: string[] | null
           created_at: string
           fallback_carrier: string | null
           id: string
           is_active: boolean
           location_id: string | null
           margin_floor_pct: number | null
+          max_distance_km: number | null
           max_total: number | null
           min_total: number | null
           postal_codes: string[] | null
@@ -5586,12 +5722,14 @@ export type Database = {
         }
         Insert: {
           account_id: string
+          carrier_chain?: string[] | null
           created_at?: string
           fallback_carrier?: string | null
           id?: string
           is_active?: boolean
           location_id?: string | null
           margin_floor_pct?: number | null
+          max_distance_km?: number | null
           max_total?: number | null
           min_total?: number | null
           postal_codes?: string[] | null
@@ -5606,12 +5744,14 @@ export type Database = {
         }
         Update: {
           account_id?: string
+          carrier_chain?: string[] | null
           created_at?: string
           fallback_carrier?: string | null
           id?: string
           is_active?: boolean
           location_id?: string | null
           margin_floor_pct?: number | null
+          max_distance_km?: number | null
           max_total?: number | null
           min_total?: number | null
           postal_codes?: string[] | null
@@ -8083,6 +8223,10 @@ export type Database = {
           account_id: string | null
           active: boolean
           address: string | null
+          assignment_strategy: string
+          bonus_combined_cap_pct: number | null
+          bonus_demand_max_pct: number
+          bonus_rain_pct: number
           city: string | null
           clock_geofence_mode: string
           clock_radius_m: number
@@ -8098,14 +8242,22 @@ export type Database = {
           lat: number | null
           lng: number | null
           name: string
+          offer_timeout_s: number
           phone: string | null
           receipt_approval: string
           updated_at: string
+          weather_auto: boolean
+          weather_is_raining: boolean
+          weather_updated_at: string | null
         }
         Insert: {
           account_id?: string | null
           active?: boolean
           address?: string | null
+          assignment_strategy?: string
+          bonus_combined_cap_pct?: number | null
+          bonus_demand_max_pct?: number
+          bonus_rain_pct?: number
           city?: string | null
           clock_geofence_mode?: string
           clock_radius_m?: number
@@ -8121,14 +8273,22 @@ export type Database = {
           lat?: number | null
           lng?: number | null
           name: string
+          offer_timeout_s?: number
           phone?: string | null
           receipt_approval?: string
           updated_at?: string
+          weather_auto?: boolean
+          weather_is_raining?: boolean
+          weather_updated_at?: string | null
         }
         Update: {
           account_id?: string | null
           active?: boolean
           address?: string | null
+          assignment_strategy?: string
+          bonus_combined_cap_pct?: number | null
+          bonus_demand_max_pct?: number
+          bonus_rain_pct?: number
           city?: string | null
           clock_geofence_mode?: string
           clock_radius_m?: number
@@ -8144,9 +8304,13 @@ export type Database = {
           lat?: number | null
           lng?: number | null
           name?: string
+          offer_timeout_s?: number
           phone?: string | null
           receipt_approval?: string
           updated_at?: string
+          weather_auto?: boolean
+          weather_is_raining?: boolean
+          weather_updated_at?: string | null
         }
         Relationships: [
           {
@@ -11953,6 +12117,7 @@ export type Database = {
       sale: {
         Row: {
           account_id: string
+          address_status: string
           archived_at: string | null
           brand_id: string | null
           cancel_reason: string | null
@@ -12017,6 +12182,7 @@ export type Database = {
         }
         Insert: {
           account_id: string
+          address_status?: string
           archived_at?: string | null
           brand_id?: string | null
           cancel_reason?: string | null
@@ -12081,6 +12247,7 @@ export type Database = {
         }
         Update: {
           account_id?: string
+          address_status?: string
           archived_at?: string | null
           brand_id?: string | null
           cancel_reason?: string | null
@@ -14714,6 +14881,32 @@ export type Database = {
           },
         ]
       }
+      weather_poll: {
+        Row: {
+          location_id: string
+          request_id: number | null
+          requested_at: string | null
+        }
+        Insert: {
+          location_id: string
+          request_id?: number | null
+          requested_at?: string | null
+        }
+        Update: {
+          location_id?: string
+          request_id?: number | null
+          requested_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "weather_poll_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: true
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
     }
@@ -14742,16 +14935,25 @@ export type Database = {
           cost_value: number | null
           created_at: string
           employee_id: string | null
+          iban: string | null
           id: string
           kind: string
           last_lat: number | null
           last_lng: number | null
           last_seen_at: string | null
           name: string
+          nif: string | null
           on_shift: boolean
           phone: string | null
+          rate_base: number | null
+          rate_max: number | null
+          rate_min_pickup: number | null
+          rate_per_km: number | null
+          rate_pickup_fee: number | null
+          rate_tiers: Json | null
           transport_type: string | null
           updated_at: string
+          vehicle_plate: string | null
         }
         SetofOptions: {
           from: "*"
@@ -14937,6 +15139,19 @@ export type Database = {
       adapt_folvy_shop_order: { Args: { p_sale_id: string }; Returns: number }
       adapt_hubrise_order: { Args: { p_sale_id: string }; Returns: number }
       adapt_lastapp_order: { Args: { p_sale_id: string }; Returns: number }
+      add_existing_product_to_brand: {
+        Args: {
+          p_account: string
+          p_dst_brand: string
+          p_menu_category_id?: string
+          p_name: string
+          p_price: number
+          p_recipe_item_id: string
+          p_vat_rate?: number
+          p_with_modifiers?: boolean
+        }
+        Returns: Json
+      }
       add_ingredient_to_recipes: {
         Args: {
           p_cut?: string
@@ -15543,11 +15758,19 @@ export type Database = {
         Args: { p_assignment_id: string; p_token: string }
         Returns: Json
       }
+      courier_earnings_by_token: { Args: { p_token: string }; Returns: Json }
       courier_feed_by_token: { Args: { p_token: string }; Returns: Json }
+      courier_payout: {
+        Args: { p_courier_id: string; p_distance_km: number }
+        Returns: number
+      }
       courier_ping_by_token: {
         Args: { p_lat: number; p_lng: number; p_token: string }
         Returns: Json
       }
+      courier_quest_progress: { Args: { p_courier_id: string }; Returns: Json }
+      courier_quests_by_token: { Args: { p_token: string }; Returns: Json }
+      courier_reset_token: { Args: { p_id: string }; Returns: string }
       courier_session_by_token: { Args: { p_token: string }; Returns: Json }
       courier_set_shift_by_token: {
         Args: { p_on: boolean; p_token: string }
@@ -15679,6 +15902,7 @@ export type Database = {
         Args: { p_account: string; p_id: string }
         Returns: Json
       }
+      delete_courier_bonus: { Args: { p_id: string }; Returns: undefined }
       delete_delivery_zone: { Args: { p_id: string }; Returns: undefined }
       delete_dispatch_rule: { Args: { p_id: string }; Returns: undefined }
       delete_printer: { Args: { p_id: string }; Returns: undefined }
@@ -15985,6 +16209,7 @@ export type Database = {
         }[]
       }
       hubrise_money: { Args: { p: string }; Returns: number }
+      internal_secret: { Args: { p_name: string }; Returns: string }
       invoice_required_role: { Args: { p_invoice_id: string }; Returns: string }
       is_brand_open: {
         Args: { p_brand_id: string; p_location_id: string; p_ts?: string }
@@ -16254,6 +16479,7 @@ export type Database = {
         }
         Returns: Json
       }
+      location_demand_pct: { Args: { p_location_id: string }; Returns: number }
       location_economics: {
         Args: { p_from?: string; p_location_id: string; p_to?: string }
         Returns: {
@@ -16277,6 +16503,11 @@ export type Database = {
           is_estimate: boolean
           labor_cost: number
         }[]
+      }
+      location_surge_pct: { Args: { p_location_id: string }; Returns: number }
+      location_surge_reason: {
+        Args: { p_location_id: string }
+        Returns: string
       }
       log_platform_event: {
         Args: {
@@ -16863,7 +17094,16 @@ export type Database = {
           removed: number
         }[]
       }
+      reparto_award_quests: { Args: never; Returns: undefined }
+      reparto_fleet: { Args: never; Returns: Json }
+      reparto_liquidacion: {
+        Args: { p_from: string; p_location_id?: string; p_to: string }
+        Returns: Json
+      }
+      reparto_reoffer: { Args: never; Returns: undefined }
       reparto_settings: { Args: never; Returns: Json }
+      reparto_weather_apply: { Args: never; Returns: undefined }
+      reparto_weather_poll: { Args: never; Returns: undefined }
       report_platform_floor: {
         Args: {
           p_channel: string
@@ -17102,6 +17342,10 @@ export type Database = {
             }[]
           }
       safe_jsonb: { Args: { p_text: string }; Returns: Json }
+      sale_delivery_distance_km: {
+        Args: { p_sale_id: string }
+        Returns: number
+      }
       sales_dashboard: {
         Args: {
           p_account_id: string
@@ -17238,10 +17482,36 @@ export type Database = {
         Args: { p_account_id: string; p_phase: string }
         Returns: undefined
       }
+      set_location_assignment: {
+        Args: { p_location_id: string; p_strategy: string; p_timeout_s: number }
+        Returns: undefined
+      }
+      set_location_bonus: {
+        Args: {
+          p_combined_cap_pct: number
+          p_demand_max_pct: number
+          p_location_id: string
+          p_rain_pct: number
+        }
+        Returns: undefined
+      }
       set_location_dispatch: {
         Args: { p_broker: string; p_location_id: string; p_mode: string }
         Returns: undefined
       }
+      set_location_weather:
+        | {
+            Args: { p_is_raining: boolean; p_location_id: string }
+            Returns: undefined
+          }
+        | {
+            Args: {
+              p_auto?: boolean
+              p_is_raining: boolean
+              p_location_id: string
+            }
+            Returns: undefined
+          }
       set_menu_item_override: {
         Args: {
           p_channel_id: string
@@ -18164,6 +18434,7 @@ export type Database = {
         Returns: string
       }
       upsert_courier: { Args: { p: Json }; Returns: string }
+      upsert_courier_bonus: { Args: { p: Json }; Returns: string }
       upsert_delivery_zone_polygon: {
         Args: {
           p_delivery_fee: number

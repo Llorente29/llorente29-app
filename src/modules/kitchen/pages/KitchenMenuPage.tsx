@@ -14,7 +14,7 @@
 // Patrón: useApp() + useActiveAccount() + useIsMobile(), igual que KitchenItemsPage.
 
 import { useEffect, useMemo, useState } from 'react'
-import { Search, ChevronDown, ChevronRight, CircleDashed, CheckCircle2, AlertTriangle, UtensilsCrossed, Package, Link2Off, Plus, FolderPlus, ArrowRightLeft, X, Undo2, Info, ArrowUp, ArrowDown, Trash2, UploadCloud, Loader2, Sparkles } from 'lucide-react'
+import { Search, ChevronDown, ChevronRight, CircleDashed, CheckCircle2, AlertTriangle, UtensilsCrossed, Package, Link2Off, Plus, FolderPlus, ArrowRightLeft, X, Undo2, Info, ArrowUp, ArrowDown, Trash2, UploadCloud, Loader2, Sparkles, PackagePlus } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import {
   listBrandsWithCatalog,
@@ -28,6 +28,7 @@ import { getReliability, type SalesReliability } from '@/modules/kitchen/service
 import CatalogProductDetailPage from '@/modules/kitchen/pages/CatalogProductDetailPage'
 import SalesExceptionsPage from '@/modules/kitchen/pages/SalesExceptionsPage'
 import NewMenuItemModal from '@/modules/kitchen/components/NewMenuItemModal'
+import AddExistingProductModal from '@/modules/kitchen/components/AddExistingProductModal'
 import NewCategoryModal from '@/modules/kitchen/components/NewCategoryModal'
 import type { MenuItemEconomics } from '@/types/kitchen'
 import { publishBrandCatalog, type PublishResult } from '@/modules/kitchen/services/catalogPublishService'
@@ -62,6 +63,7 @@ export default function KitchenMenuPage() {
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null)
   const [showExceptions, setShowExceptions] = useState(false)
   const [showNewProduct, setShowNewProduct] = useState(false)
+  const [showAddExisting, setShowAddExisting] = useState(false)
   const [showNewCombo, setShowNewCombo] = useState(false)
   const [showNewCategory, setShowNewCategory] = useState(false)
   // Capa 1 — organizar: selección múltiple + mover en bloque + deshacer
@@ -191,6 +193,7 @@ export default function KitchenMenuPage() {
   // marca (categorías + combos + conteos de marca + economía por canal).
   function refreshAfterCreate() {
     setShowNewProduct(false)
+    setShowAddExisting(false)
     setShowNewCombo(false)
     setShowNewCategory(false)
     if (!activeAccountId || !selectedBrandId) return
@@ -467,6 +470,13 @@ export default function KitchenMenuPage() {
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
             >
               <FolderPlus className="w-4 h-4" /> Categoría
+            </button>
+            <button
+              onClick={() => setShowAddExisting(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+              title="Reutilizar un producto que ya tienes en otra marca"
+            >
+              <PackagePlus className="w-4 h-4" /> Añadir existente
             </button>
             <button
               onClick={() => setShowNewProduct(true)}
@@ -879,6 +889,15 @@ export default function KitchenMenuPage() {
           brandName={selectedBrand.name}
           onClose={() => setShowNewProduct(false)}
           onCreated={refreshAfterCreate}
+        />
+      )}
+      {showAddExisting && activeAccountId && selectedBrand && (
+        <AddExistingProductModal
+          accountId={activeAccountId}
+          brandId={selectedBrand.id}
+          brandName={selectedBrand.name}
+          onClose={() => setShowAddExisting(false)}
+          onDone={refreshAfterCreate}
         />
       )}
       {showNewCombo && activeAccountId && selectedBrand && (

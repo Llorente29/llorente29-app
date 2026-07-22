@@ -520,6 +520,146 @@ export async function listLinkableMenuItems(
   }))
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// "Añadir producto existente" (autonomía multimarca) — ENCARGO 22/07/2026
+// ─────────────────────────────────────────────────────────────────────
+// Lectura: productos que YA EXISTEN en la cuenta y se pueden reutilizar en otra
+// marca. Se DEDUPLICAN por receta (un resultado por producto real, no uno por
+// marca) y se excluyen los que ya están (activos) en la marca destino. Cada
+// resultado trae el nombre de referencia, el PVP modal entre marcas, en cuántas
+// marcas está y si tiene modificadores (que se clonarán al añadirlo).
+
+export interface ReusableProduct {
+  recipeItemId: string
+  name: string            // nombre de referencia (el más frecuente entre marcas)
+  referencePrice: number  // PVP modal (sin IVA) entre marcas
+  vatRate: number         // IVA de referencia (modal)
+  brandCount: number      // en cuántas marcas está (activas)
+  hasModifiers: boolean   // algún menu_item de esa receta tiene grupos de modificadores
+}
+
+// Devuelve el valor más frecuente de una lista (modal); desempata por el primero visto.
+function modeOf<T>(values: T[]): T | undefined {
+  const counts = new Map<T, number>()
+  let best: T | undefined
+  let bestN = 0
+  for (const v of values) {
+    const n = (counts.get(v) ?? 0) + 1
+    counts.set(v, n)
+    if (n > bestN) { bestN = n; best = v }
+  }
+  return best
+}
+
+export async function listReusableProducts(
+  accountId: string,
+  dstBrandId: string,
+): Promise<ReusableProduct[]> {
+  requireSupabase()
+
+  // Productos (item) con receta, activos y no archivados, de toda la cuenta.
+  const { data: items, error } = await supabase!
+    .from('menu_item')
+    .select('id, brand_id, recipe_item_id, name, price, vat_rate')
+    .eq('account_id', accountId)
+    .eq('product_type', 'item')
+    .not('recipe_item_id', 'is', null)
+    .is('archived_at', null)
+  if (error) throw new Error(`Error listando productos reutilizables: ${error.message}`)
+
+  // Qué recetas ya están (activas) en la marca destino → se excluyen (no duplicar).
+  const inDstBrand = new Set<string>()
+  for (const it of items ?? []) {
+    if ((it.brand_id as string) === dstBrandId) inDstBrand.add(it.recipe_item_id as string)
+  }
+
+  // Menu_items que tienen algún grupo de modificadores (para marcar hasModifiers).
+  const { data: asg, error: asgErr } = await supabase!
+    .from('modifier_group_assignment')
+    .select('menu_item_id')
+    .eq('account_id', accountId)
+  if (asgErr) throw new Error(`Error comprobando modificadores: ${asgErr.message}`)
+  const itemsWithMods = new Set<string>((asg ?? []).map((a) => a.menu_item_id as string))
+
+  // Agrupar por receta.
+  interface Acc { brands: Set<string>; names: string[]; prices: number[]; vats: number[]; hasMods: boolean }
+  const byRecipe = new Map<string, Acc>()
+  for (const it of items ?? []) {
+    const rid = it.recipe_item_id as string
+    if (inDstBrand.has(rid)) continue // ya está en la marca destino
+    const acc = byRecipe.get(rid) ?? { brands: new Set<string>(), names: [], prices: [], vats: [], hasMods: false }
+    acc.brands.add(it.brand_id as string)
+    acc.names.push(it.name as string)
+    acc.prices.push(Number(it.price ?? 0))
+    acc.vats.push(Number(it.vat_rate ?? 10))
+    if (itemsWithMods.has(it.id as string)) acc.hasMods = true
+    byRecipe.set(rid, acc)
+  }
+
+  const out: ReusableProduct[] = []
+  for (const [rid, acc] of byRecipe) {
+    out.push({
+      recipeItemId: rid,
+      name: modeOf(acc.names) ?? acc.names[0] ?? '—',
+      referencePrice: modeOf(acc.prices) ?? acc.prices[0] ?? 0,
+      vatRate: modeOf(acc.vats) ?? 10,
+      brandCount: acc.brands.size,
+      hasModifiers: acc.hasMods,
+    })
+  }
+  // Orden alfabético estable para el buscador.
+  out.sort((a, b) => a.name.localeCompare(b.name, 'es'))
+  return out
+}
+
+// Escritura: añade un producto existente (por receta) a la marca destino vía el RPC
+// atómico add_existing_product_to_brand (crea el menu_item reutilizando la receta y
+// clona los modificadores del producto a la marca destino). El RPC deduplica: si ya
+// está activo devuelve 'skipped'; si estaba archivado, 'reactivated'.
+
+export interface AddExistingResult {
+  status: 'created' | 'reactivated' | 'skipped'
+  menuItemId: string
+  name: string
+  groupsCloned: number
+  optionsCloned: number
+}
+
+export async function addExistingProductToBrand(input: {
+  accountId: string
+  brandId: string
+  recipeItemId: string
+  name: string
+  price: number
+  vatRate?: number
+  menuCategoryId?: string | null
+  withModifiers?: boolean
+}): Promise<AddExistingResult> {
+  requireSupabase()
+  const { data, error } = await supabase!.rpc('add_existing_product_to_brand', {
+    p_account: input.accountId,
+    p_dst_brand: input.brandId,
+    p_recipe_item_id: input.recipeItemId,
+    p_name: input.name,
+    p_price: input.price,
+    p_vat_rate: input.vatRate ?? 10,
+    p_menu_category_id: input.menuCategoryId ?? undefined,
+    p_with_modifiers: input.withModifiers ?? true,
+  })
+  if (error) throw new Error(`Error añadiendo el producto existente: ${error.message}`)
+  const r = (data ?? {}) as {
+    status?: string; menu_item_id?: string; name?: string
+    groups_cloned?: number; options_cloned?: number
+  }
+  return {
+    status: (r.status as AddExistingResult['status']) ?? 'created',
+    menuItemId: r.menu_item_id ?? '',
+    name: r.name ?? input.name,
+    groupsCloned: r.groups_cloned ?? 0,
+    optionsCloned: r.options_cloned ?? 0,
+  }
+}
+
 export async function getMenuItemCategoryId(menuItemId: string): Promise<string | null> {
   requireSupabase()
   const { data, error } = await supabase!
