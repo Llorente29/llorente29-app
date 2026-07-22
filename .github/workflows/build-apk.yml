@@ -3,6 +3,11 @@ name: Build & publish Android APK
 # Cada push a main (que toque código de la app) → APK release firmado + version.json
 # subidos al bucket público `apps` de Supabase. Las tablets se actualizan solas
 # (ver src/native/appUpdate.ts + UpdateGate). Cero Android Studio, cero cables.
+#
+# Política de forzado (mandatory): por defecto FALSE → la actualización se ofrece
+# pero no bloquea (se aplica en reposo/reinicio, sin interrumpir el servicio de
+# cocina). Solo es OBLIGATORIA si el mensaje del commit contiene el marcador
+# [force-update] — reservado a cambios que rompen compatibilidad. Ver UpdateGate.
 
 on:
   push:
@@ -60,9 +65,19 @@ jobs:
       - name: Prepare version.json
         run: |
           VC="${{ github.run_number }}"
+          # mandatory=false salvo que el commit HEAD lleve [force-update]. Se lee con
+          # git (funciona igual en push y en workflow_dispatch, sin depender de la
+          # forma del evento).
+          MSG="$(git log -1 --pretty=%B)"
+          if printf '%s' "$MSG" | grep -qF '[force-update]'; then
+            MANDATORY=true
+          else
+            MANDATORY=false
+          fi
           cat > version.json <<EOF
-          { "versionCode": ${VC}, "versionName": "1.0.${VC}", "apkUrl": "${{ secrets.VITE_SUPABASE_URL }}/storage/v1/object/public/apps/folvy.apk", "mandatory": true }
+          { "versionCode": ${VC}, "versionName": "1.0.${VC}", "apkUrl": "${{ secrets.VITE_SUPABASE_URL }}/storage/v1/object/public/apps/folvy.apk", "mandatory": ${MANDATORY} }
           EOF
+          echo "mandatory=${MANDATORY} (commit: ${MSG%%$'\n'*})"
           echo "version.json:" && cat version.json
 
       - name: Upload APK + version.json to Supabase Storage (bucket apps, upsert)
