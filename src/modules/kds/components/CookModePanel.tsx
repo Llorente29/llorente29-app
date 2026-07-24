@@ -7,7 +7,7 @@
 //
 // Reutilizable con sesión (sin token) y con kiosco (token + locationId).
 
-import { useEffect, useState } from 'react'
+import { Component, useEffect, useState, type ErrorInfo, type ReactNode } from 'react'
 import { X, AlertTriangle, ImageOff, Loader2 } from 'lucide-react'
 import { getRecipe, type KdsRecipe, type AllergenState } from '../services/kdsService'
 import { roundQty } from '../kdsUtils'
@@ -39,6 +39,42 @@ function allergenChipClasses(state: AllergenState): string {
     case 'contains':     return 'bg-red-500/25 text-red-200 ring-1 ring-red-500/50'
     case 'may_contain':  return 'bg-amber-500/20 text-amber-200 ring-1 ring-amber-500/40'
     default:             return 'bg-zinc-700/60 text-zinc-300 ring-1 ring-zinc-600'
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RecipeErrorBoundary — red de seguridad del render de la ficha técnica.
+// Si el pintado de la receta lanza (p.ej. un campo nullable inesperado del
+// servidor), mostramos un fallback legible EN EL DRAWER en vez de dejar toda la
+// app en blanco. Elimina la CLASE de bug, no solo el toFixed sobre null de hoy.
+// Se resetea por receta vía `key={target.menuItemId}` en el punto de uso.
+// Las error boundaries DEBEN ser componentes de clase en React.
+// ─────────────────────────────────────────────────────────────────────────────
+class RecipeErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state: { error: Error | null } = { error: null }
+
+  static getDerivedStateFromError(error: Error): { error: Error | null } {
+    return { error }
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    // Rastro en consola para no perder el stack real al diagnosticar.
+    console.error('[CookMode] error capturado por la boundary de receta:', error, info)
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="rounded-lg bg-red-500/15 text-red-200 ring-1 ring-red-500/40 p-4 text-sm">
+          <div className="flex items-center gap-2 mb-1.5">
+            <AlertTriangle size={16} className="shrink-0" />
+            <span className="font-medium">No se pudo mostrar la receta</span>
+          </div>
+          <p className="text-xs text-red-200/80 break-words">{this.state.error.message}</p>
+        </div>
+      )
+    }
+    return this.props.children
   }
 }
 
@@ -124,7 +160,7 @@ export default function CookModePanel({ target, onClose, token, locationId }: Co
           )}
 
           {!loading && !error && hasRecipe && (
-            <>
+            <RecipeErrorBoundary key={target.menuItemId}>
               {/* Foto */}
               {recipe.photo_url && (
                 <button
@@ -226,7 +262,7 @@ export default function CookModePanel({ target, onClose, token, locationId }: Co
               {hasRecipe && !hasSteps && recipe.ingredients.length > 0 && (
                 <p className="text-xs text-zinc-500 italic">Pasos de elaboración aún no cargados.</p>
               )}
-            </>
+            </RecipeErrorBoundary>
           )}
         </div>
       </aside>
