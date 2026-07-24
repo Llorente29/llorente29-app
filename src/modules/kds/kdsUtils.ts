@@ -6,12 +6,16 @@
 // la RPC trae decimales largos del escandallo, p.ej. "Lima 7.7566…g").
 
 /** Redondea una cantidad para mostrar. Entero si es grande, 1 decimal si <10,
- *  sin ceros sobrantes. Pensado para gramajes del escandallo. */
-export function roundQty(n: number): string {
-  if (!isFinite(n)) return '0'
-  const abs = Math.abs(n)
+ *  sin ceros sobrantes. Pensado para gramajes del escandallo.
+ *  Tolera null/undefined/NaN → devuelve '—' (NO '0': un 0 g sería engañoso).
+ *  La RPC kds_recipe trae cantidades NULL de forma legítima (líneas de receta
+ *  sin gramaje cargado); antes reventaba con `null.toFixed` y tumbaba la app. */
+export function roundQty(n: number | null | undefined): string {
+  if (n == null || !isFinite(Number(n))) return '—'
+  const num = Number(n)
+  const abs = Math.abs(num)
   const decimals = abs >= 100 ? 0 : abs >= 10 ? 1 : 2
-  const r = Number(n.toFixed(decimals))
+  const r = Number(num.toFixed(decimals))
   return String(r)
 }
 

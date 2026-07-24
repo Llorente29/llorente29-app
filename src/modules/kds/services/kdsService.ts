@@ -138,8 +138,11 @@ export interface RecipeAllergen {
 export interface RecipeIngredient {
   name: string
   unit: string
-  qty_base: number
-  qty_total: number
+  /** Cantidades del escandallo. NULLABLE de forma legítima: hay líneas de
+   *  receta sin gramaje cargado. La vista las formatea con roundQty (tolera
+   *  null → '—'); no asumir número aquí. */
+  qty_base: number | null
+  qty_total: number | null
   cut: string | null
 }
 
