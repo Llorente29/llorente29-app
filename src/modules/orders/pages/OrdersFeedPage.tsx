@@ -7,6 +7,7 @@
 import { MapPin } from 'lucide-react'
 import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
 import OrdersFeed from '../components/OrdersFeed'
+import KdsAlarmOverlay from '@/modules/kds/components/KdsAlarmOverlay'
 
 export default function OrdersFeedPage() {
   const { resolvedLocationId, isConsolidated } = useLocationScope()
@@ -23,5 +24,12 @@ export default function OrdersFeedPage() {
     )
   }
 
-  return <OrdersFeed locationId={resolvedLocationId} />
+  return (
+    <>
+      {/* Alarma de reparto (banner+sonido): el equipo trabaja desde Pedidos, aquí
+          es donde tiene que gritar. Misma superficie que Cocina (kds_alarms). */}
+      <KdsAlarmOverlay locationId={resolvedLocationId} token={null} />
+      <OrdersFeed locationId={resolvedLocationId} />
+    </>
+  )
 }
