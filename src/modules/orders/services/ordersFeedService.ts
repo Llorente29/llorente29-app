@@ -232,6 +232,7 @@ export interface DeliveryView {
   transport: string | null      // rider_transport_type (icono + etiqueta en el front)
   seenText: string | null       // "visto a las HH:MM" (Europe/Madrid) desde rider_seen_at
   hasCourier: boolean           // ¿hay repartidor asignado? (has_courier o rider_name)
+  transportPrice: number | null // coste del reparto (nullable) → fmtMoney en el front
   supportPhone: string | null   // soporte de la plataforma (Glovo/Uber/JE), sólo en kind='platform'
 }
 
@@ -333,6 +334,7 @@ export function deliveryView(order: OrderFeedItem): DeliveryView {
       transport: order.rider_transport_type ?? null,
       seenText: seenText(order.rider_seen_at),
       hasCourier,
+      transportPrice: order.transport_price,
       supportPhone: null,
     }
   }
@@ -344,10 +346,11 @@ export function deliveryView(order: OrderFeedItem): DeliveryView {
       stateLabel: null, stateTone: 'active',
       rider: null, phone: null, etaText: null,
       transport: null, seenText: null, hasCourier: false,
+      transportPrice: null,
       supportPhone: supportPhoneFor(order.channel),
     }
   }
-  return { kind: 'none', phase: 'unknown', carrierLabel: null, stateLabel: null, stateTone: 'active', rider: null, phone: null, etaText: null, transport: null, seenText: null, hasCourier: false, supportPhone: null }
+  return { kind: 'none', phase: 'unknown', carrierLabel: null, stateLabel: null, stateTone: 'active', rider: null, phone: null, etaText: null, transport: null, seenText: null, hasCourier: false, transportPrice: null, supportPhone: null }
 }
 
 // ¿Es un pedido de reparto propio pendiente de despachar (modo manual o tras fallo)?
