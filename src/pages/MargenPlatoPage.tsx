@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { getFoodCost, type FoodCostDashboard } from '@/modules/ventas/services/foodCostService'
+import { fmtInt } from '@/lib/format'
 
 const NAVY = '#1E3A5F', CORAL = '#FF5436', GREEN = '#0F7A54', AMBER = '#B87400', RED = '#C0392B', MUT = '#6b7686', LINE = '#e6e9ef'
 const eur = (n: number | null | undefined) =>
@@ -85,7 +86,7 @@ export default function MargenPlatoPage() {
               Salud del dato — cuánto food cost conocemos
             </div>
             <div style={{ fontSize: 12.5, color: '#445' }}>
-              Cobertura <b>{pct(data.salud.cobertura_pct)}</b> · {data.salud.lineas_costeadas.toLocaleString('es-ES')} de {data.salud.lineas.toLocaleString('es-ES')} líneas con receta costeada.
+              Cobertura <b>{pct(data.salud.cobertura_pct)}</b> · {fmtInt(data.salud.lineas_costeadas)} de {fmtInt(data.salud.lineas)} líneas con receta costeada.
               El resto son platos sin escandallo enlazado — no penalizan el %, pero conviene completarlos.
             </div>
           </div>

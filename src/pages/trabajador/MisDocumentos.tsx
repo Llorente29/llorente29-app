@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { ArrowLeft, FileText, Plus } from 'lucide-react'
 import { Card } from '../../components/ui'
+import { fmtInt } from '../../lib/format'
 import type { Employee } from '../../types'
 import type { DocumentFile } from '../../types/personal'
 import { DOCUMENT_TYPES } from '../../types/personal'
@@ -105,7 +106,7 @@ export default function MisDocumentos({ employee, onBack }: Props) {
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-text-primary text-sm truncate">{doc.name}</p>
                       <p className="text-xs text-text-secondary mt-0.5">
-                        {t.label} · {(doc.fileSizeKb).toLocaleString()} KB · {new Date(doc.createdAt).toLocaleDateString('es-ES')}
+                        {t.label} · {fmtInt(doc.fileSizeKb)} KB · {new Date(doc.createdAt).toLocaleDateString('es-ES')}
                       </p>
                       {doc.uploadedRole === 'trabajador' && (
                         <p className="text-[10px] text-accent font-medium mt-0.5">Subido por ti</p>
