@@ -102,3 +102,34 @@ export function playNewTicketSound(): void {
     /* audio bloqueado: sin sonido, sin romper */
   }
 }
+
+/** Sonido de ALARMA (reparto NO ENTREGADO): más insistente y sonoro que el beep de
+ *  ticket nuevo — sirena corta de 3 pulsos, onda cuadrada, ganancia alta. Pensado
+ *  para re-lanzarse en bucle desde la capa de alarma mientras haya un aviso sin
+ *  reconocer. Silencioso si el navegador bloquea el audio (sin gesto previo). */
+export function playAlarmSound(): void {
+  try {
+    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+    if (!Ctx) return
+    const ctx = new Ctx()
+    const t0 = ctx.currentTime
+    const pulses = [{ t: 0.0, f: 880 }, { t: 0.3, f: 660 }, { t: 0.6, f: 880 }]
+    for (const p of pulses) {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.type = 'square'
+      osc.frequency.value = p.f
+      const start = t0 + p.t
+      gain.gain.setValueAtTime(0.0001, start)
+      gain.gain.exponentialRampToValueAtTime(0.5, start + 0.03)
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.22)
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.start(start)
+      osc.stop(start + 0.24)
+    }
+    window.setTimeout(() => { void ctx.close() }, 1100)
+  } catch {
+    /* audio bloqueado: sin sonido, sin romper */
+  }
+}
