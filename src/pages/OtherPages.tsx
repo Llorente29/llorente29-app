@@ -7,6 +7,7 @@ import { listLocationApprovals, setLocationReceiptApproval } from '@/modules/sup
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import BusinessHoursEditor, { type CopyTarget } from '@/modules/multitenancy/components/hours/BusinessHoursEditor'
 import DispatchConfigSection from '@/modules/integrations/components/DispatchConfigSection'
+import DeliveryWatchdogSection from '@/modules/integrations/components/DeliveryWatchdogSection'
 import PrintersSettingsPage from '@/modules/printing/components/PrintersSettingsPage'
 
 // DashboardPage se ha movido a su propia page: src/pages/DashboardPage.tsx
@@ -553,6 +554,9 @@ export function LocationsPage() {
 
                     {/* Despacho de reparto del local (auto/manual + broker) */}
                     <DispatchConfigSection locationId={loc.id} />
+
+                    {/* Vigía de reparto por tiempo (umbrales por local) */}
+                    <DeliveryWatchdogSection locationId={loc.id} />
 
                     {/* Impresoras del local (alta/edición/baja por RPC, sin SQL) */}
                     {activeAccountId && (
