@@ -23,6 +23,9 @@ interface KdsAlarmOverlayProps {
   /** Local (sesión). En kiosco/tablet va null: la RPC deriva el local del token. */
   locationId: string | null
   token?: string | null
+  /** Posicionamiento: 'fixed' (pantalla completa kiosco/tablet, flota arriba del
+   *  todo) | 'inline' (dentro del Shell: fluye BAJO el menú superior, sin solaparlo). */
+  variant?: 'fixed' | 'inline'
 }
 
 function kindLabel(kind: string): string {
@@ -32,7 +35,7 @@ function kindLabel(kind: string): string {
   return 'INCIDENCIA DE REPARTO'
 }
 
-export default function KdsAlarmOverlay({ locationId, token }: KdsAlarmOverlayProps) {
+export default function KdsAlarmOverlay({ locationId, token, variant = 'fixed' }: KdsAlarmOverlayProps) {
   const [alarms, setAlarms] = useState<KdsAlarm[]>([])
   const [soundOn, setSoundOn] = useState(true)
   const [ackingId, setAckingId] = useState<string | null>(null)
@@ -88,8 +91,14 @@ export default function KdsAlarmOverlay({ locationId, token }: KdsAlarmOverlayPr
 
   if (alarms.length === 0) return null
 
+  // 'fixed' = flota sobre todo (kiosco/tablet a pantalla completa).
+  // 'inline' = fluye en la página, BAJO el menú superior del Shell (sin solaparlo).
+  const wrapperCls = variant === 'inline'
+    ? 'relative z-30 px-2 sm:px-3 pt-2 sm:pt-3'
+    : 'fixed top-0 inset-x-0 z-[60] p-2 sm:p-3'
+
   return (
-    <div className="fixed top-0 inset-x-0 z-[60] p-2 sm:p-3">
+    <div className={wrapperCls}>
       <div className="mx-auto max-w-4xl rounded-xl bg-[#E0492E] text-white shadow-[0_10px_40px_rgba(224,73,46,0.5)] ring-2 ring-white/30 animate-pulse">
         {/* Cabecera de la alarma */}
         <div className="flex items-center gap-3 px-4 py-2.5 border-b border-white/20">
