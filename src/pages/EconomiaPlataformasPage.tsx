@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { supabase } from '@/lib/supabase'
+import { fmtInt } from '@/lib/format'
 import {
   getChannelEconomics,
   type ChannelEconomics,
@@ -163,7 +164,7 @@ export default function EconomiaPlataformasPage() {
           <div className="grid gap-2 text-[12.5px] text-slate-600" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))' }}>
             <div><b>Periodo:</b> {fdate(salud.periodo_desde)} – {fdate(salud.periodo_hasta)} · {salud.n_liquidaciones} liquidaciones</div>
             <div><b>Coste real:</b> solo <span style={{ color: GREEN, fontWeight: 600 }}>{conCoste}</span>{soloVenta ? <> · <span className="text-slate-500">{soloVenta} de momento solo venta</span></> : null}</div>
-            <div><b>Detalle por pedido:</b> {salud.pedidos_capa_c.toLocaleString('es-ES')} pedidos (Capa C, Glovo)</div>
+            <div><b>Detalle por pedido:</b> {fmtInt(salud.pedidos_capa_c)} pedidos (Capa C, Glovo)</div>
             <div><b>Casados con tu POS:</b> {salud.casados_pos} ({pct(salud.pct_casado_pos)}) — crece según se llena tu histórico</div>
           </div>
         </div>

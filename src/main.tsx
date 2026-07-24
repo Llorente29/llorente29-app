@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 import { AppProvider } from './context/AppContext'
 import App from './App'
 import UpdateGate from './components/UpdateGate'
+import RootErrorBoundary from './components/RootErrorBoundary'
 import './index.css'
 // Worker de impresión nativo (app Capacitor): reclama la cola print_job por
 // token de dispositivo e imprime por socket a la impresora de red. Import de
@@ -60,13 +61,17 @@ window.addEventListener('appinstalled', () => {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <BrowserRouter>
-      <AppProvider>
-        <App />
-        {/* Auto-actualización forzada (sólo app nativa; no-op en web). */}
-        <UpdateGate />
-      </AppProvider>
-    </BrowserRouter>
+    {/* Cortafuegos global: un crash de render en cualquier punto muestra un
+        fallback con "Recargar" en vez de dejar la pantalla en blanco. */}
+    <RootErrorBoundary>
+      <BrowserRouter>
+        <AppProvider>
+          <App />
+          {/* Auto-actualización forzada (sólo app nativa; no-op en web). */}
+          <UpdateGate />
+        </AppProvider>
+      </BrowserRouter>
+    </RootErrorBoundary>
   </React.StrictMode>
 )
 

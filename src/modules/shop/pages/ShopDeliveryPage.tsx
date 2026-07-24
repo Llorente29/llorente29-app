@@ -13,6 +13,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Plus, MapPin } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { fmtMoney } from '@/lib/format'
 import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
 import DeliveryMap, { zoneColor, type DraftCircle, type DraftPolygon } from '@/modules/shop/components/DeliveryMap'
 import ZoneEditor from '@/modules/shop/components/ZoneEditor'
@@ -219,7 +220,7 @@ export default function ShopDeliveryPage() {
                         </div>
                       </div>
                       <div className="flex flex-col items-end justify-center px-3.5 py-3">
-                        <div className="text-xl font-medium text-text-primary leading-none">{z.delivery_fee.toFixed(2)} €</div>
+                        <div className="text-xl font-medium text-text-primary leading-none">{fmtMoney(z.delivery_fee)}</div>
                         <div className="text-[11px] text-text-secondary">de envío</div>
                       </div>
                       <div className="flex flex-col border-l border-default">

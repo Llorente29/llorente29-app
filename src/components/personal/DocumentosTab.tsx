@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Card, Button } from '../ui'
 import type { Employee } from '../../types'
 import type { DocumentFile } from '../../types/personal'
+import { fmtInt } from '../../lib/format'
 import { DOCUMENT_TYPES } from '../../types/personal'
 import { fetchDocuments, uploadDocument, getDocumentUrl, deleteDocument } from '../../services/documentsService'
 
@@ -90,7 +91,7 @@ export default function DocumentosTab({ employee }: Props) {
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-gray-900 text-sm truncate">{doc.name}</p>
                     <p className="text-xs text-gray-500 mt-0.5">
-                      {t.label} · {doc.fileSizeKb.toLocaleString()} KB · {new Date(doc.createdAt).toLocaleDateString('es-ES')}
+                      {t.label} · {fmtInt(doc.fileSizeKb)} KB · {new Date(doc.createdAt).toLocaleDateString('es-ES')}
                       {doc.uploadedRole === 'trabajador' && (
                         <span className="ml-2 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[10px] font-medium">Subido por el trabajador</span>
                       )}
