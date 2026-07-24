@@ -14,6 +14,7 @@
 import { useEffect, useState } from 'react'
 import { ClipboardList, MonitorPlay, CircleOff, Printer as PrinterIcon, Loader2, LogOut } from 'lucide-react'
 import KdsBoard from '../kds/components/KdsBoard'
+import KdsAlarmOverlay from '../kds/components/KdsAlarmOverlay'
 import { getBoard } from '../kds/services/kdsService'
 import { getDeviceLocation, type TabletLocationInfo } from './services/tabletAvailabilityService'
 import TabletAvailabilityTab from './TabletAvailabilityTab'
@@ -220,6 +221,9 @@ export default function TabletStationRoute() {
           </button>
         </div>
       </header>
+
+      {/* Alarma de reparto: banner+sonido a nivel de ruta → visible en CUALQUIER pestaña. */}
+      <KdsAlarmOverlay locationId={locInfo?.locationId ?? null} token={token} />
 
       <main className="flex-1 min-h-0">
         {tab === 'cocina' && <KdsBoard locationId={null} token={token} />}

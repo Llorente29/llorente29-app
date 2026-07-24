@@ -223,6 +223,45 @@ export function getRecipe(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ALARMA DE REPARTO (Capa 2): fallo / no entregado. Doble puerta (sesión | token).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface KdsAlarm {
+  sale_id: string
+  kind: string                    // 'failed' | 'canceled' | 'cancelled' | (futuro) 'stalled_*'
+  raised_at: string
+  delivery_state: string | null
+  order_status: string | null
+  code: string | null             // nº de pedido para identificarlo de un vistazo
+  customer_name: string | null
+  delivery_address: string | null
+  rider_name: string | null
+  rider_phone: string | null
+}
+
+export interface KdsAlarmsResult {
+  location_id: string
+  now: string
+  alarms: KdsAlarm[]
+}
+
+/** Alarmas de reparto VIVAS (no reconocidas) del local. Kiosco/tablet → token. */
+export function getAlarms(locationId: string | null, token?: string | null): Promise<KdsAlarmsResult> {
+  return rpc<KdsAlarmsResult>('kds_alarms', {
+    p_location_id: locationId,
+    p_token: token ?? null,
+  })
+}
+
+/** "Enterado": reconoce (silencia) la alarma de un pedido. */
+export function ackAlarm(saleId: string, token?: string | null): Promise<void> {
+  return rpc<void>('kds_ack_alarm', {
+    p_sale_id: saleId,
+    p_token: token ?? null,
+  })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // AJUSTES DE COCINA (lectura/escritura por servicio, RLS de SESIÓN — sin token)
 // ─────────────────────────────────────────────────────────────────────────────
 

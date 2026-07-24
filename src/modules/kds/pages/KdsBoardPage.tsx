@@ -12,6 +12,7 @@ import { useApp } from '../../../context/AppContext'
 import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
 import { listStations, type KitchenStation } from '../services/kdsService'
 import KdsBoard from '../components/KdsBoard'
+import KdsAlarmOverlay from '../components/KdsAlarmOverlay'
 
 export default function KdsBoardPage() {
   const { activeAccountId } = useApp()
@@ -62,6 +63,9 @@ export default function KdsBoardPage() {
 
   return (
     <div className="space-y-3">
+      {/* Alarma de reparto (sesión): banner+sonido global, fijo sobre el Shell. */}
+      <KdsAlarmOverlay locationId={resolvedLocationId} token={null} />
+
       {/* Filtro manual de estación (sesión) */}
       {stations.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5">
