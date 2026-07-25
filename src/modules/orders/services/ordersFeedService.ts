@@ -103,6 +103,10 @@ export interface OrderFeedItem {
   has_courier: boolean | null           // ¿hay repartidor asignado?
   rider_lat: number | null              // última posición (no streaming); de momento no se pinta
   rider_lng: number | null
+  // ── Hitos de reparto (para el TIEMPO DE REPARTO del desplegable). ──
+  ready_at: string | null               // "Listo" (KPI cocina); fallback de inicio si no hubo handoff sellado
+  handed_to_courier_at: string | null   // sellado al pasar delivery_state a in_delivery (Catcher casi nunca lo manda)
+  delivered_at: string | null           // sellado por trg_sale_seal_delivered al delivery_state 'delivered'/'finish'
   lineas: OrderFeedLine[]
 }
 
@@ -232,6 +236,9 @@ export interface DeliveryView {
   transport: string | null      // rider_transport_type (icono + etiqueta en el front)
   seenText: string | null       // "visto a las HH:MM" (Europe/Madrid) desde rider_seen_at
   hasCourier: boolean           // ¿hay repartidor asignado? (has_courier o rider_name)
+  // TIEMPO DE REPARTO (el coste va FUERA de la tarjeta, decisión de Julio 24/07).
+  deliveryDurationMin: number | null        // delivered_at − coalesce(handed_to_courier_at, ready_at), en min
+  deliveryBasis: 'handoff' | 'listo' | null // 'handoff' = reparto puro · 'listo' = medido desde "Listo" (etiquetar)
   supportPhone: string | null   // soporte de la plataforma (Glovo/Uber/JE), sólo en kind='platform'
 }
 
@@ -319,10 +326,25 @@ function etaText(iso: string | null): string | null {
   return `~${min} min`
 }
 
+// Tiempo de REPARTO: delivered_at − coalesce(handed_to_courier_at, ready_at), en minutos.
+// `basis` distingue el reparto PURO (desde el handoff al rider) del medido desde "Listo":
+// handed_to_courier_at casi nunca se sella (Catcher manda in_delivery ~1/454), así que en la
+// práctica se mide desde ready_at y HAY QUE ETIQUETARLO, no venderlo como reparto puro.
+// null si aún no hay entrega sellada (delivered_at) o falta el inicio.
+function deliveryDuration(order: OrderFeedItem): { min: number | null; basis: 'handoff' | 'listo' | null } {
+  if (!order.delivered_at) return { min: null, basis: null }
+  const startIso = order.handed_to_courier_at ?? order.ready_at
+  if (!startIso) return { min: null, basis: null }
+  const ms = new Date(order.delivered_at).getTime() - new Date(startIso).getTime()
+  if (isNaN(ms) || ms < 0) return { min: null, basis: null }
+  return { min: Math.round(ms / 60000), basis: order.handed_to_courier_at ? 'handoff' : 'listo' }
+}
+
 export function deliveryView(order: OrderFeedItem): DeliveryView {
   if (order.carrier_code) {
     const st = stateView(order.delivery_state)
     const hasCourier = order.has_courier === true || !!order.rider_name
+    const dur = deliveryDuration(order)
     return {
       kind: 'own',
       phase: deliveryPhase(order.delivery_state, hasCourier),
@@ -333,6 +355,8 @@ export function deliveryView(order: OrderFeedItem): DeliveryView {
       transport: order.rider_transport_type ?? null,
       seenText: seenText(order.rider_seen_at),
       hasCourier,
+      deliveryDurationMin: dur.min,
+      deliveryBasis: dur.basis,
       supportPhone: null,
     }
   }
@@ -344,10 +368,11 @@ export function deliveryView(order: OrderFeedItem): DeliveryView {
       stateLabel: null, stateTone: 'active',
       rider: null, phone: null, etaText: null,
       transport: null, seenText: null, hasCourier: false,
+      deliveryDurationMin: null, deliveryBasis: null,
       supportPhone: supportPhoneFor(order.channel),
     }
   }
-  return { kind: 'none', phase: 'unknown', carrierLabel: null, stateLabel: null, stateTone: 'active', rider: null, phone: null, etaText: null, transport: null, seenText: null, hasCourier: false, supportPhone: null }
+  return { kind: 'none', phase: 'unknown', carrierLabel: null, stateLabel: null, stateTone: 'active', rider: null, phone: null, etaText: null, transport: null, seenText: null, hasCourier: false, deliveryDurationMin: null, deliveryBasis: null, supportPhone: null }
 }
 
 // ¿Es un pedido de reparto propio pendiente de despachar (modo manual o tras fallo)?

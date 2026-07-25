@@ -24,7 +24,7 @@
 // la decide `deliveryView().phase` en el servicio; aquí solo se pinta.
 
 import { useState } from 'react'
-import { ChefHat, Check, Printer, Bike, Car, Phone, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, ShoppingBag } from 'lucide-react'
+import { ChefHat, Check, Printer, Bike, Phone, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, ShoppingBag } from 'lucide-react'
 import { timeLevel, channelLabel, ticketCode } from '@/modules/kds/kdsUtils'
 import ChannelBadge from './ChannelBadge'
 import TicketPreviewModal from './TicketPreviewModal'
@@ -217,21 +217,6 @@ function statePillCls(tone: DeliveryTone): string {
   }
 }
 
-// Botón redondo "llamar de un toque" (rider). tel: real; para de propagar el clic
-// para no plegar/desplegar contenedores.
-function CallIconButton({ phone }: { phone: string }) {
-  return (
-    <a
-      href={`tel:${phone.replace(/\s+/g, '')}`}
-      onClick={e => e.stopPropagation()}
-      title={`Llamar al repartidor · ${phone}`}
-      className="ml-auto shrink-0 w-9 h-9 rounded-full bg-[#15171A] text-white grid place-items-center no-underline"
-    >
-      <Phone size={15} />
-    </a>
-  )
-}
-
 // Píldora "llamar" con el número visible (handoff / soporte).
 function CallPill({ phone, big = false }: { phone: string; big?: boolean }) {
   return (
@@ -241,6 +226,22 @@ function CallPill({ phone, big = false }: { phone: string; big?: boolean }) {
       className={`shrink-0 inline-flex items-center gap-1.5 bg-[#15171A] text-white rounded-full font-bold no-underline ${big ? 'px-3.5 py-2.5 text-[14px]' : 'px-3 py-2 text-[13px]'}`}
     >
       <Phone size={big ? 14 : 13} /> {phone}
+    </a>
+  )
+}
+
+// Píldora VERDE "📞 Llamar" (acción rápida del reparto propio, siempre a la vista
+// en el colapsado). `label=false` muestra el número (para la fila destacada del
+// desplegado). stopPropagation para llamar sin plegar/desplegar.
+function GreenCallPill({ phone, label = true, big = false }: { phone: string; label?: boolean; big?: boolean }) {
+  return (
+    <a
+      href={`tel:${phone.replace(/\s+/g, '')}`}
+      onClick={e => e.stopPropagation()}
+      title={`Llamar al repartidor · ${phone}`}
+      className={`shrink-0 inline-flex items-center gap-1.5 bg-[#1F9D6B] text-white rounded-full font-bold no-underline ${big ? 'px-3.5 py-2.5 text-[14px]' : 'px-2.5 py-1.5 text-[12.5px]'}`}
+    >
+      <Phone size={big ? 14 : 13} /> {label ? 'Llamar' : phone}
     </a>
   )
 }
@@ -304,10 +305,6 @@ function DeliveryRow({ order, onDispatched }: { order: OrderFeedItem; onDispatch
 
   // (C) Reparto propio despachado: prominencia POR FASE.
   const tp = transportMeta(d.transport)
-  const HeadIcon = tp?.car ? Car : Bike
-  const riderName = d.rider
-    ? <span className="text-[14px] font-bold text-text-primary truncate">{tp && <span className="mr-1" aria-label={tp.label} title={tp.label}>{tp.emoji}</span>}{d.rider}</span>
-    : null
 
   // ★ HANDOFF — repartidor EN el local: el momento de entregar la bolsa. Resaltado.
   if (d.phase === 'at_pickup') {
@@ -345,59 +342,99 @@ function DeliveryRow({ order, onDispatched }: { order: OrderFeedItem; onDispatch
     )
   }
 
-  // Entregado — se apaga a un check verde.
-  if (d.phase === 'delivered') {
-    return (
-      <div className="mx-4 mb-2.5 ml-5 rounded-xl border border-success/30 bg-success-bg px-3 py-2.5 flex items-center gap-2.5">
-        <Check size={16} className="text-success shrink-0" strokeWidth={2.4} />
-        <span className="text-[13px] font-bold text-success">Entregado</span>
-        {d.rider && <span className="text-[12px] text-success/90 truncate">· {d.rider}</span>}
-        {d.seenText && <span className="ml-auto text-[11px] text-success/80 shrink-0 hidden sm:inline">{d.seenText}</span>}
-      </div>
-    )
-  }
+  // Asignado / En camino / Entregado / Fallido / Cancelado (+ fallback) →
+  // DESPLEGABLE, mismo patrón que plataforma ("Lo lleva Uber ▾"). Colapsado = una
+  // línea limpia con "Llamar" a la vista; desplegado = teléfono grande + datos.
+  return <OwnDeliveryRow view={d} />
+}
 
-  // No entregado (fallo).
-  if (d.phase === 'failed') {
-    return (
-      <div className="mx-4 mb-2.5 ml-5 rounded-xl border border-danger/30 bg-danger-bg px-3 py-2.5 flex items-center gap-2.5">
-        <AlertTriangle size={16} className="text-danger shrink-0" />
-        <span className="text-[13px] font-bold text-danger">No entregado</span>
-        {d.rider && <span className="text-[12px] text-danger/90 truncate">· {d.rider}</span>}
-        {d.phone && <CallIconButton phone={d.phone} />}
-      </div>
-    )
-  }
-
-  // Cancelado.
-  if (d.phase === 'canceled') {
-    return (
-      <div className="mx-4 mb-2.5 ml-5 rounded-xl border border-default bg-page px-3 py-2.5 flex items-center gap-2.5">
-        <Bike size={16} className="text-text-secondary shrink-0" />
-        <span className="text-[13px] font-bold text-text-secondary">{d.carrierLabel} · Cancelado</span>
-      </div>
-    )
-  }
-
-  // Asignado / En camino / (fallback) — NOMBRE + LLAMAR a la vista, sin desplegar.
+// Fila de reparto propio: DESPLEGABLE (colapsado = resumen; desplegado = datos).
+// Espejo visual del desplegable de plataforma para consistencia (mismo borde
+// azul, chevron, espaciado). La línea de tiempo completa (ofrecido→entregado) y
+// la prueba de entrega llegarán cuando orders_feed exponga delivery_assignment;
+// hoy pinta lo que ya trae el feed (repartidor, teléfono, estado+hora, coste).
+function OwnDeliveryRow({ view }: { view: DeliveryView }) {
+  const [open, setOpen] = useState(false)
+  const tp = transportMeta(view.transport)
+  const name = view.rider ?? view.carrierLabel ?? 'Repartidor'
   return (
-    <div className="mx-4 mb-2.5 ml-5 rounded-xl border border-[#CFE4FA] bg-[#F0F7FF] px-3 py-2.5 flex items-center gap-2.5">
-      <HeadIcon size={16} className="text-[#2563A8] shrink-0" />
-      {riderName ?? <span className="text-[13px] font-bold text-[#2563A8]">{d.carrierLabel}</span>}
-      {d.stateLabel && (
-        <span className={`text-[11.5px] font-extrabold px-2.5 py-0.5 rounded-full border shrink-0 ${statePillCls(d.stateTone)}`}>
-          {d.stateLabel}
-        </span>
+    <div className="mx-4 mb-2.5 ml-5 rounded-xl border border-[#CFE4FA] bg-[#F0F7FF] overflow-hidden">
+      {/* Colapsado: una sola línea (icono · "Reparto propio · nombre" · estado · Llamar · chevron) */}
+      <div className="w-full flex items-center gap-2 px-3 py-2.5">
+        <button
+          onClick={() => setOpen(o => !o)}
+          className="flex items-center gap-2 min-w-0 flex-1 text-left"
+          aria-expanded={open}
+        >
+          <span className="shrink-0 text-[15px] leading-none" aria-hidden>🛵</span>
+          <span className="text-[13px] font-bold text-[#2563A8] truncate">Reparto propio · {name}</span>
+          {view.stateLabel && (
+            <span className={`shrink-0 text-[11.5px] font-extrabold px-2.5 py-0.5 rounded-full border ${statePillCls(view.stateTone)}`}>
+              {view.stateLabel}
+            </span>
+          )}
+        </button>
+        {view.phone && <GreenCallPill phone={view.phone} />}
+        <button
+          onClick={() => setOpen(o => !o)}
+          className="shrink-0 text-[#2563A8] p-0.5"
+          aria-label={open ? 'Ocultar detalles del reparto' : 'Ver detalles del reparto'}
+        >
+          {open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </button>
+      </div>
+
+      {/* Desplegado: todos los datos disponibles hoy. */}
+      {open && (
+        <div className="border-t border-[#DCEAFB] divide-y divide-[#DCEAFB]">
+          {/* 1. TELÉFONO DESTACADO (arriba del todo): número grande + Llamar; fila = enlace tel:. */}
+          {view.phone && (
+            <a
+              href={`tel:${view.phone.replace(/\s+/g, '')}`}
+              className="flex items-center justify-between gap-3 px-3.5 py-3 no-underline"
+            >
+              <span className="text-[18px] font-bold text-text-primary tracking-tight tabular-nums">{view.phone}</span>
+              <GreenCallPill phone={view.phone} label big />
+            </a>
+          )}
+
+          {/* 2. Repartidor: nombre + transporte (moto/bici/coche). Matrícula no modelada. */}
+          <div className="px-3.5 py-2.5 flex items-center gap-2 text-[13px]">
+            <span className="text-text-secondary shrink-0">Repartidor</span>
+            <span className="ml-auto font-bold text-text-primary flex items-center gap-1.5 min-w-0">
+              {tp && <span aria-label={tp.label} title={tp.label}>{tp.emoji}</span>}
+              <span className="truncate">{view.rider ?? '—'}</span>
+              {tp && <span className="text-text-secondary font-normal shrink-0">· {tp.label}</span>}
+            </span>
+          </div>
+
+          {/* 3. Estado + hora. (Línea de tiempo completa: ampliación posterior del RPC.) */}
+          <div className="px-3.5 py-2.5 flex items-center gap-2 text-[13px]">
+            <span className="text-text-secondary shrink-0">Estado</span>
+            <span className="ml-auto font-bold text-text-primary flex items-center gap-2 flex-wrap justify-end">
+              {view.stateLabel ?? '—'}
+              {view.seenText && <span className="text-text-secondary font-normal">· {view.seenText}</span>}
+              {view.etaText && <span className="text-text-secondary font-normal">· {view.etaText}</span>}
+            </span>
+          </div>
+
+          {/* 4. TIEMPO DE REPARTO (el coste va FUERA de la tarjeta, decisión de Julio
+              24/07). Solo si hay entrega sellada (delivered_at). Si se midió desde
+              "Listo" (sin handoff sellado — Catcher casi nunca lo manda), se ETIQUETA:
+              no es reparto puro. */}
+          {view.deliveryDurationMin != null && (
+            <div className="px-3.5 py-2.5 flex items-center gap-2 text-[13px]">
+              <span className="text-text-secondary shrink-0">Tiempo de reparto</span>
+              <span className="ml-auto font-bold text-text-primary tabular-nums flex items-center gap-1.5">
+                {view.deliveryDurationMin} min
+                {view.deliveryBasis === 'listo' && (
+                  <span className="text-[11px] font-semibold text-text-secondary">· desde Listo</span>
+                )}
+              </span>
+            </div>
+          )}
+        </div>
       )}
-      {d.etaText && <span className="text-[11px] text-text-secondary shrink-0">{d.etaText}</span>}
-      {d.seenText && <span className="text-[11px] text-text-secondary truncate hidden sm:inline">· {d.seenText}</span>}
-      {d.phone
-        ? <CallIconButton phone={d.phone} />
-        : (
-          <span className="ml-auto text-[12px] text-text-secondary shrink-0">
-            {d.hasCourier ? 'Repartidor asignado' : 'Sin datos del rider'}
-          </span>
-        )}
     </div>
   )
 }
