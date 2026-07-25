@@ -23,6 +23,7 @@
 
 import type { OrderFeedItem, OrderFeedLine, OrderFeedChild } from '../services/ordersFeedService'
 import { childVisual } from '../services/ordersFeedService'
+import { passCode } from './passCode'
 
 // ── Modelo intermedio ───────────────────────────────────────────────────────
 
@@ -55,28 +56,23 @@ export function ticketNumber(order: OrderFeedItem): string {
   return order.external_tab_ref ?? order.external_ref ?? '—'
 }
 
-/** Código GRANDE del ticket (el protagonista, lo que se canta/casa en el mostrador):
- *  el código corto del pedido (pos_short_code: G931/U382/J076 — en Glovo es el que
- *  muestra el rider al recoger; en Uber/JE, identificador ágil). Decisión 20/06,
- *  benchmark Glovo/Uber/Toast: el corto manda; el nº largo de plataforma va de
- *  referencia (platformRef). Sin mencionar al TPV intermedio (NUNCA "Last" en el
- *  papel). Si no hay corto (p.ej. HubRise), cae al nº largo y, en último caso, al tab. */
+/** Código GRANDE del ticket = CÓDIGO DE PASE (lo que canta el repartidor): Glovo →
+ *  pos_short_code (G315); Uber → platform_order_code completo (A1CDE, canta el final);
+ *  propio/otros → pos_short_code. Fallback al otro código, luego al tab. Lógica única
+ *  en passCode.ts (compartida con la tarjeta y el ticket nativo). NUNCA "Last" en el papel. */
 function pickupCode(order: OrderFeedItem): string {
-  const short = (order.pos_short_code ?? '').trim()
-  if (short) return short.toUpperCase()
-  const real = (order.platform_order_code ?? '').trim()
-  if (real) return real
-  const tab = order.external_tab_ref ?? order.external_ref ?? ''
-  return tab ? '#' + tab.replace(/-/g, '').slice(-5).toUpperCase() : '—'
+  return passCode(order).full
 }
 
-/** Línea fina de referencia: "Glovo · 101688354460" (el nº real de la plataforma,
- *  para soporte/factura). null si no hay número de plataforma. */
+/** Línea fina de referencia = el OTRO código (para soporte/incidencias/factura). Cuando
+ *  el otro es el nº de plataforma se etiqueta con el canal ("Glovo · 101688354460");
+ *  si es el corto (caso Uber), va a secas. null si no hay segundo código. */
 function platformRef(order: OrderFeedItem): string | null {
-  const real = (order.platform_order_code ?? '').trim()
-  if (!real) return null
+  const pc = passCode(order)
+  if (!pc.secondary) return null
   const ch = (order.channel ?? '').trim()
-  return ch ? `${ch} · ${real}` : real
+  const plat = (order.platform_order_code ?? '').trim().toUpperCase()
+  return (pc.secondary === plat && ch) ? `${ch} · ${pc.secondary}` : pc.secondary
 }
 
 function money(n: number | null | undefined): string {

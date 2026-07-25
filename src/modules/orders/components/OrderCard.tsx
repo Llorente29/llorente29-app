@@ -26,6 +26,7 @@
 import { useState } from 'react'
 import { ChefHat, Check, Printer, Bike, Phone, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, ShoppingBag } from 'lucide-react'
 import { timeLevel, channelLabel, ticketCode } from '@/modules/kds/kdsUtils'
+import { passCode } from '../lib/passCode'
 import ChannelBadge from './ChannelBadge'
 import TicketPreviewModal from './TicketPreviewModal'
 import {
@@ -581,14 +582,21 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
 
   const secIsDanger = secondary != null && (secondary.next === 'cancelled' || secondary.next === 'rejected')
 
+  // CÓDIGO DE PASE: lo que canta el repartidor. Protagonista de la cabecera (se lee a
+  // un metro, con las manos ocupadas). `emph` = lo cantado (dígitos Glovo / últimos 4
+  // Uber), grande; `lead` pequeño; `secondary` = el otro código, pequeño debajo.
+  const pass = passCode(order)
+
   return (
     <div className={`relative rounded-2xl overflow-hidden bg-card border ${halo} ${grow} ${terminal ? 'opacity-70' : ''}`}>
       <div className="absolute left-0 top-0 bottom-0 w-[4px]" style={{ backgroundColor: tc.spine }} />
 
       <div className="flex items-center gap-2.5 px-4 pt-3.5 pb-2.5 pl-5">
         <BrandAvatar name={order.brand} logoUrl={order.brand_logo_url} color={order.brand_color} />
-        <span className="font-display font-bold text-[18px] text-text-primary tracking-tight">
-          {ticketCode(order.external_tab_ref, order.external_ref)}
+        {/* Código de pase: emph (lo cantado) grande, lead pequeño. Lo más legible. */}
+        <span className="font-display font-bold text-text-primary tracking-tight leading-none" title={`Código de pase · ${pass.full}`}>
+          {pass.lead && <span className="text-[15px] opacity-45 mr-0.5">{pass.lead}</span>}
+          <span className="text-[23px]">{pass.emph}</span>
         </span>
         <ChannelBadge channel={order.channel ?? channelLabel(order.channel)} />
         <button
@@ -615,8 +623,11 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
         )}
       </div>
 
-      <div className="px-4 pb-2.5 pl-5 text-[12.5px] text-text-secondary">
-        {order.brand || order.channel || '—'}
+      <div className="px-4 pb-2.5 pl-5 text-[12.5px] text-text-secondary flex items-center gap-2 flex-wrap">
+        <span>{order.brand || order.channel || '—'}</span>
+        {/* El OTRO código (pequeño) + la ref interna del ticket: para incidencias. */}
+        {pass.secondary && <span className="font-mono text-[11px] opacity-80" title="Otro código">· {pass.secondary}</span>}
+        <span className="font-mono text-[11px] opacity-55" title="Referencia interna">· {ticketCode(order.external_tab_ref, order.external_ref)}</span>
       </div>
 
       {order.customer_note && (

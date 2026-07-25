@@ -135,7 +135,7 @@ Deno.serve(async (req: Request) => {
   // 1. Leer el pedido.
   const { data: sale, error: saleErr } = await sb
     .from("sale")
-    .select("id, account_id, location_id, raw_tab, total, customer_name, customer_phone, platform_order_code, external_ref, carrier_order_id, customer_note, source")
+    .select("id, account_id, location_id, raw_tab, total, customer_name, customer_phone, pos_short_code, platform_order_code, external_ref, carrier_order_id, customer_note, source")
     .eq("id", saleId)
     .single();
   if (saleErr || !sale) return json(404, { ok: false, error: "sale not found" });
@@ -238,7 +238,10 @@ Deno.serve(async (req: Request) => {
     orderSource: sale.source ?? "folvy",
     orderTotalAmount: sale.total != null ? String(Math.round(Number(sale.total) * 100)) : "0",
     orderInstructions: sale.customer_note ?? "",
-    orderCode: sale.platform_order_code ?? sale.external_ref ?? sale.id.slice(0, 8),
+    // CÓDIGO DE PASE: al repartidor propio le mandamos el CORTO (pos_short_code), no el
+    // nº de 12 dígitos de plataforma — es el que puede cantar y comparar. Fallbacks:
+    // nº de plataforma, external_ref, y en último caso los primeros 8 del id.
+    orderCode: sale.pos_short_code ?? sale.platform_order_code ?? sale.external_ref ?? sale.id.slice(0, 8),
     externalId: sale.id,
   };
 
