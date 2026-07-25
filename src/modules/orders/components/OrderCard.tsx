@@ -464,6 +464,15 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
   const primary = primaryAction(order)
   const secondary = secondaryAction(order)
 
+  // Hito "Listo" del KPI de cocina. El botón "Listo" (un toque → awaiting_collection,
+  // uniforme para plataforma / reparto propio / recogida) aparece mientras la cocina
+  // cocina (aceptado o en preparación). Alcanzado el hito, desaparece y en su lugar
+  // el estado muestra el chip "Listo ✓" (no se puede marcar dos veces). La transición
+  // posterior a in_delivery la maneja el reparto propio, no este botón.
+  const READY_MILESTONE: OrderStatus[] = ['awaiting_collection', 'awaiting_shipment', 'in_delivery', 'completed']
+  const reachedReady = READY_MILESTONE.includes(order.order_status)
+  const canMarkReady = order.order_status === 'accepted' || order.order_status === 'in_preparation'
+
   // Transiciones donde TODO debería estar hecho: avisar si quedan líneas sin marcar.
   const READY_OR_CLOSE: OrderStatus[] = ['awaiting_collection', 'awaiting_shipment', 'in_delivery', 'completed']
   const unmarkedCount = order.lineas.filter(l => !l.marked).length
@@ -478,6 +487,16 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
     }
     setBusy(true)
     try { await onAdvance(order.sale_id, next) } finally { setBusy(false) }
+  }
+
+  // "Listo" de UN TOQUE: sella el hito de cocina (ready_at) moviendo el pedido a
+  // awaiting_collection, igual para todos los servicios. SIN diálogo de confirmación
+  // (cocina de baja formación: el gesto tiene que ser inmediato). El feedback óptico
+  // es instantáneo (pinta optimista en el feed) y el polling reconcilia.
+  const markReady = async () => {
+    if (!onAdvance || busy) return
+    setBusy(true)
+    try { await onAdvance(order.sale_id, 'awaiting_collection') } finally { setBusy(false) }
   }
 
   const mark = async (lineId: string) => {
@@ -514,6 +533,11 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
       <div className="px-4 pb-2 pl-5 text-[12.5px] font-bold text-text-secondary flex items-center gap-2">
         <span className="w-2 h-2 rounded-full" style={{ backgroundColor: needsAction ? INK : terminal ? '#9CA0A6' : tc.spine }} />
         {STATUS_LABEL[order.order_status]}
+        {reachedReady && (
+          <span className="inline-flex items-center gap-1 text-[11px] font-extrabold px-2 py-0.5 rounded-full bg-success-bg text-success border border-success/30">
+            <Check size={12} strokeWidth={3} /> Listo
+          </span>
+        )}
       </div>
 
       <div className="px-4 pb-2.5 pl-5 text-[12.5px] text-text-secondary">
@@ -559,7 +583,7 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
           )}
         </div>
 
-        {onAdvance && (primary || secondary) && (
+        {onAdvance && (canMarkReady || primary || secondary) && (
           <div className="flex items-center gap-2 mt-3">
             {secondary && (
               <button
@@ -574,7 +598,16 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
                 {secondary.label}
               </button>
             )}
-            {primary && (
+            {canMarkReady ? (
+              // Gesto de FIN de cocina: un toque → awaiting_collection. Verde "listo".
+              <button
+                onClick={markReady}
+                disabled={busy}
+                className="ml-auto flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-[14px] font-extrabold text-white bg-[#1F9D6B] hover:opacity-90 disabled:opacity-50"
+              >
+                {busy ? '…' : <><Check size={17} strokeWidth={3} /> Listo</>}
+              </button>
+            ) : primary ? (
               <button
                 onClick={() => run(primary.next)}
                 disabled={busy}
@@ -582,7 +615,7 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
               >
                 {busy ? '…' : primary.label}
               </button>
-            )}
+            ) : null}
           </div>
         )}
       </div>

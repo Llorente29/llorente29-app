@@ -93,13 +93,19 @@ export default function OrdersFeed({ locationId, token }: OrdersFeedProps) {
   }, [locationId, token])
 
   const advance = useCallback(async (saleId: string, next: OrderStatus) => {
+    // Optimista: pinta el nuevo estado al instante (la Estación vive de polling,
+    // sin realtime; el toque "Listo" tiene que responder ya). Reconcilia el polling.
+    setOrders(prev => prev.map(o => (o.sale_id === saleId ? { ...o, order_status: next } : o)))
     try {
       await advanceOrder(saleId, next, token)
-      await refresh()
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'No se pudo actualizar el pedido')
+    } finally {
+      // Confirma el éxito o REVIERTE el pintado optimista con la verdad del feed
+      // (si la RPC falló, el servidor conserva el estado anterior).
+      void refresh()
     }
-  }, [refresh])
+  }, [refresh, token])
 
   // Reimpresión: encola los tickets del pedido a las impresoras del local. Con
   // token (Estación) sale por la puerta by-token. Devuelve el nº de jobs (0 = el
