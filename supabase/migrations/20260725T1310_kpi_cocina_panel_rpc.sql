@@ -11,7 +11,11 @@
 -- se rellena; solo cuentan en el denominador de adopción).
 --
 -- ADOPCIÓN destacada: % de pedidos elegibles con "Listo". < 80% => representativo=false
--- y el panel avisa de que el dato NO es fiable. [D2] objetivo = <= amber. Aún NO aplicada.
+-- y el panel avisa de que el dato NO es fiable. [D2] objetivo = <= amber.
+--
+-- APLICADA en producción vía MCP el 25/07/2026 y verificada: el guard belongs_to_account
+-- bloquea sin sesión; el cómputo produce forma válida y robusta en set vacío (medianas
+-- null, divisiones protegidas). Idempotente.
 -- ============================================================================
 
 create or replace function public.kitchen_time_stats(

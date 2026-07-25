@@ -14,7 +14,11 @@
 --
 -- TIEMPO DE COCINA = ready_at − accepted_at. Excluye cancelados, programados
 -- (heurística [D1] expected_time > accepted_at + 45') y sin ready_at (sin gesto = sin
--- medición). Objetivo = amber_max (verde+ámbar = no tarde). Idempotente. AÚN NO aplicada.
+-- medición). Objetivo = amber_max (verde+ámbar = no tarde). Idempotente.
+--
+-- APLICADA en producción vía MCP el 25/07/2026 y verificada: ejecuta en los 7 locales,
+-- forma correcta, n_elegibles cruzado contra consulta directa. (0 datos aún: los
+-- pedidos existentes son anteriores al trigger de sellado; se poblará según entren.)
 -- ============================================================================
 
 -- Helper interno: calcula el banner del día para un local. SECURITY DEFINER (lo llaman
