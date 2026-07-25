@@ -516,8 +516,11 @@ export async function getKitchenBanner(
   token?: string | null,
 ): Promise<KitchenDayBanner | null> {
   requireSupabase()
-  const rpc = supabase!.rpc as unknown as (fn: string, args: Record<string, unknown>)
-    => Promise<{ data: unknown; error: { message: string } | null }>
+  // OJO: .bind(supabase!) es OBLIGATORIO. Extraer supabase!.rpc a una variable pierde
+  // el `this`; supabase-js revienta en this.rest y la petición NUNCA se envía. El cast a
+  // la firma simple va ANTES del .bind (si no, TS instancia el tipo sobrecargado gigante).
+  const rpc = (supabase!.rpc as unknown as (fn: string, args: Record<string, unknown>)
+    => Promise<{ data: unknown; error: { message: string } | null }>).bind(supabase!)
   const { data, error } = token
     ? await rpc('kitchen_day_banner_by_token', { p_device_token: token })
     : await rpc('kitchen_day_banner', { p_location_id: locationId })
@@ -564,8 +567,10 @@ export async function getKitchenTimeStats(
   toIso: string,
 ): Promise<KitchenTimeStats> {
   requireSupabase()
-  const rpc = supabase!.rpc as unknown as (fn: string, args: Record<string, unknown>)
-    => Promise<{ data: unknown; error: { message: string } | null }>
+  // .bind(supabase!) OBLIGATORIO (sin él se pierde el `this` y supabase-js falla en
+  // this.rest). Cast a la firma simple ANTES del .bind para no instanciar el tipo gigante.
+  const rpc = (supabase!.rpc as unknown as (fn: string, args: Record<string, unknown>)
+    => Promise<{ data: unknown; error: { message: string } | null }>).bind(supabase!)
   const { data, error } = await rpc('kitchen_time_stats', {
     p_location_id: locationId, p_from: fromIso, p_to: toIso,
   })

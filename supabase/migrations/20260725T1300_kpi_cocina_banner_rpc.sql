@@ -14,11 +14,13 @@
 --
 -- TIEMPO DE COCINA = ready_at − accepted_at. Excluye cancelados, programados
 -- (heurística [D1] expected_time > accepted_at + 45') y sin ready_at (sin gesto = sin
--- medición). Objetivo = amber_max (verde+ámbar = no tarde). Idempotente.
+-- medición). Objetivo del banner = green_max (el ideal a batir; ajustado en prod tras
+-- la primera prueba — el banner motiva hacia el verde, distinto del panel donde
+-- "dentro de objetivo" = ≤ amber = "no tarde"). Idempotente.
 --
--- APLICADA en producción vía MCP el 25/07/2026 y verificada: ejecuta en los 7 locales,
--- forma correcta, n_elegibles cruzado contra consulta directa. (0 datos aún: los
--- pedidos existentes son anteriores al trigger de sellado; se poblará según entren.)
+-- APLICADA en producción vía MCP el 25/07/2026 y verificada en vivo: Alcalá hoy 14
+-- medidos, mediana 22 min, 16 elegibles. Este fichero refleja la definición VIVA
+-- (pg_get_functiondef), incluida la corrección objetivo→green_max.
 -- ============================================================================
 
 -- Helper interno: calcula el banner del día para un local. SECURITY DEFINER (lo llaman
@@ -77,7 +79,7 @@ begin
 
   return jsonb_build_object(
     'location_id',  p_location_id,
-    'objetivo_min', v_cfg.amber_max_minutes,
+    'objetivo_min', v_cfg.green_max_minutes,
     'n_medidos',    coalesce(v_n_medidos, 0),
     'n_elegibles',  coalesce(v_n_elegibles, 0),
     'mediana_min',  v_mediana,
@@ -85,7 +87,7 @@ begin
                      and (coalesce(v_n_elegibles,0) = 0
                           or v_n_medidos::numeric / v_n_elegibles >= c_min_adoption)),
     'bajo_objetivo', case when v_mediana is null then null
-                          else v_mediana <= v_cfg.amber_max_minutes end,
+                          else v_mediana <= v_cfg.green_max_minutes end,
     'config', case when v_cfg.location_id is null then null else jsonb_build_object(
       'green_max_minutes', v_cfg.green_max_minutes,
       'amber_max_minutes', v_cfg.amber_max_minutes,

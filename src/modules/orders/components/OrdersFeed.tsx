@@ -96,8 +96,13 @@ export default function OrdersFeed({ locationId, token }: OrdersFeedProps) {
     } finally {
       setLoading(false)
     }
-    // Banner del día (KPI cocina): best-effort, no bloquea ni rompe el feed.
-    try { setBanner(await getKitchenBanner(locationId, token)) } catch { /* silencioso */ }
+    // Banner del día (KPI cocina): best-effort, no bloquea ni rompe el feed. Pero NO
+    // silencioso: un fallo aquí (p. ej. RPC caída) debe ser diagnosticable en consola.
+    try {
+      setBanner(await getKitchenBanner(locationId, token))
+    } catch (e) {
+      console.warn('[KPI cocina] banner no cargó:', e)
+    }
   }, [locationId, token])
 
   const advance = useCallback(async (saleId: string, next: OrderStatus) => {
