@@ -12116,6 +12116,7 @@ export type Database = {
       }
       sale: {
         Row: {
+          accepted_at: string | null
           account_id: string
           address_status: string
           archived_at: string | null
@@ -12147,6 +12148,7 @@ export type Database = {
           external_location_text: string | null
           external_ref: string | null
           external_tab_ref: string | null
+          handed_to_courier_at: string | null
           has_courier: boolean | null
           id: string
           is_active: boolean
@@ -12162,6 +12164,7 @@ export type Database = {
           public_token: string | null
           raw_products: string | null
           raw_tab: string | null
+          ready_at: string | null
           refund_amount: number | null
           rider_lat: number | null
           rider_lng: number | null
@@ -12181,6 +12184,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          accepted_at?: string | null
           account_id: string
           address_status?: string
           archived_at?: string | null
@@ -12212,6 +12216,7 @@ export type Database = {
           external_location_text?: string | null
           external_ref?: string | null
           external_tab_ref?: string | null
+          handed_to_courier_at?: string | null
           has_courier?: boolean | null
           id?: string
           is_active?: boolean
@@ -12227,6 +12232,7 @@ export type Database = {
           public_token?: string | null
           raw_products?: string | null
           raw_tab?: string | null
+          ready_at?: string | null
           refund_amount?: number | null
           rider_lat?: number | null
           rider_lng?: number | null
@@ -12246,6 +12252,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          accepted_at?: string | null
           account_id?: string
           address_status?: string
           archived_at?: string | null
@@ -12277,6 +12284,7 @@ export type Database = {
           external_location_text?: string | null
           external_ref?: string | null
           external_tab_ref?: string | null
+          handed_to_courier_at?: string | null
           has_courier?: boolean | null
           id?: string
           is_active?: boolean
@@ -12292,6 +12300,7 @@ export type Database = {
           public_token?: string | null
           raw_products?: string | null
           raw_tab?: string | null
+          ready_at?: string | null
           refund_amount?: number | null
           rider_lat?: number | null
           rider_lng?: number | null
