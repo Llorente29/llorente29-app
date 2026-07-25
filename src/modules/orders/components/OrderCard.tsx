@@ -26,7 +26,6 @@
 import { useState } from 'react'
 import { ChefHat, Check, Printer, Bike, Phone, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, ShoppingBag } from 'lucide-react'
 import { timeLevel, channelLabel, ticketCode } from '@/modules/kds/kdsUtils'
-import { fmtMoney } from '@/lib/format'
 import ChannelBadge from './ChannelBadge'
 import TicketPreviewModal from './TicketPreviewModal'
 import {
@@ -419,11 +418,21 @@ function OwnDeliveryRow({ view }: { view: DeliveryView }) {
             </span>
           </div>
 
-          {/* 4. Coste del reparto (null-safe). */}
-          <div className="px-3.5 py-2.5 flex items-center gap-2 text-[13px]">
-            <span className="text-text-secondary shrink-0">Coste del reparto</span>
-            <span className="ml-auto font-bold text-text-primary tabular-nums">{fmtMoney(view.transportPrice)}</span>
-          </div>
+          {/* 4. TIEMPO DE REPARTO (el coste va FUERA de la tarjeta, decisión de Julio
+              24/07). Solo si hay entrega sellada (delivered_at). Si se midió desde
+              "Listo" (sin handoff sellado — Catcher casi nunca lo manda), se ETIQUETA:
+              no es reparto puro. */}
+          {view.deliveryDurationMin != null && (
+            <div className="px-3.5 py-2.5 flex items-center gap-2 text-[13px]">
+              <span className="text-text-secondary shrink-0">Tiempo de reparto</span>
+              <span className="ml-auto font-bold text-text-primary tabular-nums flex items-center gap-1.5">
+                {view.deliveryDurationMin} min
+                {view.deliveryBasis === 'listo' && (
+                  <span className="text-[11px] font-semibold text-text-secondary">· desde Listo</span>
+                )}
+              </span>
+            </div>
+          )}
         </div>
       )}
     </div>
