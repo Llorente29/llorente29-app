@@ -5,32 +5,31 @@
 // La app llama aquí con (sale_id, status[, confirmed_time]). El Edge:
 //   1) AUTORIZA: lee la venta con el JWT del usuario (RLS) -> confirma que la venta
 //      pertenece a una cuenta del usuario. La frontera autoriza; el motor no.
-//   2) EMPUJA: PUT /location/orders/:id a HubRise con X-Access-Token (marca blanca:
-//      el token vive en Secrets, Folvy llama a HubRise desde el servidor; el cliente
-//      nunca toca HubRise).
-//   3) ESPEJA: si HubRise acepta (2xx), actualiza sale.order_status (service role).
+//   2) RESUELVE TOKEN por conexión: external_integration (source=hubrise) por
+//      (account, external_location_id[, connection_name]); fallback al Secret global.
+//   3) EMPUJA: PUT /location/orders/:id a HubRise con X-Access-Token (marca blanca:
+//      Folvy llama a HubRise desde el servidor; el cliente nunca toca HubRise).
+//   4) ESPEJA: si HubRise acepta (2xx), actualiza sale.order_status (service role).
 //
-// AUTENTICACIÓN HubRise (verificado contra developers/api/authentication):
-//   cabecera "X-Access-Token: <token>" (NO Bearer). El token es POR LOCATION
-//   (HubRise emite un token por cliente×location; re-autorizar devuelve el mismo).
+// AUTENTICACIÓN HubRise: cabecera "X-Access-Token: <token>" (NO Bearer). El token es
+//   POR LOCATION (HubRise emite un token por cliente×location).
 //
-// DESPLIEGUE: este Edge es de cara a la APP (lo llama el front con sesión), así que
-//   se despliega CON verificación JWT (por defecto, SIN --no-verify-jwt). Es lo CONTRARIO
-//   de los webhooks externos.
+// DESPLIEGUE: Edge de cara a la APP -> se despliega CON verificación JWT (por defecto).
 //
-// DEUDA DECLARADA (disparador P-A / CP2): el almacenamiento multi-location del token =
-//   tabla hubrise_integration. Hoy un único Secret cubre la location de pruebas del
-//   Cliente 2. El Edge ya lee sale.external_location_text para, cuando exista la tabla,
-//   resolver el token por location sin reescribir (tabla -> Secret como fallback).
+// UNIFICADO (2026-07): el token ya NO sale de un único Secret global. Se resuelve por
+//   conexión desde external_integration (misma fuente que hubrise-catalog-publish y
+//   hubrise-webhook). El Secret HUBRISE_ACCESS_TOKEN queda solo como fallback de
+//   compatibilidad hasta retirarlo.
 
 import { corsHeaders } from "../_shared/cors.ts";
+import { resolveHubriseToken } from "../_shared/hubriseToken.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const HUBRISE_API_BASE = Deno.env.get("HUBRISE_API_BASE") ?? "https://api.hubrise.com/v1";
-const HUBRISE_ACCESS_TOKEN = Deno.env.get("HUBRISE_ACCESS_TOKEN") ?? "";
+const HUBRISE_ACCESS_TOKEN_ENV = Deno.env.get("HUBRISE_ACCESS_TOKEN") ?? "";
 
 // Estados que el EPOS PUEDE enviar a HubRise (no 'new' inicial ni 'awaiting_shipment' deprecado).
 const SENDABLE = new Set([
@@ -48,8 +47,6 @@ function json(body: unknown, status = 200): Response {
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method Not Allowed" }, 405);
-
-  if (!HUBRISE_ACCESS_TOKEN) return json({ error: "HUBRISE_ACCESS_TOKEN no configurado" }, 500);
 
   // 1) JWT del usuario (la frontera autoriza con RLS).
   const authHeader = req.headers.get("Authorization") ?? "";
@@ -77,7 +74,7 @@ Deno.serve(async (req: Request) => {
 
   const { data: sale, error: saleErr } = await userClient
     .from("sale")
-    .select("id, account_id, source, external_ref, external_location_text")
+    .select("id, account_id, source, external_ref, external_location_text, external_brand_text")
     .eq("id", saleId)
     .maybeSingle();
 
@@ -86,7 +83,19 @@ Deno.serve(async (req: Request) => {
   if (sale.source !== "hubrise") return json({ error: "La venta no es de HubRise" }, 400);
   if (!sale.external_ref) return json({ error: "La venta no tiene id de pedido de HubRise" }, 400);
 
-  // 2) Empuje a HubRise. Token por location (hoy Secret único; futuro: por external_location_text).
+  // Cliente service_role: resolver token por conexión y espejar el estado.
+  const svc = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+
+  // 2) Token por conexión (fallback al Secret global durante la migración).
+  const dbToken = await resolveHubriseToken(svc, {
+    accountId: sale.account_id as string,
+    externalLocationId: (sale.external_location_text as string | null) ?? null,
+    connectionName: (sale.external_brand_text as string | null) ?? null,
+  });
+  const accessToken = ((dbToken ?? "").trim()) || HUBRISE_ACCESS_TOKEN_ENV;
+  if (!accessToken) return json({ error: "Sin token HubRise para esta conexión (external_integration vacío y sin Secret)" }, 500);
+
+  // 3) Empuje a HubRise.
   const orderBody: Record<string, unknown> = { status };
   if (confirmedTime) orderBody["confirmed_time"] = confirmedTime;
 
@@ -96,7 +105,7 @@ Deno.serve(async (req: Request) => {
     hubResp = await fetch(url, {
       method: "PUT",
       headers: {
-        "X-Access-Token": HUBRISE_ACCESS_TOKEN,
+        "X-Access-Token": accessToken,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(orderBody),
@@ -110,8 +119,7 @@ Deno.serve(async (req: Request) => {
     return json({ error: `HubRise rechazó el cambio (${hubResp.status})`, detail: text.slice(0, 500) }, 502);
   }
 
-  // 3) Espejo local SOLO si HubRise aceptó (service role: el order_status no depende de RLS de UPDATE).
-  const svc = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+  // 4) Espejo local SOLO si HubRise aceptó (service role: el order_status no depende de RLS de UPDATE).
   const { error: updErr } = await svc.from("sale").update({ order_status: status }).eq("id", saleId);
   if (updErr) {
     return json({
