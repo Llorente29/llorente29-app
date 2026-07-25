@@ -13,7 +13,9 @@
 --                     existía sin sello.
 --   · ready_at     -> primera vez que el pedido SALE de preparación, es decir al
 --                     entrar en awaiting_collection / awaiting_shipment /
---                     in_delivery / completed. Se sella una sola vez.
+--                     in_delivery. Se sella una sola vez. (`completed` NO sella
+--                     ready_at: un pedido que se cierra sin pasar por "listo" no
+--                     tiene hito de cocina válido — corregido en prod por Julio.)
 --
 -- Complementa a `handed_to_courier_at` (Capa 4, sellado al pasar delivery_state a
 -- in_delivery), que mide "desde cuándo está en reparto". Aquí medimos cocina.
@@ -53,7 +55,7 @@ begin
     end if;
     -- LISTO: primera vez que sale de preparación.
     if new.ready_at is null
-       and new.order_status in ('awaiting_collection','awaiting_shipment','in_delivery','completed') then
+       and new.order_status in ('awaiting_collection','awaiting_shipment','in_delivery') then
       new.ready_at := now();
     end if;
   end if;
