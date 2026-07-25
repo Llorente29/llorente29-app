@@ -31,8 +31,10 @@ import TicketPreviewModal from './TicketPreviewModal'
 import {
   primaryAction, secondaryAction, childVisual, deliveryView,
   isOwnDeliveryUndispatched, dispatchOrder,
+  cookingChip, DEFAULT_KITCHEN_THRESHOLDS,
   type OrderFeedItem, type OrderFeedLine, type OrderFeedChild, type OrderStatus,
   type DeliveryView, type DeliveryTone,
+  type KitchenThresholds, type CookState,
 } from '../services/ordersFeedService'
 
 const STATUS_LABEL: Record<OrderStatus, string> = {
@@ -66,6 +68,35 @@ function timeColors(level: string): { spine: string; text: string } {
 function fmt(n: number | null | undefined): string {
   if (n == null) return ''
   return n.toFixed(2).replace('.', ',') + ' €'
+}
+
+// Chip de tiempo de COCINA (KPI). Reloj vivo desde accepted_at mientras cocina;
+// semáforo por umbrales del local. La INCIDENCIA (sobre el techo) es visualmente
+// DISTINTA del rojo: relleno sólido + pulso + ⚠ (rojo = vas tarde; techo = alguien
+// tiene que mirarlo). Congelado al pulsar "Listo". Sin accepted_at → "—", nunca 0.
+const COOK_CHIP_CLS: Record<CookState, string> = {
+  none:     'bg-page text-text-secondary border-default',
+  green:    'bg-success-bg text-success border-success/30',
+  amber:    'bg-warning-bg text-warning border-warning/30',
+  red:      'bg-danger-bg text-danger border-danger/40',
+  incident: 'bg-danger text-white border-danger animate-pulse',
+  frozen:   'bg-page text-text-secondary border-default',
+}
+function CookTimeChip({ order, thresholds, nowMs }: { order: OrderFeedItem; thresholds: KitchenThresholds; nowMs: number }) {
+  const chip = cookingChip(order, thresholds, nowMs)
+  const label = chip.minutes == null ? '—' : `${chip.minutes} min`
+  const title =
+    chip.state === 'incident' ? 'Tiempo de cocina — sobre el techo, revisar'
+    : chip.state === 'frozen'  ? 'Tiempo de cocina (final)'
+    : 'Tiempo de cocina'
+  return (
+    <span
+      title={title}
+      className={`inline-flex items-center gap-1 text-[11px] font-extrabold px-2 py-0.5 rounded-full border tabular-nums ${COOK_CHIP_CLS[chip.state]}`}
+    >
+      🍳 {label}{chip.state === 'incident' && ' ⚠'}
+    </span>
+  )
 }
 
 // ── Avatar de marca (logo real o inicial sobre su color) ────────────────────
@@ -478,9 +509,15 @@ interface OrderCardProps {
   /** Reimprime el pedido (encola a las impresoras). docType opcional = solo ese
    *  documento. Devuelve el nº de jobs. */
   onReprint?: (saleId: string, docType?: string) => Promise<number>
+  /** Umbrales del local para el chip de tiempo de cocina (del banner; reserva = defaults). */
+  thresholds?: KitchenThresholds
+  /** "Ahora" en ms, un tick por minuto desde el contenedor (no un intervalo por tarjeta). */
+  nowMs: number
 }
 
-export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRecipe, onMarkLine, onReprint }: OrderCardProps) {
+export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRecipe, onMarkLine, onReprint, thresholds, nowMs }: OrderCardProps) {
+  const cfg = thresholds ?? DEFAULT_KITCHEN_THRESHOLDS
+  const now = nowMs
   const [busy, setBusy] = useState(false)
   const [markingId, setMarkingId] = useState<string | null>(null)
   const [showTickets, setShowTickets] = useState(false)
@@ -570,6 +607,7 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
       <div className="px-4 pb-2 pl-5 text-[12.5px] font-bold text-text-secondary flex items-center gap-2">
         <span className="w-2 h-2 rounded-full" style={{ backgroundColor: needsAction ? INK : terminal ? '#9CA0A6' : tc.spine }} />
         {STATUS_LABEL[order.order_status]}
+        <CookTimeChip order={order} thresholds={cfg} nowMs={now} />
         {reachedReady && (
           <span className="inline-flex items-center gap-1 text-[11px] font-extrabold px-2 py-0.5 rounded-full bg-success-bg text-success border border-success/30">
             <Check size={12} strokeWidth={3} /> Listo
@@ -640,7 +678,8 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
               <button
                 onClick={markReady}
                 disabled={busy}
-                className="ml-auto flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-[14px] font-extrabold text-white bg-[#1F9D6B] hover:opacity-90 disabled:opacity-50"
+                title="Marcar listo (sella el tiempo de cocina)"
+                className="ml-auto flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-[14px] font-extrabold text-white bg-[#D67442] hover:opacity-90 disabled:opacity-50"
               >
                 {busy ? '…' : <><Check size={17} strokeWidth={3} /> Listo</>}
               </button>

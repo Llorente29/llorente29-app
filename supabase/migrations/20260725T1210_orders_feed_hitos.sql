@@ -1,24 +1,17 @@
--- 20260725T1210_feed_reparto_hitos.sql
+-- 20260725T1210_orders_feed_hitos.sql
 -- ============================================================================
--- Los HITOS de reparto viajan DENTRO del feed (para el TIEMPO DE REPARTO del
--- desplegable). PROPUESTA (revisar antes de aplicar; RPC VIVAS en producción).
+-- orders_feed / orders_feed_by_token — HITOS DE TIEMPO por pedido en el feed.
 -- ============================================================================
--- El desplegable de reparto propio muestra el tiempo de reparto =
---   delivered_at − coalesce(handed_to_courier_at, ready_at).
--- La tarjeta solo tiene lo que devuelve el feed, y la Estación por token no puede
--- consultar sale directamente (sin sesión → RLS). Ambas RPC son SECURITY DEFINER,
--- así que se añaden estos tres hitos al JSON por pedido, en las dos variantes.
+-- Añade al JSON por pedido, en las DOS superficies (sesión y Estación por token):
+--   accepted_at, ready_at (KPI de cocina) + handed_to_courier_at, delivered_at (reparto).
+-- Así el chip de tiempo y el tiempo de reparto llegan a la tablet sin RLS (SECURITY
+-- DEFINER). Los umbrales NO viajan aquí (van por la RPC del banner).
 --
--- CAMBIO (idéntico en las dos): vivos + tickets suman s/v.ready_at,
--- s/v.handed_to_courier_at, s/v.delivered_at (entran al JSON por to_jsonb(t)).
--- El resto del cuerpo NO cambia. Reconstruidas EXACTAS desde pg_get_functiondef
--- (25/07). Idempotente (CREATE OR REPLACE).
---
--- NOTA DE COORDINACIÓN: la F2 (KPI cocina) añadirá luego accepted_at + la clave
--- kitchen_time_config sobre ESTA versión ya mergeada del feed.
+-- ESTE FICHERO ES EL REGISTRO FIEL DE LO VIVO EN PRODUCCIÓN (25/07/2026): capturado
+-- con pg_get_functiondef de orders_feed y orders_feed_by_token. NO re-transcrito a
+-- mano. Reemplaza a un intento anterior que no coincidía con producción. Idempotente.
 -- ============================================================================
 
--- ── orders_feed (sesión) ─────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.orders_feed(p_location_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -65,8 +58,8 @@ begin
            s.rider_name, s.rider_phone, s.eta_pickup, s.eta_delivery, s.transport_price, s.dispatch_error,
            -- (+ rider Catcher) tipo de vehículo, última posición vista y flag de asignación.
            s.rider_transport_type, s.rider_lat, s.rider_lng, s.rider_seen_at, s.has_courier,
-           -- Hitos de reparto (para el tiempo de reparto del desplegable).
-           s.ready_at, s.handed_to_courier_at, s.delivered_at,
+           -- Hitos de tiempo: KPI de cocina (accepted_at/ready_at) y reparto.
+           s.accepted_at, s.ready_at, s.handed_to_courier_at, s.delivered_at,
            s.opened_at, s.closed_at, s.cancelled_at, s.sold_at, s.raw_tab,
            coalesce(s.opened_at, s.sold_at, s.created_at) as entro_at
     from sale s
@@ -165,8 +158,7 @@ begin
            v.rider_name, v.rider_phone, v.eta_pickup, v.eta_delivery, v.transport_price, v.dispatch_error,
            -- (+ rider Catcher)
            v.rider_transport_type, v.rider_lat, v.rider_lng, v.rider_seen_at, v.has_courier,
-           -- Hitos de reparto (para el tiempo de reparto del desplegable).
-           v.ready_at, v.handed_to_courier_at, v.delivered_at,
+           v.accepted_at, v.ready_at, v.handed_to_courier_at, v.delivered_at,
            v.entro_at,
            round(extract(epoch from (now() - v.entro_at)) / 60.0)::int as minutos,
            coalesce((select jsonb_agg(jsonb_build_object(
@@ -215,7 +207,6 @@ begin
 end;
 $function$;
 
--- ── orders_feed_by_token (Estación de tablet, sin sesión) ────────────────────
 CREATE OR REPLACE FUNCTION public.orders_feed_by_token(p_device_token text)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -251,8 +242,8 @@ begin
            s.dispatch_mode, s.carrier_code, s.delivery_state,
            s.rider_name, s.rider_phone, s.eta_pickup, s.eta_delivery, s.transport_price, s.dispatch_error,
            s.rider_transport_type, s.rider_lat, s.rider_lng, s.rider_seen_at, s.has_courier,
-           -- Hitos de reparto (para el tiempo de reparto del desplegable).
-           s.ready_at, s.handed_to_courier_at, s.delivered_at,
+           -- Hitos de tiempo: KPI de cocina (accepted_at/ready_at) y reparto.
+           s.accepted_at, s.ready_at, s.handed_to_courier_at, s.delivered_at,
            s.opened_at, s.closed_at, s.cancelled_at, s.sold_at, s.raw_tab,
            coalesce(s.opened_at, s.sold_at, s.created_at) as entro_at
     from sale s
@@ -347,8 +338,7 @@ begin
            v.dispatch_mode, v.carrier_code, v.delivery_state,
            v.rider_name, v.rider_phone, v.eta_pickup, v.eta_delivery, v.transport_price, v.dispatch_error,
            v.rider_transport_type, v.rider_lat, v.rider_lng, v.rider_seen_at, v.has_courier,
-           -- Hitos de reparto (para el tiempo de reparto del desplegable).
-           v.ready_at, v.handed_to_courier_at, v.delivered_at,
+           v.accepted_at, v.ready_at, v.handed_to_courier_at, v.delivered_at,
            v.entro_at,
            round(extract(epoch from (now() - v.entro_at)) / 60.0)::int as minutos,
            coalesce((select jsonb_agg(jsonb_build_object(
