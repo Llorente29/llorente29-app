@@ -18,10 +18,12 @@ import { playNewTicketSound } from '@/modules/kds/kdsUtils'
 import { markLine as kdsMarkLine } from '@/modules/kds/services/kdsService'
 import CookModePanel from '@/modules/kds/components/CookModePanel'
 import {
-  getOrdersFeed, advanceOrder, reprintOrder, isTerminalStatus,
+  getOrdersFeed, advanceOrder, reprintOrder, isTerminalStatus, getKitchenBanner, DEFAULT_KITCHEN_THRESHOLDS,
   type OrderFeedItem, type OrderFeedLine, type OrderStatus,
+  type KitchenDayBanner, type KitchenThresholds,
 } from '../services/ordersFeedService'
 import OrderCard from './OrderCard'
+import KitchenDayBannerBar from './KitchenDayBanner'
 
 const POLL_MS = 10_000
 
@@ -68,6 +70,10 @@ export default function OrdersFeed({ locationId, token }: OrdersFeedProps) {
   const [filter, setFilter] = useState<FilterKey>('activos')
   const [soundOn, setSoundOn] = useState(true)
   const [cook, setCook] = useState<CookTarget | null>(null)
+  const [banner, setBanner] = useState<KitchenDayBanner | null>(null)
+  // "Ahora" para el reloj vivo del chip de cocina: UN tick por minuto para todas las
+  // tarjetas (no un setInterval por tarjeta). El polling del feed también re-renderiza.
+  const [nowMs, setNowMs] = useState<number>(() => Date.now())
   const knownIds = useRef<Set<string>>(new Set())
   const firstLoad = useRef(true)
   const soundRef = useRef(true)
@@ -90,6 +96,8 @@ export default function OrdersFeed({ locationId, token }: OrdersFeedProps) {
     } finally {
       setLoading(false)
     }
+    // Banner del día (KPI cocina): best-effort, no bloquea ni rompe el feed.
+    try { setBanner(await getKitchenBanner(locationId, token)) } catch { /* silencioso */ }
   }, [locationId, token])
 
   const advance = useCallback(async (saleId: string, next: OrderStatus) => {
@@ -140,6 +148,12 @@ export default function OrdersFeed({ locationId, token }: OrdersFeedProps) {
     return () => window.clearInterval(id)
   }, [refresh])
 
+  // Reloj vivo del chip de cocina: UN tick por minuto para todas las tarjetas.
+  useEffect(() => {
+    const id = window.setInterval(() => setNowMs(Date.now()), 60_000)
+    return () => window.clearInterval(id)
+  }, [])
+
   useEffect(() => {
     if (token) return
     if (!isSupabaseEnabled || !supabase) return
@@ -162,6 +176,9 @@ export default function OrdersFeed({ locationId, token }: OrdersFeedProps) {
   )
 
   const filterCount = (k: FilterKey) => orders.filter(o => FILTERS[k](o.order_status)).length
+
+  // Umbrales del local para el chip de cocina: del banner; reserva = defaults.
+  const thresholds: KitchenThresholds = banner?.config ?? DEFAULT_KITCHEN_THRESHOLDS
 
   const toggleSound = () => {
     setSoundOn(prev => {
@@ -216,6 +233,13 @@ export default function OrdersFeed({ locationId, token }: OrdersFeedProps) {
           ))}
         </div>
 
+        {/* Banner del día (KPI cocina) — colectivo, siempre visible arriba. */}
+        {banner && (
+          <div className="px-5 pt-3 bg-page">
+            <KitchenDayBannerBar banner={banner} />
+          </div>
+        )}
+
         {/* Cuerpo */}
         <div className="flex-1 overflow-y-auto p-5 bg-page">
           {error && (
@@ -233,7 +257,7 @@ export default function OrdersFeed({ locationId, token }: OrdersFeedProps) {
             </div>
           ) : view === 'grid' ? (
             <div className="grid gap-4 items-start" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(330px, 1fr))' }}>
-              {filtered.map(o => <OrderCard key={o.sale_id} order={o} allowGrow onAdvance={advance} onOpenRecipe={openRecipe} onMarkLine={markLineHandler} onReprint={reprint} />)}
+              {filtered.map(o => <OrderCard key={o.sale_id} order={o} allowGrow onAdvance={advance} onOpenRecipe={openRecipe} onMarkLine={markLineHandler} onReprint={reprint} thresholds={thresholds} nowMs={nowMs} />)}
             </div>
           ) : (
             <div className="grid gap-4 h-full" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
@@ -247,7 +271,7 @@ export default function OrdersFeed({ locationId, token }: OrdersFeedProps) {
                       <span className="ml-auto bg-accent-bg text-text-secondary text-[12px] font-extrabold px-2 py-px rounded-full tabular-nums">{list.length}</span>
                     </div>
                     <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3 bg-page">
-                      {list.map(o => <OrderCard key={o.sale_id} order={o} allowGrow={false} onAdvance={advance} onOpenRecipe={openRecipe} onMarkLine={markLineHandler} onReprint={reprint} />)}
+                      {list.map(o => <OrderCard key={o.sale_id} order={o} allowGrow={false} onAdvance={advance} onOpenRecipe={openRecipe} onMarkLine={markLineHandler} onReprint={reprint} thresholds={thresholds} nowMs={nowMs} />)}
                     </div>
                   </div>
                 )

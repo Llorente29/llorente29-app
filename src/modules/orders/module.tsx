@@ -16,12 +16,13 @@
 // Gating: requiredRole 'manager' (operar pedidos / cocina = encargado).
 // Ruta propia 'orders' (cuidado con el secuestro de prefijo, como /kds→/cocina-tv).
 
-import { ClipboardList, ListOrdered, MonitorPlay, SlidersHorizontal, Bike } from 'lucide-react'
+import { ClipboardList, ListOrdered, MonitorPlay, SlidersHorizontal, Bike, Clock } from 'lucide-react'
 import type { ModuleDefinition } from '@/shell/types'
 import OrdersFeedPage from '@/modules/orders/pages/OrdersFeedPage'
 import DispatchBoardPage from '@/modules/orders/pages/DispatchBoardPage'
 import KdsBoardPage from '@/modules/kds/pages/KdsBoardPage'
 import OrdersSettingsPage from '@/modules/orders/pages/OrdersSettingsPage'
+import KitchenTimesPanelPage from '@/modules/orders/pages/KitchenTimesPanelPage'
 
 export const ordersModule: ModuleDefinition = {
   // Identidad
@@ -37,6 +38,7 @@ export const ordersModule: ModuleDefinition = {
     { path: '',         element: <OrdersFeedPage /> },   // ← el feed de pedidos (lente por pedido)
     { path: 'despacho', element: <DispatchBoardPage /> },
     { path: 'cocina',   element: <KdsBoardPage /> },
+    { path: 'tiempos',  element: <KitchenTimesPanelPage /> },
     { path: 'ajustes',  element: <OrdersSettingsPage /> },
   ],
   // Navegación interna del módulo (ModuleSidebar).
@@ -45,6 +47,7 @@ export const ordersModule: ModuleDefinition = {
       { id: 'orders_feed',     label: 'Pedidos',  icon: ListOrdered,       path: '' },
       { id: 'orders_dispatch', label: 'Despacho', icon: Bike,              path: 'despacho' },
       { id: 'orders_kitchen',  label: 'Cocina',   icon: MonitorPlay,       path: 'cocina' },
+      { id: 'orders_tiempos',  label: 'Tiempos',  icon: Clock,             path: 'tiempos', requiredRole: 'manager' },
       { id: 'orders_settings', label: 'Ajustes',  icon: SlidersHorizontal, path: 'ajustes', requiredRole: 'manager' },
     ],
   },

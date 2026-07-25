@@ -103,8 +103,9 @@ export interface OrderFeedItem {
   has_courier: boolean | null           // ¿hay repartidor asignado?
   rider_lat: number | null              // última posición (no streaming); de momento no se pinta
   rider_lng: number | null
-  // ── Hitos de reparto (para el TIEMPO DE REPARTO del desplegable). ──
-  ready_at: string | null               // "Listo" (KPI cocina); fallback de inicio si no hubo handoff sellado
+  // ── Hitos de tiempo (KPI de cocina + reparto). Todos los devuelve el feed. ──
+  accepted_at: string | null            // autoaceptación (INSERT): arranca el reloj de cocina
+  ready_at: string | null               // "Listo" (fin de cocina); fallback de inicio del reparto si no hubo handoff
   handed_to_courier_at: string | null   // sellado al pasar delivery_state a in_delivery (Catcher casi nunca lo manda)
   delivered_at: string | null           // sellado por trg_sale_seal_delivered al delivery_state 'delivered'/'finish'
   lineas: OrderFeedLine[]
@@ -447,4 +448,127 @@ export async function reprintOrder(
     : await supabase!.rpc('reprint_order', { p_sale_id: saleId, p_doc_type: docType ?? undefined })
   if (error) throw new Error(`Orders · reprint_order: ${error.message}`)
   return Number(data ?? 0)
+}
+
+// ── KPI DE COCINA (chip de tiempo + banner del día) ─────────────────────────
+
+/** Umbrales de tiempo de cocina por local (tabla kitchen_time_config). */
+export interface KitchenThresholds {
+  green_max_minutes: number
+  amber_max_minutes: number
+  ceiling_minutes: number
+  floor_minutes: number
+  enabled: boolean
+}
+
+/** Defaults (= semilla de kitchen_time_config). Reserva del chip mientras no llega el banner. */
+export const DEFAULT_KITCHEN_THRESHOLDS: KitchenThresholds = {
+  green_max_minutes: 15, amber_max_minutes: 25, ceiling_minutes: 30, floor_minutes: 3, enabled: true,
+}
+
+/** Banner del día (RPC kitchen_day_banner / _by_token). Colectivo, del local. */
+export interface KitchenDayBanner {
+  location_id: string
+  objetivo_min: number | null
+  n_medidos: number
+  n_elegibles: number
+  mediana_min: number | null
+  suficiente: boolean          // guarda de muestra mínima: false => "aún sin datos suficientes"
+  bajo_objetivo: boolean | null
+  config: KitchenThresholds | null
+}
+
+export type CookState = 'none' | 'green' | 'amber' | 'red' | 'incident' | 'frozen'
+export interface CookChip { state: CookState; minutes: number | null }
+
+/**
+ * Estado del chip de tiempo de COCINA de una tarjeta. Tiempo de cocina = ready_at − accepted_at.
+ *   - sin accepted_at        → 'none' ("—", nunca 0).
+ *   - ready_at puesto        → 'frozen' con el tiempo final (el mérito queda fijado).
+ *   - cocinando (ready null)  → reloj vivo desde accepted_at, coloreado por umbrales:
+ *       verde ≤ green_max · ámbar ≤ amber_max · rojo > amber_max · INCIDENCIA > ceiling.
+ * `nowMs` lo provee el contenedor (un tick por minuto), no un intervalo por tarjeta.
+ */
+export function cookingChip(order: OrderFeedItem, cfg: KitchenThresholds, nowMs: number): CookChip {
+  if (!order.accepted_at) return { state: 'none', minutes: null }
+  const acc = new Date(order.accepted_at).getTime()
+  if (isNaN(acc)) return { state: 'none', minutes: null }
+
+  if (order.ready_at) {
+    const r = new Date(order.ready_at).getTime()
+    if (isNaN(r) || r < acc) return { state: 'frozen', minutes: null }
+    return { state: 'frozen', minutes: Math.round((r - acc) / 60000) }
+  }
+
+  const m = Math.max(0, Math.round((nowMs - acc) / 60000))
+  let state: CookState
+  if (m > cfg.ceiling_minutes) state = 'incident'
+  else if (m > cfg.amber_max_minutes) state = 'red'
+  else if (m > cfg.green_max_minutes) state = 'amber'
+  else state = 'green'
+  return { state, minutes: m }
+}
+
+// Banner del día para la pantalla de Pedidos. Con token (Estación) → RPC by-token,
+// sin token (sesión) → RPC de sesión. Ambas SECURITY DEFINER (funciona en la tablet).
+export async function getKitchenBanner(
+  locationId: string,
+  token?: string | null,
+): Promise<KitchenDayBanner | null> {
+  requireSupabase()
+  const rpc = supabase!.rpc as unknown as (fn: string, args: Record<string, unknown>)
+    => Promise<{ data: unknown; error: { message: string } | null }>
+  const { data, error } = token
+    ? await rpc('kitchen_day_banner_by_token', { p_device_token: token })
+    : await rpc('kitchen_day_banner', { p_location_id: locationId })
+  if (error) throw new Error(`Cocina · kitchen_day_banner: ${error.message}`)
+  return (data as KitchenDayBanner | null) ?? null
+}
+
+// ── Panel de tiempos de cocina (RPC kitchen_time_stats, server-side, por local) ──
+
+export interface KitchenStatsSummary {
+  n_medidos: number
+  mediana_min: number | null
+  peor_min: number | null
+  pct_en_objetivo: number | null
+  pct_en_verde: number | null
+  pct_sobre_techo: number | null
+}
+export interface KitchenStatsAdoption {
+  elegibles: number
+  con_listo: number
+  pct: number | null
+  representativo: boolean       // >= 80%; si no, el dato NO es representativo
+}
+export interface KitchenStatsHour  { hora: number; n: number; mediana_min: number | null }
+export interface KitchenStatsBrand { brand_id: string | null; brand: string | null; n: number; mediana_min: number | null }
+export interface KitchenStatsWeek  { semana: string; n: number; mediana_min: number | null; pct_en_objetivo: number | null }
+
+export interface KitchenTimeStats {
+  location_id: string
+  from: string
+  to: string
+  config: KitchenThresholds | null
+  summary: KitchenStatsSummary
+  adopcion: KitchenStatsAdoption
+  por_hora: KitchenStatsHour[]
+  por_marca: KitchenStatsBrand[]
+  tendencia_semanal: KitchenStatsWeek[]
+}
+
+/** Panel de tiempos, POR LOCAL (nunca global). Sesión (admin/manager), sin token. */
+export async function getKitchenTimeStats(
+  locationId: string,
+  fromIso: string,
+  toIso: string,
+): Promise<KitchenTimeStats> {
+  requireSupabase()
+  const rpc = supabase!.rpc as unknown as (fn: string, args: Record<string, unknown>)
+    => Promise<{ data: unknown; error: { message: string } | null }>
+  const { data, error } = await rpc('kitchen_time_stats', {
+    p_location_id: locationId, p_from: fromIso, p_to: toIso,
+  })
+  if (error) throw new Error(`Cocina · kitchen_time_stats: ${error.message}`)
+  return data as unknown as KitchenTimeStats
 }
