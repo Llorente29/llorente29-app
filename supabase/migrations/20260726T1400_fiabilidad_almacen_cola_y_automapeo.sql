@@ -376,7 +376,9 @@ begin
     -- Candidatos: artículos vivos de la cuenta cuyo nombre, quitando la MISMA
     -- sigla de marca, es IDÉNTICO. Ni fuzzy, ni prefijos, ni "empieza por":
     -- igualdad exacta tras retirar el marcador de canal.
-    select count(*), min(ri.id), min(ri.name)
+    -- min() no admite uuid: se agrega como texto y se vuelve a uuid. (Corregido
+    -- en vivo por Julio el 26/07; aquí para que el repo sea igual que producción.)
+    select count(*), min(ri.id::text)::uuid, min(ri.name)
       into v_n, v_target, v_tname
       from recipe_item ri
      where ri.account_id = v_row.account_id
