@@ -152,7 +152,7 @@ $$;
 -- reprocesa el histórico (eso descuadra el stock contado y además revienta por
 -- timeout con volumen). El histórico se rehace, si se quiere, con
 -- recost_sales_for_product, que es explícito y tiene dry-run.
-create or replace function public.map_sales_product_to_dish(
+create or replace function public._map_sales_product_to_dish_internal(
   p_account_id     uuid,
   p_product_name   text,
   p_recipe_item_id uuid,
@@ -177,10 +177,6 @@ declare
   v_is_combo  boolean := false;
   v_pend      integer := 0;
 begin
-  if not (public.current_user_is_admin()
-          or public.current_user_is_admin_or_manager_of(p_account_id)) then
-    raise exception 'map_sales_product_to_dish: sin acceso a la cuenta %', p_account_id;
-  end if;
   if p_method not in ('manual','auto_exact') then
     raise exception 'map_sales_product_to_dish: método inválido %', p_method;
   end if;
@@ -304,6 +300,39 @@ begin
 end;
 $$;
 
+comment on function public._map_sales_product_to_dish_internal(uuid, text, uuid, uuid, text, text) is
+  'Motor del casado producto→plato, SIN guard de sesión. NO se concede a authenticated: lo llaman la función pública (que sí comprueba acceso) y el cron.';
+
+-- Cara pública: comprueba acceso y delega. El guard vive aquí, y sólo aquí,
+-- porque el cron corre como `postgres`, que NO es admin de ninguna cuenta
+-- (verificado: current_user_is_admin() = false). Con el guard dentro del motor,
+-- el cron lanzaría excepción en cada producto, el `exception when others` de
+-- auto_map_exact_sales se la tragaría y el trabajo saldría a cero cada 15
+-- minutos, en silencio y para siempre — con el dry-run en verde, además.
+create or replace function public.map_sales_product_to_dish(
+  p_account_id     uuid,
+  p_product_name   text,
+  p_recipe_item_id uuid,
+  p_brand_id       uuid default null,
+  p_actor_name     text default null,
+  p_method         text default 'manual'
+)
+returns table(resultado text, menu_item_id uuid, recipe_item_id uuid, brand_id uuid, lineas_futuras integer)
+language plpgsql
+security definer
+set search_path to 'public'
+as $$
+begin
+  if not (public.current_user_is_admin()
+          or public.current_user_is_admin_or_manager_of(p_account_id)) then
+    raise exception 'map_sales_product_to_dish: sin acceso a la cuenta %', p_account_id;
+  end if;
+  return query
+    select * from public._map_sales_product_to_dish_internal(
+      p_account_id, p_product_name, p_recipe_item_id, p_brand_id, p_actor_name, p_method);
+end;
+$$;
+
 comment on function public.map_sales_product_to_dish(uuid, text, uuid, uuid, text, text) is
   'Casa un producto vendido del TPV a un plato QUE YA EXISTE (apunta el menu_item sellado por matrícula). No crea platos y no reprocesa histórico.';
 
@@ -376,7 +405,9 @@ begin
     -- Un fallo en un producto (combo, sin matrícula, sin marca) no puede parar
     -- al resto de la pasada.
     begin
-      perform public.map_sales_product_to_dish(
+      -- Al INTERNO a propósito: la pública exige sesión de admin y el cron no
+      -- la tiene. Ver el comentario de _map_sales_product_to_dish_internal.
+      perform public._map_sales_product_to_dish_internal(
         v_row.account_id, v_row.sample_name, v_target, null, 'auto (coincidencia exacta)', 'auto_exact');
       product_name := v_row.sample_name; recipe_item_id := v_target; dish_name := v_tname;
       aplicado := true; motivo := null;
@@ -416,10 +447,20 @@ create or replace function public.warehouse_reliability_queue(
   p_days        integer default 7
 )
 returns jsonb
-language sql
+language plpgsql
 security definer
 set search_path to 'public'
 as $$
+begin
+  -- Guard multi-cuenta. Sin esto, un usuario podría pasar el account_id de otro
+  -- cliente y leerle ventas, platos e importes: la RPC es SECURITY DEFINER y
+  -- está concedida a authenticated. Misma fuga que se cerró el 25/07 en
+  -- _kitchen_day_banner_for.
+  if not public.belongs_to_account(p_account_id) then
+    raise exception 'warehouse_reliability_queue: sin acceso a la cuenta %', p_account_id;
+  end if;
+
+  return (
 with rango as (
   select now() - make_interval(days => greatest(p_days, 1)) as desde
 ),
@@ -520,7 +561,9 @@ from (
     from unidas u
     left join fixes f on f.product_norm = u.norm
     left join verificacion v on v.product_norm = u.norm
-) x;
+) x
+  );
+end;
 $$;
 
 comment on function public.warehouse_reliability_queue(uuid, uuid, integer) is
@@ -620,6 +663,9 @@ grant execute on function public.sales_product_norm(text)                       
 grant execute on function public.sales_brand_initials(text)                                  to authenticated;
 grant execute on function public.sales_product_norm_nobrand(text, text)                      to authenticated;
 grant execute on function public.map_sales_product_to_dish(uuid, text, uuid, uuid, text, text) to authenticated;
+-- El motor interno queda fuera del alcance de la sesión: sólo lo invocan la
+-- función pública (con guard) y el cron. Revocado explícitamente por si acaso.
+revoke all on function public._map_sales_product_to_dish_internal(uuid, text, uuid, uuid, text, text) from public, anon, authenticated;
 grant execute on function public.warehouse_reliability_queue(uuid, uuid, integer)            to authenticated;
 grant execute on function public.recost_sales_for_product(uuid, text, integer, boolean)      to authenticated;
 grant execute on function public.auto_map_exact_sales(uuid, integer, boolean)                to authenticated;
@@ -630,8 +676,15 @@ notify pgrst, 'reload schema';
 -- ============================================================================
 -- VERIFICACIÓN
 -- ============================================================================
--- 1) Qué casaría el automático AHORA MISMO, sin tocar nada:
+-- 1) Qué casaría el automático (VISTA PREVIA, no toca nada):
 --    select * from public.auto_map_exact_sales(null, 30, true) order by aplicado desc;
+--
+-- 1b) LA QUE VALE — ejecución REAL. El dry-run retorna antes de casar, así que
+--     sale verde aunque producción no haga nada: hay que comprobar el efecto.
+--    select * from public.auto_map_exact_sales(null, 30, false) order by aplicado desc;
+--    select method, count(*), max(fixed_at)
+--      from public.sales_mapping_fix group by 1;      -- debe haber method='auto_exact'
+--    select jobname, schedule, active from cron.job where jobname='sales-automap-exact';
 --
 -- 2) La cola de Alcalá, 7 días (lo que verá la pantalla):
 --    select jsonb_pretty(public.warehouse_reliability_queue(
