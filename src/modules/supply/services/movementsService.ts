@@ -6,6 +6,13 @@
 //   registerDirectEntry→ entrada directa SIN albarán: suma stock reusando el
 //                        ajuste (fijar conteo = saldo + N, motivo 'direct_receipt').
 // La merma sigue en wasteService (registerWaste); aquí solo se lista en el ledger.
+//
+// BÚSQUEDA EN SERVIDOR (26/07/2026): `search` viaja a la RPC como p_search y se
+// aplica ANTES de contar y de paginar. Antes el texto se filtraba en el
+// navegador sobre las filas ya descargadas, así que buscar "pan hambur" devolvía
+// 1 movimiento de los ~30 que había: sólo uno caía dentro de la página cargada.
+// Regla que deja ese fallo: lo que se cuenta y lo que se lista tienen que salir
+// del MISMO filtro, y ese filtro vive donde están todos los datos.
 
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
 import { registerAdjustment, type AdjustmentResult } from './stockAdjustmentService'
@@ -33,16 +40,32 @@ export interface MovementRow {
   notes: string | null
 }
 
+export interface MovementsPage {
+  /** Resultados del filtro activo, búsqueda INCLUIDA. Es el techo de la paginación. */
+  total: number
+  /** Resultados del mismo filtro SIN la búsqueda. Permite decir "31 de 3287". */
+  totalAll: number
+  /** Unidades que entran y que salen en el resultado (positivas ambas). */
+  sumIn: number
+  sumOut: number
+  /** Abreviaturas de unidad presentes. Si hay más de una, no se suma nada en pantalla. */
+  units: string[]
+  items: MovementRow[]
+}
+
 export async function listMovements(input: {
   accountId: string
   locationId: string
   types?: string[] | null
   from?: string | null
   to?: string | null
+  /** Texto libre sobre el nombre del artículo. Se resuelve en el servidor. */
+  search?: string | null
   limit?: number
   offset?: number
-}): Promise<{ total: number; items: MovementRow[] }> {
+}): Promise<MovementsPage> {
   requireSupabase()
+  const term = (input.search ?? '').trim()
   const { data, error } = await supabase!.rpc('list_stock_movements', {
     p_account: input.accountId,
     p_location: input.locationId,
@@ -51,9 +74,23 @@ export async function listMovements(input: {
     p_to: input.to ?? undefined,
     p_limit: input.limit ?? 200,
     p_offset: input.offset ?? 0,
+    p_search: term.length > 0 ? term : undefined,
   })
-  if (error) throw new Error(`No se pudo cargar el histórico: ${error.message}`)
-  const obj = (data ?? {}) as { total?: unknown; items?: unknown }
+  if (error) {
+    // Si el front llega antes que la migración, la RPC todavía no acepta
+    // p_search. Se avisa en claro en vez de reintentar sin búsqueda: enseñar
+    // resultados incompletos sin decirlo es exactamente el fallo que esto
+    // corrige (buscar "pan hambur" y ver 1 de 31).
+    const falta = /p_search|could not find the function|does not exist/i.test(error.message)
+    if (falta && term.length > 0) {
+      throw new Error('El buscador necesita la migración 20260726T1200 aplicada en la BBDD. Hasta entonces no se puede buscar sin arriesgar resultados incompletos.')
+    }
+    throw new Error(`No se pudo cargar el histórico: ${error.message}`)
+  }
+  const obj = (data ?? {}) as {
+    total?: unknown; total_all?: unknown; sum_in?: unknown; sum_out?: unknown
+    units?: unknown; items?: unknown
+  }
   const items = ((obj.items ?? []) as Row[]).map(r => ({
     id: String(r.id),
     movementType: String(r.movement_type),
@@ -68,7 +105,17 @@ export async function listMovements(input: {
     reference: (r.reference as string | null) ?? null,
     notes: (r.notes as string | null) ?? null,
   }))
-  return { total: Number(obj.total ?? 0), items }
+  const total = Number(obj.total ?? 0)
+  return {
+    total,
+    // RPC antigua (aún sin migrar): no manda total_all → cae al total, que es lo
+    // que esa versión sabía contar. La pantalla no miente por ello.
+    totalAll: Number(obj.total_all ?? total),
+    sumIn: Number(obj.sum_in ?? 0),
+    sumOut: Number(obj.sum_out ?? 0),
+    units: Array.isArray(obj.units) ? (obj.units as unknown[]).map(u => String(u ?? '')).filter(Boolean) : [],
+    items,
+  }
 }
 
 export interface RegisterTransferInput {
