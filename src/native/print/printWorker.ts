@@ -19,6 +19,11 @@
 // RENDER: la BOLSA y la COCINA salen como IMAGEN (canvas→ráster), con el
 // renderer APROBADO portado a ticketImage.ts (idéntico al agente Node / Milanesa
 // House). Las pegatinas siguen por TEXTO por ahora (renderForType/renderDoc).
+//
+// CONFIG DEL PAPEL DESDE BBDD (26/07): claim_print_jobs devuelve, junto a cada
+// job, un `config` con los flags del local (hoy: bag_qr). Lo que el papel enseña
+// se enciende y se apaga con un UPDATE, sin APK nueva. Si un job llega sin
+// `config` (RPC antigua), se asume todo apagado = papel de siempre.
 
 import { Capacitor } from '@capacitor/core';
 import { supabase } from '@/lib/supabase';
@@ -70,6 +75,12 @@ function resolveToken(): string {
   return readStored(TOKEN_KEY) || readStored(ESTACION_TOKEN_KEY);
 }
 
+/** Token de dispositivo guardado ('' si no hay). Lo usan piezas que necesitan
+ *  hablar por token sin login (reporte de versión, ventana de actualización). */
+export function getDeviceToken(): string {
+  return resolveToken();
+}
+
 /** ¿Esta app nativa ya está vinculada como Estación? (token + modo=estacion).
  *  Lo usa el arranque para abrir directo en /estacion en vez del login. Sólo
  *  nativo: en el navegador web nunca secuestra el login. */
@@ -105,9 +116,11 @@ async function tick() {
     if (!Array.isArray(jobs) || jobs.length === 0) return;
 
     for (const job of jobs) {
-      const { job_id, doc_type, payload, printer } = job;
+      const { job_id, doc_type, payload, printer, config } = job;
       const ip = printer?.ip;
       const port = printer?.port || 9100;
+      // Flags del papel gobernados por BBDD. Sin `config` (RPC antigua) → apagado.
+      const bagQr = config?.bag_qr === true;
       try {
         if (!ip) throw new Error(`impresora ${printer?.name} sin IP`);
         const buffers: Uint8Array[] = [];
@@ -117,7 +130,7 @@ async function tick() {
           if (doc_type === 'bag') {
             let fiscal: any = null;
             try { fiscal = await rpc('fiscal_for_print', { p_device_token: deviceToken, p_sale_id: payload.sale_id }); } catch { /* sin fiscal */ }
-            buffers.push(canvasToEscpos(await renderBagImage(order, fiscal || undefined)));
+            buffers.push(canvasToEscpos(await renderBagImage(order, fiscal || undefined, { bagQr })));
           } else if (doc_type === 'kitchen') {
             buffers.push(canvasToEscpos(await renderKitchenImage(order)));
           } else {

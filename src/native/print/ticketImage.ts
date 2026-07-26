@@ -12,9 +12,25 @@
 // Regla estructural: el worker nativo YA NO tiene un render de TEXTO propio para
 // bag/kitchen; usa este módulo. (El agente Node conserva su copia gemela como
 // referencia; convergencia a un módulo compartido = deuda futura declarada.)
+//
+// ── CÓDIGO DE PASE (26/07) ──────────────────────────────────────────────────
+// El número que el repartidor CANTA al llegar sale ARRIBA DEL TODO y al máximo
+// tamaño que permite el papel (80 mm). La regla de qué código es NO vive aquí:
+// se importa de src/modules/orders/lib/passCode.ts, la MISMA que usan la tarjeta
+// de /orders, la previsualización web y el renderer de texto. La causa raíz del
+// bug que esto cierra fue justo tener dos reglas (aquí una, allí otra): a partir
+// de ahora hay UNA. El segundo código baja a la línea fina, para incidencias.
+//
+// ── QR DEL PEDIDO (26/07, APAGADO por defecto) ──────────────────────────────
+// Si el local tiene kitchen_time_config.bag_qr = true, la bolsa lleva además un
+// QR con el sale_id (asociación pedido↔cámara del frente de visión). El flag
+// viaja en el job (claim_print_jobs → job.config.bag_qr): se enciende y se apaga
+// con un UPDATE en BBDD, sin APK nueva. Con el flag en false el papel sale
+// EXACTAMENTE como hoy salvo el código de pase.
 // ---------------------------------------------------------------------------
 
 import QRCode from 'qrcode'
+import { passCode, type PassCode, type PassCodeInput } from '@/modules/orders/lib/passCode'
 import dejaVuRegularUrl from './assets/DejaVuSans.ttf?url'
 import dejaVuBoldUrl from './assets/DejaVuSans-Bold.ttf?url'
 import folvyPieUrl from './assets/folvy_pie.png'
@@ -23,6 +39,12 @@ const W = 576            // 80mm @ 203dpi
 const PAD = 28
 const INK = '#000000'
 const MUT = '#444444'
+
+/** Opciones de render gobernadas desde BBDD (llegan en el job, no en la APK). */
+export interface BagRenderOptions {
+  /** kitchen_time_config.bag_qr — QR con el sale_id en la bolsa. Def. false. */
+  bagQr?: boolean
+}
 
 function fnt(size: number, bold?: boolean) { return `${size}px ${bold ? 'FolvyBold' : 'Folvy'}` }
 function money(n: any) {
@@ -34,19 +56,21 @@ function fmtDate(iso: any) {
   const d = new Date(iso)
   return d.toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
-function pickupCode(order: any) {
-  const short = (order.pos_short_code ?? '').trim()
-  if (short) return short.toUpperCase()
-  const real = (order.platform_order_code ?? '').trim()
-  if (real) return real
-  const tab = order.external_tab_ref ?? order.external_ref ?? ''
-  return tab ? '#' + tab.replace(/-/g, '').slice(-5).toUpperCase() : '—'
+/** CÓDIGO DE PASE — regla única compartida (passCode.ts). Nunca duplicar aquí. */
+function pass(order: PassCodeInput): PassCode {
+  return passCode(order)
 }
-function platformRef(order: any) {
-  const real = (order.platform_order_code ?? '').trim()
-  if (!real) return null
+/** El OTRO código, con etiqueta honesta: el de la plataforma lleva su nombre;
+ *  el corto de Folvy no se disfraza de código del canal. null si no hay. */
+function secondaryField(order: PassCodeInput, pc: PassCode): { label: string; value: string } | null {
+  if (!pc.secondary) return null
   const ch = (order.channel ?? '').trim()
-  return ch ? `${ch} · ${real}` : real
+  const plat = (order.platform_order_code ?? '').trim().toUpperCase()
+  const isPlatform = pc.secondary === plat
+  return {
+    label: (isPlatform && ch) ? `Código ${ch}:` : 'Código interno:',
+    value: pc.secondary,
+  }
 }
 function deliveryLabel(st: any) {
   const t = (st ?? '').toLowerCase()
@@ -115,10 +139,20 @@ async function loadRemoteImage(url: string | null | undefined): Promise<HTMLImag
   } catch { return null }
 }
 
+/** QR de una URL (QR de marca): normaliza a https:// si viene sin esquema. */
 async function qrImage(data: string): Promise<HTMLImageElement | null> {
   try {
     const url = data.startsWith('http') ? data : 'https://' + data
     const dataUrl = await QRCode.toDataURL(url, { margin: 2, scale: 6 })
+    return await loadImageSrc(dataUrl)
+  } catch { return null }
+}
+
+/** QR de texto CRUDO (sale_id): al escanearlo sale exactamente ese texto, sin
+ *  prefijos ni URL — es lo que espera el frente de visión. */
+async function qrImageRaw(data: string): Promise<HTMLImageElement | null> {
+  try {
+    const dataUrl = await QRCode.toDataURL(data, { margin: 2, scale: 6, errorCorrectionLevel: 'M' })
     return await loadImageSrc(dataUrl)
   } catch { return null }
 }
@@ -148,14 +182,16 @@ function autocropBox(img: CanvasImageSource & { width: number; height: number })
   return { sx: Math.max(0, x0 - pad), sy: Math.max(0, y0 - pad), sw: Math.min(img.width, x1 + pad) - Math.max(0, x0 - pad), sh: Math.min(img.height, y1 + pad) - Math.max(0, y0 - pad) }
 }
 
-// ── BOLSA (porte 1:1 del aprobado) ───────────────────────────────────────────
+// ── BOLSA (porte 1:1 del aprobado + código de pase arriba) ───────────────────
 
 /** Bolsa/factura como IMAGEN — idéntica al ticket aprobado (Milanesa House).
- *  Enriquece con logo de marca, pie Folvy y dirección desglosada, como el agente. */
-export async function renderBagImage(order: any, fiscal?: any): Promise<HTMLCanvasElement> {
+ *  Enriquece con logo de marca, pie Folvy y dirección desglosada, como el agente.
+ *  `opts.bagQr` (flag de BBDD) añade el QR con el sale_id. */
+export async function renderBagImage(order: any, fiscal?: any, opts?: BagRenderOptions): Promise<HTMLCanvasElement> {
   await ensureFonts()
   const logoImg = await loadRemoteImage(order.brand_logo_url)
   const folvyImg = await loadFolvyPie()
+  const pc = pass(order)
   const dd = order.delivery_detail || {}
   const addr = {
     address: dd.address || order.delivery_address || null,
@@ -220,6 +256,24 @@ export async function renderBagImage(order: any, fiscal?: any): Promise<HTMLCanv
     }
   }
 
+  // ── CÓDIGO DE PASE: banda negra, ARRIBA DEL TODO, al máximo que quepa ──
+  // `emph` es lo que canta el repartidor (dígitos de Glovo / últimos 4 de Uber):
+  // va enorme. `lead` es el prefijo (la "G"), a la mitad de tamaño: informa sin
+  // competir. El tamaño se autoajusta midiendo el texto real, así que un código
+  // de 12 dígitos entra igual que uno de 3, sin desbordar el papel.
+  passBand(ctx, pc, () => y, (ny) => { y = ny })
+
+  // QR del pedido (sale_id) — sólo si el local lo tiene encendido en BBDD.
+  if (opts?.bagQr && order.sale_id) {
+    const qrImg = await qrImageRaw(String(order.sale_id))
+    if (qrImg) {
+      const qs = 170
+      ctx.drawImage(qrImg, (W - qs) / 2, y, qs, qs)
+      y += qs + 6
+      center('Pedido ' + String(order.sale_id).slice(0, 8), 18, false, 10, MUT)
+    }
+  }
+
   // LOGO (protagonista, sin deformar)
   let logoDrawn = false
   if (logoImg) {
@@ -245,13 +299,9 @@ export async function renderBagImage(order: any, fiscal?: any): Promise<HTMLCanv
   lr('Factura Simplificada', fiscal?.ticketNumber ?? (order.external_tab_ref ?? '—'), 24)
   y += 10
 
-  // Código (banda)
-  band(pickupCode(order), 46)
-
-  // Datos del pedido
-  const ch = (order.channel ?? '').trim()
-  const realCode = (order.platform_order_code ?? '').trim()
-  if (ch && realCode) field('Código ' + ch + ':', realCode)
+  // Datos del pedido — el OTRO código en la línea fina (para incidencias).
+  const sec = secondaryField(order, pc)
+  if (sec) field(sec.label, sec.value)
   field('Método:', deliveryLabel(order.service_type))
   if (order.expected_time) field('Hora programada:', fmtDate(order.expected_time))
   else field('Hora programada:', 'Lo antes posible')
@@ -302,7 +352,7 @@ export async function renderBagImage(order: any, fiscal?: any): Promise<HTMLCanv
   lr('Total:', money(total), 40, true)
   y += 12
   left('Pagos', 22, true)
-  lr((order.payment_method || ch || 'Pago') + ':', money(total), 22)
+  lr((order.payment_method || (order.channel ?? '').trim() || 'Pago') + ':', money(total), 22)
   y += 24
 
   // QR de la marca
@@ -331,6 +381,55 @@ export async function renderBagImage(order: any, fiscal?: any): Promise<HTMLCanv
   return out
 }
 
+// ── Banda del código de pase (compartida bolsa + cocina) ─────────────────────
+
+/** Pinta la banda negra con el código de pase al MAYOR tamaño que cabe en 80 mm.
+ *  `lead` (prefijo) sale a ~55% del tamaño de `emph` (lo cantado). El llamador
+ *  pasa lectores/escritores de `y` porque el motor de ambos tickets es posicional. */
+function passBand(
+  ctx: CanvasRenderingContext2D,
+  pc: PassCode,
+  getY: () => number,
+  setY: (v: number) => void,
+): void {
+  const innerW = (W - PAD + 6) - (PAD - 6) - 28   // ancho útil dentro de la banda
+  const LEAD_RATIO = 0.55
+  const MAX = 92, MIN = 34
+  let size = MAX
+  const widthAt = (s: number) => {
+    ctx.font = fnt(s, true)
+    const ew = ctx.measureText(pc.emph || '').width
+    if (!pc.lead) return { ew, lw: 0, total: ew }
+    ctx.font = fnt(Math.round(s * LEAD_RATIO), true)
+    const lw = ctx.measureText(pc.lead).width
+    return { ew, lw, total: ew + lw + 6 }
+  }
+  while (size > MIN && widthAt(size).total > innerW) size -= 2
+
+  const { ew, lw } = widthAt(size)
+  const y0 = getY()
+  const h = size + 30
+  ctx.fillStyle = INK
+  ctx.fillRect(PAD - 6, y0 - 2, (W - PAD + 6) - (PAD - 6), h + 2)
+
+  // Bloque centrado: [lead pequeño][emph enorme], alineados por la base.
+  const totalW = lw + (lw ? 6 : 0) + ew
+  const x0 = (W - totalW) / 2
+  const baseline = y0 + h - 16
+  ctx.fillStyle = '#ffffff'
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+  if (lw) {
+    ctx.font = fnt(Math.round(size * LEAD_RATIO), true)
+    ctx.fillText(pc.lead, x0, baseline)
+  }
+  ctx.font = fnt(size, true)
+  ctx.fillText(pc.emph || '—', x0 + lw + (lw ? 6 : 0), baseline)
+  ctx.textBaseline = 'top'
+  ctx.fillStyle = INK
+  setY(y0 + h + 14)
+}
+
 // ── COCINA (nueva, mismo motor imagen; layout limpio) ────────────────────────
 
 /** Ticket de cocina como IMAGEN, legible: código grande, sin cabecera "Otros"
@@ -338,6 +437,7 @@ export async function renderBagImage(order: any, fiscal?: any): Promise<HTMLCanv
  *  combo desglosado, alérgenos y nota del cliente resaltados. */
 export async function renderKitchenImage(order: any): Promise<HTMLCanvasElement> {
   await ensureFonts()
+  const pc = pass(order)
   const H = 4000
   const canvas = newCanvas(W, H)
   const ctx = canvas.getContext('2d')!
@@ -417,11 +517,11 @@ export async function renderKitchenImage(order: any): Promise<HTMLCanvasElement>
   // Quita un código de marca al final del nombre (p.ej. " (BB)"): 2-4 mayúsculas.
   const cleanName = (n: string) => (n || '').replace(/\s*\([A-ZÑ]{2,4}\)\s*$/, '').trim()
 
-  // Cabecera (reducida a su papel; el código de recogida sigue grande).
-  band(pickupCode(order), 46)
+  // Cabecera: el MISMO código de pase que la bolsa y la pantalla (regla única).
+  passBand(ctx, pc, () => y, (ny) => { y = ny })
   centerT((order.brand ?? '').toUpperCase(), 26, true)
-  const kref = platformRef(order)
-  if (kref) centerT(kref, 20, false, MUT)
+  const sec = secondaryField(order, pc)
+  if (sec) centerT(sec.label.replace(/:$/, '') + ' ' + sec.value, 20, false, MUT)
   centerT(fmtDate(order.entro_at), 20, false, MUT)
   y += 4
   centerT(deliveryLabel(order.service_type), 24, true)
