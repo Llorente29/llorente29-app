@@ -72,9 +72,14 @@ function rpc(fn: string, args: Record<string, unknown>): Promise<{
   data: unknown
   error: { message?: string; code?: string } | null
 }> {
-  const call = supabase!.rpc as unknown as (
+  // ⚠️ El cast va ANTES del .bind (si no, TS2589) y el .bind es OBLIGATORIO:
+  // supabase-js pierde el `this` si se extrae `rpc` a una variable suelta y
+  // revienta con "Cannot read properties of undefined (reading 'rest')" — la
+  // llamada ni siquiera sale a la red. Ya pasó con el banner del KPI de cocina.
+  const call = (supabase!.rpc as unknown as (
     f: string, a: Record<string, unknown>,
   ) => Promise<{ data: unknown; error: { message?: string; code?: string } | null }>
+  ).bind(supabase!)
   return call(fn, args)
 }
 
