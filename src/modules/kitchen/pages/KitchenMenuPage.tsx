@@ -27,6 +27,7 @@ import { listMenuCategories, reorderMenuCategories, deactivateMenuCategory, upda
 import { getReliability, type SalesReliability } from '@/modules/kitchen/services/salesReliabilityService'
 import CatalogProductDetailPage from '@/modules/kitchen/pages/CatalogProductDetailPage'
 import SalesExceptionsPage from '@/modules/kitchen/pages/SalesExceptionsPage'
+import WarehouseReliabilityPage from '@/modules/kitchen/pages/WarehouseReliabilityPage'
 import NewMenuItemModal from '@/modules/kitchen/components/NewMenuItemModal'
 import AddExistingProductModal from '@/modules/kitchen/components/AddExistingProductModal'
 import NewCategoryModal from '@/modules/kitchen/components/NewCategoryModal'
@@ -62,6 +63,8 @@ export default function KitchenMenuPage() {
   const [search, setSearch] = useState('')
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null)
   const [showExceptions, setShowExceptions] = useState(false)
+  // Cola guiada de fiabilidad del almacen (arreglar paso a paso).
+  const [showReliabilityQueue, setShowReliabilityQueue] = useState(false)
   const [showNewProduct, setShowNewProduct] = useState(false)
   const [showAddExisting, setShowAddExisting] = useState(false)
   const [showNewCombo, setShowNewCombo] = useState(false)
@@ -182,6 +185,13 @@ export default function KitchenMenuPage() {
 
   // EXCEPCIONES del casado (misma mecánica lista+detalle). Al volver, refrescamos
   // la señal por si algo cambió.
+  function handleReliabilityBack() {
+    setShowReliabilityQueue(false)
+    if (activeAccountId) {
+      getReliability(activeAccountId).then(setReliability).catch(() => {})
+    }
+  }
+
   function handleExceptionsBack() {
     setShowExceptions(false)
     if (activeAccountId) {
@@ -415,6 +425,10 @@ export default function KitchenMenuPage() {
     )
   }
 
+  if (showReliabilityQueue && activeAccountId) {
+    return <WarehouseReliabilityPage accountId={activeAccountId} onBack={handleReliabilityBack} />
+  }
+
   if (showExceptions && activeAccountId) {
     return <SalesExceptionsPage accountId={activeAccountId} onBack={handleExceptionsBack} />
   }
@@ -443,6 +457,7 @@ export default function KitchenMenuPage() {
         <ReliabilityBanner
           signal={reliability}
           onOpen={() => setShowExceptions(true)}
+          onFix={() => setShowReliabilityQueue(true)}
         />
       )}
 
@@ -924,7 +939,7 @@ function KpiCard({ label, value, tone }: { label: string; value: string; tone?: 
   )
 }
 
-function ReliabilityBanner({ signal, onOpen }: { signal: SalesReliability; onOpen: () => void }) {
+function ReliabilityBanner({ signal, onOpen, onFix }: { signal: SalesReliability; onOpen: () => void; onFix: () => void }) {
   const dot =
     signal.status === 'verde' ? 'bg-green-500'
     : signal.status === 'ambar' ? 'bg-amber-500'
@@ -968,12 +983,21 @@ function ReliabilityBanner({ signal, onOpen }: { signal: SalesReliability; onOpe
           </div>
         )}
       </div>
-      <button
-        onClick={onOpen}
-        className="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 shrink-0"
-      >
-        Ver excepciones
-      </button>
+      <div className="flex items-center gap-2 shrink-0">
+        {/* Accion principal: la cola guiada que persigue cada fallo hasta corregirlo. */}
+        <button
+          onClick={onFix}
+          className="text-xs font-medium px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700"
+        >
+          Arreglar paso a paso
+        </button>
+        <button
+          onClick={onOpen}
+          className="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50"
+        >
+          Ver excepciones
+        </button>
+      </div>
     </div>
   )
 }
