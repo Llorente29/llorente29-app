@@ -29,8 +29,21 @@ export interface EscposPrinterPlugin {
   scanQr(): Promise<{ value: string | null; cancelled: boolean }>;
   /** versionCode/versionName instalados (auto-update). Sólo app nativa. */
   getVersionCode(): Promise<{ versionCode: number; versionName: string }>;
-  /** Descarga el APK y lanza el instalador de Android (sideload). Sólo app nativa. */
-  installApk(options: { url: string }): Promise<{ ok: boolean }>;
+  /**
+   * Predescarga SILENCIOSA del APK (ventana de actualización segura, 26/07). No
+   * pide permisos ni abre pantallas: puede correr en pleno servicio. Deja el APK
+   * en cache para que installApk sea instantáneo cuando la cocina esté en calma.
+   * Plugin viejo (APK anterior) → el método no existe y la llamada rechaza; el
+   * llamador debe tratarlo como "no disponible", no como error.
+   */
+  downloadApk(options: { url: string }): Promise<{ ok: boolean; path: string; bytes: number }>;
+  /** ¿Hay ya un APK descargado en cache? (instalar sería inmediato). */
+  hasDownloadedApk(): Promise<{ ready: boolean; bytes: number }>;
+  /**
+   * Lanza el instalador de Android (sideload). Si hay APK predescargado lo usa;
+   * si no, lo descarga desde `url` (contrato anterior intacto). Sólo app nativa.
+   */
+  installApk(options: { url?: string }): Promise<{ ok: boolean }>;
   /** Modo inmersivo (oculta barras de sistema). Sólo app nativa. */
   setImmersive(options: { enabled: boolean }): Promise<{ ok: boolean }>;
 }

@@ -45,6 +45,10 @@ import java.util.concurrent.TimeUnit;
 @CapacitorPlugin(name = "EscposPrinter")
 public class EscposPrinterPlugin extends Plugin {
 
+    // Nombre del APK descargado en cache. Fijo: así una predescarga previa se
+    // reutiliza aunque la app se haya reiniciado entre medias.
+    private static final String APK_CACHE_NAME = "folvy.apk";
+
     @PluginMethod
     public void print(PluginCall call) {
         String host = call.getString("host");
@@ -193,14 +197,60 @@ public class EscposPrinterPlugin extends Plugin {
         }
     }
 
-    // Auto-update: descarga el APK indicado y lanza el instalador de Android.
+    // ── VENTANA DE ACTUALIZACIÓN SEGURA (26/07) ─────────────────────────────
+    // Descargar e instalar son ahora DOS pasos:
+    //   downloadApk(url) → baja el APK a cache en segundo plano, SIN tocar la UI
+    //                      ni pedir permisos. Se puede hacer en pleno servicio.
+    //   installApk()     → lanza el instalador. Sólo esto interrumpe, y la app
+    //                      lo llama únicamente cuando la cocina está en calma.
+    // installApk sigue aceptando `url` y descargando si no hay APK predescargado:
+    // el contrato viejo no se rompe.
+
+    // Predescarga silenciosa. No pide permisos ni abre ninguna pantalla: si el
+    // dispositivo no tiene aún "instalar apps desconocidas", da igual — eso se
+    // resuelve en el momento de instalar.
+    @PluginMethod
+    public void downloadApk(PluginCall call) {
+        final String url = call.getString("url");
+        if (url == null) { call.reject("downloadApk: falta url"); return; }
+        final Context ctx = getContext();
+
+        new Thread(() -> {
+            try {
+                File out = downloadTo(ctx, url);
+                JSObject ret = new JSObject();
+                ret.put("ok", true);
+                ret.put("path", out.getAbsolutePath());
+                ret.put("bytes", out.length());
+                call.resolve(ret);
+            } catch (Exception e) {
+                call.reject("downloadApk: " + e.getMessage());
+            }
+        }).start();
+    }
+
+    // ¿Hay un APK ya descargado en cache? (para saber si instalar será instantáneo)
+    @PluginMethod
+    public void hasDownloadedApk(PluginCall call) {
+        try {
+            File f = new File(getContext().getCacheDir(), APK_CACHE_NAME);
+            JSObject ret = new JSObject();
+            ret.put("ready", f.exists() && f.length() > 0);
+            ret.put("bytes", f.exists() ? f.length() : 0);
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("hasDownloadedApk: " + e.getMessage());
+        }
+    }
+
+    // Auto-update: instala el APK. Si ya está predescargado (downloadApk), lanza
+    // el instalador al instante; si no, lo descarga primero (comportamiento previo).
     // En Android 8+ exige el permiso "instalar apps desconocidas"; si falta, abre
     // los ajustes para concederlo. Android muestra siempre un toque de confirmación
     // al instalar (inevitable fuera de Play/MDM).
     @PluginMethod
     public void installApk(PluginCall call) {
         final String url = call.getString("url");
-        if (url == null) { call.reject("installApk: falta url"); return; }
         final Context ctx = getContext();
 
         new Thread(() -> {
@@ -215,20 +265,10 @@ public class EscposPrinterPlugin extends Plugin {
                     return;
                 }
 
-                File out = new File(ctx.getCacheDir(), "folvy.apk");
-                HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
-                conn.setConnectTimeout(20000);
-                conn.setReadTimeout(120000);
-                conn.connect();
-                if (conn.getResponseCode() != 200) {
-                    call.reject("installApk: HTTP " + conn.getResponseCode());
-                    return;
-                }
-                try (InputStream in = conn.getInputStream(); FileOutputStream fos = new FileOutputStream(out)) {
-                    byte[] buf = new byte[8192];
-                    int n;
-                    while ((n = in.read(buf)) != -1) fos.write(buf, 0, n);
-                    fos.flush();
+                File out = new File(ctx.getCacheDir(), APK_CACHE_NAME);
+                if (!out.exists() || out.length() == 0) {
+                    if (url == null) { call.reject("installApk: falta url y no hay APK descargado"); return; }
+                    out = downloadTo(ctx, url);
                 }
 
                 Uri uri = FileProvider.getUriForFile(ctx, ctx.getPackageName() + ".fileprovider", out);
@@ -244,6 +284,32 @@ public class EscposPrinterPlugin extends Plugin {
                 call.reject("installApk: " + e.getMessage());
             }
         }).start();
+    }
+
+    // Descarga el APK a un temporal y sólo al terminar lo renombra al nombre
+    // definitivo: así nunca queda un APK a medias que installApk daría por bueno.
+    private File downloadTo(Context ctx, String url) throws Exception {
+        File tmp = new File(ctx.getCacheDir(), APK_CACHE_NAME + ".part");
+        File out = new File(ctx.getCacheDir(), APK_CACHE_NAME);
+        if (tmp.exists()) tmp.delete();
+
+        HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+        conn.setConnectTimeout(20000);
+        conn.setReadTimeout(120000);
+        conn.connect();
+        if (conn.getResponseCode() != 200) {
+            throw new Exception("HTTP " + conn.getResponseCode());
+        }
+        try (InputStream in = conn.getInputStream(); FileOutputStream fos = new FileOutputStream(tmp)) {
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = in.read(buf)) != -1) fos.write(buf, 0, n);
+            fos.flush();
+        }
+        if (tmp.length() == 0) { tmp.delete(); throw new Exception("descarga vacía"); }
+        if (out.exists()) out.delete();
+        if (!tmp.renameTo(out)) throw new Exception("no se pudo preparar el APK descargado");
+        return out;
     }
 
     // Modo inmersivo (Estación): oculta las barras de sistema. Delega en MainActivity,

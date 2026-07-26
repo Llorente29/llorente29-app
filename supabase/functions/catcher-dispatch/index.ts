@@ -12,6 +12,14 @@
 //
 // PRODUCCIÓN: base URL api.catcher.es (cutover 2026-07-20).
 //
+// ⚠️ VERSIONADO (26/07/2026): este fichero estuvo DESINCRONIZADO de la función
+// viva. En Supabase corría ya el secreto interno leído de Vault (internal_secret)
+// mientras el repo seguía con el secreto escrito a mano; desplegar el repo tal
+// cual habría RETROCEDIDO esa mejora. Aquí quedan fusionadas la versión viva
+// (v37) y el código de pase. Antes de desplegar esta función, comparar siempre
+// con `supabase functions download` / MCP: el repo es la verdad sólo si se
+// mantiene al día.
+//
 // ── FIABILIDAD DE DIRECCIÓN (F2, 21/07) ──────────────────────────────────────
 // El cliente es responsable de su dirección → al rider le mandamos:
 //   TEXTO = lo que escribió el cliente (delivery.address), NUNCA el geocodedAddress
@@ -22,6 +30,12 @@
 //           manda el pin dudoso de Glovo en la discrepancia.
 // Requiere el secreto MAPBOX_TOKEN (mismo pk.* del front). Sin él, el re-geocode se
 // omite y caen las coords de Glovo (no peor que antes); con él, se corrige el ~6%.
+//
+// ── CÓDIGO DE PASE (26/07) ───────────────────────────────────────────────────
+// Al repartidor propio se le manda el código CORTO (pos_short_code, "G315"), no
+// el número de 12 dígitos de la plataforma: es el que puede cantar al llegar y
+// comparar con el que lleva la bolsa impresa. externalId sigue siendo sale.id
+// INTACTO (identidad de reconciliación y de las alarmas de reparto).
 
 import { corsHeaders } from "../_shared/cors.ts";
 import { createClient } from "@supabase/supabase-js";
@@ -123,11 +137,14 @@ Deno.serve(async (req: Request) => {
   const dryRun = body.dry_run === true;
 
   // Frontera para invocación interna desde el trigger de BD.
-  const INTERNAL_SECRET = "fv_catdisp_tnrMMcaI8gALFCitfvzPGsaHgQa3A83w";
-  const gotSecret = req.headers.get("x-catcher-dispatch-secret");
+  // Secreto leído de Vault (fuente única) vía RPC service-role; nunca hardcodeado.
   const isInternal = body.internal === true;
-  if (isInternal && gotSecret !== INTERNAL_SECRET) {
-    return json(401, { ok: false, error: "secreto interno inválido" });
+  if (isInternal) {
+    const gotSecret = req.headers.get("x-catcher-dispatch-secret");
+    const { data: expectedSecret, error: intSecErr } = await sb.rpc("internal_secret", { p_name: "catcher_dispatch_secret" });
+    if (intSecErr || !expectedSecret || gotSecret !== expectedSecret) {
+      return json(401, { ok: false, error: "secreto interno inválido" });
+    }
   }
 
   if (!saleId) return json(400, { ok: false, error: "missing sale_id" });
@@ -135,7 +152,7 @@ Deno.serve(async (req: Request) => {
   // 1. Leer el pedido.
   const { data: sale, error: saleErr } = await sb
     .from("sale")
-    .select("id, account_id, location_id, raw_tab, total, customer_name, customer_phone, platform_order_code, external_ref, carrier_order_id, customer_note, source")
+    .select("id, account_id, location_id, raw_tab, total, customer_name, customer_phone, pos_short_code, platform_order_code, external_ref, carrier_order_id, customer_note, source")
     .eq("id", saleId)
     .single();
   if (saleErr || !sale) return json(404, { ok: false, error: "sale not found" });
@@ -238,7 +255,10 @@ Deno.serve(async (req: Request) => {
     orderSource: sale.source ?? "folvy",
     orderTotalAmount: sale.total != null ? String(Math.round(Number(sale.total) * 100)) : "0",
     orderInstructions: sale.customer_note ?? "",
-    orderCode: sale.platform_order_code ?? sale.external_ref ?? sale.id.slice(0, 8),
+    // CÓDIGO DE PASE: al repartidor propio le mandamos el CORTO (pos_short_code), no
+    // el nº de 12 dígitos de plataforma — es el que puede cantar y comparar. Fallbacks:
+    // nº de plataforma, external_ref, y en último caso los primeros 8 del id.
+    orderCode: sale.pos_short_code ?? sale.platform_order_code ?? sale.external_ref ?? sale.id.slice(0, 8),
     externalId: sale.id,
   };
 

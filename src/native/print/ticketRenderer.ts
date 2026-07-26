@@ -4,21 +4,21 @@
 // bag = factura/bolsa (texto) · kitchen = cocina ENORME · labels = pegatinas.
 
 import type { TicketDoc } from './escpos';
+import { passCode } from '@/modules/orders/lib/passCode';
 
 function ticketNumber(order: any) { return order.external_tab_ref ?? order.external_ref ?? '—'; }
+// CÓDIGO DE PASE (lo que canta el repartidor): Glovo → pos_short_code; Uber →
+// platform_order_code completo; propio/otros → pos_short_code. Lógica única en passCode.ts.
 function pickupCode(order: any) {
-  const short = (order.pos_short_code ?? '').trim();
-  if (short) return short.toUpperCase();
-  const real = (order.platform_order_code ?? '').trim();
-  if (real) return real;
-  const tab = order.external_tab_ref ?? order.external_ref ?? '';
-  return tab ? '#' + tab.replace(/-/g, '').slice(-5).toUpperCase() : '—';
+  return passCode(order).full;
 }
+// Referencia fina = el OTRO código (para incidencias). Con canal si es el nº de plataforma.
 function platformRef(order: any) {
-  const real = (order.platform_order_code ?? '').trim();
-  if (!real) return null;
+  const pc = passCode(order);
+  if (!pc.secondary) return null;
   const ch = (order.channel ?? '').trim();
-  return ch ? `${ch} · ${real}` : real;
+  const plat = (order.platform_order_code ?? '').trim().toUpperCase();
+  return (pc.secondary === plat && ch) ? `${ch} · ${pc.secondary}` : pc.secondary;
 }
 function money(n: any) {
   if (n === null || n === undefined) return '';
@@ -103,8 +103,10 @@ export function renderBagTicket(order: any, fiscal?: any): TicketDoc {
   b.push({ kind: 'invertBanner', text: pickupCode(order), size: 4 });
   b.push({ kind: 'space' });
   const ch = (order.channel ?? '').trim();
-  const realCode = (order.platform_order_code ?? '').trim();
-  if (ch && realCode) b.push({ kind: 'text', text: `Código ${ch}: ${realCode}`, bold: true });
+  // El OTRO código, pequeño debajo (para incidencias/reclamaciones). Para Uber es el
+  // corto; para Glovo/propio es el nº de plataforma con el canal delante.
+  const ref = platformRef(order);
+  if (ref) b.push({ kind: 'text', text: 'Código: ' + ref, bold: true });
   b.push({ kind: 'text', text: 'Método: ' + deliveryLabel(order.service_type) });
   if (order.expected_time) b.push({ kind: 'text', text: 'Hora programada: ' + fmtDate(order.expected_time) });
   if (order.customer_name) b.push({ kind: 'text', text: 'Nombre del cliente: ' + order.customer_name });
