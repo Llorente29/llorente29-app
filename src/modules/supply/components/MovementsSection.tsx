@@ -3,12 +3,29 @@
 // AL1 — Frente ① Movimientos: el libro mayor del almacén.
 // Histórico del ledger (con referencia legible por movimiento) + las tres
 // acciones que lo alimentan: entrada directa, traspaso entre locales y merma.
+//
+// ── BÚSQUEDA EN SERVIDOR + PAGINACIÓN HONESTA (26/07/2026) ──────────────────
+// Esta pantalla llegó a hacer creer que el almacén no registraba los consumos:
+// buscar "pan hambur" devolvía 1 movimiento de los ~30 que había. El texto se
+// filtraba en el navegador sobre las 300 filas ya descargadas, mientras el
+// contador de arriba ("3287 movimientos") venía del servidor. Total correcto,
+// filas incompletas y ninguna señal de que faltaban: la trampa perfecta.
+//
+// Ahora:
+//   · el texto viaja a la RPC (con el tipo y el rango, que ya iban) y se aplica
+//     antes de contar y de paginar;
+//   · la cabecera dice "31 de 3287" cuando hay búsqueda, y las entradas/salidas
+//     de esa búsqueda si todas comparten unidad;
+//   · el pie dice cuántas filas se están viendo de cuántas hay, con "Cargar
+//     más". Nunca se muestra un subconjunto sin decirlo.
 
-import { useEffect, useMemo, useState } from 'react'
-import { Loader2, Plus, ArrowLeftRight, Trash2, RefreshCw, Search, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Loader2, Plus, ArrowLeftRight, Trash2, RefreshCw, Search, X, ChevronDown } from 'lucide-react'
+import { fmtInt } from '@/lib/format'
 import type { SupplyLocation } from '@/modules/supply/services/supplierCatalogService'
 import {
-  listMovements, MOVEMENT_FILTERS, movementLabel, type MovementRow,
+  listMovements, MOVEMENT_FILTERS, movementLabel,
+  type MovementRow, type MovementsPage,
 } from '@/modules/supply/services/movementsService'
 import MovementActionModal, { type MovementKind } from '@/modules/supply/components/MovementActionModal'
 
@@ -31,8 +48,11 @@ function rangeFor(key: RangeKey): { from: string | null; to: string | null } {
   }
 }
 
-// Normaliza para buscar: minúsculas y sin acentos ("limon" encuentra "Limón")
-const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+// Cuántas filas se piden por tirada. Antes se pedían 300 de una vez y ahí
+// terminaba todo lo que el usuario podía llegar a ver.
+const PAGE_SIZE = 100
+// Espera antes de consultar mientras se teclea (la búsqueda ya no es local).
+const SEARCH_DEBOUNCE_MS = 300
 
 const fmtEur = (v: number | null) => v == null ? '—' : new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(v)
 const fmtQty = (v: number) => new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 }).format(v)
@@ -44,6 +64,8 @@ function typeChipClass(type: string): string {
   if (type === 'ajuste' || type === 'apertura' || type === 'recuento') return 'bg-warning-bg text-warning'
   return 'bg-page text-text-secondary'
 }
+
+const EMPTY: MovementsPage = { total: 0, totalAll: 0, sumIn: 0, sumOut: 0, units: [], items: [] }
 
 export default function MovementsSection({
   accountId, locationId, locations, actorId, actorName, onError, onFlash,
@@ -58,42 +80,107 @@ export default function MovementsSection({
 }) {
   const [filterKey, setFilterKey] = useState('all')
   const [rangeKey, setRangeKey] = useState<RangeKey>('30d')
-  const [q, setQ] = useState('')
-  const [data, setData] = useState<{ total: number; items: MovementRow[] }>({ total: 0, items: [] })
+  const [q, setQ] = useState('')            // lo que se está tecleando
+  const [qApplied, setQApplied] = useState('')  // lo que se ha consultado
+  const [page, setPage] = useState<MovementsPage>(EMPTY)
+  const [rows, setRows] = useState<MovementRow[]>([])
   const [loading, setLoading] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [reloadTick, setReloadTick] = useState(0)
   const [modalKind, setModalKind] = useState<MovementKind | null>(null)
 
   const types = useMemo(() => MOVEMENT_FILTERS.find(f => f.key === filterKey)?.types ?? null, [filterKey])
   const range = useMemo(() => rangeFor(rangeKey), [rangeKey])
 
-  // Filtro por artículo sobre las filas ya cargadas (hasta 300 del rango elegido)
-  const shown = useMemo(() => {
-    const term = norm(q.trim())
-    if (!term) return data.items
-    return data.items.filter(m => norm(m.itemName).includes(term))
-  }, [data.items, q])
+  // Identidad de la consulta activa: si cambia, lo que llegue tarde se descarta.
+  const queryKey = useMemo(
+    () => JSON.stringify([locationId, filterKey, range.from, range.to, qApplied, reloadTick]),
+    [locationId, filterKey, range.from, range.to, qApplied, reloadTick],
+  )
+  const queryKeyRef = useRef(queryKey)
+  useEffect(() => { queryKeyRef.current = queryKey }, [queryKey])
 
+  // Teclear no dispara una consulta por letra.
   useEffect(() => {
-    if (!accountId || !locationId) { setData({ total: 0, items: [] }); return }
+    const t = window.setTimeout(() => setQApplied(q.trim()), SEARCH_DEBOUNCE_MS)
+    return () => window.clearTimeout(t)
+  }, [q])
+
+  // Primera página: cualquier cambio de filtro, rango o búsqueda empieza de cero.
+  useEffect(() => {
+    // Sin local elegido no hay nada que pedir; el render ya muestra el aviso.
+    if (!accountId || !locationId) return
     let cancelled = false
     setLoading(true)
-    listMovements({ accountId, locationId, types, from: range.from, to: range.to, limit: 300 })
-      .then(d => { if (!cancelled) setData(d) })
+    listMovements({
+      accountId, locationId, types, from: range.from, to: range.to,
+      search: qApplied, limit: PAGE_SIZE, offset: 0,
+    })
+      .then(d => { if (!cancelled) { setPage(d); setRows(d.items) } })
       .catch(e => { if (!cancelled) onError(e instanceof Error ? e.message : 'Error cargando el histórico.') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [accountId, locationId, types, range.from, range.to, reloadTick]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [accountId, locationId, types, range.from, range.to, qApplied, reloadTick]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function loadMore() {
+    if (!accountId || !locationId || loadingMore) return
+    // Foto del filtro con el que se pidió: si cambia mientras llega la respuesta
+    // (otra pestaña, otro rango, otra búsqueda), se descarta en vez de mezclar
+    // filas de dos consultas distintas.
+    const clave = queryKey
+    setLoadingMore(true)
+    try {
+      const d = await listMovements({
+        accountId, locationId, types, from: range.from, to: range.to,
+        search: qApplied, limit: PAGE_SIZE, offset: rows.length,
+      })
+      if (clave !== queryKeyRef.current) return
+      // Un movimiento nuevo puede haber desplazado la ventana entre dos páginas:
+      // deduplicamos por id para no pintar la misma fila dos veces.
+      setRows(prev => {
+        const vistos = new Set(prev.map(r => r.id))
+        return [...prev, ...d.items.filter(r => !vistos.has(r.id))]
+      })
+      setPage(d)
+    } catch (e) {
+      onError(e instanceof Error ? e.message : 'Error cargando más movimientos.')
+    } finally {
+      setLoadingMore(false)
+    }
+  }
 
   if (!locationId) {
     return <div className="text-sm text-text-secondary p-4 border border-dashed border-border-default rounded-lg">Elige un local para ver sus movimientos.</div>
   }
 
+  const buscando = qApplied.length > 0
+  const hayMas = rows.length < page.total
+  // Sólo se suman cantidades si TODAS comparten unidad (no mezclar kg con ud).
+  const unidad = page.units.length === 1 ? page.units[0] : null
+  const conteo = buscando
+    ? `${fmtInt(page.total)} de ${fmtInt(page.totalAll)} movimientos`
+    : `${fmtInt(page.totalAll)} movimientos · todo lo que entra, sale o se ajusta`
+
   return (
     <div className="space-y-3">
       {/* Barra de acciones */}
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <span className="text-sm text-text-secondary">{data.total} movimientos · todo lo que entra, sale o se ajusta</span>
+        <span className="text-sm text-text-secondary">
+          {conteo}
+          {buscando && (
+            <>
+              <span className="text-text-tertiary"> · «{qApplied}»</span>
+              {unidad && (page.sumIn > 0 || page.sumOut > 0) && (
+                <span className="ml-2 text-xs tabular-nums">
+                  {page.sumIn > 0 && <span className="text-success">+{fmtQty(page.sumIn)}</span>}
+                  {page.sumIn > 0 && page.sumOut > 0 && <span className="text-text-tertiary"> / </span>}
+                  {page.sumOut > 0 && <span className="text-danger">−{fmtQty(page.sumOut)}</span>}
+                  <span className="text-text-tertiary"> {unidad}</span>
+                </span>
+              )}
+            </>
+          )}
+        </span>
         <div className="flex gap-2">
           <button type="button" onClick={() => setModalKind('entry')}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md font-medium bg-accent text-text-on-accent hover:opacity-90 transition-base">
@@ -110,7 +197,7 @@ export default function MovementsSection({
         </div>
       </div>
 
-      {/* Filtros */}
+      {/* Filtros — tipo, texto y rango: los tres se resuelven en el servidor */}
       <div className="flex items-center gap-1.5 flex-wrap">
         {MOVEMENT_FILTERS.map(f => (
           <button key={f.key} type="button" onClick={() => setFilterKey(f.key)}
@@ -143,9 +230,9 @@ export default function MovementsSection({
       {/* Histórico */}
       {loading ? (
         <div className="flex items-center gap-2 text-text-secondary text-sm p-4"><Loader2 size={15} className="animate-spin" /> Cargando histórico…</div>
-      ) : shown.length === 0 ? (
+      ) : rows.length === 0 ? (
         <div className="text-center py-10 text-text-secondary text-sm border border-dashed border-border-default rounded-lg">
-          {q.trim() ? `Sin movimientos de "${q.trim()}" en este rango. Amplía el rango de fechas si buscas algo antiguo.` : 'No hay movimientos en este filtro.'}
+          {buscando ? `Sin movimientos de "${qApplied}" en este rango. Amplía el rango de fechas si buscas algo antiguo.` : 'No hay movimientos en este filtro.'}
         </div>
       ) : (
         <div className="border border-border-default rounded-lg overflow-hidden">
@@ -157,7 +244,7 @@ export default function MovementsSection({
             <span className="w-20 text-right">Coste</span>
             <span className="w-32">Quién / origen</span>
           </div>
-          {shown.map(m => (
+          {rows.map(m => (
             <div key={m.id} className="flex items-center gap-3 px-3 py-2.5 border-t border-border-default first:border-t-0">
               <span className="w-24 text-xs text-text-tertiary">{fmtDate(m.occurredAt)}</span>
               <span className="flex-1 text-sm text-text-primary truncate">{m.itemName}</span>
@@ -171,6 +258,21 @@ export default function MovementsSection({
               <span className="w-32 text-xs text-text-secondary truncate">{m.reference ?? m.createdByName ?? '—'}</span>
             </div>
           ))}
+
+          {/* Pie: cuántas filas se ven de cuántas hay. Si falta lista, se dice. */}
+          <div className="flex items-center justify-between gap-3 px-3 py-2 bg-page border-t border-border-default">
+            <span className="text-[11px] text-text-tertiary">
+              Mostrando {fmtInt(rows.length)} de {fmtInt(page.total)}
+              {buscando ? ' resultados' : ' movimientos'}
+            </span>
+            {hayMas && (
+              <button type="button" onClick={loadMore} disabled={loadingMore}
+                className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 border border-border-default rounded-md text-text-secondary hover:bg-card transition-base disabled:opacity-60">
+                {loadingMore ? <Loader2 size={13} className="animate-spin" /> : <ChevronDown size={13} />}
+                {loadingMore ? 'Cargando…' : `Cargar más (${fmtInt(page.total - rows.length)})`}
+              </button>
+            )}
+          </div>
         </div>
       )}
 
