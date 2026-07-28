@@ -3,15 +3,13 @@
 // Hoja de conteo (capa 1.3). Dos modos según el estado del conteo:
 //   - 'contando': hoja BLIND secuenciada por área. Solo se teclea lo contado;
 //     NO se muestra el saldo del sistema (anti-sesgo). Guardado progresivo.
-//   - 'en_revision': revisión. Ya se ve system_qty, variación, % y € con color;
-//     las líneas fuera de tolerancia piden motivo (reason_code).
-// La aprobación → ajuste en stock es 1.4 (aquí solo se cuenta y diagnostica).
+//   - 'en_revision': revisión. Ya se ve system_qty, variación, % y € con color.
 //
-// T1 (apertura): si el conteo es de APERTURA (count.isOpening), ancla el stock
-// inicial del local. No es una corrección de merma: fija el punto de partida.
-// La UI lo refleja (banner, textos y botón) para que el usuario lo entienda; el
-// backend escribe esos movimientos como 'apertura' y el AvT los excluye de la
-// variación.
+// Clasificador de causas: el sistema PROPONE la causa de cada desviación al
+// entrar en revisión (clasificador local, instantáneo — cruza mermas/
+// recepciones/traspasos/escandallo del periodo). El gestor confirma con un
+// toque, la cambia, o aprueba sin tocar nada: las líneas sin motivo quedan
+// como alerta con la causa propuesta, nunca bloquean la aprobación.
 
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, Loader2, Check, AlertTriangle, Save, ShieldCheck, Flag, Search, X, Calculator, Sparkles, Ban } from 'lucide-react'
@@ -25,9 +23,9 @@ import {
   closeInventoryCount,
   approveInventoryCount,
   voidInventoryCount,
-  proposeCountReasons,
+  classifyCountCauses,
   REASON_CODES,
-  type CountReasonSuggestion,
+  type AvtCauseV2,
   type InventoryCount,
   type InventoryCountLine,
   type InventoryCountSummary,
@@ -56,19 +54,16 @@ export default function InventoryCountSheet({
   const [summary, setSummary] = useState<InventoryCountSummary | null>(null)
   const [savingId, setSavingId] = useState<string | null>(null)
   const [reloadTick, setReloadTick] = useState(0)
-  // Línea cuyo modal de calculadora de formatos está abierto (null = ninguno).
   const [calcLineId, setCalcLineId] = useState<string | null>(null)
   const [approving, setApproving] = useState(false)
   const [voiding, setVoiding] = useState(false)
   const [approved, setApproved] = useState<{ adjustments: number; itemsRecomputed: number } | null>(null)
-  // Inspector IA: sugerencias de motivo por línea (id → sugerencia) + estado.
-  const [suggestions, setSuggestions] = useState<Record<string, CountReasonSuggestion>>({})
-  const [suggesting, setSuggesting] = useState(false)
+  // Clasificador local (V2): sugerencia de causa por línea, instantánea.
+  const [causeV2, setCauseV2] = useState<Map<string, AvtCauseV2>>(new Map())
 
-  // Buscador + filtros (operatividad con muchas líneas).
   const [query, setQuery] = useState('')
   const [quick, setQuick] = useState<'all' | 'uncounted' | 'out' | 'review'>('all')
-  const [familyFilter, setFamilyFilter] = useState<string>('') // '' = todas, '__none__' = sin familia
+  const [familyFilter, setFamilyFilter] = useState<string>('')
 
   const { userProfile, authUserId } = useApp()
   const role = userProfile?.role ?? 'worker'
@@ -82,6 +77,13 @@ export default function InventoryCountSheet({
         const [c, ls] = await Promise.all([getInventoryCount(countId), listCountLines(countId)])
         if (cancelled) return
         setCount(c); setLines(ls)
+        // Clasificador local: al entrar en revisión, propone la causa de cada
+        // línea al instante. Silencioso si falla (el dropdown queda de respaldo).
+        if (c && (c.status === 'en_revision' || c.status === 'aprobado')) {
+          classifyCountCauses(countId, ls, c.isOpening)
+            .then(m => { if (!cancelled) setCauseV2(m) })
+            .catch(() => {})
+        }
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Error cargando el conteo.')
       } finally {
@@ -94,7 +96,6 @@ export default function InventoryCountSheet({
   const isReview = count?.status === 'en_revision' || count?.status === 'aprobado'
   const isOpening = count?.isOpening === true
 
-  // Familias presentes en el conteo (para el filtro).
   const familyOptions = useMemo(() => {
     const m = new Map<string, string>()
     let hasNone = false
@@ -107,7 +108,6 @@ export default function InventoryCountSheet({
     return opts
   }, [lines])
 
-  // Líneas visibles tras buscador + filtros rápidos + familia.
   const visibleLines = useMemo(() => {
     const q = query.trim().toLowerCase()
     return lines.filter(l => {
@@ -121,13 +121,11 @@ export default function InventoryCountSheet({
     })
   }, [lines, query, quick, familyFilter])
 
-  // Valor total (€) de las líneas visibles que tienen coste.
   const visibleValue = useMemo(
     () => visibleLines.reduce((s, l) => s + (l.lineValue ?? 0), 0),
     [visibleLines],
   )
 
-  // Agrupar por área en orden de recorrido (sobre las visibles).
   const grouped = useMemo(() => {
     const groups: { areaId: string | null; areaName: string; lines: InventoryCountLine[] }[] = []
     const byArea = new Map<string, number>()
@@ -159,8 +157,6 @@ export default function InventoryCountSheet({
     }
   }
 
-  // La calculadora de formatos devuelve el total ya en unidad base → lo fijamos
-  // como cantidad contada y lo guardamos (mismo camino que el tecleo manual).
   async function onCalcAccept(line: InventoryCountLine, qtyInBase: number) {
     setLines(prev => prev.map(l => l.id === line.id ? { ...l, countedQty: qtyInBase } : l))
     setCalcLineId(null)
@@ -182,41 +178,6 @@ export default function InventoryCountSheet({
     catch (e) { setError(e instanceof Error ? e.message : 'No se pudo guardar el motivo.') }
   }
 
-  // Líneas fuera de tolerancia (candidatas del inspector IA). En apertura no aplica.
-  const outLines = useMemo(
-    () => isOpening ? [] : lines.filter(l => l.countedQty !== null && l.withinTolerance === false),
-    [lines, isOpening],
-  )
-
-  // Inspector IA: pide motivos para las líneas fuera de tolerancia. NO auto-aplica;
-  // guarda la sugerencia por línea y el responsable la usa con un clic.
-  async function runSuggest() {
-    if (outLines.length === 0 || suggesting) return
-    setSuggesting(true)
-    setError(null)
-    try {
-      const sug = await proposeCountReasons(outLines.map(l => ({
-        id: l.id,
-        itemName: l.itemName,
-        familyName: l.familyName,
-        abcClass: l.abcClass,
-        varianceQty: l.varianceQty,
-        variancePct: l.variancePct,
-        varianceValue: l.varianceValue,
-        unitAbbr: l.unitAbbr,
-      })))
-      setSuggestions(prev => {
-        const next = { ...prev }
-        for (const s of sug) next[s.id] = s
-        return next
-      })
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'No se pudieron sugerir motivos.')
-    } finally {
-      setSuggesting(false)
-    }
-  }
-
   async function handleClose() {
     if (!window.confirm('¿Cerrar el conteo y calcular las diferencias? Después podrás revisarlas.')) return
     setClosing(true); setError(null)
@@ -233,10 +194,8 @@ export default function InventoryCountSheet({
 
   const countedCount = useMemo(() => lines.filter(l => l.countedQty !== null).length, [lines])
 
-  // Líneas fuera de tolerancia sin motivo (bloquean la aprobación).
-  // En una APERTURA no aplica: es el punto de partida del local, no se
-  // compara contra un stock previo, así que la tolerancia no tiene sentido
-  // y nunca debe bloquear la aprobación.
+  // Líneas fuera de tolerancia sin motivo. No bloquean la aprobación: quedan
+  // como alerta con la causa propuesta. Solo se cuentan para el aviso.
   const missingReasons = useMemo(
     () => isOpening
       ? 0
@@ -259,13 +218,12 @@ export default function InventoryCountSheet({
   }
 
   async function handleApprove() {
-    if (missingReasons > 0) {
-      setError(`Hay ${missingReasons} línea(s) fuera de tolerancia sin motivo. Asígnalo antes de aprobar.`)
-      return
-    }
+    const warnSuffix = missingReasons > 0
+      ? `\n\n${missingReasons} línea(s) sin motivo pasarán a alertas con la causa que propone el sistema.`
+      : ''
     const confirmMsg = isOpening
       ? '¿Aprobar el inventario de apertura? Esto fija el stock inicial del local como punto de partida.'
-      : '¿Aprobar el conteo? Esto ajustará el stock real con las diferencias y no se puede deshacer.'
+      : '¿Aprobar el conteo? Esto ajustará el stock real con las diferencias y no se puede deshacer.' + warnSuffix
     if (!window.confirm(confirmMsg)) return
     setApproving(true); setError(null)
     try {
@@ -303,7 +261,7 @@ export default function InventoryCountSheet({
             {isReview
               ? (isOpening
                   ? 'Revisa el stock inicial antes de fijarlo. Al aprobar, queda como punto de partida del local.'
-                  : 'Revisa las diferencias. Las que se salen de tolerancia necesitan un motivo.')
+                  : 'Revisa las diferencias. El sistema propone la causa de cada una — confírmala o ajústala.')
               : `Cuenta lo que ves. No se muestra el dato del sistema. ${countedCount}/${lines.length} contados.`}
           </p>
         </div>
@@ -322,8 +280,8 @@ export default function InventoryCountSheet({
             </button>
           )}
           {isReview && !isApproved && canApprove && (
-            <button type="button" onClick={handleApprove} disabled={approving || missingReasons > 0}
-              title={missingReasons > 0 ? 'Asigna motivo a las líneas fuera de tolerancia' : undefined}
+            <button type="button" onClick={handleApprove} disabled={approving}
+              title={missingReasons > 0 ? 'Hay líneas sin motivo: pasarán a alertas al aprobar' : undefined}
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base">
               {approving ? <Loader2 size={15} className="animate-spin" /> : <ShieldCheck size={15} />}
               {isOpening ? 'Aprobar apertura' : 'Aprobar y ajustar stock'}
@@ -355,7 +313,6 @@ export default function InventoryCountSheet({
         </div>
       )}
 
-      {/* Buscador + filtros + valor (operatividad) */}
       {lines.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center gap-2 flex-wrap">
@@ -402,24 +359,6 @@ export default function InventoryCountSheet({
         </div>
       )}
 
-      {isReview && !isOpening && outLines.length > 0 && (
-        <div className="flex items-center justify-between gap-2 flex-wrap p-2.5 rounded-md bg-accent-bg/40 border border-border-default">
-          <div className="flex items-center gap-1.5 text-xs text-text-secondary">
-            <Sparkles size={14} className="text-accent flex-shrink-0" />
-            <span>{outLines.length} línea(s) fuera de tolerancia. La IA puede proponerte el motivo de cada una — tú decides.</span>
-          </div>
-          <button
-            type="button"
-            onClick={runSuggest}
-            disabled={suggesting}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-md font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 transition-base"
-          >
-            {suggesting ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
-            {suggesting ? 'Pensando…' : 'Sugerir motivos con IA'}
-          </button>
-        </div>
-      )}
-
       {lines.length === 0 ? (
         <div className="text-center py-10 text-text-secondary text-sm border border-dashed border-border-default rounded-lg">
           Este conteo no tiene líneas. Genera la hoja desde la lista de conteos.
@@ -442,12 +381,13 @@ export default function InventoryCountSheet({
                     <th className="text-right font-medium px-3 py-1.5">Valor</th>
                     {isReview && !isOpening && <th className="text-right font-medium px-3 py-1.5">Variación</th>}
                     {isReview && <th className="text-right font-medium px-3 py-1.5">€</th>}
-                    {isReview && !isOpening && <th className="text-left font-medium px-3 py-1.5">Motivo</th>}
+                    {isReview && !isOpening && <th className="text-left font-medium px-3 py-1.5">Causa</th>}
                   </tr>
                 </thead>
                 <tbody>
                   {g.lines.map(l => {
                     const out = isReview && !isOpening && l.withinTolerance === false
+                    const v2 = causeV2.get(l.id)
                     return (
                       <tr key={l.id} className={`border-t border-border-default ${out ? 'bg-warning-bg/40' : ''}`}>
                         <td className="px-3 py-2 text-text-primary">
@@ -472,7 +412,7 @@ export default function InventoryCountSheet({
                               <button
                                 type="button"
                                 onClick={() => setCalcLineId(l.id)}
-                                title="Calculadora de formatos (cuenta por cajas y suma solo)"
+                                title="Calculadora de formatos"
                                 aria-label="Abrir calculadora de formatos"
                                 className="p-1 rounded text-text-tertiary hover:text-accent hover:bg-accent-bg transition-base"
                               >
@@ -499,32 +439,37 @@ export default function InventoryCountSheet({
                           </td>
                         )}
                         {isReview && !isOpening && (
-                          <td className="px-3 py-2">
+                          <td className="px-3 py-2 min-w-[240px]">
                             {out ? (
-                              <div className="space-y-1">
+                              l.reasonCode ? (
+                                <span className="inline-flex items-center gap-1 text-xs text-success">
+                                  <Check size={12} /> {REASON_CODES.find(rc => rc.value === l.reasonCode)?.label ?? l.reasonCode}
+                                </span>
+                              ) : v2 ? (
+                                <div className="rounded-md border border-accent/20 bg-accent-bg/40 px-2.5 py-1.5 space-y-1">
+                                  <div className="text-[12px] text-text-primary">
+                                    <span className="inline-flex items-center gap-1"><Sparkles size={11} className="text-accent" /> El sistema cree: <b>{v2.label}</b></span>
+                                  </div>
+                                  <p className="text-[11px] text-text-secondary leading-snug">{v2.evidence}</p>
+                                  <div className="flex items-center gap-2 pt-0.5">
+                                    <button type="button" onClick={() => onReasonChange(l, v2.reasonCode)}
+                                      className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded bg-accent text-text-on-accent font-medium">
+                                      <Check size={11} /> Es esto
+                                    </button>
+                                    <select value="" onChange={e => { if (e.target.value) onReasonChange(l, e.target.value) }}
+                                      className="px-1.5 py-0.5 text-[11px] border border-border-default rounded bg-card text-text-secondary">
+                                      <option value="">Otra…</option>
+                                      {REASON_CODES.map(rc => <option key={rc.value} value={rc.value}>{rc.label}</option>)}
+                                    </select>
+                                  </div>
+                                </div>
+                              ) : (
                                 <select value={l.reasonCode ?? ''} onChange={e => onReasonChange(l, e.target.value)}
                                   className="px-2 py-1 text-xs border border-border-default rounded bg-card text-text-primary">
                                   <option value="">— Motivo —</option>
                                   {REASON_CODES.map(rc => <option key={rc.value} value={rc.value}>{rc.label}</option>)}
                                 </select>
-                                {suggestions[l.id] && !l.reasonCode && (
-                                  <div className="space-y-0.5 max-w-[220px]">
-                                    <div className={`text-[11px] flex items-center gap-1 ${suggestions[l.id].confidence >= 0.6 ? 'text-accent' : 'text-text-tertiary'}`}>
-                                      <Sparkles size={11} className="flex-shrink-0" />
-                                      <span>
-                                        {suggestions[l.id].confidence >= 0.6 ? 'IA: ' : 'IA (quizá): '}
-                                        <span className="font-medium">{REASON_CODES.find(rc => rc.value === suggestions[l.id].reasonCode)?.label ?? suggestions[l.id].reasonCode}</span>
-                                        {' · '}{Math.round(suggestions[l.id].confidence * 100)}%
-                                      </span>
-                                      <button type="button" onClick={() => onReasonChange(l, suggestions[l.id].reasonCode)}
-                                        className="underline hover:text-accent ml-1">usar</button>
-                                    </div>
-                                    {suggestions[l.id].explanation && (
-                                      <p className="text-[10px] text-text-tertiary leading-snug">{suggestions[l.id].explanation}</p>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
+                              )
                             ) : l.countedQty === null ? (
                               <span className="text-xs text-text-tertiary">sin contar</span>
                             ) : (
@@ -563,19 +508,10 @@ export default function InventoryCountSheet({
                 ? 'Al aprobar, este conteo fija el stock inicial del local. A partir de aquí se medirán las variaciones.'
                 : 'Apertura en revisión. La aprobación que fija el stock inicial la hace un responsable.')
             : missingReasons > 0
-              ? `Faltan ${missingReasons} motivo(s) en líneas fuera de tolerancia para poder aprobar.`
+              ? `${missingReasons} línea(s) sin motivo pasarán a alertas con la causa propuesta al aprobar. Puedes confirmar las causas arriba o aprobar ya.`
               : canApprove
                 ? 'Al aprobar, las diferencias se escriben como ajuste y corrigen el stock real.'
                 : 'Conteo en revisión. La aprobación que ajusta el stock la hace un responsable.'}
-        </p>
-      )}
-
-      {isReview && !isOpening && !isApproved && missingReasons > 0 && (
-        <p className="text-[11px] text-text-tertiary flex items-start gap-1.5 max-w-prose">
-          <Sparkles size={12} className="mt-0.5 flex-shrink-0 text-accent" />
-          <span>
-            Lo que apruebes sin motivo se corrige en el stock pero queda como <span className="font-medium">merma fantasma</span> (variación sin explicar) → infla tu food cost y no aprendes de dónde se va el producto. Asigna un motivo a cada línea fuera de tolerancia; la IA puede proponértelo.
-          </span>
         </p>
       )}
 
