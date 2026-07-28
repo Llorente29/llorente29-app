@@ -6,10 +6,18 @@
 // no ve el stock del sistema, ni variación, ni %, ni € (eso es del gestor). El
 // conteo lo cierra y aprueba el gestor en su pantalla; aquí no hay "aprobar".
 //
+// UNIDAD DE MEDIDA: el trabajador cuenta en SU unidad (caja, bolsa, paquete —
+// la que le resulte cómoda), no en la unidad base del sistema. Cada opción
+// muestra nombre + contenido ("Bolsa · 5 kg") para distinguir formatos con el
+// mismo nombre. El sistema convierte a base internamente, y la preferencia se
+// recuerda por artículo y persona. "Cuentas en tu unidad, el sistema piensa en
+// la suya."
+//
 // Aviso de variación (paso 3): antes de avanzar, el SERVIDOR compara lo tecleado
-// contra el stock esperado sin enseñarlo (blind) y devuelve solo un veredicto;
-// si se sale de lo normal (un cero de más/menos), se le pregunta con suavidad
-// si quiere volver a contar. Caza el error de dedo sin frustrar.
+// (ya convertido a base) contra el stock esperado sin enseñarlo (blind) y
+// devuelve solo un veredicto; si se sale de lo normal (un cero de más/menos),
+// se le pregunta con suavidad si quiere volver a contar. Caza el error de dedo
+// sin frustrar.
 
 import { useEffect, useState } from 'react'
 import { ArrowLeft, AlertTriangle, Check, Loader2, Boxes } from 'lucide-react'
@@ -22,6 +30,10 @@ import {
   type DailyQueueLine,
 } from '../../modules/supply/services/autoinventoryService'
 import { saveCountedQty } from '../../modules/supply/services/inventoryCountService'
+import { listFormatsByItem } from '../../modules/kitchen/services/purchaseFormatService'
+import type { PurchaseFormat } from '../../types/kitchen'
+import { getUnitPref, setUnitPref } from '../../modules/supply/services/unitPrefService'
+import { useApp } from '../../context/AppContext'
 
 interface Props {
   employee: Employee
@@ -30,17 +42,27 @@ interface Props {
 
 type Phase = 'loading' | 'intro' | 'counting' | 'warn' | 'done' | 'empty' | 'error'
 
+// Unidad de conteo elegida: la base del sistema o un formato de compra.
+type UnitSel = { kind: 'base' } | { kind: 'format'; format: PurchaseFormat }
+
+const nf1 = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 })
+
 export default function MiAutoinventario({ employee, onBack }: Props) {
+  const { authUserId } = useApp()
   const [phase, setPhase] = useState<Phase>('loading')
   const [total, setTotal] = useState(0)        // artículos asignados hoy (8)
   const [doneBefore, setDoneBefore] = useState(0) // ya contados al entrar (reanudar)
   const [queue, setQueue] = useState<DailyQueueLine[]>([]) // los que faltan por contar
   const [idx, setIdx] = useState(0)            // índice dentro de queue
-  const [value, setValue] = useState('')       // lo que teclea (texto)
+  const [value, setValue] = useState('')       // lo que teclea (texto), en SU unidad
   const [saving, setSaving] = useState(false)
   const [warnKind, setWarnKind] = useState<'low' | 'high'>('low')
   const [errMsg, setErrMsg] = useState('')
   const [countId, setCountId] = useState<string | null>(null)
+
+  // Unidad de medida por artículo: formatos disponibles + la elegida.
+  const [formats, setFormats] = useState<PurchaseFormat[]>([])
+  const [unit, setUnit] = useState<UnitSel>({ kind: 'base' })
 
   useEffect(() => {
     let cancel = false
@@ -78,20 +100,69 @@ export default function MiAutoinventario({ employee, onBack }: Props) {
   const stepNumber = doneBefore + idx + 1 // "artículo X de N"
   const progressPct = total > 0 ? Math.round(((doneBefore + idx) / total) * 100) : 0
 
+  // Carga los formatos del artículo actual y resuelve la unidad inicial:
+  // preferencia guardada > formato de mayor contenido > base.
+  useEffect(() => {
+    let cancel = false
+    async function loadUnit() {
+      if (!current) return
+      const fmts = await listFormatsByItem(current.recipeItemId)
+        .then(fs => fs.filter(f => f.qtyInBase > 1))
+        .catch(() => [] as PurchaseFormat[])
+      if (cancel) return
+      setFormats(fmts)
+
+      let sel: UnitSel = { kind: 'base' }
+      if (authUserId) {
+        const pref = await getUnitPref(authUserId, current.recipeItemId).catch(() => null)
+        if (cancel) return
+        if (pref === 'base') sel = { kind: 'base' }
+        else if (pref) {
+          const f = fmts.find(x => x.id === pref)
+          if (f) sel = { kind: 'format', format: f }
+        }
+      }
+      // Sin preferencia: arranca en el formato de mayor contenido (como cuenta el cocinero).
+      if (sel.kind === 'base' && fmts.length > 0) {
+        const ref = fmts.reduce((a, b) => (b.qtyInBase > a.qtyInBase ? b : a))
+        sel = { kind: 'format', format: ref }
+      }
+      if (!cancel) setUnit(sel)
+    }
+    void loadUnit()
+    return () => { cancel = true }
+  }, [current?.recipeItemId, authUserId]) // eslint-disable-line react-hooks/exhaustive-deps
+
   function parseValue(): number | null {
     const n = Number(value.replace(',', '.'))
     return Number.isFinite(n) && n >= 0 ? n : null
   }
 
-  // Guarda lo contado y comprueba la variación. Si se sale de lo normal → aviso.
+  // Lo tecleado (en SU unidad) → unidad base del sistema.
+  function toBase(n: number, u: UnitSel): number {
+    return u.kind === 'format' ? n * u.format.qtyInBase : n
+  }
+
+  // Cambia la unidad y la recuerda para la próxima vez (por usuario + artículo).
+  function onUnitChange(u: UnitSel) {
+    setUnit(u)
+    if (authUserId && current) {
+      const formatId = u.kind === 'format' ? u.format.id : null
+      void setUnitPref(authUserId, current.recipeItemId, formatId).catch(() => {})
+    }
+  }
+
+  // Guarda lo contado (convertido a base) y comprueba la variación. Si se sale
+  // de lo normal → aviso.
   async function onNext() {
     if (!current) return
     const num = parseValue()
     if (num == null) return
+    const baseQty = toBase(num, unit)
     setSaving(true)
     try {
-      await saveCountedQty(current.lineId, num)
-      const verdict = await checkCountVariance(current.lineId, num)
+      await saveCountedQty(current.lineId, baseQty)
+      const verdict = await checkCountVariance(current.lineId, baseQty)
       setSaving(false)
       if (verdict === 'low' || verdict === 'high') {
         setWarnKind(verdict)
@@ -198,7 +269,9 @@ export default function MiAutoinventario({ employee, onBack }: Props) {
             <div className="text-xs text-accent/80 mt-1">≈ {Math.max(1, Math.round(queue.length * 0.4))} minutos</div>
           </div>
 
-          <p className="text-xs text-text-secondary text-center mt-4">Te lo pido de uno en uno</p>
+          <p className="text-xs text-text-secondary text-center mt-4">
+            Te lo pido de uno en uno. Cuentas en tu unidad (caja, bolsa…), yo me encargo del resto.
+          </p>
         </div>
         <div className="px-5 pb-8">
           <button
@@ -229,7 +302,7 @@ export default function MiAutoinventario({ employee, onBack }: Props) {
           <p className="text-sm text-text-secondary mt-3 max-w-xs leading-relaxed">
             Has puesto{' '}
             <b className="text-text-primary font-semibold">
-              {value} {current?.baseUnit ?? ''}
+              {value} {unitLabel(unit, current?.baseUnit)}
             </b>{' '}
             de {current?.name}. ¿Lo cuentas otra vez para asegurar?
           </p>
@@ -285,6 +358,8 @@ export default function MiAutoinventario({ employee, onBack }: Props) {
 
   // phase === 'counting'
   const canNext = parseValue() != null
+  const n = parseValue()
+  const baseEq = n != null && unit.kind === 'format' ? toBase(n, unit) : null
   return (
     <div className="min-h-screen bg-page flex flex-col">
       <Header onBack={onBack} title="Conteo de hoy" />
@@ -298,34 +373,52 @@ export default function MiAutoinventario({ employee, onBack }: Props) {
         </div>
 
         {/* artículo */}
-        <div className="mt-8 flex flex-col items-center text-center">
-          <div className="w-20 h-20 rounded-2xl bg-accent-bg flex items-center justify-center">
-            <Boxes size={38} className="text-accent" />
+        <div className="mt-6 flex flex-col items-center text-center">
+          <div className="w-16 h-16 rounded-2xl bg-accent-bg flex items-center justify-center">
+            <Boxes size={32} className="text-accent" />
           </div>
-          <p className="font-display text-2xl text-text-primary mt-4">{current?.name}</p>
-          <p className="text-sm text-text-secondary mt-1">
-            ¿Cuántos <b className="text-text-primary font-semibold">{unitWord(current?.baseUnit)}</b> hay?
-          </p>
+          <p className="font-display text-2xl text-text-primary mt-3">{current?.name}</p>
+          <p className="text-sm text-text-secondary mt-1">¿Cuánto hay?</p>
         </div>
 
-        {/* entrada numérica grande */}
-        <div className="mt-6">
-          <div className="relative">
-            <input
-              type="number"
-              inputMode="decimal"
-              autoFocus
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              placeholder="0"
-              className="w-full text-center font-display text-4xl py-5 rounded-2xl border-2 border-accent/40 focus:border-accent outline-none bg-card text-text-primary"
-            />
-            {current?.baseUnit && (
-              <span className="absolute right-5 top-1/2 -translate-y-1/2 text-lg text-text-secondary">
-                {current.baseUnit}
-              </span>
-            )}
+        {/* entrada numérica grande + unidad */}
+        <div className="mt-5">
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <input
+                type="number"
+                inputMode="decimal"
+                autoFocus
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                placeholder="0"
+                className="w-full text-center font-display text-4xl py-5 rounded-2xl border-2 border-accent/40 focus:border-accent outline-none bg-card text-text-primary"
+              />
+            </div>
           </div>
+
+          {/* selector de unidad: chips con nombre + contenido */}
+          {formats.length > 0 ? (
+            <div className="mt-3">
+              <UnitPicker
+                unit={unit}
+                formats={formats}
+                baseUnit={current?.baseUnit ?? null}
+                onChange={onUnitChange}
+              />
+            </div>
+          ) : (
+            current?.baseUnit && (
+              <p className="text-center text-sm text-text-secondary mt-3">{unitWord(current.baseUnit)}</p>
+            )
+          )}
+
+          {/* equivalencia viva a base (red de seguridad, solo si hay formato) */}
+          {baseEq != null && (
+            <p className="text-center text-xs text-text-tertiary mt-2">
+              ≈ {fmtQty(baseEq, current?.baseUnit)}
+            </p>
+          )}
         </div>
       </div>
 
@@ -339,6 +432,54 @@ export default function MiAutoinventario({ employee, onBack }: Props) {
           {stepNumber >= total ? 'Terminar' : 'Siguiente'}
         </button>
       </div>
+    </div>
+  )
+}
+
+// ─── Selector de unidad ───
+// Chips con los formatos de compra + la unidad base. Cada chip muestra el
+// nombre Y el contenido ("Bolsa · 5 kg") para que el trabajador distinga dos
+// formatos con el mismo nombre. La elección se recuerda (onUnitChange).
+function UnitPicker({
+  unit, formats, baseUnit, onChange,
+}: {
+  unit: UnitSel
+  formats: PurchaseFormat[]
+  baseUnit: string | null
+  onChange: (u: UnitSel) => void
+}) {
+  const isActive = (f: PurchaseFormat) => unit.kind === 'format' && unit.format.id === f.id
+  const baseActive = unit.kind === 'base'
+  return (
+    <div className="flex flex-wrap justify-center gap-2">
+      {formats.map(f => (
+        <button
+          key={f.id}
+          type="button"
+          onClick={() => onChange({ kind: 'format', format: f })}
+          className={`px-4 py-2.5 rounded-xl border text-sm font-medium transition-base active:scale-95 ${
+            isActive(f)
+              ? 'bg-accent text-white border-accent'
+              : 'bg-card text-text-secondary border-border-default'
+          }`}
+        >
+          {f.name}
+          <span className={isActive(f) ? 'text-white/75' : 'text-text-tertiary'}>
+            {' '}· {fmtQty(f.qtyInBase, baseUnit)}
+          </span>
+        </button>
+      ))}
+      <button
+        type="button"
+        onClick={() => onChange({ kind: 'base' })}
+        className={`px-4 py-2.5 rounded-xl border text-sm font-medium transition-base active:scale-95 ${
+          baseActive
+            ? 'bg-accent text-white border-accent'
+            : 'bg-card text-text-secondary border-border-default'
+        }`}
+      >
+        {baseUnit ?? 'base'}
+      </button>
     </div>
   )
 }
@@ -368,6 +509,20 @@ function Centered({ children }: { children: React.ReactNode }) {
       {children}
     </div>
   )
+}
+
+// Etiqueta de la unidad elegida (para el aviso de variación).
+function unitLabel(unit: UnitSel, baseAbbr: string | null | undefined): string {
+  if (unit.kind === 'format') return unit.format.name
+  return unitWord(baseAbbr)
+}
+
+// "1000 g" se muestra como "1 kg" para que el contenido se lea de un vistazo.
+function fmtQty(v: number, unit: string | null | undefined): string {
+  const u = (unit ?? '').toLowerCase()
+  if (u === 'g' && Math.abs(v) >= 1000) return `${nf1.format(v / 1000)} kg`
+  if (u === 'ml' && Math.abs(v) >= 1000) return `${nf1.format(v / 1000)} l`
+  return `${nf1.format(v)}${unit ? ` ${unit}` : ''}`
 }
 
 // "gramos" / "mililitros" / "unidades" en lenguaje llano (con fallback al abreviado).
