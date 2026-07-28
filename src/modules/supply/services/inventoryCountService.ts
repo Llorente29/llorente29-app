@@ -267,13 +267,26 @@ export async function closeInventoryCount(countId: string): Promise<InventoryCou
   }
 }
 
-/** Anula un conteo (no se borra; queda como anulado). */
-export async function voidInventoryCount(countId: string): Promise<void> {
+/** Anula un conteo. Solo desde estados editables: nunca un aprobado (eso
+ *  dejaría los movimientos de stock aplicados con su documento origen
+ *  anulado — corrupción contable silenciosa). Lanza error si no procede. */
+export async function voidInventoryCount(
+  countId: string,
+  input?: { voidedBy?: string | null; voidedByName?: string | null; reason?: string | null },
+): Promise<void> {
   requireSupabase()
-  const { error } = await from('inventory_count')
-    .update({ status: 'anulado', updated_at: new Date().toISOString() })
+  const { data, error } = await from('inventory_count')
+    .update({
+      status: 'anulado',
+      updated_at: new Date().toISOString(),
+    })
     .eq('id', countId)
-  if (error) throw new Error(`No se pudo anular: ${error.message}`)
+    .in('status', ['abierto', 'contando', 'en_revision'])  // nunca un aprobado
+    .select('id')
+  if (error) throw new Error(`No se pudo anular el conteo: ${error.message}`)
+  if (!data || data.length === 0) {
+    throw new Error('El conteo ya fue aprobado o anulado y no se puede anular.')
+  }
 }
 
 export interface ApplyCountResult {
