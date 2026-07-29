@@ -14,7 +14,7 @@
 // Patrón: useApp() + useActiveAccount() + useIsMobile(), igual que KitchenItemsPage.
 
 import { useEffect, useMemo, useState } from 'react'
-import { Search, ChevronDown, ChevronRight, CircleDashed, CheckCircle2, AlertTriangle, UtensilsCrossed, Package, Link2Off, Plus, FolderPlus, ArrowRightLeft, X, Undo2, Info, ArrowUp, ArrowDown, Trash2, UploadCloud, Loader2, Sparkles, PackagePlus } from 'lucide-react'
+import { Search, ChevronDown, ChevronRight, CircleDashed, CheckCircle2, AlertTriangle, UtensilsCrossed, Package, Link2Off, Link2, Plus, FolderPlus, ArrowRightLeft, X, Undo2, Info, ArrowUp, ArrowDown, Trash2, UploadCloud, Loader2, Sparkles, PackagePlus } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import {
   listBrandsWithCatalog,
@@ -34,6 +34,7 @@ import NewCategoryModal from '@/modules/kitchen/components/NewCategoryModal'
 import type { MenuItemEconomics } from '@/types/kitchen'
 import { publishBrandCatalog, type PublishResult } from '@/modules/kitchen/services/catalogPublishService'
 import PublishStatusChip from '@/modules/kitchen/components/PublishStatusChip'
+import { connectBrandToDelivery, type ConnectResult } from '@/modules/kitchen/services/hubriseBrandConnectService'
 
 function formatEur(value: number | null): string {
   if (value === null || value === undefined) return '—'
@@ -80,6 +81,8 @@ export default function KitchenMenuPage() {
   const [publishing, setPublishing] = useState(false)
   const [publishResult, setPublishResult] = useState<PublishResult | null>(null)
   const [publishStatusKey, setPublishStatusKey] = useState(0)
+  const [connecting, setConnecting] = useState(false)
+  const [connectResult, setConnectResult] = useState<ConnectResult | null>(null)
 
   // Cargar marcas con catálogo
   useEffect(() => {
@@ -239,6 +242,24 @@ export default function KitchenMenuPage() {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setPublishing(false)
+    }
+  }
+
+  // ── Conectar la marca a delivery (Fase 2, self-service) ───────────────────
+  // Crea/reusa el catálogo HubRise por local (sin bridge) y publica la carta.
+  async function handleConnect() {
+    if (!selectedBrand || connecting) return
+    setConnecting(true)
+    setConnectResult(null)
+    setError(null)
+    try {
+      const res = await connectBrandToDelivery(selectedBrand.id)
+      setConnectResult(res)
+      setPublishStatusKey((k) => k + 1)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setConnecting(false)
     }
   }
 
@@ -507,6 +528,17 @@ export default function KitchenMenuPage() {
             </button>
             {selectedBrand.catalogSource === 'folvy' && activeAccountId && (
               <PublishStatusChip accountId={activeAccountId} brandId={selectedBrand.id} refreshKey={publishStatusKey} />
+            )}
+            {selectedBrand.catalogSource === 'folvy' && (
+              <button
+                onClick={handleConnect}
+                disabled={connecting}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg font-medium border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                title="Crear/reusar el catálogo de esta marca en HubRise y publicar la carta (sin bridge)"
+              >
+                {connecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link2 className="w-4 h-4" />}
+                {connecting ? 'Conectando…' : 'Conectar a delivery'}
+              </button>
             )}
             {selectedBrand.catalogSource === 'folvy' && (
               <button
@@ -882,6 +914,68 @@ export default function KitchenMenuPage() {
             </div>
             <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-gray-200 bg-gray-50 rounded-b-xl">
               <button onClick={() => setPublishResult(null)}
+                className="px-3.5 py-1.5 text-sm rounded-lg font-medium bg-accent text-text-on-accent hover:opacity-90">Entendido</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {connectResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setConnectResult(null)}>
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-lg border border-gray-200" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-3.5 border-b border-gray-200 flex items-center gap-2">
+              {connectResult.ok
+                ? <CheckCircle2 className="w-5 h-5 text-green-600" />
+                : <AlertTriangle className="w-5 h-5 text-red-600" />}
+              <h3 className="text-base font-medium text-gray-900">
+                {connectResult.ok ? 'Marca conectada a delivery' : 'No se pudo conectar'}
+              </h3>
+            </div>
+            <div className="px-5 py-4 text-sm text-gray-700 space-y-3 max-h-[60vh] overflow-auto">
+              {connectResult.error && <p className="text-red-700">{connectResult.error}</p>}
+              {connectResult.locations.length > 0 && (
+                <div>
+                  <div className="text-xs font-medium text-gray-500 mb-1">Por local</div>
+                  <ul className="space-y-1">
+                    {connectResult.locations.map((l, i) => (
+                      <li key={i} className="flex items-start gap-2">
+                        {l.status === 'error'
+                          ? <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
+                          : <CheckCircle2 className="w-4 h-4 text-green-600 mt-0.5 shrink-0" />}
+                        <span>
+                          <span className="font-medium">{l.location_name}</span>
+                          {' · '}
+                          {l.status === 'ya_conectada' && 'ya conectada'}
+                          {l.status === 'creada' && 'catálogo creado'}
+                          {l.status === 'reusada_por_nombre' && 'catálogo reusado'}
+                          {l.status === 'error' && 'error'}
+                          {l.external_catalog_id && (
+                            <span className="text-gray-400"> ({l.external_catalog_id})</span>
+                          )}
+                          {l.status === 'error' && l.error && (
+                            <span className="block text-xs text-red-600">{l.error}</span>
+                          )}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {connectResult.publish && (
+                <div>
+                  <div className="text-xs font-medium text-gray-500 mb-1">Publicación de la carta</div>
+                  {connectResult.publish.ok ? (
+                    <p className="text-gray-600">
+                      {connectResult.publish.products ?? 0} producto{(connectResult.publish.products ?? 0) === 1 ? '' : 's'} · {connectResult.publish.deals ?? 0} combo{(connectResult.publish.deals ?? 0) === 1 ? '' : 's'}
+                    </p>
+                  ) : (
+                    <p className="text-red-700">{connectResult.publish.error ?? 'No se pudo publicar la carta.'}</p>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-gray-200 bg-gray-50 rounded-b-xl">
+              <button onClick={() => setConnectResult(null)}
                 className="px-3.5 py-1.5 text-sm rounded-lg font-medium bg-accent text-text-on-accent hover:opacity-90">Entendido</button>
             </div>
           </div>
