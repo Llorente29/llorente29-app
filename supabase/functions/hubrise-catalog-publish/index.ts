@@ -12,10 +12,13 @@
 //   deja ver, tiene acceso. El trabajo pesado va con service_role.
 //   Deploy SIN --no-verify-jwt (no es webhook; el gateway valida el JWT).
 //
-// RESOLUCIÓN marca -> catálogo+token: external_brand_map (source=hubrise,
-//   brand_id) da (external_location_id, external_brand_id=connection_name);
-//   cruzado con external_integration (source=hubrise) da access_token + catálogo.
-//   Una marca puede tener N conexiones (multi-local); se publica a cada catálogo.
+// RESOLUCIÓN marca -> catálogo+token (Fase 2): PRIMARIO brand_hubrise_catalog
+//   (creado por el asistente "Conectar a delivery" con el token escritor, sin
+//   bridge). FALLBACK (compat) external_brand_map (source=hubrise, brand_id)
+//   da (external_location_id, external_brand_id=connection_name) cruzado con
+//   external_integration (source=hubrise) -> access_token + catálogo (el path
+//   de siempre para marcas montadas a mano con bridge, p.ej. Bendito Burrito).
+//   Una marca puede tener N catálogos (multi-local); se publica a cada uno.
 //
 // sku_ref = menu_item.external_id (la MISMA matrícula que usa el 86). Donde falte
 //   (marcas nacidas en Folvy), se genera y PERSISTE 'fv_<id>' para que publicar y
@@ -166,11 +169,42 @@ Deno.serve(async (req: Request) => {
   // ── service_role para el trabajo ──────────────────────────────────────────
   const sb: SupabaseClient = createClient(SUPABASE_URL, SERVICE, { auth: { persistSession: false } });
 
+  // ── Token ESCRITOR (Fase 1): 1 por cuenta, en Vault. PRIMARIO para resolver
+  // conexiones (Fase 2, ver abajo) y para publicar. Sin fallo mudo: si no
+  // hay, se avisa y solo queda el path de bridge (transicional).
+  const writerToken = await resolveWriterToken(sb, accountId);
+  if (!writerToken) {
+    console.warn(`hubrise-catalog-publish: sin token escritor para cuenta ${accountId}, fallback a token de bridge (transicional)`);
+  }
+
   // ── Resolver conexiones HubRise de la marca ───────────────────────────────
+  // PRIMARIO (Fase 2): brand_hubrise_catalog -- catálogo creado por el
+  // asistente "Conectar a delivery" con el token escritor, sin bridge. Solo
+  // tiene sentido con token escritor (es el único que puede escribir ahí).
+  // FALLBACK (compat): external_brand_map->external_integration -- el path
+  // de siempre para marcas montadas a mano con bridge (Bendito Burrito).
+  const conns: Array<{ catalogId: string; token: string; connName: string; extLoc: string }> = [];
+  const primaryCatalogIds = new Set<string>();
+
+  if (writerToken) {
+    const { data: primaryRows } = await sb.from("brand_hubrise_catalog")
+      .select("external_catalog_id, external_location_id, hubrise_catalog_name")
+      .eq("account_id", accountId).eq("brand_id", brandId);
+    for (const r of primaryRows ?? []) {
+      if (!r.external_catalog_id || !r.external_location_id) continue;
+      conns.push({
+        catalogId: r.external_catalog_id as string,
+        token: writerToken,
+        connName: (r.hubrise_catalog_name as string) ?? "Folvy (autoservicio)",
+        extLoc: r.external_location_id as string,
+      });
+      primaryCatalogIds.add(r.external_catalog_id as string);
+    }
+  }
+
   const { data: maps } = await sb.from("external_brand_map")
     .select("external_location_id, external_brand_id, is_ignored")
     .eq("account_id", accountId).eq("source", "hubrise").eq("brand_id", brandId);
-  const conns: Array<{ catalogId: string; token: string; connName: string; extLoc: string }> = [];
   for (const m of maps ?? []) {
     if (m.is_ignored === true) continue;
     const { data: integ } = await sb.from("external_integration")
@@ -182,6 +216,7 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
     if (!integ || !integ.access_token || !integ.external_catalog_id) continue;
     if (integ.push_status_enabled === false) continue;
+    if (primaryCatalogIds.has(integ.external_catalog_id as string)) continue; // ya cubierto por brand_hubrise_catalog
     conns.push({
       catalogId: integ.external_catalog_id as string,
       token: integ.access_token as string,
@@ -192,15 +227,8 @@ Deno.serve(async (req: Request) => {
   if (conns.length === 0) {
     return json({
       ok: false,
-      error: "La marca no tiene conexión HubRise activa (revisa external_brand_map / external_integration).",
+      error: "La marca no tiene catálogo HubRise (revisa brand_hubrise_catalog / external_brand_map).",
     }, 200);
-  }
-
-  // ── Token ESCRITOR (Fase 1): 1 por cuenta, en Vault. Sin fallo mudo: si no
-  // hay, se avisa y se cae al token de bridge de cada conexión (transicional).
-  const writerToken = await resolveWriterToken(sb, accountId);
-  if (!writerToken) {
-    console.warn(`hubrise-catalog-publish: sin token escritor para cuenta ${accountId}, fallback a token de bridge (transicional)`);
   }
 
   // ── Crear el trabajo de publicación ───────────────────────────────────────
