@@ -20,6 +20,8 @@
 //               id) da 403 "Operation not allowed for the current scope" con token
 //               de cuenta (escritor) — hay que pasar el id HubRise del local explícito.
 //               agotar → {sku_ref, stock:"0", expires_at?}; reactivar → {sku_ref, stock:null}.
+//               Catálogos: PRIMARIO brand_hubrise_catalog (Fase 2, self-service, sin
+//               bridge); FALLBACK external_integration (bridge, compat Bendito Burrito).
 //   - otter   : disponibilidad de item. Hueco declarado (se LOGUEA, no se silencia).
 // ============================================================================
 
@@ -129,7 +131,15 @@ Deno.serve(async (req: Request) => {
   // sku_ref = matrícula (decisión A: Folvy publica el catálogo y elige los ref).
   // PATCH solo afecta a refs que existen en cada catálogo → se auto-filtra por marca.
   {
-    // 1) conexiones HubRise activas de la cuenta, acotadas al local si viene
+    // Token ESCRITOR (Fase 1): 1 por cuenta, en Vault. PRIMARIO para resolver
+    // catálogos self-service (Fase 2, ver abajo) y para publicar/86. Sin
+    // fallo mudo: si no hay, se avisa y se cae al bucle de bridge de siempre.
+    const writerToken = await resolveWriterToken(sb, accountId);
+    if (!writerToken) {
+      console.warn(`availability-dispatch: sin token escritor para cuenta ${accountId}, fallback a token de bridge (transicional)`);
+    }
+
+    // 1) locales HubRise activos de la cuenta, acotados al local si viene
     let hrExtLocs: string[] | null = null; // null = todos los locales (descatalogar)
     if (locationId) {
       const { data: maps } = await sb.from("external_location_map")
@@ -139,6 +149,41 @@ Deno.serve(async (req: Request) => {
       hrExtLocs = (maps ?? []).map((m) => m.external_location_id as string).filter(Boolean);
     }
 
+    type ConnRow = {
+      id: string; access_token: string | null; external_catalog_id: string | null;
+      external_location_id: string | null; connection_name: string | null; push_status_enabled: boolean | null;
+    };
+    const conns: ConnRow[] = [];
+    const primaryCatalogLocations = new Set<string>();
+
+    // PRIMARIO (Fase 2): catálogos del asistente self-service
+    // (brand_hubrise_catalog), sin bridge. Solo tiene sentido con token
+    // escritor (es el único que puede escribir en estos catálogos).
+    if (writerToken) {
+      let bhcQ = sb.from("brand_hubrise_catalog")
+        .select("id, external_catalog_id, external_location_id, hubrise_catalog_name")
+        .eq("account_id", accountId);
+      if (hrExtLocs !== null) {
+        if (hrExtLocs.length === 0) bhcQ = null as never; // local sin conexión HubRise → nada
+        else bhcQ = bhcQ.in("external_location_id", hrExtLocs);
+      }
+      const bhcRows = bhcQ ? (await bhcQ).data ?? [] : [];
+      for (const r of bhcRows) {
+        if (!r.external_catalog_id || !r.external_location_id) continue;
+        conns.push({
+          id: r.id as string,
+          access_token: writerToken,
+          external_catalog_id: r.external_catalog_id as string,
+          external_location_id: r.external_location_id as string,
+          connection_name: (r.hubrise_catalog_name as string) ?? "Folvy (autoservicio)",
+          push_status_enabled: true,
+        });
+        primaryCatalogLocations.add(`${r.external_catalog_id}::${r.external_location_id}`);
+      }
+    }
+
+    // FALLBACK (compat): conexiones de bridge (external_integration), salvo
+    // las ya cubiertas por brand_hubrise_catalog (mismo catálogo+local).
     let connQ = sb.from("external_integration")
       .select("id, access_token, external_catalog_id, external_location_id, connection_name, push_status_enabled")
       .eq("account_id", accountId).eq("source", "hubrise").eq("is_active", true);
@@ -146,8 +191,12 @@ Deno.serve(async (req: Request) => {
       if (hrExtLocs.length === 0) connQ = null as never; // local sin conexión HubRise → nada
       else connQ = connQ.in("external_location_id", hrExtLocs);
     }
-
-    const conns = connQ ? (await connQ).data ?? [] : [];
+    const bridgeRows = connQ ? (await connQ).data ?? [] : [];
+    for (const c of bridgeRows) {
+      if (c.external_catalog_id && c.external_location_id
+          && primaryCatalogLocations.has(`${c.external_catalog_id}::${c.external_location_id}`)) continue;
+      conns.push(c as ConnRow);
+    }
 
     // entradas de inventario: agotar = stock "0" (+expires_at); reactivar = stock null
     const entries = matriculas.map((m) =>
@@ -156,19 +205,11 @@ Deno.serve(async (req: Request) => {
         : { sku_ref: m, stock: "0", ...(availableUntil ? { expires_at: availableUntil } : {}) }
     );
 
-    // Token ESCRITOR (Fase 1): 1 por cuenta, en Vault. Sin fallo mudo: si no
-    // hay, se avisa y se cae al bucle de siempre (token de bridge por conexión).
-    const writerToken = await resolveWriterToken(sb, accountId);
-    if (!writerToken) {
-      console.warn(`availability-dispatch: sin token escritor para cuenta ${accountId}, fallback a token de bridge (transicional)`);
-    }
-
     if (writerToken) {
       // Dedup por (catálogo, local) DISTINTO: el inventario en HubRise es por
       // catálogo × local, no solo por catálogo — 2 locales que comparten
       // catálogo necesitan 2 PATCH distintos (antes se colapsaban en 1 y el
       // segundo local se quedaba sin empujar).
-      type ConnRow = typeof conns[number];
       const byCatalogLocation = new Map<string, { catalogId: string; extLocId: string; group: ConnRow[] }>();
       for (const c of conns) {
         if (!c.external_catalog_id) {
