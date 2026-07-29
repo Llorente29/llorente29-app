@@ -15,13 +15,17 @@
 //
 // Matriz por integrador:
 //   - lastapp : PUT /catalogs/{cat}/products/{prod} {enable} (Bearer + locationID). REAL.
-//   - hubrise : PATCH /catalogs/{cat}/location/inventory  (X-Access-Token).        REAL.
+//   - hubrise : PATCH /catalogs/{cat}/locations/{external_location_id}/inventory
+//               (X-Access-Token). REAL. La forma corta .../location/inventory (sin
+//               id) da 403 "Operation not allowed for the current scope" con token
+//               de cuenta (escritor) — hay que pasar el id HubRise del local explícito.
 //               agotar → {sku_ref, stock:"0", expires_at?}; reactivar → {sku_ref, stock:null}.
 //   - otter   : disponibilidad de item. Hueco declarado (se LOGUEA, no se silencia).
 // ============================================================================
 
 import { corsHeaders } from "../_shared/cors.ts";
 import { createClient } from "@supabase/supabase-js";
+import { resolveWriterToken } from "../_shared/hubriseToken.ts";
 
 const LASTAPP_BASE = "https://api.last.app/v2";
 // = el mismo base que usa hubrise-order-status. Si allí difiere, alinear este.
@@ -152,22 +156,76 @@ Deno.serve(async (req: Request) => {
         : { sku_ref: m, stock: "0", ...(availableUntil ? { expires_at: availableUntil } : {}) }
     );
 
-    for (const c of conns) {
-      if (c.push_status_enabled === false) {
-        results.hubrise.skipped++;
-        await logHubrise(sb, accountId, c, enable, false, null, "push_status_enabled=false");
-        continue;
+    // Token ESCRITOR (Fase 1): 1 por cuenta, en Vault. Sin fallo mudo: si no
+    // hay, se avisa y se cae al bucle de siempre (token de bridge por conexión).
+    const writerToken = await resolveWriterToken(sb, accountId);
+    if (!writerToken) {
+      console.warn(`availability-dispatch: sin token escritor para cuenta ${accountId}, fallback a token de bridge (transicional)`);
+    }
+
+    if (writerToken) {
+      // Dedup por (catálogo, local) DISTINTO: el inventario en HubRise es por
+      // catálogo × local, no solo por catálogo — 2 locales que comparten
+      // catálogo necesitan 2 PATCH distintos (antes se colapsaban en 1 y el
+      // segundo local se quedaba sin empujar).
+      type ConnRow = typeof conns[number];
+      const byCatalogLocation = new Map<string, { catalogId: string; extLocId: string; group: ConnRow[] }>();
+      for (const c of conns) {
+        if (!c.external_catalog_id) {
+          results.hubrise.skipped++;
+          await logHubrise(sb, accountId, c, enable, false, null, "sin catalog");
+          continue;
+        }
+        if (!c.external_location_id) {
+          results.hubrise.skipped++;
+          await logHubrise(sb, accountId, c, enable, false, null, "sin external_location_id");
+          continue;
+        }
+        const catalogId = c.external_catalog_id as string;
+        const extLocId = c.external_location_id as string;
+        const key = `${catalogId}::${extLocId}`;
+        const entry = byCatalogLocation.get(key);
+        if (entry) entry.group.push(c); else byCatalogLocation.set(key, { catalogId, extLocId, group: [c] });
       }
-      if (!c.access_token || !c.external_catalog_id) {
-        results.hubrise.skipped++;
-        await logHubrise(sb, accountId, c, enable, false, null, "sin access_token/catalog");
-        continue;
+      for (const { catalogId, extLocId, group } of byCatalogLocation.values()) {
+        const enabledConns = group.filter((c) => c.push_status_enabled !== false);
+        const label = {
+          id: (enabledConns[0] ?? group[0]).id,
+          connection_name: Array.from(new Set(group.map((c) => c.connection_name))).filter(Boolean).join(" + "),
+          external_catalog_id: catalogId,
+          external_location_id: extLocId,
+        };
+        if (enabledConns.length === 0) {
+          results.hubrise.skipped++;
+          await logHubrise(sb, accountId, label, enable, false, null, "push_status_enabled=false (todas las conexiones del catálogo+local)");
+          continue;
+        }
+        results.hubrise.pushed++;
+        const r = await patchHubriseInventory(writerToken, catalogId, extLocId, entries);
+        if (r.ok) results.hubrise.ok++; else results.hubrise.failed++;
+        await logHubrise(sb, accountId, label, enable, r.ok, r.status ?? null,
+          r.ok ? `ok · ${matriculas.length} sku` : (r.reason ?? null));
       }
-      results.hubrise.pushed++;
-      const r = await patchHubriseInventory(c.access_token as string, c.external_catalog_id as string, entries);
-      if (r.ok) results.hubrise.ok++; else results.hubrise.failed++;
-      await logHubrise(sb, accountId, c, enable, r.ok, r.status ?? null,
-        r.ok ? `ok · ${matriculas.length} sku` : (r.reason ?? null));
+    } else {
+      for (const c of conns) {
+        if (c.push_status_enabled === false) {
+          results.hubrise.skipped++;
+          await logHubrise(sb, accountId, c, enable, false, null, "push_status_enabled=false");
+          continue;
+        }
+        if (!c.access_token || !c.external_catalog_id || !c.external_location_id) {
+          results.hubrise.skipped++;
+          await logHubrise(sb, accountId, c, enable, false, null, "sin access_token/catalog/location");
+          continue;
+        }
+        results.hubrise.pushed++;
+        const r = await patchHubriseInventory(
+          c.access_token as string, c.external_catalog_id as string, c.external_location_id as string, entries,
+        );
+        if (r.ok) results.hubrise.ok++; else results.hubrise.failed++;
+        await logHubrise(sb, accountId, c, enable, r.ok, r.status ?? null,
+          r.ok ? `ok · ${matriculas.length} sku` : (r.reason ?? null));
+      }
     }
   }
 
@@ -208,11 +266,14 @@ async function putLastEnable(
 }
 
 // ── HUBRISE: PATCH inventory ─────────────────────────────────────────────────
+// Forma EXPLÍCITA con el id HubRise del local (p.ej. "1b6p8-0"). La forma
+// corta .../location/inventory (sin id) da 403 "Operation not allowed for
+// the current scope" con el token de cuenta (escritor).
 async function patchHubriseInventory(
-  accessToken: string, catalogId: string, entries: unknown[],
+  accessToken: string, catalogId: string, externalLocationId: string, entries: unknown[],
 ): Promise<{ ok: boolean; status?: number; reason?: string }> {
   try {
-    const res = await fetch(`${HUBRISE_BASE}/catalogs/${catalogId}/location/inventory`, {
+    const res = await fetch(`${HUBRISE_BASE}/catalogs/${catalogId}/locations/${externalLocationId}/inventory`, {
       method: "PATCH",
       headers: { "X-Access-Token": accessToken, "Content-Type": "application/json" },
       body: JSON.stringify(entries),
@@ -256,7 +317,7 @@ async function logHubrise(
       catalog_product_id: null,
       organization_product_id: null,
       enable, ok, http_status,
-      error: `hubrise · ${c.connection_name ?? "?"} · cat ${c.external_catalog_id ?? "?"}${detail ? " · " + detail : ""}`,
+      error: `hubrise · ${c.connection_name ?? "?"} · cat ${c.external_catalog_id ?? "?"} · loc ${c.external_location_id ?? "?"}${detail ? " · " + detail : ""}`,
     });
   } catch { /* best-effort */ }
 }
