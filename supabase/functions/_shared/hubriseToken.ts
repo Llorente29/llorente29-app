@@ -30,6 +30,8 @@ interface SupabaseLike {
     // deno-lint-ignore no-explicit-any
     select: (cols: string) => any;
   };
+  // deno-lint-ignore no-explicit-any
+  rpc: (fn: string, args?: Record<string, unknown>) => PromiseLike<QueryResult>;
 }
 
 export interface HubriseTokenQuery {
@@ -104,4 +106,32 @@ export async function listActiveHubriseConnections(
       connectionName: (r["connection_name"] as string | null) ?? null,
       accessToken: r["access_token"] as string,
     }));
+}
+
+// ── Token ESCRITOR (Fase 1) ─────────────────────────────────────────────────
+//
+// Conexión OAuth propia de Folvy por CUENTA (scope account[all_catalogs.write,
+// inventory.write]), guardada en Vault (public.hubrise_writer_connection +
+// hubrise_writer_token_save/read — 20260729T1500_hubrise_writer_token.sql).
+// Distinta de resolveHubriseToken/listActiveHubriseConnections (tokens de
+// BRIDGE, por conexión/local, con orders.write — esos NO se tocan: los sigue
+// usando hubrise-webhook/hubrise-order-status).
+//
+// Devuelve null (nunca lanza) si no hay conexión escritor para la cuenta; el
+// llamador decide el fallback transicional al token de bridge y lo avisa con
+// console.warn (sin fallo mudo).
+export async function resolveWriterToken(
+  sb: SupabaseLike,
+  accountId: string,
+): Promise<string | null> {
+  if (!accountId) return null;
+
+  const { data, error }: QueryResult = await sb.rpc("hubrise_writer_token_read", {
+    p_account_id: accountId,
+  });
+  if (error) {
+    console.warn("resolveWriterToken: error RPC hubrise_writer_token_read", error.message ?? error);
+    return null;
+  }
+  return typeof data === "string" && data.length > 0 ? data : null;
 }

@@ -32,6 +32,7 @@
 
 import { corsHeaders } from "../_shared/cors.ts";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { resolveWriterToken } from "../_shared/hubriseToken.ts";
 
 const HUBRISE_BASE = "https://api.hubrise.com/v1";
 const CURRENCY = "EUR";
@@ -193,6 +194,13 @@ Deno.serve(async (req: Request) => {
       ok: false,
       error: "La marca no tiene conexión HubRise activa (revisa external_brand_map / external_integration).",
     }, 200);
+  }
+
+  // ── Token ESCRITOR (Fase 1): 1 por cuenta, en Vault. Sin fallo mudo: si no
+  // hay, se avisa y se cae al token de bridge de cada conexión (transicional).
+  const writerToken = await resolveWriterToken(sb, accountId);
+  if (!writerToken) {
+    console.warn(`hubrise-catalog-publish: sin token escritor para cuenta ${accountId}, fallback a token de bridge (transicional)`);
   }
 
   // ── Crear el trabajo de publicación ───────────────────────────────────────
@@ -478,14 +486,36 @@ Deno.serve(async (req: Request) => {
       },
     };
 
-    // ── Publicar a cada conexión (PUT reemplaza el catálogo de la marca) ─────
-    // Las imágenes son POR CATÁLOGO: se resuelven (reuso/subida) por conexión y se
-    // inyectan en los productos antes del PUT.
+    // ── Targets a publicar ─────────────────────────────────────────────────
+    // Con token escritor: 1 target POR CATÁLOGO DISTINTO (dedup — las N
+    // conexiones/plataformas de una marca comparten el mismo catálogo en
+    // HubRise, así que hoy se hacían N PUT idénticos, con N-1 de más en 403).
+    // Sin escritor (fallback transicional): 1 target por conexión, cada uno
+    // con su propio token de bridge — comportamiento IDÉNTICO al de siempre.
+    interface PublishTargetJob { catalogId: string; token: string; connName: string }
+    let publishTargets: PublishTargetJob[];
+    if (writerToken) {
+      const namesByCatalog = new Map<string, string[]>();
+      for (const c of conns) {
+        (namesByCatalog.get(c.catalogId) ?? namesByCatalog.set(c.catalogId, []).get(c.catalogId)!).push(c.connName);
+      }
+      publishTargets = Array.from(namesByCatalog.entries()).map(([catalogId, names]) => ({
+        catalogId,
+        token: writerToken,
+        connName: names.filter(Boolean).join(" + "),
+      }));
+    } else {
+      publishTargets = conns.map((c) => ({ catalogId: c.catalogId, token: c.token, connName: c.connName }));
+    }
+
+    // ── Publicar (PUT reemplaza el catálogo) ──────────────────────────────────
+    // Las imágenes son POR CATÁLOGO: se resuelven (reuso/subida) una vez por
+    // target y se inyectan en los productos antes del PUT.
     let okCount = 0, errCount = 0, imagesTotal = 0;
-    for (const c of conns) {
+    for (const t of publishTargets) {
       let targetStatus = "ok", errorText: string | null = null;
       try {
-        const imgMap = await resolveCatalogImages(sb, accountId, c.catalogId, c.token, imgTargets, warnings);
+        const imgMap = await resolveCatalogImages(sb, accountId, t.catalogId, t.token, imgTargets, warnings);
         if (imgMap.size > imagesTotal) imagesTotal = imgMap.size;
         const productsForConn = productsPayload.map((prod, idx) => {
           const imageId = imgMap.get(idx);
@@ -495,9 +525,9 @@ Deno.serve(async (req: Request) => {
           ...catalogData,
           data: { ...catalogData.data, products: productsForConn },
         };
-        const res = await fetch(`${HUBRISE_BASE}/catalogs/${c.catalogId}`, {
+        const res = await fetch(`${HUBRISE_BASE}/catalogs/${t.catalogId}`, {
           method: "PUT",
-          headers: { "X-Access-Token": c.token, "Content-Type": "application/json" },
+          headers: { "X-Access-Token": t.token, "Content-Type": "application/json" },
           body: JSON.stringify(catalogDataForConn),
         });
         if (!res.ok) { targetStatus = "error"; errorText = (await res.text()).slice(0, 400); errCount++; }
@@ -507,8 +537,8 @@ Deno.serve(async (req: Request) => {
       }
       await sb.from("catalog_publish_target").insert({
         publish_id: publishId,
-        external_catalog_id: c.catalogId,
-        connection_name: c.connName,
+        external_catalog_id: t.catalogId,
+        connection_name: t.connName,
         status: targetStatus,
         error_text: errorText,
         published_at: targetStatus === "ok" ? new Date().toISOString() : null,
