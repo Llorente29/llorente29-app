@@ -15,9 +15,14 @@
 //     local está en un estado (cerrado / con tal horario) que HubRise nunca
 //     confirmó -> estado incoherente entre Folvy y la plataforma.
 //
-// Ventana de revisión de 20 min (solape sobre el cron de 15 min, para no
-// perder filas entre corridas). No dedupea entre corridas (deuda menor,
-// mismo criterio que el original: más ruidoso que perder un fallo en silencio).
+// (C) brand.closure_mode (Fase B, Cap. B) — cierres de marca OLVIDADOS: sin
+//     resume_at (indefinido) hace más de 24h, o con resume_at ya vencido pero
+//     closure_mode aún 'paused'. Ver checkStaleBrandClosures.
+//
+// Ventana de revisión de 20 min para (A)/(B) (solape sobre el cron de 15 min,
+// para no perder filas entre corridas). (C) no usa ventana: es estado actual,
+// no eventos recientes. No dedupea entre corridas (deuda menor, mismo
+// criterio que el original: más ruidoso que perder un fallo en silencio).
 //
 // Deploy: --no-verify-jwt (inocua; sin params externos, solo lee y alerta).
 
@@ -103,6 +108,68 @@ async function checkAvailabilityPushLog(
   return { failures: rows.length, stuck: stuck.length, soldOutFailed: soldOutFailed.length };
 }
 
+// (C) Cap. B — cierres de marca OLVIDADOS. Dos casos, distintos de gravedad:
+//   · INDEFINIDO (resume_at null) más de INDEFINITE_CLOSURE_ALERT_HOURS: sin
+//     expires_at en el push a HubRise, esa marca NO se reabre sola — riesgo
+//     real de quedar cerrada para siempre si nadie se acuerda.
+//   · VENCIDO (resume_at ya pasado, brand.closure_mode aún 'paused'): HubRise
+//     ya reabrió esos SKUs solo (expires_at) — closed_brands ya lo oculta en
+//     el indicador ambiental — pero el semáforo de Folvy sigue "mintiendo"
+//     hasta que alguien reabra a mano; aviso de limpieza, no de fallo real.
+// SIN dedupe entre corridas (mismo criterio que hubrise-callback-ensure: más
+// ruidoso que olvidarlo en silencio) — se resuelve solo en cuanto se reabre.
+const INDEFINITE_CLOSURE_ALERT_HOURS = 24;
+
+async function checkStaleBrandClosures(
+  sb: ReturnType<typeof createClient>,
+): Promise<{ indefinite: number; expired: number }> {
+  const { data: closed, error } = await sb
+    .from("brand")
+    .select("id, name, account_id, closure_resume_at, closure_set_at, closure_reason")
+    .eq("closure_mode", "paused")
+    .limit(200);
+
+  if (error) {
+    console.error("availability-watchdog: error consultando brand (cierres de marca)", error);
+    return { indefinite: 0, expired: 0 };
+  }
+
+  const rows = closed ?? [];
+  if (rows.length === 0) return { indefinite: 0, expired: 0 };
+
+  const now = Date.now();
+  const indefiniteCutoff = now - INDEFINITE_CLOSURE_ALERT_HOURS * 60 * 60 * 1000;
+
+  const indefinite = rows.filter((b) =>
+    !b.closure_resume_at && b.closure_set_at && new Date(b.closure_set_at as string).getTime() < indefiniteCutoff);
+  const expired = rows.filter((b) =>
+    !!b.closure_resume_at && new Date(b.closure_resume_at as string).getTime() < now);
+
+  if (indefinite.length === 0 && expired.length === 0) return { indefinite: 0, expired: 0 };
+
+  const lines: string[] = [];
+  if (indefinite.length > 0) {
+    lines.push(`⚠️ ${indefinite.length} marca(s) cerrada(s) INDEFINIDAMENTE hace más de ${INDEFINITE_CLOSURE_ALERT_HOURS}h — sin expires_at, NO se reabren solas en HubRise:`);
+    for (const b of indefinite.slice(0, 15)) {
+      lines.push(`  - ${b.name} · cuenta ${b.account_id} · cerrada desde ${b.closure_set_at} · motivo: ${b.closure_reason ?? "(sin motivo)"}`);
+    }
+    lines.push("");
+  }
+  if (expired.length > 0) {
+    lines.push(`${expired.length} marca(s) con cierre YA VENCIDO pero brand.closure_mode sigue 'paused' — HubRise ya las reabrió sola(s), es limpieza de Folvy, no fallo de plataforma:`);
+    for (const b of expired.slice(0, 15)) {
+      lines.push(`  - ${b.name} · cuenta ${b.account_id} · debía reabrir en ${b.closure_resume_at}`);
+    }
+  }
+
+  await raiseAlert(
+    `Cierres de marca sin resolver (${indefinite.length + expired.length})`,
+    lines.join("\n"),
+    "brand-closure",
+  );
+  return { indefinite: indefinite.length, expired: expired.length };
+}
+
 // (B) Cap. C/D — location_status_log (cerrar/reabrir local, horario semanal).
 async function checkLocationStatusLog(
   sb: ReturnType<typeof createClient>, since: string,
@@ -143,16 +210,19 @@ Deno.serve(async (req: Request) => {
   const sb = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
   const since = new Date(Date.now() - WINDOW_MINUTES * 60_000).toISOString();
 
-  const [availability, locationStatus] = await Promise.all([
+  const [availability, locationStatus, staleBrandClosures] = await Promise.all([
     checkAvailabilityPushLog(sb, since),
     checkLocationStatusLog(sb, since),
+    checkStaleBrandClosures(sb),
   ]);
 
-  const ok = availability.failures === 0 && locationStatus.failures === 0;
+  const ok = availability.failures === 0 && locationStatus.failures === 0
+    && staleBrandClosures.indefinite === 0 && staleBrandClosures.expired === 0;
   return json({
     ok,
     checked_since: since,
     availability_push_log: availability,
     location_status_log: locationStatus,
+    brand_closures: staleBrandClosures,
   }, ok ? 200 : 207);
 });

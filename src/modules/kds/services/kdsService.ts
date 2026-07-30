@@ -427,6 +427,27 @@ export function listBrandsForClosure(accountId: string | null, token?: string | 
   })
 }
 
+export interface ClosedBrand {
+  brand_id: string
+  brand_name: string
+  mode: BrandStatusMode
+  resume_at: string | null
+  reason: string | null
+  set_at: string | null
+}
+
+/**
+ * Marcas EFECTIVAMENTE cerradas ahora mismo (indicador ambiental, §9-C) — la
+ * RPC ya oculta las que tenían resume_at y ya pasó (HubRise las reabrió sola
+ * vía expires_at, aunque brand.closure_mode en Folvy no se reescriba solo).
+ */
+export function getClosedBrands(accountId: string | null, token?: string | null): Promise<ClosedBrand[]> {
+  return rpc<ClosedBrand[]>('closed_brands', {
+    p_account_id: accountId,
+    p_token: token ?? null,
+  })
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // AJUSTES DE COCINA (lectura/escritura por servicio, RLS de SESIÓN — sin token)
 // ─────────────────────────────────────────────────────────────────────────────

@@ -14,6 +14,7 @@ import {
 } from '@/modules/kitchen/services/availabilityService'
 import LocationStatusCard from '@/modules/kds/components/LocationStatusCard'
 import BrandCloseControl from '@/modules/kds/components/BrandCloseControl'
+import ClosedBrandsCard from '@/modules/kds/components/ClosedBrandsCard'
 
 const ACCENT = '#15171A'
 
@@ -120,21 +121,9 @@ export default function KitchenAvailabilityPage() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-6">
-      <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
-        <div>
-          <h1 className="text-lg font-medium text-stone-800">Disponibilidad</h1>
-          <p className="text-[13px] text-stone-500 mt-0.5">Lo que está agotado ahora mismo</p>
-        </div>
-        <div className="flex items-center gap-2">
-          {activeAccountId && <BrandCloseControl accountId={activeAccountId} />}
-          <button
-            onClick={() => setShowAgotar(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-white text-sm font-medium"
-            style={{ backgroundColor: ACCENT }}
-          >
-            <Plus size={18} /> Agotar producto
-          </button>
-        </div>
+      <div className="mb-6">
+        <h1 className="text-lg font-medium text-stone-800">Disponibilidad</h1>
+        <p className="text-[13px] text-stone-500 mt-0.5">Lo que está cerrado o agotado ahora mismo</p>
       </div>
 
       <div className="flex gap-2.5 mb-5 flex-wrap items-center">
@@ -183,13 +172,31 @@ export default function KitchenAvailabilityPage() {
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-[13px] text-red-700">{error}</div>
       )}
 
-      {locationId && <LocationStatusCard locationId={locationId} />}
+      {/* ── Local y marcas: los dos cierres de alcance amplio ─────────────── */}
+      <div className="mb-5">
+        <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-400">Local y marcas</p>
+          {activeAccountId && <BrandCloseControl accountId={activeAccountId} />}
+        </div>
+        {locationId && <LocationStatusCard locationId={locationId} />}
+        {activeAccountId && <ClosedBrandsCard accountId={activeAccountId} />}
+      </div>
 
-      <div className="flex items-center gap-2 mb-2.5">
-        <span className="w-2 h-2 rounded-full bg-red-500 inline-block" />
-        <span className="text-[13px] font-medium text-stone-500">
-          Agotados en {locName} · {loading ? '…' : visible.length}
-        </span>
+      {/* ── Productos: el cierre de alcance más fino ──────────────────────── */}
+      <div className="flex items-center justify-between gap-2 mb-2.5 flex-wrap">
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-red-500 inline-block" />
+          <span className="text-[13px] font-medium text-stone-500">
+            Productos agotados en {locName} · {loading ? '…' : visible.length}
+          </span>
+        </div>
+        <button
+          onClick={() => setShowAgotar(true)}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-white text-sm font-medium"
+          style={{ backgroundColor: ACCENT }}
+        >
+          <Plus size={18} /> Agotar producto
+        </button>
       </div>
 
       {loading ? (
