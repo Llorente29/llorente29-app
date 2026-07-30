@@ -448,6 +448,28 @@ export function getClosedBrands(accountId: string | null, token?: string | null)
   })
 }
 
+export interface AnomalousBrandClosure {
+  brand_id: string
+  brand_name: string
+  resume_at: string | null
+  set_at: string | null
+  reason: string | null
+  kind: 'indefinite' | 'expired'
+}
+
+/**
+ * Cierres de marca ANÓMALOS (Cap. B · Pata 3): indefinidos hace >24h, o con
+ * resume_at ya vencido. Mismo criterio que availability-watchdog usa para la
+ * alarma por email — aquí consultable para pintar el aviso en pantalla.
+ * Cierre correcto con hora futura NO aparece aquí (eso es closed_brands).
+ */
+export function getAnomalousBrandClosures(accountId: string | null, token?: string | null): Promise<AnomalousBrandClosure[]> {
+  return rpc<AnomalousBrandClosure[]>('anomalous_brand_closures', {
+    p_account_id: accountId,
+    p_token: token ?? null,
+  })
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // AJUSTES DE COCINA (lectura/escritura por servicio, RLS de SESIÓN — sin token)
 // ─────────────────────────────────────────────────────────────────────────────

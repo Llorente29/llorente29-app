@@ -24,6 +24,8 @@ import {
 } from '../services/ordersFeedService'
 import OrderCard from './OrderCard'
 import KitchenDayBannerBar from './KitchenDayBanner'
+import ClosuresChip from '@/modules/kds/components/ClosuresChip'
+import ClosureAnomalyAlarm from '@/modules/kds/components/ClosureAnomalyAlarm'
 
 const POLL_MS = 10_000
 
@@ -60,9 +62,9 @@ function sortOrders(a: OrderFeedItem, b: OrderFeedItem): number {
   return b.minutos - a.minutos
 }
 
-interface OrdersFeedProps { locationId: string; token?: string | null }
+interface OrdersFeedProps { locationId: string; token?: string | null; accountId?: string | null }
 
-export default function OrdersFeed({ locationId, token }: OrdersFeedProps) {
+export default function OrdersFeed({ locationId, token, accountId }: OrdersFeedProps) {
   const [orders, setOrders] = useState<OrderFeedItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -238,12 +240,21 @@ export default function OrdersFeed({ locationId, token }: OrdersFeedProps) {
           ))}
         </div>
 
+        {/* Escalada: cierre de marca OLVIDADO (indefinido >24h o vencido) —
+            banner rojo, mismo patrón que KdsAlarmOverlay. Cierre correcto
+            con hora NUNCA dispara esto (eso es el chip discreto de abajo). */}
+        <ClosureAnomalyAlarm accountId={accountId} token={token} variant="inline" />
+
         {/* Banner del día (KPI cocina) — colectivo, siempre visible arriba. */}
         {banner && (
           <div className="px-5 pt-3 bg-page">
             <KitchenDayBannerBar banner={banner} />
           </div>
         )}
+
+        {/* Chip discreto: qué está cerrado ahora mismo (local/marcas), tocar
+            para ver/reabrir sin salir de Pedidos. Nada si no hay nada cerrado. */}
+        <ClosuresChip accountId={accountId} locationId={locationId} token={token} />
 
         {/* Cuerpo */}
         <div className="flex-1 overflow-y-auto p-5 bg-page">

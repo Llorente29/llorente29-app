@@ -6,12 +6,14 @@
 
 import { MapPin } from 'lucide-react'
 import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
+import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import OrdersFeed from '../components/OrdersFeed'
 import KdsAlarmOverlay from '@/modules/kds/components/KdsAlarmOverlay'
 import AvailabilityNoticeOverlay from '@/modules/kds/components/AvailabilityNoticeOverlay'
 
 export default function OrdersFeedPage() {
   const { resolvedLocationId, isConsolidated } = useLocationScope()
+  const { activeAccountId } = useActiveAccount()
 
   if (isConsolidated || !resolvedLocationId) {
     return (
@@ -31,7 +33,7 @@ export default function OrdersFeedPage() {
           es donde tiene que gritar. Misma superficie que Cocina (kds_alarms). */}
       <KdsAlarmOverlay locationId={resolvedLocationId} token={null} variant="inline" />
       <AvailabilityNoticeOverlay locationId={resolvedLocationId} token={null} variant="inline" />
-      <OrdersFeed locationId={resolvedLocationId} />
+      <OrdersFeed locationId={resolvedLocationId} accountId={activeAccountId} />
     </>
   )
 }
