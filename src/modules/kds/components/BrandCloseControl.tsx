@@ -6,14 +6,16 @@
 // modo batch). Nunca toca los productos compartidos (stock_group) de la
 // marca: solo los ref por-marca.
 //
-// Doble puerta: en oficina (accountId+session) lee `brand` directo; en
-// tablet (token) usa brands_by_token (sin sesión). Mismo componente, misma UI.
+// El selector SOLO lista marcas con presencia real en HubRise (catálogo Fase
+// 2 o mapeo bridge utilizable) — las cedidas (solo Last, sin catálogo
+// HubRise) quedan fuera: cerrarlas sería una promesa falsa (Folvy no escribe
+// en Last, y availability-dispatch no tendría catálogo que tocar). Doble
+// puerta vía la MISMA RPC (brands_for_closure) para oficina y tablet.
 
 import { useCallback, useEffect, useState } from 'react'
 import { Store, Search, Lock, Unlock, Loader2, AlertTriangle, X } from 'lucide-react'
-import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
 import {
-  getBrandStatus, setBrandStatus, setBrandStatusByToken, listBrandsByToken,
+  getBrandStatus, setBrandStatus, setBrandStatusByToken, listBrandsForClosure,
   type BrandOption, type BrandStatus,
 } from '../services/kdsService'
 
@@ -63,21 +65,7 @@ function BrandCloseModal({ accountId, token, dark, onClose }: Props & { onClose:
   useEffect(() => {
     let alive = true
     setLoading(true)
-    const load = async (): Promise<BrandOption[]> => {
-      if (token) return listBrandsByToken(token)
-      if (accountId && isSupabaseEnabled && supabase) {
-        const { data, error: err } = await supabase
-          .from('brand')
-          .select('id, name')
-          .eq('account_id', accountId)
-          .eq('is_active', true)
-          .order('name')
-        if (err) throw new Error(err.message)
-        return (data ?? []) as BrandOption[]
-      }
-      return []
-    }
-    load()
+    listBrandsForClosure(accountId ?? null, token)
       .then((rows) => { if (alive) setBrands(rows) })
       .catch((e) => { if (alive) setError(e instanceof Error ? e.message : 'Error cargando marcas') })
       .finally(() => { if (alive) setLoading(false) })
@@ -162,6 +150,10 @@ function BrandCloseModal({ accountId, token, dark, onClose }: Props & { onClose:
               </div>
               {loading ? (
                 <div className="py-6 text-center text-sm opacity-60"><Loader2 size={16} className="animate-spin inline" /></div>
+              ) : brands.length === 0 ? (
+                <p className={`text-sm px-1 py-4 ${dark ? 'text-zinc-500' : 'text-stone-400'}`}>
+                  Ninguna marca de esta cuenta está conectada a HubRise todavía. Las marcas cedidas (solo Last) se gestionan en Last.
+                </p>
               ) : (
                 <div className="max-h-64 overflow-y-auto flex flex-col gap-1">
                   {filtered.map((b) => (

@@ -414,9 +414,17 @@ export function setBrandStatusByToken(
   })
 }
 
-/** Marcas activas del local del dispositivo (tablet, sin sesión). */
-export function listBrandsByToken(token: string): Promise<BrandOption[]> {
-  return rpc<BrandOption[]>('brands_by_token', { p_device_token: token })
+/**
+ * Marcas de la cuenta con presencia REAL en HubRise (catálogo Fase 2 o
+ * mapeo bridge con conexión utilizable) — mismo criterio que
+ * hubrise-catalog-publish. Excluye las cedidas (solo Last, sin catálogo
+ * HubRise): cerrarlas sería una promesa falsa. Doble puerta (sesión | token).
+ */
+export function listBrandsForClosure(accountId: string | null, token?: string | null): Promise<BrandOption[]> {
+  return rpc<BrandOption[]>('brands_for_closure', {
+    p_account_id: accountId,
+    p_token: token ?? null,
+  })
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
