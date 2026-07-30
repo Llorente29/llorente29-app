@@ -230,6 +230,22 @@ export async function getStaffingGaps(locationId: string): Promise<StaffingGap[]
   }))
 }
 
+/**
+ * Empuja el horario GENERAL del local (brandId=null) a HubRise (Fase A · Cap. D,
+ * opening_hours). La RPC lee business_hours en BBDD (fuente única, siempre los
+ * 7 días completos) y hace el PATCH /locations/:id. Local sin conexión HubRise
+ * -> no-op silencioso (connected:false), no rompe el guardado en Folvy.
+ * Solo horario general: HubRise no tiene "horario por marca" a nivel de local.
+ * NO sincroniza excepciones/festivos (business_hours_exception): el opening_hours
+ * de HubRise es semanal, sin fechas especiales — ver Cap. C para cerrar un día.
+ */
+export async function pushOpeningHoursToHubrise(locationId: string): Promise<{ connected: boolean }> {
+  if (!supabase) throw new Error('Supabase no disponible')
+  const { data, error } = await (supabase as any).rpc('push_location_opening_hours', { p_location_id: locationId })
+  if (error) throw new Error(`No se pudo empujar el horario a HubRise: ${error.message}`)
+  return { connected: Boolean((data as { connected?: boolean } | null)?.connected) }
+}
+
 /** Copia los tramos de un origen (local, marca|null) a varios destinos.
  *  Cada destino se REEMPLAZA por completo con los tramos del origen.
  *  Sirve para: marca->marcas (mismo local), general->otros locales,

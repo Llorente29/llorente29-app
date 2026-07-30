@@ -14,6 +14,7 @@ import {
   listSoldOut, searchProducts, previewScope, setProductAvailability,
   type SoldOutRow, type ProductPick, type ScopePreview,
 } from './services/tabletAvailabilityService'
+import LocationStatusCard from '@/modules/kds/components/LocationStatusCard'
 
 interface Props {
   token: string
@@ -88,6 +89,8 @@ export default function TabletAvailabilityTab({ token, locationName }: Props) {
 
       {/* Lista de agotados */}
       <div className="flex-1 overflow-y-auto p-5">
+        <LocationStatusCard locationId={null} token={token} dark />
+
         <p className="text-sm text-zinc-500 mb-3">
           <span className="inline-block w-2 h-2 rounded-full bg-red-500 mr-2 align-middle" />
           Agotados ahora · {rows.length}

@@ -302,6 +302,63 @@ export function ackAvailabilityNotice(noticeId: string, token?: string | null): 
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ESTADO DEL LOCAL (Fase A · Cap. C): cerrar/reabrir el local en HubRise
+// (order_acceptance). NO confundir con la auto-aceptación de pedidos entrantes
+// (order_acceptance_config, otro frente). Doble puerta (sesión | token).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type LocationStatusMode = 'normal' | 'busy' | 'paused'
+
+export interface LocationStatus {
+  location_id: string
+  location_name: string
+  mode: LocationStatusMode
+  resume_at: string | null
+  reason: string | null
+  set_at: string | null
+  /** false = local sin conexión HubRise (ej. Carabanchel/Plaza Castilla): la UI degrada. */
+  connected: boolean
+}
+
+/** Estado actual del local. Kiosco/tablet → token. */
+export function getLocationStatus(locationId: string | null, token?: string | null): Promise<LocationStatus> {
+  return rpc<LocationStatus>('location_status', {
+    p_location_id: locationId,
+    p_token: token ?? null,
+  })
+}
+
+/** Cierra/reabre el local (mode='paused' para cerrar, 'normal' para reabrir). */
+export function setLocationStatus(
+  locationId: string,
+  mode: LocationStatusMode,
+  resumeAt?: string | null,
+  reason?: string | null,
+): Promise<{ location_id: string; mode: LocationStatusMode; connected: boolean }> {
+  return rpc('set_location_status', {
+    p_location_id: locationId,
+    p_mode: mode,
+    p_resume_at: resumeAt ?? null,
+    p_reason: reason ?? null,
+  })
+}
+
+/** Cierra/reabre el local del dispositivo (tablet, sin selector). */
+export function setLocationStatusByToken(
+  token: string,
+  mode: LocationStatusMode,
+  resumeAt?: string | null,
+  reason?: string | null,
+): Promise<{ location_id: string; mode: LocationStatusMode; connected: boolean }> {
+  return rpc('set_location_status_by_token', {
+    p_device_token: token,
+    p_mode: mode,
+    p_resume_at: resumeAt ?? null,
+    p_reason: reason ?? null,
+  })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // AJUSTES DE COCINA (lectura/escritura por servicio, RLS de SESIÓN — sin token)
 // ─────────────────────────────────────────────────────────────────────────────
 

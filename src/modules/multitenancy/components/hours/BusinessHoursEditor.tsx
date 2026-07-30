@@ -11,7 +11,7 @@
 
 import { useEffect, useState } from 'react'
 import { Plus, Trash2, Clock, Moon, Copy, X, AlertTriangle } from 'lucide-react'
-import { getHours, replaceHours, copyHoursTo, getStaffingGaps, type HoursSlot, type StaffingGap } from '../../services/businessHoursService'
+import { getHours, replaceHours, copyHoursTo, getStaffingGaps, pushOpeningHoursToHubrise, type HoursSlot, type StaffingGap } from '../../services/businessHoursService'
 import HoursExceptions from './HoursExceptions'
 
 const DAYS = [
@@ -190,7 +190,20 @@ export default function BusinessHoursEditor({ accountId, locationId, brandId, co
     setFeedback(null)
     try {
       await replaceHours(accountId, locationId, brandId, slots)
-      setFeedback({ kind: 'ok', msg: 'Horario guardado.' })
+      // Fase A · Cap. D: el horario GENERAL del local (brandId=null) se empuja a
+      // HubRise. Por marca no aplica (HubRise no tiene horario por marca a nivel
+      // de local). Local sin conexión HubRise -> no-op silencioso, no rompe el guardado.
+      if (brandId === null) {
+        try {
+          const r = await pushOpeningHoursToHubrise(locationId)
+          setFeedback({ kind: 'ok', msg: r.connected ? 'Horario guardado y empujado a HubRise.' : 'Horario guardado.' })
+        } catch (e) {
+          setFeedback({ kind: 'error', msg: `Horario guardado en Folvy, pero falló el empuje a HubRise: ${e instanceof Error ? e.message : 'error'}` })
+          return
+        }
+      } else {
+        setFeedback({ kind: 'ok', msg: 'Horario guardado.' })
+      }
     } catch (e) {
       setFeedback({ kind: 'error', msg: e instanceof Error ? e.message : 'No se pudo guardar.' })
     } finally {
@@ -470,6 +483,11 @@ export default function BusinessHoursEditor({ accountId, locationId, brandId, co
 
       {/* Días especiales / festivos */}
       <div className="pt-4 mt-2 border-t border-border-default">
+        {brandId === null && (
+          <p className="text-xs text-text-tertiary mb-2">
+            Los días especiales NO se sincronizan con HubRise (su horario de tienda es semanal, sin fechas concretas). Para cerrar un día puntual en las plataformas, usa "Cerrar local" en Disponibilidad.
+          </p>
+        )}
         <HoursExceptions accountId={accountId} locationId={locationId} brandId={brandId} />
       </div>
     </div>

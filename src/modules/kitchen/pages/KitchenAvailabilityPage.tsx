@@ -12,6 +12,7 @@ import {
   listLocations, listSoldOut, searchProducts, previewScope, setProductAvailability,
   type LocationOption, type SoldOutRow, type ProductPick, type ScopePreview,
 } from '@/modules/kitchen/services/availabilityService'
+import LocationStatusCard from '@/modules/kds/components/LocationStatusCard'
 
 const ACCENT = '#15171A'
 
@@ -177,6 +178,8 @@ export default function KitchenAvailabilityPage() {
       {error && (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-[13px] text-red-700">{error}</div>
       )}
+
+      {locationId && <LocationStatusCard locationId={locationId} />}
 
       <div className="flex items-center gap-2 mb-2.5">
         <span className="w-2 h-2 rounded-full bg-red-500 inline-block" />
