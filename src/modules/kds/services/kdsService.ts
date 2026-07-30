@@ -359,6 +359,67 @@ export function setLocationStatusByToken(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// CERRAR MARCA (Fase B · Cap. B): 86 masivo de los ref POR-MARCA de una marca
+// (nunca los stock_group compartidos). Reutiliza la maquinaria de Fase 0 en
+// modo batch. Doble puerta (sesión | token).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type BrandStatusMode = 'normal' | 'paused'
+
+export interface BrandStatus {
+  brand_id: string
+  brand_name: string
+  mode: BrandStatusMode
+  resume_at: string | null
+  reason: string | null
+  set_at: string | null
+}
+
+export interface BrandOption { id: string; name: string }
+
+/** Estado actual de cierre de una marca. */
+export function getBrandStatus(brandId: string, token?: string | null): Promise<BrandStatus> {
+  return rpc<BrandStatus>('brand_status', { p_brand_id: brandId, p_token: token ?? null })
+}
+
+/** Cierra/reabre una marca (sesión, oficina). */
+export function setBrandStatus(
+  brandId: string,
+  mode: BrandStatusMode,
+  resumeAt?: string | null,
+  reason?: string | null,
+): Promise<{ brand_id: string; mode: BrandStatusMode; items: number }> {
+  return rpc('set_brand_status', {
+    p_brand_id: brandId,
+    p_mode: mode,
+    p_resume_at: resumeAt ?? null,
+    p_reason: reason ?? null,
+  })
+}
+
+/** Cierra/reabre una marca desde la tablet (token del local; la marca se elige a mano). */
+export function setBrandStatusByToken(
+  token: string,
+  brandId: string,
+  mode: BrandStatusMode,
+  resumeAt?: string | null,
+  reason?: string | null,
+): Promise<{ brand_id: string; mode: BrandStatusMode; items: number }> {
+  return rpc('set_brand_status_by_token', {
+    p_device_token: token,
+    p_brand_id: brandId,
+    p_mode: mode,
+    p_resume_at: resumeAt ?? null,
+    p_reason: reason ?? null,
+  })
+}
+
+/** Marcas activas del local del dispositivo (tablet, sin sesión). */
+export function listBrandsByToken(token: string): Promise<BrandOption[]> {
+  return rpc<BrandOption[]>('brands_by_token', { p_device_token: token })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // AJUSTES DE COCINA (lectura/escritura por servicio, RLS de SESIÓN — sin token)
 // ─────────────────────────────────────────────────────────────────────────────
 

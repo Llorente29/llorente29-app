@@ -22,8 +22,14 @@
 // Entra por net.http_post con header x-availability-dispatch-secret (sin JWT).
 // Deploy CON --no-verify-jwt: la frontera la valida el SECRET (es DB-triggered).
 //
-// Cuerpo: { account_id, matriculas:[...], external_location_ids:[...],
-//           location_id, available_until, enable, reason }
+// Cuerpo: { account_id, matriculas:[...], affected_menu_item_ids:[...],
+//           external_location_ids:[...], location_id, available_until, enable, reason }
+//
+// v5 (30/07, Fase B): +affected_menu_item_ids — el leg HubRise ya NO usa la
+// matrícula en crudo como sku_ref (colisionaba entre marcas). Resuelve el ref
+// namespaced de cada menu_item vía _shared/hubriseSku.ts (compartido si tiene
+// stock_group, si no {brandSlug}:{external_id}). Sin este campo, cae a la
+// matrícula en crudo (compat transicional con callers viejos).
 //
 // Matriz por integrador:
 //   - lastapp : SOLO LECTURA (30/07). No se escribe; se loguea informativo.
@@ -40,6 +46,7 @@
 import { corsHeaders } from "../_shared/cors.ts";
 import { createClient } from "@supabase/supabase-js";
 import { resolveWriterToken } from "../_shared/hubriseToken.ts";
+import { hubriseSkuRef } from "../_shared/hubriseSku.ts";
 
 const HUBRISE_BASE = "https://api.hubrise.com/v1";
 
@@ -55,6 +62,7 @@ Deno.serve(async (req: Request) => {
   let body: {
     account_id?: string;
     matriculas?: string[];
+    affected_menu_item_ids?: string[];
     external_location_ids?: string[];
     location_id?: string | null;
     available_until?: string | null;
@@ -65,6 +73,9 @@ Deno.serve(async (req: Request) => {
 
   const accountId = body.account_id;
   const matriculas = Array.isArray(body.matriculas) ? body.matriculas.filter(Boolean) : [];
+  const affectedMenuItemIds = Array.isArray(body.affected_menu_item_ids)
+    ? body.affected_menu_item_ids.filter(Boolean)
+    : [];
   const externalLocationIds = Array.isArray(body.external_location_ids)
     ? body.external_location_ids.filter(Boolean)
     : [];
@@ -111,9 +122,48 @@ Deno.serve(async (req: Request) => {
   }
 
   // ========================= LEG HUBRISE (REAL) ============================
-  // sku_ref = matrícula (decisión A: Folvy publica el catálogo y elige los ref).
-  // PATCH solo afecta a refs que existen en cada catálogo → se auto-filtra por marca.
+  // sku_ref = ref de HubRise (Fase B, namespaced) — NO la matrícula en crudo.
+  // Un ref por-marca ({brandSlug}:{external_id}) solo existe en el catálogo de
+  // SU marca; un ref compartido (stock_group.hubrise_ref) existe en todos los
+  // catálogos del grupo. PATCH solo afecta a refs que existen en cada catálogo
+  // → se auto-filtra por marca SIEMPRE QUE el ref esté namespaced (por eso hay
+  // que resolverlo aquí, no reenviar la matrícula tal cual).
   {
+    // Resolver refs de HubRise para los menu_item afectados (Fase B). Si el
+    // caller es viejo y no manda affected_menu_item_ids, cae a la matrícula en
+    // crudo (compat transicional — mismo comportamiento que antes de Fase B).
+    let hubriseRefs: string[] = matriculas;
+    if (affectedMenuItemIds.length > 0) {
+      const { data: miRows } = await sb.from("menu_item")
+        .select("id, brand_id, external_id, stock_group_id")
+        .eq("account_id", accountId)
+        .in("id", affectedMenuItemIds);
+
+      const brandIds = Array.from(new Set((miRows ?? []).map((r) => r.brand_id as string).filter(Boolean)));
+      const { data: brandRows } = brandIds.length > 0
+        ? await sb.from("brand").select("id, slug").in("id", brandIds)
+        : { data: [] as Array<{ id: string; slug: string }> };
+      const slugByBrand = new Map((brandRows ?? []).map((b) => [b.id as string, b.slug as string]));
+
+      const groupIds = Array.from(new Set(
+        (miRows ?? []).map((r) => r.stock_group_id as string | null).filter((x): x is string => !!x),
+      ));
+      const { data: groupRows } = groupIds.length > 0
+        ? await sb.from("stock_group").select("id, hubrise_ref").in("id", groupIds)
+        : { data: [] as Array<{ id: string; hubrise_ref: string }> };
+      const groupRefById = new Map((groupRows ?? []).map((g) => [g.id as string, g.hubrise_ref as string]));
+
+      const refSet = new Set<string>();
+      for (const r of miRows ?? []) {
+        const brandSlug = slugByBrand.get(r.brand_id as string);
+        if (!brandSlug) continue;
+        const groupRef = r.stock_group_id ? (groupRefById.get(r.stock_group_id as string) ?? null) : null;
+        const ref = hubriseSkuRef({ externalId: r.external_id as string | null, brandSlug, stockGroupHubriseRef: groupRef });
+        if (ref) refSet.add(ref);
+      }
+      if (refSet.size > 0) hubriseRefs = Array.from(refSet);
+    }
+
     // Token ESCRITOR (Fase 1): 1 por cuenta, en Vault. PRIMARIO para resolver
     // catálogos self-service (Fase 2, ver abajo) y para publicar/86. Sin
     // fallo mudo: si no hay, se avisa y se cae al bucle de bridge de siempre.
@@ -182,7 +232,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // entradas de inventario: agotar = stock "0" (+expires_at); reactivar = stock null
-    const entries = matriculas.map((m) =>
+    const entries = hubriseRefs.map((m) =>
       enable
         ? { sku_ref: m, stock: null }
         : { sku_ref: m, stock: "0", ...(availableUntil ? { expires_at: availableUntil } : {}) }
@@ -229,7 +279,7 @@ Deno.serve(async (req: Request) => {
         if (r.ok) results.hubrise.ok++; else results.hubrise.failed++;
         await logPush(sb, accountId, {
           source: "hubrise", external_org_id: label.id, enable, ok: r.ok, http_status: r.status ?? null,
-          error: hubriseDetail(label, r.ok ? `ok · ${matriculas.length} sku` : (r.reason ?? null)),
+          error: hubriseDetail(label, r.ok ? `ok · ${hubriseRefs.length} sku` : (r.reason ?? null)),
         });
       }
     } else {
@@ -251,7 +301,7 @@ Deno.serve(async (req: Request) => {
         if (r.ok) results.hubrise.ok++; else results.hubrise.failed++;
         await logPush(sb, accountId, {
           source: "hubrise", external_org_id: c.id, enable, ok: r.ok, http_status: r.status ?? null,
-          error: hubriseDetail(c, r.ok ? `ok · ${matriculas.length} sku` : (r.reason ?? null)),
+          error: hubriseDetail(c, r.ok ? `ok · ${hubriseRefs.length} sku` : (r.reason ?? null)),
         });
       }
     }

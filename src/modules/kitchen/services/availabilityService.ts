@@ -82,22 +82,30 @@ interface MiLite {
   external_id: string | null
   recipe_item_id: string | null
   brand_id: string | null
+  stock_group_id: string | null
   name: string
 }
 
-/** Carga las menu_item de la cuenta que casan con un conjunto de external_id / recipe_item_id. */
+/**
+ * Carga las menu_item que casan con recipe_item_id / stock_group_id (Fase B).
+ * NO usa external_id crudo: colisiona por accidente entre marcas (Last
+ * reutiliza ids), así que ya no es señal de "mismo producto físico" — la
+ * cascada cross-brand real es receta compartida O grupo de stock EXPLÍCITO.
+ */
 async function loadSiblings(
   accountId: string,
-  externalIds: string[],
   recipeItemIds: string[],
+  stockGroupIds: string[],
 ): Promise<MiLite[]> {
-  if (externalIds.length === 0 && recipeItemIds.length === 0) return []
+  if (recipeItemIds.length === 0 && stockGroupIds.length === 0) return []
   const ors: string[] = []
-  if (externalIds.length > 0) ors.push(`external_id.in.(${externalIds.map((e) => `"${e}"`).join(',')})`)
   if (recipeItemIds.length > 0) ors.push(`recipe_item_id.in.(${recipeItemIds.join(',')})`)
-  const { data, error } = await supabase!
+  if (stockGroupIds.length > 0) ors.push(`stock_group_id.in.(${stockGroupIds.join(',')})`)
+  // stock_group_id es de Fase B: cast a any hasta que se regenere database.ts
+  // en el mismo commit que la migración que crea la columna.
+  const { data, error } = await (supabase as any)
     .from('menu_item')
-    .select('id, external_id, recipe_item_id, brand_id, name')
+    .select('id, external_id, recipe_item_id, brand_id, stock_group_id, name')
     .eq('account_id', accountId)
     .or(ors.join(','))
   if (error) throw new Error(`Error resolviendo productos: ${error.message}`)
@@ -184,18 +192,22 @@ export async function previewScope(
   locationId: string | null,
 ): Promise<ScopePreview> {
   requireSupabase()
-  // identidad del producto
-  const { data: mi } = await supabase!
+  // identidad del producto (stock_group_id: cast a any, ver loadSiblings)
+  const { data: mi } = await (supabase as any)
     .from('menu_item')
-    .select('external_id, recipe_item_id')
+    .select('external_id, recipe_item_id, stock_group_id')
     .eq('id', menuItemId)
     .maybeSingle()
   const ext = (mi?.external_id as string) ?? null
   const rec = (mi?.recipe_item_id as string) ?? null
+  const grp = (mi?.stock_group_id as string) ?? null
 
-  const sibs = await loadSiblings(accountId, ext ? [ext] : [], rec ? [rec] : [])
-  const brands = new Set(sibs.map((s) => s.brand_id).filter(Boolean)).size
-  const matriculas = [...new Set(sibs.map((s) => s.external_id).filter(Boolean) as string[])]
+  const sibs = await loadSiblings(accountId, rec ? [rec] : [], grp ? [grp] : [])
+  // sin hermanos por receta/grupo -> el alcance es SOLO este item (por-marca, aislado)
+  const brands = sibs.length > 0 ? new Set(sibs.map((s) => s.brand_id).filter(Boolean)).size : 1
+  const matriculas = sibs.length > 0
+    ? [...new Set(sibs.map((s) => s.external_id).filter(Boolean) as string[])]
+    : (ext ? [ext] : [])
   if (matriculas.length === 0) return { brands, channels: 0 }
 
   // external_location_id del local (todas las del local; null = todas las de la cuenta)

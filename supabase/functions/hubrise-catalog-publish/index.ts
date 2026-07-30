@@ -36,6 +36,7 @@
 import { corsHeaders } from "../_shared/cors.ts";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { resolveWriterToken } from "../_shared/hubriseToken.ts";
+import { hubriseSkuRef } from "../_shared/hubriseSku.ts";
 
 const HUBRISE_BASE = "https://api.hubrise.com/v1";
 const CURRENCY = "EUR";
@@ -153,7 +154,7 @@ Deno.serve(async (req: Request) => {
   // ── Autorización por RLS: leer la marca con el cliente del USUARIO ─────────
   const { data: brand, error: brErr } = await sbUser
     .from("brand")
-    .select("id, account_id, name, catalog_source")
+    .select("id, account_id, name, catalog_source, slug")
     .eq("id", brandId)
     .maybeSingle();
   if (brErr) return json({ ok: false, error: `acceso a marca: ${brErr.message}` }, 403);
@@ -245,7 +246,7 @@ Deno.serve(async (req: Request) => {
         .select("id, name, emoji, position, parent_id, is_active")
         .eq("account_id", accountId).eq("brand_id", brandId),
       sb.from("menu_item")
-        .select("id, name, description, price, product_type, menu_category_id, external_id, is_active, photo_url")
+        .select("id, name, description, price, product_type, menu_category_id, external_id, is_active, photo_url, stock_group_id")
         .eq("account_id", accountId).eq("brand_id", brandId),
     ]);
 
@@ -261,16 +262,37 @@ Deno.serve(async (req: Request) => {
 
     const activeItems = (items ?? []).filter((i) => i.is_active !== false);
 
-    // sku_ref donde falte: generar y PERSISTIR (para que publicar y el 86 coincidan)
-    const refById = new Map<string, string>();
+    // external_id donde falte: generar y PERSISTIR (para que publicar y el 86
+    // sigan teniendo una matrícula que casar). NO namespaced todavía: eso lo
+    // hace hubriseSkuRef justo debajo, misma fuente que availability-dispatch.
+    const rawExternalIdById = new Map<string, string>();
     const toPersist: Array<{ id: string; ref: string }> = [];
     for (const it of activeItems) {
       let ref = (it.external_id as string | null) ?? null;
       if (!ref) { ref = genRef(it.id as string); toPersist.push({ id: it.id as string, ref }); }
-      refById.set(it.id as string, ref);
+      rawExternalIdById.set(it.id as string, ref);
     }
     for (const p of toPersist) {
       await sb.from("menu_item").update({ external_id: p.ref, external_source: "folvy" }).eq("id", p.id);
+    }
+
+    // Fase B: ref de HubRise namespaced (grupo compartido o {brandSlug}:{external_id}).
+    // ÚNICA fuente (_shared/hubriseSku.ts) — la MISMA que usa availability-dispatch.
+    const stockGroupIds = Array.from(new Set(
+      activeItems.map((i) => i.stock_group_id as string | null).filter((x): x is string => !!x),
+    ));
+    const groupRefById = new Map<string, string>();
+    if (stockGroupIds.length > 0) {
+      const { data: groupRows } = await sb.from("stock_group").select("id, hubrise_ref").in("id", stockGroupIds);
+      for (const g of groupRows ?? []) groupRefById.set(g.id as string, g.hubrise_ref as string);
+    }
+    const brandSlug = (brand.slug as string) ?? (brand.id as string);
+    const refById = new Map<string, string>();
+    for (const it of activeItems) {
+      const rawExternalId = rawExternalIdById.get(it.id as string)!;
+      const groupRef = it.stock_group_id ? (groupRefById.get(it.stock_group_id as string) ?? null) : null;
+      const ref = hubriseSkuRef({ externalId: rawExternalId, brandSlug, stockGroupHubriseRef: groupRef });
+      refById.set(it.id as string, ref ?? rawExternalId);
     }
 
     const products = activeItems.filter((i) => i.product_type !== "combo");

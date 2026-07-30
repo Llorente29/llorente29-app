@@ -13,6 +13,7 @@ import {
   type LocationOption, type SoldOutRow, type ProductPick, type ScopePreview,
 } from '@/modules/kitchen/services/availabilityService'
 import LocationStatusCard from '@/modules/kds/components/LocationStatusCard'
+import BrandCloseControl from '@/modules/kds/components/BrandCloseControl'
 
 const ACCENT = '#15171A'
 
@@ -124,13 +125,16 @@ export default function KitchenAvailabilityPage() {
           <h1 className="text-lg font-medium text-stone-800">Disponibilidad</h1>
           <p className="text-[13px] text-stone-500 mt-0.5">Lo que está agotado ahora mismo</p>
         </div>
-        <button
-          onClick={() => setShowAgotar(true)}
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-white text-sm font-medium"
-          style={{ backgroundColor: ACCENT }}
-        >
-          <Plus size={18} /> Agotar producto
-        </button>
+        <div className="flex items-center gap-2">
+          {activeAccountId && <BrandCloseControl accountId={activeAccountId} />}
+          <button
+            onClick={() => setShowAgotar(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-white text-sm font-medium"
+            style={{ backgroundColor: ACCENT }}
+          >
+            <Plus size={18} /> Agotar producto
+          </button>
+        </div>
       </div>
 
       <div className="flex gap-2.5 mb-5 flex-wrap items-center">

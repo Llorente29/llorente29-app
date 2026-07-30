@@ -15,6 +15,7 @@ import {
   type SoldOutRow, type ProductPick, type ScopePreview,
 } from './services/tabletAvailabilityService'
 import LocationStatusCard from '@/modules/kds/components/LocationStatusCard'
+import BrandCloseControl from '@/modules/kds/components/BrandCloseControl'
 
 interface Props {
   token: string
@@ -72,6 +73,7 @@ export default function TabletAvailabilityTab({ token, locationName }: Props) {
           >
             <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
           </button>
+          <BrandCloseControl token={token} dark />
           <button
             onClick={() => setShowAgotar(true)}
             className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[#D67442] text-[#1a1208] font-bold hover:bg-[#e0824f]"
