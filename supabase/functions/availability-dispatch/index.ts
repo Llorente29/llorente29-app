@@ -31,6 +31,16 @@
 // stock_group, si no {brandSlug}:{external_id}). Sin este campo, cae a la
 // matrícula en crudo (compat transicional con callers viejos).
 //
+// v6 (30/07): FIX de trazabilidad — availability_push_log.external_catalog_id
+// (ahora text) y .organization_product_id (ahora text[]) se rellenan de
+// verdad en el tramo HubRise con el catálogo destino y los refs empujados
+// (antes quedaban NULL siempre: eran uuid y el ref namespaced/catalog_id de
+// HubRise no lo son — ver 20260730T1761). +location_status_log_id opcional
+// en el cuerpo: si viene (lo manda set_brand_status para Cap. B), al acabar
+// se hace ROLLUP del resultado agregado del tramo HubRise sobre esa fila de
+// location_status_log (ok/error/resolved_at) — Cap. B reutiliza este
+// despachador en vez de uno dedicado, así que el resultado no llegaba solo.
+//
 // Matriz por integrador:
 //   - lastapp : SOLO LECTURA (30/07). No se escribe; se loguea informativo.
 //   - hubrise : PATCH /catalogs/{cat}/locations/{external_location_id}/inventory
@@ -68,6 +78,7 @@ Deno.serve(async (req: Request) => {
     available_until?: string | null;
     enable?: boolean;
     reason?: string;
+    location_status_log_id?: string | null;
   } = {};
   try { body = await req.json(); } catch { /* ignore */ }
 
@@ -82,6 +93,7 @@ Deno.serve(async (req: Request) => {
   const locationId = body.location_id ?? null;
   const availableUntil = body.available_until ?? null;
   const enable = body.enable === true;
+  const locationStatusLogId = body.location_status_log_id ?? null;
   if (!accountId || matriculas.length === 0) {
     return json({ ok: false, error: "account_id y matriculas requeridos" }, 400);
   }
@@ -247,12 +259,20 @@ Deno.serve(async (req: Request) => {
       for (const c of conns) {
         if (!c.external_catalog_id) {
           results.hubrise.skipped++;
-          await logPush(sb, accountId, { source: "hubrise", external_org_id: c.id, enable, ok: false, error: hubriseDetail(c, "sin catalog") });
+          await logPush(sb, accountId, {
+            source: "hubrise", external_org_id: c.id, enable, ok: false,
+            organization_product_id: hubriseRefs,
+            error: hubriseDetail(c, "sin catalog"),
+          });
           continue;
         }
         if (!c.external_location_id) {
           results.hubrise.skipped++;
-          await logPush(sb, accountId, { source: "hubrise", external_org_id: c.id, enable, ok: false, error: hubriseDetail(c, "sin external_location_id") });
+          await logPush(sb, accountId, {
+            source: "hubrise", external_org_id: c.id, enable, ok: false,
+            external_catalog_id: c.external_catalog_id, organization_product_id: hubriseRefs,
+            error: hubriseDetail(c, "sin external_location_id"),
+          });
           continue;
         }
         const catalogId = c.external_catalog_id as string;
@@ -271,7 +291,11 @@ Deno.serve(async (req: Request) => {
         };
         if (enabledConns.length === 0) {
           results.hubrise.skipped++;
-          await logPush(sb, accountId, { source: "hubrise", external_org_id: label.id, enable, ok: false, error: hubriseDetail(label, "push_status_enabled=false (todas las conexiones del catálogo+local)") });
+          await logPush(sb, accountId, {
+            source: "hubrise", external_org_id: label.id, enable, ok: false,
+            external_catalog_id: label.external_catalog_id, organization_product_id: hubriseRefs,
+            error: hubriseDetail(label, "push_status_enabled=false (todas las conexiones del catálogo+local)"),
+          });
           continue;
         }
         results.hubrise.pushed++;
@@ -279,6 +303,7 @@ Deno.serve(async (req: Request) => {
         if (r.ok) results.hubrise.ok++; else results.hubrise.failed++;
         await logPush(sb, accountId, {
           source: "hubrise", external_org_id: label.id, enable, ok: r.ok, http_status: r.status ?? null,
+          external_catalog_id: label.external_catalog_id, organization_product_id: hubriseRefs,
           error: hubriseDetail(label, r.ok ? `ok · ${hubriseRefs.length} sku` : (r.reason ?? null)),
         });
       }
@@ -286,12 +311,20 @@ Deno.serve(async (req: Request) => {
       for (const c of conns) {
         if (c.push_status_enabled === false) {
           results.hubrise.skipped++;
-          await logPush(sb, accountId, { source: "hubrise", external_org_id: c.id, enable, ok: false, error: hubriseDetail(c, "push_status_enabled=false") });
+          await logPush(sb, accountId, {
+            source: "hubrise", external_org_id: c.id, enable, ok: false,
+            external_catalog_id: c.external_catalog_id, organization_product_id: hubriseRefs,
+            error: hubriseDetail(c, "push_status_enabled=false"),
+          });
           continue;
         }
         if (!c.access_token || !c.external_catalog_id || !c.external_location_id) {
           results.hubrise.skipped++;
-          await logPush(sb, accountId, { source: "hubrise", external_org_id: c.id, enable, ok: false, error: hubriseDetail(c, "sin access_token/catalog/location") });
+          await logPush(sb, accountId, {
+            source: "hubrise", external_org_id: c.id, enable, ok: false,
+            external_catalog_id: c.external_catalog_id, organization_product_id: hubriseRefs,
+            error: hubriseDetail(c, "sin access_token/catalog/location"),
+          });
           continue;
         }
         results.hubrise.pushed++;
@@ -301,6 +334,7 @@ Deno.serve(async (req: Request) => {
         if (r.ok) results.hubrise.ok++; else results.hubrise.failed++;
         await logPush(sb, accountId, {
           source: "hubrise", external_org_id: c.id, enable, ok: r.ok, http_status: r.status ?? null,
+          external_catalog_id: c.external_catalog_id, organization_product_id: hubriseRefs,
           error: hubriseDetail(c, r.ok ? `ok · ${hubriseRefs.length} sku` : (r.reason ?? null)),
         });
       }
@@ -319,15 +353,34 @@ Deno.serve(async (req: Request) => {
       .in("organization_product_id", matriculas)
       .limit(50);
     for (const o of others ?? []) {
+      const orgProductId = o.organization_product_id ? [o.organization_product_id as string] : null;
       await logPush(sb, accountId, {
         source: "other",
         external_org_id: o.external_org_id as string | null,
         external_catalog_id: o.external_catalog_id as string | null,
-        organization_product_id: o.organization_product_id as string | null,
+        organization_product_id: orgProductId,
         enable, ok: false,
         error: `no empujado: integrador '${o.source}' sin leg`,
       });
     }
+  }
+
+  // ===================== ROLLUP a location_status_log (Cap. B) =============
+  // Cap. B (set_brand_status) reutiliza ESTE despachador en vez de uno
+  // dedicado; su fila de location_status_log no se actualiza sola, así que si
+  // llega location_status_log_id se hace el rollup del resultado agregado del
+  // tramo HubRise (el único real) sobre esa fila.
+  if (locationStatusLogId) {
+    const hubriseOk = results.hubrise.failed === 0;
+    const summary = `HubRise: ${results.hubrise.pushed} empujado(s) · ${results.hubrise.ok} ok · `
+      + `${results.hubrise.failed} fallido(s) · ${results.hubrise.skipped} omitido(s)`;
+    try {
+      await sb.from("location_status_log").update({
+        ok: hubriseOk,
+        error: summary,
+        resolved_at: new Date().toISOString(),
+      }).eq("id", locationStatusLogId);
+    } catch { /* best-effort */ }
   }
 
   return json({ ok: true, enable, location_id: locationId, ...results }, 200);
@@ -367,7 +420,8 @@ async function logPush(
     external_org_id?: string | null;
     external_catalog_id?: string | null;
     catalog_product_id?: string | null;
-    organization_product_id?: string | null;
+    /** Refs namespaced (Fase B) empujados en este PATCH, o refs que se iban a empujar en un skip/fallo. */
+    organization_product_id?: string[] | null;
     enable: boolean;
     ok: boolean;
     http_status?: number | null;
