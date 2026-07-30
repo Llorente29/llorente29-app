@@ -14,6 +14,7 @@ import { useEffect, useState } from 'react'
 import { MonitorPlay, LogOut, Loader2 } from 'lucide-react'
 import KdsBoard from './components/KdsBoard'
 import KdsAlarmOverlay from './components/KdsAlarmOverlay'
+import AvailabilityNoticeOverlay from './components/AvailabilityNoticeOverlay'
 import { getBoard } from './services/kdsService'
 
 const TOKEN_KEY = 'kds_device_token'
@@ -150,6 +151,8 @@ export default function KdsKioskRoute() {
       </div>
       {/* Alarma de reparto: banner+sonido global, sobre el tablero. */}
       <KdsAlarmOverlay locationId={null} token={token} />
+      {/* Aviso multi-integrador: recuerda desconectar en Last/Otter tras un 86. */}
+      <AvailabilityNoticeOverlay locationId={null} token={token} />
     </div>
   )
 }

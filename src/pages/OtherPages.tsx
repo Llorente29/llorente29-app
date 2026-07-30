@@ -8,6 +8,7 @@ import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import BusinessHoursEditor, { type CopyTarget } from '@/modules/multitenancy/components/hours/BusinessHoursEditor'
 import DispatchConfigSection from '@/modules/integrations/components/DispatchConfigSection'
 import DeliveryWatchdogSection from '@/modules/integrations/components/DeliveryWatchdogSection'
+import AvailabilityConfigSection from '@/modules/integrations/components/AvailabilityConfigSection'
 import PrintersSettingsPage from '@/modules/printing/components/PrintersSettingsPage'
 
 // DashboardPage se ha movido a su propia page: src/pages/DashboardPage.tsx
@@ -557,6 +558,9 @@ export function LocationsPage() {
 
                     {/* Vigía de reparto por tiempo (umbrales por local) */}
                     <DeliveryWatchdogSection locationId={loc.id} />
+
+                    {/* Disponibilidad (86): auto/manual + otros integradores del local */}
+                    <AvailabilityConfigSection locationId={loc.id} />
 
                     {/* Impresoras del local (alta/edición/baja por RPC, sin SQL) */}
                     {activeAccountId && (

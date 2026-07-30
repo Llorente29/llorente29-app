@@ -124,14 +124,21 @@ export default function TabletAvailabilityTab({ token, locationName }: Props) {
                     </p>
                   </div>
                 </div>
-                <button
-                  onClick={() => void handleReactivar(row)}
-                  disabled={busyId === row.id || !row.representativeMenuItemId}
-                  className="w-full py-2.5 rounded-lg bg-emerald-600 text-white font-bold hover:bg-emerald-500 disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {busyId === row.id ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
-                  Reactivar
-                </button>
+                {row.sourceLast && (
+                  <div className="w-full text-center py-2 rounded-lg bg-zinc-800 text-zinc-400 text-xs font-semibold">
+                    Gestionar en Last
+                  </div>
+                )}
+                {(!row.sourceLast || row.sourceFolvy) && (
+                  <button
+                    onClick={() => void handleReactivar(row)}
+                    disabled={busyId === row.id || !row.representativeMenuItemId}
+                    className="w-full py-2.5 rounded-lg bg-emerald-600 text-white font-bold hover:bg-emerald-500 disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {busyId === row.id ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                    {row.sourceLast ? 'Reactivar en Folvy' : 'Reactivar'}
+                  </button>
+                )}
               </div>
             ))}
           </div>

@@ -21,6 +21,7 @@
 // viven en salesReliabilityService y se re-exportan aquí para que la pantalla
 // tenga una sola puerta.
 
+import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query'
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
 
 export type Carril = 'A' | 'B' | 'C'
@@ -205,6 +206,47 @@ export async function recostProduct(
     lineasAfectadas: Number(row?.lineas_afectadas ?? 0),
     movimientos: Number(row?.movimientos ?? 0),
     aplicado: Boolean(row?.aplicado),
+  }
+}
+
+/**
+ * Hook React Query para caché inteligente de la cola de fiabilidad.
+ *
+ * CACHÉ: 5 min (staleTime). Mientras esté fresco, las pantallas abiertas
+ * ven datos instantáneamente. Después se pide refetch silencioso en fondo.
+ * El botón "Actualizar" invalida el caché y fuerza refetch inmediato.
+ *
+ * GARBAGE COLLECTION: 10 min (gcTime). Los datos se guardan en RAM 10 min
+ * incluso sin referencias activas, por si el usuario vuelve a la pantalla.
+ *
+ * RETRY: 2 intentos antes de mostrar error.
+ * REFETCH: cada 10 min de fondo, sin molestar al usuario.
+ */
+export function useReliabilityQueue(
+  accountId: string,
+  locationId?: string | null,
+  days = 7,
+): UseQueryResult<QueueItem[], Error> {
+  return useQuery({
+    queryKey: ['reliabilityQueue', accountId, locationId, days],
+    queryFn: () => getReliabilityQueue(accountId, locationId ?? null, days),
+    staleTime: 5 * 60 * 1000,        // caché fresco 5 min
+    gcTime: 10 * 60 * 1000,          // mantener en RAM 10 min
+    refetchInterval: 10 * 60 * 1000, // revalidar silencioso cada 10 min
+    retry: 2,                        // reintentar 2x si falla
+  })
+}
+
+/**
+ * Hook para obtener la query client e invalidar el caché manualmente.
+ * Úsalo en el botón "Actualizar" para forzar un refetch inmediato.
+ */
+export function useInvalidateReliabilityQueue() {
+  const queryClient = useQueryClient()
+  return (accountId: string, locationId?: string | null, days = 7) => {
+    queryClient.invalidateQueries({
+      queryKey: ['reliabilityQueue', accountId, locationId, days],
+    })
   }
 }
 

@@ -458,6 +458,14 @@ export async function classifyUnmappedProduct(
  * por nombre, con confianza + semáforo. Envuelve la RPC run_mapping (la misma que
  * usa Supply para casar líneas de albarán). Solo sugiere; no escribe nada.
  */
+/** Candidato fuerte por nombre parecido que create_dish_from_unmapped encontró
+ *  en vez de duplicar (similarity() trigram >= 0.6 contra un plato vivo). */
+export interface DuplicateCandidate {
+  recipeItemId: string
+  nombre: string
+  similitud: number
+}
+
 /**
  * Crea un plato NUEVO del TPV que no existe en Folvy (no_recipe/no_menu_item):
  * recipe_item(dish) + menu_item SELLADO (external_source='lastapp'+external_id=
@@ -465,24 +473,45 @@ export async function classifyUnmappedProduct(
  * escandallo. Modelo canónico (sin product_map). La lógica vive en la RPC
  * create_dish_from_unmapped (anti-invención: EXCEPTION si la marca no resuelve,
  * no hay matrícula, o el producto es un combo).
+ *
+ * Anti-duplicado (28/07): antes de crear, la RPC busca un plato ya existente
+ * con nombre MUY parecido. Si lo encuentra y confirmCreate=false, NO crea
+ * nada: devuelve `creado=false` + `candidato` para que la pantalla pregunte
+ * "¿es el mismo?" en vez de duplicar en silencio. confirmCreate=true salta
+ * ese check ("no, crear uno nuevo igualmente").
  */
 export async function createDishFromUnmapped(
   accountId: string,
   productName: string,
-): Promise<{ recipeItemId: string | null; marcasCreadas: number; lineasCasadas: number }> {
+  confirmCreate = false,
+): Promise<{
+  recipeItemId: string | null
+  marcasCreadas: number
+  lineasCasadas: number
+  creado: boolean
+  candidato: DuplicateCandidate | null
+}> {
   requireSupabase()
   const { data, error } = await supabase!.rpc('create_dish_from_unmapped', {
     p_account_id: accountId,
     p_product_name: productName,
+    p_confirm_create: confirmCreate,
   })
   if (error) throw new Error(error.message)
-  const row = (Array.isArray(data) ? data[0] : data) as
-    { out_recipe_item_id: string | null; out_marcas_creadas: number; out_lineas_casadas: number } | undefined
+  const row = (Array.isArray(data) ? data[0] : data) as {
+    out_recipe_item_id: string | null; out_marcas_creadas: number; out_lineas_casadas: number
+    out_creado: boolean; out_candidato_id: string | null; out_candidato_nombre: string | null
+    out_similitud: number | null
+  } | undefined
   if (!row) throw new Error('No se pudo crear el plato.')
   return {
     recipeItemId: row.out_recipe_item_id ?? null,
     marcasCreadas: Number(row.out_marcas_creadas ?? 0),
     lineasCasadas: Number(row.out_lineas_casadas ?? 0),
+    creado: row.out_creado === true,
+    candidato: row.out_candidato_id
+      ? { recipeItemId: row.out_candidato_id, nombre: row.out_candidato_nombre ?? '', similitud: Number(row.out_similitud ?? 0) }
+      : null,
   }
 }
 
@@ -498,6 +527,12 @@ export async function suggestMatch(
     p_code: undefined,
     p_limit: limit,
     p_fuzzy_min: 0.30,
+    // Sin esto la llamada es ambigua entre las dos versiones de run_mapping
+    // que hay en BBDD (drift, ninguna versionada) y PostgreSQL responde
+    // "function is not unique" — el catch de quien llama a suggestMatch se
+    // lo traga y la pantalla dice "no se parece a nada" siempre. Ver
+    // 20260729T1000_run_mapping_unico_y_anti_duplicado.sql.
+    p_target_types: ['dish'],
   })
   if (error) throw new Error(`Error sugiriendo casado: ${error.message}`)
   return ((data ?? []) as RowRunMapping[]).map((r) => ({

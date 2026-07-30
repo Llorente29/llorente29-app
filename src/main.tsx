@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AppProvider } from './context/AppContext'
 import App from './App'
 import UpdateGate from './components/UpdateGate'
@@ -59,18 +60,22 @@ window.addEventListener('appinstalled', () => {
   window.dispatchEvent(new Event('folvy:installed'))
 })
 
+const queryClient = new QueryClient()
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     {/* Cortafuegos global: un crash de render en cualquier punto muestra un
         fallback con "Recargar" en vez de dejar la pantalla en blanco. */}
     <RootErrorBoundary>
-      <BrowserRouter>
-        <AppProvider>
-          <App />
-          {/* Auto-actualización forzada (sólo app nativa; no-op en web). */}
-          <UpdateGate />
-        </AppProvider>
-      </BrowserRouter>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <AppProvider>
+            <App />
+            {/* Auto-actualización forzada (sólo app nativa; no-op en web). */}
+            <UpdateGate />
+          </AppProvider>
+        </BrowserRouter>
+      </QueryClientProvider>
     </RootErrorBoundary>
   </React.StrictMode>
 )

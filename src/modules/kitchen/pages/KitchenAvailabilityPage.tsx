@@ -224,14 +224,26 @@ export default function KitchenAvailabilityPage() {
                   ? <span className="text-amber-600">hasta {new Date(row.availableUntil).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</span>
                   : <span className="text-stone-400">indefinido</span>}
               </p>
-              <button
-                onClick={() => handleReactivate(row)}
-                disabled={busyRow === row.id || !row.representativeMenuItemId}
-                className="mt-auto w-full inline-flex items-center justify-center gap-1.5 py-1.5 rounded-md bg-emerald-600 text-white text-[12px] font-medium hover:bg-emerald-700 disabled:opacity-40"
-              >
-                {busyRow === row.id ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-                Reactivar
-              </button>
+              <div className="mt-auto flex flex-col gap-1.5">
+                {row.sourceLast && (
+                  <div
+                    className="w-full text-center py-1.5 rounded-md bg-stone-100 text-stone-500 text-[11px] font-medium"
+                    title="Este artículo viene de Last: Folvy ya no escribe ahí. Reactívalo desde Last."
+                  >
+                    Gestionar en Last
+                  </div>
+                )}
+                {(!row.sourceLast || row.sourceFolvy) && (
+                  <button
+                    onClick={() => handleReactivate(row)}
+                    disabled={busyRow === row.id || !row.representativeMenuItemId}
+                    className="w-full inline-flex items-center justify-center gap-1.5 py-1.5 rounded-md bg-emerald-600 text-white text-[12px] font-medium hover:bg-emerald-700 disabled:opacity-40"
+                  >
+                    {busyRow === row.id ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+                    {row.sourceLast ? 'Reactivar en Folvy' : 'Reactivar'}
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>

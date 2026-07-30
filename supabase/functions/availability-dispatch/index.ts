@@ -3,9 +3,21 @@
 // DESPACHADOR DE DISPONIBILIDAD (86) · disparado por net.http_post desde las RPC
 // set_product_availability / _by_token. VÍA ÚNICA: el front nunca llama aquí.
 // ============================================================================
+// v4 (30/07): LAST PASA A SOLO LECTURA. Decisión de dueño por integración:
+//   · HubRise → lo controla Folvy (fuente de la verdad; Folvy ESCRIBE).
+//   · Last    → lo controla Last. Folvy DEJA de escribir (antes hacía PUT
+//     /catalogs/.../products/...). Motivo confirmado en lastapp-sync-catalog:
+//     cada sincronización re-escribe external_catalog_product.is_enabled desde
+//     el estado REAL de Last, así que cualquier PUT de Folvy podía quedar
+//     pisado en el siguiente sync ("pegado"). Los artículos de origen Last se
+//     gestionan en Last (la UI ya no ofrece un Reactivar que no puede cumplir).
+//   El tramo Last se queda como bloque de solo-lectura: no llama a la API de
+//   Last, no toca is_enabled, y deja un log informativo (no es fallo) para
+//   trazabilidad. El camino de HubRise queda IGUAL que en v3.
+//
 // v3 (24/06): + LEG HUBRISE (PATCH inventario, sku_ref = matrícula, por
 // conexión×local) + lee location_id/available_until + LOG HONESTO de los huecos
-// (otter/desconocido) en vez de skip silencioso. El camino de Last queda IGUAL.
+// (otter/desconocido) en vez de skip silencioso.
 //
 // Entra por net.http_post con header x-availability-dispatch-secret (sin JWT).
 // Deploy CON --no-verify-jwt: la frontera la valida el SECRET (es DB-triggered).
@@ -14,7 +26,7 @@
 //           location_id, available_until, enable, reason }
 //
 // Matriz por integrador:
-//   - lastapp : PUT /catalogs/{cat}/products/{prod} {enable} (Bearer + locationID). REAL.
+//   - lastapp : SOLO LECTURA (30/07). No se escribe; se loguea informativo.
 //   - hubrise : PATCH /catalogs/{cat}/locations/{external_location_id}/inventory
 //               (X-Access-Token). REAL. La forma corta .../location/inventory (sin
 //               id) da 403 "Operation not allowed for the current scope" con token
@@ -29,8 +41,6 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { createClient } from "@supabase/supabase-js";
 import { resolveWriterToken } from "../_shared/hubriseToken.ts";
 
-const LASTAPP_BASE = "https://api.last.app/v2";
-// = el mismo base que usa hubrise-order-status. Si allí difiere, alinear este.
 const HUBRISE_BASE = "https://api.hubrise.com/v1";
 
 Deno.serve(async (req: Request) => {
@@ -73,11 +83,14 @@ Deno.serve(async (req: Request) => {
   const results = { last: { pushed: 0, ok: 0, failed: 0, skipped: 0 },
                     hubrise: { pushed: 0, ok: 0, failed: 0, skipped: 0 } };
 
-  // ========================= LEG LASTAPP (REAL) =============================
+  // ========================= LEG LASTAPP (SOLO LECTURA) =====================
+  // No se llama a la API de Last ni se toca is_enabled: Last es dueño de su
+  // catálogo. Un solo log informativo por llamada (no es fallo), para no
+  // inundar availability_push_log con una fila por producto×local.
   {
     let query = sb
       .from("external_catalog_product")
-      .select("source, external_org_id, external_catalog_id, catalog_product_id, organization_product_id, external_location_id")
+      .select("organization_product_id")
       .eq("account_id", accountId)
       .eq("source", "lastapp")
       .in("organization_product_id", matriculas);
@@ -85,45 +98,15 @@ Deno.serve(async (req: Request) => {
       query = query.in("external_location_id", externalLocationIds);
     }
     const { data: targets } = await query;
-
-    const tokenCache: Record<string, string | null> = {};
-    async function lastTokenForOrg(orgId: string): Promise<string | null> {
-      if (orgId in tokenCache) return tokenCache[orgId];
-      const { data: integ } = await sb.from("external_integration")
-        .select("token_secret_name, is_active")
-        .eq("account_id", accountId).eq("source", "lastapp").eq("external_org_id", orgId)
-        .eq("is_active", true).maybeSingle();
-      const tok = integ?.token_secret_name ? (Deno.env.get(integ.token_secret_name) ?? null) : null;
-      tokenCache[orgId] = tok;
-      return tok;
-    }
-
-    for (const t of targets ?? []) {
-      const token = await lastTokenForOrg(t.external_org_id as string);
-      if (!token || !t.external_location_id || !t.external_catalog_id || !t.catalog_product_id) {
-        results.last.skipped++;
-        await logLast(sb, accountId, t, enable, false, null, "sin token/location/catalog");
-        continue;
-      }
-      results.last.pushed++;
-      const r = await putLastEnable(
-        token,
-        t.external_location_id as string,
-        t.external_catalog_id as string,
-        t.catalog_product_id as string,
+    const n = targets?.length ?? 0;
+    results.last.skipped = n;
+    if (n > 0) {
+      await logPush(sb, accountId, {
+        source: "lastapp",
         enable,
-      );
-      if (r.ok) {
-        results.last.ok++;
-        await sb.from("external_catalog_product")
-          .update({ is_enabled: enable, updated_at: new Date().toISOString() })
-          .eq("account_id", accountId)
-          .eq("source", "lastapp")
-          .eq("catalog_product_id", t.catalog_product_id as string);
-      } else {
-        results.last.failed++;
-      }
-      await logLast(sb, accountId, t, enable, r.ok, r.status ?? null, r.ok ? null : (r.reason ?? null));
+        ok: true,
+        error: `Last es de solo lectura (Folvy no escribe) · ${n} fila(s) sin tocar, gestionar en Last`,
+      });
     }
   }
 
@@ -214,12 +197,12 @@ Deno.serve(async (req: Request) => {
       for (const c of conns) {
         if (!c.external_catalog_id) {
           results.hubrise.skipped++;
-          await logHubrise(sb, accountId, c, enable, false, null, "sin catalog");
+          await logPush(sb, accountId, { source: "hubrise", external_org_id: c.id, enable, ok: false, error: hubriseDetail(c, "sin catalog") });
           continue;
         }
         if (!c.external_location_id) {
           results.hubrise.skipped++;
-          await logHubrise(sb, accountId, c, enable, false, null, "sin external_location_id");
+          await logPush(sb, accountId, { source: "hubrise", external_org_id: c.id, enable, ok: false, error: hubriseDetail(c, "sin external_location_id") });
           continue;
         }
         const catalogId = c.external_catalog_id as string;
@@ -238,25 +221,27 @@ Deno.serve(async (req: Request) => {
         };
         if (enabledConns.length === 0) {
           results.hubrise.skipped++;
-          await logHubrise(sb, accountId, label, enable, false, null, "push_status_enabled=false (todas las conexiones del catálogo+local)");
+          await logPush(sb, accountId, { source: "hubrise", external_org_id: label.id, enable, ok: false, error: hubriseDetail(label, "push_status_enabled=false (todas las conexiones del catálogo+local)") });
           continue;
         }
         results.hubrise.pushed++;
         const r = await patchHubriseInventory(writerToken, catalogId, extLocId, entries);
         if (r.ok) results.hubrise.ok++; else results.hubrise.failed++;
-        await logHubrise(sb, accountId, label, enable, r.ok, r.status ?? null,
-          r.ok ? `ok · ${matriculas.length} sku` : (r.reason ?? null));
+        await logPush(sb, accountId, {
+          source: "hubrise", external_org_id: label.id, enable, ok: r.ok, http_status: r.status ?? null,
+          error: hubriseDetail(label, r.ok ? `ok · ${matriculas.length} sku` : (r.reason ?? null)),
+        });
       }
     } else {
       for (const c of conns) {
         if (c.push_status_enabled === false) {
           results.hubrise.skipped++;
-          await logHubrise(sb, accountId, c, enable, false, null, "push_status_enabled=false");
+          await logPush(sb, accountId, { source: "hubrise", external_org_id: c.id, enable, ok: false, error: hubriseDetail(c, "push_status_enabled=false") });
           continue;
         }
         if (!c.access_token || !c.external_catalog_id || !c.external_location_id) {
           results.hubrise.skipped++;
-          await logHubrise(sb, accountId, c, enable, false, null, "sin access_token/catalog/location");
+          await logPush(sb, accountId, { source: "hubrise", external_org_id: c.id, enable, ok: false, error: hubriseDetail(c, "sin access_token/catalog/location") });
           continue;
         }
         results.hubrise.pushed++;
@@ -264,8 +249,10 @@ Deno.serve(async (req: Request) => {
           c.access_token as string, c.external_catalog_id as string, c.external_location_id as string, entries,
         );
         if (r.ok) results.hubrise.ok++; else results.hubrise.failed++;
-        await logHubrise(sb, accountId, c, enable, r.ok, r.status ?? null,
-          r.ok ? `ok · ${matriculas.length} sku` : (r.reason ?? null));
+        await logPush(sb, accountId, {
+          source: "hubrise", external_org_id: c.id, enable, ok: r.ok, http_status: r.status ?? null,
+          error: hubriseDetail(c, r.ok ? `ok · ${matriculas.length} sku` : (r.reason ?? null)),
+        });
       }
     }
   }
@@ -282,29 +269,19 @@ Deno.serve(async (req: Request) => {
       .in("organization_product_id", matriculas)
       .limit(50);
     for (const o of others ?? []) {
-      await logLast(sb, accountId, o, enable, false, null, `no empujado: integrador '${o.source}' sin leg`);
+      await logPush(sb, accountId, {
+        source: "other",
+        external_org_id: o.external_org_id as string | null,
+        external_catalog_id: o.external_catalog_id as string | null,
+        organization_product_id: o.organization_product_id as string | null,
+        enable, ok: false,
+        error: `no empujado: integrador '${o.source}' sin leg`,
+      });
     }
   }
 
   return json({ ok: true, enable, location_id: locationId, ...results }, 200);
 });
-
-// ── LAST: PUT enable ────────────────────────────────────────────────────────
-async function putLastEnable(
-  token: string, locId: string, catalogId: string, productId: string, enable: boolean,
-): Promise<{ ok: boolean; status?: number; reason?: string }> {
-  try {
-    const res = await fetch(`${LASTAPP_BASE}/catalogs/${catalogId}/products/${productId}`, {
-      method: "PUT",
-      headers: { "Authorization": `Bearer ${token}`, "locationID": locId, "Content-Type": "application/json" },
-      body: JSON.stringify({ enable }),
-    });
-    if (!res.ok) return { ok: false, status: res.status, reason: (await res.text()).slice(0, 200) };
-    return { ok: true, status: res.status };
-  } catch (e) {
-    return { ok: false, reason: e instanceof Error ? e.message : String(e) };
-  }
-}
 
 // ── HUBRISE: PATCH inventory ─────────────────────────────────────────────────
 // Forma EXPLÍCITA con el id HubRise del local (p.ej. "1b6p8-0"). La forma
@@ -326,39 +303,39 @@ async function patchHubriseInventory(
   }
 }
 
-// ── log (best-effort) ───────────────────────────────────────────────────────
-async function logLast(
-  sb: ReturnType<typeof createClient>, accountId: string, t: Record<string, unknown>,
-  enable: boolean, ok: boolean, http_status: number | null, error: string | null,
-): Promise<void> {
-  try {
-    await sb.from("availability_push_log").insert({
-      account_id: accountId,
-      external_org_id: t.external_org_id ?? null,
-      external_catalog_id: t.external_catalog_id ?? null,
-      catalog_product_id: t.catalog_product_id ?? null,
-      organization_product_id: t.organization_product_id ?? null,
-      enable, ok, http_status, error,
-    });
-  } catch { /* best-effort */ }
+// HubRise loguea por CONEXIÓN (no por fila espejo, que no existe): el catálogo
+// y el local van en el texto del detalle.
+function hubriseDetail(c: Record<string, unknown>, detail: string | null): string {
+  return `hubrise · ${c.connection_name ?? "?"} · cat ${c.external_catalog_id ?? "?"} · loc ${c.external_location_id ?? "?"}${detail ? " · " + detail : ""}`;
 }
 
-// HubRise loguea por CONEXIÓN (no por fila espejo, que no existe). El catálogo
-// va en el texto porque availability_push_log no tiene columnas de texto para
-// HubRise (deuda menor: añadir source/detail si se quiere filtrar por integrador).
-async function logHubrise(
-  sb: ReturnType<typeof createClient>, accountId: string, c: Record<string, unknown>,
-  enable: boolean, ok: boolean, http_status: number | null, detail: string | null,
+// ── log (best-effort) ───────────────────────────────────────────────────────
+async function logPush(
+  sb: ReturnType<typeof createClient>, accountId: string,
+  fields: {
+    source: "lastapp" | "hubrise" | "other";
+    external_org_id?: string | null;
+    external_catalog_id?: string | null;
+    catalog_product_id?: string | null;
+    organization_product_id?: string | null;
+    enable: boolean;
+    ok: boolean;
+    http_status?: number | null;
+    error?: string | null;
+  },
 ): Promise<void> {
   try {
     await sb.from("availability_push_log").insert({
       account_id: accountId,
-      external_org_id: c.id ?? null,               // uuid de la fila external_integration
-      external_catalog_id: null,
-      catalog_product_id: null,
-      organization_product_id: null,
-      enable, ok, http_status,
-      error: `hubrise · ${c.connection_name ?? "?"} · cat ${c.external_catalog_id ?? "?"} · loc ${c.external_location_id ?? "?"}${detail ? " · " + detail : ""}`,
+      source: fields.source,
+      external_org_id: fields.external_org_id ?? null,
+      external_catalog_id: fields.external_catalog_id ?? null,
+      catalog_product_id: fields.catalog_product_id ?? null,
+      organization_product_id: fields.organization_product_id ?? null,
+      enable: fields.enable,
+      ok: fields.ok,
+      http_status: fields.http_status ?? null,
+      error: fields.error ?? null,
     });
   } catch { /* best-effort */ }
 }

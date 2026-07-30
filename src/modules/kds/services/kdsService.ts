@@ -262,6 +262,46 @@ export function ackAlarm(saleId: string, token?: string | null): Promise<void> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// AVISO MULTI-INTEGRADOR (86 Fase 0): al agotar un producto en un local que usa
+// otros integradores (Last, Otter…), recuerda desconectarlo también allí.
+// Lo inserta siempre la RPC del 86 (set_product_availability(_by_token)); este
+// servicio solo lee/reconoce. Doble puerta (sesión | token), calcado de la
+// alarma de reparto de arriba.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AvailabilityNotice {
+  id: string
+  product_name: string
+  external_id: string | null
+  recipe_item_id: string | null
+  brands: number
+  integrators: string[]
+  reason: string | null
+  raised_at: string
+}
+
+export interface AvailabilityNoticesResult {
+  location_id: string
+  notices: AvailabilityNotice[]
+}
+
+/** Avisos multi-integrador VIVOS (sin acuse) del local. Kiosco/tablet → token. */
+export function getAvailabilityNotices(locationId: string | null, token?: string | null): Promise<AvailabilityNoticesResult> {
+  return rpc<AvailabilityNoticesResult>('availability_notices', {
+    p_location_id: locationId,
+    p_token: token ?? null,
+  })
+}
+
+/** "Hecho": sella el acuse del aviso. */
+export function ackAvailabilityNotice(noticeId: string, token?: string | null): Promise<void> {
+  return rpc<void>('availability_ack_notice', {
+    p_notice_id: noticeId,
+    p_token: token ?? null,
+  })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // AJUSTES DE COCINA (lectura/escritura por servicio, RLS de SESIÓN — sin token)
 // ─────────────────────────────────────────────────────────────────────────────
 
