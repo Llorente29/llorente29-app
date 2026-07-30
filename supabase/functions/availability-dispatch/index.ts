@@ -41,6 +41,20 @@
 // location_status_log (ok/error/resolved_at) — Cap. B reutiliza este
 // despachador en vez de uno dedicado, así que el resultado no llegaba solo.
 //
+// v7 (30/07): DESPACHO EFICIENTE — antes cada ref se empujaba a TODOS los
+// catálogos HubRise del local (inofensivo por el namespacing: cada catálogo
+// solo conoce sus propios refs y se auto-filtra, pero N-1 llamadas de más
+// por cada 86; verificado: cerrar 1 marca con 14 refs empujaba a 6 catálogos,
+// 5 de sobra). Ahora, cuando llega affected_menu_item_ids, se resuelve
+// menu_item -> brand_id -> catálogo de ESA marca (brand_hubrise_catalog,
+// fallback external_brand_map->external_integration) y cada ref solo se
+// empuja a los catálogos de las marcas que de verdad lo tienen — un ref
+// compartido (stock_group) llega a los catálogos de TODAS las marcas
+// afectadas (la cascada de set_product_availability ya incluye a todos los
+// hermanos del grupo en affected_menu_item_ids, así que esto sale solo). Sin
+// affected_menu_item_ids (callers viejos), cae al comportamiento anterior
+// (todos los catálogos del local) — compat transicional.
+//
 // Matriz por integrador:
 //   - lastapp : SOLO LECTURA (30/07). No se escribe; se loguea informativo.
 //   - hubrise : PATCH /catalogs/{cat}/locations/{external_location_id}/inventory
@@ -135,16 +149,14 @@ Deno.serve(async (req: Request) => {
 
   // ========================= LEG HUBRISE (REAL) ============================
   // sku_ref = ref de HubRise (Fase B, namespaced) — NO la matrícula en crudo.
-  // Un ref por-marca ({brandSlug}:{external_id}) solo existe en el catálogo de
-  // SU marca; un ref compartido (stock_group.hubrise_ref) existe en todos los
-  // catálogos del grupo. PATCH solo afecta a refs que existen en cada catálogo
-  // → se auto-filtra por marca SIEMPRE QUE el ref esté namespaced (por eso hay
-  // que resolverlo aquí, no reenviar la matrícula tal cual).
+  // v7: cada ref se empuja SOLO a los catálogos de las marcas que lo tienen
+  // (ver cabecera del fichero). Sin affected_menu_item_ids, compat: todos los
+  // catálogos del local (comportamiento anterior a v7).
   {
-    // Resolver refs de HubRise para los menu_item afectados (Fase B). Si el
-    // caller es viejo y no manda affected_menu_item_ids, cae a la matrícula en
-    // crudo (compat transicional — mismo comportamiento que antes de Fase B).
     let hubriseRefs: string[] = matriculas;
+    const refToBrandIds = new Map<string, Set<string>>();
+    const brandIdsInvolved: string[] = [];
+
     if (affectedMenuItemIds.length > 0) {
       const { data: miRows } = await sb.from("menu_item")
         .select("id, brand_id, external_id, stock_group_id")
@@ -152,6 +164,7 @@ Deno.serve(async (req: Request) => {
         .in("id", affectedMenuItemIds);
 
       const brandIds = Array.from(new Set((miRows ?? []).map((r) => r.brand_id as string).filter(Boolean)));
+      brandIdsInvolved.push(...brandIds);
       const { data: brandRows } = brandIds.length > 0
         ? await sb.from("brand").select("id, slug").in("id", brandIds)
         : { data: [] as Array<{ id: string; slug: string }> };
@@ -171,7 +184,10 @@ Deno.serve(async (req: Request) => {
         if (!brandSlug) continue;
         const groupRef = r.stock_group_id ? (groupRefById.get(r.stock_group_id as string) ?? null) : null;
         const ref = hubriseSkuRef({ externalId: r.external_id as string | null, brandSlug, stockGroupHubriseRef: groupRef });
-        if (ref) refSet.add(ref);
+        if (!ref) continue;
+        refSet.add(ref);
+        if (!refToBrandIds.has(ref)) refToBrandIds.set(ref, new Set());
+        refToBrandIds.get(ref)!.add(r.brand_id as string);
       }
       if (refSet.size > 0) hubriseRefs = Array.from(refSet);
     }
@@ -184,7 +200,7 @@ Deno.serve(async (req: Request) => {
       console.warn(`availability-dispatch: sin token escritor para cuenta ${accountId}, fallback a token de bridge (transicional)`);
     }
 
-    // 1) locales HubRise activos de la cuenta, acotados al local si viene
+    // locales HubRise activos de la cuenta, acotados al local si viene
     let hrExtLocs: string[] | null = null; // null = todos los locales (descatalogar)
     if (locationId) {
       const { data: maps } = await sb.from("external_location_map")
@@ -194,150 +210,156 @@ Deno.serve(async (req: Request) => {
       hrExtLocs = (maps ?? []).map((m) => m.external_location_id as string).filter(Boolean);
     }
 
-    type ConnRow = {
-      id: string; access_token: string | null; external_catalog_id: string | null;
-      external_location_id: string | null; connection_name: string | null; push_status_enabled: boolean | null;
+    type ConnEntry = {
+      catalogId: string; extLocId: string; token: string;
+      connNames: Set<string>; pushEnabled: boolean; brandIds: Set<string>;
     };
-    const conns: ConnRow[] = [];
+    const connsByKey = new Map<string, ConnEntry>();
     const primaryCatalogLocations = new Set<string>();
 
-    // PRIMARIO (Fase 2): catálogos del asistente self-service
-    // (brand_hubrise_catalog), sin bridge. Solo tiene sentido con token
-    // escritor (es el único que puede escribir en estos catálogos).
-    if (writerToken) {
-      let bhcQ = sb.from("brand_hubrise_catalog")
-        .select("id, external_catalog_id, external_location_id, hubrise_catalog_name")
-        .eq("account_id", accountId);
-      if (hrExtLocs !== null) {
-        if (hrExtLocs.length === 0) bhcQ = null as never; // local sin conexión HubRise → nada
-        else bhcQ = bhcQ.in("external_location_id", hrExtLocs);
-      }
-      const bhcRows = bhcQ ? (await bhcQ).data ?? [] : [];
-      for (const r of bhcRows) {
-        if (!r.external_catalog_id || !r.external_location_id) continue;
-        conns.push({
-          id: r.id as string,
-          access_token: writerToken,
-          external_catalog_id: r.external_catalog_id as string,
-          external_location_id: r.external_location_id as string,
-          connection_name: (r.hubrise_catalog_name as string) ?? "Folvy (autoservicio)",
-          push_status_enabled: true,
-        });
-        primaryCatalogLocations.add(`${r.external_catalog_id}::${r.external_location_id}`);
-      }
-    }
-
-    // FALLBACK (compat): conexiones de bridge (external_integration), salvo
-    // las ya cubiertas por brand_hubrise_catalog (mismo catálogo+local).
-    let connQ = sb.from("external_integration")
-      .select("id, access_token, external_catalog_id, external_location_id, connection_name, push_status_enabled")
-      .eq("account_id", accountId).eq("source", "hubrise").eq("is_active", true);
-    if (hrExtLocs !== null) {
-      if (hrExtLocs.length === 0) connQ = null as never; // local sin conexión HubRise → nada
-      else connQ = connQ.in("external_location_id", hrExtLocs);
-    }
-    const bridgeRows = connQ ? (await connQ).data ?? [] : [];
-    for (const c of bridgeRows) {
-      if (c.external_catalog_id && c.external_location_id
-          && primaryCatalogLocations.has(`${c.external_catalog_id}::${c.external_location_id}`)) continue;
-      conns.push(c as ConnRow);
-    }
-
-    // entradas de inventario: agotar = stock "0" (+expires_at); reactivar = stock null
-    const entries = hubriseRefs.map((m) =>
-      enable
-        ? { sku_ref: m, stock: null }
-        : { sku_ref: m, stock: "0", ...(availableUntil ? { expires_at: availableUntil } : {}) }
-    );
-
-    if (writerToken) {
-      // Dedup por (catálogo, local) DISTINTO: el inventario en HubRise es por
-      // catálogo × local, no solo por catálogo — 2 locales que comparten
-      // catálogo necesitan 2 PATCH distintos (antes se colapsaban en 1 y el
-      // segundo local se quedaba sin empujar).
-      const byCatalogLocation = new Map<string, { catalogId: string; extLocId: string; group: ConnRow[] }>();
-      for (const c of conns) {
-        if (!c.external_catalog_id) {
-          results.hubrise.skipped++;
-          await logPush(sb, accountId, {
-            source: "hubrise", external_org_id: c.id, enable, ok: false,
-            organization_product_id: hubriseRefs,
-            error: hubriseDetail(c, "sin catalog"),
-          });
-          continue;
+    if (brandIdsInvolved.length > 0) {
+      // PRIMARIO (Fase 2): brand_hubrise_catalog, SOLO de las marcas afectadas.
+      if (writerToken) {
+        const { data: bhcRows } = await sb.from("brand_hubrise_catalog")
+          .select("brand_id, external_catalog_id, external_location_id, hubrise_catalog_name")
+          .eq("account_id", accountId)
+          .in("brand_id", brandIdsInvolved);
+        for (const r of bhcRows ?? []) {
+          if (!r.external_catalog_id || !r.external_location_id) continue;
+          if (hrExtLocs !== null && !hrExtLocs.includes(r.external_location_id as string)) continue;
+          const key = `${r.external_catalog_id}::${r.external_location_id}`;
+          let entry = connsByKey.get(key);
+          if (!entry) {
+            entry = { catalogId: r.external_catalog_id as string, extLocId: r.external_location_id as string,
+                       token: writerToken, connNames: new Set(), pushEnabled: false, brandIds: new Set() };
+            connsByKey.set(key, entry);
+          }
+          entry.connNames.add((r.hubrise_catalog_name as string) ?? "Folvy (autoservicio)");
+          entry.brandIds.add(r.brand_id as string);
+          entry.pushEnabled = true;
+          primaryCatalogLocations.add(key);
         }
-        if (!c.external_location_id) {
-          results.hubrise.skipped++;
-          await logPush(sb, accountId, {
-            source: "hubrise", external_org_id: c.id, enable, ok: false,
-            external_catalog_id: c.external_catalog_id, organization_product_id: hubriseRefs,
-            error: hubriseDetail(c, "sin external_location_id"),
-          });
-          continue;
-        }
-        const catalogId = c.external_catalog_id as string;
-        const extLocId = c.external_location_id as string;
-        const key = `${catalogId}::${extLocId}`;
-        const entry = byCatalogLocation.get(key);
-        if (entry) entry.group.push(c); else byCatalogLocation.set(key, { catalogId, extLocId, group: [c] });
       }
-      for (const { catalogId, extLocId, group } of byCatalogLocation.values()) {
-        const enabledConns = group.filter((c) => c.push_status_enabled !== false);
-        const label = {
-          id: (enabledConns[0] ?? group[0]).id,
-          connection_name: Array.from(new Set(group.map((c) => c.connection_name))).filter(Boolean).join(" + "),
-          external_catalog_id: catalogId,
-          external_location_id: extLocId,
-        };
-        if (enabledConns.length === 0) {
-          results.hubrise.skipped++;
-          await logPush(sb, accountId, {
-            source: "hubrise", external_org_id: label.id, enable, ok: false,
-            external_catalog_id: label.external_catalog_id, organization_product_id: hubriseRefs,
-            error: hubriseDetail(label, "push_status_enabled=false (todas las conexiones del catálogo+local)"),
-          });
-          continue;
+
+      // FALLBACK (compat): external_brand_map -> external_integration, SOLO de
+      // las marcas afectadas que no quedaron cubiertas por brand_hubrise_catalog.
+      const { data: ebmRows } = await sb.from("external_brand_map")
+        .select("brand_id, external_location_id, external_brand_id, is_ignored")
+        .eq("account_id", accountId).eq("source", "hubrise")
+        .in("brand_id", brandIdsInvolved);
+      for (const m of ebmRows ?? []) {
+        if (m.is_ignored === true) continue;
+        if (hrExtLocs !== null && !hrExtLocs.includes(m.external_location_id as string)) continue;
+        const { data: integ } = await sb.from("external_integration")
+          .select("access_token, external_catalog_id, connection_name, is_active, push_status_enabled")
+          .eq("account_id", accountId).eq("source", "hubrise")
+          .eq("external_location_id", m.external_location_id)
+          .eq("connection_name", m.external_brand_id)
+          .eq("is_active", true)
+          .maybeSingle();
+        if (!integ || !integ.access_token || !integ.external_catalog_id) continue;
+        const key = `${integ.external_catalog_id}::${m.external_location_id}`;
+        if (primaryCatalogLocations.has(key)) continue;
+        let entry = connsByKey.get(key);
+        if (!entry) {
+          entry = { catalogId: integ.external_catalog_id as string, extLocId: m.external_location_id as string,
+                     token: integ.access_token as string, connNames: new Set(), pushEnabled: false, brandIds: new Set() };
+          connsByKey.set(key, entry);
         }
-        results.hubrise.pushed++;
-        const r = await patchHubriseInventory(writerToken, catalogId, extLocId, entries);
-        if (r.ok) results.hubrise.ok++; else results.hubrise.failed++;
-        await logPush(sb, accountId, {
-          source: "hubrise", external_org_id: label.id, enable, ok: r.ok, http_status: r.status ?? null,
-          external_catalog_id: label.external_catalog_id, organization_product_id: hubriseRefs,
-          error: hubriseDetail(label, r.ok ? `ok · ${hubriseRefs.length} sku` : (r.reason ?? null)),
-        });
+        entry.connNames.add((integ.connection_name as string) ?? "");
+        entry.brandIds.add(m.brand_id as string);
+        if (integ.push_status_enabled !== false) entry.pushEnabled = true;
       }
     } else {
-      for (const c of conns) {
-        if (c.push_status_enabled === false) {
-          results.hubrise.skipped++;
-          await logPush(sb, accountId, {
-            source: "hubrise", external_org_id: c.id, enable, ok: false,
-            external_catalog_id: c.external_catalog_id, organization_product_id: hubriseRefs,
-            error: hubriseDetail(c, "push_status_enabled=false"),
-          });
-          continue;
+      // Compat transicional: sin affected_menu_item_ids no sabemos qué marca
+      // toca cada ref -> comportamiento anterior a v7 (todos los catálogos del local).
+      if (writerToken) {
+        let bhcQ = sb.from("brand_hubrise_catalog")
+          .select("external_catalog_id, external_location_id, hubrise_catalog_name")
+          .eq("account_id", accountId);
+        if (hrExtLocs !== null) {
+          if (hrExtLocs.length === 0) bhcQ = null as never;
+          else bhcQ = bhcQ.in("external_location_id", hrExtLocs);
         }
-        if (!c.access_token || !c.external_catalog_id || !c.external_location_id) {
-          results.hubrise.skipped++;
-          await logPush(sb, accountId, {
-            source: "hubrise", external_org_id: c.id, enable, ok: false,
-            external_catalog_id: c.external_catalog_id, organization_product_id: hubriseRefs,
-            error: hubriseDetail(c, "sin access_token/catalog/location"),
+        const bhcRows = bhcQ ? (await bhcQ).data ?? [] : [];
+        for (const r of bhcRows) {
+          if (!r.external_catalog_id || !r.external_location_id) continue;
+          const key = `${r.external_catalog_id}::${r.external_location_id}`;
+          connsByKey.set(key, {
+            catalogId: r.external_catalog_id as string, extLocId: r.external_location_id as string,
+            token: writerToken, connNames: new Set([(r.hubrise_catalog_name as string) ?? "Folvy (autoservicio)"]),
+            pushEnabled: true, brandIds: new Set(),
           });
-          continue;
+          primaryCatalogLocations.add(key);
         }
-        results.hubrise.pushed++;
-        const r = await patchHubriseInventory(
-          c.access_token as string, c.external_catalog_id as string, c.external_location_id as string, entries,
-        );
-        if (r.ok) results.hubrise.ok++; else results.hubrise.failed++;
-        await logPush(sb, accountId, {
-          source: "hubrise", external_org_id: c.id, enable, ok: r.ok, http_status: r.status ?? null,
-          external_catalog_id: c.external_catalog_id, organization_product_id: hubriseRefs,
-          error: hubriseDetail(c, r.ok ? `ok · ${hubriseRefs.length} sku` : (r.reason ?? null)),
-        });
       }
+      let connQ = sb.from("external_integration")
+        .select("access_token, external_catalog_id, external_location_id, connection_name, push_status_enabled")
+        .eq("account_id", accountId).eq("source", "hubrise").eq("is_active", true);
+      if (hrExtLocs !== null) {
+        if (hrExtLocs.length === 0) connQ = null as never;
+        else connQ = connQ.in("external_location_id", hrExtLocs);
+      }
+      const bridgeRows = connQ ? (await connQ).data ?? [] : [];
+      for (const c of bridgeRows) {
+        if (!c.external_catalog_id || !c.external_location_id) continue;
+        const key = `${c.external_catalog_id}::${c.external_location_id}`;
+        if (primaryCatalogLocations.has(key)) continue;
+        if (!connsByKey.has(key)) {
+          connsByKey.set(key, {
+            catalogId: c.external_catalog_id as string, extLocId: c.external_location_id as string,
+            token: c.access_token as string, connNames: new Set([(c.connection_name as string) ?? ""]),
+            pushEnabled: c.push_status_enabled !== false, brandIds: new Set(),
+          });
+        }
+      }
+    }
+
+    type HubriseEntry = { sku_ref: string; stock: string | null; expires_at?: string };
+    function entriesFor(conn: ConnEntry): HubriseEntry[] {
+      const refs = brandIdsInvolved.length > 0
+        ? hubriseRefs.filter((ref) => {
+            const brandsForRef = refToBrandIds.get(ref);
+            if (!brandsForRef) return false;
+            for (const bid of conn.brandIds) if (brandsForRef.has(bid)) return true;
+            return false;
+          })
+        : hubriseRefs;
+      return refs.map((m) =>
+        enable
+          ? { sku_ref: m, stock: null }
+          : { sku_ref: m, stock: "0", ...(availableUntil ? { expires_at: availableUntil } : {}) }
+      );
+    }
+
+    for (const conn of connsByKey.values()) {
+      const entries = entriesFor(conn);
+      if (entries.length === 0) continue; // nada de este catálogo para este 86 -> ni log ni PATCH
+
+      const refsPushed = entries.map((e) => e.sku_ref);
+      const label = {
+        connection_name: Array.from(conn.connNames).filter(Boolean).join(" + "),
+        external_catalog_id: conn.catalogId, external_location_id: conn.extLocId,
+      };
+
+      if (!conn.pushEnabled) {
+        results.hubrise.skipped++;
+        await logPush(sb, accountId, {
+          source: "hubrise", enable, ok: false,
+          external_catalog_id: conn.catalogId, organization_product_id: refsPushed,
+          error: hubriseDetail(label, "push_status_enabled=false"),
+        });
+        continue;
+      }
+
+      results.hubrise.pushed++;
+      const r = await patchHubriseInventory(conn.token, conn.catalogId, conn.extLocId, entries);
+      if (r.ok) results.hubrise.ok++; else results.hubrise.failed++;
+      await logPush(sb, accountId, {
+        source: "hubrise", enable, ok: r.ok, http_status: r.status ?? null,
+        external_catalog_id: conn.catalogId, organization_product_id: refsPushed,
+        error: hubriseDetail(label, r.ok ? `ok · ${refsPushed.length} sku` : (r.reason ?? null)),
+      });
     }
   }
 
