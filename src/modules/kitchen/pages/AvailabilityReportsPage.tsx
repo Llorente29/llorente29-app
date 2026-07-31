@@ -255,8 +255,10 @@ export default function AvailabilityReportsPage() {
         <div className={loading ? 'opacity-60 pointer-events-none' : ''}>
           {/* ── KPI cards ────────────────────────────────────────────── */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-            <KpiCard label="Uptime" value={kpis!.uptime_pct} prevValue={kpis!.prev.uptime_pct} betterWhen="up" format={fmtPct}
-              note="Solo local (Cap. C) — no incluye marca/producto" />
+            <KpiCard label="Uptime del local" value={kpis!.uptime_pct} prevValue={kpis!.prev.uptime_pct} betterWhen="up" format={fmtPct}
+              note={brandId || scope === 'brand' || scope === 'product'
+                ? 'No varía con el filtro de marca/producto — es del local'
+                : 'Solo Cap. C (cerrar local) — no incluye marca/producto'} />
             <KpiCard label="Downtime" value={kpis!.downtime_hours} prevValue={kpis!.prev.downtime_hours} betterWhen="down" format={fmtHours} />
             <KpiCard label="Pérdidas estimadas" value={kpis!.lost_revenue_est} prevValue={kpis!.prev.lost_revenue_est} betterWhen="down" format={fmtEur}
               note="Estimación sobre histórico de ventas, no facturación real perdida" />
