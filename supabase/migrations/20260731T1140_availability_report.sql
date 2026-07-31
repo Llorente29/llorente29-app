@@ -21,6 +21,13 @@
 -- MISMO decompuesto en franjas de 1h (slice_loss) — una sola pasada, sin
 -- duplicar la lógica de pérdidas entre bloques del payload.
 --
+-- FIX (antes de aplicar, mismo que en availability_kpis): `slices` recorta
+-- cada intervalo a eff_start/eff_end = intersección con [p_from,p_to] ANTES
+-- de generate_series — un cierre todavía abierto (ended_at=now()) podía
+-- trocear semanas de más y colar pérdida/heatmap/trend fuera de la ventana
+-- del informe. started_at/ended_at/duration_min ORIGINALES (sin recortar) se
+-- conservan en la fila para el log y el ranking.
+--
 -- log: tope 500 filas (más recientes primero) para el panel — el export
 -- completo (CSV/Excel) es cosa de C3b, que puede paginar sobre
 -- availability_intervals directamente si hace falta más de 500.
@@ -84,23 +91,30 @@ begin
     union all
     select 'product'::text as scope, * from public.availability_sales_profile(p_account_id, 'product', p_to, p_weeks)
   ),
+  clipped as (
+    select iv.*,
+      greatest(iv.started_at, p_from) as eff_start,
+      least(iv.ended_at,      p_to)   as eff_end
+    from intervals iv
+  ),
   slices as (
     select
-      iv.scope, iv.target_key, iv.target_id, iv.target_label, iv.location_id,
-      iv.origin, iv.reason_code, iv.actor_id, iv.started_at, iv.ended_at, iv.duration_min,
+      c.scope, c.target_key, c.target_id, c.target_label, c.location_id,
+      c.origin, c.reason_code, c.actor_id, c.started_at, c.ended_at, c.duration_min,
       bucket,
       (extract(isodow from (bucket at time zone 'Europe/Madrid'))::int - 1) as dow,
       extract(hour from (bucket at time zone 'Europe/Madrid'))::int as hour,
       (bucket at time zone 'Europe/Madrid')::date as local_day,
       greatest(0::numeric, (extract(epoch from (
-        least(iv.ended_at, bucket + interval '1 hour') - greatest(iv.started_at, bucket)
+        least(c.eff_end, bucket + interval '1 hour') - greatest(c.eff_start, bucket)
       )) / 60)::numeric) as closed_min
-    from intervals iv
+    from clipped c
     cross join lateral generate_series(
-      date_trunc('hour', iv.started_at at time zone 'Europe/Madrid') at time zone 'Europe/Madrid',
-      iv.ended_at - interval '1 microsecond',
+      date_trunc('hour', c.eff_start at time zone 'Europe/Madrid') at time zone 'Europe/Madrid',
+      c.eff_end - interval '1 microsecond',
       interval '1 hour'
     ) as bucket
+    where c.eff_end > c.eff_start
   ),
   slice_loss as (
     select sl.*, coalesce(p.avg_net, 0) * (sl.closed_min / 60.0) as loss

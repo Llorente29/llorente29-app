@@ -27,6 +27,15 @@
 -- % = minutos evitables / minutos totales cerrados (el resto, incl. sin
 -- clasificar y planificado, diluye el % sin subirlo).
 --
+-- FIX (antes de aplicar): `slices` troceaba el intervalo entero
+-- (started_at..ended_at) sin recortar a [p_from,p_to) — un cierre AÚN
+-- ABIERTO (ended_at=now()) o que arrancó antes de p_from hacía que
+-- generate_series iterase de más (podía ser semanas) y atribuía pérdida
+-- fuera de la ventana del informe. `clipped` acota a eff_start/eff_end =
+-- intersección con [p_from,p_to] ANTES de generar las franjas;
+-- started_at/ended_at originales se conservan para el resto de la fila (no
+-- se pisan).
+--
 -- SECURITY INVOKER (RLS de las tablas subyacentes ya exige manager/admin).
 -- Aplicada: —
 -- ============================================================================
@@ -57,20 +66,28 @@ as $function$
     union all
     select 'product'::text as scope, * from public.availability_sales_profile(p_account_id, 'product', p_to, p_weeks)
   ),
+  clipped as (
+    select iv.*,
+      greatest(iv.started_at, p_from) as eff_start,
+      least(iv.ended_at,      p_to)   as eff_end
+    from intervals iv
+  ),
   slices as (
     select
-      iv.scope, iv.target_key, iv.started_at, iv.ended_at, bucket,
+      c.scope, c.target_key, c.started_at, c.ended_at,
+      bucket,
       (extract(isodow from (bucket at time zone 'Europe/Madrid'))::int - 1) as dow,
       extract(hour from (bucket at time zone 'Europe/Madrid'))::int as hour,
       greatest(0::numeric, (extract(epoch from (
-        least(iv.ended_at, bucket + interval '1 hour') - greatest(iv.started_at, bucket)
+        least(c.eff_end, bucket + interval '1 hour') - greatest(c.eff_start, bucket)
       )) / 60)::numeric) as closed_min
-    from intervals iv
+    from clipped c
     cross join lateral generate_series(
-      date_trunc('hour', iv.started_at at time zone 'Europe/Madrid') at time zone 'Europe/Madrid',
-      iv.ended_at - interval '1 microsecond',
+      date_trunc('hour', c.eff_start at time zone 'Europe/Madrid') at time zone 'Europe/Madrid',
+      c.eff_end - interval '1 microsecond',
       interval '1 hour'
     ) as bucket
+    where c.eff_end > c.eff_start
   ),
   loss_total as (
     select coalesce(sum(coalesce(p.avg_net, 0) * (s.closed_min / 60.0)), 0) as lost_revenue_est
