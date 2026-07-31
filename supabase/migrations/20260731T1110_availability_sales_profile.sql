@@ -31,6 +31,11 @@
 -- recuento de días por dow puede desviarse en como mucho 1 día en el borde —
 -- aceptable (esto es una ESTIMACIÓN, no contabilidad exacta).
 --
+-- FIX (antes de aplicar): `net_by_product` reutiliza el CTE `sales` (ya
+-- filtrado por cuenta/is_active/status/order_status/ventana) en vez de volver
+-- a `public.sale` con una coma + repetir todas las condiciones — sin mezcla
+-- coma/JOIN, una sola fuente de verdad para el filtro de venta real.
+--
 -- SECURITY INVOKER (RLS de `sale`/`sale_line` ya exige cuenta propia).
 -- Aplicada: —
 -- ============================================================================
@@ -103,15 +108,10 @@ as $function$
       (extract(isodow from (s.sold_at at time zone 'Europe/Madrid'))::int - 1) as dow,
       extract(hour from (s.sold_at at time zone 'Europe/Madrid'))::int as hour,
       sum(sl.line_total) as net_sum
-    from public.sale s, bounds
+    from sales s
     join public.sale_line sl on sl.sale_id = s.id and sl.line_type = 'product'
     join public.menu_item mi on mi.id = sl.menu_item_id
-    where s.account_id = p_account_id
-      and coalesce(s.is_active, true)
-      and s.status <> 'cancelled'
-      and (s.order_status is null or s.order_status not in ('cancelled', 'rejected', 'delivery_failed'))
-      and s.sold_at >= bounds.p_from and s.sold_at < bounds.p_to
-      and (mi.external_id is not null or mi.recipe_item_id is not null)
+    where (mi.external_id is not null or mi.recipe_item_id is not null)
     group by 1, 2, 3
   ),
   chosen as (
