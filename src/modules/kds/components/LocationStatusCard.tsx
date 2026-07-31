@@ -17,6 +17,8 @@ import {
   type LocationStatus,
 } from '../services/kdsService'
 import { themeCls } from '../lib/theme'
+import ReasonSelect from './ReasonSelect'
+import { reasonCodeParam, type ReasonCode } from '../lib/reasonCode'
 
 interface Props {
   /** Local (sesión). En tablet va null: la RPC deriva el local del token. */
@@ -51,6 +53,7 @@ export default function LocationStatusCard({ locationId, token, dark = false }: 
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showClose, setShowClose] = useState(false)
+  const [reasonCode, setReasonCode] = useState<ReasonCode | ''>('')
 
   const refresh = useCallback(async () => {
     try {
@@ -70,9 +73,11 @@ export default function LocationStatusCard({ locationId, token, dark = false }: 
     setBusy(true); setError(null)
     try {
       const resumeAt = minutes !== null ? new Date(Date.now() + minutes * 60_000).toISOString() : null
-      if (token) await setLocationStatusByToken(token, 'paused', resumeAt, 'manual')
-      else if (locationId) await setLocationStatus(locationId, 'paused', resumeAt, 'manual')
+      const code = reasonCodeParam(reasonCode)
+      if (token) await setLocationStatusByToken(token, 'paused', resumeAt, 'manual', code)
+      else if (locationId) await setLocationStatus(locationId, 'paused', resumeAt, 'manual', code)
       setShowClose(false)
+      setReasonCode('')
       await refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo cerrar el local')
@@ -144,17 +149,23 @@ export default function LocationStatusCard({ locationId, token, dark = false }: 
       </div>
 
       {showClose && mode === 'normal' && (
-        <div className={`mt-3 pt-3 border-t flex flex-wrap gap-1.5 ${t.dividerLight}`}>
-          {DURATIONS.map(d => (
-            <button
-              key={d.label}
-              onClick={() => void apply(d.minutes)}
-              disabled={busy}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-medium disabled:opacity-50 ${t.chipNeutral}`}
-            >
-              {d.label}
-            </button>
-          ))}
+        <div className={`mt-3 pt-3 border-t ${t.dividerLight}`}>
+          <div className="flex flex-wrap gap-1.5">
+            {DURATIONS.map(d => (
+              <button
+                key={d.label}
+                onClick={() => void apply(d.minutes)}
+                disabled={busy}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-medium disabled:opacity-50 ${t.chipNeutral}`}
+              >
+                {d.label}
+              </button>
+            ))}
+          </div>
+          <div className="mt-2 flex items-center gap-1.5">
+            <span className={`text-xs ${t.textMuted}`}>Motivo (opcional):</span>
+            <ReasonSelect value={reasonCode} onChange={setReasonCode} theme={dark ? 'dark' : 'light'} />
+          </div>
         </div>
       )}
 

@@ -126,6 +126,7 @@ export async function setProductAvailability(
   isAvailable: boolean,
   reason: string = 'manual',
   availableUntil?: string | null,
+  reasonCode?: string | null,
 ): Promise<AvailabilityResult> {
   const d = await rpc<Record<string, unknown>>('set_product_availability_by_token', {
     p_device_token: token,
@@ -133,6 +134,7 @@ export async function setProductAvailability(
     p_is_available: isAvailable,
     p_reason: reason,
     p_available_until: availableUntil ?? null,
+    p_reason_code: reasonCode ?? null,
   })
   return {
     brands: Number(d.brands ?? 0),

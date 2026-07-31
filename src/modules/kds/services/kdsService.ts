@@ -334,12 +334,14 @@ export function setLocationStatus(
   mode: LocationStatusMode,
   resumeAt?: string | null,
   reason?: string | null,
+  reasonCode?: string | null,
 ): Promise<{ location_id: string; mode: LocationStatusMode; connected: boolean }> {
   return rpc('set_location_status', {
     p_location_id: locationId,
     p_mode: mode,
     p_resume_at: resumeAt ?? null,
     p_reason: reason ?? null,
+    p_reason_code: reasonCode ?? null,
   })
 }
 
@@ -349,12 +351,14 @@ export function setLocationStatusByToken(
   mode: LocationStatusMode,
   resumeAt?: string | null,
   reason?: string | null,
+  reasonCode?: string | null,
 ): Promise<{ location_id: string; mode: LocationStatusMode; connected: boolean }> {
   return rpc('set_location_status_by_token', {
     p_device_token: token,
     p_mode: mode,
     p_resume_at: resumeAt ?? null,
     p_reason: reason ?? null,
+    p_reason_code: reasonCode ?? null,
   })
 }
 
@@ -388,12 +392,14 @@ export function setBrandStatus(
   mode: BrandStatusMode,
   resumeAt?: string | null,
   reason?: string | null,
+  reasonCode?: string | null,
 ): Promise<{ brand_id: string; mode: BrandStatusMode; items: number }> {
   return rpc('set_brand_status', {
     p_brand_id: brandId,
     p_mode: mode,
     p_resume_at: resumeAt ?? null,
     p_reason: reason ?? null,
+    p_reason_code: reasonCode ?? null,
   })
 }
 
@@ -404,6 +410,7 @@ export function setBrandStatusByToken(
   mode: BrandStatusMode,
   resumeAt?: string | null,
   reason?: string | null,
+  reasonCode?: string | null,
 ): Promise<{ brand_id: string; mode: BrandStatusMode; items: number }> {
   return rpc('set_brand_status_by_token', {
     p_device_token: token,
@@ -411,6 +418,7 @@ export function setBrandStatusByToken(
     p_mode: mode,
     p_resume_at: resumeAt ?? null,
     p_reason: reason ?? null,
+    p_reason_code: reasonCode ?? null,
   })
 }
 

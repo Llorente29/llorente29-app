@@ -66,8 +66,8 @@ export default function TabletAvailabilityTab({ token, locationName }: Props) {
   const agotarAdapter: AgotarProductoAdapter = {
     searchProducts: (q) => searchProducts(token, q),
     previewScope: (menuItemId) => previewScope(token, menuItemId),
-    agotar: async (menuItemId, until) => {
-      await setProductAvailability(token, menuItemId, false, 'manual', until)
+    agotar: async (menuItemId, until, reasonCode) => {
+      await setProductAvailability(token, menuItemId, false, 'manual', until, reasonCode)
     },
   }
 

@@ -267,8 +267,8 @@ export default function KitchenAvailabilityPage() {
           adapter={{
             searchProducts: (q) => searchProducts(activeAccountId, q),
             previewScope: (menuItemId) => previewScope(activeAccountId, menuItemId, locationId),
-            agotar: async (menuItemId, until) => {
-              await setProductAvailability(menuItemId, false, locationId, 'manual', until)
+            agotar: async (menuItemId, until, reasonCode) => {
+              await setProductAvailability(menuItemId, false, locationId, 'manual', until, reasonCode)
             },
           } satisfies AgotarProductoAdapter}
           onClose={() => setShowAgotar(false)}

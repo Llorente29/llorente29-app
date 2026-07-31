@@ -2,7 +2,7 @@
 //
 // ModuleDefinition del módulo Folvy Kitchen (escandallo de cocina).
 // Sigue el patrón canónico de appcc/module.tsx.
-import { LayoutDashboard, ChefHat, BookOpen, TrendingUp, Target, Truck, UtensilsCrossed, SlidersHorizontal, CircleSlash, Megaphone, Sliders } from 'lucide-react'
+import { LayoutDashboard, ChefHat, BookOpen, TrendingUp, Target, Truck, UtensilsCrossed, SlidersHorizontal, CircleSlash, Megaphone, Sliders, BarChart3 } from 'lucide-react'
 import type { ModuleDefinition } from '@/shell/types'
 import KitchenDashboardPage from '@/modules/kitchen/pages/KitchenDashboardPage'
 import KitchenItemsPage from '@/modules/kitchen/pages/KitchenItemsPage'
@@ -23,6 +23,7 @@ import AgentOffersPage from '@/modules/kitchen/pages/AgentOffersPage'
 import OfferRulesPage from '@/modules/kitchen/pages/OfferRulesPage'
 import PlatformOffersPage from '@/modules/kitchen/pages/PlatformOffersPage'
 import KitchenAvailabilityPage from '@/modules/kitchen/pages/KitchenAvailabilityPage'
+import AvailabilityReportsPage from '@/modules/kitchen/pages/AvailabilityReportsPage'
 import SuppliersPage from '@/modules/kitchen/pages/SuppliersPage'
 
 export const kitchenModule: ModuleDefinition = {
@@ -41,6 +42,7 @@ export const kitchenModule: ModuleDefinition = {
     { path: 'resumen',           element: <KitchenDashboardPage /> },
     { path: 'menu',              element: <KitchenMenuPage /> },
     { path: 'disponibilidad',    element: <KitchenAvailabilityPage /> },
+    { path: 'disponibilidad-informes', element: <AvailabilityReportsPage /> },
     { path: 'proveedores',       element: <SuppliersPage /> },
     { path: 'recetas',           element: <KitchenRecipesPage /> },
     { path: 'rentabilidad',      element: <KitchenProfitabilityPage /> },
@@ -56,6 +58,7 @@ export const kitchenModule: ModuleDefinition = {
       { id: 'kitchen_dashboard',     label: 'Resumen',             icon: LayoutDashboard,   path: 'resumen',          requiredRole: 'manager' },
       { id: 'kitchen_menu',          label: 'Menú',                icon: UtensilsCrossed,   path: 'menu',             requiredRole: 'manager' },
       { id: 'kitchen_availability',  label: 'Disponibilidad',      icon: CircleSlash,       path: 'disponibilidad',   requiredRole: 'manager' },
+      { id: 'kitchen_availability_reports', label: 'Informes de disponibilidad', icon: BarChart3, path: 'disponibilidad-informes', requiredRole: 'manager' },
       { id: 'kitchen_items',         label: 'Ingredientes',        icon: ChefHat,           path: '' },
       { id: 'kitchen_suppliers',     label: 'Proveedores',         icon: Truck,             path: 'proveedores',      requiredRole: 'manager' },
       { id: 'kitchen_recipes',       label: 'Recetas',             icon: BookOpen,          path: 'recetas',          requiredRole: 'manager' },

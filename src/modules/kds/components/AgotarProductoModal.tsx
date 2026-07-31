@@ -13,6 +13,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { AlertTriangle, Loader2, Search, X } from 'lucide-react'
 import { themeCls, type Theme } from '../lib/theme'
 import { endOfTodayIso } from '../lib/endOfToday'
+import ReasonSelect from './ReasonSelect'
+import { reasonCodeParam, type ReasonCode } from '../lib/reasonCode'
 
 export interface ProductPick {
   menuItemId: string
@@ -30,8 +32,8 @@ export interface ScopePreview {
 export interface AgotarProductoAdapter {
   searchProducts: (query: string) => Promise<ProductPick[]>
   previewScope: (menuItemId: string) => Promise<ScopePreview>
-  /** Agota el producto (availableUntil=null → indefinido). */
-  agotar: (menuItemId: string, availableUntil: string | null) => Promise<void>
+  /** Agota el producto (availableUntil=null → indefinido; reasonCode=null → sin especificar). */
+  agotar: (menuItemId: string, availableUntil: string | null, reasonCode: ReasonCode | null) => Promise<void>
 }
 
 interface Props {
@@ -54,6 +56,7 @@ export default function AgotarProductoModal({ theme, adapter, locationLabel, all
   const [picked, setPicked] = useState<ProductPick | null>(null)
   const [scope, setScope] = useState<ScopePreview | null>(null)
   const [until, setUntil] = useState<'indefinido' | 'hoy'>('indefinido')
+  const [reasonCode, setReasonCode] = useState<ReasonCode | ''>('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const debounce = useRef<number | null>(null)
@@ -86,14 +89,14 @@ export default function AgotarProductoModal({ theme, adapter, locationLabel, all
     if (!picked) return
     setBusy(true); setError(null)
     try {
-      await adapter.agotar(picked.menuItemId, until === 'hoy' ? endOfTodayIso() : null)
+      await adapter.agotar(picked.menuItemId, until === 'hoy' ? endOfTodayIso() : null, reasonCodeParam(reasonCode))
       onDone()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo agotar')
       setBusy(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [picked, until])
+  }, [picked, until, reasonCode])
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
@@ -166,6 +169,11 @@ export default function AgotarProductoModal({ theme, adapter, locationLabel, all
                   <input type="radio" checked={until === 'hoy'} onChange={() => setUntil('hoy')} />
                   Solo hoy (reactiva a medianoche)
                 </label>
+              </div>
+
+              <div className="mt-3 flex items-center gap-1.5">
+                <span className={`text-xs ${t.textMuted}`}>Motivo (opcional):</span>
+                <ReasonSelect value={reasonCode} onChange={setReasonCode} theme={theme} />
               </div>
 
               {error && <div className="mt-3 text-sm text-danger">{error}</div>}

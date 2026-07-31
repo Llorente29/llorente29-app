@@ -19,6 +19,8 @@ import {
   type BrandOption, type BrandStatus,
 } from '../services/kdsService'
 import { themeCls } from '../lib/theme'
+import ReasonSelect from './ReasonSelect'
+import { reasonCodeParam, type ReasonCode } from '../lib/reasonCode'
 
 interface Props {
   accountId?: string | null   // oficina (sesión)
@@ -60,6 +62,7 @@ function BrandCloseModal({ accountId, token, dark, onClose }: Props & { onClose:
   const [busy, setBusy] = useState(false)
   const [showDurations, setShowDurations] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [reasonCode, setReasonCode] = useState<ReasonCode | ''>('')
 
   useEffect(() => {
     let alive = true
@@ -93,9 +96,11 @@ function BrandCloseModal({ accountId, token, dark, onClose }: Props & { onClose:
     setBusy(true); setError(null)
     try {
       const resumeAt = minutes !== null ? new Date(Date.now() + minutes * 60_000).toISOString() : null
-      if (token) await setBrandStatusByToken(token, picked.id, 'paused', resumeAt, 'manual')
-      else await setBrandStatus(picked.id, 'paused', resumeAt, 'manual')
+      const code = reasonCodeParam(reasonCode)
+      if (token) await setBrandStatusByToken(token, picked.id, 'paused', resumeAt, 'manual', code)
+      else await setBrandStatus(picked.id, 'paused', resumeAt, 'manual', code)
       setShowDurations(false)
+      setReasonCode('')
       await refreshStatus(picked.id)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo cerrar la marca')
@@ -195,18 +200,24 @@ function BrandCloseModal({ accountId, token, dark, onClose }: Props & { onClose:
                     <Lock size={14} /> Cerrar {status.brand_name}
                   </button>
                   {showDurations && (
-                    <div className="mt-2.5 flex flex-wrap gap-1.5">
-                      {DURATIONS.map((d) => (
-                        <button
-                          key={d.label}
-                          onClick={() => void apply(d.minutes)}
-                          disabled={busy}
-                          className={`px-2.5 py-1.5 rounded-lg text-xs font-medium disabled:opacity-50 ${t.chipNeutral}`}
-                        >
-                          {d.label}
-                        </button>
-                      ))}
-                    </div>
+                    <>
+                      <div className="mt-2.5 flex flex-wrap gap-1.5">
+                        {DURATIONS.map((d) => (
+                          <button
+                            key={d.label}
+                            onClick={() => void apply(d.minutes)}
+                            disabled={busy}
+                            className={`px-2.5 py-1.5 rounded-lg text-xs font-medium disabled:opacity-50 ${t.chipNeutral}`}
+                          >
+                            {d.label}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="mt-2 flex items-center gap-1.5">
+                        <span className={`text-xs ${t.textMuted}`}>Motivo (opcional):</span>
+                        <ReasonSelect value={reasonCode} onChange={setReasonCode} theme={dark ? 'dark' : 'light'} />
+                      </div>
+                    </>
                   )}
                 </>
               ) : (
@@ -220,7 +231,7 @@ function BrandCloseModal({ accountId, token, dark, onClose }: Props & { onClose:
               )}
 
               <button
-                onClick={() => { setPicked(null); setStatus(null); setShowDurations(false) }}
+                onClick={() => { setPicked(null); setStatus(null); setShowDurations(false); setReasonCode('') }}
                 className={`mt-3 text-xs font-medium ${t.linkMuted}`}
               >
                 ← Elegir otra marca

@@ -240,14 +240,18 @@ export async function setProductAvailability(
   locationId: string | null,
   reason: AvailabilityReason = 'manual',
   availableUntil?: string | null,
+  reasonCode?: string | null,
 ): Promise<AvailabilityResult> {
   requireSupabase()
-  const { data, error } = await supabase!.rpc('set_product_availability', {
+  // p_reason_code: cast a any hasta que se regenere database.ts (RPC v7,
+  // 20260731T1030 — mismo patrón que stock_group_id en loadSiblings arriba).
+  const { data, error } = await (supabase as any).rpc('set_product_availability', {
     p_menu_item_id: menuItemId,
     p_is_available: isAvailable,
     p_location_id: locationId ?? undefined,
     p_reason: reason,
     p_available_until: availableUntil ?? undefined,
+    p_reason_code: reasonCode ?? undefined,
   })
   if (error) throw new Error(`Error cambiando disponibilidad: ${error.message}`)
   const r = (data ?? {}) as Record<string, unknown>
