@@ -78,7 +78,7 @@ export default function ClosuresChip({ accountId, locationId, token }: Props) {
         onClick={() => setOpen((v) => !v)}
         className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl border border-danger/30 bg-danger-bg text-danger text-[13.5px] font-bold"
       >
-        <span aria-hidden>🔴</span>
+        <span className="w-2 h-2 rounded-full bg-danger shrink-0" aria-hidden />
         <Store size={15} />
         <span className="flex items-center gap-1.5 flex-wrap">
           <span>{label}</span>

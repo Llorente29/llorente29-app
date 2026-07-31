@@ -18,6 +18,7 @@ import {
   getBrandStatus, setBrandStatus, setBrandStatusByToken, listBrandsForClosure,
   type BrandOption, type BrandStatus,
 } from '../services/kdsService'
+import { themeCls } from '../lib/theme'
 
 interface Props {
   accountId?: string | null   // oficina (sesión)
@@ -35,14 +36,12 @@ const DURATIONS: { label: string; minutes: number | null }[] = [
 
 export default function BrandCloseControl({ accountId, token, dark = false }: Props) {
   const [open, setOpen] = useState(false)
+  const t = themeCls(dark ? 'dark' : 'light')
   if (!open) {
     return (
       <button
         onClick={() => setOpen(true)}
-        className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium ${
-          dark ? 'bg-zinc-900 ring-1 ring-zinc-800 text-zinc-200 hover:bg-zinc-800'
-               : 'bg-white border border-stone-300 text-stone-700 hover:bg-stone-50'
-        }`}
+        className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium ${t.buttonOutline}`}
       >
         <Store size={16} /> Cerrar marca
       </button>
@@ -120,14 +119,14 @@ function BrandCloseModal({ accountId, token, dark, onClose }: Props & { onClose:
   }
 
   const filtered = brands.filter((b) => b.name.toLowerCase().includes(q.trim().toLowerCase()))
-  const panelCls = dark ? 'bg-zinc-900 ring-1 ring-zinc-800 text-zinc-100' : 'bg-white'
+  const t = themeCls(dark ? 'dark' : 'light')
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className={`w-full max-w-sm rounded-xl overflow-hidden ${panelCls}`} onClick={(e) => e.stopPropagation()}>
-        <div className={`flex items-center justify-between px-4 py-3 border-b ${dark ? 'border-zinc-800' : 'border-stone-200'}`}>
+      <div className={`w-full max-w-sm rounded-xl overflow-hidden ${t.panel}`} onClick={(e) => e.stopPropagation()}>
+        <div className={`flex items-center justify-between px-4 py-3 border-b ${t.border}`}>
           <h2 className="text-base font-semibold">Cerrar marca</h2>
-          <button onClick={onClose} className={dark ? 'text-zinc-500 hover:text-zinc-200' : 'text-stone-400 hover:text-stone-600'}>
+          <button onClick={onClose} className={t.iconButton}>
             <X size={18} />
           </button>
         </div>
@@ -136,22 +135,19 @@ function BrandCloseModal({ accountId, token, dark, onClose }: Props & { onClose:
           {!picked ? (
             <>
               <div className="relative mb-3">
-                <Search size={15} className={`absolute left-2.5 top-1/2 -translate-y-1/2 ${dark ? 'text-zinc-500' : 'text-stone-400'}`} />
+                <Search size={15} className={`absolute left-2.5 top-1/2 -translate-y-1/2 ${t.textMuted}`} />
                 <input
                   autoFocus
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
                   placeholder="Buscar marca…"
-                  className={`w-full pl-8 pr-3 py-2 rounded-lg text-sm ${
-                    dark ? 'bg-zinc-950 ring-1 ring-zinc-700 text-zinc-100 placeholder:text-zinc-600'
-                         : 'border border-stone-300'
-                  }`}
+                  className={`w-full pl-8 pr-3 py-2 rounded-lg text-sm ${t.input}`}
                 />
               </div>
               {loading ? (
                 <div className="py-6 text-center text-sm opacity-60"><Loader2 size={16} className="animate-spin inline" /></div>
               ) : brands.length === 0 ? (
-                <p className={`text-sm px-1 py-4 ${dark ? 'text-zinc-500' : 'text-stone-400'}`}>
+                <p className={`text-sm px-1 py-4 ${t.textMuted}`}>
                   Ninguna marca de esta cuenta está conectada a HubRise todavía. Las marcas cedidas (solo Last) se gestionan en Last.
                 </p>
               ) : (
@@ -160,15 +156,13 @@ function BrandCloseModal({ accountId, token, dark, onClose }: Props & { onClose:
                     <button
                       key={b.id}
                       onClick={() => pick(b)}
-                      className={`text-left px-3 py-2 rounded-lg text-sm ${
-                        dark ? 'hover:bg-zinc-800' : 'hover:bg-stone-50'
-                      }`}
+                      className={`text-left px-3 py-2 rounded-lg text-sm ${t.hoverBg}`}
                     >
                       {b.name}
                     </button>
                   ))}
                   {filtered.length === 0 && (
-                    <p className={`text-sm px-3 py-2 ${dark ? 'text-zinc-500' : 'text-stone-400'}`}>Sin resultados.</p>
+                    <p className={`text-sm px-3 py-2 ${t.textMuted}`}>Sin resultados.</p>
                   )}
                 </div>
               )}
@@ -178,10 +172,10 @@ function BrandCloseModal({ accountId, token, dark, onClose }: Props & { onClose:
           ) : (
             <>
               <div className="flex items-center gap-2.5 mb-3">
-                <span className={`w-2.5 h-2.5 rounded-full ${status.mode === 'normal' ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                <span className={`w-2.5 h-2.5 rounded-full ${status.mode === 'normal' ? 'bg-success' : 'bg-danger'}`} />
                 <div>
                   <p className="text-sm font-semibold">{status.brand_name}</p>
-                  <p className={`text-xs ${dark ? 'text-zinc-400' : 'text-stone-500'}`}>
+                  <p className={`text-xs ${t.textSecondary}`}>
                     {status.mode === 'normal'
                       ? 'Abierta'
                       : status.resume_at
@@ -196,7 +190,7 @@ function BrandCloseModal({ accountId, token, dark, onClose }: Props & { onClose:
                   <button
                     onClick={() => setShowDurations((v) => !v)}
                     disabled={busy}
-                    className="w-full inline-flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+                    className="w-full inline-flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-semibold bg-danger text-white hover:opacity-90 disabled:opacity-50"
                   >
                     <Lock size={14} /> Cerrar {status.brand_name}
                   </button>
@@ -207,9 +201,7 @@ function BrandCloseModal({ accountId, token, dark, onClose }: Props & { onClose:
                           key={d.label}
                           onClick={() => void apply(d.minutes)}
                           disabled={busy}
-                          className={`px-2.5 py-1.5 rounded-lg text-xs font-medium disabled:opacity-50 ${
-                            dark ? 'bg-zinc-800 text-zinc-200 hover:bg-zinc-700' : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
-                          }`}
+                          className={`px-2.5 py-1.5 rounded-lg text-xs font-medium disabled:opacity-50 ${t.chipNeutral}`}
                         >
                           {d.label}
                         </button>
@@ -221,7 +213,7 @@ function BrandCloseModal({ accountId, token, dark, onClose }: Props & { onClose:
                 <button
                   onClick={() => void reopen()}
                   disabled={busy}
-                  className="w-full inline-flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+                  className="w-full inline-flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-semibold bg-success text-white hover:opacity-90 disabled:opacity-50"
                 >
                   {busy ? <Loader2 size={14} className="animate-spin" /> : <Unlock size={14} />} Reabrir ahora
                 </button>
@@ -229,7 +221,7 @@ function BrandCloseModal({ accountId, token, dark, onClose }: Props & { onClose:
 
               <button
                 onClick={() => { setPicked(null); setStatus(null); setShowDurations(false) }}
-                className={`mt-3 text-xs font-medium ${dark ? 'text-zinc-400 hover:text-zinc-200' : 'text-stone-500 hover:text-stone-700'}`}
+                className={`mt-3 text-xs font-medium ${t.linkMuted}`}
               >
                 ← Elegir otra marca
               </button>
@@ -237,7 +229,7 @@ function BrandCloseModal({ accountId, token, dark, onClose }: Props & { onClose:
           )}
 
           {error && (
-            <div className="mt-3 flex items-center gap-1.5 text-xs text-red-500">
+            <div className="mt-3 flex items-center gap-1.5 text-xs text-danger">
               <AlertTriangle size={13} /> {error}
             </div>
           )}

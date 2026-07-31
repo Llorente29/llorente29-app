@@ -4,25 +4,23 @@
 // Lista lo agotado por LOCAL, reactiva, y agota productos con confirmación de
 // alcance real ("se apaga AHORA en producción en N marcas · N canales de [LOCAL]").
 // La cascada cross-brand + el empuje por local los hace la RPC en el servidor.
+//
+// C2 (31/07): envoltorio fino sobre AvailabilityBoard (layout compartido con
+// TabletAvailabilityTab) + AgotarProductoModal (unificado con el de tablet).
+// Cero cambio de comportamiento: mismas RPC, mismos flujos — solo tokens del
+// sistema de diseño en vez del hex a medida que había antes, y estructura
+// compartida.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Plus, Search, RefreshCw, AlertTriangle, X, Loader2 } from 'lucide-react'
+import { Plus, Search, RefreshCw, Loader2, Clock, X } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import {
   listLocations, listSoldOut, searchProducts, previewScope, setProductAvailability,
-  type LocationOption, type SoldOutRow, type ProductPick, type ScopePreview,
+  type LocationOption, type SoldOutRow,
 } from '@/modules/kitchen/services/availabilityService'
-import LocationStatusCard from '@/modules/kds/components/LocationStatusCard'
-import BrandCloseControl from '@/modules/kds/components/BrandCloseControl'
-import ClosedBrandsCard from '@/modules/kds/components/ClosedBrandsCard'
-
-const ACCENT = '#15171A'
-
-function endOfTodayIso(): string {
-  const d = new Date()
-  d.setHours(23, 59, 0, 0)
-  return d.toISOString()
-}
+import AvailabilityBoard from '@/modules/kds/components/AvailabilityBoard'
+import AgotarProductoModal, { type AgotarProductoAdapter } from '@/modules/kds/components/AgotarProductoModal'
+import BusinessHoursEditor from '@/modules/multitenancy/components/hours/BusinessHoursEditor'
 
 export default function KitchenAvailabilityPage() {
   const { activeAccountId, accountsLoading } = useActiveAccount()
@@ -38,6 +36,7 @@ export default function KitchenAvailabilityPage() {
   const [busyRow, setBusyRow] = useState<string | null>(null)
 
   const [showAgotar, setShowAgotar] = useState(false)
+  const [showHours, setShowHours] = useState(false)
 
   const locName = useMemo(
     () => (locationId ? (locations.find((l) => l.id === locationId)?.name ?? 'local') : 'todos los locales'),
@@ -166,240 +165,128 @@ export default function KitchenAvailabilityPage() {
             className="w-full pl-8 pr-3 py-2 border border-stone-300 rounded-lg text-sm"
           />
         </div>
-      </div>
-
-      {error && (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-[13px] text-red-700">{error}</div>
-      )}
-
-      {/* ── Local y marcas: los dos cierres de alcance amplio ─────────────── */}
-      <div className="mb-5">
-        <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-400">Local y marcas</p>
-          {activeAccountId && <BrandCloseControl accountId={activeAccountId} />}
-        </div>
-        {locationId && <LocationStatusCard locationId={locationId} />}
-        {activeAccountId && <ClosedBrandsCard accountId={activeAccountId} />}
-      </div>
-
-      {/* ── Productos: el cierre de alcance más fino ──────────────────────── */}
-      <div className="flex items-center justify-between gap-2 mb-2.5 flex-wrap">
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-red-500 inline-block" />
-          <span className="text-[13px] font-medium text-stone-500">
-            Productos agotados en {locName} · {loading ? '…' : visible.length}
-          </span>
-        </div>
         <button
-          onClick={() => setShowAgotar(true)}
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-white text-sm font-medium"
-          style={{ backgroundColor: ACCENT }}
+          onClick={() => setShowHours(true)}
+          disabled={!locationId}
+          title={locationId ? `Horario de ${locName}` : 'Elige un local para ver su horario'}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border border-stone-300 text-stone-600 hover:bg-stone-50 disabled:opacity-40"
         >
-          <Plus size={18} /> Agotar producto
+          <Clock size={16} /> Horarios
         </button>
       </div>
 
-      {loading ? (
-        <div className="py-10 text-center text-stone-400"><Loader2 size={20} className="animate-spin inline" /></div>
-      ) : visible.length === 0 ? (
-        <div className="py-10 text-center text-stone-400 text-sm">No hay productos agotados en {locName}.</div>
-      ) : (
-        <div
-          className="grid gap-2.5"
-          style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}
-        >
-          {visible.map((row) => (
-            <div key={`${row.id}-${row.locationId ?? 'all'}`} className="bg-white border border-stone-200 rounded-lg px-3 py-2.5 flex flex-col">
-              <div className="flex items-center justify-end mb-1.5">
-                {row.sourceFolvy ? (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded text-white font-medium leading-none" style={{ backgroundColor: ACCENT }}>Folvy</span>
-                ) : (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-stone-100 text-stone-500 font-medium leading-none">Last</span>
-                )}
-              </div>
-              <div className="flex items-center gap-2 mb-1">
-                {row.photoUrl ? (
-                  <img src={row.photoUrl} alt="" className="w-9 h-9 rounded-full object-cover flex-shrink-0 border border-stone-200" />
-                ) : (
-                  <div className="w-9 h-9 rounded-full flex-shrink-0 bg-stone-100 text-stone-400 flex items-center justify-center text-[13px] font-medium">
-                    {row.name.charAt(0).toUpperCase()}
-                  </div>
-                )}
-                <p className="text-[13px] font-medium text-stone-800 leading-tight line-clamp-2 min-w-0" title={row.name}>{row.name}</p>
-              </div>
-              <p className="text-[11px] text-stone-500 mt-1">
-                {row.brands} marca{row.brands === 1 ? '' : 's'}
-              </p>
-              {!locationId && row.locationName && (
-                <p className="text-[11px] text-stone-400 truncate" title={row.locationName}>{row.locationName}</p>
-              )}
-              <p className="text-[11px] mt-0.5 mb-2">
-                {row.availableUntil
-                  ? <span className="text-amber-600">hasta {new Date(row.availableUntil).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</span>
-                  : <span className="text-stone-400">indefinido</span>}
-              </p>
-              <div className="mt-auto flex flex-col gap-1.5">
-                {row.sourceLast && (
-                  <div
-                    className="w-full text-center py-1.5 rounded-md bg-stone-100 text-stone-500 text-[11px] font-medium"
-                    title="Este artículo viene de Last: Folvy ya no escribe ahí. Reactívalo desde Last."
-                  >
-                    Gestionar en Last
-                  </div>
-                )}
-                {(!row.sourceLast || row.sourceFolvy) && (
-                  <button
-                    onClick={() => handleReactivate(row)}
-                    disabled={busyRow === row.id || !row.representativeMenuItemId}
-                    className="w-full inline-flex items-center justify-center gap-1.5 py-1.5 rounded-md bg-emerald-600 text-white text-[12px] font-medium hover:bg-emerald-700 disabled:opacity-40"
-                  >
-                    {busyRow === row.id ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-                    {row.sourceLast ? 'Reactivar en Folvy' : 'Reactivar'}
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
+      {error && (
+        <div className="mb-4 rounded-lg border border-danger/30 bg-danger-bg p-3 text-[13px] text-danger">{error}</div>
       )}
 
+      <AvailabilityBoard
+        theme="light"
+        accountId={activeAccountId}
+        locationId={locationId}
+        productsTitle={`Productos agotados en ${locName}`}
+        productsCount={loading ? null : visible.length}
+        productsAction={
+          <button
+            onClick={() => setShowAgotar(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-accent text-text-on-accent text-sm font-medium hover:bg-accent-hover"
+          >
+            <Plus size={18} /> Agotar producto
+          </button>
+        }
+      >
+        {loading ? (
+          <div className="py-10 text-center text-stone-400"><Loader2 size={20} className="animate-spin inline" /></div>
+        ) : visible.length === 0 ? (
+          <div className="py-10 text-center text-stone-400 text-sm">No hay productos agotados en {locName}.</div>
+        ) : (
+          <div
+            className="grid gap-2.5"
+            style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}
+          >
+            {visible.map((row) => (
+              <div key={`${row.id}-${row.locationId ?? 'all'}`} className="bg-white border border-stone-200 rounded-lg px-3 py-2.5 flex flex-col">
+                <div className="flex items-center justify-end mb-1.5">
+                  {row.sourceFolvy ? (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent text-text-on-accent font-medium leading-none">Folvy</span>
+                  ) : (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-stone-100 text-stone-500 font-medium leading-none">Last</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 mb-1">
+                  {row.photoUrl ? (
+                    <img src={row.photoUrl} alt="" className="w-9 h-9 rounded-full object-cover flex-shrink-0 border border-stone-200" />
+                  ) : (
+                    <div className="w-9 h-9 rounded-full flex-shrink-0 bg-stone-100 text-stone-400 flex items-center justify-center text-[13px] font-medium">
+                      {row.name.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <p className="text-[13px] font-medium text-stone-800 leading-tight line-clamp-2 min-w-0" title={row.name}>{row.name}</p>
+                </div>
+                <p className="text-[11px] text-stone-500 mt-1">
+                  {row.brands} marca{row.brands === 1 ? '' : 's'}
+                </p>
+                {!locationId && row.locationName && (
+                  <p className="text-[11px] text-stone-400 truncate" title={row.locationName}>{row.locationName}</p>
+                )}
+                <p className="text-[11px] mt-0.5 mb-2">
+                  {row.availableUntil
+                    ? <span className="text-warning">hasta {new Date(row.availableUntil).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</span>
+                    : <span className="text-stone-400">indefinido</span>}
+                </p>
+                <div className="mt-auto flex flex-col gap-1.5">
+                  {row.sourceLast && (
+                    <div
+                      className="w-full text-center py-1.5 rounded-md bg-stone-100 text-stone-500 text-[11px] font-medium"
+                      title="Este artículo viene de Last: Folvy ya no escribe ahí. Reactívalo desde Last."
+                    >
+                      Gestionar en Last
+                    </div>
+                  )}
+                  {(!row.sourceLast || row.sourceFolvy) && (
+                    <button
+                      onClick={() => handleReactivate(row)}
+                      disabled={busyRow === row.id || !row.representativeMenuItemId}
+                      className="w-full inline-flex items-center justify-center gap-1.5 py-1.5 rounded-md bg-success text-white text-[12px] font-medium hover:opacity-90 disabled:opacity-40"
+                    >
+                      {busyRow === row.id ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+                      {row.sourceLast ? 'Reactivar en Folvy' : 'Reactivar'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </AvailabilityBoard>
+
       {showAgotar && activeAccountId && (
-        <AgotarModal
-          accountId={activeAccountId}
-          locationId={locationId}
-          locationName={locName}
+        <AgotarProductoModal
+          theme="light"
+          locationLabel={locName}
+          allLocations={locationId === null}
+          adapter={{
+            searchProducts: (q) => searchProducts(activeAccountId, q),
+            previewScope: (menuItemId) => previewScope(activeAccountId, menuItemId, locationId),
+            agotar: async (menuItemId, until) => {
+              await setProductAvailability(menuItemId, false, locationId, 'manual', until)
+            },
+          } satisfies AgotarProductoAdapter}
           onClose={() => setShowAgotar(false)}
           onDone={async () => { setShowAgotar(false); await reload() }}
         />
       )}
-    </div>
-  )
-}
 
-// ─── Modal "Agotar producto" ──────────────────────────────────────────────────
-function AgotarModal({ accountId, locationId, locationName, onClose, onDone }: {
-  accountId: string
-  locationId: string | null
-  locationName: string
-  onClose: () => void
-  onDone: () => void
-}) {
-  const [q, setQ] = useState('')
-  const [results, setResults] = useState<ProductPick[]>([])
-  const [picked, setPicked] = useState<ProductPick | null>(null)
-  const [scope, setScope] = useState<ScopePreview | null>(null)
-  const [mode, setMode] = useState<'indefinido' | 'hoy'>('indefinido')
-  const [saving, setSaving] = useState(false)
-  const [err, setErr] = useState<string | null>(null)
-
-  useEffect(() => {
-    const t = setTimeout(() => {
-      if (q.trim().length < 2) { setResults([]); return }
-      searchProducts(accountId, q).then(setResults).catch(() => setResults([]))
-    }, 250)
-    return () => clearTimeout(t)
-  }, [q, accountId])
-
-  async function pick(p: ProductPick) {
-    setPicked(p); setScope(null); setErr(null)
-    try {
-      setScope(await previewScope(accountId, p.menuItemId, locationId))
-    } catch {
-      setScope({ brands: p.brands, channels: 0 })
-    }
-  }
-
-  async function confirm() {
-    if (!picked) return
-    setSaving(true); setErr(null)
-    try {
-      await setProductAvailability(
-        picked.menuItemId, false, locationId, 'manual',
-        mode === 'hoy' ? endOfTodayIso() : null,
-      )
-      onDone()
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Error agotando')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-white rounded-xl w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-base font-medium text-stone-800">Agotar producto</h2>
-          <button onClick={onClose} className="text-stone-400 hover:text-stone-600"><X size={18} /></button>
+      {showHours && activeAccountId && locationId && (
+        <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4" onClick={() => setShowHours(false)}>
+          <div className="bg-white rounded-xl w-full max-w-2xl max-h-[85vh] overflow-y-auto p-5" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-medium text-stone-800">Horario de {locName}</h2>
+              <button onClick={() => setShowHours(false)} className="text-stone-400 hover:text-stone-600"><X size={18} /></button>
+            </div>
+            <BusinessHoursEditor accountId={activeAccountId} locationId={locationId} brandId={null} />
+          </div>
         </div>
-
-        {!picked ? (
-          <>
-            <div className="relative mb-3">
-              <Search size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400" />
-              <input autoFocus value={q} onChange={(e) => setQ(e.target.value)}
-                placeholder="Buscar producto a agotar"
-                className="w-full pl-8 pr-3 py-2 border border-stone-300 rounded-lg text-sm" />
-            </div>
-            <div className="max-h-72 overflow-y-auto flex flex-col gap-1">
-              {results.map((p) => (
-                <button key={p.menuItemId} onClick={() => pick(p)}
-                  className="text-left px-3 py-2 rounded-lg hover:bg-stone-50 border border-transparent hover:border-stone-200">
-                  <span className="text-sm text-stone-800">{p.name}</span>
-                  <span className="text-[12px] text-stone-400"> · {p.brands} marca{p.brands === 1 ? '' : 's'}</span>
-                </button>
-              ))}
-              {q.trim().length >= 2 && results.length === 0 && (
-                <p className="text-[13px] text-stone-400 px-3 py-2">Sin resultados.</p>
-              )}
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 mb-3">
-              <div className="flex items-start gap-2">
-                <AlertTriangle size={18} className="text-amber-600 mt-0.5 flex-shrink-0" />
-                <div className="text-sm">
-                  <p className="font-medium text-amber-900">¿Agotar “{picked.name}” en {locationName}?</p>
-                  <p className="text-amber-800 mt-0.5">
-                    Se apagará <strong>AHORA, en producción</strong>, en{' '}
-                    {scope ? <strong>{scope.brands} marca{scope.brands === 1 ? '' : 's'} · {scope.channels} canal{scope.channels === 1 ? '' : 'es'}</strong> : '…'} de Glovo / Uber / JustEat.
-                  </p>
-                  {locationId === null && (
-                    <p className="text-amber-900 mt-1 font-medium">Atención: lo apagas en TODOS los locales.</p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex gap-3 mb-4 text-sm">
-              <label className="inline-flex items-center gap-1.5">
-                <input type="radio" checked={mode === 'indefinido'} onChange={() => setMode('indefinido')} />
-                Indefinido
-              </label>
-              <label className="inline-flex items-center gap-1.5">
-                <input type="radio" checked={mode === 'hoy'} onChange={() => setMode('hoy')} />
-                Solo hoy (reactiva a medianoche)
-              </label>
-            </div>
-
-            {err && <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-2.5 text-[13px] text-red-700">{err}</div>}
-
-            <div className="flex gap-2 justify-end">
-              <button onClick={() => { setPicked(null); setScope(null) }} disabled={saving}
-                className="px-3 py-2 rounded-lg border border-stone-300 text-sm font-medium text-stone-600 hover:bg-stone-50 disabled:opacity-50">
-                Atrás
-              </button>
-              <button onClick={confirm} disabled={saving}
-                className="px-3 py-2 rounded-lg text-white text-sm font-medium disabled:opacity-50 inline-flex items-center gap-1.5"
-                style={{ backgroundColor: '#b45309' }}>
-                {saving ? <Loader2 size={16} className="animate-spin" /> : null}
-                Sí, agotar en {locationName}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
+      )}
     </div>
   )
 }

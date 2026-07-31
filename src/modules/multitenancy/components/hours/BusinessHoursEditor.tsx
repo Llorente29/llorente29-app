@@ -77,7 +77,7 @@ function HoursGraph({ slots }: { slots: HoursSlot[] }) {
                       title={`${s.openTime}–${s.closeTime}`}
                       style={{
                         position: 'absolute', left: `${left}%`, width: `${width}%`, top: 3, bottom: 3,
-                        background: 'var(--color-accent, #FF5436)', opacity: 0.85, borderRadius: 4,
+                        background: 'var(--color-accent, black)', opacity: 0.85, borderRadius: 4,
                       }}
                     />
                   )
@@ -245,9 +245,11 @@ export default function BusinessHoursEditor({ accountId, locationId, brandId, co
   return (
     <div className="space-y-4">
       {feedback && (
-        <div className="rounded-lg p-2.5 text-sm" style={feedback.kind === 'ok'
-          ? { background: '#E3F0E6', border: '1px solid #A8D0B5', color: '#1F6B3B' }
-          : { background: '#FDECEC', border: '1px solid #E5A0A0', color: '#A12626' }}>
+        <div className={`rounded-lg p-2.5 text-sm border ${
+          feedback.kind === 'ok'
+            ? 'bg-success-bg border-success text-success'
+            : 'bg-danger-bg border-danger text-danger'
+        }`}>
           {feedback.msg}
         </div>
       )}
@@ -461,18 +463,18 @@ export default function BusinessHoursEditor({ accountId, locationId, brandId, co
 
       {/* Aviso: abierto sin personal (solo horario general del local) */}
       {brandId === null && staffingGaps.length > 0 && (
-        <div className="rounded-md p-3" style={{ background: '#FFF3D6', border: '1px solid #F2DCA0' }}>
-          <div className="flex items-center gap-1.5 text-sm font-medium mb-1.5" style={{ color: '#7A5A12' }}>
+        <div className="rounded-md p-3 border bg-warning-bg border-warning">
+          <div className="flex items-center gap-1.5 text-sm font-medium mb-1.5 text-warning">
             <AlertTriangle size={15} /> Abierto sin personal asignado
           </div>
-          <p className="text-xs mb-2" style={{ color: '#7A5A12' }}>
+          <p className="text-xs mb-2 text-warning">
             Según el último cuadrante, el local figura abierto pero sin turno de personal en:
           </p>
           <div className="space-y-0.5">
             {staffingGaps.map((g, i) => {
               const dl: Record<number, string> = { 1: 'Lunes', 2: 'Martes', 3: 'Miércoles', 4: 'Jueves', 5: 'Viernes', 6: 'Sábado', 0: 'Domingo' }
               return (
-                <div key={i} className="text-xs" style={{ color: '#7A5A12' }}>
+                <div key={i} className="text-xs text-warning">
                   <span className="font-medium">{dl[g.weekday]}</span>: {g.gapStart}–{g.gapEnd}
                 </div>
               )

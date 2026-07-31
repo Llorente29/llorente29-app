@@ -38,6 +38,7 @@ import {
   type ChannelEconomics,
   type ProductAvailabilityResult,
 } from '@/modules/kitchen/services/menuOverrideService'
+import { previewScope, type ScopePreview } from '@/modules/kitchen/services/availabilityService'
 import { uploadMenuPhoto, deleteMenuPhoto } from '@/modules/kitchen/services/menuPhotoService'
 import {
   getComboContext, getComboCost,
@@ -789,6 +790,7 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
   const [showPrices, setShowPrices] = useState(false)
   const [availSaving, setAvailSaving] = useState(false)
   const [availConfirm, setAvailConfirm] = useState(false)
+  const [availScope, setAvailScope] = useState<ScopePreview | null>(null)
   const [availResult, setAvailResult] = useState<ProductAvailabilityResult | null>(null)
   const [availError, setAvailError] = useState<string | null>(null)
   // Artículo espejo (versión promo)
@@ -923,6 +925,19 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
     }
   }
 
+  // 86: abre la confirmación de agotar y precarga el alcance real (N marcas ·
+  // N canales) — antes solo se revelaba DESPUÉS de agotar, mismo scope-preview
+  // que ya usan los modales "Agotar producto" de Disponibilidad (web/tablet).
+  function openAvailConfirm() {
+    if (!item) return
+    setAvailError(null)
+    setAvailScope(null)
+    setAvailConfirm(true)
+    previewScope(item.accountId, item.id, null)
+      .then(setAvailScope)
+      .catch(() => setAvailScope(null))
+  }
+
   // 86: marcar disponible/agotado (cascada cross-brand + empuje a canales en el servidor)
   async function handleToggleAvailability(next: boolean) {
     if (!item) return
@@ -932,6 +947,7 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
       const res = await setProductAvailability(item.id, next, 'manual')
       setAvailResult(next ? null : res)   // mostramos el alcance solo al agotar
       setAvailConfirm(false)
+      setAvailScope(null)
       await refreshItem()
     } catch (err: unknown) {
       setAvailError(err instanceof Error ? err.message : 'Error cambiando disponibilidad')
@@ -1524,7 +1540,7 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
                   <td className="py-2.5 text-right">
                     {item.isAvailable ? (
                       <button
-                        onClick={() => { setAvailError(null); setAvailConfirm(true) }}
+                        onClick={openAvailConfirm}
                         disabled={availSaving}
                         className="inline-flex items-center gap-1.5 text-[12px] font-medium text-green-700 hover:text-green-800 disabled:opacity-50"
                       >
@@ -1610,7 +1626,10 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
             <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm">
               <p className="font-medium text-amber-900">¿Marcar como agotado?</p>
               <p className="text-amber-800 mt-0.5">
-                Se agotará en <strong>todas las marcas</strong> que comparten este producto y se retirará de las plataformas (Glovo, Uber, JustEat) donde esté publicado. Podrás reactivarlo cuando quieras.
+                Se apagará <strong>AHORA, en producción</strong>, en{' '}
+                {availScope ? (
+                  <strong>{availScope.brands} marca{availScope.brands === 1 ? '' : 's'} · {availScope.channels} canal{availScope.channels === 1 ? '' : 'es'}</strong>
+                ) : 'calculando alcance…'} de Glovo / Uber / JustEat. Podrás reactivarlo cuando quieras.
               </p>
               <div className="flex gap-2 mt-2.5">
                 <button
@@ -1621,7 +1640,7 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
                   {availSaving ? 'Agotando…' : 'Sí, agotar'}
                 </button>
                 <button
-                  onClick={() => setAvailConfirm(false)}
+                  onClick={() => { setAvailConfirm(false); setAvailScope(null) }}
                   disabled={availSaving}
                   className="px-3 py-1.5 rounded-md border border-stone-300 text-[13px] font-medium text-stone-600 hover:bg-stone-50 disabled:opacity-50"
                 >

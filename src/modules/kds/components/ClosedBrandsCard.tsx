@@ -17,6 +17,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Store, Unlock, Loader2, AlertTriangle } from 'lucide-react'
 import { getClosedBrands, setBrandStatus, setBrandStatusByToken, type ClosedBrand } from '../services/kdsService'
+import { themeCls } from '../lib/theme'
 
 interface Props {
   accountId?: string | null
@@ -63,13 +64,13 @@ export default function ClosedBrandsCard({ accountId, token, dark = false }: Pro
 
   if (loading || brands.length === 0) return null
 
-  const cardCls = dark ? 'bg-zinc-900 ring-1 ring-zinc-800' : 'bg-white border border-stone-200'
+  const t = themeCls(dark ? 'dark' : 'light')
 
   return (
-    <div className={`rounded-xl px-4 py-3 mb-3 ${cardCls}`}>
+    <div className={`rounded-xl px-4 py-3 mb-3 ${t.card}`}>
       <div className="flex items-center gap-2 mb-2">
-        <Store size={15} className={dark ? 'text-zinc-500' : 'text-stone-400'} />
-        <span className={`text-xs font-semibold uppercase tracking-wide ${dark ? 'text-zinc-400' : 'text-stone-500'}`}>
+        <Store size={15} className={t.textMuted} />
+        <span className={`text-xs font-semibold uppercase tracking-wide ${t.textSecondary}`}>
           {brands.length === 1 ? 'Marca cerrada' : `${brands.length} marcas cerradas`}
         </span>
       </div>
@@ -77,9 +78,9 @@ export default function ClosedBrandsCard({ accountId, token, dark = false }: Pro
         {brands.map((b) => (
           <div key={b.brand_id} className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
-              <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
-              <span className={`text-sm truncate ${dark ? 'text-zinc-100' : 'text-stone-800'}`}>{b.brand_name}</span>
-              <span className={`text-xs shrink-0 ${dark ? 'text-zinc-500' : 'text-stone-400'}`}>
+              <span className="w-2 h-2 rounded-full bg-danger shrink-0" />
+              <span className={`text-sm truncate ${t.textPrimary}`}>{b.brand_name}</span>
+              <span className={`text-xs shrink-0 ${t.textMuted}`}>
                 {b.resume_at
                   ? `hasta las ${new Date(b.resume_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`
                   : 'indefinido'}
@@ -88,7 +89,7 @@ export default function ClosedBrandsCard({ accountId, token, dark = false }: Pro
             <button
               onClick={() => void reopen(b.brand_id)}
               disabled={busyId === b.brand_id}
-              className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+              className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold bg-success text-white hover:opacity-90 disabled:opacity-50"
             >
               {busyId === b.brand_id ? <Loader2 size={12} className="animate-spin" /> : <Unlock size={12} />} Reabrir
             </button>
@@ -96,7 +97,7 @@ export default function ClosedBrandsCard({ accountId, token, dark = false }: Pro
         ))}
       </div>
       {error && (
-        <div className="mt-2 flex items-center gap-1.5 text-xs text-red-500">
+        <div className="mt-2 flex items-center gap-1.5 text-xs text-danger">
           <AlertTriangle size={13} /> {error}
         </div>
       )}

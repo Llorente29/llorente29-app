@@ -16,6 +16,7 @@ import {
   getLocationStatus, setLocationStatus, setLocationStatusByToken,
   type LocationStatus,
 } from '../services/kdsService'
+import { themeCls } from '../lib/theme'
 
 interface Props {
   /** Local (sesión). En tablet va null: la RPC deriva el local del token. */
@@ -96,25 +97,25 @@ export default function LocationStatusCard({ locationId, token, dark = false }: 
   if (loading || !status) return null
 
   const mode = effectiveMode(status)
-  const cardCls = dark ? 'bg-zinc-900 ring-1 ring-zinc-800' : 'bg-white border border-stone-200'
+  const t = themeCls(dark ? 'dark' : 'light')
 
   if (!status.connected) {
     return (
-      <div className={`rounded-xl px-4 py-3 mb-4 flex items-center gap-2.5 ${cardCls} ${dark ? 'text-zinc-400' : 'text-stone-500'}`}>
-        <Store size={17} className={dark ? 'text-zinc-500' : 'text-stone-400'} />
+      <div className={`rounded-xl px-4 py-3 mb-4 flex items-center gap-2.5 ${t.card} ${t.textSecondary}`}>
+        <Store size={17} className={t.textMuted} />
         <span className="text-sm">{status.location_name} no está conectado a delivery (HubRise) — el 86 por producto sigue funcionando.</span>
       </div>
     )
   }
 
   return (
-    <div className={`rounded-xl px-4 py-3 mb-4 ${cardCls}`}>
+    <div className={`rounded-xl px-4 py-3 mb-4 ${t.card}`}>
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2.5">
-          <span className={`w-2.5 h-2.5 rounded-full ${mode === 'normal' ? 'bg-emerald-500' : 'bg-red-500'}`} />
+          <span className={`w-2.5 h-2.5 rounded-full ${mode === 'normal' ? 'bg-success' : 'bg-danger'}`} />
           <div>
-            <p className={`text-sm font-semibold ${dark ? 'text-zinc-100' : 'text-stone-800'}`}>{status.location_name}</p>
-            <p className={`text-xs ${dark ? 'text-zinc-400' : 'text-stone-500'}`}>
+            <p className={`text-sm font-semibold ${t.textPrimary}`}>{status.location_name}</p>
+            <p className={`text-xs ${t.textSecondary}`}>
               {mode === 'normal'
                 ? 'Abierto para pedidos de delivery'
                 : status.resume_at
@@ -127,7 +128,7 @@ export default function LocationStatusCard({ locationId, token, dark = false }: 
           <button
             onClick={() => setShowClose(v => !v)}
             disabled={busy}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-danger text-white hover:opacity-90 disabled:opacity-50"
           >
             <Lock size={13} /> Cerrar local
           </button>
@@ -135,7 +136,7 @@ export default function LocationStatusCard({ locationId, token, dark = false }: 
           <button
             onClick={() => void reopen()}
             disabled={busy}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-success text-white hover:opacity-90 disabled:opacity-50"
           >
             {busy ? <Loader2 size={13} className="animate-spin" /> : <Unlock size={13} />} Reabrir ahora
           </button>
@@ -143,15 +144,13 @@ export default function LocationStatusCard({ locationId, token, dark = false }: 
       </div>
 
       {showClose && mode === 'normal' && (
-        <div className={`mt-3 pt-3 border-t flex flex-wrap gap-1.5 ${dark ? 'border-zinc-800' : 'border-stone-100'}`}>
+        <div className={`mt-3 pt-3 border-t flex flex-wrap gap-1.5 ${t.dividerLight}`}>
           {DURATIONS.map(d => (
             <button
               key={d.label}
               onClick={() => void apply(d.minutes)}
               disabled={busy}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-medium disabled:opacity-50 ${
-                dark ? 'bg-zinc-800 text-zinc-200 hover:bg-zinc-700' : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
-              }`}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-medium disabled:opacity-50 ${t.chipNeutral}`}
             >
               {d.label}
             </button>
@@ -160,7 +159,7 @@ export default function LocationStatusCard({ locationId, token, dark = false }: 
       )}
 
       {error && (
-        <div className="mt-2.5 flex items-center gap-1.5 text-xs text-red-500">
+        <div className="mt-2.5 flex items-center gap-1.5 text-xs text-danger">
           <AlertTriangle size={13} /> {error}
         </div>
       )}
