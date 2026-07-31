@@ -2,6 +2,8 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { Capacitor } from '@capacitor/core'
+import { CapacitorUpdater } from '@capgo/capacitor-updater'
 import { AppProvider } from './context/AppContext'
 import App from './App'
 import UpdateGate from './components/UpdateGate'
@@ -11,6 +13,21 @@ import './index.css'
 // token de dispositivo e imprime por socket a la impresora de red. Import de
 // efecto: al cargar deja disponible window.folvyPrint para arrancarlo/probarlo.
 import './native/print/printWorker'
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OTA (Capa 2, 31/07) — CapacitorUpdater.notifyAppReady() INNEGOCIABLE.
+//
+// Hay que llamarlo dentro de los primeros ~10s del arranque (appReadyTimeout,
+// ver capacitor.config.ts) o Capgo asume que el bundle activo está roto y hace
+// ROLLBACK AUTOMÁTICO al último bundle bueno (o al empaquetado en la APK). Por
+// eso va AQUÍ, antes de montar React — nada de esperar a datos, red, ni al
+// primer render. Best-effort: en un fallo nunca debe bloquear el arranque; en
+// web el plugin trae un shim que resuelve solo, pero igualmente se guarda tras
+// isNativePlatform() para no tocar nada fuera de la APK.
+// ─────────────────────────────────────────────────────────────────────────────
+if (Capacitor.isNativePlatform()) {
+  void CapacitorUpdater.notifyAppReady().catch(() => { /* best-effort */ })
+}
 
 // Bloque C completo Fase 1 (17/05/2026):
 //   Envolvemos toda la app en BrowserRouter. El AppProvider va DENTRO del

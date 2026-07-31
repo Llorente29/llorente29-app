@@ -1,13 +1,24 @@
-name: Build & publish Android APK
+name: Build & publish Android APK + OTA bundle
 
-# Cada push a main (que toque código de la app) → APK release firmado + version.json
-# subidos al bucket público `apps` de Supabase. Las tablets se actualizan solas
-# (ver src/native/appUpdate.ts + UpdateGate). Cero Android Studio, cero cables.
+# Cada push a main (que toque código de la app) publica el bundle web por OTA
+# (Capa 2, 31/07: @capgo/capacitor-updater) — las tablets se lo aplican solas,
+# sin instalar nada. La APK (Capa 1) queda RESERVADA para cambios nativos de
+# verdad (plugin nuevo, permisos, versión de Capacitor): solo se rebuildea y
+# sube cuando el push dispara el "gatillo nativo" (ver detect-native-trigger).
+# Sin ese gatillo, ni se toca Android/Gradle ni se reescribe version.json — la
+# Capa 1 no vuelve a ofrecer un sideload por un cambio que ya llegó por OTA.
 #
-# Política de forzado (mandatory): por defecto FALSE → la actualización se ofrece
-# pero no bloquea (se aplica en reposo/reinicio, sin interrumpir el servicio de
-# cocina). Solo es OBLIGATORIA si el mensaje del commit contiene el marcador
-# [force-update] — reservado a cambios que rompen compatibilidad. Ver UpdateGate.
+# Política de forzado (mandatory), IGUAL en los dos canales: por defecto FALSE
+# → se ofrece/aplica en la próxima ventana segura, sin interrumpir el servicio
+# de cocina. Solo es OBLIGATORIA si el mensaje del commit lleva [force-update].
+#
+# Gatillo nativo (build/sube APK + version.json), CUALQUIERA de:
+#   · el commit lleva el marcador [apk]
+#   · cambios bajo android/
+#   · cambios en capacitor.config.ts
+#   · cambios en las deps @capacitor*/@capgo* de package.json
+# Ver src/native/appUpdate.ts + src/components/UpdateGate.tsx (Capa 1 + Capa 2)
+# y src/main.tsx (CapacitorUpdater.notifyAppReady(), INNEGOCIABLE).
 
 on:
   push:
@@ -19,10 +30,44 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-apk:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2 # necesario para diffear HEAD~1..HEAD en el detector de gatillo nativo
+
+      - name: Detect native trigger
+        id: trigger
+        run: |
+          MSG="$(git log -1 --pretty=%B)"
+          NATIVE=false
+
+          if printf '%s' "$MSG" | grep -qF '[apk]'; then
+            NATIVE=true
+            echo "gatillo: marcador [apk] en el commit"
+          fi
+
+          # HEAD~1 puede no existir (primer commit del repo/historia superficial):
+          # si falla, CHANGED queda vacío -> no fuerza nativo por error de git.
+          CHANGED="$(git diff --name-only HEAD~1 HEAD 2>/dev/null || true)"
+
+          if printf '%s\n' "$CHANGED" | grep -qE '^android/|^capacitor\.config\.ts$'; then
+            NATIVE=true
+            echo "gatillo: cambios en android/ o capacitor.config.ts"
+          fi
+
+          if printf '%s\n' "$CHANGED" | grep -qE '^package(-lock)?\.json$'; then
+            # Solo cuenta si la línea que cambió es de una dep @capacitor*/@capgo*
+            # de verdad (no cualquier otra dependencia tocada en el mismo commit).
+            if git diff HEAD~1 HEAD -- package.json 2>/dev/null | grep -qE '^[+-].*"@(capacitor|capgo)/'; then
+              NATIVE=true
+              echo "gatillo: deps @capacitor*/@capgo* cambiadas en package.json"
+            fi
+          fi
+
+          echo "native=${NATIVE}" >> "$GITHUB_OUTPUT"
+          echo "Gatillo nativo: ${NATIVE} (commit: ${MSG%%$'\n'*})"
 
       - uses: actions/setup-node@v4
         with:
@@ -30,6 +75,7 @@ jobs:
           cache: npm
 
       - uses: actions/setup-java@v4
+        if: steps.trigger.outputs.native == 'true'
         with:
           distribution: temurin
           java-version: '21'
@@ -46,13 +92,57 @@ jobs:
           VITE_MAPBOX_TOKEN: ${{ secrets.VITE_MAPBOX_TOKEN }}
           VITE_STRIPE_PUBLISHABLE_KEY: ${{ secrets.VITE_STRIPE_PUBLISHABLE_KEY }}
 
+      # ── Canal OTA — SIEMPRE, toque o no código nativo ─────────────────────
+      - name: Zip web bundle (OTA)
+        run: (cd dist && zip -qr ../bundle.zip .)
+
+      - name: Prepare bundle.json
+        run: |
+          VC="${{ github.run_number }}"
+          MSG="$(git log -1 --pretty=%B)"
+          if printf '%s' "$MSG" | grep -qF '[force-update]'; then
+            MANDATORY=true
+          else
+            MANDATORY=false
+          fi
+          SHA="$(sha256sum bundle.zip | cut -d' ' -f1)"
+          cat > bundle.json <<EOF
+          { "bundleId": ${VC}, "versionName": "1.0.${VC}", "url": "${{ secrets.VITE_SUPABASE_URL }}/storage/v1/object/public/apps/bundle-${VC}.zip", "sha256": "${SHA}", "mandatory": ${MANDATORY} }
+          EOF
+          echo "mandatory=${MANDATORY} (commit: ${MSG%%$'\n'*})"
+          echo "bundle.json:" && cat bundle.json
+
+      - name: Upload bundle.zip + bundle.json to Supabase Storage (bucket apps, upsert)
+        env:
+          SB_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SB_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          VC="${{ github.run_number }}"
+          echo "Subiendo bundle-${VC}.zip ($(du -h bundle.zip | cut -f1))…"
+          curl -sSf -X POST "$SB_URL/storage/v1/object/apps/bundle-${VC}.zip" \
+            -H "Authorization: Bearer $SB_KEY" \
+            -H "x-upsert: true" \
+            -H "Content-Type: application/zip" \
+            --data-binary "@bundle.zip"
+          echo "Subiendo bundle.json…"
+          curl -sSf -X POST "$SB_URL/storage/v1/object/apps/bundle.json" \
+            -H "Authorization: Bearer $SB_KEY" \
+            -H "x-upsert: true" \
+            -H "Content-Type: application/json" \
+            --data-binary "@bundle.json"
+          echo "OK · bundleId=${VC}"
+
+      # ── Canal nativo (APK) — SOLO con gatillo nativo ──────────────────────
       - name: Capacitor sync (android)
+        if: steps.trigger.outputs.native == 'true'
         run: npx cap sync android
 
       - name: Decode signing keystore
+        if: steps.trigger.outputs.native == 'true'
         run: echo "${{ secrets.FOLVY_KEYSTORE_B64 }}" | base64 -d > android/app/folvy-release.jks
 
       - name: Build signed release APK
+        if: steps.trigger.outputs.native == 'true'
         working-directory: android
         run: ./gradlew assembleRelease --no-daemon
         env:
@@ -63,11 +153,9 @@ jobs:
           FOLVY_VERSION_CODE: ${{ github.run_number }}
 
       - name: Prepare version.json
+        if: steps.trigger.outputs.native == 'true'
         run: |
           VC="${{ github.run_number }}"
-          # mandatory=false salvo que el commit HEAD lleve [force-update]. Se lee con
-          # git (funciona igual en push y en workflow_dispatch, sin depender de la
-          # forma del evento).
           MSG="$(git log -1 --pretty=%B)"
           if printf '%s' "$MSG" | grep -qF '[force-update]'; then
             MANDATORY=true
@@ -81,6 +169,7 @@ jobs:
           echo "version.json:" && cat version.json
 
       - name: Upload APK + version.json to Supabase Storage (bucket apps, upsert)
+        if: steps.trigger.outputs.native == 'true'
         env:
           SB_URL: ${{ secrets.VITE_SUPABASE_URL }}
           SB_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}

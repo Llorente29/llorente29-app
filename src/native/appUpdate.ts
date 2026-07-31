@@ -22,6 +22,7 @@
 // que haya que aplicar con la cocina cerrada.
 
 import { Capacitor } from '@capacitor/core'
+import { CapacitorUpdater } from '@capgo/capacitor-updater'
 import { supabase } from '@/lib/supabase'
 import { EscposPrinter } from './print/EscposPrinter'
 import { getDeviceToken } from './print/printWorker'
@@ -177,6 +178,10 @@ export async function fetchUpdateWindow(quietMinutes = 20): Promise<UpdateWindow
  * Reporta a BBDD qué versión corre este dispositivo (kds_device.app_version).
  * Best-effort absoluto: cualquier fallo se traga: es telemetría, no puede
  * estorbar al arranque de una estación.
+ *
+ * Incluye el bundleId OTA activo (si hay alguno aplicado) para no perder
+ * visibilidad de flota (§7): no se amplía el esquema de kds_device por esto
+ * (deuda menor, aceptada) — se aprovecha que app_version ya es texto libre.
  */
 export async function reportAppVersion(): Promise<void> {
   const token = getDeviceToken()
@@ -186,6 +191,10 @@ export async function reportAppVersion(): Promise<void> {
     if (Capacitor.isNativePlatform()) {
       const v = await EscposPrinter.getVersionCode()
       version = `${v.versionName ?? '?'} (${v.versionCode})`
+      try {
+        const { bundle } = await CapacitorUpdater.current()
+        if (bundle && bundle.id !== 'builtin') version += ` · bundle ${bundle.version}`
+      } catch { /* Capgo no disponible en este build viejo: se omite sin más */ }
     }
     await rpc('report_device_app_version', {
       p_device_token: token,
@@ -195,4 +204,80 @@ export async function reportAppVersion(): Promise<void> {
   } catch {
     /* telemetría: nunca molesta */
   }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// OTA DEL BUNDLE WEB (Capa 2, 31/07) — @capgo/capacitor-updater en MODO MANUAL.
+//
+// Canal separado de version.json/APK (arriba): bundle.json lo emite CI en CADA
+// build (toque o no código nativo) y anuncia el zip de `dist/` de esa build.
+// UpdateGate decide CUÁNDO aplicar (misma ventana segura de siempre); aquí solo
+// vive el I/O: comprobar, descargar, aplicar. Nunca auto-aplica por su cuenta
+// (capacitor.config.ts → CapacitorUpdater.autoUpdate:false).
+// ═════════════════════════════════════════════════════════════════════════════
+
+export interface RemoteBundle {
+  bundleId: number
+  versionName: string
+  url: string
+  sha256: string
+  mandatory: boolean
+}
+
+function bundleUrl(): string {
+  const base = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.replace(/\/+$/, '') ?? ''
+  return `${base}/storage/v1/object/public/apps/bundle.json`
+}
+
+/** ¿Hay un bundle OTA más nuevo que el que corre ahora? El "builtin" (el que
+ *  trae la APK de fábrica, nunca actualizado por OTA) cuenta como bundleId 0 —
+ *  siempre inferior a cualquier bundle.json real. */
+export async function checkForBundleUpdate(): Promise<{ remote: RemoteBundle } | null> {
+  if (!Capacitor.isNativePlatform()) return null
+  try {
+    const resp = await fetch(`${bundleUrl()}?t=${Date.now()}`, { cache: 'no-store' })
+    if (!resp.ok) return null
+    const remote = (await resp.json()) as RemoteBundle
+    if (!remote || typeof remote.bundleId !== 'number') return null
+    const { bundle } = await CapacitorUpdater.current()
+    const activeId = bundle && bundle.id !== 'builtin' ? Number(bundle.version) : 0
+    const currentId = Number.isFinite(activeId) ? activeId : 0
+    if (remote.bundleId > currentId) return { remote }
+    return null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Descarga el bundle en 2º plano (Capgo lo deja en disco, sin activar). El
+ * `version` que se le pasa es el bundleId como texto: es lo que luego lee
+ * checkForBundleUpdate() vía CapacitorUpdater.current().bundle.version para
+ * comparar. El checksum lo verifica el propio plugin (sha256); si no cuadra,
+ * download() rechaza y aquí se traga como "no descargado" — se reintenta en
+ * el siguiente ciclo, nunca se aplica un bundle corrupto.
+ */
+export async function prefetchOtaBundle(remote: RemoteBundle): Promise<string | null> {
+  if (!Capacitor.isNativePlatform()) return null
+  try {
+    const info = await CapacitorUpdater.download({
+      url: remote.url,
+      version: String(remote.bundleId),
+      checksum: remote.sha256,
+    })
+    return info?.id ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Aplica un bundle ya descargado: set() + reload inmediato (destruye el
+ * contexto JS actual — por diseño de Capgo esta promesa normalmente no llega
+ * a resolver). Si el bundle nuevo no arranca, notifyAppReady() no se llama a
+ * tiempo y Capgo hace ROLLBACK solo al bundle bueno anterior en ≤10s — la
+ * estación nunca se queda muerta por un OTA malo.
+ */
+export async function applyOtaBundle(bundleId: string): Promise<void> {
+  await CapacitorUpdater.set({ id: bundleId })
 }

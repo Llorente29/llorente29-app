@@ -1,47 +1,68 @@
 // src/components/UpdateGate.tsx
 //
-// Puerta de actualización (sideload) A PRUEBA DE FALLOS. Al arrancar la app nativa
-// comprueba version.json; si hay una versión mayor avisa. Principio rector: una
-// estación de cocina NUNCA debe quedar muerta —ni interrumpida— por culpa del
-// actualizador.
+// Puerta de actualización A PRUEBA DE FALLOS — DOS canales (Capa 2, 31/07):
+//   · NATIVO (APK sideload, Capa 1): version.json / EscposPrinter. Solo para
+//     cambios que rompen compatibilidad (plugin nuevo, permisos, Capacitor).
+//     Exige el toque de "Actualizar" + el instalador de Android (visible,
+//     porque Android obliga a consentir instalar un APK de fuera de Play).
+//   · OTA (bundle web, Capa 2): bundle.json / @capgo/capacitor-updater. Para
+//     TODO cambio de código React/web (la inmensa mayoría de los pushes). Se
+//     aplica SOLA — set()+reload, sin instalador, sin consentimiento que dar —
+//     así que no necesita tarjeta ni interacción: solo espera su ventana segura.
 //
-//   · Nunca bloquea de forma irrecuperable: si la descarga/instalación se cuelga o
-//     falla, hay siempre una salida ("Seguir trabajando") y la app sigue viva en la
-//     versión actual (el vínculo de estación vive en localStorage y sobrevive; no
-//     hay que re-vincular). Se reintenta sola en el siguiente chequeo.
+// Principio rector (igual para los dos canales): una estación de cocina NUNCA
+// debe quedar muerta —ni interrumpida— por culpa del actualizador.
+//
+//   · Nunca bloquea de forma irrecuperable: si la descarga/instalación NATIVA se
+//     cuelga o falla, hay siempre una salida ("Seguir trabajando") y la app sigue
+//     viva en la versión actual. Se reintenta sola en el siguiente chequeo.
+//   · La OTA tiene su propia red de seguridad: si el bundle nuevo no llama a
+//     notifyAppReady() a tiempo, Capgo hace ROLLBACK automático al bundle bueno
+//     anterior (ver main.tsx) — la estación nunca se queda con un bundle roto.
 //   · Actualización NO obligatoria (mandatory:false): tarjeta compacta, descartable,
-//     SIN backdrop → la cocina sigue operando detrás.
+//     SIN backdrop → la cocina sigue operando detrás. (Solo aplica al canal nativo:
+//     la OTA no tiene tarjeta, ver arriba.)
 //   · Actualización obligatoria (mandatory:true, solo cambios que rompen compat):
 //     overlay que insiste, pero con escape de emergencia si la instalación se atasca.
 //
-// ── VENTANA DE ACTUALIZACIÓN SEGURA (26/07) ─────────────────────────────────
+// ── VENTANA DE ACTUALIZACIÓN SEGURA (26/07, COMPARTIDA por los dos canales) ──
 // Antes, una versión nueva plantaba un modal encima de quien estuviera pasando
-// pedidos. Ahora el actualizador SEPARA descargar de instalar:
+// pedidos. El actualizador SEPARA descargar de instalar/aplicar:
 //
-//   1. DESCARGA: en cuanto hay versión nueva, el APK se baja SOLO, en segundo
-//      plano, sin decir nada (prefetchUpdate). Descargar no molesta a nadie.
-//   2. INSTALACIÓN: sólo se OFRECE cuando la estación está en calma:
+//   1. DESCARGA: en cuanto hay versión nueva (nativa u OTA), se baja SOLA, en
+//      segundo plano, sin decir nada. Descargar no molesta a nadie.
+//   2. INSTALAR/APLICAR: solo cuando la estación está en calma:
 //        · sin trabajos de impresión vivos    ┐ RPC station_update_window
 //        · sin pedidos en curso               │ (lo que sólo la BBDD sabe)
 //        · sin ventas en los últimos N min    ┘
 //        · y el dispositivo lleva ≥ IDLE_MIN sin que nadie lo toque (aquí).
-//      Mientras no se cumpla, el actualizador CALLA (o deja una tira discreta si
-//      la versión es obligatoria). Nunca un modal en mitad del pase.
+//      Mientras no se cumpla: el canal nativo CALLA (o deja una tira discreta
+//      si es obligatorio); el canal OTA simplemente espera en silencio — nunca
+//      un modal ni un parón en mitad del pase.
+//
+// PRIORIDAD entre canales (§4 del encargo): si hay una actualización NATIVA
+// pendiente (version.json con versionCode mayor), el bundle OTA se congela —
+// no se comprueba ni se aplica — hasta que esa nativa se resuelva. Un cambio
+// que toca lo nativo siempre viene acompañado del bundle equivalente ya
+// horneado DENTRO del APK nuevo (CI sube las dos cosas juntas), así que no se
+// pierde nada esperando.
 //
 // Un dispositivo SIN token de estación (móvil de equipo, navegador) no tiene
 // cocina que interrumpir: para él sólo cuenta la inactividad táctil.
 //
-// En web no hace nada (checkForUpdate devuelve null). Se monta en main.tsx.
+// En web ninguno de los dos canales hace nada (checkForUpdate/checkForBundleUpdate
+// devuelven null). Se monta en main.tsx.
 
 import { useEffect, useRef, useState } from 'react'
 import {
   checkForUpdate, installUpdate, prefetchUpdate, isUpdateDownloaded,
   fetchUpdateWindow, reportAppVersion,
+  checkForBundleUpdate, prefetchOtaBundle, applyOtaBundle,
   type RemoteVersion, type UpdateWindow,
 } from '../native/appUpdate'
 import { getDeviceToken } from '../native/print/printWorker'
 
-const RECHECK_MS = 15 * 60 * 1000  // re-chequea version.json cada 15 min
+const RECHECK_MS = 15 * 60 * 1000  // re-chequea version.json/bundle.json cada 15 min
 const WINDOW_MS = 60 * 1000        // con update pendiente, mira la ventana cada minuto
 const IDLE_MS = 5 * 60 * 1000      // nadie toca la tablet desde hace 5 min
 const QUIET_MINUTES = 20           // minutos sin ventas que pide la RPC
@@ -74,26 +95,30 @@ function reasonText(w: UpdateWindow | null, idleOk: boolean): string {
 }
 
 export default function UpdateGate() {
+  // ── Canal nativo (APK, Capa 1) ──────────────────────────────────────────
   const [update, setUpdate] = useState<RemoteVersion | null>(null)
   const [phase, setPhase] = useState<Phase>('prompt')
   const [error, setError] = useState<string | null>(null)
   const [slow, setSlow] = useState(false)     // instalación tardando → mostrar escape
   const [launched, setLaunched] = useState(false) // el instalador ya se abrió (nativo resolvió)
   const [downloaded, setDownloaded] = useState(false)
+  const dismissedCode = useRef<number | null>(null) // versión nativa descartada esta sesión
+  const prefetchedCode = useRef<number | null>(null) // versión nativa ya predescargada
+
+  // ── Canal OTA (bundle web, Capa 2) ───────────────────────────────────────
+  // Sin fase ni tarjeta: aplicar un bundle es set()+reload, nada que consentir.
+  const [otaBundleId, setOtaBundleId] = useState<string | null>(null) // id LOCAL de Capgo, listo para set()
+  const otaCheckedRemote = useRef<number | null>(null) // remote.bundleId ya intentado descargar
+  const otaApplying = useRef(false) // evita disparar set() dos veces a la vez
+
+  // ── Señales compartidas por los dos canales ──────────────────────────────
   const [win, setWin] = useState<UpdateWindow | null>(null)
   const [idleOk, setIdleOk] = useState(false)
-  // El servidor lleva demasiado rato mudo → dejamos de exigirle permiso.
-  const [blind, setBlind] = useState(false)
-  // Versión descartada en esta sesión (no re-molestar con la MISMA si no es obligatoria).
-  const dismissedCode = useRef<number | null>(null)
-  // Versión ya predescargada (para no bajarla en bucle).
-  const prefetchedCode = useRef<number | null>(null)
-  // 0 = aún sin marcar; lo fija el efecto de inactividad al montar.
+  const [blind, setBlind] = useState(false) // el servidor lleva demasiado rato mudo
   const lastTouch = useRef<number>(0)
-  // Sondeos seguidos sin respuesta del servidor (ver BLIND_LIMIT).
   const blindCount = useRef<number>(0)
 
-  // Telemetría de flota: qué versión corre esta tablet (best-effort, silencioso).
+  // Telemetría de flota: qué versión (+ bundle OTA activo) corre esta tablet.
   useEffect(() => { void reportAppVersion() }, [])
 
   // Inactividad táctil: la estación se considera "libre" tras IDLE_MS sin toques.
@@ -111,23 +136,39 @@ export default function UpdateGate() {
     }
   }, [])
 
-  // Chequeo de versión + PREDESCARGA silenciosa (no muestra nada por sí sola).
+  // Chequeo de versión NATIVA + predescarga silenciosa, y — solo si NO hay
+  // actualización nativa pendiente (prioridad §4) — chequeo + predescarga del
+  // bundle OTA. Ninguno de los dos "aplica" nada aquí, solo dejan lo nuevo listo.
   useEffect(() => {
     let alive = true
     const run = async () => {
+      let hasNative = false
       try {
         const r = await checkForUpdate()
-        if (!alive || !r) return
-        // No pisar un intento en curso; y si el usuario descartó esta versión (y no
-        // es obligatoria), no reabrir hasta el próximo arranque en frío.
-        if (r.remote.mandatory || r.remote.versionCode !== dismissedCode.current) {
-          setUpdate((prev) => prev ?? r.remote)
+        if (alive && r) {
+          hasNative = true
+          // No pisar un intento en curso; y si el usuario descartó esta versión (y no
+          // es obligatoria), no reabrir hasta el próximo arranque en frío.
+          if (r.remote.mandatory || r.remote.versionCode !== dismissedCode.current) {
+            setUpdate((prev) => prev ?? r.remote)
+          }
+          if (prefetchedCode.current !== r.remote.versionCode) {
+            prefetchedCode.current = r.remote.versionCode
+            const ok = await prefetchUpdate(r.remote.apkUrl)
+            if (alive) setDownloaded(ok || await isUpdateDownloaded())
+          }
         }
-        // Descargar SIEMPRE por detrás, aunque todavía no toque instalar.
-        if (prefetchedCode.current !== r.remote.versionCode) {
-          prefetchedCode.current = r.remote.versionCode
-          const ok = await prefetchUpdate(r.remote.apkUrl)
-          if (alive) setDownloaded(ok || await isUpdateDownloaded())
+      } catch { /* silencioso */ }
+
+      if (!alive || hasNative) return // con APK nativo pendiente, el bundle OTA espera
+
+      try {
+        const b = await checkForBundleUpdate()
+        if (!alive || !b) return
+        if (otaCheckedRemote.current !== b.remote.bundleId) {
+          otaCheckedRemote.current = b.remote.bundleId
+          const id = await prefetchOtaBundle(b.remote)
+          if (alive) setOtaBundleId(id)
         }
       } catch { /* silencioso */ }
     }
@@ -136,9 +177,11 @@ export default function UpdateGate() {
     return () => { alive = false; window.clearInterval(id) }
   }, [])
 
-  // Con una actualización pendiente, sondea la ventana segura (barato, 1/min).
+  // Con una actualización pendiente (nativa visible O bundle OTA descargado),
+  // sondea la ventana segura (barato, 1/min) — MISMA señal para los dos canales.
+  const otaPending = otaBundleId !== null
   useEffect(() => {
-    if (!update || phase !== 'prompt') return
+    if (!((update && phase === 'prompt') || otaPending)) return
     let alive = true
     const run = async () => {
       const w = await fetchUpdateWindow(QUIET_MINUTES)
@@ -154,11 +197,9 @@ export default function UpdateGate() {
     void run()
     const id = window.setInterval(() => { void run() }, WINDOW_MS)
     return () => { alive = false; window.clearInterval(id) }
-  }, [update, phase])
+  }, [update, phase, otaPending])
 
-  if (!update) return null
-
-  const mandatory = update.mandatory
+  const mandatory = update?.mandatory ?? false
   const isStation = getDeviceToken().length > 0
   // Ventana abierta = la BBDD dice que sí (o no aplica) Y nadie está usando la
   // tablet. Desconocido NO abre ventana en una estación: preferimos esperar a
@@ -168,9 +209,26 @@ export default function UpdateGate() {
   const ciego = win?.unsupported === true || blind
   const serverOk = !isStation || ciego ? true : win?.safe === true
   const windowOpen = serverOk && idleOk
-  // Una vez el usuario empieza (o falla), la tarjeta se queda: ya la vio él.
+
+  // ── Aplicar OTA: SILENCIOSO, sin tarjeta — set()+reload no pide permiso a
+  // nadie. Solo dispara si no hay update nativo (prioridad §4) y la ventana
+  // está abierta. Si set() falla, se libera el flag y se reintenta en el
+  // siguiente ciclo — la app nunca se queda a medias.
+  useEffect(() => {
+    if (!otaBundleId || update || !windowOpen || otaApplying.current) return
+    otaApplying.current = true
+    void applyOtaBundle(otaBundleId).catch(() => {
+      otaApplying.current = false
+      // El bundle no se pudo activar (raro: ya se verificó el checksum al
+      // descargar). Se descarta para no reintentar en bucle con el mismo id
+      // roto; el próximo bundle.json que salga se probará de cero.
+      setOtaBundleId(null)
+    })
+  }, [otaBundleId, update, windowOpen])
+
+  // Una vez el usuario empieza (o falla) el flujo NATIVO, la tarjeta se queda.
   const engaged = phase !== 'prompt'
-  const visible = windowOpen || engaged
+  const visible = !!update && (windowOpen || engaged)
 
   // Salida de emergencia disponible cuando: no es obligatoria, o la instalación
   // falló, o está tardando demasiado, o el instalador ya se lanzó. Garantiza que
@@ -209,6 +267,10 @@ export default function UpdateGate() {
       window.clearTimeout(slowTimer)
     }
   }
+
+  // Sin actualización NATIVA visible: la OTA nunca pinta nada (silenciosa por
+  // diseño — ver cabecera). Nada que mostrar.
+  if (!update) return null
 
   // ── Fuera de ventana ───────────────────────────────────────────────────────
   // No obligatoria: silencio absoluto (la cocina ni se entera).
