@@ -17,6 +17,7 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   Plus, Boxes, Loader2, X, ClipboardList, ChevronRight,
   TrendingDown, RefreshCw, Gauge, LayoutDashboard, ArrowLeftRight, SlidersHorizontal,
+  Play, CalendarClock,
 } from 'lucide-react'
 import StockLevelsSection from '@/modules/supply/components/StockLevelsSection'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
@@ -34,6 +35,7 @@ import KitchenItemDetailPage from '@/modules/kitchen/pages/KitchenItemDetailPage
 import {
   createInventoryCount,
   buildInventoryCount,
+  startInventoryCount,
   listInventoryCounts,
   listAreasWithItems,
   type InventoryCount,
@@ -144,7 +146,9 @@ export default function InventoryPage() {
     return m
   }, [staff])
 
-  async function handleCreateCount(opts: { scope: 'areas' | 'full'; areaIds: string[]; employeeId: string }) {
+  async function handleCreateCount(opts: {
+    scope: 'areas' | 'full'; areaIds: string[]; employeeId: string; scheduledFor: string; startNow: boolean
+  }) {
     if (!activeAccountId || !locationId) return
     setError(null)
     try {
@@ -161,22 +165,48 @@ export default function InventoryPage() {
         assignedEmployeeId: opts.employeeId,
         assignedBy: authUserId ?? null,
         scopeAreaIds: opts.scope === 'areas' ? opts.areaIds : null,
-      })
-      const n = await buildInventoryCount(countId, {
-        areaIds: opts.scope === 'areas' ? opts.areaIds : null,
-        full: opts.scope === 'full',
+        scheduledFor: opts.scheduledFor,
       })
       setNewCountOpen(false)
+      const emp = staff.find(e => e.id === opts.employeeId)
+
+      if (opts.startNow) {
+        // Empezar ahora: genera la hoja y congela el snapshot ya, y abre la hoja.
+        const n = await buildInventoryCount(countId, {
+          areaIds: opts.scope === 'areas' ? opts.areaIds : null,
+          full: opts.scope === 'full',
+        })
+        if (n === 0) {
+          setError('No hay artículos en el alcance elegido. Revisa las zonas o usa el almacén completo.')
+          setReloadTick(t => t + 1)
+          return
+        }
+        setOpenCountId(countId)
+      } else {
+        // Programado: NO se genera hoja ni snapshot; se congelará al pulsar Empezar.
+        const fecha = new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: 'short' }).format(new Date(opts.scheduledFor + 'T00:00:00'))
+        setFlash(`Inventario programado para el ${fecha} · asignado a ${emp?.name ?? 'el empleado'}. Pulsa "Empezar" cuando toque.`)
+        setReloadTick(t => t + 1)
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo crear el inventario.')
+    }
+  }
+
+  // Empezar un inventario programado: genera la hoja + congela snapshot AHORA y
+  // abre la hoja para contar. El alcance sale de scope_area_ids de la cabecera.
+  async function handleStart(c: InventoryCount) {
+    setError(null)
+    try {
+      const n = await startInventoryCount(c.id, c.scopeAreaIds)
       if (n === 0) {
-        setError('No hay artículos en el alcance elegido. Revisa las zonas o usa el almacén completo.')
+        setError('No hay artículos en el alcance de este inventario. Revísalo antes de empezar.')
         setReloadTick(t => t + 1)
         return
       }
-      const emp = staff.find(e => e.id === opts.employeeId)
-      setFlash(`Inventario creado y asignado a ${emp?.name ?? 'el empleado'} · ${n} artículos a contar.`)
-      setReloadTick(t => t + 1)
+      setOpenCountId(c.id)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'No se pudo crear el inventario.')
+      setError(e instanceof Error ? e.message : 'No se pudo empezar el inventario.')
     }
   }
 
@@ -312,6 +342,7 @@ export default function InventoryPage() {
               loading={countsLoading}
               nameById={empNameById}
               onOpen={(id) => setOpenCountId(id)}
+              onStart={handleStart}
               onNew={() => setNewCountOpen(true)}
             />
           )}
@@ -494,20 +525,22 @@ function tipoOf(c: InventoryCount): { label: string; cls: string } {
 }
 
 function CountsSection({
-  counts, loading, nameById, onOpen, onNew,
+  counts, loading, nameById, onOpen, onStart, onNew,
 }: {
   counts: InventoryCount[]
   loading: boolean
   nameById: Record<string, string>
   onOpen: (id: string) => void
+  onStart: (c: InventoryCount) => void
   onNew: () => void
 }) {
   const [tipo, setTipo] = useState<TipoFilter>('manual')
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
+  const [starting, setStarting] = useState<string | null>(null)
 
   const STATUS_LABEL: Record<string, string> = {
-    abierto: 'Abierto', contando: 'Contando', en_revision: 'En revisión', aprobado: 'Aprobado', anulado: 'Anulado',
+    abierto: 'Programado', contando: 'Contando', en_revision: 'En revisión', aprobado: 'Aprobado', anulado: 'Anulado',
   }
   const STATUS_CLASS: Record<string, string> = {
     abierto: 'bg-page text-text-secondary border-border-default',
@@ -519,6 +552,9 @@ function CountsSection({
   const fmt = (v: string | null) => v
     ? new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(v))
     : '—'
+  const fmtDay = (v: string | null) => v
+    ? new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: 'short' }).format(new Date(v + 'T00:00:00'))
+    : null
 
   const filtered = useMemo(() => counts.filter(c => {
     const day = (c.createdAt ?? '').slice(0, 10)  // YYYY-MM-DD (UTC), suficiente para filtrar por día
@@ -535,10 +571,15 @@ function CountsSection({
     ['manual', 'Manuales'], ['inicial', 'Inicial'], ['seguridad', 'Seguridad'], ['auto', 'Autoinventario'], ['all', 'Todos'],
   ]
 
+  async function doStart(c: InventoryCount) {
+    setStarting(c.id)
+    try { await onStart(c) } finally { setStarting(null) }
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <p className="text-sm text-text-secondary">Inventarios de este local. Crea uno completo o de seguridad y asígnalo a un empleado.</p>
+        <p className="text-sm text-text-secondary">Inventarios de este local. Crea uno completo o de seguridad, prográmalo y asígnalo a un empleado.</p>
         <button type="button" onClick={onNew}
           className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 transition-base">
           <Plus size={15} /> Nuevo inventario
@@ -582,6 +623,30 @@ function CountsSection({
           {filtered.map(c => {
             const t = tipoOf(c)
             const assignee = c.assignedEmployeeId ? (nameById[c.assignedEmployeeId] ?? 'Empleado') : null
+            const programado = c.status === 'abierto'  // aún sin arrancar (build lo pasa a 'contando')
+            const schedDay = fmtDay(c.scheduledFor)
+
+            // Fila PROGRAMADA: no se abre la hoja (aún no existe); se ofrece Empezar.
+            if (programado) {
+              return (
+                <div key={c.id}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 border-t border-border-default first:border-t-0">
+                  <span className="font-medium text-text-primary shrink-0">{c.code ?? 'Inventario'}</span>
+                  <span className={`text-[11px] px-1.5 py-0.5 rounded border shrink-0 ${t.cls}`}>{t.label}</span>
+                  {assignee && <span className="text-xs text-text-secondary truncate">· {assignee}</span>}
+                  <span className="text-xs text-text-tertiary ml-auto shrink-0 inline-flex items-center gap-1">
+                    <CalendarClock size={13} /> {schedDay ?? fmt(c.createdAt)}
+                  </span>
+                  <span className={`text-[11px] px-1.5 py-0.5 rounded border shrink-0 ${STATUS_CLASS[c.status]}`}>{STATUS_LABEL[c.status]}</span>
+                  <button type="button" disabled={starting === c.id} onClick={() => doStart(c)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 transition-base shrink-0">
+                    {starting === c.id ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />} Empezar
+                  </button>
+                </div>
+              )
+            }
+
+            // Resto (contando / en_revision / aprobado / anulado): abre la hoja.
             return (
               <button key={c.id} type="button" onClick={() => onOpen(c.id)}
                 className="w-full flex items-center gap-3 px-3 py-2.5 text-left border-t border-border-default first:border-t-0 hover:bg-page transition-base">
@@ -601,20 +666,27 @@ function CountsSection({
   )
 }
 
-// ── Modal: nuevo inventario (tipo + alcance + empleado) ──
+// ── Modal: nuevo inventario (tipo + alcance + empleado + fecha) ──
+function todayISODate(): string {
+  const d = new Date()
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
 function NewCountModal({
   zones, employees, onClose, onCreate,
 }: {
   zones: ZoneOption[]
   employees: Employee[]
   onClose: () => void
-  onCreate: (opts: { scope: 'areas' | 'full'; areaIds: string[]; employeeId: string }) => void
+  onCreate: (opts: { scope: 'areas' | 'full'; areaIds: string[]; employeeId: string; scheduledFor: string; startNow: boolean }) => void
 }) {
   // 'inicial' = local nuevo (siempre almacén completo). 'seguridad' = verificar cifras.
   const [purpose, setPurpose] = useState<'inicial' | 'seguridad'>('seguridad')
   const [scope, setScope] = useState<'areas' | 'full'>('full')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [employeeId, setEmployeeId] = useState<string>('')
+  const [scheduledFor, setScheduledFor] = useState<string>(todayISODate())
 
   const hasZones = zones.length > 0
   // Inicial → siempre full. Seguridad sin zonas con artículos → full forzado.
@@ -629,7 +701,17 @@ function NewCountModal({
     })
   }
 
-  const canCreate = employeeId !== '' && (effectiveScope === 'full' || selected.size > 0)
+  const canCreate = employeeId !== '' && scheduledFor !== '' && (effectiveScope === 'full' || selected.size > 0)
+
+  function emit(startNow: boolean) {
+    onCreate({
+      scope: effectiveScope,
+      areaIds: effectiveScope === 'areas' ? Array.from(selected) : [],
+      employeeId,
+      scheduledFor,
+      startNow,
+    })
+  }
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-start sm:items-center justify-center p-4 overflow-y-auto" role="dialog" aria-modal="true">
@@ -721,13 +803,26 @@ function NewCountModal({
               </select>
             )}
           </div>
+
+          {/* Fecha (programación) */}
+          <div>
+            <span className="block text-xs text-text-secondary mb-1.5">¿Para cuándo?</span>
+            <input type="date" value={scheduledFor} onChange={e => setScheduledFor(e.target.value)}
+              className="w-full px-3 py-2 text-sm rounded-md border border-border-default bg-card text-text-primary" />
+            <p className="text-xs text-text-tertiary mt-1.5">
+              El día en que se hará. El stock se congela cuando el empleado pulsa "Empezar", no ahora.
+            </p>
+          </div>
         </div>
-        <div className="px-5 py-3 border-t border-border-default flex justify-end gap-2">
+        <div className="px-5 py-3 border-t border-border-default flex flex-wrap justify-end gap-2">
           <button type="button" onClick={onClose} className="px-3 py-2 text-sm rounded-md border border-border-default text-text-secondary hover:bg-page transition-base">Cancelar</button>
-          <button type="button" disabled={!canCreate}
-            onClick={() => onCreate({ scope: effectiveScope, areaIds: effectiveScope === 'areas' ? Array.from(selected) : [], employeeId })}
-            className="px-3 py-2 text-sm rounded-md font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 transition-base">
-            Crear y asignar
+          <button type="button" disabled={!canCreate} onClick={() => emit(false)}
+            className="px-3 py-2 text-sm rounded-md font-medium border border-accent text-accent hover:bg-accent-bg disabled:opacity-50 transition-base">
+            Programar
+          </button>
+          <button type="button" disabled={!canCreate} onClick={() => emit(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm rounded-md font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 transition-base">
+            <Play size={14} /> Empezar ahora
           </button>
         </div>
       </div>

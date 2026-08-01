@@ -7570,6 +7570,7 @@ export type Database = {
           kind: string
           location_id: string
           notes: string | null
+          scheduled_for: string | null
           scope_area_ids: string[] | null
           started_at: string | null
           started_by: string | null
@@ -7596,6 +7597,7 @@ export type Database = {
           kind?: string
           location_id: string
           notes?: string | null
+          scheduled_for?: string | null
           scope_area_ids?: string[] | null
           started_at?: string | null
           started_by?: string | null
@@ -7622,6 +7624,7 @@ export type Database = {
           kind?: string
           location_id?: string
           notes?: string | null
+          scheduled_for?: string | null
           scope_area_ids?: string[] | null
           started_at?: string | null
           started_by?: string | null
