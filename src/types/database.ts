@@ -7651,6 +7651,7 @@ export type Database = {
           abc_class: string | null
           account_id: string
           assigned_to: string | null
+          counted_at: string | null
           counted_by: string | null
           counted_by_name: string | null
           counted_qty: number | null
@@ -7672,6 +7673,7 @@ export type Database = {
           abc_class?: string | null
           account_id: string
           assigned_to?: string | null
+          counted_at?: string | null
           counted_by?: string | null
           counted_by_name?: string | null
           counted_qty?: number | null
@@ -7693,6 +7695,7 @@ export type Database = {
           abc_class?: string | null
           account_id?: string
           assigned_to?: string | null
+          counted_at?: string | null
           counted_by?: string | null
           counted_by_name?: string | null
           counted_qty?: number | null

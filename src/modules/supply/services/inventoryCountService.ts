@@ -289,11 +289,24 @@ export async function listCountLines(countId: string): Promise<InventoryCountLin
   })
 }
 
-/** Guarda la cantidad contada de una línea (guardado progresivo). */
-export async function saveCountedQty(lineId: string, countedQty: number | null): Promise<void> {
+/** Guarda la cantidad contada de una línea (guardado progresivo).
+ *  Sella counted_at (foto por línea: apply ancla el teórico a este instante) y
+ *  registra el actor real que tecleó la cantidad. */
+export async function saveCountedQty(
+  lineId: string,
+  countedQty: number | null,
+  actorId?: string | null,
+  actorName?: string | null,
+): Promise<void> {
   requireSupabase()
+  const patch: Record<string, unknown> = {
+    counted_qty: countedQty,
+    counted_at: countedQty === null ? null : new Date().toISOString(),
+  }
+  if (actorId !== undefined)   patch.counted_by = actorId
+  if (actorName !== undefined) patch.counted_by_name = actorName
   const { error } = await from('inventory_count_line')
-    .update({ counted_qty: countedQty })
+    .update(patch)
     .eq('id', lineId)
   if (error) throw new Error(`No se pudo guardar: ${error.message}`)
 }
