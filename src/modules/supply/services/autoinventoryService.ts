@@ -120,21 +120,37 @@ export async function getAutoInventoryQueue(
 export interface AutoinventorySettings {
   enabled: boolean
   perPerson: number
+  /** C3 — quien cuenta un inventario manual no puede ser quien lo aprueba. */
+  requireSeparateApproval: boolean
+}
+
+// require_separate_approval (C3) es demasiado nueva para el database.ts vigente
+// (evita un regen que arrastraría drift de otras tablas ajeno a este cambio);
+// mismo patrón de cast puntual ya usado en inventoryCountService para RPCs
+// nuevas (avt_incomplete_raws, reassign_inventory_count).
+type SupplySettingsRow = {
+  autoinventory_enabled: boolean | null
+  autoinventory_per_person: number | null
+  require_separate_approval: boolean | null
 }
 
 // Lee los ajustes de autoinventario de la cuenta (supply_settings). Si no hay
-// fila aún, defaults: encendido, 8 por persona (la mayoría lo quiere).
+// fila aún, defaults: encendido, 8 por persona, aprobación separada (la mayoría
+// lo quiere; coincide con el default de la columna en BBDD).
 export async function getAutoinventorySettings(accountId: string): Promise<AutoinventorySettings> {
   requireSupabase()
-  const { data, error } = await supabase!
-    .from('supply_settings')
-    .select('autoinventory_enabled, autoinventory_per_person')
+  const { data, error } = await (supabase!
+    .from('supply_settings') as unknown as {
+      select: (cols: string) => { eq: (c: string, v: string) => { maybeSingle: () => Promise<{ data: SupplySettingsRow | null; error: { message: string } | null }> } }
+    })
+    .select('autoinventory_enabled, autoinventory_per_person, require_separate_approval')
     .eq('account_id', accountId)
     .maybeSingle()
   if (error) throw new Error(`No se pudieron leer los ajustes: ${error.message}`)
   return {
     enabled: data?.autoinventory_enabled ?? true,
     perPerson: Number(data?.autoinventory_per_person ?? 8),
+    requireSeparateApproval: data?.require_separate_approval ?? true,
   }
 }
 
@@ -144,6 +160,19 @@ export async function setAutoinventoryEnabled(accountId: string, enabled: boolea
   const { error } = await supabase!
     .from('supply_settings')
     .upsert({ account_id: accountId, autoinventory_enabled: enabled }, { onConflict: 'account_id' })
+  if (error) throw new Error(`No se pudo guardar el ajuste: ${error.message}`)
+}
+
+// C3 — activa/desactiva la exigencia de que quien aprueba un inventario manual
+// no sea quien lo contó (upsert por account_id). Cast puntual: ver nota arriba.
+export async function setRequireSeparateApproval(accountId: string, value: boolean): Promise<void> {
+  requireSupabase()
+  const client = supabase! as unknown as {
+    from: (t: string) => { upsert: (v: Record<string, unknown>, o: { onConflict: string }) => Promise<{ error: { message: string } | null }> }
+  }
+  const { error } = await client
+    .from('supply_settings')
+    .upsert({ account_id: accountId, require_separate_approval: value }, { onConflict: 'account_id' })
   if (error) throw new Error(`No se pudo guardar el ajuste: ${error.message}`)
 }
 
