@@ -15,6 +15,8 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { CheckCircle2, Plus, Trash2, Pencil, X, ChevronUp, ChevronDown, Copy, Link2, RefreshCw, Download } from 'lucide-react'
 import { Card, Button } from '../components/ui'
 import { supabase } from '../lib/supabase'
+import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
+import BrandDeliverySection from '@/modules/integrations/components/BrandDeliverySection'
 
 async function rpc<T = unknown>(fn: string, args: Record<string, unknown>): Promise<{ data: T | null; error: { message: string } | null }> {
   if (!supabase) return { data: null, error: { message: 'Supabase no configurado' } }
@@ -92,6 +94,7 @@ const DISPATCH_MODES: { val: string; label: string }[] = [
 ]
 
 export default function RepartoSettingsPage() {
+  const { activeAccountId } = useActiveAccount()
   const [loading, setLoading] = useState(true)
   const [locs, setLocs] = useState<Loc[]>([])
   const [carriers, setCarriers] = useState<Carrier[]>([])
@@ -825,7 +828,10 @@ export default function RepartoSettingsPage() {
           ))}
       </Card>
 
-      {/* E) Zonas (enlace) */}
+      {/* E) Reparto propio por marca */}
+      {activeAccountId && <BrandDeliverySection accountId={activeAccountId} />}
+
+      {/* F) Zonas (enlace) */}
       <Card className="p-5">
         <p className="text-xs uppercase tracking-wide text-text-secondary mb-1">Zonas de reparto</p>
         <p className="text-sm text-text-secondary">Las zonas (área, tarifa de envío y mínimo de pedido) se gestionan en <b>Ventas → Zonas</b>. Las reglas de arriba pueden apoyarse en ellas.</p>

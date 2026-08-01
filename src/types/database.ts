@@ -2901,6 +2901,7 @@ export type Database = {
           logo_url: string | null
           name: string
           notes: string | null
+          own_delivery_enabled: boolean | null
           ownership_type: string
           qr_caption: string | null
           shop_url: string | null
@@ -2926,6 +2927,7 @@ export type Database = {
           logo_url?: string | null
           name: string
           notes?: string | null
+          own_delivery_enabled?: boolean | null
           ownership_type?: string
           qr_caption?: string | null
           shop_url?: string | null
@@ -2951,6 +2953,7 @@ export type Database = {
           logo_url?: string | null
           name?: string
           notes?: string | null
+          own_delivery_enabled?: boolean | null
           ownership_type?: string
           qr_caption?: string | null
           shop_url?: string | null
@@ -14906,6 +14909,7 @@ export type Database = {
           id: string
           negotiated_alert_pct: number
           price_alert_pct: number
+          require_separate_approval: boolean
           tol_a_pct: number
           tol_b_pct: number
           tol_c_pct: number
@@ -14924,6 +14928,7 @@ export type Database = {
           id?: string
           negotiated_alert_pct?: number
           price_alert_pct?: number
+          require_separate_approval?: boolean
           tol_a_pct?: number
           tol_b_pct?: number
           tol_c_pct?: number
@@ -14942,6 +14947,7 @@ export type Database = {
           id?: string
           negotiated_alert_pct?: number
           price_alert_pct?: number
+          require_separate_approval?: boolean
           tol_a_pct?: number
           tol_b_pct?: number
           tol_c_pct?: number
@@ -16282,6 +16288,10 @@ export type Database = {
           p_to: string
         }
         Returns: Json
+      }
+      can_operate_manual_count: {
+        Args: { p_count_id: string }
+        Returns: boolean
       }
       cancel_sale: {
         Args: { p_reason?: string; p_sale_id: string }
@@ -17854,6 +17864,10 @@ export type Database = {
         Returns: Json
       }
       read_apifootball_key: { Args: never; Returns: string }
+      reassign_inventory_count: {
+        Args: { p_count_id: string; p_employee_id: string }
+        Returns: string
+      }
       recast_lastapp_sales: {
         Args: { p_account_id: string }
         Returns: {
