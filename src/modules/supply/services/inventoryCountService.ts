@@ -43,6 +43,7 @@ export interface InventoryCount {
   assignedEmployeeId: string | null
   assignedAt: string | null
   scopeAreaIds: string[] | null
+  scheduledFor: string | null
   startedAt: string | null
   closedAt: string | null
   approvedAt: string | null
@@ -99,6 +100,9 @@ export async function createInventoryCount(input: {
   assignedBy?: string | null
   // Alcance por zonas guardado para el registro / futuro snapshot diferido.
   scopeAreaIds?: string[] | null
+  // Día para el que se PROGRAMA (etiqueta + aviso; NO congela stock). El snapshot
+  // se congela al Empezar, no al crear.
+  scheduledFor?: string | null
 }): Promise<string> {
   requireSupabase()
   const { data, error } = await from('inventory_count')
@@ -116,6 +120,7 @@ export async function createInventoryCount(input: {
       assigned_by: input.assignedBy ?? null,
       assigned_at: input.assignedEmployeeId ? new Date().toISOString() : null,
       scope_area_ids: input.scopeAreaIds ?? null,
+      scheduled_for: input.scheduledFor ?? null,
     })
     .select('id')
     .single()
@@ -136,6 +141,20 @@ export async function buildInventoryCount(
   })
   if (error) throw new Error(`No se pudo generar la hoja de conteo: ${error.message}`)
   return Number(data ?? 0)
+}
+
+/**
+ * Arranca un conteo PROGRAMADO: genera la hoja y congela el snapshot AHORA
+ * (build pone status='contando' + started_at=now()). El alcance sale de
+ * scope_area_ids de la cabecera: null/vacío = almacén completo (p_full);
+ * con zonas = esas zonas. Devuelve el nº de líneas generadas.
+ */
+export async function startInventoryCount(countId: string, scopeAreaIds: string[] | null): Promise<number> {
+  const hasZones = Array.isArray(scopeAreaIds) && scopeAreaIds.length > 0
+  return buildInventoryCount(countId, {
+    areaIds: hasZones ? scopeAreaIds : null,
+    full: !hasZones,
+  })
 }
 
 // ─── Zonas de almacén CON artículos (para el selector de alcance) ───
@@ -179,7 +198,7 @@ export async function listAreasWithItems(_accountId: string, locationId: string)
 export async function listInventoryCounts(accountId: string, locationId: string): Promise<InventoryCount[]> {
   requireSupabase()
   const { data, error } = await from('inventory_count')
-    .select('id, code, location_id, kind, status, blind, is_opening, assigned_employee_id, assigned_at, scope_area_ids, started_at, closed_at, approved_at, created_at, inventory_count_line(count)')
+    .select('id, code, location_id, kind, status, blind, is_opening, assigned_employee_id, assigned_at, scope_area_ids, scheduled_for, started_at, closed_at, approved_at, created_at, inventory_count_line(count)')
     .eq('account_id', accountId)
     .eq('location_id', locationId)
     .order('created_at', { ascending: false })
@@ -198,6 +217,7 @@ export async function listInventoryCounts(accountId: string, locationId: string)
       assignedEmployeeId: (r.assigned_employee_id as string | null) ?? null,
       assignedAt: (r.assigned_at as string | null) ?? null,
       scopeAreaIds: (r.scope_area_ids as string[] | null) ?? null,
+      scheduledFor: (r.scheduled_for as string | null) ?? null,
       startedAt: (r.started_at as string | null) ?? null,
       closedAt: (r.closed_at as string | null) ?? null,
       approvedAt: (r.approved_at as string | null) ?? null,
@@ -210,7 +230,7 @@ export async function listInventoryCounts(accountId: string, locationId: string)
 export async function getInventoryCount(countId: string): Promise<InventoryCount | null> {
   requireSupabase()
   const { data, error } = await from('inventory_count')
-    .select('id, code, location_id, kind, status, blind, is_opening, assigned_employee_id, assigned_at, scope_area_ids, started_at, closed_at, approved_at, created_at')
+    .select('id, code, location_id, kind, status, blind, is_opening, assigned_employee_id, assigned_at, scope_area_ids, scheduled_for, started_at, closed_at, approved_at, created_at')
     .eq('id', countId)
     .maybeSingle()
   if (error) throw new Error(`Error cargando el conteo: ${error.message}`)
@@ -227,6 +247,7 @@ export async function getInventoryCount(countId: string): Promise<InventoryCount
     assignedEmployeeId: (r.assigned_employee_id as string | null) ?? null,
     assignedAt: (r.assigned_at as string | null) ?? null,
     scopeAreaIds: (r.scope_area_ids as string[] | null) ?? null,
+    scheduledFor: (r.scheduled_for as string | null) ?? null,
     startedAt: (r.started_at as string | null) ?? null,
     closedAt: (r.closed_at as string | null) ?? null,
     approvedAt: (r.approved_at as string | null) ?? null,
