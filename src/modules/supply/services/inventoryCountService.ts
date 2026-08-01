@@ -40,6 +40,9 @@ export interface InventoryCount {
   status: InventoryCountStatus
   blind: boolean
   isOpening: boolean
+  assignedEmployeeId: string | null
+  assignedAt: string | null
+  scopeAreaIds: string[] | null
   startedAt: string | null
   closedAt: string | null
   approvedAt: string | null
@@ -90,6 +93,12 @@ export async function createInventoryCount(input: {
   blind?: boolean
   createdBy?: string | null
   createdByName?: string | null
+  // Asignación manual (Vía A: en la cabecera, no en las líneas). El assigned_to
+  // por línea es del autoinventario y NO se toca aquí.
+  assignedEmployeeId?: string | null
+  assignedBy?: string | null
+  // Alcance por zonas guardado para el registro / futuro snapshot diferido.
+  scopeAreaIds?: string[] | null
 }): Promise<string> {
   requireSupabase()
   const { data, error } = await from('inventory_count')
@@ -103,6 +112,10 @@ export async function createInventoryCount(input: {
       created_by_name: input.createdByName ?? null,
       started_by: input.createdBy ?? null,
       started_by_name: input.createdByName ?? null,
+      assigned_employee_id: input.assignedEmployeeId ?? null,
+      assigned_by: input.assignedBy ?? null,
+      assigned_at: input.assignedEmployeeId ? new Date().toISOString() : null,
+      scope_area_ids: input.scopeAreaIds ?? null,
     })
     .select('id')
     .single()
@@ -125,11 +138,48 @@ export async function buildInventoryCount(
   return Number(data ?? 0)
 }
 
+// ─── Zonas de almacén CON artículos (para el selector de alcance) ───
+
+export interface ZoneOption {
+  id: string
+  name: string
+  parentId: string | null
+  itemCount: number
+}
+
+/**
+ * Zonas del local que TIENEN artículos asignados. El selector de alcance solo
+ * debe ofrecer estas: una zona sin artículos generaría un conteo vacío. Si el
+ * local no tiene ninguna, el modal fuerza el almacén completo (p_full).
+ * Cuenta vía la relación recipe_item_storage_area(count) (mismo patrón probado
+ * que inventory_count_line(count)).
+ */
+export async function listAreasWithItems(_accountId: string, locationId: string): Promise<ZoneOption[]> {
+  requireSupabase()
+  const { data, error } = await from('storage_area')
+    .select('id, name, parent_id, recipe_item_storage_area(count)')
+    .eq('location_id', locationId)
+    .order('name', { ascending: true })
+  if (error) throw new Error(`Error cargando zonas: ${error.message}`)
+  return ((data as Row[] | null) ?? [])
+    .map(r => {
+      const rel = (r.recipe_item_storage_area ?? null) as { count?: number }[] | { count?: number } | null
+      const itemCount = Array.isArray(rel) ? (rel[0]?.count ?? 0) : (rel?.count ?? 0)
+      return {
+        id: r.id as string,
+        name: (r.name as string) ?? '(zona)',
+        parentId: (r.parent_id as string | null) ?? null,
+        itemCount: Number(itemCount),
+      }
+    })
+    .filter(z => z.itemCount > 0)
+}
+
 /** Conteos de un local, recientes primero. */
 export async function listInventoryCounts(accountId: string, locationId: string): Promise<InventoryCount[]> {
   requireSupabase()
   const { data, error } = await from('inventory_count')
-    .select('id, code, location_id, kind, status, blind, is_opening, started_at, closed_at, approved_at, created_at, inventory_count_line(count)')
+    .select('id, code, location_id, kind, status, blind, is_opening, assigned_employee_id, assigned_at, scope_area_ids, started_at, closed_at, approved_at, created_at, inventory_count_line(count)')
     .eq('account_id', accountId)
     .eq('location_id', locationId)
     .order('created_at', { ascending: false })
@@ -145,6 +195,9 @@ export async function listInventoryCounts(accountId: string, locationId: string)
       status: (r.status as InventoryCountStatus) ?? 'abierto',
       blind: Boolean(r.blind),
       isOpening: Boolean(r.is_opening),
+      assignedEmployeeId: (r.assigned_employee_id as string | null) ?? null,
+      assignedAt: (r.assigned_at as string | null) ?? null,
+      scopeAreaIds: (r.scope_area_ids as string[] | null) ?? null,
       startedAt: (r.started_at as string | null) ?? null,
       closedAt: (r.closed_at as string | null) ?? null,
       approvedAt: (r.approved_at as string | null) ?? null,
@@ -157,7 +210,7 @@ export async function listInventoryCounts(accountId: string, locationId: string)
 export async function getInventoryCount(countId: string): Promise<InventoryCount | null> {
   requireSupabase()
   const { data, error } = await from('inventory_count')
-    .select('id, code, location_id, kind, status, blind, is_opening, started_at, closed_at, approved_at, created_at')
+    .select('id, code, location_id, kind, status, blind, is_opening, assigned_employee_id, assigned_at, scope_area_ids, started_at, closed_at, approved_at, created_at')
     .eq('id', countId)
     .maybeSingle()
   if (error) throw new Error(`Error cargando el conteo: ${error.message}`)
@@ -171,6 +224,9 @@ export async function getInventoryCount(countId: string): Promise<InventoryCount
     status: (r.status as InventoryCountStatus) ?? 'abierto',
     blind: Boolean(r.blind),
     isOpening: Boolean(r.is_opening),
+    assignedEmployeeId: (r.assigned_employee_id as string | null) ?? null,
+    assignedAt: (r.assigned_at as string | null) ?? null,
+    scopeAreaIds: (r.scope_area_ids as string[] | null) ?? null,
     startedAt: (r.started_at as string | null) ?? null,
     closedAt: (r.closed_at as string | null) ?? null,
     approvedAt: (r.approved_at as string | null) ?? null,

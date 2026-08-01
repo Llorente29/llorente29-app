@@ -437,6 +437,24 @@ export type Database = {
         }
         Relationships: []
       }
+      _backup_defs_20260725: {
+        Row: {
+          def: string | null
+          proname: string | null
+          saved_at: string
+        }
+        Insert: {
+          def?: string | null
+          proname?: string | null
+          saved_at?: string
+        }
+        Update: {
+          def?: string | null
+          proname?: string | null
+          saved_at?: string
+        }
+        Relationships: []
+      }
       account_connector: {
         Row: {
           account_id: string
@@ -2596,6 +2614,133 @@ export type Database = {
         }
         Relationships: []
       }
+      availability_event: {
+        Row: {
+          account_id: string
+          action: string
+          actor_id: string | null
+          channels: string[] | null
+          id: string
+          location_id: string | null
+          occurred_at: string
+          origin: string
+          reason_code: string | null
+          reason_note: string | null
+          resume_at: string | null
+          scope: string
+          source_log_id: string | null
+          surface: string | null
+          target_ext: string | null
+          target_id: string | null
+          target_label: string | null
+        }
+        Insert: {
+          account_id: string
+          action: string
+          actor_id?: string | null
+          channels?: string[] | null
+          id?: string
+          location_id?: string | null
+          occurred_at?: string
+          origin: string
+          reason_code?: string | null
+          reason_note?: string | null
+          resume_at?: string | null
+          scope: string
+          source_log_id?: string | null
+          surface?: string | null
+          target_ext?: string | null
+          target_id?: string | null
+          target_label?: string | null
+        }
+        Update: {
+          account_id?: string
+          action?: string
+          actor_id?: string | null
+          channels?: string[] | null
+          id?: string
+          location_id?: string | null
+          occurred_at?: string
+          origin?: string
+          reason_code?: string | null
+          reason_note?: string | null
+          resume_at?: string | null
+          scope?: string
+          source_log_id?: string | null
+          surface?: string | null
+          target_ext?: string | null
+          target_id?: string | null
+          target_label?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "availability_event_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      availability_integrator_notice: {
+        Row: {
+          account_id: string
+          ack_at: string | null
+          ack_by: string | null
+          brands: number
+          created_at: string
+          external_id: string | null
+          id: string
+          integrators: string[]
+          location_id: string
+          product_name: string
+          raised_at: string
+          raised_by: string | null
+          reason: string | null
+          recipe_item_id: string | null
+        }
+        Insert: {
+          account_id: string
+          ack_at?: string | null
+          ack_by?: string | null
+          brands?: number
+          created_at?: string
+          external_id?: string | null
+          id?: string
+          integrators: string[]
+          location_id: string
+          product_name: string
+          raised_at?: string
+          raised_by?: string | null
+          reason?: string | null
+          recipe_item_id?: string | null
+        }
+        Update: {
+          account_id?: string
+          ack_at?: string | null
+          ack_by?: string | null
+          brands?: number
+          created_at?: string
+          external_id?: string | null
+          id?: string
+          integrators?: string[]
+          location_id?: string
+          product_name?: string
+          raised_at?: string
+          raised_by?: string | null
+          reason?: string | null
+          recipe_item_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "availability_integrator_notice_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       availability_push_log: {
         Row: {
           account_id: string
@@ -2608,7 +2753,8 @@ export type Database = {
           http_status: number | null
           id: string
           ok: boolean | null
-          organization_product_id: string | null
+          organization_product_id: string[] | null
+          source: string | null
         }
         Insert: {
           account_id: string
@@ -2621,7 +2767,8 @@ export type Database = {
           http_status?: number | null
           id?: string
           ok?: boolean | null
-          organization_product_id?: string | null
+          organization_product_id?: string[] | null
+          source?: string | null
         }
         Update: {
           account_id?: string
@@ -2634,7 +2781,8 @@ export type Database = {
           http_status?: number | null
           id?: string
           ok?: boolean | null
-          organization_product_id?: string | null
+          organization_product_id?: string[] | null
+          source?: string | null
         }
         Relationships: []
       }
@@ -2738,6 +2886,11 @@ export type Database = {
           account_id: string
           archived_at: string | null
           catalog_source: string
+          closure_mode: string
+          closure_reason: string | null
+          closure_resume_at: string | null
+          closure_set_at: string | null
+          closure_set_by: string | null
           color: string | null
           created_at: string
           created_by: string | null
@@ -2758,6 +2911,11 @@ export type Database = {
           account_id: string
           archived_at?: string | null
           catalog_source?: string
+          closure_mode?: string
+          closure_reason?: string | null
+          closure_resume_at?: string | null
+          closure_set_at?: string | null
+          closure_set_by?: string | null
           color?: string | null
           created_at?: string
           created_by?: string | null
@@ -2778,6 +2936,11 @@ export type Database = {
           account_id?: string
           archived_at?: string | null
           catalog_source?: string
+          closure_mode?: string
+          closure_reason?: string | null
+          closure_resume_at?: string | null
+          closure_set_at?: string | null
+          closure_set_by?: string | null
           color?: string | null
           created_at?: string
           created_by?: string | null
@@ -2999,6 +3162,67 @@ export type Database = {
           },
           {
             foreignKeyName: "brand_channel_target_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      brand_hubrise_catalog: {
+        Row: {
+          account_id: string
+          brand_id: string
+          created_at: string
+          created_by: string | null
+          external_catalog_id: string
+          external_location_id: string
+          hubrise_catalog_name: string | null
+          id: string
+          location_id: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          brand_id: string
+          created_at?: string
+          created_by?: string | null
+          external_catalog_id: string
+          external_location_id: string
+          hubrise_catalog_name?: string | null
+          id?: string
+          location_id: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          brand_id?: string
+          created_at?: string
+          created_by?: string | null
+          external_catalog_id?: string
+          external_location_id?: string
+          hubrise_catalog_name?: string | null
+          id?: string
+          location_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_hubrise_catalog_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "brand_hubrise_catalog_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "brand_hubrise_catalog_location_id_fkey"
             columns: ["location_id"]
             isOneToOne: false
             referencedRelation: "locations"
@@ -5565,6 +5789,41 @@ export type Database = {
           },
         ]
       }
+      delivery_watchdog_config: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          in_delivery_threshold_minutes: number
+          location_id: string
+          unsealed_threshold_minutes: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          in_delivery_threshold_minutes?: number
+          location_id: string
+          unsealed_threshold_minutes?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          in_delivery_threshold_minutes?: number
+          location_id?: string
+          unsealed_threshold_minutes?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "delivery_watchdog_config_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: true
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       delivery_zone: {
         Row: {
           account_id: string
@@ -6953,6 +7212,51 @@ export type Database = {
           },
         ]
       }
+      hubrise_oauth_state: {
+        Row: {
+          account_id: string
+          created_at: string
+          nonce: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          nonce?: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          nonce?: string
+        }
+        Relationships: []
+      }
+      hubrise_writer_connection: {
+        Row: {
+          account_id: string
+          connected_at: string | null
+          created_at: string
+          credentials_ref: string | null
+          hubrise_account_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          connected_at?: string | null
+          created_at?: string
+          credentials_ref?: string | null
+          hubrise_account_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          connected_at?: string | null
+          created_at?: string
+          credentials_ref?: string | null
+          hubrise_account_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       impersonation_sessions: {
         Row: {
           actions_taken: Json
@@ -7252,6 +7556,9 @@ export type Database = {
           approved_at: string | null
           approved_by: string | null
           approved_by_name: string | null
+          assigned_at: string | null
+          assigned_by: string | null
+          assigned_employee_id: string | null
           blind: boolean
           closed_at: string | null
           code: string | null
@@ -7263,6 +7570,7 @@ export type Database = {
           kind: string
           location_id: string
           notes: string | null
+          scope_area_ids: string[] | null
           started_at: string | null
           started_by: string | null
           started_by_name: string | null
@@ -7274,6 +7582,9 @@ export type Database = {
           approved_at?: string | null
           approved_by?: string | null
           approved_by_name?: string | null
+          assigned_at?: string | null
+          assigned_by?: string | null
+          assigned_employee_id?: string | null
           blind?: boolean
           closed_at?: string | null
           code?: string | null
@@ -7285,6 +7596,7 @@ export type Database = {
           kind?: string
           location_id: string
           notes?: string | null
+          scope_area_ids?: string[] | null
           started_at?: string | null
           started_by?: string | null
           started_by_name?: string | null
@@ -7296,6 +7608,9 @@ export type Database = {
           approved_at?: string | null
           approved_by?: string | null
           approved_by_name?: string | null
+          assigned_at?: string | null
+          assigned_by?: string | null
+          assigned_employee_id?: string | null
           blind?: boolean
           closed_at?: string | null
           code?: string | null
@@ -7307,6 +7622,7 @@ export type Database = {
           kind?: string
           location_id?: string
           notes?: string | null
+          scope_area_ids?: string[] | null
           started_at?: string | null
           started_by?: string | null
           started_by_name?: string | null
@@ -7314,6 +7630,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "inventory_count_assigned_employee_id_fkey"
+            columns: ["assigned_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "inventory_count_location_id_fkey"
             columns: ["location_id"]
@@ -7553,6 +7876,8 @@ export type Database = {
       kds_device: {
         Row: {
           account_id: string
+          app_version: string | null
+          app_version_at: string | null
           created_at: string
           device_mode: string
           id: string
@@ -7560,12 +7885,15 @@ export type Database = {
           label: string
           last_seen_at: string | null
           location_id: string
+          platform: string | null
           station_ids: string[] | null
           token: string
           updated_at: string
         }
         Insert: {
           account_id: string
+          app_version?: string | null
+          app_version_at?: string | null
           created_at?: string
           device_mode?: string
           id?: string
@@ -7573,12 +7901,15 @@ export type Database = {
           label: string
           last_seen_at?: string | null
           location_id: string
+          platform?: string | null
           station_ids?: string[] | null
           token: string
           updated_at?: string
         }
         Update: {
           account_id?: string
+          app_version?: string | null
+          app_version_at?: string | null
           created_at?: string
           device_mode?: string
           id?: string
@@ -7586,6 +7917,7 @@ export type Database = {
           label?: string
           last_seen_at?: string | null
           location_id?: string
+          platform?: string | null
           station_ids?: string[] | null
           token?: string
           updated_at?: string
@@ -7980,6 +8312,53 @@ export type Database = {
           },
         ]
       }
+      kitchen_time_config: {
+        Row: {
+          amber_max_minutes: number
+          bag_on_ready: boolean
+          bag_qr: boolean
+          ceiling_minutes: number
+          created_at: string
+          enabled: boolean
+          floor_minutes: number
+          green_max_minutes: number
+          location_id: string
+          updated_at: string
+        }
+        Insert: {
+          amber_max_minutes?: number
+          bag_on_ready?: boolean
+          bag_qr?: boolean
+          ceiling_minutes?: number
+          created_at?: string
+          enabled?: boolean
+          floor_minutes?: number
+          green_max_minutes?: number
+          location_id: string
+          updated_at?: string
+        }
+        Update: {
+          amber_max_minutes?: number
+          bag_on_ready?: boolean
+          bag_qr?: boolean
+          ceiling_minutes?: number
+          created_at?: string
+          enabled?: boolean
+          floor_minutes?: number
+          green_max_minutes?: number
+          location_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kitchen_time_config_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: true
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       kitchen_unit: {
         Row: {
           abbreviation: string
@@ -8218,12 +8597,89 @@ export type Database = {
           },
         ]
       }
+      location_status_log: {
+        Row: {
+          account_id: string
+          brand_id: string | null
+          created_at: string
+          error: string | null
+          external_location_id: string | null
+          http_status: number | null
+          id: string
+          kind: string
+          location_id: string | null
+          mode: string | null
+          ok: boolean | null
+          patch_body: Json
+          reason: string | null
+          resolved_at: string | null
+          resume_at: string | null
+          set_by: string | null
+          surface: string
+        }
+        Insert: {
+          account_id: string
+          brand_id?: string | null
+          created_at?: string
+          error?: string | null
+          external_location_id?: string | null
+          http_status?: number | null
+          id?: string
+          kind: string
+          location_id?: string | null
+          mode?: string | null
+          ok?: boolean | null
+          patch_body: Json
+          reason?: string | null
+          resolved_at?: string | null
+          resume_at?: string | null
+          set_by?: string | null
+          surface: string
+        }
+        Update: {
+          account_id?: string
+          brand_id?: string | null
+          created_at?: string
+          error?: string | null
+          external_location_id?: string | null
+          http_status?: number | null
+          id?: string
+          kind?: string
+          location_id?: string | null
+          mode?: string | null
+          ok?: boolean | null
+          patch_body?: Json
+          reason?: string | null
+          resolved_at?: string | null
+          resume_at?: string | null
+          set_by?: string | null
+          surface?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "location_status_log_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "location_status_log_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       locations: {
         Row: {
           account_id: string | null
           active: boolean
           address: string | null
           assignment_strategy: string
+          availability_auto_mode: string
+          availability_other_integrators: string[]
           bonus_combined_cap_pct: number | null
           bonus_demand_max_pct: number
           bonus_rain_pct: number
@@ -8237,6 +8693,11 @@ export type Database = {
           glovo_pos_hint: string | null
           hours_balance_close_day: number | null
           hours_balance_sync_with_gestoria: boolean | null
+          hubrise_status_mode: string
+          hubrise_status_reason: string | null
+          hubrise_status_resume_at: string | null
+          hubrise_status_set_at: string | null
+          hubrise_status_set_by: string | null
           id: string
           is_billable: boolean
           lat: number | null
@@ -8255,6 +8716,8 @@ export type Database = {
           active?: boolean
           address?: string | null
           assignment_strategy?: string
+          availability_auto_mode?: string
+          availability_other_integrators?: string[]
           bonus_combined_cap_pct?: number | null
           bonus_demand_max_pct?: number
           bonus_rain_pct?: number
@@ -8268,6 +8731,11 @@ export type Database = {
           glovo_pos_hint?: string | null
           hours_balance_close_day?: number | null
           hours_balance_sync_with_gestoria?: boolean | null
+          hubrise_status_mode?: string
+          hubrise_status_reason?: string | null
+          hubrise_status_resume_at?: string | null
+          hubrise_status_set_at?: string | null
+          hubrise_status_set_by?: string | null
           id?: string
           is_billable?: boolean
           lat?: number | null
@@ -8286,6 +8754,8 @@ export type Database = {
           active?: boolean
           address?: string | null
           assignment_strategy?: string
+          availability_auto_mode?: string
+          availability_other_integrators?: string[]
           bonus_combined_cap_pct?: number | null
           bonus_demand_max_pct?: number
           bonus_rain_pct?: number
@@ -8299,6 +8769,11 @@ export type Database = {
           glovo_pos_hint?: string | null
           hours_balance_close_day?: number | null
           hours_balance_sync_with_gestoria?: boolean | null
+          hubrise_status_mode?: string
+          hubrise_status_reason?: string | null
+          hubrise_status_resume_at?: string | null
+          hubrise_status_set_at?: string | null
+          hubrise_status_set_by?: string | null
           id?: string
           is_billable?: boolean
           lat?: number | null
@@ -8744,6 +9219,7 @@ export type Database = {
           recipe_item_id: string | null
           short_name: string | null
           source: string
+          stock_group_id: string | null
           tags: string[] | null
           target_food_cost_pct: number | null
           updated_at: string
@@ -8784,6 +9260,7 @@ export type Database = {
           recipe_item_id?: string | null
           short_name?: string | null
           source?: string
+          stock_group_id?: string | null
           tags?: string[] | null
           target_food_cost_pct?: number | null
           updated_at?: string
@@ -8824,6 +9301,7 @@ export type Database = {
           recipe_item_id?: string | null
           short_name?: string | null
           source?: string
+          stock_group_id?: string | null
           tags?: string[] | null
           target_food_cost_pct?: number | null
           updated_at?: string
@@ -8863,6 +9341,13 @@ export type Database = {
             columns: ["recipe_item_id"]
             isOneToOne: false
             referencedRelation: "recipe_item"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "menu_item_stock_group_id_fkey"
+            columns: ["stock_group_id"]
+            isOneToOne: false
+            referencedRelation: "stock_group"
             referencedColumns: ["id"]
           },
         ]
@@ -12134,7 +12619,11 @@ export type Database = {
           customer_name: string | null
           customer_note: string | null
           customer_phone: string | null
+          delivered_at: string | null
           delivery_address: string | null
+          delivery_alarm_ack_at: string | null
+          delivery_alarm_at: string | null
+          delivery_alarm_kind: string | null
           delivery_cost: number | null
           delivery_state: string | null
           discount_amount: number | null
@@ -12202,7 +12691,11 @@ export type Database = {
           customer_name?: string | null
           customer_note?: string | null
           customer_phone?: string | null
+          delivered_at?: string | null
           delivery_address?: string | null
+          delivery_alarm_ack_at?: string | null
+          delivery_alarm_at?: string | null
+          delivery_alarm_kind?: string | null
           delivery_cost?: number | null
           delivery_state?: string | null
           discount_amount?: number | null
@@ -12270,7 +12763,11 @@ export type Database = {
           customer_name?: string | null
           customer_note?: string | null
           customer_phone?: string | null
+          delivered_at?: string | null
           delivery_address?: string | null
+          delivery_alarm_ack_at?: string | null
+          delivery_alarm_at?: string | null
+          delivery_alarm_kind?: string | null
           delivery_cost?: number | null
           delivery_state?: string | null
           discount_amount?: number | null
@@ -12522,6 +13019,73 @@ export type Database = {
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_mapping_fix: {
+        Row: {
+          account_id: string
+          actor_name: string | null
+          confidence: number | null
+          fixed_at: string
+          id: string
+          menu_item_id: string | null
+          method: string
+          notes: string | null
+          product_name: string
+          product_norm: string
+          recipe_item_id: string | null
+          reverted_at: string | null
+        }
+        Insert: {
+          account_id: string
+          actor_name?: string | null
+          confidence?: number | null
+          fixed_at?: string
+          id?: string
+          menu_item_id?: string | null
+          method: string
+          notes?: string | null
+          product_name: string
+          product_norm: string
+          recipe_item_id?: string | null
+          reverted_at?: string | null
+        }
+        Update: {
+          account_id?: string
+          actor_name?: string | null
+          confidence?: number | null
+          fixed_at?: string
+          id?: string
+          menu_item_id?: string | null
+          method?: string
+          notes?: string | null
+          product_name?: string
+          product_norm?: string
+          recipe_item_id?: string | null
+          reverted_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_mapping_fix_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_mapping_fix_menu_item_id_fkey"
+            columns: ["menu_item_id"]
+            isOneToOne: false
+            referencedRelation: "menu_item"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_mapping_fix_recipe_item_id_fkey"
+            columns: ["recipe_item_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_item"
             referencedColumns: ["id"]
           },
         ]
@@ -13397,6 +13961,38 @@ export type Database = {
           },
         ]
       }
+      stock_group: {
+        Row: {
+          account_id: string
+          created_at: string
+          hubrise_ref: string
+          id: string
+          name: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          hubrise_ref: string
+          id?: string
+          name: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          hubrise_ref?: string
+          id?: string
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_group_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       stock_level: {
         Row: {
           account_id: string
@@ -13483,6 +14079,7 @@ export type Database = {
           occurred_at: string
           qty_base: number
           recipe_item_id: string
+          sale_line_id: string | null
           source_id: string | null
           source_type: string
           storage_area_id: string | null
@@ -13503,6 +14100,7 @@ export type Database = {
           occurred_at?: string
           qty_base: number
           recipe_item_id: string
+          sale_line_id?: string | null
           source_id?: string | null
           source_type: string
           storage_area_id?: string | null
@@ -13523,6 +14121,7 @@ export type Database = {
           occurred_at?: string
           qty_base?: number
           recipe_item_id?: string
+          sale_line_id?: string | null
           source_id?: string | null
           source_type?: string
           storage_area_id?: string | null
@@ -13548,6 +14147,13 @@ export type Database = {
             columns: ["recipe_item_id"]
             isOneToOne: false
             referencedRelation: "recipe_item"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movement_sale_line_id_fkey"
+            columns: ["sale_line_id"]
+            isOneToOne: false
+            referencedRelation: "sale_line"
             referencedColumns: ["id"]
           },
           {
@@ -14568,6 +15174,55 @@ export type Database = {
           },
         ]
       }
+      user_item_unit_pref: {
+        Row: {
+          account_id: string
+          id: string
+          purchase_format_id: string | null
+          recipe_item_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_id: string
+          id?: string
+          purchase_format_id?: string | null
+          recipe_item_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_id?: string
+          id?: string
+          purchase_format_id?: string | null
+          recipe_item_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_item_unit_pref_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_item_unit_pref_purchase_format_id_fkey"
+            columns: ["purchase_format_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_item_purchase_format"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_item_unit_pref_recipe_item_id_fkey"
+            columns: ["recipe_item_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_item"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_profiles: {
         Row: {
           account_id: string | null
@@ -15005,6 +15660,27 @@ export type Database = {
         }
         Returns: number
       }
+      _kitchen_day_banner_for: {
+        Args: { p_location_id: string }
+        Returns: Json
+      }
+      _map_sales_product_to_dish_internal: {
+        Args: {
+          p_account_id: string
+          p_actor_name?: string
+          p_brand_id?: string
+          p_method?: string
+          p_product_name: string
+          p_recipe_item_id: string
+        }
+        Returns: {
+          brand_id: string
+          lineas_futuras: number
+          menu_item_id: string
+          recipe_item_id: string
+          resultado: string
+        }[]
+      }
       _modgroups_of_item: { Args: { p_menu_item_id: string }; Returns: Json }
       _postgis_deprecate: {
         Args: { newname: string; oldname: string; version: string }
@@ -15337,6 +16013,10 @@ export type Database = {
           target_daily: number
         }[]
       }
+      anomalous_brand_closures: {
+        Args: { p_account_id?: string; p_token?: string }
+        Returns: Json
+      }
       appcc_mark_overdue: { Args: never; Returns: undefined }
       apply_appcc_assignment_moments: {
         Args: { p_account_id: string }
@@ -15375,6 +16055,16 @@ export type Database = {
           p_zone_ids: string[]
         }
         Returns: Json
+      }
+      auto_map_exact_sales: {
+        Args: { p_account_id?: string; p_days?: number; p_dry_run?: boolean }
+        Returns: {
+          aplicado: boolean
+          dish_name: string
+          motivo: string
+          product_name: string
+          recipe_item_id: string
+        }[]
       }
       autoclose_daily_count: {
         Args: { p_count_id: string }
@@ -15416,6 +16106,60 @@ export type Database = {
           stock_value: number
         }[]
       }
+      availability_ack_notice: {
+        Args: { p_notice_id: string; p_token?: string }
+        Returns: undefined
+      }
+      availability_intervals: {
+        Args: {
+          p_account_id: string
+          p_brand_id?: string
+          p_from: string
+          p_location_id?: string
+          p_origin?: string
+          p_scope?: string
+          p_to: string
+        }
+        Returns: {
+          actor_id: string
+          duration_min: number
+          ended_at: string
+          location_id: string
+          origin: string
+          reason_code: string
+          resume_at: string
+          scope: string
+          started_at: string
+          target_ext: string
+          target_id: string
+          target_key: string
+          target_label: string
+        }[]
+      }
+      availability_kpis: {
+        Args: {
+          p_account_id: string
+          p_brand_id?: string
+          p_from: string
+          p_location_id?: string
+          p_origin?: string
+          p_scope?: string
+          p_to: string
+          p_weeks?: number
+        }
+        Returns: Json
+      }
+      availability_location_open_minutes: {
+        Args: { p_from: string; p_location_id: string; p_to: string }
+        Returns: {
+          opened_from: string
+          opened_until: string
+        }[]
+      }
+      availability_notices: {
+        Args: { p_location_id?: string; p_token?: string }
+        Returns: Json
+      }
       availability_panel: {
         Args: { p_account_id: string; p_location_id?: string }
         Returns: {
@@ -15439,6 +16183,45 @@ export type Database = {
         Args: { p_device_token: string }
         Returns: Json
       }
+      availability_report: {
+        Args: {
+          p_account_id: string
+          p_brand_id?: string
+          p_channel_id?: string
+          p_from: string
+          p_location_id?: string
+          p_origin?: string
+          p_scope?: string
+          p_to: string
+          p_weeks?: number
+        }
+        Returns: Json
+      }
+      availability_sales_profile: {
+        Args: {
+          p_account_id: string
+          p_scope: string
+          p_to: string
+          p_weeks?: number
+        }
+        Returns: {
+          avg_net: number
+          dow: number
+          hour: number
+          target_key: string
+        }[]
+      }
+      avt_cause_context: {
+        Args: { p_count_id: string }
+        Returns: {
+          consumo_incompleto: boolean
+          receipts_qty_base: number
+          recipe_item_id: string
+          transfers_out_qty_base: number
+          used_in_recipes: boolean
+          waste_qty_base: number
+        }[]
+      }
       avt_incomplete_raws: {
         Args: {
           p_account: string
@@ -15461,6 +16244,15 @@ export type Database = {
         Returns: Json
       }
       belongs_to_account: { Args: { p_account_id: string }; Returns: boolean }
+      brand_status: {
+        Args: { p_brand_id: string; p_token?: string }
+        Returns: Json
+      }
+      brands_by_token: { Args: { p_device_token: string }; Returns: Json }
+      brands_for_closure: {
+        Args: { p_account_id?: string; p_token?: string }
+        Returns: Json
+      }
       build_inventory_count: {
         Args: { p_area_ids?: string[]; p_count_id: string; p_full?: boolean }
         Returns: number
@@ -15678,6 +16470,10 @@ export type Database = {
         }[]
       }
       close_sale: { Args: { p_sale_id: string }; Returns: undefined }
+      closed_brands: {
+        Args: { p_account_id?: string; p_token?: string }
+        Returns: Json
+      }
       commit_ai_action: {
         Args: { p_action_id: string; p_edited_args?: Json }
         Returns: Json
@@ -15802,11 +16598,19 @@ export type Database = {
         Returns: string
       }
       create_dish_from_unmapped: {
-        Args: { p_account_id: string; p_product_name: string }
+        Args: {
+          p_account_id: string
+          p_confirm_create?: boolean
+          p_product_name: string
+        }
         Returns: {
+          out_candidato_id: string
+          out_candidato_nombre: string
+          out_creado: boolean
           out_lineas_casadas: number
           out_marcas_creadas: number
           out_recipe_item_id: string
+          out_similitud: number
         }[]
       }
       create_mirror_item: {
@@ -15919,11 +16723,16 @@ export type Database = {
         Args: { p_device_token: string; p_id: string }
         Returns: undefined
       }
+      delivery_watchdog_scan: { Args: never; Returns: number }
       device_location_by_token: {
         Args: { p_device_token: string }
         Returns: Json
       }
       disablelongtransactions: { Args: never; Returns: string }
+      dispatch_watchdog_scan: {
+        Args: { p_grace_minutes?: number }
+        Returns: number
+      }
       dropgeometrycolumn:
         | {
             Args: {
@@ -16218,6 +17027,18 @@ export type Database = {
         }[]
       }
       hubrise_money: { Args: { p: string }; Returns: number }
+      hubrise_writer_token_read: {
+        Args: { p_account_id: string }
+        Returns: string
+      }
+      hubrise_writer_token_save: {
+        Args: {
+          p_access_token: string
+          p_account_id: string
+          p_hubrise_account_id?: string
+        }
+        Returns: undefined
+      }
       internal_secret: { Args: { p_name: string }; Returns: string }
       invoice_required_role: { Args: { p_invoice_id: string }; Returns: string }
       is_brand_open: {
@@ -16237,6 +17058,14 @@ export type Database = {
       }
       item_stock_by_location: {
         Args: { p_account: string; p_recipe_item: string }
+        Returns: Json
+      }
+      kds_ack_alarm: {
+        Args: { p_sale_id: string; p_token?: string }
+        Returns: undefined
+      }
+      kds_alarms: {
+        Args: { p_location_id: string; p_token?: string }
         Returns: Json
       }
       kds_authorize: {
@@ -16268,6 +17097,8 @@ export type Database = {
         Args: { p_token: string }
         Returns: {
           account_id: string
+          app_version: string | null
+          app_version_at: string | null
           created_at: string
           device_mode: string
           id: string
@@ -16275,6 +17106,7 @@ export type Database = {
           label: string
           last_seen_at: string | null
           location_id: string
+          platform: string | null
           station_ids: string[] | null
           token: string
           updated_at: string
@@ -16300,6 +17132,11 @@ export type Database = {
           ancestor_id: string
           depth: number
         }[]
+      }
+      kitchen_day_banner: { Args: { p_location_id: string }; Returns: Json }
+      kitchen_day_banner_by_token: {
+        Args: { p_device_token: string }
+        Returns: Json
       }
       kitchen_delete_or_archive_item: {
         Args: { p_item_id: string }
@@ -16363,6 +17200,10 @@ export type Database = {
       }
       kitchen_similar_dishes_for_ai: {
         Args: { p_n?: number; p_recipe_item_id: string }
+        Returns: Json
+      }
+      kitchen_time_stats: {
+        Args: { p_from: string; p_location_id: string; p_to: string }
         Returns: Json
       }
       learn_from_receipt: { Args: { p_receipt_id: string }; Returns: number }
@@ -16483,6 +17324,7 @@ export type Database = {
           p_limit?: number
           p_location: string
           p_offset?: number
+          p_search?: string
           p_to?: string
           p_types?: string[]
         }
@@ -16513,6 +17355,10 @@ export type Database = {
           labor_cost: number
         }[]
       }
+      location_status: {
+        Args: { p_location_id?: string; p_token?: string }
+        Returns: Json
+      }
       location_surge_pct: { Args: { p_location_id: string }; Returns: number }
       location_surge_reason: {
         Args: { p_location_id: string }
@@ -16528,6 +17374,23 @@ export type Database = {
         Returns: string
       }
       longtransactionsenabled: { Args: never; Returns: boolean }
+      map_sales_product_to_dish: {
+        Args: {
+          p_account_id: string
+          p_actor_name?: string
+          p_brand_id?: string
+          p_method?: string
+          p_product_name: string
+          p_recipe_item_id: string
+        }
+        Returns: {
+          brand_id: string
+          lineas_futuras: number
+          menu_item_id: string
+          recipe_item_id: string
+          resultado: string
+        }[]
+      }
       margin_by_brand: {
         Args: {
           p_account: string
@@ -16970,6 +17833,10 @@ export type Database = {
         Args: { p_recipe_item_id: string }
         Returns: string
       }
+      push_location_opening_hours: {
+        Args: { p_location_id: string }
+        Returns: Json
+      }
       quality_dashboard: {
         Args: {
           p_account: string
@@ -17021,6 +17888,20 @@ export type Database = {
         Returns: {
           lines_processed: number
           movements_written: number
+        }[]
+      }
+      recost_sales_for_product: {
+        Args: {
+          p_account_id: string
+          p_days?: number
+          p_dry_run?: boolean
+          p_product_name: string
+        }
+        Returns: {
+          aplicado: boolean
+          lineas_afectadas: number
+          movimientos: number
+          ventas_afectadas: number
         }[]
       }
       regenerate_social_copy: { Args: { p_post_id: string }; Returns: string }
@@ -17113,6 +17994,14 @@ export type Database = {
       reparto_settings: { Args: never; Returns: Json }
       reparto_weather_apply: { Args: never; Returns: undefined }
       reparto_weather_poll: { Args: never; Returns: undefined }
+      report_device_app_version: {
+        Args: {
+          p_app_version: string
+          p_device_token: string
+          p_platform?: string
+        }
+        Returns: boolean
+      }
       report_platform_floor: {
         Args: {
           p_channel: string
@@ -17314,47 +18203,30 @@ export type Database = {
           match_status: string
         }[]
       }
-      run_mapping:
-        | {
-            Args: {
-              p_account_id: string
-              p_code?: string
-              p_fuzzy_min?: number
-              p_limit?: number
-              p_text: string
-            }
-            Returns: {
-              confidence: number
-              folvy_code: string
-              match_type: string
-              name: string
-              recipe_item_id: string
-              semaphore: string
-            }[]
-          }
-        | {
-            Args: {
-              p_account_id: string
-              p_code?: string
-              p_fuzzy_min?: number
-              p_limit?: number
-              p_target_types?: string[]
-              p_text: string
-            }
-            Returns: {
-              confidence: number
-              folvy_code: string
-              match_type: string
-              name: string
-              recipe_item_id: string
-              semaphore: string
-            }[]
-          }
+      run_mapping: {
+        Args: {
+          p_account_id: string
+          p_code?: string
+          p_fuzzy_min?: number
+          p_limit?: number
+          p_target_types?: string[]
+          p_text: string
+        }
+        Returns: {
+          confidence: number
+          folvy_code: string
+          match_type: string
+          name: string
+          recipe_item_id: string
+          semaphore: string
+        }[]
+      }
       safe_jsonb: { Args: { p_text: string }; Returns: Json }
       sale_delivery_distance_km: {
         Args: { p_sale_id: string }
         Returns: number
       }
+      sales_brand_initials: { Args: { p_brand_name: string }; Returns: string }
       sales_dashboard: {
         Args: {
           p_account_id: string
@@ -17388,6 +18260,11 @@ export type Database = {
           status: string
           threshold_pct: number
         }[]
+      }
+      sales_product_norm: { Args: { p_name: string }; Returns: string }
+      sales_product_norm_nobrand: {
+        Args: { p_brand_name: string; p_name: string }
+        Returns: string
       }
       save_campaign: {
         Args: {
@@ -17479,6 +18356,27 @@ export type Database = {
         Args: { p_account_id: string; p_subtitle: string; p_tagline: string }
         Returns: undefined
       }
+      set_brand_status: {
+        Args: {
+          p_brand_id: string
+          p_mode: string
+          p_reason?: string
+          p_reason_code?: string
+          p_resume_at?: string
+        }
+        Returns: Json
+      }
+      set_brand_status_by_token: {
+        Args: {
+          p_brand_id: string
+          p_device_token: string
+          p_mode: string
+          p_reason?: string
+          p_reason_code?: string
+          p_resume_at?: string
+        }
+        Returns: Json
+      }
       set_customer_notify: {
         Args: { p_enabled: boolean; p_location_id: string }
         Returns: undefined
@@ -17507,6 +18405,26 @@ export type Database = {
       set_location_dispatch: {
         Args: { p_broker: string; p_location_id: string; p_mode: string }
         Returns: undefined
+      }
+      set_location_status: {
+        Args: {
+          p_location_id: string
+          p_mode: string
+          p_reason?: string
+          p_reason_code?: string
+          p_resume_at?: string
+        }
+        Returns: Json
+      }
+      set_location_status_by_token: {
+        Args: {
+          p_device_token: string
+          p_mode: string
+          p_reason?: string
+          p_reason_code?: string
+          p_resume_at?: string
+        }
+        Returns: Json
       }
       set_location_weather:
         | {
@@ -17580,6 +18498,7 @@ export type Database = {
           p_location_id?: string
           p_menu_item_id: string
           p_reason?: string
+          p_reason_code?: string
         }
         Returns: Json
       }
@@ -17590,6 +18509,7 @@ export type Database = {
           p_is_available: boolean
           p_menu_item_id: string
           p_reason?: string
+          p_reason_code?: string
         }
         Returns: Json
       }
@@ -18239,6 +19159,10 @@ export type Database = {
         Args: { geom: unknown; move: number; wrap: number }
         Returns: unknown
       }
+      station_update_window: {
+        Args: { p_device_token: string; p_quiet_minutes?: number }
+        Returns: Json
+      }
       stock_levels_overview: {
         Args: {
           p_account: string
@@ -18547,6 +19471,10 @@ export type Database = {
         }
       }
       void_goods_receipt: { Args: { p_receipt_id: string }; Returns: number }
+      warehouse_reliability_queue: {
+        Args: { p_account_id: string; p_days?: number; p_location_id?: string }
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never

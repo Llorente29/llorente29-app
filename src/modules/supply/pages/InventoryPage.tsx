@@ -35,29 +35,28 @@ import {
   createInventoryCount,
   buildInventoryCount,
   listInventoryCounts,
+  listAreasWithItems,
   type InventoryCount,
   type InventoryCountKind,
+  type ZoneOption,
 } from '@/modules/supply/services/inventoryCountService'
 import {
   recomputeConsumption,
   listConsumptionByRaw,
   type ConsumptionByRaw,
 } from '@/modules/supply/services/consumptionService'
-import {
-  listStorageAreas,
-  type StorageArea,
-} from '@/modules/supply/services/storageAreaService'
+import type { Employee } from '@/types'
 import { getStorageCoverage, type StorageCoverage } from '@/modules/supply/services/storageZonesService'
 import { getStockLevelsOverview } from '@/modules/supply/services/stockLevelService'
 
 export default function InventoryPage() {
   const { activeAccountId, accountsLoading } = useActiveAccount()
-  const { userProfile, authUserId } = useApp()
+  const { userProfile, authUserId, staff } = useApp()
 
   const [locations, setLocations] = useState<SupplyLocation[]>([])
   const op = useOperativeLocation()
   const locationId = op.operativeLocationId ?? ''
-  const [areas, setAreas] = useState<StorageArea[]>([])
+  const [zones, setZones] = useState<ZoneOption[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [flash, setFlash] = useState<string | null>(null)
@@ -97,17 +96,17 @@ export default function InventoryPage() {
     return () => { cancelled = true }
   }, [activeAccountId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // cargar áreas del local (para el alcance del modal de conteo)
+  // cargar zonas CON artículos (para el selector de alcance del modal de inventario)
   useEffect(() => {
     if (!activeAccountId || !locationId) { setLoading(false); return }
     let cancelled = false
     setLoading(true)
     ;(async () => {
       try {
-        const a = await listStorageAreas(activeAccountId, locationId)
-        if (!cancelled) setAreas(a)
+        const z = await listAreasWithItems(activeAccountId, locationId)
+        if (!cancelled) setZones(z)
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'Error cargando áreas.')
+        if (!cancelled) setError(e instanceof Error ? e.message : 'Error cargando zonas.')
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -133,10 +132,25 @@ export default function InventoryPage() {
     return () => { cancelled = true }
   }, [tab, invTab, activeAccountId, locationId, openCountId, reloadTick])
 
-  async function handleCreateCount(kind: InventoryCountKind, scope: 'areas' | 'full', areaIds: string[]) {
+  // empleados activos del local operativo (mismo criterio que CalendarioPage:
+  // local principal O local en assigned_locations). Para el dropdown de asignar.
+  const employees = useMemo(
+    () => staff.filter(e => e.active && (e.locationId === locationId || (e.assignedLocations || []).includes(locationId))),
+    [staff, locationId],
+  )
+  const empNameById = useMemo(() => {
+    const m: Record<string, string> = {}
+    for (const e of staff) m[e.id] = e.name
+    return m
+  }, [staff])
+
+  async function handleCreateCount(opts: { scope: 'areas' | 'full'; areaIds: string[]; employeeId: string }) {
     if (!activeAccountId || !locationId) return
     setError(null)
     try {
+      // Alcance por zonas → 'audit'; almacén completo → 'full'. La apertura
+      // (is_opening) la decide el MOTOR al generar la hoja, no el cliente.
+      const kind: InventoryCountKind = opts.scope === 'areas' ? 'audit' : 'full'
       const countId = await createInventoryCount({
         accountId: activeAccountId,
         locationId,
@@ -144,20 +158,25 @@ export default function InventoryPage() {
         blind: true,
         createdBy: authUserId ?? null,
         createdByName: userProfile?.displayName ?? null,
+        assignedEmployeeId: opts.employeeId,
+        assignedBy: authUserId ?? null,
+        scopeAreaIds: opts.scope === 'areas' ? opts.areaIds : null,
       })
       const n = await buildInventoryCount(countId, {
-        areaIds: scope === 'areas' ? areaIds : null,
-        full: scope === 'full',
+        areaIds: opts.scope === 'areas' ? opts.areaIds : null,
+        full: opts.scope === 'full',
       })
       setNewCountOpen(false)
       if (n === 0) {
-        setError('No hay artículos en el alcance elegido. Asigna artículos a las zonas o usa "Todo el local".')
+        setError('No hay artículos en el alcance elegido. Revisa las zonas o usa el almacén completo.')
         setReloadTick(t => t + 1)
         return
       }
-      setOpenCountId(countId)
+      const emp = staff.find(e => e.id === opts.employeeId)
+      setFlash(`Inventario creado y asignado a ${emp?.name ?? 'el empleado'} · ${n} artículos a contar.`)
+      setReloadTick(t => t + 1)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'No se pudo crear el conteo.')
+      setError(e instanceof Error ? e.message : 'No se pudo crear el inventario.')
     }
   }
 
@@ -291,6 +310,7 @@ export default function InventoryPage() {
             <CountsSection
               counts={counts}
               loading={countsLoading}
+              nameById={empNameById}
               onOpen={(id) => setOpenCountId(id)}
               onNew={() => setNewCountOpen(true)}
             />
@@ -359,10 +379,11 @@ export default function InventoryPage() {
       </>
       )}
 
-      {/* Modal nuevo conteo */}
+      {/* Modal nuevo inventario (crear + asignar) */}
       {newCountOpen && (
         <NewCountModal
-          areas={areas}
+          zones={zones}
+          employees={employees}
           onClose={() => setNewCountOpen(false)}
           onCreate={handleCreateCount}
         />
@@ -461,16 +482,30 @@ function SummarySection({
   )
 }
 
-// ── Sección de conteos del local ──
+// ── Sección de inventarios del local (manuales + autoinventario) ──
+type TipoFilter = 'manual' | 'inicial' | 'seguridad' | 'auto' | 'all'
+
+// Etiqueta de TIPO derivada de la verdad del motor (is_opening) + kind.
+function tipoOf(c: InventoryCount): { label: string; cls: string } {
+  if (c.kind === 'cycle') return { label: 'Autoinventario', cls: 'bg-accent-bg text-accent border-accent/20' }
+  if (c.isOpening)        return { label: 'Inicial · apertura', cls: 'bg-success-bg text-success border-success/20' }
+  if (c.kind === 'audit') return { label: 'Seguridad · zonas', cls: 'bg-warning-bg text-warning border-warning/20' }
+  return { label: 'Seguridad · completo', cls: 'bg-warning-bg text-warning border-warning/20' }
+}
+
 function CountsSection({
-  counts, loading, onOpen, onNew,
+  counts, loading, nameById, onOpen, onNew,
 }: {
   counts: InventoryCount[]
   loading: boolean
+  nameById: Record<string, string>
   onOpen: (id: string) => void
   onNew: () => void
 }) {
-  const KIND_LABEL: Record<string, string> = { cycle: 'Cíclico', audit: 'Auditoría', full: 'Completo' }
+  const [tipo, setTipo] = useState<TipoFilter>('manual')
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
+
   const STATUS_LABEL: Record<string, string> = {
     abierto: 'Abierto', contando: 'Contando', en_revision: 'En revisión', aprobado: 'Aprobado', anulado: 'Anulado',
   }
@@ -485,53 +520,106 @@ function CountsSection({
     ? new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(v))
     : '—'
 
+  const filtered = useMemo(() => counts.filter(c => {
+    const day = (c.createdAt ?? '').slice(0, 10)  // YYYY-MM-DD (UTC), suficiente para filtrar por día
+    if (fromDate && day < fromDate) return false
+    if (toDate && day > toDate) return false
+    if (tipo === 'manual')    return c.kind !== 'cycle'
+    if (tipo === 'inicial')   return c.isOpening
+    if (tipo === 'seguridad') return c.kind !== 'cycle' && !c.isOpening
+    if (tipo === 'auto')      return c.kind === 'cycle'
+    return true // 'all'
+  }), [counts, tipo, fromDate, toDate])
+
+  const CHIPS: [TipoFilter, string][] = [
+    ['manual', 'Manuales'], ['inicial', 'Inicial'], ['seguridad', 'Seguridad'], ['auto', 'Autoinventario'], ['all', 'Todos'],
+  ]
+
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-text-secondary">Conteos de este local. Cuenta a ciegas y revisa las diferencias.</p>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <p className="text-sm text-text-secondary">Inventarios de este local. Crea uno completo o de seguridad y asígnalo a un empleado.</p>
         <button type="button" onClick={onNew}
           className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 transition-base">
-          <Plus size={15} /> Nuevo conteo
+          <Plus size={15} /> Nuevo inventario
         </button>
+      </div>
+
+      {/* Filtros: tipo + rango de fechas */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {CHIPS.map(([k, label]) => (
+          <button key={k} type="button" onClick={() => setTipo(k)}
+            className={`px-2.5 py-1 text-xs rounded-md border transition-base ${tipo === k ? 'bg-accent text-text-on-accent border-accent' : 'border-border-default text-text-secondary hover:bg-page'}`}>
+            {label}
+          </button>
+        ))}
+        <span className="w-px h-5 bg-border-default mx-1" />
+        <label className="text-xs text-text-tertiary inline-flex items-center gap-1">
+          Desde
+          <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)}
+            className="px-2 py-1 text-xs rounded-md border border-border-default bg-card text-text-primary" />
+        </label>
+        <label className="text-xs text-text-tertiary inline-flex items-center gap-1">
+          Hasta
+          <input type="date" value={toDate} onChange={e => setToDate(e.target.value)}
+            className="px-2 py-1 text-xs rounded-md border border-border-default bg-card text-text-primary" />
+        </label>
+        {(fromDate || toDate) && (
+          <button type="button" onClick={() => { setFromDate(''); setToDate('') }}
+            className="text-xs text-text-tertiary hover:text-text-primary underline">limpiar fechas</button>
+        )}
       </div>
 
       {loading ? (
         <div className="flex items-center gap-2 text-text-secondary text-sm p-4"><Loader2 size={15} className="animate-spin" /> Cargando…</div>
-      ) : counts.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <div className="text-center py-10 text-text-secondary text-sm border border-dashed border-border-default rounded-lg">
           <ClipboardList size={28} className="mx-auto mb-2 text-text-tertiary" />
-          Aún no hay conteos. Crea el primero con "Nuevo conteo".
+          {counts.length === 0 ? 'Aún no hay inventarios. Crea el primero con "Nuevo inventario".' : 'Ningún inventario con estos filtros.'}
         </div>
       ) : (
         <div className="border border-border-default rounded-lg overflow-hidden">
-          {counts.map(c => (
-            <button key={c.id} type="button" onClick={() => onOpen(c.id)}
-              className="w-full flex items-center gap-3 px-3 py-2.5 text-left border-t border-border-default first:border-t-0 hover:bg-page transition-base">
-              <span className="font-medium text-text-primary">{c.code ?? 'Conteo'}</span>
-              <span className="text-xs text-text-tertiary">{KIND_LABEL[c.kind] ?? c.kind}</span>
-              <span className="text-xs text-text-tertiary">· {c.lineCount ?? 0} líneas</span>
-              <span className="text-xs text-text-tertiary ml-auto">{fmt(c.createdAt)}</span>
-              <span className={`text-[11px] px-1.5 py-0.5 rounded border ${STATUS_CLASS[c.status]}`}>{STATUS_LABEL[c.status]}</span>
-              <ChevronRight size={16} className="text-text-tertiary" />
-            </button>
-          ))}
+          {filtered.map(c => {
+            const t = tipoOf(c)
+            const assignee = c.assignedEmployeeId ? (nameById[c.assignedEmployeeId] ?? 'Empleado') : null
+            return (
+              <button key={c.id} type="button" onClick={() => onOpen(c.id)}
+                className="w-full flex items-center gap-3 px-3 py-2.5 text-left border-t border-border-default first:border-t-0 hover:bg-page transition-base">
+                <span className="font-medium text-text-primary shrink-0">{c.code ?? 'Inventario'}</span>
+                <span className={`text-[11px] px-1.5 py-0.5 rounded border shrink-0 ${t.cls}`}>{t.label}</span>
+                <span className="text-xs text-text-tertiary shrink-0">{c.lineCount ?? 0} líneas</span>
+                {assignee && <span className="text-xs text-text-secondary truncate">· {assignee}</span>}
+                <span className="text-xs text-text-tertiary ml-auto shrink-0">{fmt(c.createdAt)}</span>
+                <span className={`text-[11px] px-1.5 py-0.5 rounded border shrink-0 ${STATUS_CLASS[c.status]}`}>{STATUS_LABEL[c.status]}</span>
+                <ChevronRight size={16} className="text-text-tertiary shrink-0" />
+              </button>
+            )
+          })}
         </div>
       )}
     </div>
   )
 }
 
-// ── Modal: nuevo conteo (kind + alcance) ──
+// ── Modal: nuevo inventario (tipo + alcance + empleado) ──
 function NewCountModal({
-  areas, onClose, onCreate,
+  zones, employees, onClose, onCreate,
 }: {
-  areas: StorageArea[]
+  zones: ZoneOption[]
+  employees: Employee[]
   onClose: () => void
-  onCreate: (kind: InventoryCountKind, scope: 'areas' | 'full', areaIds: string[]) => void
+  onCreate: (opts: { scope: 'areas' | 'full'; areaIds: string[]; employeeId: string }) => void
 }) {
-  const [kind, setKind] = useState<InventoryCountKind>('cycle')
-  const [scope, setScope] = useState<'areas' | 'full'>('areas')
+  // 'inicial' = local nuevo (siempre almacén completo). 'seguridad' = verificar cifras.
+  const [purpose, setPurpose] = useState<'inicial' | 'seguridad'>('seguridad')
+  const [scope, setScope] = useState<'areas' | 'full'>('full')
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [employeeId, setEmployeeId] = useState<string>('')
+
+  const hasZones = zones.length > 0
+  // Inicial → siempre full. Seguridad sin zonas con artículos → full forzado.
+  const effectiveScope: 'areas' | 'full' =
+    purpose === 'inicial' ? 'full' : (hasZones ? scope : 'full')
 
   function toggleArea(id: string) {
     setSelected(prev => {
@@ -541,66 +629,105 @@ function NewCountModal({
     })
   }
 
-  const canCreate = scope === 'full' || selected.size > 0
+  const canCreate = employeeId !== '' && (effectiveScope === 'full' || selected.size > 0)
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-start sm:items-center justify-center p-4 overflow-y-auto" role="dialog" aria-modal="true">
       <div className="bg-card rounded-lg border border-border-default shadow-lg w-full max-w-md my-8">
         <div className="px-5 py-3 border-b border-border-default flex items-center justify-between">
-          <h3 className="text-base font-medium text-text-primary">Nuevo conteo</h3>
+          <h3 className="text-base font-medium text-text-primary">Nuevo inventario</h3>
           <button type="button" onClick={onClose} className="text-text-tertiary hover:text-text-primary"><X size={18} /></button>
         </div>
         <div className="px-5 py-4 space-y-4">
+          {/* Tipo */}
           <div>
             <span className="block text-xs text-text-secondary mb-1.5">Tipo</span>
             <div className="flex gap-2">
-              {([['cycle', 'Cíclico'], ['audit', 'Auditoría'], ['full', 'Completo']] as const).map(([kk, label]) => (
-                <button key={kk} type="button" onClick={() => setKind(kk)}
-                  className={`px-3 py-1.5 text-sm rounded-md border transition-base ${kind === kk ? 'bg-accent text-text-on-accent border-accent' : 'border-border-default text-text-secondary hover:bg-page'}`}>
-                  {label}
-                </button>
-              ))}
+              <button type="button" onClick={() => setPurpose('inicial')}
+                className={`px-3 py-1.5 text-sm rounded-md border transition-base ${purpose === 'inicial' ? 'bg-accent text-text-on-accent border-accent' : 'border-border-default text-text-secondary hover:bg-page'}`}>
+                Inicial (local nuevo)
+              </button>
+              <button type="button" onClick={() => setPurpose('seguridad')}
+                className={`px-3 py-1.5 text-sm rounded-md border transition-base ${purpose === 'seguridad' ? 'bg-accent text-text-on-accent border-accent' : 'border-border-default text-text-secondary hover:bg-page'}`}>
+                De seguridad
+              </button>
             </div>
+            {purpose === 'inicial' ? (
+              <p className="text-xs text-text-tertiary mt-1.5">
+                Cuenta el almacén completo. Ancla la apertura solo si el local no tiene stock previo; si ya lo tiene, será un conteo completo normal.
+              </p>
+            ) : (
+              <p className="text-xs text-text-tertiary mt-1.5">
+                Verifica las cifras existentes. Al aprobar, fija el stock a lo contado.
+              </p>
+            )}
           </div>
 
-          <div>
-            <span className="block text-xs text-text-secondary mb-1.5">Alcance</span>
-            <div className="flex gap-2 mb-2">
-              <button type="button" onClick={() => setScope('areas')}
-                className={`px-3 py-1.5 text-sm rounded-md border transition-base ${scope === 'areas' ? 'bg-accent text-text-on-accent border-accent' : 'border-border-default text-text-secondary hover:bg-page'}`}>
-                Por zonas
-              </button>
-              <button type="button" onClick={() => setScope('full')}
-                className={`px-3 py-1.5 text-sm rounded-md border transition-base ${scope === 'full' ? 'bg-accent text-text-on-accent border-accent' : 'border-border-default text-text-secondary hover:bg-page'}`}>
-                Todo el local
-              </button>
-            </div>
-            {scope === 'areas' && (
-              areas.length === 0 ? (
-                <p className="text-xs text-text-tertiary">No hay zonas. Crea zonas o usa "Todo el local".</p>
+          {/* Alcance (solo Seguridad) */}
+          {purpose === 'seguridad' && (
+            <div>
+              <span className="block text-xs text-text-secondary mb-1.5">Alcance</span>
+              {!hasZones ? (
+                <p className="text-xs text-text-tertiary">
+                  Este local no tiene zonas con artículos: se contará el almacén completo.
+                </p>
               ) : (
-                <div className="border border-border-default rounded-md max-h-48 overflow-y-auto">
-                  {areas.map(a => (
-                    <button key={a.id} type="button" onClick={() => toggleArea(a.id)}
-                      className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left border-t border-border-default first:border-t-0 hover:bg-page transition-base ${selected.has(a.id) ? 'text-text-primary' : 'text-text-secondary'}`}>
-                      <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${selected.has(a.id) ? 'bg-accent border-accent' : 'border-border-default'}`}>
-                        {selected.has(a.id) && <span className="text-text-on-accent text-[10px]">✓</span>}
-                      </span>
-                      {a.parentId && <span className="text-text-tertiary">└</span>}
-                      {a.name}
+                <>
+                  <div className="flex gap-2 mb-2">
+                    <button type="button" onClick={() => setScope('full')}
+                      className={`px-3 py-1.5 text-sm rounded-md border transition-base ${scope === 'full' ? 'bg-accent text-text-on-accent border-accent' : 'border-border-default text-text-secondary hover:bg-page'}`}>
+                      Todo el almacén
                     </button>
-                  ))}
-                </div>
-              )
+                    <button type="button" onClick={() => setScope('areas')}
+                      className={`px-3 py-1.5 text-sm rounded-md border transition-base ${scope === 'areas' ? 'bg-accent text-text-on-accent border-accent' : 'border-border-default text-text-secondary hover:bg-page'}`}>
+                      Zonas concretas
+                    </button>
+                  </div>
+                  {scope === 'areas' && (
+                    <div className="border border-border-default rounded-md max-h-48 overflow-y-auto">
+                      {zones.map(z => (
+                        <button key={z.id} type="button" onClick={() => toggleArea(z.id)}
+                          className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left border-t border-border-default first:border-t-0 hover:bg-page transition-base ${selected.has(z.id) ? 'text-text-primary' : 'text-text-secondary'}`}>
+                          <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${selected.has(z.id) ? 'bg-accent border-accent' : 'border-border-default'}`}>
+                            {selected.has(z.id) && <span className="text-text-on-accent text-[10px]">✓</span>}
+                          </span>
+                          {z.parentId && <span className="text-text-tertiary">└</span>}
+                          <span className="flex-1">{z.name}</span>
+                          <span className="text-xs text-text-tertiary">{z.itemCount}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-xs text-text-tertiary mt-1.5">
+                    "Todo el almacén" incluye también los artículos sin zona. Solo se listan zonas con artículos.
+                  </p>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Empleado (obligatorio) */}
+          <div>
+            <span className="block text-xs text-text-secondary mb-1.5">Asignar a</span>
+            {employees.length === 0 ? (
+              <p className="text-xs text-warning">No hay empleados activos en este local. Da de alta o asigna un empleado al local primero.</p>
+            ) : (
+              <select value={employeeId} onChange={e => setEmployeeId(e.target.value)}
+                className="w-full px-3 py-2 text-sm rounded-md border border-border-default bg-card text-text-primary">
+                <option value="">Elige un empleado…</option>
+                {employees.map(e => (
+                  <option key={e.id} value={e.id}>{e.name}</option>
+                ))}
+              </select>
             )}
           </div>
         </div>
         <div className="px-5 py-3 border-t border-border-default flex justify-end gap-2">
           <button type="button" onClick={onClose} className="px-3 py-2 text-sm rounded-md border border-border-default text-text-secondary hover:bg-page transition-base">Cancelar</button>
           <button type="button" disabled={!canCreate}
-            onClick={() => onCreate(kind, scope, Array.from(selected))}
+            onClick={() => onCreate({ scope: effectiveScope, areaIds: effectiveScope === 'areas' ? Array.from(selected) : [], employeeId })}
             className="px-3 py-2 text-sm rounded-md font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 transition-base">
-            Crear y contar
+            Crear y asignar
           </button>
         </div>
       </div>
