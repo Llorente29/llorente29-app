@@ -7,7 +7,7 @@
 // NO cambia lógica, props ni navegación: solo el aspecto.
 
 import { useEffect, useState } from 'react'
-import { Leaf, User, LogOut, AlertCircle, ArrowLeft, ChevronRight, LogIn, Clock, Boxes, Truck } from 'lucide-react'
+import { Leaf, User, LogOut, AlertCircle, ArrowLeft, ChevronRight, LogIn, Clock, Boxes, Truck, Play, Loader2 } from 'lucide-react'
 import type { Employee } from '../../types'
 import { hasOpenShift } from '../../services/fichajeKiosko'
 import NotificationBell from '../../components/NotificationBell'
@@ -33,6 +33,12 @@ interface Props {
   inventoryPendingCount?: number
   /** Nº de pedidos pendientes de recibir (enviado + parcial); 0 = sin badge. */
   receivingPendingCount?: number
+  /** C5 — inventarios MANUALES asignados (uno por zona: Proteínas, Refrigerados…). */
+  manualCounts?: { id: string; label: string; status: 'abierto' | 'contando' }[]
+  onOpenManualCount?: (id: string) => void
+  /** id del manual que está arrancando (build en curso) — deshabilita su botón. */
+  manualBusyId?: string | null
+  manualError?: string | null
 }
 
 interface ModuleButton {
@@ -47,7 +53,11 @@ interface ModuleButton {
   badgeColor?: string
 }
 
-export default function HomeEmpleado({ employee, onNavigate, onLogout, exitLabel = 'logout', appccPendingCount = 0, showInventory = false, inventoryPendingCount = 0, receivingPendingCount = 0 }: Props) {
+export default function HomeEmpleado({
+  employee, onNavigate, onLogout, exitLabel = 'logout', appccPendingCount = 0, showInventory = false,
+  inventoryPendingCount = 0, receivingPendingCount = 0,
+  manualCounts = [], onOpenManualCount, manualBusyId = null, manualError = null,
+}: Props) {
   const open = hasOpenShift(employee)
   const [showAppcc, setShowAppcc] = useState(false)
 
@@ -249,6 +259,44 @@ export default function HomeEmpleado({ employee, onNavigate, onLogout, exitLabel
       <div className="px-5 pt-4">
         <InstallAppButton />
       </div>
+
+      {/* C5 — Inventarios manuales asignados (uno por zona). Empezar lo pulsa
+          el trabajador, nunca oficina en remoto: el snapshot se congela aquí. */}
+      {manualCounts.length > 0 && (
+        <div className="px-5 pt-4">
+          <p className="text-xs text-text-secondary uppercase tracking-wide mb-2">Inventarios asignados</p>
+          {manualError && (
+            <div className="mb-2 p-2.5 rounded-lg bg-danger-bg text-danger text-xs border border-danger/20">
+              {manualError}
+            </div>
+          )}
+          <div className="space-y-2">
+            {manualCounts.map(mc => {
+              const busy = manualBusyId === mc.id
+              return (
+                <button
+                  key={mc.id}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => onOpenManualCount?.(mc.id)}
+                  className="w-full flex items-center justify-between gap-3 p-4 rounded-2xl bg-card border border-border-default shadow-sm active:scale-[0.98] transition-base disabled:opacity-60"
+                >
+                  <span className="text-left min-w-0">
+                    <span className="block font-semibold text-text-primary truncate">{mc.label}</span>
+                    <span className="block text-xs text-text-secondary mt-0.5">
+                      {mc.status === 'contando' ? 'En curso' : 'Programado'}
+                    </span>
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-terracota text-white text-sm font-semibold shrink-0">
+                    {busy ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
+                    {mc.status === 'contando' ? 'Continuar' : 'Empezar'}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Alerta APPCC grande cuando hay tareas pendientes */}
       {showAppcc && appccPendingCount > 0 && (
