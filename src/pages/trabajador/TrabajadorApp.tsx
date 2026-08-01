@@ -17,7 +17,9 @@ import MiBolsaHoras from '../../components/MiBolsaHoras'
 import MisTurnos from './MisTurnos'
 import CambiosTurnoPage from './CambiosTurnoPage'
 import MiAutoinventario from './MiAutoinventario'
-import { getMyDailyQueue } from '../../modules/supply/services/autoinventoryService'
+import { getMyDailyQueue, getMyManualCounts, type MyManualCount } from '../../modules/supply/services/autoinventoryService'
+import { startInventoryCount } from '../../modules/supply/services/inventoryCountService'
+import { listStorageAreas } from '../../modules/supply/services/storageAreaService'
 import OrderReceiveFlow from '../../modules/supply/components/OrderReceiveFlow'
 import { listPurchaseOrders } from '../../modules/supply/services/purchaseOrderService'
 import MisChecklistsPage from './MisChecklistsPage'
@@ -35,6 +37,7 @@ type SubPage =
   | 'fichar' | 'horario' | 'fichajes' | 'documentos' | 'vacaciones' | 'bolsa' | 'turnos' | 'cambios'
   | 'appcc_list' | 'appcc_execution'
   | 'inventario'
+  | 'inventario_manual'
   | 'recepcion'
 
 interface Props {
@@ -68,6 +71,12 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
   // Autoinventario: ¿hay cola asignada hoy a este empleado? y cuántos faltan.
   const [showInventory, setShowInventory] = useState(false)
   const [inventoryPendingCount, setInventoryPendingCount] = useState(0)
+  // C5 — inventarios MANUALES asignados (uno por zona, cada uno un conteo aparte).
+  const [manualCounts, setManualCounts] = useState<MyManualCount[]>([])
+  const [zoneNames, setZoneNames] = useState<Record<string, string>>({})
+  const [activeManualCount, setActiveManualCount] = useState<MyManualCount | null>(null)
+  const [manualBusyId, setManualBusyId] = useState<string | null>(null)
+  const [manualError, setManualError] = useState<string | null>(null)
   // Recepciones: nº de pedidos pendientes en el local (solo para el badge; la
   // tarjeta "Recepciones" es fija — se entra siempre, haya pedidos o no).
   const [receivingPendingCount, setReceivingPendingCount] = useState(0)
@@ -153,6 +162,70 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
       .catch(() => { if (!cancel) { setShowInventory(false); setInventoryPendingCount(0) } })
     return () => { cancel = true }
   }, [employee?.locationId, employee?.id, subPage])
+
+  // C5 — inventarios MANUALES asignados a este empleado (programado o en curso).
+  useEffect(() => {
+    if (!employee?.locationId || !employee?.id) return
+    let cancel = false
+    getMyManualCounts(employee.locationId, employee.id)
+      .then((cs) => { if (!cancel) setManualCounts(cs) })
+      .catch(() => { if (!cancel) setManualCounts([]) })
+    return () => { cancel = true }
+  }, [employee?.locationId, employee?.id, subPage])
+
+  // Nombres de zona para etiquetar cada tarjeta ("Seguridad · Proteínas").
+  // Solo si hay manuales con alcance de zonas (evita la query si no hace falta).
+  useEffect(() => {
+    if (!activeAccountId || !employee?.locationId) return
+    if (!manualCounts.some(mc => (mc.scopeAreaIds?.length ?? 0) > 0)) return
+    let cancel = false
+    listStorageAreas(activeAccountId, employee.locationId)
+      .then((areas) => {
+        if (cancel) return
+        const map: Record<string, string> = {}
+        for (const a of areas) map[a.id] = a.name
+        setZoneNames(map)
+      })
+      .catch(() => { if (!cancel) setZoneNames({}) })
+    return () => { cancel = true }
+  }, [activeAccountId, employee?.locationId, manualCounts])
+
+  function manualCountLabel(mc: MyManualCount): string {
+    const tipo = mc.kind === 'audit' ? 'Seguridad' : 'Inicial'
+    const zoneIds = mc.scopeAreaIds ?? []
+    if (zoneIds.length === 1) {
+      const zone = zoneNames[zoneIds[0]]
+      if (zone) return `${tipo} · ${zone}`
+    }
+    if (zoneIds.length > 1) return `${tipo} · varias zonas`
+    return `${tipo} · almacén completo`
+  }
+
+  // Empezar (congela snapshot AHORA, en el móvil) o Continuar un manual ya en marcha.
+  async function handleOpenManualCount(countId: string) {
+    const mc = manualCounts.find(m => m.id === countId)
+    if (!mc) return
+    setManualError(null)
+    if (mc.status === 'contando') {
+      setActiveManualCount(mc)
+      setSubPage('inventario_manual')
+      return
+    }
+    setManualBusyId(mc.id)
+    try {
+      const n = await startInventoryCount(mc.id, mc.scopeAreaIds)
+      if (n === 0) {
+        setManualError('Este inventario no tiene artículos en su alcance. Avisa a tu encargado.')
+        return
+      }
+      setActiveManualCount(mc)
+      setSubPage('inventario_manual')
+    } catch (e) {
+      setManualError(e instanceof Error ? e.message : 'No se pudo empezar el inventario.')
+    } finally {
+      setManualBusyId(null)
+    }
+  }
 
   // Pedidos pendientes de recibir (enviado + parcial) en el local del empleado.
   // Solo para el badge de la tarjeta "Recepciones" (la tarjeta es fija).
@@ -281,6 +354,16 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
   if (subPage === 'turnos') return <MisTurnos employee={employee} onBack={() => setSubPage('portal')} />
   if (subPage === 'cambios') return <CambiosTurnoPage employee={employee} onBack={() => setSubPage('portal')} />
   if (subPage === 'inventario') return <MiAutoinventario employee={employee} onBack={() => setSubPage('home')} />
+  if (subPage === 'inventario_manual' && activeManualCount) {
+    return (
+      <MiAutoinventario
+        employee={employee}
+        manualCountId={activeManualCount.id}
+        title={manualCountLabel(activeManualCount)}
+        onBack={() => { setSubPage('home'); setActiveManualCount(null) }}
+      />
+    )
+  }
   if (subPage === 'recepcion' && activeAccountId) {
     return (
       <OrderReceiveFlow
@@ -353,6 +436,10 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
         showInventory={showInventory}
         inventoryPendingCount={inventoryPendingCount}
         receivingPendingCount={receivingPendingCount}
+        manualCounts={manualCounts.map(mc => ({ id: mc.id, label: manualCountLabel(mc), status: mc.status }))}
+        onOpenManualCount={handleOpenManualCount}
+        manualBusyId={manualBusyId}
+        manualError={manualError}
       />
       <BottomTabBar active="inicio" onSelect={goToTab} showTareas={showAppccTab} />
     </div>

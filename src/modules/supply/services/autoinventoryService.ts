@@ -335,6 +335,75 @@ export async function getMyDailyQueue(
   return { countId, lines }
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// C5 — INVENTARIOS MANUALES asignados al trabajador (móvil)
+// Cabecera assigned_employee_id (kind full/audit, C1/C3), NO assigned_to por
+// línea: aquí el trabajador cuenta TODAS las líneas del conteo, sin filtrar
+// (el manual es suyo por cabecera, no repartido entre varios como el cíclico).
+// ─────────────────────────────────────────────────────────────────────
+
+export interface MyManualCount {
+  id: string
+  code: string | null
+  kind: 'full' | 'audit'
+  status: 'abierto' | 'contando'
+  scopeAreaIds: string[] | null
+  scheduledFor: string | null
+  startedAt: string | null
+}
+
+// Inventarios manuales asignados a este empleado en este local, programados o
+// en curso (abierto|contando). No incluye en_revision/aprobado/anulado: ya no
+// hay nada que el trabajador tenga que hacer con esos (los aprueba oficina).
+export async function getMyManualCounts(locationId: string, employeeId: string): Promise<MyManualCount[]> {
+  requireSupabase()
+  const { data, error } = await supabase!
+    .from('inventory_count')
+    .select('id, code, kind, status, scope_area_ids, scheduled_for, started_at')
+    .eq('location_id', locationId)
+    .eq('assigned_employee_id', employeeId)
+    .in('kind', ['full', 'audit'])
+    .in('status', ['abierto', 'contando'])
+    .order('scheduled_for', { ascending: true, nullsFirst: false })
+  if (error) throw new Error(`No se pudieron cargar tus inventarios: ${error.message}`)
+  return (data ?? []).map(r => ({
+    id: r.id,
+    code: r.code,
+    kind: r.kind as 'full' | 'audit',
+    status: r.status as 'abierto' | 'contando',
+    scopeAreaIds: r.scope_area_ids,
+    scheduledFor: r.scheduled_for,
+    startedAt: r.started_at,
+  }))
+}
+
+// Líneas de UN inventario manual, TODAS (sin filtrar por assigned_to). Mismo
+// shape que getMyDailyQueue para que MiAutoinventario reutilice su wizard de
+// conteo sin tocar la lógica de contar/guardar/avisar variación.
+export async function getManualCountLines(countId: string): Promise<DailyQueueLine[]> {
+  requireSupabase()
+  const { data, error } = await supabase!
+    .from('inventory_count_line')
+    .select('id, recipe_item_id, counted_qty, system_qty, abc_class, position, recipe_item(name, base_unit_id, kitchen_unit:base_unit_id(abbreviation))')
+    .eq('inventory_count_id', countId)
+    .order('position', { ascending: true })
+  if (error) throw new Error(`No se pudo cargar el inventario: ${error.message}`)
+  return ((data as Row[] | null) ?? []).map((r) => {
+    const ri = (r.recipe_item ?? {}) as Record<string, unknown>
+    const ku = (ri.kitchen_unit ?? {}) as Record<string, unknown>
+    return {
+      lineId: r.id as string,
+      recipeItemId: r.recipe_item_id as string,
+      name: (ri.name as string) ?? '(sin nombre)',
+      baseUnit: (ku.abbreviation as string | null) ?? null,
+      countedQty: r.counted_qty == null ? null : Number(r.counted_qty),
+      systemQty: r.system_qty == null ? null : Number(r.system_qty),
+      abcClass: (r.abc_class as 'A' | 'B' | 'C' | null) ?? null,
+      position: Number(r.position ?? 0),
+    }
+  })
+}
+
 // Veredicto de variación para el aviso al trabajador (paso 3 del wizard móvil).
 // El servidor compara lo tecleado contra el system_qty SIN exponerlo (blind):
 // 'ok' | 'low' (mucho menos) | 'high' (mucho más). Banda ancha (1/3 ó 3x):

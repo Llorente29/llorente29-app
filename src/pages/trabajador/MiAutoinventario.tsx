@@ -24,12 +24,13 @@ import { ArrowLeft, AlertTriangle, Check, Loader2, Boxes } from 'lucide-react'
 import type { Employee } from '../../types'
 import {
   getMyDailyQueue,
+  getManualCountLines,
   checkCountVariance,
   countRemainingLines,
   autocloseDailyCount,
   type DailyQueueLine,
 } from '../../modules/supply/services/autoinventoryService'
-import { saveCountedQty } from '../../modules/supply/services/inventoryCountService'
+import { saveCountedQty, closeInventoryCount } from '../../modules/supply/services/inventoryCountService'
 import { listFormatsByItem } from '../../modules/kitchen/services/purchaseFormatService'
 import type { PurchaseFormat } from '../../types/kitchen'
 import { getUnitPref, setUnitPref } from '../../modules/supply/services/unitPrefService'
@@ -38,6 +39,13 @@ import { useApp } from '../../context/AppContext'
 interface Props {
   employee: Employee
   onBack: () => void
+  /** C5 — si viene, es un inventario MANUAL concreto: se cuentan TODAS sus
+   *  líneas (asignación por cabecera, no por línea) y al terminar se cierra
+   *  explícitamente (Terminar), no el auto-cierre del cíclico compartido. */
+  manualCountId?: string
+  /** Título de la cabecera. Por defecto "Conteo de hoy" (autoinventario). Para
+   *  un manual el caller pasa el código/zona, para que Pamela distinga cada uno. */
+  title?: string
 }
 
 type Phase = 'loading' | 'intro' | 'counting' | 'warn' | 'done' | 'empty' | 'error'
@@ -47,7 +55,7 @@ type UnitSel = { kind: 'base' } | { kind: 'format'; format: PurchaseFormat }
 
 const nf1 = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 })
 
-export default function MiAutoinventario({ employee, onBack }: Props) {
+export default function MiAutoinventario({ employee, onBack, manualCountId, title = 'Conteo de hoy' }: Props) {
   const { authUserId } = useApp()
   const [phase, setPhase] = useState<Phase>('loading')
   const [total, setTotal] = useState(0)        // artículos asignados hoy (8)
@@ -68,6 +76,20 @@ export default function MiAutoinventario({ employee, onBack }: Props) {
     let cancel = false
     async function load() {
       try {
+        if (manualCountId) {
+          const lines = await getManualCountLines(manualCountId)
+          if (cancel) return
+          setCountId(manualCountId)
+          const pending = lines.filter((l) => l.countedQty == null)
+          setTotal(lines.length)
+          setDoneBefore(lines.length - pending.length)
+          setQueue(pending)
+          setIdx(0)
+          if (lines.length === 0) setPhase('empty')
+          else if (pending.length === 0) setPhase('done')
+          else setPhase('intro')
+          return
+        }
         if (!employee.locationId) {
           if (!cancel) setPhase('empty')
           return
@@ -94,7 +116,7 @@ export default function MiAutoinventario({ employee, onBack }: Props) {
     return () => {
       cancel = true
     }
-  }, [employee.id, employee.locationId])
+  }, [employee.id, employee.locationId, manualCountId])
 
   const current = queue[idx]
   const stepNumber = doneBefore + idx + 1 // "artículo X de N"
@@ -189,11 +211,19 @@ export default function MiAutoinventario({ employee, onBack }: Props) {
       if (countId) {
         void (async () => {
           try {
-            const remaining = await countRemainingLines(countId)
-            if (remaining === 0) await autocloseDailyCount(countId)
+            if (manualCountId) {
+              // Manual: una sola persona asignada por cabecera — al terminar
+              // su última línea, se cierra siempre (pasa a en_revision, listo
+              // para que oficina lo apruebe).
+              await closeInventoryCount(countId)
+            } else {
+              const remaining = await countRemainingLines(countId)
+              if (remaining === 0) await autocloseDailyCount(countId)
+            }
           } catch {
-            // Si falla el auto-cierre, no se le muestra error al trabajador:
-            // el barrido del día siguiente lo cerrará igualmente.
+            // Si falla el cierre, no se le muestra error al trabajador: el
+            // barrido del día siguiente (cíclico) o el gestor a mano
+            // (Almacén › Inventarios, manual) lo cerrarán igualmente.
           }
         })()
       }
@@ -233,7 +263,7 @@ export default function MiAutoinventario({ employee, onBack }: Props) {
   if (phase === 'empty') {
     return (
       <div className="min-h-screen bg-page flex flex-col">
-        <Header onBack={onBack} title="Conteo de hoy" />
+        <Header onBack={onBack} title={title} />
         <Centered>
           <div className="w-16 h-16 rounded-full bg-success-bg flex items-center justify-center">
             <Check size={32} className="text-success" />
@@ -256,7 +286,7 @@ export default function MiAutoinventario({ employee, onBack }: Props) {
   if (phase === 'intro') {
     return (
       <div className="min-h-screen bg-page flex flex-col">
-        <Header onBack={onBack} title="Conteo de hoy" />
+        <Header onBack={onBack} title={title} />
         <div className="flex-1 px-5 pt-2">
           <p className="font-display text-2xl text-text-primary">Hola, {employee.name.split(' ')[0]}</p>
           <p className="text-sm text-text-secondary mt-1">Hoy te toca un conteo rápido</p>
@@ -331,7 +361,7 @@ export default function MiAutoinventario({ employee, onBack }: Props) {
   if (phase === 'done') {
     return (
       <div className="min-h-screen bg-page flex flex-col">
-        <Header title="Conteo de hoy" />
+        <Header title={title} />
         <div className="flex-1 px-6 pt-10 flex flex-col items-center text-center">
           <div className="w-20 h-20 rounded-full bg-success-bg flex items-center justify-center">
             <Check size={40} className="text-success" />
@@ -362,7 +392,7 @@ export default function MiAutoinventario({ employee, onBack }: Props) {
   const baseEq = n != null && unit.kind === 'format' ? toBase(n, unit) : null
   return (
     <div className="min-h-screen bg-page flex flex-col">
-      <Header onBack={onBack} title="Conteo de hoy" />
+      <Header onBack={onBack} title={title} />
       <div className="flex-1 px-5 pt-2">
         {/* progreso */}
         <div className="flex items-center justify-between text-xs text-text-secondary">
