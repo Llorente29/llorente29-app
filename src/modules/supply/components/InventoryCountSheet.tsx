@@ -149,7 +149,7 @@ export default function InventoryCountSheet({
   async function onCountedBlur(line: InventoryCountLine) {
     setSavingId(line.id)
     try {
-      await saveCountedQty(line.id, line.countedQty)
+      await saveCountedQty(line.id, line.countedQty, authUserId ?? null, userProfile?.displayName ?? null)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo guardar.')
     } finally {
@@ -162,7 +162,7 @@ export default function InventoryCountSheet({
     setCalcLineId(null)
     setSavingId(line.id)
     try {
-      await saveCountedQty(line.id, qtyInBase)
+      await saveCountedQty(line.id, qtyInBase, authUserId ?? null, userProfile?.displayName ?? null)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo guardar.')
     } finally {

@@ -161,7 +161,7 @@ export default function MiAutoinventario({ employee, onBack }: Props) {
     const baseQty = toBase(num, unit)
     setSaving(true)
     try {
-      await saveCountedQty(current.lineId, baseQty)
+      await saveCountedQty(current.lineId, baseQty, employee.id, employee.name ?? null)
       const verdict = await checkCountVariance(current.lineId, baseQty)
       setSaving(false)
       if (verdict === 'low' || verdict === 'high') {
