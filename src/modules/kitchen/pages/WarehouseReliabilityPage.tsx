@@ -17,14 +17,14 @@
 //     limpio no se enseña B. No abrumar con tres problemas mezclados.
 //   · Lenguaje humano. Aquí no existe "menu_item_id null".
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   AlertTriangle, ArrowLeft, Check, ChefHat, Clock, Euro, Loader2, RefreshCw, Search, X,
 } from 'lucide-react'
 import { fmtInt, fmtMoney } from '@/lib/format'
 import KitchenItemDetailPage from '@/modules/kitchen/pages/KitchenItemDetailPage'
 import {
-  getReliabilityQueue, mapProductToDish, recostProduct,
+  useReliabilityQueue, useInvalidateReliabilityQueue, mapProductToDish, recostProduct,
   getReliability, suggestMatch, createDishFromUnmapped, resolveUnmapped,
   type QueueItem, type Carril, type MatchSuggestion, type SalesReliability,
 } from '@/modules/kitchen/services/warehouseReliabilityService'
@@ -67,35 +67,43 @@ export default function WarehouseReliabilityPage({
   // KitchenItemsPage): así "Añadir ingredientes" lleva al sitio de verdad y al
   // volver se recarga la lista para comprobar si el fallo ya desapareció.
   const [openItemId, setOpenItemId] = useState<string | null>(null)
-  const [items, setItems] = useState<QueueItem[]>([])
   const [rel, setRel] = useState<SalesReliability | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [flash, setFlash] = useState<string | null>(null)
-  const [tick, setTick] = useState(0)
+  const [pageSize, setPageSize] = useState(15)
 
-  const reload = useCallback(() => setTick(t => t + 1), [])
+  // React Query para caché inteligente (5 min fresco + 10 min en RAM)
+  const { data: items = [], isLoading, error: queryError } = useReliabilityQueue(accountId, locationId, DAYS)
+  const invalidateQueue = useInvalidateReliabilityQueue()
 
+  // Si hay error en React Query, mostrar mensaje de error
+  useEffect(() => {
+    if (queryError) {
+      setErrorMsg(queryError instanceof Error ? queryError.message : 'No se pudo cargar.')
+    } else {
+      setErrorMsg(null)
+    }
+  }, [queryError])
+
+  // Cargar fiabilidad (usa su propia lógica)
   useEffect(() => {
     let vivo = true
     const cargar = async () => {
-      setLoading(true)
-      setError(null)
       try {
-        const [cola, r] = await Promise.all([
-          getReliabilityQueue(accountId, locationId ?? null, DAYS),
-          getReliability(accountId).catch(() => null),
-        ])
-        if (vivo) { setItems(cola); setRel(r) }
+        const r = await getReliability(accountId).catch(() => null)
+        if (vivo) setRel(r)
       } catch (e) {
-        if (vivo) setError(e instanceof Error ? e.message : 'No se pudo cargar.')
-      } finally {
-        if (vivo) setLoading(false)
+        // Silenciar errores en fiabilidad para no bloquear
       }
     }
     void cargar()
     return () => { vivo = false }
-  }, [accountId, locationId, tick])
+  }, [accountId])
+
+  // Botón "Actualizar" invalida caché y fuerza refetch
+  const handleRefresh = () => {
+    invalidateQueue(accountId, locationId, DAYS)
+  }
 
   // UN carril a la vez: se enseña el primero que aún tenga trabajo.
   const porCarril = useMemo(() => ({
@@ -116,7 +124,7 @@ export default function WarehouseReliabilityPage({
       <div className="p-4 sm:p-6 max-w-5xl mx-auto">
         <KitchenItemDetailPage
           itemId={openItemId}
-          onBack={() => { setOpenItemId(null); reload() }}
+          onBack={() => { setOpenItemId(null); handleRefresh() }}
         />
       </div>
     )
@@ -158,21 +166,21 @@ export default function WarehouseReliabilityPage({
           <button onClick={() => setFlash(null)} className="text-emerald-700 hover:text-emerald-900"><X size={14} /></button>
         </div>
       )}
-      {error && (
+      {errorMsg && (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 flex items-start gap-2">
           <AlertTriangle size={15} className="mt-0.5 shrink-0" />
-          <span className="flex-1">{error}</span>
+          <span className="flex-1">{errorMsg}</span>
         </div>
       )}
 
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs text-gray-500">Últimos {DAYS} días{locationId ? ' · este local' : ' · todos los locales'}</span>
-        <button onClick={reload} className="inline-flex items-center gap-1.5 text-xs px-2 py-1 border border-gray-200 rounded-md text-gray-600 hover:bg-gray-50">
-          <RefreshCw size={13} /> Actualizar
+        <button onClick={handleRefresh} disabled={isLoading} className="inline-flex items-center gap-1.5 text-xs px-2 py-1 border border-gray-200 rounded-md text-gray-600 hover:bg-gray-50 disabled:opacity-60">
+          <RefreshCw size={13} className={isLoading ? 'animate-spin' : ''} /> Actualizar
         </button>
       </div>
 
-      {loading ? (
+      {isLoading ? (
         <div className="flex items-center gap-2 text-gray-500 text-sm p-6">
           <Loader2 size={16} className="animate-spin" /> Revisando tus ventas…
         </div>
@@ -197,18 +205,29 @@ export default function WarehouseReliabilityPage({
           </div>
 
           <div className="space-y-3">
-            {listaActiva.map(item => (
+            {listaActiva.slice(0, pageSize).map(item => (
               <QueueCard
                 key={`${item.carril}-${item.productName}`}
                 item={item}
                 accountId={accountId}
                 actorName={actorName ?? null}
                 onOpenRecipe={setOpenItemId}
-                onDone={(msg) => { setFlash(msg); reload() }}
-                onError={setError}
+                onDone={(msg) => { setFlash(msg); handleRefresh() }}
+                onError={setErrorMsg}
               />
             ))}
           </div>
+
+          {pageSize < listaActiva.length && (
+            <div className="mt-4 flex justify-center">
+              <button
+                onClick={() => setPageSize(p => p + 15)}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50"
+              >
+                Cargar más ({listaActiva.length - pageSize} restantes)
+              </button>
+            </div>
+          )}
 
           {(carrilActivo === 'A' && (porCarril.B.length > 0 || porCarril.C.length > 0)) && (
             <p className="text-xs text-gray-500 mt-5 text-center">
@@ -241,6 +260,8 @@ function QueueCard({
   const [verOtros, setVerOtros] = useState(false)
   const [confirmarIgnorar, setConfirmarIgnorar] = useState(false)
   const [recost, setRecost] = useState<{ ventas: number } | null>(null)
+  // "Crear plato nuevo" encontró uno ya muy parecido: preguntar antes de duplicar.
+  const [duplicado, setDuplicado] = useState<{ recipeItemId: string; nombre: string; similitud: number } | null>(null)
 
   // La sugerencia solo se pide en el carril A, que es donde hay que elegir plato.
   useEffect(() => {
@@ -277,10 +298,14 @@ function QueueCard({
     }
   }
 
-  async function crearPlato() {
+  async function crearPlato(forzar = false) {
     setBusy('crear')
     try {
-      const r = await createDishFromUnmapped(accountId, item.productName)
+      const r = await createDishFromUnmapped(accountId, item.productName, forzar)
+      if (!r.creado && r.candidato) {
+        setDuplicado(r.candidato)
+        return
+      }
       onDone(`Plato «${item.productName}» creado. Ahora dile de qué ingredientes está hecho.`)
       if (r.recipeItemId && onOpenRecipe) onOpenRecipe(r.recipeItemId)
     } catch (e) {
@@ -345,81 +370,107 @@ function QueueCard({
       {/* Carril A: elegir plato */}
       {item.carril === 'A' && (
         <div className="mt-3">
-          {cargandoSug && (
-            <div className="text-xs text-gray-500 flex items-center gap-1.5"><Loader2 size={12} className="animate-spin" /> Buscando a qué plato se parece…</div>
-          )}
-
-          {mejor && (
-            <>
-              <div className="text-sm text-gray-700">
-                Folvy cree que es: <span className="font-medium text-gray-900">{mejor.name}</span>{' '}
-                <span className="text-xs text-gray-500">({Math.round(mejor.confidence * 100)}% seguro)</span>
-              </div>
+          {duplicado ? (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-3">
+              <p className="text-sm text-amber-900">
+                Esto se parece mucho a <span className="font-medium">«{duplicado.nombre}»</span>, que ya tienes
+                ({Math.round(duplicado.similitud * 100)}% parecido). ¿Es el mismo plato?
+              </p>
               <div className="flex flex-wrap gap-2 mt-2.5">
                 <button
-                  onClick={() => casar(mejor.recipeItemId, mejor.name)}
+                  onClick={() => { void casar(duplicado.recipeItemId, duplicado.nombre).then(() => setDuplicado(null)) }}
                   disabled={busy != null}
                   className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-60"
                 >
-                  {busy === mejor.recipeItemId ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
-                  Sí, es este plato
+                  {busy === duplicado.recipeItemId ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
+                  Sí, casar con «{duplicado.nombre}»
                 </button>
-                {otros.length > 0 && (
-                  <button onClick={() => setVerOtros(v => !v)} disabled={busy != null}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50">
-                    <Search size={14} /> Es otro…
-                  </button>
-                )}
-                <button onClick={crearPlato} disabled={busy != null}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50">
+                <button onClick={() => { setDuplicado(null); void crearPlato(true) }} disabled={busy != null}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-amber-300 text-sm text-amber-900 hover:bg-amber-100">
                   {busy === 'crear' ? <Loader2 size={14} className="animate-spin" /> : <ChefHat size={14} />}
-                  Crear plato nuevo
+                  No, crear uno nuevo igualmente
                 </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {cargandoSug && (
+                <div className="text-xs text-gray-500 flex items-center gap-1.5"><Loader2 size={12} className="animate-spin" /> Buscando a qué plato se parece…</div>
+              )}
+
+              {mejor && (
+                <>
+                  <div className="text-sm text-gray-700">
+                    Folvy cree que es: <span className="font-medium text-gray-900">{mejor.name}</span>{' '}
+                    <span className="text-xs text-gray-500">({Math.round(mejor.confidence * 100)}% seguro)</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2 mt-2.5">
+                    <button
+                      onClick={() => casar(mejor.recipeItemId, mejor.name)}
+                      disabled={busy != null}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-60"
+                    >
+                      {busy === mejor.recipeItemId ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
+                      Sí, es este plato
+                    </button>
+                    {otros.length > 0 && (
+                      <button onClick={() => setVerOtros(v => !v)} disabled={busy != null}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50">
+                        <Search size={14} /> Es otro…
+                      </button>
+                    )}
+                    <button onClick={() => crearPlato()} disabled={busy != null}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50">
+                      {busy === 'crear' ? <Loader2 size={14} className="animate-spin" /> : <ChefHat size={14} />}
+                      Crear plato nuevo
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {sug !== null && sug.length === 0 && !cargandoSug && (
+                <div className="text-sm text-gray-700">
+                  No se parece a ningún plato de tu carta.
+                  <div className="mt-2">
+                    <button onClick={() => crearPlato()} disabled={busy != null}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-60">
+                      {busy === 'crear' ? <Loader2 size={15} className="animate-spin" /> : <ChefHat size={15} />}
+                      Crear plato nuevo
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {verOtros && otros.length > 0 && (
+                <div className="mt-2.5 rounded-lg border border-gray-200 divide-y">
+                  {otros.map(o => (
+                    <button key={o.recipeItemId} onClick={() => casar(o.recipeItemId, o.name)} disabled={busy != null}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between gap-2">
+                      <span className="text-gray-900">{o.name}</span>
+                      <span className="text-xs text-gray-500">{Math.round(o.confidence * 100)}%</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Salida honesta para lo que no gasta stock */}
+              <div className="mt-2.5">
+                {!confirmarIgnorar ? (
+                  <button onClick={() => setConfirmarIgnorar(true)} disabled={busy != null}
+                    className="text-xs text-gray-500 hover:text-gray-800 underline">
+                    No lleva stock (bebida, extra…) → no contarlo
+                  </button>
+                ) : (
+                  <div className="text-xs text-gray-700 flex items-center gap-2 flex-wrap">
+                    <span>¿Seguro? Dejará de aparecer aquí y no descontará nada.</span>
+                    <button onClick={ignorar} disabled={busy != null}
+                      className="px-2.5 py-1 rounded-md bg-gray-900 text-white">Sí, no contarlo</button>
+                    <button onClick={() => setConfirmarIgnorar(false)} className="px-2 py-1 text-gray-600">Cancelar</button>
+                  </div>
+                )}
               </div>
             </>
           )}
-
-          {sug !== null && sug.length === 0 && !cargandoSug && (
-            <div className="text-sm text-gray-700">
-              No se parece a ningún plato de tu carta.
-              <div className="mt-2">
-                <button onClick={crearPlato} disabled={busy != null}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-60">
-                  {busy === 'crear' ? <Loader2 size={15} className="animate-spin" /> : <ChefHat size={15} />}
-                  Crear plato nuevo
-                </button>
-              </div>
-            </div>
-          )}
-
-          {verOtros && otros.length > 0 && (
-            <div className="mt-2.5 rounded-lg border border-gray-200 divide-y">
-              {otros.map(o => (
-                <button key={o.recipeItemId} onClick={() => casar(o.recipeItemId, o.name)} disabled={busy != null}
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between gap-2">
-                  <span className="text-gray-900">{o.name}</span>
-                  <span className="text-xs text-gray-500">{Math.round(o.confidence * 100)}%</span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Salida honesta para lo que no gasta stock */}
-          <div className="mt-2.5">
-            {!confirmarIgnorar ? (
-              <button onClick={() => setConfirmarIgnorar(true)} disabled={busy != null}
-                className="text-xs text-gray-500 hover:text-gray-800 underline">
-                No lleva stock (bebida, extra…) → no contarlo
-              </button>
-            ) : (
-              <div className="text-xs text-gray-700 flex items-center gap-2 flex-wrap">
-                <span>¿Seguro? Dejará de aparecer aquí y no descontará nada.</span>
-                <button onClick={ignorar} disabled={busy != null}
-                  className="px-2.5 py-1 rounded-md bg-gray-900 text-white">Sí, no contarlo</button>
-                <button onClick={() => setConfirmarIgnorar(false)} className="px-2 py-1 text-gray-600">Cancelar</button>
-              </div>
-            )}
-          </div>
         </div>
       )}
 
