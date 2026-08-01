@@ -17,7 +17,7 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   Plus, Boxes, Loader2, X, ClipboardList, ChevronRight,
   TrendingDown, RefreshCw, Gauge, LayoutDashboard, ArrowLeftRight, SlidersHorizontal,
-  Play, CalendarClock,
+  Play, CalendarClock, UserCog,
 } from 'lucide-react'
 import StockLevelsSection from '@/modules/supply/components/StockLevelsSection'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
@@ -36,6 +36,7 @@ import {
   createInventoryCount,
   buildInventoryCount,
   startInventoryCount,
+  reassignInventoryCount,
   listInventoryCounts,
   listAreasWithItems,
   type InventoryCount,
@@ -74,6 +75,7 @@ export default function InventoryPage() {
   const [counts, setCounts] = useState<InventoryCount[]>([])
   const [countsLoading, setCountsLoading] = useState(false)
   const [newCountOpen, setNewCountOpen] = useState(false)
+  const [reassignFor, setReassignFor] = useState<InventoryCount | null>(null)
 
   // ficha de un artículo abierta desde el peek de Zonas
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
@@ -210,6 +212,23 @@ export default function InventoryPage() {
     }
   }
 
+  // Reasigna un inventario a otro empleado. Si estaba 'contando', el backend
+  // reinicia (borra la hoja) → vuelve a programado.
+  async function handleReassign(countId: string, employeeId: string) {
+    setError(null)
+    try {
+      const res = await reassignInventoryCount(countId, employeeId)
+      setReassignFor(null)
+      const emp = staff.find(e => e.id === employeeId)
+      setFlash(res === 'reasignado_reiniciado'
+        ? `Reasignado a ${emp?.name ?? 'el empleado'} y reiniciado (se borró lo contado). Vuelve a "Empezar" cuando toque.`
+        : `Reasignado a ${emp?.name ?? 'el empleado'}.`)
+      setReloadTick(t => t + 1)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo reasignar el inventario.')
+    }
+  }
+
   if (accountsLoading || loading) {
     return (
       <div className="flex items-center gap-2 text-text-secondary text-sm p-6">
@@ -343,6 +362,7 @@ export default function InventoryPage() {
               nameById={empNameById}
               onOpen={(id) => setOpenCountId(id)}
               onStart={handleStart}
+              onReassign={(c) => setReassignFor(c)}
               onNew={() => setNewCountOpen(true)}
             />
           )}
@@ -417,6 +437,16 @@ export default function InventoryPage() {
           employees={employees}
           onClose={() => setNewCountOpen(false)}
           onCreate={handleCreateCount}
+        />
+      )}
+
+      {/* Modal reasignar inventario */}
+      {reassignFor && (
+        <ReassignModal
+          count={reassignFor}
+          employees={employees}
+          onClose={() => setReassignFor(null)}
+          onReassign={handleReassign}
         />
       )}
     </div>
@@ -525,13 +555,14 @@ function tipoOf(c: InventoryCount): { label: string; cls: string } {
 }
 
 function CountsSection({
-  counts, loading, nameById, onOpen, onStart, onNew,
+  counts, loading, nameById, onOpen, onStart, onReassign, onNew,
 }: {
   counts: InventoryCount[]
   loading: boolean
   nameById: Record<string, string>
   onOpen: (id: string) => void
   onStart: (c: InventoryCount) => void
+  onReassign: (c: InventoryCount) => void
   onNew: () => void
 }) {
   const [tipo, setTipo] = useState<TipoFilter>('manual')
@@ -625,8 +656,18 @@ function CountsSection({
             const assignee = c.assignedEmployeeId ? (nameById[c.assignedEmployeeId] ?? 'Empleado') : null
             const programado = c.status === 'abierto'  // aún sin arrancar (build lo pasa a 'contando')
             const schedDay = fmtDay(c.scheduledFor)
+            const isManual = c.kind === 'full' || c.kind === 'audit'
+            const canReassign = isManual && (c.status === 'abierto' || c.status === 'contando')
 
-            // Fila PROGRAMADA: no se abre la hoja (aún no existe); se ofrece Empezar.
+            const ReassignBtn = canReassign ? (
+              <button type="button" onClick={() => onReassign(c)}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border border-border-default text-text-secondary hover:bg-page transition-base shrink-0"
+                title="Reasignar a otro empleado">
+                <UserCog size={13} /> Reasignar
+              </button>
+            ) : null
+
+            // Fila PROGRAMADA: no se abre la hoja (aún no existe); se ofrece Empezar/Reasignar.
             if (programado) {
               return (
                 <div key={c.id}
@@ -638,6 +679,7 @@ function CountsSection({
                     <CalendarClock size={13} /> {schedDay ?? fmt(c.createdAt)}
                   </span>
                   <span className={`text-[11px] px-1.5 py-0.5 rounded border shrink-0 ${STATUS_CLASS[c.status]}`}>{STATUS_LABEL[c.status]}</span>
+                  {ReassignBtn}
                   <button type="button" disabled={starting === c.id} onClick={() => doStart(c)}
                     className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 transition-base shrink-0">
                     {starting === c.id ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />} Empezar
@@ -646,18 +688,23 @@ function CountsSection({
               )
             }
 
-            // Resto (contando / en_revision / aprobado / anulado): abre la hoja.
+            // Resto (contando / en_revision / aprobado / anulado): el área de info
+            // abre la hoja; si es manual+contando, se ofrece Reasignar (reinicia).
             return (
-              <button key={c.id} type="button" onClick={() => onOpen(c.id)}
-                className="w-full flex items-center gap-3 px-3 py-2.5 text-left border-t border-border-default first:border-t-0 hover:bg-page transition-base">
-                <span className="font-medium text-text-primary shrink-0">{c.code ?? 'Inventario'}</span>
-                <span className={`text-[11px] px-1.5 py-0.5 rounded border shrink-0 ${t.cls}`}>{t.label}</span>
-                <span className="text-xs text-text-tertiary shrink-0">{c.lineCount ?? 0} líneas</span>
-                {assignee && <span className="text-xs text-text-secondary truncate">· {assignee}</span>}
-                <span className="text-xs text-text-tertiary ml-auto shrink-0">{fmt(c.createdAt)}</span>
-                <span className={`text-[11px] px-1.5 py-0.5 rounded border shrink-0 ${STATUS_CLASS[c.status]}`}>{STATUS_LABEL[c.status]}</span>
+              <div key={c.id}
+                className="w-full flex items-center gap-3 px-3 py-2.5 border-t border-border-default first:border-t-0">
+                <button type="button" onClick={() => onOpen(c.id)}
+                  className="flex items-center gap-3 flex-1 min-w-0 text-left hover:opacity-80 transition-base">
+                  <span className="font-medium text-text-primary shrink-0">{c.code ?? 'Inventario'}</span>
+                  <span className={`text-[11px] px-1.5 py-0.5 rounded border shrink-0 ${t.cls}`}>{t.label}</span>
+                  <span className="text-xs text-text-tertiary shrink-0">{c.lineCount ?? 0} líneas</span>
+                  {assignee && <span className="text-xs text-text-secondary truncate">· {assignee}</span>}
+                  <span className="text-xs text-text-tertiary ml-auto shrink-0">{fmt(c.createdAt)}</span>
+                  <span className={`text-[11px] px-1.5 py-0.5 rounded border shrink-0 ${STATUS_CLASS[c.status]}`}>{STATUS_LABEL[c.status]}</span>
+                </button>
+                {ReassignBtn}
                 <ChevronRight size={16} className="text-text-tertiary shrink-0" />
-              </button>
+              </div>
             )
           })}
         </div>
@@ -823,6 +870,65 @@ function NewCountModal({
           <button type="button" disabled={!canCreate} onClick={() => emit(true)}
             className="inline-flex items-center gap-1.5 px-3 py-2 text-sm rounded-md font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 transition-base">
             <Play size={14} /> Empezar ahora
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Modal: reasignar inventario a otro empleado ──
+function ReassignModal({
+  count, employees, onClose, onReassign,
+}: {
+  count: InventoryCount
+  employees: Employee[]
+  onClose: () => void
+  onReassign: (countId: string, employeeId: string) => void
+}) {
+  const [employeeId, setEmployeeId] = useState<string>('')
+  const [saving, setSaving] = useState(false)
+  const enCurso = count.status === 'contando'  // ya empezado → reasignar reinicia
+
+  async function submit() {
+    if (!employeeId) return
+    setSaving(true)
+    try { await onReassign(count.id, employeeId) } finally { setSaving(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-start sm:items-center justify-center p-4 overflow-y-auto" role="dialog" aria-modal="true">
+      <div className="bg-card rounded-lg border border-border-default shadow-lg w-full max-w-md my-8">
+        <div className="px-5 py-3 border-b border-border-default flex items-center justify-between">
+          <h3 className="text-base font-medium text-text-primary">Reasignar {count.code ?? 'inventario'}</h3>
+          <button type="button" onClick={onClose} className="text-text-tertiary hover:text-text-primary"><X size={18} /></button>
+        </div>
+        <div className="px-5 py-4 space-y-4">
+          {enCurso && (
+            <div className="p-3 rounded-md bg-warning-bg text-warning border border-warning/20 text-xs">
+              Este inventario ya está en marcha. Al reasignarlo se <strong>reiniciará</strong>: se borra lo contado y el nuevo empleado empezará de cero (con un recuento fresco del stock).
+            </div>
+          )}
+          <div>
+            <span className="block text-xs text-text-secondary mb-1.5">Nuevo empleado</span>
+            {employees.length === 0 ? (
+              <p className="text-xs text-warning">No hay empleados activos en este local.</p>
+            ) : (
+              <select value={employeeId} onChange={e => setEmployeeId(e.target.value)}
+                className="w-full px-3 py-2 text-sm rounded-md border border-border-default bg-card text-text-primary">
+                <option value="">Elige un empleado…</option>
+                {employees.map(e => (
+                  <option key={e.id} value={e.id}>{e.name}</option>
+                ))}
+              </select>
+            )}
+          </div>
+        </div>
+        <div className="px-5 py-3 border-t border-border-default flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="px-3 py-2 text-sm rounded-md border border-border-default text-text-secondary hover:bg-page transition-base">Cancelar</button>
+          <button type="button" disabled={!employeeId || saving} onClick={submit}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm rounded-md font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 transition-base">
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <UserCog size={14} />} {enCurso ? 'Reasignar y reiniciar' : 'Reasignar'}
           </button>
         </div>
       </div>

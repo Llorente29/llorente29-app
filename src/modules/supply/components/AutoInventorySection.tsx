@@ -10,13 +10,16 @@
 // posterior; hoy el conteo se crea en la pestaña "Conteos".
 
 import { useEffect, useMemo, useState } from 'react'
-import { Gauge, Loader2, RefreshCw, AlertTriangle, ScanLine, ClipboardCheck, UserCircle2, Users } from 'lucide-react'
+import { Gauge, Loader2, RefreshCw, AlertTriangle, ScanLine, ClipboardCheck, UserCircle2, Users, ShieldCheck } from 'lucide-react'
 import {
   getAutoInventoryQueue,
   generateDailyCount,
   getTodayAssignments,
+  getAutoinventorySettings,
+  setRequireSeparateApproval,
   type AutoInventoryItem,
   type TodayAssignmentSummary,
+  type AutoinventorySettings,
 } from '@/modules/supply/services/autoinventoryService'
 
 const COVERAGE_OPTIONS = [70, 80, 90, 95] as const
@@ -44,6 +47,9 @@ export default function AutoInventorySection({
   const [reloadTick, setReloadTick] = useState(0)
   const [generating, setGenerating] = useState(false)
   const [assign, setAssign] = useState<TodayAssignmentSummary | null>(null)
+  // C3 — ajuste de aprobación separada (inventarios manuales, no la cola auto).
+  const [settings, setSettings] = useState<AutoinventorySettings | null>(null)
+  const [savingApproval, setSavingApproval] = useState(false)
 
   // Generación de la COLA DEL DÍA (A3/A4): reparte por persona los artículos más
   // "rancios" del alcance hasta cubrir el objetivo, con tope por persona.
@@ -110,6 +116,33 @@ export default function AutoInventorySection({
     return () => { cancelled = true }
   }, [accountId, locationId, reloadTick])
 
+  // Ajustes de la cuenta (C3: aprobación separada de inventarios manuales).
+  useEffect(() => {
+    if (!accountId) { setSettings(null); return }
+    let cancelled = false
+    getAutoinventorySettings(accountId)
+      .then(s => { if (!cancelled) setSettings(s) })
+      .catch(() => { if (!cancelled) setSettings(null) })
+    return () => { cancelled = true }
+  }, [accountId])
+
+  async function toggleSeparateApproval() {
+    if (!accountId || !settings || savingApproval) return
+    const next = !settings.requireSeparateApproval
+    setSavingApproval(true)
+    try {
+      await setRequireSeparateApproval(accountId, next)
+      setSettings({ ...settings, requireSeparateApproval: next })
+      onFlash(next
+        ? 'Aprobación separada activada: quien cuenta un inventario manual ya no podrá aprobarlo.'
+        : 'Aprobación separada desactivada.')
+    } catch (e) {
+      onError(e instanceof Error ? e.message : 'No se pudo guardar el ajuste.')
+    } finally {
+      setSavingApproval(false)
+    }
+  }
+
   const inScope = useMemo(() => rows.filter(r => r.inScope), [rows])
   const criticalCount = useMemo(() => rows.filter(r => r.mustCount).length, [rows])
   const maxScore = useMemo(() => rows.reduce((m, r) => Math.max(m, r.score), 0) || 1, [rows])
@@ -168,6 +201,27 @@ export default function AutoInventorySection({
           </button>
         </div>
       </div>
+
+      {/* Ajuste: aprobación separada (C3, gobierna los inventarios MANUALES, no esta cola). */}
+      {settings && (
+        <div className="border border-border-default rounded-lg p-3 bg-card flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-start gap-2">
+            <ShieldCheck size={16} className="text-accent mt-0.5 shrink-0" />
+            <div>
+              <p className="text-sm text-text-secondary">Aprobación separada</p>
+              <p className="text-xs text-text-tertiary">
+                Quien cuenta un inventario manual (Conteos → completo/seguridad) no puede aprobarlo.
+              </p>
+            </div>
+          </div>
+          <button type="button" onClick={toggleSeparateApproval} disabled={savingApproval}
+            role="switch" aria-checked={settings.requireSeparateApproval}
+            aria-label="Aprobación separada"
+            className={`relative w-10 h-6 rounded-full shrink-0 transition-base disabled:opacity-50 ${settings.requireSeparateApproval ? 'bg-accent' : 'bg-page border border-border-default'}`}>
+            <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-base ${settings.requireSeparateApproval ? 'translate-x-4' : ''}`} />
+          </button>
+        </div>
+      )}
 
       {/* KPIs */}
       {!loading && rows.length > 0 && (

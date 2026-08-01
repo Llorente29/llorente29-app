@@ -157,6 +157,30 @@ export async function startInventoryCount(countId: string, scopeAreaIds: string[
   })
 }
 
+/**
+ * Reasigna un inventario manual a otro empleado (solo gestor, guard server-side).
+ * Si estaba 'contando', el backend REINICIA (borra la hoja, vuelve a programado)
+ * para no mezclar dos manos. Devuelve 'reasignado' | 'reasignado_reiniciado'.
+ */
+export async function reassignInventoryCount(countId: string, employeeId: string): Promise<string> {
+  requireSupabase()
+  // reassign_inventory_count es RPC nueva y no está en los tipos generados: se
+  // invoca con el cliente sin tipar (mismo patrón que avt_cause_context) para no
+  // tocar database.ts.
+  const client = supabase! as unknown as {
+    rpc: (fn: string, args: Record<string, unknown>) => Promise<{
+      data: unknown
+      error: { message: string } | null
+    }>
+  }
+  const { data, error } = await client.rpc('reassign_inventory_count', {
+    p_count_id: countId,
+    p_employee_id: employeeId,
+  })
+  if (error) throw new Error(`No se pudo reasignar: ${error.message}`)
+  return String(data ?? 'reasignado')
+}
+
 // ─── Zonas de almacén CON artículos (para el selector de alcance) ───
 
 export interface ZoneOption {
