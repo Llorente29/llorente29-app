@@ -43,6 +43,7 @@ import {
   Trash2,
   Loader2,
   Scale,
+  Pencil,
 } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import { useIsMobile } from '@/shell/useIsMobile'
@@ -215,6 +216,15 @@ export default function RecipeEscandalloTab({
   // reemplazo total de líneas (importar ficha). Las mutaciones de línea a
   // línea refrescan `lines` directamente (ver cada handler).
   const [tick, setTick] = useState(0)
+
+  // Nombre PROPIO del escandallo (recipe_item.name — distinto del nombre de
+  // venta, que se edita en la pestaña Ficha). EDICIÓN QUE FALTABA (hallazgo en
+  // revisión, decisión 5 del plan: editable aquí, mismo patrón inline que
+  // tenía la cabecera del editor viejo — clic → input → blur/Enter guarda,
+  // Escape cancela).
+  const [editingName, setEditingName] = useState(false)
+  const [nameDraft, setNameDraft] = useState('')
+  const [savingName, setSavingName] = useState(false)
 
   // E5 — foto de cocina: input oculto, estado de subida/borrado, URL firmada
   // resuelta (kitchen_photo_url guarda el PATH; la URL firmada se resuelve al
@@ -478,6 +488,29 @@ export default function RecipeEscandalloTab({
     () => lines.filter((l) => l.needsReview).length,
     [lines]
   )
+
+  // ── Nombre propio del escandallo ──
+  function startEditName() {
+    if (!recipe) return
+    setNameDraft(recipe.name)
+    setEditingName(true)
+  }
+  async function saveName() {
+    if (!recipe || savingName) return
+    const next = nameDraft.trim()
+    if (!next || next === recipe.name) { setEditingName(false); return }
+    setSavingName(true)
+    try {
+      await updateRecipeItem(recipe.id, { name: next })
+      setEditingName(false)
+      onRecipeChanged()
+      setTick((t) => t + 1)
+    } catch (err: unknown) {
+      setEditError(err instanceof Error ? err.message : 'No se pudo cambiar el nombre.')
+    } finally {
+      setSavingName(false)
+    }
+  }
 
   // ── E5: foto de cocina ──
   function openPhotoPicker() {
@@ -1429,8 +1462,41 @@ export default function RecipeEscandalloTab({
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] -m-5">
-      {/* Columna izquierda: foto de cocina + composición */}
+      {/* Columna izquierda: nombre + foto de cocina + composición */}
       <div className="p-4 md:p-5 lg:border-r border-border-default">
+        {/* Nombre propio del escandallo (recipe_item.name) — clic para editar,
+            mismo patrón que tenía la cabecera del editor viejo. Distinto del
+            nombre de venta (pestaña Ficha). */}
+        <div className="mb-3">
+          <div className="text-xs font-medium tracking-wide text-text-secondary uppercase mb-1">
+            Nombre del escandallo
+          </div>
+          {editingName ? (
+            <input
+              type="text"
+              value={nameDraft}
+              autoFocus
+              disabled={savingName}
+              onChange={(e) => setNameDraft(e.target.value)}
+              onBlur={saveName}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') saveName()
+                if (e.key === 'Escape') setEditingName(false)
+              }}
+              className="text-lg font-display font-medium text-text-primary bg-card border border-terracota/40 rounded-md px-2 py-1 focus:outline-none focus:border-terracota"
+            />
+          ) : (
+            <h2
+              className="text-lg font-display font-medium text-text-primary inline-flex items-center gap-2 group cursor-text"
+              onClick={startEditName}
+              title="Haz clic para cambiar el nombre del escandallo"
+            >
+              {recipe.name}
+              <Pencil className="w-3.5 h-3.5 text-text-secondary opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+            </h2>
+          )}
+        </div>
+
         {/* Foto de cocina (gestión completa: subir/cambiar/eliminar/lightbox).
             Distinta de la foto pública del producto (esa vive en la pestaña
             Ficha) — CatalogFichaPage solo lee kitchenPhotoUrl para el hero. */}

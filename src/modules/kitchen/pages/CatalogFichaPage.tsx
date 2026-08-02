@@ -57,6 +57,9 @@ import RecipeStepsTab from '@/modules/kitchen/components/RecipeStepsTab'
 import RecipeHistoryTab from '@/modules/kitchen/components/RecipeHistoryTab'
 import ModifierEditorSection from '@/modules/kitchen/components/ModifierEditorSection'
 import ModifierImpactsTab from '@/modules/kitchen/components/ModifierImpactsTab'
+import EconomiaTab from '@/modules/kitchen/components/EconomiaTab'
+import EnCartaTab from '@/modules/kitchen/components/EnCartaTab'
+import FichaTab from '@/modules/kitchen/components/FichaTab'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import type { MenuItem, RecipeItem } from '@/types/kitchen'
 
@@ -972,13 +975,37 @@ export default function CatalogFichaPage({
             </div>
           )}
           {activeTab === 'economia' && (
-            <div key={(effectiveRecipeItemId ?? 'none') + '-' + (activeMenuItemId ?? 'none')} className="text-sm text-stone-400 py-10 text-center">
-              Economía — pendiente de esta rama (Fase 4).
+            <div key={activeMenuItemId ?? 'none'}>
+              {activeMenuItemId && item ? (
+                <EconomiaTab
+                  item={item}
+                  accountId={item.accountId}
+                  onItemChanged={refreshItem}
+                />
+              ) : activeMenuItemId && itemLoading ? (
+                <div className="text-sm text-stone-400 py-10 text-center">Cargando producto…</div>
+              ) : (
+                <div className="text-sm text-stone-400 py-10 text-center">
+                  Este plato aún no está en ninguna carta. Añádelo desde la pestaña "Escandallo" para ver economía por canal.
+                </div>
+              )}
             </div>
           )}
           {activeTab === 'en_carta' && (
-            <div key={activeMenuItemId ?? 'none'} className="text-sm text-stone-400 py-10 text-center">
-              En carta — pendiente de esta rama (Fase 4).
+            <div key={activeMenuItemId ?? 'none'}>
+              {activeMenuItemId && item ? (
+                <EnCartaTab
+                  item={item}
+                  accountId={item.accountId}
+                  onItemChanged={refreshItem}
+                />
+              ) : activeMenuItemId && itemLoading ? (
+                <div className="text-sm text-stone-400 py-10 text-center">Cargando producto…</div>
+              ) : (
+                <div className="text-sm text-stone-400 py-10 text-center">
+                  Este plato aún no está en ninguna carta. Añádelo desde la pestaña "Escandallo" para gestionar precio y disponibilidad.
+                </div>
+              )}
             </div>
           )}
           {activeTab === 'etiquetado' && (
@@ -1002,8 +1029,20 @@ export default function CatalogFichaPage({
             </div>
           )}
           {activeTab === 'ficha' && (
-            <div key={activeMenuItemId ?? 'none'} className="text-sm text-stone-400 py-10 text-center">
-              Ficha — pendiente de esta rama (Fase 4).
+            <div key={activeMenuItemId ?? 'none'}>
+              {activeMenuItemId && item ? (
+                <FichaTab
+                  item={item}
+                  accountId={item.accountId}
+                  onItemChanged={refreshItem}
+                />
+              ) : activeMenuItemId && itemLoading ? (
+                <div className="text-sm text-stone-400 py-10 text-center">Cargando producto…</div>
+              ) : (
+                <div className="text-sm text-stone-400 py-10 text-center">
+                  Este plato aún no está en ninguna carta. Añádelo desde la pestaña "Escandallo" para completar su ficha.
+                </div>
+              )}
             </div>
           )}
         </div>
