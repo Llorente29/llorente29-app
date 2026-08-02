@@ -59,6 +59,7 @@ import ModifierEditorSection from '@/modules/kitchen/components/ModifierEditorSe
 import ModifierImpactsTab from '@/modules/kitchen/components/ModifierImpactsTab'
 import EconomiaTab from '@/modules/kitchen/components/EconomiaTab'
 import EnCartaTab from '@/modules/kitchen/components/EnCartaTab'
+import EtiquetadoTab from '@/modules/kitchen/components/EtiquetadoTab'
 import FichaTab from '@/modules/kitchen/components/FichaTab'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import type { MenuItem, RecipeItem } from '@/types/kitchen'
@@ -1009,8 +1010,14 @@ export default function CatalogFichaPage({
             </div>
           )}
           {activeTab === 'etiquetado' && (
-            <div key={effectiveRecipeItemId ?? 'none'} className="text-sm text-stone-400 py-10 text-center">
-              Etiquetado — pendiente de esta rama (Fase 5).
+            <div key={effectiveRecipeItemId ?? 'none'}>
+              {effectiveRecipeItemId ? (
+                <EtiquetadoTab recipeItemId={effectiveRecipeItemId} />
+              ) : (
+                <div className="text-sm text-stone-400 py-10 text-center">
+                  Necesita escandallo para declarar alérgenos.
+                </div>
+              )}
             </div>
           )}
           {activeTab === 'historico' && (
