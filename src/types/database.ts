@@ -17536,6 +17536,7 @@ export type Database = {
           link_approved_at: string
           menu_item_id: string
           needs_review: boolean
+          price: number
           recipe_item_id: string
           recipe_line_count: number
           recipe_name: string

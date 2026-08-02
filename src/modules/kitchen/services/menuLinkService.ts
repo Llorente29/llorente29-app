@@ -20,6 +20,7 @@
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
 import { createRecipeItem } from './recipeItemService'
 import { listUnits } from './kitchenUnitService'
+import { fmtMoney } from '../../../lib/format'
 import type { RecipeItemType } from '../../../types/kitchen'
 
 function requireSupabase(): void {
@@ -60,6 +61,9 @@ export interface MenuItemLinkHealthRow {
    * 'dish' significa "escandallo sin montar todavía". */
   recipeLineCount: number
   cost: number | null
+  /** precio de venta del menu_item — solo para afinar el aviso de "Para
+   * revisar" en un raw (aritmética precio/coste), nunca decide el estado. */
+  price: number | null
   needsReview: boolean
   linkApprovedAt: string | null
   status: MenuItemLinkStatus
@@ -101,6 +105,11 @@ function classification(human: LinkHumanState, text: string): LinkClassification
   return { human, label: HUMAN_LABEL[human], tone: HUMAN_TONE[human], text }
 }
 
+/** Por debajo de este % del precio de venta, el coste de un `raw` es
+ * demasiado bajo para ser un artículo/escandallo completo — dispara el
+ * aviso de alarma en "Para revisar". Sugerido por Julio (03/08), parametrizable. */
+const SUSPICIOUS_COST_RATIO = 0.05
+
 /**
  * Clasifica una fila de menu_item_link_health en uno de los 5 estados
  * humanos del cockpit "Casado" — ÚNICA fuente de verdad del sello. Las
@@ -112,12 +121,20 @@ function classification(human: LinkHumanState, text: string): LinkClassification
  * 'raw'), NUNCA nombre/categoría/juicio de cocina — is_sellable/
  * is_purchasable están sucios en datos reales y no sirven de eje.
  *
- * Un `raw` casado con coste y sin aprobar es SIEMPRE "Para revisar" con el
- * aviso de "ingrediente suelto": no hay un camino aparte de "reventa normal
- * sin aviso" — el mismo mecanismo de aprobación cubre tanto un refresco
- * legítimo (Nestea) como un plato mal enlazado a un ingrediente suelto
- * (Quesadilla→Carne de Birria). Oficina lo confirma una vez; tras aprobar,
- * ambos casos son "Bien" igual que cualquier otro.
+ * "Falta precio"/"Falta escandallo" son SOLO para coste NULL (o, en dish,
+ * 0 líneas) — NUNCA por un umbral de coste bajo. Un raw con coste, por bajo
+ * que sea (Carne de Birria a 0,019 €), tiene coste: va a "Para revisar", no
+ * a "Falta precio" — ese fue el bug que cazó Julio en vivo el 03/08.
+ *
+ * Un `raw` casado con coste y sin aprobar es SIEMPRE "Para revisar": no hay
+ * un camino aparte de "reventa normal sin aviso" — el mismo mecanismo de
+ * aprobación cubre tanto un refresco legítimo (Nestea) como un plato mal
+ * enlazado a un ingrediente suelto (Quesadilla→Carne de Birria). Oficina lo
+ * confirma una vez; tras aprobar, ambos casos son "Bien" igual que
+ * cualquier otro. El AVISO (no el estado) se afina por aritmética
+ * precio/coste — un hecho, no juicio de cocina — SOLO cuando hay precio de
+ * venta > 0; si el precio es 0 o desconocido, aviso neutro (no se puede
+ * calcular una alarma con datos que no existen).
  */
 export function classifyMenuItemLink(row: MenuItemLinkHealthRow): LinkClassification {
   if (!row.recipeItemId || !row.recipeType) {
@@ -127,12 +144,10 @@ export function classifyMenuItemLink(row: MenuItemLinkHealthRow): LinkClassifica
     )
   }
 
-  const costOk = row.cost != null && row.cost >= 0.50
-  const trustworthy = costOk && !row.needsReview
   const sharedNote = row.sharedWith > 1 ? ' Esta receta también la usa otro plato.' : ''
 
   if (row.recipeType === 'dish') {
-    if (row.recipeLineCount === 0 || !trustworthy) {
+    if (row.recipeLineCount === 0 || row.cost == null) {
       return classification('falta_escandallo', 'Falta el escandallo — este plato aún no tiene receta montada.')
     }
     if (row.linkApprovedAt) {
@@ -142,7 +157,7 @@ export function classifyMenuItemLink(row: MenuItemLinkHealthRow): LinkClassifica
   }
 
   if (row.recipeType === 'raw') {
-    if (!trustworthy) {
+    if (row.cost == null) {
       return classification(
         'falta_precio',
         `Casado con ${row.recipeName ?? 'su artículo'}, falta ponerle el precio de compra.`,
@@ -151,10 +166,13 @@ export function classifyMenuItemLink(row: MenuItemLinkHealthRow): LinkClassifica
     if (row.linkApprovedAt) {
       return classification('bien', 'Confirmado por oficina.')
     }
-    return classification(
-      'para_revisar',
-      `Este plato se está costeando con un ingrediente suelto (${row.recipeName ?? 'artículo'}), no con un escandallo completo — pueden faltarle componentes.${sharedNote}`,
-    )
+    const ratio = row.price != null && row.price > 0 ? row.cost / row.price : null
+    const text = ratio == null
+      ? 'Este producto se está costeando con un ingrediente suelto. Revísalo.'
+      : ratio < SUSPICIOUS_COST_RATIO
+        ? `Se vende a ${fmtMoney(row.price)} pero se costea con un ingrediente de ${fmtMoney(row.cost)}. Le faltan casi todos los componentes. ¿Reasignar a un escandallo completo?`
+        : 'Este producto se vende como un artículo directo. Confirma que es correcto.'
+    return classification('para_revisar', `${text}${sharedNote}`)
   }
 
   // packaging/tool/recipe enlazado — la RPC ya excluye estos casos; defensivo.
@@ -267,6 +285,7 @@ export async function getMenuItemLinkHealth(
     recipeType: (row.recipe_type as RecipeItemType | null) ?? null,
     recipeLineCount: row.recipe_line_count ?? 0,
     cost: row.cost ?? null,
+    price: row.price ?? null,
     needsReview: row.needs_review,
     linkApprovedAt: row.link_approved_at ?? null,
     status: row.status as MenuItemLinkStatus,
