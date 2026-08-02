@@ -26,7 +26,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   AlertTriangle, ArrowLeft, Camera, Check, Copy, Link2, Loader2,
-  ShieldCheck, Trash2, X, Archive,
+  ShieldCheck, Sparkles, Trash2, X, Archive,
 } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useApp } from '@/context/AppContext'
@@ -52,6 +52,9 @@ import {
 } from '@/modules/kitchen/services/menuLinkService'
 import { listBrands } from '@/modules/multitenancy/services/brandsService'
 import RecipeLinkPickerModal from '@/modules/kitchen/components/RecipeLinkPickerModal'
+import RecipeEscandalloTab from '@/modules/kitchen/components/RecipeEscandalloTab'
+import RecipeStepsTab from '@/modules/kitchen/components/RecipeStepsTab'
+import RecipeHistoryTab from '@/modules/kitchen/components/RecipeHistoryTab'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import type { MenuItem, RecipeItem } from '@/types/kitchen'
 
@@ -147,7 +150,7 @@ export default function CatalogFichaPage({
 }: CatalogFichaPageProps) {
   const navigate = useNavigate()
   const { activeAccountId, accountsLoading } = useActiveAccount()
-  const { authUserId } = useApp()
+  const { authUserId, userProfile } = useApp()
 
   const [activeTab, setActiveTab] = useState<FichaTab>('escandallo')
 
@@ -650,11 +653,38 @@ export default function CatalogFichaPage({
         <div className="relative z-[1] mx-6 bg-white rounded-[14px] shadow-lg p-7 sm:p-8 border border-stone-100">
           <div className="flex items-start justify-between gap-3 mb-1.5">
             <h1 className="font-display text-[26px] font-medium leading-tight">{displayName}</h1>
-            {linkClassification && (
-              <span className={`text-[11px] px-2.5 py-1 rounded-full font-medium shrink-0 ${TONE_CLASSES[linkClassification.tone]}`} title={linkClassification.text}>
-                {linkClassification.label}
-              </span>
-            )}
+            <div className="flex items-center gap-1.5 shrink-0">
+              {recipe && (recipe.source === 'ai_recipe' || recipe.source === 'ocr_invoice') && (
+                <span className="text-[11px] px-2.5 py-1 rounded-full font-medium bg-accent text-text-on-accent inline-flex items-center gap-1">
+                  <Sparkles size={12} /> IA
+                </span>
+              )}
+              {/* Chip recuperado del editor viejo — pero SIMPLIFICADO: el
+                  original era recipe.needsReview OR alguna línea con
+                  problema (childNeedsReview/needsReview), calculado sobre
+                  `lines`, que aquí no vive en la cabecera (vive dentro de la
+                  pestaña Escandallo, a propósito, para no duplicar la carga).
+                  Este chip usa solo el flag propio del escandallo; el detalle
+                  por línea sigue disponible (puntos rojo/ámbar) dentro de la
+                  pestaña Escandallo — no se pierde información, se deja de
+                  agregar en la cabecera. Señalado a Julio. */}
+              {recipe && (
+                recipe.needsReview ? (
+                  <span className="text-[11px] px-2.5 py-1 rounded-full font-medium bg-amber-500 text-white inline-flex items-center gap-1">
+                    <AlertTriangle size={12} /> Revisar
+                  </span>
+                ) : (
+                  <span className="text-[11px] px-2.5 py-1 rounded-full font-medium bg-green-600 text-white inline-flex items-center gap-1">
+                    <Check size={12} /> Validado
+                  </span>
+                )
+              )}
+              {linkClassification && (
+                <span className={`text-[11px] px-2.5 py-1 rounded-full font-medium ${TONE_CLASSES[linkClassification.tone]}`} title={linkClassification.text}>
+                  {linkClassification.label}
+                </span>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2 text-sm text-stone-500 mb-4">
             {item ? (
@@ -843,17 +873,42 @@ export default function CatalogFichaPage({
         </div>
 
         <div className="p-5">
-          {/* Fase 1: placeholders. Fases 2-6 sustituyen cada uno por su
-              componente de pestaña real (ver plan). key={} fuerza el remount
+          {/* Fase 2: Escandallo/Receta/Histórico ya son componentes reales
+              (recipe_item-scoped, sin depender del selector de producto).
+              Modificadores/Economía/En carta/Ficha siguen en placeholder,
+              pendientes de las Fases 3-5 (ver plan). key={} fuerza el remount
               al cambiar de ancla, evitando estado cruzado entre productos/recetas. */}
           {activeTab === 'escandallo' && (
-            <div key={effectiveRecipeItemId ?? 'none'} className="text-sm text-stone-400 py-10 text-center">
-              Escandallo — pendiente de esta rama (Fase 2).
+            <div key={effectiveRecipeItemId ?? 'none'}>
+              {effectiveRecipeItemId ? (
+                <RecipeEscandalloTab
+                  accountId={item?.accountId ?? recipe?.accountId ?? ''}
+                  recipeId={effectiveRecipeItemId}
+                  onRecipeChanged={() => {
+                    setReloadTick((t) => t + 1)
+                    // "Añadir a carta" (entre otras) puede crear un menu_item
+                    // nuevo enlazado a esta receta — el selector de N
+                    // productos debe reflejarlo. Barato incluso cuando no
+                    // aplica (refreshAnchor es no-op si entramos por producto).
+                    refreshAnchor()
+                  }}
+                />
+              ) : (
+                <div className="text-sm text-stone-400 py-10 text-center">
+                  Este producto todavía no tiene escandallo asignado.
+                </div>
+              )}
             </div>
           )}
           {activeTab === 'receta' && (
-            <div key={effectiveRecipeItemId ?? 'none'} className="text-sm text-stone-400 py-10 text-center">
-              Receta — pendiente de esta rama (Fase 2).
+            <div key={effectiveRecipeItemId ?? 'none'}>
+              {effectiveRecipeItemId ? (
+                <RecipeStepsTab recipeItemId={effectiveRecipeItemId} />
+              ) : (
+                <div className="text-sm text-stone-400 py-10 text-center">
+                  Necesita escandallo para tener pasos de elaboración.
+                </div>
+              )}
             </div>
           )}
           {activeTab === 'modificadores' && (
@@ -877,8 +932,18 @@ export default function CatalogFichaPage({
             </div>
           )}
           {activeTab === 'historico' && (
-            <div key={effectiveRecipeItemId ?? 'none'} className="text-sm text-stone-400 py-10 text-center">
-              Histórico — pendiente de esta rama (Fase 2).
+            <div key={effectiveRecipeItemId ?? 'none'}>
+              {effectiveRecipeItemId ? (
+                <RecipeHistoryTab
+                  recipeItemId={effectiveRecipeItemId}
+                  createdByName={userProfile?.displayName ?? null}
+                  onRestored={() => setReloadTick((t) => t + 1)}
+                />
+              ) : (
+                <div className="text-sm text-stone-400 py-10 text-center">
+                  Necesita escandallo para tener histórico de versiones.
+                </div>
+              )}
             </div>
           )}
           {activeTab === 'ficha' && (
