@@ -14,7 +14,8 @@
 // Patrón: useApp() + useActiveAccount() + useIsMobile(), igual que KitchenItemsPage.
 
 import { useEffect, useMemo, useState } from 'react'
-import { Search, ChevronDown, ChevronRight, CircleDashed, CheckCircle2, AlertTriangle, UtensilsCrossed, Package, Link2Off, Link2, Plus, FolderPlus, ArrowRightLeft, X, Undo2, Info, ArrowUp, ArrowDown, Trash2, UploadCloud, Loader2, Sparkles, PackagePlus } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Search, ChevronDown, ChevronRight, CircleDashed, CheckCircle2, AlertTriangle, Clock, UtensilsCrossed, Package, Link2Off, Link2, Plus, FolderPlus, ArrowRightLeft, X, Undo2, Info, ArrowUp, ArrowDown, Trash2, UploadCloud, Loader2, Sparkles, PackagePlus } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import {
   listBrandsWithCatalog,
@@ -33,7 +34,6 @@ import {
 import CatalogProductDetailPage from '@/modules/kitchen/pages/CatalogProductDetailPage'
 import SalesExceptionsPage from '@/modules/kitchen/pages/SalesExceptionsPage'
 import WarehouseReliabilityPage from '@/modules/kitchen/pages/WarehouseReliabilityPage'
-import MenuLinkHealthPage from '@/modules/kitchen/pages/MenuLinkHealthPage'
 import NewMenuItemModal from '@/modules/kitchen/components/NewMenuItemModal'
 import AddExistingProductModal from '@/modules/kitchen/components/AddExistingProductModal'
 import NewCategoryModal from '@/modules/kitchen/components/NewCategoryModal'
@@ -57,6 +57,7 @@ function formatPct(value: number | null): string {
 
 export default function KitchenMenuPage() {
   const { activeAccountId, accountsLoading } = useActiveAccount()
+  const navigate = useNavigate()
 
   const [brands, setBrands] = useState<CatalogBrand[]>([])
   const [selectedBrandId, setSelectedBrandId] = useState<string | null>(null)
@@ -77,8 +78,6 @@ export default function KitchenMenuPage() {
   const [showExceptions, setShowExceptions] = useState(false)
   // Cola guiada de fiabilidad del almacen (arreglar paso a paso).
   const [showReliabilityQueue, setShowReliabilityQueue] = useState(false)
-  // Pantalla de barrido del enlace ítem↔escandallo (menu_item_link_health).
-  const [showLinkHealth, setShowLinkHealth] = useState(false)
   const [showNewProduct, setShowNewProduct] = useState(false)
   const [showAddExisting, setShowAddExisting] = useState(false)
   const [showNewCombo, setShowNewCombo] = useState(false)
@@ -130,15 +129,6 @@ export default function KitchenMenuPage() {
   // marca visible (igual criterio que `reliability`). Un fallo aquí no debe
   // leerse como "0 problemas": si falla, degradamos a lista vacía pero lo
   // avisamos por consola.
-  function reloadLinkHealthSummary() {
-    if (!activeAccountId) return
-    getMenuItemLinkHealth(activeAccountId)
-      .then(setLinkHealthSummary)
-      .catch((e: unknown) => {
-        console.warn('KitchenMenuPage: fallo cargando el resumen de salud de escandallos', e)
-        setLinkHealthSummary([])
-      })
-  }
   useEffect(() => {
     if (accountsLoading || !activeAccountId) return
     let cancelled = false
@@ -246,27 +236,6 @@ export default function KitchenMenuPage() {
     if (activeAccountId) {
       getReliability(activeAccountId).then(setReliability).catch(() => {})
     }
-  }
-
-  // Al volver del barrido: el resumen de cuenta pudo cambiar (aprobaciones,
-  // reasignaciones) y también la marca visible, si es la misma.
-  function handleLinkHealthBack() {
-    setShowLinkHealth(false)
-    reloadLinkHealthSummary()
-    if (activeAccountId && selectedBrandId) {
-      getMenuItemLinkHealth(activeAccountId, selectedBrandId)
-        .then((rows) => {
-          const lh = new Map<string, MenuItemLinkHealthRow>()
-          for (const r of rows) lh.set(r.menuItemId, r)
-          setLinkHealth(lh)
-        })
-        .catch((e: unknown) => console.warn('KitchenMenuPage: fallo recargando salud de escandallos', e))
-    }
-  }
-
-  function handleJumpToItemFromLinkHealth(menuItemId: string) {
-    setShowLinkHealth(false)
-    setSelectedProductId(menuItemId)
   }
 
   // Tras crear producto o categoría: cerrar el modal y recargar la carta de la
@@ -521,15 +490,6 @@ export default function KitchenMenuPage() {
     return <SalesExceptionsPage accountId={activeAccountId} onBack={handleExceptionsBack} />
   }
 
-  if (showLinkHealth && activeAccountId) {
-    return (
-      <MenuLinkHealthPage
-        accountId={activeAccountId}
-        onBack={handleLinkHealthBack}
-        onJumpToItem={handleJumpToItemFromLinkHealth}
-      />
-    )
-  }
 
   if (accountsLoading || loadingBrands) {
     return <div className="p-6 text-sm text-gray-500">Cargando carta…</div>
@@ -560,7 +520,7 @@ export default function KitchenMenuPage() {
       )}
 
       {linkHealthSummary.length > 0 && (
-        <LinkHealthBanner rows={linkHealthSummary} onOpen={() => setShowLinkHealth(true)} />
+        <LinkHealthBanner rows={linkHealthSummary} onOpen={() => navigate('/kitchen/casado')} />
       )}
 
       {/* Cabecera: selector de marca */}
@@ -848,8 +808,8 @@ export default function KitchenMenuPage() {
                           </span>
                         ) : (() => {
                           const meta = LINK_STATUS_META[health.status]
-                          const toneColor = meta.tone === 'green' ? 'text-green-600' : meta.tone === 'red' ? 'text-red-600' : 'text-gray-500'
-                          const Icon = meta.tone === 'green' ? CheckCircle2 : meta.tone === 'red' ? AlertTriangle : CircleDashed
+                          const toneColor = meta.tone === 'green' ? 'text-green-600' : meta.tone === 'red' ? 'text-red-600' : 'text-amber-600'
+                          const Icon = meta.tone === 'green' ? CheckCircle2 : meta.tone === 'red' ? AlertTriangle : Clock
                           return (
                             <div>
                               <span className={`inline-flex items-center gap-1 text-xs ${toneColor}`} title={meta.reason}>
@@ -1179,29 +1139,29 @@ function ReliabilityBanner({ signal, onOpen, onFix }: { signal: SalesReliability
 // la marca visible). rows viene de menu_item_link_health sin filtrar por
 // marca; los contadores son la única fuente de verdad, igual que el sello.
 function LinkHealthBanner({ rows, onOpen }: { rows: MenuItemLinkHealthRow[]; onOpen: () => void }) {
-  const rotos = rows.filter((r) => r.status.startsWith('roto_')).length
-  const sinAprobar = rows.filter((r) => r.status === 'sin_aprobar').length
-  const aprobados = rows.filter((r) => r.status === 'aprobado').length
-  if (rotos === 0 && sinAprobar === 0) return null // nada que auditar — no molestar
+  const sinCasar = rows.filter((r) => LINK_STATUS_META[r.status].human === 'sin_casar').length
+  const paraRevisar = rows.filter((r) => LINK_STATUS_META[r.status].human === 'para_revisar').length
+  const bien = rows.filter((r) => LINK_STATUS_META[r.status].human === 'bien').length
+  if (sinCasar === 0 && paraRevisar === 0) return null // nada que auditar — no molestar
 
-  const cardBg = rotos > 0 ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'
-  const dot = rotos > 0 ? 'bg-red-500' : 'bg-amber-500'
-  const valueColor = rotos > 0 ? 'text-red-700' : 'text-amber-700'
+  const cardBg = sinCasar > 0 ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'
+  const dot = sinCasar > 0 ? 'bg-red-500' : 'bg-amber-500'
+  const valueColor = sinCasar > 0 ? 'text-red-700' : 'text-amber-700'
 
   return (
     <div className={`rounded-xl border p-3 mb-5 flex items-center gap-3 flex-wrap ${cardBg}`}>
       <span className={`w-2.5 h-2.5 rounded-full ${dot} shrink-0`} />
       <div className="flex-1 min-w-0">
         <span className={`text-sm font-medium ${valueColor}`}>
-          Escandallos: {rotos} roto{rotos !== 1 ? 's' : ''} · {sinAprobar} sin aprobar
+          Casado: {sinCasar} sin casar · {paraRevisar} para revisar
         </span>
-        <span className="text-xs text-gray-500"> · {aprobados} aprobado{aprobados !== 1 ? 's' : ''}</span>
+        <span className="text-xs text-gray-500"> · {bien} bien</span>
       </div>
       <button
         onClick={onOpen}
         className="text-xs font-medium px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 shrink-0"
       >
-        Revisar escandallos
+        Abrir Casado
       </button>
     </div>
   )

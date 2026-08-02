@@ -18,6 +18,8 @@
 // console.warn antes de degradar a lista vacía en el caller.
 
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
+import { createRecipeItem } from './recipeItemService'
+import { listUnits } from './kitchenUnitService'
 
 function requireSupabase(): void {
   if (!isSupabaseEnabled || !supabase) {
@@ -54,19 +56,61 @@ export interface MenuItemLinkHealthRow {
   sharedWith: number
 }
 
+/** Los 7 status técnicos colapsan a 3 estados humanos — el cockpit, el Menú y
+ * la ficha muestran SIEMPRE uno de estos 3, nunca la jerga técnica. */
+export type LinkHumanState = 'bien' | 'para_revisar' | 'sin_casar'
+
 /**
- * Metadatos de presentación del sello de 3 estados — única fuente de verdad
- * para las 3 pantallas que lo pintan (ficha de producto, fila del Menú,
- * barrido). No dupliques este mapeo localmente en un componente.
+ * Metadatos de presentación del sello — única fuente de verdad para las
+ * pantallas que lo pintan (ficha de producto, fila del Menú, cockpit
+ * "Casado", ficha de escandallo). No dupliques este mapeo localmente en un
+ * componente. `label`/`tone` son SIEMPRE los 3 del bucket humano (uniformes);
+ * `reason` es el motivo corto técnico (para tooltip); `plainText` es la
+ * frase larga en lenguaje de cocina para el cockpit — nada de "needs_review"
+ * ni "roto_coste_imposible" en pantalla, eso vive solo en `status`.
  */
-export const LINK_STATUS_META: Record<MenuItemLinkStatus, { label: string; reason: string; tone: 'red' | 'neutral' | 'green' }> = {
-  roto_sin_escandallo: { label: 'Sin escandallo', reason: 'Sin escandallo enlazado', tone: 'red' },
-  roto_enlace: { label: 'Enlace roto', reason: 'El escandallo enlazado ya no existe', tone: 'red' },
-  roto_coste_null: { label: 'Sin coste', reason: 'El escandallo no tiene coste calculado', tone: 'red' },
-  roto_needs_review: { label: 'A revisión', reason: 'El escandallo está marcado a revisión', tone: 'red' },
-  roto_coste_imposible: { label: 'Coste imposible', reason: 'El coste del escandallo es sospechosamente bajo', tone: 'red' },
-  sin_aprobar: { label: 'Sin aprobar', reason: 'En uso, pendiente de aprobación de oficina', tone: 'neutral' },
-  aprobado: { label: 'Escandallo OK', reason: 'Aprobado por oficina', tone: 'green' },
+export const LINK_STATUS_META: Record<MenuItemLinkStatus, {
+  human: LinkHumanState
+  label: string
+  tone: 'red' | 'amber' | 'green'
+  reason: string
+  plainText: string
+}> = {
+  roto_sin_escandallo: {
+    human: 'sin_casar', label: 'Sin casar', tone: 'red',
+    reason: 'Sin escandallo enlazado',
+    plainText: 'No tiene receta. No sabemos su coste ni descuenta de almacén.',
+  },
+  roto_enlace: {
+    human: 'sin_casar', label: 'Sin casar', tone: 'red',
+    reason: 'El escandallo enlazado ya no existe',
+    plainText: 'La receta a la que estaba enlazado ya no existe. Hay que volver a enlazarlo.',
+  },
+  roto_coste_null: {
+    human: 'sin_casar', label: 'Sin casar', tone: 'red',
+    reason: 'El escandallo no tiene coste calculado',
+    plainText: 'La receta no tiene coste. No sabemos cuánto cuesta este plato.',
+  },
+  roto_needs_review: {
+    human: 'sin_casar', label: 'Sin casar', tone: 'red',
+    reason: 'El escandallo está marcado a revisión',
+    plainText: 'La receta está marcada a revisión — su coste no es fiable todavía.',
+  },
+  roto_coste_imposible: {
+    human: 'sin_casar', label: 'Sin casar', tone: 'red',
+    reason: 'El coste del escandallo es sospechosamente bajo',
+    plainText: 'El coste es demasiado bajo, parece un error.',
+  },
+  sin_aprobar: {
+    human: 'para_revisar', label: 'Para revisar', tone: 'amber',
+    reason: 'En uso, pendiente de aprobación de oficina',
+    plainText: 'Está casado pero nadie lo ha confirmado.',
+  },
+  aprobado: {
+    human: 'bien', label: 'Bien', tone: 'green',
+    reason: 'Aprobado por oficina',
+    plainText: 'Confirmado por oficina.',
+  },
 }
 
 export interface MenuItemSharedRecipeReview {
@@ -227,4 +271,28 @@ export async function listMenuItemsUsingRecipe(recipeItemId: string): Promise<Me
     name: row.name,
     brandId: row.brand_id,
   }))
+}
+
+/**
+ * "Crear receta" — crea un recipe_item tipo 'dish' con el nombre del plato y
+ * lo enlaza en un solo paso. Composición reutilizada por la ficha de
+ * producto y por el cockpit "Casado" (no duplicar esta lógica en cada UI).
+ */
+export async function createDishAndLinkToMenuItem(
+  accountId: string,
+  menuItemId: string,
+  dishName: string,
+): Promise<SetMenuItemRecipeResult> {
+  const units = await listUnits({ dimension: 'unit', includeInactive: false })
+  const baseUnitId = units.find((u) => u.isBase)?.id ?? units[0]?.id
+  if (!baseUnitId) throw new Error('No hay una unidad de tipo "Unidad" configurada en esta cuenta.')
+  const created = await createRecipeItem({
+    accountId,
+    type: 'dish',
+    name: dishName,
+    baseUnitId,
+    source: 'manual',
+    needsReview: true,
+  })
+  return setMenuItemRecipe(menuItemId, created.id)
 }

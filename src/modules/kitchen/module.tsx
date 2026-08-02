@@ -2,11 +2,12 @@
 //
 // ModuleDefinition del módulo Folvy Kitchen (escandallo de cocina).
 // Sigue el patrón canónico de appcc/module.tsx.
-import { LayoutDashboard, ChefHat, BookOpen, TrendingUp, Target, Truck, UtensilsCrossed, SlidersHorizontal, CircleSlash, Megaphone, Sliders, BarChart3 } from 'lucide-react'
+import { LayoutDashboard, ChefHat, BookOpen, TrendingUp, Target, Truck, UtensilsCrossed, SlidersHorizontal, CircleSlash, Megaphone, Sliders, BarChart3, Link2 } from 'lucide-react'
 import type { ModuleDefinition } from '@/shell/types'
 import KitchenDashboardPage from '@/modules/kitchen/pages/KitchenDashboardPage'
 import KitchenItemsPage from '@/modules/kitchen/pages/KitchenItemsPage'
 import KitchenMenuPage from '@/modules/kitchen/pages/KitchenMenuPage'
+import KitchenCasadoPage from '@/modules/kitchen/pages/KitchenCasadoPage'
 // KitchenRecipePage (lienzo viejo) → reemplazado por RecipeEditorPage (rediseño V1).
 // El editor ahora se monta DENTRO de KitchenRecipesPage (lista + detalle por
 // estado), que es lo que cuelga de la ruta 'recetas'. KitchenRecipePage se
@@ -41,6 +42,7 @@ export const kitchenModule: ModuleDefinition = {
     { path: '',                  element: <KitchenItemsPage /> },
     { path: 'resumen',           element: <KitchenDashboardPage /> },
     { path: 'menu',              element: <KitchenMenuPage /> },
+    { path: 'casado',            element: <KitchenCasadoPage /> },
     { path: 'disponibilidad',    element: <KitchenAvailabilityPage /> },
     { path: 'disponibilidad-informes', element: <AvailabilityReportsPage /> },
     { path: 'proveedores',       element: <SuppliersPage /> },
@@ -57,6 +59,7 @@ export const kitchenModule: ModuleDefinition = {
     items: [
       { id: 'kitchen_dashboard',     label: 'Resumen',             icon: LayoutDashboard,   path: 'resumen',          requiredRole: 'manager' },
       { id: 'kitchen_menu',          label: 'Menú',                icon: UtensilsCrossed,   path: 'menu',             requiredRole: 'manager' },
+      { id: 'kitchen_casado',        label: 'Casado',              icon: Link2,             path: 'casado',           requiredRole: 'manager' },
       { id: 'kitchen_availability',  label: 'Disponibilidad',      icon: CircleSlash,       path: 'disponibilidad',   requiredRole: 'manager' },
       { id: 'kitchen_availability_reports', label: 'Informes de disponibilidad', icon: BarChart3, path: 'disponibilidad-informes', requiredRole: 'manager' },
       { id: 'kitchen_items',         label: 'Ingredientes',        icon: ChefHat,           path: '' },

@@ -24,16 +24,17 @@ import {
 } from 'lucide-react'
 import { getMenuItemById, updateMenuItem } from '@/modules/kitchen/services/menuItemService'
 import { getMirrorState, swapMirror, type MirrorState } from '@/modules/kitchen/services/mirrorService'
-import { listRecipeItems, createRecipeItem } from '@/modules/kitchen/services/recipeItemService'
-import { listUnits } from '@/modules/kitchen/services/kitchenUnitService'
 import {
   setMenuItemRecipe,
   clearMenuItemRecipe,
   approveMenuItemLink,
+  createDishAndLinkToMenuItem,
   getMenuItemLinkHealth,
   LINK_STATUS_META,
   type MenuItemLinkHealthRow,
 } from '@/modules/kitchen/services/menuLinkService'
+import RecipeLinkPickerModal from '@/modules/kitchen/components/RecipeLinkPickerModal'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import {
   getProductModifierGroups,
   type CatalogModifierGroup,
@@ -72,7 +73,7 @@ import { childVisual } from '@/modules/orders/services/ordersFeedService'
 import ProductPlacementSection from '@/modules/kitchen/components/ProductPlacementSection'
 import EditPricesModal from '@/modules/kitchen/components/EditPricesModal'
 import { supabase } from '@/lib/supabase'
-import type { MenuItem, MenuItemUpdate, RecipeItem } from '@/types/kitchen'
+import type { MenuItem, MenuItemUpdate } from '@/types/kitchen'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -92,9 +93,9 @@ function fmtDate(iso: string | null | undefined): string {
 
 // Tono → clases Tailwind de esta ficha (el tono viene de LINK_STATUS_META,
 // única fuente de verdad del sello — ver menuLinkService.ts).
-const TONE_CLASSES: Record<'red' | 'neutral' | 'green', string> = {
+const TONE_CLASSES: Record<'red' | 'amber' | 'green', string> = {
   red: 'bg-red-50 text-red-700',
-  neutral: 'bg-stone-100 text-stone-600',
+  amber: 'bg-amber-50 text-amber-800',
   green: 'bg-green-50 text-green-800',
 }
 
@@ -822,14 +823,12 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
   const [shortNameVal, setShortNameVal] = useState('')
   const [fieldSaving, setFieldSaving] = useState<string | null>(null)
 
-  // ── Vincular escandallo (picker) + sello de 3 estados ──
+  // ── Vincular escandallo (picker compartido RecipeLinkPickerModal) + sello de 3 estados ──
   const [recipePickerOpen, setRecipePickerOpen] = useState(false)
-  const [recipeOptions, setRecipeOptions] = useState<RecipeItem[]>([])
-  const [recipeSearch, setRecipeSearch] = useState('')
-  const [recipeLoading, setRecipeLoading] = useState(false)
   const [linking, setLinking] = useState(false)
   const [linkError, setLinkError] = useState<string | null>(null)
   const [linkHealth, setLinkHealth] = useState<MenuItemLinkHealthRow | null>(null)
+  const [confirmClear, setConfirmClear] = useState(false)
 
   // ─── Data loading ───────────────────────────────────────────────────────
 
@@ -1023,17 +1022,8 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
 
   function openRecipePicker() {
     if (!item) return
-    setRecipePickerOpen(true)
-    setRecipeSearch('')
     setLinkError(null)
-    setRecipeLoading(true)
-    listRecipeItems({ accountId: item.accountId, type: 'dish', includeInactive: false })
-      .then((rows) => setRecipeOptions(rows))
-      .catch((err: unknown) => {
-        setLinkError(err instanceof Error ? err.message : 'No se pudieron cargar los escandallos.')
-        setRecipeOptions([])
-      })
-      .finally(() => setRecipeLoading(false))
+    setRecipePickerOpen(true)
   }
 
   async function linkRecipe(recipeItemId: string) {
@@ -1057,23 +1047,13 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
 
   // Crea un recipe_item tipo 'dish' con el nombre del producto y lo enlaza —
   // para platos huérfanos que no tienen escandallo propio en el catálogo.
+  // Composición centralizada en menuLinkService (la comparte el cockpit "Casado").
   async function createDishFromProduct() {
     if (!item) return
     setLinking(true)
     setLinkError(null)
     try {
-      const units = await listUnits({ dimension: 'unit', includeInactive: false })
-      const baseUnitId = units.find((u) => u.isBase)?.id ?? units[0]?.id
-      if (!baseUnitId) throw new Error('No hay una unidad de tipo "Unidad" configurada en esta cuenta.')
-      const created = await createRecipeItem({
-        accountId: item.accountId,
-        type: 'dish',
-        name: item.name,
-        baseUnitId,
-        source: 'manual',
-        needsReview: true,
-      })
-      await setMenuItemRecipe(item.id, created.id)
+      await createDishAndLinkToMenuItem(item.accountId, item.id, item.name)
       setRecipePickerOpen(false)
       await refreshItem()
       reloadLinkHealth()
@@ -1090,10 +1070,12 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
     setLinkError(null)
     try {
       await clearMenuItemRecipe(item.id)
+      setConfirmClear(false)
       await refreshItem()
       reloadLinkHealth()
     } catch (err: unknown) {
       setLinkError(err instanceof Error ? err.message : 'No se pudo quitar el escandallo.')
+      setConfirmClear(false)
     } finally {
       setLinking(false)
     }
@@ -1276,7 +1258,7 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
   const linkBadgeMeta = linkHealth
     ? LINK_STATUS_META[linkHealth.status]
     : hasRecipe
-      ? { label: 'Revisando…', reason: 'Cargando estado del enlace', tone: 'neutral' as const }
+      ? { label: 'Revisando…', reason: 'Cargando estado del enlace', tone: 'amber' as const }
       : LINK_STATUS_META.roto_sin_escandallo
   const linkBadge = { ...linkBadgeMeta, className: TONE_CLASSES[linkBadgeMeta.tone] }
   const canApprove = linkHealth?.status === 'sin_aprobar'
@@ -1439,7 +1421,7 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
                     <button onClick={openRecipePicker} disabled={linking} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-stone-200 text-stone-800 hover:border-stone-400 transition-colors disabled:opacity-50">
                       <Link2 size={15} /> Cambiar escandallo
                     </button>
-                    <button onClick={unlinkRecipe} disabled={linking} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-stone-200 text-red-700 hover:border-red-300 hover:bg-red-50 transition-colors disabled:opacity-50">
+                    <button onClick={() => setConfirmClear(true)} disabled={linking} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-stone-200 text-red-700 hover:border-red-300 hover:bg-red-50 transition-colors disabled:opacity-50">
                       <X size={15} /> Quitar
                     </button>
                     {canApprove && (
@@ -1515,7 +1497,7 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
         {/* S1 — Escandallo y elaboración */}
         <CollapsibleSection id="s-escandallo" icon="chef-hat" title="Escandallo y elaboración"
           badge={linkBadge.label}
-          badgeColor={linkHealth?.status === 'aprobado' ? 'ok' : linkHealth?.status === 'sin_aprobar' ? 'neutral' : hasRecipe ? 'danger' : 'warn'}
+          badgeColor={linkBadge.tone === 'green' ? 'ok' : linkBadge.tone === 'amber' ? 'warn' : 'danger'}
           defaultOpen={hasRecipe}>
           {!hasRecipe ? (
             <EmptyState text="Sin escandallo vinculado. Conecta una receta para ver costes, alérgenos y elaboración.">
@@ -1526,11 +1508,19 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
             </EmptyState>
           ) : (
             <>
-              {linkHealth && linkHealth.status !== 'aprobado' && linkHealth.status !== 'sin_aprobar' && (
+              {linkBadge.tone === 'red' && (
                 <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">{linkBadge.reason}</p>
               )}
               {linkHealth?.recipeName && (
-                <p className="text-xs text-stone-500 mb-3">Coste calculado desde: <span className="font-medium text-stone-700">{linkHealth.recipeName}</span></p>
+                <p className="text-xs text-stone-500 mb-3">
+                  Coste calculado desde:{' '}
+                  <button
+                    onClick={() => item.recipeItemId && navigate('/kitchen/recetas?recipe=' + item.recipeItemId)}
+                    className="font-medium text-stone-700 hover:underline"
+                  >
+                    {linkHealth.recipeName}
+                  </button>
+                </p>
               )}
               {linkHealth && linkHealth.sharedWith > 1 && (
                 <p className="text-xs text-stone-500 mb-3">Este escandallo se comparte con {linkHealth.sharedWith - 1} ítem{linkHealth.sharedWith - 1 === 1 ? '' : 's'} más de la cuenta.</p>
@@ -1560,7 +1550,7 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
                 <span className="text-stone-300">·</span>
                 <button onClick={openRecipePicker} disabled={linking} className="text-sm font-medium text-stone-600 hover:underline disabled:opacity-50">Cambiar</button>
                 <span className="text-stone-300">·</span>
-                <button onClick={unlinkRecipe} disabled={linking} className="text-sm font-medium text-red-700 hover:underline disabled:opacity-50">Quitar</button>
+                <button onClick={() => setConfirmClear(true)} disabled={linking} className="text-sm font-medium text-red-700 hover:underline disabled:opacity-50">Quitar</button>
                 {canApprove && (
                   <>
                     <span className="text-stone-300">·</span>
@@ -1985,83 +1975,29 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
         </div>
       </div>
 
-      {recipePickerOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !linking && setRecipePickerOpen(false)}>
-          <div className="bg-white rounded-xl w-full max-w-lg max-h-[80vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 py-3.5 border-b border-stone-200">
-              <div className="flex items-center gap-2 text-stone-800">
-                <Link2 size={16} className="text-accent" />
-                <span className="text-sm font-medium">Vincular escandallo a «{item?.name}»</span>
-              </div>
-              <button onClick={() => !linking && setRecipePickerOpen(false)} className="text-stone-400 hover:text-stone-700 disabled:opacity-50" disabled={linking}>
-                <X size={18} />
-              </button>
-            </div>
-            <div className="px-5 py-3 border-b border-stone-100">
-              <input
-                type="text"
-                autoFocus
-                value={recipeSearch}
-                onChange={(e) => setRecipeSearch(e.target.value)}
-                placeholder="Buscar escandallo por nombre…"
-                className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg bg-stone-50 focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
-              />
-            </div>
-            {linkError && (
-              <div className="mx-5 mt-3 p-2.5 rounded-lg bg-red-50 text-red-700 border border-red-200 text-xs">{linkError}</div>
-            )}
-            <div className="flex-1 overflow-y-auto px-2 py-2">
-              {recipeLoading ? (
-                <div className="flex items-center justify-center gap-2 py-10 text-sm text-stone-400">
-                  <Loader2 className="w-4 h-4 animate-spin" /> Cargando escandallos…
-                </div>
-              ) : (() => {
-                const q = recipeSearch.trim().toLowerCase()
-                const filtered = q === '' ? recipeOptions : recipeOptions.filter((r) => r.name.toLowerCase().includes(q))
-                if (filtered.length === 0) {
-                  return <div className="py-10 text-center text-sm text-stone-400">No hay escandallos que coincidan.</div>
-                }
-                return (
-                  <ul className="space-y-0.5">
-                    {filtered.map((r) => (
-                      <li key={r.id}>
-                        <button
-                          onClick={() => linkRecipe(r.id)}
-                          disabled={linking}
-                          className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg text-left hover:bg-accent/5 disabled:opacity-50 transition-colors group"
-                        >
-                          <div className="min-w-0">
-                            <div className="text-sm text-stone-800 truncate">{r.name}</div>
-                            {r.code && <div className="text-[11px] text-stone-400">{r.code}</div>}
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <span className="text-xs tabular-nums text-stone-500">{fmtEur(r.computedCost)}</span>
-                            <Link2 size={14} className="text-stone-300 group-hover:text-accent" />
-                          </div>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )
-              })()}
-            </div>
-            <div className="px-5 py-2.5 border-t border-stone-100">
-              <button onClick={createDishFromProduct} disabled={linking}
-                className="inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:underline disabled:opacity-50">
-                <Plus size={14} /> Crear escandallo nuevo «{item?.name}»
-              </button>
-            </div>
-            <div className="px-5 py-3 border-t border-stone-100 flex items-center justify-between">
-              <span className="text-[11px] text-stone-400">
-                {linking ? 'Guardando…' : 'Elige el escandallo que corresponde a este producto.'}
-              </span>
-              <button onClick={() => !linking && setRecipePickerOpen(false)} disabled={linking} className="px-3 py-1.5 text-sm rounded-lg text-stone-500 hover:bg-stone-50 disabled:opacity-50">
-                Cancelar
-              </button>
-            </div>
-          </div>
-        </div>
+      {recipePickerOpen && item && (
+        <RecipeLinkPickerModal
+          accountId={item.accountId}
+          itemName={item.name}
+          wasApproved={linkHealth?.status === 'aprobado'}
+          busy={linking}
+          error={linkError}
+          onChoose={(id) => linkRecipe(id)}
+          onCreateNew={createDishFromProduct}
+          onClose={() => setRecipePickerOpen(false)}
+        />
       )}
+
+      <ConfirmDialog
+        open={confirmClear}
+        title="Quitar escandallo"
+        message={item ? `«${item.name}» quedará sin coste y sin descontar del almacén hasta que le asignes otra receta.` : ''}
+        confirmLabel="Quitar"
+        tone="danger"
+        busy={linking}
+        onConfirm={unlinkRecipe}
+        onCancel={() => setConfirmClear(false)}
+      />
     </div>
   )
 }
