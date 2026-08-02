@@ -55,6 +55,8 @@ import RecipeLinkPickerModal from '@/modules/kitchen/components/RecipeLinkPicker
 import RecipeEscandalloTab from '@/modules/kitchen/components/RecipeEscandalloTab'
 import RecipeStepsTab from '@/modules/kitchen/components/RecipeStepsTab'
 import RecipeHistoryTab from '@/modules/kitchen/components/RecipeHistoryTab'
+import ModifierEditorSection from '@/modules/kitchen/components/ModifierEditorSection'
+import ModifierImpactsTab from '@/modules/kitchen/components/ModifierImpactsTab'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import type { MenuItem, RecipeItem } from '@/types/kitchen'
 
@@ -278,6 +280,14 @@ export default function CatalogFichaPage({
   const [recipeLoading, setRecipeLoading] = useState(false)
   const [recipeError, setRecipeError] = useState<string | null>(null)
   const [reloadTick, setReloadTick] = useState(0)
+
+  // Puente de refresco (tick) Modificadores: ModifierEditorSection (asignación
+  // de grupos, menu_item-scoped) avisa por onGroupsChanged cuando crea/asigna/
+  // quita un grupo; ModifierImpactsTab (impacto en coste, recipe_item-scoped)
+  // no tiene prop de tick nativo, así que se le fuerza un remount limpio
+  // cambiando su key — sin tocar el componente en sí. Cargas independientes:
+  // esto solo sincroniza el REFRESCO, no fusiona sus modelos de datos.
+  const [modifiersTick, setModifiersTick] = useState(0)
 
   useEffect(() => {
     if (!effectiveRecipeItemId) { setRecipe(null); return }
@@ -912,8 +922,53 @@ export default function CatalogFichaPage({
             </div>
           )}
           {activeTab === 'modificadores' && (
-            <div key={(effectiveRecipeItemId ?? 'none') + '-' + (activeMenuItemId ?? 'none')} className="text-sm text-stone-400 py-10 text-center">
-              Modificadores — pendiente de esta rama (Fase 3).
+            <div key={(effectiveRecipeItemId ?? 'none') + '-' + (activeMenuItemId ?? 'none')} className="space-y-8">
+              {/* Mitad ASIGNACIÓN (menu_item-scoped): qué grupos tiene el
+                  producto. "¿Hay producto?" lo decide el padre con `item`/
+                  `activeMenuItemId` (la misma verdad que usa el resto de la
+                  ficha) — este bloque nunca pregunta por su cuenta. */}
+              <div>
+                <h3 className="text-xs font-medium uppercase tracking-wide text-stone-400 mb-3">
+                  Modificadores del producto
+                </h3>
+                {activeMenuItemId && item ? (
+                  <ModifierEditorSection
+                    accountId={item.accountId}
+                    brandId={item.brandId ?? null}
+                    menuItemId={item.id}
+                    recipeItemId={item.recipeItemId ?? null}
+                    onGroupsChanged={() => setModifiersTick((t) => t + 1)}
+                  />
+                ) : activeMenuItemId && itemLoading ? (
+                  <div className="text-sm text-stone-400 py-6 text-center">Cargando producto…</div>
+                ) : (
+                  <div className="text-sm text-stone-400 py-6 text-center">
+                    Este plato aún no está en ninguna carta. Añádelo desde la pestaña "En carta" para asignar modificadores.
+                  </div>
+                )}
+              </div>
+
+              {/* Mitad IMPACTO (recipe_item-scoped): qué le hace cada opción al
+                  coste. Funciona sin producto anclado — solo necesita
+                  effectiveRecipeItemId. key={modifiersTick} fuerza un remount
+                  limpio cuando la mitad de arriba crea/asigna/quita un grupo. */}
+              <div>
+                <h3 className="text-xs font-medium uppercase tracking-wide text-stone-400 mb-3">
+                  Impacto en coste
+                </h3>
+                {effectiveRecipeItemId ? (
+                  <ModifierImpactsTab
+                    key={modifiersTick}
+                    recipeItemId={effectiveRecipeItemId}
+                    accountId={item?.accountId ?? recipe?.accountId ?? ''}
+                    actorName={userProfile?.displayName ?? 'Usuario'}
+                  />
+                ) : (
+                  <div className="text-sm text-stone-400 py-6 text-center">
+                    Necesita escandallo para calcular el impacto en coste de los modificadores.
+                  </div>
+                )}
+              </div>
             </div>
           )}
           {activeTab === 'economia' && (
