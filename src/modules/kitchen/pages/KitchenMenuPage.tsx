@@ -25,9 +25,15 @@ import {
 import { getMenuItemEconomics, setMenuItemCategoryBulk, reorderMenuItems } from '@/modules/kitchen/services/menuItemService'
 import { listMenuCategories, reorderMenuCategories, deactivateMenuCategory, updateMenuCategory, type MenuCategory } from '@/modules/kitchen/services/menuCategoryService'
 import { getReliability, type SalesReliability } from '@/modules/kitchen/services/salesReliabilityService'
+import {
+  getMenuItemLinkHealth,
+  LINK_STATUS_META,
+  type MenuItemLinkHealthRow,
+} from '@/modules/kitchen/services/menuLinkService'
 import CatalogProductDetailPage from '@/modules/kitchen/pages/CatalogProductDetailPage'
 import SalesExceptionsPage from '@/modules/kitchen/pages/SalesExceptionsPage'
 import WarehouseReliabilityPage from '@/modules/kitchen/pages/WarehouseReliabilityPage'
+import MenuLinkHealthPage from '@/modules/kitchen/pages/MenuLinkHealthPage'
 import NewMenuItemModal from '@/modules/kitchen/components/NewMenuItemModal'
 import AddExistingProductModal from '@/modules/kitchen/components/AddExistingProductModal'
 import NewCategoryModal from '@/modules/kitchen/components/NewCategoryModal'
@@ -58,6 +64,11 @@ export default function KitchenMenuPage() {
   const [allCats, setAllCats] = useState<MenuCategory[]>([])
   const [economics, setEconomics] = useState<Map<string, MenuItemEconomics>>(new Map())
   const [reliability, setReliability] = useState<SalesReliability | null>(null)
+  // Sello de 3 estados del enlace ítem↔escandallo — de la marca visible (fila del
+  // Menú) y de toda la cuenta (contadores del banner-resumen). Única fuente de
+  // verdad: menu_item_link_health.status, nunca menu_item.needs_review.
+  const [linkHealth, setLinkHealth] = useState<Map<string, MenuItemLinkHealthRow>>(new Map())
+  const [linkHealthSummary, setLinkHealthSummary] = useState<MenuItemLinkHealthRow[]>([])
   const [loadingBrands, setLoadingBrands] = useState(true)
   const [loadingCatalog, setLoadingCatalog] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -66,6 +77,8 @@ export default function KitchenMenuPage() {
   const [showExceptions, setShowExceptions] = useState(false)
   // Cola guiada de fiabilidad del almacen (arreglar paso a paso).
   const [showReliabilityQueue, setShowReliabilityQueue] = useState(false)
+  // Pantalla de barrido del enlace ítem↔escandallo (menu_item_link_health).
+  const [showLinkHealth, setShowLinkHealth] = useState(false)
   const [showNewProduct, setShowNewProduct] = useState(false)
   const [showAddExisting, setShowAddExisting] = useState(false)
   const [showNewCombo, setShowNewCombo] = useState(false)
@@ -113,6 +126,32 @@ export default function KitchenMenuPage() {
     return () => { cancelled = true }
   }, [activeAccountId, accountsLoading])
 
+  // Contadores del banner de salud del enlace — TODA la cuenta, no solo la
+  // marca visible (igual criterio que `reliability`). Un fallo aquí no debe
+  // leerse como "0 problemas": si falla, degradamos a lista vacía pero lo
+  // avisamos por consola.
+  function reloadLinkHealthSummary() {
+    if (!activeAccountId) return
+    getMenuItemLinkHealth(activeAccountId)
+      .then(setLinkHealthSummary)
+      .catch((e: unknown) => {
+        console.warn('KitchenMenuPage: fallo cargando el resumen de salud de escandallos', e)
+        setLinkHealthSummary([])
+      })
+  }
+  useEffect(() => {
+    if (accountsLoading || !activeAccountId) return
+    let cancelled = false
+    getMenuItemLinkHealth(activeAccountId)
+      .then((rows) => { if (!cancelled) setLinkHealthSummary(rows) })
+      .catch((e: unknown) => {
+        if (cancelled) return
+        console.warn('KitchenMenuPage: fallo cargando el resumen de salud de escandallos', e)
+        setLinkHealthSummary([])
+      })
+    return () => { cancelled = true }
+  }, [activeAccountId, accountsLoading])
+
   // Cargar catálogo de la marca seleccionada
   useEffect(() => {
     if (!activeAccountId || !selectedBrandId) return
@@ -123,14 +162,21 @@ export default function KitchenMenuPage() {
       listCategoriesWithProducts(activeAccountId, selectedBrandId),
       getMenuItemEconomics(selectedBrandId).catch(() => [] as MenuItemEconomics[]),
       listMenuCategories(activeAccountId, selectedBrandId).catch(() => [] as MenuCategory[]),
+      getMenuItemLinkHealth(activeAccountId, selectedBrandId).catch((e: unknown) => {
+        console.warn('KitchenMenuPage: fallo cargando salud de escandallos de la marca', e)
+        return [] as MenuItemLinkHealthRow[]
+      }),
     ])
-      .then(([cats, econ, all]) => {
+      .then(([cats, econ, all, health]) => {
         if (cancelled) return
         setCategories(cats)
         setAllCats(all)
         const m = new Map<string, MenuItemEconomics>()
         for (const e of econ) m.set(e.menuItemId, e)
         setEconomics(m)
+        const lh = new Map<string, MenuItemLinkHealthRow>()
+        for (const r of health) lh.set(r.menuItemId, r)
+        setLinkHealth(lh)
       })
       .catch((e) => { if (!cancelled) setError(String(e.message ?? e)) })
       .finally(() => { if (!cancelled) setLoadingCatalog(false) })
@@ -200,6 +246,27 @@ export default function KitchenMenuPage() {
     if (activeAccountId) {
       getReliability(activeAccountId).then(setReliability).catch(() => {})
     }
+  }
+
+  // Al volver del barrido: el resumen de cuenta pudo cambiar (aprobaciones,
+  // reasignaciones) y también la marca visible, si es la misma.
+  function handleLinkHealthBack() {
+    setShowLinkHealth(false)
+    reloadLinkHealthSummary()
+    if (activeAccountId && selectedBrandId) {
+      getMenuItemLinkHealth(activeAccountId, selectedBrandId)
+        .then((rows) => {
+          const lh = new Map<string, MenuItemLinkHealthRow>()
+          for (const r of rows) lh.set(r.menuItemId, r)
+          setLinkHealth(lh)
+        })
+        .catch((e: unknown) => console.warn('KitchenMenuPage: fallo recargando salud de escandallos', e))
+    }
+  }
+
+  function handleJumpToItemFromLinkHealth(menuItemId: string) {
+    setShowLinkHealth(false)
+    setSelectedProductId(menuItemId)
   }
 
   // Tras crear producto o categoría: cerrar el modal y recargar la carta de la
@@ -454,6 +521,16 @@ export default function KitchenMenuPage() {
     return <SalesExceptionsPage accountId={activeAccountId} onBack={handleExceptionsBack} />
   }
 
+  if (showLinkHealth && activeAccountId) {
+    return (
+      <MenuLinkHealthPage
+        accountId={activeAccountId}
+        onBack={handleLinkHealthBack}
+        onJumpToItem={handleJumpToItemFromLinkHealth}
+      />
+    )
+  }
+
   if (accountsLoading || loadingBrands) {
     return <div className="p-6 text-sm text-gray-500">Cargando carta…</div>
   }
@@ -480,6 +557,10 @@ export default function KitchenMenuPage() {
           onOpen={() => setShowExceptions(true)}
           onFix={() => setShowReliabilityQueue(true)}
         />
+      )}
+
+      {linkHealthSummary.length > 0 && (
+        <LinkHealthBanner rows={linkHealthSummary} onOpen={() => setShowLinkHealth(true)} />
       )}
 
       {/* Cabecera: selector de marca */}
@@ -701,7 +782,7 @@ export default function KitchenMenuPage() {
                     <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
                 {cat.products.map((p, idx) => {
                   const econ = economics.get(p.id)
-                  const hasRecipe = p.recipeItemId !== null
+                  const health = linkHealth.get(p.id)
                   return (
                     <div
                       key={p.id}
@@ -760,33 +841,31 @@ export default function KitchenMenuPage() {
                           <span className="inline-flex items-center gap-1 text-xs text-gray-400">
                             <Package className="w-3.5 h-3.5" /> coste por componentes
                           </span>
-                        ) : !hasRecipe ? (
-                          <span className="inline-flex items-center gap-1 text-xs text-amber-600">
-                            <CircleDashed className="w-3.5 h-3.5" /> Sin escandallo
+                        ) : !health ? (
+                          // Marca recién cambiada / linkHealth aún no cargó — no mentir a verde ni a roto.
+                          <span className="inline-flex items-center gap-1 text-xs text-gray-400">
+                            <CircleDashed className="w-3.5 h-3.5" /> …
                           </span>
-                        ) : p.needsReview ? (
-                          <div>
-                            <span className="inline-flex items-center gap-1 text-xs text-amber-600">
-                              <AlertTriangle className="w-3.5 h-3.5" /> Revisar coste
-                            </span>
-                            {econ && (
-                              <div className="text-xs text-gray-500 mt-0.5">
-                                coste {formatEur(econ.cost)} · FC {formatPct(econ.foodCostPct)}
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <div>
-                            <span className="inline-flex items-center gap-1 text-xs text-green-600">
-                              <CheckCircle2 className="w-3.5 h-3.5" /> Escandallo OK
-                            </span>
-                            {econ && (
-                              <div className="text-xs text-gray-500 mt-0.5">
-                                coste {formatEur(econ.cost)} · margen {formatEur(econ.contributionMargin)} · FC {formatPct(econ.foodCostPct)}
-                              </div>
-                            )}
-                          </div>
-                        )}
+                        ) : (() => {
+                          const meta = LINK_STATUS_META[health.status]
+                          const toneColor = meta.tone === 'green' ? 'text-green-600' : meta.tone === 'red' ? 'text-red-600' : 'text-gray-500'
+                          const Icon = meta.tone === 'green' ? CheckCircle2 : meta.tone === 'red' ? AlertTriangle : CircleDashed
+                          return (
+                            <div>
+                              <span className={`inline-flex items-center gap-1 text-xs ${toneColor}`} title={meta.reason}>
+                                <Icon className="w-3.5 h-3.5" /> {meta.label}
+                              </span>
+                              {econ && (
+                                <div className="text-xs text-gray-500 mt-0.5">
+                                  coste {formatEur(econ.cost)}{meta.tone === 'green' ? ` · margen ${formatEur(econ.contributionMargin)}` : ''} · FC {formatPct(econ.foodCostPct)}
+                                </div>
+                              )}
+                              {health.sharedWith > 1 && (
+                                <div className="text-[11px] text-gray-400 mt-0.5">compartido con {health.sharedWith - 1}</div>
+                              )}
+                            </div>
+                          )
+                        })()}
                       </div>
                       <div className="shrink-0 flex flex-col -my-1" onClick={(e) => e.stopPropagation()}>
                         <button onClick={() => moveProduct(cat, p.id, -1)} disabled={moving || idx <= 0}
@@ -1092,6 +1171,38 @@ function ReliabilityBanner({ signal, onOpen, onFix }: { signal: SalesReliability
           Ver excepciones
         </button>
       </div>
+    </div>
+  )
+}
+
+// Banner-resumen del sello de enlace ítem↔escandallo — TODA la cuenta (no solo
+// la marca visible). rows viene de menu_item_link_health sin filtrar por
+// marca; los contadores son la única fuente de verdad, igual que el sello.
+function LinkHealthBanner({ rows, onOpen }: { rows: MenuItemLinkHealthRow[]; onOpen: () => void }) {
+  const rotos = rows.filter((r) => r.status.startsWith('roto_')).length
+  const sinAprobar = rows.filter((r) => r.status === 'sin_aprobar').length
+  const aprobados = rows.filter((r) => r.status === 'aprobado').length
+  if (rotos === 0 && sinAprobar === 0) return null // nada que auditar — no molestar
+
+  const cardBg = rotos > 0 ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'
+  const dot = rotos > 0 ? 'bg-red-500' : 'bg-amber-500'
+  const valueColor = rotos > 0 ? 'text-red-700' : 'text-amber-700'
+
+  return (
+    <div className={`rounded-xl border p-3 mb-5 flex items-center gap-3 flex-wrap ${cardBg}`}>
+      <span className={`w-2.5 h-2.5 rounded-full ${dot} shrink-0`} />
+      <div className="flex-1 min-w-0">
+        <span className={`text-sm font-medium ${valueColor}`}>
+          Escandallos: {rotos} roto{rotos !== 1 ? 's' : ''} · {sinAprobar} sin aprobar
+        </span>
+        <span className="text-xs text-gray-500"> · {aprobados} aprobado{aprobados !== 1 ? 's' : ''}</span>
+      </div>
+      <button
+        onClick={onOpen}
+        className="text-xs font-medium px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 shrink-0"
+      >
+        Revisar escandallos
+      </button>
     </div>
   )
 }

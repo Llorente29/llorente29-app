@@ -68,6 +68,10 @@ import {
   listMenuItems,
   getMenuItemEconomics,
 } from '@/modules/kitchen/services/menuItemService'
+import {
+  listMenuItemsUsingRecipe,
+  type MenuItemUsingRecipe,
+} from '@/modules/kitchen/services/menuLinkService'
 import { listBrands } from '@/modules/multitenancy/services/brandsService'
 import { streamMessage } from '@/modules/folvy-ai/services/folvyAIService'
 import {
@@ -278,6 +282,9 @@ export default function RecipeEditorPage({
   const [editingName, setEditingName] = useState(false)
   const [nameDraft, setNameDraft] = useState('')
   const [savingName, setSavingName] = useState(false)
+  // Doble dirección (trazabilidad ítem↔escandallo): qué ítems de carta usan
+  // este escandallo hoy. null = cargando; [] = ninguno.
+  const [usedByItems, setUsedByItems] = useState<MenuItemUsingRecipe[] | null>(null)
   // ── Importar ficha (rellenar ESTE escandallo, no crear otro) ──
   const importInputRef = useRef<HTMLInputElement | null>(null)
   const [importing, setImporting] = useState(false)
@@ -379,6 +386,22 @@ export default function RecipeEditorPage({
       cancelled = true
     }
   }, [accountsLoading, activeAccountId, recipeId, reloadTick])
+
+  // Doble dirección: "usado por N ítems" — hoy invisible, y esa invisibilidad
+  // es parte de la causa raíz del enlace equivocado que nadie ve.
+  useEffect(() => {
+    if (!recipeId) { setUsedByItems(null); return }
+    let cancelled = false
+    setUsedByItems(null)
+    listMenuItemsUsingRecipe(recipeId)
+      .then((rows) => { if (!cancelled) setUsedByItems(rows) })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        console.warn('RecipeEditorPage: fallo cargando ítems que usan este escandallo', err)
+        setUsedByItems([])
+      })
+    return () => { cancelled = true }
+  }, [recipeId, reloadTick])
 
   // Economía: marcas del plato + FC/margen por canal. Se re-dispara con
   // econReloadTick tras editar/añadir/borrar una línea (latido del FC).
@@ -1773,6 +1796,15 @@ export default function RecipeEditorPage({
                 <>
                   <span className="opacity-50">·</span>
                   <span className="font-mono opacity-85">{recipe.code}</span>
+                </>
+              )}
+              {usedByItems !== null && (
+                <>
+                  <span className="opacity-50">·</span>
+                  <span title={usedByItems.map((i) => i.name).join(', ')}>
+                    Usado por {usedByItems.length} ítem{usedByItems.length === 1 ? '' : 's'}
+                    {usedByItems.length > 0 ? ` de carta: ${usedByItems.map((i) => i.name).join(', ')}` : ' de carta'}
+                  </span>
                 </>
               )}
             </div>

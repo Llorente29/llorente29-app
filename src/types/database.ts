@@ -9214,6 +9214,8 @@ export type Database = {
           is_active: boolean
           is_available: boolean
           kitchen_name: string | null
+          link_approved_at: string | null
+          link_approved_by: string | null
           menu_category_id: string | null
           mirror_of_item_id: string | null
           name: string
@@ -9255,6 +9257,8 @@ export type Database = {
           is_active?: boolean
           is_available?: boolean
           kitchen_name?: string | null
+          link_approved_at?: string | null
+          link_approved_by?: string | null
           menu_category_id?: string | null
           mirror_of_item_id?: string | null
           name: string
@@ -9296,6 +9300,8 @@ export type Database = {
           is_active?: boolean
           is_available?: boolean
           kitchen_name?: string | null
+          link_approved_at?: string | null
+          link_approved_by?: string | null
           menu_category_id?: string | null
           mirror_of_item_id?: string | null
           name?: string
@@ -16058,6 +16064,10 @@ export type Database = {
           recipe_item_id: string
         }[]
       }
+      approve_menu_item_link: {
+        Args: { p_menu_item_id: string }
+        Returns: Json
+      }
       assign_items_to_zones: {
         Args: {
           p_account: string
@@ -16464,6 +16474,10 @@ export type Database = {
           p_menu_item_id: string
         }
         Returns: undefined
+      }
+      clear_menu_item_recipe: {
+        Args: { p_menu_item_id: string }
+        Returns: Json
       }
       clone_brand_catalog: {
         Args: {
@@ -17512,6 +17526,32 @@ export type Database = {
           vat_rate: number
         }[]
       }
+      menu_item_link_health: {
+        Args: { p_account_id: string; p_brand_id?: string }
+        Returns: {
+          brand_id: string
+          brand_name: string
+          cost: number
+          item_name: string
+          link_approved_at: string
+          menu_item_id: string
+          needs_review: boolean
+          recipe_item_id: string
+          recipe_name: string
+          shared_with: number
+          status: string
+        }[]
+      }
+      menu_item_shared_recipe_review: {
+        Args: { p_account_id: string }
+        Returns: {
+          item_names: string[]
+          n_items: number
+          raw_ingredients: string[]
+          recipe_item_id: string
+          recipe_name: string
+        }[]
+      }
       menu_item_units_sold: {
         Args: { p_brand_id: string; p_from?: string; p_to?: string }
         Returns: {
@@ -18468,6 +18508,10 @@ export type Database = {
           p_price?: number
         }
         Returns: undefined
+      }
+      set_menu_item_recipe: {
+        Args: { p_menu_item_id: string; p_recipe_item_id: string }
+        Returns: Json
       }
       set_n2_config: {
         Args: {
