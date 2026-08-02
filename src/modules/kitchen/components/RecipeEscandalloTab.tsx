@@ -2037,9 +2037,21 @@ export default function RecipeEscandalloTab({
 
         <div className="border-t border-default my-3.5" />
 
-        {econLoading ? (
+        {/* Bug cazado en vivo por Julio (04/08): este bloque decidía "¿está en
+            carta?" preguntando a SU PROPIA fuente vieja (economics, derivada
+            de listMenuItems+getMenuItemEconomics por marca) en vez de la
+            verdad ya cargada en esta misma pestaña (usedByItems, la misma
+            consulta que usa la cabecera del padre para el ancla). Podían
+            contradecirse: cabecera con PVP/food cost reales + "Platos que
+            usan esta receta" listando 2 productos, y este bloque diciendo
+            "aún no está en ninguna carta". La existencia de producto la
+            decide SIEMPRE usedByItems; economics (datos por canal) puede
+            estar vacío por otras razones (aún sin canales configurados) sin
+            que eso signifique "no está en carta" — en ese caso, aviso
+            distinto, sin el CTA de "Añadir a carta" (ya está añadido). */}
+        {econLoading || usedByItems === null ? (
           <div className="text-[11px] text-text-secondary">Calculando food cost…</div>
-        ) : economics.length === 0 ? (
+        ) : usedByItems.length === 0 ? (
           <div>
             <div className="text-[11px] font-medium tracking-wide text-text-secondary uppercase mb-2">
               Food cost
@@ -2056,6 +2068,13 @@ export default function RecipeEscandalloTab({
               <Plus className="w-3.5 h-3.5" />
               Añadir a carta
             </button>
+          </div>
+        ) : economics.length === 0 ? (
+          <div>
+            <div className="text-[11px] font-medium tracking-wide text-text-secondary uppercase mb-2">
+              Food cost
+            </div>
+            <p className="text-[11px] text-text-secondary">Sin datos de food cost por canal todavía.</p>
           </div>
         ) : (
           <div className="flex flex-col gap-3">
