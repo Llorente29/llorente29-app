@@ -178,9 +178,11 @@ export default function CatalogFichaPage({
         setUsingRecipeItems(rows)
         setActiveMenuItemId((prev) => {
           // Si el ancla actual sigue en la lista (p. ej. tras un refresco por
-          // mutación), se conserva la elección del usuario. Si no, se recalcula.
+          // mutación), se conserva la elección del usuario. Si no, se recalcula:
+          // 0 → sin ancla; 1 → ese; N≥2 → el primero por defecto (con selector
+          // visible para cambiarlo — nunca "sin producto" habiendo productos).
           if (prev && rows.some((r) => r.id === prev)) return prev
-          return rows.length === 1 ? rows[0].id : null
+          return rows.length > 0 ? rows[0].id : null
         })
         if (rows.length >= 2 && activeAccountId) {
           try {
@@ -248,6 +250,21 @@ export default function CatalogFichaPage({
       console.error('CatalogFichaPage: refresco del producto falló', err)
     }
   }
+
+  // Nombre de marca del producto anclado (subtítulo "marca · categoría").
+  const [brandName, setBrandName] = useState<string>('')
+  useEffect(() => {
+    if (!item?.brandId) { setBrandName(''); return }
+    let cancelled = false
+    if (usingBrandNames[item.brandId]) { setBrandName(usingBrandNames[item.brandId]); return }
+    listBrands({ accountId: item.accountId })
+      .then((brands) => {
+        if (cancelled) return
+        setBrandName(brands.find((b) => b.id === item.brandId)?.name ?? '')
+      })
+      .catch(() => { if (!cancelled) setBrandName('') })
+    return () => { cancelled = true }
+  }, [item?.brandId, item?.accountId, usingBrandNames])
 
   // El recipeItemId real: si entramos por producto, del propio item (puede
   // ser null = "sin casar"); si entramos por receta, siempre recipeIdProp.
@@ -480,11 +497,19 @@ export default function CatalogFichaPage({
   const foodCostPct = plateCost != null && pvp != null && pvp > 0
     ? Math.round((plateCost / pvp) * 10000) / 100
     : null
+  // Resolución del ancla ya terminada Y realmente no hay ningún producto
+  // (solo posible entrando por receta con 0 productos vinculados) — distinto
+  // de "todavía cargando", que no debe leerse como "sin producto".
+  const noProductAnchor = !anchorLoading && !activeMenuItemId
 
   // ─── Loading / error ────────────────────────────────────────────────────
 
-  const loading = accountsLoading || anchorLoading || itemLoading || (!!effectiveRecipeItemId && recipeLoading && !recipe)
-  const backLabel = menuItemIdProp ? 'Menú' : 'Recetas'
+  // Bloquea la página ENTERA solo en la carga inicial (sin nada que enseñar
+  // todavía). Un cambio de ancla posterior (selector, mutación) NO debe
+  // volver a tapar toda la ficha con el spinner — el propio bloque de "tres
+  // cifras" y el subtítulo indican su carga en línea (ver más abajo).
+  const loading = accountsLoading || anchorLoading || (!item && !recipe && (itemLoading || recipeLoading))
+  const backLabel = menuItemIdProp ? 'Cartas' : 'Platos'
 
   if (loading) {
     return (
@@ -632,9 +657,19 @@ export default function CatalogFichaPage({
             )}
           </div>
           <div className="flex items-center gap-2 text-sm text-stone-500 mb-4">
-            {item?.category && <span>{item.category}</span>}
-            {item && <span>{item.isAvailable ? 'En carta' : 'Agotado'}</span>}
-            {!item && recipe && <span>Sin producto de venta vinculado todavía</span>}
+            {item ? (
+              <>
+                {brandName && <span>{brandName}</span>}
+                {brandName && item.category && <span className="w-1 h-1 rounded-full bg-stone-300" />}
+                {item.category && <span>{item.category}</span>}
+                {(brandName || item.category) && <span className="w-1 h-1 rounded-full bg-stone-300" />}
+                <span>{item.isAvailable ? 'En carta' : 'Agotado'}</span>
+              </>
+            ) : noProductAnchor ? (
+              <span>Sin producto de venta vinculado todavía</span>
+            ) : (
+              <span className="text-stone-400">Cargando producto…</span>
+            )}
           </div>
 
           {/* Sello + acciones de casado (solo si hay producto anclado) */}
@@ -708,18 +743,33 @@ export default function CatalogFichaPage({
             </div>
           )}
 
-          {/* Tres cifras honestas */}
+          {/* Tres cifras honestas — cada una distingue "cargando" de "sin dato"
+              de "valor real"; nunca un guion mudo que confunda los tres casos. */}
           <div className="flex items-baseline gap-6 mb-1 flex-wrap">
             <div>
-              <div className="font-mono text-[26px] font-medium tracking-tight">{fmtEur(plateCost)}</div>
+              <div className="font-mono text-[26px] font-medium tracking-tight">
+                {recipeLoading && !recipe ? '…' : plateCost != null ? fmtEur(plateCost) : 'Sin coste'}
+              </div>
               <div className="text-xs text-stone-500">coste del plato</div>
             </div>
             <div>
-              <div className="font-mono text-[26px] font-medium tracking-tight">{foodCostPct != null ? `${foodCostPct}%` : '—'}</div>
+              <div className="font-mono text-[26px] font-medium tracking-tight">
+                {noProductAnchor
+                  ? 'Sin producto'
+                  : itemLoading || (recipeLoading && !recipe)
+                    ? '…'
+                    : plateCost == null
+                      ? 'Sin coste'
+                      : !pvp
+                        ? 'Sin precio'
+                        : `${foodCostPct}%`}
+              </div>
               <div className="text-xs text-stone-500">food cost</div>
             </div>
             <div>
-              <div className="font-mono text-[26px] font-medium tracking-tight">{item ? fmtEur(pvp) : '—'}</div>
+              <div className="font-mono text-[26px] font-medium tracking-tight">
+                {noProductAnchor ? 'Sin producto' : itemLoading && !item ? '…' : !pvp ? 'Sin precio' : fmtEur(pvp)}
+              </div>
               <div className="text-xs text-stone-500">PVP sin IVA</div>
             </div>
           </div>

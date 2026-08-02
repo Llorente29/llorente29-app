@@ -498,7 +498,7 @@ export default function KitchenMenuPage() {
   if (brands.length === 0) {
     return (
       <div className="p-6">
-        <h1 className="text-2xl font-semibold text-gray-900 mb-2">Menú</h1>
+        <h1 className="text-2xl font-semibold text-gray-900 mb-2">Cartas</h1>
         <p className="text-sm text-gray-500">
           Aún no hay catálogo. Importa el catálogo desde tu TPV o crea productos para empezar.
         </p>
@@ -525,7 +525,7 @@ export default function KitchenMenuPage() {
 
       {/* Cabecera: selector de marca */}
       <div className="flex items-center gap-3 mb-4 flex-wrap">
-        <h1 className="text-2xl font-semibold text-gray-900">Menú</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">Cartas</h1>
         <select
           value={selectedBrandId ?? ''}
           onChange={(e) => setSelectedBrandId(e.target.value)}
