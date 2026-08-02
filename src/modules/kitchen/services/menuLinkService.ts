@@ -20,6 +20,7 @@
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
 import { createRecipeItem } from './recipeItemService'
 import { listUnits } from './kitchenUnitService'
+import type { RecipeItemType } from '../../../types/kitchen'
 
 function requireSupabase(): void {
   if (!isSupabaseEnabled || !supabase) {
@@ -49,6 +50,15 @@ export interface MenuItemLinkHealthRow {
   brandName: string | null
   recipeItemId: string | null
   recipeName: string | null
+  /** type del recipe_item enlazado ('dish'|'raw'|...) — null si no hay enlace.
+   * Eje de clasificación: un recipe_item es a la vez escandallo Y artículo,
+   * una bebida de reventa se casa igual que un plato (menu_item.recipe_item_id
+   * apunta a su propio recipe_item type='raw'). NUNCA clasificar por nombre
+   * o categoría — solo por este hecho estructural. */
+  recipeType: RecipeItemType | null
+  /** nº de recipe_line del recipe_item enlazado (como padre) — 0 en un
+   * 'dish' significa "escandallo sin montar todavía". */
+  recipeLineCount: number
   cost: number | null
   needsReview: boolean
   linkApprovedAt: string | null
@@ -56,61 +66,99 @@ export interface MenuItemLinkHealthRow {
   sharedWith: number
 }
 
-/** Los 7 status técnicos colapsan a 3 estados humanos — el cockpit, el Menú y
- * la ficha muestran SIEMPRE uno de estos 3, nunca la jerga técnica. */
-export type LinkHumanState = 'bien' | 'para_revisar' | 'sin_casar'
+/** Los 7 status técnicos + recipe_type + recipe_line_count colapsan a 5
+ * estados humanos — el cockpit, el Menú y las fichas muestran SIEMPRE uno de
+ * estos 5, nunca la jerga técnica. */
+export type LinkHumanState = 'bien' | 'para_revisar' | 'falta_escandallo' | 'falta_precio' | 'sin_casar'
 
-/**
- * Metadatos de presentación del sello — única fuente de verdad para las
- * pantallas que lo pintan (ficha de producto, fila del Menú, cockpit
- * "Casado", ficha de escandallo). No dupliques este mapeo localmente en un
- * componente. `label`/`tone` son SIEMPRE los 3 del bucket humano (uniformes);
- * `reason` es el motivo corto técnico (para tooltip); `plainText` es la
- * frase larga en lenguaje de cocina para el cockpit — nada de "needs_review"
- * ni "roto_coste_imposible" en pantalla, eso vive solo en `status`.
- */
-export const LINK_STATUS_META: Record<MenuItemLinkStatus, {
+export interface LinkClassification {
   human: LinkHumanState
   label: string
-  tone: 'red' | 'amber' | 'green'
-  reason: string
-  plainText: string
-}> = {
-  roto_sin_escandallo: {
-    human: 'sin_casar', label: 'Sin casar', tone: 'red',
-    reason: 'Sin escandallo enlazado',
-    plainText: 'No tiene receta. No sabemos su coste ni descuenta de almacén.',
-  },
-  roto_enlace: {
-    human: 'sin_casar', label: 'Sin casar', tone: 'red',
-    reason: 'El escandallo enlazado ya no existe',
-    plainText: 'La receta a la que estaba enlazado ya no existe. Hay que volver a enlazarlo.',
-  },
-  roto_coste_null: {
-    human: 'sin_casar', label: 'Sin casar', tone: 'red',
-    reason: 'El escandallo no tiene coste calculado',
-    plainText: 'La receta no tiene coste. No sabemos cuánto cuesta este plato.',
-  },
-  roto_needs_review: {
-    human: 'sin_casar', label: 'Sin casar', tone: 'red',
-    reason: 'El escandallo está marcado a revisión',
-    plainText: 'La receta está marcada a revisión — su coste no es fiable todavía.',
-  },
-  roto_coste_imposible: {
-    human: 'sin_casar', label: 'Sin casar', tone: 'red',
-    reason: 'El coste del escandallo es sospechosamente bajo',
-    plainText: 'El coste es demasiado bajo, parece un error.',
-  },
-  sin_aprobar: {
-    human: 'para_revisar', label: 'Para revisar', tone: 'amber',
-    reason: 'En uso, pendiente de aprobación de oficina',
-    plainText: 'Está casado pero nadie lo ha confirmado.',
-  },
-  aprobado: {
-    human: 'bien', label: 'Bien', tone: 'green',
-    reason: 'Aprobado por oficina',
-    plainText: 'Confirmado por oficina.',
-  },
+  tone: 'green' | 'amber' | 'orange' | 'red'
+  /** Frase larga en lenguaje de cocina, lista para pintar — nada de
+   * "needs_review" ni "roto_coste_imposible" en pantalla, eso vive solo en
+   * `status`/`recipeType`. */
+  text: string
+}
+
+const HUMAN_LABEL: Record<LinkHumanState, string> = {
+  bien: 'Bien',
+  para_revisar: 'Para revisar',
+  falta_escandallo: 'Falta escandallo',
+  falta_precio: 'Falta precio',
+  sin_casar: 'Sin casar',
+}
+
+const HUMAN_TONE: Record<LinkHumanState, 'green' | 'amber' | 'orange' | 'red'> = {
+  bien: 'green',
+  para_revisar: 'amber',
+  falta_escandallo: 'orange',
+  falta_precio: 'orange',
+  sin_casar: 'red',
+}
+
+function classification(human: LinkHumanState, text: string): LinkClassification {
+  return { human, label: HUMAN_LABEL[human], tone: HUMAN_TONE[human], text }
+}
+
+/**
+ * Clasifica una fila de menu_item_link_health en uno de los 5 estados
+ * humanos del cockpit "Casado" — ÚNICA fuente de verdad del sello. Las
+ * pantallas que lo pintan (ficha de producto, fila del Menú, cockpit
+ * "Casado", ficha de escandallo) llaman a esta función — no reimplementar
+ * la lógica en un componente.
+ *
+ * Regla aprobada por Julio (03/08): el eje es recipe_item.type ('dish' vs
+ * 'raw'), NUNCA nombre/categoría/juicio de cocina — is_sellable/
+ * is_purchasable están sucios en datos reales y no sirven de eje.
+ *
+ * Un `raw` casado con coste y sin aprobar es SIEMPRE "Para revisar" con el
+ * aviso de "ingrediente suelto": no hay un camino aparte de "reventa normal
+ * sin aviso" — el mismo mecanismo de aprobación cubre tanto un refresco
+ * legítimo (Nestea) como un plato mal enlazado a un ingrediente suelto
+ * (Quesadilla→Carne de Birria). Oficina lo confirma una vez; tras aprobar,
+ * ambos casos son "Bien" igual que cualquier otro.
+ */
+export function classifyMenuItemLink(row: MenuItemLinkHealthRow): LinkClassification {
+  if (!row.recipeItemId || !row.recipeType) {
+    return classification(
+      'sin_casar',
+      'No tiene receta ni artículo enlazado. No sabemos su coste ni descuenta de almacén.',
+    )
+  }
+
+  const costOk = row.cost != null && row.cost >= 0.50
+  const trustworthy = costOk && !row.needsReview
+  const sharedNote = row.sharedWith > 1 ? ' Esta receta también la usa otro plato.' : ''
+
+  if (row.recipeType === 'dish') {
+    if (row.recipeLineCount === 0 || !trustworthy) {
+      return classification('falta_escandallo', 'Falta el escandallo — este plato aún no tiene receta montada.')
+    }
+    if (row.linkApprovedAt) {
+      return classification('bien', 'Confirmado por oficina.')
+    }
+    return classification('para_revisar', `Casado, sin confirmar.${sharedNote}`)
+  }
+
+  if (row.recipeType === 'raw') {
+    if (!trustworthy) {
+      return classification(
+        'falta_precio',
+        `Casado con ${row.recipeName ?? 'su artículo'}, falta ponerle el precio de compra.`,
+      )
+    }
+    if (row.linkApprovedAt) {
+      return classification('bien', 'Confirmado por oficina.')
+    }
+    return classification(
+      'para_revisar',
+      `Este plato se está costeando con un ingrediente suelto (${row.recipeName ?? 'artículo'}), no con un escandallo completo — pueden faltarle componentes.${sharedNote}`,
+    )
+  }
+
+  // packaging/tool/recipe enlazado — la RPC ya excluye estos casos; defensivo.
+  return classification('sin_casar', 'Enlazado a un artículo que no es ni plato ni ingrediente de venta.')
 }
 
 export interface MenuItemSharedRecipeReview {
@@ -216,6 +264,8 @@ export async function getMenuItemLinkHealth(
     brandName: row.brand_name ?? null,
     recipeItemId: row.recipe_item_id ?? null,
     recipeName: row.recipe_name ?? null,
+    recipeType: (row.recipe_type as RecipeItemType | null) ?? null,
+    recipeLineCount: row.recipe_line_count ?? 0,
     cost: row.cost ?? null,
     needsReview: row.needs_review,
     linkApprovedAt: row.link_approved_at ?? null,

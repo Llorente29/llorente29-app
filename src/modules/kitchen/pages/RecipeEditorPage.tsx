@@ -71,7 +71,7 @@ import {
 import {
   listMenuItemsUsingRecipe,
   getMenuItemLinkHealth,
-  LINK_STATUS_META,
+  classifyMenuItemLink,
   type MenuItemUsingRecipe,
   type MenuItemLinkHealthRow,
 } from '@/modules/kitchen/services/menuLinkService'
@@ -2586,7 +2586,7 @@ export default function RecipeEditorPage({
                     <div className="flex flex-col gap-1">
                       {usedByItems.map((it) => {
                         const h = usedByHealth.get(it.id)
-                        const meta = h ? LINK_STATUS_META[h.status] : null
+                        const meta = h ? classifyMenuItemLink(h) : null
                         return (
                           <button
                             key={it.id}
@@ -2598,7 +2598,10 @@ export default function RecipeEditorPage({
                             {meta && (
                               <span className={
                                 'text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0 ' +
-                                (meta.tone === 'green' ? 'bg-success-bg text-success' : meta.tone === 'amber' ? 'bg-warning-bg text-warning' : 'bg-danger-bg text-danger')
+                                (meta.tone === 'green' ? 'bg-success-bg text-success'
+                                  : meta.tone === 'amber' ? 'bg-warning-bg text-warning'
+                                  : meta.tone === 'orange' ? 'bg-orange-100 text-orange-800'
+                                  : 'bg-danger-bg text-danger')
                               }>
                                 {meta.label}
                               </span>

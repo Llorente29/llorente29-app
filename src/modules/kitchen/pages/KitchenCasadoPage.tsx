@@ -1,19 +1,20 @@
 // src/modules/kitchen/pages/KitchenCasadoPage.tsx
 //
-// Cockpit "Casado" — F2 del frente de trazabilidad ítem↔escandallo. UN solo
-// sitio, en lenguaje de cocina, que responde "¿está cada plato bien casado y
-// qué hago?" de un vistazo. No añade lógica de casado nueva: traduce y
-// ordena por impacto lo que ya construyó F1 (menu_item_link_health).
+// Cockpit "Casado" — frente de trazabilidad ítem↔escandallo. UN solo sitio,
+// en lenguaje de cocina, que responde "¿está cada plato bien casado y qué
+// hago?" de un vistazo. No añade lógica de casado nueva: traduce y ordena
+// por impacto lo que ya construyó el backend (menu_item_link_health).
 //
-// Los 7 status técnicos SIEMPRE se muestran como uno de 3 estados humanos
-// (Bien / Para revisar / Sin casar) vía LINK_STATUS_META — nunca la jerga en
-// pantalla. Un plato "Bien" nunca queda bloqueado: Cambiar/Quitar siempre
-// visibles: cambiar la receta de un aprobado lo devuelve a "Para revisar"
+// 5 estados humanos (Bien / Para revisar / Falta escandallo / Falta precio /
+// Sin casar) vía classifyMenuItemLink — nunca la jerga técnica en pantalla.
+// El eje es recipe_item.type (dish vs raw), no nombre/categoría/juicio de
+// cocina. Un plato "Bien" nunca queda bloqueado: Cambiar/Quitar siempre
+// visibles; cambiar la receta de un aprobado lo devuelve a "Para revisar"
 // (lo hace la RPC set_menu_item_recipe; aquí solo se avisa y se refresca).
 
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { AlertTriangle, Check, Clock, Link2, Loader2, Plus, RefreshCw, Search, X } from 'lucide-react'
+import { AlertTriangle, Check, ChefHat, Clock, Euro, Link2, Loader2, Plus, RefreshCw, Search, X } from 'lucide-react'
 import { fmtMoney, fmtInt } from '@/lib/format'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { listBrandsWithCatalog, type CatalogBrand } from '@/modules/kitchen/services/brandCatalogService'
@@ -24,7 +25,7 @@ import {
   clearMenuItemRecipe,
   approveMenuItemLink,
   createDishAndLinkToMenuItem,
-  LINK_STATUS_META,
+  classifyMenuItemLink,
   type MenuItemLinkHealthRow,
   type LinkHumanState,
 } from '@/modules/kitchen/services/menuLinkService'
@@ -32,23 +33,18 @@ import RecipeLinkPickerModal from '@/modules/kitchen/components/RecipeLinkPicker
 import CatalogProductDetailPage from '@/modules/kitchen/pages/CatalogProductDetailPage'
 import ConfirmDialog from '@/components/ConfirmDialog'
 
-const HUMAN_RANK: Record<LinkHumanState, number> = { sin_casar: 0, para_revisar: 1, bien: 2 }
-const HUMAN_ICON: Record<LinkHumanState, typeof AlertTriangle> = { sin_casar: AlertTriangle, para_revisar: Clock, bien: Check }
+const HUMAN_RANK: Record<LinkHumanState, number> = {
+  sin_casar: 0, falta_escandallo: 1, falta_precio: 2, para_revisar: 3, bien: 4,
+}
+const HUMAN_ICON: Record<LinkHumanState, typeof AlertTriangle> = {
+  sin_casar: AlertTriangle, falta_escandallo: ChefHat, falta_precio: Euro, para_revisar: Clock, bien: Check,
+}
 const HUMAN_CLASSES: Record<LinkHumanState, { text: string; badge: string; dot: string }> = {
   sin_casar: { text: 'text-red-700', badge: 'bg-red-50 text-red-700 border-red-200', dot: 'bg-red-500' },
+  falta_escandallo: { text: 'text-orange-700', badge: 'bg-orange-50 text-orange-700 border-orange-200', dot: 'bg-orange-500' },
+  falta_precio: { text: 'text-orange-700', badge: 'bg-orange-50 text-orange-700 border-orange-200', dot: 'bg-orange-500' },
   para_revisar: { text: 'text-amber-700', badge: 'bg-amber-50 text-amber-800 border-amber-200', dot: 'bg-amber-500' },
   bien: { text: 'text-green-700', badge: 'bg-green-50 text-green-800 border-green-200', dot: 'bg-green-500' },
-}
-
-function rowPlainText(row: MenuItemLinkHealthRow): string {
-  const meta = LINK_STATUS_META[row.status]
-  if (row.status === 'roto_coste_imposible' && row.cost != null) {
-    return `El coste (${fmtMoney(row.cost)}) es demasiado bajo, parece un error.`
-  }
-  if (row.status === 'sin_aprobar' && row.sharedWith > 1) {
-    return `${meta.plainText} Esta receta también la usa otro plato.`
-  }
-  return meta.plainText
 }
 
 export default function KitchenCasadoPage() {
@@ -128,19 +124,22 @@ export default function KitchenCasadoPage() {
   }, [activeAccountId, selectedBrandId])
 
   const counts = useMemo(() => {
-    let bien = 0, revisar = 0, sinCasar = 0
+    let bien = 0, revisar = 0, faltaEscandallo = 0, faltaPrecio = 0, sinCasar = 0
     for (const r of rows) {
-      const h = LINK_STATUS_META[r.status].human
-      if (h === 'bien') bien++
-      else if (h === 'para_revisar') revisar++
-      else sinCasar++
+      switch (classifyMenuItemLink(r).human) {
+        case 'bien': bien++; break
+        case 'para_revisar': revisar++; break
+        case 'falta_escandallo': faltaEscandallo++; break
+        case 'falta_precio': faltaPrecio++; break
+        case 'sin_casar': sinCasar++; break
+      }
     }
-    return { bien, revisar, sinCasar }
+    return { bien, revisar, faltaEscandallo, faltaPrecio, sinCasar }
   }, [rows])
 
   const filtered = useMemo(() => {
     let out = rows
-    if (onlyProblems) out = out.filter((r) => LINK_STATUS_META[r.status].human !== 'bien')
+    if (onlyProblems) out = out.filter((r) => classifyMenuItemLink(r).human !== 'bien')
     const q = search.trim().toLowerCase()
     if (q !== '') {
       out = out.filter((r) =>
@@ -148,8 +147,8 @@ export default function KitchenCasadoPage() {
         (r.recipeName ?? '').toLowerCase().includes(q))
     }
     return [...out].sort((a, b) => {
-      const ra = HUMAN_RANK[LINK_STATUS_META[a.status].human]
-      const rb = HUMAN_RANK[LINK_STATUS_META[b.status].human]
+      const ra = HUMAN_RANK[classifyMenuItemLink(a).human]
+      const rb = HUMAN_RANK[classifyMenuItemLink(b).human]
       if (ra !== rb) return ra - rb
       const va = sales.get(a.menuItemId)?.revenue ?? 0
       const vb = sales.get(b.menuItemId)?.revenue ?? 0
@@ -169,7 +168,11 @@ export default function KitchenCasadoPage() {
 
   function openPicker(row: MenuItemLinkHealthRow) {
     setRowError(null)
-    setPickerFor({ menuItemId: row.menuItemId, itemName: row.itemName, wasApproved: row.status === 'aprobado' })
+    setPickerFor({
+      menuItemId: row.menuItemId,
+      itemName: row.itemName,
+      wasApproved: classifyMenuItemLink(row).human === 'bien',
+    })
   }
 
   async function handleChoose(recipeItemId: string) {
@@ -273,7 +276,7 @@ export default function KitchenCasadoPage() {
         ¿Está cada plato bien casado con su receta? Aquí lo ves de un vistazo y lo arreglas sin salir de esta pantalla.
       </p>
 
-      {/* Cabecera: 3 contadores en lenguaje llano */}
+      {/* Cabecera: 5 contadores en lenguaje llano */}
       <div className="rounded-xl border border-gray-200 bg-white p-5 mb-5 flex items-center gap-6 flex-wrap">
         <div>
           <div className="text-3xl font-bold tabular-nums text-green-700">{counts.bien}</div>
@@ -282,6 +285,14 @@ export default function KitchenCasadoPage() {
         <div>
           <div className="text-3xl font-bold tabular-nums text-amber-700">{counts.revisar}</div>
           <div className="text-sm text-gray-600">Para revisar</div>
+        </div>
+        <div>
+          <div className="text-3xl font-bold tabular-nums text-orange-700">{counts.faltaEscandallo}</div>
+          <div className="text-sm text-gray-600">Falta escandallo</div>
+        </div>
+        <div>
+          <div className="text-3xl font-bold tabular-nums text-orange-700">{counts.faltaPrecio}</div>
+          <div className="text-sm text-gray-600">Falta precio</div>
         </div>
         <div>
           <div className="text-3xl font-bold tabular-nums text-red-700">{counts.sinCasar}</div>
@@ -335,7 +346,7 @@ export default function KitchenCasadoPage() {
       ) : (
         <div className="space-y-2">
           {filtered.map((row) => {
-            const meta = LINK_STATUS_META[row.status]
+            const meta = classifyMenuItemLink(row)
             const cls = HUMAN_CLASSES[meta.human]
             const HumanIcon = HUMAN_ICON[meta.human]
             const s = sales.get(row.menuItemId)
@@ -360,7 +371,7 @@ export default function KitchenCasadoPage() {
                       {' · '}
                       {s ? `${fmtMoney(s.revenue)} vendidos (${fmtInt(s.unitsSold)} ud, 30 d)` : 'sin ventas en 30 d'}
                     </div>
-                    <p className="text-sm text-gray-700 mt-1.5">{rowPlainText(row)}</p>
+                    <p className="text-sm text-gray-700 mt-1.5">{meta.text}</p>
                   </div>
                   <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-full border shrink-0 ${cls.badge}`}>
                     <HumanIcon size={11} /> {meta.label}
@@ -391,6 +402,18 @@ export default function KitchenCasadoPage() {
                         <Link2 size={14} /> Cambiar receta
                       </button>
                     </>
+                  )}
+                  {meta.human === 'falta_escandallo' && (
+                    <button onClick={() => row.recipeItemId && navigate('/kitchen/recetas?recipe=' + row.recipeItemId)} disabled={busy}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-60">
+                      <ChefHat size={14} /> Montar escandallo
+                    </button>
+                  )}
+                  {meta.human === 'falta_precio' && (
+                    <button onClick={() => row.recipeItemId && navigate('/kitchen?item=' + row.recipeItemId)} disabled={busy}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-60">
+                      <Euro size={14} /> Poner precio
+                    </button>
                   )}
                   {meta.human === 'bien' && (
                     <>

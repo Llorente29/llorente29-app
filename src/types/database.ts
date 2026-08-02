@@ -17537,7 +17537,9 @@ export type Database = {
           menu_item_id: string
           needs_review: boolean
           recipe_item_id: string
+          recipe_line_count: number
           recipe_name: string
+          recipe_type: string
           shared_with: number
           status: string
         }[]

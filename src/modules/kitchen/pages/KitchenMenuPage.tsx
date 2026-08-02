@@ -15,7 +15,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, ChevronDown, ChevronRight, CircleDashed, CheckCircle2, AlertTriangle, Clock, UtensilsCrossed, Package, Link2Off, Link2, Plus, FolderPlus, ArrowRightLeft, X, Undo2, Info, ArrowUp, ArrowDown, Trash2, UploadCloud, Loader2, Sparkles, PackagePlus } from 'lucide-react'
+import { Search, ChevronDown, ChevronRight, CircleDashed, CheckCircle2, AlertTriangle, ChefHat, Clock, UtensilsCrossed, Package, Link2Off, Link2, Plus, FolderPlus, ArrowRightLeft, X, Undo2, Info, ArrowUp, ArrowDown, Trash2, UploadCloud, Loader2, Sparkles, PackagePlus } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import {
   listBrandsWithCatalog,
@@ -28,7 +28,7 @@ import { listMenuCategories, reorderMenuCategories, deactivateMenuCategory, upda
 import { getReliability, type SalesReliability } from '@/modules/kitchen/services/salesReliabilityService'
 import {
   getMenuItemLinkHealth,
-  LINK_STATUS_META,
+  classifyMenuItemLink,
   type MenuItemLinkHealthRow,
 } from '@/modules/kitchen/services/menuLinkService'
 import CatalogProductDetailPage from '@/modules/kitchen/pages/CatalogProductDetailPage'
@@ -807,12 +807,12 @@ export default function KitchenMenuPage() {
                             <CircleDashed className="w-3.5 h-3.5" /> …
                           </span>
                         ) : (() => {
-                          const meta = LINK_STATUS_META[health.status]
-                          const toneColor = meta.tone === 'green' ? 'text-green-600' : meta.tone === 'red' ? 'text-red-600' : 'text-amber-600'
-                          const Icon = meta.tone === 'green' ? CheckCircle2 : meta.tone === 'red' ? AlertTriangle : Clock
+                          const meta = classifyMenuItemLink(health)
+                          const toneColor = meta.tone === 'green' ? 'text-green-600' : meta.tone === 'red' ? 'text-red-600' : meta.tone === 'orange' ? 'text-orange-600' : 'text-amber-600'
+                          const Icon = meta.tone === 'green' ? CheckCircle2 : meta.tone === 'red' ? AlertTriangle : meta.tone === 'orange' ? ChefHat : Clock
                           return (
                             <div>
-                              <span className={`inline-flex items-center gap-1 text-xs ${toneColor}`} title={meta.reason}>
+                              <span className={`inline-flex items-center gap-1 text-xs ${toneColor}`} title={meta.text}>
                                 <Icon className="w-3.5 h-3.5" /> {meta.label}
                               </span>
                               {econ && (
@@ -1139,21 +1139,25 @@ function ReliabilityBanner({ signal, onOpen, onFix }: { signal: SalesReliability
 // la marca visible). rows viene de menu_item_link_health sin filtrar por
 // marca; los contadores son la única fuente de verdad, igual que el sello.
 function LinkHealthBanner({ rows, onOpen }: { rows: MenuItemLinkHealthRow[]; onOpen: () => void }) {
-  const sinCasar = rows.filter((r) => LINK_STATUS_META[r.status].human === 'sin_casar').length
-  const paraRevisar = rows.filter((r) => LINK_STATUS_META[r.status].human === 'para_revisar').length
-  const bien = rows.filter((r) => LINK_STATUS_META[r.status].human === 'bien').length
-  if (sinCasar === 0 && paraRevisar === 0) return null // nada que auditar — no molestar
+  const sinCasar = rows.filter((r) => classifyMenuItemLink(r).human === 'sin_casar').length
+  const faltaAlgo = rows.filter((r) => {
+    const h = classifyMenuItemLink(r).human
+    return h === 'falta_escandallo' || h === 'falta_precio'
+  }).length
+  const paraRevisar = rows.filter((r) => classifyMenuItemLink(r).human === 'para_revisar').length
+  const bien = rows.filter((r) => classifyMenuItemLink(r).human === 'bien').length
+  if (sinCasar === 0 && faltaAlgo === 0 && paraRevisar === 0) return null // nada que auditar — no molestar
 
-  const cardBg = sinCasar > 0 ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'
-  const dot = sinCasar > 0 ? 'bg-red-500' : 'bg-amber-500'
-  const valueColor = sinCasar > 0 ? 'text-red-700' : 'text-amber-700'
+  const cardBg = sinCasar > 0 ? 'bg-red-50 border-red-200' : faltaAlgo > 0 ? 'bg-orange-50 border-orange-200' : 'bg-amber-50 border-amber-200'
+  const dot = sinCasar > 0 ? 'bg-red-500' : faltaAlgo > 0 ? 'bg-orange-500' : 'bg-amber-500'
+  const valueColor = sinCasar > 0 ? 'text-red-700' : faltaAlgo > 0 ? 'text-orange-700' : 'text-amber-700'
 
   return (
     <div className={`rounded-xl border p-3 mb-5 flex items-center gap-3 flex-wrap ${cardBg}`}>
       <span className={`w-2.5 h-2.5 rounded-full ${dot} shrink-0`} />
       <div className="flex-1 min-w-0">
         <span className={`text-sm font-medium ${valueColor}`}>
-          Casado: {sinCasar} sin casar · {paraRevisar} para revisar
+          Casado: {sinCasar} sin casar · {faltaAlgo} sin precio/escandallo · {paraRevisar} para revisar
         </span>
         <span className="text-xs text-gray-500"> · {bien} bien</span>
       </div>

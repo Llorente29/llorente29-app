@@ -46,7 +46,9 @@ export default function RecipeLinkPickerModal({
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    listRecipeItems({ accountId, type: 'dish', includeInactive: false })
+    // dish + raw: un recipe_item 'raw' también puede ser el artículo de venta
+    // de un producto de reventa (Nestea, agua…) — no solo escandallos de plato.
+    listRecipeItems({ accountId, types: ['dish', 'raw'], includeInactive: false })
       .then((rows) => { if (!cancelled) setOptions(rows) })
       .catch((err: unknown) => {
         if (cancelled) return

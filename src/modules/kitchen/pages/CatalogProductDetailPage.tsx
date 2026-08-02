@@ -30,7 +30,7 @@ import {
   approveMenuItemLink,
   createDishAndLinkToMenuItem,
   getMenuItemLinkHealth,
-  LINK_STATUS_META,
+  classifyMenuItemLink,
   type MenuItemLinkHealthRow,
 } from '@/modules/kitchen/services/menuLinkService'
 import RecipeLinkPickerModal from '@/modules/kitchen/components/RecipeLinkPickerModal'
@@ -91,11 +91,12 @@ function fmtDate(iso: string | null | undefined): string {
   catch { return '—' }
 }
 
-// Tono → clases Tailwind de esta ficha (el tono viene de LINK_STATUS_META,
+// Tono → clases Tailwind de esta ficha (el tono viene de classifyMenuItemLink,
 // única fuente de verdad del sello — ver menuLinkService.ts).
-const TONE_CLASSES: Record<'red' | 'amber' | 'green', string> = {
+const TONE_CLASSES: Record<'red' | 'amber' | 'orange' | 'green', string> = {
   red: 'bg-red-50 text-red-700',
   amber: 'bg-amber-50 text-amber-800',
+  orange: 'bg-orange-50 text-orange-700',
   green: 'bg-green-50 text-green-800',
 }
 
@@ -142,7 +143,7 @@ function PhotoLightbox({ src, onClose }: { src: string; onClose: () => void }) {
 
 function CollapsibleSection({ id, icon, title, badge, badgeColor, defaultOpen, children }: {
   id: string; icon: string; title: string; badge?: string;
-  badgeColor?: 'ok' | 'warn' | 'danger' | 'neutral'; defaultOpen?: boolean; children: ReactNode
+  badgeColor?: 'ok' | 'warn' | 'danger' | 'orange' | 'neutral'; defaultOpen?: boolean; children: ReactNode
 }) {
   const [open, setOpen] = useState(defaultOpen ?? false)
   return (
@@ -150,7 +151,7 @@ function CollapsibleSection({ id, icon, title, badge, badgeColor, defaultOpen, c
       <button onClick={() => setOpen(!open)} className="flex items-center w-full px-5 py-3 gap-2 hover:bg-stone-50 text-left">
         <Icon name={icon} size={16} className="text-stone-400 shrink-0" />
         <span className="text-sm font-medium flex-1">{title}</span>
-        {badge && <span className={`text-[10px] px-2 py-0.5 rounded font-medium ${badgeColor === 'ok' ? 'bg-green-50 text-green-800' : badgeColor === 'danger' ? 'bg-red-50 text-red-700' : badgeColor === 'warn' ? 'bg-amber-50 text-amber-800' : 'bg-stone-100 text-stone-500'}`}>{badge}</span>}
+        {badge && <span className={`text-[10px] px-2 py-0.5 rounded font-medium ${badgeColor === 'ok' ? 'bg-green-50 text-green-800' : badgeColor === 'danger' ? 'bg-red-50 text-red-700' : badgeColor === 'orange' ? 'bg-orange-50 text-orange-700' : badgeColor === 'warn' ? 'bg-amber-50 text-amber-800' : 'bg-stone-100 text-stone-500'}`}>{badge}</span>}
         <ChevronDown size={14} className={`text-stone-400 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && <div className="px-5 pb-4">{children}</div>}
@@ -1253,15 +1254,15 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
   }
 
   const hasRecipe = !!item.recipeItemId
-  // Sello de 3 estados: mientras carga linkHealth, degrada a algo razonable
-  // (nunca a "Escandallo OK" — el verde solo sale de linkHealth.status === 'aprobado').
+  // Sello de 5 estados: mientras carga linkHealth, degrada a algo razonable
+  // (nunca a "Bien" — el verde solo sale de classifyMenuItemLink(linkHealth).human === 'bien').
   const linkBadgeMeta = linkHealth
-    ? LINK_STATUS_META[linkHealth.status]
+    ? classifyMenuItemLink(linkHealth)
     : hasRecipe
-      ? { label: 'Revisando…', reason: 'Cargando estado del enlace', tone: 'amber' as const }
-      : LINK_STATUS_META.roto_sin_escandallo
+      ? { label: 'Revisando…', text: 'Cargando estado del enlace', tone: 'amber' as const, human: 'para_revisar' as const }
+      : { label: 'Sin casar', text: 'No tiene receta ni artículo enlazado.', tone: 'red' as const, human: 'sin_casar' as const }
   const linkBadge = { ...linkBadgeMeta, className: TONE_CLASSES[linkBadgeMeta.tone] }
-  const canApprove = linkHealth?.status === 'sin_aprobar'
+  const canApprove = linkHealth != null && classifyMenuItemLink(linkHealth).human === 'para_revisar'
 
   // ─── Render ─────────────────────────────────────────────────────────────
 
@@ -1381,7 +1382,7 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
             <>
               <div className="flex items-start justify-between gap-3">
                 <h1 className="font-display text-[26px] font-medium leading-tight mb-1.5">{item.name}</h1>
-                <span className={`text-[11px] px-2.5 py-1 rounded-full font-medium shrink-0 ${linkBadge.className}`} title={linkBadge.reason}>
+                <span className={`text-[11px] px-2.5 py-1 rounded-full font-medium shrink-0 ${linkBadge.className}`} title={linkBadge.text}>
                   {linkBadge.label}
                 </span>
               </div>
@@ -1497,7 +1498,7 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
         {/* S1 — Escandallo y elaboración */}
         <CollapsibleSection id="s-escandallo" icon="chef-hat" title="Escandallo y elaboración"
           badge={linkBadge.label}
-          badgeColor={linkBadge.tone === 'green' ? 'ok' : linkBadge.tone === 'amber' ? 'warn' : 'danger'}
+          badgeColor={linkBadge.tone === 'green' ? 'ok' : linkBadge.tone === 'amber' ? 'warn' : linkBadge.tone === 'orange' ? 'orange' : 'danger'}
           defaultOpen={hasRecipe}>
           {!hasRecipe ? (
             <EmptyState text="Sin escandallo vinculado. Conecta una receta para ver costes, alérgenos y elaboración.">
@@ -1508,8 +1509,8 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
             </EmptyState>
           ) : (
             <>
-              {linkBadge.tone === 'red' && (
-                <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">{linkBadge.reason}</p>
+              {(linkBadge.tone === 'red' || linkBadge.tone === 'orange') && (
+                <p className={`text-xs rounded-lg px-3 py-2 mb-3 ${linkBadge.tone === 'red' ? 'text-red-700 bg-red-50 border border-red-200' : 'text-orange-700 bg-orange-50 border border-orange-200'}`}>{linkBadge.text}</p>
               )}
               {linkHealth?.recipeName && (
                 <p className="text-xs text-stone-500 mb-3">
@@ -1979,7 +1980,7 @@ export default function CatalogProductDetailPage({ menuItemId, onBack }: Catalog
         <RecipeLinkPickerModal
           accountId={item.accountId}
           itemName={item.name}
-          wasApproved={linkHealth?.status === 'aprobado'}
+          wasApproved={linkHealth != null && classifyMenuItemLink(linkHealth).human === 'bien'}
           busy={linking}
           error={linkError}
           onChoose={(id) => linkRecipe(id)}
