@@ -6,6 +6,12 @@
 -- No se edita 20260802T1030_menu_item_link_rpcs.sql (ya aplicada) — CREATE OR
 -- REPLACE en migración nueva, tal como manda la regla del proyecto.
 --
+-- coalesce(mi.product_type, 'item') en vez de mi.product_type a secas: si
+-- algún registro tuviera product_type NULL, coalesce lo trata como 'item' →
+-- SE AUDITA (lado seguro), no se excluye en silencio. Solo se excluye lo
+-- explícitamente 'combo'. Mismo patrón que ya usa el proyecto en otros sitios
+-- (coalesce(sl.line_type,'product'), coalesce(mi.is_available,...)).
+--
 -- Aplicar por SQL Editor a mano. Verificar con:
 --   select count(*) from menu_item_link_health(p_account_id) — antes/después
 --   del filtro, el nº de filas con status='roto_sin_escandallo' debe bajar
@@ -58,7 +64,7 @@ begin
   left join share_counts sc on sc.recipe_item_id = mi.recipe_item_id
   where mi.account_id = p_account_id
     and mi.archived_at is null
-    and mi.product_type <> 'combo'
+    and coalesce(mi.product_type, 'item') <> 'combo'
     and (p_brand_id is null or mi.brand_id = p_brand_id)
   order by
     case
