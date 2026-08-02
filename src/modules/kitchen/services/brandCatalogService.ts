@@ -37,7 +37,6 @@ export interface CatalogProduct {
   recipeItemId: string | null
   isActive: boolean
   isAvailable: boolean
-  needsReview: boolean
   modifierGroupCount: number
   comboSlotCount: number   // nº de slots si es combo (0 si es item)
   position: number
@@ -225,7 +224,6 @@ export async function listCategoriesWithProducts(
     recipeItemId: (i.recipe_item_id as string) ?? null,
     isActive: i.is_active !== false,
     isAvailable: i.is_available !== false,
-    needsReview: i.needs_review === true,
     modifierGroupCount: groupCountByItem.get(i.id as string) ?? 0,
     comboSlotCount: slotCountByCombo.get(i.id as string) ?? 0,
     position: Number(i.position ?? 0),

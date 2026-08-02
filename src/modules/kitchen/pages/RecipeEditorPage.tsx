@@ -68,6 +68,13 @@ import {
   listMenuItems,
   getMenuItemEconomics,
 } from '@/modules/kitchen/services/menuItemService'
+import {
+  listMenuItemsUsingRecipe,
+  getMenuItemLinkHealth,
+  classifyMenuItemLink,
+  type MenuItemUsingRecipe,
+  type MenuItemLinkHealthRow,
+} from '@/modules/kitchen/services/menuLinkService'
 import { listBrands } from '@/modules/multitenancy/services/brandsService'
 import { streamMessage } from '@/modules/folvy-ai/services/folvyAIService'
 import {
@@ -278,6 +285,11 @@ export default function RecipeEditorPage({
   const [editingName, setEditingName] = useState(false)
   const [nameDraft, setNameDraft] = useState('')
   const [savingName, setSavingName] = useState(false)
+  // Doble dirección (trazabilidad ítem↔escandallo): qué ítems de carta usan
+  // este escandallo hoy, con su sello de casado — clicables al cockpit
+  // "Casado". null = cargando; [] = ninguno.
+  const [usedByItems, setUsedByItems] = useState<MenuItemUsingRecipe[] | null>(null)
+  const [usedByHealth, setUsedByHealth] = useState<Map<string, MenuItemLinkHealthRow>>(new Map())
   // ── Importar ficha (rellenar ESTE escandallo, no crear otro) ──
   const importInputRef = useRef<HTMLInputElement | null>(null)
   const [importing, setImporting] = useState(false)
@@ -379,6 +391,38 @@ export default function RecipeEditorPage({
       cancelled = true
     }
   }, [accountsLoading, activeAccountId, recipeId, reloadTick])
+
+  // Doble dirección: "usado por N ítems" — hoy invisible, y esa invisibilidad
+  // es parte de la causa raíz del enlace equivocado que nadie ve.
+  useEffect(() => {
+    if (!recipeId || !activeAccountId) { setUsedByItems(null); setUsedByHealth(new Map()); return }
+    let cancelled = false
+    setUsedByItems(null)
+    listMenuItemsUsingRecipe(recipeId)
+      .then((rows) => {
+        if (cancelled) return
+        setUsedByItems(rows)
+        if (rows.length === 0) { setUsedByHealth(new Map()); return }
+        // Sello de casado por ítem — cuenta entera (un escandallo se puede
+        // reutilizar entre marcas, no solo dentro de una).
+        getMenuItemLinkHealth(activeAccountId)
+          .then((health) => {
+            if (cancelled) return
+            const m = new Map<string, MenuItemLinkHealthRow>()
+            for (const h of health) m.set(h.menuItemId, h)
+            setUsedByHealth(m)
+          })
+          .catch((e: unknown) => {
+            if (!cancelled) console.warn('RecipeEditorPage: fallo cargando el estado de casado de los ítems', e)
+          })
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        console.warn('RecipeEditorPage: fallo cargando ítems que usan este escandallo', err)
+        setUsedByItems([])
+      })
+    return () => { cancelled = true }
+  }, [recipeId, reloadTick, activeAccountId])
 
   // Economía: marcas del plato + FC/margen por canal. Se re-dispara con
   // econReloadTick tras editar/añadir/borrar una línea (latido del FC).
@@ -2526,6 +2570,48 @@ export default function RecipeEditorPage({
                     )
                   })}
                 </div>
+              )}
+
+              {/* Doble dirección (trazabilidad ítem↔escandallo): hoy invisible era
+                  parte de la causa raíz del enlace equivocado que nadie veía. */}
+              {usedByItems !== null && (
+                <>
+                  <div className="border-t border-default my-3.5" />
+                  <div className="text-[11px] font-medium tracking-wider text-text-secondary uppercase mb-2.5">
+                    Platos de venta que usan esta receta
+                  </div>
+                  {usedByItems.length === 0 ? (
+                    <p className="text-[11px] text-text-secondary">Ningún plato de la carta usa este escandallo todavía.</p>
+                  ) : (
+                    <div className="flex flex-col gap-1">
+                      {usedByItems.map((it) => {
+                        const h = usedByHealth.get(it.id)
+                        const meta = h ? classifyMenuItemLink(h) : null
+                        return (
+                          <button
+                            key={it.id}
+                            type="button"
+                            onClick={() => navigate('/kitchen/casado?item=' + it.id)}
+                            className="w-full flex items-center justify-between gap-2 text-left px-2 py-1.5 rounded-md hover:bg-accent-bg transition-colors"
+                          >
+                            <span className="text-[12px] text-text-primary truncate">{it.name}</span>
+                            {meta && (
+                              <span className={
+                                'text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0 ' +
+                                (meta.tone === 'green' ? 'bg-success-bg text-success'
+                                  : meta.tone === 'amber' ? 'bg-warning-bg text-warning'
+                                  : meta.tone === 'orange' ? 'bg-orange-100 text-orange-800'
+                                  : 'bg-danger-bg text-danger')
+                              }>
+                                {meta.label}
+                              </span>
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
