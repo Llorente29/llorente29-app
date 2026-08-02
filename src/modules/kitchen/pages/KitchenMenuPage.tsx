@@ -31,7 +31,7 @@ import {
   classifyMenuItemLink,
   type MenuItemLinkHealthRow,
 } from '@/modules/kitchen/services/menuLinkService'
-import CatalogProductDetailPage from '@/modules/kitchen/pages/CatalogProductDetailPage'
+import CatalogFichaPage from '@/modules/kitchen/pages/CatalogFichaPage'
 import SalesExceptionsPage from '@/modules/kitchen/pages/SalesExceptionsPage'
 import WarehouseReliabilityPage from '@/modules/kitchen/pages/WarehouseReliabilityPage'
 import NewMenuItemModal from '@/modules/kitchen/components/NewMenuItemModal'
@@ -477,7 +477,7 @@ export default function KitchenMenuPage() {
   if (selectedProductId) {
     return (
       <div className="p-4 sm:p-6 max-w-6xl mx-auto">
-        <CatalogProductDetailPage menuItemId={selectedProductId} onBack={handleDetailBack} />
+        <CatalogFichaPage menuItemId={selectedProductId} onBack={handleDetailBack} />
       </div>
     )
   }

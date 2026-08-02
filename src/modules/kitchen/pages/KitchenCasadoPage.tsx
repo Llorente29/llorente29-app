@@ -30,7 +30,7 @@ import {
   type LinkHumanState,
 } from '@/modules/kitchen/services/menuLinkService'
 import RecipeLinkPickerModal from '@/modules/kitchen/components/RecipeLinkPickerModal'
-import CatalogProductDetailPage from '@/modules/kitchen/pages/CatalogProductDetailPage'
+import CatalogFichaPage from '@/modules/kitchen/pages/CatalogFichaPage'
 import ConfirmDialog from '@/components/ConfirmDialog'
 
 const HUMAN_RANK: Record<LinkHumanState, number> = {
@@ -251,7 +251,7 @@ export default function KitchenCasadoPage() {
   if (selectedProductId) {
     return (
       <div className="p-4 sm:p-6 max-w-6xl mx-auto">
-        <CatalogProductDetailPage menuItemId={selectedProductId} onBack={handleProductBack} />
+        <CatalogFichaPage menuItemId={selectedProductId} onBack={handleProductBack} />
       </div>
     )
   }

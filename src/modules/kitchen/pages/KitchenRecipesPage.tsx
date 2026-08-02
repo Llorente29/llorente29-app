@@ -64,7 +64,7 @@ import {
 import RecipeImportReviewModal from '@/modules/kitchen/components/RecipeImportReviewModal'
 import { listUnits } from '@/modules/kitchen/services/kitchenUnitService'
 import type { RecipeItem, KitchenUnit, RecipeItemType } from '@/types/kitchen'
-import RecipeEditorPage from '@/modules/kitchen/pages/RecipeEditorPage'
+import CatalogFichaPage from '@/modules/kitchen/pages/CatalogFichaPage'
 
 function formatEur(value: number | null | undefined): string {
   if (value === null || value === undefined) return '—'
@@ -337,7 +337,7 @@ export default function KitchenRecipesPage() {
   // ── Vista DETALLE: el editor del plato seleccionado ──
   if (selectedRecipeId) {
     return (
-      <RecipeEditorPage
+      <CatalogFichaPage
         recipeId={selectedRecipeId}
         onBack={() => setSelectedRecipeId(null)}
         onOpenRecipe={(id) => setSelectedRecipeId(id)}
