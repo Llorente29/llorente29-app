@@ -278,7 +278,13 @@ export default function AllergensCompliancePage() {
         <h3 className="text-sm font-semibold text-text-primary mb-1.5 flex items-center gap-1.5">
           <AlertTriangle className="w-4 h-4 text-text-secondary" /> Qué falta
         </h3>
-        {incompleteCount === 0 ? (
+        {matrixError ? (
+          <p className="text-sm text-text-secondary">La matriz no cargó — ver el error de arriba.</p>
+        ) : filteredMatrix.length === 0 ? (
+          <p className="text-sm text-text-secondary">
+            {matrix.length === 0 ? 'Ningún plato a la venta todavía.' : 'Ninguna marca coincide con el filtro.'}
+          </p>
+        ) : incompleteCount === 0 ? (
           <p className="text-sm text-success">
             Los {filteredMatrix.length} platos{brandFilter ? ` de ${brandFilter}` : ''} tienen los 14 alérgenos con
             declaración real (ni "sin declarar" ni "sin determinar").
