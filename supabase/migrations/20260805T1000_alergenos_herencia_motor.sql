@@ -197,8 +197,12 @@ $$;
 -- mantiene su guard y sus permisos. Verificado: ningún cliente llama hoy a
 -- compute_recipe_item_allergens (no existe wrapper en src/, Fase 2 aún no
 -- está escrita).
-revoke execute on function public.compute_recipe_item_allergens(uuid) from anon, authenticated;
-revoke execute on function public._recompute_recipe_item_allergens(uuid) from anon, authenticated;
+-- El EXECUTE por defecto lo concede Postgres al rol PUBLIC (no a anon ni a
+-- authenticated directamente) — hay que revocárselo también a PUBLIC, si no
+-- anon/authenticated lo siguen heredando de ahí (confirmado en vivo: el
+-- guard de abajo abortó la primera vez exactamente por este motivo).
+revoke execute on function public.compute_recipe_item_allergens(uuid) from public, anon, authenticated;
+revoke execute on function public._recompute_recipe_item_allergens(uuid) from public, anon, authenticated;
 
 notify pgrst, 'reload schema';
 
