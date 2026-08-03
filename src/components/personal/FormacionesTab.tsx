@@ -209,10 +209,11 @@ export default function FormacionesTab({ employee }: Props) {
    ===================================================== */
 
 const INTERNAL_STATE_LABEL: Record<TrainingCellState, string> = {
-  vigente: 'Vigente', caducado: 'Caducado', pendiente: 'Pendiente', en_curso: 'En curso (sin firmar)', no_aplica: 'No aplica',
+  vigente: 'Vigente', caducado: 'Caducado', pendiente: 'Pendiente', en_curso: 'En curso (sin firmar)',
+  pendiente_practica: 'Falta verificación práctica', no_aplica: 'No aplica',
 }
 const INTERNAL_STATE_COLOR: Record<TrainingCellState, string> = {
-  vigente: 'green', caducado: 'red', pendiente: 'gray', en_curso: 'yellow', no_aplica: 'gray',
+  vigente: 'green', caducado: 'red', pendiente: 'gray', en_curso: 'yellow', pendiente_practica: 'yellow', no_aplica: 'gray',
 }
 
 function InternalTrainingSection({ employee }: { employee: Employee }) {

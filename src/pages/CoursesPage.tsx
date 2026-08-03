@@ -13,7 +13,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   GraduationCap, Plus, ArrowLeft, BookOpen, ListChecks, Users2, ClipboardList,
-  Trash2, Pencil, Check, X as XIcon, AlertTriangle, ShieldCheck,
+  Trash2, Pencil, Check, X as XIcon, AlertTriangle, ShieldCheck, ClipboardCheck,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { supabase } from '../lib/supabase'
@@ -385,12 +385,127 @@ function ContenidoTab({ course, accountId, editable, onChanged, onAdopted }: {
         </div>
       </section>
 
+      <section>
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="font-semibold text-text-primary flex items-center gap-2"><ClipboardCheck size={16} /> Verificación práctica</h2>
+          {editable && <AddPracticalItemButton courseId={course.id} nextOrd={content.practicalItems.length + 1} onAdded={load} />}
+        </div>
+        {editable && (
+          <label className="flex items-center gap-2 text-sm text-text-primary mb-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={course.requiresPractical}
+              onChange={async (e) => { await coursesService.updateCourse(course.id, { requiresPractical: e.target.checked }); onChanged() }}
+            />
+            Requiere verificación práctica (aprobar test + firmar no basta: un responsable debe verla en el puesto)
+          </label>
+        )}
+        {course.requiresPractical ? (
+          <div className="space-y-2">
+            {content.practicalItems.length === 0 && (
+              <p className="text-sm text-text-secondary">Sin gestos definidos todavía — añade 3-5 acciones observables.</p>
+            )}
+            {content.practicalItems.map(item => (
+              <PracticalItemCard key={item.id} item={item} editable={editable} onChanged={load} />
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-text-secondary">Este curso no exige verificación práctica.</p>
+        )}
+      </section>
+
       {editable && (
         <div className="flex justify-end pt-2">
           <PublishButton course={course} onDone={onChanged} />
         </div>
       )}
     </div>
+  )
+}
+
+function AddPracticalItemButton({ courseId, nextOrd, onAdded }: { courseId: string; nextOrd: number; onAdded: () => void }) {
+  const [open, setOpen] = useState(false)
+  const [text, setText] = useState('')
+  const [helpText, setHelpText] = useState('')
+  const [saving, setSaving] = useState(false)
+  async function submit() {
+    if (!text.trim()) return
+    setSaving(true)
+    try {
+      await coursesService.createPracticalItem(courseId, { ord: nextOrd, text: text.trim(), helpText: helpText.trim() || undefined })
+      setText(''); setHelpText(''); setOpen(false)
+      onAdded()
+    } finally {
+      setSaving(false)
+    }
+  }
+  return (
+    <>
+      <Button size="sm" variant="outline" onClick={() => setOpen(true)}><Plus size={14} /> Gesto</Button>
+      <Modal open={open} onClose={() => setOpen(false)} title="Nuevo gesto observable">
+        <div className="space-y-3">
+          <div><Label>Gesto (qué debe ver hacer el verificador)</Label><Textarea rows={2} value={text} onChange={e => setText(e.target.value)} /></div>
+          <div><Label>Ayuda para el verificador (opcional)</Label><Textarea rows={2} value={helpText} onChange={e => setHelpText(e.target.value)} /></div>
+          <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button><Button onClick={submit} disabled={saving}>Añadir</Button></div>
+        </div>
+      </Modal>
+    </>
+  )
+}
+
+function PracticalItemCard({ item, editable, onChanged }: {
+  item: coursesService.CoursePracticalItem; editable: boolean; onChanged: () => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [text, setText] = useState(item.text)
+  const [helpText, setHelpText] = useState(item.helpText ?? '')
+  const [busy, setBusy] = useState(false)
+
+  async function save() {
+    setBusy(true)
+    try {
+      await coursesService.updatePracticalItem(item.id, { text, helpText: helpText.trim() || null })
+      setEditing(false)
+      onChanged()
+    } finally {
+      setBusy(false)
+    }
+  }
+  async function remove() {
+    if (!confirm('¿Borrar este gesto?')) return
+    setBusy(true)
+    try { await coursesService.deletePracticalItem(item.id); onChanged() }
+    finally { setBusy(false) }
+  }
+
+  if (editing) {
+    return (
+      <Card className="p-4 space-y-2">
+        <Textarea rows={2} value={text} onChange={e => setText(e.target.value)} />
+        <Textarea rows={2} value={helpText} onChange={e => setHelpText(e.target.value)} placeholder="Ayuda para el verificador" />
+        <div className="flex justify-end gap-2">
+          <Button size="sm" variant="outline" onClick={() => setEditing(false)}>Cancelar</Button>
+          <Button size="sm" onClick={save} disabled={busy}>Guardar</Button>
+        </div>
+      </Card>
+    )
+  }
+
+  return (
+    <Card className="p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm text-text-primary">{item.ord}. {item.text}</p>
+          {item.helpText && <p className="text-xs text-text-secondary mt-1">{item.helpText}</p>}
+        </div>
+        {editable && (
+          <div className="flex gap-1 shrink-0">
+            <button onClick={() => setEditing(true)} className="p-1.5 rounded-md hover:bg-accent-bg text-text-secondary" aria-label="Editar"><Pencil size={14} /></button>
+            <button onClick={remove} className="p-1.5 rounded-md hover:bg-danger-bg text-danger" aria-label="Borrar" disabled={busy}><Trash2 size={14} /></button>
+          </div>
+        )}
+      </div>
+    </Card>
   )
 }
 
@@ -836,6 +951,7 @@ const TRACKING_BADGE: Record<TrackingRow['status'], { label: string; color: stri
   en_curso: { label: 'En curso', color: 'yellow' },
   suspendido: { label: 'Suspendido', color: 'red' },
   firmado: { label: 'Superado y firmado', color: 'green' },
+  pendiente_practica: { label: 'Falta verificación práctica', color: 'yellow' },
 }
 
 function SeguimientoTab({ course, staff }: { course: Course; staff: Employee[] }) {
@@ -843,28 +959,47 @@ function SeguimientoTab({ course, staff }: { course: Course; staff: Employee[] }
   const navigate = useNavigate()
   const [rows, setRows] = useState<TrackingRow[]>([])
   const [signatures, setSignatures] = useState<CourseSignatureRow[]>([])
+  const [practicalItems, setPracticalItems] = useState<coursesService.CoursePracticalItem[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
   const [generatingActa, setGeneratingActa] = useState(false)
   const [actaError, setActaError] = useState<string | null>(null)
+  const [verifyingRow, setVerifyingRow] = useState<TrackingRow | null>(null)
+
+  async function load() {
+    setLoading(true)
+    setLoadError(false)
+    try {
+      const [assignments, attempts] = await Promise.all([
+        coursesService.listAssignments(course.id),
+        coursesService.listAttemptsForCourse(course.id),
+      ])
+      const [sigs, items] = await Promise.all([
+        coursesService.listSignaturesForAttempts(attempts.map((a: CourseAttempt) => a.id)),
+        course.requiresPractical ? coursesService.listPracticalItems(course.id) : Promise.resolve([]),
+      ])
+      const checks = course.requiresPractical
+        ? await coursesService.listPracticalChecksForAttempts(attempts.map((a: CourseAttempt) => a.id))
+        : []
+      setSignatures(sigs)
+      setPracticalItems(items)
+      setRows(coursesService.resolveTrackingRows(assignments, attempts, sigs, staff, {
+        requiresPractical: course.requiresPractical,
+        practicalItems: items,
+        practicalChecks: checks,
+      }))
+    } catch {
+      setLoadError(true)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
     let cancel = false
-    setLoading(true)
-    setLoadError(false)
-    Promise.all([
-      coursesService.listAssignments(course.id),
-      coursesService.listAttemptsForCourse(course.id),
-    ])
-      .then(async ([assignments, attempts]) => {
-        const sigs = await coursesService.listSignaturesForAttempts(attempts.map((a: CourseAttempt) => a.id))
-        if (cancel) return
-        setSignatures(sigs)
-        setRows(coursesService.resolveTrackingRows(assignments, attempts, sigs, staff))
-      })
-      .catch(() => { if (!cancel) setLoadError(true) })
-      .finally(() => { if (!cancel) setLoading(false) })
+    load().catch(() => { if (!cancel) setLoadError(true) })
     return () => { cancel = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [course.id, staff])
 
   const overdueCount = rows.filter(r => r.overdue).length
@@ -940,6 +1075,7 @@ function SeguimientoTab({ course, staff }: { course: Course; staff: Employee[] }
               <th className="text-left px-3 py-2">Nota</th>
               <th className="text-left px-3 py-2">Firmado</th>
               <th className="text-left px-3 py-2">Vence</th>
+              {course.requiresPractical && <th className="text-left px-3 py-2">Práctica</th>}
             </tr>
           </thead>
           <tbody>
@@ -952,11 +1088,98 @@ function SeguimientoTab({ course, staff }: { course: Course; staff: Employee[] }
                 <td className={`px-3 py-2 ${r.overdue ? 'text-danger font-medium' : 'text-text-secondary'}`}>
                   {r.dueAt ? new Date(r.dueAt).toLocaleDateString('es-ES') : '—'}
                 </td>
+                {course.requiresPractical && (
+                  <td className="px-3 py-2">
+                    {r.status === 'pendiente_practica' && r.attemptId ? (
+                      <Button size="sm" onClick={() => setVerifyingRow(r)}>Verificar ahora</Button>
+                    ) : r.status === 'firmado' ? (
+                      <span className="text-xs text-success">Verificado</span>
+                    ) : (
+                      <span className="text-xs text-text-tertiary">—</span>
+                    )}
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {verifyingRow && verifyingRow.attemptId && (
+        <VerifyPracticalModal
+          attemptId={verifyingRow.attemptId}
+          employeeName={verifyingRow.employeeName}
+          items={practicalItems}
+          onClose={() => setVerifyingRow(null)}
+          onVerified={async () => { setVerifyingRow(null); await load() }}
+        />
+      )}
     </div>
+  )
+}
+
+function VerifyPracticalModal({ attemptId, employeeName, items, onClose, onVerified }: {
+  attemptId: string
+  employeeName: string
+  items: coursesService.CoursePracticalItem[]
+  onClose: () => void
+  onVerified: () => void
+}) {
+  const [checks, setChecks] = useState<Record<string, boolean>>({})
+  const [notes, setNotes] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function submit() {
+    setSaving(true)
+    setError(null)
+    try {
+      await coursesService.verifyPracticalItems(
+        attemptId,
+        items.map(i => ({ itemId: i.id, checked: !!checks[i.id] })),
+        notes.trim() || undefined,
+      )
+      onVerified()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo registrar la verificación. Recuerda: el verificador no puede ser quien firmó el intento.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title={`Verificar práctica — ${employeeName}`} size="lg">
+      <div className="space-y-3">
+        {error && <Alert type="error">{error}</Alert>}
+        <p className="text-sm text-text-secondary">
+          Marca los gestos que has observado hacer correctamente a {employeeName}. Tu firma (tu identidad
+          autenticada) queda registrada junto a la del trabajador.
+        </p>
+        <div className="space-y-2">
+          {items.map(item => (
+            <label key={item.id} className="flex items-start gap-2 p-3 rounded-lg border border-border-default cursor-pointer">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={!!checks[item.id]}
+                onChange={e => setChecks(c => ({ ...c, [item.id]: e.target.checked }))}
+              />
+              <span>
+                <span className="text-sm text-text-primary">{item.text}</span>
+                {item.helpText && <span className="block text-xs text-text-secondary mt-0.5">{item.helpText}</span>}
+              </span>
+            </label>
+          ))}
+        </div>
+        <div>
+          <Label>Notas (opcional)</Label>
+          <Textarea rows={2} value={notes} onChange={e => setNotes(e.target.value)} />
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button onClick={submit} disabled={saving}>{saving ? 'Guardando…' : 'Registrar verificación'}</Button>
+        </div>
+      </div>
+    </Modal>
   )
 }
