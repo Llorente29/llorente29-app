@@ -86,3 +86,56 @@ export async function saveItemAllergens(
     if (upErr) throw new Error(`Error guardando alérgenos: ${upErr.message}`)
   }
 }
+
+/**
+ * Guarda SOLO los códigos que la persona tocó de verdad en un plato/receta
+ * (type IN ('dish','recipe')) — a diferencia de saveItemAllergens (que
+ * reemplaza la lista ENTERA y por tanto solo es seguro para un ingrediente,
+ * donde no existe "heredado" que proteger).
+ *
+ * Por qué existe esta función aparte (bug real, cazado por Julio en vivo,
+ * 06/08): EtiquetadoTab cargaba los 14 códigos de un plato (la mayoría
+ * heredados por Capa 2, source='inherited') y, al guardar, los mandaba
+ * TODOS a saveItemAllergens — que marca cada fila recibida como 'manual'.
+ * Guardar UN solo alérgeno a mano contaminaba silenciosamente los otros 13,
+ * que dejaban de recibir actualizaciones de la cascada de herencia para
+ * siempre (el fill-only del motor de Capa 2 nunca pisa una fila 'manual').
+ *
+ * Contrato: state=null borra la fila (vuelve a "sin declarar" hasta que la
+ * próxima cascada la rellene de nuevo con lo heredado) — nunca toca los
+ * códigos ausentes de `changes`, sean 'inherited', 'manual' previo o
+ * cualquier otra fuente.
+ */
+export async function saveManualAllergenOverrides(
+  recipeItemId: string,
+  changes: { code: AllergenCode; state: AllergenState | null }[],
+): Promise<void> {
+  requireSupabase()
+  if (changes.length === 0) return
+
+  const toUpsert = changes.filter(
+    (c): c is { code: AllergenCode; state: AllergenState } => c.state !== null,
+  )
+  const toDelete = changes.filter((c) => c.state === null).map((c) => c.code)
+
+  if (toUpsert.length > 0) {
+    const rows = toUpsert.map((c) => ({
+      recipe_item_id: recipeItemId,
+      allergen_code: c.code,
+      state: c.state,
+      source: 'manual',
+    }))
+    const { error } = await supabase!
+      .from('recipe_item_allergen')
+      .upsert(rows, { onConflict: 'recipe_item_id,allergen_code' })
+    if (error) throw new Error(`Error guardando alérgenos: ${error.message}`)
+  }
+  if (toDelete.length > 0) {
+    const { error } = await supabase!
+      .from('recipe_item_allergen')
+      .delete()
+      .eq('recipe_item_id', recipeItemId)
+      .in('allergen_code', toDelete)
+    if (error) throw new Error(`Error actualizando alérgenos: ${error.message}`)
+  }
+}
