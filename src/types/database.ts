@@ -5173,6 +5173,7 @@ export type Database = {
       course: {
         Row: {
           account_id: string | null
+          adopted_from_course_id: string | null
           appcc_prerequisite: boolean
           code: string
           created_at: string
@@ -5191,6 +5192,7 @@ export type Database = {
         }
         Insert: {
           account_id?: string | null
+          adopted_from_course_id?: string | null
           appcc_prerequisite?: boolean
           code: string
           created_at?: string
@@ -5209,6 +5211,7 @@ export type Database = {
         }
         Update: {
           account_id?: string | null
+          adopted_from_course_id?: string | null
           appcc_prerequisite?: boolean
           code?: string
           created_at?: string
@@ -5231,6 +5234,13 @@ export type Database = {
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "course_adopted_from_course_id_fkey"
+            columns: ["adopted_from_course_id"]
+            isOneToOne: false
+            referencedRelation: "course"
             referencedColumns: ["id"]
           },
         ]
