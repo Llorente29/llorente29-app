@@ -19,7 +19,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AlertTriangle, Download, Loader2 } from 'lucide-react'
+import { AlertTriangle, Download, FileText, Loader2 } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import {
   getAllergenComplianceMatrix,
@@ -37,8 +37,10 @@ import {
   ALLERGEN_CODES,
   allergenLabel,
   allergenStateLabel,
+  allergenIconUrl,
   type AllergenState,
 } from '@/modules/kitchen/lib/allergens'
+import { generateAllergenCompliancePdf } from '@/modules/appcc/services/allergenCompliancePdfService'
 
 const CELL_TONE: Record<AllergenState, string> = {
   contains: 'bg-danger-bg text-danger',
@@ -75,21 +77,37 @@ const LEGEND_ITEMS: { state: AllergenState | null; label: string }[] = [
 
 function MatrixLegend() {
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-3 py-2 border-t border-border-default text-xs text-text-secondary">
-      {LEGEND_ITEMS.map((item) => (
-        <div key={item.label} className="flex items-center gap-1.5">
-          {item.state === null ? (
-            <span className="inline-flex items-center justify-center w-5 h-5 rounded border border-dashed border-border-default text-text-tertiary text-[9px]">
-              —
-            </span>
-          ) : (
-            <span className={`inline-flex items-center justify-center w-5 h-5 rounded text-[10px] font-semibold ${CELL_TONE[item.state]}`}>
-              {CELL_LETTER[item.state]}
-            </span>
-          )}
-          <span>{item.label}</span>
+    <div className="border-t border-border-default px-3 py-2.5 space-y-2.5">
+      <div>
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-text-tertiary mb-1.5">Alérgenos</div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-x-3 gap-y-1.5">
+          {ALLERGEN_CODES.map((code) => (
+            <div key={code} className="flex items-center gap-1.5 text-xs text-text-secondary min-w-0">
+              <img src={allergenIconUrl(code)} alt="" className="w-4 h-4 shrink-0" loading="lazy" />
+              <span className="truncate">{allergenLabel(code)}</span>
+            </div>
+          ))}
         </div>
-      ))}
+      </div>
+      <div>
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-text-tertiary mb-1.5">Estados</div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-text-secondary">
+          {LEGEND_ITEMS.map((item) => (
+            <div key={item.label} className="flex items-center gap-1.5">
+              {item.state === null ? (
+                <span className="inline-flex items-center justify-center w-5 h-5 rounded border border-dashed border-border-default text-text-tertiary text-[9px]">
+                  —
+                </span>
+              ) : (
+                <span className={`inline-flex items-center justify-center w-5 h-5 rounded text-[10px] font-semibold ${CELL_TONE[item.state]}`}>
+                  {CELL_LETTER[item.state]}
+                </span>
+              )}
+              <span>{item.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }
@@ -141,6 +159,8 @@ export default function AllergensCompliancePage() {
   const [discrepanciesError, setDiscrepanciesError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [brandFilter, setBrandFilter] = useState<string>('')
+  const [pdfGenerating, setPdfGenerating] = useState(false)
+  const [pdfError, setPdfError] = useState<string | null>(null)
 
   useEffect(() => {
     if (accountsLoading) return
@@ -218,6 +238,27 @@ export default function AllergensCompliancePage() {
     URL.revokeObjectURL(url)
   }
 
+  async function exportPdf() {
+    if (pdfGenerating) return
+    setPdfGenerating(true)
+    setPdfError(null)
+    try {
+      const now = new Date()
+      await generateAllergenCompliancePdf(filteredMatrix, {
+        brandLabel: brandFilter || 'Todas las marcas',
+        generatedAtLabel: now.toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' }),
+        // Sin regex de clase de caracteres con guion/dos puntos entre corchetes:
+        // Tailwind escanea el código fuente buscando "[propiedad:valor]" (sintaxis
+        // de propiedad arbitraria) y ese patrón literal rompía la build de CSS.
+        generatedAtFilename: now.toISOString().slice(0, 16).replaceAll('-', '').replaceAll(':', '').replaceAll('T', ''),
+      })
+    } catch (e: unknown) {
+      setPdfError(e instanceof Error ? e.message : 'No se pudo generar el PDF.')
+    } finally {
+      setPdfGenerating(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="p-4 sm:p-6 flex items-center gap-2 text-sm text-text-secondary">
@@ -256,8 +297,18 @@ export default function AllergensCompliancePage() {
           >
             <Download className="w-4 h-4" /> Exportar CSV
           </button>
+          <button
+            type="button"
+            onClick={exportPdf}
+            disabled={filteredMatrix.length === 0 || pdfGenerating}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg font-medium border border-border-default text-text-primary bg-card hover:bg-page disabled:opacity-50 transition-colors"
+          >
+            {pdfGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+            {pdfGenerating ? 'Generando…' : 'Exportar PDF'}
+          </button>
         </div>
       </div>
+      {pdfError && <div className="p-2.5 rounded-lg bg-danger-bg text-danger text-xs">{pdfError}</div>}
 
       {/* Matriz completa */}
       <div className="bg-card border border-border-default rounded-lg">
@@ -281,6 +332,12 @@ export default function AllergensCompliancePage() {
                     className="px-1 py-2 text-center w-11 text-[10px] text-text-secondary font-medium"
                     title={allergenLabel(code)}
                   >
+                    <img
+                      src={allergenIconUrl(code)}
+                      alt={allergenLabel(code)}
+                      className="w-5 h-5 mx-auto mb-0.5"
+                      loading="lazy"
+                    />
                     {allergenLabel(code).slice(0, 3)}
                   </th>
                 ))}

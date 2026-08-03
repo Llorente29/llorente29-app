@@ -130,3 +130,13 @@ export function allergenStateLabel(
     ? ALLERGEN_STATE_LABEL_EN[state]
     : ALLERGEN_STATE_LABEL_ES[state]
 }
+
+/**
+ * Ruta pública del pictograma de un alérgeno. Ya montados en
+ * public/allergens/allergen-{code}.png para las etiquetas de pedidos —
+ * ojo, el código de archivo es el AllergenCode (p.ej. "soy"), nunca el
+ * nombre largo en inglés ("soybeans").
+ */
+export function allergenIconUrl(code: AllergenCode): string {
+  return `/allergens/allergen-${code}.png`
+}
