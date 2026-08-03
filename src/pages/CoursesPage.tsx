@@ -9,7 +9,7 @@
 // NO toca FormacionesTab.tsx ni employee_formations (certificados externos,
 // tabla y pantalla aparte, fuera de alcance de C1).
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   GraduationCap, Plus, ArrowLeft, BookOpen, ListChecks, Users2, ClipboardList,
@@ -24,6 +24,10 @@ import type {
   DeliveryMode, TrackingRow,
 } from '../services/coursesService'
 import { generateSessionActaPdf, blobToDataUrl } from '../services/courseCertificatePdfService'
+import { adoptCourseForAccount } from '../services/courseAdoptionService'
+import {
+  getSignedSectionImageUrl, uploadOwnSectionImage, revertSectionImageToFolvy,
+} from '../services/courseImagesService'
 import type { Employee, Location } from '../types'
 
 const POSITIONS = ['Encargado', 'Jefe de cocina', 'Cocinero', 'Ayudante cocina', 'Camarero', 'Barra', 'Hostess', 'Limpieza', 'Gerente', 'Otro']
@@ -70,6 +74,14 @@ export default function CoursesPage() {
     }
   }
 
+  // Tras adoptar una plantilla global, aterrizar directamente en la copia
+  // propia recién creada (donde "Usar foto propia" ya funciona) en vez de
+  // dejar al admin de vuelta en la global de solo lectura.
+  async function handleAdopted(newCourseId: string) {
+    await refreshCourses()
+    setSelectedId(newCourseId)
+  }
+
   const selected = courses.find(c => c.id === selectedId) ?? null
 
   if (!activeAccountId) return null
@@ -83,6 +95,7 @@ export default function CoursesPage() {
         locations={locations}
         onBack={() => setSelectedId(null)}
         onChanged={refreshCourses}
+        onAdopted={handleAdopted}
       />
     )
   }
@@ -230,13 +243,14 @@ function CreateCourseModal({ open, onClose, accountId, onCreated }: {
 // Detalle de curso
 // ============================================================
 
-function CourseDetail({ course, accountId, staff, locations, onBack, onChanged }: {
+function CourseDetail({ course, accountId, staff, locations, onBack, onChanged, onAdopted }: {
   course: Course
   accountId: string
   staff: Employee[]
   locations: Location[]
   onBack: () => void
   onChanged: () => void
+  onAdopted: (newCourseId: string) => void
 }) {
   const [tab, setTab] = useState<'contenido' | 'asignar' | 'seguimiento'>('contenido')
   const editable = course.accountId !== null
@@ -266,7 +280,9 @@ function CourseDetail({ course, accountId, staff, locations, onBack, onChanged }
         className="mb-5"
       />
 
-      {tab === 'contenido' && <ContenidoTab course={course} editable={editable} onChanged={onChanged} />}
+      {tab === 'contenido' && (
+        <ContenidoTab course={course} accountId={accountId} editable={editable} onChanged={onChanged} onAdopted={onAdopted} />
+      )}
       {tab === 'asignar' && <AsignarTab course={course} accountId={accountId} staff={staff} locations={locations} />}
       {tab === 'seguimiento' && <SeguimientoTab course={course} staff={staff} />}
     </div>
@@ -277,10 +293,15 @@ function CourseDetail({ course, accountId, staff, locations, onBack, onChanged }
 // Tab: Contenido (secciones de teoría + preguntas del test)
 // ============================================================
 
-function ContenidoTab({ course, editable, onChanged }: { course: Course; editable: boolean; onChanged: () => void }) {
+function ContenidoTab({ course, accountId, editable, onChanged, onAdopted }: {
+  course: Course; accountId: string; editable: boolean; onChanged: () => void
+  onAdopted: (newCourseId: string) => void
+}) {
   const [content, setContent] = useState<CourseWithContent | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
+  const [adopting, setAdopting] = useState(false)
+  const [adoptError, setAdoptError] = useState<string | null>(null)
 
   async function load() {
     setLoading(true)
@@ -297,6 +318,19 @@ function ContenidoTab({ course, editable, onChanged }: { course: Course; editabl
 
   useEffect(() => { load() }, [course.id])
 
+  async function adoptAndPersonalize() {
+    setAdopting(true)
+    setAdoptError(null)
+    try {
+      const { courseId } = await adoptCourseForAccount(accountId, course.id)
+      onAdopted(courseId)
+    } catch (e) {
+      setAdoptError(e instanceof Error ? e.message : 'No se pudo adoptar el curso')
+    } finally {
+      setAdopting(false)
+    }
+  }
+
   if (loading) return <Card className="p-8 text-center text-sm text-text-secondary">Cargando contenido…</Card>
   if (loadError || !content) return <Alert type="error">No se pudo cargar el contenido del curso.</Alert>
 
@@ -304,7 +338,17 @@ function ContenidoTab({ course, editable, onChanged }: { course: Course; editabl
     <div className="space-y-6">
       {!editable && (
         <Alert type="info">
-          Este curso es una plantilla de Folvy. Su contenido legal no se edita desde aquí — solo se asigna.
+          <p>Este curso es una plantilla de Folvy. Su contenido legal no se edita desde aquí — solo se asigna.</p>
+          <p className="mt-2">
+            Para poner una foto de tu propia cocina en una sección, primero hay que adoptar el curso a tu cuenta
+            (se crea una copia propia; la plantilla de Folvy no se toca y el resto de clientes sigue viendo la suya).
+          </p>
+          {adoptError && <p className="mt-2 text-danger">{adoptError}</p>}
+          <div className="mt-3">
+            <Button size="sm" onClick={adoptAndPersonalize} disabled={adopting}>
+              {adopting ? 'Adoptando…' : 'Adoptar y personalizar'}
+            </Button>
+          </div>
         </Alert>
       )}
 
@@ -316,7 +360,14 @@ function ContenidoTab({ course, editable, onChanged }: { course: Course; editabl
         <div className="space-y-2">
           {content.sections.length === 0 && <p className="text-sm text-text-secondary">Sin secciones todavía.</p>}
           {content.sections.map(s => (
-            <SectionCard key={s.id} section={s} editable={editable} onChanged={load} />
+            <SectionCard
+              key={s.id}
+              section={s}
+              editable={editable}
+              accountId={accountId}
+              adoptedFromCourseId={course.adoptedFromCourseId}
+              onChanged={load}
+            />
           ))}
         </div>
       </section>
@@ -396,13 +447,29 @@ function AddSectionButton({ courseId, nextOrd, onAdded }: { courseId: string; ne
   )
 }
 
-function SectionCard({ section, editable, onChanged }: {
-  section: CourseWithContent['sections'][number]; editable: boolean; onChanged: () => void
+function SectionCard({ section, editable, accountId, adoptedFromCourseId, onChanged }: {
+  section: CourseWithContent['sections'][number]
+  editable: boolean
+  accountId: string
+  adoptedFromCourseId: string | null
+  onChanged: () => void
 }) {
   const [editing, setEditing] = useState(false)
   const [title, setTitle] = useState(section.title)
   const [body, setBody] = useState(section.body)
   const [busy, setBusy] = useState(false)
+  const [imageUrl, setImageUrl] = useState<string | null>(null)
+  const [imageFailed, setImageFailed] = useState(false)
+  const [imageBusy, setImageBusy] = useState(false)
+  const [imageError, setImageError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    let cancel = false
+    setImageFailed(false)
+    getSignedSectionImageUrl(section.mediaUrl).then(url => { if (!cancel) setImageUrl(url) })
+    return () => { cancel = true }
+  }, [section.mediaUrl])
 
   async function save() {
     setBusy(true)
@@ -414,6 +481,35 @@ function SectionCard({ section, editable, onChanged }: {
     setBusy(true)
     try { await coursesService.deleteSection(section.id); onChanged() }
     finally { setBusy(false) }
+  }
+
+  async function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = '' // permite volver a elegir el mismo fichero después
+    if (!file) return
+    setImageBusy(true)
+    setImageError(null)
+    try {
+      await uploadOwnSectionImage(accountId, section.id, file, section.mediaUrl)
+      onChanged()
+    } catch (err) {
+      setImageError(err instanceof Error ? err.message : 'No se pudo subir la foto')
+    } finally {
+      setImageBusy(false)
+    }
+  }
+
+  async function revertToFolvy() {
+    setImageBusy(true)
+    setImageError(null)
+    try {
+      await revertSectionImageToFolvy(section.id, accountId)
+      onChanged()
+    } catch (err) {
+      setImageError(err instanceof Error ? err.message : 'No se pudo volver a la imagen de Folvy')
+    } finally {
+      setImageBusy(false)
+    }
   }
 
   if (editing) {
@@ -431,6 +527,14 @@ function SectionCard({ section, editable, onChanged }: {
 
   return (
     <Card className="p-4">
+      {imageUrl && !imageFailed && (
+        <img
+          src={imageUrl}
+          alt={section.title}
+          className="w-full max-h-48 rounded-lg object-contain bg-page mb-3"
+          onError={() => setImageFailed(true)}
+        />
+      )}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-medium text-text-primary">{section.ord}. {section.title}</p>
@@ -443,6 +547,28 @@ function SectionCard({ section, editable, onChanged }: {
           </div>
         )}
       </div>
+      {editable && (
+        <div className="mt-3 pt-3 border-t border-border-default">
+          {imageError && <p className="text-xs text-danger mb-2">{imageError}</p>}
+          <div className="flex items-center gap-2 flex-wrap">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={handleFileSelected}
+            />
+            <Button size="sm" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={imageBusy}>
+              {imageBusy ? 'Subiendo…' : 'Usar foto propia'}
+            </Button>
+            {adoptedFromCourseId && (
+              <Button size="sm" variant="ghost" onClick={revertToFolvy} disabled={imageBusy}>
+                Volver a la imagen de Folvy
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
     </Card>
   )
 }
