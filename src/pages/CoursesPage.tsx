@@ -10,6 +10,7 @@
 // tabla y pantalla aparte, fuera de alcance de C1).
 
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   GraduationCap, Plus, ArrowLeft, BookOpen, ListChecks, Users2, ClipboardList,
   Trash2, Pencil, Check, X as XIcon, AlertTriangle, ShieldCheck,
@@ -713,6 +714,7 @@ const TRACKING_BADGE: Record<TrackingRow['status'], { label: string; color: stri
 
 function SeguimientoTab({ course, staff }: { course: Course; staff: Employee[] }) {
   const { activeAccount } = useApp()
+  const navigate = useNavigate()
   const [rows, setRows] = useState<TrackingRow[]>([])
   const [signatures, setSignatures] = useState<CourseSignatureRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -795,7 +797,10 @@ function SeguimientoTab({ course, staff }: { course: Course; staff: Employee[] }
         </Alert>
       )}
       {actaError && <Alert type="error">{actaError}</Alert>}
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" size="sm" onClick={() => navigate('/appcc/formacion')}>
+          Ver informe de inspección
+        </Button>
         <Button variant="outline" size="sm" onClick={downloadActa} disabled={generatingActa}>
           {generatingActa ? 'Generando acta…' : 'Descargar acta de sesión'}
         </Button>
