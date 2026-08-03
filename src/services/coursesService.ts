@@ -26,6 +26,8 @@ export type AssignmentOrigin = 'manual' | 'onboarding' | 'reeval_periodica' | 'r
 export interface Course {
   id: string
   accountId: string | null
+  /** Si esta es una copia adoptada de una plantilla global, el course.id de origen. */
+  adoptedFromCourseId: string | null
   code: string
   title: string
   summary: string | null
@@ -114,6 +116,7 @@ export interface CourseSignatureRow {
 interface CourseRow {
   id: string
   account_id: string | null
+  adopted_from_course_id: string | null
   code: string
   title: string
   summary: string | null
@@ -133,6 +136,7 @@ function rowToCourse(r: CourseRow): Course {
   return {
     id: r.id,
     accountId: r.account_id,
+    adoptedFromCourseId: r.adopted_from_course_id,
     code: r.code,
     title: r.title,
     summary: r.summary,

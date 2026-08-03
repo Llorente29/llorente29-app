@@ -8,6 +8,8 @@
 // resuelve su propia identidad — eso lo hace el servidor con auth.uid().
 
 import { useEffect, useRef, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
+import type { Components } from 'react-markdown'
 import {
   ArrowLeft, GraduationCap, BookOpen, ListChecks, CheckCircle2, XCircle,
   Clock, AlertTriangle, Download, RotateCcw, PenLine, Eraser,
@@ -18,6 +20,7 @@ import { supabase } from '../../lib/supabase'
 import * as mobile from '../../services/mobileCoursesService'
 import type { PendingCourse, StartAttemptResult, SubmitResult } from '../../services/mobileCoursesService'
 import { generateDiplomaPdf, issueDiplomaCertificate, blobToDataUrl } from '../../services/courseCertificatePdfService'
+import { getSignedSectionImageUrls } from '../../services/courseImagesService'
 
 interface Props {
   employee: Employee
@@ -25,6 +28,43 @@ interface Props {
 }
 
 type Step = 'lista' | 'teoria' | 'test' | 'resultados' | 'firma' | 'diploma'
+
+// Markdown del contenido didáctico: negrita, listas, encabezados y párrafos
+// con cuerpo 16px (se lee de pie, en cocina, con prisa). Blockquote (>) es el
+// recuadro de "dato técnico/legal" — se pinta como caja aparte, no como cita.
+// Sin rehype-raw a propósito: el contenido lo escribe la oficina, pero el
+// portal del trabajador no debe renderizar HTML crudo.
+const MARKDOWN_COMPONENTS: Components = {
+  p: ({ children }) => <p className="text-base text-text-primary leading-relaxed mb-3 last:mb-0">{children}</p>,
+  strong: ({ children }) => <strong className="font-semibold text-text-primary">{children}</strong>,
+  em: ({ children }) => <em className="italic">{children}</em>,
+  ul: ({ children }) => <ul className="list-disc pl-5 space-y-1.5 mb-3 text-base text-text-primary leading-relaxed">{children}</ul>,
+  ol: ({ children }) => <ol className="list-decimal pl-5 space-y-1.5 mb-3 text-base text-text-primary leading-relaxed">{children}</ol>,
+  li: ({ children }) => <li>{children}</li>,
+  h1: ({ children }) => <h3 className="font-display text-lg text-accent mt-4 mb-2">{children}</h3>,
+  h2: ({ children }) => <h3 className="font-display text-lg text-accent mt-4 mb-2">{children}</h3>,
+  h3: ({ children }) => <h4 className="font-display text-base font-semibold text-accent mt-3 mb-1.5">{children}</h4>,
+  blockquote: ({ children }) => (
+    <blockquote className="mt-3 mb-3 pl-4 pr-3 py-2.5 border-l-4 border-accent bg-accent-bg rounded-r-md text-sm text-text-primary">
+      {children}
+    </blockquote>
+  ),
+}
+
+// Imagen de sección con fallback silencioso: si falla la carga, se oculta el
+// hueco entero y el texto sigue sin layout roto (regla explícita del encargo).
+function SectionImage({ src, alt }: { src: string; alt: string }) {
+  const [failed, setFailed] = useState(false)
+  if (failed) return null
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className="w-full rounded-xl object-contain mb-3 bg-page max-h-64"
+      onError={() => setFailed(true)}
+    />
+  )
+}
 
 const STATUS_LABEL: Record<PendingCourse['status'], { label: string; color: string }> = {
   pendiente: { label: 'Pendiente', color: 'bg-page text-text-secondary' },
@@ -46,6 +86,7 @@ export default function MiFormacion({ employee, onBack }: Props) {
   const [questionIdx, setQuestionIdx] = useState(0)
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [result, setResult] = useState<SubmitResult | null>(null)
+  const [sectionImageUrls, setSectionImageUrls] = useState<Record<string, string>>({})
   const [signaturePath, setSignaturePath] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -75,8 +116,15 @@ export default function MiFormacion({ employee, onBack }: Props) {
       setAnswers({})
       setResult(null)
       setSignaturePath(null)
+      setSectionImageUrls({})
       setTheoryStartedAt(Date.now())
       setStep(started.sections.length > 0 ? 'teoria' : 'test')
+      // Firmadas en lote (no una por sección) — la sección body ya vino, esto
+      // solo resuelve imágenes; si falla, SectionImage oculta el hueco solo.
+      const paths = started.sections.map(s => s.mediaUrl).filter((p): p is string => !!p)
+      if (paths.length > 0) {
+        getSignedSectionImageUrls(paths).then(setSectionImageUrls).catch(() => {})
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo abrir el curso')
     } finally {
@@ -175,11 +223,13 @@ export default function MiFormacion({ employee, onBack }: Props) {
   if (step === 'teoria') {
     const section = attempt.sections[sectionIdx]
     const isLast = sectionIdx === attempt.sections.length - 1
+    const imageUrl = section.mediaUrl ? sectionImageUrls[section.mediaUrl] : undefined
     return (
       <MobileShell title={active.courseTitle} subtitle={`Teoría · ${sectionIdx + 1}/${attempt.sections.length}`} onBack={backToList} icon={BookOpen}>
         <div className="bg-card border border-border-default rounded-xl p-5">
+          {imageUrl && <SectionImage src={imageUrl} alt={section.title} />}
           <p className="font-semibold text-text-primary mb-3">{section.title}</p>
-          <p className="text-sm text-text-primary whitespace-pre-wrap leading-relaxed">{section.body}</p>
+          <ReactMarkdown components={MARKDOWN_COMPONENTS}>{section.body}</ReactMarkdown>
         </div>
         <div className="flex gap-2 mt-4">
           {sectionIdx > 0 && (
