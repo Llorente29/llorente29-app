@@ -78,6 +78,47 @@ Es el cambio que más importa. Compara:
 - **Cada opción lleva explicación**, también las incorrectas: cuando el trabajador falla, tiene que entender por qué. Ahí es donde de verdad aprende.
 - Los distractores son **errores reales** que se cometen ("el calor de la freidora destruye el alérgeno"), no opciones absurdas de relleno.
 
+## 5.bis TAXONOMÍA DEL CATÁLOGO (obligatoria en todo curso nuevo)
+
+Con 30+ cursos, un listado plano es inmanejable. Todo curso se clasifica por **tres ejes independientes**. Son campos, no carpetas: un curso puede filtrarse por cualquiera de ellos.
+
+### Eje 1 — CATEGORÍA (`course.category`)
+De qué trata. Define dónde aparece en el catálogo.
+
+| Código | Categoría | Contenido |
+|---|---|---|
+| `cumplimiento` | Cumplimiento legal | Los 9 obligatorios: alérgenos, manipulador, APPCC, igualdad, LGTBI, RGPD, canal, primeros auxilios, PRL |
+| `cocina` | Operación de cocina | Mermas, escandallo, inventario, recepción, conservación, limpieza |
+| `delivery` | Reparto y delivery | Embolsado, temperatura en ruta, incidencias, KDS |
+| `sala` | Sala y cliente | Atención, quejas, upselling, TPV, bebidas |
+| `equipo` | Equipo y mandos | Onboarding, dar el pase, liderazgo de turno, cuadrante |
+| `producto` | Producto y recetas | Cursos del cliente: smash, milanesa, montaje de combos |
+| `sostenibilidad` | Sostenibilidad | Residuos, energía, Ley 1/2025 de desperdicio |
+
+### Eje 2 — TIPO DE NEGOCIO (`course.business_types text[]`)
+A quién le sirve. **Un curso solo aparece en el catálogo de las cuentas cuyo `accounts.business_type` esté en su lista.** Vacío o `{todos}` = aplica a cualquiera.
+
+Valores: `restaurante` · `bar_cafeteria` · `dark_kitchen` · `delivery` · `hotel` · `cadena` · `catering` · `todos`
+
+Ejemplos:
+- Alérgenos, manipulador, APPCC, RGPD → `{todos}` (la ley no distingue)
+- Embolsado y temperatura en ruta → `{dark_kitchen, delivery, restaurante}`
+- Servicio de bebidas y ley del alcohol → `{bar_cafeteria, restaurante, hotel}`
+- Liderazgo de turno → `{cadena, hotel, restaurante}`
+
+⚠️ **Nunca filtrar por tipo de negocio un curso de cumplimiento legal.** Si la ley obliga, obliga a todos: ocultarlo por tipo de negocio dejaría a un cliente descubierto. Ante la duda, `{todos}`.
+
+### Eje 3 — NIVEL (`course.level`)
+A quién va dirigido dentro del local.
+
+`base` (toda la plantilla) · `especialista` (un puesto concreto) · `mando` (encargados, jefes de partida, dirección)
+
+### Y además: ORDEN DE RECOMENDACIÓN (`course.recommended_order`)
+Entero que ordena el itinerario sugerido a un empleado nuevo. Manipulador y alérgenos van primero (10, 20); el resto detrás. No es obligatorio hacerlos en orden, pero el portal los presenta así.
+
+### Regla de oro
+**Ningún curso nuevo se siembra sin `category` y sin `business_types`.** Un curso sin clasificar se pierde en el catálogo y no lo encuentra nadie.
+
 ## 6. FUENTES: de dónde sale el contenido
 
 **Nunca se redacta de memoria.** Cada curso parte de la fuente oficial y **cita sus fuentes al final**. Eso permite verificarlo y, ante un inspector, demuestra que el contenido tiene respaldo.
@@ -113,6 +154,8 @@ Es el cambio que más importa. Compara:
 - [ ] **Posición de las correctas variada** (verificado, no supuesto)
 - [ ] Bloque de fuentes al final, con referencias concretas
 - [ ] `reeval_months` acorde a la tabla del punto 6
+- [ ] **`category`, `business_types`, `level` y `recommended_order` asignados** (§5.bis)
+- [ ] **`requires_practical` decidido**: si el curso enseña un GESTO (no solo un concepto), debe llevar verificación práctica con sus items observables
 - [ ] Sembrado en `draft`
 - [ ] Migración idempotente, con guard, UTF-8 sin BOM y LF
 
