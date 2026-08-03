@@ -8,11 +8,6 @@ import KitchenDashboardPage from '@/modules/kitchen/pages/KitchenDashboardPage'
 import KitchenItemsPage from '@/modules/kitchen/pages/KitchenItemsPage'
 import KitchenMenuPage from '@/modules/kitchen/pages/KitchenMenuPage'
 import KitchenCasadoPage from '@/modules/kitchen/pages/KitchenCasadoPage'
-// KitchenRecipePage (lienzo viejo) → reemplazado por RecipeEditorPage (rediseño V1).
-// El editor ahora se monta DENTRO de KitchenRecipesPage (lista + detalle por
-// estado), que es lo que cuelga de la ruta 'recetas'. KitchenRecipePage se
-// conserva en disco por si hay que revertir; import desactivado.
-// import KitchenRecipePage from '@/modules/kitchen/pages/KitchenRecipePage'
 import KitchenRecipesPage from '@/modules/kitchen/pages/KitchenRecipesPage'
 import KitchenProfitabilityPage from '@/modules/kitchen/pages/KitchenProfitabilityPage'
 import KitchenMenuEngineeringPage from '@/modules/kitchen/pages/KitchenMenuEngineeringPage'
@@ -58,13 +53,13 @@ export const kitchenModule: ModuleDefinition = {
   sidebar: {
     items: [
       { id: 'kitchen_dashboard',     label: 'Resumen',             icon: LayoutDashboard,   path: 'resumen',          requiredRole: 'manager' },
-      { id: 'kitchen_menu',          label: 'Menú',                icon: UtensilsCrossed,   path: 'menu',             requiredRole: 'manager' },
+      { id: 'kitchen_menu',          label: 'Cartas',              icon: UtensilsCrossed,   path: 'menu',             requiredRole: 'manager' },
       { id: 'kitchen_casado',        label: 'Casado',              icon: Link2,             path: 'casado',           requiredRole: 'manager' },
       { id: 'kitchen_availability',  label: 'Disponibilidad',      icon: CircleSlash,       path: 'disponibilidad',   requiredRole: 'manager' },
       { id: 'kitchen_availability_reports', label: 'Informes de disponibilidad', icon: BarChart3, path: 'disponibilidad-informes', requiredRole: 'manager' },
       { id: 'kitchen_items',         label: 'Ingredientes',        icon: ChefHat,           path: '' },
       { id: 'kitchen_suppliers',     label: 'Proveedores',         icon: Truck,             path: 'proveedores',      requiredRole: 'manager' },
-      { id: 'kitchen_recipes',       label: 'Recetas',             icon: BookOpen,          path: 'recetas',          requiredRole: 'manager' },
+      { id: 'kitchen_recipes',       label: 'Platos',              icon: BookOpen,          path: 'recetas',          requiredRole: 'manager' },
       { id: 'kitchen_profitability', label: 'Rentabilidad',        icon: TrendingUp,        path: 'rentabilidad',     requiredRole: 'manager' },
       { id: 'kitchen_menu_eng',      label: 'Ingeniería de menús', icon: Target,            path: 'ingenieria-menus', requiredRole: 'manager' },
       { id: 'kitchen_offers',        label: 'Ofertas del agente',  icon: Megaphone,         path: 'ofertas',          requiredRole: 'manager' },

@@ -38,10 +38,14 @@ export type AllergenCode =
  *  · contains    -> lo contiene (declaración positiva)
  *  · may_contain -> trazas / puede contener (contaminación cruzada)
  *  · free        -> libre de (declaración negativa explícita)
- * La AUSENCIA de fila NO equivale a 'free': es "sin determinar". 'free' es una
+ *  · unknown     -> declaración EXPLÍCITA de "no se sabe" (alguien lo miró y no
+ *                   pudo determinarlo) — distinto de la AUSENCIA de fila, que
+ *                   es "nadie lo ha declarado todavía" y la UI trata aparte
+ *                   ("Sin declarar"). 'unknown' es una fila real en BBDD.
+ * La AUSENCIA de fila NO equivale a 'free': es "sin declarar". 'free' es una
  * afirmación deliberada que el cocinero/master asume (con su responsabilidad).
  */
-export type AllergenState = 'contains' | 'may_contain' | 'free'
+export type AllergenState = 'contains' | 'may_contain' | 'free' | 'unknown'
 
 export interface AllergenDef {
   code: AllergenCode
@@ -101,18 +105,21 @@ export const ALLERGEN_STATES: readonly AllergenState[] = [
   'contains',
   'may_contain',
   'free',
+  'unknown',
 ]
 
 const ALLERGEN_STATE_LABEL_ES: Record<AllergenState, string> = {
   contains: 'Contiene',
   may_contain: 'Puede contener (trazas)',
   free: 'Libre de',
+  unknown: 'Sin determinar',
 }
 
 const ALLERGEN_STATE_LABEL_EN: Record<AllergenState, string> = {
   contains: 'Contains',
   may_contain: 'May contain (traces)',
   free: 'Free from',
+  unknown: 'Unknown',
 }
 
 export function allergenStateLabel(
