@@ -8,11 +8,6 @@ import KitchenDashboardPage from '@/modules/kitchen/pages/KitchenDashboardPage'
 import KitchenItemsPage from '@/modules/kitchen/pages/KitchenItemsPage'
 import KitchenMenuPage from '@/modules/kitchen/pages/KitchenMenuPage'
 import KitchenCasadoPage from '@/modules/kitchen/pages/KitchenCasadoPage'
-// KitchenRecipePage (lienzo viejo) → reemplazado por RecipeEditorPage (rediseño V1).
-// El editor ahora se monta DENTRO de KitchenRecipesPage (lista + detalle por
-// estado), que es lo que cuelga de la ruta 'recetas'. KitchenRecipePage se
-// conserva en disco por si hay que revertir; import desactivado.
-// import KitchenRecipePage from '@/modules/kitchen/pages/KitchenRecipePage'
 import KitchenRecipesPage from '@/modules/kitchen/pages/KitchenRecipesPage'
 import KitchenProfitabilityPage from '@/modules/kitchen/pages/KitchenProfitabilityPage'
 import KitchenMenuEngineeringPage from '@/modules/kitchen/pages/KitchenMenuEngineeringPage'
