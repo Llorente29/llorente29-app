@@ -25,14 +25,31 @@ function requireSupabase() {
 }
 
 /** Resuelve URLs firmadas en lote para varios paths de una vez (1h de validez). */
+// media_url puede ser un path de Storage (fotos propias de cuenta, bucket
+// privado course-section-images) O una ruta pública de assets estáticos del
+// propio despliegue (esquemas genéricos de Folvy, /formacion/*.svg servidos
+// por Vercel desde public/) — estas últimas se devuelven TAL CUAL, sin pasar
+// por Storage: createSignedUrls fallaría porque el objeto no vive ahí.
+function isPublicUrl(path: string): boolean {
+  return path.startsWith('/') || path.startsWith('http://') || path.startsWith('https://')
+}
+
 export async function getSignedSectionImageUrls(paths: string[]): Promise<Record<string, string>> {
-  const sb = requireSupabase()
   const unique = Array.from(new Set(paths.filter(Boolean)))
   if (unique.length === 0) return {}
-  const { data, error } = await sb.storage.from(SECTION_IMAGES_BUCKET).createSignedUrls(unique, 3600)
-  if (error) { console.error('[courseImagesService] getSignedSectionImageUrls', error); return {} }
+
   const map: Record<string, string> = {}
-  ;(data ?? []).forEach((d, i) => { if (d.signedUrl) map[unique[i]] = d.signedUrl })
+  const storagePaths: string[] = []
+  for (const p of unique) {
+    if (isPublicUrl(p)) map[p] = p
+    else storagePaths.push(p)
+  }
+  if (storagePaths.length === 0) return map
+  if (!supabase) return map
+
+  const { data, error } = await supabase.storage.from(SECTION_IMAGES_BUCKET).createSignedUrls(storagePaths, 3600)
+  if (error) { console.error('[courseImagesService] getSignedSectionImageUrls', error); return map }
+  ;(data ?? []).forEach((d, i) => { if (d.signedUrl) map[storagePaths[i]] = d.signedUrl })
   return map
 }
 
