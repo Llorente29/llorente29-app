@@ -203,6 +203,7 @@ const PAGE_TO_PATH: Partial<Record<Page, string>> = {
   appcc_templates:        'appcc/plantillas',
   appcc_execution:        'appcc/hoy/exec/:executionId',
   appcc_onboarding:       'appcc/onboarding',
+  appcc_allergens:        'appcc/alergenos',
 }
 
 const PATH_TO_PAGE: Map<string, Page> = (() => {

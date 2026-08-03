@@ -20,10 +20,11 @@
 // Decisión de diseño "Sin declarar" vs 'unknown' (documentada, ver plan):
 // son DOS conceptos distintos, no un alias del mismo estado.
 //  · "Sin declarar" = no existe fila en BBDD — nadie ha mirado este alérgeno
-//    todavía. Es un estado SOLO-UI (ausencia de entrada en `values`), nunca
-//    se envía a saveItemAllergens — al guardar, los códigos sin entrada se
-//    BORRAN de recipe_item_allergen (si tenían fila previa) o simplemente no
-//    se crean.
+//    todavía. Es un estado SOLO-UI (ausencia de entrada en `values`). Al
+//    guardar (saveManualAllergenOverrides, Capa 2) solo viajan los códigos
+//    que la persona tocó de verdad esta sesión — si uno de ellos queda sin
+//    entrada, se BORRA de recipe_item_allergen; los códigos NO tocados
+//    (típicamente heredados) ni se leen ni se tocan.
 //  · 'unknown' = SÍ hay fila real (source='manual'), y esa fila dice
 //    explícitamente "alguien lo miró y no pudo determinarlo". Es uno de los 4
 //    estados reales del CHECK de BBDD, seleccionable a propósito.
@@ -36,9 +37,10 @@ import { useEffect, useState } from 'react'
 import { AlertTriangle, Loader2, Save, Sparkles } from 'lucide-react'
 import {
   listItemAllergens,
-  saveItemAllergens,
+  saveManualAllergenOverrides,
 } from '@/modules/kitchen/services/recipeItemAllergenService'
 import { getRecipeBreakdown } from '@/modules/kitchen/services/recipeLineService'
+import { cascadeAllergensFromItem } from '@/modules/kitchen/services/allergenCascadeService'
 import { streamMessage } from '@/modules/folvy-ai/services/folvyAIService'
 import {
   EU_ALLERGENS,
@@ -65,6 +67,21 @@ interface Props {
   accountId: string
 }
 
+// De dónde viene el valor mostrado — visible junto a cada chip (encargo de
+// Julio, 06/08: "que se vea en pantalla de dónde viene cada valor" — antes
+// los 14 se veían iguales y por eso el bug de fill-only era invisible: no
+// había forma de distinguir a simple vista un heredado de un manual).
+const SOURCE_LABEL: Record<string, string> = {
+  inherited: 'Heredado',
+  manual: 'Manual',
+  ai_enrich: 'IA sin confirmar',
+  automatic: 'Automático',
+}
+function sourceLabel(source: string | undefined): string | null {
+  if (!source) return null
+  return SOURCE_LABEL[source] ?? source
+}
+
 /** Clases de tono por estado — 'null' (sin fila) es su propio tono, distinto de 'unknown'. */
 function stateTone(state: AllergenState | null): string {
   if (state === 'free') return 'bg-success-bg text-success'
@@ -77,11 +94,21 @@ function stateTone(state: AllergenState | null): string {
 
 export default function EtiquetadoTab({ recipeItemId, accountId }: Props) {
   const [values, setValues] = useState<Map<AllergenCode, AllergenState>>(new Map())
+  // De dónde viene CADA valor cargado (inherited/manual/ai_enrich/automatic)
+  // — solo informativo, nunca se manda al guardar. Se actualiza en el acto
+  // a 'manual' cuando la persona toca un código (handleChange): es lo que
+  // ese código VA a ser en cuanto se guarde, honesto de inmediato.
+  const [sources, setSources] = useState<Map<AllergenCode, string>>(new Map())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [success, setSuccess] = useState(false)
   const [ingredientHints, setIngredientHints] = useState<Map<AllergenCode, IngredientHint[]>>(new Map())
+  // Códigos que la persona tocó de verdad en ESTA sesión — es lo ÚNICO que
+  // se manda a guardar (saveManualAllergenOverrides), nunca los 14. Fix del
+  // bug de fill-only: mandar el Map completo pisaba de source='inherited' a
+  // 'manual' los códigos que la persona nunca tocó.
+  const [touchedCodes, setTouchedCodes] = useState<Set<AllergenCode>>(new Set())
 
   // ── A3: "Verificar con IA" (cableado real, Fase 6) — DISTINTO de la pista
   // "según sus ingredientes" de arriba (esa es agregado fijo, solo lectura).
@@ -101,12 +128,18 @@ export default function EtiquetadoTab({ recipeItemId, accountId }: Props) {
     setLoading(true)
     setError(null)
     setSuccess(false)
+    setTouchedCodes(new Set())
     listItemAllergens(recipeItemId)
       .then((rows) => {
         if (cancelled) return
         const m = new Map<AllergenCode, AllergenState>()
-        for (const r of rows) m.set(r.code, r.state)
+        const s = new Map<AllergenCode, string>()
+        for (const r of rows) {
+          m.set(r.code, r.state)
+          if (r.source) s.set(r.code, r.source)
+        }
         setValues(m)
+        setSources(s)
       })
       .catch((e: unknown) => {
         if (cancelled) return
@@ -166,6 +199,19 @@ export default function EtiquetadoTab({ recipeItemId, accountId }: Props) {
       else next.set(code, raw as AllergenState)
       return next
     })
+    // La persona tocó este código: se guardará como manual, y se enseña ya
+    // como tal (honesto de inmediato, no solo tras guardar).
+    setSources((prev) => {
+      const next = new Map(prev)
+      if (raw === '') next.delete(code)
+      else next.set(code, 'manual')
+      return next
+    })
+    setTouchedCodes((prev) => {
+      const next = new Set(prev)
+      next.add(code)
+      return next
+    })
   }
 
   async function handleSave() {
@@ -174,11 +220,39 @@ export default function EtiquetadoTab({ recipeItemId, accountId }: Props) {
     setError(null)
     setSuccess(false)
     try {
-      const payload = Array.from(values.entries()).map(([code, state]) => ({ code, state }))
-      await saveItemAllergens(recipeItemId, payload)
+      // SOLO los códigos que la persona tocó de verdad (handleChange) o que
+      // aceptó de una sugerencia de IA pendiente — nunca los 14. Fix del bug
+      // de fill-only: mandar todo el Map (como antes) pisaba a 'manual' los
+      // códigos heredados que nadie tocó, y el motor de Capa 2 dejaba de
+      // tocarlos para siempre (el fill-only protege 'manual', ese es el
+      // punto — el bug era disparar esa protección sin querer).
+      const codesToSave = new Set<AllergenCode>([...touchedCodes, ...aiPendingCodes])
+      if (codesToSave.size === 0) {
+        setSuccess(true)
+        return
+      }
+      const changes = Array.from(codesToSave).map((code) => ({
+        code,
+        state: values.get(code) ?? null,
+      }))
+      await saveManualAllergenOverrides(recipeItemId, changes)
       setSuccess(true)
+      setSources((prev) => {
+        const next = new Map(prev)
+        for (const code of codesToSave) {
+          if (values.has(code)) next.set(code, 'manual')
+          else next.delete(code)
+        }
+        return next
+      })
+      setTouchedCodes(new Set())
       // Ya persistidas: dejan de ser "sugerencia pendiente".
       setAiPendingCodes(new Set())
+      // Este plato puede ser a su vez sub-receta de otro — best-effort, no
+      // bloquea el guardado si falla.
+      cascadeAllergensFromItem(recipeItemId).catch((e) =>
+        console.error('EtiquetadoTab: cascada de alérgenos tras guardar falló', e)
+      )
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'No se pudieron guardar los alérgenos.')
     } finally {
@@ -332,11 +406,18 @@ export default function EtiquetadoTab({ recipeItemId, accountId }: Props) {
                     <span className={'inline-block text-[11px] px-2 py-0.5 rounded-full font-medium ' + stateTone(current)}>
                       {current ? allergenStateLabel(current) : 'Sin declarar'}
                     </span>
-                    {aiPending && (
+                    {aiPending ? (
                       <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-accent text-text-on-accent font-medium">
                         <Sparkles size={10} /> IA sugiere, sin guardar
                       </span>
-                    )}
+                    ) : current && sourceLabel(sources.get(a.code)) ? (
+                      <span
+                        className="text-[10px] text-text-tertiary"
+                        title="De dónde viene este valor — heredado se recalcula solo al cambiar el escandallo, manual nunca se toca."
+                      >
+                        {sourceLabel(sources.get(a.code))}
+                      </span>
+                    ) : null}
                   </div>
                 </div>
                 <select

@@ -51,6 +51,7 @@ import {
   type MenuItemUsingRecipe,
 } from '@/modules/kitchen/services/menuLinkService'
 import { listBrands } from '@/modules/multitenancy/services/brandsService'
+import { cascadeAllergensFromItem } from '@/modules/kitchen/services/allergenCascadeService'
 import RecipeLinkPickerModal from '@/modules/kitchen/components/RecipeLinkPickerModal'
 import RecipeEscandalloTab from '@/modules/kitchen/components/RecipeEscandalloTab'
 import RecipeStepsTab from '@/modules/kitchen/components/RecipeStepsTab'
@@ -116,7 +117,7 @@ const TAG_STYLES: Record<string, string> = {
   'promocional': 'bg-purple-50 text-purple-800',
 }
 
-type FichaTab =
+export type FichaTab =
   | 'escandallo' | 'receta' | 'modificadores' | 'economia'
   | 'en_carta' | 'etiquetado' | 'historico' | 'ficha'
 
@@ -155,6 +156,9 @@ interface CatalogFichaPageProps {
   onBack: () => void
   /** Solo lo pasa KitchenRecipesPage — "Duplicar" navega a la copia si existe. */
   onOpenRecipe?: (recipeId: string) => void
+  /** Pestaña con la que abre (deep-link desde otra pantalla, p.ej. la matriz
+   * de alérgenos → Etiquetado). Por defecto 'escandallo', igual que antes. */
+  initialTab?: FichaTab
 }
 
 export default function CatalogFichaPage({
@@ -162,12 +166,13 @@ export default function CatalogFichaPage({
   recipeId: recipeIdProp,
   onBack,
   onOpenRecipe,
+  initialTab,
 }: CatalogFichaPageProps) {
   const navigate = useNavigate()
   const { activeAccountId, accountsLoading } = useActiveAccount()
   const { authUserId, userProfile } = useApp()
 
-  const [activeTab, setActiveTab] = useState<FichaTab>('escandallo')
+  const [activeTab, setActiveTab] = useState<FichaTab>(initialTab ?? 'escandallo')
 
   // ── Ancla de producto (ver cabecera del fichero) ──────────────────────────
   const [activeMenuItemId, setActiveMenuItemId] = useState<string | null>(menuItemIdProp ?? null)
@@ -458,6 +463,13 @@ export default function CatalogFichaPage({
     setDuplicateError(null)
     try {
       const newId = await duplicateRecipeItem(recipe.id)
+      // Alérgenos (Capa 2): la copia nueva no tiene filas propias de
+      // recipe_item_allergen todavía — hereda desde cero de sus propios
+      // ingredientes (no tiene ancestros aún, nadie la usa todavía).
+      // Best-effort, no bloquea la navegación a la copia.
+      cascadeAllergensFromItem(newId).catch((e) =>
+        console.error('CatalogFichaPage: cascada de alérgenos tras duplicar falló', e)
+      )
       if (onOpenRecipe) {
         onOpenRecipe(newId)
       } else {
