@@ -51,6 +51,7 @@ import {
   type MenuItemUsingRecipe,
 } from '@/modules/kitchen/services/menuLinkService'
 import { listBrands } from '@/modules/multitenancy/services/brandsService'
+import { cascadeAllergensFromItem } from '@/modules/kitchen/services/allergenCascadeService'
 import RecipeLinkPickerModal from '@/modules/kitchen/components/RecipeLinkPickerModal'
 import RecipeEscandalloTab from '@/modules/kitchen/components/RecipeEscandalloTab'
 import RecipeStepsTab from '@/modules/kitchen/components/RecipeStepsTab'
@@ -458,6 +459,13 @@ export default function CatalogFichaPage({
     setDuplicateError(null)
     try {
       const newId = await duplicateRecipeItem(recipe.id)
+      // Alérgenos (Capa 2): la copia nueva no tiene filas propias de
+      // recipe_item_allergen todavía — hereda desde cero de sus propios
+      // ingredientes (no tiene ancestros aún, nadie la usa todavía).
+      // Best-effort, no bloquea la navegación a la copia.
+      cascadeAllergensFromItem(newId).catch((e) =>
+        console.error('CatalogFichaPage: cascada de alérgenos tras duplicar falló', e)
+      )
       if (onOpenRecipe) {
         onOpenRecipe(newId)
       } else {

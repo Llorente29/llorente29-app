@@ -88,6 +88,7 @@ import {
 } from '@/modules/kitchen/services/recipeImportService'
 import RecipeImportReviewModal from '@/modules/kitchen/components/RecipeImportReviewModal'
 import AddToMenuModal from '@/modules/kitchen/components/AddToMenuModal'
+import { cascadeAllergensFromItem } from '@/modules/kitchen/services/allergenCascadeService'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import type { RecipeItem, MenuItemEconomics, KitchenUnit } from '@/types/kitchen'
 import type { RecipeLineBreakdown } from '@/modules/kitchen/services/recipeLineService'
@@ -971,6 +972,11 @@ export default function RecipeEscandalloTab({
         triggerLatido(null)
         setEconReloadTick((t) => t + 1)
         onRecipeChanged()
+        // Alérgenos (Capa 2): quitar una línea puede quitar el único
+        // ingrediente que aportaba un alérgeno — hay que recalcular.
+        cascadeAllergensFromItem(recipeId).catch((e) =>
+          console.error('RecipeEscandalloTab: cascada de alérgenos tras borrado falló', e)
+        )
       })
       .catch((err: unknown) => {
         setLines(prevLines)
@@ -1164,6 +1170,12 @@ export default function RecipeEscandalloTab({
         // Listo para añadir otro: volvemos al buscador.
         setAddPicked(null)
         setAddQty('')
+        // Alérgenos (Capa 2): cambió la composición → este escandallo y todo
+        // lo que lo use puede haber cambiado de estado. Best-effort, no
+        // bloquea el alta ni el "finally" de abajo.
+        cascadeAllergensFromItem(recipeId).catch((e) =>
+          console.error('RecipeEscandalloTab: cascada de alérgenos tras alta falló', e)
+        )
       })
       .catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : 'No se pudo añadir el ingrediente'
@@ -1739,6 +1751,11 @@ export default function RecipeEscandalloTab({
               setTick((t) => t + 1)
               setEconReloadTick((t) => t + 1)
               onRecipeChanged()
+              // Alérgenos (Capa 2): reemplazo completo de líneas, la
+              // composición cambió de raíz.
+              cascadeAllergensFromItem(recipeId).catch((e) =>
+                console.error('RecipeEscandalloTab: cascada de alérgenos tras importar ficha falló', e)
+              )
             }}
           />
         )}

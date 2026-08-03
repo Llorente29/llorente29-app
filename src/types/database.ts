@@ -15726,6 +15726,10 @@ export type Database = {
         }
         Returns: number
       }
+      _recompute_recipe_item_allergens: {
+        Args: { p_recipe_item_id: string }
+        Returns: undefined
+      }
       _require_manage_admins: { Args: never; Returns: undefined }
       _resolve_day_counters: {
         Args: { p_date: string; p_location_id: string }
@@ -16523,6 +16527,13 @@ export type Database = {
           slots_total: number
         }[]
       }
+      compute_recipe_item_allergens: {
+        Args: { p_recipe_item_id: string }
+        Returns: {
+          allergen_code: string
+          computed_state: string
+        }[]
+      }
       compute_sale_line_consumption: {
         Args: { p_sale_line_id: string }
         Returns: number
@@ -16683,6 +16694,14 @@ export type Database = {
       }
       current_user_is_admin_or_manager_of: {
         Args: { p_account_id: string }
+        Returns: boolean
+      }
+      current_user_is_employee: {
+        Args: { p_account_id: string; p_employee_id: string }
+        Returns: boolean
+      }
+      current_user_manages_location: {
+        Args: { p_location_id: string }
         Returns: boolean
       }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
@@ -17945,6 +17964,10 @@ export type Database = {
       recompute_purchase_order_status: {
         Args: { p_order_id: string }
         Returns: string
+      }
+      recompute_recipe_item_allergens: {
+        Args: { p_recipe_item_id: string }
+        Returns: undefined
       }
       recompute_sales_consumption: {
         Args: { p_account_id: string; p_from?: string; p_to?: string }

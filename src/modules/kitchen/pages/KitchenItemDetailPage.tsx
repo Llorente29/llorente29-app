@@ -38,6 +38,7 @@ import { listConversions, upsertConversion, removeConversion, type UnitConversio
 import { classifyUnmappedProduct } from '@/modules/kitchen/services/salesReliabilityService'
 import { listSuppliers, listSuppliersByItem } from '@/modules/kitchen/services/purchaseFormatService'
 import { recomputeItemAndAncestors } from '@/modules/kitchen/services/costCascadeService'
+import { cascadeAllergensFromItem } from '@/modules/kitchen/services/allergenCascadeService'
 import {
   listIngredientFamilies,
   type IngredientFamily,
@@ -562,6 +563,14 @@ export default function KitchenItemDetailPage({ itemId, onBack, returnTo }: Kitc
       // Alérgenos (lista final, reemplazo) vía su servicio.
       const allergenList = Array.from(fAllergens.entries()).map(([code, state]) => ({ code, state }))
       await saveItemAllergens(item.id, allergenList)
+      // Capa 2: solo el ingrediente (type='raw') declara alérgenos aquí — si
+      // cambió, todos los platos que lo usan pueden haber cambiado de
+      // estado. Best-effort, no bloquea el guardado.
+      if (item.type === 'raw') {
+        cascadeAllergensFromItem(item.id).catch((e) =>
+          console.error('KitchenItemDetailPage: cascada de alérgenos tras guardar ingrediente falló', e)
+        )
+      }
 
       // Nutrición + etiquetas de menú: update directo tipado.
       const nutritionObj: Record<string, number> = {}
