@@ -5170,6 +5170,384 @@ export type Database = {
           },
         ]
       }
+      course: {
+        Row: {
+          account_id: string | null
+          appcc_prerequisite: boolean
+          code: string
+          created_at: string
+          created_by: string | null
+          delivery_mode: string
+          estimated_minutes: number | null
+          id: string
+          is_mandatory: boolean
+          legal_basis: string | null
+          pass_threshold_pct: number
+          reeval_months: number | null
+          status: string
+          summary: string | null
+          title: string
+          version: number
+        }
+        Insert: {
+          account_id?: string | null
+          appcc_prerequisite?: boolean
+          code: string
+          created_at?: string
+          created_by?: string | null
+          delivery_mode: string
+          estimated_minutes?: number | null
+          id?: string
+          is_mandatory?: boolean
+          legal_basis?: string | null
+          pass_threshold_pct?: number
+          reeval_months?: number | null
+          status?: string
+          summary?: string | null
+          title: string
+          version?: number
+        }
+        Update: {
+          account_id?: string | null
+          appcc_prerequisite?: boolean
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          delivery_mode?: string
+          estimated_minutes?: number | null
+          id?: string
+          is_mandatory?: boolean
+          legal_basis?: string | null
+          pass_threshold_pct?: number
+          reeval_months?: number | null
+          status?: string
+          summary?: string | null
+          title?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "course_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      course_assignment: {
+        Row: {
+          account_id: string
+          course_id: string
+          created_at: string
+          created_by: string | null
+          due_at: string | null
+          employee_id: string | null
+          id: string
+          location_id: string | null
+          origin: string
+          role: string | null
+          source_incident_id: string | null
+        }
+        Insert: {
+          account_id: string
+          course_id: string
+          created_at?: string
+          created_by?: string | null
+          due_at?: string | null
+          employee_id?: string | null
+          id?: string
+          location_id?: string | null
+          origin: string
+          role?: string | null
+          source_incident_id?: string | null
+        }
+        Update: {
+          account_id?: string
+          course_id?: string
+          created_at?: string
+          created_by?: string | null
+          due_at?: string | null
+          employee_id?: string | null
+          id?: string
+          location_id?: string | null
+          origin?: string
+          role?: string | null
+          source_incident_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "course_assignment_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "course_assignment_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "course"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "course_assignment_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "course_assignment_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      course_attempt: {
+        Row: {
+          answers: Json
+          assignment_id: string
+          employee_id: string
+          finished_at: string | null
+          id: string
+          passed: boolean | null
+          score_pct: number | null
+          started_at: string
+          time_spent_seconds: number | null
+        }
+        Insert: {
+          answers?: Json
+          assignment_id: string
+          employee_id: string
+          finished_at?: string | null
+          id?: string
+          passed?: boolean | null
+          score_pct?: number | null
+          started_at?: string
+          time_spent_seconds?: number | null
+        }
+        Update: {
+          answers?: Json
+          assignment_id?: string
+          employee_id?: string
+          finished_at?: string | null
+          id?: string
+          passed?: boolean | null
+          score_pct?: number | null
+          started_at?: string
+          time_spent_seconds?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "course_attempt_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "course_assignment"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "course_attempt_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      course_certificate: {
+        Row: {
+          attempt_id: string
+          id: string
+          issued_at: string
+          issued_by: string | null
+          pdf_url: string
+          serial: string
+        }
+        Insert: {
+          attempt_id: string
+          id?: string
+          issued_at?: string
+          issued_by?: string | null
+          pdf_url: string
+          serial: string
+        }
+        Update: {
+          attempt_id?: string
+          id?: string
+          issued_at?: string
+          issued_by?: string | null
+          pdf_url?: string
+          serial?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "course_certificate_attempt_id_fkey"
+            columns: ["attempt_id"]
+            isOneToOne: false
+            referencedRelation: "course_attempt"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      course_option: {
+        Row: {
+          explanation: string | null
+          id: string
+          is_correct: boolean
+          question_id: string
+          text: string
+        }
+        Insert: {
+          explanation?: string | null
+          id?: string
+          is_correct?: boolean
+          question_id: string
+          text: string
+        }
+        Update: {
+          explanation?: string | null
+          id?: string
+          is_correct?: boolean
+          question_id?: string
+          text?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "course_option_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "course_question"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      course_question: {
+        Row: {
+          course_id: string
+          id: string
+          ord: number
+          text: string
+        }
+        Insert: {
+          course_id: string
+          id?: string
+          ord: number
+          text: string
+        }
+        Update: {
+          course_id?: string
+          id?: string
+          ord?: number
+          text?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "course_question_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "course"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      course_section: {
+        Row: {
+          body: string
+          course_id: string
+          id: string
+          media_url: string | null
+          ord: number
+          title: string
+        }
+        Insert: {
+          body: string
+          course_id: string
+          id?: string
+          media_url?: string | null
+          ord: number
+          title: string
+        }
+        Update: {
+          body?: string
+          course_id?: string
+          id?: string
+          media_url?: string | null
+          ord?: number
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "course_section_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "course"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      course_signature: {
+        Row: {
+          attempt_id: string
+          auth_method: string
+          auth_uid: string | null
+          course_version: number
+          employee_id: string
+          id: string
+          ip: string | null
+          signature_png: string
+          signed_at: string
+          signer_doc_id: string
+          signer_name: string
+          user_agent: string | null
+        }
+        Insert: {
+          attempt_id: string
+          auth_method?: string
+          auth_uid?: string | null
+          course_version: number
+          employee_id: string
+          id?: string
+          ip?: string | null
+          signature_png: string
+          signed_at?: string
+          signer_doc_id: string
+          signer_name: string
+          user_agent?: string | null
+        }
+        Update: {
+          attempt_id?: string
+          auth_method?: string
+          auth_uid?: string | null
+          course_version?: number
+          employee_id?: string
+          id?: string
+          ip?: string | null
+          signature_png?: string
+          signed_at?: string
+          signer_doc_id?: string
+          signer_name?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "course_signature_attempt_id_fkey"
+            columns: ["attempt_id"]
+            isOneToOne: false
+            referencedRelation: "course_attempt"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "course_signature_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ctb_notification_queue: {
         Row: {
           account_id: string
@@ -16721,6 +17099,13 @@ export type Database = {
         Returns: string
       }
       cron_generate_daily_counts: { Args: never; Returns: undefined }
+      current_employee_and_account: {
+        Args: never
+        Returns: {
+          account_id: string
+          employee_id: string
+        }[]
+      }
       current_user_account_ids: { Args: never; Returns: string[] }
       current_user_can_approve_invoice: {
         Args: { p_invoice_id: string }
@@ -16743,11 +17128,48 @@ export type Database = {
         Args: { p_account_id: string; p_employee_id: string }
         Returns: boolean
       }
+      current_user_is_office: { Args: never; Returns: boolean }
       current_user_manages_location: {
         Args: { p_location_id: string }
         Returns: boolean
       }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
+      // Formación C1 — RPCs del motor de cursos internos (course_*).
+      my_pending_courses: {
+        Args: never
+        Returns: {
+          assignment_id: string
+          attempt_id: string | null
+          course_code: string
+          course_id: string
+          course_title: string
+          delivery_mode: string
+          due_at: string | null
+          estimated_minutes: number | null
+          passed: boolean | null
+          reeval_months: number | null
+          score_pct: number | null
+          signed_at: string | null
+          status: string
+        }[]
+      }
+      sign_course_attempt: {
+        Args: {
+          p_attempt_id: string
+          p_signature_path: string
+          p_signer_doc_id: string
+          p_signer_name: string
+        }
+        Returns: Json
+      }
+      start_course_attempt: {
+        Args: { p_assignment_id: string }
+        Returns: Json
+      }
+      submit_course_attempt: {
+        Args: { p_answers: Json; p_attempt_id: string; p_time_spent_seconds?: number | null }
+        Returns: Json
+      }
       customer_addresses: { Args: { p_token: string }; Returns: Json }
       customer_coupons: { Args: { p_token: string }; Returns: Json }
       customer_delete_address: {

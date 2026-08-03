@@ -4,13 +4,13 @@
 
 import {
   ArrowLeft, LogIn, LogOut, Calendar, Armchair, RefreshCw,
-  Clock, Wallet, FileText, Sun,
+  Clock, Wallet, FileText, Sun, GraduationCap,
   type LucideIcon,
 } from 'lucide-react'
 import type { Employee } from '../../types'
 import { hasOpenShift } from '../../services/fichajeKiosko'
 
-export type PortalSubPage = 'fichar' | 'horario' | 'fichajes' | 'documentos' | 'vacaciones' | 'bolsa' | 'turnos' | 'cambios'
+export type PortalSubPage = 'fichar' | 'horario' | 'fichajes' | 'documentos' | 'vacaciones' | 'bolsa' | 'turnos' | 'cambios' | 'formacion'
 
 interface Props {
   employee: Employee
@@ -66,6 +66,13 @@ export default function PortalEmpleado({ employee, onNavigate, onBack, showBolsa
       Icon: Clock,
       title: 'Mis fichajes',
       desc: 'Historial de tus fichajes',
+      color: 'bg-card border-border-default hover:border-accent',
+    },
+    {
+      id: 'formacion',
+      Icon: GraduationCap,
+      title: 'Mi formación',
+      desc: 'Cursos, test y diplomas',
       color: 'bg-card border-border-default hover:border-accent',
     },
     ...(showBolsaHoras ? [{
