@@ -52,6 +52,20 @@ export interface BlockingIngredient {
   ingredientId: string
   ingredientName: string
   dishCount: number
+  // Cuántos de los 14 códigos tiene declarados (cualquier estado). 0 = nadie
+  // lo ha mirado nunca ("pendiente de ficha técnica"); >0 = dato parcial.
+  declaredCount: number
+}
+
+// declared_count lo añade la migración 20260806T0900 (cambia la firma de
+// allergen_blocking_ingredients). Tipado manual de la fila mientras esa
+// migración no esté aplicada + database.ts regenerado — quitar este tipo y
+// dejar la inferencia normal de supabase.rpc() en cuanto se regenere.
+interface RawBlockingIngredientRow {
+  ingredient_id: string
+  ingredient_name: string
+  dish_count: number
+  declared_count: number
 }
 
 export async function getAllergenBlockingIngredients(
@@ -62,10 +76,12 @@ export async function getAllergenBlockingIngredients(
     p_account_id: accountId,
   })
   if (error) throw new Error(`Error leyendo ingredientes bloqueantes: ${error.message}`)
-  return (data ?? []).map((row) => ({
+  const rows = (data ?? []) as unknown as RawBlockingIngredientRow[]
+  return rows.map((row) => ({
     ingredientId: row.ingredient_id,
     ingredientName: row.ingredient_name,
     dishCount: row.dish_count,
+    declaredCount: row.declared_count ?? 0,
   }))
 }
 
@@ -111,4 +127,23 @@ export async function getAllergenDiscrepancies(
     declaredState: row.declared_state as AllergenState,
     wouldInherit: row.would_inherit as AllergenState,
   }))
+}
+
+export interface AccountFiscalInfo {
+  legalName: string | null
+  cif: string | null
+}
+
+// Identidad fiscal para la portada del informe (PDF/Excel) — mismas 2
+// columnas que buildPurchaseOrderPdfData (purchaseOrderPdf.ts), fuente ya
+// verificada contra el esquema vivo de `accounts`.
+export async function getAccountFiscalInfo(accountId: string): Promise<AccountFiscalInfo> {
+  requireSupabase()
+  const { data, error } = await supabase!
+    .from('accounts')
+    .select('legal_name, cif')
+    .eq('id', accountId)
+    .single()
+  if (error) throw new Error(`Error leyendo datos fiscales de la cuenta: ${error.message}`)
+  return { legalName: data?.legal_name ?? null, cif: data?.cif ?? null }
 }

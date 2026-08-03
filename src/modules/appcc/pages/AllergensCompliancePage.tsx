@@ -19,13 +19,15 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AlertTriangle, Download, FileText, Loader2 } from 'lucide-react'
+import { AlertTriangle, Download, FileSpreadsheet, FileText, Loader2 } from 'lucide-react'
+import { useApp } from '@/context/AppContext'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import {
   getAllergenComplianceMatrix,
   getAllergenBlockingIngredients,
   getAllergenDataHealth,
   getAllergenDiscrepancies,
+  getAccountFiscalInfo,
   type ComplianceMatrixRow,
   type BlockingIngredient,
   type DataHealthRow,
@@ -41,6 +43,7 @@ import {
   type AllergenState,
 } from '@/modules/kitchen/lib/allergens'
 import { generateAllergenCompliancePdf } from '@/modules/appcc/services/allergenCompliancePdfService'
+import { generateAllergenComplianceExcel } from '@/modules/appcc/services/allergenComplianceExcelService'
 
 const CELL_TONE: Record<AllergenState, string> = {
   contains: 'bg-danger-bg text-danger',
@@ -148,6 +151,7 @@ function MatrixCell({ cell }: { cell?: AllergenCell }) {
 export default function AllergensCompliancePage() {
   const navigate = useNavigate()
   const { activeAccountId, accountsLoading } = useActiveAccount()
+  const { locations } = useApp()
 
   const [matrix, setMatrix] = useState<ComplianceMatrixRow[]>([])
   const [matrixError, setMatrixError] = useState<string | null>(null)
@@ -161,6 +165,8 @@ export default function AllergensCompliancePage() {
   const [brandFilter, setBrandFilter] = useState<string>('')
   const [pdfGenerating, setPdfGenerating] = useState(false)
   const [pdfError, setPdfError] = useState<string | null>(null)
+  const [excelGenerating, setExcelGenerating] = useState(false)
+  const [excelError, setExcelError] = useState<string | null>(null)
 
   useEffect(() => {
     if (accountsLoading) return
@@ -238,24 +244,68 @@ export default function AllergensCompliancePage() {
     URL.revokeObjectURL(url)
   }
 
+  // Contexto común a PDF y Excel: identidad fiscal (accounts.legal_name/cif,
+  // misma fuente que purchaseOrderPdf.ts) + alcance (marcas/locales
+  // realmente incluidos en ESTE export, respeta el filtro de marca activo)
+  // + fecha ya formateada dos veces (visible / para nombre de fichero).
+  async function buildReportScope() {
+    if (!activeAccountId) throw new Error('No hay cuenta activa.')
+    const account = await getAccountFiscalInfo(activeAccountId)
+    const now = new Date()
+    return {
+      account,
+      brandCount: brandFilter ? 1 : brandOptions.length,
+      locationCount: locations.filter((l) => l.active).length,
+      generatedAtLabel: now.toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' }),
+      // Sin regex de clase de caracteres con guion/dos puntos entre corchetes:
+      // Tailwind escanea el código fuente buscando "[propiedad:valor]" (sintaxis
+      // de propiedad arbitraria) y ese patrón literal rompía la build de CSS.
+      generatedAtFilename: now.toISOString().slice(0, 16).replaceAll('-', '').replaceAll(':', '').replaceAll('T', ''),
+    }
+  }
+
   async function exportPdf() {
     if (pdfGenerating) return
     setPdfGenerating(true)
     setPdfError(null)
     try {
-      const now = new Date()
-      await generateAllergenCompliancePdf(filteredMatrix, {
-        brandLabel: brandFilter || 'Todas las marcas',
-        generatedAtLabel: now.toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' }),
-        // Sin regex de clase de caracteres con guion/dos puntos entre corchetes:
-        // Tailwind escanea el código fuente buscando "[propiedad:valor]" (sintaxis
-        // de propiedad arbitraria) y ese patrón literal rompía la build de CSS.
-        generatedAtFilename: now.toISOString().slice(0, 16).replaceAll('-', '').replaceAll(':', '').replaceAll('T', ''),
+      const scope = await buildReportScope()
+      const { blob, filename } = generateAllergenCompliancePdf({
+        ...scope,
+        rows: filteredMatrix,
+        blocking,
+        discrepancies,
+        health,
       })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      a.click()
+      URL.revokeObjectURL(url)
     } catch (e: unknown) {
       setPdfError(e instanceof Error ? e.message : 'No se pudo generar el PDF.')
     } finally {
       setPdfGenerating(false)
+    }
+  }
+
+  async function exportExcel() {
+    if (excelGenerating) return
+    setExcelGenerating(true)
+    setExcelError(null)
+    try {
+      const scope = await buildReportScope()
+      generateAllergenComplianceExcel({
+        ...scope,
+        rows: filteredMatrix,
+        blocking,
+        health,
+      })
+    } catch (e: unknown) {
+      setExcelError(e instanceof Error ? e.message : 'No se pudo generar el Excel.')
+    } finally {
+      setExcelGenerating(false)
     }
   }
 
@@ -299,6 +349,15 @@ export default function AllergensCompliancePage() {
           </button>
           <button
             type="button"
+            onClick={exportExcel}
+            disabled={filteredMatrix.length === 0 || excelGenerating}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg font-medium border border-border-default text-text-primary bg-card hover:bg-page disabled:opacity-50 transition-colors"
+          >
+            {excelGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+            {excelGenerating ? 'Generando…' : 'Exportar Excel'}
+          </button>
+          <button
+            type="button"
             onClick={exportPdf}
             disabled={filteredMatrix.length === 0 || pdfGenerating}
             className="inline-flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg font-medium border border-border-default text-text-primary bg-card hover:bg-page disabled:opacity-50 transition-colors"
@@ -309,6 +368,7 @@ export default function AllergensCompliancePage() {
         </div>
       </div>
       {pdfError && <div className="p-2.5 rounded-lg bg-danger-bg text-danger text-xs">{pdfError}</div>}
+      {excelError && <div className="p-2.5 rounded-lg bg-danger-bg text-danger text-xs">{excelError}</div>}
 
       {/* Matriz completa */}
       <div className="bg-card border border-border-default rounded-lg">
