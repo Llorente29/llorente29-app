@@ -189,6 +189,17 @@ BEGIN
 END;
 $$;
 
+-- SECURITY DEFINER en 'public' queda expuesta por PostgREST con EXECUTE a
+-- PUBLIC por defecto salvo revoke explícito. compute_recipe_item_allergens
+-- (lectura, sin guard) y _recompute_recipe_item_allergens (escritura, sin
+-- guard) NO deben ser invocables directamente por ningún usuario — la única
+-- puerta de entrada de cliente es recompute_recipe_item_allergens, que sí
+-- mantiene su guard y sus permisos. Verificado: ningún cliente llama hoy a
+-- compute_recipe_item_allergens (no existe wrapper en src/, Fase 2 aún no
+-- está escrita).
+revoke execute on function public.compute_recipe_item_allergens(uuid) from anon, authenticated;
+revoke execute on function public._recompute_recipe_item_allergens(uuid) from anon, authenticated;
+
 notify pgrst, 'reload schema';
 
 -- ─────────────────────────────────────────────────────────────────────
@@ -222,5 +233,11 @@ BEGIN
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'recompute_recipe_item_allergens') THEN
     RAISE EXCEPTION 'MIGRACIÓN FALLIDA: falta recompute_recipe_item_allergens';
+  END IF;
+  IF has_function_privilege('authenticated', 'public.compute_recipe_item_allergens(uuid)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'MIGRACIÓN FALLIDA: compute_recipe_item_allergens sigue expuesta a authenticated';
+  END IF;
+  IF has_function_privilege('authenticated', 'public._recompute_recipe_item_allergens(uuid)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'MIGRACIÓN FALLIDA: _recompute_recipe_item_allergens sigue expuesta a authenticated';
   END IF;
 END $$;
