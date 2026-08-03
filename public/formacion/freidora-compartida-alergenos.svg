@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 400" width="680" height="400" role="img" aria-label="El calor no destruye los alérgenos: el aceite de los rebozados lleva gluten y lo pasa a las patatas">
+<title>El calor no destruye los alérgenos</title>
+<rect width="680" height="400" fill="#FFFFFF"/>
+<rect x="40" y="26" width="600" height="60" rx="8" fill="#E0492E"/>
+<text x="340" y="52" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="19" font-weight="bold" fill="#FFFFFF">El calor mata bacterias.</text>
+<text x="340" y="76" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="19" font-weight="bold" fill="#FFFFFF">NO destruye los alérgenos.</text>
+<rect x="60" y="118" width="240" height="150" rx="8" fill="#FBE8E3" stroke="#E0492E" stroke-width="2"/>
+<text x="180" y="148" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="16" font-weight="bold" fill="#A82E18">Freidora de rebozados</text>
+<text x="180" y="176" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#A82E18">El aceite lleva gluten</text>
+<text x="180" y="198" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#A82E18">de las croquetas y</text>
+<text x="180" y="220" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#A82E18">los empanados</text>
+<text x="180" y="250" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="15" font-weight="bold" fill="#A82E18">180 °C no lo eliminan</text>
+<path d="M312 193 L378 193" stroke="#E0492E" stroke-width="2.5" fill="none"/>
+<path d="M370 186 L380 193 L370 200" stroke="#E0492E" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="392" y="118" width="240" height="150" rx="8" fill="#FBE8E3" stroke="#E0492E" stroke-width="2"/>
+<text x="512" y="148" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="16" font-weight="bold" fill="#A82E18">Patatas del celíaco</text>
+<text x="512" y="182" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#A82E18">Salen con gluten.</text>
+<text x="512" y="206" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#A82E18">Escurrirlas o secarlas</text>
+<text x="512" y="228" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#A82E18">no sirve de nada.</text>
+<rect x="60" y="296" width="572" height="72" rx="8" fill="#E7F4EE" stroke="#1F9D6B" stroke-width="1.5"/>
+<text x="80" y="324" font-family="Helvetica,Arial,sans-serif" font-size="16" font-weight="bold" fill="#146846">Freidora y plancha nunca se comparten con un alérgico</text>
+<text x="80" y="350" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#146846">Espera a la freidora limpia o ofrécele otra guarnición, explicándole por qué.</text>
+</svg>

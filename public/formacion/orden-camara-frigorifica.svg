@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 430" width="680" height="430" role="img" aria-label="Orden correcto de la cámara: arriba los alimentos listos, abajo del todo la carne y el pescado crudos">
+<title>Orden correcto de la cámara frigorífica</title>
+<rect width="680" height="430" fill="#FFFFFF"/>
+<rect x="120" y="28" width="340" height="340" rx="12" fill="none" stroke="#1E3A5F" stroke-width="2.5"/>
+<rect x="140" y="48" width="300" height="66" rx="6" fill="#E7F4EE" stroke="#1F9D6B" stroke-width="1.5"/>
+<text x="160" y="74" font-family="Helvetica,Arial,sans-serif" font-size="16" font-weight="bold" fill="#146846">Listos para consumo</text>
+<text x="160" y="97" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#146846">Postres, quesos, salsas frías</text>
+<rect x="140" y="126" width="300" height="66" rx="6" fill="#E7F4EE" stroke="#1F9D6B" stroke-width="1.5"/>
+<text x="160" y="152" font-family="Helvetica,Arial,sans-serif" font-size="16" font-weight="bold" fill="#146846">Cocinados</text>
+<text x="160" y="175" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#146846">Tapados y con fecha</text>
+<rect x="140" y="204" width="300" height="66" rx="6" fill="#F5F4F0" stroke="#6B7280" stroke-width="1.5"/>
+<text x="160" y="230" font-family="Helvetica,Arial,sans-serif" font-size="16" font-weight="bold" fill="#1F2421">Verduras y fruta</text>
+<text x="160" y="253" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#4B5563">Lavadas antes de guardar</text>
+<rect x="140" y="282" width="300" height="70" rx="6" fill="#FBE8E3" stroke="#E0492E" stroke-width="2.5"/>
+<text x="160" y="310" font-family="Helvetica,Arial,sans-serif" font-size="16" font-weight="bold" fill="#A82E18">Carne y pescado CRUDOS</text>
+<text x="160" y="334" font-family="Helvetica,Arial,sans-serif" font-size="14" font-weight="bold" fill="#A82E18">Siempre abajo del todo</text>
+<line x1="462" y1="80" x2="496" y2="80" stroke="#6B7280" stroke-width="1" stroke-dasharray="3 3"/>
+<text x="504" y="85" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#1F2421">Arriba lo listo</text>
+<line x1="462" y1="316" x2="496" y2="316" stroke="#6B7280" stroke-width="1" stroke-dasharray="3 3"/>
+<text x="504" y="304" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#1F2421">Abajo lo crudo:</text>
+<text x="504" y="323" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#1F2421">si gotea, no cae</text>
+<text x="504" y="342" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#1F2421">sobre nada</text>
+<text x="40" y="400" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#6B7280">El jugo de la carne cruda cae hacia abajo. Por eso nunca va encima de nada.</text>
+</svg>

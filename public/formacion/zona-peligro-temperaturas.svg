@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 430" width="680" height="430" role="img" aria-label="Zona de peligro de temperaturas: por debajo de 5 grados las bacterias se duermen, entre 5 y 65 se multiplican, por encima de 65 mueren">
+<title>Zona de peligro de temperaturas</title>
+<rect width="680" height="430" fill="#FFFFFF"/>
+<rect x="150" y="30" width="300" height="86" rx="8" fill="#FAF0D8" stroke="#C2890F" stroke-width="1.5"/>
+<text x="172" y="60" font-family="Helvetica,Arial,sans-serif" font-size="17" font-weight="bold" fill="#8A5F09">Calor seguro</text>
+<text x="172" y="84" font-family="Helvetica,Arial,sans-serif" font-size="15" fill="#8A5F09">Más de 65 °C</text>
+<text x="172" y="105" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#8A5F09">Las bacterias mueren</text>
+<rect x="150" y="132" width="300" height="140" rx="8" fill="#FBE8E3" stroke="#E0492E" stroke-width="2.5"/>
+<text x="172" y="164" font-family="Helvetica,Arial,sans-serif" font-size="19" font-weight="bold" fill="#A82E18">ZONA DE PELIGRO</text>
+<text x="172" y="192" font-family="Helvetica,Arial,sans-serif" font-size="16" font-weight="bold" fill="#A82E18">Entre 5 °C y 65 °C</text>
+<text x="172" y="222" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#A82E18">Se multiplican muy rápido.</text>
+<text x="172" y="246" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#A82E18">Aquí NO se deja la comida.</text>
+<rect x="150" y="288" width="300" height="86" rx="8" fill="#E7F4EE" stroke="#1F9D6B" stroke-width="1.5"/>
+<text x="172" y="318" font-family="Helvetica,Arial,sans-serif" font-size="17" font-weight="bold" fill="#146846">Frío seguro</text>
+<text x="172" y="342" font-family="Helvetica,Arial,sans-serif" font-size="15" fill="#146846">Menos de 5 °C</text>
+<text x="172" y="363" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#146846">Las bacterias se duermen</text>
+<line x1="466" y1="73" x2="500" y2="73" stroke="#6B7280" stroke-width="1" stroke-dasharray="3 3"/>
+<text x="508" y="78" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#1F2421">Mantener caliente</text>
+<line x1="466" y1="202" x2="500" y2="202" stroke="#6B7280" stroke-width="1" stroke-dasharray="3 3"/>
+<text x="508" y="196" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#1F2421">La comida no</text>
+<text x="508" y="215" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#1F2421">puede estar aquí</text>
+<line x1="466" y1="331" x2="500" y2="331" stroke="#6B7280" stroke-width="1" stroke-dasharray="3 3"/>
+<text x="508" y="336" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#1F2421">Nevera y congelador</text>
+<text x="140" y="127" text-anchor="end" font-family="Helvetica,Arial,sans-serif" font-size="15" font-weight="bold" fill="#1E3A5F">65 °C</text>
+<text x="140" y="283" text-anchor="end" font-family="Helvetica,Arial,sans-serif" font-size="15" font-weight="bold" fill="#1E3A5F">5 °C</text>
+<text x="40" y="408" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#6B7280">Una bandeja templándose en la encimera está en el centro de la zona roja.</text>
+</svg>

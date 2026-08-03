@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 430" width="680" height="430" role="img" aria-label="Señales de reacción alérgica grave y qué hacer: llamar al 112, adrenalina en el muslo, tumbar con piernas elevadas">
+<title>Reacción alérgica grave: señales y actuación</title>
+<rect width="680" height="430" fill="#FFFFFF"/>
+<rect x="40" y="26" width="600" height="50" rx="8" fill="#E0492E"/>
+<text x="340" y="57" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="bold" fill="#FFFFFF">Si ves esto, no esperes: llama al 112</text>
+<text x="40" y="106" font-family="Helvetica,Arial,sans-serif" font-size="16" font-weight="bold" fill="#1F2421">Señales de alarma</text>
+<rect x="40" y="118" width="290" height="180" rx="8" fill="#FBE8E3" stroke="#E0492E" stroke-width="1.5"/>
+<circle cx="60" cy="148" r="4" fill="#E0492E"/><text x="76" y="154" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#A82E18">Hinchazón de labios, lengua</text>
+<text x="76" y="173" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#A82E18">o garganta</text>
+<circle cx="60" cy="196" r="4" fill="#E0492E"/><text x="76" y="202" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#A82E18">Dificultad para respirar</text>
+<circle cx="60" cy="226" r="4" fill="#E0492E"/><text x="76" y="232" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#A82E18">Ronchas por el cuerpo</text>
+<circle cx="60" cy="256" r="4" fill="#E0492E"/><text x="76" y="262" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#A82E18">Mareo, palidez, desmayo</text>
+<text x="360" y="106" font-family="Helvetica,Arial,sans-serif" font-size="16" font-weight="bold" fill="#1F2421">Qué hacer, en este orden</text>
+<rect x="360" y="118" width="280" height="180" rx="8" fill="#E7F4EE" stroke="#1F9D6B" stroke-width="1.5"/>
+<text x="380" y="150" font-family="Helvetica,Arial,sans-serif" font-size="15" font-weight="bold" fill="#146846">1. Llama al 112</text>
+<text x="380" y="180" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#146846">2. Si lleva autoinyector,</text>
+<text x="398" y="199" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#146846">adrenalina en el muslo</text>
+<text x="380" y="227" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#146846">3. Túmbalo con las piernas</text>
+<text x="398" y="246" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#146846">elevadas. Que no se levante</text>
+<text x="380" y="274" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#146846">4. No le des de beber</text>
+<rect x="40" y="318" width="600" height="46" rx="8" fill="#FAF0D8" stroke="#C2890F" stroke-width="1.5"/>
+<text x="60" y="346" font-family="Helvetica,Arial,sans-serif" font-size="15" fill="#8A5F09">Guarda el plato y el envase: es información clave para el hospital.</text>
+<rect x="40" y="374" width="600" height="40" rx="8" fill="#1E3A5F"/>
+<text x="340" y="400" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="15" font-weight="bold" fill="#FFFFFF">Aunque mejore, tiene que ir al hospital: puede volver horas después</text>
+</svg>

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 380" width="680" height="380" role="img" aria-label="Vías de contaminación cruzada: manos, utensilios, superficies y goteo en la cámara">
+<title>Cómo viaja la contaminación cruzada</title>
+<rect width="680" height="380" fill="#FFFFFF"/>
+<text x="40" y="48" font-family="Helvetica,Arial,sans-serif" font-size="19" font-weight="bold" fill="#1E3A5F">Un alérgeno o una bacteria viajan así</text>
+<rect x="40" y="72" width="160" height="92" rx="8" fill="#FBE8E3" stroke="#E0492E" stroke-width="2"/>
+<text x="120" y="104" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="15" font-weight="bold" fill="#A82E18">Alimento crudo</text>
+<text x="120" y="128" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="13" fill="#A82E18">o con alérgeno</text>
+<path d="M208 118 L262 118" stroke="#6B7280" stroke-width="2" fill="none"/>
+<path d="M254 111 L264 118 L254 125" stroke="#6B7280" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="272" y="60" width="136" height="52" rx="6" fill="#F5F4F0" stroke="#6B7280" stroke-width="1.5"/>
+<text x="340" y="91" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#1F2421">Manos y guantes</text>
+<rect x="272" y="122" width="136" height="52" rx="6" fill="#F5F4F0" stroke="#6B7280" stroke-width="1.5"/>
+<text x="340" y="153" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#1F2421">Tablas y cuchillos</text>
+<rect x="272" y="184" width="136" height="52" rx="6" fill="#F5F4F0" stroke="#6B7280" stroke-width="1.5"/>
+<text x="340" y="215" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#1F2421">Aceite y planchas</text>
+<rect x="272" y="246" width="136" height="52" rx="6" fill="#F5F4F0" stroke="#6B7280" stroke-width="1.5"/>
+<text x="340" y="270" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#1F2421">Goteo en la</text>
+<text x="340" y="289" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#1F2421">cámara</text>
+<path d="M416 118 L470 118" stroke="#6B7280" stroke-width="2" fill="none"/>
+<path d="M462 111 L472 118 L462 125" stroke="#6B7280" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="480" y="72" width="160" height="92" rx="8" fill="#FAF0D8" stroke="#C2890F" stroke-width="2"/>
+<text x="560" y="104" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="15" font-weight="bold" fill="#8A5F09">El plato del</text>
+<text x="560" y="126" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="15" font-weight="bold" fill="#8A5F09">cliente</text>
+<rect x="40" y="316" width="600" height="48" rx="8" fill="#E7F4EE" stroke="#1F9D6B" stroke-width="1.5"/>
+<text x="60" y="346" font-family="Helvetica,Arial,sans-serif" font-size="15" fill="#146846">Se corta separando lo crudo de lo listo, lavando manos y utillaje, y colocando bien la cámara.</text>
+</svg>
