@@ -16035,6 +16035,42 @@ export type Database = {
           target_daily: number
         }[]
       }
+      allergen_blocking_ingredients: {
+        Args: { p_account_id: string }
+        Returns: {
+          dish_count: number
+          ingredient_id: string
+          ingredient_name: string
+        }[]
+      }
+      allergen_compliance_matrix: {
+        Args: { p_account_id: string }
+        Returns: {
+          allergens: Json
+          brands: string[]
+          recipe_item_id: string
+          recipe_name: string
+          recipe_type: string
+        }[]
+      }
+      allergen_data_health: {
+        Args: { p_account_id: string }
+        Returns: {
+          row_count: number
+          scope: string
+          source: string
+        }[]
+      }
+      allergen_discrepancies: {
+        Args: { p_account_id: string }
+        Returns: {
+          allergen_code: string
+          declared_state: string
+          recipe_item_id: string
+          recipe_name: string
+          would_inherit: string
+        }[]
+      }
       anomalous_brand_closures: {
         Args: { p_account_id?: string; p_token?: string }
         Returns: Json

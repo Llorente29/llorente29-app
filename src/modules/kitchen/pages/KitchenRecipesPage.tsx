@@ -64,7 +64,18 @@ import {
 import RecipeImportReviewModal from '@/modules/kitchen/components/RecipeImportReviewModal'
 import { listUnits } from '@/modules/kitchen/services/kitchenUnitService'
 import type { RecipeItem, KitchenUnit, RecipeItemType } from '@/types/kitchen'
-import CatalogFichaPage from '@/modules/kitchen/pages/CatalogFichaPage'
+import CatalogFichaPage, { type FichaTab } from '@/modules/kitchen/pages/CatalogFichaPage'
+
+const FICHA_TABS: FichaTab[] = [
+  'escandallo', 'receta', 'modificadores', 'economia',
+  'en_carta', 'etiquetado', 'historico', 'ficha',
+]
+// El ?tab= entrante es texto libre de la URL — valida contra las pestañas
+// reales antes de pasarlo, así un valor inesperado cae al default en vez
+// de romper el tipado o abrir en un estado inexistente.
+function isFichaTab(value: string | null): value is FichaTab {
+  return value !== null && (FICHA_TABS as string[]).includes(value)
+}
 
 function formatEur(value: number | null | undefined): string {
   if (value === null || value === undefined) return '—'
@@ -157,6 +168,10 @@ export default function KitchenRecipesPage() {
   const [search, setSearch] = useState('')
   // null = vista lista; un id = vista detalle (editor de ese plato).
   const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(null)
+  // Pestaña de apertura (deep-link, p.ej. ?recipe=ID&tab=etiquetado desde la
+  // matriz de cumplimiento de alérgenos). Mismo query param que ?recipe=,
+  // se lee y se limpia una sola vez en el mismo efecto de abajo.
+  const [selectedInitialTab, setSelectedInitialTab] = useState<string | null>(null)
   // E5: URLs firmadas de las fotos (id del plato -> URL servible). El listado
   // guarda el PATH en kitchen_photo_url; aquí lo firmamos para poder mostrarlo.
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({})
@@ -186,8 +201,10 @@ export default function KitchenRecipesPage() {
     const incomingId = searchParams.get('recipe')
     if (incomingId) {
       setSelectedRecipeId(incomingId)
+      setSelectedInitialTab(searchParams.get('tab'))
       const next = new URLSearchParams(searchParams)
       next.delete('recipe')
+      next.delete('tab')
       setSearchParams(next, { replace: true })
     }
     // Solo al montar / cambiar el param entrante.
@@ -341,6 +358,7 @@ export default function KitchenRecipesPage() {
         recipeId={selectedRecipeId}
         onBack={() => setSelectedRecipeId(null)}
         onOpenRecipe={(id) => setSelectedRecipeId(id)}
+        initialTab={isFichaTab(selectedInitialTab) ? selectedInitialTab : undefined}
       />
     )
   }

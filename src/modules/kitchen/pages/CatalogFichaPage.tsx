@@ -117,7 +117,7 @@ const TAG_STYLES: Record<string, string> = {
   'promocional': 'bg-purple-50 text-purple-800',
 }
 
-type FichaTab =
+export type FichaTab =
   | 'escandallo' | 'receta' | 'modificadores' | 'economia'
   | 'en_carta' | 'etiquetado' | 'historico' | 'ficha'
 
@@ -156,6 +156,9 @@ interface CatalogFichaPageProps {
   onBack: () => void
   /** Solo lo pasa KitchenRecipesPage — "Duplicar" navega a la copia si existe. */
   onOpenRecipe?: (recipeId: string) => void
+  /** Pestaña con la que abre (deep-link desde otra pantalla, p.ej. la matriz
+   * de alérgenos → Etiquetado). Por defecto 'escandallo', igual que antes. */
+  initialTab?: FichaTab
 }
 
 export default function CatalogFichaPage({
@@ -163,12 +166,13 @@ export default function CatalogFichaPage({
   recipeId: recipeIdProp,
   onBack,
   onOpenRecipe,
+  initialTab,
 }: CatalogFichaPageProps) {
   const navigate = useNavigate()
   const { activeAccountId, accountsLoading } = useActiveAccount()
   const { authUserId, userProfile } = useApp()
 
-  const [activeTab, setActiveTab] = useState<FichaTab>('escandallo')
+  const [activeTab, setActiveTab] = useState<FichaTab>(initialTab ?? 'escandallo')
 
   // ── Ancla de producto (ver cabecera del fichero) ──────────────────────────
   const [activeMenuItemId, setActiveMenuItemId] = useState<string | null>(menuItemIdProp ?? null)

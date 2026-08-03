@@ -79,6 +79,7 @@ export type Page =
   | 'appcc_onboarding'
   | 'appcc_reports'
   | 'appcc_templates'
+  | 'appcc_allergens'
   | 'brands'
 
 export interface Location {
