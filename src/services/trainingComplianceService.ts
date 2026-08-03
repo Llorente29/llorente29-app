@@ -17,7 +17,7 @@ function requireSupabase(): void {
   }
 }
 
-export type TrainingCellState = 'vigente' | 'caducado' | 'pendiente' | 'en_curso' | 'no_aplica'
+export type TrainingCellState = 'vigente' | 'caducado' | 'pendiente' | 'en_curso' | 'pendiente_practica' | 'no_aplica'
 
 export interface TrainingCourseCell {
   state: TrainingCellState
@@ -103,7 +103,7 @@ export function computeMandatoryCompliancePct(
   return { pct, vigente, applicable }
 }
 
-export type TrainingGapKind = 'nunca_hecho' | 'caducado' | 'caduca_pronto' | 'sin_firmar'
+export type TrainingGapKind = 'nunca_hecho' | 'caducado' | 'caduca_pronto' | 'sin_firmar' | 'falta_practica'
 
 export interface TrainingGap {
   employeeId: string

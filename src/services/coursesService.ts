@@ -18,6 +18,7 @@ type CourseUpdate = Database['public']['Tables']['course']['Update']
 type CourseSectionUpdate = Database['public']['Tables']['course_section']['Update']
 type CourseQuestionUpdate = Database['public']['Tables']['course_question']['Update']
 type CourseOptionUpdate = Database['public']['Tables']['course_option']['Update']
+type CoursePracticalItemUpdate = Database['public']['Tables']['course_practical_item']['Update']
 
 export type DeliveryMode = 'folvy_imparte' | 'solo_archivo' | 'mixto'
 export type CourseStatus = 'draft' | 'published' | 'archived'
@@ -41,6 +42,26 @@ export interface Course {
   version: number
   status: CourseStatus
   createdAt: string
+  /** Si true, aprobar test+firma no basta: falta verificación práctica en el puesto (C4). */
+  requiresPractical: boolean
+}
+
+export interface CoursePracticalItem {
+  id: string
+  courseId: string
+  ord: number
+  text: string
+  helpText: string | null
+}
+
+export interface CoursePracticalCheck {
+  id: string
+  attemptId: string
+  itemId: string
+  checked: boolean
+  verifiedBy: string
+  verifiedAt: string
+  notes: string | null
 }
 
 export interface CourseOption {
@@ -71,6 +92,7 @@ export interface CourseSection {
 export interface CourseWithContent extends Course {
   sections: CourseSection[]
   questions: CourseQuestion[]
+  practicalItems: CoursePracticalItem[]
 }
 
 export interface CourseAssignment {
@@ -130,6 +152,7 @@ interface CourseRow {
   version: number
   status: string
   created_at: string
+  requires_practical: boolean
 }
 
 function rowToCourse(r: CourseRow): Course {
@@ -150,6 +173,7 @@ function rowToCourse(r: CourseRow): Course {
     version: r.version,
     status: r.status as CourseStatus,
     createdAt: r.created_at,
+    requiresPractical: r.requires_practical,
   }
 }
 
@@ -201,6 +225,13 @@ export async function getCourseWithContent(courseId: string): Promise<CourseWith
     options = opts ?? []
   }
 
+  const { data: practicalItems, error: practicalErr } = await supabase
+    .from('course_practical_item')
+    .select('*')
+    .eq('course_id', courseId)
+    .order('ord', { ascending: true })
+  if (practicalErr) { console.error('[coursesService] getCourseWithContent (practicalItems)', practicalErr); throw practicalErr }
+
   return {
     ...rowToCourse(courseRow as CourseRow),
     sections: (sections ?? []).map((s: { id: string; course_id: string; ord: number; title: string; body: string; media_url: string | null }) => ({
@@ -211,6 +242,9 @@ export async function getCourseWithContent(courseId: string): Promise<CourseWith
       options: options
         .filter(o => o.question_id === q.id)
         .map(o => ({ id: o.id, questionId: o.question_id, text: o.text, isCorrect: o.is_correct, explanation: o.explanation })),
+    })),
+    practicalItems: (practicalItems ?? []).map((p: { id: string; course_id: string; ord: number; text: string; help_text: string | null }) => ({
+      id: p.id, courseId: p.course_id, ord: p.ord, text: p.text, helpText: p.help_text,
     })),
   }
 }
@@ -262,6 +296,7 @@ export interface UpdateCourseInput {
   estimatedMinutes?: number | null
   passThresholdPct?: number
   status?: CourseStatus
+  requiresPractical?: boolean
 }
 
 export async function updateCourse(courseId: string, patch: UpdateCourseInput): Promise<Course> {
@@ -275,6 +310,7 @@ export async function updateCourse(courseId: string, patch: UpdateCourseInput): 
   if (patch.appccPrerequisite !== undefined) update.appcc_prerequisite = patch.appccPrerequisite
   if (patch.estimatedMinutes !== undefined) update.estimated_minutes = patch.estimatedMinutes
   if (patch.passThresholdPct !== undefined) update.pass_threshold_pct = patch.passThresholdPct
+  if (patch.requiresPractical !== undefined) update.requires_practical = patch.requiresPractical
   if (patch.status !== undefined) {
     update.status = patch.status
     // Publicar un curso ya publicado antes = nueva versión (el acta de quien
@@ -404,6 +440,89 @@ export async function deleteOption(optionId: string): Promise<void> {
   if (!supabase) throw new Error('Supabase no disponible')
   const { error } = await supabase.from('course_option').delete().eq('id', optionId)
   if (error) { console.error('[coursesService] deleteOption', error); throw error }
+}
+
+// ============================================================
+// VERIFICACIÓN PRÁCTICA (C4) — gestos observables + registro de checks
+// ============================================================
+
+export async function createPracticalItem(
+  courseId: string,
+  input: { ord: number; text: string; helpText?: string },
+): Promise<CoursePracticalItem> {
+  if (!supabase) throw new Error('Supabase no disponible')
+  const { data, error } = await supabase
+    .from('course_practical_item')
+    .insert({ course_id: courseId, ord: input.ord, text: input.text, help_text: input.helpText ?? null })
+    .select('*')
+    .single()
+  if (error) { console.error('[coursesService] createPracticalItem', error); throw error }
+  return { id: data.id, courseId: data.course_id, ord: data.ord, text: data.text, helpText: data.help_text }
+}
+
+export async function updatePracticalItem(
+  itemId: string,
+  patch: { ord?: number; text?: string; helpText?: string | null },
+): Promise<void> {
+  if (!supabase) throw new Error('Supabase no disponible')
+  const update: CoursePracticalItemUpdate = {}
+  if (patch.ord !== undefined) update.ord = patch.ord
+  if (patch.text !== undefined) update.text = patch.text
+  if (patch.helpText !== undefined) update.help_text = patch.helpText
+  const { error } = await supabase.from('course_practical_item').update(update).eq('id', itemId)
+  if (error) { console.error('[coursesService] updatePracticalItem', error); throw error }
+}
+
+export async function deletePracticalItem(itemId: string): Promise<void> {
+  if (!supabase) throw new Error('Supabase no disponible')
+  const { error } = await supabase.from('course_practical_item').delete().eq('id', itemId)
+  if (error) { console.error('[coursesService] deletePracticalItem', error); throw error }
+}
+
+/** Historial de checks de un intento (todas las filas, no solo el último por item — es evidencia append-only). */
+export async function listPracticalChecksForAttempt(attemptId: string): Promise<CoursePracticalCheck[]> {
+  if (!supabase) throw new Error('Supabase no disponible')
+  const { data, error } = await supabase
+    .from('course_practical_check')
+    .select('*')
+    .eq('attempt_id', attemptId)
+    .order('verified_at', { ascending: false })
+  if (error) { console.error('[coursesService] listPracticalChecksForAttempt', error); throw error }
+  return (data ?? []).map((r: {
+    id: string; attempt_id: string; item_id: string; checked: boolean
+    verified_by: string; verified_at: string; notes: string | null
+  }) => ({
+    id: r.id, attemptId: r.attempt_id, itemId: r.item_id, checked: r.checked,
+    verifiedBy: r.verified_by, verifiedAt: r.verified_at, notes: r.notes,
+  }))
+}
+
+export interface PracticalItemCheckInput {
+  itemId: string
+  checked: boolean
+  notes?: string
+}
+
+/**
+ * Registra la verificación práctica de una sesión (uno o varios gestos a la
+ * vez). RPC SECURITY DEFINER (C4): exige admin/manager de la cuenta y que el
+ * verificador no sea quien firmó el intento — lo comprueba el propio
+ * servidor, esto solo empaqueta la llamada.
+ */
+export async function verifyPracticalItems(
+  attemptId: string,
+  checks: PracticalItemCheckInput[],
+  notes?: string,
+): Promise<{ insertedCount: number; verifiedAt: string }> {
+  if (!supabase) throw new Error('Supabase no disponible')
+  const { data, error } = await supabase.rpc('verify_practical_items', {
+    p_attempt_id: attemptId,
+    p_checks: checks.map(c => ({ itemId: c.itemId, checked: c.checked, notes: c.notes ?? null })),
+    p_notes: notes ?? null,
+  })
+  if (error) { console.error('[coursesService] verifyPracticalItems', error); throw error }
+  const result = data as { insertedCount: number; verifiedAt: string }
+  return result
 }
 
 // ============================================================
@@ -539,10 +658,11 @@ export async function listSignaturesForAttempts(attemptIds: string[]): Promise<C
 // AppContext) para pintar "quién ha hecho qué, quién va tarde".
 // ============================================================
 
-export type TrackingStatus = 'pendiente' | 'en_curso' | 'suspendido' | 'firmado'
+export type TrackingStatus = 'pendiente' | 'en_curso' | 'suspendido' | 'firmado' | 'pendiente_practica'
 
 export interface TrackingRow {
   assignmentId: string
+  attemptId: string | null
   employeeId: string
   employeeName: string
   dueAt: string | null
@@ -550,6 +670,27 @@ export interface TrackingRow {
   status: TrackingStatus
   scorePct: number | null
   signedAt: string | null
+}
+
+export interface ResolveTrackingOptions {
+  requiresPractical?: boolean
+  practicalItems?: CoursePracticalItem[]
+  practicalChecks?: CoursePracticalCheck[]
+}
+
+/** ¿Todos los gestos del curso están, para este intento, con su check MÁS RECIENTE en checked=true? */
+function isPracticalSatisfied(
+  attemptId: string,
+  items: CoursePracticalItem[],
+  checks: CoursePracticalCheck[],
+): boolean {
+  if (items.length === 0) return true
+  return items.every(item => {
+    const forItem = checks
+      .filter(c => c.attemptId === attemptId && c.itemId === item.id)
+      .sort((x, y) => new Date(y.verifiedAt).getTime() - new Date(x.verifiedAt).getTime())
+    return forItem[0]?.checked === true
+  })
 }
 
 /**
@@ -562,10 +703,13 @@ export function resolveTrackingRows(
   attempts: CourseAttempt[],
   signatures: CourseSignatureRow[],
   employees: Employee[],
+  options?: ResolveTrackingOptions,
 ): TrackingRow[] {
   const now = Date.now()
   const activeEmployees = employees.filter(e => e.active)
   const rows: TrackingRow[] = []
+  const practicalItems = options?.practicalItems ?? []
+  const practicalChecks = options?.practicalChecks ?? []
 
   for (const a of assignments) {
     const targets = activeEmployees.filter(e =>
@@ -585,12 +729,18 @@ export function resolveTrackingRows(
         : undefined
 
       let status: TrackingStatus = 'pendiente'
-      if (lastSignature) status = 'firmado'
+      if (lastSignature) {
+        status = 'firmado'
+        if (options?.requiresPractical && lastAttempt && !isPracticalSatisfied(lastAttempt.id, practicalItems, practicalChecks)) {
+          status = 'pendiente_practica'
+        }
+      }
       else if (lastAttempt?.finishedAt && lastAttempt.passed === false) status = 'suspendido'
       else if (lastAttempt?.startedAt && !lastAttempt.finishedAt) status = 'en_curso'
 
       rows.push({
         assignmentId: a.id,
+        attemptId: lastAttempt?.id ?? null,
         employeeId: emp.id,
         employeeName: emp.name,
         dueAt: a.dueAt,
@@ -603,4 +753,35 @@ export function resolveTrackingRows(
   }
 
   return rows
+}
+
+export async function listPracticalItems(courseId: string): Promise<CoursePracticalItem[]> {
+  if (!supabase) throw new Error('Supabase no disponible')
+  const { data, error } = await supabase
+    .from('course_practical_item')
+    .select('*')
+    .eq('course_id', courseId)
+    .order('ord', { ascending: true })
+  if (error) { console.error('[coursesService] listPracticalItems', error); throw error }
+  return (data ?? []).map((p: { id: string; course_id: string; ord: number; text: string; help_text: string | null }) => ({
+    id: p.id, courseId: p.course_id, ord: p.ord, text: p.text, helpText: p.help_text,
+  }))
+}
+
+export async function listPracticalChecksForAttempts(attemptIds: string[]): Promise<CoursePracticalCheck[]> {
+  if (!supabase) throw new Error('Supabase no disponible')
+  if (attemptIds.length === 0) return []
+  const { data, error } = await supabase
+    .from('course_practical_check')
+    .select('*')
+    .in('attempt_id', attemptIds)
+    .order('verified_at', { ascending: false })
+  if (error) { console.error('[coursesService] listPracticalChecksForAttempts', error); throw error }
+  return (data ?? []).map((r: {
+    id: string; attempt_id: string; item_id: string; checked: boolean
+    verified_by: string; verified_at: string; notes: string | null
+  }) => ({
+    id: r.id, attemptId: r.attempt_id, itemId: r.item_id, checked: r.checked,
+    verifiedBy: r.verified_by, verifiedAt: r.verified_at, notes: r.notes,
+  }))
 }
