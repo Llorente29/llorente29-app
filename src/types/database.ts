@@ -19909,6 +19909,7 @@ export type Database = {
           course_code: string
           course_id: string
           course_title: string
+          estimated_minutes: number | null
           legal_basis: string | null
           section_titles: string[]
           signed_count: number
@@ -19926,9 +19927,11 @@ export type Database = {
       training_gaps: {
         Args: { p_account_id: string; p_days_ahead?: number }
         Returns: {
+          course_id: string
           course_title: string
           days_left: number | null
           due_at: string | null
+          employee_id: string
           employee_name: string
           gap_kind: string
         }[]

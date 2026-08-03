@@ -176,7 +176,10 @@ $function$;
 
 -- ─────────────────────────────────────────────────────────────────────
 -- 2) training_gaps — panel accionable "quién va tarde", ordenado por
--- urgencia. 4 tipos de hueco (los que pide el encargo, literal):
+-- urgencia. Devuelve employee_id/course_id además de los nombres (el
+-- encargo pide un botón "Asignar formación" inline en este panel — sin los
+-- IDs sería imposible de implementar sin arriesgar un match por nombre
+-- ambiguo). 4 tipos de hueco (los que pide el encargo, literal):
 --   nunca_hecho  → alcanzado por el curso, cero intentos
 --   sin_firmar   → aprobó el test pero no ha firmado
 --   caducado     → estuvo vigente, ya expiró
@@ -193,7 +196,9 @@ create or replace function public.training_gaps(
   p_account_id uuid,
   p_days_ahead int default 30
 ) returns table(
+  employee_id uuid,
   employee_name text,
+  course_id uuid,
   course_title text,
   gap_kind text,
   due_at timestamptz,
@@ -269,7 +274,9 @@ begin
   ),
   classified as (
     select
+      employee_id,
       employee_name,
+      course_id,
       course_title,
       due_at,
       case
@@ -287,7 +294,9 @@ begin
     from cell
   )
   select
+    employee_id,
     employee_name,
+    course_id,
     course_title,
     gap_kind,
     due_at,
@@ -370,10 +379,10 @@ end;
 $function$;
 
 -- ─────────────────────────────────────────────────────────────────────
--- 4) training_course_summary — ficha por curso: base legal, contenidos
--- impartidos (títulos de secciones, en orden), y el embudo asignados →
--- formados (aprobado el test) → firmados, con % de cumplimiento sobre
--- firmados/asignados (firmar es lo que acredita, no solo aprobar).
+-- 4) training_course_summary — ficha por curso: base legal, duración,
+-- contenidos impartidos (títulos de secciones, en orden), y el embudo
+-- asignados → formados (aprobado el test) → firmados, con % de cumplimiento
+-- sobre firmados/asignados (firmar es lo que acredita, no solo aprobar).
 -- ─────────────────────────────────────────────────────────────────────
 create or replace function public.training_course_summary(
   p_account_id uuid
@@ -382,6 +391,7 @@ create or replace function public.training_course_summary(
   course_code text,
   course_title text,
   legal_basis text,
+  estimated_minutes int,
   section_titles text[],
   assigned_count int,
   trained_count int,
@@ -398,7 +408,7 @@ begin
 
   return query
   with relevant_courses as (
-    select distinct c.id, c.code, c.title, c.legal_basis
+    select distinct c.id, c.code, c.title, c.legal_basis, c.estimated_minutes
     from public.course c
     join public.course_assignment ca on ca.course_id = c.id
     where ca.account_id = p_account_id
@@ -464,6 +474,7 @@ begin
     rc.code,
     rc.title,
     rc.legal_basis,
+    rc.estimated_minutes,
     coalesce(s.titles, array[]::text[]),
     co.assigned_count,
     co.trained_count,

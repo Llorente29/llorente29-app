@@ -106,7 +106,9 @@ export function computeMandatoryCompliancePct(
 export type TrainingGapKind = 'nunca_hecho' | 'caducado' | 'caduca_pronto' | 'sin_firmar'
 
 export interface TrainingGap {
+  employeeId: string
   employeeName: string
+  courseId: string
   courseTitle: string
   gapKind: TrainingGapKind
   dueAt: string | null
@@ -121,7 +123,9 @@ export async function getTrainingGaps(accountId: string, daysAhead = 30): Promis
   })
   if (error) throw new Error(`Error leyendo huecos de formación: ${error.message}`)
   return (data ?? []).map((row) => ({
+    employeeId: row.employee_id,
     employeeName: row.employee_name,
+    courseId: row.course_id,
     courseTitle: row.course_title,
     gapKind: row.gap_kind as TrainingGapKind,
     dueAt: row.due_at,
@@ -153,6 +157,7 @@ export interface TrainingCourseSummary {
   courseCode: string
   courseTitle: string
   legalBasis: string | null
+  estimatedMinutes: number | null
   sectionTitles: string[]
   assignedCount: number
   trainedCount: number
@@ -169,6 +174,7 @@ export async function getTrainingCourseSummary(accountId: string): Promise<Train
     courseCode: row.course_code,
     courseTitle: row.course_title,
     legalBasis: row.legal_basis,
+    estimatedMinutes: row.estimated_minutes,
     sectionTitles: row.section_titles ?? [],
     assignedCount: row.assigned_count,
     trainedCount: row.trained_count,
