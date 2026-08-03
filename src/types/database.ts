@@ -17167,7 +17167,7 @@ export type Database = {
         Returns: Json
       }
       submit_course_attempt: {
-        Args: { p_answers: Json; p_attempt_id: string; p_time_spent_seconds?: number }
+        Args: { p_answers: Json; p_attempt_id: string; p_time_spent_seconds?: number | null }
         Returns: Json
       }
       customer_addresses: { Args: { p_token: string }; Returns: Json }

@@ -12,6 +12,12 @@
 
 import { supabase } from '../lib/supabase'
 import type { Employee } from '../types'
+import type { Database } from '../types/database'
+
+type CourseUpdate = Database['public']['Tables']['course']['Update']
+type CourseSectionUpdate = Database['public']['Tables']['course_section']['Update']
+type CourseQuestionUpdate = Database['public']['Tables']['course_question']['Update']
+type CourseOptionUpdate = Database['public']['Tables']['course_option']['Update']
 
 export type DeliveryMode = 'folvy_imparte' | 'solo_archivo' | 'mixto'
 export type CourseStatus = 'draft' | 'published' | 'archived'
@@ -97,6 +103,8 @@ export interface CourseSignatureRow {
   signerDocId: string
   signedAt: string
   courseVersion: number
+  /** Path dentro del bucket privado course-signatures (para servir por URL firmada). */
+  signaturePng: string
 }
 
 // ============================================================
@@ -254,7 +262,7 @@ export interface UpdateCourseInput {
 
 export async function updateCourse(courseId: string, patch: UpdateCourseInput): Promise<Course> {
   if (!supabase) throw new Error('Supabase no disponible')
-  const update: Record<string, unknown> = {}
+  const update: CourseUpdate = {}
   if (patch.title !== undefined) update.title = patch.title
   if (patch.summary !== undefined) update.summary = patch.summary
   if (patch.legalBasis !== undefined) update.legal_basis = patch.legalBasis
@@ -315,7 +323,7 @@ export async function updateSection(
   patch: { ord?: number; title?: string; body?: string; mediaUrl?: string | null },
 ): Promise<void> {
   if (!supabase) throw new Error('Supabase no disponible')
-  const update: Record<string, unknown> = {}
+  const update: CourseSectionUpdate = {}
   if (patch.ord !== undefined) update.ord = patch.ord
   if (patch.title !== undefined) update.title = patch.title
   if (patch.body !== undefined) update.body = patch.body
@@ -347,7 +355,7 @@ export async function createQuestion(courseId: string, ord: number, text: string
 
 export async function updateQuestion(questionId: string, patch: { ord?: number; text?: string }): Promise<void> {
   if (!supabase) throw new Error('Supabase no disponible')
-  const update: Record<string, unknown> = {}
+  const update: CourseQuestionUpdate = {}
   if (patch.ord !== undefined) update.ord = patch.ord
   if (patch.text !== undefined) update.text = patch.text
   const { error } = await supabase.from('course_question').update(update).eq('id', questionId)
@@ -380,7 +388,7 @@ export async function updateOption(
   patch: { text?: string; isCorrect?: boolean; explanation?: string | null },
 ): Promise<void> {
   if (!supabase) throw new Error('Supabase no disponible')
-  const update: Record<string, unknown> = {}
+  const update: CourseOptionUpdate = {}
   if (patch.text !== undefined) update.text = patch.text
   if (patch.isCorrect !== undefined) update.is_correct = patch.isCorrect
   if (patch.explanation !== undefined) update.explanation = patch.explanation
@@ -512,11 +520,12 @@ export async function listSignaturesForAttempts(attemptIds: string[]): Promise<C
   if (error) { console.error('[coursesService] listSignaturesForAttempts', error); throw error }
   return (data ?? []).map((r: {
     id: string; attempt_id: string; employee_id: string; signer_name: string
-    signer_doc_id: string; signed_at: string; course_version: number
+    signer_doc_id: string; signed_at: string; course_version: number; signature_png: string
   }) => ({
     id: r.id, attemptId: r.attempt_id, employeeId: r.employee_id,
     signerName: r.signer_name, signerDocId: r.signer_doc_id,
     signedAt: r.signed_at, courseVersion: r.course_version,
+    signaturePng: r.signature_png,
   }))
 }
 

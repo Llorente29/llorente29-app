@@ -18,10 +18,12 @@
 import {
   Users, Activity, Clock, Smartphone, Inbox, Armchair,
   RefreshCw, Calendar, FolderOpen, FileText, Wallet, BarChart3, Receipt,
+  GraduationCap,
 } from 'lucide-react'
 import type { ModuleDefinition } from '@/shell/types'
 
 import StaffPage from '@/pages/StaffPage'
+import CoursesPage from '@/pages/CoursesPage'
 import FichajesGlobalPage from '@/pages/FichajesGlobalPage'
 import KioskoFichajePage from '@/pages/KioskoFichajePage'
 import SolicitudesPendientesPage from '@/pages/SolicitudesPendientesPage'
@@ -57,6 +59,7 @@ export const personalModule: ModuleDefinition = {
     { path: 'nominas',          element: <NominasPage /> },
     { path: 'informes',         element: <InformesPage /> },
     { path: 'bolsa-horas',      element: <BolsaHorasPage /> },
+    { path: 'formacion',        element: <CoursesPage /> },
   ],
 
   sidebar: {
@@ -74,6 +77,7 @@ export const personalModule: ModuleDefinition = {
       { id: 'personal_nominas',      label: 'Nóminas',           icon: Receipt,    path: 'nominas',             requiredPermission: 'show_informes_personal' },
       { id: 'personal_informes',     label: 'Informes Gestoría', icon: FileText,   path: 'informes',            requiredPermission: 'show_informes_personal' },
       { id: 'personal_bolsa',        label: 'Bolsa de horas',    icon: Wallet,     path: 'bolsa-horas',         requiredPermission: 'show_bolsa_horas' },
+      { id: 'personal_formacion',    label: 'Formación',         icon: GraduationCap, path: 'formacion',        requiredPermission: 'show_formacion' },
     ],
   },
 

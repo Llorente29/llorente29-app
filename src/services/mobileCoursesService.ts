@@ -82,7 +82,7 @@ export async function startAttempt(assignmentId: string): Promise<StartAttemptRe
   if (!supabase) throw new Error('Supabase no disponible')
   const { data, error } = await supabase.rpc('start_course_attempt', { p_assignment_id: assignmentId })
   if (error) { console.error('[mobileCoursesService] startAttempt', error); throw error }
-  const d = data as {
+  const d = data as unknown as {
     attemptId: string
     course: { id: string; code: string; title: string; summary: string | null; legalBasis: string | null; deliveryMode: string; estimatedMinutes: number | null; passThresholdPct: number; version: number }
     sections: AttemptSection[]
@@ -121,7 +121,7 @@ export async function submitAttempt(
     p_time_spent_seconds: timeSpentSeconds ?? null,
   })
   if (error) { console.error('[mobileCoursesService] submitAttempt', error); throw error }
-  return data as SubmitResult
+  return data as unknown as SubmitResult
 }
 
 const SIGNATURES_BUCKET = 'course-signatures'
@@ -162,5 +162,5 @@ export async function signAttempt(
     p_signer_doc_id: signerDocId,
   })
   if (error) { console.error('[mobileCoursesService] signAttempt', error); throw error }
-  return data as SignAttemptResult
+  return data as unknown as SignAttemptResult
 }
