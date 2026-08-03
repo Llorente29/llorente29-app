@@ -11868,6 +11868,8 @@ export type Database = {
           recipe_item_id: string
           source: string
           state: string
+          updated_at: string | null
+          updated_by: string | null
         }
         Insert: {
           allergen_code: string
@@ -11876,6 +11878,8 @@ export type Database = {
           recipe_item_id: string
           source: string
           state: string
+          updated_at?: string | null
+          updated_by?: string | null
         }
         Update: {
           allergen_code?: string
@@ -11884,6 +11888,8 @@ export type Database = {
           recipe_item_id?: string
           source?: string
           state?: string
+          updated_at?: string | null
+          updated_by?: string | null
         }
         Relationships: [
           {
@@ -16038,6 +16044,7 @@ export type Database = {
       allergen_blocking_ingredients: {
         Args: { p_account_id: string }
         Returns: {
+          declared_count: number
           dish_count: number
           ingredient_id: string
           ingredient_name: string
