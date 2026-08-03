@@ -21,6 +21,7 @@ import {
   searchOptionCandidates,
   type ComboSlotDetail, type OptionCandidate, type ComboCost,
 } from '@/modules/kitchen/services/comboEditService'
+import ConfirmDialog from '@/components/ConfirmDialog'
 
 function fmtEur(value: number | null | undefined): string {
   if (value === null || value === undefined || !Number.isFinite(value)) return '—'
@@ -49,6 +50,9 @@ export default function ComboEditorSection({
   const [searching, setSearching] = useState(false)
   // coste del combo (se recalcula al cambiar slots/opciones)
   const [cost, setCost] = useState<ComboCost | null>(null)
+  // Fase 6, B4: confirmación antes de borrar (antes disparaba al instante).
+  const [confirmRemoveSlot, setConfirmRemoveSlot] = useState<ComboSlotDetail | null>(null)
+  const [confirmRemoveOption, setConfirmRemoveOption] = useState<{ id: string; name: string } | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -85,7 +89,12 @@ export default function ComboEditorSection({
     wrap(() => updateSlot(accountId, s.id, { maxSelections: m, minSelections: Math.min(s.minSelections, m) }))
   }
   function addSlot() { wrap(() => createSlot(accountId, comboItemId, 'Nuevo grupo', 1, 1).then(() => {})) }
-  function removeSlot(slotId: string) { wrap(() => deleteSlot(accountId, slotId)) }
+  function doRemoveSlot() {
+    if (!confirmRemoveSlot) return
+    const id = confirmRemoveSlot.id
+    setConfirmRemoveSlot(null)
+    wrap(() => deleteSlot(accountId, id))
+  }
 
   // ── Opciones ──
   function openAdd(slotId: string) {
@@ -104,7 +113,12 @@ export default function ComboEditorSection({
     setAddingTo(null)
     wrap(() => addOption(accountId, slotId, c.id, 0, false).then(() => {}))
   }
-  function removeOption(optionId: string) { wrap(() => deleteOption(accountId, optionId)) }
+  function doRemoveOption() {
+    if (!confirmRemoveOption) return
+    const id = confirmRemoveOption.id
+    setConfirmRemoveOption(null)
+    wrap(() => deleteOption(accountId, id))
+  }
   function toggleDefault(o: { id: string; isDefault: boolean }) {
     wrap(() => updateOption(accountId, o.id, { isDefault: !o.isDefault }))
   }
@@ -211,7 +225,7 @@ export default function ComboEditorSection({
                 />
               </label>
 
-              <button onClick={() => removeSlot(s.id)} disabled={busy} className="text-stone-400 hover:text-red-600 p-1" title="Quitar grupo">
+              <button onClick={() => setConfirmRemoveSlot(s)} disabled={busy} className="text-stone-400 hover:text-red-600 p-1" title="Quitar grupo">
                 <Trash2 size={14} />
               </button>
             </div>
@@ -237,7 +251,7 @@ export default function ComboEditorSection({
                       className="w-14 px-1 py-0.5 border border-stone-200 rounded text-right"
                     />
                   </div>
-                  <button onClick={() => removeOption(o.id)} disabled={busy} className="text-stone-300 hover:text-red-600 p-0.5" title="Quitar opción">
+                  <button onClick={() => setConfirmRemoveOption({ id: o.id, name: o.optionName })} disabled={busy} className="text-stone-300 hover:text-red-600 p-0.5" title="Quitar opción">
                     <X size={13} />
                   </button>
                 </div>
@@ -285,6 +299,27 @@ export default function ComboEditorSection({
         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-accent text-text-on-accent hover:bg-accent-hover transition-colors disabled:opacity-50">
         <Plus size={13} /> Añadir grupo
       </button>
+
+      <ConfirmDialog
+        open={confirmRemoveSlot !== null}
+        title="Quitar grupo"
+        message={confirmRemoveSlot ? `¿Quitar el grupo «${confirmRemoveSlot.name}»? Se perderán sus opciones.` : ''}
+        tone="danger"
+        confirmLabel="Quitar"
+        busy={busy}
+        onConfirm={doRemoveSlot}
+        onCancel={() => setConfirmRemoveSlot(null)}
+      />
+      <ConfirmDialog
+        open={confirmRemoveOption !== null}
+        title="Quitar opción"
+        message={confirmRemoveOption ? `¿Quitar la opción «${confirmRemoveOption.name}»?` : ''}
+        tone="danger"
+        confirmLabel="Quitar"
+        busy={busy}
+        onConfirm={doRemoveOption}
+        onCancel={() => setConfirmRemoveOption(null)}
+      />
     </div>
   )
 }

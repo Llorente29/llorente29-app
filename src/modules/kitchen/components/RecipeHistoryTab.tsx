@@ -20,6 +20,7 @@ import {
   type RecipeVersion,
 } from '@/modules/kitchen/services/recipeVersionService'
 import { listUnits } from '@/modules/kitchen/services/kitchenUnitService'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import type { KitchenUnit } from '@/types/kitchen'
 
 interface Props {
@@ -90,6 +91,9 @@ export default function RecipeHistoryTab({ recipeItemId, createdByName, onRestor
     () => versions.find((v) => v.validTo === null) ?? versions[0] ?? null,
     [versions]
   )
+
+  // Fase 6, B6: antes confirmación inline "¿Restaurar vN?" Sí/No.
+  const confirmRestoreVersion = versions.find((v) => v.id === confirmRestoreId) ?? null
 
   async function handleSave() {
     if (saving) return
@@ -190,7 +194,6 @@ export default function RecipeHistoryTab({ recipeItemId, createdByName, onRestor
               const isActive = v.validTo === null
               const expanded = expandedId === v.id
               const diff = active && v.id !== active.id ? diffSnapshots(v.snapshot, active.snapshot) : null
-              const restoring = restoringId === v.id
               return (
                 <div key={v.id} className="rounded-lg border border-border-default overflow-hidden">
                   <div className="flex items-center gap-2 px-3 py-2.5">
@@ -224,24 +227,12 @@ export default function RecipeHistoryTab({ recipeItemId, createdByName, onRestor
                       </button>
                     )}
                     {!isActive && (
-                      confirmRestoreId === v.id ? (
-                        <span className="ml-auto inline-flex items-center gap-2 text-xs">
-                          <span className="text-text-secondary">¿Restaurar v{v.versionNumber}?</span>
-                          <button type="button" onClick={() => handleRestore(v)} disabled={restoring}
-                            className="px-2 py-1 rounded-md bg-terracota text-white font-medium hover:bg-terracota-hover disabled:opacity-50">
-                            {restoring ? 'Restaurando…' : 'Sí'}
-                          </button>
-                          <button type="button" onClick={() => setConfirmRestoreId(null)} disabled={restoring}
-                            className="px-2 py-1 rounded-md text-text-secondary hover:bg-accent-bg">No</button>
-                        </span>
-                      ) : (
-                        <button
-                          type="button" onClick={() => setConfirmRestoreId(v.id)} disabled={!!restoringId}
-                          className="ml-auto inline-flex items-center gap-1 text-xs text-text-secondary hover:text-text-primary transition-colors disabled:opacity-50"
-                        >
-                          <RotateCcw className="w-3.5 h-3.5" /> Restaurar
-                        </button>
-                      )
+                      <button
+                        type="button" onClick={() => setConfirmRestoreId(v.id)} disabled={!!restoringId}
+                        className="ml-auto inline-flex items-center gap-1 text-xs text-text-secondary hover:text-text-primary transition-colors disabled:opacity-50"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" /> Restaurar
+                      </button>
                     )}
                   </div>
 
@@ -291,6 +282,17 @@ export default function RecipeHistoryTab({ recipeItemId, createdByName, onRestor
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirmRestoreId !== null}
+        title="Restaurar versión"
+        message={confirmRestoreVersion ? `¿Restaurar la versión v${confirmRestoreVersion.versionNumber}? El estado actual se sustituirá (queda guardado como versión previa, se puede deshacer).` : ''}
+        tone="accent"
+        confirmLabel="Restaurar"
+        busy={restoringId !== null}
+        onConfirm={() => { if (confirmRestoreVersion) handleRestore(confirmRestoreVersion) }}
+        onCancel={() => setConfirmRestoreId(null)}
+      />
     </div>
   )
 }

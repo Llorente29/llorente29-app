@@ -41,6 +41,7 @@ import {
   type OptionWithImpact,
 } from '@/modules/kitchen/services/modifierImpactService'
 import { childVisual } from '@/modules/orders/services/ordersFeedService'
+import ConfirmDialog from '@/components/ConfirmDialog'
 
 /**
  * Cómo se verá una opción de modificador en el TICKET DE COCINA.
@@ -90,6 +91,9 @@ export default function ModifierEditorSection({
   const [impacts, setImpacts] = useState<Map<string, OptionWithImpact>>(new Map())
   const [aiBusy, setAiBusy] = useState(false)
   const [aiMsg, setAiMsg] = useState<string | null>(null)
+  // Fase 6, B5: confirmación antes de borrar (antes disparaba al instante).
+  const [confirmRemoveGroup, setConfirmRemoveGroup] = useState<ModifierGroupDetail | null>(null)
+  const [confirmRemoveOpt, setConfirmRemoveOpt] = useState<{ id: string; name: string } | null>(null)
 
   function loadImpacts() {
     listOptionsWithImpacts(menuItemId)
@@ -163,7 +167,12 @@ export default function ModifierEditorSection({
     const m = Math.max(1, max)
     wrap(() => updateGroup(accountId, g.id, { maxSelections: m, minSelections: Math.min(g.minSelections, m) }))
   }
-  function removeGroup(groupId: string) { wrap(() => unassignGroupFromProduct(accountId, groupId, menuItemId), { notifyGroupsChanged: true }) }
+  function doRemoveGroup() {
+    if (!confirmRemoveGroup) return
+    const id = confirmRemoveGroup.id
+    setConfirmRemoveGroup(null)
+    wrap(() => unassignGroupFromProduct(accountId, id, menuItemId), { notifyGroupsChanged: true })
+  }
 
   // ── Opciones ──
   function addOpt(groupId: string) { wrap(() => addModifierOption(accountId, groupId, 'Nueva opción', 0, false)) }
@@ -179,7 +188,12 @@ export default function ModifierEditorSection({
     wrap(() => updateModifierOption(accountId, optId, { priceImpact: v }))
   }
   function toggleOptDefault(o: ModifierOptionDetail) { wrap(() => updateModifierOption(accountId, o.id, { isDefault: !o.isDefault })) }
-  function removeOpt(optId: string) { wrap(() => deleteModifierOption(accountId, optId)) }
+  function doRemoveOpt() {
+    if (!confirmRemoveOpt) return
+    const id = confirmRemoveOpt.id
+    setConfirmRemoveOpt(null)
+    wrap(() => deleteModifierOption(accountId, id))
+  }
 
   // ── Asignar grupo existente ──
   function openAssign() {
@@ -220,7 +234,7 @@ export default function ModifierEditorSection({
                     {g.name}
                   </button>
                 )}
-                <button onClick={() => removeGroup(g.id)} disabled={busy} className="text-stone-400 hover:text-red-600 p-1" title="Quitar grupo de este producto">
+                <button onClick={() => setConfirmRemoveGroup(g)} disabled={busy} className="text-stone-400 hover:text-red-600 p-1" title="Quitar grupo de este producto">
                   <Trash2 size={14} />
                 </button>
               </div>
@@ -297,7 +311,7 @@ export default function ModifierEditorSection({
                       onBlur={(e) => setOptPrice(o.id, e.target.value)}
                       className="w-14 px-1 py-0.5 border border-stone-200 rounded text-right" />
                   </div>
-                  <button onClick={() => removeOpt(o.id)} disabled={busy} className="text-stone-300 hover:text-red-600 p-0.5" title="Quitar opción">
+                  <button onClick={() => setConfirmRemoveOpt({ id: o.id, name: o.name })} disabled={busy} className="text-stone-300 hover:text-red-600 p-0.5" title="Quitar opción">
                     <X size={13} />
                   </button>
                   </div>
@@ -380,6 +394,27 @@ export default function ModifierEditorSection({
           <button onClick={() => setAssignOpen(false)} className="text-stone-500 underline">Cerrar</button>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmRemoveGroup !== null}
+        title="Quitar grupo"
+        message={confirmRemoveGroup ? `¿Quitar el grupo «${confirmRemoveGroup.name}» de este producto? Se perderán sus opciones para este producto.` : ''}
+        tone="danger"
+        confirmLabel="Quitar"
+        busy={busy}
+        onConfirm={doRemoveGroup}
+        onCancel={() => setConfirmRemoveGroup(null)}
+      />
+      <ConfirmDialog
+        open={confirmRemoveOpt !== null}
+        title="Quitar opción"
+        message={confirmRemoveOpt ? `¿Quitar la opción «${confirmRemoveOpt.name}»?` : ''}
+        tone="danger"
+        confirmLabel="Quitar"
+        busy={busy}
+        onConfirm={doRemoveOpt}
+        onCancel={() => setConfirmRemoveOpt(null)}
+      />
     </div>
   )
 }

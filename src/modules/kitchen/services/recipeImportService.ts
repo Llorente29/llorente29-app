@@ -38,7 +38,7 @@ const BUCKET = 'recipe-uploads'
 
 // ── Detección de formato ──────────────────────────────────────────────────────
 
-type RecipeFileKind = 'image' | 'pdf' | 'excel' | 'word' | 'unsupported'
+type RecipeFileKind = 'image' | 'pdf' | 'excel' | 'word' | 'text' | 'unsupported'
 
 function detectKind(file: File): RecipeFileKind {
   const name = file.name.toLowerCase()
@@ -61,6 +61,10 @@ function detectKind(file: File): RecipeFileKind {
   ) {
     return 'word'
   }
+  // Texto plano — usado por el dictado por voz (Fase 6): la transcripción se
+  // envuelve en un File de texto plano y entra por el mismo camino que ya
+  // convierte Excel/Word a texto (kind:'conversational', input_text).
+  if (type === 'text/plain' || name.endsWith('.txt')) return 'text'
   return 'unsupported'
 }
 
@@ -302,7 +306,10 @@ export async function extractRecipeSession(
       target_recipe_id: targetRecipeId,
     }
   } else {
-    const text = fileKind === 'excel' ? await excelToText(file) : await wordToText(file)
+    const text =
+      fileKind === 'excel' ? await excelToText(file)
+      : fileKind === 'word' ? await wordToText(file)
+      : await file.text() // 'text' (dictado por voz): ya es texto plano, nada que convertir.
     extractBody = {
       account_id: accountId,
       kind: 'conversational',

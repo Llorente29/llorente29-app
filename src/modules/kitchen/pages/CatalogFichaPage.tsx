@@ -434,13 +434,17 @@ export default function CatalogFichaPage({
   // ── Duplicar / Eliminar escandallo (acciones sobre recipe_item, cabecera) ──
   const [duplicating, setDuplicating] = useState(false)
   const [duplicateError, setDuplicateError] = useState<string | null>(null)
+  // Fase 6, B1: antes window.confirm.
+  const [confirmDuplicateOpen, setConfirmDuplicateOpen] = useState(false)
 
-  async function handleDuplicate() {
+  function handleDuplicate() {
     if (!recipe || duplicating) return
-    const ok = window.confirm(
-      `¿Duplicar "${recipe.name}"? Se creará una copia con todos sus ingredientes y pasos, marcada para revisar, y la abriremos para que la ajustes.`,
-    )
-    if (!ok) return
+    setConfirmDuplicateOpen(true)
+  }
+
+  async function doDuplicate() {
+    if (!recipe) return
+    setConfirmDuplicateOpen(false)
     setDuplicating(true)
     setDuplicateError(null)
     try {
@@ -495,8 +499,18 @@ export default function CatalogFichaPage({
 
   // ── Dar por revisado (banner, flag propio del escandallo) ─────────────────
   const [dismissing, setDismissing] = useState(false)
-  async function handleDismissReview() {
+  // Fase 6, B2: el editor viejo SÍ confirmaba esta acción; se perdió en la
+  // Fase 1 al no rozarla ninguna fase intermedia. Se recupera aquí.
+  const [confirmDismissOpen, setConfirmDismissOpen] = useState(false)
+
+  function handleDismissReview() {
     if (!recipe || dismissing) return
+    setConfirmDismissOpen(true)
+  }
+
+  async function doDismissReview() {
+    if (!recipe) return
+    setConfirmDismissOpen(false)
     setDismissing(true)
     try {
       await dismissReview(recipe.id, 'Revisado manualmente desde la ficha', authUserId ?? null)
@@ -595,6 +609,30 @@ export default function CatalogFichaPage({
         onCancel={() => setConfirmClear(false)}
       />
 
+      {/* Fase 6, B1 */}
+      <ConfirmDialog
+        open={confirmDuplicateOpen}
+        title="Duplicar escandallo"
+        message={recipe ? `¿Duplicar "${recipe.name}"? Se creará una copia con todos sus ingredientes y pasos, marcada para revisar, y la abriremos para que la ajustes.` : ''}
+        tone="accent"
+        confirmLabel="Duplicar"
+        busy={duplicating}
+        onConfirm={doDuplicate}
+        onCancel={() => setConfirmDuplicateOpen(false)}
+      />
+
+      {/* Fase 6, B2 */}
+      <ConfirmDialog
+        open={confirmDismissOpen}
+        title="Dar por revisado"
+        message="Este plato dejará de mostrarse como «marcado para revisar». Si el coste vuelve a fallar, se volverá a marcar solo."
+        tone="accent"
+        confirmLabel="Dar por revisado"
+        busy={dismissing}
+        onConfirm={doDismissReview}
+        onCancel={() => setConfirmDismissOpen(false)}
+      />
+
       {/* ── Diálogo eliminar/archivar el escandallo ── */}
       {deleteOpen && recipe && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !deleteBusy && setDeleteOpen(false)}>
@@ -673,26 +711,19 @@ export default function CatalogFichaPage({
                   <Sparkles size={12} /> IA
                 </span>
               )}
-              {/* Chip recuperado del editor viejo — pero SIMPLIFICADO: el
-                  original era recipe.needsReview OR alguna línea con
-                  problema (childNeedsReview/needsReview), calculado sobre
-                  `lines`, que aquí no vive en la cabecera (vive dentro de la
-                  pestaña Escandallo, a propósito, para no duplicar la carga).
-                  Este chip usa solo el flag propio del escandallo; el detalle
-                  por línea sigue disponible (puntos rojo/ámbar) dentro de la
-                  pestaña Escandallo — no se pierde información, se deja de
-                  agregar en la cabecera. Señalado a Julio. */}
-              {recipe && (
-                recipe.needsReview ? (
-                  <span className="text-[11px] px-2.5 py-1 rounded-full font-medium bg-amber-500 text-white inline-flex items-center gap-1">
-                    <AlertTriangle size={12} /> Revisar
-                  </span>
-                ) : (
-                  <span className="text-[11px] px-2.5 py-1 rounded-full font-medium bg-green-600 text-white inline-flex items-center gap-1">
-                    <Check size={12} /> Validado
-                  </span>
-                )
-              )}
+              {/* Bug cazado en vivo por Julio (Fase 5): esta cabecera llegó a
+                  mostrar a la vez "Validado"/"Revisar" (recipe.needsReview,
+                  chip que yo mismo recuperé en la revisión de la Fase 2) y el
+                  sello de casado (para_revisar/bien/etc, classifyMenuItemLink)
+                  — dos verdades DISTINTAS (¿necesita revisión el escandallo en
+                  sí? vs. ¿está aprobado el enlace producto↔receta?) que
+                  comparten vocabulario ("Para revisar") y leían como
+                  contradictorias sin contexto. Se quita el chip
+                  Validado/Revisar (redundante: el mismo dato ya lo cubre, con
+                  motivo y acción, el banner "Marcado para revisar" de abajo;
+                  el detalle por línea sigue visible como puntos rojo/ámbar
+                  dentro de la pestaña Escandallo) — se queda solo el sello de
+                  casado arriba, sin ambigüedad de a qué pregunta responde. */}
               {linkClassification && (
                 <span className={`text-[11px] px-2.5 py-1 rounded-full font-medium ${TONE_CLASSES[linkClassification.tone]}`} title={linkClassification.text}>
                   {linkClassification.label}
@@ -720,9 +751,28 @@ export default function CatalogFichaPage({
           {item && linkClassification && (
             <div className="flex gap-2.5 flex-wrap mb-5">
               {linkClassification.human === 'sin_casar' && (
-                <button onClick={openRecipePicker} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-accent text-text-on-accent hover:bg-accent-hover transition-colors">
-                  <Link2 size={15} /> Vincular escandallo
-                </button>
+                <>
+                  <button onClick={openRecipePicker} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-accent text-text-on-accent hover:bg-accent-hover transition-colors">
+                    <Link2 size={15} /> Vincular escandallo
+                  </button>
+                  {/* A4: deshabilitado honesto (decisión de Julio, confirmada en
+                      Fase 6) — el extractor extract-recipe es anti-invención:
+                      rechaza texto/imagen que no parezca una receta real y
+                      devuelve líneas vacías. Pedirle "redacta un escandallo
+                      desde solo el nombre del producto" no serviría tal cual
+                      hoy — haría falta trabajo de servidor nuevo (un prompt/
+                      modo distinto) o una UI de revisión sustancialmente
+                      nueva. En vez de fingir que funciona, se deja
+                      deshabilitado con el motivo real en el tooltip. */}
+                  <button
+                    type="button"
+                    disabled
+                    title="Disponible en breve — hoy el extractor de IA rechaza texto que no sea una receta real; crear un escandallo desde solo el nombre necesita trabajo de servidor nuevo"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-stone-200 text-stone-400 cursor-not-allowed"
+                  >
+                    <Sparkles size={15} /> Crear escandallo con IA
+                  </button>
+                </>
               )}
               {linkClassification.human === 'para_revisar' && (
                 <>
@@ -1012,7 +1062,10 @@ export default function CatalogFichaPage({
           {activeTab === 'etiquetado' && (
             <div key={effectiveRecipeItemId ?? 'none'}>
               {effectiveRecipeItemId ? (
-                <EtiquetadoTab recipeItemId={effectiveRecipeItemId} />
+                <EtiquetadoTab
+                  recipeItemId={effectiveRecipeItemId}
+                  accountId={item?.accountId ?? recipe?.accountId ?? ''}
+                />
               ) : (
                 <div className="text-sm text-stone-400 py-10 text-center">
                   Necesita escandallo para declarar alérgenos.

@@ -36,9 +36,11 @@
 // editar el otro (se resuelve solo, por construcción).
 
 import { useEffect, useRef, useState } from 'react'
-import { Camera, Check, ImagePlus, Loader2, Trash2, X } from 'lucide-react'
+import { Camera, Check, ImagePlus, Loader2, Sparkles, Trash2, X } from 'lucide-react'
 import { updateMenuItem } from '@/modules/kitchen/services/menuItemService'
 import { uploadMenuPhoto, deleteMenuPhoto } from '@/modules/kitchen/services/menuPhotoService'
+import { streamMessage } from '@/modules/folvy-ai/services/folvyAIService'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import type { MenuItem, MenuItemUpdate } from '@/types/kitchen'
 
 function fmtDate(iso: string | null | undefined): string {
@@ -118,6 +120,59 @@ export default function FichaTab({ item, accountId, onItemChanged }: FichaTabPro
     }
   }
 
+  // ── A1: "Mejorar descripción con IA" (cableado real, Fase 6) — reutiliza
+  // streamMessage con el mismo patrón que suggestWasteAI de
+  // RecipeEscandalloTab (surface:'background', sin history). El resultado
+  // rellena descriptionVal como SUGERENCIA editable: nunca se auto-guarda,
+  // el usuario sigue pulsando "Guardar descripción".
+  const [aiDescBusy, setAiDescBusy] = useState(false)
+  const [aiDescError, setAiDescError] = useState<string | null>(null)
+
+  function improveDescriptionAI() {
+    if (aiDescBusy) return
+    setAiDescError(null)
+    setAiDescBusy(true)
+    let acc = ''
+    streamMessage(
+      {
+        accountId,
+        surface: 'background',
+        message:
+          `Escribe una descripción de venta breve (1-2 frases, en español, sin ` +
+          `comillas) para el plato "${item.name}"` +
+          (item.category ? `, de la categoría "${item.category}"` : '') +
+          (descriptionVal.trim() ? `. Descripción actual a mejorar: "${descriptionVal.trim()}"` : '') +
+          `. Responde SOLO con el texto de la descripción, sin explicaciones ni texto adicional.`,
+        history: [],
+      },
+      (evt) => {
+        if (evt.type === 'text') {
+          acc += evt.content
+        } else if (evt.type === 'done' || evt.type === 'partial_end') {
+          let text = acc.trim()
+          if (text.startsWith('"') && text.endsWith('"') && text.length >= 2) {
+            text = text.slice(1, -1).trim()
+          }
+          if (text) {
+            setDescriptionVal(text)
+          } else {
+            setAiDescError('La IA no devolvió una descripción. Escríbela a mano.')
+            window.setTimeout(() => setAiDescError(null), 4000)
+          }
+          setAiDescBusy(false)
+        } else if (evt.type === 'error') {
+          setAiDescError('No se pudo consultar a la IA. Escribe la descripción a mano.')
+          window.setTimeout(() => setAiDescError(null), 4000)
+          setAiDescBusy(false)
+        }
+      },
+    ).catch(() => {
+      setAiDescError('No se pudo consultar a la IA. Escribe la descripción a mano.')
+      window.setTimeout(() => setAiDescError(null), 4000)
+      setAiDescBusy(false)
+    })
+  }
+
   // ── Edición inline (identidad, descripción, notas, packaging, avanzado, target FC) ──
   // Nombre y precio: EDICIÓN QUE FALTABA (hallazgo en revisión, no del agente
   // de la Fase 4) — la Fase 1 nunca implementó el modo "Editar" de la
@@ -189,6 +244,18 @@ export default function FichaTab({ item, accountId, onItemChanged }: FichaTabPro
         <PhotoLightbox src={item.photoUrl} onClose={() => setLightboxOpen(false)} />
       )}
 
+      {/* Fase 6, B3: antes confirmación inline (photoConfirmDelete Sí/Cancelar). */}
+      <ConfirmDialog
+        open={photoConfirmDelete}
+        title="Eliminar foto"
+        message="¿Eliminar la foto del producto?"
+        tone="danger"
+        confirmLabel="Eliminar"
+        busy={photoDeleting}
+        onConfirm={onPhotoDelete}
+        onCancel={() => setPhotoConfirmDelete(false)}
+      />
+
       {/* Foto pública del producto */}
       <div>
         <h3 className="text-xs font-medium uppercase tracking-wide text-stone-400 mb-3">Foto del producto</h3>
@@ -218,46 +285,27 @@ export default function FichaTab({ item, accountId, onItemChanged }: FichaTabPro
             )}
           </button>
           <div className="min-w-0 flex-1">
-            {!photoConfirmDelete ? (
-              <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={photoUploading || photoDeleting}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-stone-200 text-stone-700 hover:bg-stone-50 disabled:opacity-50 transition-colors"
+              >
+                {photoUploading ? <Loader2 size={13} className="animate-spin" /> : <ImagePlus size={13} />}
+                {photoUploading ? 'Subiendo…' : item.photoUrl ? 'Cambiar' : 'Añadir foto'}
+              </button>
+              {item.photoUrl && (
                 <button
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={() => setPhotoConfirmDelete(true)}
                   disabled={photoUploading || photoDeleting}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-stone-200 text-stone-700 hover:bg-stone-50 disabled:opacity-50 transition-colors"
+                  aria-label="Eliminar foto"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-50 transition-colors"
                 >
-                  {photoUploading ? <Loader2 size={13} className="animate-spin" /> : <ImagePlus size={13} />}
-                  {photoUploading ? 'Subiendo…' : item.photoUrl ? 'Cambiar' : 'Añadir foto'}
+                  {photoDeleting ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                  {photoDeleting ? 'Eliminando…' : 'Eliminar'}
                 </button>
-                {item.photoUrl && (
-                  <button
-                    onClick={() => setPhotoConfirmDelete(true)}
-                    disabled={photoUploading || photoDeleting}
-                    aria-label="Eliminar foto"
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-50 transition-colors"
-                  >
-                    <Trash2 size={13} /> Eliminar
-                  </button>
-                )}
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-medium text-stone-700">¿Eliminar foto?</span>
-                <button
-                  onClick={onPhotoDelete}
-                  disabled={photoDeleting}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-[#A32D2D] text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
-                >
-                  {photoDeleting ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Sí
-                </button>
-                <button
-                  onClick={() => setPhotoConfirmDelete(false)}
-                  disabled={photoDeleting}
-                  className="px-2.5 py-1 rounded-lg text-xs font-medium text-stone-500 hover:bg-stone-100 disabled:opacity-50 transition-colors"
-                >
-                  Cancelar
-                </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -298,7 +346,21 @@ export default function FichaTab({ item, accountId, onItemChanged }: FichaTabPro
 
       {/* Descripción del producto */}
       <div>
-        <h3 className="text-xs font-medium uppercase tracking-wide text-stone-400 mb-3">Descripción</h3>
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <h3 className="text-xs font-medium uppercase tracking-wide text-stone-400">Descripción</h3>
+          {/* A1: cableado real (Fase 6) — sugiere texto, nunca auto-guarda. */}
+          <button
+            type="button"
+            onClick={improveDescriptionAI}
+            disabled={aiDescBusy}
+            title="Pide a la IA una sugerencia de descripción — la puedes editar antes de guardar"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-purple-50 text-purple-700 hover:bg-purple-100 disabled:opacity-50 transition-colors"
+          >
+            {aiDescBusy ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+            {aiDescBusy ? 'Pensando…' : 'Mejorar descripción con IA'}
+          </button>
+        </div>
+        {aiDescError && <p className="text-xs text-red-600 mb-2">{aiDescError}</p>}
         <textarea
           value={descriptionVal}
           onChange={(e) => setDescriptionVal(e.target.value)}

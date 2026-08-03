@@ -55,6 +55,7 @@ import {
   type StepMedia,
   type StepMediaKind,
 } from '@/modules/kitchen/services/recipeStepService'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import type { RecipeItemStep } from '@/types/kitchen'
 
 interface RecipeStepsTabProps {
@@ -604,36 +605,16 @@ export default function RecipeStepsTab({ recipeItemId }: RecipeStepsTabProps) {
                   </div>
                 </div>
 
-                {/* Borrar (con confirmación inline) */}
+                {/* Borrar (Fase 6, B7: antes confirmación inline Borrar/Cancelar) */}
                 <div className="shrink-0">
-                  {confirmDeleteId === step.id ? (
-                    <div className="flex flex-col items-end gap-1">
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(step.id)}
-                        disabled={isBusy}
-                        className="text-xs font-medium px-2 py-1 rounded-md bg-danger text-white hover:opacity-90 disabled:opacity-60 transition-base"
-                      >
-                        Borrar
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setConfirmDeleteId(null)}
-                        className="text-xs text-text-secondary hover:text-text-primary transition-colors"
-                      >
-                        Cancelar
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setConfirmDeleteId(step.id)}
-                      className="text-text-secondary hover:text-danger transition-colors"
-                      aria-label="Borrar paso"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDeleteId(step.id)}
+                    className="text-text-secondary hover:text-danger transition-colors"
+                    aria-label="Borrar paso"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
             )
@@ -651,6 +632,17 @@ export default function RecipeStepsTab({ recipeItemId }: RecipeStepsTabProps) {
           </button>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmDeleteId !== null}
+        title="Borrar paso"
+        message="¿Borrar este paso de la elaboración? No se puede deshacer."
+        tone="danger"
+        confirmLabel="Borrar"
+        busy={confirmDeleteId !== null && busyId === confirmDeleteId}
+        onConfirm={() => { if (confirmDeleteId) handleDelete(confirmDeleteId) }}
+        onCancel={() => setConfirmDeleteId(null)}
+      />
     </div>
   )
 }

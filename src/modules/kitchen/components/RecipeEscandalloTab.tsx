@@ -47,6 +47,7 @@ import {
 } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import { useIsMobile } from '@/shell/useIsMobile'
+import { useVoice } from '@/modules/folvy-ai/hooks/useVoice'
 import {
   getRecipeItemById,
   listRecipeItems,
@@ -87,6 +88,7 @@ import {
 } from '@/modules/kitchen/services/recipeImportService'
 import RecipeImportReviewModal from '@/modules/kitchen/components/RecipeImportReviewModal'
 import AddToMenuModal from '@/modules/kitchen/components/AddToMenuModal'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import type { RecipeItem, MenuItemEconomics, KitchenUnit } from '@/types/kitchen'
 import type { RecipeLineBreakdown } from '@/modules/kitchen/services/recipeLineService'
 
@@ -236,6 +238,8 @@ export default function RecipeEscandalloTab({
   const [photoUrl, setPhotoUrl] = useState<string | null>(null)
   const [photoError, setPhotoError] = useState<string | null>(null)
   const [photoLightbox, setPhotoLightbox] = useState(false)
+  // Confirmación de borrado de la foto de cocina (Fase 6, B3: antes window.confirm).
+  const [confirmDeletePhotoOpen, setConfirmDeletePhotoOpen] = useState(false)
 
   // "Producción": escalado NO destructivo (vista de producción). factor=1 → apagado.
   const [prodFactor, setProdFactor] = useState(1)
@@ -261,6 +265,8 @@ export default function RecipeEscandalloTab({
   const [draftQty, setDraftQty] = useState('')
   const [savingLineId, setSavingLineId] = useState<string | null>(null)
   const [editError, setEditError] = useState<string | null>(null)
+  // Confirmación de borrado de línea (Fase 6, B4: antes window.confirm).
+  const [confirmDeleteLine, setConfirmDeleteLine] = useState<RecipeLineBreakdown | null>(null)
   const [flashLineId, setFlashLineId] = useState<string | null>(null)
   const [flashHero, setFlashHero] = useState(false)
   // E3 — merma por línea: qué línea tiene el panel de merma abierto + su draft.
@@ -553,8 +559,6 @@ export default function RecipeEscandalloTab({
   // editor viejo solo permitía sustituirla, nunca quitarla sin reemplazo.
   async function handleDeletePhoto() {
     if (!recipe || !recipe.kitchenPhotoUrl || photoDeleting) return
-    const ok = window.confirm('¿Eliminar la foto de cocina de este escandallo?')
-    if (!ok) return
     setPhotoDeleting(true)
     setPhotoError(null)
     const previousPath = recipe.kitchenPhotoUrl
@@ -574,13 +578,13 @@ export default function RecipeEscandalloTab({
     }
   }
 
-  // Importa una ficha (foto/PDF/Excel/Word) y RELLENA este escandallo (no crea
-  // otro): pasa targetRecipeId = recipeId. La RPC borra las líneas viejas y las
-  // reemplaza. Al terminar refrescamos plato+líneas (tick) y FC (econReloadTick).
-  async function handleImportRecipe(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    e.target.value = ''
-    if (!file || !accountId) return
+  // Importa una ficha (foto/PDF/Excel/Word/dictado por voz) y RELLENA este
+  // escandallo (no crea otro): pasa targetRecipeId = recipeId. La RPC borra las
+  // líneas viejas y las reemplaza. Al terminar refrescamos plato+líneas (tick)
+  // y FC (econReloadTick). Extraído como helper compartido (Fase 6): tanto el
+  // input de archivo como el dictado por voz (A2) alimentan el mismo camino.
+  async function importFromFile(file: File) {
+    if (!accountId) return
     setImporting(true)
     setImportError(null)
     setImportResult(null)
@@ -600,6 +604,25 @@ export default function RecipeEscandalloTab({
       setImporting(false)
     }
   }
+
+  async function handleImportRecipe(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    await importFromFile(file)
+  }
+
+  // A2 — Dictar por voz: al terminar de hablar, se envuelve el transcrito en un
+  // File de texto plano y se reutiliza EXACTAMENTE el mismo flujo de importación
+  // (extractRecipeSession detecta kind:'text' → input_text → mismo
+  // RecipeImportReviewModal anti-duplicados de "Importar ficha", sin modal nuevo).
+  function handleVoiceTranscript(text: string) {
+    if (!text.trim() || !accountId) return
+    const file = new File([text], 'dictado.txt', { type: 'text/plain' })
+    importFromFile(file)
+  }
+
+  const voice = useVoice({ onTranscript: handleVoiceTranscript })
 
   function closeImportModal() {
     setImportStage('idle')
@@ -933,12 +956,10 @@ export default function RecipeEscandalloTab({
     })
   }
 
-  function handleDelete(line: RecipeLineBreakdown) {
-    const ok = window.confirm(
-      `¿Eliminar "${line.childName}" del escandallo? El coste se recalculará.`
-    )
-    if (!ok) return
-
+  // Confirmación vía ConfirmDialog (Fase 6, antes window.confirm) — el botón
+  // de la línea abre el diálogo (setConfirmDeleteLine), esta función ejecuta
+  // el borrado real tras confirmar.
+  function doDeleteLine(line: RecipeLineBreakdown) {
     const prevLines = lines
     setSavingLineId(line.lineId)
     setLines((prev) => prev.filter((l) => l.lineId !== line.lineId))
@@ -1363,7 +1384,7 @@ export default function RecipeEscandalloTab({
           {!scaled && (
             <button
               type="button"
-              onClick={() => handleDelete(line)}
+              onClick={() => setConfirmDeleteLine(line)}
               disabled={saving}
               title="Eliminar línea"
               className={'ml-0.5 w-6 h-6 rounded inline-flex items-center justify-center text-text-secondary ' + (isMobile ? 'opacity-100 ' : 'opacity-0 group-hover:opacity-100 focus:opacity-100 ') + 'hover:text-danger hover:bg-danger-bg transition-all disabled:opacity-30'}
@@ -1540,7 +1561,7 @@ export default function RecipeEscandalloTab({
               {photoUrl && (
                 <button
                   type="button"
-                  onClick={handleDeletePhoto}
+                  onClick={() => setConfirmDeletePhotoOpen(true)}
                   disabled={photoUploading || photoDeleting}
                   className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-card text-danger font-medium border border-danger/30 hover:bg-danger-bg disabled:opacity-60 transition-colors"
                 >
@@ -1581,12 +1602,30 @@ export default function RecipeEscandalloTab({
                   : `Sugerir mermas con IA (${linesWithoutWaste.length})`}
               </button>
             )}
-            <button
-              title="Dictar por voz (próximamente)"
-              className="w-7 h-7 rounded-md bg-accent-bg text-text-secondary inline-flex items-center justify-center hover:text-text-primary transition-colors"
-            >
-              <Mic className="w-4 h-4" />
-            </button>
+            {voice.sttSupported ? (
+              <button
+                type="button"
+                onClick={() => (voice.isListening ? voice.stopListening() : voice.startListening())}
+                title={voice.isListening ? 'Escuchando… toca para parar' : 'Dictar el escandallo por voz'}
+                className={
+                  'w-7 h-7 rounded-md inline-flex items-center justify-center transition-colors ' +
+                  (voice.isListening
+                    ? 'bg-danger text-white animate-pulse'
+                    : 'bg-accent-bg text-text-secondary hover:text-text-primary')
+                }
+              >
+                <Mic className="w-4 h-4" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled
+                title="Dictar por voz — no disponible en este navegador"
+                className="w-7 h-7 rounded-md bg-accent-bg text-text-secondary/40 inline-flex items-center justify-center cursor-not-allowed"
+              >
+                <Mic className="w-4 h-4" />
+              </button>
+            )}
             <button
               title="Pedir a Folvy (próximamente)"
               className="w-7 h-7 rounded-md bg-accent-bg text-text-secondary inline-flex items-center justify-center hover:text-text-primary transition-colors"
@@ -2320,6 +2359,33 @@ export default function RecipeEscandalloTab({
           }}
         />
       )}
+
+      <ConfirmDialog
+        open={confirmDeletePhotoOpen}
+        title="Eliminar foto de cocina"
+        message="¿Eliminar la foto de cocina de este escandallo?"
+        tone="danger"
+        confirmLabel="Eliminar"
+        busy={photoDeleting}
+        onConfirm={() => { setConfirmDeletePhotoOpen(false); handleDeletePhoto() }}
+        onCancel={() => setConfirmDeletePhotoOpen(false)}
+      />
+
+      <ConfirmDialog
+        open={confirmDeleteLine !== null}
+        title="Eliminar línea"
+        message={confirmDeleteLine ? `¿Eliminar "${confirmDeleteLine.childName}" del escandallo? El coste se recalculará.` : ''}
+        tone="danger"
+        confirmLabel="Eliminar"
+        busy={confirmDeleteLine != null && savingLineId === confirmDeleteLine.lineId}
+        onConfirm={() => {
+          if (!confirmDeleteLine) return
+          const line = confirmDeleteLine
+          setConfirmDeleteLine(null)
+          doDeleteLine(line)
+        }}
+        onCancel={() => setConfirmDeleteLine(null)}
+      />
     </div>
   )
 }
