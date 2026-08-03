@@ -1516,6 +1516,21 @@ export default function RecipeEscandalloTab({
               <Pencil className="w-3.5 h-3.5 text-text-secondary opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
             </h2>
           )}
+          {/* Línea tipo/código — recuperada en el checklist de la Fase 7 (gap
+              fila 138): vivía en la cabecera del editor viejo, se perdió al no
+              pertenecer a ninguna sección con id propio. */}
+          <div className="text-[13px] text-text-secondary mt-1 flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5">
+              <ChefHat className="w-[15px] h-[15px]" />
+              {recipe.type === 'dish' ? 'Plato' : recipe.type}
+            </span>
+            {recipe.code && (
+              <>
+                <span className="opacity-50">·</span>
+                <span className="font-mono opacity-85">{recipe.code}</span>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Foto de cocina (gestión completa: subir/cambiar/eliminar/lightbox).
@@ -2139,6 +2154,9 @@ export default function RecipeEscandalloTab({
             </div>
           </div>
         )}
+
+        {/* Recuperado en el checklist de la Fase 7 (gap fila 51). */}
+        <p className="text-[11px] text-text-secondary mt-2">Merma estimada incluida en el coste del escandallo.</p>
 
         <div className="border-t border-default my-3.5" />
 

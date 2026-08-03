@@ -107,6 +107,15 @@ const TONE_CLASSES: Record<'red' | 'amber' | 'orange' | 'green', string> = {
   green: 'bg-green-50 text-green-800',
 }
 
+// Estilos de los tags conocidos (resto → neutro) — recuperado en el checklist
+// de la Fase 7 (gap fila 17): item.tags[] se había perdido por completo.
+const TAG_STYLES: Record<string, string> = {
+  'best-seller': 'bg-green-50 text-green-800',
+  'nuevo': 'bg-blue-50 text-blue-800',
+  'temporada': 'bg-amber-50 text-amber-800',
+  'promocional': 'bg-purple-50 text-purple-800',
+}
+
 type FichaTab =
   | 'escandallo' | 'receta' | 'modificadores' | 'economia'
   | 'en_carta' | 'etiquetado' | 'historico' | 'ficha'
@@ -699,6 +708,15 @@ export default function CatalogFichaPage({
               </div>
             )}
             <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-black/35 to-transparent pointer-events-none" />
+            {/* Badge de marca (avatar-letra) — recuperado en el checklist de la
+                Fase 7 (gap fila 11): se había perdido, ninguna fase lo reclamó
+                por vivir suelto en el hero, no dentro de una sección. */}
+            <div className="absolute top-4 left-4 bg-white/95 backdrop-blur-md px-4 py-2 rounded-xl shadow-md flex items-center gap-2">
+              <span className="w-6 h-6 rounded-md bg-accent flex items-center justify-center text-white text-[10px] font-bold">
+                {(brandName || item?.category || 'P').charAt(0)}
+              </span>
+              <span className="text-sm font-medium text-stone-800">{brandName || item?.category || 'Producto'}</span>
+            </div>
           </div>
         </div>
 
@@ -746,6 +764,26 @@ export default function CatalogFichaPage({
               <span className="text-stone-400">Cargando producto…</span>
             )}
           </div>
+
+          {/* Chips de tags — recuperado en el checklist de la Fase 7 (gap fila 17). */}
+          {item?.tags && item.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-4">
+              {item.tags.map((t) => (
+                <span key={t} className={`text-[11px] px-2.5 py-1 rounded-full font-medium ${TAG_STYLES[t] ?? 'bg-stone-100 text-stone-600'}`}>{t}</span>
+              ))}
+            </div>
+          )}
+
+          {/* Franja de aviso visible cuando el sello es preocupante (tono rojo/
+              naranja/ámbar) — recuperado en el checklist de la Fase 7 (gap fila
+              47): antes de esta corrección, linkClassification.text solo vivía
+              en el atributo title del badge de arriba (tooltip hover), invisible
+              en touch (tablet, uso real de cocina). */}
+          {linkClassification && linkClassification.tone !== 'green' && (
+            <div className={`mb-4 px-3 py-2 rounded-lg text-[13px] leading-snug ${TONE_CLASSES[linkClassification.tone]}`}>
+              {linkClassification.text}
+            </div>
+          )}
 
           {/* Sello + acciones de casado (solo si hay producto anclado) */}
           {item && linkClassification && (

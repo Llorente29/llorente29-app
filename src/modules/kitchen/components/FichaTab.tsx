@@ -238,6 +238,26 @@ export default function FichaTab({ item, accountId, onItemChanged }: FichaTabPro
     }
   }
 
+  // Descripción: gap cazado en el checklist de la Fase 7 (fila 29) — en el
+  // original, nombre+precio+descripción se guardaban juntos con un único
+  // saveError VISIBLE; al desacoplar la descripción a su propio campo quedó
+  // usando el saveField genérico (silencioso, solo console.error, igual que
+  // notas/packaging). Se le da su propio error visible, sin tocar el patrón
+  // silencioso del resto de campos (ese sí es fiel al original).
+  const [descriptionError, setDescriptionError] = useState<string | null>(null)
+  async function saveDescription() {
+    setDescriptionError(null)
+    setFieldSaving('desc')
+    try {
+      await updateMenuItem(item.id, { description: descriptionVal.trim() === '' ? null : descriptionVal.trim() })
+      onItemChanged()
+    } catch (err: unknown) {
+      setDescriptionError(err instanceof Error ? err.message : 'No se pudo guardar la descripción.')
+    } finally {
+      setFieldSaving(null)
+    }
+  }
+
   return (
     <div className="space-y-8">
       {lightboxOpen && item.photoUrl && (
@@ -368,9 +388,10 @@ export default function FichaTab({ item, accountId, onItemChanged }: FichaTabPro
           placeholder="Descripción visible en carta…"
           className="w-full px-3 py-2.5 text-sm border border-stone-200 rounded-lg bg-stone-50 focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
         />
+        {descriptionError && <p className="text-xs text-red-600 mt-2">{descriptionError}</p>}
         {descriptionVal !== (item.description ?? '') && (
           <button
-            onClick={() => saveField('desc', { description: descriptionVal.trim() === '' ? null : descriptionVal.trim() })}
+            onClick={saveDescription}
             disabled={fieldSaving === 'desc'}
             className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 transition-opacity"
           >
