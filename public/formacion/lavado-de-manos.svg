@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 430" width="680" height="430" role="img" aria-label="Cuándo lavarse las manos: al empezar, tras el baño, tras tocar basura o móvil, y siempre al pasar de crudo a listo para comer">
+<title>Cuándo lavarse las manos</title>
+<rect width="680" height="430" fill="#FFFFFF"/>
+<rect x="40" y="26" width="600" height="70" rx="8" fill="#1E3A5F"/>
+<text x="340" y="58" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="bold" fill="#FFFFFF">Agua caliente + jabón + 20 segundos frotando</text>
+<text x="340" y="82" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#D6E3F0">Uñas, entre los dedos y muñecas · secar con papel de un solo uso</text>
+<text x="40" y="130" font-family="Helvetica,Arial,sans-serif" font-size="16" font-weight="bold" fill="#1F2421">Lávate las manos SIEMPRE:</text>
+<circle cx="56" cy="160" r="4" fill="#D67442"/><text x="72" y="166" font-family="Helvetica,Arial,sans-serif" font-size="15" fill="#1F2421">Al empezar el turno y al volver a cocina</text>
+<circle cx="56" cy="192" r="4" fill="#D67442"/><text x="72" y="198" font-family="Helvetica,Arial,sans-serif" font-size="15" fill="#1F2421">Después del baño, de fumar, comer o sonarte</text>
+<circle cx="56" cy="224" r="4" fill="#D67442"/><text x="72" y="230" font-family="Helvetica,Arial,sans-serif" font-size="15" fill="#1F2421">Tras tocar basura, cajas, dinero o el móvil</text>
+<rect x="40" y="252" width="600" height="72" rx="8" fill="#FBE8E3" stroke="#E0492E" stroke-width="2"/>
+<text x="60" y="280" font-family="Helvetica,Arial,sans-serif" font-size="16" font-weight="bold" fill="#A82E18">Y sobre todo: al pasar de CRUDO a LISTO PARA COMER</text>
+<text x="60" y="306" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#A82E18">Deshuesar pollo y luego emplatar una ensalada, sin lavarse: así llega la salmonela al cliente.</text>
+<rect x="40" y="344" width="600" height="56" rx="8" fill="#FAF0D8" stroke="#C2890F" stroke-width="1.5"/>
+<text x="60" y="370" font-family="Helvetica,Arial,sans-serif" font-size="15" font-weight="bold" fill="#8A5F09">Los guantes NO sustituyen al lavado de manos</text>
+<text x="60" y="390" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#8A5F09">Un guante sucio contamina igual que una mano sucia. Se cambian al cambiar de tarea.</text>
+</svg>
