@@ -21,9 +21,12 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, BarChart, Bar,
 } from 'recharts'
+import { useNavigate } from 'react-router-dom'
 import { useApp } from '@/context/AppContext'
 import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
+import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import * as analyticsService from '@/modules/appcc/services/analyticsService'
+import * as trainingComplianceService from '@/services/trainingComplianceService'
 import type {
   DateRange,
   KpiSummary,
@@ -175,6 +178,9 @@ export default function AppccDashboardPage() {
       {error && (
         <div className="bg-danger-bg text-danger rounded-md p-3 text-sm">{error}</div>
       )}
+
+      {/* ============ PRERREQUISITO: FORMACIÓN (Capa 2) ============ */}
+      <TrainingPrerequisiteCard />
 
       {/* ============ KPIs ============ */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -632,5 +638,63 @@ function Heatmap({ cells }: { cells: HeatmapCell[] }) {
         </div>
       </div>
     </div>
+  )
+}
+
+// ============ PRERREQUISITO: FORMACIÓN (Capa 2) ============
+// Tarjeta autocontenida (su propio fetch, no comparte estado con el resto
+// del dashboard) — así no se toca ninguna lógica existente del dashboard
+// para añadir esto. Semáforo = mismo cálculo que el KPI de portada del
+// informe (computeMandatoryCompliancePct), para que nunca puedan divergir.
+function TrainingPrerequisiteCard() {
+  const { activeAccountId } = useActiveAccount()
+  const navigate = useNavigate()
+  const [kpi, setKpi] = useState<{ pct: number; vigente: number; applicable: number } | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    if (!activeAccountId) { setLoading(false); return }
+    let cancelled = false
+    trainingComplianceService.getTrainingComplianceMatrix(activeAccountId, null, true)
+      .then((rows) => {
+        if (cancelled) return
+        setKpi(trainingComplianceService.computeMandatoryCompliancePct(rows))
+        setFailed(false)
+      })
+      .catch(() => { if (!cancelled) setFailed(true) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [activeAccountId])
+
+  const tone = failed || kpi == null
+    ? { dot: 'bg-text-tertiary', text: 'text-text-secondary' }
+    : kpi.pct === 100
+      ? { dot: 'bg-success', text: 'text-success' }
+      : kpi.pct >= 80
+        ? { dot: 'bg-warning', text: 'text-warning' }
+        : { dot: 'bg-danger', text: 'text-danger' }
+
+  return (
+    <button
+      type="button"
+      onClick={() => navigate('/appcc/formacion')}
+      className="w-full flex items-center justify-between gap-3 bg-card rounded-lg border border-border-default p-3 sm:p-4 text-left hover:bg-page transition-colors"
+    >
+      <div className="flex items-center gap-3 min-w-0">
+        <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${tone.dot}`} />
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-text-primary">Prerrequisito: Formación del personal</p>
+          <p className="text-xs text-text-secondary truncate">
+            {loading ? 'Cargando…' : failed || kpi == null
+              ? 'No se pudo calcular — abre el informe para más detalle.'
+              : `${kpi.vigente} de ${kpi.applicable} con la formación obligatoria vigente`}
+          </p>
+        </div>
+      </div>
+      <span className={`text-lg font-bold shrink-0 ${tone.text}`}>
+        {loading || failed || kpi == null ? '—' : `${kpi.pct}%`}
+      </span>
+    </button>
   )
 }

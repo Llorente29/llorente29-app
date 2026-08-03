@@ -14,7 +14,8 @@ import {
   Infinity,
   X,
 } from 'lucide-react'
-import { Card, Button, Input, Select, Label, Textarea } from '../ui'
+import { Card, Button, Badge, Input, Select, Label, Textarea } from '../ui'
+import { useApp } from '../../context/AppContext'
 import type { Employee } from '../../types'
 import type { Formation, FormationType } from '../../types/personal'
 import { FORMATION_CATALOG } from '../../types/personal'
@@ -25,6 +26,8 @@ import {
   deleteFormation,
   getFormationStatus,
 } from '../../services/formationsService'
+import * as trainingComplianceService from '../../services/trainingComplianceService'
+import type { TrainingCellState } from '../../services/trainingComplianceService'
 
 interface Props {
   employee: Employee
@@ -89,9 +92,13 @@ export default function FormacionesTab({ employee }: Props) {
         </div>
       </Card>
 
+      {/* Formación interna (C1/C2): cursos impartidos por Folvy con test y firma.
+          NO toca employee_formations ni la lista de abajo — es una sección aparte. */}
+      <InternalTrainingSection employee={employee} />
+
       <div className="flex items-center justify-between">
         <p className="text-xs text-text-secondary">
-          {formations.length} formación{formations.length !== 1 ? 'es' : ''}
+          {formations.length} formación{formations.length !== 1 ? 'es' : ''} externa{formations.length !== 1 ? 's' : ''}
         </p>
         <Button size="sm" onClick={() => { setEditing(null); setShowModal(true) }}>
           + Añadir formación
@@ -194,6 +201,81 @@ export default function FormacionesTab({ employee }: Props) {
         />
       )}
     </div>
+  )
+}
+
+/* =====================================================
+   FORMACIÓN INTERNA (C1/C2) — cursos impartidos por Folvy
+   ===================================================== */
+
+const INTERNAL_STATE_LABEL: Record<TrainingCellState, string> = {
+  vigente: 'Vigente', caducado: 'Caducado', pendiente: 'Pendiente', en_curso: 'En curso (sin firmar)', no_aplica: 'No aplica',
+}
+const INTERNAL_STATE_COLOR: Record<TrainingCellState, string> = {
+  vigente: 'green', caducado: 'red', pendiente: 'gray', en_curso: 'yellow', no_aplica: 'gray',
+}
+
+function InternalTrainingSection({ employee }: { employee: Employee }) {
+  const { activeAccountId } = useApp()
+  const [courses, setCourses] = useState<{ code: string; title: string; state: TrainingCellState; scorePct: number | null; expiresAt: string | null }[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
+
+  useEffect(() => {
+    if (!activeAccountId) { setLoading(false); return }
+    let cancel = false
+    setLoading(true)
+    setError(false)
+    Promise.all([
+      trainingComplianceService.getTrainingComplianceMatrix(activeAccountId, employee.locationId, false),
+      trainingComplianceService.getTrainingCourseSummary(activeAccountId),
+    ])
+      .then(([matrix, summary]) => {
+        if (cancel) return
+        const row = matrix.find((r) => r.employeeId === employee.id)
+        const titleByCode = new Map(summary.map((c) => [c.courseCode, c.courseTitle]))
+        const list = Object.entries(row?.courses ?? {})
+          .filter(([, cell]) => cell.state !== 'no_aplica')
+          .map(([code, cell]) => ({
+            code,
+            title: titleByCode.get(code) ?? code,
+            state: cell.state,
+            scorePct: cell.scorePct,
+            expiresAt: cell.expiresAt,
+          }))
+        setCourses(list)
+      })
+      .catch(() => { if (!cancel) setError(true) })
+      .finally(() => { if (!cancel) setLoading(false) })
+    return () => { cancel = true }
+  }, [activeAccountId, employee.id, employee.locationId])
+
+  return (
+    <Card className="p-3">
+      <p className="text-sm font-semibold text-text-primary inline-flex items-center gap-1.5 mb-2">
+        <GraduationCap size={14} /> Formación interna (Folvy)
+      </p>
+      {loading ? (
+        <p className="text-xs text-text-secondary">Cargando…</p>
+      ) : error ? (
+        <p className="text-xs text-danger">No se pudo cargar la formación interna.</p>
+      ) : courses.length === 0 ? (
+        <p className="text-xs text-text-secondary">Sin cursos internos asignados todavía.</p>
+      ) : (
+        <div className="space-y-1.5">
+          {courses.map((c) => (
+            <div key={c.code} className="flex items-center justify-between gap-2 text-xs">
+              <span className="text-text-primary">{c.title}</span>
+              <div className="flex items-center gap-2 shrink-0">
+                {c.scorePct != null && <span className="text-text-secondary">{c.scorePct}%</span>}
+                {c.expiresAt && <span className="text-text-secondary">hasta {new Date(c.expiresAt).toLocaleDateString('es-ES')}</span>}
+                <Badge color={INTERNAL_STATE_COLOR[c.state]}>{INTERNAL_STATE_LABEL[c.state]}</Badge>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
   )
 }
 

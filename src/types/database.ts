@@ -19885,6 +19885,57 @@ export type Database = {
         Returns: Json
       }
       track_by_token: { Args: { p_token: string }; Returns: Json }
+      // Formación C2 — informes de lectura.
+      training_compliance_matrix: {
+        Args: {
+          p_account_id: string
+          p_location_id?: string | null
+          p_only_mandatory?: boolean
+        }
+        Returns: {
+          courses: Json
+          doc_id: string | null
+          employee_id: string
+          employee_name: string
+          location_name: string
+          role: string | null
+        }[]
+      }
+      training_course_summary: {
+        Args: { p_account_id: string }
+        Returns: {
+          assigned_count: number
+          compliance_pct: number
+          course_code: string
+          course_id: string
+          course_title: string
+          estimated_minutes: number | null
+          legal_basis: string | null
+          section_titles: string[]
+          signed_count: number
+          trained_count: number
+        }[]
+      }
+      training_data_health: {
+        Args: { p_account_id: string }
+        Returns: {
+          check_kind: string
+          item_count: number
+          sample_names: string[] | null
+        }[]
+      }
+      training_gaps: {
+        Args: { p_account_id: string; p_days_ahead?: number }
+        Returns: {
+          course_id: string
+          course_title: string
+          days_left: number | null
+          due_at: string | null
+          employee_id: string
+          employee_name: string
+          gap_kind: string
+        }[]
+      }
       unaccent: { Args: { "": string }; Returns: string }
       unassign_items_from_zones: {
         Args: {
