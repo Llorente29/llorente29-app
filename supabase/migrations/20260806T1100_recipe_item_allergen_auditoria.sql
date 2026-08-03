@@ -10,12 +10,14 @@
 -- que el código cliente se acuerde de mandarlo — la garantía vive en BBDD,
 -- mismo espíritu que el fill-only del motor de herencia.
 --
--- updated_by: SOLO se rellena cuando la fila es una declaración humana
--- (source='manual'). Un 'inherited'/'ai_enrich'/'automatic' no lo declaró
--- nadie, lo calculó el motor — atribuírselo a quien disparó el recálculo
--- (p.ej. alguien que añadió una guarnición sin relación con el alérgeno en
--- cuestión) sería engañoso, no auditoría real. auth.uid() es NULL cuando no
--- hay sesión (SQL Editor, backfill) — queda así, honesto.
+-- updated_by: SOLO se ESCRIBE cuando la fila es una declaración humana en
+-- sesión real (source='manual' AND auth.uid() IS NOT NULL). Sin "else": si
+-- no se cumple, la columna se deja tal cual estaba — nunca se pisa con
+-- NULL. Corrección de Julio (06/08) sobre la primera versión: un "else
+-- updated_by := null" borraría para siempre quién declaró una fila si
+-- luego cambia de source por cualquier vía, o si un recálculo sin sesión
+-- (SQL Editor, backfill) llegase a tocar una fila manual — dos formas de
+-- perder la atribución real sin querer.
 --
 -- Filas EXISTENTES: updated_at/updated_by quedan NULL. No se reconstruye el
 -- pasado (pedido explícito de Julio) — created_at ya es una pista parcial y
@@ -36,10 +38,8 @@ set search_path to 'public'
 as $function$
 begin
   new.updated_at := now();
-  if new.source = 'manual' then
+  if new.source = 'manual' and auth.uid() is not null then
     new.updated_by := auth.uid();
-  else
-    new.updated_by := null;
   end if;
   return new;
 end;
