@@ -7,7 +7,7 @@
 //      pertenece a una cuenta del usuario. La frontera autoriza; el motor no.
 //   2) RESUELVE TOKEN por conexión: external_integration (source=hubrise) por
 //      (account, external_location_id[, connection_name]); fallback al Secret global.
-//   3) EMPUJA: PUT /location/orders/:id a HubRise con X-Access-Token (marca blanca:
+//   3) EMPUJA: PATCH /location/orders/:id a HubRise con X-Access-Token (marca blanca:
 //      Folvy llama a HubRise desde el servidor; el cliente nunca toca HubRise).
 //   4) ESPEJA: si HubRise acepta (2xx), actualiza sale.order_status (service role).
 //
@@ -103,7 +103,8 @@ Deno.serve(async (req: Request) => {
   let hubResp: Response;
   try {
     hubResp = await fetch(url, {
-      method: "PUT",
+      // PATCH (no PUT): ver auditoría de integración HubRise. No revertir a PUT.
+      method: "PATCH",
       headers: {
         "X-Access-Token": accessToken,
         "Content-Type": "application/json",

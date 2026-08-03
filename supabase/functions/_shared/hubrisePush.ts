@@ -2,7 +2,7 @@
 //
 // EMPUJE DE ESTADO A HUBRISE — helper compartido.
 // ============================================================================
-// Único lugar donde se construye el PUT /location/orders/:id a HubRise. Lo usan:
+// Único lugar donde se construye el PATCH /location/orders/:id a HubRise. Lo usan:
 //   - hubrise-order-status (Edge de SALIDA, lo llama la app con sesión).
 //   - hubrise-webhook (la rama de AUTO-ACEPTACIÓN, en la frontera de entrada).
 // Así el contrato con HubRise (cabecera X-Access-Token, base de API, forma del
@@ -60,7 +60,9 @@ export async function pushOrderStatus(
   let resp: Response;
   try {
     resp = await fetch(url, {
-      method: "PUT",
+      // PATCH (no PUT): HubRise actualiza el estado del pedido con PATCH.
+      // Verificado en la auditoría de integración HubRise. No revertir a PUT.
+      method: "PATCH",
       headers: { "X-Access-Token": token, "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
