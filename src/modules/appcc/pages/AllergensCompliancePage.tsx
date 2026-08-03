@@ -61,6 +61,39 @@ const SOURCE_LABEL: Record<AllergenSource, string> = {
   ai_enrich: 'IA sin confirmar',
 }
 
+// Leyenda de la matriz — mismos 5 estados que EtiquetadoTab.tsx ("Sin
+// declarar" es el 5º, UI-only, nunca una fila real). Se reutiliza tal cual
+// para la pantalla y para las líneas de cabecera del CSV exportado, así el
+// CSV se explica solo fuera de la app (impreso o abierto en Excel).
+const LEGEND_ITEMS: { state: AllergenState | null; label: string }[] = [
+  { state: 'contains', label: 'Contiene' },
+  { state: 'may_contain', label: 'Puede contener (trazas)' },
+  { state: 'free', label: 'Libre de' },
+  { state: 'unknown', label: 'Sin determinar' },
+  { state: null, label: 'Sin declarar' },
+]
+
+function MatrixLegend() {
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-3 py-2 border-t border-border-default text-xs text-text-secondary">
+      {LEGEND_ITEMS.map((item) => (
+        <div key={item.label} className="flex items-center gap-1.5">
+          {item.state === null ? (
+            <span className="inline-flex items-center justify-center w-5 h-5 rounded border border-dashed border-border-default text-text-tertiary text-[9px]">
+              —
+            </span>
+          ) : (
+            <span className={`inline-flex items-center justify-center w-5 h-5 rounded text-[10px] font-semibold ${CELL_TONE[item.state]}`}>
+              {CELL_LETTER[item.state]}
+            </span>
+          )}
+          <span>{item.label}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function csvEscape(value: string): string {
   if (/[",\n;]/.test(value)) return '"' + value.replace(/"/g, '""') + '"'
   return value
@@ -155,6 +188,14 @@ export default function AllergensCompliancePage() {
   )
 
   function exportCsv() {
+    // Leyenda como cabecera del propio CSV (líneas sueltas, no forman parte
+    // de la tabla) — así el fichero se explica solo abierto en Excel o
+    // impreso, sin depender de haber visto la pantalla antes.
+    const legendLines: string[][] = [
+      ['Leyenda'],
+      ...LEGEND_ITEMS.map((item) => [item.label]),
+      [],
+    ]
     const header = ['Plato', 'Tipo', 'Marcas', ...ALLERGEN_CODES.map((c) => allergenLabel(c))]
     const rows = filteredMatrix.map((r) => [
       r.recipeName,
@@ -165,7 +206,7 @@ export default function AllergensCompliancePage() {
         return cell ? allergenStateLabel(cell.state) : 'Sin declarar'
       }),
     ])
-    const csv = [header, ...rows]
+    const csv = [...legendLines, header, ...rows]
       .map((cols) => cols.map(csvEscape).join(','))
       .join('\r\n')
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
@@ -219,7 +260,7 @@ export default function AllergensCompliancePage() {
       </div>
 
       {/* Matriz completa */}
-      <div className="bg-card border border-border-default rounded-lg overflow-x-auto">
+      <div className="bg-card border border-border-default rounded-lg">
         {matrixError ? (
           <div className="p-4 text-sm text-danger">{matrixError}</div>
         ) : filteredMatrix.length === 0 ? (
@@ -227,6 +268,7 @@ export default function AllergensCompliancePage() {
             {matrix.length === 0 ? 'Ningún plato a la venta todavía.' : 'Ninguna marca coincide con el filtro.'}
           </div>
         ) : (
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-page">
               <tr>
@@ -270,7 +312,9 @@ export default function AllergensCompliancePage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
+        {filteredMatrix.length > 0 && !matrixError && <MatrixLegend />}
       </div>
 
       {/* Qué falta */}
