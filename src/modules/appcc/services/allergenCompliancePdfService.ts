@@ -271,8 +271,13 @@ export function generateAllergenCompliancePdf(data: AllergenPdfData): { blob: Bl
   )
 
   // Bloque "Origen del dato".
+  // Solo ingrediente/plato: 'equipo_envase' (tool/packaging) es otra
+  // naturaleza de riesgo, no entra en "cómo se calculan los platos".
   const bySource = new Map<AllergenSource, number>()
-  for (const h of data.health) bySource.set(h.source, (bySource.get(h.source) ?? 0) + h.rowCount)
+  for (const h of data.health) {
+    if (h.scope === 'equipo_envase') continue
+    bySource.set(h.source, (bySource.get(h.source) ?? 0) + h.rowCount)
+  }
   const originLine =
     `${SOURCE_LABEL.manual}: ${bySource.get('manual') ?? 0}   ·   ` +
     `${SOURCE_LABEL.inherited}: ${bySource.get('inherited') ?? 0}   ·   ` +

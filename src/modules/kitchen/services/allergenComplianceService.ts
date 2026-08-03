@@ -85,8 +85,14 @@ export async function getAllergenBlockingIngredients(
   }))
 }
 
+// 'equipo_envase' = recipe_item type IN ('tool','packaging') — no se come
+// ni se vende, es otra naturaleza de riesgo (contaminación cruzada de un
+// utensilio compartido, alérgeno en el propio envase). Migración
+// 20260806T1200 — antes esas filas se perdían del conteo sin más.
+export type AllergenHealthScope = 'ingrediente' | 'plato' | 'equipo_envase'
+
 export interface DataHealthRow {
-  scope: 'ingrediente' | 'plato'
+  scope: AllergenHealthScope
   source: AllergenSource
   rowCount: number
 }
@@ -98,7 +104,7 @@ export async function getAllergenDataHealth(accountId: string): Promise<DataHeal
   })
   if (error) throw new Error(`Error leyendo salud del dato de alérgenos: ${error.message}`)
   return (data ?? []).map((row) => ({
-    scope: row.scope as 'ingrediente' | 'plato',
+    scope: row.scope as AllergenHealthScope,
     source: row.source as AllergenSource,
     rowCount: row.row_count,
   }))

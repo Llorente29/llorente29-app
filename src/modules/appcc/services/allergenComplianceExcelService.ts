@@ -82,8 +82,13 @@ export function generateAllergenComplianceExcel(data: AllergenExcelData): { file
   const incomplete = data.rows.filter(dishIsIncomplete).length
   const complete = total - incomplete
   const pct = total > 0 ? Math.round((complete / total) * 100) : 0
+  // Solo ingrediente/plato en el resumen: 'equipo_envase' (tool/packaging)
+  // es otra naturaleza de riesgo, no entra en "cómo se calculan los platos".
   const bySource = new Map<AllergenSource, number>()
-  for (const h of data.health) bySource.set(h.source, (bySource.get(h.source) ?? 0) + h.rowCount)
+  for (const h of data.health) {
+    if (h.scope === 'equipo_envase') continue
+    bySource.set(h.source, (bySource.get(h.source) ?? 0) + h.rowCount)
+  }
 
   const summaryRows: Record<string, string>[] = [
     { 'Campo': 'Cliente', 'Valor': data.account.legalName ?? '—' },

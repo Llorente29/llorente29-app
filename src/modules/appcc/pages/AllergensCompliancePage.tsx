@@ -502,14 +502,14 @@ export default function AllergensCompliancePage() {
           {healthError && (
             <div className="p-2 rounded-md bg-danger-bg text-danger text-xs mb-2">{healthError}</div>
           )}
-          <div className="grid grid-cols-2 gap-3">
-            {(['ingrediente', 'plato'] as const).map((scope) => {
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {(['ingrediente', 'plato', 'equipo_envase'] as const).map((scope) => {
               const rows = health.filter((h) => h.scope === scope)
               const total = rows.reduce((s, r) => s + r.rowCount, 0)
               return (
                 <div key={scope} className="border border-border-default rounded-md p-2.5">
                   <div className="text-[10px] font-medium text-text-secondary uppercase tracking-wide mb-1.5">
-                    {scope === 'ingrediente' ? 'Ingrediente' : 'Plato (heredado)'}
+                    {scope === 'ingrediente' ? 'Ingrediente' : scope === 'plato' ? 'Plato (heredado)' : 'Equipo y envases'}
                   </div>
                   {rows.length === 0 ? (
                     <div className="text-xs text-text-tertiary">Sin datos.</div>
