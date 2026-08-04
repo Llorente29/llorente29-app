@@ -41,12 +41,15 @@ import type {
 } from '@/modules/appcc/services/analyticsService'
 import { SEVERITY_LABEL } from '@/modules/appcc/types'
 
-// Paleta para gráficos (consistente con tokens semánticos)
+// Paleta para gráficos — auditoría externa (B.3): usaba rojo/ámbar
+// genéricos de Tailwind en vez de los tokens de marca (danger #E0492E,
+// warning #C2890F, tailwind.config.js). Ahora coherente con el resto del
+// producto (KPI cards, badges de estado).
 const SEV_COLORS: Record<string, string> = {
-  critical: '#DC2626',
-  high: '#F59E0B',
-  medium: '#FBBF24',
-  low: '#15171A',
+  critical: '#E0492E', // danger
+  high: '#C2890F',     // warning
+  medium: '#DCAA4D',   // warning, más claro (distinto de "high" sin salirse de la familia ámbar)
+  low: '#15171A',       // accent/tinta
 }
 const CATEGORY_COLOR = '#15171A'
 const TREND_COLOR = '#15171A'
@@ -238,7 +241,7 @@ export default function AppccDashboardPage() {
               />
               <Tooltip
                 contentStyle={{ fontSize: 12, borderRadius: 6 }}
-                formatter={(v) => [`${v}%`, 'Cumplimiento']}
+                formatter={(v) => [v == null ? 'Sin auditoría este día' : `${v}%`, 'Cumplimiento']}
                 labelFormatter={(l) => `Día ${String(l ?? '')}`}
               />
               <Line

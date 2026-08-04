@@ -465,10 +465,13 @@ export default function FichaTab({ item, accountId, onItemChanged }: FichaTabPro
 
       {/* Objetivo de food cost (target_food_cost_pct) — EDITABLE, única pieza
           de lógica nueva permitida en esta fase. La comparación "Dentro/Fuera
-          del objetivo" sigue viviendo en Economía. */}
+          del objetivo" sigue viviendo en Economía.
+          "Food cost" se queda en inglés a propósito (decisión de Julio,
+          auditoría externa) -- término estándar del sector, no spanglish
+          descuidado. Ver EconomiaTab.tsx para la nota completa. */}
       <div>
-        <h3 className="text-xs font-medium uppercase tracking-wide text-stone-400 mb-3">Objetivo de coste de producto</h3>
-        <label className="block text-xs font-medium text-stone-500 mb-1.5">Objetivo de coste (%)</label>
+        <h3 className="text-xs font-medium uppercase tracking-wide text-stone-400 mb-3">Objetivo de food cost</h3>
+        <label className="block text-xs font-medium text-stone-500 mb-1.5">Objetivo de food cost (%)</label>
         <input
           type="text" inputMode="decimal" value={targetFcVal} onChange={(e) => setTargetFcVal(e.target.value)}
           placeholder="Sin definir"

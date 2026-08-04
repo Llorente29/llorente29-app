@@ -66,6 +66,7 @@ import ConfirmDialog from '@/components/ConfirmDialog'
 import * as coursesService from '@/services/coursesService'
 import { generateCourseFromRecipe, type GenerateCourseResult } from '@/services/courseFromRecipeService'
 import type { MenuItem, RecipeItem } from '@/types/kitchen'
+import { fmtPct } from '@/lib/format'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -958,7 +959,7 @@ export default function CatalogFichaPage({
                       ? 'Sin coste'
                       : !pvp
                         ? 'Sin precio'
-                        : `${foodCostPct}%`}
+                        : fmtPct(foodCostPct, 2)}
               </div>
               <div className="text-xs text-stone-500">food cost</div>
             </div>
