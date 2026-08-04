@@ -86,20 +86,33 @@ export async function getTrainingComplianceMatrix(
  * inspector. Función PURA (sin red) para que el KPI de portada del PDF, el
  * de la pantalla y el del dashboard de Safety usen exactamente el mismo
  * cálculo y nunca puedan divergir.
+ *
+ * Auditoría externa (Pieza B): esto contaba CELDAS empleado×curso, no
+ * personas — con 20 empleados y 5 obligatorias podía imprimir "83 de 100
+ * trabajadores" en la portada del PDF de inspección, un dato falso en un
+ * documento legal. Ahora cuenta personas de verdad: "vigente" = un
+ * trabajador con TODAS sus obligatorias aplicables vigentes (ni una
+ * pendiente, caducada, en curso o sin verificar la práctica). "applicable"
+ * = trabajadores con al menos una obligatoria que les aplique — quien no
+ * tiene ninguna (no_aplica en todas) no cuenta ni en el numerador ni en el
+ * denominador, igual que antes a nivel de celda.
+ *
+ * applicable=0 (cuenta sin datos aún) ya no cae en 100%: pct queda en null
+ * para que quien lo consuma pinte un estado neutro ("sin datos"), no un
+ * 100% verde engañoso (Pieza E.4).
  */
 export function computeMandatoryCompliancePct(
   rows: TrainingComplianceRow[],
-): { pct: number; vigente: number; applicable: number } {
+): { pct: number | null; vigente: number; applicable: number } {
   let vigente = 0
   let applicable = 0
   for (const row of rows) {
-    for (const cell of Object.values(row.courses)) {
-      if (cell.state === 'no_aplica') continue
-      applicable++
-      if (cell.state === 'vigente') vigente++
-    }
+    const cells = Object.values(row.courses).filter(c => c.state !== 'no_aplica')
+    if (cells.length === 0) continue
+    applicable++
+    if (cells.every(c => c.state === 'vigente')) vigente++
   }
-  const pct = applicable > 0 ? Math.round((vigente / applicable) * 100) : 100
+  const pct = applicable > 0 ? Math.round((vigente / applicable) * 100) : null
   return { pct, vigente, applicable }
 }
 

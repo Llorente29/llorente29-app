@@ -95,7 +95,8 @@ export interface TrainingCompliancePdfData {
   responsibleName: string | null
   generatedAtLabel: string
   generatedAtFilename: string
-  kpi: { vigente: number; applicable: number; pct: number }
+  /** pct null = cuenta sin datos aún (nadie con obligatorias aplicables) — se imprime como estado neutro, no como 100%. */
+  kpi: { vigente: number; applicable: number; pct: number | null }
   /** Filas de la matriz agrupadas por local, en el orden en que se imprimen. */
   rowsByLocation: [string, TrainingComplianceRow[]][]
   courses: TrainingPdfCourseInfo[]
@@ -173,21 +174,24 @@ export function generateTrainingCompliancePdf(data: TrainingCompliancePdfData): 
 
   let y = headerH + 14
 
-  // El KPI grande, el que mira el inspector.
-  const kpiColor = data.kpi.pct === 100 ? SUCCESS : data.kpi.pct >= 80 ? WARNING : DANGER
+  // El KPI grande, el que mira el inspector. pct null = cuenta sin datos
+  // aún (nadie con obligatorias aplicables) — se imprime en gris neutro,
+  // nunca como un 100% que nadie ganó (auditoría externa, Pieza E.4).
+  const kpiPct = data.kpi.pct
+  const kpiColor = kpiPct === null ? MUTED : kpiPct === 100 ? SUCCESS : kpiPct >= 80 ? WARNING : DANGER
   display('bold'); doc.setFontSize(34); ink(kpiColor)
-  doc.text(`${data.kpi.vigente} de ${data.kpi.applicable}`, MARGIN, y + 14)
+  doc.text(kpiPct === null ? 'Sin datos' : `${data.kpi.vigente} de ${data.kpi.applicable}`, MARGIN, y + 14)
   sans('normal'); doc.setFontSize(10); ink(MUTED)
   doc.text('trabajadores con la formación obligatoria vigente', MARGIN, y + 21)
   display('bold'); doc.setFontSize(22); ink(kpiColor)
-  doc.text(`${data.kpi.pct}%`, PAGE_W - MARGIN - 30, y + 12, { align: 'right' })
+  doc.text(kpiPct === null ? '—' : `${kpiPct}%`, PAGE_W - MARGIN - 30, y + 12, { align: 'right' })
 
   y += 30
   const barH = 5
   fill(DANGER_BG); doc.roundedRect(MARGIN, y, CONTENT_W, barH, 1, 1, 'F')
-  if (data.kpi.pct > 0) {
+  if (kpiPct !== null && kpiPct > 0) {
     fill(SUCCESS)
-    doc.roundedRect(MARGIN, y, Math.max(CONTENT_W * (data.kpi.pct / 100), barH), barH, 1, 1, 'F')
+    doc.roundedRect(MARGIN, y, Math.max(CONTENT_W * (kpiPct / 100), barH), barH, 1, 1, 'F')
   }
   y += barH + 8
 

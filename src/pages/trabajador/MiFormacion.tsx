@@ -72,6 +72,41 @@ const STATUS_LABEL: Record<PendingCourse['status'], { label: string; color: stri
   suspendido: { label: 'Suspendido — repite', color: 'bg-danger-bg text-danger' },
   pendiente_practica: { label: 'Falta verificar práctica', color: 'bg-warning-bg text-warning' },
   firmado: { label: 'Superado', color: 'bg-success-bg text-success' },
+  // Auditoría externa (A.2): antes se quedaba en 'firmado' para siempre —
+  // ya respeta reeval_months (course_state_for_employee, server-side).
+  // Reabrir el curso crea un intento nuevo (start_course_attempt) que, una
+  // vez firmado, vuelve a poner el curso vigente — mismo flujo de "empezar",
+  // sin pantalla especial de "repetir por caducidad".
+  caducado: { label: 'Caducado — repite', color: 'bg-danger-bg text-danger' },
+}
+
+// Auditoría externa (D): la opción correcta no puede vivir siempre en la
+// misma posición (patrón detectado: distribución global A/B/C/D muy
+// desigual, y 3 cursos con la clave idéntica — memorizar una posición o un
+// curso basta para aprobar sin leer). Se baraja SOLO en el render, por
+// empleado+intento+pregunta — determinista (no reordena a media pantalla al
+// re-renderizar) pero distinto entre personas y entre intentos de la misma
+// persona. La corrección sigue siendo por optionId (course_option.is_correct),
+// nunca por posición, así que barajar aquí no toca la trazabilidad de qué
+// opción eligió el alumno ni exige cambios en submit_course_attempt.
+function seededShuffle<T>(items: T[], seed: string): T[] {
+  let h = 0
+  for (let i = 0; i < seed.length; i++) {
+    h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0
+  }
+  let state = h >>> 0
+  function next(): number {
+    state = (state + 0x6d2b79f5) | 0
+    let t = Math.imul(state ^ (state >>> 15), 1 | state)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+  const arr = [...items]
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(next() * (i + 1))
+    ;[arr[i], arr[j]] = [arr[j], arr[i]]
+  }
+  return arr
 }
 
 // Itinerario por fases — docs/folvy_formacion_itinerario_fases_rediseno.md §3.
@@ -140,7 +175,16 @@ export default function MiFormacion({ employee, onBack }: Props) {
     setBusy(true)
     try {
       const started = await mobile.startAttempt(c.assignmentId)
-      setAttempt(started)
+      // Barajado determinista por empleado+intento+pregunta (auditoría
+      // externa, Pieza D) — ver seededShuffle arriba.
+      const shuffled: StartAttemptResult = {
+        ...started,
+        questions: started.questions.map(q => ({
+          ...q,
+          options: seededShuffle(q.options, `${employee.id}:${started.attemptId}:${q.id}`),
+        })),
+      }
+      setAttempt(shuffled)
       setSectionIdx(0)
       setQuestionIdx(0)
       setAnswers({})

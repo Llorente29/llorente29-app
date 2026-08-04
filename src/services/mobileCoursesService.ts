@@ -9,7 +9,7 @@
 
 import { supabase } from '../lib/supabase'
 
-export type PendingCourseStatus = 'pendiente' | 'en_curso' | 'suspendido' | 'pendiente_practica' | 'firmado'
+export type PendingCourseStatus = 'pendiente' | 'en_curso' | 'suspendido' | 'pendiente_practica' | 'firmado' | 'caducado'
 
 /** Fase del itinerario de incorporación de la que viene esta asignación (dia_1/dias_30/dias_90). null = no viene de un itinerario (manual, mandatoria de cuenta). */
 export type TrainingPhase = 'dia_1' | 'dias_30' | 'dias_90'
