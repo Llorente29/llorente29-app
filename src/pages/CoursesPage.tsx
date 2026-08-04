@@ -1521,7 +1521,14 @@ function SeguimientoTab({ course, staff }: { course: Course; staff: Employee[] }
           <tbody>
             {rows.map((r, i) => (
               <tr key={`${r.assignmentId}-${r.employeeId}-${i}`} className="border-t border-border-default">
-                <td className="px-3 py-2 text-text-primary">{r.employeeName}</td>
+                <td className="px-3 py-2 text-text-primary">
+                  {r.employeeName}
+                  {(r.employeePosition || r.employeeDepartment) && (
+                    <span className="block text-xs text-text-secondary font-normal">
+                      {[r.employeePosition, r.employeeDepartment].filter(Boolean).join(' · ')}
+                    </span>
+                  )}
+                </td>
                 <td className="px-3 py-2"><Badge color={TRACKING_BADGE[r.status].color}>{TRACKING_BADGE[r.status].label}</Badge></td>
                 <td className="px-3 py-2 text-text-secondary">{r.scorePct != null ? `${r.scorePct}%` : '—'}</td>
                 <td className="px-3 py-2 text-text-secondary">{r.signedAt ? new Date(r.signedAt).toLocaleString('es-ES') : '—'}</td>

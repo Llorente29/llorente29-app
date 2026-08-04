@@ -59,6 +59,7 @@ export default function TrainingCalendarView() {
   }, [activeAccountId])
 
   const empById = useMemo(() => new Map(staff.map(e => [e.id, e])), [staff])
+  const locationById = useMemo(() => new Map(locations.map(l => [l.id, l])), [locations])
   const positions = useMemo(() => [...new Set(staff.map(e => e.position).filter(Boolean))].sort(), [staff])
 
   function passesFilter(employeeId: string): boolean {
@@ -69,11 +70,25 @@ export default function TrainingCalendarView() {
     return true
   }
 
+  // Homónimos son reales (fichas distintas con el mismo nombre, en distinta
+  // cuenta/local) — visto en producción con dos "Pamela Guzmán Velásquez"
+  // (ids distintos, una en Sala y otra en Cocina). El Map de abajo agrupa por
+  // employeeId (nunca por nombre: dos ids nunca comparten entrada aquí), pero
+  // dos tarjetas con el mismo nombre y SIN nada más que las distinga eran
+  // indistinguibles a la vista — de ahí el aviso. Cada tarjeta lleva ahora
+  // puesto + local para que un vistazo baste.
+  function employeeDetail(employeeId: string): string {
+    const emp = empById.get(employeeId)
+    if (!emp) return ''
+    const loc = emp.locationId ? locationById.get(emp.locationId)?.name : null
+    return [emp.position, loc].filter(Boolean).join(' · ')
+  }
+
   const venceByEmployee = useMemo(() => {
-    const map = new Map<string, { name: string; items: TrainingGap[] }>()
+    const map = new Map<string, { name: string; detail: string; items: TrainingGap[] }>()
     for (const g of gaps) {
       if (!VENCE_KINDS.includes(g.gapKind) || !passesFilter(g.employeeId)) continue
-      const entry = map.get(g.employeeId) ?? { name: g.employeeName, items: [] }
+      const entry = map.get(g.employeeId) ?? { name: g.employeeName, detail: employeeDetail(g.employeeId), items: [] }
       entry.items.push(g)
       map.set(g.employeeId, entry)
     }
@@ -86,7 +101,7 @@ export default function TrainingCalendarView() {
       if (aBlocking !== bBlocking) return aBlocking ? -1 : 1
       return b[1].items.length - a[1].items.length
     })
-  }, [gaps, empById, locationFilter, positionFilter, blockingIds])
+  }, [gaps, empById, locationById, locationFilter, positionFilter, blockingIds])
 
   const caducaInternal = useMemo(
     () => gaps.filter(g => CADUCA_KINDS.includes(g.gapKind) && passesFilter(g.employeeId)),
@@ -159,12 +174,15 @@ export default function TrainingCalendarView() {
               <Card className="p-6 text-center text-sm text-text-secondary">Nadie tiene formación pendiente con este filtro.</Card>
             ) : (
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {venceByEmployee.map(([employeeId, { name, items }]) => {
+                {venceByEmployee.map(([employeeId, { name, detail, items }]) => {
                   const hasBlocking = items.some(i => blockingIds.has(i.courseId))
                   return (
                     <Card key={employeeId} className={`p-4 ${hasBlocking ? 'border-danger/40' : ''}`}>
                       <div className="flex items-center justify-between gap-2">
-                        <p className="font-semibold text-text-primary truncate">{name}</p>
+                        <div className="min-w-0">
+                          <p className="font-semibold text-text-primary truncate">{name}</p>
+                          {detail && <p className="text-xs text-text-secondary truncate">{detail}</p>}
+                        </div>
                         <Badge color={hasBlocking ? 'red' : 'gray'}>{items.length}</Badge>
                       </div>
                       <ul className="mt-2 space-y-1">
@@ -197,7 +215,9 @@ export default function TrainingCalendarView() {
                   <Card key={`int-${i}`} className="p-3 flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-sm text-text-primary truncate">{g.employeeName} · {g.courseTitle}</p>
-                      <p className="text-xs text-text-secondary">Formación interna</p>
+                      <p className="text-xs text-text-secondary truncate">
+                        Formación interna{employeeDetail(g.employeeId) ? ` · ${employeeDetail(g.employeeId)}` : ''}
+                      </p>
                     </div>
                     <Badge color={g.gapKind === 'caducado' ? 'red' : 'yellow'}>
                       {g.gapKind === 'caducado' ? 'Caducado' : g.daysLeft != null ? `${g.daysLeft} días` : 'Caduca pronto'}
@@ -208,7 +228,9 @@ export default function TrainingCalendarView() {
                   <Card key={`ext-${i}`} className="p-3 flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-sm text-text-primary truncate">{empById.get(formation.employeeId)?.name ?? '—'} · {formation.name}</p>
-                      <p className="text-xs text-text-secondary">Certificado externo</p>
+                      <p className="text-xs text-text-secondary truncate">
+                        Certificado externo{employeeDetail(formation.employeeId) ? ` · ${employeeDetail(formation.employeeId)}` : ''}
+                      </p>
                     </div>
                     <Badge color={status.color === 'red' ? 'red' : status.color === 'orange' ? 'yellow' : 'yellow'}>{status.label}</Badge>
                   </Card>
