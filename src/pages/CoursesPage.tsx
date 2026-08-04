@@ -26,6 +26,7 @@ import type {
 } from '../services/coursesService'
 import { generateSessionActaPdf, blobToDataUrl } from '../services/courseCertificatePdfService'
 import { adoptCourseForAccount } from '../services/courseAdoptionService'
+import TrainingCalendarView from '../components/personal/TrainingCalendarView'
 import {
   getSignedSectionImageUrl, getSignedSectionImageUrls, uploadOwnSectionImage, revertSectionImageToFolvy,
   uploadOwnCoverImage, revertCoverToFolvy,
@@ -102,6 +103,7 @@ export default function CoursesPage() {
   const [categoryFilter, setCategoryFilter] = useState<CourseCategory | 'todas'>('todas')
   const [levelFilter, setLevelFilter] = useState<CourseLevel | 'todos'>('todos')
   const [coverUrls, setCoverUrls] = useState<Record<string, string>>({})
+  const [view, setView] = useState<'catalogo' | 'calendario'>('catalogo')
 
   useEffect(() => {
     if (!activeAccountId) return
@@ -202,6 +204,25 @@ export default function CoursesPage() {
         <Button onClick={() => setShowCreate(true)}><Plus size={16} /> Nuevo curso</Button>
       </div>
 
+      <div className="flex gap-1 bg-page p-1 rounded-lg mb-6 w-fit">
+        <button
+          onClick={() => setView('catalogo')}
+          className={`px-4 py-1.5 rounded-md text-sm font-medium transition-base ${view === 'catalogo' ? 'bg-card text-text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary'}`}
+        >
+          Catálogo
+        </button>
+        <button
+          onClick={() => setView('calendario')}
+          className={`px-4 py-1.5 rounded-md text-sm font-medium transition-base ${view === 'calendario' ? 'bg-card text-text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary'}`}
+        >
+          Calendario
+        </button>
+      </div>
+
+      {view === 'calendario' ? (
+        <TrainingCalendarView />
+      ) : (
+        <>
       {loadError && (
         <Alert type="error" className="mb-4">
           No se pudo cargar el catálogo de cursos. Reintenta o avisa si persiste.
@@ -347,6 +368,8 @@ export default function CoursesPage() {
             </div>
           )
         })()
+      )}
+        </>
       )}
 
       <CreateCourseModal

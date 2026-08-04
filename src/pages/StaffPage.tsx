@@ -10,6 +10,7 @@ import SendMessageModal from '../components/personal/SendMessageModal'
 import AccesoTrabajadorPanel from '../components/personal/AccesoTrabajadorPanel'
 import InsightsPage from './InsightsPage'
 import { fetchStaffRoles, type StaffRole } from '../services/staffRoleService'
+import { getEmployeeTrainingStatus, type EmployeeTrainingStatus } from '../services/trainingPathService'
 import {
   createEmployeeWithAccount,
   deactivateEmployeeAccount,
@@ -345,6 +346,19 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
     fetchStaffRoles(accountId).then(r => { if (!cancel) setStaffRoles(r.filter(x => x.active)) })
     return () => { cancel = true }
   }, [accountId])
+
+  // Semáforo de formación (onboarding formativo, §3.2 del diseño): 🔴 falta
+  // un curso bloqueante, 🟡 al día en bloqueantes pero quedan del itinerario,
+  // 🟢 al día. Avisa — nunca bloquea nada desde aquí.
+  const [trainingStatus, setTrainingStatus] = useState<EmployeeTrainingStatus | null>(null)
+  useEffect(() => {
+    if (!accountId || !employee.id) { setTrainingStatus(null); return }
+    let cancel = false
+    getEmployeeTrainingStatus(accountId, employee.id)
+      .then(s => { if (!cancel) setTrainingStatus(s) })
+      .catch(() => { if (!cancel) setTrainingStatus(null) })
+    return () => { cancel = true }
+  }, [accountId, employee.id])
   const [tab, setTab] = useState('info')
   const [clocking, setClocking] = useState(false)
   const [clockWarn, setClockWarn] = useState<{ type: 'blocked' | 'rounded' | 'real'; msg: string } | null>(null)
@@ -467,7 +481,30 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
             <div className="col-span-2 flex items-center gap-4 pb-3 border-b border-border-default">
               <EmployeeAvatar employee={emp} size="xl" />
               <div className="flex-1 min-w-0">
-                <p className="font-bold text-lg truncate text-text-primary">{emp.name || '(sin nombre)'}</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="font-bold text-lg truncate text-text-primary">{emp.name || '(sin nombre)'}</p>
+                  {trainingStatus && (
+                    <span
+                      className={`inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${
+                        trainingStatus.status === 'rojo' ? 'bg-danger-bg text-danger'
+                          : trainingStatus.status === 'amarillo' ? 'bg-warning-bg text-warning'
+                            : 'bg-success-bg text-success'
+                      }`}
+                      title={
+                        trainingStatus.blockingPending.length > 0
+                          ? `No puede manipular alimentos — falta: ${trainingStatus.blockingPending.join(', ')}`
+                          : trainingStatus.otherPending.length > 0
+                            ? `Pendiente del itinerario de incorporación: ${trainingStatus.otherPending.join(', ')}`
+                            : 'Formación de incorporación al día'
+                      }
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${
+                        trainingStatus.status === 'rojo' ? 'bg-danger' : trainingStatus.status === 'amarillo' ? 'bg-warning' : 'bg-success'
+                      }`} />
+                      {trainingStatus.status === 'rojo' ? 'No puede manipular alimentos' : trainingStatus.status === 'amarillo' ? 'Formación pendiente' : 'Formación al día'}
+                    </span>
+                  )}
+                </div>
                 <p className="text-sm text-text-secondary">{emp.position || '(sin puesto)'} · {emp.contractType || '(sin contrato)'}</p>
               </div>
               <PhotoUploader employee={emp} onChange={photo => update('photo', photo)} />

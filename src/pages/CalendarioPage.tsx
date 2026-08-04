@@ -54,6 +54,14 @@ import { fetchPayrollCosts } from '../services/payrollService'
 import { fetchSalesByLocation, fetchDemandProfile, fetchDemandForecast, type DemandProfile, type DemandForecast } from '../services/teamReportsService'
 import { fetchStaffRoles, roleColor, upsertStaffRole, deleteStaffRole, ROLE_COLOR_KEYS, type StaffRole, type RoleKind } from '../services/staffRoleService'
 import { fetchLaborModel, saveLaborModelRow, fetchLaborIntensity, setLaborIntensity, fetchLaborRequirement, type LaborModelRow, type LaborDriver, type LaborRequirementRow } from '../services/teamLaborService'
+import { getTrainingComplianceMatrix } from '../services/trainingComplianceService'
+import { listOnboardingCourseFlags } from '../services/trainingPathService'
+
+// Semáforo de formación en el cuadrante (onboarding formativo, pieza 3):
+// "cero falsos positivos" — solo se enseña en los puestos que de verdad
+// manipulan alimentos. Mismos puestos que "Itinerario cocina" (onboarding
+// núcleo). Avisa, nunca bloquea: decisión firme de Julio.
+const KITCHEN_ROLES = ['Jefe de cocina', 'Cocinero', 'Ayudante cocina']
 
 const DAYS: DayOfWeek[] = [0, 1, 2, 3, 4, 5, 6]
 
@@ -137,6 +145,44 @@ export default function CalendarioPage() {
       .catch(() => { if (!cancelled) setVacations([]) })
     return () => { cancelled = true }
   }, [activeAccountId])
+
+  // Semáforo de formación (pieza 3): quién de los puestos de cocina tiene
+  // algún curso BLOQUEANTE del itinerario sin superar. Reutiliza
+  // training_compliance_matrix (ya calculada, C2/C4) — no se recalcula
+  // "¿está vigente?" por cuarta vez en el módulo.
+  const [trainingGapsByEmployee, setTrainingGapsByEmployee] = useState<Map<string, string[]>>(new Map())
+  useEffect(() => {
+    if (!activeAccountId) { setTrainingGapsByEmployee(new Map()); return }
+    let cancelled = false
+    Promise.all([getTrainingComplianceMatrix(activeAccountId), listOnboardingCourseFlags()])
+      .then(([matrix, flags]) => {
+        if (cancelled) return
+        const blockingByCode = new Map(flags.filter(f => f.isBlocking).map(f => [f.code, f.title]))
+        const gaps = new Map<string, string[]>()
+        for (const row of matrix) {
+          const missing: string[] = []
+          for (const [code, title] of blockingByCode) {
+            const cell = row.courses[code]
+            if (cell && cell.state !== 'vigente' && cell.state !== 'no_aplica') missing.push(title)
+          }
+          if (missing.length > 0) gaps.set(row.employeeId, missing)
+        }
+        setTrainingGapsByEmployee(gaps)
+      })
+      .catch(() => { if (!cancelled) setTrainingGapsByEmployee(new Map()) })
+    return () => { cancelled = true }
+  }, [activeAccountId])
+
+  // Solo cuenta donde importa: puesto de cocina + gap bloqueante. Un
+  // camarero con el mismo gap no se marca aquí (regla de oro: cero falsos
+  // positivos) — sí sale en el semáforo general de su ficha (pieza 2).
+  const redEmployeeIds = useMemo(() => {
+    const set = new Set<string>()
+    for (const e of employees) {
+      if (KITCHEN_ROLES.includes(e.position) && trainingGapsByEmployee.has(e.id)) set.add(e.id)
+    }
+    return set
+  }, [employees, trainingGapsByEmployee])
 
   async function refresh() {
     if (!locationId) return
@@ -515,6 +561,30 @@ export default function CalendarioPage() {
     }
   }
 
+  // Aviso destacado al publicar (pieza 3): informa, NUNCA bloquea — "se puede
+  // publicar igualmente" es la regla firme de Julio. Solo mira a quién hay
+  // REALMENTE asignado esta semana en cells, cruzado con redEmployeeIds.
+  const [publishWarning, setPublishWarning] = useState<{ name: string; missing: string[] }[] | null>(null)
+
+  function assignedThisWeekIds(): Set<string> {
+    const ids = new Set<string>()
+    for (const byDay of Object.values(cells)) {
+      for (const list of Object.values(byDay)) {
+        for (const id of list) ids.add(id)
+      }
+    }
+    return ids
+  }
+
+  function requestPublish() {
+    const empById = new Map(employees.map(e => [e.id, e]))
+    const affected = [...assignedThisWeekIds()]
+      .filter(id => redEmployeeIds.has(id))
+      .map(id => ({ name: empById.get(id)?.name || id, missing: trainingGapsByEmployee.get(id) || [] }))
+    if (affected.length > 0) setPublishWarning(affected)
+    else doPublish()
+  }
+
   function shiftWeek(deltaDays: number) {
     if (dirty && !confirm('Tienes cambios sin guardar. ¿Cambiar de semana?')) return
     setWeekStart(prev => addDays(prev, deltaDays))
@@ -578,7 +648,7 @@ export default function CalendarioPage() {
 
         {/* Secundaria fuerte */}
         <button
-          onClick={doPublish}
+          onClick={requestPublish}
           className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-accent text-accent bg-card text-sm font-semibold hover:bg-accent-bg transition-base"
           title="Publicar para que los empleados lo vean en su móvil"
         >
@@ -926,6 +996,8 @@ export default function CalendarioPage() {
                           assignedIds={assignedIds}
                           allEmployees={employees}
                           workloads={workloads}
+                          redEmployeeIds={redEmployeeIds}
+                          trainingGapsByEmployee={trainingGapsByEmployee}
                           onChangeAssigned={(ids) => setCellAssign(t.id, d, ids)}
                           onChangeNeeded={(v) => setOverride(t.id, d, v === baseCov ? null : v)}
                         />
@@ -969,6 +1041,14 @@ export default function CalendarioPage() {
             setCellAssign(gapModal.template_id, gapModal.day_of_week, [...cur, empId])
             setGapModal(null)
           }}
+        />
+      )}
+
+      {publishWarning && (
+        <PublishWarningModal
+          affected={publishWarning}
+          onCancel={() => setPublishWarning(null)}
+          onPublishAnyway={() => { setPublishWarning(null); doPublish() }}
         />
       )}
 
@@ -1385,13 +1465,15 @@ interface CellProps {
   assignedIds: string[]
   allEmployees: Employee[]
   workloads: EmployeeWorkload[]
+  redEmployeeIds: Set<string>
+  trainingGapsByEmployee: Map<string, string[]>
   onChangeAssigned: (ids: string[]) => void
   onChangeNeeded: (v: number) => void
 }
 
 function Cell({
   template, day, needed, baseCoverage, isOverridden,
-  assignedIds, allEmployees, workloads,
+  assignedIds, allEmployees, workloads, redEmployeeIds, trainingGapsByEmployee,
   onChangeAssigned, onChangeNeeded,
 }: CellProps) {
   const [open, setOpen] = useState(false)
@@ -1447,14 +1529,19 @@ function Cell({
           const wl = wlById.get(id)
           const code = emp?.shiftCode || emp?.name?.slice(0, 3).toUpperCase() || '?'
           const exceedsContract = wl && wl.assigned_hours > wl.contracted_hours * 1.10
+          const trainingGap = redEmployeeIds.has(id) ? trainingGapsByEmployee.get(id) : undefined
+          const title = trainingGap ? `${emp?.name || ''} — falta formación obligatoria: ${trainingGap.join(', ')}` : (emp?.name || '')
           return (
             <div
               key={`${id}-${i}`}
-              className={`group flex items-center justify-between gap-1 rounded px-1.5 py-0.5 cursor-default ${
+              className={`group relative flex items-center justify-between gap-1 rounded px-1.5 py-0.5 cursor-default ${
                 exceedsContract ? 'bg-danger-bg text-danger' : 'bg-accent-bg text-accent'
               }`}
-              title={emp?.name || ''}
+              title={title}
             >
+              {trainingGap && (
+                <span className="absolute -top-1 -left-1 w-2.5 h-2.5 rounded-full bg-danger border-2 border-card" aria-label="Falta formación obligatoria" />
+              )}
               <span className="text-xs font-bold">{code}</span>
               <button
                 onClick={() => removeAt(i)}
@@ -1572,6 +1659,59 @@ interface SuggestionsModalProps {
   vacations: VacationRequest[]
   onClose: () => void
   onApply: (empId: string) => void
+}
+
+// Aviso al publicar (pieza 3 onboarding): informa, no bloquea — "se puede
+// publicar igualmente" es la regla firme del diseño.
+function PublishWarningModal({ affected, onCancel, onPublishAnyway }: {
+  affected: { name: string; missing: string[] }[]
+  onCancel: () => void
+  onPublishAnyway: () => void
+}) {
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onCancel}>
+      <div
+        className="bg-card rounded-lg shadow-xl max-w-lg w-full overflow-hidden flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-5 py-3 border-b border-border-default bg-danger text-white">
+          <div className="flex items-center gap-2">
+            <AlertTriangle size={18} />
+            <div className="font-semibold">
+              {affected.length === 1 ? '1 persona' : `${affected.length} personas`} sin formación obligatoria acreditada
+            </div>
+          </div>
+        </div>
+
+        <div className="p-4 space-y-2 max-h-[50vh] overflow-y-auto">
+          <p className="text-sm text-text-secondary">
+            No deberían manipular alimentos sin haberla superado. Se puede publicar igualmente — este aviso no bloquea el cuadrante.
+          </p>
+          {affected.map((a, i) => (
+            <div key={i} className="border border-danger/30 bg-danger-bg rounded-lg px-3 py-2">
+              <p className="text-sm font-semibold text-text-primary">{a.name}</p>
+              <p className="text-xs text-danger mt-0.5">Falta: {a.missing.join(', ')}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="px-4 py-3 border-t border-border-default flex justify-end gap-2">
+          <button
+            onClick={onCancel}
+            className="px-3.5 py-2 rounded-lg border border-border-default text-text-secondary text-sm font-medium hover:bg-page transition-base"
+          >
+            Cancelar y revisar
+          </button>
+          <button
+            onClick={onPublishAnyway}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-accent text-text-on-accent text-sm font-semibold hover:bg-accent-hover transition-base"
+          >
+            <Megaphone size={15} /> Publicar de todas formas
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function SuggestionsModal({ gap, template, weekStart, cells, employees, vacations, onClose, onApply }: SuggestionsModalProps) {
