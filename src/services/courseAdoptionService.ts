@@ -80,6 +80,17 @@ export async function adoptCourseForAccount(
       pass_threshold_pct: g.pass_threshold_pct,
       version: 1,
       status: g.status,
+      // Campos añadidos en C4/C5, posteriores a este servicio (C3-A): sin
+      // copiarlos, la copia nacía con category/level/recommended_order NULL
+      // ("Sin clasificar" en el catálogo) y — más grave — requires_practical
+      // en false aunque la plantilla exigiera práctica, dejando "vigente"
+      // sin verificación real (bug C5 pieza A).
+      category: g.category,
+      business_types: g.business_types,
+      level: g.level,
+      recommended_order: g.recommended_order,
+      requires_practical: g.requires_practical,
+      cover_url: g.cover_url,
     })
     .select('id')
     .single()
@@ -126,6 +137,24 @@ export async function adoptCourseForAccount(
         )
         if (error) throw error
       }
+    }
+
+    // Gestos de verificación práctica (C4): si no se clonan, una copia de un
+    // curso con requires_practical=true nace SIN items — practical_ok se
+    // calcula "vacuamente true" (ver training_compliance_matrix), así que la
+    // cuenta vería "vigente" sin que nadie verifique nada. Mismo bug de fondo
+    // que el de category/requires_practical, sobre datos en vez de columnas.
+    const { data: practicalItems, error: practicalErr } = await sb
+      .from('course_practical_item')
+      .select('*')
+      .eq('course_id', globalCourseId)
+      .order('ord', { ascending: true })
+    if (practicalErr) throw practicalErr
+    if (practicalItems && practicalItems.length > 0) {
+      const { error } = await sb.from('course_practical_item').insert(
+        practicalItems.map(p => ({ course_id: newCourseId, ord: p.ord, text: p.text, help_text: p.help_text })),
+      )
+      if (error) throw error
     }
   } catch (e) {
     // Limpieza best-effort: si algo falló a mitad de la clonación, no dejar

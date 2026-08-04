@@ -5178,6 +5178,7 @@ export type Database = {
           business_types: string[]
           category: string | null
           code: string
+          cover_url: string | null
           created_at: string
           created_by: string | null
           delivery_mode: string
@@ -5202,6 +5203,7 @@ export type Database = {
           business_types?: string[]
           category?: string | null
           code: string
+          cover_url?: string | null
           created_at?: string
           created_by?: string | null
           delivery_mode: string
@@ -5226,6 +5228,7 @@ export type Database = {
           business_types?: string[]
           category?: string | null
           code?: string
+          cover_url?: string | null
           created_at?: string
           created_by?: string | null
           delivery_mode?: string

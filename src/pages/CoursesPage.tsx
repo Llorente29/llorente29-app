@@ -14,6 +14,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   GraduationCap, Plus, ArrowLeft, BookOpen, ListChecks, Users2, ClipboardList,
   Trash2, Pencil, Check, X as XIcon, AlertTriangle, ShieldCheck, ClipboardCheck,
+  Image as ImageIcon, Clock, ChefHat, Truck, UtensilsCrossed, Leaf, FolderOpen,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { supabase } from '../lib/supabase'
@@ -26,7 +27,8 @@ import type {
 import { generateSessionActaPdf, blobToDataUrl } from '../services/courseCertificatePdfService'
 import { adoptCourseForAccount } from '../services/courseAdoptionService'
 import {
-  getSignedSectionImageUrl, uploadOwnSectionImage, revertSectionImageToFolvy,
+  getSignedSectionImageUrl, getSignedSectionImageUrls, uploadOwnSectionImage, revertSectionImageToFolvy,
+  uploadOwnCoverImage, revertCoverToFolvy,
 } from '../services/courseImagesService'
 import type { Employee, Location } from '../types'
 
@@ -66,6 +68,29 @@ const LEVEL_LABEL: Record<CourseLevel, string> = {
   mando: 'Mando',
 }
 
+// Capa 3 de la portada (C5 §B): si no hay cover_url ni imagen de sección,
+// fondo de color + icono por categoría. Nunca gris vacío.
+const CATEGORY_ICON: Record<CourseCategory | 'sin_categoria', typeof ShieldCheck> = {
+  cumplimiento: ShieldCheck,
+  cocina: ChefHat,
+  delivery: Truck,
+  sala: UtensilsCrossed,
+  equipo: Users2,
+  producto: ClipboardList,
+  sostenibilidad: Leaf,
+  sin_categoria: FolderOpen,
+}
+const CATEGORY_BG: Record<CourseCategory | 'sin_categoria', string> = {
+  cumplimiento: 'bg-blue-50 text-blue-400',
+  cocina: 'bg-orange-50 text-orange-400',
+  delivery: 'bg-teal-50 text-teal-400',
+  sala: 'bg-purple-50 text-purple-400',
+  equipo: 'bg-indigo-50 text-indigo-400',
+  producto: 'bg-pink-50 text-pink-400',
+  sostenibilidad: 'bg-green-50 text-green-400',
+  sin_categoria: 'bg-gray-50 text-gray-400',
+}
+
 export default function CoursesPage() {
   const { activeAccountId, staff, locations } = useApp()
   const [courses, setCourses] = useState<Course[]>([])
@@ -76,6 +101,7 @@ export default function CoursesPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [categoryFilter, setCategoryFilter] = useState<CourseCategory | 'todas'>('todas')
   const [levelFilter, setLevelFilter] = useState<CourseLevel | 'todos'>('todos')
+  const [coverUrls, setCoverUrls] = useState<Record<string, string>>({})
 
   useEffect(() => {
     if (!activeAccountId) return
@@ -91,6 +117,19 @@ export default function CoursesPage() {
       .finally(() => { if (!cancel) setLoading(false) })
     return () => { cancel = true }
   }, [activeAccountId])
+
+  // Resolución de portadas en LOTE (capas 1+2, C5 §B) para toda la rejilla a
+  // la vez — una tarjeta por curso sería N llamadas; getSignedSectionImageUrls
+  // ya está pensada para recibir varios paths de una sola vez.
+  useEffect(() => {
+    const candidates = courses
+      .map(c => c.coverUrl ?? c.firstSectionMediaUrl)
+      .filter((p): p is string => !!p)
+    if (candidates.length === 0) { setCoverUrls({}); return }
+    let cancel = false
+    getSignedSectionImageUrls(candidates).then(map => { if (!cancel) setCoverUrls(map) })
+    return () => { cancel = true }
+  }, [courses])
 
   async function refreshCourses() {
     if (!activeAccountId) return
@@ -205,23 +244,17 @@ export default function CoursesPage() {
                       <h2 className="font-display text-sm uppercase tracking-wide text-text-secondary mb-3">
                         {CATEGORY_LABEL[key]}
                       </h2>
-                      <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                         {groups.get(key)!.map(c => (
-                          <Card key={c.id} className="p-4" onClick={() => setSelectedId(c.id)}>
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="min-w-0">
-                                <p className="font-semibold text-text-primary truncate">{c.title}</p>
-                                <p className="text-xs text-text-secondary mt-0.5">{c.legalBasis || 'Sin base legal declarada'}</p>
-                              </div>
-                              {c.accountId === null && <Badge color="blue">Plantilla Folvy</Badge>}
-                            </div>
-                            <div className="flex items-center gap-2 mt-3 flex-wrap">
-                              <Badge color={STATUS_BADGE[c.status].color}>{STATUS_BADGE[c.status].label}</Badge>
-                              <Badge color="gray">{DELIVERY_LABEL[c.deliveryMode]}</Badge>
-                              {c.level && <Badge color="gray">{LEVEL_LABEL[c.level]}</Badge>}
-                              {c.appccPrerequisite && <Badge color="yellow">Prerrequisito APPCC</Badge>}
-                            </div>
-                          </Card>
+                          <CourseCard
+                            key={c.id}
+                            course={c}
+                            imageUrl={(() => {
+                              const candidate = c.coverUrl ?? c.firstSectionMediaUrl
+                              return candidate ? coverUrls[candidate] ?? null : null
+                            })()}
+                            onClick={() => setSelectedId(c.id)}
+                          />
                         ))}
                       </div>
                     </div>
@@ -240,6 +273,47 @@ export default function CoursesPage() {
         onCreated={async () => { setShowCreate(false); await refreshCourses() }}
       />
     </div>
+  )
+}
+
+// Tarjeta del catálogo (C5 §C): portada 16:9 arriba, título grande, UNA línea
+// discreta de metadatos. Base legal / is_mandatory / appcc_prerequisite /
+// level / "Plantilla Folvy" van al detalle (CourseDetail) — esto es un
+// catálogo, no una ficha de auditor. Referencia: Typsy / Flow Learning.
+function CourseCard({ course, imageUrl, onClick }: { course: Course; imageUrl: string | null; onClick: () => void }) {
+  const [imageFailed, setImageFailed] = useState(false)
+  const showImage = !!imageUrl && !imageFailed
+  const categoryKey = course.category ?? 'sin_categoria'
+  const CategoryIcon = CATEGORY_ICON[categoryKey]
+  const isDraft = course.status === 'draft'
+
+  return (
+    <Card className={`overflow-hidden ${isDraft ? 'opacity-70' : ''}`} onClick={onClick}>
+      <div className={`w-full aspect-video flex items-center justify-center ${showImage ? '' : CATEGORY_BG[categoryKey]}`}>
+        {showImage ? (
+          <img
+            src={imageUrl!}
+            alt={course.title}
+            className="w-full h-full object-cover"
+            onError={() => setImageFailed(true)}
+          />
+        ) : (
+          <CategoryIcon size={32} />
+        )}
+      </div>
+      <div className="p-4">
+        <p className="font-semibold text-text-primary line-clamp-2">{course.title}</p>
+        <p className="text-xs text-text-secondary mt-1.5 inline-flex items-center gap-1">
+          {course.estimatedMinutes && <Clock size={11} />}
+          {[
+            course.estimatedMinutes ? `${course.estimatedMinutes} min` : null,
+            STATUS_BADGE[course.status].label,
+            course.deliveryMode === 'solo_archivo' ? 'Solo archivo' : null,
+            course.requiresPractical ? 'Requiere práctica' : null,
+          ].filter(Boolean).join(' · ')}
+        </p>
+      </div>
+    </Card>
   )
 }
 
@@ -354,6 +428,18 @@ function CourseDetail({ course, accountId, staff, locations, onBack, onChanged, 
         {!editable && <Badge color="blue">Plantilla Folvy · solo lectura</Badge>}
       </div>
 
+      {/* Información de "ficha de auditor" (C5 §C): se saca de la tarjeta del
+          catálogo y aterriza aquí, donde sí importa. */}
+      <div className="mb-5">
+        <p className="text-sm text-text-secondary">{course.legalBasis || 'Sin base legal declarada'}</p>
+        <div className="flex items-center gap-2 mt-2 flex-wrap">
+          <Badge color="gray">{DELIVERY_LABEL[course.deliveryMode]}</Badge>
+          {course.level && <Badge color="gray">{LEVEL_LABEL[course.level]}</Badge>}
+          {course.isMandatory && <Badge color="blue">Obligatorio</Badge>}
+          {course.appccPrerequisite && <Badge color="yellow">Prerrequisito APPCC</Badge>}
+        </div>
+      </div>
+
       <Tabs
         value={tab}
         onChange={v => setTab(v as typeof tab)}
@@ -436,6 +522,17 @@ function ContenidoTab({ course, accountId, editable, onChanged, onAdopted }: {
           </div>
         </Alert>
       )}
+
+      <section>
+        <h2 className="font-semibold text-text-primary flex items-center gap-2 mb-2"><ImageIcon size={16} /> Portada</h2>
+        <CoverCard
+          course={course}
+          editable={editable}
+          accountId={accountId}
+          adoptedFromCourseId={course.adoptedFromCourseId}
+          onChanged={load}
+        />
+      </section>
 
       <section>
         <div className="flex items-center justify-between mb-2">
@@ -644,6 +741,86 @@ function AddSectionButton({ courseId, nextOrd, onAdded }: { courseId: string; ne
         </div>
       </Modal>
     </>
+  )
+}
+
+function CoverCard({ course, editable, accountId, adoptedFromCourseId, onChanged }: {
+  course: Course
+  editable: boolean
+  accountId: string
+  adoptedFromCourseId: string | null
+  onChanged: () => void
+}) {
+  const [imageUrl, setImageUrl] = useState<string | null>(null)
+  const [imageFailed, setImageFailed] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    let cancel = false
+    setImageFailed(false)
+    getSignedSectionImageUrl(course.coverUrl).then(url => { if (!cancel) setImageUrl(url) })
+    return () => { cancel = true }
+  }, [course.coverUrl])
+
+  async function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setBusy(true)
+    setError(null)
+    try {
+      await uploadOwnCoverImage(accountId, course.id, file, course.coverUrl)
+      onChanged()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo subir la portada')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function revertToFolvy() {
+    setBusy(true)
+    setError(null)
+    try {
+      await revertCoverToFolvy(course.id, accountId)
+      onChanged()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo volver a la portada de Folvy')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Card className="p-4">
+      <div className="w-full aspect-video rounded-lg overflow-hidden bg-page mb-3">
+        {imageUrl && !imageFailed ? (
+          <img src={imageUrl} alt={course.title} className="w-full h-full object-cover" onError={() => setImageFailed(true)} />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-text-secondary">
+            <ImageIcon size={28} />
+          </div>
+        )}
+      </div>
+      {editable && (
+        <div>
+          {error && <p className="text-xs text-danger mb-2">{error}</p>}
+          <div className="flex items-center gap-2 flex-wrap">
+            <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleFileSelected} />
+            <Button size="sm" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={busy}>
+              {busy ? 'Subiendo…' : 'Cambiar portada'}
+            </Button>
+            {adoptedFromCourseId && (
+              <Button size="sm" variant="ghost" onClick={revertToFolvy} disabled={busy}>
+                Volver a la portada de Folvy
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+    </Card>
   )
 }
 

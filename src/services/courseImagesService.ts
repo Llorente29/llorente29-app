@@ -114,6 +114,98 @@ export async function uploadOwnSectionImage(
 }
 
 /**
+ * Sube una portada propia (C5) para un curso de la cuenta y actualiza su
+ * cover_url. Mismo patrón que uploadOwnSectionImage: mismo bucket privado
+ * (course-section-images — la RLS solo mira el primer segmento de la ruta,
+ * {account_id}/..., así que no hace falta un bucket ni una policy nueva),
+ * subcarpeta 'covers/' para no mezclar con las fotos de sección.
+ * El curso DEBE tener account_id (adoptar primero si aún es plantilla global
+ * — mismo requisito que "Usar foto propia").
+ */
+export async function uploadOwnCoverImage(
+  accountId: string,
+  courseId: string,
+  file: File,
+  previousCoverUrl?: string | null,
+): Promise<string> {
+  const sb = requireSupabase()
+
+  if (!ALLOWED_TYPES.includes(file.type)) {
+    throw new Error('Formato no permitido. Sube una foto en JPG, PNG o WEBP.')
+  }
+  if (file.size > MAX_UPLOAD_MB * 1024 * 1024) {
+    throw new Error(`Foto demasiado grande (máx ${MAX_UPLOAD_MB} MB antes de comprimir).`)
+  }
+
+  const compressed = await compressImage(file, 1600, 0.75)
+  const path = `${accountId}/covers/${courseId}-${Date.now()}.jpg`
+
+  const { error: upErr } = await sb.storage.from(SECTION_IMAGES_BUCKET).upload(path, compressed, {
+    contentType: 'image/jpeg',
+    upsert: false,
+  })
+  if (upErr) { console.error('[courseImagesService] upload cover', upErr); throw upErr }
+
+  const { error: updErr } = await sb.from('course').update({ cover_url: path }).eq('id', courseId)
+  if (updErr) {
+    await sb.storage.from(SECTION_IMAGES_BUCKET).remove([path])
+    console.error('[courseImagesService] actualizar cover_url', updErr)
+    throw updErr
+  }
+
+  if (previousCoverUrl && previousCoverUrl.startsWith(`${accountId}/`) && previousCoverUrl !== path) {
+    try {
+      await sb.storage.from(SECTION_IMAGES_BUCKET).remove([previousCoverUrl])
+    } catch {
+      // no bloquea la subida ya confirmada
+    }
+  }
+
+  return path
+}
+
+/**
+ * "Volver a la portada de Folvy": revierte la portada de una copia ADOPTADA
+ * al cover_url que tenga hoy la plantilla global de origen (nunca a NULL a
+ * secas: si Folvy no tiene portada propia, la tarjeta cae sola a la capa 2/3
+ * de la resolución — no es un borrado unilateral de la cuenta).
+ */
+export async function revertCoverToFolvy(courseId: string, accountId: string): Promise<string | null> {
+  const sb = requireSupabase()
+
+  const { data: course, error: cErr } = await sb
+    .from('course')
+    .select('adopted_from_course_id, cover_url')
+    .eq('id', courseId)
+    .single()
+  if (cErr) throw cErr
+  if (!course.adopted_from_course_id) {
+    throw new Error('Este curso no es una copia adoptada de una plantilla de Folvy: no hay portada a la que volver.')
+  }
+
+  const { data: origin, error: oErr } = await sb
+    .from('course')
+    .select('cover_url')
+    .eq('id', course.adopted_from_course_id)
+    .single()
+  if (oErr) throw oErr
+  const originCoverUrl = origin?.cover_url ?? null
+
+  const { error: updErr } = await sb.from('course').update({ cover_url: originCoverUrl }).eq('id', courseId)
+  if (updErr) throw updErr
+
+  if (course.cover_url && course.cover_url.startsWith(`${accountId}/`)) {
+    try {
+      await sb.storage.from(SECTION_IMAGES_BUCKET).remove([course.cover_url])
+    } catch {
+      // no bloquea la reversión ya confirmada
+    }
+  }
+
+  return originCoverUrl
+}
+
+/**
  * "Volver a la imagen de Folvy": revierte la sección de una copia ADOPTADA a
  * la imagen que tenga hoy la sección correspondiente en la plantilla global
  * (nunca a NULL a secas — si Folvy aún no tiene imagen para esa sección,
