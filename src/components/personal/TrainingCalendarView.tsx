@@ -21,7 +21,7 @@ import { fetchAllFormations, getFormationStatus } from '@/services/formationsSer
 import type { Formation } from '@/types/personal'
 
 const GAP_DAYS_AHEAD = 30
-const VENCE_KINDS: TrainingGap['gapKind'][] = ['nunca_hecho', 'sin_firmar', 'falta_practica']
+const VENCE_KINDS: TrainingGap['gapKind'][] = ['nunca_hecho', 'sin_firmar', 'en_curso', 'falta_practica']
 const CADUCA_KINDS: TrainingGap['gapKind'][] = ['caducado', 'caduca_pronto']
 const MONTH_LABELS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
 
