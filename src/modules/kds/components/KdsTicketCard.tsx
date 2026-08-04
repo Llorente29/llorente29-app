@@ -25,6 +25,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Check, ChefHat, Undo2, AlertTriangle } from 'lucide-react'
 import type { KdsTicket, KdsLine, KdsLineChild } from '../services/kdsService'
 import { ticketCode, channelBadge, timeLevel, timeChipClasses } from '../kdsUtils'
+import { allergenLabel, type AllergenCode } from '@/modules/kitchen/lib/allergens'
 
 const SIN_ESTACION = '__none__'
 
@@ -151,7 +152,16 @@ export default function KdsTicketCard({
       <header className="px-3 py-2.5 bg-zinc-900/60 border-b border-zinc-700">
         <div className="flex items-center gap-2">
           <BrandAvatar name={ticket.brand} logoUrl={ticket.brand_logo_url} />
-          <span className="text-lg font-extrabold tabular-nums text-zinc-100 font-display flex-1 min-w-0 truncate">
+          {/* Auditoría externa (2.5): el auditor propuso ocultar este código
+              por "ruido" -- descartado por Julio, es lo que pide soporte de
+              la plataforma para localizar un pedido, no es ruido. Se queda
+              visible pero deja de competir con el tiempo (que es lo que el
+              cocinero mira primero): pequeño y gris en vez de el elemento
+              más grande y brillante de la cabecera. */}
+          <span
+            className="text-xs text-zinc-400 tabular-nums font-mono flex-1 min-w-0 truncate"
+            title="Referencia de la plataforma — para soporte"
+          >
             {ticketCode(ticket.external_tab_ref, ticket.external_ref)}
           </span>
           <span className={`px-2 py-0.5 rounded-md text-sm font-bold tabular-nums shrink-0 ${timeChipClasses(level)}`}>
@@ -309,7 +319,7 @@ function KdsLineRow({ line, onMarkLine, onOpenCook }: {
               <span className="text-[15px] font-medium">{line.name}</span>
               {clickable && <ChefHat size={13} className="inline ml-1.5 -mt-0.5 text-zinc-500" />}
               {line.allergens.length > 0 && (
-                <span className="ml-1.5 text-[#E8B84B] text-xs align-middle" title={line.allergens.join(', ')}>
+                <span className="ml-1.5 text-[#E8B84B] text-xs align-middle" title={line.allergens.map(a => allergenLabel(a as AllergenCode)).join(', ')}>
                   ⚠ {line.allergens.length}
                 </span>
               )}

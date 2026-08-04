@@ -11,6 +11,7 @@ import { Component, useEffect, useState, type ErrorInfo, type ReactNode } from '
 import { X, AlertTriangle, ImageOff, Loader2 } from 'lucide-react'
 import { getRecipe, type KdsRecipe, type AllergenState } from '../services/kdsService'
 import { roundQty } from '../kdsUtils'
+import { allergenLabel, type AllergenCode } from '@/modules/kitchen/lib/allergens'
 
 interface CookModeTarget {
   menuItemId: string
@@ -25,15 +26,13 @@ interface CookModePanelProps {
   locationId?: string | null
 }
 
-const ALLERGEN_LABELS: Record<string, string> = {
-  gluten: 'Gluten', crustaceos: 'Crustáceos', huevo: 'Huevo', pescado: 'Pescado',
-  cacahuetes: 'Cacahuetes', soja: 'Soja', lacteos: 'Lácteos', frutos_secos: 'Frutos secos',
-  apio: 'Apio', mostaza: 'Mostaza', sesamo: 'Sésamo', sulfitos: 'Sulfitos',
-  altramuces: 'Altramuces', moluscos: 'Moluscos',
-}
-function allergenLabel(code: string): string {
-  return ALLERGEN_LABELS[code] ?? code
-}
+// 🔴 Auditoría externa: aquí vivía un ALLERGEN_LABELS local con claves en
+// ESPAÑOL (gluten/crustaceos/huevo...) que no casaban con AllergenCode, el
+// código estable en inglés-neutro que persiste la BBDD (gluten/crustaceans/
+// eggs...) — solo 'gluten' traducía de verdad, los otros 13 caían al
+// fallback `?? code` y salían en inglés. Se sustituye por la fuente única
+// (src/modules/kitchen/lib/allergens.ts) en vez de mantener una segunda
+// traducción que puede volver a divergir.
 function allergenChipClasses(state: AllergenState): string {
   switch (state) {
     case 'contains':     return 'bg-red-500/25 text-red-200 ring-1 ring-red-500/50'
@@ -187,7 +186,7 @@ export default function CookModePanel({ target, onClose, token, locationId }: Co
                         key={a.code}
                         className={`px-2.5 py-1 rounded-md text-sm font-medium ${allergenChipClasses(a.state)}`}
                       >
-                        {allergenLabel(a.code)}
+                        {allergenLabel(a.code as AllergenCode)}
                         {a.state === 'may_contain' && <span className="opacity-70"> (trazas)</span>}
                       </span>
                     ))}
