@@ -37,19 +37,28 @@ export interface KpiSummary {
   incidentsCreatedInRange: number
 }
 
-/** Punto de la serie de cumplimiento diario */
+/** Un punto por cada día que tuvo auditoría real (nunca uno por relleno). */
 export interface DailyComplianceData {
   date: string         // YYYY-MM-DD
   total: number        // ejecuciones del día
   completed: number    // completadas
-  /** % (0-100). null = sin ejecuciones ese día ("sin dato"), NO 0% — un día
-   *  sin controles programados no es un día de incumplimiento. Auditoría
-   *  externa (B.1): antes se rellenaba con 0, y la línea caía a cero todos
-   *  los días sin auditoría, leyendo como "este local no cumple casi nunca"
-   *  cuando el KPI de al lado decía 93%. Con null, recharts <Line> no dibuja
-   *  el tramo (no conecta a través de huecos por defecto) -- puntos solo en
-   *  los días con auditoría real, en vez de un electrocardiograma falso. */
-  rate: number | null
+  /** % (0-100) de ejecuciones completadas ese día.
+   *
+   *  Auditoría externa (B.1, dos iteraciones):
+   *  1) Original: se rellenaba con 0 cada día sin controles -- la línea caía
+   *     a cero casi a diario y leía como "este local no cumple casi nunca"
+   *     cuando el KPI de al lado decía 93%.
+   *  2) Con `null` en los días sin dato, recharts ya no dibujaba la caída a
+   *     cero -- pero en pantalla quedaban 2-3 puntos sueltos flotando en un
+   *     lienzo vacío de un mes: dejó de mentir, pero también dejó de
+   *     comunicar. El fallo de fondo era de PLANTEAMIENTO: esto se llama
+   *     "Cumplimiento diario" pero no hay control diario -- son unas pocas
+   *     auditorías puntuales en el rango, no una serie temporal continua.
+   *  Ahora `getDailyCompliance` YA NO rellena ningún día: solo devuelve un
+   *  punto por cada fecha con ejecuciones reales, así que `rate` nunca es
+   *  null. El panel lo pinta como barras (una por auditoría), no como línea
+   *  -- ver "Cumplimiento por auditoría" en AppccDashboardPage.tsx. */
+  rate: number
 }
 
 /** Distribución de incidencias por severidad */
@@ -219,22 +228,17 @@ export async function getDailyCompliance(
     byDate.set(d, entry)
   }
 
-  // Rellenar días sin datos para que la línea sea continua
-  const result: DailyComplianceData[] = []
-  const fromDate = new Date(range.from + 'T00:00:00Z')
-  const toDate = new Date(range.to + 'T00:00:00Z')
-  for (let d = new Date(fromDate); d <= toDate; d.setUTCDate(d.getUTCDate() + 1)) {
-    const iso = d.toISOString().slice(0, 10)
-    const e = byDate.get(iso)
-    result.push({
-      date: iso,
-      total: e?.total ?? 0,
-      completed: e?.completed ?? 0,
-      rate: e && e.total > 0 ? Math.round((e.completed / e.total) * 100) : null,
-    })
-  }
-
-  return result
+  // Un punto SOLO por cada día con auditoría real -- no se rellenan los días
+  // sin ejecuciones (ver comentario de DailyComplianceData.rate). Orden
+  // cronológico para el eje X del gráfico de barras.
+  return Array.from(byDate.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, e]) => ({
+      date,
+      total: e.total,
+      completed: e.completed,
+      rate: Math.round((e.completed / e.total) * 100),
+    }))
 }
 
 // ============================================================
