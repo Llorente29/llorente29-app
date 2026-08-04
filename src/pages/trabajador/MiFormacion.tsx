@@ -18,7 +18,7 @@ import type { Employee } from '../../types'
 import { useApp } from '../../context/AppContext'
 import { supabase } from '../../lib/supabase'
 import * as mobile from '../../services/mobileCoursesService'
-import type { PendingCourse, StartAttemptResult, SubmitResult } from '../../services/mobileCoursesService'
+import type { PendingCourse, StartAttemptResult, SubmitResult, TrainingPhase } from '../../services/mobileCoursesService'
 import { generateDiplomaPdf, issueDiplomaCertificate, blobToDataUrl } from '../../services/courseCertificatePdfService'
 import { getSignedSectionImageUrls } from '../../services/courseImagesService'
 
@@ -72,6 +72,35 @@ const STATUS_LABEL: Record<PendingCourse['status'], { label: string; color: stri
   suspendido: { label: 'Suspendido — repite', color: 'bg-danger-bg text-danger' },
   pendiente_practica: { label: 'Falta verificar práctica', color: 'bg-warning-bg text-warning' },
   firmado: { label: 'Superado', color: 'bg-success-bg text-success' },
+}
+
+// Itinerario por fases — docs/folvy_formacion_itinerario_fases_rediseno.md §3.
+// Solo se muestra la fase activa (la primera con algo pendiente; si todo lo
+// que llegó está superado, la última que haya llegado), con su progreso. Los
+// cursos sin fase (asignación manual/mandatoria de cuenta, no vienen de un
+// itinerario) se listan aparte, sin contar en el progreso de la fase.
+const PHASE_ORDER: TrainingPhase[] = ['dia_1', 'dias_30', 'dias_90']
+const PHASE_LABEL: Record<TrainingPhase, string> = {
+  dia_1: 'Para poder empezar a trabajar',
+  dias_30: 'Tu primer mes',
+  dias_90: 'Tus primeros 90 días',
+}
+
+function groupActivePhase(courses: PendingCourse[]) {
+  const byPhase = new Map<TrainingPhase, PendingCourse[]>()
+  const other: PendingCourse[] = []
+  for (const c of courses) {
+    if (c.phase === null) { other.push(c); continue }
+    const arr = byPhase.get(c.phase) ?? []
+    arr.push(c)
+    byPhase.set(c.phase, arr)
+  }
+  const present = PHASE_ORDER.filter(p => byPhase.has(p))
+  const activePhase = present.find(p => byPhase.get(p)!.some(c => c.status !== 'firmado')) ?? present[present.length - 1] ?? null
+  const activeCourses = activePhase ? (byPhase.get(activePhase) ?? []) : []
+  const doneCount = activeCourses.filter(c => c.status === 'firmado').length
+  const totalMinutes = activeCourses.reduce((sum, c) => sum + (c.estimatedMinutes ?? 0), 0)
+  return { activePhase, activeCourses, doneCount, totalMinutes, other }
 }
 
 export default function MiFormacion({ employee, onBack }: Props) {
@@ -194,42 +223,87 @@ export default function MiFormacion({ employee, onBack }: Props) {
               <p className="text-xs text-text-secondary mt-1">Cuando te asignen un curso, aparecerá aquí.</p>
             </div>
           ) : (
-            courses.map(c => (
-              c.deliveryMode === 'solo_archivo' ? (
-                // Este curso no se "hace" en el móvil: lo imparte un tercero
-                // (p. ej. el servicio de prevención). Sin botón de empezar
-                // test — llevaría a una teoría/test que no existe para esto.
-                <div key={c.assignmentId} className="w-full bg-card border-2 border-dashed border-border-default rounded-xl p-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="font-semibold text-text-primary">{c.courseTitle}</p>
-                    <span className={`text-xs px-2 py-1 rounded-full font-medium shrink-0 ${STATUS_LABEL[c.status].color}`}>
-                      {STATUS_LABEL[c.status].label}
-                    </span>
-                  </div>
-                  <p className="text-xs text-text-secondary mt-2">
-                    Lo imparte tu servicio de prevención. Sube el certificado desde <span className="font-medium">Mis documentos</span> (tipo «Formación / curso»).
-                  </p>
-                </div>
-              ) : (
-                <button
-                  key={c.assignmentId}
-                  onClick={() => openCourse(c)}
-                  disabled={busy}
-                  className="w-full bg-card border-2 border-border-default hover:border-accent rounded-xl p-4 text-left transition-base active:scale-[0.98]"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="font-semibold text-text-primary">{c.courseTitle}</p>
-                    <span className={`text-xs px-2 py-1 rounded-full font-medium shrink-0 ${STATUS_LABEL[c.status].color}`}>
-                      {STATUS_LABEL[c.status].label}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3 mt-1.5 text-xs text-text-secondary">
-                    {c.estimatedMinutes && <span className="flex items-center gap-1"><Clock size={12} /> {c.estimatedMinutes} min</span>}
-                    {c.dueAt && <span>Antes del {new Date(c.dueAt).toLocaleDateString('es-ES')}</span>}
-                  </div>
-                </button>
+            (() => {
+              const { activePhase, activeCourses, doneCount, totalMinutes, other } = groupActivePhase(courses)
+              const phaseComplete = activeCourses.length > 0 && doneCount === activeCourses.length
+              return (
+                <>
+                  {activePhase && (
+                    <div className="bg-card border border-border-default rounded-xl p-4">
+                      <p className="font-display text-lg text-accent">{PHASE_LABEL[activePhase]}</p>
+                      <p className="text-xs text-text-secondary mt-0.5">
+                        {activeCourses.length} curso{activeCourses.length === 1 ? '' : 's'}
+                        {totalMinutes > 0 && ` · ${totalMinutes} min`}
+                      </p>
+                      <div className="mt-3">
+                        <div className="h-2 rounded-full bg-page overflow-hidden">
+                          <div
+                            className="h-full bg-accent rounded-full transition-all"
+                            style={{ width: activeCourses.length > 0 ? `${(doneCount / activeCourses.length) * 100}%` : '0%' }}
+                          />
+                        </div>
+                        <p className="text-xs text-text-secondary mt-1.5">Progreso: {doneCount} de {activeCourses.length}</p>
+                      </div>
+                      {phaseComplete && (
+                        <div className="mt-3 flex items-start gap-2 bg-success-bg border border-success/30 rounded-lg p-3">
+                          <CheckCircle2 size={18} className="text-success shrink-0 mt-0.5" />
+                          <p className="text-sm text-success">
+                            {activePhase === 'dias_90'
+                              ? 'Itinerario de incorporación completado.'
+                              : 'Fase completada. Tu responsable liberará la siguiente cuando corresponda.'}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {activeCourses.map(c => (
+                    <button
+                      key={c.assignmentId}
+                      onClick={() => openCourse(c)}
+                      disabled={busy}
+                      className="w-full bg-card border-2 border-border-default hover:border-accent rounded-xl p-4 text-left transition-base active:scale-[0.98]"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="font-semibold text-text-primary">{c.courseTitle}</p>
+                        <span className={`text-xs px-2 py-1 rounded-full font-medium shrink-0 ${STATUS_LABEL[c.status].color}`}>
+                          {STATUS_LABEL[c.status].label}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 mt-1.5 text-xs text-text-secondary">
+                        {c.estimatedMinutes && <span className="flex items-center gap-1"><Clock size={12} /> {c.estimatedMinutes} min</span>}
+                        {c.dueAt && <span>Antes del {new Date(c.dueAt).toLocaleDateString('es-ES')}</span>}
+                      </div>
+                    </button>
+                  ))}
+
+                  {other.length > 0 && (
+                    <>
+                      <p className="text-xs text-text-secondary uppercase tracking-wide pt-2">Otros cursos asignados</p>
+                      {other.map(c => (
+                        <button
+                          key={c.assignmentId}
+                          onClick={() => openCourse(c)}
+                          disabled={busy}
+                          className="w-full bg-card border-2 border-border-default hover:border-accent rounded-xl p-4 text-left transition-base active:scale-[0.98]"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="font-semibold text-text-primary">{c.courseTitle}</p>
+                            <span className={`text-xs px-2 py-1 rounded-full font-medium shrink-0 ${STATUS_LABEL[c.status].color}`}>
+                              {STATUS_LABEL[c.status].label}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3 mt-1.5 text-xs text-text-secondary">
+                            {c.estimatedMinutes && <span className="flex items-center gap-1"><Clock size={12} /> {c.estimatedMinutes} min</span>}
+                            {c.dueAt && <span>Antes del {new Date(c.dueAt).toLocaleDateString('es-ES')}</span>}
+                          </div>
+                        </button>
+                      ))}
+                    </>
+                  )}
+                </>
               )
-            ))
+            })()
           )}
         </div>
       </div>

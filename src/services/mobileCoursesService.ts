@@ -11,6 +11,9 @@ import { supabase } from '../lib/supabase'
 
 export type PendingCourseStatus = 'pendiente' | 'en_curso' | 'suspendido' | 'pendiente_practica' | 'firmado'
 
+/** Fase del itinerario de incorporación de la que viene esta asignación (dia_1/dias_30/dias_90). null = no viene de un itinerario (manual, mandatoria de cuenta). */
+export type TrainingPhase = 'dia_1' | 'dias_30' | 'dias_90'
+
 export interface PendingCourse {
   assignmentId: string
   courseId: string
@@ -25,6 +28,7 @@ export interface PendingCourse {
   scorePct: number | null
   passed: boolean | null
   signedAt: string | null
+  phase: TrainingPhase | null
 }
 
 interface PendingCourseRpcRow {
@@ -41,6 +45,7 @@ interface PendingCourseRpcRow {
   score_pct: number | null
   passed: boolean | null
   signed_at: string | null
+  phase: string | null
 }
 
 export async function fetchMyPendingCourses(): Promise<PendingCourse[]> {
@@ -61,6 +66,7 @@ export async function fetchMyPendingCourses(): Promise<PendingCourse[]> {
     scorePct: r.score_pct,
     passed: r.passed,
     signedAt: r.signed_at,
+    phase: r.phase as TrainingPhase | null,
   }))
 }
 

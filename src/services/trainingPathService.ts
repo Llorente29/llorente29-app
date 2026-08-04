@@ -101,3 +101,73 @@ export async function getEmployeeTrainingStatus(accountId: string, employeeId: s
 
   return { status, blockingPending, otherPending }
 }
+
+// ============================================================
+// Itinerario por fases — liberación manual (individual y por grupo).
+// docs/folvy_formacion_itinerario_fases_rediseno.md §2.3.
+// La liberación automática al completar fase + el cron de desfase temporal
+// NO están construidos en esta entrega (declarado) -- solo la vía manual.
+// ============================================================
+
+export type TrainingPhaseName = 'dia_1' | 'dias_30' | 'dias_90'
+export type TrainingPhaseState = 'pendiente' | 'liberada' | 'completada'
+
+export interface EmployeePhaseProgress {
+  id: string
+  pathId: string
+  pathName: string
+  phase: TrainingPhaseName
+  state: TrainingPhaseState
+  releasedAt: string | null
+  dueAt: string | null
+}
+
+const PHASE_ORDER: Record<TrainingPhaseName, number> = { dia_1: 0, dias_30: 1, dias_90: 2 }
+
+/** Progreso por fase de un empleado, en todos los itinerarios que le apliquen. Requiere ser admin/manager de su cuenta (RLS). */
+export async function listEmployeePhaseProgress(employeeId: string): Promise<EmployeePhaseProgress[]> {
+  if (!supabase) throw new Error('Supabase no disponible')
+  const { data, error } = await supabase
+    .from('training_path_progress')
+    .select('id, path_id, phase, state, released_at, due_at, path:path_id(name)')
+    .eq('employee_id', employeeId)
+  if (error) { console.error('[trainingPathService] listEmployeePhaseProgress', error); throw error }
+  return ((data ?? []) as unknown as { id: string; path_id: string; phase: TrainingPhaseName; state: TrainingPhaseState; released_at: string | null; due_at: string | null; path: { name: string } | null }[])
+    .map(r => ({
+      id: r.id,
+      pathId: r.path_id,
+      pathName: r.path?.name ?? '—',
+      phase: r.phase,
+      state: r.state,
+      releasedAt: r.released_at,
+      dueAt: r.due_at,
+    }))
+    .sort((a, b) => a.pathName.localeCompare(b.pathName) || PHASE_ORDER[a.phase] - PHASE_ORDER[b.phase])
+}
+
+export interface ReleaseNextPhaseResult { phase: TrainingPhaseName; assignmentsCreated: number }
+
+/** Libera la siguiente fase 'pendiente' de un empleado en un itinerario concreto. Falla si no queda ninguna. */
+export async function releaseNextPhase(employeeId: string, pathId: string): Promise<ReleaseNextPhaseResult> {
+  if (!supabase) throw new Error('Supabase no disponible')
+  const { data, error } = await supabase.rpc('release_next_phase', { p_employee_id: employeeId, p_path_id: pathId })
+  if (error) { console.error('[trainingPathService] releaseNextPhase', error); throw error }
+  return data as unknown as ReleaseNextPhaseResult
+}
+
+export interface ReleaseNextPhaseForGroupResult { released: number; skipped: number }
+
+/** La "campaña": libera la siguiente fase pendiente a todo un local y/o puesto. Exige al menos uno de los dos filtros. */
+export async function releaseNextPhaseForGroup(
+  pathId: string,
+  filters: { locationId?: string; role?: string },
+): Promise<ReleaseNextPhaseForGroupResult> {
+  if (!supabase) throw new Error('Supabase no disponible')
+  const { data, error } = await supabase.rpc('release_next_phase_for_group', {
+    p_path_id: pathId,
+    p_location_id: filters.locationId ?? null,
+    p_role: filters.role ?? null,
+  })
+  if (error) { console.error('[trainingPathService] releaseNextPhaseForGroup', error); throw error }
+  return data as unknown as ReleaseNextPhaseForGroupResult
+}
