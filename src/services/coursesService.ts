@@ -50,6 +50,15 @@ export interface Course {
   businessTypes: string[]
   level: CourseLevel | null
   recommendedOrder: number | null
+  /** Portada del catálogo (C5). Puede ser ruta pública o path de Storage — resolver con courseImagesService. */
+  coverUrl: string | null
+  /**
+   * media_url de la primera course_section que tenga una (por ord), para la
+   * capa 2 de la resolución de portada (C5 §B). null si el curso no tiene
+   * secciones con imagen. Solo lo rellena listCourses (embebe course_section);
+   * getCourseWithContent no lo toca (ya trae sections completo, úsalo directo).
+   */
+  firstSectionMediaUrl: string | null
 }
 
 export type CourseCategory = 'cumplimiento' | 'cocina' | 'delivery' | 'sala' | 'equipo' | 'producto' | 'sostenibilidad'
@@ -166,6 +175,9 @@ interface CourseRow {
   business_types: string[]
   level: string | null
   recommended_order: number | null
+  cover_url: string | null
+  /** Solo presente cuando listCourses embebe course_section para resolver la capa 2 de la portada (C5 §B). */
+  course_section?: { ord: number; media_url: string | null }[]
 }
 
 function rowToCourse(r: CourseRow): Course {
@@ -191,15 +203,22 @@ function rowToCourse(r: CourseRow): Course {
     businessTypes: r.business_types ?? [],
     level: r.level as CourseLevel | null,
     recommendedOrder: r.recommended_order,
+    coverUrl: r.cover_url,
+    firstSectionMediaUrl: (r.course_section ?? [])
+      .filter((s): s is { ord: number; media_url: string } => !!s.media_url)
+      .sort((a, b) => a.ord - b.ord)[0]?.media_url ?? null,
   }
 }
 
 /** Plantillas globales de Folvy (account_id NULL) + cursos propios de la cuenta. */
 export async function listCourses(accountId: string): Promise<Course[]> {
   if (!supabase) throw new Error('Supabase no disponible')
+  // Embebe course_section(ord, media_url) en la misma consulta (capa 2 de la
+  // portada, C5 §B): sin esto, resolver el fallback de cada tarjeta exigiría
+  // una consulta por curso (N+1) para un catálogo que ya se pinta en rejilla.
   const { data, error } = await supabase
     .from('course')
-    .select('*')
+    .select('*, course_section(ord, media_url)')
     .or(`account_id.is.null,account_id.eq.${accountId}`)
     .order('title', { ascending: true })
   if (error) { console.error('[coursesService] listCourses', error); throw error }
