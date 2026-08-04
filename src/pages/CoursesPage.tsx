@@ -27,6 +27,7 @@ import type {
 import { generateSessionActaPdf, blobToDataUrl } from '../services/courseCertificatePdfService'
 import { adoptCourseForAccount } from '../services/courseAdoptionService'
 import TrainingCalendarView from '../components/personal/TrainingCalendarView'
+import ReleasePhaseCampaignModal from '../components/personal/ReleasePhaseCampaignModal'
 import { getTrainingComplianceMatrix, type TrainingComplianceRow } from '../services/trainingComplianceService'
 import {
   getSignedSectionImageUrl, getSignedSectionImageUrls, uploadOwnSectionImage, revertSectionImageToFolvy,
@@ -105,6 +106,7 @@ export default function CoursesPage() {
   const [levelFilter, setLevelFilter] = useState<CourseLevel | 'todos'>('todos')
   const [coverUrls, setCoverUrls] = useState<Record<string, string>>({})
   const [view, setView] = useState<'catalogo' | 'calendario'>('catalogo')
+  const [showCampaign, setShowCampaign] = useState(false)
 
   useEffect(() => {
     if (!activeAccountId) return
@@ -202,8 +204,13 @@ export default function CoursesPage() {
             <p className="text-sm text-text-secondary">Cursos internos, asignación y seguimiento</p>
           </div>
         </div>
-        <Button onClick={() => setShowCreate(true)}><Plus size={16} /> Nuevo curso</Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setShowCampaign(true)}><Users2 size={16} /> Liberar fase a un grupo</Button>
+          <Button onClick={() => setShowCreate(true)}><Plus size={16} /> Nuevo curso</Button>
+        </div>
       </div>
+
+      {showCampaign && <ReleasePhaseCampaignModal onClose={() => setShowCampaign(false)} />}
 
       <div className="flex gap-1 bg-page p-1 rounded-lg mb-6 w-fit">
         <button

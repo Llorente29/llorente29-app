@@ -155,19 +155,50 @@ export async function releaseNextPhase(employeeId: string, pathId: string): Prom
   return data as unknown as ReleaseNextPhaseResult
 }
 
-export interface ReleaseNextPhaseForGroupResult { released: number; skipped: number }
+export interface TrainingPathSummary { id: string; name: string }
 
-/** La "campaña": libera la siguiente fase pendiente a todo un local y/o puesto. Exige al menos uno de los dos filtros. */
-export async function releaseNextPhaseForGroup(
-  pathId: string,
-  filters: { locationId?: string; role?: string },
-): Promise<ReleaseNextPhaseForGroupResult> {
+/** Itinerarios visibles para la cuenta (globales de Folvy + propios) — para el selector de la campaña. */
+export async function listTrainingPaths(accountId: string): Promise<TrainingPathSummary[]> {
   if (!supabase) throw new Error('Supabase no disponible')
-  const { data, error } = await supabase.rpc('release_next_phase_for_group', {
+  const { data, error } = await supabase
+    .from('training_path')
+    .select('id, name, account_id')
+    .eq('active', true)
+    .or(`account_id.is.null,account_id.eq.${accountId}`)
+    .order('name')
+  if (error) { console.error('[trainingPathService] listTrainingPaths', error); throw error }
+  return (data ?? []).map(r => ({ id: r.id, name: r.name }))
+}
+
+/** Estado de una fase concreta de un itinerario, para TODOS los empleados que la tienen — base de la previsualización de la campaña (sin mutar nada). */
+export async function listPhaseProgressForPath(pathId: string, phase: TrainingPhaseName): Promise<Map<string, TrainingPhaseState>> {
+  if (!supabase) throw new Error('Supabase no disponible')
+  const { data, error } = await supabase
+    .from('training_path_progress')
+    .select('employee_id, state')
+    .eq('path_id', pathId)
+    .eq('phase', phase)
+  if (error) { console.error('[trainingPathService] listPhaseProgressForPath', error); throw error }
+  return new Map((data ?? []).map(r => [r.employee_id, r.state as TrainingPhaseState]))
+}
+
+export interface ReleasePhaseForGroupResult { released: number; alreadyReleased: number; totalMatching: number }
+
+/** La "campaña": libera UNA FASE CONCRETA (no necesariamente "la siguiente") a todo un local y/o puesto. Exige al menos uno de los dos filtros. Idempotente. */
+export async function releasePhaseForGroup(
+  accountId: string,
+  pathId: string,
+  phase: TrainingPhaseName,
+  filters: { locationId?: string; role?: string },
+): Promise<ReleasePhaseForGroupResult> {
+  if (!supabase) throw new Error('Supabase no disponible')
+  const { data, error } = await supabase.rpc('release_phase_for_group', {
+    p_account_id: accountId,
     p_path_id: pathId,
+    p_phase: phase,
     p_location_id: filters.locationId ?? null,
     p_role: filters.role ?? null,
   })
-  if (error) { console.error('[trainingPathService] releaseNextPhaseForGroup', error); throw error }
-  return data as unknown as ReleaseNextPhaseForGroupResult
+  if (error) { console.error('[trainingPathService] releasePhaseForGroup', error); throw error }
+  return data as unknown as ReleasePhaseForGroupResult
 }
