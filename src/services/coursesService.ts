@@ -685,6 +685,20 @@ export async function deleteAssignment(assignmentId: string): Promise<void> {
   if (error) { console.error('[coursesService] deleteAssignment', error); throw error }
 }
 
+/** Cambia solo la fecha límite de una asignación ya existente — la
+ * alternativa a duplicarla que ofrece el anti-duplicado de AsignarTab. */
+export async function updateAssignment(assignmentId: string, patch: { dueAt: string | null }): Promise<CourseAssignment> {
+  if (!supabase) throw new Error('Supabase no disponible')
+  const { data, error } = await supabase
+    .from('course_assignment')
+    .update({ due_at: patch.dueAt })
+    .eq('id', assignmentId)
+    .select('*')
+    .single()
+  if (error) { console.error('[coursesService] updateAssignment', error); throw error }
+  return rowToAssignment(data as AssignmentRow)
+}
+
 // ============================================================
 // SEGUIMIENTO — intentos y firmas de las asignaciones de un curso
 // ============================================================
