@@ -416,3 +416,33 @@ Notas: meez **se declara "complementario, no competidor" de ERPs** — capa culi
 - Apicbase internal ordering: detalle — disparador: frente producción/multi-local.
 - Gstock/Mapal: detalle por área — disparador: cuando compitan en un frente concreto.
 - Precios actualizados: caducan; reverificar antes de usar en argumentario comercial.
+
+---
+
+## ÁREA — FORMACIÓN Y CUMPLIMIENTO DEL PERSONAL (04/08/2026)
+
+**Rivales**: Mapal/Flow Learning (la amenaza estructural: único con formación + workforce en la misma casa **y en español**) · Opus Training (Serie B $9M feb-2026, frontline-first, SMS, IA, auto-traduce a 100+ idiomas) · TalentLMS · 360Learning · Trainual · Typsy (2.000+ lecciones en vídeo) · Paycom.
+
+### 🟢 Ventaja real
+- **Evidencia firmada localizada a España** — firma con DNI + `auth.uid()` + informe de inspección con marco legal AESAN/APPCC. Es lo que exige de verdad una inspección. *Foso bajo: 2-4 meses-persona + conocimiento normativo.*
+- **Curso generado desde el escandallo** — **nadie en el mercado lo hace** (meez convierte recetas en material sin quiz; GastroKaizen tiene escandallos y academia sin conectar; Opus genera con IA desde documentos, no desde tu receta). El foso **no es la IA, son los datos**: tener escandallo+POS+turnos en la misma base. *LMS puro: 6-12 MP + adquirir un sistema de recetas. Mapal: 3-6 MP.*
+- **Semáforo de formación en el cuadrante de turnos** — nadie lo hace: los schedulers (Skello, Combo, 7shifts) no tienen LMS; los LMS no tienen turnos; **solo Mapal tiene ambos módulos y no los ha conectado**. *Vigilar el día que Flow Learning se una a su módulo Workforce.*
+
+### 🟡 Empate (declarado, no vender como victoria)
+- **Verificación práctica en el puesto** — **Opus Training ya la tiene**. Era nuestra supuesta joya y está copiada por el rival que viene a este mercado.
+- **Itinerarios, asignación automática, plazos desde el alta, modelo 30-60-90** — estándar del sector desde hace años. Folvy lo iguala, no lo supera.
+
+### 🔴 Por debajo del mercado (deuda declarada)
+- **Reevaluación periódica**: NO EXISTE. Un manipulador caduca y nadie lo reasigna. Es media propuesta de valor de un LMS de cumplimiento.
+- **Ciclo cerrado con APPCC**: se ha vendido internamente como "goleada a Flow" y **no está construido**. Corregido en la documentación.
+- **Multiidioma**: 1 idioma frente a los 100+ de Opus, con plantillas de hostelería no siempre castellanoparlantes. **Es el hueco con mayor retorno pendiente (+45% de retención según la evidencia).**
+- **SCORM/xAPI**: no se puede importar el contenido corporativo de un grupo grande — justo el comprador objetivo.
+- **Vídeo, offline, app nativa de LMS, volumen de catálogo** (20 cursos frente a librerías de 1.000+).
+
+### Foso verdadero, sin autoengaño
+No es ningún curso ni ninguna firma: es que **el escandallo, el POS, el cuadrante y la formación viven en la misma base multi-tenant, en español, ya dentro del local**. Todo lo demás es copiable en trimestres.
+
+### Empaquetado
+Sin precio definido. Referencias: Opus y Mapal cobran **por local**; Typsy 120$/miembro/año; 7shifts 40-135$/local/mes. **Recomendación: por local/mes** (el por-asiento lo castiga la rotación), rango defendible **20-40 €/local/mes** como add-on, revisable cuando el catálogo pase de ~9 cursos revisados a ~30.
+
+_Fuente: auditoría externa 04/08/2026 (`AUDITORIA_EXTERNA_formacion.md`)._

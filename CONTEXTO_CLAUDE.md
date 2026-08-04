@@ -390,6 +390,34 @@ CEO: **Julio Gª Colón (García Colón)**, NO "Gascón". Admin Google: `jgcolon
 - **Futuro:** cuenta "cliente base" con semillas/plantillas para onboarding de clientes nuevos.
 - **REGLA:** verificar el `account_id` real con SELECT antes de sembrar/configurar. NO asumir Llorente29. (Hoy se corrigió el vigilante de ingesta y el seed de familias, que estaban por error en la cuenta vacía.)
 
+### 1.0.ter — MÓDULO DE FORMACIÓN (04/08, EN PRODUCCIÓN)
+
+**Qué es.** Formación de cumplimiento con evidencia firmada, integrada en Team (oficina) y Safety (inspección). Módulo de pago extra. Nace de un requisito real: en la última inspección sanitaria de Llorente29 pidieron formación específica del personal en alérgenos, además de la matriz y las fichas técnicas.
+
+**Hallazgo legal que lo sostiene:** el **RD 109/2010 eliminó el carnet oficial** de manipulador. La empresa alimentaria **puede impartir y certificar** ella misma, con un documento privado que especifique contenidos y lleve firma del responsable. **El acta de Folvy ES la acreditación** — no hace falta curso externo.
+
+**Vivo en producción (verificado en pantalla):**
+- **Motor**: `course` · `course_section` · `course_question` · `course_option` · `course_assignment` · `course_attempt` · `course_signature` (append-only, 0 policies UPDATE/DELETE) · `course_certificate` · `course_practical_item` / `course_practical_check`. Corrección server-side (`is_correct` nunca viaja al cliente); firma solo sobre intento aprobado; identidad por `auth.uid()` resuelta en la RPC.
+- **Portal del empleado** por magic link + QR: teoría en markdown con imágenes → test una pregunta por pantalla → firma con el dedo → diploma.
+- **Verificación práctica en el puesto**: `requires_practical` por curso; el test no basta, un responsable observa los gestos y **firma también**. El servidor rechaza la autoverificación. Ningún LMS lo tiene: no están en la cocina.
+- **Informe de inspección** PDF + Excel: matriz por local, contenidos impartidos, anexo de firmas con DNI y sello de tiempo, certificados externos, huecos declarados.
+- **Itinerarios por fases** (`training_path` / `training_path_item` / `training_path_progress`): fases `dia_1` (bloqueante — antes de manipular alimentos) / `dias_30` / `dias_90`. **Solo se asigna la fase liberada**, no las tres. Liberación automática al completar + cron de desfase (`release_overdue_phases`, 6:00, con suelo de 7 días) + **campañas por grupo** (`release_phase_for_group`). Plazos desde `released_at`, nunca desde la fecha de contratación.
+- **Curso desde el escandallo** (`generate_course_from_recipe`): genera curso + test + gesto práctico desde `recipe_item_step` / `recipe_line` / `recipe_item_step_line` / `recipe_item_allergen`. **Ningún LMS del mercado puede hacerlo** porque ninguno tiene la receta dentro. Las fotos cruzan de `recipe-uploads` a `course-section-images` desde el cliente (PL/pgSQL no mueve bytes entre buckets).
+- **Fuente única de vigencia**: `course_state_for_employee` (pendiente → en_curso → pendiente_practica → vigente/caducado). La consultan `training_compliance_matrix` y el detector de fase completa.
+
+**Catálogo: 20 cursos** (`account_id IS NULL` = plantilla global, patrón `ingredient_template`). Taxonomía obligatoria: `category` · `business_types[]` · `level` · `recommended_order`. **Nunca filtrar por tipo de negocio un curso de cumplimiento legal.**
+- Cumplimiento (9): manipulador · alérgenos · APPCC · igualdad y acoso · LGTBI · RGPD · canal de denuncias · primeros auxilios (mixto) · PRL (**solo_archivo**: es actividad preventiva reservada al servicio de prevención — Folvy archiva y vigila caducidades, no imparte).
+- Delivery (4): embolsado · temperatura en ruta · incidencias · estación/KDS.
+- Cocina (6): escandallo · mermas · inventario · recepción · conservación · limpieza y cierre.
+
+**🔴 ESTADO REAL HOY: 17 en `draft`, 2 publicados.** El motor está listo pero **no hay casi nada que asignar**. 9 empleados con formación pendiente, **8 sin los dos bloqueantes**. Publicar es tarea de Julio y es lo que desbloquea el módulo. **Al publicar una obligatoria, re-correr el backfill `20260810T1100`** (el trigger solo dispara al alta).
+
+**Molde de contenido** (`docs/folvy_formacion_guia_contenido.md`): el porqué antes que la norma · caso real de cocina en cada sección ("En tu turno esto pasa así") · recuadro con la base legal al final · test **situacional**, no de definiciones · esquema para lo invisible, foto para lo que hay que reconocer.
+
+**Declarado y NO construido:** reevaluación periódica (`origin='reeval_periodica'` está en el CHECK y **nada lo inserta** — un manipulador caduca y nadie lo reasigna) · recordatorios y escalado · vista previa de curso desde oficina · ciclo cerrado APPCC → reformación · multiidioma (el mayor retorno pendiente: +45% de retención) · 22 de los 31 cursos del catálogo v2.
+
+**Seguridad (04/08):** se cerró una **fuga multi-tenant** — 6 funciones `SECURITY DEFINER` eran ejecutables por `anon` (baseline con `GRANT ALL ON FUNCTIONS`, cero REVOKE en 22 migraciones) y tres sin guard de cuenta. Era bloqueante para el cliente 2. Hoy: REVOKE de las 25 funciones + GRANT selectivo a las 12 que el cliente llama; verificado `anon_puede = false`.
+
 ### 1.0.ter — DECISIÓN ESTRATÉGICA MAYOR (02/06) — NO PERDER
 **Folvy es INTEGRADOR DIRECTO de las plataformas de delivery (Glovo primero), sin intermediarios.** Razones: coste, concepto 360, control del flujo de datos, fidelización estructural. Confirmado viable (Glovo/Uber tienen partner program con staging gratis).
 
