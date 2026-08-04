@@ -17440,9 +17440,31 @@ export type Database = {
         Args: { p_employee_id: string; p_path_id: string }
         Returns: Json
       }
-      release_next_phase_for_group: {
-        Args: { p_location_id?: string | null; p_path_id: string; p_role?: string | null }
+      release_specific_phase: {
+        Args: { p_employee_id: string; p_path_id: string; p_phase: string; p_released_by?: string | null }
         Returns: Json
+      }
+      release_phase_for_group: {
+        Args: {
+          p_account_id: string
+          p_location_id?: string | null
+          p_path_id: string
+          p_phase: string
+          p_role?: string | null
+        }
+        Returns: Json
+      }
+      check_phase_completion_for_assignment: {
+        Args: { p_assignment_id: string }
+        Returns: undefined
+      }
+      release_overdue_phases: {
+        Args: never
+        Returns: number
+      }
+      course_state_for_employee: {
+        Args: { p_account_id: string; p_course_id: string; p_employee_id: string }
+        Returns: string
       }
       sign_course_attempt: {
         Args: {
