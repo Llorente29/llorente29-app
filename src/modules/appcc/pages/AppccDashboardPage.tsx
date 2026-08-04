@@ -4,7 +4,7 @@
 // Estructura visual:
 //   1. Filtros: rango (semana/mes/trimestre) + local
 //   2. 4 KPI cards grandes
-//   3. Tendencia diaria de cumplimiento (LineChart)
+//   3. Cumplimiento por auditoría (BarChart -- una barra por día auditado)
 //   4. Donut por severidad + Bar por categoría (2 columnas)
 //   5. Ranking por local (tabla con barras)
 //   6. Top 5 plantillas con más fallos
@@ -18,7 +18,7 @@ import {
   TrendingUp, MapPin, FileWarning, CalendarClock, UserCheck,
 } from 'lucide-react'
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, BarChart, Bar,
 } from 'recharts'
 import { useNavigate } from 'react-router-dom'
@@ -219,13 +219,20 @@ export default function AppccDashboardPage() {
         />
       </div>
 
-      {/* ============ TENDENCIA DIARIA ============ */}
-      <Panel title="Cumplimiento diario" Icon={TrendingUp}>
+      {/* ============ CUMPLIMIENTO POR AUDITORÍA ============
+          Bloque 3 (iteración 2, auditoría externa): esto NO es un control
+          diario -- son unas pocas auditorías puntuales en el rango, no una
+          serie temporal continua. Una línea (incluso sin rellenar los huecos
+          con 0) dibuja 2-3 puntos sueltos flotando en un lienzo vacío de un
+          mes: no comunica nada. Barras -- una por auditoría, nada donde no la
+          hubo -- se leen directamente: "hubo tres controles: 80%, 100%,
+          100%". Ver DailyComplianceData.rate en analyticsService.ts. */}
+      <Panel title="Cumplimiento por auditoría" Icon={TrendingUp}>
         {daily.length === 0 ? (
           <EmptyState message="Sin datos de ejecuciones en este rango" />
         ) : (
           <ResponsiveContainer width="100%" height={260}>
-            <LineChart data={daily} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+            <BarChart data={daily} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
               <XAxis
                 dataKey="date"
@@ -241,18 +248,11 @@ export default function AppccDashboardPage() {
               />
               <Tooltip
                 contentStyle={{ fontSize: 12, borderRadius: 6 }}
-                formatter={(v) => [v == null ? 'Sin auditoría este día' : `${v}%`, 'Cumplimiento']}
-                labelFormatter={(l) => `Día ${String(l ?? '')}`}
+                formatter={(v) => [`${v}%`, 'Cumplimiento']}
+                labelFormatter={(l) => `Auditoría del ${String(l ?? '')}`}
               />
-              <Line
-                type="monotone"
-                dataKey="rate"
-                stroke={TREND_COLOR}
-                strokeWidth={2.5}
-                dot={{ r: 3 }}
-                activeDot={{ r: 5 }}
-              />
-            </LineChart>
+              <Bar dataKey="rate" fill={TREND_COLOR} radius={[3, 3, 0, 0]} maxBarSize={48} />
+            </BarChart>
           </ResponsiveContainer>
         )}
       </Panel>
