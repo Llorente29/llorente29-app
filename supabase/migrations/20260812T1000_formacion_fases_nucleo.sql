@@ -407,7 +407,14 @@ grant execute on function public.release_next_phase_for_group(uuid, uuid, text) 
 --    referencia nueva (pit.phase, per_assignment.phase, best_per_course.phase)
 --    va cualificada, mismo criterio que el resto de la función (lección C2:
 --    [[feedback... ambigüedad RETURNS TABLE]]).
+--
+--    🔴 DROP antes de CREATE: cambia el tipo de retorno (13 columnas -> 14),
+--    y CREATE OR REPLACE no permite cambiar el tipo de retorno de una
+--    función existente (42P13). Regla del proyecto: si cambia firma o tipo
+--    de retorno, DROP FUNCTION IF EXISTS antes del CREATE.
 -- ────────────────────────────────────────────────────────────────────────────
+drop function if exists public.my_pending_courses();
+
 create or replace function public.my_pending_courses()
 returns table (
   assignment_id uuid,
@@ -550,6 +557,12 @@ begin
     best_per_course.course_title;
 end;
 $$;
+
+-- El DROP de más arriba se lleva el GRANT anterior por delante (C1:
+-- grant execute on function public.my_pending_courses() to authenticated).
+-- Hay que volver a concederlo aquí -- si no, el móvil del empleado se queda
+-- sin permiso para llamar a la RPC tras aplicar esta migración.
+grant execute on function public.my_pending_courses() to authenticated;
 
 notify pgrst, 'reload schema';
 
