@@ -374,8 +374,12 @@ export default function TrainingCompliancePage() {
 
       {/* Tira de KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-        <KpiBox label="Con la obligatoria vigente" value={`${kpi.pct}%`} sub={`${kpi.vigente}/${kpi.applicable}`}
-          tone={kpi.pct === 100 ? 'success' : kpi.pct >= 80 ? 'warning' : 'danger'} />
+        <KpiBox
+          label="Con la obligatoria vigente"
+          value={kpi.pct === null ? '—' : `${kpi.pct}%`}
+          sub={kpi.pct === null ? 'Sin datos aún' : `${kpi.vigente}/${kpi.applicable}`}
+          tone={kpi.pct === null ? 'neutral' : kpi.pct === 100 ? 'success' : kpi.pct >= 80 ? 'warning' : 'danger'}
+        />
         <KpiBox label="Caducan en 30 días" value={String(caducaPronto30)} tone={caducaPronto30 > 0 ? 'warning' : 'neutral'} />
         <KpiBox label="Sin firmar" value={String(sinFirmar)} tone={sinFirmar > 0 ? 'warning' : 'neutral'} />
         <KpiBox label="En curso, sin superar" value={String(enCurso)} tone={enCurso > 0 ? 'warning' : 'neutral'} />

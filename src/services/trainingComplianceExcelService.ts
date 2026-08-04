@@ -11,7 +11,8 @@
 import type { TrainingComplianceRow, TrainingGap, TrainingDataHealthRow, TrainingCourseSummary } from './trainingComplianceService'
 
 const STATE_LABEL: Record<string, string> = {
-  vigente: 'Vigente', caducado: 'Caducado', pendiente: 'Pendiente', en_curso: 'En curso (sin firmar)', no_aplica: 'No aplica',
+  vigente: 'Vigente', caducado: 'Caducado', pendiente: 'Pendiente', en_curso: 'En curso (sin firmar)',
+  pendiente_practica: 'Falta verificación práctica', no_aplica: 'No aplica',
 }
 
 const HEALTH_LABEL: Record<string, string> = {
@@ -25,7 +26,7 @@ export interface TrainingExcelData {
   account: { legalName: string | null; cif: string | null }
   generatedAtLabel: string
   generatedAtFilename: string
-  kpi: { vigente: number; applicable: number; pct: number }
+  kpi: { vigente: number; applicable: number; pct: number | null }
   rowsByLocation: [string, TrainingComplianceRow[]][]
   courseCodes: { code: string; title: string }[]
   courseSummary: TrainingCourseSummary[]
@@ -57,8 +58,8 @@ export async function generateTrainingComplianceExcel(data: TrainingExcelData): 
     { 'Campo': 'CIF', 'Valor': data.account.cif ?? '—' },
     { 'Campo': 'Generado', 'Valor': data.generatedAtLabel },
     { 'Campo': '', 'Valor': '' },
-    { 'Campo': 'Con la obligatoria vigente', 'Valor': `${data.kpi.vigente} de ${data.kpi.applicable}` },
-    { 'Campo': 'Cumplimiento', 'Valor': `${data.kpi.pct}%` },
+    { 'Campo': 'Con la obligatoria vigente', 'Valor': data.kpi.pct === null ? 'Sin datos aún' : `${data.kpi.vigente} de ${data.kpi.applicable}` },
+    { 'Campo': 'Cumplimiento', 'Valor': data.kpi.pct === null ? '—' : `${data.kpi.pct}%` },
     { 'Campo': '', 'Valor': '' },
     { 'Campo': 'Empleados sin DNI', 'Valor': String(data.health.find(h => h.checkKind === 'sin_dni')?.itemCount ?? 0) },
     { 'Campo': 'Empleados sin acceso generado', 'Valor': String(data.health.find(h => h.checkKind === 'sin_acceso')?.itemCount ?? 0) },

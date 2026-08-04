@@ -649,7 +649,7 @@ function Heatmap({ cells }: { cells: HeatmapCell[] }) {
 function TrainingPrerequisiteCard() {
   const { activeAccountId } = useActiveAccount()
   const navigate = useNavigate()
-  const [kpi, setKpi] = useState<{ pct: number; vigente: number; applicable: number } | null>(null)
+  const [kpi, setKpi] = useState<{ pct: number | null; vigente: number; applicable: number } | null>(null)
   const [loading, setLoading] = useState(true)
   const [failed, setFailed] = useState(false)
 
@@ -667,11 +667,13 @@ function TrainingPrerequisiteCard() {
     return () => { cancelled = true }
   }, [activeAccountId])
 
-  const tone = failed || kpi == null
+  const pct = kpi?.pct ?? null
+  const noData = !failed && kpi != null && pct === null
+  const tone = failed || kpi == null || pct === null
     ? { dot: 'bg-text-tertiary', text: 'text-text-secondary' }
-    : kpi.pct === 100
+    : pct === 100
       ? { dot: 'bg-success', text: 'text-success' }
-      : kpi.pct >= 80
+      : pct >= 80
         ? { dot: 'bg-warning', text: 'text-warning' }
         : { dot: 'bg-danger', text: 'text-danger' }
 
@@ -688,12 +690,14 @@ function TrainingPrerequisiteCard() {
           <p className="text-xs text-text-secondary truncate">
             {loading ? 'Cargando…' : failed || kpi == null
               ? 'No se pudo calcular — abre el informe para más detalle.'
-              : `${kpi.vigente} de ${kpi.applicable} con la formación obligatoria vigente`}
+              : noData
+                ? 'Sin datos aún.'
+                : `${kpi.vigente} de ${kpi.applicable} con la formación obligatoria vigente`}
           </p>
         </div>
       </div>
       <span className={`text-lg font-bold shrink-0 ${tone.text}`}>
-        {loading || failed || kpi == null ? '—' : `${kpi.pct}%`}
+        {loading || failed || kpi == null || noData ? '—' : `${pct}%`}
       </span>
     </button>
   )
