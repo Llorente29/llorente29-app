@@ -26,7 +26,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   AlertTriangle, ArrowLeft, Camera, Check, Copy, Link2, Loader2,
-  ShieldCheck, Sparkles, Trash2, X, Archive,
+  ShieldCheck, Sparkles, Trash2, X, Archive, GraduationCap,
 } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useApp } from '@/context/AppContext'
@@ -63,6 +63,8 @@ import EnCartaTab from '@/modules/kitchen/components/EnCartaTab'
 import EtiquetadoTab from '@/modules/kitchen/components/EtiquetadoTab'
 import FichaTab from '@/modules/kitchen/components/FichaTab'
 import ConfirmDialog from '@/components/ConfirmDialog'
+import * as coursesService from '@/services/coursesService'
+import { generateCourseFromRecipe, type GenerateCourseResult } from '@/services/courseFromRecipeService'
 import type { MenuItem, RecipeItem } from '@/types/kitchen'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -518,6 +520,40 @@ export default function CatalogFichaPage({
     }
   }
 
+  // ── Crear/Regenerar curso desde el escandallo (C7) ─────────────────────────
+  // "La jugada que nadie puede copiar": Folvy tiene pasos vinculados a
+  // ingredientes (recipe_item_step_line, E8), ningún LMS del mercado lo tiene.
+  const [generatingCourse, setGeneratingCourse] = useState(false)
+  const [courseError, setCourseError] = useState<string | null>(null)
+  const [confirmGenerateOpen, setConfirmGenerateOpen] = useState(false)
+  const [existingCourse, setExistingCourse] = useState<coursesService.Course | null>(null)
+  const [courseResult, setCourseResult] = useState<GenerateCourseResult | null>(null)
+
+  useEffect(() => {
+    if (!recipe) { setExistingCourse(null); return }
+    let cancelled = false
+    coursesService.getCourseBySourceRecipeItemId(recipe.id)
+      .then((c) => { if (!cancelled) setExistingCourse(c) })
+      .catch(() => { if (!cancelled) setExistingCourse(null) })
+    return () => { cancelled = true }
+  }, [recipe?.id])
+
+  async function doGenerateCourse() {
+    if (!recipe) return
+    setConfirmGenerateOpen(false)
+    setGeneratingCourse(true)
+    setCourseError(null)
+    try {
+      const result = await generateCourseFromRecipe(recipe.id)
+      setCourseResult(result)
+      setExistingCourse(await coursesService.getCourseBySourceRecipeItemId(recipe.id))
+    } catch (err: unknown) {
+      setCourseError(err instanceof Error ? err.message : 'No se pudo generar el curso.')
+    } finally {
+      setGeneratingCourse(false)
+    }
+  }
+
   // ── Dar por revisado (banner, flag propio del escandallo) ─────────────────
   const [dismissing, setDismissing] = useState(false)
   // Fase 6, B2: el editor viejo SÍ confirmaba esta acción; se perdió en la
@@ -640,6 +676,22 @@ export default function CatalogFichaPage({
         busy={duplicating}
         onConfirm={doDuplicate}
         onCancel={() => setConfirmDuplicateOpen(false)}
+      />
+
+      {/* C7: generar/regenerar curso desde el escandallo */}
+      <ConfirmDialog
+        open={confirmGenerateOpen}
+        title={existingCourse ? 'Regenerar curso' : 'Crear curso de este plato'}
+        message={
+          existingCourse
+            ? `Ya existe un curso generado desde "${recipe?.name}" (v${existingCourse.version}). Regenerar reemplaza el contenido (secciones y test) con la ficha actual — las firmas ya emitidas conservan la versión que firmaron entonces. Queda en borrador para que lo revises antes de publicarlo.`
+            : `Se generará un curso borrador de Formación desde el escandallo de "${recipe?.name}": una sección por paso con sus fotos, el test y la verificación práctica. Queda en borrador para que lo revises antes de publicarlo.`
+        }
+        tone="accent"
+        confirmLabel={existingCourse ? 'Regenerar' : 'Generar'}
+        busy={generatingCourse}
+        onConfirm={doGenerateCourse}
+        onCancel={() => setConfirmGenerateOpen(false)}
       />
 
       {/* Fase 6, B2 */}
@@ -936,11 +988,41 @@ export default function CatalogFichaPage({
               >
                 <Trash2 className="w-3.5 h-3.5" /> Eliminar
               </button>
+              <button
+                onClick={() => setConfirmGenerateOpen(true)}
+                disabled={generatingCourse}
+                title="Genera (o regenera) un curso borrador de Formación desde este escandallo: una sección por paso, test y verificación práctica"
+                className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full bg-white text-accent font-medium border border-accent/30 hover:bg-accent/5 disabled:opacity-60 transition-colors"
+              >
+                {generatingCourse ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <GraduationCap className="w-3.5 h-3.5" />}
+                {generatingCourse ? 'Generando…' : existingCourse ? `Regenerar curso (v${existingCourse.version})` : 'Crear curso de este plato'}
+              </button>
               {duplicateError && <span className="px-2.5 py-1 rounded-md bg-red-600 text-white text-xs">{duplicateError}</span>}
+              {courseError && <span className="px-2.5 py-1 rounded-md bg-red-600 text-white text-xs">{courseError}</span>}
             </div>
           )}
         </div>
       </div>
+
+      {/* ── Resultado de generar/regenerar curso (C7) ── */}
+      {courseResult && (
+        <div className="mx-6 mt-4 rounded-lg border border-emerald-300 bg-emerald-50 px-3.5 py-3 flex items-start gap-3">
+          <GraduationCap className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-stone-800">
+              Curso {courseResult.regenerated ? `regenerado (v${courseResult.version})` : 'generado'} en Formación, en borrador — revísalo antes de publicarlo.
+            </p>
+            {courseResult.warnings.length > 0 && (
+              <ul className="text-[13px] text-stone-600 mt-1.5 list-disc pl-4 space-y-0.5">
+                {courseResult.warnings.map((w, i) => <li key={i}>{w}</li>)}
+              </ul>
+            )}
+          </div>
+          <button onClick={() => setCourseResult(null)} className="shrink-0 text-stone-400 hover:text-stone-600" aria-label="Cerrar">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* ── Banner "Marcado para revisar" (flag propio del escandallo) ── */}
       {ownNeedsReview && (
