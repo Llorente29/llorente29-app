@@ -19,6 +19,18 @@ export interface OnboardingCourseFlag {
   isBlocking: boolean
 }
 
+/** IDs de curso (course_id, no code) que son bloqueantes en algún itinerario
+ * de incorporación — para cruzar directo con TrainingGap.courseId (pieza 4). */
+export async function listBlockingCourseIds(): Promise<Set<string>> {
+  if (!supabase) throw new Error('Supabase no disponible')
+  const { data, error } = await supabase
+    .from('training_path_item')
+    .select('course_id')
+    .eq('is_blocking', true)
+  if (error) { console.error('[trainingPathService] listBlockingCourseIds', error); throw error }
+  return new Set((data ?? []).map(r => r.course_id))
+}
+
 /** Cursos que forman parte de CUALQUIER itinerario de incorporación, con si
  * son bloqueantes (OR entre todos los training_path_item que referencian ese
  * curso — en la práctica cada curso solo aparece en un itinerario). */
