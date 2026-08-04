@@ -29,10 +29,19 @@
 // commit de limpieza aparte: ya no lo monta nadie — la ruta 'recetas' monta esta
 // página, y el editor es RecipeEditorPage.)
 //
-// FOTO (E5): kitchen_photo_url guarda el PATH de un bucket privado; la URL
-// servible se firma al render con getDishPhotoUrl(). La lista resuelve las
-// URLs firmadas en lote tras cargar los platos (igual criterio que el editor),
-// para que la miniatura muestre la foto real y no un path roto.
+// FOTO (E5 + auditoría externa Bloque C): dos fuentes posibles, misma
+// prioridad que headerPhotoUrl en CatalogFichaPage.tsx —
+//   1) menu_item.photo_url: la foto PÚBLICA del producto de carta (si el
+//      plato está vinculado a algún ítem de marca/canal). Ya es una URL
+//      servible, no requiere firma.
+//   2) recipe_item.kitchen_photo_url: la foto INTERNA del escandallo, un PATH
+//      de bucket privado que se firma al vuelo con getDishPhotoUrl().
+// Antes la lista solo miraba (2): un plato con foto de carta pero sin foto de
+// escandallo (el caso más común — la mayoría de fotos se suben al montar el
+// producto en el menú, no en el editor de escandallos) se veía con el icono
+// gris aunque la ficha sí mostrara una foto real. Ambas se resuelven en lote
+// tras cargar los platos, para que la miniatura muestre la foto real y no un
+// path roto ni un hueco vacío.
 //
 // Patrón de carga: useActiveAccount() + useEffect con flag `cancelled`,
 // igual que KitchenItemsPage.
@@ -56,6 +65,7 @@ import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useApp } from '@/context/AppContext'
 import { listRecipeItems, getDishesIncomplete, createRecipeItem } from '@/modules/kitchen/services/recipeItemService'
 import { getDishPhotoUrl } from '@/modules/kitchen/services/recipePhotoService'
+import { listMenuItemPhotosForRecipes } from '@/modules/kitchen/services/menuLinkService'
 import {
   extractRecipeSession,
   type ImportRecipeResult,
@@ -172,9 +182,18 @@ export default function KitchenRecipesPage() {
   // matriz de cumplimiento de alérgenos). Mismo query param que ?recipe=,
   // se lee y se limpia una sola vez en el mismo efecto de abajo.
   const [selectedInitialTab, setSelectedInitialTab] = useState<string | null>(null)
-  // E5: URLs firmadas de las fotos (id del plato -> URL servible). El listado
-  // guarda el PATH en kitchen_photo_url; aquí lo firmamos para poder mostrarlo.
+  // E5: URLs firmadas de las fotos de escandallo (id del plato -> URL
+  // servible). El listado guarda el PATH en kitchen_photo_url; aquí lo
+  // firmamos para poder mostrarlo.
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({})
+  // Bloque C: fotos públicas de carta (id del plato -> URL), prioritarias
+  // sobre las de escandallo — ver comentario de cabecera de este bloque FOTO.
+  const [menuPhotoUrls, setMenuPhotoUrls] = useState<Record<string, string>>({})
+  // Bloque C: platos cuya URL de foto (pública o firmada) dio error al cargar
+  // en el <img> — se marca aquí y a partir de entonces cae al icono en vez de
+  // dejar el hueco roto del navegador (foto borrada del storage, URL firmada
+  // caducada, etc.).
+  const [brokenPhotoIds, setBrokenPhotoIds] = useState<Set<string>>(new Set())
 
   // ── Función estrella: importar escandallo por foto ──
   const [importing, setImporting] = useState(false)
@@ -303,6 +322,28 @@ export default function KitchenRecipesPage() {
       for (const p of pairs) if (p) map[p[0]] = p[1]
       setPhotoUrls(map)
     })
+    return () => {
+      cancelled = true
+    }
+  }, [items])
+
+  // Bloque C: foto pública de carta en lote, una sola consulta para todos los
+  // platos (no una por plato) — prioritaria sobre la de escandallo, ver
+  // comentario de cabecera del bloque FOTO más arriba.
+  useEffect(() => {
+    let cancelled = false
+    if (items.length === 0) {
+      setMenuPhotoUrls({})
+      return
+    }
+    listMenuItemPhotosForRecipes(items.map((it) => it.id))
+      .then((map) => {
+        if (!cancelled) setMenuPhotoUrls(map)
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        console.error('listMenuItemPhotosForRecipes falló:', err)
+      })
     return () => {
       cancelled = true
     }
@@ -569,7 +610,12 @@ export default function KitchenRecipesPage() {
             const isAi =
               item.source === 'ai_recipe' || item.source === 'ocr_invoice'
             const updated = formatRelative(item.costUpdatedAt)
-            const photo = photoUrls[item.id]
+            // Prioridad: foto pública de carta (menu_item) > foto interna de
+            // escandallo (kitchen_photo_url firmada) > icono de siempre. Si ya
+            // falló al cargar, no se reintenta: directo al icono.
+            const photo = brokenPhotoIds.has(item.id)
+              ? undefined
+              : (menuPhotoUrls[item.id] ?? photoUrls[item.id])
 
             return (
               <div
@@ -577,15 +623,17 @@ export default function KitchenRecipesPage() {
                 onClick={() => setSelectedRecipeId(item.id)}
                 className="bg-card rounded-lg border border-border-default p-3 flex items-center gap-3 cursor-pointer hover:border-terracota hover:shadow-sm transition-base"
               >
-                {/* Foto / placeholder cálido. La miniatura usa la URL firmada
-                    (photoUrls[id]); mientras se resuelve o si no hay foto,
-                    cae al recuadro cálido con el icono. */}
+                {/* Foto / placeholder cálido. La miniatura usa la foto pública
+                    de carta o, si no hay, la firmada del escandallo; mientras
+                    se resuelve, si no hay foto, o si la URL falla al cargar,
+                    cae al recuadro cálido con el icono (nunca un hueco roto). */}
                 <span className="w-14 h-14 rounded-md overflow-hidden flex-shrink-0">
                   {photo ? (
                     <img
                       src={photo}
                       alt={item.name}
                       className="w-full h-full object-cover"
+                      onError={() => setBrokenPhotoIds((prev) => new Set(prev).add(item.id))}
                     />
                   ) : (
                     <span className="w-full h-full flex items-center justify-center bg-terracota-bg">

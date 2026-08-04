@@ -401,29 +401,20 @@ export default function InsightsPage() {
         )}
       </Card>
 
-      {/* ─── BLOQUE 2: ESTADO PLANTILLA con gráficos ─── */}
+      {/* ─── BLOQUE 2: ESTADO PLANTILLA con gráficos ───
+          Auditoría externa (Bloque B.3): los tres barrean la misma cosa
+          (recuento de personas), no un estado — así que llevan el MISMO
+          color neutro por defecto. El único color con significado real es
+          el de la barra "(Sin local/contrato/puesto)": ESA sí es un aviso
+          (dato incompleto de la ficha), así que se pinta en warning. Mismo
+          criterio que los SEV_COLORS del donut de severidad en
+          AppccDashboardPage.tsx: color solo cuando codifica bien/aviso/mal,
+          nunca para diferenciar categorías sin más. Si se añade un cuarto
+          gráfico de distribución, que siga esta misma regla. ─── */}
       <div className="grid md:grid-cols-3 gap-3">
-        <DistributionCard
-          title="Por local"
-          TitleIcon={BarChart3}
-          items={staffByLocation}
-          total={activeStaff.length}
-          accentColor="var(--color-accent)"
-        />
-        <DistributionCard
-          title="Por contrato"
-          TitleIcon={FileText}
-          items={staffByContract}
-          total={activeStaff.length}
-          accentColor="var(--color-warning)"
-        />
-        <DistributionCard
-          title="Por puesto"
-          TitleIcon={Briefcase}
-          items={staffByPosition}
-          total={activeStaff.length}
-          accentColor="var(--color-success)"
-        />
+        <DistributionCard title="Por local" TitleIcon={BarChart3} items={staffByLocation} total={activeStaff.length} />
+        <DistributionCard title="Por contrato" TitleIcon={FileText} items={staffByContract} total={activeStaff.length} />
+        <DistributionCard title="Por puesto" TitleIcon={Briefcase} items={staffByPosition} total={activeStaff.length} />
       </div>
 
       {/* ─── BAJAS MÉDICAS DETALLE ─── */}
@@ -605,18 +596,29 @@ function MiniAvatar({ employee }: { employee: Employee }) {
   )
 }
 
+// Único caso con significado real en estas distribuciones: el cubo
+// "(Sin local)" / "(Sin contrato)" / "(Sin puesto)" señala una ficha de
+// empleado incompleta — un aviso de calidad de dato, no una categoría más.
+function isMissingBucket(label: string): boolean {
+  return label.startsWith('(Sin ')
+}
+
+// Barra neutra por defecto (color de marca, sin estado); ámbar solo para el
+// cubo "sin dato" — ver comentario en el bloque que llama a este componente.
+function barColor(label: string): string {
+  return isMissingBucket(label) ? 'var(--color-warning)' : 'var(--color-accent)'
+}
+
 function DistributionCard({
   title,
   TitleIcon,
   items,
   total,
-  accentColor,
 }: {
   title: string
   TitleIcon: LucideIcon
   items: DistributionItem[]
   total: number
-  accentColor: string
 }) {
   return (
     <Card className="p-4">
@@ -630,7 +632,7 @@ function DistributionCard({
           {items.map((item, i) => (
             <div key={i}>
               <div className="flex items-center justify-between text-xs mb-0.5">
-                <span className="text-text-primary truncate flex-1 pr-2">{item.label}</span>
+                <span className={`truncate flex-1 pr-2 ${isMissingBucket(item.label) ? 'text-warning font-medium' : 'text-text-primary'}`}>{item.label}</span>
                 <span className="text-text-secondary font-mono shrink-0">{item.count}</span>
               </div>
               <div className="h-2 bg-accent-bg rounded-full overflow-hidden">
@@ -638,7 +640,7 @@ function DistributionCard({
                   className="h-full transition-base"
                   style={{
                     width: `${item.percentage}%`,
-                    backgroundColor: accentColor,
+                    backgroundColor: barColor(item.label),
                   }}
                 />
               </div>

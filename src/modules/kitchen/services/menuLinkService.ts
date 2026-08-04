@@ -343,6 +343,36 @@ export async function listMenuItemsUsingRecipe(recipeItemId: string): Promise<Me
 }
 
 /**
+ * Auditoría externa (Bloque C): foto de portada por escandallo, en lote, para
+ * listas (p.ej. KitchenRecipesPage). CatalogFichaPage ya prioriza
+ * `item.photoUrl` (la del producto de carta, pública, sin firmar) sobre
+ * `recipe.kitchenPhotoUrl` (interna, bucket privado, requiere getDishPhotoUrl)
+ * — ver headerPhotoUrl en CatalogFichaPage.tsx. Un escandallo se ve en varios
+ * platos de carta (marca/canal); nos quedamos con la primera foto no nula que
+ * aparezca, misma ambigüedad que ya acepta el selector de ancla de la ficha.
+ */
+export async function listMenuItemPhotosForRecipes(
+  recipeItemIds: string[],
+): Promise<Record<string, string>> {
+  requireSupabase()
+  if (recipeItemIds.length === 0) return {}
+  const { data, error } = await supabase!
+    .from('menu_item')
+    .select('recipe_item_id, photo_url')
+    .in('recipe_item_id', recipeItemIds)
+    .is('archived_at', null)
+    .not('photo_url', 'is', null)
+  if (error) throw new Error(`Error listando fotos de carta: ${error.message}`)
+  const map: Record<string, string> = {}
+  for (const row of data ?? []) {
+    if (row.recipe_item_id && row.photo_url && !map[row.recipe_item_id]) {
+      map[row.recipe_item_id] = row.photo_url
+    }
+  }
+  return map
+}
+
+/**
  * "Crear receta" — crea un recipe_item tipo 'dish' con el nombre del plato y
  * lo enlaza en un solo paso. Composición reutilizada por la ficha de
  * producto y por el cockpit "Casado" (no duplicar esta lógica en cada UI).
