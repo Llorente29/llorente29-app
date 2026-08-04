@@ -42,16 +42,25 @@ export default function ModuleSidebar({
   })
 
   return (
+    // Auditoría externa (Bloque 4, tablet): a 208px fijos, un iPad vertical
+    // (768px) le daba el 27% del ancho a esto solo. De 768 a 1023px (tablet:
+    // isMobile ya es false ahí, así que Shell.tsx sigue montando ESTA
+    // sidebar, no MobileModuleTabs) se colapsa a solo-icono (w-14 = 56px,
+    // patrón "activity bar" ya estándar en apps de escritorio/tablet). A
+    // partir de 1024px (lg) recupera el ancho y las etiquetas de siempre —
+    // 208px exactos (w-52 = 13rem). Puro CSS/Tailwind: no toca useIsMobile
+    // ni la rama de Shell.tsx, cero riesgo para el bottom-nav móvil ni para
+    // los terminales standalone (que ni montan este componente).
     <aside
-      className="shrink-0"
+      className="shrink-0 w-14 lg:w-52"
       style={{
-        width: 208,
         background: SURFACE,
         borderRight: `0.5px solid ${BORDER}`,
         padding: '1rem 0.625rem',
       }}
     >
       <p
+        className="hidden lg:block"
         style={{
           fontSize: '0.6875rem',
           textTransform: 'uppercase',
@@ -73,7 +82,8 @@ export default function ModuleSidebar({
               key={item.id}
               type="button"
               onClick={() => onSelectItem(item.id)}
-              className="flex items-center text-left transition-colors"
+              title={item.label}
+              className="flex items-center justify-center lg:justify-start text-left transition-colors"
               style={{
                 gap: 10,
                 padding: '0.5rem 0.625rem',
@@ -83,8 +93,8 @@ export default function ModuleSidebar({
                 color: active ? '#fff' : 'var(--color-text-primary)',
               }}
             >
-              <Icon size={17} />
-              {item.label}
+              <Icon size={17} className="shrink-0" />
+              <span className="hidden lg:inline">{item.label}</span>
             </button>
           )
         })}
