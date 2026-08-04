@@ -44,7 +44,16 @@ export interface Course {
   createdAt: string
   /** Si true, aprobar test+firma no basta: falta verificación práctica en el puesto (C4). */
   requiresPractical: boolean
+  /** Taxonomía del catálogo (C4 pieza B, guía §5.bis). null = curso sin clasificar. */
+  category: CourseCategory | null
+  /** Vacío o que contenga 'todos' = aplica a cualquier tipo de negocio. */
+  businessTypes: string[]
+  level: CourseLevel | null
+  recommendedOrder: number | null
 }
+
+export type CourseCategory = 'cumplimiento' | 'cocina' | 'delivery' | 'sala' | 'equipo' | 'producto' | 'sostenibilidad'
+export type CourseLevel = 'base' | 'especialista' | 'mando'
 
 export interface CoursePracticalItem {
   id: string
@@ -153,6 +162,10 @@ interface CourseRow {
   status: string
   created_at: string
   requires_practical: boolean
+  category: string | null
+  business_types: string[]
+  level: string | null
+  recommended_order: number | null
 }
 
 function rowToCourse(r: CourseRow): Course {
@@ -174,6 +187,10 @@ function rowToCourse(r: CourseRow): Course {
     status: r.status as CourseStatus,
     createdAt: r.created_at,
     requiresPractical: r.requires_practical,
+    category: r.category as CourseCategory | null,
+    businessTypes: r.business_types ?? [],
+    level: r.level as CourseLevel | null,
+    recommendedOrder: r.recommended_order,
   }
 }
 
@@ -187,6 +204,35 @@ export async function listCourses(accountId: string): Promise<Course[]> {
     .order('title', { ascending: true })
   if (error) { console.error('[coursesService] listCourses', error); throw error }
   return (data as CourseRow[]).map(rowToCourse)
+}
+
+/**
+ * Tipo de negocio de la cuenta (accounts.business_type), para filtrar el
+ * catálogo por course.business_types en la UI (§5.bis). NO es una barrera de
+ * seguridad — RLS ya controla el acceso real a los datos — es solo para no
+ * enseñar en el catálogo cursos de otro tipo de negocio.
+ */
+export async function getAccountBusinessType(accountId: string): Promise<string | null> {
+  if (!supabase) throw new Error('Supabase no disponible')
+  const { data, error } = await supabase
+    .from('accounts')
+    .select('business_type')
+    .eq('id', accountId)
+    .maybeSingle()
+  if (error) { console.error('[coursesService] getAccountBusinessType', error); throw error }
+  return data?.business_type ?? null
+}
+
+/**
+ * Filtro de catálogo por tipo de negocio (§5.bis): un curso de cumplimiento
+ * SIEMPRE se ve (la ley no distingue); el resto solo si business_types está
+ * vacío, contiene 'todos', o incluye el tipo de negocio de la cuenta.
+ */
+export function courseAppliesToBusinessType(course: Course, businessType: string | null): boolean {
+  if (course.category === 'cumplimiento') return true
+  if (course.businessTypes.length === 0) return true
+  if (course.businessTypes.includes('todos')) return true
+  return businessType != null && course.businessTypes.includes(businessType)
 }
 
 export async function getCourseWithContent(courseId: string): Promise<CourseWithContent | null> {

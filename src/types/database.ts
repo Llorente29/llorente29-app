@@ -5175,6 +5175,8 @@ export type Database = {
           account_id: string | null
           adopted_from_course_id: string | null
           appcc_prerequisite: boolean
+          business_types: string[]
+          category: string | null
           code: string
           created_at: string
           created_by: string | null
@@ -5183,7 +5185,9 @@ export type Database = {
           id: string
           is_mandatory: boolean
           legal_basis: string | null
+          level: string | null
           pass_threshold_pct: number
+          recommended_order: number | null
           reeval_months: number | null
           requires_practical: boolean
           status: string
@@ -5195,6 +5199,8 @@ export type Database = {
           account_id?: string | null
           adopted_from_course_id?: string | null
           appcc_prerequisite?: boolean
+          business_types?: string[]
+          category?: string | null
           code: string
           created_at?: string
           created_by?: string | null
@@ -5203,7 +5209,9 @@ export type Database = {
           id?: string
           is_mandatory?: boolean
           legal_basis?: string | null
+          level?: string | null
           pass_threshold_pct?: number
+          recommended_order?: number | null
           reeval_months?: number | null
           requires_practical?: boolean
           status?: string
@@ -5215,6 +5223,8 @@ export type Database = {
           account_id?: string | null
           adopted_from_course_id?: string | null
           appcc_prerequisite?: boolean
+          business_types?: string[]
+          category?: string | null
           code?: string
           created_at?: string
           created_by?: string | null
@@ -5223,7 +5233,9 @@ export type Database = {
           id?: string
           is_mandatory?: boolean
           legal_basis?: string | null
+          level?: string | null
           pass_threshold_pct?: number
+          recommended_order?: number | null
           reeval_months?: number | null
           requires_practical?: boolean
           status?: string
