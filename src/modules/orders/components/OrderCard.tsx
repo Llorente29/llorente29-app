@@ -26,6 +26,7 @@
 import { useState } from 'react'
 import { ChefHat, Check, Printer, Bike, Phone, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, ShoppingBag } from 'lucide-react'
 import { timeLevel, channelLabel, ticketCode } from '@/modules/kds/kdsUtils'
+import { allergenLabel, type AllergenCode } from '@/modules/kitchen/lib/allergens'
 import { passCode } from '../lib/passCode'
 import ChannelBadge from './ChannelBadge'
 import TicketPreviewModal from './TicketPreviewModal'
@@ -214,7 +215,9 @@ function LineRow({
         <div className="mt-2 ml-[58px] flex items-center gap-1.5 flex-wrap">
           <span className="text-[10.5px] font-extrabold uppercase tracking-wide text-text-secondary">Alérgenos</span>
           {line.allergens.map(a => (
-            <span key={a} className="text-[12px] font-bold px-2 py-0.5 rounded-md bg-warning-bg text-warning border border-warning/30">{a}</span>
+            <span key={a} className="text-[12px] font-bold px-2 py-0.5 rounded-md bg-warning-bg text-warning border border-warning/30">
+              {allergenLabel(a as AllergenCode)}
+            </span>
           ))}
         </div>
       )}

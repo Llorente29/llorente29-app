@@ -424,11 +424,11 @@ export default function FichaTab({ item, accountId, onItemChanged }: FichaTabPro
         </p>
       </div>
 
-      {/* Packaging delivery (S9) */}
+      {/* Envases para reparto (S9) */}
       <div>
-        <h3 className="text-xs font-medium uppercase tracking-wide text-stone-400 mb-3">Packaging delivery</h3>
+        <h3 className="text-xs font-medium uppercase tracking-wide text-stone-400 mb-3">Envases para reparto</h3>
         {!item.packagingDescription && item.packagingCost == null && (
-          <p className="text-sm text-stone-500 mb-3">Sin información de packaging.</p>
+          <p className="text-sm text-stone-500 mb-3">Sin información de envases.</p>
         )}
         <div className="space-y-3">
           <div>
@@ -442,7 +442,7 @@ export default function FichaTab({ item, accountId, onItemChanged }: FichaTabPro
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-stone-500 mb-1.5">Coste packaging (€/unidad)</label>
+            <label className="block text-xs font-medium text-stone-500 mb-1.5">Coste de envases (€/unidad)</label>
             <input
               type="text" inputMode="decimal" value={packCost} onChange={(e) => setPackCost(e.target.value)}
               className="w-40 px-3 py-2.5 text-sm border border-stone-200 rounded-lg bg-stone-50 focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
@@ -457,7 +457,7 @@ export default function FichaTab({ item, accountId, onItemChanged }: FichaTabPro
               disabled={fieldSaving === 'pack'}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 transition-opacity"
             >
-              {fieldSaving === 'pack' ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} Guardar packaging
+              {fieldSaving === 'pack' ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} Guardar envases
             </button>
           )}
         </div>
@@ -467,8 +467,8 @@ export default function FichaTab({ item, accountId, onItemChanged }: FichaTabPro
           de lógica nueva permitida en esta fase. La comparación "Dentro/Fuera
           del objetivo" sigue viviendo en Economía. */}
       <div>
-        <h3 className="text-xs font-medium uppercase tracking-wide text-stone-400 mb-3">Objetivo de food cost</h3>
-        <label className="block text-xs font-medium text-stone-500 mb-1.5">Target FC (%)</label>
+        <h3 className="text-xs font-medium uppercase tracking-wide text-stone-400 mb-3">Objetivo de coste de producto</h3>
+        <label className="block text-xs font-medium text-stone-500 mb-1.5">Objetivo de coste (%)</label>
         <input
           type="text" inputMode="decimal" value={targetFcVal} onChange={(e) => setTargetFcVal(e.target.value)}
           placeholder="Sin definir"

@@ -19,6 +19,7 @@ import type { ShiftSwapRequest } from '../../types/shiftSwap'
 import MiBolsaHoras from '../../components/MiBolsaHoras'
 import SolicitarCambioModal from '../../components/trabajador/SolicitarCambioModal'
 import { fetchVacations } from '../../services/vacationsService'
+import { fmtHours } from '../../lib/format'
 import {
   type ShiftTemplate,
   type Schedule,
@@ -299,13 +300,13 @@ export default function MiHorario({ employee, onBack }: MiHorarioProps) {
           <div>
             <div className="text-xs text-text-secondary">Total horas semana</div>
             <div className="text-2xl font-bold text-accent">
-              {totalHoras}h
+              {fmtHours(totalHoras)}
             </div>
           </div>
           <div className="text-right">
             <div className="text-xs text-text-secondary">Contratadas</div>
             <div className="text-lg font-semibold text-text-primary">
-              {employee.weeklyHours || 40}h
+              {fmtHours(employee.weeklyHours || 40)}
             </div>
           </div>
         </div>
@@ -375,7 +376,7 @@ export default function MiHorario({ employee, onBack }: MiHorarioProps) {
                 </div>
                 {!libre && (
                   <span className="text-xs font-mono text-text-secondary">
-                    {totalDia.toFixed(2)}h
+                    {fmtHours(totalDia)}
                   </span>
                 )}
               </div>
@@ -413,7 +414,7 @@ export default function MiHorario({ employee, onBack }: MiHorarioProps) {
                               </div>
                             )}
                           </div>
-                          <span className="text-xs font-mono text-text-primary">{t.hours}h</span>
+                          <span className="text-xs font-mono text-text-primary">{fmtHours(t.hours)}</span>
                         </div>
 
                         {/* Estado del cambio o botón solicitar */}

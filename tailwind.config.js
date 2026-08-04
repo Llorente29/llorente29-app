@@ -12,6 +12,11 @@ export default {
         // ── Texto ──
         'text-primary': '#15171A',   // tinta
         'text-secondary': '#6B7077', // gris frío legible
+        // Auditoría externa: text-text-tertiary se usaba en 280+ sitios sin
+        // existir en el theme -- Tailwind lo ignoraba en silencio (la
+        // jerarquía de gris se aplanaba, sin error visible). Un tercer
+        // escalón, más apagado que secondary, para metadatos/ayuda.
+        'text-tertiary': '#9CA1A8',
         'text-on-accent': '#FFFFFF',
 
         // ── Acción / marca (rebrand 30/06/2026: tinta monocroma) ──
@@ -45,6 +50,14 @@ export default {
           DEFAULT: '#E0492E',
           bg: '#FBE8E3',
         },
+
+        // Auditoría externa: bg-background-info/text-text-info se usaban
+        // (chip de "merma" en Almacén, etiqueta de sección en el escandallo)
+        // sin existir en el theme -- el chip salía invisible (texto del
+        // color de fondo). Azul-marino informativo, distinto de los tres
+        // semánticos del margen (no es ganar/perder, es "dato neutro").
+        'background-info': '#E3E8ED',
+        'text-info': '#1E3A5F',
       },
       fontFamily: {
         // Display → Space Grotesk (grotesca moderna). Fallback a Inter para
