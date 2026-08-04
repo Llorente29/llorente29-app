@@ -76,6 +76,39 @@ function extractDelivery(rawTab: string | null): DeliveryInfo | null {
   }
 }
 
+// ── Dirección de un pedido del SHOP PROPIO (source='folvy_shop') ────────────
+// Los pedidos de Last.app traen la dirección dentro de raw_tab.delivery. Los del
+// Shop NO: la guardan en sale.delivery_address (texto) y las coordenadas en
+// customer_address (lat/lng geocodificadas con Mapbox por place_shop_order, que
+// además separa el piso/puerta en `detail`).
+// Se prefiere la dirección predeterminada del cliente y, si hay varias, la más
+// reciente — que es la que el checkout acaba de sembrar/refrescar para el pedido.
+async function deliveryFromShop(
+  sb: ReturnType<typeof createClient>,
+  sale: { customer_id?: string | null; delivery_address?: string | null; customer_note?: string | null },
+): Promise<DeliveryInfo | null> {
+  if (!sale.customer_id) return null;
+  const { data, error } = await sb
+    .from("customer_address")
+    .select("address, detail, lat, lng")
+    .eq("customer_id", sale.customer_id)
+    .order("is_default", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(1);
+  if (error || !data || data.length === 0) return null;
+  const a = data[0] as { address?: string | null; detail?: string | null; lat?: number | null; lng?: number | null };
+  if (a.lat == null || a.lng == null) return null;
+  return {
+    // TEXTO: manda lo que quedó en la venta; si faltara, la dirección guardada.
+    address: (sale.delivery_address ?? a.address ?? "").trim() || undefined,
+    details: (a.detail ?? sale.customer_note ?? "").trim() || undefined,
+    latitude: Number(a.lat),
+    longitude: Number(a.lng),
+    // Sin geocodedAddress: estas coords YA vienen de geocodificar ese mismo
+    // texto en el checkout, así que no hay discrepancia que detectar.
+  };
+}
+
 // ── Fiabilidad de dirección: detección de discrepancia address vs geocoded ──
 function normStreet(s: string | null | undefined): string {
   return (s ?? "")
@@ -152,7 +185,7 @@ Deno.serve(async (req: Request) => {
   // 1. Leer el pedido.
   const { data: sale, error: saleErr } = await sb
     .from("sale")
-    .select("id, account_id, location_id, raw_tab, total, customer_name, customer_phone, pos_short_code, platform_order_code, external_ref, carrier_order_id, customer_note, source")
+    .select("id, account_id, location_id, raw_tab, total, customer_name, customer_phone, pos_short_code, platform_order_code, external_ref, carrier_order_id, customer_note, source, customer_id, delivery_address")
     .eq("id", saleId)
     .single();
   if (saleErr || !sale) return json(404, { ok: false, error: "sale not found" });
@@ -212,10 +245,23 @@ Deno.serve(async (req: Request) => {
     return json(400, { ok: false, error: "credenciales incompletas (app_id/app_secret/location_id)" });
   }
 
-  // 5. Dirección del cliente (raw_tab.delivery).
-  const delivery = extractDelivery(sale.raw_tab);
+  // 5. Dirección del cliente, RESUELTA POR ORIGEN.
+  //    · Shop propio  -> sale.delivery_address + customer_address (lat/lng, detail)
+  //    · Last.app y demás plataformas -> raw_tab.delivery (camino histórico, intacto)
+  //    Si el camino propio del Shop no diera resultado, se cae a raw_tab por si
+  //    ese pedido lo trajera igualmente. Nunca al revés.
+  let delivery: DeliveryInfo | null = null;
+  if (sale.source === "folvy_shop") {
+    delivery = await deliveryFromShop(sb, sale);
+  }
+  if (!delivery) delivery = extractDelivery(sale.raw_tab);
   if (!delivery || delivery.latitude == null || delivery.longitude == null) {
-    return json(400, { ok: false, error: "el pedido no tiene dirección de cliente (raw_tab.delivery)" });
+    return json(400, {
+      ok: false,
+      error: sale.source === "folvy_shop"
+        ? "el pedido del Shop no tiene dirección con coordenadas (customer_address.lat/lng)"
+        : "el pedido no tiene dirección de cliente (raw_tab.delivery)",
+    });
   }
 
   // ── F2: TEXTO = lo que escribió el cliente (nunca el geocoded). PIN = si el
