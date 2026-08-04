@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
-<rect width="800" height="450" fill="#E8EEF5"/>
-<circle cx="700" cy="70" r="180" fill="#1E3A5F" opacity="0.06"/>
-<circle cx="90" cy="400" r="120" fill="#1E3A5F" opacity="0.05"/>
+<rect width="800" height="450" fill="#D3E0EE"/>
+<circle cx="700" cy="70" r="180" fill="#1E3A5F" opacity="0.10"/>
+<circle cx="90" cy="400" r="120" fill="#1E3A5F" opacity="0.09"/>
 <path d="M240 350 a160 160 0 0 1 320 0" fill="none" stroke="#E0492E" stroke-width="13" stroke-linecap="round"/><path d="M256 350 a144 144 0 0 1 288 0" fill="none" stroke="#D67442" stroke-width="13" stroke-linecap="round"/><path d="M272 350 a128 128 0 0 1 256 0" fill="none" stroke="#C2890F" stroke-width="13" stroke-linecap="round"/><path d="M288 350 a112 112 0 0 1 224 0" fill="none" stroke="#1F9D6B" stroke-width="13" stroke-linecap="round"/><path d="M304 350 a96 96 0 0 1 192 0" fill="none" stroke="#2C5282" stroke-width="13" stroke-linecap="round"/><path d="M320 350 a80 80 0 0 1 160 0" fill="none" stroke="#6B4A8F" stroke-width="13" stroke-linecap="round"/>
 <rect x="0" y="404" width="800" height="46" fill="#1E3A5F" opacity="0.9"/>
 <text x="40" y="434" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="bold" fill="#FFFFFF" letter-spacing="1">DIVERSIDAD LGTBI</text>
