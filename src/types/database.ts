@@ -15607,6 +15607,89 @@ export type Database = {
         }
         Relationships: []
       }
+      training_path: {
+        Row: {
+          account_id: string | null
+          active: boolean
+          business_types: string[]
+          created_at: string
+          id: string
+          name: string
+          roles: string[]
+        }
+        Insert: {
+          account_id?: string | null
+          active?: boolean
+          business_types?: string[]
+          created_at?: string
+          id?: string
+          name: string
+          roles?: string[]
+        }
+        Update: {
+          account_id?: string | null
+          active?: boolean
+          business_types?: string[]
+          created_at?: string
+          id?: string
+          name?: string
+          roles?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "training_path_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      training_path_item: {
+        Row: {
+          course_id: string
+          created_at: string
+          days_from_hire: number
+          id: string
+          is_blocking: boolean
+          path_id: string
+          phase: string
+        }
+        Insert: {
+          course_id: string
+          created_at?: string
+          days_from_hire: number
+          id?: string
+          is_blocking?: boolean
+          path_id: string
+          phase: string
+        }
+        Update: {
+          course_id?: string
+          created_at?: string
+          days_from_hire?: number
+          id?: string
+          is_blocking?: boolean
+          path_id?: string
+          phase?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "training_path_item_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "course"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_path_item_path_id_fkey"
+            columns: ["path_id"]
+            isOneToOne: false
+            referencedRelation: "training_path"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       uber_store_map: {
         Row: {
           account_id: string
@@ -16621,6 +16704,10 @@ export type Database = {
           p_zone_ids: string[]
         }
         Returns: Json
+      }
+      assign_onboarding_training: {
+        Args: { p_employee_id: string }
+        Returns: number
       }
       auto_map_exact_sales: {
         Args: { p_account_id?: string; p_days?: number; p_dry_run?: boolean }
