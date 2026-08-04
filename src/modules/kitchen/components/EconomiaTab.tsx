@@ -132,7 +132,13 @@ export default function EconomiaTab({ item }: EconomiaTabProps) {
           <div className="text-[11px] text-stone-400">IVA {fmtPct(vatPct)} incluido</div>
         </div>
         <div className="bg-stone-50 rounded-lg px-4 py-3">
-          <div className="text-[10px] font-medium text-stone-400 tracking-widest uppercase mb-1">Coste de producto</div>
+          {/* "Food cost" se queda EN INGLÉS a propósito (decisión de Julio,
+              auditoría externa): es el término estándar del sector en toda
+              la hostelería española, igual que "escandallo" o "mise en
+              place" -- traducirlo suena más pulcro pero resta credibilidad
+              profesional. Distinto de "Plate cost"/"Packaging", que sí eran
+              spanglish descuidado y se tradujeron. No lo "arregles" de vuelta. */}
+          <div className="text-[10px] font-medium text-stone-400 tracking-widest uppercase mb-1">Food cost</div>
           <div className={`font-mono text-lg font-medium ${hasCost ? 'text-[#BA7517]' : 'text-stone-300'}`}>{hasCost ? fmtEur(recipeCost) : '—'}</div>
           <div className="text-[11px] text-stone-400">{hasCost ? `${fmtPct(foodCostPct, 2)} del PVP` : 'Pendiente de escandallo'}</div>
         </div>
@@ -177,11 +183,11 @@ export default function EconomiaTab({ item }: EconomiaTabProps) {
                   <div className="flex items-center gap-2.5">{badge}</div>
                   <div className="text-right">
                     <span className={`font-mono text-xl font-medium ${margin >= 0 ? 'text-success' : 'text-danger'}`}>{fmtEur(margin)}</span>
-                    <div className="text-[12px] text-stone-400">{fmtPct(marginPct, 2)} del PVP{!e.costAvailable ? ' · sin coste de producto' : ''}</div>
+                    <div className="text-[12px] text-stone-400">{fmtPct(marginPct, 2)} del PVP{!e.costAvailable ? ' · sin food cost' : ''}</div>
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 mb-2 text-[12px] text-stone-500">
-                  {e.costAvailable && <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-[#A68B6B]" /> Coste de producto {fmtEur(e.cost)}</span>}
+                  {e.costAvailable && <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-[#A68B6B]" /> Food cost {fmtEur(e.cost)}</span>}
                   {e.commissionPct != null && <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-[#4A6A8A]" /> Comisión {fmtPct(e.commissionPct)} ({fmtEur(commAmt)})</span>}
                   {hasOrderCosts && (
                     <span className="flex items-center gap-1.5 cursor-help"
@@ -215,8 +221,8 @@ export default function EconomiaTab({ item }: EconomiaTabProps) {
           prop, así que no hay ventana de desincronización). */}
       <p className="text-[12px] text-stone-500 mt-4 pt-3 border-t border-stone-200">
         {item.targetFoodCostPct != null
-          ? `Objetivo de coste: ${fmtPct(item.targetFoodCostPct)} · ${foodCostPct != null ? (foodCostPct <= item.targetFoodCostPct ? 'Dentro del objetivo' : 'Fuera del objetivo') : 'sin coste de producto para comparar'}`
-          : 'Sin objetivo de coste configurado.'}
+          ? `Objetivo de food cost: ${fmtPct(item.targetFoodCostPct)} · ${foodCostPct != null ? (foodCostPct <= item.targetFoodCostPct ? 'Dentro del objetivo' : 'Fuera del objetivo') : 'sin food cost para comparar'}`
+          : 'Sin objetivo de food cost configurado.'}
       </p>
     </div>
   )
