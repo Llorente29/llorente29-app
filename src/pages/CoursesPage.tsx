@@ -149,6 +149,26 @@ export default function CoursesPage() {
     setSelectedId(newCourseId)
   }
 
+  // "Añadir a mis cursos" desde el Catálogo Folvy (C6 §A): a diferencia de
+  // handleAdopted, aquí NO se navega — es una acción de "añadir a la lista"
+  // (la tarjeta pasa sola de zona 2 a zona 1 al refrescar), no de "empezar a
+  // editar ahora mismo".
+  const [adoptingId, setAdoptingId] = useState<string | null>(null)
+  const [adoptCatalogError, setAdoptCatalogError] = useState<string | null>(null)
+  async function handleAddFromCatalog(globalCourseId: string) {
+    if (!activeAccountId) return
+    setAdoptingId(globalCourseId)
+    setAdoptCatalogError(null)
+    try {
+      await adoptCourseForAccount(activeAccountId, globalCourseId)
+      await refreshCourses()
+    } catch (e) {
+      setAdoptCatalogError(e instanceof Error ? e.message : 'No se pudo añadir el curso')
+    } finally {
+      setAdoptingId(null)
+    }
+  }
+
   const selected = courses.find(c => c.id === selectedId) ?? null
 
   if (!activeAccountId) return null
@@ -196,10 +216,38 @@ export default function CoursesPage() {
         </Card>
       ) : (
         (() => {
-          // §5.bis: cumplimiento nunca se filtra por tipo de negocio; el resto
-          // solo se enseña si aplica al tipo de negocio de esta cuenta.
-          const visible = courses.filter(c => coursesService.courseAppliesToBusinessType(c, businessType))
-          const filtered = visible.filter(c =>
+          const imageUrlFor = (c: Course): string | null => {
+            const candidate = c.coverUrl ?? c.firstSectionMediaUrl
+            return candidate ? coverUrls[candidate] ?? null : null
+          }
+
+          // C6 §A: tres zonas, no una rejilla mezclada. "Mis cursos" (copias
+          // adoptadas + propias) es lo primero — es donde se trabaja cada día.
+          // "Catálogo Folvy" son plantillas SIN adoptar todavía: en cuanto se
+          // adopta una, desaparece de aquí y aparece en "Mis cursos" — así el
+          // duplicado no existe por diseño, no por filtro a posteriori.
+          const own = courses.filter(c => c.accountId !== null)
+          const adoptedOriginIds = new Set(
+            own.map(c => c.adoptedFromCourseId).filter((id): id is string => !!id),
+          )
+          const mine = own.filter(c => c.deliveryMode !== 'solo_archivo')
+          const catalog = courses.filter(c =>
+            c.accountId === null
+            && c.deliveryMode !== 'solo_archivo'
+            && !adoptedOriginIds.has(c.id)
+            && coursesService.courseAppliesToBusinessType(c, businessType),
+          )
+          // Certificados externos: si la cuenta ya adoptó su copia, se enseña
+          // ESA (puede llevar notas/ajustes propios); si no, la plantilla
+          // global de solo lectura. Nunca las dos a la vez para el mismo code.
+          const soloByCode = new Map<string, Course>()
+          for (const c of courses.filter(c => c.deliveryMode === 'solo_archivo')) {
+            const existing = soloByCode.get(c.code)
+            if (!existing || (c.accountId !== null && existing.accountId === null)) soloByCode.set(c.code, c)
+          }
+          const external = [...soloByCode.values()]
+
+          const filtered = mine.filter(c =>
             (categoryFilter === 'todas' || c.category === categoryFilter) &&
             (levelFilter === 'todos' || c.level === levelFilter),
           )
@@ -215,53 +263,88 @@ export default function CoursesPage() {
           const orderedGroups = CATEGORY_ORDER.filter(k => groups.has(k))
 
           return (
-            <>
-              <div className="flex flex-wrap items-center gap-3 mb-5">
-                <div className="w-56">
-                  <Select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value as CourseCategory | 'todas')}>
-                    <option value="todas">Todas las categorías</option>
-                    {(Object.keys(CATEGORY_LABEL) as (CourseCategory | 'sin_categoria')[])
-                      .filter((k): k is CourseCategory => k !== 'sin_categoria')
-                      .map(k => <option key={k} value={k}>{CATEGORY_LABEL[k]}</option>)}
-                  </Select>
+            <div className="space-y-10">
+              {/* Zona 1 — Mis cursos */}
+              <section>
+                <h2 className="font-display text-lg text-text-primary mb-3">Mis cursos</h2>
+                <div className="flex flex-wrap items-center gap-3 mb-5">
+                  <div className="w-56">
+                    <Select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value as CourseCategory | 'todas')}>
+                      <option value="todas">Todas las categorías</option>
+                      {(Object.keys(CATEGORY_LABEL) as (CourseCategory | 'sin_categoria')[])
+                        .filter((k): k is CourseCategory => k !== 'sin_categoria')
+                        .map(k => <option key={k} value={k}>{CATEGORY_LABEL[k]}</option>)}
+                    </Select>
+                  </div>
+                  <div className="w-48">
+                    <Select value={levelFilter} onChange={e => setLevelFilter(e.target.value as CourseLevel | 'todos')}>
+                      <option value="todos">Todos los niveles</option>
+                      {(Object.keys(LEVEL_LABEL) as CourseLevel[]).map(k => <option key={k} value={k}>{LEVEL_LABEL[k]}</option>)}
+                    </Select>
+                  </div>
                 </div>
-                <div className="w-48">
-                  <Select value={levelFilter} onChange={e => setLevelFilter(e.target.value as CourseLevel | 'todos')}>
-                    <option value="todos">Todos los niveles</option>
-                    {(Object.keys(LEVEL_LABEL) as CourseLevel[]).map(k => <option key={k} value={k}>{LEVEL_LABEL[k]}</option>)}
-                  </Select>
-                </div>
-              </div>
 
-              {filtered.length === 0 ? (
-                <Card className="p-8 text-center">
-                  <p className="text-sm text-text-secondary">Ningún curso coincide con este filtro.</p>
-                </Card>
-              ) : (
-                <div className="space-y-8">
-                  {orderedGroups.map(key => (
-                    <div key={key}>
-                      <h2 className="font-display text-sm uppercase tracking-wide text-text-secondary mb-3">
-                        {CATEGORY_LABEL[key]}
-                      </h2>
-                      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                        {groups.get(key)!.map(c => (
-                          <CourseCard
-                            key={c.id}
-                            course={c}
-                            imageUrl={(() => {
-                              const candidate = c.coverUrl ?? c.firstSectionMediaUrl
-                              return candidate ? coverUrls[candidate] ?? null : null
-                            })()}
-                            onClick={() => setSelectedId(c.id)}
-                          />
-                        ))}
+                {mine.length === 0 ? (
+                  <Card className="p-8 text-center">
+                    <p className="text-sm text-text-secondary">Todavía no tienes ningún curso propio. Añade uno del catálogo Folvy o crea el primero.</p>
+                  </Card>
+                ) : filtered.length === 0 ? (
+                  <Card className="p-8 text-center">
+                    <p className="text-sm text-text-secondary">Ningún curso coincide con este filtro.</p>
+                  </Card>
+                ) : (
+                  <div className="space-y-8">
+                    {orderedGroups.map(key => (
+                      <div key={key}>
+                        <h3 className="font-display text-sm uppercase tracking-wide text-text-secondary mb-3">
+                          {CATEGORY_LABEL[key]}
+                        </h3>
+                        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                          {groups.get(key)!.map(c => (
+                            <CourseCard key={c.id} course={c} imageUrl={imageUrlFor(c)} onClick={() => setSelectedId(c.id)} />
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              {/* Zona 2 — Catálogo Folvy (plantillas sin adoptar) */}
+              {catalog.length > 0 && (
+                <section>
+                  <h2 className="font-display text-lg text-text-primary mb-1">Catálogo Folvy</h2>
+                  <p className="text-sm text-text-secondary mb-4">Plantillas de Folvy que aún no tienes. Añádelas para empezar a asignarlas.</p>
+                  {adoptCatalogError && <Alert type="error" className="mb-4">{adoptCatalogError}</Alert>}
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {catalog.map(c => (
+                      <CatalogCard
+                        key={c.id}
+                        course={c}
+                        imageUrl={imageUrlFor(c)}
+                        alreadyAdopted={adoptedOriginIds.has(c.id)}
+                        adopting={adoptingId === c.id}
+                        onPreview={() => setSelectedId(c.id)}
+                        onAdd={() => handleAddFromCatalog(c.id)}
+                      />
+                    ))}
+                  </div>
+                </section>
               )}
-            </>
+
+              {/* Zona 3 — Certificados externos (Folvy vigila, no imparte) */}
+              {external.length > 0 && (
+                <section>
+                  <h2 className="font-display text-lg text-text-primary mb-1">Certificados externos</h2>
+                  <p className="text-sm text-text-secondary mb-4">Formación que Folvy vigila pero no imparte.</p>
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {external.map(c => (
+                      <SoloArchivoCard key={c.id} course={c} imageUrl={imageUrlFor(c)} onClick={() => setSelectedId(c.id)} />
+                    ))}
+                  </div>
+                </section>
+              )}
+            </div>
           )
         })()
       )}
@@ -311,6 +394,78 @@ function CourseCard({ course, imageUrl, onClick }: { course: Course; imageUrl: s
             course.deliveryMode === 'solo_archivo' ? 'Solo archivo' : null,
             course.requiresPractical ? 'Requiere práctica' : null,
           ].filter(Boolean).join(' · ')}
+        </p>
+      </div>
+    </Card>
+  )
+}
+
+// Tarjeta del Catálogo Folvy (C6 §A): plantilla sin adoptar todavía, con CTA
+// "Añadir a mis cursos". `alreadyAdopted` es una red de seguridad — por
+// construcción esta tarjeta nunca debería recibir un curso ya adoptado (se
+// filtra antes), pero si algo se coló (caché desfasada, carrera), la tarjeta
+// lo detecta por sí misma y NO deja adoptar dos veces (regla dura del §B).
+function CatalogCard({ course, imageUrl, alreadyAdopted, adopting, onPreview, onAdd }: {
+  course: Course; imageUrl: string | null; alreadyAdopted: boolean; adopting: boolean
+  onPreview: () => void; onAdd: () => void
+}) {
+  const [imageFailed, setImageFailed] = useState(false)
+  const showImage = !!imageUrl && !imageFailed
+  const categoryKey = course.category ?? 'sin_categoria'
+  const CategoryIcon = CATEGORY_ICON[categoryKey]
+
+  return (
+    <Card className="overflow-hidden">
+      <div className={`w-full aspect-video flex items-center justify-center cursor-pointer ${showImage ? '' : CATEGORY_BG[categoryKey]}`} onClick={onPreview}>
+        {showImage ? (
+          <img src={imageUrl!} alt={course.title} className="w-full h-full object-cover" onError={() => setImageFailed(true)} />
+        ) : (
+          <CategoryIcon size={32} />
+        )}
+      </div>
+      <div className="p-4">
+        <p className="font-semibold text-text-primary line-clamp-2 cursor-pointer" onClick={onPreview}>{course.title}</p>
+        <p className="text-xs text-text-secondary mt-1.5 inline-flex items-center gap-1">
+          {course.estimatedMinutes && <Clock size={11} />}
+          {[course.estimatedMinutes ? `${course.estimatedMinutes} min` : null, course.isMandatory ? 'Obligatorio' : null]
+            .filter(Boolean).join(' · ')}
+        </p>
+        <Button
+          size="sm"
+          variant={alreadyAdopted ? 'outline' : 'primary'}
+          className="w-full mt-3"
+          disabled={alreadyAdopted || adopting}
+          onClick={(e) => { e.stopPropagation(); onAdd() }}
+        >
+          {alreadyAdopted ? 'Ya lo tienes' : adopting ? 'Añadiendo…' : 'Añadir a mis cursos'}
+        </Button>
+      </div>
+    </Card>
+  )
+}
+
+// Tarjeta de Certificados externos (C6 §A): ni se asigna ni se "hace" desde
+// aquí — es evidencia que se archiva en la ficha del empleado. Sin duración
+// (0 min leería como curso roto) y sin ningún botón de acción.
+function SoloArchivoCard({ course, imageUrl, onClick }: { course: Course; imageUrl: string | null; onClick: () => void }) {
+  const [imageFailed, setImageFailed] = useState(false)
+  const showImage = !!imageUrl && !imageFailed
+  const categoryKey = course.category ?? 'sin_categoria'
+  const CategoryIcon = CATEGORY_ICON[categoryKey]
+
+  return (
+    <Card className="overflow-hidden" onClick={onClick}>
+      <div className={`w-full aspect-video flex items-center justify-center ${showImage ? '' : CATEGORY_BG[categoryKey]}`}>
+        {showImage ? (
+          <img src={imageUrl!} alt={course.title} className="w-full h-full object-cover" onError={() => setImageFailed(true)} />
+        ) : (
+          <CategoryIcon size={32} />
+        )}
+      </div>
+      <div className="p-4">
+        <p className="font-semibold text-text-primary line-clamp-2">{course.title}</p>
+        <p className="text-xs text-text-secondary mt-1.5">
+          Lo imparte tu servicio de prevención. Súbelo en la ficha del empleado.
         </p>
       </div>
     </Card>

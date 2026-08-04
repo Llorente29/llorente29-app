@@ -16433,6 +16433,10 @@ export type Database = {
             }
             Returns: string
           }
+      adopt_mandatory_courses: {
+        Args: { p_account_id: string }
+        Returns: number
+      }
       agent_campaign_uplift: {
         Args: { p_account_id: string; p_days_back?: number }
         Returns: {
