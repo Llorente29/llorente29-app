@@ -222,7 +222,7 @@ export default function Shell() {
               activeItemId={activeItem?.id ?? ''}
               onSelectItem={handleSelectItem}
             />
-            <main className="flex-1 w-full">
+            <main className="flex-1 w-full min-w-0">
               <div style={contentStyle}>
                 {moduleRoutesEl}
               </div>
@@ -236,7 +236,7 @@ export default function Shell() {
               activeItemId={activeItem?.id ?? ''}
               onSelectItem={handleSelectItem}
             />
-            <main className="flex-1 w-full">
+            <main className="flex-1 w-full min-w-0">
               <div style={contentStyle}>
                 {moduleRoutesEl}
               </div>
@@ -244,7 +244,7 @@ export default function Shell() {
           </div>
         )
       ) : (
-        <main className="flex-1 w-full">
+        <main className="flex-1 w-full min-w-0">
           <div style={contentStyle}>
             <HomeGeneral userName={userName} onOpenModule={goToKey} />
           </div>
