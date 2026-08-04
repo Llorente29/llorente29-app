@@ -5284,6 +5284,7 @@ export type Database = {
           id: string
           location_id: string | null
           origin: string
+          path_item_id: string | null
           role: string | null
           source_incident_id: string | null
         }
@@ -5297,6 +5298,7 @@ export type Database = {
           id?: string
           location_id?: string | null
           origin: string
+          path_item_id?: string | null
           role?: string | null
           source_incident_id?: string | null
         }
@@ -5310,6 +5312,7 @@ export type Database = {
           id?: string
           location_id?: string | null
           origin?: string
+          path_item_id?: string | null
           role?: string | null
           source_incident_id?: string | null
         }
@@ -5340,6 +5343,13 @@ export type Database = {
             columns: ["location_id"]
             isOneToOne: false
             referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "course_assignment_path_item_id_fkey"
+            columns: ["path_item_id"]
+            isOneToOne: false
+            referencedRelation: "training_path_item"
             referencedColumns: ["id"]
           },
         ]
@@ -15611,6 +15621,7 @@ export type Database = {
         Row: {
           account_id: string | null
           active: boolean
+          auto_release: boolean
           business_types: string[]
           created_at: string
           id: string
@@ -15620,6 +15631,7 @@ export type Database = {
         Insert: {
           account_id?: string | null
           active?: boolean
+          auto_release?: boolean
           business_types?: string[]
           created_at?: string
           id?: string
@@ -15629,6 +15641,7 @@ export type Database = {
         Update: {
           account_id?: string | null
           active?: boolean
+          auto_release?: boolean
           business_types?: string[]
           created_at?: string
           id?: string
@@ -15641,6 +15654,60 @@ export type Database = {
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      training_path_progress: {
+        Row: {
+          created_at: string
+          due_at: string | null
+          employee_id: string
+          id: string
+          path_id: string
+          phase: string
+          released_at: string | null
+          released_by: string | null
+          state: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          due_at?: string | null
+          employee_id: string
+          id?: string
+          path_id: string
+          phase: string
+          released_at?: string | null
+          released_by?: string | null
+          state?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          due_at?: string | null
+          employee_id?: string
+          id?: string
+          path_id?: string
+          phase?: string
+          released_at?: string | null
+          released_by?: string | null
+          state?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "training_path_progress_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_path_progress_path_id_fkey"
+            columns: ["path_id"]
+            isOneToOne: false
+            referencedRelation: "training_path"
             referencedColumns: ["id"]
           },
         ]
@@ -17353,11 +17420,29 @@ export type Database = {
           due_at: string | null
           estimated_minutes: number | null
           passed: boolean | null
+          phase: string | null
           reeval_months: number | null
           score_pct: number | null
           signed_at: string | null
           status: string
         }[]
+      }
+      // Formación — Itinerario por fases (liberación escalonada).
+      ensure_training_path_progress: {
+        Args: { p_employee_id: string; p_path_id: string }
+        Returns: undefined
+      }
+      sync_phase_assignments: {
+        Args: { p_employee_id: string; p_path_id: string; p_phase: string }
+        Returns: number
+      }
+      release_next_phase: {
+        Args: { p_employee_id: string; p_path_id: string }
+        Returns: Json
+      }
+      release_next_phase_for_group: {
+        Args: { p_location_id?: string | null; p_path_id: string; p_role?: string | null }
+        Returns: Json
       }
       sign_course_attempt: {
         Args: {
