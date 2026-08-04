@@ -5191,6 +5191,7 @@ export type Database = {
           recommended_order: number | null
           reeval_months: number | null
           requires_practical: boolean
+          source_recipe_item_id: string | null
           status: string
           summary: string | null
           title: string
@@ -5216,6 +5217,7 @@ export type Database = {
           recommended_order?: number | null
           reeval_months?: number | null
           requires_practical?: boolean
+          source_recipe_item_id?: string | null
           status?: string
           summary?: string | null
           title: string
@@ -5241,6 +5243,7 @@ export type Database = {
           recommended_order?: number | null
           reeval_months?: number | null
           requires_practical?: boolean
+          source_recipe_item_id?: string | null
           status?: string
           summary?: string | null
           title?: string
@@ -5259,6 +5262,13 @@ export type Database = {
             columns: ["adopted_from_course_id"]
             isOneToOne: false
             referencedRelation: "course"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "course_source_recipe_item_id_fkey"
+            columns: ["source_recipe_item_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_item"
             referencedColumns: ["id"]
           },
         ]
@@ -17494,6 +17504,18 @@ export type Database = {
         Returns: number
       }
       fv_e164_or_null: { Args: { p: string }; Returns: string }
+      generate_course_from_recipe: {
+        Args: {
+          p_estimated_minutes: number
+          p_practical_item_text: string
+          p_questions: Json
+          p_recipe_item_id: string
+          p_sections: Json
+          p_summary: string
+          p_title: string
+        }
+        Returns: Json
+      }
       generate_daily_count: {
         Args: {
           p_account_id: string

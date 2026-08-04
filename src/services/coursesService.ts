@@ -59,6 +59,8 @@ export interface Course {
    * getCourseWithContent no lo toca (ya trae sections completo, úsalo directo).
    */
   firstSectionMediaUrl: string | null
+  /** Si este curso se generó desde un plato (C7), el recipe_item de origen. null = no generado. */
+  sourceRecipeItemId: string | null
 }
 
 export type CourseCategory = 'cumplimiento' | 'cocina' | 'delivery' | 'sala' | 'equipo' | 'producto' | 'sostenibilidad'
@@ -176,6 +178,7 @@ interface CourseRow {
   level: string | null
   recommended_order: number | null
   cover_url: string | null
+  source_recipe_item_id: string | null
   /** Solo presente cuando listCourses embebe course_section para resolver la capa 2 de la portada (C5 §B). */
   course_section?: { ord: number; media_url: string | null }[]
 }
@@ -207,6 +210,7 @@ function rowToCourse(r: CourseRow): Course {
     firstSectionMediaUrl: (r.course_section ?? [])
       .filter((s): s is { ord: number; media_url: string } => !!s.media_url)
       .sort((a, b) => a.ord - b.ord)[0]?.media_url ?? null,
+    sourceRecipeItemId: r.source_recipe_item_id,
   }
 }
 
@@ -223,6 +227,22 @@ export async function listCourses(accountId: string): Promise<Course[]> {
     .order('title', { ascending: true })
   if (error) { console.error('[coursesService] listCourses', error); throw error }
   return (data as CourseRow[]).map(rowToCourse)
+}
+
+/**
+ * Curso ya generado desde este plato (C7), si existe — para que la ficha del
+ * plato sepa si ofrecer "Crear curso" o "Regenerar curso" sin tener que
+ * cargar todo el catálogo (CatalogFichaPage no lo necesita para nada más).
+ */
+export async function getCourseBySourceRecipeItemId(recipeItemId: string): Promise<Course | null> {
+  if (!supabase) throw new Error('Supabase no disponible')
+  const { data, error } = await supabase
+    .from('course')
+    .select('*')
+    .eq('source_recipe_item_id', recipeItemId)
+    .maybeSingle()
+  if (error) { console.error('[coursesService] getCourseBySourceRecipeItemId', error); throw error }
+  return data ? rowToCourse(data as CourseRow) : null
 }
 
 /**
