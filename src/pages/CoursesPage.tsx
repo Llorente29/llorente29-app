@@ -27,6 +27,7 @@ import type {
 import { generateSessionActaPdf, blobToDataUrl } from '../services/courseCertificatePdfService'
 import { adoptCourseForAccount } from '../services/courseAdoptionService'
 import TrainingCalendarView from '../components/personal/TrainingCalendarView'
+import { getTrainingComplianceMatrix, type TrainingComplianceRow } from '../services/trainingComplianceService'
 import {
   getSignedSectionImageUrl, getSignedSectionImageUrls, uploadOwnSectionImage, revertSectionImageToFolvy,
   uploadOwnCoverImage, revertCoverToFolvy,
@@ -1254,6 +1255,7 @@ function AsignarTab({ course, accountId, staff, locations }: {
   course: Course; accountId: string; staff: Employee[]; locations: Location[]
 }) {
   const [assignments, setAssignments] = useState<CourseAssignment[]>([])
+  const [matrix, setMatrix] = useState<TrainingComplianceRow[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
   const [targetType, setTargetType] = useState<'empleado' | 'puesto' | 'local'>('empleado')
@@ -1263,18 +1265,62 @@ function AsignarTab({ course, accountId, staff, locations }: {
   const [dueAt, setDueAt] = useState('')
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  // Anti-duplicado (bug real en producción: el mismo curso asignado varias
+  // veces a la misma persona, con intentos a medias repartidos entre
+  // asignaciones). Si al pulsar "Asignar" ya hay una asignación ACTIVA (no
+  // superada ni caducada) para ese destino, no se crea otra: se ofrece
+  // actualizar la fecha límite de la que ya existe.
+  const [duplicateOf, setDuplicateOf] = useState<CourseAssignment | null>(null)
 
   async function load() {
     setLoading(true)
     setLoadError(false)
-    try { setAssignments(await coursesService.listAssignments(course.id)) }
+    try {
+      const [a, m] = await Promise.all([
+        coursesService.listAssignments(course.id),
+        getTrainingComplianceMatrix(accountId),
+      ])
+      setAssignments(a)
+      setMatrix(m)
+    }
     catch { setLoadError(true) }
     finally { setLoading(false) }
   }
   useEffect(() => { load() }, [course.id])
 
+  /** Asignación ya existente que haría de ésta un duplicado, o null si no la hay. */
+  function findDuplicate(): CourseAssignment | null {
+    if (targetType === 'empleado') {
+      if (!employeeId) return null
+      const existing = assignments.find(a => a.employeeId === employeeId)
+      if (!existing) return null
+      // "Activa" = ni superada (vigente) ni caducada -- si ya la superó o ya
+      // le caducó, una asignación nueva es legítima (reevaluación), no un
+      // duplicado. Reutiliza training_compliance_matrix (C2): no se
+      // recalcula "¿está vigente?" por quinta vez en el módulo.
+      const state = matrix.find(r => r.employeeId === employeeId)?.courses[course.code]?.state
+      const isActive = state === 'pendiente' || state === 'en_curso' || state === 'pendiente_practica'
+      return isActive ? existing : null
+    }
+    if (targetType === 'puesto') {
+      if (!role) return null
+      // Por puesto/local no hay "estado de una persona" que consultar -- son
+      // reglas estructurales (cualquiera que entre en ese puesto la hereda);
+      // una segunda fila con el mismo puesto para el mismo curso nunca añade
+      // cobertura nueva, así que se bloquea sin condición.
+      return assignments.find(a => a.role === role) ?? null
+    }
+    if (targetType === 'local') {
+      if (!locationId) return null
+      return assignments.find(a => a.locationId === locationId) ?? null
+    }
+    return null
+  }
+
   async function submit() {
     setFormError(null)
+    const dup = findDuplicate()
+    if (dup) { setDuplicateOf(dup); return }
     setSaving(true)
     try {
       await coursesService.createAssignment({
@@ -1289,6 +1335,21 @@ function AsignarTab({ course, accountId, staff, locations }: {
       await load()
     } catch (e) {
       setFormError(e instanceof Error ? e.message : 'No se pudo asignar')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function updateDueDateInstead() {
+    if (!duplicateOf) return
+    setSaving(true)
+    setFormError(null)
+    try {
+      await coursesService.updateAssignment(duplicateOf.id, { dueAt: dueAt ? new Date(dueAt).toISOString() : null })
+      setDuplicateOf(null)
+      await load()
+    } catch (e) {
+      setFormError(e instanceof Error ? e.message : 'No se pudo actualizar la fecha límite')
     } finally {
       setSaving(false)
     }
@@ -1312,10 +1373,20 @@ function AsignarTab({ course, accountId, staff, locations }: {
       <Card className="p-4">
         <p className="font-semibold text-text-primary mb-3">Nueva asignación</p>
         {formError && <Alert type="error" className="mb-3">{formError}</Alert>}
+        {duplicateOf && (
+          <Alert type="error" className="mb-3">
+            <p className="font-medium">{targetLabel(duplicateOf)} ya tiene este curso asignado y sin superar.</p>
+            <p className="text-sm mt-1">No se crea una asignación nueva — puedes actualizar la fecha límite de la que ya existe.</p>
+            <div className="flex gap-2 mt-2">
+              <Button size="sm" onClick={updateDueDateInstead} disabled={saving}>Actualizar fecha límite</Button>
+              <Button size="sm" variant="outline" onClick={() => setDuplicateOf(null)}>Cancelar</Button>
+            </div>
+          </Alert>
+        )}
         <div className="grid sm:grid-cols-2 gap-3">
           <div>
             <Label>Destino</Label>
-            <Select value={targetType} onChange={e => setTargetType(e.target.value as typeof targetType)}>
+            <Select value={targetType} onChange={e => { setTargetType(e.target.value as typeof targetType); setDuplicateOf(null) }}>
               <option value="empleado">Un empleado</option>
               <option value="puesto">Todo un puesto</option>
               <option value="local">Todo un local</option>
@@ -1329,7 +1400,7 @@ function AsignarTab({ course, accountId, staff, locations }: {
         {targetType === 'empleado' && (
           <div className="mt-3">
             <Label>Empleado</Label>
-            <Select value={employeeId} onChange={e => setEmployeeId(e.target.value)}>
+            <Select value={employeeId} onChange={e => { setEmployeeId(e.target.value); setDuplicateOf(null) }}>
               <option value="">Selecciona…</option>
               {staff.filter(e => e.active).map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
             </Select>
@@ -1338,7 +1409,7 @@ function AsignarTab({ course, accountId, staff, locations }: {
         {targetType === 'puesto' && (
           <div className="mt-3">
             <Label>Puesto</Label>
-            <Select value={role} onChange={e => setRole(e.target.value)}>
+            <Select value={role} onChange={e => { setRole(e.target.value); setDuplicateOf(null) }}>
               {POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
             </Select>
           </div>
@@ -1346,7 +1417,7 @@ function AsignarTab({ course, accountId, staff, locations }: {
         {targetType === 'local' && (
           <div className="mt-3">
             <Label>Local</Label>
-            <Select value={locationId} onChange={e => setLocationId(e.target.value)}>
+            <Select value={locationId} onChange={e => { setLocationId(e.target.value); setDuplicateOf(null) }}>
               <option value="">Selecciona…</option>
               {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
             </Select>

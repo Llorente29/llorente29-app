@@ -10,7 +10,10 @@ import SendMessageModal from '../components/personal/SendMessageModal'
 import AccesoTrabajadorPanel from '../components/personal/AccesoTrabajadorPanel'
 import InsightsPage from './InsightsPage'
 import { fetchStaffRoles, type StaffRole } from '../services/staffRoleService'
-import { getEmployeeTrainingStatus, type EmployeeTrainingStatus } from '../services/trainingPathService'
+import {
+  getEmployeeTrainingStatus, type EmployeeTrainingStatus,
+  listEmployeePhaseProgress, releaseNextPhase, type EmployeePhaseProgress, type TrainingPhaseName,
+} from '../services/trainingPathService'
 import {
   createEmployeeWithAccount,
   deactivateEmployeeAccount,
@@ -26,6 +29,13 @@ import {
   User, UserMinus, UserX, FileText, Key, UserPlus,
   type LucideIcon,
 } from 'lucide-react'
+
+const PHASE_ORDER_INDEX: Record<TrainingPhaseName, number> = { dia_1: 0, dias_30: 1, dias_90: 2 }
+const PHASE_SHORT_LABEL: Record<TrainingPhaseName, string> = {
+  dia_1: 'Fase 1 (día 1)',
+  dias_30: 'Fase 2 (30 días)',
+  dias_90: 'Fase 3 (90 días)',
+}
 
 
 const POSITIONS = ['Encargado', 'Jefe de cocina', 'Cocinero', 'Ayudante cocina', 'Camarero', 'Barra', 'Hostess', 'Limpieza', 'Gerente', 'Otro']
@@ -359,6 +369,35 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
       .catch(() => { if (!cancel) setTrainingStatus(null) })
     return () => { cancel = true }
   }, [accountId, employee.id])
+
+  // Itinerario por fases — liberación manual (§2.3 del rediseño). Solo la vía
+  // manual: liberación automática al completar fase + cron de desfase están
+  // declaradas, no construidas en esta entrega.
+  const [phaseProgress, setPhaseProgress] = useState<EmployeePhaseProgress[]>([])
+  const [releasingPathId, setReleasingPathId] = useState<string | null>(null)
+  const [releaseError, setReleaseError] = useState<string | null>(null)
+  async function loadPhaseProgress() {
+    if (!employee.id) return
+    try {
+      setPhaseProgress(await listEmployeePhaseProgress(employee.id))
+    } catch {
+      setPhaseProgress([])
+    }
+  }
+  useEffect(() => { loadPhaseProgress() }, [employee.id])
+  async function handleReleaseNextPhase(pathId: string) {
+    setReleaseError(null)
+    setReleasingPathId(pathId)
+    try {
+      await releaseNextPhase(employee.id, pathId)
+      await loadPhaseProgress()
+    } catch (e) {
+      setReleaseError(e instanceof Error ? e.message : 'No se pudo liberar la siguiente fase')
+    } finally {
+      setReleasingPathId(null)
+    }
+  }
+
   const [tab, setTab] = useState('info')
   const [clocking, setClocking] = useState(false)
   const [clockWarn, setClockWarn] = useState<{ type: 'blocked' | 'rounded' | 'real'; msg: string } | null>(null)
@@ -739,7 +778,54 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
 
         {/* ── FORMACIONES ── */}
         {tab === 'formaciones' && (
-          <FormacionesTab employee={emp} />
+          <div className="space-y-4">
+            <Card className="p-4">
+              <p className="font-semibold text-text-primary mb-2">Itinerario de incorporación por fases</p>
+              {phaseProgress.length === 0 ? (
+                <p className="text-sm text-text-secondary">Sin itinerario de incorporación asignado.</p>
+              ) : (
+                <div className="space-y-3">
+                  {[...new Set(phaseProgress.map(p => p.pathId))].map(pathId => {
+                    const rows = phaseProgress.filter(p => p.pathId === pathId)
+                    const pathName = rows[0]?.pathName ?? '—'
+                    const nextPending = rows
+                      .filter(p => p.state === 'pendiente')
+                      .sort((a, b) => PHASE_ORDER_INDEX[a.phase] - PHASE_ORDER_INDEX[b.phase])[0]
+                    return (
+                      <div key={pathId} className="border border-border-default rounded-lg p-3">
+                        <p className="text-sm font-medium text-text-primary">{pathName}</p>
+                        <div className="flex items-center gap-2 mt-2 flex-wrap">
+                          {[...rows].sort((a, b) => PHASE_ORDER_INDEX[a.phase] - PHASE_ORDER_INDEX[b.phase]).map(p => (
+                            <span
+                              key={p.id}
+                              className={`text-xs px-2 py-1 rounded-full font-medium ${
+                                p.state === 'liberada' ? 'bg-success-bg text-success' : 'bg-page text-text-secondary'
+                              }`}
+                            >
+                              {PHASE_SHORT_LABEL[p.phase]} · {p.state}
+                            </span>
+                          ))}
+                        </div>
+                        {nextPending && (
+                          <Button
+                            className="mt-3"
+                            variant="outline"
+                            size="sm"
+                            disabled={releasingPathId === pathId}
+                            onClick={() => handleReleaseNextPhase(pathId)}
+                          >
+                            {releasingPathId === pathId ? 'Liberando…' : `Liberar ${PHASE_SHORT_LABEL[nextPending.phase]}`}
+                          </Button>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+              {releaseError && <p className="text-xs text-danger mt-2">{releaseError}</p>}
+            </Card>
+            <FormacionesTab employee={emp} />
+          </div>
         )}
 
         {/* ── CONTRATO ── */}
