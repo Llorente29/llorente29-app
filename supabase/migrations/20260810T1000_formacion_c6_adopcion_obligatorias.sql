@@ -4,10 +4,24 @@
 --
 -- Mismo patrón que 20260617T2360_ingredient_family_onboarding.sql (RECON
 -- obligatorio del encargo, verificado): función SECURITY DEFINER idempotente
--- + trigger AFTER INSERT ON accounts que la invoca + backfill aparte para
--- las cuentas que ya existen (esa migración también separa el backfill del
--- alta de la función, por la misma razón: no mezclar DDL con una operación
--- pesada de datos en la misma transacción implícita).
+-- + trigger AFTER INSERT ON accounts que la invoca. El backfill para las
+-- cuentas que ya existen va en un FICHERO APARTE
+-- (20260810T1100_formacion_c6_backfill_obligatorias.sql) — no en el mismo,
+-- ni siquiera en la misma sección: el SQL Editor de Supabase envuelve TODO
+-- el script pegado en una única transacción, así que un fallo en el
+-- backfill (datos) tumbaría también este DDL si estuvieran en el mismo
+-- fichero. Aplícalos en dos pasadas separadas.
+--
+-- 🔴 CORRECCIÓN sobre el primer intento de esta migración: llevaba un DO de
+-- backfill con COMMIT/ROLLBACK dentro del bucle, asumiendo ejecución
+-- top-level con autocommit (válido en psql/una sesión suelta, PG11+). El
+-- SQL Editor de Supabase NO es ese contexto: envuelve el script en una
+-- transacción explícita, y COMMIT/ROLLBACK dentro de un DO ahí revienta con
+-- "invalid transaction termination" (2D000) — abortando TODA la
+-- transacción, incluida la creación de la función y el trigger de más
+-- arriba (verificado en producción: 0/1, ni la función ni el trigger
+-- llegaron a existir). Corregido: el backfill ya no usa COMMIT/ROLLBACK en
+-- ningún sitio, y vive en su propio fichero.
 --
 -- Duplica en PL/pgSQL el clonado que hace courseAdoptionService.ts
 -- (course + course_section + course_question/course_option +
@@ -182,40 +196,7 @@ begin
 end
 $guard$;
 
--- ────────────────────────────────────────────────────────────────────────────
--- 3) BACKFILL — cuentas que ya existen. UNA TRANSACCIÓN POR CUENTA (aviso del
---    encargo: adoptar clona curso+secciones+preguntas+opciones+gestos; con
---    varias cuentas y 9 obligatorias puede ser pesado). Ejecutar este bloque
---    tal cual, en la SQL Editor, en modo top-level (no dentro de otra función):
---    los DO en top-level SÍ pueden hacer COMMIT/ROLLBACK internamente desde
---    Postgres 11.
---
---    Errores por cuenta se registran con RAISE WARNING y NO detienen el
---    backfill de las demás -- una cuenta con un dato raro no debe bloquear a
---    las 50 siguientes.
--- ────────────────────────────────────────────────────────────────────────────
-do $backfill$
-declare
-  r record;
-  v_n integer;
-  v_total integer := 0;
-  v_accounts integer := 0;
-begin
-  for r in select id, name from public.accounts order by created_at loop
-    begin
-      v_n := public.adopt_mandatory_courses(r.id);
-      v_total := v_total + v_n;
-      v_accounts := v_accounts + 1;
-      if v_n > 0 then
-        raise notice 'Cuenta % (%): % curso(s) obligatorio(s) adoptado(s).', r.name, r.id, v_n;
-      end if;
-      commit;
-    exception when others then
-      rollback;
-      raise warning 'adopt_mandatory_courses falló para la cuenta % (%): %', r.name, r.id, sqlerrm;
-    end;
-  end loop;
-  raise notice 'Backfill de obligatorias: % cursos adoptados en % cuenta(s) revisada(s).', v_total, v_accounts;
-end
-$backfill$;
+-- El backfill de cuentas ya existentes va en
+-- 20260810T1100_formacion_c6_backfill_obligatorias.sql -- aplícala DESPUÉS
+-- de esta, como una ejecución aparte en el SQL Editor.
 -- ============================================================================
