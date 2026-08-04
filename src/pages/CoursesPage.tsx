@@ -21,7 +21,7 @@ import { Button, Input, Select, Textarea, Badge, Card, Tabs, Modal, Label, Alert
 import * as coursesService from '../services/coursesService'
 import type {
   Course, CourseWithContent, CourseAssignment, CourseAttempt, CourseSignatureRow,
-  DeliveryMode, TrackingRow,
+  DeliveryMode, TrackingRow, CourseCategory, CourseLevel,
 } from '../services/coursesService'
 import { generateSessionActaPdf, blobToDataUrl } from '../services/courseCertificatePdfService'
 import { adoptCourseForAccount } from '../services/courseAdoptionService'
@@ -44,21 +44,49 @@ const STATUS_BADGE: Record<Course['status'], { label: string; color: string }> =
   archived: { label: 'Archivado', color: 'gray' },
 }
 
+// Orden lógico del catálogo (guía §5.bis / catálogo v2 §6), no alfabético:
+// cumplimiento primero (es lo obligatorio), 'sin_categoria' al final para no
+// esconder cursos aún sin clasificar (deuda declarada, no un descarte).
+const CATEGORY_ORDER: (CourseCategory | 'sin_categoria')[] = [
+  'cumplimiento', 'cocina', 'delivery', 'sala', 'equipo', 'producto', 'sostenibilidad', 'sin_categoria',
+]
+const CATEGORY_LABEL: Record<CourseCategory | 'sin_categoria', string> = {
+  cumplimiento: 'Cumplimiento legal',
+  cocina: 'Operación de cocina',
+  delivery: 'Reparto y delivery',
+  sala: 'Sala y cliente',
+  equipo: 'Equipo y mandos',
+  producto: 'Producto y recetas',
+  sostenibilidad: 'Sostenibilidad',
+  sin_categoria: 'Sin clasificar',
+}
+const LEVEL_LABEL: Record<CourseLevel, string> = {
+  base: 'Base (toda la plantilla)',
+  especialista: 'Especialista',
+  mando: 'Mando',
+}
+
 export default function CoursesPage() {
   const { activeAccountId, staff, locations } = useApp()
   const [courses, setCourses] = useState<Course[]>([])
+  const [businessType, setBusinessType] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [showCreate, setShowCreate] = useState(false)
+  const [categoryFilter, setCategoryFilter] = useState<CourseCategory | 'todas'>('todas')
+  const [levelFilter, setLevelFilter] = useState<CourseLevel | 'todos'>('todos')
 
   useEffect(() => {
     if (!activeAccountId) return
     let cancel = false
     setLoading(true)
     setLoadError(false)
-    coursesService.listCourses(activeAccountId)
-      .then(rows => { if (!cancel) setCourses(rows) })
+    Promise.all([
+      coursesService.listCourses(activeAccountId),
+      coursesService.getAccountBusinessType(activeAccountId),
+    ])
+      .then(([rows, bt]) => { if (!cancel) { setCourses(rows); setBusinessType(bt) } })
       .catch(() => { if (!cancel) setLoadError(true) })
       .finally(() => { if (!cancel) setLoading(false) })
     return () => { cancel = true }
@@ -128,24 +156,81 @@ export default function CoursesPage() {
           <p className="text-sm text-text-secondary">Todavía no hay cursos. Crea el primero.</p>
         </Card>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {courses.map(c => (
-            <Card key={c.id} className="p-4" onClick={() => setSelectedId(c.id)}>
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="font-semibold text-text-primary truncate">{c.title}</p>
-                  <p className="text-xs text-text-secondary mt-0.5">{c.legalBasis || 'Sin base legal declarada'}</p>
+        (() => {
+          // §5.bis: cumplimiento nunca se filtra por tipo de negocio; el resto
+          // solo se enseña si aplica al tipo de negocio de esta cuenta.
+          const visible = courses.filter(c => coursesService.courseAppliesToBusinessType(c, businessType))
+          const filtered = visible.filter(c =>
+            (categoryFilter === 'todas' || c.category === categoryFilter) &&
+            (levelFilter === 'todos' || c.level === levelFilter),
+          )
+          const groups = new Map<CourseCategory | 'sin_categoria', Course[]>()
+          for (const c of filtered) {
+            const key = c.category ?? 'sin_categoria'
+            const list = groups.get(key)
+            if (list) list.push(c); else groups.set(key, [c])
+          }
+          for (const list of groups.values()) {
+            list.sort((a, b) => (a.recommendedOrder ?? 9999) - (b.recommendedOrder ?? 9999) || a.title.localeCompare(b.title))
+          }
+          const orderedGroups = CATEGORY_ORDER.filter(k => groups.has(k))
+
+          return (
+            <>
+              <div className="flex flex-wrap items-center gap-3 mb-5">
+                <div className="w-56">
+                  <Select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value as CourseCategory | 'todas')}>
+                    <option value="todas">Todas las categorías</option>
+                    {(Object.keys(CATEGORY_LABEL) as (CourseCategory | 'sin_categoria')[])
+                      .filter((k): k is CourseCategory => k !== 'sin_categoria')
+                      .map(k => <option key={k} value={k}>{CATEGORY_LABEL[k]}</option>)}
+                  </Select>
                 </div>
-                {c.accountId === null && <Badge color="blue">Plantilla Folvy</Badge>}
+                <div className="w-48">
+                  <Select value={levelFilter} onChange={e => setLevelFilter(e.target.value as CourseLevel | 'todos')}>
+                    <option value="todos">Todos los niveles</option>
+                    {(Object.keys(LEVEL_LABEL) as CourseLevel[]).map(k => <option key={k} value={k}>{LEVEL_LABEL[k]}</option>)}
+                  </Select>
+                </div>
               </div>
-              <div className="flex items-center gap-2 mt-3">
-                <Badge color={STATUS_BADGE[c.status].color}>{STATUS_BADGE[c.status].label}</Badge>
-                <Badge color="gray">{DELIVERY_LABEL[c.deliveryMode]}</Badge>
-                {c.appccPrerequisite && <Badge color="yellow">Prerrequisito APPCC</Badge>}
-              </div>
-            </Card>
-          ))}
-        </div>
+
+              {filtered.length === 0 ? (
+                <Card className="p-8 text-center">
+                  <p className="text-sm text-text-secondary">Ningún curso coincide con este filtro.</p>
+                </Card>
+              ) : (
+                <div className="space-y-8">
+                  {orderedGroups.map(key => (
+                    <div key={key}>
+                      <h2 className="font-display text-sm uppercase tracking-wide text-text-secondary mb-3">
+                        {CATEGORY_LABEL[key]}
+                      </h2>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {groups.get(key)!.map(c => (
+                          <Card key={c.id} className="p-4" onClick={() => setSelectedId(c.id)}>
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="font-semibold text-text-primary truncate">{c.title}</p>
+                                <p className="text-xs text-text-secondary mt-0.5">{c.legalBasis || 'Sin base legal declarada'}</p>
+                              </div>
+                              {c.accountId === null && <Badge color="blue">Plantilla Folvy</Badge>}
+                            </div>
+                            <div className="flex items-center gap-2 mt-3 flex-wrap">
+                              <Badge color={STATUS_BADGE[c.status].color}>{STATUS_BADGE[c.status].label}</Badge>
+                              <Badge color="gray">{DELIVERY_LABEL[c.deliveryMode]}</Badge>
+                              {c.level && <Badge color="gray">{LEVEL_LABEL[c.level]}</Badge>}
+                              {c.appccPrerequisite && <Badge color="yellow">Prerrequisito APPCC</Badge>}
+                            </div>
+                          </Card>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )
+        })()
       )}
 
       <CreateCourseModal

@@ -195,23 +195,40 @@ export default function MiFormacion({ employee, onBack }: Props) {
             </div>
           ) : (
             courses.map(c => (
-              <button
-                key={c.assignmentId}
-                onClick={() => openCourse(c)}
-                disabled={busy}
-                className="w-full bg-card border-2 border-border-default hover:border-accent rounded-xl p-4 text-left transition-base active:scale-[0.98]"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <p className="font-semibold text-text-primary">{c.courseTitle}</p>
-                  <span className={`text-xs px-2 py-1 rounded-full font-medium shrink-0 ${STATUS_LABEL[c.status].color}`}>
-                    {STATUS_LABEL[c.status].label}
-                  </span>
+              c.deliveryMode === 'solo_archivo' ? (
+                // Este curso no se "hace" en el móvil: lo imparte un tercero
+                // (p. ej. el servicio de prevención). Sin botón de empezar
+                // test — llevaría a una teoría/test que no existe para esto.
+                <div key={c.assignmentId} className="w-full bg-card border-2 border-dashed border-border-default rounded-xl p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-semibold text-text-primary">{c.courseTitle}</p>
+                    <span className={`text-xs px-2 py-1 rounded-full font-medium shrink-0 ${STATUS_LABEL[c.status].color}`}>
+                      {STATUS_LABEL[c.status].label}
+                    </span>
+                  </div>
+                  <p className="text-xs text-text-secondary mt-2">
+                    Lo imparte tu servicio de prevención. Sube el certificado desde <span className="font-medium">Mis documentos</span> (tipo «Formación / curso»).
+                  </p>
                 </div>
-                <div className="flex items-center gap-3 mt-1.5 text-xs text-text-secondary">
-                  {c.estimatedMinutes && <span className="flex items-center gap-1"><Clock size={12} /> {c.estimatedMinutes} min</span>}
-                  {c.dueAt && <span>Antes del {new Date(c.dueAt).toLocaleDateString('es-ES')}</span>}
-                </div>
-              </button>
+              ) : (
+                <button
+                  key={c.assignmentId}
+                  onClick={() => openCourse(c)}
+                  disabled={busy}
+                  className="w-full bg-card border-2 border-border-default hover:border-accent rounded-xl p-4 text-left transition-base active:scale-[0.98]"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-semibold text-text-primary">{c.courseTitle}</p>
+                    <span className={`text-xs px-2 py-1 rounded-full font-medium shrink-0 ${STATUS_LABEL[c.status].color}`}>
+                      {STATUS_LABEL[c.status].label}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 mt-1.5 text-xs text-text-secondary">
+                    {c.estimatedMinutes && <span className="flex items-center gap-1"><Clock size={12} /> {c.estimatedMinutes} min</span>}
+                    {c.dueAt && <span>Antes del {new Date(c.dueAt).toLocaleDateString('es-ES')}</span>}
+                  </div>
+                </button>
+              )
             ))
           )}
         </div>
