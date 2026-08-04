@@ -213,9 +213,24 @@ export default function VentasDashboardPage() {
     }
   }, [activeAccountId, accountsLoading, period, locationId, ownership, channel, brandId])
 
+  // Auditoría externa (2.6): un canal "Desconocido" con net negativo (ajustes/
+  // devoluciones sin canal atribuido) pintaba una barra negativa sin sentido.
+  // Se agrupan los residuales (net<=0, o sin nombre reconocible) en "Otros" en
+  // vez de mostrarlos sueltos -- mismo total, sin la barra rota.
+  const byChannelGrouped = useMemo(() => {
+    const rows = data?.by_channel ?? []
+    const positive = rows.filter((c) => c.net > 0 && c.name && c.name.toLowerCase() !== 'desconocido')
+    const residual = rows.filter((c) => !(c.net > 0 && c.name && c.name.toLowerCase() !== 'desconocido'))
+    if (residual.length === 0) return positive
+    const otrosNet = residual.reduce((sum, c) => sum + c.net, 0)
+    const otrosOrders = residual.reduce((sum, c) => sum + c.orders, 0)
+    return otrosNet !== 0 || otrosOrders !== 0
+      ? [...positive, { name: 'Otros', net: otrosNet, orders: otrosOrders }]
+      : positive
+  }, [data])
   const channelMax = useMemo(
-    () => Math.max(1, ...(data?.by_channel ?? []).map((c) => c.net)),
-    [data]
+    () => Math.max(1, ...byChannelGrouped.map((c) => c.net)),
+    [byChannelGrouped]
   )
   const locationMax = useMemo(
     () => Math.max(1, ...(data?.by_location ?? []).map((l) => l.net)),
@@ -354,13 +369,13 @@ export default function VentasDashboardPage() {
             <div className="rounded-xl bg-white border border-stone-200 p-4">
               <div className="text-sm font-medium text-stone-800 mb-2.5">Ventas por canal</div>
               <div className="flex flex-col gap-2.5">
-                {data.by_channel.map((c) => (
+                {byChannelGrouped.map((c) => (
                   <div key={c.name}>
                     <div className="flex justify-between text-xs mb-1">
                       <span className="capitalize">{c.name}</span>
                       <span className="text-stone-500 tabular-nums">{eur(c.net)} · {c.orders} ped.</span>
                     </div>
-                    <Bar pct={(c.net / channelMax) * 100} color={TERRA} />
+                    <Bar pct={Math.max(0, (c.net / channelMax) * 100)} color={TERRA} />
                   </div>
                 ))}
               </div>

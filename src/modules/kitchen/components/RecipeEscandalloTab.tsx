@@ -1860,7 +1860,7 @@ export default function RecipeEscandalloTab({
               emptyHint: 'Sin sub-recetas.',
             })}
             {Section({
-              title: 'Packaging',
+              title: 'Envases',
               icon: <ShoppingBag className="w-3.5 h-3.5" />,
               kind: 'packaging',
               sectionLines: packagingLines,
@@ -2134,7 +2134,7 @@ export default function RecipeEscandalloTab({
           Coste en vivo
         </div>
 
-        <div className="text-xs text-text-secondary">{packagingCost > 0 ? 'Plate cost' : 'Coste total'}</div>
+        <div className="text-xs text-text-secondary">{packagingCost > 0 ? 'Coste del plato' : 'Coste total'}</div>
         <div
           className={
             'font-mono font-medium text-text-primary leading-tight text-[34px] origin-left transition-all duration-slow ' +
@@ -2166,7 +2166,7 @@ export default function RecipeEscandalloTab({
               <span className="font-mono text-text-primary">{formatEur(foodCost * prodFactor)}</span>
             </div>
             <div className="flex items-center justify-between text-[12px]">
-              <span className="text-text-secondary">Packaging</span>
+              <span className="text-text-secondary">Envases</span>
               <span className="font-mono text-text-primary">{formatEur(packagingCost * prodFactor)}</span>
             </div>
           </div>
@@ -2190,15 +2190,15 @@ export default function RecipeEscandalloTab({
             que eso signifique "no está en carta" — en ese caso, aviso
             distinto, sin el CTA de "Añadir a carta" (ya está añadido). */}
         {econLoading || usedByItems === null ? (
-          <div className="text-[11px] text-text-secondary">Calculando food cost…</div>
+          <div className="text-[11px] text-text-secondary">Calculando coste de producto…</div>
         ) : usedByItems.length === 0 ? (
           <div>
             <div className="text-[11px] font-medium tracking-wide text-text-secondary uppercase mb-2">
-              Food cost
+              Coste de producto
             </div>
             <div className="flex items-start gap-1.5 text-[11px] text-text-secondary leading-relaxed mb-2.5">
               <AlertTriangle className="w-3.5 h-3.5 mt-px flex-shrink-0 text-warning" />
-              <span>Este plato aún no está en ninguna carta. Añádelo para ver su food cost y margen.</span>
+              <span>Este plato aún no está en ninguna carta. Añádelo para ver su coste de producto y margen.</span>
             </div>
             <button
               type="button"
@@ -2212,9 +2212,9 @@ export default function RecipeEscandalloTab({
         ) : economics.length === 0 ? (
           <div>
             <div className="text-[11px] font-medium tracking-wide text-text-secondary uppercase mb-2">
-              Food cost
+              Coste de producto
             </div>
-            <p className="text-[11px] text-text-secondary">Sin datos de food cost por canal todavía.</p>
+            <p className="text-[11px] text-text-secondary">Sin datos de coste de producto por canal todavía.</p>
           </div>
         ) : (
           <div className="flex flex-col gap-3">

@@ -27,6 +27,7 @@ import {
   type SalesChannel as SalesChannelType,
 } from '@/modules/kitchen/services/channelRateService'
 import { supabase } from '@/lib/supabase'
+import { fmtPct } from '@/lib/format'
 import type { MenuItem } from '@/types/kitchen'
 
 function fmtEur(value: number | null | undefined): string {
@@ -128,17 +129,17 @@ export default function EconomiaTab({ item }: EconomiaTabProps) {
         <div className="bg-stone-50 rounded-lg px-4 py-3">
           <div className="text-[10px] font-medium text-stone-400 tracking-widest uppercase mb-1">PVP cliente</div>
           <div className="font-mono text-lg font-medium">{fmtEur(pvpConIva)}</div>
-          <div className="text-[11px] text-stone-400">IVA {vatPct}% incluido</div>
+          <div className="text-[11px] text-stone-400">IVA {fmtPct(vatPct)} incluido</div>
         </div>
         <div className="bg-stone-50 rounded-lg px-4 py-3">
-          <div className="text-[10px] font-medium text-stone-400 tracking-widest uppercase mb-1">Food cost</div>
+          <div className="text-[10px] font-medium text-stone-400 tracking-widest uppercase mb-1">Coste de producto</div>
           <div className={`font-mono text-lg font-medium ${hasCost ? 'text-[#BA7517]' : 'text-stone-300'}`}>{hasCost ? fmtEur(recipeCost) : '—'}</div>
-          <div className="text-[11px] text-stone-400">{hasCost ? `${foodCostPct}% del PVP` : 'Pendiente de escandallo'}</div>
+          <div className="text-[11px] text-stone-400">{hasCost ? `${fmtPct(foodCostPct, 2)} del PVP` : 'Pendiente de escandallo'}</div>
         </div>
         <div className="bg-stone-50 rounded-lg px-4 py-3">
           <div className="text-[10px] font-medium text-stone-400 tracking-widest uppercase mb-1">Mejor margen</div>
           <div className={`font-mono text-lg font-medium ${bestMargin != null ? 'text-success' : 'text-stone-300'}`}>{bestMargin != null ? fmtEur(bestMargin) : '—'}</div>
-          <div className="text-[11px] text-stone-400">{bestChannel ? `${bestChannel} · ${bestMarginPct}%` : 'Configura un canal'}</div>
+          <div className="text-[11px] text-stone-400">{bestChannel ? `${bestChannel} · ${fmtPct(bestMarginPct, 2)}` : 'Configura un canal'}</div>
         </div>
       </div>
 
@@ -176,12 +177,12 @@ export default function EconomiaTab({ item }: EconomiaTabProps) {
                   <div className="flex items-center gap-2.5">{badge}</div>
                   <div className="text-right">
                     <span className={`font-mono text-xl font-medium ${margin >= 0 ? 'text-success' : 'text-danger'}`}>{fmtEur(margin)}</span>
-                    <div className="text-[12px] text-stone-400">{marginPct}% del PVP{!e.costAvailable ? ' · sin food cost' : ''}</div>
+                    <div className="text-[12px] text-stone-400">{fmtPct(marginPct, 2)} del PVP{!e.costAvailable ? ' · sin coste de producto' : ''}</div>
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 mb-2 text-[12px] text-stone-500">
-                  {e.costAvailable && <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-[#A68B6B]" /> Food cost {fmtEur(e.cost)}</span>}
-                  {e.commissionPct != null && <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-[#4A6A8A]" /> Comisión {e.commissionPct}% ({fmtEur(commAmt)})</span>}
+                  {e.costAvailable && <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-[#A68B6B]" /> Coste de producto {fmtEur(e.cost)}</span>}
+                  {e.commissionPct != null && <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-[#4A6A8A]" /> Comisión {fmtPct(e.commissionPct)} ({fmtEur(commAmt)})</span>}
                   {hasOrderCosts && (
                     <span className="flex items-center gap-1.5 cursor-help"
                       title={`Coste de reparto propio por pedido: coste del rider${e.ownCourierCost != null ? ` (${fmtEur(e.ownCourierCost)})` : ''} + comisión fija${e.commissionFixed != null ? ` (${fmtEur(e.commissionFixed)})` : ''} − envío que paga el cliente${e.ownCustomerFee != null ? ` (${fmtEur(e.ownCustomerFee)})` : ''}, sin IVA, repartido entre ~2 platos por pedido. Es una estimación hasta tener ventas reales.`}>
@@ -214,8 +215,8 @@ export default function EconomiaTab({ item }: EconomiaTabProps) {
           prop, así que no hay ventana de desincronización). */}
       <p className="text-[12px] text-stone-500 mt-4 pt-3 border-t border-stone-200">
         {item.targetFoodCostPct != null
-          ? `Target FC: ${item.targetFoodCostPct}% · ${foodCostPct != null ? (foodCostPct <= item.targetFoodCostPct ? 'Dentro del objetivo' : 'Fuera del objetivo') : 'sin food cost para comparar'}`
-          : 'Sin target de food cost configurado.'}
+          ? `Objetivo de coste: ${fmtPct(item.targetFoodCostPct)} · ${foodCostPct != null ? (foodCostPct <= item.targetFoodCostPct ? 'Dentro del objetivo' : 'Fuera del objetivo') : 'sin coste de producto para comparar'}`
+          : 'Sin objetivo de coste configurado.'}
       </p>
     </div>
   )

@@ -45,6 +45,17 @@ export function fmtPct(x: unknown, dp = 1): string {
   return isNum(x) ? `${Number(x).toFixed(dp).replace('.', ',')} %` : DASH
 }
 
+/** Horas trabajadas/contratadas en formato español: `4,5h` (sin decimales
+ *  sobrantes: `8h`, no `8,00h`). Ausente → '—'. `0` → '0h'. */
+export function fmtHours(x: unknown, dp = 2): string {
+  if (!isNum(x)) return DASH
+  const n = Number(x)
+  // Recorta ceros sobrantes (4.50 -> "4,5", 8.00 -> "8") pero conserva los
+  // decimales que sí aportan info (8.75 -> "8,75") -- parseFloat sobre el
+  // fijo a dp quita los ceros de cola sin reintroducir el punto.
+  return `${parseFloat(n.toFixed(dp))}`.replace('.', ',') + 'h'
+}
+
 /** Entero con separador de miles local (`1.234`). Null-safe: reemplaza a
  *  `n.toLocaleString('es-ES')` sobre conteos del servidor (que petan con null).
  *  Ausente → '—'. `0` → '0'. */
