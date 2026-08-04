@@ -750,6 +750,12 @@ export interface TrackingRow {
   attemptId: string | null
   employeeId: string
   employeeName: string
+  /** Puesto/área del empleado — homónimos son reales (fichas distintas con el
+   * mismo nombre, en distinta cuenta/local): sin esto, dos filas de personas
+   * diferentes son indistinguibles a la vista aunque estén correctamente
+   * separadas por employeeId. */
+  employeePosition: string | null
+  employeeDepartment: string | null
   dueAt: string | null
   overdue: boolean
   status: TrackingStatus
@@ -828,6 +834,8 @@ export function resolveTrackingRows(
         attemptId: lastAttempt?.id ?? null,
         employeeId: emp.id,
         employeeName: emp.name,
+        employeePosition: emp.position || null,
+        employeeDepartment: emp.department || null,
         dueAt: a.dueAt,
         overdue: !!a.dueAt && status !== 'firmado' && new Date(a.dueAt).getTime() < now,
         status,
