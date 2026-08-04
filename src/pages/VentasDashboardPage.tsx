@@ -410,7 +410,7 @@ export default function VentasDashboardPage() {
                       <span>{l.name}</span>
                       <span className="text-stone-500 tabular-nums">{eur(l.net)} · {l.orders} ped.</span>
                     </div>
-                    <Bar pct={(l.net / locationMax) * 100} color="#534AB7" />
+                    <Bar pct={(l.net / locationMax) * 100} color={TERRA} />
                   </div>
                 ))}
               </div>
@@ -427,7 +427,13 @@ export default function VentasDashboardPage() {
               {data.by_hour.map((h) => {
                 const ratio = h.net / hourMax
                 const height = Math.max(6, ratio * 64)
-                const color = ratio > 0.66 ? '#534AB7' : ratio > 0.33 ? '#7F77DD' : '#CECBF6'
+                // Auditoría externa (B.2): violeta (#534AB7/#7F77DD) sin
+                // relación con la marca, contiguo a "Ventas por canal" (negro/
+                // tinta) justo encima -- dos idiomas de color en la misma
+                // pantalla, la primera de la demo comercial. Misma escala
+                // monocroma que el resto (tailwind.config.js: "rebrand tinta
+                // monocroma").
+                const color = ratio > 0.66 ? TERRA : ratio > 0.33 ? '#6B7077' : '#E9EBED'
                 return (
                   <div key={h.hour} className="flex-1 text-center" title={`${eur(h.net)} · ${h.orders} ped.`}>
                     <div style={{ height, background: color, borderRadius: 3 }} />

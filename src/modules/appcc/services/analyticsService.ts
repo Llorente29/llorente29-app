@@ -42,7 +42,14 @@ export interface DailyComplianceData {
   date: string         // YYYY-MM-DD
   total: number        // ejecuciones del día
   completed: number    // completadas
-  rate: number         // % (0-100)
+  /** % (0-100). null = sin ejecuciones ese día ("sin dato"), NO 0% — un día
+   *  sin controles programados no es un día de incumplimiento. Auditoría
+   *  externa (B.1): antes se rellenaba con 0, y la línea caía a cero todos
+   *  los días sin auditoría, leyendo como "este local no cumple casi nunca"
+   *  cuando el KPI de al lado decía 93%. Con null, recharts <Line> no dibuja
+   *  el tramo (no conecta a través de huecos por defecto) -- puntos solo en
+   *  los días con auditoría real, en vez de un electrocardiograma falso. */
+  rate: number | null
 }
 
 /** Distribución de incidencias por severidad */
@@ -223,7 +230,7 @@ export async function getDailyCompliance(
       date: iso,
       total: e?.total ?? 0,
       completed: e?.completed ?? 0,
-      rate: e && e.total > 0 ? Math.round((e.completed / e.total) * 100) : 0,
+      rate: e && e.total > 0 ? Math.round((e.completed / e.total) * 100) : null,
     })
   }
 
