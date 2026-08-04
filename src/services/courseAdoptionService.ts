@@ -94,7 +94,20 @@ export async function adoptCourseForAccount(
     })
     .select('id')
     .single()
-  if (insertErr) { console.error('[courseAdoptionService] crear copia de la cuenta', insertErr); throw insertErr }
+  if (insertErr) {
+    // Defensa en profundidad (C6 §B): course_adopted_from_unique (índice
+    // parcial, C3-A) es la última red si dos pestañas/sesiones adoptan el
+    // mismo curso a la vez y el pre-check de arriba no llegó a tiempo.
+    // 23505 = unique_violation en Postgres. En vez de un error crudo,
+    // resolvemos a la copia que ganó la carrera -- adoptar dos veces nunca
+    // debe ser un error de UX, solo un no-op idempotente.
+    if (insertErr.code === '23505') {
+      const raceWinnerId = await findAdoptedCourseId(accountId, globalCourseId)
+      if (raceWinnerId) return { courseId: raceWinnerId, alreadyExisted: true }
+    }
+    console.error('[courseAdoptionService] crear copia de la cuenta', insertErr)
+    throw insertErr
+  }
   const newCourseId = newCourse.id as string
 
   try {
