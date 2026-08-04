@@ -27,7 +27,7 @@ interface Props {
   onBack?: () => void
 }
 
-type Step = 'lista' | 'teoria' | 'test' | 'resultados' | 'firma' | 'diploma'
+type Step = 'lista' | 'teoria' | 'test' | 'resultados' | 'firma' | 'practica_pendiente' | 'diploma'
 
 // Markdown del contenido didáctico: negrita, listas, encabezados y párrafos
 // con cuerpo 16px (se lee de pie, en cocina, con prisa). Blockquote (>) es el
@@ -70,6 +70,7 @@ const STATUS_LABEL: Record<PendingCourse['status'], { label: string; color: stri
   pendiente: { label: 'Pendiente', color: 'bg-page text-text-secondary' },
   en_curso: { label: 'En curso', color: 'bg-warning-bg text-warning' },
   suspendido: { label: 'Suspendido — repite', color: 'bg-danger-bg text-danger' },
+  pendiente_practica: { label: 'Falta verificar práctica', color: 'bg-warning-bg text-warning' },
   firmado: { label: 'Superado', color: 'bg-success-bg text-success' },
 }
 
@@ -194,23 +195,40 @@ export default function MiFormacion({ employee, onBack }: Props) {
             </div>
           ) : (
             courses.map(c => (
-              <button
-                key={c.assignmentId}
-                onClick={() => openCourse(c)}
-                disabled={busy}
-                className="w-full bg-card border-2 border-border-default hover:border-accent rounded-xl p-4 text-left transition-base active:scale-[0.98]"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <p className="font-semibold text-text-primary">{c.courseTitle}</p>
-                  <span className={`text-xs px-2 py-1 rounded-full font-medium shrink-0 ${STATUS_LABEL[c.status].color}`}>
-                    {STATUS_LABEL[c.status].label}
-                  </span>
+              c.deliveryMode === 'solo_archivo' ? (
+                // Este curso no se "hace" en el móvil: lo imparte un tercero
+                // (p. ej. el servicio de prevención). Sin botón de empezar
+                // test — llevaría a una teoría/test que no existe para esto.
+                <div key={c.assignmentId} className="w-full bg-card border-2 border-dashed border-border-default rounded-xl p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-semibold text-text-primary">{c.courseTitle}</p>
+                    <span className={`text-xs px-2 py-1 rounded-full font-medium shrink-0 ${STATUS_LABEL[c.status].color}`}>
+                      {STATUS_LABEL[c.status].label}
+                    </span>
+                  </div>
+                  <p className="text-xs text-text-secondary mt-2">
+                    Lo imparte tu servicio de prevención. Sube el certificado desde <span className="font-medium">Mis documentos</span> (tipo «Formación / curso»).
+                  </p>
                 </div>
-                <div className="flex items-center gap-3 mt-1.5 text-xs text-text-secondary">
-                  {c.estimatedMinutes && <span className="flex items-center gap-1"><Clock size={12} /> {c.estimatedMinutes} min</span>}
-                  {c.dueAt && <span>Antes del {new Date(c.dueAt).toLocaleDateString('es-ES')}</span>}
-                </div>
-              </button>
+              ) : (
+                <button
+                  key={c.assignmentId}
+                  onClick={() => openCourse(c)}
+                  disabled={busy}
+                  className="w-full bg-card border-2 border-border-default hover:border-accent rounded-xl p-4 text-left transition-base active:scale-[0.98]"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-semibold text-text-primary">{c.courseTitle}</p>
+                    <span className={`text-xs px-2 py-1 rounded-full font-medium shrink-0 ${STATUS_LABEL[c.status].color}`}>
+                      {STATUS_LABEL[c.status].label}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 mt-1.5 text-xs text-text-secondary">
+                    {c.estimatedMinutes && <span className="flex items-center gap-1"><Clock size={12} /> {c.estimatedMinutes} min</span>}
+                    {c.dueAt && <span>Antes del {new Date(c.dueAt).toLocaleDateString('es-ES')}</span>}
+                  </div>
+                </button>
+              )
             ))
           )}
         </div>
@@ -344,8 +362,29 @@ export default function MiFormacion({ employee, onBack }: Props) {
         attemptId={attempt.attemptId}
         courseTitle={active.courseTitle}
         onBack={() => setStep('resultados')}
-        onSigned={(path) => { setSignaturePath(path); setStep('diploma') }}
+        onSigned={(path) => {
+          setSignaturePath(path)
+          setStep(attempt.course.requiresPractical ? 'practica_pendiente' : 'diploma')
+        }}
       />
+    )
+  }
+
+  if (step === 'practica_pendiente') {
+    return (
+      <MobileShell title={active.courseTitle} subtitle="Falta la práctica" onBack={backToList} icon={AlertTriangle}>
+        <div className="bg-warning-bg border border-warning/30 rounded-xl p-6 text-center">
+          <AlertTriangle size={44} className="text-warning mx-auto mb-3" />
+          <p className="font-display text-xl text-warning">Has superado la teoría</p>
+          <p className="text-sm text-text-secondary mt-2">
+            Tu firma ya ha quedado registrada. Falta que tu responsable verifique la parte práctica en el puesto
+            antes de que este curso cuente como completado.
+          </p>
+        </div>
+        <button onClick={backToList} className="w-full mt-4 py-3 rounded-xl bg-accent text-text-on-accent font-semibold active:scale-95 transition-base">
+          Volver a mi formación
+        </button>
+      </MobileShell>
     )
   }
 

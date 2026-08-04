@@ -31,17 +31,20 @@ const CELL_TONE: Record<TrainingCellState, string> = {
   caducado: 'bg-danger-bg text-danger',
   pendiente: 'bg-warning-bg text-warning',
   en_curso: 'bg-warning-bg text-warning',
+  pendiente_practica: 'bg-warning-bg text-warning',
   no_aplica: 'bg-accent-bg text-text-secondary',
 }
 const CELL_LETTER: Record<TrainingCellState, string> = {
-  vigente: 'V', caducado: 'C', pendiente: 'P', en_curso: 'E', no_aplica: '·',
+  vigente: 'V', caducado: 'C', pendiente: 'P', en_curso: 'E', pendiente_practica: 'X', no_aplica: '·',
 }
 const CELL_LABEL: Record<TrainingCellState, string> = {
-  vigente: 'Vigente', caducado: 'Caducado', pendiente: 'Pendiente', en_curso: 'En curso (sin firmar)', no_aplica: 'No aplica',
+  vigente: 'Vigente', caducado: 'Caducado', pendiente: 'Pendiente', en_curso: 'En curso (sin firmar)',
+  pendiente_practica: 'Falta verificación práctica', no_aplica: 'No aplica',
 }
 const GAP_LABEL: Record<string, string> = {
   nunca_hecho: 'Nunca hecho',
   sin_firmar: 'Aprobado, sin firmar',
+  falta_practica: 'Falta verificación práctica',
   caducado: 'Caducado',
   caduca_pronto: 'Caduca pronto',
 }

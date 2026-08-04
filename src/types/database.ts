@@ -5175,6 +5175,8 @@ export type Database = {
           account_id: string | null
           adopted_from_course_id: string | null
           appcc_prerequisite: boolean
+          business_types: string[]
+          category: string | null
           code: string
           created_at: string
           created_by: string | null
@@ -5183,8 +5185,11 @@ export type Database = {
           id: string
           is_mandatory: boolean
           legal_basis: string | null
+          level: string | null
           pass_threshold_pct: number
+          recommended_order: number | null
           reeval_months: number | null
+          requires_practical: boolean
           status: string
           summary: string | null
           title: string
@@ -5194,6 +5199,8 @@ export type Database = {
           account_id?: string | null
           adopted_from_course_id?: string | null
           appcc_prerequisite?: boolean
+          business_types?: string[]
+          category?: string | null
           code: string
           created_at?: string
           created_by?: string | null
@@ -5202,8 +5209,11 @@ export type Database = {
           id?: string
           is_mandatory?: boolean
           legal_basis?: string | null
+          level?: string | null
           pass_threshold_pct?: number
+          recommended_order?: number | null
           reeval_months?: number | null
+          requires_practical?: boolean
           status?: string
           summary?: string | null
           title: string
@@ -5213,6 +5223,8 @@ export type Database = {
           account_id?: string | null
           adopted_from_course_id?: string | null
           appcc_prerequisite?: boolean
+          business_types?: string[]
+          category?: string | null
           code?: string
           created_at?: string
           created_by?: string | null
@@ -5221,8 +5233,11 @@ export type Database = {
           id?: string
           is_mandatory?: boolean
           legal_basis?: string | null
+          level?: string | null
           pass_threshold_pct?: number
+          recommended_order?: number | null
           reeval_months?: number | null
+          requires_practical?: boolean
           status?: string
           summary?: string | null
           title?: string
@@ -5430,6 +5445,83 @@ export type Database = {
             columns: ["question_id"]
             isOneToOne: false
             referencedRelation: "course_question"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      course_practical_check: {
+        Row: {
+          attempt_id: string
+          checked: boolean
+          id: string
+          item_id: string
+          notes: string | null
+          verified_at: string
+          verified_by: string
+        }
+        Insert: {
+          attempt_id: string
+          checked: boolean
+          id?: string
+          item_id: string
+          notes?: string | null
+          verified_at?: string
+          verified_by: string
+        }
+        Update: {
+          attempt_id?: string
+          checked?: boolean
+          id?: string
+          item_id?: string
+          notes?: string | null
+          verified_at?: string
+          verified_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "course_practical_check_attempt_id_fkey"
+            columns: ["attempt_id"]
+            isOneToOne: false
+            referencedRelation: "course_attempt"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "course_practical_check_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "course_practical_item"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      course_practical_item: {
+        Row: {
+          course_id: string
+          help_text: string | null
+          id: string
+          ord: number
+          text: string
+        }
+        Insert: {
+          course_id: string
+          help_text?: string | null
+          id?: string
+          ord: number
+          text: string
+        }
+        Update: {
+          course_id?: string
+          help_text?: string | null
+          id?: string
+          ord?: number
+          text?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "course_practical_item_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "course"
             referencedColumns: ["id"]
           },
         ]
@@ -20058,6 +20150,10 @@ export type Database = {
           equivalence_surcharge: number
           rate: number
         }[]
+      }
+      verify_practical_items: {
+        Args: { p_attempt_id: string; p_checks: Json; p_notes?: string | null }
+        Returns: Json
       }
       void_clock_entry: {
         Args: { p_actor_label?: string; p_entry_id: string; p_reason: string }

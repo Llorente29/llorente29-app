@@ -17,7 +17,7 @@
 
 import jsPDF from 'jspdf'
 import { ensureFraunces } from '@/modules/supply/services/folvyPdfFont'
-import type { TrainingComplianceRow } from './trainingComplianceService'
+import type { TrainingCellState, TrainingComplianceRow } from './trainingComplianceService'
 
 const NAVY: [number, number, number] = [30, 58, 95]
 const TERRA: [number, number, number] = [214, 116, 66]
@@ -44,14 +44,17 @@ const NAME_COL_W = 62
 const TABLE_HEADER_H = 7
 const ROW_H = 6.2
 
-const STATE_LETTER: Record<string, string> = {
-  vigente: 'V', caducado: 'C', pendiente: 'P', en_curso: 'E', no_aplica: '·',
+// Record<TrainingCellState, ...> (no Record<string, ...>) a propósito: si el
+// tipo de estado gana un miembro nuevo, tsc debe romper aquí en vez de dejar
+// que el PDF pinte una celda en blanco/undefined ante el inspector.
+const STATE_LETTER: Record<TrainingCellState, string> = {
+  vigente: 'V', caducado: 'C', pendiente: 'P', en_curso: 'E', pendiente_practica: 'X', no_aplica: '·',
 }
-const STATE_COLOR: Record<string, [number, number, number]> = {
-  vigente: SUCCESS, caducado: DANGER, pendiente: WARNING, en_curso: WARNING, no_aplica: MUTED,
+const STATE_COLOR: Record<TrainingCellState, [number, number, number]> = {
+  vigente: SUCCESS, caducado: DANGER, pendiente: WARNING, en_curso: WARNING, pendiente_practica: WARNING, no_aplica: MUTED,
 }
-const STATE_BG: Record<string, [number, number, number]> = {
-  vigente: SUCCESS_BG, caducado: DANGER_BG, pendiente: WARNING_BG, en_curso: WARNING_BG, no_aplica: UNKNOWN_BG,
+const STATE_BG: Record<TrainingCellState, [number, number, number]> = {
+  vigente: SUCCESS_BG, caducado: DANGER_BG, pendiente: WARNING_BG, en_curso: WARNING_BG, pendiente_practica: WARNING_BG, no_aplica: UNKNOWN_BG,
 }
 export interface TrainingPdfCourseInfo {
   code: string
@@ -193,7 +196,9 @@ export function generateTrainingCompliancePdf(data: TrainingCompliancePdfData): 
     'Cómo se ha elaborado',
     'Cada trabajador se considera "vigente" en un curso SOLO si existe una firma electrónica capturada en su ' +
       'sesión autenticada sobre un intento de test aprobado. Un test aprobado sin firmar no cuenta como vigente. ' +
-      'Los huecos (nunca formado, caducado, pendiente de firma) se listan explícitamente más adelante — no se ocultan.',
+      'Si el curso exige verificación práctica en el puesto, tampoco cuenta como vigente hasta que un responsable ' +
+      'la registre, aunque la teoría esté superada y firmada. ' +
+      'Los huecos (nunca formado, caducado, pendiente de firma, pendiente de práctica) se listan explícitamente más adelante — no se ocultan.',
     18,
   )
 
@@ -226,6 +231,7 @@ export function generateTrainingCompliancePdf(data: TrainingCompliancePdfData): 
       { letter: 'C', color: DANGER, label: 'Caducado' },
       { letter: 'P', color: WARNING, label: 'Pendiente' },
       { letter: 'E', color: WARNING, label: 'En curso (sin firmar)' },
+      { letter: 'X', color: WARNING, label: 'Falta verificación práctica' },
       { letter: '·', color: MUTED, label: 'No aplica' },
     ]
     for (const it of items) {

@@ -9,7 +9,7 @@
 
 import { supabase } from '../lib/supabase'
 
-export type PendingCourseStatus = 'pendiente' | 'en_curso' | 'suspendido' | 'firmado'
+export type PendingCourseStatus = 'pendiente' | 'en_curso' | 'suspendido' | 'pendiente_practica' | 'firmado'
 
 export interface PendingCourse {
   assignmentId: string
@@ -70,6 +70,7 @@ export interface AttemptSection { id: string; ord: number; title: string; body: 
 export interface AttemptCourse {
   id: string; code: string; title: string; summary: string | null; legalBasis: string | null
   deliveryMode: string; estimatedMinutes: number | null; passThresholdPct: number; version: number
+  requiresPractical: boolean
 }
 export interface StartAttemptResult {
   attemptId: string
@@ -84,7 +85,7 @@ export async function startAttempt(assignmentId: string): Promise<StartAttemptRe
   if (error) { console.error('[mobileCoursesService] startAttempt', error); throw error }
   const d = data as unknown as {
     attemptId: string
-    course: { id: string; code: string; title: string; summary: string | null; legalBasis: string | null; deliveryMode: string; estimatedMinutes: number | null; passThresholdPct: number; version: number }
+    course: { id: string; code: string; title: string; summary: string | null; legalBasis: string | null; deliveryMode: string; estimatedMinutes: number | null; passThresholdPct: number; version: number; requiresPractical: boolean }
     sections: AttemptSection[]
     questions: AttemptQuestion[]
   }
