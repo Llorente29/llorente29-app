@@ -44,6 +44,7 @@ const CELL_LABEL: Record<TrainingCellState, string> = {
 const GAP_LABEL: Record<string, string> = {
   nunca_hecho: 'Nunca hecho',
   sin_firmar: 'Aprobado, sin firmar',
+  en_curso: 'En curso, sin superar',
   falta_practica: 'Falta verificación práctica',
   caducado: 'Caducado',
   caduca_pronto: 'Caduca pronto',
@@ -142,6 +143,7 @@ export default function TrainingCompliancePage() {
   const kpi = useMemo(() => trainingComplianceService.computeMandatoryCompliancePct(filteredRows), [filteredRows])
   const caducaPronto30 = gaps.filter((g) => g.gapKind === 'caduca_pronto').length
   const sinFirmar = gaps.filter((g) => g.gapKind === 'sin_firmar').length
+  const enCurso = gaps.filter((g) => g.gapKind === 'en_curso').length
   const sinDni = health.find((h) => h.checkKind === 'sin_dni')?.itemCount ?? 0
 
   async function assignFromGap(gap: TrainingGap) {
@@ -371,11 +373,12 @@ export default function TrainingCompliancePage() {
       {excelError && <div className="p-2.5 rounded-lg bg-danger-bg text-danger text-xs">{excelError}</div>}
 
       {/* Tira de KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <KpiBox label="Con la obligatoria vigente" value={`${kpi.pct}%`} sub={`${kpi.vigente}/${kpi.applicable}`}
           tone={kpi.pct === 100 ? 'success' : kpi.pct >= 80 ? 'warning' : 'danger'} />
         <KpiBox label="Caducan en 30 días" value={String(caducaPronto30)} tone={caducaPronto30 > 0 ? 'warning' : 'neutral'} />
         <KpiBox label="Sin firmar" value={String(sinFirmar)} tone={sinFirmar > 0 ? 'warning' : 'neutral'} />
+        <KpiBox label="En curso, sin superar" value={String(enCurso)} tone={enCurso > 0 ? 'warning' : 'neutral'} />
         <KpiBox label="Empleados sin DNI" value={String(sinDni)} tone={sinDni > 0 ? 'danger' : 'neutral'} />
       </div>
 

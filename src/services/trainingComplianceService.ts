@@ -103,7 +103,7 @@ export function computeMandatoryCompliancePct(
   return { pct, vigente, applicable }
 }
 
-export type TrainingGapKind = 'nunca_hecho' | 'caducado' | 'caduca_pronto' | 'sin_firmar' | 'falta_practica'
+export type TrainingGapKind = 'nunca_hecho' | 'caducado' | 'caduca_pronto' | 'sin_firmar' | 'en_curso' | 'falta_practica'
 
 export interface TrainingGap {
   employeeId: string
