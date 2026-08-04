@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+<rect width="800" height="450" fill="#FBEFE8"/>
+<circle cx="700" cy="70" r="180" fill="#B8562F" opacity="0.06"/>
+<circle cx="90" cy="400" r="120" fill="#B8562F" opacity="0.05"/>
+<rect x="300" y="150" width="200" height="190" rx="18" fill="#FFF" stroke="#B8562F" stroke-width="6"/>
+<rect x="300" y="150" width="200" height="52" rx="18" fill="#D67442" opacity="0.35"/>
+<rect x="368" y="120" width="64" height="34" rx="10" fill="#B8562F"/>
+<line x1="300" y1="252" x2="500" y2="252" stroke="#B8562F" stroke-width="4" stroke-dasharray="8 6"/>
+<path d="M556 200 q16 -30 32 0 a18 18 0 1 1 -32 0" fill="#E0492E" opacity="0.75"/>
+<path d="M214 236 q14 -26 28 0 a16 16 0 1 1 -28 0" fill="#2C5282" opacity="0.55"/>
+<rect x="0" y="404" width="800" height="46" fill="#B8562F" opacity="0.9"/>
+<text x="40" y="434" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="bold" fill="#FFFFFF" letter-spacing="1">TEMPERATURA EN RUTA</text>
+</svg>

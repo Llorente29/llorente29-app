@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+<rect width="800" height="450" fill="#FBEFE8"/>
+<circle cx="700" cy="70" r="180" fill="#B8562F" opacity="0.06"/>
+<circle cx="90" cy="400" r="120" fill="#B8562F" opacity="0.05"/>
+<rect x="266" y="112" width="268" height="216" rx="16" fill="#B8562F"/>
+<rect x="282" y="132" width="236" height="176" rx="8" fill="#FFF"/>
+<rect x="298" y="150" width="204" height="16" rx="8" fill="#D67442" opacity="0.75"/><rect x="298" y="180" width="150" height="16" rx="8" fill="#1F9D6B" opacity="0.6"/><rect x="298" y="210" width="178" height="16" rx="8" fill="#D67442" opacity="0.4"/><rect x="298" y="240" width="120" height="16" rx="8" fill="#D67442" opacity="0.3"/>
+<rect x="330" y="328" width="140" height="12" rx="6" fill="#B8562F" opacity="0.6"/>
+<circle cx="612" cy="180" r="10" fill="#1F9D6B"/><circle cx="612" cy="220" r="10" fill="#D67442" opacity="0.5"/>
+<rect x="0" y="404" width="800" height="46" fill="#B8562F" opacity="0.9"/>
+<text x="40" y="434" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="bold" fill="#FFFFFF" letter-spacing="1">LA ESTACIÓN</text>
+</svg>

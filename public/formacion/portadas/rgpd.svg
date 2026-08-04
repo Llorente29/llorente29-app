@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+<rect width="800" height="450" fill="#E8EEF5"/>
+<circle cx="700" cy="70" r="180" fill="#1E3A5F" opacity="0.06"/>
+<circle cx="90" cy="400" r="120" fill="#1E3A5F" opacity="0.05"/>
+<path d="M340 190 v-38 a60 60 0 0 1 120 0 v38" fill="none" stroke="#1E3A5F" stroke-width="16" stroke-linecap="round"/>
+<rect x="300" y="190" width="200" height="160" rx="18" fill="#FFF" stroke="#1E3A5F" stroke-width="6"/>
+<circle cx="400" cy="258" r="22" fill="#2C5282"/><rect x="392" y="272" width="16" height="42" rx="8" fill="#2C5282"/>
+<circle cx="575" cy="150" r="6" fill="#2C5282" opacity="0.3"/><circle cx="610" cy="200" r="6" fill="#2C5282" opacity="0.3"/><circle cx="560" cy="235" r="6" fill="#2C5282" opacity="0.3"/><circle cx="620" cy="275" r="6" fill="#2C5282" opacity="0.3"/><circle cx="210" cy="170" r="6" fill="#2C5282" opacity="0.3"/><circle cx="180" cy="225" r="6" fill="#2C5282" opacity="0.3"/><circle cx="230" cy="265" r="6" fill="#2C5282" opacity="0.3"/>
+<rect x="0" y="404" width="800" height="46" fill="#1E3A5F" opacity="0.9"/>
+<text x="40" y="434" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="bold" fill="#FFFFFF" letter-spacing="1">PROTECCIÓN DE DATOS</text>
+</svg>

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+<rect width="800" height="450" fill="#E8EEF5"/>
+<circle cx="700" cy="70" r="180" fill="#1E3A5F" opacity="0.06"/>
+<circle cx="90" cy="400" r="120" fill="#1E3A5F" opacity="0.05"/>
+<path d="M400 80 L520 120 V240 C520 300 462 340 400 360 C338 340 280 300 280 240 V120 Z" fill="#FFF" stroke="#1E3A5F" stroke-width="6"/>
+<line x1="400" y1="150" x2="400" y2="300" stroke="#1E3A5F" stroke-width="6"/>
+<path d="M400 175 q-34 8 -34 30 q34 0 34 -30 Z" fill="#2C5282"/><path d="M400 175 q34 8 34 30 q-34 0 -34 -30 Z" fill="#2C5282"/>
+<path d="M400 215 q-34 8 -34 30 q34 0 34 -30 Z" fill="#2C5282"/><path d="M400 215 q34 8 34 30 q-34 0 -34 -30 Z" fill="#2C5282"/>
+<path d="M400 255 q-34 8 -34 30 q34 0 34 -30 Z" fill="#2C5282"/><path d="M400 255 q34 8 34 30 q-34 0 -34 -30 Z" fill="#2C5282"/>
+<line x1="562" y1="150" x2="640" y2="228" stroke="#E0492E" stroke-width="8" stroke-linecap="round"/>
+<line x1="640" y1="150" x2="562" y2="228" stroke="#E0492E" stroke-width="8" stroke-linecap="round"/>
+<rect x="0" y="404" width="800" height="46" fill="#1E3A5F" opacity="0.9"/>
+<text x="40" y="434" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="bold" fill="#FFFFFF" letter-spacing="1">LOS 14 ALÉRGENOS</text>
+</svg>
