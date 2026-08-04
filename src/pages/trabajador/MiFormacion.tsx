@@ -34,7 +34,10 @@ type Step = 'lista' | 'teoria' | 'test' | 'resultados' | 'firma' | 'practica_pen
 // recuadro de "dato técnico/legal" — se pinta como caja aparte, no como cita.
 // Sin rehype-raw a propósito: el contenido lo escribe la oficina, pero el
 // portal del trabajador no debe renderizar HTML crudo.
-const MARKDOWN_COMPONENTS: Components = {
+// Exportados para Vista previa del curso (oficina, encargo propio): mismo
+// renderizado exacto que ve el trabajador -- si esto divergiera, la vista
+// previa dejaría de reflejar lo que se quiere comprobar. No se duplica.
+export const MARKDOWN_COMPONENTS: Components = {
   p: ({ children }) => <p className="text-base text-text-primary leading-relaxed mb-3 last:mb-0">{children}</p>,
   strong: ({ children }) => <strong className="font-semibold text-text-primary">{children}</strong>,
   em: ({ children }) => <em className="italic">{children}</em>,
@@ -53,7 +56,7 @@ const MARKDOWN_COMPONENTS: Components = {
 
 // Imagen de sección con fallback silencioso: si falla la carga, se oculta el
 // hueco entero y el texto sigue sin layout roto (regla explícita del encargo).
-function SectionImage({ src, alt }: { src: string; alt: string }) {
+export function SectionImage({ src, alt }: { src: string; alt: string }) {
   const [failed, setFailed] = useState(false)
   if (failed) return null
   return (

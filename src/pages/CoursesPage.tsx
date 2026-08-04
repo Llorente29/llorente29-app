@@ -11,10 +11,12 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import ReactMarkdown from 'react-markdown'
 import {
   GraduationCap, Plus, ArrowLeft, BookOpen, ListChecks, Users2, ClipboardList,
   Trash2, Pencil, Check, X as XIcon, AlertTriangle, ShieldCheck, ClipboardCheck,
   Image as ImageIcon, Clock, ChefHat, Truck, UtensilsCrossed, Leaf, FolderOpen,
+  CheckCircle2, Printer, Eye,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { supabase } from '../lib/supabase'
@@ -28,6 +30,9 @@ import { generateSessionActaPdf, blobToDataUrl } from '../services/courseCertifi
 import { adoptCourseForAccount } from '../services/courseAdoptionService'
 import TrainingCalendarView from '../components/personal/TrainingCalendarView'
 import ReleasePhaseCampaignModal from '../components/personal/ReleasePhaseCampaignModal'
+// Vista previa (oficina): mismo renderizado EXACTO que ve el trabajador — se
+// reutiliza tal cual, no se monta un renderizador nuevo que pueda divergir.
+import { MARKDOWN_COMPONENTS, SectionImage } from './trabajador/MiFormacion'
 import { getTrainingComplianceMatrix, type TrainingComplianceRow } from '../services/trainingComplianceService'
 import {
   getSignedSectionImageUrl, getSignedSectionImageUrls, uploadOwnSectionImage, revertSectionImageToFolvy,
@@ -598,7 +603,12 @@ function CourseDetail({ course, accountId, staff, locations, onBack, onChanged, 
   onAdopted: (newCourseId: string) => void
 }) {
   const [tab, setTab] = useState<'contenido' | 'asignar' | 'seguimiento'>('contenido')
+  const [showPreview, setShowPreview] = useState(false)
   const editable = course.accountId !== null
+
+  if (showPreview) {
+    return <CoursePreview course={course} onBack={() => setShowPreview(false)} />
+  }
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -610,6 +620,7 @@ function CourseDetail({ course, accountId, staff, locations, onBack, onChanged, 
           <p className="text-xs text-text-secondary uppercase tracking-wide">Curso · v{course.version}</p>
           <h1 className="font-display text-xl text-text-primary truncate">{course.title}</h1>
         </div>
+        <Button variant="outline" size="sm" onClick={() => setShowPreview(true)}><Eye size={14} /> Vista previa</Button>
         <Badge color={STATUS_BADGE[course.status].color}>{STATUS_BADGE[course.status].label}</Badge>
         {!editable && <Badge color="blue">Plantilla Folvy · solo lectura</Badge>}
       </div>
@@ -642,6 +653,163 @@ function CourseDetail({ course, accountId, staff, locations, onBack, onChanged, 
       )}
       {tab === 'asignar' && <AsignarTab course={course} accountId={accountId} staff={staff} locations={locations} />}
       {tab === 'seguimiento' && <SeguimientoTab course={course} staff={staff} />}
+    </div>
+  )
+}
+
+// ============================================================
+// Vista previa — encargo propio: leer el curso entero de corrido, tal cual
+// lo ve el trabajador, MÁS la respuesta correcta y las explicaciones (que un
+// empleado nunca ve). Solo lectura: getCourseWithContent son SELECT puros,
+// no crea course_assignment/course_attempt/course_signature. Funciona con
+// draft (getCourseWithContent no filtra por status) -- es su uso principal:
+// revisar los cursos en borrador antes de publicarlos.
+//
+// Acceso: RLS de course_section/course_question/course_option/
+// course_practical_item YA permite lectura a admin/manager/office (es lo
+// que usa ContenidoTab para editar) -- no hace falta RPC ni migración
+// nuevas. Un trabajador no llega aquí: esta pantalla solo se navega desde
+// CourseDetail, que ya vive detrás de la pantalla de oficina (Team).
+// ============================================================
+function CoursePreview({ course, onBack }: { course: Course; onBack: () => void }) {
+  const [content, setContent] = useState<CourseWithContent | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
+  const [imageUrls, setImageUrls] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    let cancel = false
+    setLoading(true)
+    setLoadError(false)
+    coursesService.getCourseWithContent(course.id)
+      .then(c => { if (!cancel) setContent(c) })
+      .catch(() => { if (!cancel) setLoadError(true) })
+      .finally(() => { if (!cancel) setLoading(false) })
+    return () => { cancel = true }
+  }, [course.id])
+
+  useEffect(() => {
+    if (!content) return
+    const paths = content.sections.map(s => s.mediaUrl).filter((p): p is string => !!p)
+    if (paths.length === 0) { setImageUrls({}); return }
+    let cancel = false
+    getSignedSectionImageUrls(paths).then(m => { if (!cancel) setImageUrls(m) }).catch(() => {})
+    return () => { cancel = true }
+  }, [content])
+
+  return (
+    <div className="p-6 max-w-3xl mx-auto">
+      <div className="print:hidden flex items-center justify-between mb-6">
+        <button onClick={onBack} className="flex items-center gap-2 text-text-secondary hover:text-text-primary text-sm">
+          <ArrowLeft size={18} /> Volver
+        </button>
+        {content && (
+          <Button variant="outline" size="sm" onClick={() => window.print()}>
+            <Printer size={14} /> Imprimir / Guardar como PDF
+          </Button>
+        )}
+      </div>
+
+      {loading ? (
+        <Card className="p-8 text-center text-sm text-text-secondary">Cargando…</Card>
+      ) : loadError || !content ? (
+        <Alert type="error">No se pudo cargar el curso.</Alert>
+      ) : (
+        <>
+          {/* Cabecera */}
+          <div className="mb-8 pb-5 border-b border-border-default break-inside-avoid">
+            <div className="flex items-center gap-2 flex-wrap mb-2">
+              <Badge color={STATUS_BADGE[content.status].color}>{STATUS_BADGE[content.status].label}</Badge>
+              {content.category && <Badge color="gray">{CATEGORY_LABEL[content.category]}</Badge>}
+              {content.level && <Badge color="gray">{LEVEL_LABEL[content.level]}</Badge>}
+              {content.requiresPractical && (
+                <Badge color="yellow">Requiere verificación práctica{content.reevalMonths ? ` · reevalúa cada ${content.reevalMonths} meses` : ''}</Badge>
+              )}
+            </div>
+            <h1 className="font-display text-2xl text-text-primary">{content.title}</h1>
+            {content.summary && <p className="text-sm text-text-secondary mt-1">{content.summary}</p>}
+            <div className="flex items-center gap-4 mt-3 text-xs text-text-secondary flex-wrap">
+              {content.legalBasis && <span>Base legal: {content.legalBasis}</span>}
+              {content.estimatedMinutes != null && (
+                <span className="flex items-center gap-1"><Clock size={12} /> {content.estimatedMinutes} min estimados</span>
+              )}
+              {!content.requiresPractical && content.reevalMonths != null && (
+                <span>Reevaluación cada {content.reevalMonths} meses</span>
+              )}
+            </div>
+          </div>
+
+          {/* Secciones — mismo markdown + imágenes que Mi Formación */}
+          {content.sections.length > 0 && (
+            <div className="space-y-8 mb-10">
+              {content.sections.map(s => {
+                const imgUrl = s.mediaUrl ? imageUrls[s.mediaUrl] : undefined
+                return (
+                  <div key={s.id} className="break-inside-avoid">
+                    {imgUrl && <SectionImage src={imgUrl} alt={s.title} />}
+                    <h2 className="font-display text-lg text-accent mb-2">{s.title}</h2>
+                    <ReactMarkdown components={MARKDOWN_COMPONENTS}>{s.body}</ReactMarkdown>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Test completo — con la correcta destacada y las explicaciones
+              visibles (al revés que en Mi Formación, aquí es justo lo que
+              hay que poder revisar). solo_archivo no tiene preguntas: no
+              se renderiza nada, sin caso especial. */}
+          {content.questions.length > 0 && (
+            <div className="mb-10">
+              <h2 className="font-display text-xl text-text-primary mb-4 pb-2 border-b border-border-default">
+                Test — {content.questions.length} pregunta{content.questions.length === 1 ? '' : 's'} · mínimo {content.passThresholdPct}% para superar
+              </h2>
+              <div className="space-y-6">
+                {content.questions.map((q, qi) => (
+                  <div key={q.id} className="break-inside-avoid">
+                    <p className="font-semibold text-text-primary mb-2">{qi + 1}. {q.text}</p>
+                    <div className="space-y-1.5 ml-1">
+                      {q.options.map(o => (
+                        <div
+                          key={o.id}
+                          className={`flex items-start gap-2 p-2 rounded-md text-sm ${o.isCorrect ? 'bg-success-bg text-success font-medium' : 'text-text-secondary'}`}
+                        >
+                          {o.isCorrect ? <CheckCircle2 size={16} className="shrink-0 mt-0.5" /> : <span className="w-4 shrink-0" />}
+                          <span>{o.text}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {q.options.some(o => o.explanation) && (
+                      <div className="ml-1 mt-2 space-y-1">
+                        {q.options.filter(o => o.explanation).map(o => (
+                          <p key={o.id} className="text-xs text-text-secondary">
+                            <span className={o.isCorrect ? 'text-success font-medium' : ''}>{o.isCorrect ? 'Correcta —' : '·'}</span> {o.explanation}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Gestos de verificación práctica */}
+          {content.practicalItems.length > 0 && (
+            <div className="break-inside-avoid">
+              <h2 className="font-display text-xl text-text-primary mb-4 pb-2 border-b border-border-default">Verificación práctica en el puesto</h2>
+              <ul className="space-y-2">
+                {content.practicalItems.map(p => (
+                  <li key={p.id} className="text-sm text-text-primary">
+                    <span className="font-medium">☐ {p.text}</span>
+                    {p.helpText && <p className="text-xs text-text-secondary ml-5 mt-0.5">{p.helpText}</p>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
+      )}
     </div>
   )
 }
