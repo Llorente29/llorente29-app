@@ -138,12 +138,36 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
       const todayIso = toISODate(today)
 
       const cells = schedule.cells || {}
-      let myTemplateId: string | null = null
+      // Recoger TODOS los turnos del empleado hoy (puede tener varios: mañana y noche).
+      const myTemplateIds: string[] = []
       for (const tid of Object.keys(cells)) {
         const dayCell = cells[tid]?.[String(schedulerDay)]
         if (dayCell && dayCell.includes(employee.id)) {
+          myTemplateIds.push(tid)
+        }
+      }
+
+      // Referencia horaria para elegir el turno correcto:
+      // - si ya tiene entrada abierta (va a fichar salida) → su hora de entrada real
+      // - si no (va a fichar entrada) → la hora actual
+      const openEntry = (currentEmp.clockEntries || [])
+        .filter(e => !e.voided && e.type === 'entrada' && e.datetime.slice(0, 10) === todayIso)
+        .sort((a, b) => new Date(b.datetime).getTime() - new Date(a.datetime).getTime())[0]
+      const refDate = openEntry ? new Date(openEntry.datetime) : today
+      const refMin = refDate.getHours() * 60 + refDate.getMinutes()
+
+      // Elegir el turno cuyo start_time esté MÁS CERCA de la referencia.
+      let myTemplateId: string | null = null
+      let bestDist = Infinity
+      for (const tid of myTemplateIds) {
+        const t = templates.find(x => x.id === tid)
+        if (!t) continue
+        const [sh, sm] = t.start_time.slice(0, 5).split(':').map(Number)
+        const startMin = sh * 60 + sm
+        const dist = Math.abs(refMin - startMin)
+        if (dist < bestDist) {
+          bestDist = dist
           myTemplateId = tid
-          break
         }
       }
 
@@ -177,7 +201,7 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
     }
     loadRoundingCtx()
     return () => { cancel = true }
-  }, [selectedLocId, allowedLocations, employee.id, employee.locationId])
+  }, [selectedLocId, allowedLocations, employee.id, employee.locationId, currentEmp.clockEntries])
 
   const selectedLoc: Location | null = selectedLocId ? (allowedLocations.find(l => l.id === selectedLocId) || null) : null
 
