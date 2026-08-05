@@ -31,6 +31,8 @@ export interface Employee {
   // === Campos para bolsa de horas ===
   initialHoursBalance?: number       // saldo inicial al empezar a usar Folvy (puede ser negativo)
   showHoursBalance?: boolean         // si true, el trabajador ve su saldo en su app móvil (default true)
+  // === Recordatorio de olvido de fichaje de salida (opt-out, desconexión digital) ===
+  forgotClockoutReminder?: boolean   // si true (default), se le avisa por WhatsApp si olvida fichar salida
   // === Campos para baja de empleado ===
   terminationType?: string           // tipo de baja: 'voluntaria' | 'no_renovacion' | 'despido' | etc.
   terminationReason?: string         // motivo libre

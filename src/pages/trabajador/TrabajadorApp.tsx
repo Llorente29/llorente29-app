@@ -24,6 +24,7 @@ import OrderReceiveFlow from '../../modules/supply/components/OrderReceiveFlow'
 import { listPurchaseOrders } from '../../modules/supply/services/purchaseOrderService'
 import MisChecklistsPage from './MisChecklistsPage'
 import MiFormacion from './MiFormacion'
+import MisAjustes from './MisAjustes'
 import BottomTabBar from '../../components/trabajador/BottomTabBar'
 import type { WorkerTab } from '../../components/trabajador/BottomTabBar'
 import ExecutionPage from '../../modules/appcc/pages/ExecutionPage'
@@ -35,7 +36,7 @@ import type { Employee, Location } from '../../types'
 type SubPage =
   | 'home'
   | 'portal'
-  | 'fichar' | 'horario' | 'fichajes' | 'documentos' | 'vacaciones' | 'bolsa' | 'turnos' | 'cambios' | 'formacion'
+  | 'fichar' | 'horario' | 'fichajes' | 'documentos' | 'vacaciones' | 'bolsa' | 'turnos' | 'cambios' | 'formacion' | 'ajustes'
   | 'appcc_list' | 'appcc_execution'
   | 'inventario'
   | 'inventario_manual'
@@ -355,6 +356,7 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
   if (subPage === 'turnos') return <MisTurnos employee={employee} onBack={() => setSubPage('portal')} />
   if (subPage === 'cambios') return <CambiosTurnoPage employee={employee} onBack={() => setSubPage('portal')} />
   if (subPage === 'formacion') return <MiFormacion employee={employee} onBack={() => setSubPage('portal')} />
+  if (subPage === 'ajustes') return <MisAjustes employee={employee} onBack={() => setSubPage('portal')} />
   if (subPage === 'inventario') return <MiAutoinventario employee={employee} onBack={() => setSubPage('home')} />
   if (subPage === 'inventario_manual' && activeManualCount) {
     return (

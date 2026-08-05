@@ -4547,6 +4547,79 @@ export type Database = {
         }
         Relationships: []
       }
+      clockout_reminder_log: {
+        Row: {
+          account_id: string
+          attempts: number
+          clock_entry_id: string
+          created_at: string
+          employee_id: string
+          error: string | null
+          id: string
+          provider_message_id: string | null
+          scheduled_end: string | null
+          sent_at: string | null
+          skip_reason: string | null
+          status: string
+          to_phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          attempts?: number
+          clock_entry_id: string
+          created_at?: string
+          employee_id: string
+          error?: string | null
+          id?: string
+          provider_message_id?: string | null
+          scheduled_end?: string | null
+          sent_at?: string | null
+          skip_reason?: string | null
+          status?: string
+          to_phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          attempts?: number
+          clock_entry_id?: string
+          created_at?: string
+          employee_id?: string
+          error?: string | null
+          id?: string
+          provider_message_id?: string | null
+          scheduled_end?: string | null
+          sent_at?: string | null
+          skip_reason?: string | null
+          status?: string
+          to_phone?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clockout_reminder_log_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clockout_reminder_log_clock_entry_id_fkey"
+            columns: ["clock_entry_id"]
+            isOneToOne: true
+            referencedRelation: "clock_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clockout_reminder_log_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       combo_slot: {
         Row: {
           account_id: string
@@ -6826,6 +6899,7 @@ export type Database = {
           email: string | null
           employer_ss_annual: number | null
           end_date: string | null
+          forgot_clockout_reminder: boolean
           id: string
           initial_hours_balance: number | null
           location_id: string | null
@@ -6864,6 +6938,7 @@ export type Database = {
           email?: string | null
           employer_ss_annual?: number | null
           end_date?: string | null
+          forgot_clockout_reminder?: boolean
           id?: string
           initial_hours_balance?: number | null
           location_id?: string | null
@@ -6902,6 +6977,7 @@ export type Database = {
           email?: string | null
           employer_ss_annual?: number | null
           end_date?: string | null
+          forgot_clockout_reminder?: boolean
           id?: string
           initial_hours_balance?: number | null
           location_id?: string | null
@@ -17675,6 +17751,7 @@ export type Database = {
         }
       }
       enablelongtransactions: { Args: never; Returns: string }
+      enqueue_clockout_reminders: { Args: never; Returns: number }
       enqueue_customer_notification: {
         Args: { p_event: string; p_sale_id: string }
         Returns: undefined

@@ -18,13 +18,14 @@
 import {
   Users, Activity, Clock, Smartphone, Inbox, Armchair,
   RefreshCw, Calendar, FolderOpen, FileText, Wallet, BarChart3, Receipt,
-  GraduationCap,
+  GraduationCap, BellRing,
 } from 'lucide-react'
 import type { ModuleDefinition } from '@/shell/types'
 
 import StaffPage from '@/pages/StaffPage'
 import CoursesPage from '@/pages/CoursesPage'
 import FichajesGlobalPage from '@/pages/FichajesGlobalPage'
+import ClockoutReminderReportPage from '@/pages/ClockoutReminderReportPage'
 import KioskoFichajePage from '@/pages/KioskoFichajePage'
 import SolicitudesPendientesPage from '@/pages/SolicitudesPendientesPage'
 import AhoraMismoPage from '@/pages/AhoraMismoPage'
@@ -49,6 +50,7 @@ export const personalModule: ModuleDefinition = {
     { path: '',                 element: <StaffPage /> },
     { path: 'ahora-mismo',      element: <AhoraMismoPage /> },
     { path: 'control-horario',  element: <FichajesGlobalPage /> },
+    { path: 'recordatorios-fichaje', element: <ClockoutReminderReportPage /> },
     { path: 'kiosko',           element: <KioskoFichajePage /> },
     { path: 'solicitudes',      element: <SolicitudesPendientesPage /> },
     { path: 'turnos-abiertos',  element: <TurnosAbiertosPage /> },
@@ -67,6 +69,7 @@ export const personalModule: ModuleDefinition = {
       { id: 'personal_staff',        label: 'Empleados',         icon: Users,      path: '',                    requiredPermission: 'show_staff' },
       { id: 'personal_ahora',        label: 'Ahora mismo',       icon: Activity,   path: 'ahora-mismo',         requiredPermission: 'show_ahora_mismo' },
       { id: 'personal_horario',      label: 'Control horario',   icon: Clock,      path: 'control-horario',     requiredPermission: 'show_fichajes_global' },
+      { id: 'personal_recordatorios', label: 'Recordatorios de fichaje', icon: BellRing, path: 'recordatorios-fichaje', requiredPermission: 'show_informes_personal' },
       { id: 'personal_kiosko',       label: 'Kiosko fichaje',    icon: Smartphone, path: 'kiosko',              requiredPermission: 'show_kiosko_fichaje' },
       { id: 'personal_solicitudes',  label: 'Solicitudes',       icon: Inbox,      path: 'solicitudes',         requiredPermission: 'show_solicitudes_pendientes' },
       { id: 'personal_turnos',       label: 'Turnos abiertos',   icon: Armchair,   path: 'turnos-abiertos',     requiredPermission: 'show_turnos_abiertos' },

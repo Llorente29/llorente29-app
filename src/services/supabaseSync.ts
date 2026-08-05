@@ -161,6 +161,7 @@ interface EmployeeRow {
   rest_pattern: RestPattern | null
   initial_hours_balance: number | null
   show_hours_balance: boolean | null
+  forgot_clockout_reminder: boolean | null
   termination_type: string | null
   termination_reason: string | null
   termination_communicated_to_gestoria: boolean | null
@@ -213,6 +214,7 @@ function rowToEmployee(r: EmployeeRow): Employee {
     restPattern: r.rest_pattern || undefined,
     initialHoursBalance: r.initial_hours_balance != null ? Number(r.initial_hours_balance) : 0,
     showHoursBalance: r.show_hours_balance ?? true,
+    forgotClockoutReminder: r.forgot_clockout_reminder ?? true,
     terminationType: (r.termination_type as Employee['terminationType']) || undefined,
     terminationReason: r.termination_reason || undefined,
     terminationCommunicatedToGestoria: r.termination_communicated_to_gestoria ?? false,
