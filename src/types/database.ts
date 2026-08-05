@@ -5196,6 +5196,7 @@ export type Database = {
           summary: string | null
           title: string
           version: number
+          whatsapp_hook: string | null
         }
         Insert: {
           account_id?: string | null
@@ -5222,6 +5223,7 @@ export type Database = {
           summary?: string | null
           title: string
           version?: number
+          whatsapp_hook?: string | null
         }
         Update: {
           account_id?: string | null
@@ -5248,6 +5250,7 @@ export type Database = {
           summary?: string | null
           title?: string
           version?: number
+          whatsapp_hook?: string | null
         }
         Relationships: [
           {
@@ -5618,6 +5621,7 @@ export type Database = {
           attempt_id: string
           auth_method: string
           auth_uid: string | null
+          content_snapshot: Json | null
           course_version: number
           employee_id: string
           id: string
@@ -5632,6 +5636,7 @@ export type Database = {
           attempt_id: string
           auth_method?: string
           auth_uid?: string | null
+          content_snapshot?: Json | null
           course_version: number
           employee_id: string
           id?: string
@@ -5646,6 +5651,7 @@ export type Database = {
           attempt_id?: string
           auth_method?: string
           auth_uid?: string | null
+          content_snapshot?: Json | null
           course_version?: number
           employee_id?: string
           id?: string
@@ -15617,6 +15623,110 @@ export type Database = {
         }
         Relationships: []
       }
+      training_notice: {
+        Row: {
+          account_id: string
+          assignment_id: string | null
+          attempts: number
+          channel: string
+          course_id: string
+          created_at: string
+          delivered_at: string | null
+          employee_id: string
+          error: string | null
+          id: string
+          lang: string
+          origin: string
+          payload: Json
+          provider_message_id: string | null
+          read_at: string | null
+          requested_by: string | null
+          sent_at: string | null
+          skip_reason: string | null
+          status: string
+          template: string
+          to_phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          assignment_id?: string | null
+          attempts?: number
+          channel?: string
+          course_id: string
+          created_at?: string
+          delivered_at?: string | null
+          employee_id: string
+          error?: string | null
+          id?: string
+          lang?: string
+          origin?: string
+          payload?: Json
+          provider_message_id?: string | null
+          read_at?: string | null
+          requested_by?: string | null
+          sent_at?: string | null
+          skip_reason?: string | null
+          status?: string
+          template?: string
+          to_phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          assignment_id?: string | null
+          attempts?: number
+          channel?: string
+          course_id?: string
+          created_at?: string
+          delivered_at?: string | null
+          employee_id?: string
+          error?: string | null
+          id?: string
+          lang?: string
+          origin?: string
+          payload?: Json
+          provider_message_id?: string | null
+          read_at?: string | null
+          requested_by?: string | null
+          sent_at?: string | null
+          skip_reason?: string | null
+          status?: string
+          template?: string
+          to_phone?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "training_notice_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_notice_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "course_assignment"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_notice_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "course"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_notice_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       training_path: {
         Row: {
           account_id: string | null
@@ -15654,6 +15764,51 @@ export type Database = {
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      training_path_item: {
+        Row: {
+          course_id: string
+          created_at: string
+          days_from_hire: number
+          id: string
+          is_blocking: boolean
+          path_id: string
+          phase: string
+        }
+        Insert: {
+          course_id: string
+          created_at?: string
+          days_from_hire: number
+          id?: string
+          is_blocking?: boolean
+          path_id: string
+          phase: string
+        }
+        Update: {
+          course_id?: string
+          created_at?: string
+          days_from_hire?: number
+          id?: string
+          is_blocking?: boolean
+          path_id?: string
+          phase?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "training_path_item_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "course"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_path_item_path_id_fkey"
+            columns: ["path_id"]
+            isOneToOne: false
+            referencedRelation: "training_path"
             referencedColumns: ["id"]
           },
         ]
@@ -15705,51 +15860,6 @@ export type Database = {
           },
           {
             foreignKeyName: "training_path_progress_path_id_fkey"
-            columns: ["path_id"]
-            isOneToOne: false
-            referencedRelation: "training_path"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      training_path_item: {
-        Row: {
-          course_id: string
-          created_at: string
-          days_from_hire: number
-          id: string
-          is_blocking: boolean
-          path_id: string
-          phase: string
-        }
-        Insert: {
-          course_id: string
-          created_at?: string
-          days_from_hire: number
-          id?: string
-          is_blocking?: boolean
-          path_id: string
-          phase: string
-        }
-        Update: {
-          course_id?: string
-          created_at?: string
-          days_from_hire?: number
-          id?: string
-          is_blocking?: boolean
-          path_id?: string
-          phase?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "training_path_item_course_id_fkey"
-            columns: ["course_id"]
-            isOneToOne: false
-            referencedRelation: "course"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "training_path_item_path_id_fkey"
             columns: ["path_id"]
             isOneToOne: false
             referencedRelation: "training_path"
@@ -16973,6 +17083,10 @@ export type Database = {
         Args: { p_account_id?: string; p_token?: string }
         Returns: Json
       }
+      build_course_content_snapshot: {
+        Args: { p_course_id: string }
+        Returns: Json
+      }
       build_inventory_count: {
         Args: { p_area_ids?: string[]; p_count_id: string; p_full?: boolean }
         Returns: number
@@ -17047,6 +17161,10 @@ export type Database = {
       check_count_variance: {
         Args: { p_counted: number; p_line_id: string }
         Returns: string
+      }
+      check_phase_completion_for_assignment: {
+        Args: { p_assignment_id: string }
+        Returns: undefined
       }
       claim_n2_budget: { Args: { p_account_id: string }; Returns: boolean }
       claim_next_image_job: {
@@ -17316,6 +17434,14 @@ export type Database = {
         Args: { p_on: boolean; p_token: string }
         Returns: Json
       }
+      course_state_for_employee: {
+        Args: {
+          p_account_id: string
+          p_course_id: string
+          p_employee_id: string
+        }
+        Returns: string
+      }
       create_account_tx: {
         Args: {
           p_account_name: string
@@ -17374,10 +17500,7 @@ export type Database = {
       cron_generate_daily_counts: { Args: never; Returns: undefined }
       current_employee_and_account: {
         Args: never
-        Returns: {
-          account_id: string
-          employee_id: string
-        }[]
+        Returns: Record<string, unknown>
       }
       current_user_account_ids: { Args: never; Returns: string[] }
       current_user_can_approve_invoice: {
@@ -17407,82 +17530,6 @@ export type Database = {
         Returns: boolean
       }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
-      // Formación C1 — RPCs del motor de cursos internos (course_*).
-      my_pending_courses: {
-        Args: never
-        Returns: {
-          assignment_id: string
-          attempt_id: string | null
-          course_code: string
-          course_id: string
-          course_title: string
-          delivery_mode: string
-          due_at: string | null
-          estimated_minutes: number | null
-          passed: boolean | null
-          phase: string | null
-          reeval_months: number | null
-          score_pct: number | null
-          signed_at: string | null
-          status: string
-        }[]
-      }
-      // Formación — Itinerario por fases (liberación escalonada).
-      ensure_training_path_progress: {
-        Args: { p_employee_id: string; p_path_id: string }
-        Returns: undefined
-      }
-      sync_phase_assignments: {
-        Args: { p_employee_id: string; p_path_id: string; p_phase: string }
-        Returns: number
-      }
-      release_next_phase: {
-        Args: { p_employee_id: string; p_path_id: string }
-        Returns: Json
-      }
-      release_specific_phase: {
-        Args: { p_employee_id: string; p_path_id: string; p_phase: string; p_released_by?: string | null }
-        Returns: Json
-      }
-      release_phase_for_group: {
-        Args: {
-          p_account_id: string
-          p_location_id?: string | null
-          p_path_id: string
-          p_phase: string
-          p_role?: string | null
-        }
-        Returns: Json
-      }
-      check_phase_completion_for_assignment: {
-        Args: { p_assignment_id: string }
-        Returns: undefined
-      }
-      release_overdue_phases: {
-        Args: never
-        Returns: number
-      }
-      course_state_for_employee: {
-        Args: { p_account_id: string; p_course_id: string; p_employee_id: string }
-        Returns: string
-      }
-      sign_course_attempt: {
-        Args: {
-          p_attempt_id: string
-          p_signature_path: string
-          p_signer_doc_id: string
-          p_signer_name: string
-        }
-        Returns: Json
-      }
-      start_course_attempt: {
-        Args: { p_assignment_id: string }
-        Returns: Json
-      }
-      submit_course_attempt: {
-        Args: { p_answers: Json; p_attempt_id: string; p_time_spent_seconds?: number | null }
-        Returns: Json
-      }
       customer_addresses: { Args: { p_token: string }; Returns: Json }
       customer_coupons: { Args: { p_token: string }; Returns: Json }
       customer_delete_address: {
@@ -17647,6 +17694,18 @@ export type Database = {
       enqueue_test_print_by_token: {
         Args: { p_device_token: string; p_printer_id: string }
         Returns: string
+      }
+      enqueue_training_notice: {
+        Args: {
+          p_assignment_id: string
+          p_origin?: string
+          p_requested_by?: string
+        }
+        Returns: string
+      }
+      ensure_training_path_progress: {
+        Args: { p_employee_id: string; p_path_id: string }
+        Returns: undefined
       }
       equals: { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
       evaluate_campaign_rules: { Args: never; Returns: number }
@@ -18417,6 +18476,25 @@ export type Database = {
         }
         Returns: Json
       }
+      my_pending_courses: {
+        Args: never
+        Returns: {
+          assignment_id: string
+          attempt_id: string
+          course_code: string
+          course_id: string
+          course_title: string
+          delivery_mode: string
+          due_at: string
+          estimated_minutes: number
+          passed: boolean
+          phase: string
+          reeval_months: number
+          score_pct: number
+          signed_at: string
+          status: string
+        }[]
+      }
       next_folvy_code: {
         Args: { p_account_id: string; p_type: string }
         Returns: string
@@ -18438,6 +18516,14 @@ export type Database = {
         Returns: string
       }
       normalize_ingredient_name: { Args: { p_text: string }; Returns: string }
+      notify_employee_courses: {
+        Args: { p_course_id?: string; p_employee_id: string }
+        Returns: {
+          course_id: string
+          notice_id: string
+          result: string
+        }[]
+      }
       offers_goal_report: {
         Args: { p_account_id: string }
         Returns: {
@@ -18852,6 +18938,30 @@ export type Database = {
           cost_eur: number
           waste_id: string
         }[]
+      }
+      release_next_phase: {
+        Args: { p_employee_id: string; p_path_id: string }
+        Returns: Json
+      }
+      release_overdue_phases: { Args: never; Returns: number }
+      release_phase_for_group: {
+        Args: {
+          p_account_id: string
+          p_location_id?: string
+          p_path_id: string
+          p_phase: string
+          p_role?: string
+        }
+        Returns: Json
+      }
+      release_specific_phase: {
+        Args: {
+          p_employee_id: string
+          p_path_id: string
+          p_phase: string
+          p_released_by: string
+        }
+        Returns: Json
       }
       remove_ingredient_from_recipes: {
         Args: { p_parents: string[]; p_source: string }
@@ -19457,6 +19567,15 @@ export type Database = {
       shop_payment_config: { Args: { p_slug: string }; Returns: Json }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      sign_course_attempt: {
+        Args: {
+          p_attempt_id: string
+          p_signature_path: string
+          p_signer_doc_id: string
+          p_signer_name: string
+        }
+        Returns: Json
+      }
       social_secret_read: { Args: { p_name: string }; Returns: string }
       st_3dclosestpoint: {
         Args: { geom1: unknown; geom2: unknown }
@@ -20039,6 +20158,7 @@ export type Database = {
         Args: { geom: unknown; move: number; wrap: number }
         Returns: unknown
       }
+      start_course_attempt: { Args: { p_assignment_id: string }; Returns: Json }
       station_update_window: {
         Args: { p_device_token: string; p_quiet_minutes?: number }
         Returns: Json
@@ -20073,6 +20193,14 @@ export type Database = {
           p_limit?: number
           p_offset?: number
           p_search?: string
+        }
+        Returns: Json
+      }
+      submit_course_attempt: {
+        Args: {
+          p_answers: Json
+          p_attempt_id: string
+          p_time_spent_seconds?: number
         }
         Returns: Json
       }
@@ -20114,6 +20242,10 @@ export type Database = {
       swap_mirror: {
         Args: { p_account: string; p_item: string; p_use_mirror: boolean }
         Returns: Json
+      }
+      sync_phase_assignments: {
+        Args: { p_employee_id: string; p_path_id: string; p_phase: string }
+        Returns: number
       }
       team_demand_by_hour: {
         Args: { p_account: string; p_from: string; p_to: string }
@@ -20210,20 +20342,19 @@ export type Database = {
         Returns: Json
       }
       track_by_token: { Args: { p_token: string }; Returns: Json }
-      // Formación C2 — informes de lectura.
       training_compliance_matrix: {
         Args: {
           p_account_id: string
-          p_location_id?: string | null
+          p_location_id?: string
           p_only_mandatory?: boolean
         }
         Returns: {
           courses: Json
-          doc_id: string | null
+          doc_id: string
           employee_id: string
           employee_name: string
           location_name: string
-          role: string | null
+          role: string
         }[]
       }
       training_course_summary: {
@@ -20234,8 +20365,8 @@ export type Database = {
           course_code: string
           course_id: string
           course_title: string
-          estimated_minutes: number | null
-          legal_basis: string | null
+          estimated_minutes: number
+          legal_basis: string
           section_titles: string[]
           signed_count: number
           trained_count: number
@@ -20246,7 +20377,7 @@ export type Database = {
         Returns: {
           check_kind: string
           item_count: number
-          sample_names: string[] | null
+          sample_names: string[]
         }[]
       }
       training_gaps: {
@@ -20254,12 +20385,20 @@ export type Database = {
         Returns: {
           course_id: string
           course_title: string
-          days_left: number | null
-          due_at: string | null
+          days_left: number
+          due_at: string
           employee_id: string
           employee_name: string
           gap_kind: string
         }[]
+      }
+      training_is_clocked_in: {
+        Args: { p_employee_id: string }
+        Returns: boolean
+      }
+      training_notice_mark_status: {
+        Args: { p_at?: string; p_status: string; p_wamid: string }
+        Returns: boolean
       }
       unaccent: { Args: { "": string }; Returns: string }
       unassign_items_from_zones: {
@@ -20375,7 +20514,7 @@ export type Database = {
         }[]
       }
       verify_practical_items: {
-        Args: { p_attempt_id: string; p_checks: Json; p_notes?: string | null }
+        Args: { p_attempt_id: string; p_checks: Json; p_notes?: string }
         Returns: Json
       }
       void_clock_entry: {

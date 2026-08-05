@@ -61,6 +61,12 @@ export interface Course {
   firstSectionMediaUrl: string | null
   /** Si este curso se generó desde un plato (C7), el recipe_item de origen. null = no generado. */
   sourceRecipeItemId: string | null
+  /**
+   * Texto ameno del aviso de WhatsApp al empleado (variable {{2}} de la
+   * plantilla formacion_curso_disponible). null = el curso no genera avisos
+   * todavía (enqueue_training_notice lo deja en skip_reason='sin_gancho').
+   */
+  whatsappHook: string | null
 }
 
 export type CourseCategory = 'cumplimiento' | 'cocina' | 'delivery' | 'sala' | 'equipo' | 'producto' | 'sostenibilidad'
@@ -179,6 +185,7 @@ interface CourseRow {
   recommended_order: number | null
   cover_url: string | null
   source_recipe_item_id: string | null
+  whatsapp_hook: string | null
   /** Solo presente cuando listCourses embebe course_section para resolver la capa 2 de la portada (C5 §B). */
   course_section?: { ord: number; media_url: string | null }[]
 }
@@ -211,6 +218,7 @@ function rowToCourse(r: CourseRow): Course {
       .filter((s): s is { ord: number; media_url: string } => !!s.media_url)
       .sort((a, b) => a.ord - b.ord)[0]?.media_url ?? null,
     sourceRecipeItemId: r.source_recipe_item_id,
+    whatsappHook: r.whatsapp_hook,
   }
 }
 
@@ -382,6 +390,7 @@ export interface UpdateCourseInput {
   passThresholdPct?: number
   status?: CourseStatus
   requiresPractical?: boolean
+  whatsappHook?: string | null
 }
 
 export async function updateCourse(courseId: string, patch: UpdateCourseInput): Promise<Course> {
@@ -396,6 +405,7 @@ export async function updateCourse(courseId: string, patch: UpdateCourseInput): 
   if (patch.estimatedMinutes !== undefined) update.estimated_minutes = patch.estimatedMinutes
   if (patch.passThresholdPct !== undefined) update.pass_threshold_pct = patch.passThresholdPct
   if (patch.requiresPractical !== undefined) update.requires_practical = patch.requiresPractical
+  if (patch.whatsappHook !== undefined) update.whatsapp_hook = patch.whatsappHook
   if (patch.status !== undefined) {
     update.status = patch.status
     // Publicar un curso ya publicado antes = nueva versión (el acta de quien
@@ -603,7 +613,7 @@ export async function verifyPracticalItems(
   const { data, error } = await supabase.rpc('verify_practical_items', {
     p_attempt_id: attemptId,
     p_checks: checks.map(c => ({ itemId: c.itemId, checked: c.checked, notes: c.notes ?? null })),
-    p_notes: notes ?? null,
+    p_notes: notes ?? undefined,
   })
   if (error) { console.error('[coursesService] verifyPracticalItems', error); throw error }
   const result = data as { insertedCount: number; verifiedAt: string }

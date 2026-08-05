@@ -196,8 +196,8 @@ export async function releasePhaseForGroup(
     p_account_id: accountId,
     p_path_id: pathId,
     p_phase: phase,
-    p_location_id: filters.locationId ?? null,
-    p_role: filters.role ?? null,
+    p_location_id: filters.locationId ?? undefined,
+    p_role: filters.role ?? undefined,
   })
   if (error) { console.error('[trainingPathService] releasePhaseForGroup', error); throw error }
   return data as unknown as ReleasePhaseForGroupResult

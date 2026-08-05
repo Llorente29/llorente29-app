@@ -59,7 +59,7 @@ export async function getTrainingComplianceMatrix(
   requireSupabase()
   const { data, error } = await supabase!.rpc('training_compliance_matrix', {
     p_account_id: accountId,
-    p_location_id: locationId ?? null,
+    p_location_id: locationId ?? undefined,
     p_only_mandatory: onlyMandatory,
   })
   if (error) throw new Error(`Error leyendo la matriz de formación: ${error.message}`)

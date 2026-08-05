@@ -15,6 +15,7 @@ import {
   GraduationCap, Plus, ArrowLeft, BookOpen, ListChecks, Users2, ClipboardList,
   Trash2, Pencil, Check, X as XIcon, AlertTriangle, ShieldCheck, ClipboardCheck,
   Image as ImageIcon, Clock, ChefHat, Truck, UtensilsCrossed, Leaf, FolderOpen,
+  Send, Sparkles,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { supabase } from '../lib/supabase'
@@ -34,6 +35,11 @@ import {
   getSignedSectionImageUrl, getSignedSectionImageUrls, uploadOwnSectionImage, revertSectionImageToFolvy,
   uploadOwnCoverImage, revertCoverToFolvy,
 } from '../services/courseImagesService'
+import {
+  getNoticeStatusForCourse, notifyEmployee, notifyPending,
+  type TrainingNoticeStatus, type NotifyResult,
+} from '../services/trainingNoticeService'
+import { suggestCourseHook } from '../services/courseHookService'
 import type { Employee, Location } from '../types'
 
 const POSITIONS = ['Encargado', 'Jefe de cocina', 'Cocinero', 'Ayudante cocina', 'Camarero', 'Barra', 'Hostess', 'Limpieza', 'Gerente', 'Otro']
@@ -733,6 +739,14 @@ function ContenidoTab({ course, accountId, editable, onChanged, onAdopted }: {
       </section>
 
       <section>
+        <h2 className="font-semibold text-text-primary flex items-center gap-2 mb-2"><Send size={16} /> Aviso de WhatsApp</h2>
+        <p className="text-xs text-text-secondary mb-2">
+          Texto que recibe el empleado cuando le toca este curso. Sin gancho, el curso no genera avisos.
+        </p>
+        <WhatsappHookCard course={course} editable={editable} onSaved={onChanged} />
+      </section>
+
+      <section>
         <div className="flex items-center justify-between mb-2">
           <h2 className="font-semibold text-text-primary flex items-center gap-2"><BookOpen size={16} /> Teoría</h2>
           {editable && <AddSectionButton courseId={course.id} nextOrd={content.sections.length + 1} onAdded={load} />}
@@ -891,7 +905,9 @@ function PracticalItemCard({ item, editable, onChanged }: {
 
 function PublishButton({ course, onDone }: { course: Course; onDone: () => void }) {
   const [busy, setBusy] = useState(false)
-  async function publish() {
+  const [showHookModal, setShowHookModal] = useState(false)
+
+  async function doPublish() {
     setBusy(true)
     try {
       if (course.status === 'published') {
@@ -904,11 +920,104 @@ function PublishButton({ course, onDone }: { course: Course; onDone: () => void 
       setBusy(false)
     }
   }
+
+  // ENCARGO CODE — sin gancho, enqueue_training_notice deja el aviso en
+  // skip_reason='sin_gancho' (nunca se envía). Antes de publicar SIN gancho,
+  // dar la oportunidad de ponerlo — pero no bloquear: "Publicar sin aviso" es
+  // una salida válida.
+  function handleClick() {
+    const hasHook = !!(course.whatsappHook && course.whatsappHook.trim())
+    if (!hasHook) { setShowHookModal(true); return }
+    doPublish()
+  }
+
   return (
-    <Button onClick={publish} disabled={busy}>
-      <ShieldCheck size={16} />
-      {course.status === 'published' ? `Publicar como v${course.version + 1}` : 'Publicar curso'}
-    </Button>
+    <>
+      <Button onClick={handleClick} disabled={busy}>
+        <ShieldCheck size={16} />
+        {course.status === 'published' ? `Publicar como v${course.version + 1}` : 'Publicar curso'}
+      </Button>
+      {showHookModal && (
+        <PublishHookModal
+          course={course}
+          onClose={() => setShowHookModal(false)}
+          onPublishWithoutHook={async () => { setShowHookModal(false); await doPublish() }}
+          onSavedAndPublish={async () => { setShowHookModal(false); await doPublish() }}
+        />
+      )}
+    </>
+  )
+}
+
+function PublishHookModal({ course, onClose, onPublishWithoutHook, onSavedAndPublish }: {
+  course: Course
+  onClose: () => void
+  onPublishWithoutHook: () => void
+  onSavedAndPublish: () => void
+}) {
+  const [hook, setHook] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [suggesting, setSuggesting] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function generate() {
+    setSuggesting(true)
+    setError(null)
+    try {
+      setHook(await suggestCourseHook(course.id))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo proponer un gancho con IA')
+    } finally {
+      setSuggesting(false)
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { generate() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function saveAndPublish() {
+    setSaving(true)
+    setError(null)
+    try {
+      await coursesService.updateCourse(course.id, { whatsappHook: hook.trim() || null })
+      onSavedAndPublish()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo guardar el aviso')
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title="Este curso no tiene aviso de WhatsApp">
+      <div className="space-y-3">
+        <p className="text-sm text-text-secondary">
+          Propón uno para que los empleados reciban la notificación cuando les toque este curso — se avisará
+          en cuanto fichen su entrada. Publicar sin aviso también es válido: el curso no notificará hasta que
+          tenga uno.
+        </p>
+        {error && <Alert type="error">{error}</Alert>}
+        {loading ? (
+          <p className="text-sm text-text-secondary">Generando propuesta…</p>
+        ) : (
+          <>
+            <Textarea rows={3} value={hook} onChange={e => setHook(e.target.value)} maxLength={300} />
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-text-secondary">{hook.length}/300</p>
+              <Button size="sm" variant="outline" onClick={generate} disabled={suggesting}>
+                <Sparkles size={14} /> {suggesting ? 'Proponiendo…' : 'Proponer otro'}
+              </Button>
+            </div>
+          </>
+        )}
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="outline" onClick={onPublishWithoutHook} disabled={saving}>Publicar sin aviso</Button>
+          <Button onClick={saveAndPublish} disabled={saving || loading || !hook.trim()}>
+            {saving ? 'Guardando…' : 'Guardar y publicar'}
+          </Button>
+        </div>
+      </div>
+    </Modal>
   )
 }
 
@@ -939,6 +1048,82 @@ function AddSectionButton({ courseId, nextOrd, onAdded }: { courseId: string; ne
         </div>
       </Modal>
     </>
+  )
+}
+
+// Aviso de WhatsApp (ENCARGO CODE) — course.whatsapp_hook. "IA propone,
+// humano decide": suggestCourseHook() solo pinta el texto en el campo, nunca
+// guarda por sí sola. onSaved refresca el `course` del padre (CoursesPage)
+// para que PublishButton vea el hook fresco sin recargar la página.
+function WhatsappHookCard({ course, editable, onSaved }: {
+  course: Course
+  editable: boolean
+  onSaved: () => void
+}) {
+  const [hook, setHook] = useState(course.whatsappHook ?? '')
+  const [dirty, setDirty] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [suggesting, setSuggesting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    setHook(course.whatsappHook ?? '')
+    setDirty(false)
+  }, [course.id, course.whatsappHook])
+
+  async function suggest() {
+    setSuggesting(true)
+    setError(null)
+    try {
+      const proposal = await suggestCourseHook(course.id)
+      setHook(proposal)
+      setDirty(true)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo proponer un gancho con IA')
+    } finally {
+      setSuggesting(false)
+    }
+  }
+
+  async function save() {
+    setSaving(true)
+    setError(null)
+    try {
+      await coursesService.updateCourse(course.id, { whatsappHook: hook.trim() || null })
+      setDirty(false)
+      onSaved()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo guardar el aviso')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Card className="p-4">
+      {error && <p className="text-xs text-danger mb-2">{error}</p>}
+      <Textarea
+        rows={3}
+        value={hook}
+        onChange={e => { setHook(e.target.value); setDirty(true) }}
+        placeholder="Sin gancho todavía — el curso no generará avisos de WhatsApp hasta que tenga uno."
+        disabled={!editable}
+        maxLength={300}
+      />
+      <div className="flex items-center justify-between mt-2">
+        <p className="text-xs text-text-secondary">{hook.length}/300</p>
+        {editable && (
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={suggest} disabled={suggesting}>
+              <Sparkles size={14} /> {suggesting ? 'Proponiendo…' : 'Proponer con IA'}
+            </Button>
+            <Button size="sm" onClick={save} disabled={saving || !dirty}>
+              {saving ? 'Guardando…' : 'Guardar'}
+            </Button>
+          </div>
+        )}
+      </div>
+    </Card>
   )
 }
 
@@ -1484,17 +1669,91 @@ const TRACKING_BADGE: Record<TrackingRow['status'], { label: string; color: stri
   pendiente_practica: { label: 'Falta verificación práctica', color: 'yellow' },
 }
 
+// Avisos de formación (ENCARGO CODE) — el backend (training_notice, cron
+// training-notify) ya vive en producción; esto solo pinta su estado. La
+// desconexión digital (art. 88 LOPDGDD) hace que 'queued' pueda tardar horas
+// en pasar a 'sent' — nunca prometer entrega inmediata en el copy.
+const SKIP_REASON_LABEL: Record<string, string> = {
+  sin_telefono: 'sin teléfono registrado',
+  sin_gancho: 'el curso no tiene aviso de WhatsApp configurado',
+}
+
+function formatNoticeTime(iso: string | null): string {
+  if (!iso) return ''
+  return new Date(iso).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+}
+
+function NoticeCell({ notice }: { notice: TrainingNoticeStatus | undefined }) {
+  if (!notice) return <span className="text-text-tertiary">—</span>
+  switch (notice.status) {
+    case 'queued':
+      return <span className="text-text-secondary">⏳ En cola</span>
+    case 'sent':
+      return <span className="text-text-secondary">✅ Enviado · {formatNoticeTime(notice.sentAt)}</span>
+    case 'delivered':
+      return <span className="text-text-secondary">✅✅ Entregado · {formatNoticeTime(notice.deliveredAt)}</span>
+    case 'read':
+      return <span className="text-accent">👁️ Leído · {formatNoticeTime(notice.readAt)}</span>
+    case 'failed':
+      return (
+        <span className="text-danger cursor-help" title={notice.error ?? 'Error al enviar'}>
+          ❌ Falló
+        </span>
+      )
+    case 'skipped':
+      return (
+        <span className="text-warning cursor-help" title={notice.skipReason ? SKIP_REASON_LABEL[notice.skipReason] ?? notice.skipReason : 'Sin enviar'}>
+          ⚠️ Sin enviar
+        </span>
+      )
+    default:
+      return <span className="text-text-tertiary">—</span>
+  }
+}
+
+/** "3 encolados, 1 omitido" — resumen del toast tras pulsar Avisar. */
+function summarizeNotify(res: NotifyResult): string {
+  const parts: string[] = []
+  if (res.encolados > 0) parts.push(`${res.encolados} encolado${res.encolados === 1 ? '' : 's'}`)
+  if (res.omitidos > 0) parts.push(`${res.omitidos} omitido${res.omitidos === 1 ? '' : 's'} (ya avisado, sin gancho o sin teléfono)`)
+  return parts.length > 0 ? parts.join(', ') : 'Nadie pendiente de avisar'
+}
+
+/** Toast mínimo, local a esta pestaña: no hay sistema de toasts global en la app todavía. */
+function useSimpleToast() {
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(null), 4000)
+    return () => clearTimeout(t)
+  }, [toast])
+  return { toast, showToast: (message: string, type: 'success' | 'error' = 'success') => setToast({ message, type }) }
+}
+
 function SeguimientoTab({ course, staff }: { course: Course; staff: Employee[] }) {
   const { activeAccount } = useApp()
   const navigate = useNavigate()
   const [rows, setRows] = useState<TrackingRow[]>([])
   const [signatures, setSignatures] = useState<CourseSignatureRow[]>([])
   const [practicalItems, setPracticalItems] = useState<coursesService.CoursePracticalItem[]>([])
+  const [noticeMap, setNoticeMap] = useState<Map<string, TrainingNoticeStatus>>(new Map())
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
   const [generatingActa, setGeneratingActa] = useState(false)
   const [actaError, setActaError] = useState<string | null>(null)
   const [verifyingRow, setVerifyingRow] = useState<TrackingRow | null>(null)
+  const [notifyingId, setNotifyingId] = useState<string | null>(null)
+  const [notifyingBulk, setNotifyingBulk] = useState(false)
+  const { toast, showToast } = useSimpleToast()
+
+  async function loadNotices() {
+    try {
+      const notices = await getNoticeStatusForCourse(course.id)
+      setNoticeMap(new Map(notices.map(n => [n.employeeId, n])))
+    } catch {
+      // No bloquea el seguimiento: la columna "Aviso" se queda en "—" si falla.
+    }
+  }
 
   async function load() {
     setLoading(true)
@@ -1518,10 +1777,39 @@ function SeguimientoTab({ course, staff }: { course: Course; staff: Employee[] }
         practicalItems: items,
         practicalChecks: checks,
       }))
+      await loadNotices()
     } catch {
       setLoadError(true)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleNotifyRow(r: TrackingRow) {
+    setNotifyingId(r.employeeId)
+    try {
+      const res = await notifyEmployee(r.employeeId, course.id)
+      showToast(summarizeNotify(res))
+      await loadNotices()
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'No se pudo avisar', 'error')
+    } finally {
+      setNotifyingId(null)
+    }
+  }
+
+  async function handleNotifyPending() {
+    const pendingIds = rows.filter(r => r.status !== 'firmado').map(r => r.employeeId)
+    if (pendingIds.length === 0) { showToast('Nadie pendiente de avisar'); return }
+    setNotifyingBulk(true)
+    try {
+      const res = await notifyPending(pendingIds, course.id)
+      showToast(summarizeNotify(res))
+      await loadNotices()
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'No se pudo avisar', 'error')
+    } finally {
+      setNotifyingBulk(false)
     }
   }
 
@@ -1588,7 +1876,13 @@ function SeguimientoTab({ course, staff }: { course: Course; staff: Employee[] }
         </Alert>
       )}
       {actaError && <Alert type="error">{actaError}</Alert>}
-      <div className="flex justify-end gap-2">
+      <div className="flex items-center justify-end gap-3">
+        <p className="text-xs text-text-secondary">
+          Se avisará a cada persona en cuanto fiche su entrada (desconexión digital).
+        </p>
+        <Button variant="outline" size="sm" onClick={handleNotifyPending} disabled={notifyingBulk}>
+          <Send size={14} /> {notifyingBulk ? 'Avisando…' : 'Avisar a los pendientes'}
+        </Button>
         <Button variant="outline" size="sm" onClick={() => navigate('/appcc/formacion')}>
           Ver informe de inspección
         </Button>
@@ -1605,6 +1899,7 @@ function SeguimientoTab({ course, staff }: { course: Course; staff: Employee[] }
               <th className="text-left px-3 py-2">Nota</th>
               <th className="text-left px-3 py-2">Firmado</th>
               <th className="text-left px-3 py-2">Vence</th>
+              <th className="text-left px-3 py-2">Aviso</th>
               {course.requiresPractical && <th className="text-left px-3 py-2">Práctica</th>}
             </tr>
           </thead>
@@ -1624,6 +1919,22 @@ function SeguimientoTab({ course, staff }: { course: Course; staff: Employee[] }
                 <td className="px-3 py-2 text-text-secondary">{r.signedAt ? new Date(r.signedAt).toLocaleString('es-ES') : '—'}</td>
                 <td className={`px-3 py-2 ${r.overdue ? 'text-danger font-medium' : 'text-text-secondary'}`}>
                   {r.dueAt ? new Date(r.dueAt).toLocaleDateString('es-ES') : '—'}
+                </td>
+                <td className="px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <NoticeCell notice={noticeMap.get(r.employeeId)} />
+                    {r.status !== 'firmado' && (
+                      <button
+                        onClick={() => handleNotifyRow(r)}
+                        disabled={notifyingId === r.employeeId}
+                        className="p-1 rounded hover:bg-accent-bg text-text-secondary disabled:opacity-50"
+                        aria-label={`Avisar a ${r.employeeName}`}
+                        title="Avisar por WhatsApp en cuanto fiche"
+                      >
+                        <Send size={13} />
+                      </button>
+                    )}
+                  </div>
                 </td>
                 {course.requiresPractical && (
                   <td className="px-3 py-2">
@@ -1650,6 +1961,16 @@ function SeguimientoTab({ course, staff }: { course: Course; staff: Employee[] }
           onClose={() => setVerifyingRow(null)}
           onVerified={async () => { setVerifyingRow(null); await load() }}
         />
+      )}
+
+      {toast && (
+        <div
+          className={`fixed bottom-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-sm font-medium ${
+            toast.type === 'success' ? 'bg-text-primary text-card' : 'bg-danger text-text-on-accent'
+          }`}
+        >
+          {toast.message}
+        </div>
       )}
     </div>
   )

@@ -125,7 +125,7 @@ export async function submitAttempt(
   const { data, error } = await supabase.rpc('submit_course_attempt', {
     p_attempt_id: attemptId,
     p_answers: answers,
-    p_time_spent_seconds: timeSpentSeconds ?? null,
+    p_time_spent_seconds: timeSpentSeconds ?? undefined,
   })
   if (error) { console.error('[mobileCoursesService] submitAttempt', error); throw error }
   return data as unknown as SubmitResult
