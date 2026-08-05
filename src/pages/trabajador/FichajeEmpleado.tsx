@@ -26,7 +26,7 @@ interface Props {
 
 export default function FichajeEmpleado({ employee, onBack }: Props) {
   const { locations, addClockEntry, staff } = useApp()
-  const [step, setStep] = useState<'idle' | 'fetching-gps' | 'choosing-location' | 'confirming' | 'warn-confirm' | 'success' | 'error'>('idle')
+  const [step, setStep] = useState<'idle' | 'fetching-gps' | 'choosing-location' | 'confirming' | 'warn-confirm' | 'early-confirm' | 'success' | 'error'>('idle')
   const [position, setPosition] = useState<GeolocationPosition | null>(null)
   const [errorMsg, setErrorMsg] = useState('')
   const [pendingDist, setPendingDist] = useState(0)
@@ -36,6 +36,10 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
   // Sin esto, buildClockEntry no puede redondear (no sabe el horario teórico).
   const [calendarCtx, setCalendarCtx] = useState<CalendarContext | undefined>(undefined)
   const [roundingToleranceMin, setRoundingToleranceMin] = useState(8)
+  // Turno teórico de HOY en minutos desde 00:00 (para avisos de fichaje anticipado).
+  const [todayShift, setTodayShift] = useState<{ startMin: number; endMin: number; start: string; end: string } | null>(null)
+  // Aviso de fichaje anticipado pendiente de confirmación.
+  const [earlyWarn, setEarlyWarn] = useState<null | { kind: 'entrada' | 'salida'; theoreticalTime: string; minutesEarly: number }>(null)
 
   // Locales donde puede fichar
   const allowedLocations = useMemo(() => {
@@ -155,7 +159,18 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
             isOff: false,
           })
           assignmentsByDate.set(todayIso, { shiftTypeId: myTemplateId })
+          // Guardar el turno de hoy en minutos para los avisos de fichaje anticipado.
+          const [sh, sm] = start.split(':').map(Number)
+          const [eh, em] = end.split(':').map(Number)
+          const startMin = sh * 60 + sm
+          let endMin = eh * 60 + em
+          if (endMin <= startMin) endMin += 24 * 60  // cruce medianoche
+          setTodayShift({ startMin, endMin, start, end })
+        } else {
+          setTodayShift(null)
         }
+      } else {
+        setTodayShift(null)
       }
 
       setCalendarCtx({ assignmentsByDate, typesById })
@@ -178,6 +193,35 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
   const geofenceMode = selectedLoc?.clockGeofenceMode ?? 'block'
   // En modo 'warn' se puede fichar aunque esté fuera de zona (GPS caprichoso / sin coords).
   const canClock = !!selectedLoc && (inZone || geofenceMode === 'warn')
+
+  // Margen (min) para avisar de salida anticipada. Independiente del redondeo.
+  const EARLY_EXIT_WARN_MIN = 3
+
+  // ¿Hay que avisar de fichaje anticipado? Devuelve el aviso o null.
+  // - Entrada antes de su hora (más de la tolerancia): avisa que se redondeará.
+  // - Salida antes de su hora (más de 3 min): avisa siempre, sin importar cuánto.
+  function earlyClockWarning(type: 'entrada' | 'salida'): typeof earlyWarn {
+    if (!todayShift) return null
+    const now = new Date()
+    const nowMin = now.getHours() * 60 + now.getMinutes()
+
+    if (type === 'entrada') {
+      const diff = todayShift.startMin - nowMin  // positivo = llega antes
+      if (diff > roundingToleranceMin) {
+        return { kind: 'entrada', theoreticalTime: todayShift.start, minutesEarly: diff }
+      }
+    } else {
+      // salida: comparar contra endMin (ojo cruce medianoche: si el turno cruta las 00:00,
+      // endMin puede ser > 1440; ajustamos nowMin al mismo marco si ya pasó medianoche)
+      let effNowMin = nowMin
+      if (todayShift.endMin > 24 * 60 && nowMin < todayShift.startMin) effNowMin += 24 * 60
+      const diff = todayShift.endMin - effNowMin  // positivo = sale antes
+      if (diff >= EARLY_EXIT_WARN_MIN) {
+        return { kind: 'salida', theoreticalTime: todayShift.end, minutesEarly: diff }
+      }
+    }
+    return null
+  }
 
   function doClockAction() {
     if (!selectedLoc) return
@@ -207,20 +251,34 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
       return
     }
 
-    // Dentro de zona: fichaje normal, directo.
+    // Aviso de fichaje anticipado (entrada antes de hora → se redondea; salida
+    // antes de hora → confirmar). Independiente del geofence.
+    const warn = earlyClockWarning(nextType)
+    if (warn) {
+      setEarlyWarn(warn)
+      setStep('early-confirm')
+      return
+    }
+
+    // Dentro de zona y en hora: fichaje normal, directo.
     void writeEntry('in', 0)
   }
 
   // Escribe el fichaje. mode: 'in' (en zona) · 'outside' (fuera, marca distancia) ·
-  // 'nogps' (sin ubicación, marca para revisión).
-  async function writeEntry(mode: 'in' | 'outside' | 'nogps', distM: number) {
+  // 'nogps' (sin ubicación, marca para revisión) · 'early-exit' (salida anticipada
+  // confirmada: hora real, sin redondeo hacia arriba, marcada para el manager).
+  async function writeEntry(mode: 'in' | 'outside' | 'nogps' | 'early-exit', distM: number) {
     if (!selectedLoc) return
     setStep('confirming')
     const config = { ...defaultKioskoConfig(selectedLoc.id), geofenceRadiusM: radiusForLoc(selectedLoc) }
-    const result = buildClockEntry(currentEmp, selectedLoc, config, position, undefined, roundingToleranceMin, calendarCtx)
+    // En salida anticipada NO pasamos calendarCtx: así buildClockEntry no redondea
+    // hacia la hora teórica (regalaría minutos no trabajados). Se guarda la hora real.
+    const ctxForBuild = mode === 'early-exit' ? undefined : calendarCtx
+    const result = buildClockEntry(currentEmp, selectedLoc, config, position, undefined, roundingToleranceMin, ctxForBuild)
     let entry = result.entry
     if (mode === 'outside') entry = { ...entry, address: `Fuera de zona · ${distM}m` }
     else if (mode === 'nogps') entry = { ...entry, address: 'Sin ubicación (GPS no disponible)' }
+    else if (mode === 'early-exit') entry = { ...entry, address: `Salida anticipada · ${distM} min antes` }
     await addClockEntry(currentEmp.id, entry)
     setStep('success')
   }
@@ -291,6 +349,66 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
                 Fichar igualmente
               </button>
             </div>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
+  if (step === 'early-confirm' && earlyWarn) {
+    const isEntry = earlyWarn.kind === 'entrada'
+    return (
+      <div className="min-h-screen bg-page p-4">
+        <div className="max-w-md mx-auto pt-12">
+          <Card className={`p-6 text-center border-2 ${isEntry ? 'border-warning' : 'border-danger'}`}>
+            <div className="flex justify-center mb-3">
+              {isEntry
+                ? <Clock size={56} className="text-warning" />
+                : <AlertTriangle size={56} className="text-danger" />}
+            </div>
+            {isEntry ? (
+              <>
+                <p className="font-bold text-warning text-xl">Fichas antes de tu turno</p>
+                <p className="text-sm text-text-secondary mt-3">
+                  Tu turno empieza a las <b>{earlyWarn.theoreticalTime}</b> y llegas
+                  {' '}<b>{earlyWarn.minutesEarly} min</b> antes. Se computará desde tu hora
+                  de entrada, salvo que sean horas extra aprobadas. Tu hora real queda registrada.
+                </p>
+                <div className="flex gap-2 mt-6">
+                  <button
+                    onClick={() => { setEarlyWarn(null); setStep('idle') }}
+                    className="flex-1 py-3 rounded-xl bg-accent-bg text-text-primary font-medium hover:bg-page transition-base">
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => { setEarlyWarn(null); void writeEntry('in', 0) }}
+                    className="flex-1 py-3 rounded-xl bg-accent text-text-on-accent font-bold hover:bg-accent-hover transition-base">
+                    Entendido, fichar
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="font-bold text-danger text-xl">Sales antes de tu hora</p>
+                <p className="text-3xl font-extrabold text-danger mt-2">faltan {earlyWarn.minutesEarly} min</p>
+                <p className="text-sm text-text-secondary mt-3">
+                  Tu turno acaba a las <b>{earlyWarn.theoreticalTime}</b>. Si fichas salida ahora,
+                  se registrará tu hora real y tu encargado podrá verlo. ¿Seguro que te vas?
+                </p>
+                <div className="flex gap-2 mt-6">
+                  <button
+                    onClick={() => { setEarlyWarn(null); setStep('idle') }}
+                    className="flex-1 py-3 rounded-xl bg-accent-bg text-text-primary font-medium hover:bg-page transition-base">
+                    No, cancelar
+                  </button>
+                  <button
+                    onClick={() => { const m = earlyWarn.minutesEarly; setEarlyWarn(null); void writeEntry('early-exit', m) }}
+                    className="flex-1 py-3 rounded-xl bg-danger text-text-on-accent font-bold hover:opacity-90 transition-base">
+                    Sí, me voy
+                  </button>
+                </div>
+              </>
+            )}
           </Card>
         </div>
       </div>
