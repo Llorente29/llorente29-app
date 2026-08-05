@@ -1,84 +1,84 @@
 -- ============================================================================
--- BUG CRÍTICO — DOBLE DESCUENTO DE STOCK POR VENTA (solo DDL, sin datos).
+-- BUG CRÃTICO â€” DOBLE DESCUENTO DE STOCK POR VENTA (solo DDL, sin datos).
 --
--- SÍNTOMA (verificado en producción, Foodint Alcalá, "Milanesa de Pollo
--- Rebozado" 52aa4147-…, ventana de 1 día):
---     "Consumo por venta"  → 27 movimientos, 35 uds
---     "consumo teorico"    → 25 movimientos, 32 uds
+-- SÃNTOMA (verificado en producciÃ³n, Foodint AlcalÃ¡, "Milanesa de Pollo
+-- Rebozado" 52aa4147-â€¦, ventana de 1 dÃ­a):
+--     "Consumo por venta"  â†’ 27 movimientos, 35 uds
+--     "consumo teorico"    â†’ 25 movimientos, 32 uds
 --   = 67 uds descontadas donde las ventas solo justifican 35.
 --
--- CAUSA RAÍZ (RECON completo sobre la BD viva, no sobre el repo):
+-- CAUSA RAÃZ (RECON completo sobre la BD viva, no sobre el repo):
 --   Hay DOS motores de consumo escribiendo en stock_movement con
 --   movement_type='consumo' y source_type='sale', pero con DISTINTO source_id:
 --
---     A) generate_sale_consumption(sale_id)   → source_id = sale.id
+--     A) generate_sale_consumption(sale_id)   â†’ source_id = sale.id
 --        notes = 'Consumo por venta'. Idempotente POR VENTA (borra por sale_id
---        antes de reinsertar). Explota combos y modificadores vía
+--        antes de reinsertar). Explota combos y modificadores vÃ­a
 --        _sale_line_raw_consumption. Disparado por el trigger
 --        trg_sale_consumption_on_complete (AFTER UPDATE ON sale, al pasar
 --        order_status a 'completed').
 --
---     B) compute_sale_line_consumption(sale_line_id) → source_id = sale_line.id
---        notes = 'consumo teorico'. Idempotente POR LÍNEA (borra por
---        sale_line_id). Disparado desde close_sale (bucle por línea).
+--     B) compute_sale_line_consumption(sale_line_id) â†’ source_id = sale_line.id
+--        notes = 'consumo teorico'. Idempotente POR LÃNEA (borra por
+--        sale_line_id). Disparado desde close_sale (bucle por lÃ­nea).
 --
 --   Como cada uno borra SOLO lo suyo (distinto source_id), nunca se pisan: los
 --   dos consumos coexisten. Y el webhook de Last ejecuta LOS DOS en cada venta,
 --   en este orden exacto (supabase/functions/lastapp-webhook/index.ts,
 --   ingestBill):
---        1. close_sale(id)                        → escribe B
---        2. UPDATE sale SET order_status='completed' → trigger escribe A
+--        1. close_sale(id)                        â†’ escribe B
+--        2. UPDATE sale SET order_status='completed' â†’ trigger escribe A
 --   Resultado: doble descuento en TODAS las ventas de Last. Igual en HubRise.
 --
--- POR QUÉ NO BASTA CON "QUITAR B" (lo que el encargo dejaba abierto al RECON):
---   Sobre 30 días de Foodint (2.485 ventas completed+closed):
+-- POR QUÃ‰ NO BASTA CON "QUITAR B" (lo que el encargo dejaba abierto al RECON):
+--   Sobre 30 dÃ­as de Foodint (2.485 ventas completed+closed):
 --        ambas .......... 1.683   (el doble descuento)
---        solo A .............64   (líneas sin computed_cost: B se abstiene)
---        solo B .............86   (el UPDATE a 'completed' nunca ocurrió → el
---                                  trigger A no llegó a disparar)
---        sin consumo .......652   (TODAS sus líneas con computed_cost NULL:
---                                  escandallo sin resolver — problema DISTINTO,
+--        solo A .............64   (lÃ­neas sin computed_cost: B se abstiene)
+--        solo B .............86   (el UPDATE a 'completed' nunca ocurriÃ³ â†’ el
+--                                  trigger A no llegÃ³ a disparar)
+--        sin consumo .......652   (TODAS sus lÃ­neas con computed_cost NULL:
+--                                  escandallo sin resolver â€” problema DISTINTO,
 --                                  ni lo causa ni lo agrava este arreglo)
 --   Esas 86 "solo B" demuestran que hay ventas que pasan por close_sale y NUNCA
---   por 'completed'. Si close_sale dejara de escribir consumo sin más, esas
---   ventas se quedarían a cero.
+--   por 'completed'. Si close_sale dejara de escribir consumo sin mÃ¡s, esas
+--   ventas se quedarÃ­an a cero.
 --
--- ARREGLO (vía 2 de las dos que planteaba el encargo):
+-- ARREGLO (vÃ­a 2 de las dos que planteaba el encargo):
 --   close_sale NO deja de generar consumo: pasa a generar el del sistema A.
---   Es seguro precisamente porque A es idempotente POR VENTA: cuando después
+--   Es seguro precisamente porque A es idempotente POR VENTA: cuando despuÃ©s
 --   el UPDATE a 'completed' dispare el trigger, A borra su propio consumo y lo
---   reescribe → el resultado final es 1x, nunca 2x. Y si el UPDATE nunca llega
---   (las 86), el consumo ya quedó escrito por close_sale. Un solo motor, una
---   sola etiqueta, cero duplicados, cero ventas huérfanas.
+--   reescribe â†’ el resultado final es 1x, nunca 2x. Y si el UPDATE nunca llega
+--   (las 86), el consumo ya quedÃ³ escrito por close_sale. Un solo motor, una
+--   sola etiqueta, cero duplicados, cero ventas huÃ©rfanas.
 --
 --   Se aplica el mismo cambio a los otros DOS llamadores de B encontrados en el
---   RECON (si no, un reproceso volvería a inyectar el duplicado):
+--   RECON (si no, un reproceso volverÃ­a a inyectar el duplicado):
 --     - reprocess_sale(sale_id)
 --     - recompute_sales_consumption(account_id, from, to)
 --
---   compute_sale_line_consumption NO se borra (el encargo lo pide así): queda
---   viva y marcada como deprecada vía COMMENT. Tras esta migración ya no la
+--   compute_sale_line_consumption NO se borra (el encargo lo pide asÃ­): queda
+--   viva y marcada como deprecada vÃ­a COMMENT. Tras esta migraciÃ³n ya no la
 --   llama nadie en public (verificado con pg_get_functiondef sobre pg_proc).
 --
--- BUG LATENTE ARREGLADO DE PASO (lo destapó el RECON, no estaba en el encargo):
+-- BUG LATENTE ARREGLADO DE PASO (lo destapÃ³ el RECON, no estaba en el encargo):
 --   revert_sale_consumption borraba SOLO los movimientos de B (join contra
 --   sale_line por source_id). Los de A (source_id = sale.id) NUNCA se borraban.
---   Es decir: cancelar una venta (cancel_sale → revert_sale_consumption) dejaba
---   su consumo A vivo en el stock. Y tras esta migración, sin arreglarlo, no
---   borraría absolutamente nada. Ahora borra AMBAS formas.
+--   Es decir: cancelar una venta (cancel_sale â†’ revert_sale_consumption) dejaba
+--   su consumo A vivo en el stock. Y tras esta migraciÃ³n, sin arreglarlo, no
+--   borrarÃ­a absolutamente nada. Ahora borra AMBAS formas.
 --
 -- Ninguna firma cambia (mismos argumentos y mismo tipo de retorno en las 4
--- funciones), así que CREATE OR REPLACE es suficiente y no hace falta DROP.
+-- funciones), asÃ­ que CREATE OR REPLACE es suficiente y no hace falta DROP.
 --
--- SOLO DDL. El borrado del histórico duplicado va en la migración de datos
--- hermana 20260815T1400_fix_doble_consumo_venta_datos.sql — separadas a
--- propósito: una función SECURITY DEFINER no debe ejecutarse en la misma
--- transacción que la crea (auth.uid() es null en el SQL Editor → EXCEPTION).
+-- SOLO DDL. El borrado del histÃ³rico duplicado va en la migraciÃ³n de datos
+-- hermana 20260815T1400_fix_doble_consumo_venta_datos.sql â€” separadas a
+-- propÃ³sito: una funciÃ³n SECURITY DEFINER no debe ejecutarse en la misma
+-- transacciÃ³n que la crea (auth.uid() es null en el SQL Editor â†’ EXCEPTION).
 -- ============================================================================
 
--- ────────────────────────────────────────────────────────────────────────────
--- 1) close_sale — el coste sigue igual; el consumo pasa al motor A.
--- ────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- 1) close_sale â€” el coste sigue igual; el consumo pasa al motor A.
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 create or replace function public.close_sale(p_sale_id uuid)
 returns void
 language plpgsql
@@ -94,7 +94,7 @@ begin
       updated_at = now()
   where id = p_sale_id;
 
-  -- 1) coste de cada línea product (INTACTO: esto no es consumo).
+  -- 1) coste de cada lÃ­nea product (INTACTO: esto no es consumo).
   for v_line in
     select id from sale_line
     where sale_id = p_sale_id and coalesce(line_type, 'product') = 'product'
@@ -102,20 +102,20 @@ begin
     perform public.compute_sale_line_cost(v_line);
   end loop;
 
-  -- 2) consumo de stock: motor ÚNICO y por VENTA (generate_sale_consumption).
-  --    Antes aquí había un bucle llamando a compute_sale_line_consumption, que
-  --    escribía un segundo consumo con source_id = sale_line.id y sobrevivía a
-  --    la idempotencia del trigger de 'completed' → doble descuento.
+  -- 2) consumo de stock: motor ÃšNICO y por VENTA (generate_sale_consumption).
+  --    Antes aquÃ­ habÃ­a un bucle llamando a compute_sale_line_consumption, que
+  --    escribÃ­a un segundo consumo con source_id = sale_line.id y sobrevivÃ­a a
+  --    la idempotencia del trigger de 'completed' â†’ doble descuento.
   --    generate_sale_consumption es idempotente por sale_id: da igual que se
-  --    llame aquí y otra vez desde el trigger, el resultado final es 1x.
+  --    llame aquÃ­ y otra vez desde el trigger, el resultado final es 1x.
   perform public.generate_sale_consumption(p_sale_id);
 end;
 $function$;
 
--- ────────────────────────────────────────────────────────────────────────────
--- 2) reprocess_sale — mismo cambio: reconstruye líneas y coste igual que antes,
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- 2) reprocess_sale â€” mismo cambio: reconstruye lÃ­neas y coste igual que antes,
 --    pero el consumo lo regenera el motor A una sola vez al final.
--- ────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 create or replace function public.reprocess_sale(p_sale_id uuid)
 returns integer
 language plpgsql
@@ -136,7 +136,7 @@ BEGIN
   IF v_account_id IS NULL THEN RETURN 0; END IF;
 
   -- Raws con consumo PREVIO de esta venta, en CUALQUIERA de las dos formas
-  -- (por línea = legacy B, por venta = motor A) — para recalcular su stock
+  -- (por lÃ­nea = legacy B, por venta = motor A) â€” para recalcular su stock
   -- aunque tras el reproceso ya no consuman ese raw.
   v_old_items := ARRAY(
     SELECT DISTINCT sm.recipe_item_id
@@ -150,7 +150,7 @@ BEGIN
       )
   );
 
-  -- Limpiar el consumo legacy por línea (el motor A limpiará el suyo solo).
+  -- Limpiar el consumo legacy por lÃ­nea (el motor A limpiarÃ¡ el suyo solo).
   DELETE FROM stock_movement sm
   WHERE sm.account_id = v_account_id
     AND sm.movement_type = 'consumo'
@@ -162,14 +162,14 @@ BEGIN
     PERFORM public.resolve_sale_brand_from_map(p_sale_id);
   END IF;
 
-  -- 1) Reconstruir las líneas canónicas con el motor de la fuente correcta.
+  -- 1) Reconstruir las lÃ­neas canÃ³nicas con el motor de la fuente correcta.
   IF v_source = 'hubrise' THEN
     PERFORM public.adapt_hubrise_order(p_sale_id);
   ELSE
     PERFORM public.adapt_lastapp_order(p_sale_id);
   END IF;
 
-  -- 2) Coste por línea (el consumo ya NO va aquí).
+  -- 2) Coste por lÃ­nea (el consumo ya NO va aquÃ­).
   FOR v_line_id IN
     SELECT id FROM sale_line
     WHERE sale_id = p_sale_id AND line_type = 'product'
@@ -181,7 +181,7 @@ BEGIN
   -- 3) Consumo: una sola pasada por venta.
   PERFORM public.generate_sale_consumption(p_sale_id);
 
-  -- 4) Recalcular el stock de los raws que solo tenían el consumo viejo.
+  -- 4) Recalcular el stock de los raws que solo tenÃ­an el consumo viejo.
   IF v_loc IS NOT NULL THEN
     FOREACH v_item IN ARRAY COALESCE(v_old_items, '{}'::uuid[])
     LOOP
@@ -193,11 +193,11 @@ BEGIN
 END;
 $function$;
 
--- ────────────────────────────────────────────────────────────────────────────
--- 3) recompute_sales_consumption — recálculo masivo por cuenta. Pasa a iterar
---    por VENTA (no por línea), que es la granularidad del motor A. Mismo guard
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- 3) recompute_sales_consumption â€” recÃ¡lculo masivo por cuenta. Pasa a iterar
+--    por VENTA (no por lÃ­nea), que es la granularidad del motor A. Mismo guard
 --    de permisos, misma firma, mismo shape de retorno.
--- ────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 create or replace function public.recompute_sales_consumption(
   p_account_id uuid,
   p_from timestamp with time zone default null,
@@ -237,11 +237,11 @@ BEGIN
 END;
 $function$;
 
--- ────────────────────────────────────────────────────────────────────────────
--- 4) revert_sale_consumption — ahora borra el consumo de la venta en SUS DOS
---    formas. Antes solo borraba el legacy por línea, así que cancelar una
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- 4) revert_sale_consumption â€” ahora borra el consumo de la venta en SUS DOS
+--    formas. Antes solo borraba el legacy por lÃ­nea, asÃ­ que cancelar una
 --    venta dejaba vivo su consumo del motor A (stock fantasma).
--- ────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 create or replace function public.revert_sale_consumption(p_sale_id uuid)
 returns integer
 language plpgsql
@@ -288,20 +288,20 @@ begin
 end;
 $function$;
 
--- ────────────────────────────────────────────────────────────────────────────
--- 5) Deprecación explícita del motor legacy (NO se borra: el encargo pide
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- 5) DeprecaciÃ³n explÃ­cita del motor legacy (NO se borra: el encargo pide
 --    dejarla viva por si algo externo la usara).
--- ────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 comment on function public.compute_sale_line_consumption(uuid) is
-  'DEPRECADA (2026-08-15). Motor de consumo legacy por LÍNEA (notes=''consumo '
-  'teorico'', source_id=sale_line.id). Convivía con generate_sale_consumption '
+  'DEPRECADA (2026-08-15). Motor de consumo legacy por LÃNEA (notes=''consumo '
+  'teorico'', source_id=sale_line.id). ConvivÃ­a con generate_sale_consumption '
   '(por VENTA) y, al usar distinto source_id, ninguna idempotencia borraba a la '
   'otra: cada venta descontaba stock DOS VECES. Ya no la llama nadie en public. '
-  'El motor único es generate_sale_consumption(sale_id). NO usar en código nuevo.';
+  'El motor Ãºnico es generate_sale_consumption(sale_id). NO usar en cÃ³digo nuevo.';
 
--- ────────────────────────────────────────────────────────────────────────────
--- GUARD — ninguna función de public puede seguir llamando al motor legacy.
--- ────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- GUARD â€” ninguna funciÃ³n de public puede seguir llamando al motor legacy.
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 do $guard$
 declare
   v_callers text;
@@ -315,18 +315,18 @@ begin
     and pg_get_functiondef(p.oid) ilike '%compute_sale_line_consumption%';
 
   if v_callers is not null then
-    raise exception 'MIGRACIÓN FALLIDA: siguen llamando al motor legacy: %', v_callers;
+    raise exception 'MIGRACIÃ“N FALLIDA: siguen llamando al motor legacy: %', v_callers;
   end if;
 
-  raise notice 'OK — motor de consumo unificado en generate_sale_consumption (sin llamadores legacy).';
+  raise notice 'OK â€” motor de consumo unificado en generate_sale_consumption (sin llamadores legacy).';
 end
 $guard$;
 
--- ────────────────────────────────────────────────────────────────────────────
--- VERIFICACIÓN (Julio, en transacción APARTE de esta migración):
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- VERIFICACIÃ“N (Julio, en transacciÃ³n APARTE de esta migraciÃ³n):
 --
 --   -- 1) Una venta NUEVA posterior al fix debe tener SOLO 'Consumo por venta'.
---   --    (Se filtra por uuid de local: hay DOS 'Foodint Alcalá', uno por cuenta.)
+--   --    (Se filtra por uuid de local: hay DOS 'Foodint AlcalÃ¡', uno por cuenta.)
 --   select sm.notes, count(*), sum(abs(sm.qty_base))
 --     from stock_movement sm
 --    where sm.recipe_item_id = '52aa4147-d2de-4bfd-9679-5a757247c16c'
@@ -341,3 +341,4 @@ $guard$;
 --    where notes = 'consumo teorico' and occurred_at > now() - interval '1 hour';
 --   -- Esperado: 0.
 -- ============================================================================
+

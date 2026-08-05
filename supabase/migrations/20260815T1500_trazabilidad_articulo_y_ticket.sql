@@ -96,6 +96,7 @@ resolved as (
           coalesce(sc.name, initcap(s.external_channel_text), 'Venta')
           || coalesce(' · ' || nullif((case when left(btrim(s.raw_tab),1) = '{' then s.raw_tab::jsonb->>'code' else null end), ''), ''))
         from sale s
+        left join sales_channel sc on sc.id = s.channel_id
         where s.id = coalesce(
           (select s2.id from sale s2 where s2.id = f.source_id),
           (select sl.sale_id from sale_line sl where sl.id = f.source_id)

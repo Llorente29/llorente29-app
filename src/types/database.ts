@@ -17988,6 +17988,7 @@ export type Database = {
         Args: { p_job_id: string; p_secret: string }
         Returns: string
       }
+      get_sale_ticket: { Args: { p_sale_id: string }; Returns: Json }
       gettransactionid: { Args: never; Returns: unknown }
       has_permission: {
         Args: { p_account_id: string; p_permission_key: string }
@@ -18222,6 +18223,18 @@ export type Database = {
           priority: number
           radius_m: number
         }[]
+      }
+      list_item_stock_movements: {
+        Args: {
+          p_account: string
+          p_from?: string
+          p_item: string
+          p_limit?: number
+          p_location: string
+          p_offset?: number
+          p_to?: string
+        }
+        Returns: Json
       }
       list_pending_external_brands: {
         Args: { p_account_id: string }
@@ -19515,6 +19528,10 @@ export type Database = {
       set_menu_item_recipe: {
         Args: { p_menu_item_id: string; p_recipe_item_id: string }
         Returns: Json
+      }
+      set_my_clockout_reminder: {
+        Args: { p_enabled: boolean }
+        Returns: boolean
       }
       set_n2_config: {
         Args: {
