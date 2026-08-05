@@ -28,6 +28,7 @@ import { generateSessionActaPdf, blobToDataUrl } from '../services/courseCertifi
 import { adoptCourseForAccount } from '../services/courseAdoptionService'
 import TrainingCalendarView from '../components/personal/TrainingCalendarView'
 import ReleasePhaseCampaignModal from '../components/personal/ReleasePhaseCampaignModal'
+import CoursePreviewModal from '../components/personal/CoursePreviewModal'
 import { getTrainingComplianceMatrix, type TrainingComplianceRow } from '../services/trainingComplianceService'
 import {
   getSignedSectionImageUrl, getSignedSectionImageUrls, uploadOwnSectionImage, revertSectionImageToFolvy,
@@ -107,6 +108,7 @@ export default function CoursesPage() {
   const [coverUrls, setCoverUrls] = useState<Record<string, string>>({})
   const [view, setView] = useState<'catalogo' | 'calendario'>('catalogo')
   const [showCampaign, setShowCampaign] = useState(false)
+  const [previewCourseId, setPreviewCourseId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!activeAccountId) return
@@ -180,15 +182,21 @@ export default function CoursesPage() {
 
   if (selected) {
     return (
-      <CourseDetail
-        course={selected}
-        accountId={activeAccountId}
-        staff={staff}
-        locations={locations}
-        onBack={() => setSelectedId(null)}
-        onChanged={refreshCourses}
-        onAdopted={handleAdopted}
-      />
+      <>
+        <CourseDetail
+          course={selected}
+          accountId={activeAccountId}
+          staff={staff}
+          locations={locations}
+          onBack={() => setSelectedId(null)}
+          onChanged={refreshCourses}
+          onAdopted={handleAdopted}
+          onPreview={() => setPreviewCourseId(selected.id)}
+        />
+        {previewCourseId && (
+          <CoursePreviewModal courseId={previewCourseId} onClose={() => setPreviewCourseId(null)} />
+        )}
+      </>
     )
   }
 
@@ -588,7 +596,7 @@ function CreateCourseModal({ open, onClose, accountId, onCreated }: {
 // Detalle de curso
 // ============================================================
 
-function CourseDetail({ course, accountId, staff, locations, onBack, onChanged, onAdopted }: {
+function CourseDetail({ course, accountId, staff, locations, onBack, onChanged, onAdopted, onPreview }: {
   course: Course
   accountId: string
   staff: Employee[]
@@ -596,6 +604,7 @@ function CourseDetail({ course, accountId, staff, locations, onBack, onChanged, 
   onBack: () => void
   onChanged: () => void
   onAdopted: (newCourseId: string) => void
+  onPreview: () => void
 }) {
   const [tab, setTab] = useState<'contenido' | 'asignar' | 'seguimiento'>('contenido')
   const editable = course.accountId !== null
@@ -612,6 +621,9 @@ function CourseDetail({ course, accountId, staff, locations, onBack, onChanged, 
         </div>
         <Badge color={STATUS_BADGE[course.status].color}>{STATUS_BADGE[course.status].label}</Badge>
         {!editable && <Badge color="blue">Plantilla Folvy · solo lectura</Badge>}
+        <Button variant="outline" size="sm" onClick={onPreview}>
+          <BookOpen size={14} /> Vista previa
+        </Button>
       </div>
 
       {/* Información de "ficha de auditor" (C5 §C): se saca de la tarjeta del
