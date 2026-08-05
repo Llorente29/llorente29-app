@@ -11,6 +11,10 @@ import {
   getCurrentPosition, distanceMeters, coordsForLocation,
   hasOpenShift, nextClockType, buildClockEntry, defaultKioskoConfig,
 } from '../../services/fichajeKiosko'
+import type { CalendarContext, ScheduledShift, ShiftTypeInfo } from '../../services/horasComputo'
+import { listShiftTemplates, getSchedule } from '../../services/schedulerService'
+import { getMondayOfWeek, toISODate, shiftDurationHours } from '../../types/scheduler'
+import { fetchAppSettings } from '../../services/appSettingsService'
 
 const DEFAULT_RADIUS_M = 200  // fallback si el local no tiene radio configurado
 const radiusForLoc = (loc: Location | null | undefined) => (loc?.clockRadiusM ?? DEFAULT_RADIUS_M)
@@ -27,6 +31,11 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
   const [errorMsg, setErrorMsg] = useState('')
   const [pendingDist, setPendingDist] = useState(0)
   const [selectedLocId, setSelectedLocId] = useState<string | null>(null)
+
+  // Redondeo: contexto del calendario publicado (turno teórico de HOY) + tolerancia.
+  // Sin esto, buildClockEntry no puede redondear (no sabe el horario teórico).
+  const [calendarCtx, setCalendarCtx] = useState<CalendarContext | undefined>(undefined)
+  const [roundingToleranceMin, setRoundingToleranceMin] = useState(8)
 
   // Locales donde puede fichar
   const allowedLocations = useMemo(() => {
@@ -88,6 +97,73 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Cargar el turno PUBLICADO del empleado para HOY + la tolerancia de redondeo.
+  // Construye el CalendarContext que buildClockEntry necesita para redondear al
+  // horario teórico. Modelo A: solo cuenta el horario publicado.
+  useEffect(() => {
+    let cancel = false
+    async function loadRoundingCtx() {
+      // Local donde va a fichar (si aún no eligió, usa el primero permitido).
+      const locId = selectedLocId
+        || (allowedLocations.length === 1 ? allowedLocations[0].id : employee.locationId)
+      if (!locId) return
+
+      const today = new Date()
+      const weekStart = toISODate(getMondayOfWeek(today))
+      // scheduler: 0=lunes..6=domingo ; JS getDay(): 0=domingo..6=sábado
+      const schedulerDay = (today.getDay() + 6) % 7
+
+      const [settings, templates, schedule] = await Promise.all([
+        fetchAppSettings(),
+        listShiftTemplates(locId),
+        getSchedule(locId, weekStart),
+      ])
+      if (cancel) return
+
+      setRoundingToleranceMin(settings.roundingToleranceMin ?? 8)
+
+      // Solo el horario PUBLICADO cuenta (Modelo A). Borrador → sin redondeo.
+      if (!schedule || schedule.status !== 'published') {
+        setCalendarCtx(undefined)
+        return
+      }
+
+      // Buscar el turno de HOY donde este empleado está asignado.
+      const typesById = new Map<string, ShiftTypeInfo>()
+      const assignmentsByDate = new Map<string, ScheduledShift | null>()
+      const todayIso = toISODate(today)
+
+      const cells = schedule.cells || {}
+      let myTemplateId: string | null = null
+      for (const tid of Object.keys(cells)) {
+        const dayCell = cells[tid]?.[String(schedulerDay)]
+        if (dayCell && dayCell.includes(employee.id)) {
+          myTemplateId = tid
+          break
+        }
+      }
+
+      if (myTemplateId) {
+        const t = templates.find(x => x.id === myTemplateId)
+        if (t) {
+          const start = t.start_time.slice(0, 5)
+          const end = t.end_time.slice(0, 5)
+          typesById.set(myTemplateId, {
+            startTime: start,
+            endTime: end,
+            hours: shiftDurationHours(start, end),
+            isOff: false,
+          })
+          assignmentsByDate.set(todayIso, { shiftTypeId: myTemplateId })
+        }
+      }
+
+      setCalendarCtx({ assignmentsByDate, typesById })
+    }
+    loadRoundingCtx()
+    return () => { cancel = true }
+  }, [selectedLocId, allowedLocations, employee.id, employee.locationId])
+
   const selectedLoc: Location | null = selectedLocId ? (allowedLocations.find(l => l.id === selectedLocId) || null) : null
 
   // Calcular distancia al local seleccionado
@@ -114,7 +190,7 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
     }
 
     const config = { ...defaultKioskoConfig(selectedLoc.id), geofenceRadiusM: radiusForLoc(selectedLoc) }
-    const result = buildClockEntry(currentEmp, selectedLoc, config, position)
+    const result = buildClockEntry(currentEmp, selectedLoc, config, position, undefined, roundingToleranceMin, calendarCtx)
 
     if (!result.withinGeofence && geofenceMode === 'block') {
       setStep('error')
@@ -141,7 +217,7 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
     if (!selectedLoc) return
     setStep('confirming')
     const config = { ...defaultKioskoConfig(selectedLoc.id), geofenceRadiusM: radiusForLoc(selectedLoc) }
-    const result = buildClockEntry(currentEmp, selectedLoc, config, position)
+    const result = buildClockEntry(currentEmp, selectedLoc, config, position, undefined, roundingToleranceMin, calendarCtx)
     let entry = result.entry
     if (mode === 'outside') entry = { ...entry, address: `Fuera de zona · ${distM}m` }
     else if (mode === 'nogps') entry = { ...entry, address: 'Sin ubicación (GPS no disponible)' }
