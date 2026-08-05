@@ -10,10 +10,11 @@
 // las RPC de la lista. Si el artículo no tiene formatos, solo se ve la base.
 
 import { useEffect, useMemo, useState } from 'react'
-import { X, ExternalLink, Package, Calculator, Loader2, SlidersHorizontal } from 'lucide-react'
+import { X, ExternalLink, Package, Calculator, Loader2, SlidersHorizontal, History } from 'lucide-react'
 import { listFormatsByItem } from '@/modules/kitchen/services/purchaseFormatService'
 import type { PurchaseFormat } from '@/types/kitchen'
 import AdjustStockModal from '@/modules/supply/components/AdjustStockModal'
+import ItemMovementsPanel from '@/modules/supply/components/ItemMovementsPanel'
 
 export interface PeekItem {
   recipeItemId: string
@@ -54,6 +55,7 @@ export default function ItemPeekPanel({
   const [formats, setFormats] = useState<PurchaseFormat[]>([])
   const [loading, setLoading] = useState(true)
   const [adjustOpen, setAdjustOpen] = useState(false)
+  const [movementsOpen, setMovementsOpen] = useState(false)
 
   // calculadora: cantidad + unidad de origen ('base' o id de formato)
   const [calcQty, setCalcQty] = useState('1')
@@ -161,18 +163,35 @@ export default function ItemPeekPanel({
           </p>
         </div>
 
-        <div className="px-5 py-3 border-t border-border-default flex gap-2">
+        <div className="px-5 py-3 border-t border-border-default space-y-2">
           {accountId && locationId && (
-            <button type="button" onClick={() => setAdjustOpen(true)}
-              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm rounded-md font-medium border border-border-default text-text-secondary hover:text-text-primary transition-base">
-              <SlidersHorizontal size={15} /> Ajustar stock
+            <button type="button" onClick={() => setMovementsOpen(true)}
+              className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm rounded-md font-medium border border-border-default text-text-secondary hover:text-text-primary transition-base">
+              <History size={15} /> Ver movimientos y trazabilidad
             </button>
           )}
-          <button type="button" onClick={() => onOpenFull(item.recipeItemId)}
-            className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm rounded-md font-medium bg-accent text-text-on-accent hover:opacity-90 transition-base">
-            <ExternalLink size={15} /> Ver ficha completa
-          </button>
+          <div className="flex gap-2">
+            {accountId && locationId && (
+              <button type="button" onClick={() => setAdjustOpen(true)}
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm rounded-md font-medium border border-border-default text-text-secondary hover:text-text-primary transition-base">
+                <SlidersHorizontal size={15} /> Ajustar stock
+              </button>
+            )}
+            <button type="button" onClick={() => onOpenFull(item.recipeItemId)}
+              className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm rounded-md font-medium bg-accent text-text-on-accent hover:opacity-90 transition-base">
+              <ExternalLink size={15} /> Ver ficha completa
+            </button>
+          </div>
         </div>
+
+        {movementsOpen && accountId && locationId && (
+          <ItemMovementsPanel
+            accountId={accountId}
+            recipeItemId={item.recipeItemId}
+            locationId={locationId}
+            onClose={() => setMovementsOpen(false)}
+          />
+        )}
 
         {adjustOpen && accountId && locationId && (
           <AdjustStockModal
