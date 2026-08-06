@@ -21,6 +21,7 @@ export interface ItemAllergen {
   code: AllergenCode
   state: AllergenState
   source: string | null
+  sourceDocumentId: string | null
 }
 
 /** Lee los alérgenos de un ingrediente. */
@@ -30,7 +31,7 @@ export async function listItemAllergens(
   requireSupabase()
   const { data, error } = await supabase!
     .from('recipe_item_allergen')
-    .select('allergen_code, state, source')
+    .select('allergen_code, state, source, source_document_id')
     .eq('recipe_item_id', recipeItemId)
   if (error) {
     throw new Error(`Error leyendo alérgenos: ${error.message}`)
@@ -39,6 +40,7 @@ export async function listItemAllergens(
     code: r.allergen_code as AllergenCode,
     state: (r.state as AllergenState) ?? 'contains',
     source: r.source ?? null,
+    sourceDocumentId: (r as { source_document_id?: string | null }).source_document_id ?? null,
   }))
 }
 

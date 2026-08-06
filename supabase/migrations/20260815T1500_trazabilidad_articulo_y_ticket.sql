@@ -419,13 +419,24 @@ select jsonb_build_object(
 $function$;
 
 -- ────────────────────────────────────────────────────────────────────────────
--- GUARD — las tres existen y no son SECURITY DEFINER (la RLS debe aplicarse
--- con el JWT del que llama, no saltarse).
+-- GUARD — las tres existen.
+--
+-- NOTA (2026-08-15, posterior a esta migración): list_item_stock_movements y
+-- get_sale_ticket, tal como quedan creadas AQUÍ, son SECURITY INVOKER —
+-- correcto en el momento de esta migración. Pero en producción, con 361 filas
+-- en la ventana, la RLS evaluada fila a fila más las subconsultas del "origen
+-- legible" resolviéndose ANTES de paginar daban "canceling statement due to
+-- statement timeout". La migración hermana 20260815T1600 las convierte a
+-- SECURITY DEFINER (con su propio guard de cuenta al inicio, sustituyendo a la
+-- RLS) y pagina ANTES de resolver el origen. Por eso este guard YA NO afirma
+-- que las tres deban ser INVOKER — esa aserción la invalida, a propósito,
+-- 20260815T1600. list_stock_movements sí se queda INVOKER (no tiene el
+-- problema: no pagina sobre subconsultas caras del mismo modo) y esa migración
+-- no la toca.
 -- ────────────────────────────────────────────────────────────────────────────
 do $guard$
 declare
   v_faltan text;
-  v_definer text;
 begin
   select string_agg(x, ', ') into v_faltan
   from unnest(array['list_stock_movements','list_item_stock_movements','get_sale_ticket']) x
@@ -437,15 +448,14 @@ begin
     raise exception 'MIGRACIÓN FALLIDA: no se crearon: %', v_faltan;
   end if;
 
-  select string_agg(p.proname, ', ') into v_definer
-  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-  where n.nspname = 'public' and p.prosecdef
-    and p.proname in ('list_stock_movements','list_item_stock_movements','get_sale_ticket');
-  if v_definer is not null then
-    raise exception 'MIGRACIÓN FALLIDA: % es SECURITY DEFINER y debe ser INVOKER (RLS)', v_definer;
+  if exists (
+    select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'list_stock_movements' and p.prosecdef
+  ) then
+    raise exception 'MIGRACIÓN FALLIDA: list_stock_movements debe seguir siendo SECURITY INVOKER';
   end if;
 
-  raise notice 'OK — 3 RPC de trazabilidad creadas, todas SECURITY INVOKER.';
+  raise notice 'OK — 3 RPC de trazabilidad creadas (seguridad final de las otras dos: ver 20260815T1600).';
 end
 $guard$;
 

@@ -6,6 +6,8 @@
 // UNA marca (catalog_source='folvy') a su catálogo HubRise. Construye el payload
 // completo a PRECIO BASE: categorías -> products/skus -> option_lists (modificadores)
 // -> deals (combos). Variants por plataforma e imágenes son capas posteriores (T2b/T2c).
+// T2d: objeto `nutrition` por producto (alérgenos EU -> HubRise + "puede contener"
+//   en legal_name). Base legal: Rgto (UE) 1169/2011. Mapeo en _shared/hubriseAllergens.ts.
 //
 // AUTH: el usuario invoca con su sesión (functions.invoke manda su JWT). La
 //   autorización la da RLS: se lee la marca con el cliente del USUARIO; si RLS la
@@ -37,6 +39,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { resolveWriterToken } from "../_shared/hubriseToken.ts";
 import { hubriseSkuRef } from "../_shared/hubriseSku.ts";
+import { buildNutrition, type AllergenRow } from "../_shared/hubriseAllergens.ts";
 
 const HUBRISE_BASE = "https://api.hubrise.com/v1";
 const CURRENCY = "EUR";
@@ -246,7 +249,7 @@ Deno.serve(async (req: Request) => {
         .select("id, name, emoji, position, parent_id, is_active")
         .eq("account_id", accountId).eq("brand_id", brandId),
       sb.from("menu_item")
-        .select("id, name, description, price, product_type, menu_category_id, external_id, is_active, photo_url, stock_group_id")
+        .select("id, name, description, price, product_type, menu_category_id, external_id, is_active, photo_url, stock_group_id, recipe_item_id")
         .eq("account_id", accountId).eq("brand_id", brandId),
     ]);
 
@@ -300,6 +303,40 @@ Deno.serve(async (req: Request) => {
     const productIds = products.map((p) => p.id as string);
     const comboIds = combos.map((c) => c.id as string);
     const warnings: string[] = [];
+
+    // ── T2d: nutrition (alérgenos + "puede contener") por producto ──────────
+    // El alérgeno del plato vive en recipe_item_allergen, colgado del
+    // menu_item.recipe_item_id (motor de herencia ya aplicado). Publicamos la
+    // UNIÓN de fuentes (manual + inherited + ai_enrich): decisión de seguridad
+    // (omitir un alérgeno real es peor que sobre-declararlo). 'contains' -> lista
+    // de presencia; 'may_contain' -> texto en legal_name; gluten/nuts -> tags
+    // allergen_gluten/allergen_nuts que HubRise expande a sus subtipos. NUNCA se
+    // emite [] sin conocimiento positivo (para HubRise [] = "no contiene ninguno";
+    // omitir = "no informado"). Lógica en _shared/hubriseAllergens.ts.
+    const recipeItemIdByProduct = new Map<string, string>();
+    for (const p of products) {
+      const ri = (p.recipe_item_id as string | null) ?? null;
+      if (ri) recipeItemIdByProduct.set(p.id as string, ri);
+    }
+    const recipeItemIds = Array.from(new Set(recipeItemIdByProduct.values()));
+    const allergenRowsByRecipeItem = new Map<string, AllergenRow[]>();
+    if (recipeItemIds.length > 0) {
+      const { data: allergenRows } = await sb.from("recipe_item_allergen")
+        .select("recipe_item_id, allergen_code, state")
+        .in("recipe_item_id", recipeItemIds);
+      for (const r of allergenRows ?? []) {
+        const k = r.recipe_item_id as string;
+        (allergenRowsByRecipeItem.get(k) ?? allergenRowsByRecipeItem.set(k, []).get(k)!)
+          .push({ allergen_code: r.allergen_code as string, state: r.state as string });
+      }
+    }
+    // menu_item_id -> { nutrition, tags } listo para inyectar en el producto.
+    const nutByProductId = new Map<string, { nutrition: Record<string, unknown> | null; tags: string[] }>();
+    for (const [productId, ri] of recipeItemIdByProduct.entries()) {
+      const rows = allergenRowsByRecipeItem.get(ri) ?? [];
+      if (rows.length === 0) continue; // sin dato -> no se declara nada (no informado)
+      nutByProductId.set(productId, buildNutrition(rows));
+    }
 
     // Overrides por canal (T2b): precio/disponibilidad propios por canal delivery.
     // Nivel marca/canal (location_id null), que es lo que escribe el editor de precios.
@@ -464,6 +501,12 @@ Deno.serve(async (req: Request) => {
           name: p.name,
           skus: [sku],
         };
+        // T2d: nutrition (alérgenos + "puede contener") y tags de gluten/nuts.
+        const nut = nutByProductId.get(p.id as string);
+        if (nut) {
+          if (nut.nutrition) prod.nutrition = nut.nutrition;
+          if (nut.tags.length > 0) prod.tags = nut.tags;
+        }
         if (p.description) prod.description = p.description;
         return prod;
       });
@@ -609,6 +652,9 @@ Deno.serve(async (req: Request) => {
       return acc + skus.reduce((a, s) => a + (((s.price_overrides as unknown[] | undefined)?.length) ?? 0), 0);
     }, 0);
 
+    // T2d: cuántos productos salieron con declaración de alérgenos (nutrition o tag).
+    const nutritionApplied = productsPayload.filter((p) => p.nutrition || p.tags).length;
+
     return json({
       ok: errCount === 0,
       publish_id: publishId,
@@ -618,6 +664,7 @@ Deno.serve(async (req: Request) => {
       option_lists: optionLists.length,
       variants: variants.length,
       price_overrides: priceOverridesApplied,
+      nutrition: nutritionApplied,
       images: imagesTotal,
       warnings,
       targets: targets ?? [],

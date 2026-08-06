@@ -82,11 +82,7 @@ export async function listItemMovements(input: {
   offset?: number
 }): Promise<ItemMovementsPage> {
   requireSupabase()
-  // RPC de la migración NUEVA 20260815T1500, todavía sin aplicar por Julio →
-  // aún no existe en database.ts. Cast temporal; quitar el `as any` en cuanto
-  // se aplique y se regenere types:gen.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase!.rpc as any)('list_item_stock_movements', {
+  const { data, error } = await supabase!.rpc('list_item_stock_movements', {
     p_account: input.accountId,
     p_item: input.recipeItemId,
     p_location: input.locationId,
@@ -196,9 +192,7 @@ export interface SaleTicket {
 
 export async function getSaleTicket(saleId: string): Promise<SaleTicket> {
   requireSupabase()
-  // Ídem: migración 20260815T1500 pendiente de aplicar (ver nota arriba).
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase!.rpc as any)('get_sale_ticket', { p_sale_id: saleId })
+  const { data, error } = await supabase!.rpc('get_sale_ticket', { p_sale_id: saleId })
   if (error) {
     const falta = /could not find the function|does not exist/i.test(error.message)
     if (falta) {

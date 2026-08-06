@@ -16,7 +16,7 @@
 
 import {
   BarChart3, Leaf, AlertTriangle, ClipboardCheck, FolderOpen, FileText, Settings, ShieldAlert,
-  GraduationCap,
+  GraduationCap, Archive,
 } from 'lucide-react'
 import type { ModuleDefinition } from '@/shell/types'
 
@@ -29,6 +29,7 @@ import ReportsPage from '@/modules/appcc/pages/ReportsPage'
 import TemplateEditorPage from '@/modules/appcc/pages/TemplateEditorPage'
 import AllergensCompliancePage from '@/modules/appcc/pages/AllergensCompliancePage'
 import TrainingCompliancePage from '@/modules/appcc/pages/TrainingCompliancePage'
+import ComplianceDocumentsPage from '@/modules/appcc/pages/ComplianceDocumentsPage'
 import AuditsPage from '@/modules/appcc/audits/AuditsPage'
 import AuditExecutionPage from '@/modules/appcc/audits/AuditExecutionPage'
 import AuditTemplateEditorPage from '@/modules/appcc/audits/AuditTemplateEditorPage'
@@ -60,6 +61,7 @@ export const appccModule: ModuleDefinition = {
     { path: 'onboarding',            element: <OnboardingPage /> },
     { path: 'alergenos',             element: <AllergensCompliancePage /> },
     { path: 'formacion',             element: <TrainingCompliancePage /> },
+    { path: 'documentos',            element: <ComplianceDocumentsPage /> },
   ],
 
   // Navegación interna del módulo (ModuleSidebar).
@@ -73,6 +75,7 @@ export const appccModule: ModuleDefinition = {
       { id: 'appcc_audits',          label: 'Auditorías',            icon: ClipboardCheck, path: 'auditorias',             requiredRole: 'admin' },
       { id: 'appcc_audit_templates', label: 'Plantillas Auditoría',  icon: FolderOpen,     path: 'auditorias/plantillas',  requiredRole: 'admin' },
       { id: 'appcc_allergens',       label: 'Alérgenos',             icon: ShieldAlert,    path: 'alergenos',              requiredRole: 'admin' },
+      { id: 'appcc_documents',       label: 'Archivo documental',    icon: Archive,        path: 'documentos',             requiredRole: 'manager' },
       { id: 'appcc_training',        label: 'Formación',             icon: GraduationCap,  path: 'formacion',              requiredRole: 'admin' },
       { id: 'appcc_reports',         label: 'Informes',              icon: FileText,       path: 'informes',               requiredRole: 'admin' },
       { id: 'appcc_templates',       label: 'Plantillas',            icon: FolderOpen,     path: 'plantillas',             requiredRole: 'admin' },

@@ -22,6 +22,7 @@ import {
   ArrowLeft, Archive, Check, Loader2, Pencil, X, ChevronDown, ImagePlus, Trash2,
   ChefHat, AlertTriangle, Activity, Scissors, Boxes, Clock, Snowflake, Settings2,
   TrendingUp, Tag, Scale,
+  FileText,
 } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import {
@@ -275,7 +276,7 @@ export default function KitchenItemDetailPage({ itemId, onBack, returnTo }: Kitc
   // Datos cargados aparte del mapper de RecipeItem (para mostrar en la ficha).
   const [nutritionData, setNutritionData] = useState<Record<string, number>>({})
   const [menuTags, setMenuTags] = useState<string[]>([])
-  const [allergens, setAllergens] = useState<{ code: AllergenCode; state: AllergenState }[]>([])
+  const [allergens, setAllergens] = useState<{ code: AllergenCode; state: AllergenState; source: string | null; sourceDocumentId: string | null }[]>([])
 
   const actorId = authUserId ?? null
   const actorName = userProfile?.displayName ?? null
@@ -320,7 +321,7 @@ export default function KitchenItemDetailPage({ itemId, onBack, returnTo }: Kitc
         if (cancelled) return
         setNutritionData(x.nutrition)
         setMenuTags(x.menuTags)
-        setAllergens(allg.map((a) => ({ code: a.code, state: a.state })))
+        setAllergens(allg.map((a) => ({ code: a.code, state: a.state, source: a.source, sourceDocumentId: a.sourceDocumentId })))
       })
       .catch(() => {
         if (!cancelled) { setNutritionData({}); setMenuTags([]); setAllergens([]) }
@@ -1185,6 +1186,11 @@ export default function KitchenItemDetailPage({ itemId, onBack, returnTo }: Kitc
                       }
                     >
                       {allergenLabel(a.code)} · {allergenStateLabel(a.state)}
+                      {a.source === 'manual' && a.sourceDocumentId ? (
+                        <FileText className="inline-block w-3 h-3 ml-1 -mt-0.5 opacity-80" aria-label="Respaldado por ficha técnica" />
+                      ) : a.source === 'ai_enrich' ? (
+                        <span className="ml-1 text-[10px] italic opacity-70" title="Estimación de IA, aún sin ficha que la respalde">IA</span>
+                      ) : null}
                     </span>
                   ))}
                 </div>
