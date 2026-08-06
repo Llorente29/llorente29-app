@@ -78,17 +78,19 @@ function fnv1a(s: string): string {
   return h.toString(16);
 }
 
-interface ImgTarget { idx: number; itemId: string; photoUrl: string }
+interface ImgTarget { itemId: string; photoUrl: string }
 
 // Resuelve los image_id de HubRise para un catálogo: reusa los ya subidos (si la
 // foto no cambió) o sube los nuevos (POST /catalogs/:id/images) y los persiste en
-// catalog_image_map. Devuelve idx(producto) -> image_id. Las imágenes son POR
-// CATÁLOGO, por eso se resuelve dentro del bucle de conexiones.
+// catalog_image_map. Devuelve menu_item_id -> image_id (clave por REF/item, no
+// por posición: productos y deals son dos arrays distintos, un idx compartido
+// entre ambos colisionaría — ver ENCARGO fotos-combos 06/08). Las imágenes son
+// POR CATÁLOGO, por eso se resuelve dentro del bucle de conexiones.
 async function resolveCatalogImages(
   sb: SupabaseClient, accountId: string, catalogId: string, token: string,
   targets: ImgTarget[], warnings: string[],
-): Promise<Map<number, string>> {
-  const out = new Map<number, string>();
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
   if (targets.length === 0) return out;
 
   const itemIds = targets.map((t) => t.itemId);
@@ -103,7 +105,7 @@ async function resolveCatalogImages(
 
   for (const t of targets) {
     const prev = byItem.get(t.itemId);
-    if (prev && prev.source_url === t.photoUrl) { out.set(t.idx, prev.image_id); continue; } // reuso
+    if (prev && prev.source_url === t.photoUrl) { out.set(t.itemId, prev.image_id); continue; } // reuso
     try {
       const imgResp = await fetch(cloudinaryResized(t.photoUrl));
       if (!imgResp.ok) { warnings.push(`Foto inaccesible (HTTP ${imgResp.status}), omitida.`); continue; }
@@ -122,7 +124,7 @@ async function resolveCatalogImages(
         image_id: imageId, source_url: t.photoUrl, source_hash: fnv1a(t.photoUrl),
         updated_at: new Date().toISOString(),
       }, { onConflict: "menu_item_id,external_catalog_id" });
-      out.set(t.idx, imageId);
+      out.set(t.itemId, imageId);
     } catch (e) {
       warnings.push(`Error con una foto: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -467,6 +469,11 @@ Deno.serve(async (req: Request) => {
       return UNCAT_REF;
     };
 
+    // ref (HubRise) -> menu_item_id, para inyectar image_ids por REF tras
+    // resolver las imágenes (productos y deals son dos arrays distintos: un
+    // idx compartido entre ambos colisionaría — ver ENCARGO fotos-combos 06/08).
+    const refToItemId = new Map<string, string>();
+
     // ── Construir products (skus) ───────────────────────────────────────────
     const sortedProducts = products
       .sort((a, b) => Number((a as Record<string, unknown>).position ?? 0) - Number((b as Record<string, unknown>).position ?? 0));
@@ -495,8 +502,10 @@ Deno.serve(async (req: Request) => {
           const enabled = deliverySlugs.filter((s) => !disabledSlugs.includes(s));
           sku.restrictions = enabled.length === 0 ? { enabled: false } : { variant_refs: enabled };
         }
+        const prodRef = "p_" + (p.id as string);
+        refToItemId.set(prodRef, p.id as string);
         const prod: Record<string, unknown> = {
-          ref: "p_" + (p.id as string),
+          ref: prodRef,
           category_ref: catRefFor((p.menu_category_id as string | null) ?? null),
           name: p.name,
           skus: [sku],
@@ -511,12 +520,17 @@ Deno.serve(async (req: Request) => {
         return prod;
       });
 
-    // Productos con foto: idx en productsPayload -> menu_item + url (para subir/reusar).
+    // Productos Y combos con foto (ENCARGO fotos-combos 06/08 — antes solo
+    // productos, ningún combo publicaba foto en ninguna de las 9 marcas).
     const imgTargets: ImgTarget[] = [];
-    sortedProducts.forEach((p, idx) => {
+    for (const p of sortedProducts) {
       const url = (p.photo_url as string | null) ?? null;
-      if (url) imgTargets.push({ idx, itemId: p.id as string, photoUrl: url });
-    });
+      if (url) imgTargets.push({ itemId: p.id as string, photoUrl: url });
+    }
+    for (const c of combos) {
+      const url = (c.photo_url as string | null) ?? null;
+      if (url) imgTargets.push({ itemId: c.id as string, photoUrl: url });
+    }
 
     // ── Construir deals (combos) ────────────────────────────────────────────
     const dealsPayload: Array<Record<string, unknown>> = [];
@@ -550,8 +564,10 @@ Deno.serve(async (req: Request) => {
         lineIdx++;
       }
       if (lines.length === 0) { warnings.push(`Combo "${c.name}" sin líneas válidas: omitido.`); continue; }
+      const dealRef = (c.external_id as string) ?? ("dl_" + (c.id as string));
+      refToItemId.set(dealRef, c.id as string);
       const deal: Record<string, unknown> = {
-        ref: (c.external_id as string) ?? ("dl_" + (c.id as string)),
+        ref: dealRef,
         name: c.name,
         category_ref: catRefFor((c.menu_category_id as string | null) ?? null),
         lines,
@@ -603,20 +619,24 @@ Deno.serve(async (req: Request) => {
 
     // ── Publicar (PUT reemplaza el catálogo) ──────────────────────────────────
     // Las imágenes son POR CATÁLOGO: se resuelven (reuso/subida) una vez por
-    // target y se inyectan en los productos antes del PUT.
+    // target y se inyectan en productos Y deals antes del PUT, por REF (via
+    // refToItemId) — no por posición, productos y deals son arrays distintos.
     let okCount = 0, errCount = 0, imagesTotal = 0;
     for (const t of publishTargets) {
       let targetStatus = "ok", errorText: string | null = null;
       try {
         const imgMap = await resolveCatalogImages(sb, accountId, t.catalogId, t.token, imgTargets, warnings);
         if (imgMap.size > imagesTotal) imagesTotal = imgMap.size;
-        const productsForConn = productsPayload.map((prod, idx) => {
-          const imageId = imgMap.get(idx);
-          return imageId ? { ...prod, image_ids: [imageId] } : prod;
-        });
+        const injectImage = (o: Record<string, unknown>): Record<string, unknown> => {
+          const itemId = refToItemId.get(o.ref as string);
+          const imageId = itemId ? imgMap.get(itemId) : undefined;
+          return imageId ? { ...o, image_ids: [imageId] } : o;
+        };
+        const productsForConn = productsPayload.map(injectImage);
+        const dealsForConn = dealsPayload.map(injectImage);
         const catalogDataForConn = {
           ...catalogData,
-          data: { ...catalogData.data, products: productsForConn },
+          data: { ...catalogData.data, products: productsForConn, deals: dealsForConn },
         };
         const res = await fetch(`${HUBRISE_BASE}/catalogs/${t.catalogId}`, {
           method: "PUT",
