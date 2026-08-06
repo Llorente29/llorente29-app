@@ -15,7 +15,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Plus, Search, RefreshCw, Loader2, Clock, X } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import {
-  listLocations, listSoldOut, searchProducts, previewScope, setProductAvailability,
+  listLocations, listSoldOut, searchProducts, previewScopeBulk, setProductAvailability, setProductsAvailabilityBulk,
   type LocationOption, type SoldOutRow,
 } from '@/modules/kitchen/services/availabilityService'
 import AvailabilityBoard from '@/modules/kds/components/AvailabilityBoard'
@@ -265,10 +265,15 @@ export default function KitchenAvailabilityPage() {
           locationLabel={locName}
           allLocations={locationId === null}
           adapter={{
-            searchProducts: (q) => searchProducts(activeAccountId, q),
-            previewScope: (menuItemId) => previewScope(activeAccountId, menuItemId, locationId),
-            agotar: async (menuItemId, until, reasonCode) => {
-              await setProductAvailability(menuItemId, false, locationId, 'manual', until, reasonCode)
+            searchProducts: (q) => searchProducts(activeAccountId, q, locationId),
+            previewScopeBulk: (menuItemIds) => previewScopeBulk(activeAccountId, menuItemIds, locationId),
+            agotarBulk: async (menuItemIds, until, reasonCode) => {
+              const result = await setProductsAvailabilityBulk(menuItemIds, false, locationId, 'manual', until, reasonCode)
+              if (result.failed.length > 0) {
+                throw new Error(
+                  `${result.failed.length} de ${menuItemIds.length} no se pudieron agotar: ${result.failed.map((f) => f.error).join('; ')}`,
+                )
+              }
             },
           } satisfies AgotarProductoAdapter}
           onClose={() => setShowAgotar(false)}

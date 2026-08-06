@@ -17,7 +17,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { CircleOff, Plus, RefreshCw, Loader2 } from 'lucide-react'
 import {
-  listSoldOut, searchProducts, previewScope, setProductAvailability,
+  listSoldOut, searchProducts, previewScopeBulk, setProductAvailability, setProductsAvailabilityBulk,
   type SoldOutRow,
 } from './services/tabletAvailabilityService'
 import AvailabilityBoard from '@/modules/kds/components/AvailabilityBoard'
@@ -65,9 +65,14 @@ export default function TabletAvailabilityTab({ token, locationName }: Props) {
 
   const agotarAdapter: AgotarProductoAdapter = {
     searchProducts: (q) => searchProducts(token, q),
-    previewScope: (menuItemId) => previewScope(token, menuItemId),
-    agotar: async (menuItemId, until, reasonCode) => {
-      await setProductAvailability(token, menuItemId, false, 'manual', until, reasonCode)
+    previewScopeBulk: (menuItemIds) => previewScopeBulk(token, menuItemIds),
+    agotarBulk: async (menuItemIds, until, reasonCode) => {
+      const result = await setProductsAvailabilityBulk(token, menuItemIds, false, 'manual', until, reasonCode)
+      if (result.failed.length > 0) {
+        throw new Error(
+          `${result.failed.length} de ${menuItemIds.length} no se pudieron agotar: ${result.failed.map((f) => f.error).join('; ')}`,
+        )
+      }
     },
   }
 
