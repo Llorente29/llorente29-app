@@ -4754,6 +4754,187 @@ export type Database = {
           },
         ]
       }
+      compliance_document: {
+        Row: {
+          account_id: string
+          created_at: string
+          doc_family: string
+          expires_at: string | null
+          extracted: Json | null
+          file_path: string
+          file_size_kb: number | null
+          id: string
+          issued_at: string | null
+          last_reminder_at: string | null
+          location_id: string | null
+          mime_type: string | null
+          notes: string | null
+          reference: string | null
+          review_due_at: string | null
+          status: string
+          supersedes_id: string | null
+          supplier_id: string | null
+          title: string
+          updated_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          doc_family: string
+          expires_at?: string | null
+          extracted?: Json | null
+          file_path: string
+          file_size_kb?: number | null
+          id?: string
+          issued_at?: string | null
+          last_reminder_at?: string | null
+          location_id?: string | null
+          mime_type?: string | null
+          notes?: string | null
+          reference?: string | null
+          review_due_at?: string | null
+          status?: string
+          supersedes_id?: string | null
+          supplier_id?: string | null
+          title: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          doc_family?: string
+          expires_at?: string | null
+          extracted?: Json | null
+          file_path?: string
+          file_size_kb?: number | null
+          id?: string
+          issued_at?: string | null
+          last_reminder_at?: string | null
+          location_id?: string | null
+          mime_type?: string | null
+          notes?: string | null
+          reference?: string | null
+          review_due_at?: string | null
+          status?: string
+          supersedes_id?: string | null
+          supplier_id?: string | null
+          title?: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "compliance_document_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "compliance_document_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "compliance_document_supersedes_id_fkey"
+            columns: ["supersedes_id"]
+            isOneToOne: false
+            referencedRelation: "compliance_document"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "compliance_document_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "supplier"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      compliance_document_link: {
+        Row: {
+          created_at: string
+          document_id: string
+          entity_id: string
+          entity_type: string
+        }
+        Insert: {
+          created_at?: string
+          document_id: string
+          entity_id: string
+          entity_type: string
+        }
+        Update: {
+          created_at?: string
+          document_id?: string
+          entity_id?: string
+          entity_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "compliance_document_link_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "compliance_document"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      compliance_reminder_log: {
+        Row: {
+          account_id: string
+          document_id: string | null
+          error_message: string | null
+          id: string
+          resend_email_id: string | null
+          sent_at: string
+          status: string
+          subject: string | null
+          to_email: string
+        }
+        Insert: {
+          account_id: string
+          document_id?: string | null
+          error_message?: string | null
+          id?: string
+          resend_email_id?: string | null
+          sent_at?: string
+          status: string
+          subject?: string | null
+          to_email: string
+        }
+        Update: {
+          account_id?: string
+          document_id?: string | null
+          error_message?: string | null
+          id?: string
+          resend_email_id?: string | null
+          sent_at?: string
+          status?: string
+          subject?: string | null
+          to_email?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "compliance_reminder_log_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "compliance_reminder_log_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "compliance_document"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       connector: {
         Row: {
           category: string
@@ -12452,6 +12633,7 @@ export type Database = {
           manual_reason: string | null
           recipe_item_id: string
           source: string
+          source_document_id: string | null
           state: string
           updated_at: string | null
           updated_by: string | null
@@ -12462,6 +12644,7 @@ export type Database = {
           manual_reason?: string | null
           recipe_item_id: string
           source: string
+          source_document_id?: string | null
           state: string
           updated_at?: string | null
           updated_by?: string | null
@@ -12472,6 +12655,7 @@ export type Database = {
           manual_reason?: string | null
           recipe_item_id?: string
           source?: string
+          source_document_id?: string | null
           state?: string
           updated_at?: string | null
           updated_by?: string | null
@@ -12489,6 +12673,13 @@ export type Database = {
             columns: ["recipe_item_id"]
             isOneToOne: false
             referencedRelation: "recipe_item"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recipe_item_allergen_source_document_id_fkey"
+            columns: ["source_document_id"]
+            isOneToOne: false
+            referencedRelation: "compliance_document"
             referencedColumns: ["id"]
           },
         ]
@@ -16920,6 +17111,15 @@ export type Database = {
         Args: { p_account_id: string }
         Returns: undefined
       }
+      apply_compliance_doc_allergens: {
+        Args: {
+          p_contains: string[]
+          p_document_id: string
+          p_may_contain: string[]
+          p_recipe_item_id: string
+        }
+        Returns: Json
+      }
       apply_inventory_count: {
         Args: {
           p_count_id: string
@@ -17399,6 +17599,23 @@ export type Database = {
       commit_ai_action: {
         Args: { p_action_id: string; p_edited_args?: Json }
         Returns: Json
+      }
+      compliance_doc_mark_expired: { Args: never; Returns: number }
+      compliance_docs_due: {
+        Args: { p_days?: number }
+        Returns: {
+          account_id: string
+          account_name: string
+          expires_at: string
+          id: string
+          last_reminder_at: string
+          reference: string
+          review_due_at: string
+          supplier_email: string
+          supplier_id: string
+          supplier_name: string
+          title: string
+        }[]
       }
       compute_combo_cost: {
         Args: { p_combo_item_id: string }
@@ -18014,6 +18231,15 @@ export type Database = {
           p_hubrise_account_id?: string
         }
         Returns: undefined
+      }
+      ingredients_without_spec: {
+        Args: { p_account_id: string }
+        Returns: {
+          ingredient_id: string
+          ingredient_name: string
+          supplier_id: string
+          supplier_name: string
+        }[]
       }
       internal_secret: { Args: { p_name: string }; Returns: string }
       invoice_required_role: { Args: { p_invoice_id: string }; Returns: string }
