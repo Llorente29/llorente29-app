@@ -131,9 +131,7 @@ async function loadSiblings(
   const ors: string[] = []
   if (recipeItemIds.length > 0) ors.push(`recipe_item_id.in.(${recipeItemIds.join(',')})`)
   if (stockGroupIds.length > 0) ors.push(`stock_group_id.in.(${stockGroupIds.join(',')})`)
-  // stock_group_id es de Fase B: cast a any hasta que se regenere database.ts
-  // en el mismo commit que la migración que crea la columna.
-  const { data, error } = await (supabase as any)
+  const { data, error } = await supabase!
     .from('menu_item')
     .select('id, external_id, recipe_item_id, brand_id, stock_group_id, name')
     .eq('account_id', accountId)
@@ -180,7 +178,6 @@ export async function listSoldOut(
  * Vía RPC search_products_86 (migración 20260815T1700): incluye combos, excluye
  * ya-agotados y marcas inactivas — antes era una query directa que solo miraba
  * product_type='item' y no sabía qué ya estaba agotado.
- * RPC no tipada aún en database.ts hasta que Julio aplique la migración.
  */
 export async function searchProducts(
   accountId: string,
@@ -190,7 +187,7 @@ export async function searchProducts(
   requireSupabase()
   const term = query.trim()
   if (term.length < 2) return []
-  const { data, error } = await (supabase as any).rpc('search_products_86', {
+  const { data, error } = await supabase!.rpc('search_products_86', {
     p_account_id: accountId,
     p_query: term,
     p_location_id: locationId ?? undefined,
@@ -278,8 +275,7 @@ export async function previewScope(
   locationId: string | null,
 ): Promise<ScopePreview> {
   requireSupabase()
-  // identidad del producto (stock_group_id: cast a any, ver loadSiblings)
-  const { data: mi } = await (supabase as any)
+  const { data: mi } = await supabase!
     .from('menu_item')
     .select('external_id, recipe_item_id, stock_group_id, brand_id')
     .eq('id', menuItemId)
@@ -318,7 +314,7 @@ export async function previewScopeBulk(
   requireSupabase()
   if (menuItemIds.length === 0) return { brands: 0, channelsLast: 0, brandsHubrise: 0 }
 
-  const { data: misData, error } = await (supabase as any)
+  const { data: misData, error } = await supabase!
     .from('menu_item')
     .select('id, external_id, recipe_item_id, stock_group_id, brand_id')
     .eq('account_id', accountId)
@@ -360,9 +356,7 @@ export async function setProductAvailability(
   reasonCode?: string | null,
 ): Promise<AvailabilityResult> {
   requireSupabase()
-  // p_reason_code: cast a any hasta que se regenere database.ts (RPC v7,
-  // 20260731T1030 — mismo patrón que stock_group_id en loadSiblings arriba).
-  const { data, error } = await (supabase as any).rpc('set_product_availability', {
+  const { data, error } = await supabase!.rpc('set_product_availability', {
     p_menu_item_id: menuItemId,
     p_is_available: isAvailable,
     p_location_id: locationId ?? undefined,
@@ -395,7 +389,7 @@ export async function setProductsAvailabilityBulk(
   reasonCode?: string | null,
 ): Promise<BulkAvailabilityResult> {
   requireSupabase()
-  const { data, error } = await (supabase as any).rpc('set_products_availability_bulk', {
+  const { data, error } = await supabase!.rpc('set_products_availability_bulk', {
     p_menu_item_ids: menuItemIds,
     p_is_available: isAvailable,
     p_location_id: locationId ?? undefined,
