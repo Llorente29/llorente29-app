@@ -10,7 +10,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Archive, Upload, FileText, Trash2, Loader2, ExternalLink, X, AlertTriangle, Search, Sparkles, Link2, FileDown,
+  Archive, Upload, FileText, Trash2, Loader2, ExternalLink, X, AlertTriangle, Search, Sparkles, Link2, FileDown, ChevronDown, ChevronRight,
 } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import {
@@ -24,6 +24,7 @@ import {
   listLocations,
   coverageByFamily,
   getAccountFiscal,
+  listIngredientsWithoutSpec,
   DOC_FAMILIES,
   DOC_FAMILY_LABEL,
   DOC_STATUS_LABEL,
@@ -35,6 +36,7 @@ import {
   type FamilyCoverage,
   type OcrResult,
   type IngredientLite,
+  type IngredientWithoutSpec,
 } from '@/modules/appcc/services/complianceDocumentService'
 import { allergenLabel } from '@/modules/kitchen/lib/allergens'
 import {
@@ -111,6 +113,9 @@ export default function ComplianceDocumentsPage() {
   const [applying, setApplying] = useState(false)
   const [applyMsg, setApplyMsg] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
+  const [batch, setBatch] = useState<{ running: boolean; done: number; total: number; failed: number } | null>(null)
+  const [noSpec, setNoSpec] = useState<IngredientWithoutSpec[]>([])
+  const [noSpecOpen, setNoSpecOpen] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -127,6 +132,7 @@ export default function ComplianceDocumentsPage() {
       setDocs(d)
       setSuppliers(s)
       setLocations(l)
+      try { setNoSpec(await listIngredientsWithoutSpec(activeAccountId)) } catch { setNoSpec([]) }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo cargar el archivo documental.')
     } finally {
@@ -151,6 +157,21 @@ export default function ComplianceDocumentsPage() {
   }, [ingQuery, applyDoc, activeAccountId])
 
   const coverage = useMemo(() => coverageByFamily(docs), [docs])
+  const pendingCount = useMemo(() => docs.filter((d) => !d.extracted).length, [docs])
+  const noSpecBySupplier = useMemo(() => {
+    const map = new Map<string, IngredientWithoutSpec[]>()
+    for (const it of noSpec) {
+      const key = it.supplierName ?? '(sin proveedor asignado)'
+      const arr = map.get(key) ?? []
+      arr.push(it)
+      map.set(key, arr)
+    }
+    return Array.from(map.entries()).sort((a, b) => {
+      if (a[0] === '(sin proveedor asignado)') return 1
+      if (b[0] === '(sin proveedor asignado)') return -1
+      return b[1].length - a[1].length
+    })
+  }, [noSpec])
 
   const supplierNameById = useMemo(
     () => new Map(suppliers.map((s) => [s.id, s.name])),
@@ -334,6 +355,26 @@ export default function ComplianceDocumentsPage() {
     }
   }
 
+  async function batchReadAll() {
+    if (!activeAccountId) return
+    const pendings = docs.filter((d) => !d.extracted)
+    if (pendings.length === 0) return
+    setError(null)
+    setBatch({ running: true, done: 0, total: pendings.length, failed: 0 })
+    let failed = 0
+    for (let i = 0; i < pendings.length; i++) {
+      try {
+        await ocrComplianceDoc(pendings[i].id)
+      } catch {
+        failed++
+      }
+      setBatch({ running: true, done: i + 1, total: pendings.length, failed })
+    }
+    await load()
+    setBatch({ running: false, done: pendings.length, total: pendings.length, failed })
+    if (failed > 0) setError(`${failed} ficha(s) no se pudieron leer. Puedes reintentarlas una a una.`)
+  }
+
   if (accountsLoading || (loading && docs.length === 0)) {
     return (
       <div className="p-4 sm:p-6 flex items-center gap-2 text-sm text-text-secondary">
@@ -353,16 +394,32 @@ export default function ComplianceDocumentsPage() {
             respalda cada dato.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => void exportInspectionFolder()}
-          disabled={exporting || docs.length === 0}
-          className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg font-medium border border-border-default text-text-primary bg-card hover:bg-page disabled:opacity-50 transition-colors"
-          title="Genera un PDF con el estado del archivo por familia, los documentos y los huecos"
-        >
-          {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
-          Carpeta de inspección
-        </button>
+        <div className="flex flex-col items-end gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => void batchReadAll()}
+            disabled={batch?.running || pendingCount === 0}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg font-medium border border-border-default text-text-primary bg-accent-bg hover:bg-page disabled:opacity-50 transition-colors"
+            title="Lee con IA todas las fichas que aún no se han procesado"
+          >
+            {batch?.running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+            {batch?.running
+              ? `Leyendo ${batch.done}/${batch.total}…`
+              : pendingCount > 0
+                ? `Leer ${pendingCount} pendiente${pendingCount === 1 ? '' : 's'} con IA`
+                : 'Todo leído'}
+          </button>
+          <button
+            type="button"
+            onClick={() => void exportInspectionFolder()}
+            disabled={exporting || docs.length === 0}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg font-medium border border-border-default text-text-primary bg-card hover:bg-page disabled:opacity-50 transition-colors"
+            title="Genera un PDF con el estado del archivo por familia, los documentos y los huecos"
+          >
+            {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
+            Carpeta de inspección
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -399,6 +456,43 @@ export default function ComplianceDocumentsPage() {
           </button>
         ))}
       </div>
+
+      {/* Ingredientes sin ficha técnica — a quién reclamar */}
+      {noSpec.length > 0 && (
+        <div className="rounded-lg border border-border-default bg-card">
+          <button
+            type="button"
+            onClick={() => setNoSpecOpen((v) => !v)}
+            className="w-full flex items-center justify-between gap-2 px-4 py-3 text-left"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              {noSpecOpen ? <ChevronDown className="w-4 h-4 text-text-tertiary shrink-0" /> : <ChevronRight className="w-4 h-4 text-text-tertiary shrink-0" />}
+              <span className="text-sm font-medium text-text-primary">Ingredientes sin ficha técnica</span>
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-warning-bg text-warning shrink-0">{noSpec.length}</span>
+            </div>
+            <span className="text-xs text-text-tertiary shrink-0">a quién reclamar</span>
+          </button>
+          {noSpecOpen && (
+            <div className="px-4 pb-4 pt-3 space-y-3 border-t border-border-default">
+              {noSpecBySupplier.map(([supplier, items]) => (
+                <div key={supplier}>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="text-sm font-semibold text-text-primary">{supplier}</span>
+                    <span className="text-[11px] text-text-tertiary">· {items.length} ingrediente{items.length === 1 ? '' : 's'}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {items.map((it) => (
+                      <span key={it.ingredientId} className="text-[11px] px-2 py-0.5 rounded-full bg-page text-text-secondary">
+                        {it.ingredientName}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Zona de subida */}
       <div
@@ -575,16 +669,36 @@ export default function ComplianceDocumentsPage() {
                     <span className={'text-[11px] px-2 py-0.5 rounded-full shrink-0 ' + STATUS_TONE[d.status]}>
                       {DOC_STATUS_LABEL[d.status]}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => void runOcr(d)}
-                      disabled={o?.loading}
-                      className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg border border-border-default text-text-primary bg-card hover:bg-page disabled:opacity-50 transition-colors shrink-0"
-                      title="Leer con IA"
-                    >
-                      {o?.loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                      Leer con IA
-                    </button>
+                    <span className={'text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ' + (d.extracted ? 'bg-success-bg text-success' : 'bg-page text-text-tertiary')}>
+                      {d.extracted ? 'Leída' : 'Sin leer'}
+                    </span>
+                    {d.doc_family === 'food_spec' && (
+                      <span className={'text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ' + (d.linked ? 'bg-success-bg text-success' : 'bg-page text-text-tertiary')}>
+                        {d.linked ? 'Aplicada' : 'Sin aplicar'}
+                      </span>
+                    )}
+                    {d.doc_family === 'food_spec' && d.extracted &&
+                    (d.extracted.parsed.allergens_contains?.length || d.extracted.parsed.allergens_may_contain?.length) ? (
+                      <button
+                        type="button"
+                        onClick={() => openApply(d, d.extracted!)}
+                        className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg border border-border-default text-text-primary bg-accent-bg hover:bg-page transition-colors shrink-0"
+                        title="Aplicar al ingrediente"
+                      >
+                        <Link2 className="w-3.5 h-3.5" /> Aplicar
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => void runOcr(d)}
+                        disabled={o?.loading}
+                        className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg border border-border-default text-text-primary bg-card hover:bg-page disabled:opacity-50 transition-colors shrink-0"
+                        title={d.extracted ? 'Volver a leer con IA' : 'Leer con IA'}
+                      >
+                        {o?.loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                        {d.extracted ? 'Releer' : 'Leer con IA'}
+                      </button>
+                    )}
                     {d.url && (
                       <a href={d.url} target="_blank" rel="noreferrer" className="text-text-secondary hover:text-text-primary shrink-0" title="Abrir">
                         <ExternalLink className="w-4 h-4" />

@@ -24,6 +24,8 @@ const MAX_FILE_MB = 25
 // .from en variable → `this` intacto). DISPARADOR para quitarlo: database.ts regenerado OK.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const cdoc = (): any => (supabase as any).from('compliance_document')
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const clink = (): any => (supabase as any).from('compliance_document_link')
 
 export const DOC_FAMILIES = [
   'food_spec', 'chemical_spec', 'chemical_sds', 'pest_contract', 'pest_spec',
@@ -73,6 +75,10 @@ export interface ComplianceDocument {
   uploaded_by: string | null
   created_at: string
   updated_at: string
+  /** Lectura de IA guardada (T3). null = sin leer. */
+  extracted: OcrResult | null
+  /** true si la ficha ya está enlazada/aplicada a algún ingrediente (T4). */
+  linked: boolean
   // enriquecidos en lectura
   supplier_name?: string | null
   url?: string
@@ -152,6 +158,44 @@ export async function uploadComplianceDocument(input: NewComplianceDocument): Pr
 export interface ListOpts { locationId?: string | null; family?: DocFamily }
 
 /** Lista los documentos de una cuenta (con nombre de proveedor y URL firmada). */
+// Reconstruye un OcrResult a partir del jsonb `extracted` guardado (campos planos).
+function extractedToResult(id: string, family: DocFamily, ex: Record<string, unknown> | null): OcrResult | null {
+  if (!ex) return null
+  const val = <T,>(k: string, d: T): T => (ex[k] === undefined || ex[k] === null ? d : (ex[k] as T))
+  const rev = (ex.review as OcrReview | undefined) ?? { needs_review: false, reasons: [] }
+  return {
+    document_id: id,
+    doc_family: family,
+    parsed: {
+      doc_family_detected: val('doc_family_detected', null),
+      legal_name: val('legal_name', null),
+      reference: val('reference', null),
+      manufacturer_name: val('manufacturer_name', null),
+      manufacturer_address: val('manufacturer_address', null),
+      health_registry: val('health_registry', null),
+      issued_at: val('issued_at', null),
+      expires_at: val('expires_at', null),
+      ingredients: val('ingredients', null),
+      allergens_contains: val('allergens_contains', null),
+      allergens_may_contain: val('allergens_may_contain', null),
+      product_registry: val('product_registry', null),
+      food_contact_authorized: val('food_contact_authorized', null),
+      provider_name: val('provider_name', null),
+      valid_from: val('valid_from', null),
+      valid_to: val('valid_to', null),
+      handwritten: val('handwritten', false),
+      confidence: val('confidence', 0),
+      notes: val('notes', null),
+    },
+    review: {
+      needs_review: !!rev.needs_review,
+      reasons: Array.isArray(rev.reasons) ? rev.reasons : [],
+    },
+    ai_model: val('ai_model', ''),
+    ai_latency_ms: val('ai_latency_ms', 0),
+  }
+}
+
 export async function listComplianceDocuments(
   accountId: string, opts: ListOpts = {},
 ): Promise<ComplianceDocument[]> {
@@ -172,6 +216,14 @@ export async function listComplianceDocuments(
 
   const paths = rows.map((r) => r.file_path as string)
   const { data: signed } = await supabase.storage.from(BUCKET).createSignedUrls(paths, SIGNED_URL_TTL)
+
+  // Qué documentos están enlazados a algún ingrediente (T4).
+  const ids = rows.map((r) => r.id as string)
+  const { data: links } = await clink()
+    .select('document_id')
+    .eq('entity_type', 'recipe_item')
+    .in('document_id', ids)
+  const linkedSet = new Set(((links ?? []) as Array<{ document_id: string }>).map((l) => l.document_id))
 
   return rows.map((r, i) => ({
     id: r.id as string,
@@ -194,6 +246,8 @@ export async function listComplianceDocuments(
     created_at: r.created_at as string,
     updated_at: r.updated_at as string,
     url: signed?.[i]?.signedUrl ?? undefined,
+    extracted: extractedToResult(r.id as string, r.doc_family as DocFamily, (r.extracted as Record<string, unknown> | null) ?? null),
+    linked: linkedSet.has(r.id as string),
   }))
 }
 
@@ -419,4 +473,32 @@ export async function getAccountFiscal(accountId: string): Promise<AccountFiscal
     legalName: (data?.legal_name as string | null) ?? (data?.name as string | null) ?? null,
     cif: (data?.cif as string | null) ?? null,
   }
+}
+
+
+// ── Vista inversa: ingredientes SIN ficha técnica (a quién reclamar) ─────────
+export interface IngredientWithoutSpec {
+  ingredientId: string
+  ingredientName: string
+  supplierId: string | null
+  supplierName: string | null
+}
+export async function listIngredientsWithoutSpec(accountId: string): Promise<IngredientWithoutSpec[]> {
+  if (!supabase) throw new Error('Supabase no disponible')
+  const { data, error } = await (supabase.rpc as unknown as (
+    fn: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ data: unknown; error: { message: string } | null }>)(
+    'ingredients_without_spec',
+    { p_account_id: accountId },
+  )
+  if (error) throw new Error(error.message)
+  return ((data ?? []) as Array<{
+    ingredient_id: string; ingredient_name: string; supplier_id: string | null; supplier_name: string | null
+  }>).map((r) => ({
+    ingredientId: r.ingredient_id,
+    ingredientName: r.ingredient_name,
+    supplierId: r.supplier_id,
+    supplierName: r.supplier_name,
+  }))
 }

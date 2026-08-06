@@ -29,18 +29,24 @@ export async function listItemAllergens(
   recipeItemId: string,
 ): Promise<ItemAllergen[]> {
   requireSupabase()
-  const { data, error } = await supabase!
+  const { data, error } = await (supabase! as unknown as {
+    from: (t: string) => {
+      select: (c: string) => { eq: (k: string, v: string) => Promise<{ data: unknown; error: { message: string } | null }> }
+    }
+  })
     .from('recipe_item_allergen')
     .select('allergen_code, state, source, source_document_id')
     .eq('recipe_item_id', recipeItemId)
   if (error) {
     throw new Error(`Error leyendo alérgenos: ${error.message}`)
   }
-  return (data ?? []).map((r) => ({
+  return ((data ?? []) as Array<{
+    allergen_code: string; state: string | null; source: string | null; source_document_id: string | null
+  }>).map((r) => ({
     code: r.allergen_code as AllergenCode,
     state: (r.state as AllergenState) ?? 'contains',
     source: r.source ?? null,
-    sourceDocumentId: (r as { source_document_id?: string | null }).source_document_id ?? null,
+    sourceDocumentId: r.source_document_id ?? null,
   }))
 }
 
