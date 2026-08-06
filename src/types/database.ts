@@ -16768,6 +16768,30 @@ export type Database = {
           raw_item_id: string
         }[]
       }
+      _scope_preview_core: {
+        Args: {
+          p_account_id: string
+          p_brand_ids: string[]
+          p_location_id: string
+          p_matriculas: string[]
+        }
+        Returns: Json
+      }
+      _set_product_availability_core: {
+        Args: {
+          p_account_id: string
+          p_actor: string
+          p_available_until: string
+          p_is_available: boolean
+          p_location_id: string
+          p_menu_item_id: string
+          p_origin: string
+          p_reason: string
+          p_reason_code: string
+          p_surface: string
+        }
+        Returns: Json
+      }
       _shop_account_free_delivery: {
         Args: { p_account: string }
         Returns: Json
@@ -19045,6 +19069,10 @@ export type Database = {
           parent_name: string
         }[]
       }
+      preview_scope_bulk_by_token: {
+        Args: { p_device_token: string; p_menu_item_ids: string[] }
+        Returns: Json
+      }
       preview_scope_by_token: {
         Args: { p_device_token: string; p_menu_item_id: string }
         Returns: Json
@@ -19610,6 +19638,10 @@ export type Database = {
         }
         Returns: Json
       }
+      search_products_86: {
+        Args: { p_account_id: string; p_location_id?: string; p_query: string }
+        Returns: Json
+      }
       search_products_by_token: {
         Args: { p_device_token: string; p_query: string }
         Returns: Json
@@ -19818,6 +19850,28 @@ export type Database = {
           p_device_token: string
           p_is_available: boolean
           p_menu_item_id: string
+          p_reason?: string
+          p_reason_code?: string
+        }
+        Returns: Json
+      }
+      set_products_availability_bulk: {
+        Args: {
+          p_available_until?: string
+          p_is_available: boolean
+          p_location_id?: string
+          p_menu_item_ids: string[]
+          p_reason?: string
+          p_reason_code?: string
+        }
+        Returns: Json
+      }
+      set_products_availability_bulk_by_token: {
+        Args: {
+          p_available_until?: string
+          p_device_token: string
+          p_is_available: boolean
+          p_menu_item_ids: string[]
           p_reason?: string
           p_reason_code?: string
         }

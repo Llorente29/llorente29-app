@@ -270,7 +270,11 @@ export default function EnCartaTab({ item, accountId, onItemChanged }: EnCartaTa
             <p className="text-amber-800 mt-0.5">
               Se apagará <strong>AHORA, en producción</strong>, en{' '}
               {availScope ? (
-                <strong>{availScope.brands} marca{availScope.brands === 1 ? '' : 's'} · {availScope.channels} canal{availScope.channels === 1 ? '' : 'es'}</strong>
+                <strong>
+                  {availScope.brands} marca{availScope.brands === 1 ? '' : 's'}
+                  {' · '}Last: {availScope.channelsLast ?? '—'} canal{availScope.channelsLast === 1 ? '' : 'es'}
+                  {' · '}HubRise: {availScope.brandsHubrise ?? '—'} marca{availScope.brandsHubrise === 1 ? '' : 's'}
+                </strong>
               ) : 'calculando alcance…'} de Glovo / Uber / JustEat. Podrás reactivarlo cuando quieras.
             </p>
             <div className="flex gap-2 mt-2.5">
