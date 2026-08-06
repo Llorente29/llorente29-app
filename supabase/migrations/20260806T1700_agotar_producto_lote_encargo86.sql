@@ -1,9 +1,20 @@
--- supabase/migrations/20260815T1700_agotar_producto_lote_encargo86.sql
+-- supabase/migrations/20260806T1700_agotar_producto_lote_encargo86.sql
 --
 -- ENCARGO 86 · MULTI-SELECCIÓN + AGOTADO EN LOTE (un solo dispatch)
 -- ============================================================================
--- Aplicada: (pendiente — la ejecuta Julio por SQL Editor / MCP apply_migration
---            y verifica; no marcar como aplicada por escribir este fichero)
+-- Aplicada: (pendiente — la ejecuta Julio y verifica; no marcar como aplicada
+--            por escribir este fichero)
+--
+-- ⚠️⚠️ CÓMO APLICAR — LEER ANTES DE PEGAR NADA ⚠️⚠️
+--   Este fichero lleva `begin;` / `commit;` a propósito (10 objetos: o entran
+--   todos o no entra ninguno). PERO **el SQL Editor de Supabase DESCARTA el
+--   begin/commit y devuelve "Success" SIN APLICAR NADA** — incluidos los
+--   guards `DO`, que también se traga. Es la trampa documentada en
+--   folvy_reglas.md §3.
+--   -> APLICAR CON `apply_migration` POR MCP (respeta la transacción), o
+--      quitar begin/commit a mano y aplicar por editor sentencia a sentencia.
+--   -> En cualquier caso, VERIFICAR CADA OBJETO con query independiente
+--      después (pg_get_functiondef / to_regprocedure). No fiarse del "Success".
 --
 -- RECON hecho contra producción antes de escribir esto (pg_get_functiondef en
 -- vivo de set_product_availability, set_product_availability_by_token,
@@ -11,6 +22,12 @@
 -- availability-dispatch + esquema de product_availability/brand/
 -- brand_hubrise_catalog/external_catalog_product). El cuerpo de A.1 está
 -- FUSIONADO sobre el original en producción, no reescrito desde el repo.
+--
+-- VERIFICADO EN REVISIÓN (06/08, Claude):
+--   · brand_hubrise_catalog SÍ tiene columna location_id -> el filtro de C es válido.
+--   · El by_token vivo inserta availability_event con origin='cocina',
+--     surface='tablet', actor_id=null -> es EXACTAMENTE lo que pasa el refactor.
+--     La semántica analítica se conserva.
 --
 -- Bloque A.1 — refactor SIN cambio de comportamiento:
 --   _set_product_availability_core: hace todo lo que hacía la RPC excepto el
@@ -34,6 +51,9 @@
 --   duplicadas siguen is_active=true hoy (verificado en RECON) — archivarlas
 --   es tarea aparte (fuera de este encargo); este filtro es la red que
 --   mantiene la búsqueda limpia DESPUÉS de esa tarea.
+--   COMPORTAMIENTO CONOCIDO: con p_location_id NULL ("todos los locales"), un
+--   producto agotado en UN local SÍ aparece en la búsqueda — sigue disponible
+--   en los demás. Es intencionado; documentado para que no se reporte como bug.
 --
 -- Bloque C — contador de canales honesto: _scope_preview_core (nuevo)
 --   calcula channelsLast (Last, como antes) Y brandsHubrise (marcas con fila
@@ -45,6 +65,14 @@
 --   tiene acceso directo a tablas (todo por token/RPC) — sin esta pieza la
 --   tablet se queda descolgada del alcance agregado honesto en el flujo de
 --   lote, exactamente el hueco que A.3 avisa de no dejar.
+--
+--   🔴 COMPATIBILIDAD HACIA ATRÁS (añadido en revisión 06/08): las dos
+--   funciones de preview devuelven TAMBIÉN la clave `channels` (= channelsLast).
+--   Sin ella, en la ventana entre aplicar esta migración y desplegar el front,
+--   el tabletAvailabilityService YA DESPLEGADO (que hace `Number(d.channels ?? 0)`)
+--   enseñaría 0 canales en la tablet: otro falso verde, y en la superficie
+--   donde menos se mira. Retirar `channels` SOLO cuando web y tablet estén
+--   desplegadas con los campos nuevos.
 --
 -- SEGURIDAD: _set_product_availability_core y _scope_preview_core son
 -- SECURITY DEFINER pero NO repiten el guard admin/manager (lo hace el
@@ -553,7 +581,10 @@ begin
 
   return jsonb_build_object(
     'products',    v_products_ok,
-    'brands',      coalesce((select count(distinct brand_id) from menu_item where id = any(v_all_ids)), 0),
+    -- account_id explícito (revisión 06/08): los ids ya vienen acotados por el
+    -- core, pero un conteo multi-tenant nunca se deja sin filtro de cuenta.
+    'brands',      coalesce((select count(distinct brand_id) from menu_item
+                              where id = any(v_all_ids) and account_id = v_account_id), 0),
     'channels',    coalesce(v_channels, 0),
     'matriculas',  coalesce(v_all_matr, array[]::text[]),
     'failed',      v_failed
@@ -677,7 +708,9 @@ begin
 
   return jsonb_build_object(
     'products',    v_products_ok,
-    'brands',      coalesce((select count(distinct brand_id) from menu_item where id = any(v_all_ids)), 0),
+    -- account_id explícito (revisión 06/08), ver nota en la gemela de web.
+    'brands',      coalesce((select count(distinct brand_id) from menu_item
+                              where id = any(v_all_ids) and account_id = v_account_id), 0),
     'channels',    coalesce(v_channels, 0),
     'matriculas',  coalesce(v_all_matr, array[]::text[]),
     'failed',      v_failed
@@ -923,6 +956,11 @@ begin
 
   return jsonb_build_object(
     'brands',        coalesce(v_brands, 0),
+    -- COMPAT (revisión 06/08): el tabletAvailabilityService YA DESPLEGADO lee
+    -- `channels`. Sin esta clave, entre aplicar la migración y desplegar el
+    -- front la tablet enseñaría 0 canales. Retirar solo cuando web y tablet
+    -- estén desplegadas con channelsLast/brandsHubrise.
+    'channels',      coalesce((v_core->>'channelsLast')::int, 0),
     'channelsLast',  (v_core->>'channelsLast')::int,
     'brandsHubrise', (v_core->>'brandsHubrise')::int
   );
@@ -977,6 +1015,8 @@ begin
 
   return jsonb_build_object(
     'brands',        coalesce(v_brands, 0),
+    -- COMPAT (revisión 06/08), ver nota en preview_scope_by_token.
+    'channels',      coalesce((v_core->>'channelsLast')::int, 0),
     'channelsLast',  (v_core->>'channelsLast')::int,
     'brandsHubrise', (v_core->>'brandsHubrise')::int
   );
