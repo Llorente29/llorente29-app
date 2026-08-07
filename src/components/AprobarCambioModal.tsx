@@ -14,6 +14,7 @@ import {
   ArrowDown,
   Minus,
   Check,
+  AlertTriangle,
 } from 'lucide-react'
 import type { ShiftSwapRequest, HoursAttribution } from '../types/shiftSwap'
 import {
@@ -23,6 +24,7 @@ import type { Employee } from '../types'
 import type { ShiftTemplate, DayOfWeek } from '../types/scheduler'
 import { DAY_LABELS, shiftDurationHours } from '../types/scheduler'
 import { approveSwap, rejectSwap } from '../services/shiftSwapService'
+import { fetchVacations } from '../services/vacationsService'
 
 interface Props {
   swap: ShiftSwapRequest
@@ -53,6 +55,11 @@ export default function AprobarCambioModal({
   const [hoursAttribution, setHoursAttribution] = useState<HoursAttribution>('worker')
   const [managerNotes, setManagerNotes] = useState('')
   const [acting, setActing] = useState<'none' | 'approving' | 'rejecting'>('none')
+  // F7.1 (cierre punto 2): mismo patrón que CalendarioPage — aviso ANTES de
+  // aplicar si alguien queda asignado en un día de vacación aprobada, y el
+  // mensaje del backstop si aun así se cuela algo. Banner en vez de alert()
+  // nativo, consistente con el resto de la app.
+  const [actionError, setActionError] = useState<string | null>(null)
 
   // Calcular horas del turno del solicitante
   const requesterHours = useMemo(() => {
@@ -120,26 +127,56 @@ export default function AprobarCambioModal({
     }
   }, [swap.swapType, hoursAttribution, requesterHours, targetHours, requester.name, target.name])
 
+  // Comprueba, ANTES de aplicar, si el empleado que va a entrar a trabajar
+  // tiene vacación aprobada ese día. Usa las fechas ya resueltas en el propio
+  // swap (requesterDate/targetDate) — no hace falta recalcular desde
+  // week_start+día. Si esto no lo atrapa (carrera entre pestañas), el
+  // backstop del trigger lo hace igual y su mensaje se muestra abajo.
+  async function checkVacationBlock(): Promise<string | null> {
+    const checks: { emp: Employee; date: string }[] = [{ emp: target, date: swap.requesterDate }]
+    if (swap.swapType === 'intercambio' && swap.targetDate) {
+      checks.push({ emp: requester, date: swap.targetDate })
+    }
+    for (const c of checks) {
+      const vacs = await fetchVacations(c.emp.id)
+      const blocking = (vacs || []).find(
+        v => v.status === 'aprobada' && c.date >= v.startDate && c.date <= v.endDate
+      )
+      if (blocking) {
+        return `${c.emp.name} tiene vacaciones aprobadas el ${shortDate(c.date)} — no se puede asignar ese turno.`
+      }
+    }
+    return null
+  }
+
   async function handleApprove() {
+    setActionError(null)
     setActing('approving')
-    const ok = await approveSwap(swap.id, managerEmployeeId, managerNotes.trim() || undefined, hoursAttribution)
+    const blocked = await checkVacationBlock()
+    if (blocked) {
+      setActing('none')
+      setActionError(blocked)
+      return
+    }
+    const { ok, errorMessage } = await approveSwap(swap.id, managerEmployeeId, managerNotes.trim() || undefined, hoursAttribution)
     setActing('none')
     if (ok) {
       onResolved()
     } else {
-      alert('Error al aprobar. Mira la consola para más detalles.')
+      setActionError(errorMessage || 'Error al aprobar. Mira la consola para más detalles.')
     }
   }
 
   async function handleReject() {
     if (!confirm('¿Rechazar esta solicitud?')) return
+    setActionError(null)
     setActing('rejecting')
     const ok = await rejectSwap(swap.id, managerEmployeeId, managerNotes.trim() || undefined)
     setActing('none')
     if (ok) {
       onResolved()
     } else {
-      alert('Error al rechazar. Mira la consola para más detalles.')
+      setActionError('Error al rechazar. Mira la consola para más detalles.')
     }
   }
 
@@ -272,6 +309,19 @@ export default function AprobarCambioModal({
             <p className="text-[10px] text-text-secondary mt-0.5 text-right">{managerNotes.length}/300</p>
           </div>
         </div>
+
+        {actionError && (
+          <div className="px-5">
+            <div className="bg-danger-bg border border-danger/30 rounded-lg p-3 flex items-start justify-between gap-3">
+              <p className="text-sm text-danger inline-flex items-start gap-1.5">
+                <AlertTriangle size={14} className="shrink-0 mt-0.5" /> {actionError}
+              </p>
+              <button onClick={() => setActionError(null)} className="text-danger hover:opacity-70 shrink-0">
+                <X size={14} />
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Botones */}
         <div className="px-5 py-3 border-t border-border-default bg-page sticky bottom-0 flex gap-2 justify-end">

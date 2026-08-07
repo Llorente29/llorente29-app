@@ -11,6 +11,7 @@ import type {
 } from '../types/shiftSwap'
 import type { Schedule, ScheduleCells } from '../types/scheduler'
 import { createNotification } from './notificationsService'
+import { parseVacationConflictError } from './scheduleGenerator'
 
 interface ShiftSwapRow {
   id: string
@@ -239,6 +240,14 @@ export async function confirmTargetAccepts(
    APROBAR / RECHAZAR (gestor)
    ===================================================== */
 
+export interface ApproveSwapResult {
+  ok: boolean
+  // Mensaje legible para mostrar al gestor cuando ok=false (p.ej. el rechazo
+  // del backstop trg_schedule_no_vacation_conflict, ya parseado). null si no
+  // hay nada específico que mostrar más allá de "revisa la consola".
+  errorMessage: string | null
+}
+
 /**
  * Gestor aprueba un cambio. Aplica los movimientos al/los schedules
  * correspondientes y marca la solicitud como 'aprobada'.
@@ -251,8 +260,8 @@ export async function approveSwap(
   managerEmployeeId: string,
   managerNotes?: string,
   hoursAttribution: HoursAttribution = 'worker'
-): Promise<boolean> {
-  if (!supabase) return false
+): Promise<ApproveSwapResult> {
+  if (!supabase) return { ok: false, errorMessage: null }
 
   // Cargar solicitud
   const { data: row, error: getErr } = await supabase
@@ -263,19 +272,19 @@ export async function approveSwap(
     .maybeSingle()
   if (getErr || !row) {
     console.error('[shiftSwap] approveSwap: solicitud no encontrada o no en propuesta', getErr)
-    return false
+    return { ok: false, errorMessage: null }
   }
   const swap = rowToSwap(row as ShiftSwapRow)
   if (!swap.targetId) {
     console.error('[shiftSwap] approveSwap: sin target_id, no se puede aplicar')
-    return false
+    return { ok: false, errorMessage: null }
   }
 
   // Aplicar el movimiento al schedule (siempre, refleja la realidad física)
   const applied = await applySwapToSchedule(swap)
-  if (!applied) {
-    console.error('[shiftSwap] approveSwap: error aplicando al schedule')
-    return false
+  if (!applied.ok) {
+    console.error('[shiftSwap] approveSwap: error aplicando al schedule:', applied.errorMessage)
+    return { ok: false, errorMessage: applied.errorMessage }
   }
 
   // Marcar como aprobada con la atribución de horas
@@ -291,12 +300,12 @@ export async function approveSwap(
     .eq('id', swapId)
   if (error) {
     console.error('[shiftSwap] approveSwap:', error)
-    return false
+    return { ok: false, errorMessage: null }
   }
 
   // Notificar a ambos empleados
   notifySwapResolved(swap, 'aprobada')
-  return true
+  return { ok: true, errorMessage: null }
 }
 
 /**
@@ -436,41 +445,47 @@ export async function listSwapsForEmployee(employeeId: string): Promise<ShiftSwa
  * Las celdas tienen estructura:
  *   cells[templateId][dayKey] = string[]  (array de employeeIds)
  */
-async function applySwapToSchedule(swap: ShiftSwapRequest): Promise<boolean> {
-  if (!supabase) return false
-  if (!swap.targetId) return false
+async function applySwapToSchedule(swap: ShiftSwapRequest): Promise<ApproveSwapResult> {
+  if (!supabase) return { ok: false, errorMessage: null }
+  if (!swap.targetId) return { ok: false, errorMessage: null }
 
   // 1) Aplicar al turno del requester (sustituir requester por target)
-  const ok1 = await replaceEmployeeInCell(
+  const r1 = await replaceEmployeeInCell(
     swap.requesterScheduleId,
     swap.requesterTemplateId,
     swap.requesterDayKey,
     swap.requesterId,
     swap.targetId
   )
-  if (!ok1) return false
+  if (!r1.ok) return r1
 
   // 2) Si es intercambio, aplicar también el inverso en el turno del target
   if (swap.swapType === 'intercambio' &&
       swap.targetScheduleId &&
       swap.targetTemplateId &&
       swap.targetDayKey) {
-    const ok2 = await replaceEmployeeInCell(
+    const r2 = await replaceEmployeeInCell(
       swap.targetScheduleId,
       swap.targetTemplateId,
       swap.targetDayKey,
       swap.targetId,
       swap.requesterId
     )
-    if (!ok2) return false
+    if (!r2.ok) return r2
   }
-  return true
+  return { ok: true, errorMessage: null }
 }
 
 /**
  * En el schedule indicado, encuentra el array de empleados de
  * `cells[templateId][dayKey]`, sustituye `oldEmployeeId` por `newEmployeeId`
  * y guarda el schedule.
+ *
+ * F7.1 (cierre punto 2): esta escritura pasa por el mismo trigger
+ * `trg_schedule_no_vacation_conflict` que el guardado manual del cuadrante —
+ * si `newEmployeeId` tiene vacación aprobada ese día, la BBDD rechaza el
+ * UPDATE. Se propaga el mensaje parseado (mismo parser que CalendarioPage)
+ * para que el gestor vea el motivo real en vez de "error, mira la consola".
  */
 async function replaceEmployeeInCell(
   scheduleId: string,
@@ -478,8 +493,8 @@ async function replaceEmployeeInCell(
   dayKey: string,
   oldEmployeeId: string,
   newEmployeeId: string
-): Promise<boolean> {
-  if (!supabase) return false
+): Promise<ApproveSwapResult> {
+  if (!supabase) return { ok: false, errorMessage: null }
 
   // Cargar schedule
   const { data: scheduleRow, error: getErr } = await supabase
@@ -489,7 +504,7 @@ async function replaceEmployeeInCell(
     .maybeSingle()
   if (getErr || !scheduleRow) {
     console.error('[shiftSwap] replaceEmployeeInCell: schedule no encontrado', getErr)
-    return false
+    return { ok: false, errorMessage: 'No se encontró el cuadrante de ese turno (puede que se haya borrado).' }
   }
   const schedule = scheduleRow as Schedule
   const cells: ScheduleCells = (schedule.cells as ScheduleCells) || {}
@@ -497,17 +512,17 @@ async function replaceEmployeeInCell(
   const tplCells = cells[templateId]
   if (!tplCells) {
     console.error('[shiftSwap] replaceEmployeeInCell: templateId no encontrado en cells')
-    return false
+    return { ok: false, errorMessage: 'El turno ya no está en el cuadrante (puede que se haya editado mientras tanto).' }
   }
   const dayList = tplCells[dayKey]
   if (!Array.isArray(dayList)) {
     console.error('[shiftSwap] replaceEmployeeInCell: dayKey no encontrado')
-    return false
+    return { ok: false, errorMessage: 'El turno ya no está en el cuadrante (puede que se haya editado mientras tanto).' }
   }
   const idx = dayList.indexOf(oldEmployeeId)
   if (idx === -1) {
     console.error('[shiftSwap] replaceEmployeeInCell: empleado no estaba en la celda')
-    return false
+    return { ok: false, errorMessage: 'El empleado ya no está asignado a ese turno (puede que el cuadrante haya cambiado).' }
   }
 
   // Reemplazar (manteniendo el resto del array)
@@ -528,9 +543,15 @@ async function replaceEmployeeInCell(
     .eq('id', scheduleId)
   if (updErr) {
     console.error('[shiftSwap] replaceEmployeeInCell: error al guardar', updErr)
-    return false
+    const vacDetail = parseVacationConflictError(updErr.message)
+    return {
+      ok: false,
+      errorMessage: vacDetail
+        ? `No se puede aplicar: hay vacaciones aprobadas ese día — ${vacDetail}.`
+        : 'No se pudo guardar el cambio en el cuadrante.',
+    }
   }
-  return true
+  return { ok: true, errorMessage: null }
 }
 
 /* =====================================================
