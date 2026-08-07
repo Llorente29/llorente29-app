@@ -9,11 +9,12 @@
 // FASE 2.A.2 (22/05/2026): horasComputo ya no depende de tipos de calendarService.
 // El adapter sintetiza ScheduledShift / ShiftTypeInfo (tipos propios de horasComputo).
 import { useState, useEffect, useMemo } from 'react'
-import { Check, AlertCircle, AlertTriangle, Clock, Users, MapPin } from 'lucide-react'
+import { Check, AlertCircle, AlertTriangle, Clock, Users, MapPin, Moon, Radio } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
+import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { Card } from '../components/ui'
-import type { Employee, Location } from '../types'
+import type { Employee, Location, ClockEntry } from '../types'
 import {
   computeCurrentStatus, entriesOfDay,
   type CurrentStatus, type CalendarContext,
@@ -23,9 +24,22 @@ import { fetchAppSettings, type AppSettings } from '../services/appSettingsServi
 import { getSchedule, listShiftTemplates } from '../services/schedulerService'
 import { getMondayOfWeek, toISODate, shiftDurationHours, type DayOfWeek } from '../types/scheduler'
 import { isSupabaseEnabled, supabase } from '../lib/supabase'
+import { getStaffingGaps, type StaffingGap } from '../modules/multitenancy/services/businessHoursService'
+import { fetchMinRestMinutes } from '../services/breakPolicyService'
+
+// F4.4 — horas transcurridas desde la última salida ANTES de ahora (la
+// jornada previa, no la de hoy si sigue dentro). clockEntries viene más
+// reciente primero (misma convención que el resto del módulo Personal).
+function hoursSinceLastRest(clockEntries: ClockEntry[], now: Date): number | null {
+  const pastSalidas = clockEntries.filter(ce => ce.type === 'salida' && new Date(ce.datetime).getTime() < now.getTime())
+  if (pastSalidas.length === 0) return null
+  const last = pastSalidas[0]
+  return (now.getTime() - new Date(last.datetime).getTime()) / 3600000
+}
 
 export default function AhoraMismoPage() {
   const { staff, locations } = useApp()
+  const { activeAccountId } = useActiveAccount()
   const [now, setNow] = useState(new Date())
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [filterLoc, setFilterLoc] = useState<string>('all')
@@ -42,6 +56,27 @@ export default function AhoraMismoPage() {
   useEffect(() => {
     fetchAppSettings().then(setSettings)
   }, [])
+
+  // F4.4 — descanso mínimo entre jornadas (break_policy, F1.5) por local, y
+  // huecos de cobertura (local abierto sin nadie asignado en el cuadrante).
+  const [minRestByLoc, setMinRestByLoc] = useState<Map<string, number>>(new Map())
+  const [staffingGaps, setStaffingGaps] = useState<StaffingGap[]>([])
+  useEffect(() => {
+    const activeLocs = locations.filter(l => l.active)
+    if (!activeAccountId || activeLocs.length === 0) { setMinRestByLoc(new Map()); return }
+    let cancel = false
+    Promise.all(activeLocs.map(l => fetchMinRestMinutes(activeAccountId, l.id).then(min => [l.id, min] as const)))
+      .then(pairs => { if (!cancel) setMinRestByLoc(new Map(pairs)) })
+    return () => { cancel = true }
+  }, [activeAccountId, locations])
+  useEffect(() => {
+    const activeLocs = locations.filter(l => l.active)
+    if (activeLocs.length === 0) { setStaffingGaps([]); return }
+    let cancel = false
+    Promise.all(activeLocs.map(l => getStaffingGaps(l.id).catch(() => [])))
+      .then(results => { if (!cancel) setStaffingGaps(results.flat()) })
+    return () => { cancel = true }
+  }, [locations])
 
   // Reloj que actualiza cada minuto para refrescar contadores
   useEffect(() => {
@@ -123,7 +158,13 @@ export default function AhoraMismoPage() {
   }, [])
 
   // Calcular el estado de cada empleado activo
-  type EmpStatus = { employee: Employee; status: CurrentStatus; primaryLoc: Location | undefined }
+  type EmpStatus = {
+    employee: Employee
+    status: CurrentStatus
+    primaryLoc: Location | undefined
+    restHours: number | null
+    restBelowMin: boolean
+  }
 
   const allStatuses: EmpStatus[] = useMemo(() => {
     if (!settings) return []
@@ -139,9 +180,12 @@ export default function AhoraMismoPage() {
           calendarCtx,
         })
         const primaryLoc = locations.find(l => l.id === e.locationId)
-        return { employee: e, status, primaryLoc }
+        const restHours = hoursSinceLastRest(e.clockEntries || [], now)
+        const minRestMin = e.locationId ? minRestByLoc.get(e.locationId) : undefined
+        const restBelowMin = restHours != null && minRestMin != null && restHours < minRestMin / 60
+        return { employee: e, status, primaryLoc, restHours, restBelowMin }
       })
-  }, [staff, locations, now, settings, calendarCtxByEmp])
+  }, [staff, locations, now, settings, calendarCtxByEmp, minRestByLoc])
 
   // Filtrar por local
   const filtered = useMemo(() => {
@@ -193,7 +237,12 @@ export default function AhoraMismoPage() {
       <Card className="p-4 bg-accent-bg border-accent/30">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-xs text-text-secondary uppercase tracking-wide">Ahora mismo</p>
+            <p className="text-xs text-text-secondary uppercase tracking-wide inline-flex items-center gap-1.5">
+              Ahora mismo
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-success">
+                <Radio size={10} className="animate-pulse" /> EN VIVO
+              </span>
+            </p>
             <p className="text-3xl font-bold text-accent tabular-nums">
               {now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
             </p>
@@ -207,6 +256,19 @@ export default function AhoraMismoPage() {
           </div>
         </div>
       </Card>
+
+      {/* F4.4 — cobertura sin cubrir: local abierto pero el cuadrante publicado no tiene a nadie */}
+      {staffingGaps.length > 0 && (
+        <div className="flex items-center gap-2 text-xs px-0.5" style={{ color: '#7A5A12' }}>
+          <AlertTriangle size={13} className="shrink-0" />
+          <span><span className="font-semibold">Sin personal en horario comercial:</span>{' '}
+            {staffingGaps.slice(0, 6).map((g, i) => {
+              const dl: Record<number, string> = { 1: 'Lun', 2: 'Mar', 3: 'Mié', 4: 'Jue', 5: 'Vie', 6: 'Sáb', 0: 'Dom' }
+              return `${dl[g.weekday]} ${g.gapStart}–${g.gapEnd}${i < Math.min(staffingGaps.length, 6) - 1 ? ' · ' : ''}`
+            })}{staffingGaps.length > 6 ? ` +${staffingGaps.length - 6}` : ''}
+          </span>
+        </div>
+      )}
 
       {/* KPIs rápidos */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -323,9 +385,14 @@ function Section({ title, TitleIcon, children, colorClass }: { title: string; Ti
   )
 }
 
-function EmpCard({ status }: { status: { employee: Employee; status: CurrentStatus; primaryLoc: Location | undefined } }) {
-  const { employee, status: s, primaryLoc } = status
+function EmpCard({ status }: {
+  status: { employee: Employee; status: CurrentStatus; primaryLoc: Location | undefined; restHours: number | null; restBelowMin: boolean }
+}) {
+  const { employee, status: s, primaryLoc, restHours, restBelowMin } = status
   const initials = (employee.name || '').split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase()
+  // F4.4 — descanso desde la jornada anterior, solo relevante para quien está
+  // dentro ahora o a punto de entrar (break_policy.min_rest_between_shifts_minutes, F1.5).
+  const showRest = (s.kind === 'inside' || s.kind === 'pending_arrival') && restHours != null
 
   let mainText = ''
   let subText = ''
@@ -384,6 +451,11 @@ function EmpCard({ status }: { status: { employee: Employee; status: CurrentStat
           </div>
           <p className="text-sm text-text-primary mt-0.5">{mainText}</p>
           {subText && <p className="text-xs text-text-secondary">{subText}</p>}
+          {showRest && (
+            <p className={`text-xs mt-0.5 inline-flex items-center gap-1 ${restBelowMin ? 'text-danger font-medium' : 'text-text-secondary'}`}>
+              <Moon size={11} /> {restBelowMin ? '¡Descanso corto!' : 'Descansó'} {formatMinutes(Math.round((restHours ?? 0) * 60))} desde el turno anterior
+            </p>
+          )}
         </div>
         {badge && (
           <span className={`text-[10px] font-medium px-2 py-1 rounded-full shrink-0 ${badge.cls}`}>
