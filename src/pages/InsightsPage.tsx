@@ -2,7 +2,8 @@
 // Dashboard de personal: cumpleaños, aniversarios, eventos próximos,
 // distribuciones por local/contrato/puesto, KPIs operativos.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Activity,
   HeartPulse,
@@ -19,6 +20,12 @@ import {
   BarChart3,
   FileText,
   Briefcase,
+  Euro,
+  Clock,
+  ShieldAlert,
+  FileWarning,
+  TrendingUp,
+  X,
   type LucideIcon,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
@@ -28,6 +35,12 @@ import type { VacationRequest, Formation } from '../types/personal'
 import { VACATION_TYPES, FORMATION_CATALOG } from '../types/personal'
 import { fetchVacations } from '../services/vacationsService'
 import { fetchAllFormations, getFormationStatus } from '../services/formationsService'
+import { fetchTeamHoursSummary } from '../services/teamHoursService'
+import { fetchSalesByLocation } from '../services/teamReportsService'
+import { fetchComplianceScan, type ComplianceIssue } from '../services/teamComplianceService'
+import { getStaffingGaps } from '../modules/multitenancy/services/businessHoursService'
+import { toISODate } from '../types/scheduler'
+import StatusBand, { type StatusLine } from '../components/team/StatusBand'
 
 /* =====================================================
    TIPOS Y HELPERS
@@ -78,11 +91,64 @@ function todayDate(): Date {
    COMPONENTE PRINCIPAL
    ===================================================== */
 
-export default function InsightsPage() {
-  const { staff, locations } = useApp()
+export default function InsightsPage({ onGoToIncompleteContracts }: { onGoToIncompleteContracts?: () => void } = {}) {
+  const { staff, locations, activeAccountId } = useApp()
+  const navigate = useNavigate()
   const [vacations, setVacations] = useState<VacationRequest[]>([])
   const [formations, setFormations] = useState<Formation[]>([])
   const [loading, setLoading] = useState(true)
+
+  // F4.1 — Centro de Mando: franja de estado + tira de dinero. "Del mes"
+  // en curso, fijo (no navegable) — esto es una foto de "ahora", no un informe.
+  const [moneyStats, setMoneyStats] = useState<{
+    cost: number; costPartial: boolean; sales: number; workedHours: number; contractedHours: number
+  } | null>(null)
+  const [coverageGapsCount, setCoverageGapsCount] = useState(0)
+  const [complianceIssues, setComplianceIssues] = useState<ComplianceIssue[]>([])
+  const [complianceDetailOpen, setComplianceDetailOpen] = useState(false)
+  const formacionesRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!activeAccountId) { setMoneyStats(null); return }
+    let cancel = false
+    const now = new Date()
+    const from = toISODate(new Date(now.getFullYear(), now.getMonth(), 1))
+    const to = toISODate(new Date(now.getFullYear(), now.getMonth() + 1, 0))
+    Promise.all([
+      fetchTeamHoursSummary(activeAccountId, from, to),
+      fetchSalesByLocation(activeAccountId, from, to),
+    ]).then(([summary, sales]) => {
+      if (cancel) return
+      setMoneyStats({
+        cost: summary.reduce((a, r) => a + r.laborCost, 0),
+        costPartial: summary.some(r => r.costIsPartial),
+        workedHours: summary.reduce((a, r) => a + r.workedHours, 0),
+        contractedHours: summary.reduce((a, r) => a + r.contractedHours, 0),
+        sales: sales.reduce((a, s) => a + s.ventas, 0),
+      })
+    })
+    return () => { cancel = true }
+  }, [activeAccountId])
+
+  useEffect(() => {
+    const activeLocs = locations.filter(l => l.active)
+    if (activeLocs.length === 0) { setCoverageGapsCount(0); return }
+    let cancel = false
+    Promise.all(activeLocs.map(l => getStaffingGaps(l.id).catch(() => []))).then(results => {
+      if (!cancel) setCoverageGapsCount(results.reduce((a, r) => a + r.length, 0))
+    })
+    return () => { cancel = true }
+  }, [locations])
+
+  useEffect(() => {
+    if (!activeAccountId) { setComplianceIssues([]); return }
+    let cancel = false
+    const now = new Date()
+    const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+    const to = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString()
+    fetchComplianceScan(activeAccountId, from, to).then(rows => { if (!cancel) setComplianceIssues(rows) })
+    return () => { cancel = true }
+  }, [activeAccountId])
 
   useEffect(() => {
     let alive = true
@@ -262,6 +328,66 @@ export default function InsightsPage() {
     return items
   }, [formations, staff])
 
+  const missingContractCount = useMemo(() => activeStaff.filter(e => !e.contractType).length, [activeStaff])
+
+  // F4.1 — StatusBand: UNA franja, no cinco tarjetas. Cada línea = un
+  // problema real con consecuencia + acción. Vacío -> verde.
+  const statusLines: StatusLine[] = useMemo(() => {
+    const lines: StatusLine[] = []
+    const critical = complianceIssues.filter(i => i.issueSeverity === 'critical').length
+    const warning = complianceIssues.filter(i => i.issueSeverity === 'warning').length
+    if (critical + warning > 0) {
+      lines.push({
+        key: 'compliance',
+        severity: critical > 0 ? 'critical' : 'warning',
+        Icon: ShieldAlert,
+        text: `${critical + warning} incumplimiento${critical + warning === 1 ? '' : 's'} de convenio este mes`,
+        consequence: critical > 0
+          ? `${critical} grave${critical === 1 ? '' : 's'} — riesgo real si Inspección de Trabajo audita`
+          : `${warning} aviso${warning === 1 ? '' : 's'} a vigilar antes de que se agraven`,
+        actionLabel: complianceDetailOpen ? 'Ocultar' : 'Ver detalle',
+        onAction: () => setComplianceDetailOpen(o => !o),
+      })
+    }
+    if (coverageGapsCount > 0) {
+      lines.push({
+        key: 'coverage',
+        severity: 'warning',
+        Icon: Clock,
+        text: `${coverageGapsCount} franja${coverageGapsCount === 1 ? '' : 's'} sin personal en horario comercial`,
+        consequence: 'El local abre pero el cuadrante publicado no tiene a nadie asignado esas horas',
+        actionLabel: 'Ir al calendario',
+        onAction: () => navigate('/personal/calendario'),
+      })
+    }
+    const urgentFormations = expiringFormations.filter(
+      f => f.statusInfo.status === 'caducada' || f.statusInfo.status === 'caduca_urgente'
+    )
+    if (urgentFormations.length > 0) {
+      lines.push({
+        key: 'formaciones',
+        severity: urgentFormations.some(f => f.statusInfo.status === 'caducada') ? 'critical' : 'warning',
+        Icon: GraduationCap,
+        text: `${urgentFormations.length} formación${urgentFormations.length === 1 ? '' : 'es'} obligatoria${urgentFormations.length === 1 ? '' : 's'} caducada${urgentFormations.length === 1 ? '' : 's'} o a punto`,
+        consequence: 'Quien manipula alimentos sin ella no debería estar en cocina',
+        actionLabel: 'Ver quién',
+        onAction: () => formacionesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+      })
+    }
+    if (missingContractCount > 0) {
+      lines.push({
+        key: 'contratos',
+        severity: 'warning',
+        Icon: FileWarning,
+        text: `${missingContractCount} empleado${missingContractCount === 1 ? '' : 's'} sin tipo de contrato`,
+        consequence: 'Sin esto no se puede separar extras de complementarias ni cerrar el cómputo anual',
+        actionLabel: 'Ver empleados',
+        onAction: onGoToIncompleteContracts,
+      })
+    }
+    return lines
+  }, [complianceIssues, complianceDetailOpen, coverageGapsCount, expiringFormations, missingContractCount, navigate, onGoToIncompleteContracts])
+
   /* ─── HELPERS DE VISUALIZACIÓN ────────────────────── */
 
   function findEmployee(id: string): Employee | undefined {
@@ -282,8 +408,62 @@ export default function InsightsPage() {
     )
   }
 
+  const eur0 = (n: number) => n.toLocaleString('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })
+  const pctSales = moneyStats && moneyStats.sales > 0 ? (moneyStats.cost / moneyStats.sales) * 100 : null
+  const salesPerHour = moneyStats && moneyStats.workedHours > 0 ? moneyStats.sales / moneyStats.workedHours : null
+
   return (
     <div className="space-y-4">
+      {/* ─── F4.1 Centro de Mando: franja de estado (UNA, no cinco tarjetas) ─── */}
+      <StatusBand lines={statusLines} />
+
+      {complianceDetailOpen && complianceIssues.length > 0 && (
+        <Card className="p-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm font-semibold text-text-primary">Incumplimientos de convenio este mes</p>
+            <button onClick={() => setComplianceDetailOpen(false)} className="text-text-secondary hover:text-text-primary"><X size={14} /></button>
+          </div>
+          <div className="space-y-1.5 max-h-64 overflow-y-auto">
+            {complianceIssues.slice(0, 30).map((i, idx) => (
+              <div key={idx} className={`flex items-start gap-2 p-2 rounded text-xs ${i.issueSeverity === 'critical' ? 'bg-danger-bg' : 'bg-warning-bg'}`}>
+                <ShieldAlert size={12} className={`shrink-0 mt-0.5 ${i.issueSeverity === 'critical' ? 'text-danger' : 'text-warning'}`} />
+                <div>
+                  <p className={i.issueSeverity === 'critical' ? 'text-danger font-medium' : 'text-warning font-medium'}>
+                    {i.employeeName} — {i.issueDetail}
+                  </p>
+                  <p className="text-text-secondary mt-0.5">{new Date(i.startedAt).toLocaleDateString('es-ES')} · {i.legalRef}</p>
+                </div>
+              </div>
+            ))}
+            {complianceIssues.length > 30 && (
+              <p className="text-xs text-text-secondary italic">y {complianceIssues.length - 30} más…</p>
+            )}
+          </div>
+        </Card>
+      )}
+
+      {/* ─── Tira de dinero: agregado de cuenta, del mes en curso ─── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <Card className="p-3">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-text-secondary inline-flex items-center gap-1.5"><Euro size={12} /> Coste laboral del mes</p>
+          <p className="text-2xl font-bold text-text-primary mt-1 tabular-nums">{moneyStats ? eur0(moneyStats.cost) : '—'}</p>
+          <p className="text-xs text-text-secondary mt-0.5">
+            {pctSales == null ? 'Sin ventas registradas este mes' : `${pctSales.toFixed(1)}% sobre ventas ${pctSales > 30 ? `(${(pctSales - 30).toFixed(1)} pts sobre objetivo 30%)` : '(dentro de objetivo 30%)'}`}
+            {moneyStats?.costPartial && ' · estimado, falta alguna nómina'}
+          </p>
+        </Card>
+        <Card className="p-3">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-text-secondary inline-flex items-center gap-1.5"><TrendingUp size={12} /> Ventas por hora trabajada</p>
+          <p className="text-2xl font-bold text-text-primary mt-1 tabular-nums">{salesPerHour == null ? '—' : eur0(salesPerHour)}</p>
+          <p className="text-xs text-text-secondary mt-0.5">{moneyStats ? `sobre ${moneyStats.workedHours.toFixed(0)}h trabajadas este mes` : '—'}</p>
+        </Card>
+        <Card className="p-3">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-text-secondary inline-flex items-center gap-1.5"><Clock size={12} /> Horas trabajadas del mes</p>
+          <p className="text-2xl font-bold text-text-primary mt-1 tabular-nums">{moneyStats ? `${moneyStats.workedHours.toFixed(0)}h` : '—'}</p>
+          <p className="text-xs text-text-secondary mt-0.5">{moneyStats ? `de ${moneyStats.contractedHours.toFixed(0)}h contratadas este mes` : '—'}</p>
+        </Card>
+      </div>
+
       {/* ─── KPIs OPERATIVOS (arriba, lo más relevante hoy) ─── */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <KpiCard Icon={Activity} label="Trabajando ahora" value={workingNow.length} accent="success" />
@@ -472,6 +652,7 @@ export default function InsightsPage() {
 
       {/* ─── FORMACIONES POR RENOVAR ─── */}
       {expiringFormations.length > 0 && (
+        <div ref={formacionesRef}>
         <Card className="p-4">
           <h3 className="text-sm font-semibold text-text-primary mb-3 inline-flex items-center gap-1.5">
             <GraduationCap size={14} className="text-warning" /> Formaciones por renovar ({expiringFormations.length})
@@ -515,6 +696,7 @@ export default function InsightsPage() {
             })}
           </div>
         </Card>
+        </div>
       )}
 
       {/* ─── ROTACIÓN 12 MESES DETALLE ─── */}

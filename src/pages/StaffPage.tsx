@@ -160,7 +160,8 @@ export default function StaffPage() {
     if (locFilter !== 'todas' && e.locationId !== locFilter) return false
     if (stateFilter === 'active' && !e.active) return false
     if (stateFilter === 'inactive' && e.active) return false
-    if (contractFilter !== 'todos' && e.contractType !== contractFilter) return false
+    if (contractFilter === 'sin_contrato' && e.contractType) return false
+    if (contractFilter !== 'todos' && contractFilter !== 'sin_contrato' && e.contractType !== contractFilter) return false
     const q = search.toLowerCase()
     if (q && !(e.name.toLowerCase().includes(q) || e.dni.toLowerCase().includes(q) || e.position.toLowerCase().includes(q))) return false
     return true
@@ -222,7 +223,16 @@ export default function StaffPage() {
       </div>
 
       {/* Contenido según pestaña */}
-      {mainTab === 'insights' && <InsightsPage />}
+      {mainTab === 'insights' && (
+        <InsightsPage
+          onGoToIncompleteContracts={() => {
+            setMainTab('list')
+            setContractFilter('sin_contrato')
+            setStateFilter('active')
+            setSearch('')
+          }}
+        />
+      )}
 
       {mainTab === 'list' && (
         <>
@@ -281,6 +291,7 @@ export default function StaffPage() {
             </Select>
             <Select value={contractFilter} onChange={e => setContractFilter(e.target.value)} className="w-44">
               <option value="todos">Todos los contratos</option>
+              <option value="sin_contrato">Sin tipo de contrato</option>
               {CONTRACT_TYPES.map(c => <option key={c} value={c}>{c}</option>)}
             </Select>
           </div>
