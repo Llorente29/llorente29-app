@@ -11,7 +11,7 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   Wand2, Save, Check, Megaphone, X, Plus,
   AlertTriangle, Copy, Euro, TrendingUp, TrendingDown, CalendarDays, Leaf, Users, SlidersHorizontal,
-  Settings, ChevronDown, MoreHorizontal, Trash2, Sparkles,
+  Settings, ChevronDown, MoreHorizontal, Trash2, Sparkles, RefreshCw,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import {
@@ -61,6 +61,7 @@ import { fetchStaffRoles, roleColor, upsertStaffRole, deleteStaffRole, ROLE_COLO
 import { fetchLaborModel, saveLaborModelRow, fetchLaborIntensity, setLaborIntensity, fetchLaborRequirement, type LaborModelRow, type LaborDriver, type LaborRequirementRow } from '../services/teamLaborService'
 import { getTrainingComplianceMatrix } from '../services/trainingComplianceService'
 import { listOnboardingCourseFlags } from '../services/trainingPathService'
+import { fetchScheduleProposal } from '../services/scheduleProposalService'
 
 // Semáforo de formación en el cuadrante (onboarding formativo, pieza 3):
 // "cero falsos positivos" — solo se enseña en los puestos que de verdad
@@ -154,6 +155,22 @@ export default function CalendarioPage() {
   // cargan aparte y se pasan explícitas al generador.
   const [vacations, setVacations] = useState<VacationRequest[]>([])
 
+  // F10 — "Proponer cuadrante" (propose_schedule, solver determinista).
+  // Convive con "Generar automático": no sustituye nada, el encargado elige.
+  // proposalAvisos: `${templateId}:${day}:${employeeId}` -> motivo, SOLO para
+  // las filas donde el solver tuvo que romper la preferencia inferida
+  // (rompe_preferencia=true) — se pintan en ámbar en la celda. No se guarda
+  // nada hasta que el encargado pulse "Guardar" (mismo botón de siempre).
+  const [proposing, setProposing] = useState(false)
+  const [proposalAvisos, setProposalAvisos] = useState<Map<string, string> | null>(null)
+  const [proposalStats, setProposalStats] = useState<{ total: number; avisos: number; skippedNames: string[] } | null>(null)
+  const [proposalError, setProposalError] = useState<string | null>(null)
+  // Tras Guardar/Publicar, sube este contador para que CoverageGapPanel
+  // (que solo reacciona a accountId/locationId/weekStart) vuelva a pedir
+  // schedule_coverage_gap y refleje el borrador recién guardado — el
+  // "cruce con cobertura" que pide el encargo.
+  const [coverageRefreshToken, setCoverageRefreshToken] = useState(0)
+
   const employees = useMemo(
     () => staff.filter(e => e.active && (e.locationId === locationId || (e.assignedLocations || []).includes(locationId))),
     [staff, locationId]
@@ -223,6 +240,9 @@ export default function CalendarioPage() {
     setOverrides(sched?.coverage_overrides || {})
     setDirty(false)
     setLoading(false)
+    setProposalAvisos(null)
+    setProposalStats(null)
+    setProposalError(null)
     // Aviso: horario comercial abierto sin personal (lee de BD; refleja lo guardado)
     getStaffingGaps(locationId).then(setStaffingGaps).catch(() => setStaffingGaps([]))
   }
@@ -549,6 +569,70 @@ export default function CalendarioPage() {
     })
     setCells(result.cells)
     setDirty(true)
+    setProposalAvisos(null)
+    setProposalStats(null)
+    setProposalError(null)
+  }
+
+  // F10 — propose_schedule: solver determinista sobre disponibilidad
+  // inferida + demanda. Carga el resultado como BORRADOR editable sobre la
+  // MISMA rejilla (no un modal aparte) — no escribe nada hasta "Guardar".
+  async function doPropose() {
+    if (!canEditSchedule || !activeAccountId) return
+    if (!locationId || templates.length === 0) return
+    if (Object.keys(cells).length > 0) {
+      if (!confirm('Esto sobreescribirá los turnos actuales con la propuesta del generador. ¿Continuar?')) return
+    }
+    setProposing(true)
+    setProposalError(null)
+    try {
+      const rows = await fetchScheduleProposal(activeAccountId, locationId, weekStart)
+      if (rows.length === 0) {
+        setProposalError('El generador no pudo proponer nada para esta semana: revisa que haya plantillas de turno con cobertura y empleados activos en este local.')
+        return
+      }
+      // propose_schedule elige de TODO el historial de la cuenta en este
+      // local (infer_employee_availability no está atado a `employees`, que
+      // aquí solo trae quien tiene este local como principal o asignado).
+      // Si asignara a alguien fuera de esa lista, la celda no podría
+      // pintarlo (ni el desplegable "asignar" a mano lo ofrece) — se
+      // descarta y se avisa con nombre, nunca en silencio con un "?" roto.
+      const knownIds = new Set(employees.map(e => e.id))
+      const newCells: ScheduleCells = {}
+      const avisos = new Map<string, string>()
+      const skippedNames = new Map<string, string>()
+      let avisosCount = 0
+      let includedCount = 0
+      for (const r of rows) {
+        if (!knownIds.has(r.employeeId)) {
+          skippedNames.set(r.employeeId, r.employeeName)
+          continue
+        }
+        includedCount++
+        if (!newCells[r.shiftTemplateId]) newCells[r.shiftTemplateId] = {}
+        const dayKey = String(r.dayOfWeek)
+        const list = newCells[r.shiftTemplateId][dayKey] || []
+        list.push(r.employeeId)
+        newCells[r.shiftTemplateId][dayKey] = list
+        if (r.rompePreferencia) {
+          avisos.set(`${r.shiftTemplateId}:${r.dayOfWeek}:${r.employeeId}`, r.motivo)
+          avisosCount++
+        }
+      }
+      setCells(newCells)
+      setOverrides({})
+      setDirty(true)
+      setProposalAvisos(avisos)
+      setProposalStats({ total: includedCount, avisos: avisosCount, skippedNames: [...skippedNames.values()] })
+    } catch (e) {
+      setProposalError(e instanceof Error ? e.message : 'No se pudo proponer el cuadrante.')
+    } finally {
+      setProposing(false)
+    }
+  }
+
+  function discardProposal() {
+    refresh()
   }
 
   async function doSave() {
@@ -569,6 +653,9 @@ export default function CalendarioPage() {
       setDirty(false)
       // Recalcular aviso de personal con lo recién guardado
       getStaffingGaps(locationId).then(setStaffingGaps).catch(() => setStaffingGaps([]))
+      // F10 — cruce con cobertura: el borrador ya está guardado, que
+      // CoverageGapPanel vuelva a preguntar y refleje este cuadrante.
+      setCoverageRefreshToken(t => t + 1)
     } else if (errorMessage) {
       setSaveError(parseScheduleSaveError(errorMessage))
     }
@@ -585,6 +672,7 @@ export default function CalendarioPage() {
     if (scheduleRow?.id) {
       await publishSchedule(scheduleRow.id)
       await refresh()
+      setCoverageRefreshToken(t => t + 1)
     } else {
       const { schedule: saved, errorMessage } = await upsertSchedule({
         location_id: locationId,
@@ -595,7 +683,7 @@ export default function CalendarioPage() {
         generated_at: new Date().toISOString(),
         published_at: new Date().toISOString(),
       })
-      if (saved) setScheduleRow(saved)
+      if (saved) { setScheduleRow(saved); setCoverageRefreshToken(t => t + 1) }
       else if (errorMessage) setSaveError(parseScheduleSaveError(errorMessage))
     }
   }
@@ -634,6 +722,8 @@ export default function CalendarioPage() {
     if (!confirm('¿Vaciar toda la matriz?')) return
     setCells({})
     setDirty(true)
+    setProposalAvisos(null)
+    setProposalStats(null)
   }
 
   return (
@@ -688,6 +778,20 @@ export default function CalendarioPage() {
           </button>
         )}
 
+        {/* F10 — alternativa que convive con "Generar automático": el
+            encargado elige. Usa disponibilidad inferida + demanda vía solver
+            determinista (propose_schedule); nunca guarda sola. */}
+        {canEditSchedule && (
+          <button
+            onClick={doPropose}
+            disabled={proposing || loading || templates.length === 0 || employees.length === 0}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-accent text-accent bg-card text-sm font-semibold hover:bg-accent-bg disabled:opacity-40 transition-base"
+            title="Propone un borrador con el generador de disponibilidad — no guarda nada hasta que pulses Guardar"
+          >
+            {proposing ? <RefreshCw size={15} className="animate-spin" /> : <Sparkles size={15} />} Proponer cuadrante
+          </button>
+        )}
+
         {/* Secundaria fuerte */}
         {canEditSchedule && (
           <button
@@ -737,6 +841,35 @@ export default function CalendarioPage() {
           )}
         </div>
       </div>
+
+      {/* F10 — banner del borrador propuesto: nada se guardó, solo se cargó
+          en la rejilla. El encargado revisa los ámbar y decide Guardar o
+          descartar (recarga lo que había antes). */}
+      {proposalStats && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-warning-bg border border-warning/30 flex-wrap">
+          <Sparkles size={16} className="text-warning shrink-0" />
+          <p className="text-sm text-text-primary flex-1 min-w-[240px]">
+            <strong>Borrador propuesto</strong> por el generador de disponibilidad: {proposalStats.total} turnos asignados,{' '}
+            {proposalStats.avisos > 0 ? (
+              <span className="text-warning font-semibold">{proposalStats.avisos} en ámbar</span>
+            ) : 'ninguno rompe la disponibilidad habitual'}
+            {proposalStats.avisos > 0 && ' — pasa el ratón sobre esas celdas para ver el motivo.'}{' '}
+            Reparte por cobertura de plantilla, no por rol, y todavía no vigila el descanso de 12h como restricción dura del solver
+            (sí lo revisa Cumplimiento después). No se ha guardado nada — pulsa Guardar para aplicarlo.
+            {proposalStats.skippedNames.length > 0 && (
+              <><br /><strong className="text-danger">{proposalStats.skippedNames.length} turno{proposalStats.skippedNames.length === 1 ? '' : 's'} no cargado{proposalStats.skippedNames.length === 1 ? '' : 's'}</strong>: {proposalStats.skippedNames.join(', ')} — no tiene{proposalStats.skippedNames.length === 1 ? '' : 'n'} este local en su ficha, revísalo en Empleados si trabaja aquí habitualmente.</>
+            )}
+          </p>
+          <button onClick={discardProposal} className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-warning/40 text-warning hover:bg-card transition-base shrink-0">
+            Descartar propuesta
+          </button>
+        </div>
+      )}
+      {proposalError && (
+        <div className="px-4 py-3 rounded-xl bg-danger-bg border border-danger/30 text-sm text-danger">
+          {proposalError}
+        </div>
+      )}
 
       {/* Hero inteligente: demanda → cobertura → coste (la historia de la semana) */}
       <div className="bg-card border border-border-default rounded-2xl overflow-hidden">
@@ -1076,6 +1209,7 @@ export default function CalendarioPage() {
                           canEdit={canEditSchedule}
                           onChangeAssigned={(ids) => setCellAssign(t.id, d, ids)}
                           onChangeNeeded={(v) => setOverride(t.id, d, v === baseCov ? null : v)}
+                          proposalAvisos={proposalAvisos ?? undefined}
                         />
                       )
                     })}
@@ -1096,6 +1230,7 @@ export default function CalendarioPage() {
           locationId={locationId}
           weekStart={weekStart}
           canSeeCosts={canSeeLaborCosts}
+          refreshKey={coverageRefreshToken}
         />
       )}
 
@@ -1562,12 +1697,16 @@ interface CellProps {
   canEdit: boolean
   onChangeAssigned: (ids: string[]) => void
   onChangeNeeded: (v: number) => void
+  // F10 — motivo de "Proponer cuadrante" cuando el solver rompió la
+  // preferencia inferida para cubrir este turno. Clave: `${templateId}:${day}:${employeeId}`.
+  // Ámbar (no rojo): es una decisión explicable, no un error.
+  proposalAvisos?: Map<string, string>
 }
 
 function Cell({
   template, day, needed, baseCoverage, isOverridden,
   assignedIds, allEmployees, workloads, redEmployeeIds, trainingGapsByEmployee, canEdit,
-  onChangeAssigned, onChangeNeeded,
+  onChangeAssigned, onChangeNeeded, proposalAvisos,
 }: CellProps) {
   const [open, setOpen] = useState(false)
   const empById = useMemo(() => new Map(allEmployees.map(e => [e.id, e])), [allEmployees])
@@ -1629,17 +1768,23 @@ function Cell({
           const code = emp?.shiftCode || emp?.name?.slice(0, 3).toUpperCase() || '?'
           const exceedsContract = wl && wl.assigned_hours > wl.contracted_hours * 1.10
           const trainingGap = redEmployeeIds.has(id) ? trainingGapsByEmployee.get(id) : undefined
-          const title = trainingGap ? `${emp?.name || ''} — falta formación obligatoria: ${trainingGap.join(', ')}` : (emp?.name || '')
+          const aviso = proposalAvisos?.get(`${template.id}:${day}:${id}`)
+          const title = trainingGap
+            ? `${emp?.name || ''} — falta formación obligatoria: ${trainingGap.join(', ')}`
+            : aviso ? `${emp?.name || ''} — ${aviso}` : (emp?.name || '')
           return (
             <div
               key={`${id}-${i}`}
               className={`group relative flex items-center justify-between gap-1 rounded px-1.5 py-0.5 cursor-default ${
-                exceedsContract ? 'bg-danger-bg text-danger' : 'bg-accent-bg text-accent'
+                exceedsContract ? 'bg-danger-bg text-danger' : aviso ? 'bg-warning-bg text-warning' : 'bg-accent-bg text-accent'
               }`}
               title={title}
             >
               {trainingGap && (
                 <span className="absolute -top-1 -left-1 w-2.5 h-2.5 rounded-full bg-danger border-2 border-card" aria-label="Falta formación obligatoria" />
+              )}
+              {!trainingGap && aviso && (
+                <span className="absolute -top-1 -left-1 w-2.5 h-2.5 rounded-full bg-warning border-2 border-card" aria-label="Rompe la disponibilidad habitual" />
               )}
               <span className="text-xs font-bold">{code}</span>
               {canEdit && (

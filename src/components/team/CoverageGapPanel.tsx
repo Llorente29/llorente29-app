@@ -29,9 +29,13 @@ interface Props {
   locationId: string
   weekStart: string
   canSeeCosts: boolean
+  // F10 — sube este número tras guardar/publicar un cuadrante para forzar
+  // un refetch: schedule_coverage_gap lee schedules.cells de BBDD, así que
+  // sin esto el panel se queda con la cobertura de antes del guardado.
+  refreshKey?: number | string
 }
 
-export default function CoverageGapPanel({ accountId, locationId, weekStart, canSeeCosts }: Props) {
+export default function CoverageGapPanel({ accountId, locationId, weekStart, canSeeCosts, refreshKey }: Props) {
   const [rows, setRows] = useState<CoverageGapHour[]>([])
   const [loading, setLoading] = useState(false)
   const [expanded, setExpanded] = useState(false)
@@ -45,7 +49,7 @@ export default function CoverageGapPanel({ accountId, locationId, weekStart, can
       if (!cancel) { setRows(r); setLoading(false) }
     })
     return () => { cancel = true }
-  }, [accountId, locationId, weekStart])
+  }, [accountId, locationId, weekStart, refreshKey])
 
   const byDayFecha = useMemo(() => DAYS.map(d => addDaysISO(weekStart, d)), [weekStart])
 

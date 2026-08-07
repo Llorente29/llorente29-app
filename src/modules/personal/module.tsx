@@ -17,7 +17,7 @@
 
 import {
   Users, Activity, Clock, Smartphone, Inbox, Armchair,
-  RefreshCw, Calendar, FolderOpen, FileText, Wallet, BarChart3, Receipt,
+  RefreshCw, Calendar, CalendarCheck, FolderOpen, FileText, Wallet, BarChart3, Receipt,
   GraduationCap, BellRing, Table2,
 } from 'lucide-react'
 import type { ModuleDefinition } from '@/shell/types'
@@ -33,6 +33,7 @@ import AhoraMismoPage from '@/pages/AhoraMismoPage'
 import TurnosAbiertosPage from '@/pages/TurnosAbiertosPage'
 import CambiosPendientesPage from '@/pages/CambiosPendientesPage'
 import CalendarioPage from '@/pages/CalendarioPage'
+import DisponibilidadPage from '@/pages/DisponibilidadPage'
 import PlantillaTurnosPage from '@/pages/PlantillaTurnosPage'
 import InformesPage from '@/pages/InformesPage'
 import InformesTeamPage from '@/pages/InformesTeamPage'
@@ -57,6 +58,7 @@ export const personalModule: ModuleDefinition = {
     { path: 'turnos-abiertos',  element: <TurnosAbiertosPage /> },
     { path: 'cambios',          element: <CambiosPendientesPage /> },
     { path: 'calendario',       element: <CalendarioPage /> },
+    { path: 'disponibilidad',   element: <DisponibilidadPage /> },
     { path: 'plantilla',        element: <PlantillaPage /> },
     { path: 'plantilla-turnos', element: <PlantillaTurnosPage /> },
     { path: 'informes-analitica', element: <InformesTeamPage /> },
@@ -77,6 +79,7 @@ export const personalModule: ModuleDefinition = {
       { id: 'personal_turnos',       label: 'Turnos abiertos',   icon: Armchair,   path: 'turnos-abiertos',     requiredPermission: 'show_turnos_abiertos' },
       { id: 'personal_cambios',      label: 'Cambios de turno',  icon: RefreshCw,  path: 'cambios',             requiredPermission: 'show_cambios_pendientes' },
       { id: 'personal_calendario',   label: 'Calendario',        icon: Calendar,   path: 'calendario',          requiredPermission: 'show_calendario' },
+      { id: 'personal_disponibilidad', label: 'Disponibilidad',  icon: CalendarCheck, path: 'disponibilidad',   requiredPermission: 'show_calendario' },
       { id: 'personal_horas',        label: 'Plantilla',         icon: Table2,     path: 'plantilla',           requiredPermission: 'show_staff' },
       { id: 'personal_plantilla',    label: 'Plantilla turnos',  icon: FolderOpen, path: 'plantilla-turnos',    requiredPermission: 'show_plantilla_turnos' },
       { id: 'personal_informes_team', label: 'Informes',         icon: BarChart3,  path: 'informes-analitica',  requiredPermission: 'show_informes_personal' },

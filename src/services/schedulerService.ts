@@ -114,6 +114,47 @@ export async function listAvailabilityForLocation(
 }
 
 /**
+ * F10 — Upsert general de disponibilidad manual (3 estados en la UI:
+ * disponible / no disponible / sin dato-borrar). A diferencia de
+ * setUnavailable (histórico, solo escribe available=false), esta SÍ incluye
+ * account_id — la columna es NOT NULL y setUnavailable no lo mandaba, un bug
+ * latente que nunca se disparó porque ninguna pantalla llamaba a esa función.
+ */
+export async function setAvailability(
+  accountId: string,
+  employeeId: string,
+  day: DayOfWeek,
+  period: ShiftPeriod,
+  available: boolean,
+  note?: string | null
+): Promise<boolean> {
+  if (!supabase) return false;
+  // account_id no está en el Insert generado de database.ts (deuda: la
+  // columna se añadió en BBDD sin regenerar tipos) — laxo aquí, mismo patrón
+  // que el resto de RPCs/columnas nuevas de esta capa.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sb = supabase as any;
+  const { error } = await sb
+    .from('employee_availability')
+    .upsert(
+      {
+        employee_id: employeeId,
+        account_id: accountId,
+        day_of_week: day,
+        shift_period: period,
+        available,
+        note: note ?? null,
+      },
+      { onConflict: 'employee_id,day_of_week,shift_period' }
+    );
+  if (error) {
+    console.error('[scheduler] setAvailability', error);
+    return false;
+  }
+  return true;
+}
+
+/**
  * Marca una franja como NO disponible (descanso fijo).
  */
 export async function setUnavailable(
