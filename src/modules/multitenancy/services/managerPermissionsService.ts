@@ -27,8 +27,9 @@
 // DIFERENCIAS RESPECTO AL VIEJO (src/services/managerPermissionsService.ts):
 //   - Tipos camelCase (ManagerPermissions con userProfileId, showDashboard…) en
 //     lugar de snake_case del viejo (user_profile_id, show_dashboard…).
-//   - Incluye los 30 booleanos (el viejo solo mapea 27; faltaban showAppccToday,
-//     showAppccIncidents, can_manage_employees lo tenía pero algunos callers no).
+//   - Incluye los 32 booleanos (el viejo solo mapea 27; faltaban showAppccToday,
+//     showAppccIncidents, can_manage_employees lo tenía pero algunos callers no;
+//     F0.6 sumó canEditSchedule/canApproveVacations).
 //   - upsertPermissions admite patch parcial; el viejo saveManagerPermissions
 //     exigía el objeto entero.
 //   - Errores con throw Error (patrón nuevo) en lugar de { ok, error } (patrón viejo).
@@ -86,6 +87,8 @@ export const DEFAULT_PERMISSIONS: Omit<ManagerPermissions, 'userProfileId' | 'cr
   showTspoonSettings: false,
   showSalaries: false,
   canManageEmployees: true,
+  canEditSchedule: true,
+  canApproveVacations: true,
   showAppccToday: false,
   showAppccIncidents: false,
 }
@@ -136,6 +139,8 @@ export function rowToManagerPermissions(row: RowManagerPermissions): ManagerPerm
     showTspoonSettings: row.show_tspoon_settings,
     showSalaries: row.show_salaries,
     canManageEmployees: row.can_manage_employees,
+    canEditSchedule: row.can_edit_schedule,
+    canApproveVacations: row.can_approve_vacations,
     showAppccToday: row.show_appcc_today ?? false,
     showAppccIncidents: row.show_appcc_incidents ?? false,
     createdAt: row.created_at,
@@ -181,6 +186,8 @@ function managerPermissionsToInsertRow(
     show_tspoon_settings: perms.showTspoonSettings,
     show_salaries: perms.showSalaries,
     can_manage_employees: perms.canManageEmployees,
+    can_edit_schedule: perms.canEditSchedule,
+    can_approve_vacations: perms.canApproveVacations,
     show_appcc_today: perms.showAppccToday,
     show_appcc_incidents: perms.showAppccIncidents,
   }
@@ -219,6 +226,8 @@ function patchToUpdateRow(patch: ManagerPermissionsPatch): RowManagerPermissions
   if (patch.showTspoonSettings !== undefined) row.show_tspoon_settings = patch.showTspoonSettings
   if (patch.showSalaries !== undefined) row.show_salaries = patch.showSalaries
   if (patch.canManageEmployees !== undefined) row.can_manage_employees = patch.canManageEmployees
+  if (patch.canEditSchedule !== undefined) row.can_edit_schedule = patch.canEditSchedule
+  if (patch.canApproveVacations !== undefined) row.can_approve_vacations = patch.canApproveVacations
   if (patch.showAppccToday !== undefined) row.show_appcc_today = patch.showAppccToday
   if (patch.showAppccIncidents !== undefined) row.show_appcc_incidents = patch.showAppccIncidents
   return row

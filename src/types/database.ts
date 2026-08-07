@@ -9610,6 +9610,8 @@ export type Database = {
       }
       manager_permissions: {
         Row: {
+          can_approve_vacations: boolean
+          can_edit_schedule: boolean
           can_manage_employees: boolean
           created_at: string | null
           show_ahora_mismo: boolean
@@ -9644,6 +9646,8 @@ export type Database = {
           user_profile_id: string
         }
         Insert: {
+          can_approve_vacations?: boolean
+          can_edit_schedule?: boolean
           can_manage_employees?: boolean
           created_at?: string | null
           show_ahora_mismo?: boolean
@@ -9678,6 +9682,8 @@ export type Database = {
           user_profile_id: string
         }
         Update: {
+          can_approve_vacations?: boolean
+          can_edit_schedule?: boolean
           can_manage_employees?: boolean
           created_at?: string | null
           show_ahora_mismo?: boolean

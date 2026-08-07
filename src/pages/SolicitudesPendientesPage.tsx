@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Clock, Check, FileText, CheckCircle2, Inbox, AlertTriangle, MessageSquare, X, Settings, Lock } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { useActiveAccount } from '../modules/multitenancy/hooks/useActiveAccount'
+import { usePermissions } from '../modules/multitenancy/hooks/usePermissions'
 import { Card, Button } from '../components/ui'
 import type { VacationRequest, VacationStatus, VacationType, VacationSettings } from '../types/personal'
 import { VACATION_TYPES, ALWAYS_AVAILABLE_VACATION_TYPE } from '../types/personal'
@@ -19,6 +20,8 @@ type FilterTab = 'pendientes' | 'aprobadas' | 'todas'
 export default function SolicitudesPendientesPage() {
   const { staff } = useApp()
   const { activeAccountId } = useActiveAccount()
+  const { hasPermission } = usePermissions()
+  const canApproveVacations = hasPermission('can_approve_vacations')
   const [filter, setFilter] = useState<FilterTab>('pendientes')
   const [vacations, setVacations] = useState<VacationRequest[]>([])
   const [loading, setLoading] = useState(true)
@@ -101,7 +104,7 @@ export default function SolicitudesPendientesPage() {
   }
 
   async function doReview() {
-    if (!reviewModal) return
+    if (!reviewModal || !canApproveVacations) return
     // Comprobar si saltaría aviso de mínimo de plantilla
     let alertMin = false
     if (reviewModal.action === 'aprobar') {
@@ -253,7 +256,7 @@ export default function SolicitudesPendientesPage() {
                     </p>
                   </div>
 
-                  {v.status === 'solicitada' && (
+                  {v.status === 'solicitada' && canApproveVacations && (
                     <div className="flex flex-col gap-1.5 shrink-0">
                       <Button size="sm" onClick={() => setReviewModal({ vac: v, action: 'aprobar' })}>
                         Aprobar

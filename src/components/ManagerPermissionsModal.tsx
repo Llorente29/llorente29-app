@@ -64,6 +64,8 @@ const PERMISSION_ITEMS: PermissionItem[] = [
   { key: 'showBolsaHoras',            label: 'Bolsa de horas',      Icon: Wallet, section: 'Personal' },
   { key: 'showSalaries',              label: 'Ver salarios',        Icon: DollarSign, section: 'Personal', sensitive: true },
   { key: 'canManageEmployees',        label: 'Crear / dar de baja / eliminar empleados', Icon: Settings2, section: 'Personal', sensitive: true },
+  { key: 'canEditSchedule',           label: 'Editar y publicar el cuadrante', Icon: Calendar, section: 'Personal', sensitive: true },
+  { key: 'canApproveVacations',       label: 'Aprobar / rechazar vacaciones', Icon: Inbox, section: 'Personal', sensitive: true },
 
   // APPCC (NUEVOS - antes ocultos en UI a pesar de existir en BBDD)
   { key: 'showAppccToday',            label: 'APPCC: Hoy',          Icon: Leaf, section: 'APPCC' },

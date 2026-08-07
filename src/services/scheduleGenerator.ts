@@ -138,6 +138,64 @@ function isEmpOnVacation(
   return !!list && list.some(v => v.start <= isoDate && isoDate <= v.end)
 }
 
+// F7.1 — un empleado asignado en cells que cae en un día de vacación aprobada.
+export interface VacationConflict {
+  employeeId: string
+  employeeName: string
+  day: DayOfWeek
+  dateISO: string
+}
+
+// Recorre TODA la matriz (cells) y devuelve un conflicto por (empleado, día),
+// deduplicado aunque el empleado tenga varios turnos ese mismo día. Misma
+// fuente de verdad (buildApprovedVacByEmp/isEmpOnVacation/isoForDay) que usa
+// el generador — para que el aviso pre-guardado (F7.1 UX) y el backstop del
+// trigger `trg_schedule_no_vacation_conflict` coincidan siempre en qué es
+// conflicto. fecha(día d) = week_start + d (0=lunes), igual que MiHorario.tsx.
+export function findVacationConflicts(
+  cells: ScheduleCells,
+  weekStart: string,
+  employees: Employee[],
+  vacations: GeneratorVacation[] = [],
+): VacationConflict[] {
+  const approvedVacByEmp = buildApprovedVacByEmp(employees, vacations)
+  const empById = new Map(employees.map(e => [e.id, e]))
+  const seen = new Set<string>()
+  const out: VacationConflict[] = []
+  for (const tid of Object.keys(cells)) {
+    for (const dk of Object.keys(cells[tid] || {})) {
+      const day = parseInt(dk, 10)
+      if (Number.isNaN(day) || day < 0 || day > 6) continue
+      const dateISO = isoForDay(weekStart, day as DayOfWeek)
+      for (const empId of cells[tid][dk] || []) {
+        const key = `${empId}:${dk}`
+        if (seen.has(key)) continue
+        if (!isEmpOnVacation(approvedVacByEmp, empId, dateISO)) continue
+        seen.add(key)
+        out.push({
+          employeeId: empId,
+          employeeName: empById.get(empId)?.name || empId,
+          day: day as DayOfWeek,
+          dateISO,
+        })
+      }
+    }
+  }
+  return out
+}
+
+// F7.1 — mensaje crudo de Postgres cuando el trigger
+// `trg_schedule_no_vacation_conflict` rechaza una escritura en `schedules`
+// ('CUADRANTE_CON_VACACIONES: <nombre> el DD/MM/YYYY; ...'). Compartido por
+// TODOS los puntos que escriben cells (guardado manual en CalendarioPage,
+// aplicar un cambio de turno aprobado en shiftSwapService) para no reinventar
+// el parseo en cada sitio. Devuelve null si el mensaje no es este caso.
+export function parseVacationConflictError(message: string): string | null {
+  const marker = 'CUADRANTE_CON_VACACIONES:'
+  if (!message.startsWith(marker)) return null
+  return message.slice(marker.length).trim().replace(/;\s*$/, '')
+}
+
 function isoForDay(weekStartISO: string, dayIdx: DayOfWeek): string {
   const [y, m, d] = weekStartISO.split('-').map(Number)
   const dt = new Date(y, m - 1, d)
@@ -562,11 +620,22 @@ export interface ValidationIssue {
 export function validateSchedule(
   cells: ScheduleCells,
   templates: ShiftTemplate[],
-  employees: Employee[]
+  employees: Employee[],
+  weekStart: string,
+  vacations: GeneratorVacation[] = []
 ): ValidationIssue[] {
   const issues: ValidationIssue[] = []
   const wls = computeWorkloads(cells, templates, employees)
   const empById = new Map(employees.map(e => [e.id, e]))
+
+  for (const c of findVacationConflicts(cells, weekStart, employees, vacations)) {
+    issues.push({
+      type: 'vacation_conflict',
+      employeeId: c.employeeId,
+      day: c.day,
+      message: `${c.employeeName} está asignado el ${dayLabel(c.day)} ${c.dateISO.slice(8, 10)}/${c.dateISO.slice(5, 7)} pero tiene vacaciones aprobadas ese día`,
+    })
+  }
 
   for (const w of wls) {
     const max = w.contracted_hours * (1 + HOURS_OVERTIME_TOLERANCE)

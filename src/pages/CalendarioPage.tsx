@@ -28,8 +28,11 @@ import {
   suggestFillForGap,
   setGlobalAssignedHoursSnapshot,
   validateSchedule,
+  findVacationConflicts,
+  parseVacationConflictError,
   type FillSuggestion,
   type ValidationIssue,
+  type VacationConflict,
 } from '../services/scheduleGenerator'
 import {
   type ShiftTemplate,
@@ -49,6 +52,7 @@ import {
 import type { Employee } from '../types'
 import { fetchVacations } from '../services/vacationsService'
 import type { VacationRequest } from '../types/personal'
+import { usePermissions } from '../modules/multitenancy/hooks/usePermissions'
 import { getStaffingGaps, type StaffingGap } from '../modules/multitenancy/services/businessHoursService'
 import { fetchPayrollCosts } from '../services/payrollService'
 import { fetchSalesByLocation, fetchDemandProfile, fetchDemandForecast, type DemandProfile, type DemandForecast } from '../services/teamReportsService'
@@ -99,6 +103,19 @@ function addDays(iso: string, days: number): string {
   return toISODate(dt)
 }
 
+// F7.1 — el backstop `trg_schedule_no_vacation_conflict` rechaza el guardado
+// con 'CUADRANTE_CON_VACACIONES: <nombre> el DD/MM/YYYY; ...'. El aviso
+// pre-guardado (findVacationConflicts) debería atrapar esto SIEMPRE antes de
+// llegar aquí; si aun así aparece (carrera: vacación aprobada en otra pestaña
+// mientras esta estaba abierta), se muestra tal cual — ya viene legible.
+function parseScheduleSaveError(message: string): string {
+  const detail = parseVacationConflictError(message)
+  if (detail) {
+    return `No se pudo guardar: hay empleados en vacaciones aprobadas — ${detail}. Quítalos de esos días y vuelve a guardar.`
+  }
+  return 'No se pudo guardar el cuadrante. Inténtalo de nuevo.'
+}
+
 function formatWeekLabel(weekStartISO: string): string {
   const [y, m, d] = weekStartISO.split('-').map(Number)
   const start = new Date(y, m - 1, d)
@@ -110,6 +127,9 @@ function formatWeekLabel(weekStartISO: string): string {
 
 export default function CalendarioPage() {
   const { locations, staff, activeAccountId } = useApp()
+  const { hasPermission } = usePermissions()
+  const canEditSchedule = hasPermission('can_edit_schedule')
+  const canSeeLaborCosts = hasPermission('show_salaries')
   const [locationId, setLocationId] = useState<string>('')
   const [weekStart, setWeekStart] = useState<string>(() => toISODate(getMondayOfWeek(new Date())))
   const [templates, setTemplates] = useState<ShiftTemplate[]>([])
@@ -123,6 +143,11 @@ export default function CalendarioPage() {
   const [staffingGaps, setStaffingGaps] = useState<StaffingGap[]>([])
   const [issuesShown, setIssuesShown] = useState(false)
   const [copyModalOpen, setCopyModalOpen] = useState(false)
+  // F7.1 — aviso pre-guardado (nombre + día) si algún empleado asignado cae en
+  // una vacación aprobada, y el mensaje del trigger si aun así se cuela algo
+  // (carrera entre pestañas: vacación aprobada justo tras cargar esta página).
+  const [vacationConflicts, setVacationConflicts] = useState<VacationConflict[] | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
   // Vacaciones de la cuenta (para excluir a quien tenga vacación APROBADA al
   // generar/rellenar). emp.vacations no se puebla al cargar el staff, así que se
   // cargan aparte y se pasan explícitas al generador.
@@ -466,6 +491,7 @@ export default function CalendarioPage() {
   }, [cells, overrides, templates])
 
   function setCellAssign(templateId: string, day: DayOfWeek, ids: string[]) {
+    if (!canEditSchedule) return
     setCells(prev => {
       const copy = { ...prev }
       if (!copy[templateId]) copy[templateId] = {}
@@ -476,6 +502,7 @@ export default function CalendarioPage() {
   }
 
   function setOverride(templateId: string, day: DayOfWeek, value: number | null) {
+    if (!canEditSchedule) return
     setOverrides(prev => {
       const copy = { ...prev }
       if (!copy[templateId]) copy[templateId] = {}
@@ -491,11 +518,12 @@ export default function CalendarioPage() {
   }
 
   function doValidate() {
-    setIssues(validateSchedule(cells, templates, employees))
+    setIssues(validateSchedule(cells, templates, employees, weekStart, vacations))
     setIssuesShown(true)
   }
 
   async function doGenerate() {
+    if (!canEditSchedule) return
     if (!locationId || templates.length === 0 || employees.length === 0) return
     if (Object.keys(cells).length > 0) {
       if (!confirm('Esto sobreescribirá los turnos actuales. ¿Continuar?')) return
@@ -523,8 +551,11 @@ export default function CalendarioPage() {
   }
 
   async function doSave() {
-    if (!locationId) return
-    const saved = await upsertSchedule({
+    if (!locationId || !canEditSchedule) return
+    const conflicts = findVacationConflicts(cells, weekStart, employees, vacations)
+    if (conflicts.length > 0) { setVacationConflicts(conflicts); return }
+    setSaveError(null)
+    const { schedule: saved, errorMessage } = await upsertSchedule({
       location_id: locationId,
       week_start: weekStart,
       cells,
@@ -537,10 +568,16 @@ export default function CalendarioPage() {
       setDirty(false)
       // Recalcular aviso de personal con lo recién guardado
       getStaffingGaps(locationId).then(setStaffingGaps).catch(() => setStaffingGaps([]))
+    } else if (errorMessage) {
+      setSaveError(parseScheduleSaveError(errorMessage))
     }
   }
 
   async function doPublish() {
+    if (!canEditSchedule) return
+    const conflicts = findVacationConflicts(cells, weekStart, employees, vacations)
+    if (conflicts.length > 0) { setVacationConflicts(conflicts); return }
+    setSaveError(null)
     if (!scheduleRow) {
       await doSave()
     }
@@ -548,7 +585,7 @@ export default function CalendarioPage() {
       await publishSchedule(scheduleRow.id)
       await refresh()
     } else {
-      const saved = await upsertSchedule({
+      const { schedule: saved, errorMessage } = await upsertSchedule({
         location_id: locationId,
         week_start: weekStart,
         cells,
@@ -558,6 +595,7 @@ export default function CalendarioPage() {
         published_at: new Date().toISOString(),
       })
       if (saved) setScheduleRow(saved)
+      else if (errorMessage) setSaveError(parseScheduleSaveError(errorMessage))
     }
   }
 
@@ -591,6 +629,7 @@ export default function CalendarioPage() {
   }
 
   function clearCells() {
+    if (!canEditSchedule) return
     if (!confirm('¿Vaciar toda la matriz?')) return
     setCells({})
     setDirty(true)
@@ -637,32 +676,38 @@ export default function CalendarioPage() {
         <div className="w-px h-6 bg-border-default mx-1" />
 
         {/* Primaria */}
-        <button
-          onClick={doGenerate}
-          disabled={loading || templates.length === 0 || employees.length === 0}
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-text-on-accent text-sm font-semibold disabled:opacity-40 bg-accent hover:bg-accent-hover shadow-sm transition-base"
-          title="Genera la matriz automáticamente respetando las reglas"
-        >
-          <Wand2 size={15} /> Generar automático
-        </button>
+        {canEditSchedule && (
+          <button
+            onClick={doGenerate}
+            disabled={loading || templates.length === 0 || employees.length === 0}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-text-on-accent text-sm font-semibold disabled:opacity-40 bg-accent hover:bg-accent-hover shadow-sm transition-base"
+            title="Genera la matriz automáticamente respetando las reglas"
+          >
+            <Wand2 size={15} /> Generar automático
+          </button>
+        )}
 
         {/* Secundaria fuerte */}
-        <button
-          onClick={requestPublish}
-          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-accent text-accent bg-card text-sm font-semibold hover:bg-accent-bg transition-base"
-          title="Publicar para que los empleados lo vean en su móvil"
-        >
-          <Megaphone size={15} /> Publicar
-        </button>
+        {canEditSchedule && (
+          <button
+            onClick={requestPublish}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-accent text-accent bg-card text-sm font-semibold hover:bg-accent-bg transition-base"
+            title="Publicar para que los empleados lo vean en su móvil"
+          >
+            <Megaphone size={15} /> Publicar
+          </button>
+        )}
 
         {/* Secundaria */}
-        <button
-          onClick={doSave}
-          disabled={!dirty}
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border-default bg-card text-text-secondary text-sm font-medium hover:border-accent hover:text-text-primary disabled:opacity-40 transition-base"
-        >
-          <Save size={14} /> Guardar
-        </button>
+        {canEditSchedule && (
+          <button
+            onClick={doSave}
+            disabled={!dirty}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border-default bg-card text-text-secondary text-sm font-medium hover:border-accent hover:text-text-primary disabled:opacity-40 transition-base"
+          >
+            <Save size={14} /> Guardar
+          </button>
+        )}
 
         {/* Terciaria: más acciones */}
         <div className="relative">
@@ -677,11 +722,15 @@ export default function CalendarioPage() {
                 <button onClick={() => { setMoreMenuOpen(false); doValidate() }}
                   disabled={templates.length === 0 || employees.length === 0}
                   className="w-full text-left px-3 py-2 text-sm text-text-primary hover:bg-page inline-flex items-center gap-2 disabled:opacity-40"><AlertTriangle size={14} /> Validar</button>
-                <button onClick={() => { setMoreMenuOpen(false); setCopyModalOpen(true) }}
-                  disabled={Object.keys(cells).length === 0}
-                  className="w-full text-left px-3 py-2 text-sm text-text-primary hover:bg-page inline-flex items-center gap-2 disabled:opacity-40"><Copy size={14} /> Copiar</button>
-                <button onClick={() => { setMoreMenuOpen(false); clearCells() }}
-                  className="w-full text-left px-3 py-2 text-sm text-danger hover:bg-danger-bg inline-flex items-center gap-2"><Trash2 size={14} /> Vaciar</button>
+                {canEditSchedule && (
+                  <button onClick={() => { setMoreMenuOpen(false); setCopyModalOpen(true) }}
+                    disabled={Object.keys(cells).length === 0}
+                    className="w-full text-left px-3 py-2 text-sm text-text-primary hover:bg-page inline-flex items-center gap-2 disabled:opacity-40"><Copy size={14} /> Copiar</button>
+                )}
+                {canEditSchedule && (
+                  <button onClick={() => { setMoreMenuOpen(false); clearCells() }}
+                    className="w-full text-left px-3 py-2 text-sm text-danger hover:bg-danger-bg inline-flex items-center gap-2"><Trash2 size={14} /> Vaciar</button>
+                )}
               </div>
             </>
           )}
@@ -695,7 +744,7 @@ export default function CalendarioPage() {
           <p className="text-[13px] text-text-primary leading-snug m-0">
             {forecast.length === 0
               ? 'Aún no hay previsión de demanda para esta semana en este local.'
-              : <>Demanda <b>{heroStats.weekWord}</b> esta semana{coverage.hasReq && <>, cobertura <b>{Math.round(coverage.weekCov * 100)}%</b> — {coverage.gapDays > 0 ? <>faltan <b>{coverage.gapDays} día(s)</b> por reforzar</> : 'todo cubierto'}</>}{costLive.pct != null && <>. Coste <b>{costLive.pct.toFixed(1)}%</b> sobre ventas {costLive.pct > 30 ? `(${(costLive.pct - 30).toFixed(1)} pts sobre objetivo)` : '(dentro de objetivo)'}</>}.
+              : <>Demanda <b>{heroStats.weekWord}</b> esta semana{coverage.hasReq && <>, cobertura <b>{Math.round(coverage.weekCov * 100)}%</b> — {coverage.gapDays > 0 ? <>faltan <b>{coverage.gapDays} día(s)</b> por reforzar</> : 'todo cubierto'}</>}{canSeeLaborCosts && costLive.pct != null && <>. Coste <b>{costLive.pct.toFixed(1)}%</b> sobre ventas {costLive.pct > 30 ? `(${(costLive.pct - 30).toFixed(1)} pts sobre objetivo)` : '(dentro de objetivo)'}</>}.
             </>}
           </p>
         </div>
@@ -722,11 +771,17 @@ export default function CalendarioPage() {
           </div>
           <div className="p-4">
             <div className="text-[11px] font-bold uppercase tracking-wide text-text-secondary flex items-center gap-1.5"><Euro size={13} /> Coste / ventas</div>
-            <div className="text-2xl font-extrabold text-text-primary mt-1 flex items-center gap-2">
-              {costLive.pct == null ? '—' : `${costLive.pct.toFixed(1)}%`}
-              {costLive.pct != null && <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-full" style={costLive.pct > 30 ? { background: '#faf0d8', color: '#c2890f' } : { background: '#e7f4ee', color: '#1f9d6b' }}>objetivo 30%</span>}
-            </div>
-            <div className="text-xs text-text-secondary mt-1.5">{eur0(costLive.cost)} · {costLive.hours} h · ventas {weekSales == null ? '—' : eur0(weekSales)}</div>
+            {canSeeLaborCosts ? (
+              <>
+                <div className="text-2xl font-extrabold text-text-primary mt-1 flex items-center gap-2">
+                  {costLive.pct == null ? '—' : `${costLive.pct.toFixed(1)}%`}
+                  {costLive.pct != null && <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-full" style={costLive.pct > 30 ? { background: '#faf0d8', color: '#c2890f' } : { background: '#e7f4ee', color: '#1f9d6b' }}>objetivo 30%</span>}
+                </div>
+                <div className="text-xs text-text-secondary mt-1.5">{eur0(costLive.cost)} · {costLive.hours} h · ventas {weekSales == null ? '—' : eur0(weekSales)}</div>
+              </>
+            ) : (
+              <div className="text-sm text-text-secondary mt-1.5">Sin acceso a costes de personal</div>
+            )}
           </div>
         </div>
       </div>
@@ -739,6 +794,17 @@ export default function CalendarioPage() {
           <span className="inline-flex items-center gap-1 text-warning"><AlertTriangle size={12} /> No hay turnos definidos en la plantilla</span>
         )}
       </div>
+
+      {saveError && (
+        <div className="bg-danger-bg border border-danger/30 rounded-lg p-3 flex items-start justify-between gap-3">
+          <p className="text-sm text-danger inline-flex items-start gap-1.5">
+            <AlertTriangle size={14} className="shrink-0 mt-0.5" /> {saveError}
+          </p>
+          <button onClick={() => setSaveError(null)} className="text-danger hover:opacity-70 shrink-0">
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       {issuesShown && (
         <div className="bg-card border border-border-default rounded-lg p-3">
@@ -922,14 +988,22 @@ export default function CalendarioPage() {
                         <td key={d} className="px-1.5 py-1.5 align-top border-l border-border-default">
                           <div className="space-y-1">
                             {shifts.map(t => (
-                              <button key={t.id} onClick={() => removeFromShift(t.id, d, e.id)}
-                                className={`w-full text-left rounded-md px-1.5 py-1 text-[11px] font-medium ${col.bg} ${col.text} hover:opacity-80 transition-base group`}
-                                title={`${t.label} · clic para quitar`}>
-                                {t.start_time.slice(0, 5)}–{t.end_time.slice(0, 5)}
-                                <X size={10} className="inline ml-1 opacity-0 group-hover:opacity-100" />
-                              </button>
+                              canEditSchedule ? (
+                                <button key={t.id} onClick={() => removeFromShift(t.id, d, e.id)}
+                                  className={`w-full text-left rounded-md px-1.5 py-1 text-[11px] font-medium ${col.bg} ${col.text} hover:opacity-80 transition-base group`}
+                                  title={`${t.label} · clic para quitar`}>
+                                  {t.start_time.slice(0, 5)}–{t.end_time.slice(0, 5)}
+                                  <X size={10} className="inline ml-1 opacity-0 group-hover:opacity-100" />
+                                </button>
+                              ) : (
+                                <div key={t.id}
+                                  className={`w-full text-left rounded-md px-1.5 py-1 text-[11px] font-medium ${col.bg} ${col.text}`}
+                                  title={t.label}>
+                                  {t.start_time.slice(0, 5)}–{t.end_time.slice(0, 5)}
+                                </div>
+                              )
                             ))}
-                            {avail.length > 0 && (
+                            {canEditSchedule && avail.length > 0 && (
                               <select value="" onChange={ev => { if (ev.target.value) addToShift(ev.target.value, d, e.id) }}
                                 className="w-full text-[10px] text-text-secondary border border-dashed border-border-default rounded-md px-1 py-0.5 bg-transparent hover:border-accent cursor-pointer">
                                 <option value="">+ turno</option>
@@ -998,6 +1072,7 @@ export default function CalendarioPage() {
                           workloads={workloads}
                           redEmployeeIds={redEmployeeIds}
                           trainingGapsByEmployee={trainingGapsByEmployee}
+                          canEdit={canEditSchedule}
                           onChangeAssigned={(ids) => setCellAssign(t.id, d, ids)}
                           onChangeNeeded={(v) => setOverride(t.id, d, v === baseCov ? null : v)}
                         />
@@ -1049,6 +1124,13 @@ export default function CalendarioPage() {
           affected={publishWarning}
           onCancel={() => setPublishWarning(null)}
           onPublishAnyway={() => { setPublishWarning(null); doPublish() }}
+        />
+      )}
+
+      {vacationConflicts && (
+        <VacationConflictModal
+          conflicts={vacationConflicts}
+          onClose={() => setVacationConflicts(null)}
         />
       )}
 
@@ -1467,13 +1549,14 @@ interface CellProps {
   workloads: EmployeeWorkload[]
   redEmployeeIds: Set<string>
   trainingGapsByEmployee: Map<string, string[]>
+  canEdit: boolean
   onChangeAssigned: (ids: string[]) => void
   onChangeNeeded: (v: number) => void
 }
 
 function Cell({
   template, day, needed, baseCoverage, isOverridden,
-  assignedIds, allEmployees, workloads, redEmployeeIds, trainingGapsByEmployee,
+  assignedIds, allEmployees, workloads, redEmployeeIds, trainingGapsByEmployee, canEdit,
   onChangeAssigned, onChangeNeeded,
 }: CellProps) {
   const [open, setOpen] = useState(false)
@@ -1490,9 +1573,11 @@ function Cell({
   else if (isWeekend) bg = 'bg-warning-bg/30'
 
   function removeAt(idx: number) {
+    if (!canEdit) return
     onChangeAssigned(assignedIds.filter((_, i) => i !== idx))
   }
   function addEmployee(id: string) {
+    if (!canEdit) return
     if (!assignedIds.includes(id)) onChangeAssigned([...assignedIds, id])
     setOpen(false)
   }
@@ -1503,17 +1588,21 @@ function Cell({
     <td className={`px-1 py-1 align-top border-l ${bg}`}>
       <div className="flex items-center justify-between gap-1 mb-1 px-1">
         <div className="text-[10px] text-text-secondary flex items-center gap-1">
-          <input
-            type="number"
-            min={0}
-            max={9}
-            value={needed}
-            onChange={(e) => onChangeNeeded(Math.max(0, parseInt(e.target.value || '0', 10)))}
-            className={`w-9 border rounded px-1 text-[10px] text-center ${
-              isOverridden ? 'bg-accent-bg border-accent/30' : 'bg-card'
-            }`}
-            title={isOverridden ? `Override (base: ${baseCoverage})` : 'Personas necesarias'}
-          />
+          {canEdit ? (
+            <input
+              type="number"
+              min={0}
+              max={9}
+              value={needed}
+              onChange={(e) => onChangeNeeded(Math.max(0, parseInt(e.target.value || '0', 10)))}
+              className={`w-9 border rounded px-1 text-[10px] text-center ${
+                isOverridden ? 'bg-accent-bg border-accent/30' : 'bg-card'
+              }`}
+              title={isOverridden ? `Override (base: ${baseCoverage})` : 'Personas necesarias'}
+            />
+          ) : (
+            <span className="w-9 text-[10px] text-center inline-block" title="Personas necesarias">{needed}</span>
+          )}
           <span className="text-text-secondary">×</span>
         </div>
         {isGap && (
@@ -1543,18 +1632,20 @@ function Cell({
                 <span className="absolute -top-1 -left-1 w-2.5 h-2.5 rounded-full bg-danger border-2 border-card" aria-label="Falta formación obligatoria" />
               )}
               <span className="text-xs font-bold">{code}</span>
-              <button
-                onClick={() => removeAt(i)}
-                className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-danger transition-base"
-                title="Quitar"
-              >
-                <X size={10} />
-              </button>
+              {canEdit && (
+                <button
+                  onClick={() => removeAt(i)}
+                  className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-danger transition-base"
+                  title="Quitar"
+                >
+                  <X size={10} />
+                </button>
+              )}
             </div>
           )
         })}
 
-        {needed > 0 && (
+        {canEdit && needed > 0 && (
           <div className="relative">
             <button
               onClick={() => setOpen(o => !o)}
@@ -1707,6 +1798,54 @@ function PublishWarningModal({ affected, onCancel, onPublishAnyway }: {
             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-accent text-text-on-accent text-sm font-semibold hover:bg-accent-hover transition-base"
           >
             <Megaphone size={15} /> Publicar de todas formas
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// F7.1 — aviso pre-guardado: bloquea intencionadamente (a diferencia de
+// PublishWarningModal) porque el backstop del trigger va a rechazar el
+// guardado igualmente si se insiste; no tiene sentido ofrecer "guardar de
+// todas formas". Solo deja "Entendido" para volver a la matriz y corregir.
+function VacationConflictModal({ conflicts, onClose }: {
+  conflicts: VacationConflict[]
+  onClose: () => void
+}) {
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
+      <div
+        className="bg-card rounded-lg shadow-xl max-w-lg w-full overflow-hidden flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-5 py-3 border-b border-border-default bg-danger text-white">
+          <div className="flex items-center gap-2">
+            <AlertTriangle size={18} />
+            <div className="font-semibold">
+              No se puede guardar: {conflicts.length === 1 ? '1 persona' : `${conflicts.length} personas`} en vacaciones aprobadas
+            </div>
+          </div>
+        </div>
+
+        <div className="p-4 space-y-2 max-h-[50vh] overflow-y-auto">
+          <p className="text-sm text-text-secondary">
+            Quítalos de esos días (o cambia la vacación) antes de guardar. Es una regla dura: aunque se fuerce, la base de datos rechazará el guardado igual.
+          </p>
+          {conflicts.map((c, i) => (
+            <div key={`${c.employeeId}-${c.day}-${i}`} className="border border-danger/30 bg-danger-bg rounded-lg px-3 py-2">
+              <p className="text-sm font-semibold text-text-primary">{c.employeeName}</p>
+              <p className="text-xs text-danger mt-0.5">{DAY_LABELS[c.day]} {c.dateISO.slice(8, 10)}/{c.dateISO.slice(5, 7)}/{c.dateISO.slice(0, 4)}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="px-4 py-3 border-t border-border-default flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-3.5 py-2 rounded-lg bg-accent text-text-on-accent text-sm font-semibold hover:bg-accent-hover transition-base"
+          >
+            Entendido, voy a corregir
           </button>
         </div>
       </div>

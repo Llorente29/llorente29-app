@@ -516,6 +516,10 @@ export interface ManagerPermissions {
   showTspoonSettings: boolean
   showSalaries: boolean
   canManageEmployees: boolean
+  /** F0.6 — editar/generar/publicar el cuadrante de turnos (CalendarioPage). */
+  canEditSchedule: boolean
+  /** F0.6 — aprobar/rechazar solicitudes de vacaciones (SolicitudesPendientesPage). */
+  canApproveVacations: boolean
   /** Nullable en BBDD (default false). Tratado como boolean en cliente. */
   showAppccToday: boolean
   showAppccIncidents: boolean

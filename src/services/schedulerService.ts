@@ -189,6 +189,14 @@ export async function getSchedule(
   return (data as Schedule) ?? null;
 }
 
+export interface UpsertScheduleResult {
+  schedule: Schedule | null;
+  // F7.1: mensaje crudo del error (p.ej. el rechazo del trigger
+  // trg_schedule_no_vacation_conflict, "CUADRANTE_CON_VACACIONES: ...") para
+  // que el caller lo muestre en vez de tragárselo en silencio.
+  errorMessage: string | null;
+}
+
 export async function upsertSchedule(s: {
   location_id: string;
   week_start: string;
@@ -197,8 +205,8 @@ export async function upsertSchedule(s: {
   status?: 'draft' | 'published';
   generated_at?: string | null;
   published_at?: string | null;
-}): Promise<Schedule | null> {
-  if (!supabase) return null;
+}): Promise<UpsertScheduleResult> {
+  if (!supabase) return { schedule: null, errorMessage: null };
   const sb = supabase;
   const { data, error } = await sb
     .from('schedules')
@@ -218,9 +226,9 @@ export async function upsertSchedule(s: {
     .single();
   if (error) {
     console.error('[scheduler] upsertSchedule', error);
-    return null;
+    return { schedule: null, errorMessage: error.message };
   }
-  return data as Schedule;
+  return { schedule: data as Schedule, errorMessage: null };
 }
 
 export async function publishSchedule(id: string): Promise<boolean> {
@@ -413,7 +421,7 @@ export async function copyScheduleToWeeks(
       }
     }
 
-    const saved = await upsertSchedule({
+    const { schedule: saved } = await upsertSchedule({
       location_id: locationId,
       week_start: target,
       cells: newCells,
