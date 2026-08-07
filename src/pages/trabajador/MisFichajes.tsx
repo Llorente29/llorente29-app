@@ -1,6 +1,6 @@
 // src/pages/trabajador/MisFichajes.tsx
 import { useMemo, useState, useEffect, useCallback } from 'react'
-import { ArrowLeft, Clock, Plus, AlertTriangle, Check, X, Hourglass, CheckCircle2 } from 'lucide-react'
+import { ArrowLeft, Clock, Plus, AlertTriangle, Check, X, Hourglass, CheckCircle2, Moon } from 'lucide-react'
 import { useApp } from '../../context/AppContext'
 import { Card } from '../../components/ui'
 import type { Employee, ClockEntry } from '../../types'
@@ -8,8 +8,10 @@ import {
   requestClockCorrection, fetchMyCorrectionRequests,
   type ClockCorrectionRequest, type ClockType, type CorrectionKind,
 } from '../../services/clockEditService'
+import { fetchEmployeeDailyDetail } from '../../services/teamHoursService'
+import { toISODate } from '../../types/scheduler'
 
-interface Props { employee: Employee; onBack: () => void }
+interface Props { employee: Employee; onBack: () => void; showNightHours?: boolean }
 
 // Motivos prefijados en lenguaje de trabajador (+ "Otro" texto libre).
 const REASONS_ADD = ['Me olvidé de fichar la entrada', 'Me olvidé de fichar la salida', 'El GPS no iba', 'La app fallaba', 'Otro']
@@ -28,10 +30,26 @@ function prettyISO(iso: string): string {
 }
 function effectiveReason(v: string): string { return v === '__other__' ? '' : v.trim() }
 
-export default function MisFichajes({ employee, onBack }: Props) {
+export default function MisFichajes({ employee, onBack, showNightHours = false }: Props) {
   const { staff, locations } = useApp()
   const current = staff.find(e => e.id === employee.id) || employee
   const entries = current.clockEntries || []
+
+  // F8 — horas nocturnas del mes en curso, solo si el flag lo permite (fetch
+  // condicionado: ni se pide el dato si no se va a poder mostrar).
+  const [nightHoursMonth, setNightHoursMonth] = useState<number | null>(null)
+  useEffect(() => {
+    if (!showNightHours) { setNightHoursMonth(null); return }
+    let cancel = false
+    const now = new Date()
+    const from = toISODate(new Date(now.getFullYear(), now.getMonth(), 1))
+    const to = toISODate(new Date(now.getFullYear(), now.getMonth() + 1, 0))
+    fetchEmployeeDailyDetail(employee.id, from, to).then(rows => {
+      if (cancel) return
+      setNightHoursMonth(rows.reduce((acc, r) => acc + r.nightMinutes, 0) / 60)
+    })
+    return () => { cancel = true }
+  }, [showNightHours, employee.id])
 
   const sorted = useMemo(() => [...entries].sort((a, b) => new Date(b.datetime).getTime() - new Date(a.datetime).getTime()), [entries])
   const grouped = useMemo(() => {
@@ -78,6 +96,14 @@ export default function MisFichajes({ employee, onBack }: Props) {
           <button onClick={() => setShowAdd(true)}
             className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-accent text-text-on-accent text-xs font-medium hover:bg-accent-hover transition-base"><Plus size={12} /> Reportar olvido</button>
         </div>
+
+        {/* F8 — tono suave, un dato informativo, no un semáforo de culpa. */}
+        {showNightHours && nightHoursMonth != null && (
+          <Card className="p-3 mb-4 bg-accent-bg border-accent/20">
+            <p className="text-xs text-text-secondary inline-flex items-center gap-1.5"><Moon size={12} /> Horas nocturnas este mes</p>
+            <p className="text-xl font-bold text-accent mt-0.5">{nightHoursMonth.toLocaleString('es-ES', { maximumFractionDigits: 1 })}h</p>
+          </Card>
+        )}
 
         {requests.length > 0 && (
           <div className="mb-4">

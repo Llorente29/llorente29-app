@@ -1,6 +1,9 @@
 // src/components/MiBolsaHoras.tsx
 // Vista del trabajador: su propia bolsa de horas con periodos cerrados y alertas del periodo.
-// Solo se muestra si emp.showHoursBalance === true
+// F8: la visibilidad (flag global + individual combinados) la decide worker_portal_visibility
+// UNA vez en TrabajadorApp — este componente confía en que si se monta, es porque toca mostrarlo.
+// No repetir aquí una comprobación parcial (antes miraba solo emp.showHoursBalance, ignorando
+// el flag global — quedaba desincronizado del RPC, que es la fuente de verdad).
 
 import { useEffect, useState } from 'react'
 import { Wallet, AlertTriangle, Clock, ChevronDown, ChevronRight } from 'lucide-react'
@@ -84,8 +87,6 @@ export default function MiBolsaHoras({ employee, location }: Props) {
       })
     return () => { cancelled = true }
   }, [employee.id, closeDay])
-
-  if (!(employee as any).showHoursBalance) return null
 
   if (loading) {
     return (

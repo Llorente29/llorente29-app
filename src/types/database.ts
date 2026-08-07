@@ -1143,7 +1143,10 @@ export type Database = {
           late_alert_min: number
           rounding_tolerance_min: number
           scope: string
+          show_compliance_to_employee: boolean
           show_hour_bank_to_employee: boolean
+          show_labor_cost_to_employee: boolean
+          show_night_hours_to_employee: boolean
           updated_at: string
         }
         Insert: {
@@ -1154,7 +1157,10 @@ export type Database = {
           late_alert_min?: number
           rounding_tolerance_min?: number
           scope?: string
+          show_compliance_to_employee?: boolean
           show_hour_bank_to_employee?: boolean
+          show_labor_cost_to_employee?: boolean
+          show_night_hours_to_employee?: boolean
           updated_at?: string
         }
         Update: {
@@ -1165,7 +1171,10 @@ export type Database = {
           late_alert_min?: number
           rounding_tolerance_min?: number
           scope?: string
+          show_compliance_to_employee?: boolean
           show_hour_bank_to_employee?: boolean
+          show_labor_cost_to_employee?: boolean
+          show_night_hours_to_employee?: boolean
           updated_at?: string
         }
         Relationships: [

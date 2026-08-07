@@ -28,7 +28,7 @@ import MisAjustes from './MisAjustes'
 import BottomTabBar from '../../components/trabajador/BottomTabBar'
 import type { WorkerTab } from '../../components/trabajador/BottomTabBar'
 import ExecutionPage from '../../modules/appcc/pages/ExecutionPage'
-import { fetchAppSettings } from '../../services/appSettingsService'
+import { fetchWorkerPortalVisibility, type WorkerPortalVisibility } from '../../services/workerVisibilityService'
 import { fetchLocations } from '../../services/supabaseSync'
 import { supabase } from '../../lib/supabase'
 import type { Employee, Location } from '../../types'
@@ -64,7 +64,11 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
     refreshStaff,
   } = useApp()
   const [subPage, setSubPage] = useState<SubPage>('home')
-  const [showBolsaHoras, setShowBolsaHoras] = useState(false)
+  // F8 — UNA sola llamada al RPC worker_portal_visibility; se respeta en todo
+  // el portal (menú + rutas). Invisible por defecto (fail-closed) mientras se resuelve.
+  const [visibility, setVisibility] = useState<WorkerPortalVisibility>({
+    showHourBank: false, showNightHours: false, showLaborCost: false, showCompliance: false,
+  })
   const [location, setLocation] = useState<Location | undefined>(undefined)
   const [currentExecutionId, setCurrentExecutionId] = useState<string | null>(null)
   // Desde dónde se entró a fichar, para volver al sitio correcto (home o portal).
@@ -89,13 +93,17 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
   // disparado el sync para esta cuenta todavía. Una sola oportunidad por montaje.
   const [refreshAttempted, setRefreshAttempted] = useState(false)
 
-  useEffect(() => {
-    fetchAppSettings().then(s => setShowBolsaHoras(s.showHourBankToEmployee))
-  }, [])
-
   const employee: Employee | null = employeeId
     ? (staff.find(e => e.id === employeeId) || null)
     : null
+
+  // F8 — resuelto en cuanto se conoce el empleado; nunca antes (fail-closed).
+  useEffect(() => {
+    if (!employee?.id) return
+    let cancel = false
+    fetchWorkerPortalVisibility(employee.id).then(v => { if (!cancel) setVisibility(v) })
+    return () => { cancel = true }
+  }, [employee?.id])
 
   // Guarda de carga: solo afirmar "no existe el empleado" cuando ya hemos
   // visto la BBDD al menos una vez para esta cuenta. Sin esto, el primer
@@ -349,8 +357,8 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
 
   // Portal: subpáginas
   if (subPage === 'fichar') return <FichajeEmpleado employee={employee} onBack={() => setSubPage(ficharOrigin)} />
-  if (subPage === 'horario') return <MiHorario employee={employee} onBack={() => setSubPage('portal')} />
-  if (subPage === 'fichajes') return <MisFichajes employee={employee} onBack={() => setSubPage('portal')} />
+  if (subPage === 'horario') return <MiHorario employee={employee} onBack={() => setSubPage('portal')} showHourBank={visibility.showHourBank} />
+  if (subPage === 'fichajes') return <MisFichajes employee={employee} onBack={() => setSubPage('portal')} showNightHours={visibility.showNightHours} />
   if (subPage === 'documentos') return <MisDocumentos employee={employee} onBack={() => setSubPage('portal')} />
   if (subPage === 'vacaciones') return <MisVacaciones employee={employee} onBack={() => setSubPage('portal')} />
   if (subPage === 'turnos') return <MisTurnos employee={employee} onBack={() => setSubPage('portal')} />
@@ -380,7 +388,7 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
     )
   }
 
-  if (subPage === 'bolsa' && showBolsaHoras) {
+  if (subPage === 'bolsa' && visibility.showHourBank) {
     return (
       <div className="min-h-screen bg-page p-4 pb-8">
         <div className="max-w-md mx-auto">
@@ -406,7 +414,7 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
         <PortalEmpleado
           employee={employee}
           onNavigate={(p: PortalSubPage) => { if (p === 'fichar') setFicharOrigin('portal'); setSubPage(p) }}
-          showBolsaHoras={showBolsaHoras}
+          showBolsaHoras={visibility.showHourBank}
         />
         <BottomTabBar active="mas" onSelect={goToTab} showTareas={showAppccTab} />
       </div>

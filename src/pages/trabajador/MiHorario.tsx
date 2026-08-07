@@ -57,6 +57,10 @@ function formatWeekLabel(weekStartISO: string): string {
 interface MiHorarioProps {
   employee: Employee
   onBack?: () => void
+  // F8 — resuelto una vez en TrabajadorApp (worker_portal_visibility). Este
+  // componente NO decide su propia visibilidad; MiBolsaHoras ya no lo hace
+  // tampoco (ver su cabecera) — si no se pasa true, no se monta.
+  showHourBank?: boolean
 }
 
 interface DayShift {
@@ -69,7 +73,7 @@ interface DayShift {
   coworkers: string[]
 }
 
-export default function MiHorario({ employee, onBack }: MiHorarioProps) {
+export default function MiHorario({ employee, onBack, showHourBank = false }: MiHorarioProps) {
   const employeeId = employee.id
   const [weekStart, setWeekStart] = useState<string>(() => toISODate(getMondayOfWeek(new Date())))
   const [templates, setTemplates] = useState<ShiftTemplate[]>([])
@@ -343,10 +347,12 @@ export default function MiHorario({ employee, onBack }: MiHorarioProps) {
         </div>
       )}
 
-      {/* Bolsa de horas (si el empleado tiene visibilidad activa) */}
-      <div className="mx-4 mb-3">
-        <MiBolsaHoras employee={employee} location={location} />
-      </div>
+      {/* Bolsa de horas (F8: solo si worker_portal_visibility lo permite) */}
+      {showHourBank && (
+        <div className="mx-4 mb-3">
+          <MiBolsaHoras employee={employee} location={location} />
+        </div>
+      )}
 
       {/* Días */}
       <div className="px-4 space-y-2">
