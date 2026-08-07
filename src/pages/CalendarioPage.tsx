@@ -53,6 +53,7 @@ import type { Employee } from '../types'
 import { fetchVacations } from '../services/vacationsService'
 import type { VacationRequest } from '../types/personal'
 import { usePermissions } from '../modules/multitenancy/hooks/usePermissions'
+import CoverageGapPanel from '../components/team/CoverageGapPanel'
 import { getStaffingGaps, type StaffingGap } from '../modules/multitenancy/services/businessHoursService'
 import { fetchPayrollCosts } from '../services/payrollService'
 import { fetchSalesByLocation, fetchDemandProfile, fetchDemandForecast, type DemandProfile, type DemandForecast } from '../services/teamReportsService'
@@ -1088,6 +1089,15 @@ export default function CalendarioPage() {
           </table>
         </div>
       ))}
+
+      {locationId && (
+        <CoverageGapPanel
+          accountId={activeAccountId}
+          locationId={locationId}
+          weekStart={weekStart}
+          canSeeCosts={canSeeLaborCosts}
+        />
+      )}
 
       {uncovered.length > 0 && (
         <UncoveredPanel
