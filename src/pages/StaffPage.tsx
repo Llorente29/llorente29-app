@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useApp } from '../context/AppContext'
 import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
 import { Button, Input, Select, Textarea, Badge, Card, Tabs, Modal, Label, Alert } from '../components/ui'
@@ -85,6 +86,23 @@ export default function StaffPage() {
   }, [resolvedLocationId])
   const [contractFilter, setContractFilter] = useState('todos')
   const [showNewEmployeeModal, setShowNewEmployeeModal] = useState(false)
+
+  // F4.2: "clic en fila -> ficha" desde Plantilla llega como
+  // /personal?employee=<id>. Se consume una vez y se limpia de la URL para
+  // que no se reabra el modal al navegar hacia atrás dentro de esta página.
+  const [searchParams, setSearchParams] = useSearchParams()
+  useEffect(() => {
+    const empParam = searchParams.get('employee')
+    if (empParam) {
+      setSelectedId(empParam)
+      setSearchParams(prev => {
+        const next = new URLSearchParams(prev)
+        next.delete('employee')
+        return next
+      }, { replace: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
 
   // Permisos del usuario logueado en la cuenta activa.
   // BLOQUE B-7 (16/05/2026): migrado de fetch directo al service viejo

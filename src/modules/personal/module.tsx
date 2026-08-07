@@ -18,11 +18,12 @@
 import {
   Users, Activity, Clock, Smartphone, Inbox, Armchair,
   RefreshCw, Calendar, FolderOpen, FileText, Wallet, BarChart3, Receipt,
-  GraduationCap, BellRing,
+  GraduationCap, BellRing, Table2,
 } from 'lucide-react'
 import type { ModuleDefinition } from '@/shell/types'
 
 import StaffPage from '@/pages/StaffPage'
+import PlantillaPage from '@/pages/PlantillaPage'
 import CoursesPage from '@/pages/CoursesPage'
 import FichajesGlobalPage from '@/pages/FichajesGlobalPage'
 import ClockoutReminderReportPage from '@/pages/ClockoutReminderReportPage'
@@ -56,6 +57,7 @@ export const personalModule: ModuleDefinition = {
     { path: 'turnos-abiertos',  element: <TurnosAbiertosPage /> },
     { path: 'cambios',          element: <CambiosPendientesPage /> },
     { path: 'calendario',       element: <CalendarioPage /> },
+    { path: 'plantilla',        element: <PlantillaPage /> },
     { path: 'plantilla-turnos', element: <PlantillaTurnosPage /> },
     { path: 'informes-analitica', element: <InformesTeamPage /> },
     { path: 'nominas',          element: <NominasPage /> },
@@ -75,6 +77,7 @@ export const personalModule: ModuleDefinition = {
       { id: 'personal_turnos',       label: 'Turnos abiertos',   icon: Armchair,   path: 'turnos-abiertos',     requiredPermission: 'show_turnos_abiertos' },
       { id: 'personal_cambios',      label: 'Cambios de turno',  icon: RefreshCw,  path: 'cambios',             requiredPermission: 'show_cambios_pendientes' },
       { id: 'personal_calendario',   label: 'Calendario',        icon: Calendar,   path: 'calendario',          requiredPermission: 'show_calendario' },
+      { id: 'personal_horas',        label: 'Plantilla',         icon: Table2,     path: 'plantilla',           requiredPermission: 'show_staff' },
       { id: 'personal_plantilla',    label: 'Plantilla turnos',  icon: FolderOpen, path: 'plantilla-turnos',    requiredPermission: 'show_plantilla_turnos' },
       { id: 'personal_informes_team', label: 'Informes',         icon: BarChart3,  path: 'informes-analitica',  requiredPermission: 'show_informes_personal' },
       { id: 'personal_nominas',      label: 'Nóminas',           icon: Receipt,    path: 'nominas',             requiredPermission: 'show_informes_personal' },
