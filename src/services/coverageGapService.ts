@@ -26,30 +26,16 @@ export interface CoverageGapHour {
   costIsPartial: boolean  // algún asignado sin nómina cargada -> coste infravalorado, no ocultar
 }
 
-// CalendarioPage dispara ~25 llamadas simultáneas al montar; esta RPC (varias
-// CTE, una subconsulta team_worked_shifts por empleado con nómina) es de las
-// más pesadas y a veces cae en ese pico inicial (500 transitorio) aunque
-// funcione bien sola — verificado en vivo: falla en carga en frío, funciona
-// al reintentar. Reintento único con espera corta antes de rendirse; si
-// vuelve a fallar sí es un error real y se registra.
-async function callCoverageGapRpc(accountId: string, locationId: string, weekStart: string) {
-  return db().rpc('schedule_coverage_gap', {
-    p_account: accountId,
-    p_location: locationId,
-    p_week_start: weekStart,
-  })
-}
-
 export async function fetchScheduleCoverageGap(
   accountId: string,
   locationId: string,
   weekStart: string
 ): Promise<CoverageGapHour[]> {
-  let { data, error } = await callCoverageGapRpc(accountId, locationId, weekStart)
-  if (error) {
-    await new Promise(r => setTimeout(r, 800))
-    ;({ data, error } = await callCoverageGapRpc(accountId, locationId, weekStart))
-  }
+  const { data, error } = await db().rpc('schedule_coverage_gap', {
+    p_account: accountId,
+    p_location: locationId,
+    p_week_start: weekStart,
+  })
   if (error) {
     console.error('[coverageGap] schedule_coverage_gap:', error)
     return []
