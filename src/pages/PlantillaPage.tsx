@@ -7,16 +7,31 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Users, Euro, Clock, AlertTriangle, ArrowUpDown, ArrowUp, ArrowDown, TrendingUp, TrendingDown, Minus,
+  Download, RefreshCw,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { useActiveAccount } from '../modules/multitenancy/hooks/useActiveAccount'
 import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
 import { usePermissions } from '@/modules/multitenancy/hooks/usePermissions'
-import { Card } from '../components/ui'
+import { Button, Card } from '../components/ui'
 import PeriodFilter, { makePeriodValue, type PeriodValue } from '../components/team/PeriodFilter'
 import { fetchTeamHoursSummary, type TeamHoursSummaryRow } from '../services/teamHoursService'
 import { fetchSalesByLocation } from '../services/teamReportsService'
 import { toISODate } from '../types/scheduler'
+import { fetchRegistroJornadaMensual, fetchRegistroJornadaTotales } from '../services/registroJornadaService'
+import { generateRegistroJornadaPdf } from '../services/registroJornadaPdfService'
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url; a.download = filename
+  document.body.appendChild(a); a.click(); document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
 
 // Balance (delta_hours = trabajado+ausencia_pagada - contratado): rojo si debe
 // horas (déficit real), ámbar mientras está cerca de 0 (aún no es un colchón
@@ -50,6 +65,47 @@ export default function PlantillaPage() {
   const [loading, setLoading] = useState(true)
   const [sortKey, setSortKey] = useState<SortKey>('name')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
+
+  // F5.1 — "Botón en Plantilla (todos)": un PDF de registro de jornada por
+  // cada empleado visible, mismo periodo que se está viendo en pantalla.
+  // Descargas secuenciales con una pequeña pausa entre cada una — evita que
+  // el navegador bloquee un aluvión de doc.save() disparados de golpe.
+  const { activeAccount } = useActiveAccount()
+  const [bulkPdf, setBulkPdf] = useState<{ done: number; total: number } | null>(null)
+  const [bulkPdfError, setBulkPdfError] = useState<string | null>(null)
+  async function handleDownloadAllPdfs() {
+    if (rows.length === 0) return
+    setBulkPdfError(null)
+    setBulkPdf({ done: 0, total: rows.length })
+    try {
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i]
+        const emp = staff.find(e => e.id === r.employeeId)
+        const [days, totals] = await Promise.all([
+          fetchRegistroJornadaMensual(r.employeeId, period.from, period.to),
+          fetchRegistroJornadaTotales(r.employeeId, period.from, period.to),
+        ])
+        if (totals) {
+          const { blob, filename } = generateRegistroJornadaPdf({
+            account: { legalName: activeAccount?.legalName ?? null, cif: activeAccount?.cif ?? null },
+            employee: { name: r.employeeName, dni: emp?.dni || null },
+            periodLabel: period.label,
+            periodFrom: period.from,
+            periodTo: period.to,
+            days,
+            totals,
+          })
+          downloadBlob(blob, filename)
+        }
+        setBulkPdf({ done: i + 1, total: rows.length })
+        if (i < rows.length - 1) await sleep(350)
+      }
+    } catch (e) {
+      setBulkPdfError(e instanceof Error ? e.message : 'No se pudieron generar todos los PDFs.')
+    } finally {
+      setBulkPdf(null)
+    }
+  }
 
   useEffect(() => {
     if (!activeAccountId) return
@@ -115,8 +171,19 @@ export default function PlantillaPage() {
           <h1 className="font-display text-2xl text-accent">Plantilla</h1>
           <p className="text-sm text-text-secondary mt-0.5">Horas y coste real por empleado · {period.label}</p>
         </div>
-        <PeriodFilter value={period} onChange={setPeriod} />
+        <div className="flex items-center gap-2 flex-wrap">
+          <PeriodFilter value={period} onChange={setPeriod} />
+          <Button size="sm" variant="outline" onClick={handleDownloadAllPdfs} disabled={!!bulkPdf || rows.length === 0}>
+            <span className="inline-flex items-center gap-1.5">
+              {bulkPdf ? <RefreshCw size={13} className="animate-spin" /> : <Download size={13} />}
+              {bulkPdf ? `Generando ${bulkPdf.done}/${bulkPdf.total}…` : 'PDFs de jornada (todos)'}
+            </span>
+          </Button>
+        </div>
       </div>
+      {bulkPdfError && (
+        <div className="px-4 py-2 rounded-lg bg-danger-bg border border-danger/30 text-sm text-danger">{bulkPdfError}</div>
+      )}
 
       {/* Cabecera de dinero: agregado de cuenta/local, NUNCA por empleado
           (no se puede atribuir venta a una persona sin inventar). */}

@@ -31,10 +31,13 @@ import {
 import { editClockEntry, addManualClockEntry } from '../services/clockEditService'
 import PeriodFilter, { makePeriodValue, type PeriodValue } from '../components/team/PeriodFilter'
 import { toISODate } from '../types/scheduler'
+import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
+import { fetchRegistroJornadaMensual, fetchRegistroJornadaTotales } from '../services/registroJornadaService'
+import { generateRegistroJornadaPdf } from '../services/registroJornadaPdfService'
 import {
   BarChart3, Users, AlertTriangle, Search, LogOut, Trash2, RefreshCw,
   Camera, LogIn, Square, Mail, X, ShieldCheck, Calendar, Sun, Moon, Ban,
-  User, UserMinus, UserX, FileText, Key, UserPlus, Euro, Pencil,
+  User, UserMinus, UserX, FileText, Key, UserPlus, Euro, Pencil, Download,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -502,6 +505,42 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
     return () => { cancel = true }
   }, [tab, emp.id, dailyPeriod.from, dailyPeriod.to])
 
+  // F5.1 — PDF de registro de jornada (RD-ley 8/2019, art. 34.9 ET), un
+  // empleado, el periodo que esté viendo en "Día a día" (dailyPeriod).
+  const { activeAccount } = useActiveAccount()
+  const [pdfGenerating, setPdfGenerating] = useState(false)
+  const [pdfError, setPdfError] = useState<string | null>(null)
+  async function handleDownloadJornadaPdf() {
+    if (!emp.id) return
+    setPdfError(null)
+    setPdfGenerating(true)
+    try {
+      const [days, totals] = await Promise.all([
+        fetchRegistroJornadaMensual(emp.id, dailyPeriod.from, dailyPeriod.to),
+        fetchRegistroJornadaTotales(emp.id, dailyPeriod.from, dailyPeriod.to),
+      ])
+      if (!totals) throw new Error('No se pudo calcular el registro de jornada de este periodo.')
+      const { blob, filename } = generateRegistroJornadaPdf({
+        account: { legalName: activeAccount?.legalName ?? null, cif: activeAccount?.cif ?? null },
+        employee: { name: emp.name, dni: emp.dni || null },
+        periodLabel: dailyPeriod.label,
+        periodFrom: dailyPeriod.from,
+        periodTo: dailyPeriod.to,
+        days,
+        totals,
+      })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url; a.download = filename
+      document.body.appendChild(a); a.click(); document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      setPdfError(e instanceof Error ? e.message : 'No se pudo generar el PDF.')
+    } finally {
+      setPdfGenerating(false)
+    }
+  }
+
   // F4.3 — "Bolsa": compute_employee_balance + coste real (team_hours_summary
   // filtrado a este empleado, mismo RPC que Plantilla, F4.2).
   const [balancePeriod, setBalancePeriod] = useState<PeriodValue>(() => makePeriodValue('mensual', toISODate(new Date())))
@@ -851,8 +890,17 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
                 jornada real, en vez de dejar al lector emparejarlos a mano. */}
             <div className="flex items-center justify-between flex-wrap gap-2">
               <p className="text-sm font-semibold text-text-primary">Día a día</p>
-              <PeriodFilter value={dailyPeriod} onChange={setDailyPeriod} />
+              <div className="flex items-center gap-2 flex-wrap">
+                <PeriodFilter value={dailyPeriod} onChange={setDailyPeriod} />
+                <Button size="sm" variant="outline" onClick={handleDownloadJornadaPdf} disabled={pdfGenerating || !emp.id}>
+                  <span className="inline-flex items-center gap-1.5">
+                    {pdfGenerating ? <RefreshCw size={13} className="animate-spin" /> : <Download size={13} />}
+                    PDF de jornada
+                  </span>
+                </Button>
+              </div>
             </div>
+            {pdfError && <Alert type="error">{pdfError}</Alert>}
             <div className="border border-border-default rounded-lg overflow-hidden">
               <table className="w-full text-sm">
                 <thead className="bg-page border-b border-border-default">

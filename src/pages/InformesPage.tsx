@@ -1,166 +1,232 @@
-import { useState, useEffect } from 'react'
-import { Download, Settings, CheckCircle2, RefreshCw } from 'lucide-react'
-import { useApp } from '../context/AppContext'
-import { Button, Card, Label, Input, Alert } from '../components/ui'
-import { fetchVacations } from '../services/vacationsService'
-import { exportPersonalReportCsv } from '../services/exportGestoriaService'
-import type { VacationRequest } from '../types/personal'
+// src/pages/InformesPage.tsx
+// F5.2 — Cierre de mes / export a gestoría. Consume export_gestoria_mensual
+// (RPC, verificada en BBDD 07/08 — ver ENCARGO_CODE_F5_gestoria_y_pdf_jornada.md).
+// Reemplaza el cálculo cliente-side anterior (recorría clockEntries en el
+// navegador, sin incidencias): misma fuente que Plantilla/Ficha.
+//
+// Bloqueos SIEMPRE visibles arriba, agrupados por tipo — nunca se ocultan:
+// es lo que diferencia un export honesto de uno que pasa datos sucios a la
+// gestoría (ver AVISOS del encargo).
 
-const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Download, FileText, Settings, RefreshCw, Coffee, AlertTriangle, Scale } from 'lucide-react'
+import { useApp } from '../context/AppContext'
+import { useActiveAccount } from '../modules/multitenancy/hooks/useActiveAccount'
+import { Button, Card, Label, Input } from '../components/ui'
+import StatusBand, { type StatusLine } from '../components/team/StatusBand'
+import PeriodFilter, { makePeriodValue, type PeriodValue } from '../components/team/PeriodFilter'
+import { fetchExportGestoriaMensual, downloadExportGestoriaCsv, type ExportGestoriaRow } from '../services/exportGestoriaMensualService'
+import { generateExportGestoriaPdf } from '../services/exportGestoriaPdfService'
+import { toISODate } from '../types/scheduler'
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url; a.download = filename
+  document.body.appendChild(a); a.click(); document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+const hrs = (n: number) => `${n.toLocaleString('es-ES', { maximumFractionDigits: 1 })}h`
+
+type IncidentKind = 'sin_descansos' | 'olvido_salida' | 'desvio' | 'otro'
+
+function classifyIncident(text: string): IncidentKind {
+  if (text.includes('sin descansos')) return 'sin_descansos'
+  if (text.includes('fichaje de salida olvidado')) return 'olvido_salida'
+  if (text.includes('desvío de')) return 'desvio'
+  return 'otro'
+}
+
+// Bloqueos agrupados por tipo (no una línea por incidencia suelta): más
+// escaneable sin ocultar nada — cada fila lista a quién afecta.
+function buildStatusLines(rows: ExportGestoriaRow[]): StatusLine[] {
+  const byKind: Record<IncidentKind, { row: ExportGestoriaRow; text: string }[]> = {
+    sin_descansos: [], olvido_salida: [], desvio: [], otro: [],
+  }
+  for (const r of rows) {
+    for (const text of r.incidencias) byKind[classifyIncident(text)].push({ row: r, text })
+  }
+  const lines: StatusLine[] = []
+  if (byKind.sin_descansos.length > 0) {
+    lines.push({
+      key: 'sin_descansos', severity: 'warning', Icon: Coffee,
+      text: `${byKind.sin_descansos.length} empleado${byKind.sin_descansos.length === 1 ? '' : 's'} sin descansos registrados`,
+      consequence: 'El fichaje de pausa ya existe pero todavía no se usa — la columna "descanso" del PDF de jornada saldrá vacía.',
+    })
+  }
+  if (byKind.olvido_salida.length > 0) {
+    lines.push({
+      key: 'olvido_salida', severity: 'critical', Icon: AlertTriangle,
+      text: `Posible fichaje de salida olvidado: ${byKind.olvido_salida.map(x => x.row.empleado).join(', ')}`,
+      consequence: 'Revisar y corregir el fichaje antes de cerrar el mes — puede falsear las horas trabajadas.',
+    })
+  }
+  if (byKind.desvio.length > 0) {
+    lines.push({
+      key: 'desvio', severity: 'warning', Icon: Scale,
+      text: `Desvío de horas sobre contrato: ${byKind.desvio.map(x => `${x.row.empleado} (${x.row.deltaHoras > 0 ? '+' : ''}${x.row.deltaHoras.toFixed(1)}h)`).join(', ')}`,
+      consequence: 'Verificar si es real (turnos extra, ausencia sin registrar) antes de enviar a gestoría.',
+    })
+  }
+  if (byKind.otro.length > 0) {
+    lines.push({
+      key: 'otro', severity: 'warning', Icon: AlertTriangle,
+      text: `${byKind.otro.length} incidencia${byKind.otro.length === 1 ? '' : 's'} adicional${byKind.otro.length === 1 ? '' : 'es'}`,
+      consequence: byKind.otro.map(x => `${x.row.empleado}: ${x.text}`).join(' · '),
+    })
+  }
+  return lines
+}
 
 export default function InformesPage() {
-  const { staff, locations, gestoriaConfig, saveGestoriaConfig } = useApp()
-  const now = new Date()
-  const [month, setMonth] = useState(now.getMonth() + 1)
-  const [year, setYear] = useState(now.getFullYear())
-  const [generating, setGenerating] = useState(false)
-  const [downloaded, setDownloaded] = useState(false)
-  const [allVacations, setAllVacations] = useState<VacationRequest[]>([])
+  const { staff, gestoriaConfig, saveGestoriaConfig } = useApp()
+  const { activeAccountId, activeAccount } = useActiveAccount()
+  const navigate = useNavigate()
+
+  const [period, setPeriod] = useState<PeriodValue>(() => makePeriodValue('mensual', toISODate(new Date())))
+  const [rows, setRows] = useState<ExportGestoriaRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [pdfGenerating, setPdfGenerating] = useState(false)
 
   useEffect(() => {
+    if (!activeAccountId) return
     let cancel = false
-    fetchVacations().then(list => {
+    setLoading(true)
+    fetchExportGestoriaMensual(activeAccountId, period.from, period.to).then(r => {
       if (cancel) return
-      setAllVacations(list || [])
+      setRows(r)
+      setLoading(false)
     })
     return () => { cancel = true }
-  }, [])
+  }, [activeAccountId, period.from, period.to])
 
-  const dateFrom = new Date(year, month - 1, 1).toISOString().slice(0, 10)
-  const dateTo = new Date(year, month, 0).toISOString().slice(0, 10)
+  const statusLines = useMemo(() => buildStatusLines(rows), [rows])
 
-  const report = staff.map(e => {
-    const entries = e.clockEntries.filter(c => c.datetime >= dateFrom && c.datetime <= dateTo + 'T23:59:59')
-    let hours = 0
-    for (let i = entries.length - 1; i >= 0; i--) {
-      if (entries[i].type === 'entrada' && entries[i - 1]?.type === 'salida') {
-        hours += (new Date(entries[i - 1].datetime).getTime() - new Date(entries[i].datetime).getTime()) / 3600000
-      }
-    }
-    const empVacs = allVacations.filter(v => v.employeeId === e.id)
-    const abs = empVacs.filter(v => v.startDate <= dateTo && v.endDate >= dateFrom)
-    const approved = abs.filter(v => v.status === 'aprobada')
-    return {
-      ...e,
-      periodEntries: entries,
-      totalHours: hours.toFixed(1),
-      diasTrabajados: new Set(entries.map(c => c.datetime.slice(0, 10))).size,
-      vacaciones: approved.filter(v => v.type === 'vacaciones'),
-      bajas:      approved.filter(v => v.type === 'baja_medica'),
-      permisos:   approved.filter(v =>
-        v.type === 'asuntos_propios' ||
-        v.type === 'permiso_matrimonio' ||
-        v.type === 'permiso_fallecimiento' ||
-        v.type === 'permiso_mudanza' ||
-        v.type === 'otro'
-      ),
-    }
-  })
+  function goToFicha(dni: string) {
+    const emp = staff.find(e => e.dni === dni)
+    if (emp) navigate(`/personal?employee=${emp.id}`)
+  }
 
-  async function downloadCsv() {
-    setGenerating(true)
-    setDownloaded(false)
+  function downloadCsv() {
+    downloadExportGestoriaCsv(rows, period.label)
+    saveGestoriaConfig({ lastSentAt: new Date().toISOString() })
+  }
+
+  function downloadPdf() {
+    setPdfGenerating(true)
     try {
-      await exportPersonalReportCsv({
-        employees: staff,
-        locations,
-        periodStart: dateFrom,
-        periodEnd: dateTo,
-        periodLabel: `${MESES[month - 1]} ${year}`,
+      const { blob, filename } = generateExportGestoriaPdf({
+        account: { legalName: activeAccount?.legalName ?? null, cif: activeAccount?.cif ?? null },
+        periodLabel: period.label,
+        periodFrom: period.from,
+        periodTo: period.to,
+        rows,
       })
-      await saveGestoriaConfig({ lastSentAt: new Date().toISOString() })
-      setDownloaded(true)
+      downloadBlob(blob, filename)
+      saveGestoriaConfig({ lastSentAt: new Date().toISOString() })
     } finally {
-      setGenerating(false)
+      setPdfGenerating(false)
     }
   }
 
-  const yearOptions = [now.getFullYear(), now.getFullYear() - 1]
   const dayOfMonth = gestoriaConfig?.dayOfMonth ?? 25
   const enabled = gestoriaConfig?.enabled ?? false
   const lastSentAt = gestoriaConfig?.lastSentAt
+  const missingFields = [
+    !gestoriaConfig?.gestoriaNombre ? 'nombre de la gestoría' : null,
+    !gestoriaConfig?.gestoriaEmail ? 'email de la gestoría' : null,
+  ].filter((x): x is string => !!x)
 
   return (
     <div className="space-y-5">
       <div>
         <h1 className="font-display text-2xl text-accent">Informes Gestoría</h1>
-        <p className="text-sm text-text-secondary mt-0.5">Resumen mensual de personal para envío a gestoría</p>
+        <p className="text-sm text-text-secondary mt-0.5">Cierre de mes: horas, ausencias e incidencias para enviar a gestoría</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Left: report */}
+        {/* Left: cierre de mes */}
         <div className="lg:col-span-2 space-y-4">
-          {/* Controls */}
-          <div className="flex flex-wrap items-center gap-3 p-4 bg-page rounded-xl border border-border-default">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <PeriodFilter value={period} onChange={setPeriod} />
             <div className="flex items-center gap-2">
-              <label className="text-xs text-text-secondary">Mes</label>
-              <select value={month} onChange={e => setMonth(Number(e.target.value))}
-                className="border border-border-default rounded-md px-3 py-1.5 text-sm bg-card text-text-primary">
-                {MESES.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
-              </select>
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-text-secondary">Año</label>
-              <select value={year} onChange={e => setYear(Number(e.target.value))}
-                className="border border-border-default rounded-md px-3 py-1.5 text-sm bg-card text-text-primary">
-                {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
-              </select>
-            </div>
-            <div className="ml-auto flex items-center gap-3">
-              {downloaded && (
-                <span className="inline-flex items-center gap-1 text-xs text-success font-medium">
-                  <CheckCircle2 size={14} /> Descargado
-                </span>
-              )}
-              <Button size="sm" onClick={downloadCsv} disabled={generating}>
+              <Button size="sm" variant="outline" onClick={downloadCsv} disabled={loading || rows.length === 0}>
+                <span className="inline-flex items-center gap-1.5"><Download size={14} /> CSV</span>
+              </Button>
+              <Button size="sm" variant="outline" onClick={downloadPdf} disabled={loading || pdfGenerating || rows.length === 0}>
                 <span className="inline-flex items-center gap-1.5">
-                  {generating ? <RefreshCw size={14} className="animate-spin" /> : <Download size={14} />}
-                  {generating ? 'Generando...' : 'Descargar CSV'}
+                  {pdfGenerating ? <RefreshCw size={14} className="animate-spin" /> : <FileText size={14} />}
+                  PDF
                 </span>
               </Button>
             </div>
           </div>
 
-          {/* Table */}
+          {/* Bloqueos — SIEMPRE visibles, nunca ocultos (ver AVISOS del encargo F5.2) */}
+          {!loading && (
+            <StatusBand
+              lines={statusLines}
+              emptyLabel="Sin incidencias detectadas — listo para enviar a gestoría."
+            />
+          )}
+
           <Card>
             <div className="p-4 border-b border-border-default bg-page rounded-t-xl">
-              <h3 className="font-semibold text-sm text-text-primary">{MESES[month - 1]} {year} — Resumen</h3>
+              <h3 className="font-semibold text-sm text-text-primary">{period.label} — {rows.length} empleado{rows.length === 1 ? '' : 's'}</h3>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead><tr className="border-b border-border-default bg-page">
-                  <th className="p-3 text-left text-xs font-semibold text-text-secondary">Empleado</th>
-                  <th className="p-3 text-center text-xs font-semibold text-text-secondary">Días trab.</th>
-                  <th className="p-3 text-center text-xs font-semibold text-text-secondary">Horas</th>
-                  <th className="p-3 text-center text-xs font-semibold text-text-secondary">Vacac.</th>
-                  <th className="p-3 text-center text-xs font-semibold text-text-secondary">Bajas</th>
-                  <th className="p-3 text-center text-xs font-semibold text-text-secondary">Permisos</th>
+                  <th className="p-2.5 text-left text-xs font-semibold text-text-secondary">Empleado</th>
+                  <th className="p-2.5 text-left text-xs font-semibold text-text-secondary">Local</th>
+                  <th className="p-2.5 text-center text-xs font-semibold text-text-secondary">Días trab.</th>
+                  <th className="p-2.5 text-center text-xs font-semibold text-text-secondary">Horas trab.</th>
+                  <th className="p-2.5 text-center text-xs font-semibold text-text-secondary">H. noct.</th>
+                  <th className="p-2.5 text-center text-xs font-semibold text-text-secondary">Vacac.</th>
+                  <th className="p-2.5 text-center text-xs font-semibold text-text-secondary">Baja</th>
+                  <th className="p-2.5 text-center text-xs font-semibold text-text-secondary">Fest. trab.</th>
+                  <th className="p-2.5 text-center text-xs font-semibold text-text-secondary">H. contr.</th>
+                  <th className="p-2.5 text-center text-xs font-semibold text-text-secondary">Delta</th>
+                  <th className="p-2.5 text-left text-xs font-semibold text-text-secondary">Incidencias</th>
                 </tr></thead>
                 <tbody>
-                  {report.length === 0 ? (
-                    <tr><td colSpan={6} className="p-8 text-center text-text-secondary text-sm">Sin empleados registrados</td></tr>
-                  ) : report.map(e => (
-                    <tr key={e.id} className="border-b border-border-default last:border-0 hover:bg-accent-bg">
-                      <td className="p-3">
-                        <p className="font-medium text-text-primary">{e.name}</p>
-                        <p className="text-xs text-text-secondary">{e.position}</p>
+                  {loading ? (
+                    <tr><td colSpan={11} className="p-8 text-center text-text-secondary text-sm">Cargando…</td></tr>
+                  ) : rows.length === 0 ? (
+                    <tr><td colSpan={11} className="p-8 text-center text-text-secondary text-sm">Sin empleados con datos en este periodo</td></tr>
+                  ) : rows.map(r => (
+                    <tr
+                      key={r.dni}
+                      onClick={() => goToFicha(r.dni)}
+                      className="border-b border-border-default last:border-0 hover:bg-accent-bg cursor-pointer"
+                    >
+                      <td className="p-2.5">
+                        <p className="font-medium text-text-primary">{r.empleado}</p>
+                        <p className="text-xs text-text-secondary">{r.dni}</p>
                       </td>
-                      <td className="p-3 text-center text-text-primary">{e.diasTrabajados}</td>
-                      <td className="p-3 text-center font-medium text-text-primary">{e.totalHours}h</td>
-                      <td className="p-3 text-center">
-                        {e.vacaciones.length > 0
-                          ? <span className="text-xs bg-accent-bg text-accent px-2 py-0.5 rounded-full">{e.vacaciones.length}</span>
-                          : '-'}
+                      <td className="p-2.5 text-xs text-text-secondary">{r.local}</td>
+                      <td className="p-2.5 text-center text-text-primary tabular-nums">{r.diasTrabajados}</td>
+                      <td className="p-2.5 text-center font-medium text-text-primary tabular-nums">{hrs(r.horasTrabajadas)}</td>
+                      <td className="p-2.5 text-center text-text-secondary tabular-nums">{r.horasNocturnas > 0 ? hrs(r.horasNocturnas) : '—'}</td>
+                      <td className="p-2.5 text-center tabular-nums">{r.diasVacaciones > 0 ? r.diasVacaciones : '—'}</td>
+                      <td className="p-2.5 text-center tabular-nums">{r.diasBaja > 0 ? r.diasBaja : '—'}</td>
+                      <td className="p-2.5 text-center tabular-nums">{r.diasFestivoTrabajado > 0 ? r.diasFestivoTrabajado : '—'}</td>
+                      <td className="p-2.5 text-center text-text-secondary tabular-nums">{hrs(r.horasContratadas)}</td>
+                      <td className={`p-2.5 text-center font-semibold tabular-nums ${r.deltaHoras < 0 ? 'text-danger' : r.deltaHoras > 0 ? 'text-warning' : 'text-text-secondary'}`}>
+                        {r.deltaHoras > 0 ? '+' : ''}{hrs(r.deltaHoras)}
                       </td>
-                      <td className="p-3 text-center">
-                        {e.bajas.length > 0
-                          ? <span className="text-xs bg-danger-bg text-danger px-2 py-0.5 rounded-full">{e.bajas.length}</span>
-                          : '-'}
-                      </td>
-                      <td className="p-3 text-center">
-                        {e.permisos.length > 0
-                          ? <span className="text-xs bg-warning-bg text-warning px-2 py-0.5 rounded-full">{e.permisos.length}</span>
-                          : '-'}
+                      <td className="p-2.5 text-xs">
+                        {r.incidencias.length === 0 ? (
+                          <span className="text-text-tertiary">—</span>
+                        ) : (
+                          <ul className="space-y-0.5">
+                            {r.incidencias.map((txt, i) => (
+                              <li key={i} className="text-danger">{txt}</li>
+                            ))}
+                          </ul>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -168,7 +234,7 @@ export default function InformesPage() {
               </table>
             </div>
             <p className="px-4 py-2 text-xs text-text-secondary border-t border-border-default">
-              La tabla es un resumen rápido. El CSV es el informe oficial.
+              Clic en un empleado para abrir su ficha. Horas reales, sin redondeo — misma fuente que Plantilla.
             </p>
           </Card>
         </div>
@@ -228,15 +294,21 @@ export default function InformesPage() {
                 Activar envío automático el día {dayOfMonth}
               </label>
             </div>
-            <Alert type="warning">
-              El envío automático requiere integración SMTP/EmailJS. Por ahora el informe se descarga en CSV listo para adjuntar.
-            </Alert>
+            {enabled && missingFields.length > 0 ? (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-danger-bg border border-danger/30 text-xs text-danger">
+                <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+                <span>
+                  Envío automático activado pero falta {missingFields.join(' y ')}. <strong>No se enviará nada</strong> hasta rellenarlo — el envío automático (SMTP/EmailJS) tampoco está integrado todavía. Por ahora, descarga el CSV o el PDF y envíalos a mano.
+                </span>
+              </div>
+            ) : (
+              <div className="text-xs text-text-secondary p-3 rounded-lg bg-page border border-border-default">
+                Envío automático desactivado o sin integración SMTP/EmailJS todavía. Descarga el CSV o el PDF y adjúntalos a mano.
+              </div>
+            )}
           </div>
-          <div className="pt-2 border-t border-border-default text-xs text-text-secondary inline-flex items-center gap-1.5">
-            {enabled
-              ? <><CheckCircle2 size={12} className="text-success" /> Envío automático activo</>
-              : <>Desactivado</>}
-            <span>· Último envío: {lastSentAt ? new Date(lastSentAt).toLocaleDateString('es-ES') : 'Nunca'}</span>
+          <div className="pt-2 border-t border-border-default text-xs text-text-secondary">
+            Último envío/descarga: {lastSentAt ? new Date(lastSentAt).toLocaleDateString('es-ES') : 'Nunca'}
           </div>
         </Card>
       </div>
