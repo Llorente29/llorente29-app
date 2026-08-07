@@ -126,9 +126,14 @@ Team es **mucho más grande** de lo que sugerían los docs. Quince entradas de m
   borrador 10-16 ago, verificado. Causa raíz confirmada: **el guardado manual del cuadrante no valida
   vacaciones** (el generador sí) -> tarea de F7.1. Falta operativo: Pamela rellena los 9 huecos de
   Carabanchel.
-- **Estructura `schedules.cells` documentada** en `folvy_mapa_sistema.md`: `{template_id:{dia:[emp]}}`,
-  día 1=lunes, con celdas índice "0" (domingo anterior al week_start). Afecta al generador y a cualquier
-  cruce por fecha.
+- **Estructura `schedules.cells` documentada y CORREGIDA** en `folvy_mapa_sistema.md`: `{template_id:{dia:[emp]}}`,
+  **día 0=lunes** (`shift_date = week_start + dia`, SIN `-1`). Una entrada anterior de esta misma sesión
+  decía "1=lunes, con celda '0' anómala = domingo anterior" — era un error de lectura de los datos: en
+  toda la tabla `schedules` en vivo solo aparecen las claves `'0'`..`'6'` (nunca `'7'`); el "0" es solo
+  menos frecuente (Carabanchel cierra los lunes). El trigger de F7.1 se aplicó primero con la fórmula
+  `-1` (bug real: no detectaba el conflicto real de Marlón) y se corrigió el mismo 07/08 — ver
+  `20260807T2200_f7_1_fix_vacation_trigger_offbyone.sql`. Afecta al generador y a cualquier cruce por
+  fecha futuro (F4-F11): usar `week_start + dia`, nunca `week_start + (dia-1)`.
 - **Tenencia verificada**: ancla en `locations.account_id`; el núcleo de Team sin `account_id` son **15
   tablas** (no 10). `shift_swap_requests` no tiene ni account ni location; `manager_permissions` cuelga
   de `user_profile_id`. Detalle en `mapa_sistema_areas_huerfanas_20260807.md`.

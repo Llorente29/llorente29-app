@@ -209,13 +209,26 @@
 | `monthly_balance_closures` | 3 | — | estructura OK, **cálculo a cero** (deuda) |
 | `course` / `course_assignment` / `training_path_progress` | 40 / 30 / 81 | 04/08 | formación viva |
 
-- **`schedules.cells` = `{ shift_template_id: { dia: [employee_id, …] } }`.**
-  **⚠️ El índice de día 1–7 (1=lunes, `week_start`=lunes) CONVIVE con celdas de índice "0"**
-  (el domingo *anterior* al `week_start`). Cualquier cruce por fecha debe contemplar el "0"
-  (`shift_date = week_start + (dia-1)` da el domingo previo cuando dia=0). Hallado 07/08.
-- **⚠️ El guardado MANUAL del cuadrante NO valida vacaciones; `generateSchedule` (`scheduleGenerator.ts`) SÍ.**
-  Ese es el agujero real. Corregido a mano el caso Marlón (07/08). Fix pendiente en el encargo de Team:
-  validación en el guardado manual que bloquee/avise al asignar a alguien de vacaciones.
+- **`schedules.cells` = `{ shift_template_id: { dia: [employee_id, …] } }`, índice de día 0–6, 0=lunes
+  (`shift_date = week_start + dia`).** CORRECCIÓN 07/08 noche: una entrada anterior de esta sesión decía
+  "1=lunes, con celda '0' anómala = domingo anterior, `shift_date = week_start + (dia-1)`" — **era un
+  error de lectura de los datos, no una convención real.** Verificado dos veces:
+  (a) `SELECT DISTINCT day_key FROM schedules, jsonb_each(cells)...` sobre TODA la tabla en vivo →
+  únicamente aparecen las claves `'0'`..`'6'`, **nunca `'7'`** (si fuera 1–7 con un "0" colado, existiría
+  la clave "7"; no existe). La clave "0" es simplemente la menos frecuente (20 filas vs 68-81 del resto)
+  porque Carabanchel cierra los lunes — no porque sea un índice distinto.
+  (b) Los TRES sitios que escriben/leen `cells` en el cliente (`scheduleGenerator.ts:isoForDay`,
+  `CalendarioPage.tsx`, `MiHorario.tsx`) usan `week_start + día` sin desfase, y `DayOfWeek` está
+  tipado `0|1|...|6 // 0=lun`. El trigger `trg_schedule_no_vacation_conflict` (F7.1) SÍ se aplicó
+  primero con la fórmula `-1` (bug real, no invención) y se demostró en vivo con rollback que NO
+  detectaba el conflicto real de Marlón (lunes 21/09, vacación 21-27/09); con `week_start + día` sí lo
+  detecta. Migración de fix: `20260807T2200_f7_1_fix_vacation_trigger_offbyone.sql`.
+  **Usar `week_start + día` (sin `-1`) en cualquier cruce por fecha futuro (F4-F11).**
+- **El guardado MANUAL del cuadrante ya valida vacaciones (F7.1, cerrado 07/08 noche)**: backstop en BBDD
+  (trigger, corregido arriba) + aviso pre-guardado en `CalendarioPage.tsx` (`findVacationConflicts` en
+  `scheduleGenerator.ts`, misma fuente que el generador) + mensaje legible si el trigger rechaza algo.
+  Caso Marlón corregido a mano (07/08). Cierre también aplicado a aprobar cambios de turno
+  (`shiftSwapService.ts`), que escribe en `cells` por la misma vía.
 
 ## 2. APP DEL TRABAJADOR (PWA)
 
@@ -315,11 +328,14 @@ auditoria de los 30 `*_by_token` (frontera = token, no revocar) + guards `belong
 `authenticated` (requiere grep de call-sites en repo) + c2 (148 helpers). Metodo: lotes pequenos,
 verificacion en vivo tras cada uno, migracion versionada con guard `DO`.
 
-## Cuadrante — estructura de `schedules.cells` (07/08/2026)
-`cells` = `{ shift_template_id: { dia: [employee_id,...] } }`. Indice de dia 1-7 (1=lunes,
-`week_start`=lunes) **CONVIVE con celdas indice "0"** (domingo anterior). `shift_date = week_start +
-(dia-1)`. Cualquier cruce por fecha debe contemplar el "0". **El guardado MANUAL del cuadrante NO valida
-vacaciones; `generateSchedule` SI.** -> agujero de F7.1. Turnos viven aqui, no en tabla aparte.
+## Cuadrante — estructura de `schedules.cells` (07/08/2026, CORREGIDO 07/08 noche — ver detalle arriba)
+`cells` = `{ shift_template_id: { dia: [employee_id,...] } }`. Indice de dia **0-6, 0=lunes**,
+`shift_date = week_start + dia` (SIN -1). La entrada anterior de este mismo dia ("1-7 con un indice '0'
+anomalo = domingo anterior") era un error de lectura: en TODA la tabla en vivo solo existen las claves
+'0'..'6' (nunca '7'); el '0' es solo menos frecuente porque Carabanchel cierra los lunes. Verificado
+contra los 3 sitios del cliente que leen/escriben cells y con el trigger F7.1 en vivo (rollback). F7.1
+YA esta cerrado (07/08 noche): guardado manual valida vacaciones (backstop BBDD + aviso pre-guardado en
+CalendarioPage + cierre en shiftSwapService). Turnos viven aqui, no en tabla aparte.
 Plantillas en `shift_templates` (label/start_time/end_time; ambiguas en Alcala, no borrar: Opcion 2).
 
 ---
