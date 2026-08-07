@@ -25,9 +25,16 @@ import {
 } from '../services/employeeAuthService'
 import { usePermissions } from '@/modules/multitenancy/hooks/usePermissions'
 import {
+  fetchEmployeeDailyDetail, fetchEmployeeBalance, fetchTeamHoursSummary,
+  type EmployeeDailyDetailRow, type EmployeeBalanceRow,
+} from '../services/teamHoursService'
+import { editClockEntry, addManualClockEntry } from '../services/clockEditService'
+import PeriodFilter, { makePeriodValue, type PeriodValue } from '../components/team/PeriodFilter'
+import { toISODate } from '../types/scheduler'
+import {
   BarChart3, Users, AlertTriangle, Search, LogOut, Trash2, RefreshCw,
   Camera, LogIn, Square, Mail, X, ShieldCheck, Calendar, Sun, Moon, Ban,
-  User, UserMinus, UserX, FileText, Key, UserPlus,
+  User, UserMinus, UserX, FileText, Key, UserPlus, Euro, Pencil,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -68,6 +75,41 @@ const TERMINATION_OPTIONS: { id: TerminationType; label: string; Icon: LucideIco
 function getScheduledMinutes(str: string) {
   const [h, m] = str.split(':').map(Number)
   return h * 60 + m
+}
+
+// F4.3 — helpers de formato para las pestañas Fichajes/Bolsa.
+const fmtHrs = (n: number) => `${n.toLocaleString('es-ES', { maximumFractionDigits: 1 })}h`
+const fmtEur = (n: number) => n.toLocaleString('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })
+
+// <input type="datetime-local"> quiere YYYY-MM-DDTHH:mm en hora LOCAL (no UTC).
+function toLocalInputValue(iso: string): string {
+  const d = new Date(iso)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+// F4.3 — localiza en los fichajes crudos del empleado el que hay que tocar
+// para cerrar un "¿salida sin fichar?": si el último evento de la ventana de
+// esa jornada (entrada..entrada+20h) es una salida ya existente, se EDITA
+// (edit_clock_entry); si no hay ninguna salida, se AÑADE una nueva
+// (add_manual_clock_entry) — la RPC que menciona el encargo. Ventana de 20h
+// para cubrir jornadas largas sin colarse en el turno del día siguiente.
+function findCorrectionTarget(
+  clockEntries: ClockEntry[],
+  day: EmployeeDailyDetailRow
+): { mode: 'add' | 'edit'; entry?: ClockEntry } {
+  if (!day.startedAt) return { mode: 'add' }
+  const startMs = new Date(day.startedAt).getTime()
+  const windowEnd = startMs + 20 * 3600000
+  const candidates = clockEntries
+    .filter(ce => {
+      const t = new Date(ce.datetime).getTime()
+      return t >= startMs - 5 * 60000 && t <= windowEnd
+    })
+    .sort((a, b) => new Date(a.datetime).getTime() - new Date(b.datetime).getTime())
+  const last = candidates[candidates.length - 1]
+  if (last && last.type === 'salida') return { mode: 'edit', entry: last }
+  return { mode: 'add' }
 }
 
 export default function StaffPage() {
@@ -434,6 +476,44 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
   const [grantError, setGrantError] = useState<string | null>(null)
   const [grantCopied, setGrantCopied] = useState(false)
 
+  // F4.3 — "Fichajes": día a día anclado a la entrada (employee_daily_detail).
+  const [dailyPeriod, setDailyPeriod] = useState<PeriodValue>(() => makePeriodValue('mensual', toISODate(new Date())))
+  const [dailyDetail, setDailyDetail] = useState<EmployeeDailyDetailRow[]>([])
+  const [dailyLoading, setDailyLoading] = useState(false)
+  const [correctDay, setCorrectDay] = useState<EmployeeDailyDetailRow | null>(null)
+  useEffect(() => {
+    if (tab !== 'fichajes' || !emp.id) return
+    let cancel = false
+    setDailyLoading(true)
+    fetchEmployeeDailyDetail(emp.id, dailyPeriod.from, dailyPeriod.to).then(rows => {
+      if (!cancel) { setDailyDetail(rows); setDailyLoading(false) }
+    })
+    return () => { cancel = true }
+  }, [tab, emp.id, dailyPeriod.from, dailyPeriod.to])
+
+  // F4.3 — "Bolsa": compute_employee_balance + coste real (team_hours_summary
+  // filtrado a este empleado, mismo RPC que Plantilla, F4.2).
+  const [balancePeriod, setBalancePeriod] = useState<PeriodValue>(() => makePeriodValue('mensual', toISODate(new Date())))
+  const [balance, setBalance] = useState<EmployeeBalanceRow | null>(null)
+  const [balanceCost, setBalanceCost] = useState<{ laborCost: number; costIsPartial: boolean } | null>(null)
+  const [balanceLoading, setBalanceLoading] = useState(false)
+  useEffect(() => {
+    if (tab !== 'bolsa' || !emp.id) return
+    let cancel = false
+    setBalanceLoading(true)
+    Promise.all([
+      fetchEmployeeBalance(emp.id, balancePeriod.from, balancePeriod.to),
+      accountId && canSeeSalaries ? fetchTeamHoursSummary(accountId, balancePeriod.from, balancePeriod.to) : Promise.resolve([]),
+    ]).then(([bal, summary]) => {
+      if (cancel) return
+      setBalance(bal)
+      const row = summary.find(r => r.employeeId === emp.id)
+      setBalanceCost(row ? { laborCost: row.laborCost, costIsPartial: row.costIsPartial } : null)
+      setBalanceLoading(false)
+    })
+    return () => { cancel = true }
+  }, [tab, emp.id, balancePeriod.from, balancePeriod.to, accountId, canSeeSalaries])
+
   const update = (field: keyof Employee, value: unknown) => setEmp(prev => ({ ...prev, [field]: value }))
 
   const isWorking = emp.clockEntries[0]?.type === 'entrada'
@@ -519,6 +599,7 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
   const TABS = [
     { value: 'info', label: 'Datos' },
     { value: 'fichajes', label: 'Fichajes' },
+    { value: 'bolsa', label: 'Bolsa' },
     { value: 'documentos', label: 'Docs' },
     { value: 'ausencias', label: 'Ausencias' },
     { value: 'formaciones', label: 'Formaciones' },
@@ -754,26 +835,57 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
               </Card>
             )}
 
+            {/* F4.3 — Día a día anclado a la entrada (employee_daily_detail, F1.4).
+                Sustituye la lista cruda de fichajes: agrupa entrada+salida en
+                jornada real, en vez de dejar al lector emparejarlos a mano. */}
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <p className="text-sm font-semibold text-text-primary">Día a día</p>
+              <PeriodFilter value={dailyPeriod} onChange={setDailyPeriod} />
+            </div>
             <div className="border border-border-default rounded-lg overflow-hidden">
               <table className="w-full text-sm">
                 <thead className="bg-page border-b border-border-default">
                   <tr>
-                    <th className="p-3 text-left text-xs font-semibold text-text-secondary">Fecha y hora</th>
-                    <th className="p-3 text-left text-xs font-semibold text-text-secondary">Tipo</th>
-                    <th className="p-3 text-left text-xs font-semibold text-text-secondary">Notas</th>
+                    <th className="p-2 text-left text-xs font-semibold text-text-secondary">Fecha</th>
+                    <th className="p-2 text-left text-xs font-semibold text-text-secondary">Entrada</th>
+                    <th className="p-2 text-left text-xs font-semibold text-text-secondary">Salida</th>
+                    <th className="p-2 text-right text-xs font-semibold text-text-secondary">Trabajado</th>
+                    <th className="p-2 text-right text-xs font-semibold text-text-secondary inline-flex items-center gap-1"><Moon size={11} /> Nocturnas</th>
+                    <th className="p-2" />
                   </tr>
                 </thead>
                 <tbody>
-                  {emp.clockEntries.length === 0 ? (
-                    <tr><td colSpan={3} className="p-4 text-center text-text-secondary italic">Sin fichajes</td></tr>
+                  {dailyLoading ? (
+                    <tr><td colSpan={6} className="p-4 text-center text-text-secondary italic">Cargando…</td></tr>
+                  ) : dailyDetail.length === 0 ? (
+                    <tr><td colSpan={6} className="p-4 text-center text-text-secondary italic">Sin jornadas en este periodo</td></tr>
                   ) : (
-                    emp.clockEntries.slice(0, 30).map((ce, i) => (
-                      <tr key={i} className="border-b border-border-default last:border-0">
-                        <td className="p-2 text-xs text-text-primary">{new Date(ce.datetime).toLocaleString('es-ES')}</td>
-                        <td className="p-2"><Badge color={ce.type === 'entrada' ? 'green' : 'red'}>{ce.type}</Badge></td>
-                        <td className="p-2 text-xs text-text-secondary">
-                          {ce.roundingApplied && '↻ redondeo · '}
-                          {ce.diffMinutes != null && `${ce.diffMinutes > 0 ? '+' : ''}${ce.diffMinutes} min`}
+                    dailyDetail.map((d, i) => (
+                      <tr key={i} className={`border-b border-border-default last:border-0 ${d.looksLikeForgottenClockout ? 'bg-warning-bg/40' : ''}`}>
+                        <td className="p-2 text-xs text-text-primary capitalize">
+                          {new Date(d.workDate + 'T00:00:00').toLocaleDateString('es-ES', { weekday: 'short', day: '2-digit', month: 'short' })}
+                        </td>
+                        <td className="p-2 text-xs text-text-primary tabular-nums">
+                          {d.startedAt ? new Date(d.startedAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                        </td>
+                        <td className="p-2 text-xs tabular-nums">
+                          {d.looksLikeForgottenClockout ? (
+                            <span className="inline-flex items-center gap-1 text-warning font-medium"><AlertTriangle size={11} /> ¿sin fichar?</span>
+                          ) : d.endedAt ? (
+                            new Date(d.endedAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+                          ) : '—'}
+                        </td>
+                        <td className="p-2 text-xs text-right tabular-nums text-text-primary">{fmtHrs(d.workedMinutes / 60)}</td>
+                        <td className="p-2 text-xs text-right tabular-nums text-text-secondary">{d.nightMinutes > 0 ? fmtHrs(d.nightMinutes / 60) : '—'}</td>
+                        <td className="p-2 text-right">
+                          {d.looksLikeForgottenClockout && (
+                            <button
+                              onClick={() => setCorrectDay(d)}
+                              className="text-[10px] px-2 py-1 rounded border border-warning/40 text-warning hover:bg-warning-bg transition-base inline-flex items-center gap-1"
+                            >
+                              <Pencil size={10} /> Corregir
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))
@@ -781,6 +893,60 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+
+        {/* ── BOLSA (F2/F4.3: compute_employee_balance + coste real del periodo) ── */}
+        {tab === 'bolsa' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <p className="text-sm font-semibold text-text-primary">Bolsa de horas</p>
+              <PeriodFilter value={balancePeriod} onChange={setBalancePeriod} />
+            </div>
+            {balanceLoading ? (
+              <Card className="p-6 text-center text-sm text-text-secondary">Cargando…</Card>
+            ) : !balance ? (
+              <Card className="p-6 text-center text-sm text-text-secondary">Sin datos en este periodo.</Card>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <Card className="p-3">
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-text-secondary">Contratadas</p>
+                    <p className="text-xl font-bold text-text-primary mt-0.5 tabular-nums">{fmtHrs(balance.contractedHours)}</p>
+                  </Card>
+                  <Card className="p-3">
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-text-secondary">Trabajadas</p>
+                    <p className="text-xl font-bold text-text-primary mt-0.5 tabular-nums">{fmtHrs(balance.workedHours)}</p>
+                  </Card>
+                  <Card className="p-3">
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-text-secondary">Ausencia pagada</p>
+                    <p className="text-xl font-bold text-text-primary mt-0.5 tabular-nums">{fmtHrs(balance.paidAbsenceHours)}</p>
+                  </Card>
+                  <Card className="p-3">
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-text-secondary inline-flex items-center gap-1"><Moon size={11} /> Nocturnas</p>
+                    <p className="text-xl font-bold text-text-primary mt-0.5 tabular-nums">{fmtHrs(balance.nightHours)}</p>
+                  </Card>
+                </div>
+
+                <Card className={`p-4 border ${balance.deltaHours < 0 ? 'bg-danger-bg border-danger/30' : balance.deltaHours < 2 ? 'bg-warning-bg border-warning/30' : 'bg-success-bg border-success/30'}`}>
+                  <p className={`text-[11px] font-bold uppercase tracking-wide ${balance.deltaHours < 0 ? 'text-danger' : balance.deltaHours < 2 ? 'text-warning' : 'text-success'}`}>Balance (bolsa)</p>
+                  <p className={`text-3xl font-extrabold tabular-nums mt-1 ${balance.deltaHours < 0 ? 'text-danger' : balance.deltaHours < 2 ? 'text-warning' : 'text-success'}`}>
+                    {balance.deltaHours > 0 ? '+' : ''}{fmtHrs(balance.deltaHours)}
+                  </p>
+                  <p className="text-xs text-text-secondary mt-1">Trabajadas + ausencia pagada − contratadas, para este periodo.</p>
+                </Card>
+
+                {canSeeSalaries && balanceCost && (
+                  <Card className="p-3">
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-text-secondary inline-flex items-center gap-1.5"><Euro size={11} /> Coste real del periodo</p>
+                    <p className="text-xl font-bold text-text-primary mt-0.5 tabular-nums">{fmtEur(balanceCost.laborCost)}</p>
+                    {balanceCost.costIsPartial && (
+                      <p className="text-xs text-warning mt-0.5 inline-flex items-center gap-1"><AlertTriangle size={11} /> Estimado: falta alguna nómina de este periodo</p>
+                    )}
+                  </Card>
+                )}
+              </>
+            )}
           </div>
         )}
 
@@ -1232,6 +1398,19 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
             onClose={() => setShowSendMessage(false)}
           />
         )}
+        {correctDay && (
+          <CorregirFichajeModal
+            employeeId={emp.id}
+            day={correctDay}
+            target={findCorrectionTarget(emp.clockEntries, correctDay)}
+            senderName={senderName}
+            onClose={() => setCorrectDay(null)}
+            onDone={() => {
+              setCorrectDay(null)
+              fetchEmployeeDailyDetail(emp.id, dailyPeriod.from, dailyPeriod.to).then(setDailyDetail)
+            }}
+          />
+        )}
         {showGrantAccess && (
           <Modal
             open={true}
@@ -1457,6 +1636,71 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
             </div>
           </Modal>
         )}
+      </div>
+    </Modal>
+  )
+}
+
+
+// ─── Corregir fichaje (F4.3: "¿salida sin fichar?" desde el día a día) ────────
+
+function CorregirFichajeModal({ employeeId, day, target, senderName, onClose, onDone }: {
+  employeeId: string
+  day: EmployeeDailyDetailRow
+  target: { mode: 'add' | 'edit'; entry?: ClockEntry }
+  senderName: string | null
+  onClose: () => void
+  onDone: () => void
+}) {
+  const defaultDt = target.entry
+    ? toLocalInputValue(target.entry.datetime)
+    : day.startedAt
+      ? toLocalInputValue(new Date(new Date(day.startedAt).getTime() + 8 * 3600000).toISOString())
+      : toLocalInputValue(new Date().toISOString())
+  const [datetimeLocal, setDatetimeLocal] = useState(defaultDt)
+  const [reason, setReason] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  async function submit() {
+    if (!reason.trim()) { setErr('Indica el motivo de la corrección.'); return }
+    setBusy(true)
+    setErr(null)
+    try {
+      const iso = new Date(datetimeLocal).toISOString()
+      if (target.mode === 'edit' && target.entry) {
+        await editClockEntry(target.entry.id, iso, reason.trim(), 'salida', senderName ?? undefined)
+      } else {
+        await addManualClockEntry(employeeId, 'salida', iso, reason.trim(), senderName ?? undefined)
+      }
+      onDone()
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'No se pudo corregir el fichaje')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title="¿Salida sin fichar?" size="sm">
+      <div className="space-y-3">
+        <p className="text-sm text-text-secondary">
+          {new Date(day.workDate + 'T00:00:00').toLocaleDateString('es-ES', { weekday: 'long', day: '2-digit', month: 'long' })}
+          {' · '}entró a las {day.startedAt ? new Date(day.startedAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : '—'}
+        </p>
+        <div>
+          <Label>Hora real de salida</Label>
+          <Input type="datetime-local" value={datetimeLocal} onChange={e => setDatetimeLocal(e.target.value)} className="mt-1" />
+        </div>
+        <div>
+          <Label>Motivo</Label>
+          <Input value={reason} onChange={e => setReason(e.target.value)} placeholder="Ej: olvidó fichar la salida" className="mt-1" />
+        </div>
+        {err && <p className="text-xs text-danger">{err}</p>}
+        <div className="flex justify-end gap-2 pt-1">
+          <Button variant="outline" onClick={onClose} disabled={busy}>Cancelar</Button>
+          <Button onClick={submit} disabled={busy}>{busy ? 'Guardando…' : 'Guardar salida'}</Button>
+        </div>
       </div>
     </Modal>
   )

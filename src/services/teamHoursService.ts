@@ -103,3 +103,42 @@ export async function fetchEmployeeDailyDetail(
     looksLikeForgottenClockout: !!r.looks_like_forgotten_clockout,
   }))
 }
+
+/**
+ * Bolsa de un empleado en un periodo (base de la pestaña "Bolsa" de la ficha,
+ * F2, motor ya en producción). effective_hours = worked + paid_absence.
+ */
+export interface EmployeeBalanceRow {
+  contractedHours: number
+  workedHours: number
+  paidAbsenceHours: number
+  effectiveHours: number
+  deltaHours: number
+  nightHours: number
+}
+
+export async function fetchEmployeeBalance(
+  employeeId: string,
+  from: string,
+  to: string
+): Promise<EmployeeBalanceRow | null> {
+  const { data, error } = await db().rpc('compute_employee_balance', {
+    p_employee_id: employeeId,
+    p_from: from,
+    p_to: to,
+  })
+  if (error) {
+    console.error('[teamHours] compute_employee_balance:', error)
+    return null
+  }
+  const r = (data as unknown[])[0] as Record<string, unknown> | undefined
+  if (!r) return null
+  return {
+    contractedHours: Number(r.contracted_hours) || 0,
+    workedHours: Number(r.worked_hours) || 0,
+    paidAbsenceHours: Number(r.paid_absence_hours) || 0,
+    effectiveHours: Number(r.effective_hours) || 0,
+    deltaHours: Number(r.delta_hours) || 0,
+    nightHours: Number(r.night_hours) || 0,
+  }
+}
