@@ -153,6 +153,40 @@ function buildSyntheticTemplate(id: string, locationId: string, ini: number, fin
   }
 }
 
+// F10 — "Generar automático" y "Proponer cuadrante" sustituyen `cells` entero:
+// probado en vivo que una regeneración borra sin rastro cualquier edición
+// manual hecha sobre el borrador anterior (o sobre otra propuesta sin
+// guardar) — no se fusiona nada. Hasta que eso se resuelva de raíz, el
+// mínimo es avisar con una cifra real de cuánto se pierde, comparando contra
+// lo último GUARDADO (scheduleRow.cells), no contra el estado en memoria.
+function countCellChanges(a: ScheduleCells, b: ScheduleCells): number {
+  const toSet = (c: ScheduleCells) => {
+    const s = new Set<string>()
+    for (const tid of Object.keys(c)) {
+      for (const day of Object.keys(c[tid] || {})) {
+        for (const empId of c[tid][day] || []) s.add(`${tid}|${day}|${empId}`)
+      }
+    }
+    return s
+  }
+  const setA = toSet(a)
+  const setB = toSet(b)
+  let n = 0
+  for (const k of setA) if (!setB.has(k)) n++
+  for (const k of setB) if (!setA.has(k)) n++
+  return n
+}
+function confirmOverwrite(cells: ScheduleCells, savedCells: ScheduleCells, fallbackMsg: string): boolean {
+  if (Object.keys(cells).length === 0) return true
+  const changes = countCellChanges(cells, savedCells)
+  if (changes === 0) return confirm(fallbackMsg)
+  return confirm(
+    `Tienes ${changes} cambio${changes === 1 ? '' : 's'} sin guardar en el cuadrante (ediciones manuales u otra ` +
+    `propuesta que aún no has guardado). Se perderán si continúas — no se fusionan, se sobrescriben. ` +
+    `¿Continuar de todas formas?`
+  )
+}
+
 export default function CalendarioPage() {
   const { locations, staff, activeAccountId } = useApp()
   const { hasPermission } = usePermissions()
@@ -639,9 +673,7 @@ export default function CalendarioPage() {
   async function doGenerate() {
     if (!canEditSchedule) return
     if (!locationId || templates.length === 0 || employees.length === 0) return
-    if (Object.keys(cells).length > 0) {
-      if (!confirm('Esto sobreescribirá los turnos actuales. ¿Continuar?')) return
-    }
+    if (!confirmOverwrite(cells, scheduleRow?.cells || {}, 'Esto sobreescribirá los turnos actuales. ¿Continuar?')) return
     // Mapa empleado → área (role_kind) desde staff_role + department.
     const kindByName = new Map(roles.map(r => [r.name.toLowerCase().trim(), r.kind as string]))
     const roleKindByEmployee: Record<string, string> = {}
@@ -678,9 +710,7 @@ export default function CalendarioPage() {
   async function doPropose() {
     if (!canEditSchedule || !activeAccountId) return
     if (!locationId) return
-    if (Object.keys(cells).length > 0) {
-      if (!confirm('Esto sobreescribirá los turnos actuales con la propuesta del generador. ¿Continuar?')) return
-    }
+    if (!confirmOverwrite(cells, scheduleRow?.cells || {}, 'Esto sobreescribirá los turnos actuales con la propuesta del generador. ¿Continuar?')) return
     setProposing(true)
     setProposalError(null)
     try {
