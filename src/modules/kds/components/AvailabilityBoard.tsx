@@ -2,22 +2,27 @@
 //
 // DISPONIBILIDAD · C2 — layout ÚNICO compartido por KitchenAvailabilityPage
 // (web) y TabletAvailabilityTab (tablet): panel "Local y marcas" (Cap. C +
-// Cap. B: LocationStatusCard + BrandCloseControl + ClosedBrandsCard) seguido
-// de la cabecera de "Productos". Antes cada pantalla repetía este bloque a
-// mano con jerarquía/envoltorio distintos (web sin panel real, tablet sin
-// panel en absoluto). Orden estable Local → Marcas → Productos en las dos
-// superficies.
+// Cap. B: cabecera con LocationCloseControl + BrandCloseControl, banner
+// LocationStatusCard + ClosedBrandsCard) seguido de la cabecera de "Productos".
+// Antes cada pantalla repetía este bloque a mano con jerarquía/envoltorio
+// distintos (web sin panel real, tablet sin panel en absoluto). Orden estable
+// Local → Marcas → Productos en las dos superficies.
+//
+// "Cerrar local" y "Cerrar marca" viven JUNTOS en la cabecera del panel (mismo
+// patrón: botón → modal). El estado del local (LocationStatusCard) es solo
+// lectura y se refresca al cerrar/reabrir vía key (statusVersion).
 //
 // La rejilla de tarjetas de producto (visualmente distinta: compacta en web,
 // grande y táctil en tablet) NO se fusiona aquí — se pasa como children.
 
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { CircleOff, Store } from 'lucide-react'
 import { themeCls, type Theme } from '../lib/theme'
 import SectionHeader from './SectionHeader'
 import LocationStatusCard from './LocationStatusCard'
 import ClosedBrandsCard from './ClosedBrandsCard'
 import BrandCloseControl from './BrandCloseControl'
+import LocationCloseControl from './LocationCloseControl'
 
 interface Props {
   theme: Theme
@@ -39,6 +44,10 @@ export default function AvailabilityBoard({
 }: Props) {
   const t = themeCls(theme)
   const dark = theme === 'dark'
+  // Cerrar/reabrir el local vive en LocationCloseControl (con confirmación); el
+  // banner de estado (LocationStatusCard) es de solo lectura. Al cambiar el
+  // estado, se refresca el banner remontándolo con una key nueva.
+  const [statusVersion, setStatusVersion] = useState(0)
 
   return (
     <>
@@ -48,9 +57,21 @@ export default function AvailabilityBoard({
           title="Local y marcas"
           theme={theme}
           className="mb-3"
-          action={<BrandCloseControl accountId={accountId} token={token} dark={dark} />}
+          action={
+            <div className="flex items-center gap-2">
+              <LocationCloseControl
+                locationId={locationId}
+                token={token}
+                dark={dark}
+                onChanged={() => setStatusVersion((v) => v + 1)}
+              />
+              <BrandCloseControl accountId={accountId} token={token} dark={dark} />
+            </div>
+          }
         />
-        {(locationId || token) && <LocationStatusCard locationId={locationId} token={token} dark={dark} />}
+        {(locationId || token) && (
+          <LocationStatusCard key={statusVersion} locationId={locationId} token={token} dark={dark} />
+        )}
         <ClosedBrandsCard accountId={accountId} token={token} dark={dark} />
       </div>
 
