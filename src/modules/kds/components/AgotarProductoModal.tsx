@@ -198,8 +198,10 @@ export default function AgotarProductoModal({ theme, adapter, locationLabel, all
                       className={`text-left px-3 py-2 rounded-lg flex items-center gap-2.5 disabled:opacity-40 ${t.hoverBg}`}
                     >
                       <span
-                        className={`w-4 h-4 rounded shrink-0 flex items-center justify-center border ${
-                          isSelected ? 'bg-accent border-accent text-text-on-accent' : `${t.border} bg-transparent`
+                        className={`w-4 h-4 rounded shrink-0 flex items-center justify-center border-2 ${
+                          isSelected
+                            ? 'bg-accent border-accent text-text-on-accent'
+                            : `bg-transparent ${dark ? 'border-zinc-500' : 'border-stone-400'}`
                         }`}
                       >
                         {isSelected && <Check size={12} strokeWidth={3} />}
