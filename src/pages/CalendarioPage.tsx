@@ -546,6 +546,40 @@ export default function CalendarioPage() {
     setCellAssign(templateId, day, cur.filter(x => x !== empId))
   }
 
+  // F10 — "+ nuevo bloque…": el desplegable "+turno" solo ofrecía plantillas
+  // reales con cobertura ese día; con generate_week_schedule el cuadrante
+  // pasaba a ser de solo lectura para cualquier cosa que no viniera ya
+  // propuesta (p.ej. reaccionar a una baja). Crea una plantilla sintética
+  // gen-<ini>-<fin> igual que las que genera el RPC — mismo id autodescrito,
+  // mismo mecanismo de reconstrucción en displayTemplates.
+  const [newBlockFor, setNewBlockFor] = useState<{ empId: string; day: DayOfWeek } | null>(null)
+  const [newBlockIni, setNewBlockIni] = useState('')
+  const [newBlockFin, setNewBlockFin] = useState('')
+  const [newBlockError, setNewBlockError] = useState<string | null>(null)
+
+  function openNewBlock(empId: string, day: DayOfWeek) {
+    setNewBlockFor({ empId, day })
+    setNewBlockIni('')
+    setNewBlockFin('')
+    setNewBlockError(null)
+  }
+  function cancelNewBlock() {
+    setNewBlockFor(null)
+    setNewBlockError(null)
+  }
+  function confirmNewBlock() {
+    if (!newBlockFor) return
+    const ini = parseInt(newBlockIni, 10)
+    const fin = parseInt(newBlockFin, 10)
+    if (!Number.isInteger(ini) || !Number.isInteger(fin) || ini < 0 || ini > 23 || fin <= ini || fin > 24) {
+      setNewBlockError('Hora inválida: inicio 0-23, fin > inicio, máx. 24.')
+      return
+    }
+    addToShift(`gen-${ini}-${fin}`, newBlockFor.day, newBlockFor.empId)
+    setNewBlockFor(null)
+    setNewBlockError(null)
+  }
+
   const uncovered = useMemo<UncoveredSlot[]>(() => {
     const list: UncoveredSlot[] = []
     for (const t of displayTemplates) {
@@ -1206,7 +1240,15 @@ export default function CalendarioPage() {
                     </td>
                     {DAYS.map(d => {
                       const shifts = empSchedule[e.id]?.[d] || []
-                      const avail = templates.filter(t => coverageForDay(t, d) > 0 && !shifts.some(s => s.id === t.id))
+                      // Plantillas reales con cobertura ese día + TODOS los bloques
+                      // sintéticos de la semana (generate_week_schedule no tiene
+                      // cobertura por día — el "needed" vive en overrides, no aquí).
+                      // Así el encargado puede reforzar un bloque generado en un
+                      // día donde el generador no lo puso, p.ej. para cubrir una baja.
+                      const avail = displayTemplates.filter(t =>
+                        (GEN_ID_RE.test(t.id) || coverageForDay(t, d) > 0) && !shifts.some(s => s.id === t.id)
+                      )
+                      const isAddingBlock = newBlockFor?.empId === e.id && newBlockFor.day === d
                       return (
                         <td key={d} className="px-1.5 py-1.5 align-top border-l border-border-default">
                           <div className="space-y-1">
@@ -1226,11 +1268,33 @@ export default function CalendarioPage() {
                                 </div>
                               )
                             ))}
-                            {canEditSchedule && avail.length > 0 && (
-                              <select value="" onChange={ev => { if (ev.target.value) addToShift(ev.target.value, d, e.id) }}
+                            {canEditSchedule && isAddingBlock && (
+                              <div className="flex flex-col gap-1 border border-dashed border-accent rounded-md p-1 bg-accent-bg/40">
+                                <div className="flex items-center gap-1">
+                                  <input type="number" min={0} max={23} placeholder="ini" value={newBlockIni}
+                                    onChange={ev => setNewBlockIni(ev.target.value)}
+                                    className="w-11 text-[10px] border border-border-default rounded px-1 py-0.5 bg-card" />
+                                  <span className="text-[10px] text-text-secondary">–</span>
+                                  <input type="number" min={1} max={24} placeholder="fin" value={newBlockFin}
+                                    onChange={ev => setNewBlockFin(ev.target.value)}
+                                    className="w-11 text-[10px] border border-border-default rounded px-1 py-0.5 bg-card" />
+                                </div>
+                                {newBlockError && <span className="text-[9px] text-danger leading-tight">{newBlockError}</span>}
+                                <div className="flex gap-1">
+                                  <button onClick={confirmNewBlock} className="flex-1 text-[10px] font-semibold text-accent hover:underline">Crear</button>
+                                  <button onClick={cancelNewBlock} className="flex-1 text-[10px] text-text-secondary hover:underline">Cancelar</button>
+                                </div>
+                              </div>
+                            )}
+                            {canEditSchedule && !isAddingBlock && (
+                              <select value="" onChange={ev => {
+                                if (ev.target.value === '__new__') openNewBlock(e.id, d)
+                                else if (ev.target.value) addToShift(ev.target.value, d, e.id)
+                              }}
                                 className="w-full text-[10px] text-text-secondary border border-dashed border-border-default rounded-md px-1 py-0.5 bg-transparent hover:border-accent cursor-pointer">
                                 <option value="">+ turno</option>
                                 {avail.map(t => <option key={t.id} value={t.id}>{t.label} {t.start_time.slice(0, 5)}</option>)}
+                                <option value="__new__">+ nuevo bloque…</option>
                               </select>
                             )}
                           </div>
