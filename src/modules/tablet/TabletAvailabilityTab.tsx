@@ -10,9 +10,13 @@
 //
 // C2 (31/07): cuerpo (Local y marcas + Productos) sobre AvailabilityBoard,
 // compartido con KitchenAvailabilityPage (web) — misma jerarquía, mismo orden.
-// La barra superior (título, refrescar, cerrar marca, agotar) se queda IGUAL
-// que hoy, según el encargo. El hex a medida que había antes se sustituye por
-// ámbar de Tailwind (mismo tono, ya usado en esta pantalla para avisos).
+// El hex a medida que había antes se sustituye por ámbar de Tailwind (mismo
+// tono, ya usado en esta pantalla para avisos).
+//
+// Cerrar local / Cerrar marca viven AMBOS en la cabecera de "Local y marcas"
+// (dentro de AvailabilityBoard), no en la barra superior: antes "Cerrar marca"
+// se repetía en las dos zonas (duplicado visible en la tablet). La barra
+// superior se queda con refrescar + agotar producto.
 
 import { useCallback, useEffect, useState } from 'react'
 import { CircleOff, Plus, RefreshCw, Loader2 } from 'lucide-react'
@@ -22,7 +26,6 @@ import {
 } from './services/tabletAvailabilityService'
 import AvailabilityBoard from '@/modules/kds/components/AvailabilityBoard'
 import AgotarProductoModal, { type AgotarProductoAdapter } from '@/modules/kds/components/AgotarProductoModal'
-import BrandCloseControl from '@/modules/kds/components/BrandCloseControl'
 
 interface Props {
   token: string
@@ -93,7 +96,6 @@ export default function TabletAvailabilityTab({ token, locationName }: Props) {
           >
             <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
           </button>
-          <BrandCloseControl token={token} dark />
           <button
             onClick={() => setShowAgotar(true)}
             className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-amber-500 text-zinc-950 font-bold hover:bg-amber-400"
