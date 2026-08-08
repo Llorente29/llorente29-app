@@ -1,9 +1,17 @@
 // src/services/scheduleProposalService.ts
-// F10 — Generador de cuadrantes por solver determinista (propose_schedule).
-// Motor verificado en BBDD 07/08 — ver ENCARGO_CODE_F10_generador_cuadrantes.md.
+// F10 — Generadores de cuadrante por RPC (solver determinista, sin IA).
 // Convive con el generador heurístico existente (scheduleGenerator.ts): el
 // encargado elige, nada se sustituye. No escribe nada — el caller decide si
 // vuelca el resultado en schedules.cells (y solo lo hace al guardar).
+//
+// fetchScheduleProposal/fetchScheduleRest (propose_schedule): motor original
+// por shift_templates. HUÉRFANO desde 08/08 — CalendarioPage pasó a
+// fetchGeneratedSchedule (generate_week_schedule, sin shift_templates, desde
+// la curva de demanda). No se borra (regla de no destrucción): se retira
+// cuando el nuevo lleve unas semanas verificado.
+//
+// fetchGeneratedSchedule (generate_week_schedule): EN USO. Motor verificado
+// en BBDD 08/08 — ver supabase/migrations/20260808T1500..1810.
 
 import { supabase } from '../lib/supabase'
 import type { DayOfWeek } from '../types/scheduler'
@@ -109,5 +117,61 @@ export async function fetchScheduleRest(
     margenHoras: Number(r.margen_horas) || 0,
     estado: (r.estado === 'ok' || r.estado === 'al_limite' || r.estado === 'incumple') ? r.estado : 'incumple',
     cumple: !!r.cumple,
+  }))
+}
+
+// F10 — generate_week_schedule: NO usa shift_templates. Convierte la curva de
+// demanda directamente en bloques de turno continuos (hora inicio/fin), sin
+// plantilla fija. Cada fila es UN asiento: o bien una persona concreta, o un
+// hueco (o_hueco=true) con su motivo — nunca "menos filas en silencio".
+// ⚠️ Aplicado pero sobredimensiona la demanda si no se acota bien la ventana
+// de apertura (F10 sigue 🟡) — ver project_f10_solver_legal en memoria.
+export interface GeneratedScheduleRow {
+  fecha: string
+  dayOfWeek: DayOfWeek
+  /** hora de inicio del bloque, 0-23 */
+  horaIni: number
+  /** hora de fin del bloque, 1-24 (24 = medianoche) */
+  horaFin: number
+  horas: number
+  /** capa de cobertura (1 = base, 2+ = refuerzo en horas punta) */
+  capa: number
+  /** null cuando esHueco: nadie puede cubrir el bloque sin incumplir una restricción dura. */
+  employeeId: string | null
+  employeeName: string | null
+  esHueco: boolean
+  motivo: string
+}
+
+export async function fetchGeneratedSchedule(
+  accountId: string,
+  locationId: string,
+  weekStart: string,
+  role: string = 'cocina',
+  minPctDias: number = 15
+): Promise<GeneratedScheduleRow[]> {
+  const { data, error } = await db().rpc('generate_week_schedule', {
+    p_account: accountId,
+    p_location: locationId,
+    p_week_start: weekStart,
+    p_role: role,
+    p_min_pct_dias: minPctDias,
+  })
+  if (error) {
+    console.error('[scheduleProposal] generate_week_schedule:', error)
+    throw new Error(error.message || 'No se pudo generar el cuadrante.')
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data as any[]).map(r => ({
+    fecha: r.o_fecha,
+    dayOfWeek: Number(r.o_dow) as DayOfWeek,
+    horaIni: Number(r.o_ini),
+    horaFin: Number(r.o_fin),
+    horas: Number(r.o_horas),
+    capa: Number(r.o_capa),
+    employeeId: r.o_employee_id ?? null,
+    employeeName: r.o_employee ? String(r.o_employee).trim() : null,
+    esHueco: !!r.o_hueco,
+    motivo: r.o_motivo || '',
   }))
 }

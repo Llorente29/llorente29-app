@@ -61,7 +61,7 @@ import { fetchStaffRoles, roleColor, upsertStaffRole, deleteStaffRole, ROLE_COLO
 import { fetchLaborModel, saveLaborModelRow, fetchLaborIntensity, setLaborIntensity, fetchLaborRequirement, type LaborModelRow, type LaborDriver, type LaborRequirementRow } from '../services/teamLaborService'
 import { getTrainingComplianceMatrix } from '../services/trainingComplianceService'
 import { listOnboardingCourseFlags } from '../services/trainingPathService'
-import { fetchScheduleProposal, fetchScheduleRest, type ScheduleRestRow } from '../services/scheduleProposalService'
+import { fetchGeneratedSchedule } from '../services/scheduleProposalService'
 
 // Semáforo de formación en el cuadrante (onboarding formativo, pieza 3):
 // "cero falsos positivos" — solo se enseña en los puestos que de verdad
@@ -127,6 +127,32 @@ function formatWeekLabel(weekStartISO: string): string {
   return `${start.toLocaleDateString('es-ES', opts)} – ${end.toLocaleDateString('es-ES', opts)} ${end.getFullYear()}`
 }
 
+// F10 — generate_week_schedule no usa shift_templates: cada bloque distinto
+// (hora inicio/fin) se representa como una plantilla SINTÉTICA para reusar
+// la rejilla, el cálculo de horas y el coste tal cual. El id se autodescribe
+// (`gen-<ini>-<fin>`) para poder reconstruirla desde las claves de `cells`
+// tras recargar la página — no hace falta persistirla en shift_templates.
+const GEN_ID_RE = /^gen-(\d+)-(\d+)$/
+function parseGenId(id: string): { ini: number; fin: number } | null {
+  const m = GEN_ID_RE.exec(id)
+  return m ? { ini: Number(m[1]), fin: Number(m[2]) } : null
+}
+function genHourLabel(h: number): string {
+  return `${String(h % 24).padStart(2, '0')}:00`
+}
+function buildSyntheticTemplate(id: string, locationId: string, ini: number, fin: number): ShiftTemplate {
+  return {
+    id,
+    location_id: locationId,
+    label: `Generado ${genHourLabel(ini)}–${genHourLabel(fin)}`,
+    start_time: genHourLabel(ini),
+    end_time: genHourLabel(fin),
+    coverage_mon: 0, coverage_tue: 0, coverage_wed: 0, coverage_thu: 0,
+    coverage_fri: 0, coverage_sat: 0, coverage_sun: 0,
+    active: true,
+  }
+}
+
 export default function CalendarioPage() {
   const { locations, staff, activeAccountId } = useApp()
   const { hasPermission } = usePermissions()
@@ -155,24 +181,26 @@ export default function CalendarioPage() {
   // cargan aparte y se pasan explícitas al generador.
   const [vacations, setVacations] = useState<VacationRequest[]>([])
 
-  // F10 — "Proponer cuadrante" (propose_schedule, solver determinista).
-  // Convive con "Generar automático": no sustituye nada, el encargado elige.
-  // proposalAvisos: `${templateId}:${day}:${employeeId}` -> motivo, SOLO para
-  // las filas donde el solver tuvo que romper la preferencia inferida
-  // (rompe_preferencia=true) — se pintan en ámbar en la celda. No se guarda
-  // nada hasta que el encargado pulse "Guardar" (mismo botón de siempre).
+  // F10 — "Proponer cuadrante" (generate_week_schedule: bloques continuos
+  // desde la curva de demanda, SIN shift_templates). Sustituye a
+  // propose_schedule (08/08) — ver scheduleProposalService.ts. Convive con
+  // "Generar automático": no sustituye ese, el encargado elige. Cada bloque
+  // se representa como una plantilla SINTÉTICA (id `gen-<ini>-<fin>`,
+  // reconstruida en `displayTemplates` a partir de las claves de `cells` —
+  // no vive en shift_templates, no hace falta migración para persistirla:
+  // el id se autodescribe). No se guarda nada hasta que el encargado pulse
+  // "Guardar" (mismo botón de siempre).
   const [proposing, setProposing] = useState(false)
+  // proposalAvisos: reservado para futuros avisos ámbar (p.ej. turnos
+  // ampliados) — generate_week_schedule no tiene hoy el concepto de "rompe
+  // preferencia", así que queda vacío en este flujo.
   const [proposalAvisos, setProposalAvisos] = useState<Map<string, string> | null>(null)
-  // proposalGaps: `${templateId}:${day}` -> motivos del hueco (uno por asiento
-  // sin cubrir). es_hueco del solver — nadie podía cubrirlo sin romper una
+  // proposalGaps: `${synthId}:${day}` -> motivos del hueco (uno por asiento
+  // sin cubrir). o_hueco del generador — nadie podía cubrirlo sin romper una
   // restricción dura. Se pinta en rojo con el motivo, nunca desaparece.
   const [proposalGaps, setProposalGaps] = useState<Map<string, string[]> | null>(null)
   const [proposalStats, setProposalStats] = useState<{ total: number; avisos: number; huecos: number; skippedNames: string[] } | null>(null)
   const [proposalError, setProposalError] = useState<string | null>(null)
-  // propose_schedule_rest: descanso semanal continuo de cada persona frente al
-  // mínimo exigido (configurable por cuenta/local en break_policy). Chip por
-  // persona junto al banner del borrador — no solo bloquea en el solver, se ve.
-  const [restChips, setRestChips] = useState<ScheduleRestRow[] | null>(null)
   // Tras Guardar/Publicar, sube este contador para que CoverageGapPanel
   // (que solo reacciona a accountId/locationId/weekStart) vuelva a pedir
   // schedule_coverage_gap y refleje el borrador recién guardado — el
@@ -183,6 +211,28 @@ export default function CalendarioPage() {
     () => staff.filter(e => e.active && (e.locationId === locationId || (e.assignedLocations || []).includes(locationId))),
     [staff, locationId]
   )
+
+  // F10 — plantillas reales (shift_templates) + sintéticas de
+  // generate_week_schedule, reconstruidas desde las claves `gen-<ini>-<fin>`
+  // presentes en `cells` (persistidas) y, mientras hay un borrador vivo, en
+  // `proposalGaps` (huecos — no se guardan, son solo del borrador en curso).
+  const displayTemplates = useMemo(() => {
+    const ids = new Set<string>()
+    for (const id of Object.keys(cells)) if (GEN_ID_RE.test(id)) ids.add(id)
+    if (proposalGaps) {
+      for (const key of proposalGaps.keys()) {
+        const id = key.slice(0, key.lastIndexOf(':'))
+        if (GEN_ID_RE.test(id)) ids.add(id)
+      }
+    }
+    const synths: ShiftTemplate[] = []
+    for (const id of ids) {
+      const parsed = parseGenId(id)
+      if (parsed) synths.push(buildSyntheticTemplate(id, locationId, parsed.ini, parsed.fin))
+    }
+    synths.sort((a, b) => a.start_time.localeCompare(b.start_time))
+    return [...templates, ...synths]
+  }, [cells, proposalGaps, templates, locationId])
 
   useEffect(() => {
     if (!locationId && locations.length > 0) setLocationId(locations[0].id)
@@ -251,7 +301,6 @@ export default function CalendarioPage() {
     setProposalAvisos(null)
     setProposalGaps(null)
     setProposalStats(null)
-    setRestChips(null)
     setProposalError(null)
     // Aviso: horario comercial abierto sin personal (lee de BD; refleja lo guardado)
     getStaffingGaps(locationId).then(setStaffingGaps).catch(() => setStaffingGaps([]))
@@ -263,8 +312,8 @@ export default function CalendarioPage() {
   }, [locationId, weekStart])
 
   const workloads = useMemo<EmployeeWorkload[]>(
-    () => computeWorkloads(cells, templates, employees),
-    [cells, templates, employees]
+    () => computeWorkloads(cells, displayTemplates, employees),
+    [cells, displayTemplates, employees]
   )
 
   // ── Coste en vivo del cuadrante ─────────────────────────────────────────
@@ -391,7 +440,7 @@ export default function CalendarioPage() {
     const reqHour: number[][] = Array.from({ length: 7 }, () => new Array(24).fill(0))
     for (const r of laborReq) if (r.dow >= 0 && r.dow <= 6 && r.hora >= 0 && r.hora < 24) reqHour[r.dow][r.hora] += r.required
     const asgHour: number[][] = Array.from({ length: 7 }, () => new Array(24).fill(0))
-    const tById = new Map(templates.map(t => [t.id, t]))
+    const tById = new Map(displayTemplates.map(t => [t.id, t]))
     for (const tid of Object.keys(cells)) {
       const t = tById.get(tid); if (!t) continue
       const sh = Number(t.start_time.slice(0, 2))
@@ -423,7 +472,7 @@ export default function CalendarioPage() {
     const weekCov = reqSum > 0 ? covSum / reqSum : 1
     const gapDays = covByDay.filter((c, i) => dayHasReq[i] && c < 0.95).length
     return { covByDay, weekCov, gapDays, gapHours, hasReq: reqSum > 0 }
-  }, [laborReq, cells, templates])
+  }, [laborReq, cells, displayTemplates])
 
   const heroStats = useMemo(() => {
     const perDay = demandLevels.perDay
@@ -463,7 +512,7 @@ export default function CalendarioPage() {
   // Inversión: por empleado y día, los turnos que tiene asignados esa semana.
   const empSchedule = useMemo(() => {
     const map: Record<string, Record<number, ShiftTemplate[]>> = {}
-    for (const t of templates) {
+    for (const t of displayTemplates) {
       for (const d of DAYS) {
         const ids = cells[t.id]?.[String(d)] || []
         for (const id of ids) {
@@ -474,7 +523,7 @@ export default function CalendarioPage() {
       }
     }
     return map
-  }, [cells, templates])
+  }, [cells, displayTemplates])
 
   const hoursByEmp = useMemo(() => {
     const m: Record<string, number> = {}
@@ -499,7 +548,7 @@ export default function CalendarioPage() {
 
   const uncovered = useMemo<UncoveredSlot[]>(() => {
     const list: UncoveredSlot[] = []
-    for (const t of templates) {
+    for (const t of displayTemplates) {
       for (const d of DAYS) {
         const baseCov = coverageForDay(t, d)
         const ov = overrides[t.id]?.[String(d)]
@@ -519,7 +568,7 @@ export default function CalendarioPage() {
       }
     }
     return list
-  }, [cells, overrides, templates])
+  }, [cells, overrides, displayTemplates])
 
   function setCellAssign(templateId: string, day: DayOfWeek, ids: string[]) {
     if (!canEditSchedule) return
@@ -549,7 +598,7 @@ export default function CalendarioPage() {
   }
 
   function doValidate() {
-    setIssues(validateSchedule(cells, templates, employees, weekStart, vacations))
+    setIssues(validateSchedule(cells, displayTemplates, employees, weekStart, vacations))
     setIssuesShown(true)
   }
 
@@ -582,86 +631,87 @@ export default function CalendarioPage() {
     setProposalAvisos(null)
     setProposalGaps(null)
     setProposalStats(null)
-    setRestChips(null)
     setProposalError(null)
   }
 
-  // F10 — propose_schedule: solver determinista sobre disponibilidad
-  // inferida + demanda. Carga el resultado como BORRADOR editable sobre la
-  // MISMA rejilla (no un modal aparte) — no escribe nada hasta "Guardar".
+  // F10 — generate_week_schedule: bloques continuos desde la curva de
+  // demanda, SIN shift_templates. Carga el resultado como BORRADOR editable
+  // sobre la MISMA rejilla (no un modal aparte) — no escribe nada hasta
+  // "Guardar". Cada bloque distinto (hora ini/fin) se representa como una
+  // plantilla SINTÉTICA — ver displayTemplates, que la reconstruye a partir
+  // del id (`gen-<ini>-<fin>`), así que no hace falta persistirla aparte:
+  // el id ya lleva la definición y sobrevive a un recargar de página.
   async function doPropose() {
     if (!canEditSchedule || !activeAccountId) return
-    if (!locationId || templates.length === 0) return
+    if (!locationId) return
     if (Object.keys(cells).length > 0) {
       if (!confirm('Esto sobreescribirá los turnos actuales con la propuesta del generador. ¿Continuar?')) return
     }
     setProposing(true)
     setProposalError(null)
     try {
-      const [rows, rest] = await Promise.all([
-        fetchScheduleProposal(activeAccountId, locationId, weekStart),
-        // No bloquea la propuesta si falla: son los chips de descanso, no el cuadrante.
-        fetchScheduleRest(activeAccountId, locationId, weekStart).catch(e => {
-          console.error('[CalendarioPage] fetchScheduleRest:', e)
-          return null
-        }),
-      ])
+      const rows = await fetchGeneratedSchedule(activeAccountId, locationId, weekStart)
       if (rows.length === 0) {
-        setProposalError('El generador no pudo proponer nada para esta semana: revisa que haya plantillas de turno con cobertura y empleados activos en este local.')
+        setProposalError('El generador no pudo proponer nada para esta semana: revisa que haya previsión de demanda y empleados activos en este local.')
         return
       }
-      // propose_schedule elige de TODO el historial de la cuenta en este
-      // local (infer_employee_availability no está atado a `employees`, que
-      // aquí solo trae quien tiene este local como principal o asignado).
-      // Si asignara a alguien fuera de esa lista, la celda no podría
-      // pintarlo (ni el desplegable "asignar" a mano lo ofrece) — se
-      // descarta y se avisa con nombre, nunca en silencio con un "?" roto.
       const knownIds = new Set(employees.map(e => e.id))
       const newCells: ScheduleCells = {}
-      const avisos = new Map<string, string>()
+      const newOverrides: CoverageOverrides = {}
+      // gaps: `${synthId}:${day}` -> motivos del hueco (uno por asiento sin
+      // cubrir). o_hueco del generador — nadie podía cubrirlo sin romper una
+      // restricción dura. Se pinta en rojo con el motivo, nunca desaparece.
       const gaps = new Map<string, string[]>()
       const skippedNames = new Map<string, string>()
-      let avisosCount = 0
       let huecosCount = 0
       let includedCount = 0
+
       for (const r of rows) {
-        // es_hueco: el solver legal declaró que nadie puede cubrir este
-        // asiento sin romper una restricción dura. No es un "empleado no
-        // reconocido" (no trae employeeId) — se pinta en rojo con motivo,
-        // no se cuenta como turno cargado ni se descarta en silencio.
+        const synthId = `gen-${r.horaIni}-${r.horaFin}`
+        const dayKey = String(r.dayOfWeek)
+        if (!newOverrides[synthId]) newOverrides[synthId] = {}
+        // "needed" real de este bloque/día = nº de asientos que devolvió el
+        // generador para él (cubiertos + huecos). La plantilla sintética
+        // nace con coverage_* = 0; el override es la única fuente de verdad.
+        newOverrides[synthId][dayKey] = (newOverrides[synthId][dayKey] || 0) + 1
+
         if (r.esHueco) {
-          const key = `${r.shiftTemplateId}:${r.dayOfWeek}`
+          const key = `${synthId}:${dayKey}`
           const list = gaps.get(key) || []
-          // Varios asientos del mismo turno/día suelen compartir motivo
-          // (misma plantilla bloqueada igual para todos) — no repetir el texto.
-          const reason = r.motivoHueco || r.motivo
-          if (!list.includes(reason)) list.push(reason)
+          if (!list.includes(r.motivo)) list.push(r.motivo)
           gaps.set(key, list)
           huecosCount++
           continue
         }
         if (!r.employeeId || !knownIds.has(r.employeeId)) {
-          skippedNames.set(r.employeeId || r.employeeName, r.employeeName)
+          skippedNames.set(r.employeeId || r.employeeName || '', r.employeeName || '(sin nombre)')
           continue
         }
         includedCount++
-        if (!newCells[r.shiftTemplateId]) newCells[r.shiftTemplateId] = {}
-        const dayKey = String(r.dayOfWeek)
-        const list = newCells[r.shiftTemplateId][dayKey] || []
+        if (!newCells[synthId]) newCells[synthId] = {}
+        const list = newCells[synthId][dayKey] || []
         list.push(r.employeeId)
-        newCells[r.shiftTemplateId][dayKey] = list
-        if (r.rompePreferencia) {
-          avisos.set(`${r.shiftTemplateId}:${r.dayOfWeek}:${r.employeeId}`, r.motivo)
-          avisosCount++
+        newCells[synthId][dayKey] = list
+      }
+
+      // Los shift_templates reales no participan en este generador. Sin
+      // esto, su cobertura de BD (coverage_* > 0) saldría en rojo por
+      // error: no es que falte gente, es que este generador no los usa.
+      for (const t of templates) {
+        for (const d of DAYS) {
+          if (coverageForDay(t, d) > 0) {
+            if (!newOverrides[t.id]) newOverrides[t.id] = {}
+            newOverrides[t.id][String(d)] = 0
+          }
         }
       }
+
       setCells(newCells)
-      setOverrides({})
+      setOverrides(newOverrides)
       setDirty(true)
-      setProposalAvisos(avisos)
+      setProposalAvisos(null)
       setProposalGaps(gaps)
-      setProposalStats({ total: includedCount, avisos: avisosCount, huecos: huecosCount, skippedNames: [...skippedNames.values()] })
-      setRestChips(rest)
+      setProposalStats({ total: includedCount, avisos: 0, huecos: huecosCount, skippedNames: [...skippedNames.values()] })
     } catch (e) {
       setProposalError(e instanceof Error ? e.message : 'No se pudo proponer el cuadrante.')
     } finally {
@@ -763,7 +813,6 @@ export default function CalendarioPage() {
     setProposalAvisos(null)
     setProposalGaps(null)
     setProposalStats(null)
-    setRestChips(null)
   }
 
   return (
@@ -819,14 +868,14 @@ export default function CalendarioPage() {
         )}
 
         {/* F10 — alternativa que convive con "Generar automático": el
-            encargado elige. Usa disponibilidad inferida + demanda vía solver
-            determinista (propose_schedule); nunca guarda sola. */}
+            encargado elige. Bloques desde la curva de demanda vía
+            generate_week_schedule (sin shift_templates); nunca guarda sola. */}
         {canEditSchedule && (
           <button
             onClick={doPropose}
-            disabled={proposing || loading || templates.length === 0 || employees.length === 0}
+            disabled={proposing || loading || employees.length === 0}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-accent text-accent bg-card text-sm font-semibold hover:bg-accent-bg disabled:opacity-40 transition-base"
-            title="Propone un borrador con el generador de disponibilidad — no guarda nada hasta que pulses Guardar"
+            title="Propone un borrador desde la curva de demanda — no guarda nada hasta que pulses Guardar"
           >
             {proposing ? <RefreshCw size={15} className="animate-spin" /> : <Sparkles size={15} />} Proponer cuadrante
           </button>
@@ -865,7 +914,7 @@ export default function CalendarioPage() {
               <div className="fixed inset-0 z-40" onClick={() => setMoreMenuOpen(false)} />
               <div className="absolute right-0 mt-1 z-50 w-48 bg-card border border-border-default rounded-xl shadow-lg overflow-hidden py-1">
                 <button onClick={() => { setMoreMenuOpen(false); doValidate() }}
-                  disabled={templates.length === 0 || employees.length === 0}
+                  disabled={displayTemplates.length === 0 || employees.length === 0}
                   className="w-full text-left px-3 py-2 text-sm text-text-primary hover:bg-page inline-flex items-center gap-2 disabled:opacity-40"><AlertTriangle size={14} /> Validar</button>
                 {canEditSchedule && (
                   <button onClick={() => { setMoreMenuOpen(false); setCopyModalOpen(true) }}
@@ -883,22 +932,18 @@ export default function CalendarioPage() {
       </div>
 
       {/* F10 — banner del borrador propuesto: nada se guardó, solo se cargó
-          en la rejilla. El encargado revisa los ámbar y decide Guardar o
+          en la rejilla. El encargado revisa los huecos y decide Guardar o
           descartar (recarga lo que había antes). */}
       {proposalStats && (
         <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-warning-bg border border-warning/30 flex-wrap">
           <Sparkles size={16} className="text-warning shrink-0" />
           <p className="text-sm text-text-primary flex-1 min-w-[240px]">
-            <strong>Borrador propuesto</strong> por el solver legal: {proposalStats.total} turnos asignados,{' '}
-            {proposalStats.avisos > 0 ? (
-              <span className="text-warning font-semibold">{proposalStats.avisos} en ámbar</span>
-            ) : 'ninguno rompe la disponibilidad habitual'}
-            {proposalStats.avisos > 0 && ' — pasa el ratón sobre esas celdas para ver el motivo.'}{' '}
-            Nunca propone un turno que incumpla vacaciones aprobadas, el descanso semanal mínimo exigido
-            (36h por defecto, art. 37.1 — configurable por convenio), el descanso entre jornadas o el tope
-            de horas contratadas. No se ha guardado nada — pulsa Guardar para aplicarlo.
+            <strong>Borrador propuesto</strong> desde la curva de demanda: {proposalStats.total} bloques asignados.
+            Nunca propone un bloque que incumpla vacaciones aprobadas, el descanso semanal mínimo exigido,
+            el descanso entre jornadas o el tope de horas contratadas. No se ha guardado nada — pulsa Guardar
+            para aplicarlo.
             {proposalStats.huecos > 0 && (
-              <><br /><strong className="text-danger">{proposalStats.huecos} turno{proposalStats.huecos === 1 ? '' : 's'} sin cubrir</strong> — nadie podía asumirlo{proposalStats.huecos === 1 ? '' : 's'} sin incumplir una de esas restricciones. Están marcados en rojo en la rejilla, con el motivo al pasar el ratón.</>
+              <><br /><strong className="text-danger">{proposalStats.huecos} asiento{proposalStats.huecos === 1 ? '' : 's'} sin cubrir</strong> — nadie podía asumirlo{proposalStats.huecos === 1 ? '' : 's'} sin incumplir una de esas restricciones. Están marcados en rojo en la rejilla, con el motivo al pasar el ratón.</>
             )}
             {proposalStats.skippedNames.length > 0 && (
               <><br /><strong className="text-danger">{proposalStats.skippedNames.length} turno{proposalStats.skippedNames.length === 1 ? '' : 's'} no cargado{proposalStats.skippedNames.length === 1 ? '' : 's'}</strong>: {proposalStats.skippedNames.join(', ')} — no tiene{proposalStats.skippedNames.length === 1 ? '' : 'n'} este local en su ficha, revísalo en Empleados si trabaja aquí habitualmente.</>
@@ -907,42 +952,6 @@ export default function CalendarioPage() {
           <button onClick={discardProposal} className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-warning/40 text-warning hover:bg-card transition-base shrink-0">
             Descartar propuesta
           </button>
-        </div>
-      )}
-      {/* F10 — chip de descanso semanal por persona (propose_schedule_rest):
-          hueco continuo más largo de la semana propuesta frente al mínimo
-          exigido. Tres estados, no dos: verde 'ok' (colchón real por encima
-          del margen de seguridad operativo), ámbar 'al_limite' (cumple el
-          mínimo legal pero sin margen — un fichaje tardío lo tumba), rojo
-          'incumple'. Verde solo cuando hay colchón de verdad. */}
-      {restChips && restChips.length > 0 && (
-        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-card border border-border-default flex-wrap">
-          <span className="text-xs font-semibold text-text-secondary shrink-0">Descanso semanal:</span>
-          {restChips.map(r => {
-            const estadoCls = r.estado === 'ok'
-              ? { chip: 'bg-success-bg text-success', dot: 'bg-success' }
-              : r.estado === 'al_limite'
-              ? { chip: 'bg-warning-bg text-warning', dot: 'bg-warning' }
-              : { chip: 'bg-danger-bg text-danger', dot: 'bg-danger' }
-            const horas = r.descansoHoras.toLocaleString('es-ES', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
-            const minimo = r.minimoExigidoHoras.toLocaleString('es-ES', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
-            const margenMin = Math.round(Math.abs(r.margenHoras) * 60)
-            const title = r.estado === 'incumple'
-              ? `${r.employeeName} · ${horas} h de descanso — ${margenMin} min por debajo del mínimo (${minimo} h)`
-              : r.estado === 'al_limite'
-              ? `${r.employeeName} · ${horas} h · ${margenMin} min sobre el mínimo`
-              : `${r.employeeName} · ${horas} h de descanso, mínimo ${minimo} h`
-            return (
-              <span
-                key={r.employeeId}
-                className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${estadoCls.chip}`}
-                title={title}
-              >
-                <span className={`w-1.5 h-1.5 rounded-full ${estadoCls.dot}`} />
-                {r.employeeName} · {horas}h{r.estado !== 'ok' ? ` (mín. ${minimo}h)` : ''}
-              </span>
-            )
-          })}
         </div>
       )}
       {proposalError && (
@@ -1072,7 +1081,7 @@ export default function CalendarioPage() {
         </div>
       )}
 
-      {templates.length > 0 && (
+      {displayTemplates.length > 0 && (
         <div className="flex items-center gap-2">
           <div className="inline-flex bg-accent-bg rounded-lg p-0.5">
             <button onClick={() => setViewMode('empleado')}
@@ -1111,7 +1120,7 @@ export default function CalendarioPage() {
         </div>
       )}
 
-      {templates.length > 0 && (viewMode === 'empleado' ? (
+      {displayTemplates.length > 0 && (viewMode === 'empleado' ? (
         employees.length === 0 ? (
           <div className="bg-card border border-border-default rounded-lg p-6 text-center text-sm text-text-secondary">No hay empleados en este local.</div>
         ) : (
@@ -1255,7 +1264,7 @@ export default function CalendarioPage() {
               </tr>
             </thead>
             <tbody>
-              {templates.map(t => {
+              {displayTemplates.map(t => {
                 const tHours = shiftDurationHours(t.start_time, t.end_time)
                 return (
                   <tr key={t.id} className="border-b">
@@ -1318,7 +1327,7 @@ export default function CalendarioPage() {
       {uncovered.length > 0 && (
         <UncoveredPanel
           uncovered={uncovered}
-          templates={templates}
+          templates={displayTemplates}
           onClickGap={(g) => {
             const map = new Map<string, number>()
             for (const w of workloads) map.set(w.employee_id, w.assigned_hours)
@@ -1331,7 +1340,7 @@ export default function CalendarioPage() {
       {gapModal && (
         <SuggestionsModal
           gap={gapModal}
-          template={templates.find(t => t.id === gapModal.template_id)!}
+          template={displayTemplates.find(t => t.id === gapModal.template_id)!}
           weekStart={weekStart}
           cells={cells}
           employees={employees}
@@ -1842,7 +1851,13 @@ function Cell({
         {isGap && (
           <span
             className="text-danger"
-            title={proposalGaps && proposalGaps.length > 0 ? `Sin cubrir — ${proposalGaps.join(' · ')}` : 'Hueco sin cubrir'}
+            title={
+              proposalGaps && proposalGaps.length > 0
+                // El motivo de generate_week_schedule ya arranca en "SIN CUBRIR —";
+                // el de propose_schedule no. No duplicar el prefijo en el primer caso.
+                ? (/^sin cubrir/i.test(proposalGaps[0]) ? proposalGaps.join(' · ') : `Sin cubrir — ${proposalGaps.join(' · ')}`)
+                : 'Hueco sin cubrir'
+            }
           >
             <AlertTriangle size={11} />
           </span>
