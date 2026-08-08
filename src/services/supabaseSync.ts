@@ -166,8 +166,7 @@ interface EmployeeRow {
   termination_reason: string | null
   termination_communicated_to_gestoria: boolean | null
   trial_period_days: number | null
-  // NOTA: contracted_hours_week existe en BBDD pero NO se expone al cliente
-  // todavía. Deuda apuntada para sesión futura (ver CONTEXTO §11).
+  contracted_hours_week: number | null
 }
 
 function rowToEmployee(r: EmployeeRow): Employee {
@@ -187,6 +186,7 @@ function rowToEmployee(r: EmployeeRow): Employee {
     salary: r.salary ?? 0,
     employerSsAnnual: r.employer_ss_annual != null ? Number(r.employer_ss_annual) : undefined,
     weeklyHours: r.weekly_hours ?? 40,
+    contractedHoursWeek: r.contracted_hours_week ?? undefined,
     schedule: r.schedule || '',
     active: r.active,
     notes: r.notes || '',

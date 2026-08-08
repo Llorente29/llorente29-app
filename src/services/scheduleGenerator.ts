@@ -593,7 +593,7 @@ export function computeWorkloads(
 
   return employees.map(emp => {
     const assigned = sum.get(emp.id) || 0
-    const contracted = emp.weeklyHours || 40
+    const contracted = emp.contractedHoursWeek || emp.weeklyHours || 40
     return {
       employee_id: emp.id,
       employee_name: emp.name,

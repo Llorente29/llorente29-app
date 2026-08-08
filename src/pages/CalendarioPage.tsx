@@ -53,7 +53,6 @@ import type { Employee } from '../types'
 import { fetchVacations } from '../services/vacationsService'
 import type { VacationRequest } from '../types/personal'
 import { usePermissions } from '../modules/multitenancy/hooks/usePermissions'
-import CoverageGapPanel from '../components/team/CoverageGapPanel'
 import { getStaffingGaps, type StaffingGap } from '../modules/multitenancy/services/businessHoursService'
 import { fetchPayrollCosts } from '../services/payrollService'
 import { fetchSalesByLocation, fetchDemandProfile, fetchDemandForecast, type DemandProfile, type DemandForecast } from '../services/teamReportsService'
@@ -235,11 +234,6 @@ export default function CalendarioPage() {
   const [proposalGaps, setProposalGaps] = useState<Map<string, string[]> | null>(null)
   const [proposalStats, setProposalStats] = useState<{ total: number; avisos: number; huecos: number; skippedNames: string[] } | null>(null)
   const [proposalError, setProposalError] = useState<string | null>(null)
-  // Tras Guardar/Publicar, sube este contador para que CoverageGapPanel
-  // (que solo reacciona a accountId/locationId/weekStart) vuelva a pedir
-  // schedule_coverage_gap y refleje el borrador recién guardado — el
-  // "cruce con cobertura" que pide el encargo.
-  const [coverageRefreshToken, setCoverageRefreshToken] = useState(0)
 
   const employees = useMemo(
     () => staff.filter(e => e.active && (e.locationId === locationId || (e.assignedLocations || []).includes(locationId))),
@@ -469,44 +463,19 @@ export default function CalendarioPage() {
     return () => { cancel = true }
   }, [activeAccountId, locationId, weekStart])
 
-  // Cobertura HONESTA hora a hora: personal asignado vs necesario por franja.
-  const coverage = useMemo(() => {
-    const reqHour: number[][] = Array.from({ length: 7 }, () => new Array(24).fill(0))
-    for (const r of laborReq) if (r.dow >= 0 && r.dow <= 6 && r.hora >= 0 && r.hora < 24) reqHour[r.dow][r.hora] += r.required
-    const asgHour: number[][] = Array.from({ length: 7 }, () => new Array(24).fill(0))
-    const tById = new Map(displayTemplates.map(t => [t.id, t]))
-    for (const tid of Object.keys(cells)) {
-      const t = tById.get(tid); if (!t) continue
-      const sh = Number(t.start_time.slice(0, 2))
-      const eh0 = Number(t.end_time.slice(0, 2))
-      const end = eh0 <= sh ? eh0 + 24 : eh0
-      for (const dk of Object.keys(cells[tid])) {
-        const d = parseInt(dk, 10)
-        const n = cells[tid][dk]?.length || 0
-        if (!n) continue
-        for (let x = sh; x < end; x++) asgHour[d][x % 24] += n
-      }
-    }
-    let covSum = 0, reqSum = 0, gapHours = 0
-    const covByDay = new Array(7).fill(1) as number[]
-    const dayHasReq = new Array(7).fill(false) as boolean[]
-    for (let d = 0; d < 7; d++) {
-      let dc = 0, dr = 0
-      for (let h = 0; h < 24; h++) {
-        const req = reqHour[d][h]
-        if (req > 0) {
-          dayHasReq[d] = true
-          const cov = Math.min(asgHour[d][h], req)
-          covSum += cov; reqSum += req; dc += cov; dr += req
-          if (asgHour[d][h] < req) gapHours += req - asgHour[d][h]
-        }
-      }
-      covByDay[d] = dr > 0 ? dc / dr : 1
-    }
-    const weekCov = reqSum > 0 ? covSum / reqSum : 1
-    const gapDays = covByDay.filter((c, i) => dayHasReq[i] && c < 0.95).length
-    return { covByDay, weekCov, gapDays, gapHours, hasReq: reqSum > 0 }
-  }, [laborReq, cells, displayTemplates])
+  // Cobertura de cocina: la calcula generate_week_schedule (bloques sin
+  // hueco / bloques totales), no el frontend. Si el motor lo calcula, el
+  // frontend no lo recalcula — antes había un cálculo propio aquí (sumaba
+  // team_labor_requirement de las 4 áreas sin filtrar, no solo cocina, y
+  // discrepaba con lo que el motor resolvía). Sin propuesta generada en esta
+  // sesión, no hay cifra que mostrar.
+  const motorCoverage = useMemo(() => {
+    if (!proposalStats) return null
+    const totalBloques = proposalStats.total + proposalStats.huecos
+    const pct = totalBloques > 0 ? Math.round((proposalStats.total / totalBloques) * 100) : 100
+    const gapDays = proposalGaps ? new Set([...proposalGaps.keys()].map(k => k.split(':')[1])).size : 0
+    return { pct, huecos: proposalStats.huecos, gapDays }
+  }, [proposalStats, proposalGaps])
 
   const heroStats = useMemo(() => {
     const perDay = demandLevels.perDay
@@ -569,6 +538,12 @@ export default function CalendarioPage() {
     for (const w of workloads) m[w.employee_id] = { contracted: w.contracted_hours, delta: w.delta }
     return m
   }, [workloads])
+  // Capacidad contratada que el cuadrante actual no usa (nunca "faltan": no
+  // es un hueco frente a demanda, es margen del equipo sin asignar todavía).
+  const teamUnassignedHours = useMemo(
+    () => Math.round(workloads.reduce((acc, w) => acc + Math.max(0, w.contracted_hours - w.assigned_hours), 0)),
+    [workloads]
+  )
 
   // Añadir/quitar un empleado de un turno concreto en un día (reusa setCellAssign).
   function addToShift(templateId: string, day: DayOfWeek, empId: string) {
@@ -805,9 +780,6 @@ export default function CalendarioPage() {
       setDirty(false)
       // Recalcular aviso de personal con lo recién guardado
       getStaffingGaps(locationId).then(setStaffingGaps).catch(() => setStaffingGaps([]))
-      // F10 — cruce con cobertura: el borrador ya está guardado, que
-      // CoverageGapPanel vuelva a preguntar y refleje este cuadrante.
-      setCoverageRefreshToken(t => t + 1)
     } else if (errorMessage) {
       setSaveError(parseScheduleSaveError(errorMessage))
     }
@@ -824,7 +796,6 @@ export default function CalendarioPage() {
     if (scheduleRow?.id) {
       await publishSchedule(scheduleRow.id)
       await refresh()
-      setCoverageRefreshToken(t => t + 1)
     } else {
       const { schedule: saved, errorMessage } = await upsertSchedule({
         location_id: locationId,
@@ -835,7 +806,7 @@ export default function CalendarioPage() {
         generated_at: new Date().toISOString(),
         published_at: new Date().toISOString(),
       })
-      if (saved) { setScheduleRow(saved); setCoverageRefreshToken(t => t + 1) }
+      if (saved) { setScheduleRow(saved) }
       else if (errorMessage) setSaveError(parseScheduleSaveError(errorMessage))
     }
   }
@@ -939,10 +910,18 @@ export default function CalendarioPage() {
             onClick={doPropose}
             disabled={proposing || loading || employees.length === 0}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-accent text-accent bg-card text-sm font-semibold hover:bg-accent-bg disabled:opacity-40 transition-base"
-            title="Propone un borrador desde la curva de demanda — no guarda nada hasta que pulses Guardar"
+            title="Propone un borrador desde la curva de demanda, solo para cocina — no guarda nada hasta que pulses Guardar"
           >
             {proposing ? <RefreshCw size={15} className="animate-spin" /> : <Sparkles size={15} />} Proponer cuadrante
           </button>
+        )}
+        {canEditSchedule && (
+          <span
+            className="text-[10.5px] font-semibold text-text-tertiary uppercase tracking-wide"
+            title="El generador solo calcula demanda y turnos de cocina; otras áreas (reparto, sala…) no entran en esta propuesta"
+          >
+            solo cocina
+          </span>
         )}
 
         {/* Secundaria fuerte */}
@@ -1031,7 +1010,7 @@ export default function CalendarioPage() {
           <p className="text-[13px] text-text-primary leading-snug m-0">
             {forecast.length === 0
               ? 'Aún no hay previsión de demanda para esta semana en este local.'
-              : <>Demanda <b>{heroStats.weekWord}</b> esta semana{coverage.hasReq && <>, cobertura <b>{Math.round(coverage.weekCov * 100)}%</b> — {coverage.gapDays > 0 ? <>faltan <b>{coverage.gapDays} día(s)</b> por reforzar</> : 'todo cubierto'}</>}{canSeeLaborCosts && costLive.pct != null && <>. Coste <b>{costLive.pct.toFixed(1)}%</b> sobre ventas {costLive.pct > 30 ? `(${(costLive.pct - 30).toFixed(1)} pts sobre objetivo)` : '(dentro de objetivo)'}</>}.
+              : <>Demanda <b>{heroStats.weekWord}</b> esta semana{motorCoverage && <>, cobertura de cocina <b>{motorCoverage.pct}%</b> — {motorCoverage.huecos > 0 ? <>faltan <b>{motorCoverage.huecos} asiento{motorCoverage.huecos === 1 ? '' : 's'}</b> en {motorCoverage.gapDays} día(s)</> : 'todo cubierto'}</>}{canSeeLaborCosts && costLive.pct != null && <>. Coste <b>{costLive.pct.toFixed(1)}%</b> sobre ventas {costLive.pct > 30 ? `(${(costLive.pct - 30).toFixed(1)} pts sobre objetivo)` : '(dentro de objetivo)'}</>}.
             </>}
           </p>
         </div>
@@ -1049,12 +1028,12 @@ export default function CalendarioPage() {
             </div>
           </div>
           <div className="p-4 border-r border-border-default">
-            <div className="text-[11px] font-bold uppercase tracking-wide text-text-secondary flex items-center gap-1.5"><Users size={13} /> Personal cubierto</div>
-            <div className="text-2xl font-extrabold text-text-primary mt-1">{coverage.hasReq ? `${Math.round(coverage.weekCov * 100)}%` : '—'}</div>
+            <div className="text-[11px] font-bold uppercase tracking-wide text-text-secondary flex items-center gap-1.5"><Users size={13} /> Cobertura de cocina</div>
+            <div className="text-2xl font-extrabold text-text-primary mt-1">{motorCoverage ? `${motorCoverage.pct}%` : '—'}</div>
             <div className="h-2 rounded-full mt-2 overflow-hidden" style={{ background: '#fbe8e3' }}>
-              <div className="h-full rounded-full" style={{ width: `${coverage.hasReq ? Math.round(coverage.weekCov * 100) : 0}%`, background: '#1f9d6b' }} />
+              <div className="h-full rounded-full" style={{ width: `${motorCoverage ? motorCoverage.pct : 0}%`, background: '#1f9d6b' }} />
             </div>
-            <div className="text-xs text-text-secondary mt-1.5">{!coverage.hasReq ? 'Configura el modelo de trabajo' : coverage.gapHours > 0 ? `Faltan ${Math.round(coverage.gapHours)} h · ${coverage.gapDays} día(s)` : 'Todo cubierto'}</div>
+            <div className="text-xs text-text-secondary mt-1.5">{!motorCoverage ? 'Genera una propuesta para ver la cobertura' : motorCoverage.huecos > 0 ? `Faltan ${motorCoverage.huecos} asiento(s) · ${motorCoverage.gapDays} día(s)` : 'Todo cubierto'}</div>
           </div>
           <div className="p-4">
             <div className="text-[11px] font-bold uppercase tracking-wide text-text-secondary flex items-center gap-1.5"><Euro size={13} /> Coste / ventas</div>
@@ -1184,6 +1163,12 @@ export default function CalendarioPage() {
         </div>
       )}
 
+      {viewMode === 'empleado' && teamUnassignedHours > 0.5 && (
+        <div className="text-xs text-text-secondary px-1">
+          {teamUnassignedHours} h contratadas sin asignar esta semana
+        </div>
+      )}
+
       {displayTemplates.length > 0 && (viewMode === 'empleado' ? (
         employees.length === 0 ? (
           <div className="bg-card border border-border-default rounded-lg p-6 text-center text-sm text-text-secondary">No hay empleados en este local.</div>
@@ -1235,13 +1220,6 @@ export default function CalendarioPage() {
                             )}
                           </span>
                         </button>
-                      )}
-                      {coverage.hasReq && units > 0 && (
-                        <div className="mt-1.5 px-0.5" title={`Cobertura ${Math.round(coverage.covByDay[d] * 100)}%`}>
-                          <div className="h-1 rounded-full overflow-hidden" style={{ background: '#fbe8e3' }}>
-                            <div className="h-full rounded-full" style={{ width: `${Math.round(coverage.covByDay[d] * 100)}%`, background: coverage.covByDay[d] >= 0.95 ? '#1f9d6b' : coverage.covByDay[d] >= 0.6 ? '#c2890f' : '#e0492e' }} />
-                          </div>
-                        </div>
                       )}
                     </th>
                   )
@@ -1407,16 +1385,6 @@ export default function CalendarioPage() {
           </table>
         </div>
       ))}
-
-      {locationId && (
-        <CoverageGapPanel
-          accountId={activeAccountId}
-          locationId={locationId}
-          weekStart={weekStart}
-          canSeeCosts={canSeeLaborCosts}
-          refreshKey={coverageRefreshToken}
-        />
-      )}
 
       {uncovered.length > 0 && (
         <UncoveredPanel
@@ -2012,7 +1980,7 @@ function Cell({
                 ) : availableToAdd.map(e => {
                   const wl = wlById.get(e.id)
                   const newH = (wl?.assigned_hours || 0) + shiftDurationHours(template.start_time, template.end_time)
-                  const max = (e.weeklyHours || 40) * 1.10
+                  const max = (e.contractedHoursWeek || e.weeklyHours || 40) * 1.10
                   const overflow = newH > max
                   return (
                     <button

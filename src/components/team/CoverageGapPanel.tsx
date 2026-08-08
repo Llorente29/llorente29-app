@@ -2,6 +2,13 @@
 // F7 — Cobertura: huecos y excesos con coste real, sobre el cuadrante existente.
 // Semáforo permitido aquí a propósito (decisión 10/07: reservado para cobertura,
 // no para demanda). rojo = falta, ámbar = sobra, neutro = ajustado.
+//
+// HUÉRFANO desde F10 (08/08): ya no se renderiza en CalendarioPage. Motivo:
+// lee schedules.cells PERSISTIDO en BBDD (no el borrador en pantalla) via
+// schedule_coverage_gap, una RPC legacy que además castea las claves de
+// cells a ::uuid — rompe en cuanto se guarde una propuesta F10 (claves
+// gen-<ini>-<fin>, no shift_templates.id). No se borra por si se retoma
+// (regla de no destrucción) — ver project_f10_solver_legal en memoria.
 
 import { useEffect, useMemo, useState } from 'react'
 import {
