@@ -61,7 +61,7 @@ import { fetchStaffRoles, roleColor, upsertStaffRole, deleteStaffRole, ROLE_COLO
 import { fetchLaborModel, saveLaborModelRow, fetchLaborIntensity, setLaborIntensity, fetchLaborRequirement, type LaborModelRow, type LaborDriver, type LaborRequirementRow } from '../services/teamLaborService'
 import { getTrainingComplianceMatrix } from '../services/trainingComplianceService'
 import { listOnboardingCourseFlags } from '../services/trainingPathService'
-import { fetchScheduleProposal } from '../services/scheduleProposalService'
+import { fetchScheduleProposal, fetchScheduleRest, type ScheduleRestRow } from '../services/scheduleProposalService'
 
 // Semáforo de formación en el cuadrante (onboarding formativo, pieza 3):
 // "cero falsos positivos" — solo se enseña en los puestos que de verdad
@@ -163,8 +163,16 @@ export default function CalendarioPage() {
   // nada hasta que el encargado pulse "Guardar" (mismo botón de siempre).
   const [proposing, setProposing] = useState(false)
   const [proposalAvisos, setProposalAvisos] = useState<Map<string, string> | null>(null)
-  const [proposalStats, setProposalStats] = useState<{ total: number; avisos: number; skippedNames: string[] } | null>(null)
+  // proposalGaps: `${templateId}:${day}` -> motivos del hueco (uno por asiento
+  // sin cubrir). es_hueco del solver — nadie podía cubrirlo sin romper una
+  // restricción dura. Se pinta en rojo con el motivo, nunca desaparece.
+  const [proposalGaps, setProposalGaps] = useState<Map<string, string[]> | null>(null)
+  const [proposalStats, setProposalStats] = useState<{ total: number; avisos: number; huecos: number; skippedNames: string[] } | null>(null)
   const [proposalError, setProposalError] = useState<string | null>(null)
+  // propose_schedule_rest: descanso semanal continuo de cada persona frente al
+  // mínimo exigido (configurable por cuenta/local en break_policy). Chip por
+  // persona junto al banner del borrador — no solo bloquea en el solver, se ve.
+  const [restChips, setRestChips] = useState<ScheduleRestRow[] | null>(null)
   // Tras Guardar/Publicar, sube este contador para que CoverageGapPanel
   // (que solo reacciona a accountId/locationId/weekStart) vuelva a pedir
   // schedule_coverage_gap y refleje el borrador recién guardado — el
@@ -241,7 +249,9 @@ export default function CalendarioPage() {
     setDirty(false)
     setLoading(false)
     setProposalAvisos(null)
+    setProposalGaps(null)
     setProposalStats(null)
+    setRestChips(null)
     setProposalError(null)
     // Aviso: horario comercial abierto sin personal (lee de BD; refleja lo guardado)
     getStaffingGaps(locationId).then(setStaffingGaps).catch(() => setStaffingGaps([]))
@@ -570,7 +580,9 @@ export default function CalendarioPage() {
     setCells(result.cells)
     setDirty(true)
     setProposalAvisos(null)
+    setProposalGaps(null)
     setProposalStats(null)
+    setRestChips(null)
     setProposalError(null)
   }
 
@@ -586,7 +598,14 @@ export default function CalendarioPage() {
     setProposing(true)
     setProposalError(null)
     try {
-      const rows = await fetchScheduleProposal(activeAccountId, locationId, weekStart)
+      const [rows, rest] = await Promise.all([
+        fetchScheduleProposal(activeAccountId, locationId, weekStart),
+        // No bloquea la propuesta si falla: son los chips de descanso, no el cuadrante.
+        fetchScheduleRest(activeAccountId, locationId, weekStart).catch(e => {
+          console.error('[CalendarioPage] fetchScheduleRest:', e)
+          return null
+        }),
+      ])
       if (rows.length === 0) {
         setProposalError('El generador no pudo proponer nada para esta semana: revisa que haya plantillas de turno con cobertura y empleados activos en este local.')
         return
@@ -600,12 +619,26 @@ export default function CalendarioPage() {
       const knownIds = new Set(employees.map(e => e.id))
       const newCells: ScheduleCells = {}
       const avisos = new Map<string, string>()
+      const gaps = new Map<string, string[]>()
       const skippedNames = new Map<string, string>()
       let avisosCount = 0
+      let huecosCount = 0
       let includedCount = 0
       for (const r of rows) {
-        if (!knownIds.has(r.employeeId)) {
-          skippedNames.set(r.employeeId, r.employeeName)
+        // es_hueco: el solver legal declaró que nadie puede cubrir este
+        // asiento sin romper una restricción dura. No es un "empleado no
+        // reconocido" (no trae employeeId) — se pinta en rojo con motivo,
+        // no se cuenta como turno cargado ni se descarta en silencio.
+        if (r.esHueco) {
+          const key = `${r.shiftTemplateId}:${r.dayOfWeek}`
+          const list = gaps.get(key) || []
+          list.push(r.motivoHueco || r.motivo)
+          gaps.set(key, list)
+          huecosCount++
+          continue
+        }
+        if (!r.employeeId || !knownIds.has(r.employeeId)) {
+          skippedNames.set(r.employeeId || r.employeeName, r.employeeName)
           continue
         }
         includedCount++
@@ -623,7 +656,9 @@ export default function CalendarioPage() {
       setOverrides({})
       setDirty(true)
       setProposalAvisos(avisos)
-      setProposalStats({ total: includedCount, avisos: avisosCount, skippedNames: [...skippedNames.values()] })
+      setProposalGaps(gaps)
+      setProposalStats({ total: includedCount, avisos: avisosCount, huecos: huecosCount, skippedNames: [...skippedNames.values()] })
+      setRestChips(rest)
     } catch (e) {
       setProposalError(e instanceof Error ? e.message : 'No se pudo proponer el cuadrante.')
     } finally {
@@ -723,7 +758,9 @@ export default function CalendarioPage() {
     setCells({})
     setDirty(true)
     setProposalAvisos(null)
+    setProposalGaps(null)
     setProposalStats(null)
+    setRestChips(null)
   }
 
   return (
@@ -849,13 +886,17 @@ export default function CalendarioPage() {
         <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-warning-bg border border-warning/30 flex-wrap">
           <Sparkles size={16} className="text-warning shrink-0" />
           <p className="text-sm text-text-primary flex-1 min-w-[240px]">
-            <strong>Borrador propuesto</strong> por el generador de disponibilidad: {proposalStats.total} turnos asignados,{' '}
+            <strong>Borrador propuesto</strong> por el solver legal: {proposalStats.total} turnos asignados,{' '}
             {proposalStats.avisos > 0 ? (
               <span className="text-warning font-semibold">{proposalStats.avisos} en ámbar</span>
             ) : 'ninguno rompe la disponibilidad habitual'}
             {proposalStats.avisos > 0 && ' — pasa el ratón sobre esas celdas para ver el motivo.'}{' '}
-            Reparte por cobertura de plantilla, no por rol, y todavía no vigila el descanso de 12h como restricción dura del solver
-            (sí lo revisa Cumplimiento después). No se ha guardado nada — pulsa Guardar para aplicarlo.
+            Nunca propone un turno que incumpla vacaciones aprobadas, el descanso semanal mínimo exigido
+            (36h por defecto, art. 37.1 — configurable por convenio), el descanso entre jornadas o el tope
+            de horas contratadas. No se ha guardado nada — pulsa Guardar para aplicarlo.
+            {proposalStats.huecos > 0 && (
+              <><br /><strong className="text-danger">{proposalStats.huecos} turno{proposalStats.huecos === 1 ? '' : 's'} sin cubrir</strong> — nadie podía asumirlo{proposalStats.huecos === 1 ? '' : 's'} sin incumplir una de esas restricciones. Están marcados en rojo en la rejilla, con el motivo al pasar el ratón.</>
+            )}
             {proposalStats.skippedNames.length > 0 && (
               <><br /><strong className="text-danger">{proposalStats.skippedNames.length} turno{proposalStats.skippedNames.length === 1 ? '' : 's'} no cargado{proposalStats.skippedNames.length === 1 ? '' : 's'}</strong>: {proposalStats.skippedNames.join(', ')} — no tiene{proposalStats.skippedNames.length === 1 ? '' : 'n'} este local en su ficha, revísalo en Empleados si trabaja aquí habitualmente.</>
             )}
@@ -863,6 +904,42 @@ export default function CalendarioPage() {
           <button onClick={discardProposal} className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-warning/40 text-warning hover:bg-card transition-base shrink-0">
             Descartar propuesta
           </button>
+        </div>
+      )}
+      {/* F10 — chip de descanso semanal por persona (propose_schedule_rest):
+          hueco continuo más largo de la semana propuesta frente al mínimo
+          exigido. Tres estados, no dos: verde 'ok' (colchón real por encima
+          del margen de seguridad operativo), ámbar 'al_limite' (cumple el
+          mínimo legal pero sin margen — un fichaje tardío lo tumba), rojo
+          'incumple'. Verde solo cuando hay colchón de verdad. */}
+      {restChips && restChips.length > 0 && (
+        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-card border border-border-default flex-wrap">
+          <span className="text-xs font-semibold text-text-secondary shrink-0">Descanso semanal:</span>
+          {restChips.map(r => {
+            const estadoCls = r.estado === 'ok'
+              ? { chip: 'bg-success-bg text-success', dot: 'bg-success' }
+              : r.estado === 'al_limite'
+              ? { chip: 'bg-warning-bg text-warning', dot: 'bg-warning' }
+              : { chip: 'bg-danger-bg text-danger', dot: 'bg-danger' }
+            const horas = r.descansoHoras.toLocaleString('es-ES', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+            const minimo = r.minimoExigidoHoras.toLocaleString('es-ES', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+            const margenMin = Math.round(Math.abs(r.margenHoras) * 60)
+            const title = r.estado === 'incumple'
+              ? `${r.employeeName} · ${horas} h de descanso — ${margenMin} min por debajo del mínimo (${minimo} h)`
+              : r.estado === 'al_limite'
+              ? `${r.employeeName} · ${horas} h · ${margenMin} min sobre el mínimo`
+              : `${r.employeeName} · ${horas} h de descanso, mínimo ${minimo} h`
+            return (
+              <span
+                key={r.employeeId}
+                className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${estadoCls.chip}`}
+                title={title}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${estadoCls.dot}`} />
+                {r.employeeName} · {horas}h{r.estado !== 'ok' ? ` (mín. ${minimo}h)` : ''}
+              </span>
+            )
+          })}
         </div>
       )}
       {proposalError && (
@@ -1210,6 +1287,7 @@ export default function CalendarioPage() {
                           onChangeAssigned={(ids) => setCellAssign(t.id, d, ids)}
                           onChangeNeeded={(v) => setOverride(t.id, d, v === baseCov ? null : v)}
                           proposalAvisos={proposalAvisos ?? undefined}
+                          proposalGaps={proposalGaps?.get(`${t.id}:${d}`)}
                         />
                       )
                     })}
@@ -1701,12 +1779,16 @@ interface CellProps {
   // preferencia inferida para cubrir este turno. Clave: `${templateId}:${day}:${employeeId}`.
   // Ámbar (no rojo): es una decisión explicable, no un error.
   proposalAvisos?: Map<string, string>
+  // F10 — motivos de hueco (es_hueco) del solver legal para esta celda: nadie
+  // podía cubrir ese asiento sin romper una restricción dura. Uno por asiento
+  // sin cubrir. Siempre en rojo, nunca se omite.
+  proposalGaps?: string[]
 }
 
 function Cell({
   template, day, needed, baseCoverage, isOverridden,
   assignedIds, allEmployees, workloads, redEmployeeIds, trainingGapsByEmployee, canEdit,
-  onChangeAssigned, onChangeNeeded, proposalAvisos,
+  onChangeAssigned, onChangeNeeded, proposalAvisos, proposalGaps,
 }: CellProps) {
   const [open, setOpen] = useState(false)
   const empById = useMemo(() => new Map(allEmployees.map(e => [e.id, e])), [allEmployees])
@@ -1755,7 +1837,10 @@ function Cell({
           <span className="text-text-secondary">×</span>
         </div>
         {isGap && (
-          <span className="text-danger" title="Hueco sin cubrir">
+          <span
+            className="text-danger"
+            title={proposalGaps && proposalGaps.length > 0 ? `Sin cubrir — ${proposalGaps.join(' · ')}` : 'Hueco sin cubrir'}
+          >
             <AlertTriangle size={11} />
           </span>
         )}
