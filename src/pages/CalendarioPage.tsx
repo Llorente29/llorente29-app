@@ -632,7 +632,10 @@ export default function CalendarioPage() {
         if (r.esHueco) {
           const key = `${r.shiftTemplateId}:${r.dayOfWeek}`
           const list = gaps.get(key) || []
-          list.push(r.motivoHueco || r.motivo)
+          // Varios asientos del mismo turno/día suelen compartir motivo
+          // (misma plantilla bloqueada igual para todos) — no repetir el texto.
+          const reason = r.motivoHueco || r.motivo
+          if (!list.includes(reason)) list.push(reason)
           gaps.set(key, list)
           huecosCount++
           continue
