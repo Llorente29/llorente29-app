@@ -22,6 +22,12 @@ export interface LaborModelRow {
   minOnOpen: number
   openCloseExtra: number
   isEstimate: boolean   // true = viene del prior de hostelería (aún no afinado)
+  // ENCARGO F10 (09/08) — parámetros 1 y 4 de "Cubrir el resto". NULL/0 = sin
+  // efecto (comportamiento previo). Ver migración 20260809T1510.
+  peakWeekday: number | null
+  peakWeekend: number | null
+  preOpenMinutes: number
+  postCloseMinutes: number
 }
 
 export interface LaborRequirementRow {
@@ -58,6 +64,12 @@ export async function fetchLaborModel(accountId: string, roleKinds: string[]): P
       minOnOpen: Number(src?.min_on_open ?? 0),
       openCloseExtra: Number(src?.open_close_extra ?? 0),
       isEstimate: !o,
+      // Los priores por tipo de negocio no traen estos 4 campos (son
+      // exclusivos de la fila de la cuenta) — sin fila propia, sin efecto.
+      peakWeekday: o?.peak_weekday != null ? Number(o.peak_weekday) : null,
+      peakWeekend: o?.peak_weekend != null ? Number(o.peak_weekend) : null,
+      preOpenMinutes: Number(o?.pre_open_minutes ?? 0),
+      postCloseMinutes: Number(o?.post_close_minutes ?? 0),
     }
   })
 }
@@ -68,6 +80,10 @@ export async function saveLaborModelRow(accountId: string, row: LaborModelRow): 
     per_person_hour: row.perPersonHour,
     min_on_open: row.minOnOpen,
     open_close_extra: row.openCloseExtra,
+    peak_weekday: row.peakWeekday,
+    peak_weekend: row.peakWeekend,
+    pre_open_minutes: row.preOpenMinutes,
+    post_close_minutes: row.postCloseMinutes,
     active: true,
     updated_at: new Date().toISOString(),
   }
@@ -87,6 +103,20 @@ export async function fetchLaborIntensity(accountId: string): Promise<string> {
 
 export async function setLaborIntensity(accountId: string, intensity: string): Promise<void> {
   await db().from('team_demand_config').upsert({ account_id: accountId, labor_intensity: intensity }, { onConflict: 'account_id' })
+}
+
+// ENCARGO F10 (09/08) — tolerancia de contrato configurable, parámetro extra
+// de "Cubrir el resto" (break_policy.contract_tolerance_pct, 0% por defecto).
+export async function fetchContractTolerance(accountId: string): Promise<number> {
+  const res = await db().from('break_policy').select('contract_tolerance_pct')
+    .eq('account_id', accountId).is('location_id', null).maybeSingle()
+  return Number(res?.data?.contract_tolerance_pct ?? 0)
+}
+
+export async function saveContractTolerance(accountId: string, pct: number): Promise<void> {
+  await db().from('break_policy')
+    .update({ contract_tolerance_pct: pct, updated_at: new Date().toISOString() })
+    .eq('account_id', accountId).is('location_id', null)
 }
 
 export async function fetchLaborRequirement(accountId: string, locationId: string, weekStart: string): Promise<LaborRequirementRow[]> {

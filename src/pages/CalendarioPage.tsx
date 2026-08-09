@@ -57,10 +57,11 @@ import { getStaffingGaps, type StaffingGap } from '../modules/multitenancy/servi
 import { fetchPayrollCosts } from '../services/payrollService'
 import { fetchSalesByLocation, fetchDemandProfile, fetchDemandForecast, type DemandProfile, type DemandForecast } from '../services/teamReportsService'
 import { fetchStaffRoles, roleColor, upsertStaffRole, deleteStaffRole, ROLE_COLOR_KEYS, type StaffRole, type RoleKind } from '../services/staffRoleService'
-import { fetchLaborModel, saveLaborModelRow, fetchLaborIntensity, setLaborIntensity, fetchLaborRequirement, type LaborModelRow, type LaborDriver, type LaborRequirementRow } from '../services/teamLaborService'
+import { fetchLaborModel, saveLaborModelRow, fetchLaborIntensity, setLaborIntensity, fetchLaborRequirement, fetchContractTolerance, saveContractTolerance, type LaborModelRow, type LaborDriver, type LaborRequirementRow } from '../services/teamLaborService'
 import { getTrainingComplianceMatrix } from '../services/trainingComplianceService'
 import { listOnboardingCourseFlags } from '../services/trainingPathService'
-import { fetchGeneratedSchedule } from '../services/scheduleProposalService'
+import { fetchGeneratedSchedule, type GeneratedScheduleRow } from '../services/scheduleProposalService'
+import { fmtHours } from '../lib/format'
 
 // Semáforo de formación en el cuadrante (onboarding formativo, pieza 3):
 // "cero falsos positivos" — solo se enseña en los puestos que de verdad
@@ -126,26 +127,50 @@ function formatWeekLabel(weekStartISO: string): string {
   return `${start.toLocaleDateString('es-ES', opts)} – ${end.toLocaleDateString('es-ES', opts)} ${end.getFullYear()}`
 }
 
-// F10 — generate_week_schedule no usa shift_templates: cada bloque distinto
-// (hora inicio/fin) se representa como una plantilla SINTÉTICA para reusar
-// la rejilla, el cálculo de horas y el coste tal cual. El id se autodescribe
-// (`gen-<ini>-<fin>`) para poder reconstruirla desde las claves de `cells`
+// F10 v3 (09/08) — generate_week_schedule ancla la mayoría de bloques a
+// shift_templates reales (o_shift_template_id). Solo el refuerzo excepcional
+// (como mucho uno por día) llega sin plantilla real, con horaIni/horaFin en
+// "HH:MM" — ese se representa como plantilla SINTÉTICA para reusar la
+// rejilla, el cálculo de horas y el coste tal cual. El id se autodescribe
+// (`gen-<HHMM>-<HHMM>`) para poder reconstruirla desde las claves de `cells`
 // tras recargar la página — no hace falta persistirla en shift_templates.
-const GEN_ID_RE = /^gen-(\d+)-(\d+)$/
-function parseGenId(id: string): { ini: number; fin: number } | null {
+const GEN_ID_RE = /^gen-(\d{4})-(\d{4})$/
+function hhmmToId(t: string): string {
+  return t.replace(':', '')
+}
+function idToHhmm(t: string): string {
+  return `${t.slice(0, 2)}:${t.slice(2)}`
+}
+function parseGenId(id: string): { ini: string; fin: string } | null {
   const m = GEN_ID_RE.exec(id)
-  return m ? { ini: Number(m[1]), fin: Number(m[2]) } : null
+  return m ? { ini: idToHhmm(m[1]), fin: idToHhmm(m[2]) } : null
 }
-function genHourLabel(h: number): string {
-  return `${String(h % 24).padStart(2, '0')}:00`
+// ENCARGO F10 (09/08) — categoriza el motivo que devuelve generate_week_schedule
+// v3 en una clave corta para el desglose honesto por empleado (§4 Bloque B).
+const MOTIVO_CATEGORY: { test: (m: string) => boolean; key: string; label: string }[] = [
+  { test: m => m === 'Franja forzada', key: 'forzada', label: 'Franja forzada' },
+  { test: m => m === 'Bloque fijo no productivo', key: 'fijo', label: 'Bloque fijo' },
+  { test: m => m.startsWith('Turno largo'), key: 'largo', label: 'Turno largo (pico)' },
+  { test: m => m.startsWith('Dotación mínima'), key: 'pico', label: 'Dotación de pico' },
+  { test: m => m.startsWith('Refuerzo excepcional'), key: 'refuerzo', label: 'Refuerzo excepcional' },
+]
+function categorizeMotivo(motivo: string): { key: string; label: string } {
+  const hit = MOTIVO_CATEGORY.find(c => c.test(motivo))
+  return hit ? { key: hit.key, label: hit.label } : { key: 'demanda', label: 'Demanda' }
 }
-function buildSyntheticTemplate(id: string, locationId: string, ini: number, fin: number): ShiftTemplate {
+const BREAKDOWN_ORDER = ['demanda', 'largo', 'pico', 'forzada', 'fijo', 'refuerzo']
+const BREAKDOWN_LABEL: Record<string, string> = {
+  demanda: 'Demanda', largo: 'Turno largo (pico)', pico: 'Dotación de pico',
+  forzada: 'Franja forzada', fijo: 'Bloque fijo', refuerzo: 'Refuerzo excepcional',
+}
+
+function buildSyntheticTemplate(id: string, locationId: string, ini: string, fin: string): ShiftTemplate {
   return {
     id,
     location_id: locationId,
-    label: `Generado ${genHourLabel(ini)}–${genHourLabel(fin)}`,
-    start_time: genHourLabel(ini),
-    end_time: genHourLabel(fin),
+    label: `Refuerzo ${ini}–${fin}`,
+    start_time: ini,
+    end_time: fin,
     coverage_mon: 0, coverage_tue: 0, coverage_wed: 0, coverage_thu: 0,
     coverage_fri: 0, coverage_sat: 0, coverage_sun: 0,
     active: true,
@@ -234,11 +259,28 @@ export default function CalendarioPage() {
   const [proposalGaps, setProposalGaps] = useState<Map<string, string[]> | null>(null)
   const [proposalStats, setProposalStats] = useState<{ total: number; avisos: number; huecos: number; skippedNames: string[] } | null>(null)
   const [proposalError, setProposalError] = useState<string | null>(null)
+  // ENCARGO F10 (09/08) — "Cubrir el resto": segunda pasada que AÑADE sobre
+  // el borrador ya cargado (manual o de "Proponer cuadrante") sin pisar lo
+  // que ya hay en una celda; solo rellena las vacías. Comparte el motor
+  // (generate_week_schedule v3) con "Proponer cuadrante" — la diferencia es
+  // de fusión en el cliente, no de RPC.
+  const [filling, setFilling] = useState(false)
+  // proposalBreakdown: por empleado, horas propuestas por origen (demanda ·
+  // turno largo · dotación de pico · franja forzada · bloque fijo · refuerzo).
+  // Desglose honesto (§4): de dónde sale cada hora, no solo el total.
+  const [proposalBreakdown, setProposalBreakdown] = useState<Map<string, Record<string, number>> | null>(null)
 
   const employees = useMemo(
     () => staff.filter(e => e.active && (e.locationId === locationId || (e.assignedLocations || []).includes(locationId))),
     [staff, locationId]
   )
+
+  // ENCARGO F10 (09/08) — local cerrado: nunca un cuadrante en rojo (regla de
+  // UI honesta, §4). generate_week_schedule v3 ya devuelve 0 filas para un
+  // local con locations.active=false; aquí se degrada el botón antes de
+  // llamarlo, con el mismo mensaje.
+  const currentLocation = useMemo(() => locations.find(l => l.id === locationId) || null, [locations, locationId])
+  const locationClosed = currentLocation?.active === false
 
   // F10 — plantillas reales (shift_templates) + sintéticas de
   // generate_week_schedule, reconstruidas desde las claves `gen-<ini>-<fin>`
@@ -329,6 +371,7 @@ export default function CalendarioPage() {
     setProposalAvisos(null)
     setProposalGaps(null)
     setProposalStats(null)
+    setProposalBreakdown(null)
     setProposalError(null)
     // Aviso: horario comercial abierto sin personal (lee de BD; refleja lo guardado)
     getStaffingGaps(locationId).then(setStaffingGaps).catch(() => setStaffingGaps([]))
@@ -494,6 +537,20 @@ export default function CalendarioPage() {
   const [roles, setRoles] = useState<StaffRole[]>([])
   const [rolesModalOpen, setRolesModalOpen] = useState(false)
   const [laborModalOpen, setLaborModalOpen] = useState(false)
+  // ENCARGO F10 (09/08) — parámetro 5 "Ritmo (platos/persona-hora)" en
+  // primer plano: vivía enterrado en team_labor_model.per_person_hour y
+  // engañó semanas (15 vs 20 vs 12, ver folvy_team_f10_rediseno_motor_
+  // horarios.md §1.8). Se muestra siempre visible junto al selector de local;
+  // clic abre el mismo "Modelo de trabajo" para editarlo.
+  const [ritmoCocina, setRitmoCocina] = useState<number | null>(null)
+  useEffect(() => {
+    if (!activeAccountId) { setRitmoCocina(null); return }
+    let cancel = false
+    fetchLaborModel(activeAccountId, ['cocina']).then(rows => {
+      if (!cancel) setRitmoCocina(rows[0]?.perPersonHour ?? null)
+    })
+    return () => { cancel = true }
+  }, [activeAccountId, laborModalOpen])
   const [moreMenuOpen, setMoreMenuOpen] = useState(false)
   const [configMenuOpen, setConfigMenuOpen] = useState(false)
   const reloadRoles = () => { if (activeAccountId) fetchStaffRoles(activeAccountId).then(setRoles) }
@@ -584,7 +641,7 @@ export default function CalendarioPage() {
       setNewBlockError('Hora inválida: inicio 0-23, fin > inicio, máx. 24.')
       return
     }
-    addToShift(`gen-${ini}-${fin}`, newBlockFor.day, newBlockFor.empId)
+    addToShift(`gen-${String(ini).padStart(2, '0')}00-${String(fin % 24).padStart(2, '0')}00`, newBlockFor.day, newBlockFor.empId)
     setNewBlockFor(null)
     setNewBlockError(null)
   }
@@ -672,16 +729,29 @@ export default function CalendarioPage() {
     setProposalAvisos(null)
     setProposalGaps(null)
     setProposalStats(null)
+    setProposalBreakdown(null)
     setProposalError(null)
   }
 
-  // F10 — generate_week_schedule: bloques continuos desde la curva de
-  // demanda, SIN shift_templates. Carga el resultado como BORRADOR editable
-  // sobre la MISMA rejilla (no un modal aparte) — no escribe nada hasta
-  // "Guardar". Cada bloque distinto (hora ini/fin) se representa como una
-  // plantilla SINTÉTICA — ver displayTemplates, que la reconstruye a partir
-  // del id (`gen-<ini>-<fin>`), así que no hace falta persistirla aparte:
-  // el id ya lleva la definición y sobrevive a un recargar de página.
+  // F10 v3 (09/08) — generate_week_schedule ancla la mayoría de bloques a
+  // shift_templates reales (o_shift_template_id): esas filas se vuelcan
+  // directo en cells[shift_template_id], igual que un cuadrante manual. Solo
+  // el refuerzo excepcional (como mucho uno por día) llega sin plantilla real
+  // y se representa como sintética `gen-<HHMM>-<HHMM>` — ver displayTemplates.
+  // Carga el resultado como BORRADOR editable sobre la MISMA rejilla (no un
+  // modal aparte) — no escribe nada hasta "Guardar".
+  function buildBreakdown(rows: GeneratedScheduleRow[]): Map<string, Record<string, number>> {
+    const breakdown = new Map<string, Record<string, number>>()
+    for (const r of rows) {
+      if (r.esHueco || !r.employeeId) continue
+      const { key } = categorizeMotivo(r.motivo)
+      const cur = breakdown.get(r.employeeId) || {}
+      cur[key] = (cur[key] || 0) + r.horas
+      breakdown.set(r.employeeId, cur)
+    }
+    return breakdown
+  }
+
   async function doPropose() {
     if (!canEditSchedule || !activeAccountId) return
     if (!locationId) return
@@ -691,7 +761,7 @@ export default function CalendarioPage() {
     try {
       const rows = await fetchGeneratedSchedule(activeAccountId, locationId, weekStart)
       if (rows.length === 0) {
-        setProposalError('El generador no pudo proponer nada para esta semana: revisa que haya previsión de demanda y empleados activos en este local.')
+        setProposalError('El generador no pudo proponer nada para esta semana: revisa que el local esté abierto, que haya previsión de demanda y empleados activos en este local.')
         return
       }
       const knownIds = new Set(employees.map(e => e.id))
@@ -702,16 +772,18 @@ export default function CalendarioPage() {
       // restricción dura. Se pinta en rojo con el motivo, nunca desaparece.
       const gaps = new Map<string, string[]>()
       const skippedNames = new Map<string, string>()
+      const touchedTemplateIds = new Set<string>()
       let huecosCount = 0
       let includedCount = 0
 
       for (const r of rows) {
-        const synthId = `gen-${r.horaIni}-${r.horaFin}`
+        const synthId = r.shiftTemplateId || `gen-${hhmmToId(r.horaIni)}-${hhmmToId(r.horaFin)}`
+        touchedTemplateIds.add(synthId)
         const dayKey = String(r.dayOfWeek)
         if (!newOverrides[synthId]) newOverrides[synthId] = {}
         // "needed" real de este bloque/día = nº de asientos que devolvió el
-        // generador para él (cubiertos + huecos). La plantilla sintética
-        // nace con coverage_* = 0; el override es la única fuente de verdad.
+        // generador para él (cubiertos + huecos). Se usa como override aunque
+        // la plantilla sea real: coverage_* es legado poco fiable (F10 #6).
         newOverrides[synthId][dayKey] = (newOverrides[synthId][dayKey] || 0) + 1
 
         if (r.esHueco) {
@@ -733,10 +805,11 @@ export default function CalendarioPage() {
         newCells[synthId][dayKey] = list
       }
 
-      // Los shift_templates reales no participan en este generador. Sin
-      // esto, su cobertura de BD (coverage_* > 0) saldría en rojo por
-      // error: no es que falte gente, es que este generador no los usa.
+      // Plantillas reales con cobertura declarada en BD que esta propuesta NO
+      // tocó esta semana se ponen a 0 — si no, pedirían gente que el motor
+      // decidió no abrir (coverage_* es legado poco fiable, hallazgo F10 #6).
       for (const t of templates) {
+        if (touchedTemplateIds.has(t.id)) continue
         for (const d of DAYS) {
           if (coverageForDay(t, d) > 0) {
             if (!newOverrides[t.id]) newOverrides[t.id] = {}
@@ -750,11 +823,107 @@ export default function CalendarioPage() {
       setDirty(true)
       setProposalAvisos(null)
       setProposalGaps(gaps)
+      setProposalBreakdown(buildBreakdown(rows))
       setProposalStats({ total: includedCount, avisos: 0, huecos: huecosCount, skippedNames: [...skippedNames.values()] })
     } catch (e) {
       setProposalError(e instanceof Error ? e.message : 'No se pudo proponer el cuadrante.')
     } finally {
       setProposing(false)
+    }
+  }
+
+  // ENCARGO F10 (09/08) — "Cubrir el resto": segunda pasada sobre el
+  // borrador YA CARGADO (manual o de "Proponer cuadrante"). Llama al mismo
+  // motor pero solo rellena celdas vacías — nunca pisa una celda que ya
+  // tenga a alguien, sea de una propuesta anterior o de una edición manual.
+  async function doCubrirElResto() {
+    if (!canEditSchedule || !activeAccountId || !locationId) return
+    setFilling(true)
+    setProposalError(null)
+    try {
+      const rows = await fetchGeneratedSchedule(activeAccountId, locationId, weekStart)
+      if (rows.length === 0) {
+        setProposalError('El generador no pudo proponer nada para completar: revisa que el local esté abierto, que haya previsión de demanda y empleados activos en este local.')
+        return
+      }
+      const knownIds = new Set(employees.map(e => e.id))
+      const newCells: ScheduleCells = JSON.parse(JSON.stringify(cells)) as ScheduleCells
+      const newOverrides: CoverageOverrides = JSON.parse(JSON.stringify(overrides)) as CoverageOverrides
+      const gaps = new Map<string, string[]>(proposalGaps ? [...proposalGaps] : [])
+
+      const byCell = new Map<string, { emps: string[]; needed: number; motivos: string[] }>()
+      for (const r of rows) {
+        const synthId = r.shiftTemplateId || `gen-${hhmmToId(r.horaIni)}-${hhmmToId(r.horaFin)}`
+        const dayKey = String(r.dayOfWeek)
+        const key = `${synthId}|${dayKey}`
+        const cur = byCell.get(key) || { emps: [], needed: 0, motivos: [] }
+        cur.needed++
+        if (r.esHueco) {
+          if (!cur.motivos.includes(r.motivo)) cur.motivos.push(r.motivo)
+        } else if (r.employeeId && knownIds.has(r.employeeId)) {
+          cur.emps.push(r.employeeId)
+        }
+        byCell.set(key, cur)
+      }
+
+      let addedSeats = 0
+      let stillGaps = 0
+      for (const [key, info] of byCell) {
+        const [synthId, dayKey] = key.split('|')
+        const existing = newCells[synthId]?.[dayKey] || []
+        if (!newOverrides[synthId]) newOverrides[synthId] = {}
+        const prevNeeded = newOverrides[synthId][dayKey] ?? 0
+        newOverrides[synthId][dayKey] = Math.max(prevNeeded, info.needed)
+        if (existing.length === 0 && info.emps.length > 0) {
+          if (!newCells[synthId]) newCells[synthId] = {}
+          newCells[synthId][dayKey] = info.emps
+          addedSeats += info.emps.length
+        }
+        const finalAssigned = (newCells[synthId]?.[dayKey] || []).length
+        const finalNeeded = newOverrides[synthId][dayKey]
+        const gapKey = `${synthId}:${dayKey}`
+        if (finalAssigned < finalNeeded) {
+          stillGaps++
+          if (info.motivos.length > 0) gaps.set(gapKey, info.motivos)
+        } else {
+          gaps.delete(gapKey)
+        }
+      }
+
+      if (addedSeats === 0 && stillGaps === (proposalStats?.huecos ?? 0)) {
+        setProposalError('No había ninguna celda vacía que el motor pudiera rellenar sin incumplir una restricción dura — revisa los huecos declarados.')
+        return
+      }
+
+      setCells(newCells)
+      setOverrides(newOverrides)
+      setDirty(true)
+      setProposalGaps(gaps)
+      setProposalBreakdown(prev => {
+        const merged = new Map(prev || [])
+        for (const r of rows) {
+          if (r.esHueco || !r.employeeId) continue
+          const synthId = r.shiftTemplateId || `gen-${hhmmToId(r.horaIni)}-${hhmmToId(r.horaFin)}`
+          const dayKey = String(r.dayOfWeek)
+          const wasEmpty = (cells[synthId]?.[dayKey] || []).length === 0
+          if (!wasEmpty) continue
+          const { key: cat } = categorizeMotivo(r.motivo)
+          const cur = merged.get(r.employeeId) || {}
+          cur[cat] = (cur[cat] || 0) + r.horas
+          merged.set(r.employeeId, cur)
+        }
+        return merged
+      })
+      setProposalStats(prev => ({
+        total: (prev?.total ?? 0) + addedSeats,
+        avisos: 0,
+        huecos: stillGaps,
+        skippedNames: prev?.skippedNames ?? [],
+      }))
+    } catch (e) {
+      setProposalError(e instanceof Error ? e.message : 'No se pudo completar el cuadrante.')
+    } finally {
+      setFilling(false)
     }
   }
 
@@ -848,6 +1017,7 @@ export default function CalendarioPage() {
     setProposalAvisos(null)
     setProposalGaps(null)
     setProposalStats(null)
+    setProposalBreakdown(null)
   }
 
   return (
@@ -859,9 +1029,23 @@ export default function CalendarioPage() {
           className="border rounded px-3 py-2 bg-card text-sm"
         >
           {locations.map(l => (
-            <option key={l.id} value={l.id}>{l.name}</option>
+            <option key={l.id} value={l.id}>{l.name}{l.active === false ? ' (cerrado)' : ''}</option>
           ))}
         </select>
+        {locationClosed && (
+          <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-danger-bg text-danger">
+            <AlertTriangle size={12} /> Este local está cerrado
+          </span>
+        )}
+        {ritmoCocina != null && (
+          <button
+            onClick={() => setLaborModalOpen(true)}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-page text-text-secondary hover:text-accent hover:bg-accent-bg transition-base"
+            title="Ritmo de cocina (platos por persona-hora) — el número que usa el motor para calcular cuánta gente hace falta. Clic para editarlo."
+          >
+            <SlidersHorizontal size={12} /> Ritmo {ritmoCocina} platos/persona-h
+          </button>
+        )}
 
         <div className="flex items-center gap-1">
           <button onClick={() => shiftWeek(-7)} className="px-2 py-1 border rounded hover:bg-page">←</button>
@@ -903,19 +1087,32 @@ export default function CalendarioPage() {
         )}
 
         {/* F10 — alternativa que convive con "Generar automático": el
-            encargado elige. Bloques desde la curva de demanda vía
-            generate_week_schedule (sin shift_templates); nunca guarda sola. */}
-        {canEditSchedule && (
+            encargado elige. Bloques anclados a shift_templates reales vía
+            generate_week_schedule v3; nunca guarda sola. */}
+        {canEditSchedule && !locationClosed && (
           <button
             onClick={doPropose}
-            disabled={proposing || loading || employees.length === 0}
+            disabled={proposing || filling || loading || employees.length === 0}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-accent text-accent bg-card text-sm font-semibold hover:bg-accent-bg disabled:opacity-40 transition-base"
-            title="Propone un borrador desde la curva de demanda, solo para cocina — no guarda nada hasta que pulses Guardar"
+            title="Propone un borrador desde la curva de demanda, solo para cocina — sustituye lo que hay, no guarda nada hasta que pulses Guardar"
           >
             {proposing ? <RefreshCw size={15} className="animate-spin" /> : <Sparkles size={15} />} Proponer cuadrante
           </button>
         )}
-        {canEditSchedule && (
+        {/* ENCARGO F10 (09/08) — "Cubrir el resto": segunda pasada que AÑADE
+            sobre el borrador ya cargado (parámetros de dotación de pico,
+            franjas forzadas, bloques fijos y tolerancia de contrato). */}
+        {canEditSchedule && !locationClosed && (
+          <button
+            onClick={doCubrirElResto}
+            disabled={proposing || filling || loading || employees.length === 0}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-border-default text-text-secondary bg-card text-sm font-semibold hover:border-accent hover:text-accent disabled:opacity-40 transition-base"
+            title="Segunda pasada: rellena solo las celdas vacías del borrador actual con dotación de pico, franjas forzadas, bloques fijos y el margen de contrato configurados — no toca lo que ya hay"
+          >
+            {filling ? <RefreshCw size={15} className="animate-spin" /> : <Plus size={15} />} Cubrir el resto
+          </button>
+        )}
+        {canEditSchedule && !locationClosed && (
           <span
             className="text-[10.5px] font-semibold text-text-tertiary uppercase tracking-wide"
             title="El generador solo calcula demanda y turnos de cocina; otras áreas (reparto, sala…) no entran en esta propuesta"
@@ -995,6 +1192,38 @@ export default function CalendarioPage() {
           <button onClick={discardProposal} className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-warning/40 text-warning hover:bg-card transition-base shrink-0">
             Descartar propuesta
           </button>
+        </div>
+      )}
+      {/* ENCARGO F10 (09/08) — desglose honesto por persona (§4 Bloque B):
+          contratadas vs colocadas y de dónde sale cada hora. Solo cubre lo
+          que ha entrado por "Proponer cuadrante"/"Cubrir el resto" en esta
+          sesión — no se persiste (schedules.cells no guarda el motivo). */}
+      {proposalBreakdown && proposalBreakdown.size > 0 && (
+        <div className="px-4 py-3 rounded-xl bg-card border border-border-default">
+          <div className="text-xs font-bold uppercase tracking-wide text-text-secondary mb-2">Desglose por persona — de dónde sale cada hora</div>
+          <div className="space-y-1.5">
+            {employees.map(e => {
+              const byCat = proposalBreakdown.get(e.id)
+              if (!byCat) return null
+              const wl = wlByEmp[e.id]
+              const totalProp = Object.values(byCat).reduce((a, b) => a + b, 0)
+              return (
+                <div key={e.id} className="flex items-center gap-2 text-xs flex-wrap">
+                  <span className="font-semibold text-text-primary min-w-[140px]">{e.name}</span>
+                  {wl && (
+                    <span className="text-text-secondary">
+                      colocadas <strong className="text-text-primary">{fmtHours(wl.contracted + wl.delta)}</strong> / contratadas {fmtHours(wl.contracted)}
+                    </span>
+                  )}
+                  <span className="text-text-tertiary">·</span>
+                  <span className="text-text-secondary">
+                    {BREAKDOWN_ORDER.filter(k => byCat[k] > 0).map(k => `${BREAKDOWN_LABEL[k]} ${fmtHours(byCat[k])}`).join(' · ')}
+                    {' '}({fmtHours(totalProp)} de esta propuesta)
+                  </span>
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
       {proposalError && (
@@ -1806,9 +2035,40 @@ function LaborModelModal({ accountId, locationId, weekStart, roleKinds, onClose 
                       className="mt-0.5 w-full border border-border-default rounded px-2 py-1.5 text-sm bg-card" />
                   </label>
                   <label className="text-[11px] text-text-secondary">
-                    Extra apertura/cierre
+                    Extra apertura/cierre (viejo, superado)
                     <input type="number" min={0} value={r.openCloseExtra}
                       onChange={e => patchRow(r.roleKind, { openCloseExtra: Math.max(0, Number(e.target.value) || 0) })}
+                      className="mt-0.5 w-full border border-border-default rounded px-2 py-1.5 text-sm bg-card" />
+                  </label>
+                </div>
+                {/* ENCARGO F10 (09/08) — "Cubrir el resto": dotación de pico
+                    (parámetro 1) y márgenes de apertura/cierre (parámetro 4).
+                    0/vacío = sin efecto (comportamiento previo). */}
+                <div className="grid grid-cols-2 gap-2 items-end mt-2 pt-2 border-t border-border-default">
+                  <label className="text-[11px] text-text-secondary">
+                    Dotación en el pico · entre semana
+                    <input type="number" min={0} value={r.peakWeekday ?? ''}
+                      placeholder="sin suelo"
+                      onChange={e => patchRow(r.roleKind, { peakWeekday: e.target.value === '' ? null : Math.max(0, Number(e.target.value) || 0) })}
+                      className="mt-0.5 w-full border border-border-default rounded px-2 py-1.5 text-sm bg-card" />
+                  </label>
+                  <label className="text-[11px] text-text-secondary">
+                    Dotación en el pico · sáb-dom
+                    <input type="number" min={0} value={r.peakWeekend ?? ''}
+                      placeholder="sin suelo"
+                      onChange={e => patchRow(r.roleKind, { peakWeekend: e.target.value === '' ? null : Math.max(0, Number(e.target.value) || 0) })}
+                      className="mt-0.5 w-full border border-border-default rounded px-2 py-1.5 text-sm bg-card" />
+                  </label>
+                  <label className="text-[11px] text-text-secondary">
+                    Min. antes de abrir
+                    <input type="number" min={0} value={r.preOpenMinutes}
+                      onChange={e => patchRow(r.roleKind, { preOpenMinutes: Math.max(0, Number(e.target.value) || 0) })}
+                      className="mt-0.5 w-full border border-border-default rounded px-2 py-1.5 text-sm bg-card" />
+                  </label>
+                  <label className="text-[11px] text-text-secondary">
+                    Min. después de cerrar
+                    <input type="number" min={0} value={r.postCloseMinutes}
+                      onChange={e => patchRow(r.roleKind, { postCloseMinutes: Math.max(0, Number(e.target.value) || 0) })}
                       className="mt-0.5 w-full border border-border-default rounded px-2 py-1.5 text-sm bg-card" />
                   </label>
                 </div>
@@ -1823,9 +2083,48 @@ function LaborModelModal({ accountId, locationId, weekStart, roleKinds, onClose 
           })}
         </div>
 
+        <ContractToleranceRow accountId={accountId} />
+
         <div className="px-4 pb-4 text-[11px] text-text-secondary">
-          Vista previa sobre la semana del cuadrante y este local. "estimación" = usa el prior de hostelería hasta que lo afines. Clima y eventos aún no entran (hacen falta 20-30 locales).
+          Vista previa sobre la semana del cuadrante y este local. "estimación" = usa el prior de hostelería hasta que lo afines. Dotación de pico y márgenes solo los usa "Cubrir el resto". Clima y eventos aún no entran (hacen falta 20-30 locales).
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ENCARGO F10 (09/08) — tolerancia de contrato: parámetro extra de "Cubrir
+// el resto", a nivel de cuenta (break_policy.contract_tolerance_pct). 0% por
+// defecto — no rebasa nunca, igual que antes de este encargo.
+function ContractToleranceRow({ accountId }: { accountId: string }) {
+  const [pct, setPct] = useState<number | null>(null)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    let cancel = false
+    fetchContractTolerance(accountId).then(v => { if (!cancel) setPct(v) })
+    return () => { cancel = true }
+  }, [accountId])
+  async function save() {
+    if (pct == null) return
+    setBusy(true)
+    await saveContractTolerance(accountId, pct)
+    setBusy(false)
+  }
+  return (
+    <div className="px-4 pb-2 pt-1">
+      <div className="border border-border-default rounded-lg p-3 flex items-center gap-3 flex-wrap">
+        <div className="flex-1 min-w-[200px]">
+          <div className="text-[11px] font-semibold text-text-secondary">Tolerancia sobre contrato</div>
+          <p className="text-[11px] text-text-secondary mt-0.5">Cuánto puede pasarse "Cubrir el resto" de las horas contratadas al colocar el excedente. 0% = nunca rebasa (igual que antes).</p>
+        </div>
+        <input type="number" min={0} max={50} value={pct ?? ''} disabled={pct == null}
+          onChange={e => setPct(Math.max(0, Number(e.target.value) || 0))}
+          className="w-20 border border-border-default rounded px-2 py-1.5 text-sm bg-card" />
+        <span className="text-xs text-text-secondary">%</span>
+        <button onClick={save} disabled={busy || pct == null}
+          className="text-xs px-3 py-1.5 rounded-lg bg-accent text-text-on-accent font-medium disabled:opacity-40 inline-flex items-center gap-1.5">
+          <Save size={13} /> Guardar
+        </button>
       </div>
     </div>
   )
