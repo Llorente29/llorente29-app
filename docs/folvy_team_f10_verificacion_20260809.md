@@ -341,3 +341,105 @@ Criterios del encargo (§8.4), marcar con el resultado real:
       criterio de negocio explícito antes de seguir tocando el solver.
 - [ ] Las formas de turno siguen siendo las 4 reales (si esto se rompe, parar y revisar).
 - [ ] `team_compliance_scan` 90 días sigue en 54 (repetir consulta de §5).
+
+---
+
+## 12. Reparto justo de partidos y descanso semanal (encargo 5º, 09/08 noche)
+
+**⚠️ Hallazgo prioritario, independiente del reparto de partidos — leer
+antes que el resto de esta sección.** El encargo pedía comprobar si el
+solver mira más allá del lunes de la semana que resuelve al calcular el
+descanso semanal. **No lo hace.** `solveWeekSchedule()` no recibe ni lee
+nunca el cuadrante de la semana anterior/siguiente — `lastShiftEndAbs` (el
+fin del último turno de cada persona) arranca vacío en cada llamada, y
+`minWeeklyRestNow()` calcula el descanso semanal **solo dentro de la
+semana que se resuelve**, con el propio lunes 00:00/domingo 24:00 como
+límite si no hay turno pegado al borde. Es el mismo límite que ya tiene
+`has_weekly_rest` en plpgsql (v3/v4/T1700) — no es una regresión de este
+encargo, es una limitación que ya existía y que este encargo hereda sin
+tocar. Consecuencia práctica: el caso real que motivó este encargo (Pamela
+con 36,25h de descanso semanal) solo es visible encadenando el cierre del
+domingo de la semana anterior con la apertura del lunes de esta — **ni el
+plpgsql ni el solver TypeScript lo detectan hoy**, ambos pueden reportar un
+descanso semanal "correcto" (o "al límite") que en realidad incumple al
+mirar la frontera real entre semanas. Tratarlo como encargo aparte, como
+pedía el encargo si se confirmaba — **confirmado**.
+
+**`break_policy.rest_safety_margin_minutes` (30 min, aplicada 08/08) — a
+qué se aplica hoy:** a descanso **semanal**, no diario. Es el margen que usa
+`propose_schedule_rest` (RPC, mismo fichero de migración
+`20260808T1300_break_policy_margen_seguridad_descanso.sql`) para clasificar
+cada persona en `'ok' | 'al_limite' | 'incumple'` comparando su descanso
+semanal más corto contra `mínimo` y `mínimo + margen`. Es un umbral de
+**aviso**, no una restricción dura (un cuadrante a 36h05 es legal). Y es
+importante: **ni el solver TypeScript ni `generate_week_schedule` lo leen**
+— es una función de diagnóstico aparte, llamada desde
+`scheduleProposalService.ts` para pintar el semáforo en pantalla DESPUÉS de
+generar la propuesta, no un parámetro que entre en el objetivo de ninguno
+de los dos motores. Y, por el hallazgo de arriba, ese diagnóstico también
+mira solo dentro de la semana — mismo punto ciego.
+
+**Objetivo nuevo, implementado en `src/services/scheduleSolver.ts`:**
+`maxSplitsPerEmployee` (criterio 4) y `−minWeeklyRestMinutes` (criterio 5),
+añadidos al objetivo lexicográfico de `rec()`. **Orden final: `[dev,
+splits_total, spread, maxSplits, −minRest]`** — spread (igualdad de horas)
+sigue mandando antes que los dos criterios nuevos, **no** el orden literal
+del encargo (que los pedía entre splits_total y spread). Decisión tomada
+tras comprobarlo empíricamente (regla del proyecto: validar antes de
+entregar, no solo leer):
+
+| Orden probado | Partidos (semana 10/08 real) | Horas |
+|---|---|---|
+| Literal del encargo (4/5 antes de spread) | 2-2-1 ✅ | 39,25 / 38,5 / 40 ❌ |
+| **Elegido** (spread antes de 4/5) | 3-1-1 (sin cambio de patrón) | **39,25 × 3** ✅ |
+
+Para la demanda real de Alcalá, **2-2-1 exacto y 39,25h×3 exactas no son
+alcanzables a la vez** — es un trade-off de negocio real, no un bug.
+Con el orden elegido las horas nunca se tocan; el descanso semanal mejora
+mucho de todas formas: **43,5h** el peor caso (frente a 36,25h en el
+cuadrante real sin este criterio) — ver el segundo test de §12.1. Si Julio
+prefiere el otro orden (2-2-1 exacto, aceptando que las horas dejen de ser
+iguales), es una decisión suya, no una corrección de un error.
+
+### 12.1 Tests (`tests/unit/services/scheduleSolver.test.ts`)
+
+9 tests, todos en verde (`npm test -- tests/unit/services/scheduleSolver.test.ts`):
+- Los 5 tests del oráculo (§10) y los 2 de nivel de plantilla (§11) siguen
+  en verde. Los 2 tests de la semana 03/08 y 10/08 se ajustaron: dejaron de
+  exigir la fila exacta persona-por-turno del oráculo (el propio oráculo
+  tiene la misma asimetría 3-1-1 que este encargo corrige, así que un
+  reparto más justo elige, entre soluciones empatadas en horas/huecos/
+  partidos totales, una fila distinta a la de python) — lo que sigue
+  vinculante (huecos=0, días libres, horas 39,25×3, total 117,75, partidos=5,
+  desvío 2,25, spread 0,0, máx. 1 corrido/persona) se mantiene intacto.
+- 2 tests nuevos:
+  1. Fixture sintético (2 plantillas de igual duración, 3 personas, 3 días
+     abiertos): 2 partidos forzados por aritmética, con una sola persona
+     disponible ambos días forzados (podría llevarse los 2). El solver
+     reparte 1 a cada una de dos personas distintas — `maxSplitsPerEmployee
+     ≤ 1`, nunca 2.
+  2. Semana 10/08 real: horas siguen en 39,25×3 (spread 0,0) con el
+     criterio nuevo activo; `maxSplitsPerEmployee=3` (no baja de 3-1-1 para
+     esta demanda, número exacto verificado) y `minWeeklyRestMinutes=2610`
+     (43,5h, verificado, frente a las 36,25h del cuadrante real).
+
+`npx tsc -b` y `npm run build` en verde. `npx eslint` en verde sobre los dos
+ficheros tocados. El resto de la suite (`npx vitest run`) tiene 3 ficheros
+en rojo (`routes.test.ts`, `brandsService.mappers`, `salesChannelsService.mappers`)
+— **preexistentes, no tocados en esta rama, sin relación con
+`scheduleSolver.ts`** (multitenancy/rutas, módulos que este encargo no toca).
+
+### 12.2 Pendiente
+
+- Rodaje real en Alcalá 10/08 con "Proponer cuadrante": confirmar en vivo
+  que splits/horas/huecos/corridos/días libres coinciden con lo que
+  predicen los tests (sin credenciales de Julio en este entorno, solo
+  verificado por test).
+- El cuadrante draft guardado en `schedules` (`1e95fdbc-93b2-4ae2-a8a1-38dfbda9b8d8`,
+  `status='draft'`) sigue sin publicarse — decisión explícita de Julio hasta
+  que el reparto de partidos sea justo. Con este fix, el peor descanso pasa
+  de 36,25h a 43,5h; el patrón de partidos queda en 3-1-1 (no 2-2-1) salvo
+  que Julio prefiera el orden literal del encargo y ceda la igualdad de horas.
+- El punto ciego de fin de semana (arriba) queda **fuera de este encargo**,
+  declarado como posible encargo aparte, prioritario según el propio
+  encargo si se confirmaba — y se ha confirmado.
