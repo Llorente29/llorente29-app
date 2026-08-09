@@ -61,6 +61,7 @@ import { fetchLaborModel, saveLaborModelRow, fetchLaborIntensity, setLaborIntens
 import { getTrainingComplianceMatrix } from '../services/trainingComplianceService'
 import { listOnboardingCourseFlags } from '../services/trainingPathService'
 import { fetchGeneratedSchedule, type GeneratedScheduleRow } from '../services/scheduleProposalService'
+import { runScheduleSolver, type SolverEmployeeInput } from '../services/scheduleSolver'
 import { fmtHours } from '../lib/format'
 
 // Semáforo de formación en el cuadrante (onboarding formativo, pieza 3):
@@ -752,6 +753,33 @@ export default function CalendarioPage() {
     return breakdown
   }
 
+  // ENCARGO F10 (final, 09/08) — SOLVER EXACTO (docs/solver_prototipo.py,
+  // puerto en src/services/scheduleSolver.ts) sustituye a generate_week_
+  // schedule (plpgsql) SOLO aquí, en "Proponer cuadrante" — seis vueltas de
+  // greedy (v3…v6) arreglaban un síntoma en cada una y destapaban otro; el
+  // último, el lunes de una semana entera sin nadie porque los descansos
+  // caían de residuo, no de decisión. El solver reserva los días libres
+  // ANTES de repartir y resuelve por backtracking exacto con objetivo
+  // lexicográfico — validado contra el oráculo, tests en
+  // tests/unit/services/scheduleSolver.test.ts. generate_week_schedule
+  // queda vivo sin tocar (NO DESTRUCCIÓN) — "Cubrir el resto" lo sigue
+  // usando, fuera de alcance de este encargo (§2 solo pide "Proponer
+  // cuadrante").
+  function vacationDaysThisWeek(): Map<string, Set<number>> {
+    const map = new Map<string, Set<number>>()
+    for (const v of vacations) {
+      if (v.status !== 'aprobada') continue
+      for (const d of DAYS) {
+        const dateISO = addDays(weekStart, d)
+        if (v.startDate <= dateISO && dateISO <= v.endDate) {
+          if (!map.has(v.employeeId)) map.set(v.employeeId, new Set())
+          map.get(v.employeeId)!.add(d)
+        }
+      }
+    }
+    return map
+  }
+
   async function doPropose() {
     if (!canEditSchedule || !activeAccountId) return
     if (!locationId) return
@@ -759,7 +787,15 @@ export default function CalendarioPage() {
     setProposing(true)
     setProposalError(null)
     try {
-      const rows = await fetchGeneratedSchedule(activeAccountId, locationId, weekStart)
+      const solverEmployees: SolverEmployeeInput[] = employees.map(e => ({
+        id: e.id, name: e.name, contractedHoursWeek: e.contractedHoursWeek ?? 40,
+      }))
+      const { rows, outcome } = await runScheduleSolver(
+        activeAccountId, locationId, weekStart, solverEmployees, vacationDaysThisWeek()
+      )
+      if (!outcome.feasible) {
+        setProposalError('El solver no encontró ninguna semana completa legal para este equipo y esta demanda — revisa los huecos declarados en la rejilla para ver qué restricción bloquea cada asiento.')
+      }
       if (rows.length === 0) {
         setProposalError('El generador no pudo proponer nada para esta semana: revisa que el local esté abierto, que haya previsión de demanda y empleados activos en este local.')
         return
@@ -2034,12 +2070,14 @@ function LaborModelModal({ accountId, locationId, weekStart, roleKinds, onClose 
                       onChange={e => patchRow(r.roleKind, { minOnOpen: Math.max(0, Number(e.target.value) || 0) })}
                       className="mt-0.5 w-full border border-border-default rounded px-2 py-1.5 text-sm bg-card" />
                   </label>
-                  <label className="text-[11px] text-text-secondary">
-                    Extra apertura/cierre (viejo, superado)
-                    <input type="number" min={0} value={r.openCloseExtra}
-                      onChange={e => patchRow(r.roleKind, { openCloseExtra: Math.max(0, Number(e.target.value) || 0) })}
-                      className="mt-0.5 w-full border border-border-default rounded px-2 py-1.5 text-sm bg-card" />
-                  </label>
+                  {r.openCloseExtra > 0 && (
+                    <div className="text-[11px] text-text-secondary col-span-2">
+                      <span className="font-semibold text-warning">Extra apertura/cierre (viejo, superado): {r.openCloseExtra}</span> — ya
+                      no se edita desde aquí (bug 09/08: sumaba PERSONAS, no minutos, a la
+                      hora de apertura/cierre). Sustituido por los 2 campos de abajo. Para
+                      quitarlo hace falta un UPDATE directo en BBDD.
+                    </div>
+                  )}
                 </div>
                 {/* ENCARGO F10 (09/08) — "Cubrir el resto": dotación de pico
                     (parámetro 1) y márgenes de apertura/cierre (parámetro 4).
