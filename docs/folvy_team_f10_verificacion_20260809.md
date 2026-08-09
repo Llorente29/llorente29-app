@@ -220,6 +220,46 @@ build`, sin errores). Repetir tras aplicar la migración si se toca algo más.
 
 ---
 
+## 10. Solver exacto (encargo final) — sustituye al greedy en "Proponer cuadrante"
+
+**No hace falta ninguna migración para esta parte** — el motor pasa a ser
+`src/services/scheduleSolver.ts` (TypeScript, cliente), puerto de
+`docs/solver_prototipo.py`. `generate_week_schedule` (plpgsql) queda vivo
+sin tocar — lo sigue usando "Cubrir el resto", fuera de alcance de esta
+parte del encargo.
+
+**Verificación ya hecha por Claude, automatizada** (§4.6 del encargo):
+
+```
+npm test -- tests/unit/services/scheduleSolver.test.ts
+```
+
+5 tests, todos en verde. Reproducen las DOS semanas del oráculo
+(`docs/solver_prototipo.py`) **día por día, asiento por asiento** — no solo
+el total: 0 huecos, días libres escalonados y rotando (`{Johanny:L,
+Natacha:M, Pamela:X}` semana 03/08 → `{Johanny:M, Natacha:X, Pamela:L}`
+semana 10/08), 39,25h cada una, spread 0,0, un Corrido1 máximo por persona,
+y el **lunes de la semana 10/08 con gente trabajando** (la regresión #1 que
+motivó abandonar la línea greedy).
+
+⚠️ **Lo que Claude NO ha podido verificar** (sin credenciales de Julio en
+este entorno): la app en vivo — abrir Calendario, pulsar "Proponer
+cuadrante" con datos reales de producción, revisar la propuesta en pantalla,
+Guardar y Publicar. Es el mismo "rodaje" que llevaba pendiente desde la 1ª
+parte de este encargo (nunca se ha guardado una propuesta de ningún motor
+de F10 en producción) — sigue pendiente, ahora con el solver.
+
+Pasos para Julio:
+1. `git pull` en `feat/f10-cubrir-el-resto` (o mergear la rama).
+2. Calendario → Alcalá → semana 03/08 (la real) → "Proponer cuadrante".
+3. Comparar contra `schedules.cells` de esa semana (§4 del encargo).
+4. Semana 10/08 → confirmar que el lunes NO sale vacío.
+5. Guardar y Publicar una vez — el rodaje pendiente desde el principio.
+6. `team_compliance_scan` 90 días sigue en 54 (no debería cambiar: el
+   solver no toca cumplimiento, solo genera la propuesta).
+
+---
+
 ## 9. Mix de turnos (3ª parte, T1700) — cuántos corridos, no quién ni cuándo
 
 Aplicar `20260809T1700_generate_week_schedule_mix_de_turnos.sql` (una sola

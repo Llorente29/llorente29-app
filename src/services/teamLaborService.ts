@@ -10,6 +10,7 @@ import { supabase } from '../lib/supabase'
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function db(): any {
   if (!supabase) throw new Error('Sin conexión con el servidor.')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return supabase as any
 }
 
@@ -39,6 +40,10 @@ export interface LaborRequirementRow {
   volumen: number
   perPersonHour: number
   required: number
+  /** ENCARGO F10 (solver exacto) — sin redondear, es el que debe usar
+   *  cualquier cálculo fino (el motor plpgsql ya lo usaba; `required` es
+   *  el entero redondeado, solo para mostrar en pantalla). */
+  requiredExact: number
   isEstimate: boolean
 }
 
@@ -138,6 +143,7 @@ export async function fetchLaborRequirement(accountId: string, locationId: strin
     volumen: Number(r.volumen) || 0,
     perPersonHour: Number(r.per_person_hour) || 0,
     required: Number(r.required) || 0,
+    requiredExact: Number(r.required_exact) || 0,
     isEstimate: !!r.is_estimate,
   }))
 }
