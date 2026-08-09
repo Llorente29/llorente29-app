@@ -120,21 +120,25 @@ export async function fetchScheduleRest(
   }))
 }
 
-// F10 — generate_week_schedule: NO usa shift_templates. Convierte la curva de
-// demanda directamente en bloques de turno continuos (hora inicio/fin), sin
-// plantilla fija. Cada fila es UN asiento: o bien una persona concreta, o un
-// hueco (o_hueco=true) con su motivo — nunca "menos filas en silencio".
-// ⚠️ Aplicado pero sobredimensiona la demanda si no se acota bien la ventana
-// de apertura (F10 sigue 🟡) — ver project_f10_solver_legal en memoria.
+// F10 v3 (09/08) — generate_week_schedule ahora ANCLA a shift_templates
+// reales (kind='demanda'/'forzado'/'no_productivo'): la mayoría de filas
+// traen shiftTemplateId. Solo el refuerzo excepcional (como mucho uno por
+// día) llega con shiftTemplateId=null y horaIni/horaFin en "HH:MM" — ese sí
+// se representa como plantilla sintética `gen-<HHMM>-<HHMM>` en CalendarioPage.
+// ⚠️ CAMBIO DE CONTRATO respecto a la versión anterior: horaIni/horaFin
+// pasan de "hora entera" (number) a "HH:MM" (string) — ver migración
+// 20260809T1530_generate_week_schedule_v3_ancla_plantillas.sql.
 export interface GeneratedScheduleRow {
   fecha: string
   dayOfWeek: DayOfWeek
-  /** hora de inicio del bloque, 0-23 */
-  horaIni: number
-  /** hora de fin del bloque, 1-24 (24 = medianoche) */
-  horaFin: number
+  /** null solo en el refuerzo excepcional — el resto ancla a un shift_templates real. */
+  shiftTemplateId: string | null
+  /** "HH:MM" */
+  horaIni: string
+  /** "HH:MM" (puede ser < horaIni si cruza medianoche) */
+  horaFin: string
   horas: number
-  /** capa de cobertura (1 = base, 2+ = refuerzo en horas punta) */
+  /** 1=base (demanda/forzado/no_productivo) · 2=turno largo del pico · 3=dotación mínima en pico · 4=refuerzo excepcional */
   capa: number
   /** null cuando esHueco: nadie puede cubrir el bloque sin incumplir una restricción dura. */
   employeeId: string | null
@@ -165,8 +169,9 @@ export async function fetchGeneratedSchedule(
   return (data as any[]).map(r => ({
     fecha: r.o_fecha,
     dayOfWeek: Number(r.o_dow) as DayOfWeek,
-    horaIni: Number(r.o_ini),
-    horaFin: Number(r.o_fin),
+    shiftTemplateId: r.o_shift_template_id ?? null,
+    horaIni: String(r.o_ini),
+    horaFin: String(r.o_fin),
     horas: Number(r.o_horas),
     capa: Number(r.o_capa),
     employeeId: r.o_employee_id ?? null,
