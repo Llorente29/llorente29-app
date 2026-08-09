@@ -1,15 +1,19 @@
 # F10 — Verificación "Cubrir el resto" + arreglo de reparto (09/08/2026)
 
 > Estado a fecha de este documento:
-> - `T0940`, `T0945`, y una versión CORREGIDA de `T1530` (con las columnas de
->   `T1500`/`T1510`/`T1520` incluidas) **YA ESTÁN APLICADAS en producción**
->   (aplicadas directamente vía MCP durante la sesión, con el ERROR 42601 del
->   primer intento corregido en el sitio). Los ficheros del repo con esos
->   nombres se han sincronizado a posteriori con lo vivo — no hace falta
->   volver a aplicarlos, son idempotentes si se reaplican por error.
-> - `20260809T1600_generate_week_schedule_reparto_v4.sql` es la ÚNICA
->   migración pendiente de aplicar de este encargo. Cambia el REPARTO
->   (quién hace cada turno), no el anclaje a plantillas (eso ya funciona).
+> - `T0940`, `T0945`, `T1530` (corregida) y **`T1600` (reparto v4) YA ESTÁN
+>   APLICADAS en producción** — Julio las aplicó y midió en vivo (Alcalá
+>   03/08, `contract_tolerance_pct=10`, ver §8 del encargo 2ª parte). Los
+>   ficheros del repo se han sincronizado a posteriori con lo vivo.
+> - `20260809T1700_generate_week_schedule_mix_de_turnos.sql` es la ÚNICA
+>   migración pendiente de este encargo (3ª parte, §8: arregla CUÁNTOS
+>   turnos largos de 9,5h propone el motor, no quién ni en qué orden — eso
+>   ya funciona). Validada por MCP dos veces (encontró y corrigió dos
+>   efectos en cadena antes de la versión final — ver cabecera de la
+>   migración). Ver §9 más abajo.
+> - `contract_tolerance_pct` sigue en **10 %** en producción — es una
+>   decisión laboral (permite llegar a 44h en un contrato de 40),
+>   **pendiente de confirmación explícita de Julio** (§0 del encargo).
 >
 > IDs reales de esta cuenta (Llorente29 / Foodint) — **no confundir con los
 > duplicados de la cuenta demo "Folvy Interno"** `00000000-0000-0000-0000-000000000001`
@@ -213,3 +217,57 @@ npm run build
 
 Ya verificado en verde por Claude antes de este commit (`tsc -b && vite
 build`, sin errores). Repetir tras aplicar la migración si se toca algo más.
+
+---
+
+## 9. Mix de turnos (3ª parte, T1700) — cuántos corridos, no quién ni cuándo
+
+Aplicar `20260809T1700_generate_week_schedule_mix_de_turnos.sql` (una sola
+sentencia `create or replace function` + su guard). Validada por Claude por
+MCP **dos veces** antes de escribirse — la 1ª validación del orden propuesto
+literal (`neto desc, uso desc...`) resucitó plantillas duplicadas sin uso
+real; la 2ª (con `uso desc` primero) dejó el turno largo garantizado sin
+sitio y lo convirtió en huecos. La versión final mueve el turno largo
+garantizado a ANTES del greedy — ver cabecera de la migración para el
+detalle completo, no maquillado.
+
+```sql
+select o_dow, o_shift_template_id, o_ini, o_fin, o_horas, o_employee, o_hueco, o_motivo
+from public.generate_week_schedule(
+  '51ad1792-6629-4ef7-833a-b57b09a86710'::uuid,
+  '38158159-cd71-4056-950b-53425afac1ce'::uuid,
+  '2026-08-03'::date
+)
+order by o_dow, o_ini;
+```
+
+**Resultado que obtuvo Claude en la validación por MCP** (con
+`contract_tolerance_pct=10`, el valor ya en producción):
+
+| | Cuadrante real | v4 (antes de T1700) | T1700 validado |
+|---|---|---|---|
+| Corridos de 9,5h | 3 | 8 | **3** ✅ |
+| Uno por persona | sí | no (4·3·0) | **sí** ✅ |
+| Avisos "Segundo turno largo" | — | 5 | **0** ✅ |
+| Días trabajados | 6·6·6 | 6·6·6 | **6·6·6** ✅ |
+| Huecos | 0 | 2 | **2** (no sube) ✅ |
+| Plantillas usadas | las 4 reales | las 4 reales | **las 4 reales** ✅ |
+| Horas totales | 124,25 | 119,5 | **97,5** 🔴 |
+
+Criterios del encargo (§8.4), marcar con el resultado real:
+- [ ] Corridos de 9,5h: máximo 3-4 (el real son 3).
+- [ ] Avisos "Segundo turno largo — no había alternativa": 0-1.
+- [ ] Días trabajados siguen en 6·6·6, huecos no suben de 2.
+- [ ] **Horas totales no bajan de 115** — ⚠️ en la validación de Claude
+      dieron **97,5**. Este criterio, tal como está la migración propuesta,
+      **no se cumple**. Es la contracara de quitar el desperdicio: al no
+      sobredotar con turnos largos que tapan de más, el total baja. Decisión
+      pendiente de Julio: ¿aceptar un cuadrante más ajustado a la demanda
+      pura con el patrón estructural correcto (3 corridos, 1 por persona),
+      cerrando la distancia hasta 124h con "Cubrir el resto" (§8.5, todavía
+      sin probar nunca) — o pedir una 4ª vuelta de ajuste del greedy?
+      **No se ha intentado una 4ª vuelta a ciegas**: cada ajuste adicional en
+      esta sesión ha encontrado un efecto en cadena nuevo: seguir requiere
+      criterio de negocio explícito antes de seguir tocando el solver.
+- [ ] Las formas de turno siguen siendo las 4 reales (si esto se rompe, parar y revisar).
+- [ ] `team_compliance_scan` 90 días sigue en 54 (repetir consulta de §5).
