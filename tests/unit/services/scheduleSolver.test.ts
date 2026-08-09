@@ -172,3 +172,74 @@ describe('scheduleSolver — reproduce el oráculo docs/solver_prototipo.py', ()
     expect(out.seats.filter((s) => s.day === 0)).toHaveLength(0)
   })
 })
+
+// ENCARGO F10 (09/08 noche) — el solver ocupaba plantillas sin asiento
+// declarado dejando vacío uno que sí lo tenía. Caso real: Alcalá tiene
+// "Mañana" (coverage=1 los 7 días, uso histórico 59 semanas) y "Mañana1"
+// (coverage=0, uso=0, gemela sin depurar F7.2, 12:30-16:00 = 3.5h en vez de
+// 4.25h) — el set-cover elegía Mañana1 por ser más barata en horas y dejaba
+// el hueco "Mañana: faltan 1 de 1" declarado en la misma franja y día.
+describe('scheduleSolver — nivel de plantilla (coverage declarado > uso histórico > coste)', () => {
+  const TPL_M_REAL: SolverTemplate = { id: 'M-real', label: 'Mañana', iniMin: 750, finMin: 1005, kind: 'demanda', uso: 59, coverageByDay: [1, 1, 1, 1, 1, 1, 1] }
+  // Mañana1: gemela sin depurar — más corta (más barata en horas), sin
+  // coverage declarado y sin uso histórico. Debe perder SIEMPRE contra
+  // Mañana cuando compiten por la misma franja de demanda.
+  const TPL_M1_DUP: SolverTemplate = { id: 'M1-duplicada', label: 'Mañana1', iniMin: 750, finMin: 960, kind: 'demanda', uso: 0, coverageByDay: [0, 0, 0, 0, 0, 0, 0] }
+  const TPL_T_REAL: SolverTemplate = { id: 'T-real', label: 'Tarde/Noche F/S', iniMin: 1185, finMin: 1455, kind: 'demanda', uso: 35, coverageByDay: [1, 1, 1, 1, 1, 1, 1] }
+  // Corridos reales de Alcalá: coverage=0 (igual que Mañana1) pero CON uso
+  // histórico real — deben seguir siendo elegibles, nunca descartados solo
+  // por no tener coverage declarado.
+  const TPL_C1_REAL: SolverTemplate = { id: 'C1-real', label: 'Corrido1', iniMin: 885, finMin: 1455, kind: 'demanda', uso: 6, coverageByDay: [0, 0, 0, 0, 0, 0, 0] }
+  const TPL_C2_REAL: SolverTemplate = { id: 'C2-real', label: 'Corrido2', iniMin: 1005, finMin: 1455, kind: 'demanda', uso: 11, coverageByDay: [0, 0, 0, 0, 0, 0, 0] }
+
+  const solo1Empleado: SolverEmployeeInput[] = [{ id: 'A', name: 'Ana', contractedHoursWeek: 40 }]
+
+  it('elige la plantilla con asiento declarado (coverage>0) sobre una gemela sin declarar y sin uso, aunque sea más barata en horas', () => {
+    // Demanda solo en horas 13-16 (la franja de "Mañana"/"Mañana1"). Se
+    // reparte en DOS días (con 1 solo empleado, si solo hay un día con
+    // demanda, la Fase 1 le reserva justo ESE día como libre — hay que
+    // dejarle otro día "sacrificable" para que el jueves quede disponible).
+    const demand: Record<number, number>[] = Array.from({ length: 7 }, () => ({}))
+    demand[0] = { 13: 1 }
+    demand[3] = { 13: 1, 14: 1, 15: 1 }
+    const out = solveWeekSchedule({
+      weekIndex: 0,
+      templates: [TPL_M_REAL, TPL_M1_DUP, TPL_T_REAL],
+      employees: solo1Empleado,
+      vacationDaysByEmployee: new Map(),
+      demandByDayHour: demand,
+      maxDailyHours: 9.5, splitGapMinutes: 90, restBetweenShiftsMinutes: 720,
+      toleranceFraction: 0.10, peakWeekday: 0, peakWeekend: 0,
+    })
+    const jueves = out.seats.filter((s) => s.day === 3 && !s.isHueco)
+    expect(jueves.length).toBeGreaterThan(0)
+    for (const s of jueves) expect(s.templateId).toBe('M-real')
+    expect(out.seats.some((s) => s.templateId === 'M1-duplicada')).toBe(false)
+    // Ningún hueco declarado sobre "Mañana" mientras "Mañana1" se usó en su lugar.
+    expect(out.seats.filter((s) => s.isHueco)).toHaveLength(0)
+  })
+
+  it('una plantilla con coverage=0 pero uso histórico real (los corridos) sigue siendo elegible — no se filtra solo por coverage', () => {
+    // Demanda de tarde/noche larga y sostenida: un Corrido1 (14:45-00:15) la
+    // tapa con 1 solo asiento; Tarde/Noche F/S (19:45-00:15) sola no llega a
+    // las horas de media tarde. Con 1 empleado disponible, el set-cover debe
+    // poder elegir el corrido (tier 1: sin coverage, con uso) en vez de
+    // dejarlo sin cubrir por no tener "asiento declarado". Día "sacrificable"
+    // aparte (mismo motivo que el test anterior: con 1 empleado, si solo hay
+    // un día con demanda, la Fase 1 se lo reserva como libre).
+    const demand: Record<number, number>[] = Array.from({ length: 7 }, () => ({}))
+    demand[0] = { 13: 1 }
+    demand[5] = { 15: 1, 16: 1, 17: 1, 18: 1, 19: 1, 20: 1, 21: 1, 22: 1, 23: 1 }
+    const out = solveWeekSchedule({
+      weekIndex: 0,
+      templates: [TPL_M_REAL, TPL_T_REAL, TPL_C1_REAL, TPL_C2_REAL],
+      employees: solo1Empleado,
+      vacationDaysByEmployee: new Map(),
+      demandByDayHour: demand,
+      maxDailyHours: 9.5, splitGapMinutes: 90, restBetweenShiftsMinutes: 720,
+      toleranceFraction: 0.10, peakWeekday: 0, peakWeekend: 0,
+    })
+    const sabado = out.seats.filter((s) => s.day === 5)
+    expect(sabado.some((s) => s.templateId === 'C1-real' && !s.isHueco)).toBe(true)
+  })
+})

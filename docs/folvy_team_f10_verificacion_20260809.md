@@ -260,6 +260,36 @@ Pasos para Julio:
 
 ---
 
+## 11. Fix — plantillas sin asiento declarado (rodaje 09/08, commit sobre `a5e6a1b`)
+
+El rodaje del punto 10 encontró un defecto real: en Alcalá semana 10/08, el
+set-cover sentaba a Natacha/Pamela en "Mañana1" (12:30–16:00, `coverage=0`,
+0 uso histórico — gemela sin depurar, F7.2) en vez de "Mañana"
+(12:30–16:45, `coverage=1` los 7 días, 59 semanas de uso real), dejando 4
+huecos declarados sobre el asiento que sí existía. Causa: el objetivo del
+set-cover (`unc, count, tot`) no miraba ni `coverage_<dia>` ni `uso` —
+Mañana1, al ser más corta, ganaba por horas.
+
+Arreglo: nuevo criterio `tier` en el objetivo (`unc, tier, count, tot`) —
+nivel 0 = asiento declarado (`coverage_<dia}>0`), nivel 1 = sin declarar
+pero con uso histórico real (los corridos: `coverage=0` en Alcalá pero SÍ
+se usan), nivel 2 = ni una cosa ni la otra (Mañana1). Se compara antes que
+horas/nº de asientos — nunca se ocupa un nivel peor por ser más barato.
+
+2 tests nuevos (`tests/unit/services/scheduleSolver.test.ts`, describe
+"nivel de plantilla"): Mañana gana a Mañana1 aunque sea más cara; un corrido
+con `coverage=0` sigue siendo elegible (no se filtra solo por coverage — eso
+mataría los corridos de verdad). Los 5 tests del oráculo siguen en verde
+(en esos fixtures todas las plantillas tienen coverage>0, así que el nuevo
+criterio no las distingue — comportamiento sin cambios frente al oráculo).
+
+**Pendiente**: repetir el rodaje de Alcalá 10/08 con este fix — el encargo
+espera que los 4 huecos bajen a 0 y las horas colocadas suban ~3h. Sin
+credenciales de Julio en este entorno, Claude no lo ha podido comprobar en
+vivo — solo por test.
+
+---
+
 ## 9. Mix de turnos (3ª parte, T1700) — cuántos corridos, no quién ni cuándo
 
 Aplicar `20260809T1700_generate_week_schedule_mix_de_turnos.sql` (una sola

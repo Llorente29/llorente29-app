@@ -235,11 +235,11 @@ function seatsForDay(
   const loSeats = Math.max(0, nAvail - mandatoryCount)
   const hiSeats = Math.max(0, nAvail * 2 - mandatoryCount)
 
-  let best: { unc: number; count: number; tot: number; seats: SolverTemplate[] } | null = null
+  let best: { unc: number; tier: number; count: number; tot: number; seats: SolverTemplate[] } | null = null
   const n = demanda.length
   if (n === 0) {
     const unc = Object.values(need).reduce((a, b) => a + b, 0)
-    best = { unc, count: 0, tot: 0, seats: [] }
+    best = { unc, tier: 0, count: 0, tot: 0, seats: [] }
   } else {
     // Dos pasadas: la 1ª respeta el rango [loSeats,hiSeats] (1-2 asientos
     // por disponible, igual que el prototipo). Si NINGÚN multiset de las
@@ -266,10 +266,24 @@ function seatsForDay(
           const covered = seats.reduce((acc, s) => acc + (covers(s, h) ? 1 : 0), 0)
           unc += Math.max(0, q - covered)
         }
+        // Nivel de plantilla (encontrado en rodaje real 09/08 — el port del
+        // set-cover no distinguía "Mañana" de "Mañana1", una gemela con
+        // coverage=0 y 0 uso histórico: por ser más corta ganaba en horas y
+        // se sentaba a alguien ahí dejando el asiento real declarado vacío).
+        // Nivel 0 = tiene asiento declarado ese día (coverage_<dia>>0).
+        // Nivel 1 = sin asiento declarado pero con uso histórico real (los
+        //   corridos: coverage=0 en Alcalá pero sí se usan de verdad — NO
+        //   se puede filtrar solo por coverage sin matar los corridos).
+        // Nivel 2 = ni una cosa ni la otra (gemela sin depurar, F7.2).
+        // Se compara ANTES que el nº de asientos/horas: nunca se ocupa un
+        // nivel peor solo porque sea más barato en horas.
+        const tier = seats.reduce((a, s) => a + (coverageForDow(s, day) > 0 ? 0 : s.uso > 0 ? 1 : 2), 0)
         const tot = seats.reduce((a, s) => a + durationHours(s), 0)
-        if (!best || unc < best.unc || (unc === best.unc && seats.length < best.count) ||
-            (unc === best.unc && seats.length === best.count && tot < best.tot)) {
-          best = { unc, count: seats.length, tot, seats }
+        if (!best || unc < best.unc ||
+            (unc === best.unc && tier < best.tier) ||
+            (unc === best.unc && tier === best.tier && seats.length < best.count) ||
+            (unc === best.unc && tier === best.tier && seats.length === best.count && tot < best.tot)) {
+          best = { unc, tier, count: seats.length, tot, seats }
         }
       }
     }
