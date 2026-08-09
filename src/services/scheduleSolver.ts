@@ -885,6 +885,204 @@ function weekIndexFor(weekStartISO: string): number {
   return Math.floor((week - anchor) / (7 * 24 * 3600 * 1000))
 }
 
+/** ENCARGO F10 "conectar la semilla de frontera" (09/08 noche) — qué fuente
+ *  alimentó previousWeekLastShiftEndByEmployee para esa persona. Se expone
+ *  aparte de SolverOutcome (que es agnóstico a la fuente, solo sabe si tuvo
+ *  dato o no) porque solveWeekSchedule() no toca BBDD — la fuente es cosa
+ *  del adaptador. */
+export type CrossWeekRestSource = 'fichaje' | 'publicado' | 'ninguno'
+
+/**
+ * Sembrado del fin del último turno de la semana ANTERIOR, por persona.
+ * Cascada aprobada por Julio (09/08 noche, ENCARGO "conectar la semilla"):
+ *   1. clock_entries (fichaje real) — SI supera el filtro de cordura (abajo).
+ *   2. schedules.cells de la semana anterior, status='published'.
+ *   3. "no lo sé" (persona ausente del mapa devuelto).
+ * NUNCA desde un draft — es mutable, sembrar desde ahí encadena la
+ * propuesta de esta semana a algo que puede cambiar bajo los pies.
+ *
+ * Filtro de cordura (por qué existe): RECON real (MCP, 09/08) sobre 60 días
+ * de fichajes de Alcalá encontró 4 jornadas por encima de 12h entre 166
+ * fichajes limpios — una de casi 24h (salida que se olvidó y se cerró
+ * tarde), y un grupo de 3 personas la MISMA noche con salida idéntica de
+ * madrugada (huella de un fallo de sistema, no de tres personas trabajando
+ * juntas hasta las 6 de la mañana en una cocina que cierra a medianoche).
+ * "Posterior al plan" NO basta como criterio — una salida olvidada es
+ * SIEMPRE posterior al plan, así que ese criterio elegiría justo el dato
+ * corrupto. Umbral: `maxDailyMinutes + 3×restSafetyMarginMinutes` (con los
+ * valores reales de la cuenta, 570+90=660min=11h) — deriva de política ya
+ * configurada, no un número sacado de la manga: 3 turnos-jornada llegan a
+ * ~9,5h (el corrido más largo real), el margen de cierre ya está
+ * establecido en el proyecto como colchón de "cierre alargado" real
+ * (rest_safety_margin_minutes); triplicarlo da margen generoso para un mal
+ * día sin dejar pasar un fichaje de 12h+ nunca visto en un turno real. El
+ * hueco natural en los datos reales (nada entre 584 y 674 min) confirma
+ * que el umbral cae limpio entre lo legítimo y lo anómalo, sin haber sido
+ * ajustado a mano para lograrlo.
+ */
+/**
+ * Escalón 1 puro: dado el historial YA ordenado cronológicamente de UNA
+ * persona (entrada/salida, sin voided), calcula el par cerrado MÁS
+ * RECIENTE anterior a `weekStartMs` y aplica el filtro de cordura. No prueba
+ * un par anterior si el último falla el filtro — se cae al escalón 2 tal
+ * cual (regla explícita del encargo, no "buscar el fichaje bueno más
+ * cercano"). Exportada para test directo, sin mock de Supabase — mismo
+ * patrón que el resto de este fichero (funciones puras + tests, la BBDD
+ * queda solo en el adaptador que las envuelve).
+ */
+export function resolveSeedFromClockEntries(
+  rows: { type: string; datetime: string }[],
+  weekStartMs: number,
+  sanityThresholdMinutes: number
+): number | null {
+  let openStart: number | null = null
+  let lastPair: { start: number; end: number } | null = null
+  for (const r of rows) {
+    const t = new Date(r.datetime).getTime()
+    if (r.type === 'entrada') openStart = t
+    else if (r.type === 'salida' && openStart !== null) { lastPair = { start: openStart, end: t }; openStart = null }
+  }
+  if (!lastPair) return null
+  const durationMinutes = (lastPair.end - lastPair.start) / 60000
+  if (durationMinutes > sanityThresholdMinutes + 1e-9) return null // filtro de cordura: descartado
+  return (lastPair.end - weekStartMs) / 60000
+}
+
+/**
+ * Escalón 2 puro: dado `schedules.cells` (publicado) de la semana anterior
+ * ya decodificado y las horas de las plantillas que aparecen ahí, calcula
+ * el fin del ÚLTIMO turno de una persona esa semana. `null` si la persona
+ * no aparece en ningún turno esa semana (sigue "no lo sé").
+ */
+export function resolveSeedFromPublishedCells(
+  prevCells: Record<string, Record<string, string[]>>,
+  tplTimes: Map<string, { iniMin: number; finMin: number }>,
+  employeeId: string
+): number | null {
+  const WEEK_END_ABS = 7 * 1440
+  let maxAbsEnd: number | undefined
+  for (const [tplId, byDay] of Object.entries(prevCells)) {
+    const times = tplTimes.get(tplId)
+    if (!times) continue
+    for (const [dayStr, empIds] of Object.entries(byDay)) {
+      if (!empIds.includes(employeeId)) continue
+      const day = Number(dayStr)
+      if (!Number.isFinite(day) || day < 0 || day > 6) continue
+      const absEnd = day * 1440 + times.finMin
+      if (maxAbsEnd === undefined || absEnd > maxAbsEnd) maxAbsEnd = absEnd
+    }
+  }
+  if (maxAbsEnd === undefined) return null
+  return maxAbsEnd - WEEK_END_ABS
+}
+
+/**
+ * Sembrado del fin del último turno de la semana ANTERIOR, por persona.
+ * Cascada aprobada por Julio (09/08 noche, ENCARGO "conectar la semilla"):
+ *   1. clock_entries (fichaje real) — SI supera el filtro de cordura
+ *      (resolveSeedFromClockEntries).
+ *   2. schedules.cells de la semana anterior, status='published'
+ *      (resolveSeedFromPublishedCells).
+ *   3. "no lo sé" (persona ausente del mapa devuelto).
+ * NUNCA desde un draft — es mutable, sembrar desde ahí encadena la
+ * propuesta de esta semana a algo que puede cambiar bajo los pies.
+ *
+ * Filtro de cordura (por qué existe): RECON real (MCP, 09/08) sobre 60 días
+ * de fichajes de Alcalá encontró 4 jornadas por encima de 12h entre 166
+ * fichajes limpios — una de casi 24h (salida que se olvidó y se cerró
+ * tarde), y un grupo de 3 personas la MISMA noche con salida idéntica de
+ * madrugada (huella de un fallo de sistema, no de tres personas trabajando
+ * juntas hasta las 6 de la mañana en una cocina que cierra a medianoche).
+ * "Posterior al plan" NO basta como criterio — una salida olvidada es
+ * SIEMPRE posterior al plan, así que ese criterio elegiría justo el dato
+ * corrupto. Umbral: `maxDailyMinutes + 3×restSafetyMarginMinutes` (con los
+ * valores reales de la cuenta, 570+90=660min=11h) — deriva de política ya
+ * configurada, no un número sacado de la manga: el corrido más largo real
+ * llega a 9,5h, el margen de cierre ya está establecido en el proyecto como
+ * colchón de "cierre alargado" real (rest_safety_margin_minutes);
+ * triplicarlo da margen generoso para un mal día sin dejar pasar un fichaje
+ * de 12h+ nunca visto en un turno real. El hueco natural en los datos
+ * reales (nada entre 584 y 674 min) confirma que el umbral cae limpio entre
+ * lo legítimo y lo anómalo, sin haber sido ajustado a mano para lograrlo.
+ */
+async function fetchPreviousWeekBoundary(
+  accountId: string,
+  locationId: string,
+  weekStart: string,
+  employeeIds: string[],
+  maxDailyMinutes: number,
+  restSafetyMarginMinutes: number
+): Promise<{ seedByEmployee: Map<string, number>; sourceByEmployee: Record<string, CrossWeekRestSource> }> {
+  const seedByEmployee = new Map<string, number>()
+  const sourceByEmployee: Record<string, CrossWeekRestSource> = {}
+  for (const id of employeeIds) sourceByEmployee[id] = 'ninguno'
+  if (employeeIds.length === 0) return { seedByEmployee, sourceByEmployee }
+
+  const sanityThresholdMinutes = maxDailyMinutes + 3 * restSafetyMarginMinutes
+  const weekStartMs = new Date(`${weekStart}T00:00:00`).getTime()
+
+  // --- 1. clock_entries: el ÚLTIMO par entrada→salida cerrado antes de
+  // esta semana, por persona.
+  const { data: clockRows } = await db().from('clock_entries')
+    .select('employee_id, type, datetime')
+    .eq('account_id', accountId)
+    .eq('voided', false)
+    .in('employee_id', employeeIds)
+    .gte('datetime', `${addDaysISO(weekStart, -8)}T00:00:00`)
+    .lt('datetime', `${weekStart}T00:00:00`)
+    .order('datetime', { ascending: true })
+
+  const byEmployee = new Map<string, { type: string; datetime: string }[]>()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const r of (clockRows ?? []) as any[]) {
+    const list = byEmployee.get(r.employee_id) ?? []
+    list.push({ type: r.type, datetime: r.datetime })
+    byEmployee.set(r.employee_id, list)
+  }
+  const pendingPublicado: string[] = []
+  for (const id of employeeIds) {
+    const seed = resolveSeedFromClockEntries(byEmployee.get(id) ?? [], weekStartMs, sanityThresholdMinutes)
+    if (seed !== null) {
+      seedByEmployee.set(id, seed)
+      sourceByEmployee[id] = 'fichaje'
+    } else {
+      pendingPublicado.push(id)
+    }
+  }
+  if (pendingPublicado.length === 0) return { seedByEmployee, sourceByEmployee }
+
+  // --- 2. schedules.cells publicado de la semana anterior, para quien no
+  // resolvió por fichaje (sin par válido, o descartado por el filtro).
+  const prevWeekStart = addDaysISO(weekStart, -7)
+  const { data: prevSchedule } = await db().from('schedules')
+    .select('cells').eq('location_id', locationId).eq('week_start', prevWeekStart)
+    .eq('status', 'published').maybeSingle()
+  const prevCells = prevSchedule?.cells as Record<string, Record<string, string[]>> | null | undefined
+  if (!prevCells) return { seedByEmployee, sourceByEmployee }
+
+  const tplIds = Object.keys(prevCells)
+  if (tplIds.length === 0) return { seedByEmployee, sourceByEmployee }
+  const { data: tplRows } = await db().from('shift_templates')
+    .select('id, start_time, end_time').in('id', tplIds)
+  const tplTimes = new Map<string, { iniMin: number; finMin: number }>()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const t of (tplRows ?? []) as any[]) {
+    const iniMin = timeStrToMin(t.start_time)
+    let finMin = timeStrToMin(t.end_time)
+    if (finMin <= iniMin) finMin += 1440
+    tplTimes.set(t.id, { iniMin, finMin })
+  }
+
+  for (const id of pendingPublicado) {
+    const seed = resolveSeedFromPublishedCells(prevCells, tplTimes, id)
+    if (seed === null) continue // sigue "ninguno" — no trabajó esa semana en este local
+    seedByEmployee.set(id, seed)
+    sourceByEmployee[id] = 'publicado'
+  }
+
+  return { seedByEmployee, sourceByEmployee }
+}
+
 export interface SolverRunRow {
   fecha: string
   dayOfWeek: DayOfWeek
@@ -924,21 +1122,32 @@ export async function runScheduleSolver(
   employees: SolverEmployeeInput[],
   vacationDaysByEmployee: Map<string, Set<number>>,
   role: string = 'cocina',
-  // ENCARGO F10 "el descanso semanal no cruza la frontera de semana" (09/08
-  // noche) — §3 del encargo pide una decisión de Julio ANTES de construir
-  // el fetch real (publicado vs borrador vs fichajes de la semana anterior;
-  // ver la propuesta en la entrega). Hasta que se decida, este parámetro se
-  // deja sin cablear desde CalendarioPage (nadie lo pasa todavía) — el
-  // solver cae a "no lo sé" (comportamiento anterior, declarado en
-  // crossWeekRestCheckedByEmployee), nunca a un verde falso.
-  previousWeekLastShiftEndByEmployee?: Map<string, number>
-): Promise<{ rows: SolverRunRow[]; outcome: SolverOutcome }> {
+  // ENCARGO F10 "conectar la semilla de frontera" (09/08 noche) — override
+  // manual para tests/casos especiales. Por defecto (sin pasar nada) este
+  // motor calcula la semilla SOLO desde fetchPreviousWeekBoundary() (§1 del
+  // encargo: fichaje sano → publicado → "no lo sé"). Pasar un mapa aquí lo
+  // sustituye entero — no se fusiona con lo calculado.
+  previousWeekLastShiftEndByEmployeeOverride?: Map<string, number>
+): Promise<{ rows: SolverRunRow[]; outcome: SolverOutcome; crossWeekRestSourceByEmployee: Record<string, CrossWeekRestSource> }> {
   const [templates, laborReq, breakPolicy, peaks] = await Promise.all([
     fetchSolverTemplates(locationId, weekStart),
     fetchLaborRequirement(accountId, locationId, weekStart),
     fetchBreakPolicyForSolver(accountId),
     fetchPeakFloors(accountId, role),
   ])
+
+  let previousWeekLastShiftEndByEmployee = previousWeekLastShiftEndByEmployeeOverride
+  let crossWeekRestSourceByEmployee: Record<string, CrossWeekRestSource> = {}
+  if (previousWeekLastShiftEndByEmployee === undefined) {
+    const boundary = await fetchPreviousWeekBoundary(
+      accountId, locationId, weekStart, employees.map((e) => e.id),
+      breakPolicy.maxDailyHours * 60, breakPolicy.restSafetyMarginMinutes
+    )
+    previousWeekLastShiftEndByEmployee = boundary.seedByEmployee
+    crossWeekRestSourceByEmployee = boundary.sourceByEmployee
+  } else {
+    for (const e of employees) crossWeekRestSourceByEmployee[e.id] = 'ninguno'
+  }
 
   const demandByDayHour: Record<number, number>[] = Array.from({ length: 7 }, () => ({}))
   for (const r of laborReq) {
@@ -978,5 +1187,5 @@ export async function runScheduleSolver(
     motivo: s.motivo,
   }))
 
-  return { rows, outcome }
+  return { rows, outcome, crossWeekRestSourceByEmployee }
 }

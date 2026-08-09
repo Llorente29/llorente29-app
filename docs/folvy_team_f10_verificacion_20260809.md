@@ -595,3 +595,112 @@ se retire pronto. Mejor decidir primero si "Cubrir el resto" pasa al
 solver TS (pendiente, declarado desde el sexto frente) y arreglar UNA vez,
 en el motor que quede vivo, que arreglarlo dos veces por separado. No
 tocado, regla de NO DESTRUCCIÓN.
+
+---
+
+## 14. Conectar la semilla de frontera (encargo 7º, 09/08 noche)
+
+El parámetro `previousWeekLastShiftEndByEmployee` existía (encargo 6º) pero
+nadie lo pasaba. Este encargo lo enchufa de verdad: `runScheduleSolver()`
+ahora lo calcula solo, con la cascada que decidió Julio.
+
+### 14.1 Cascada implementada
+
+1. **`clock_entries`** (fichaje real) — el último par entrada→salida
+   cerrado antes de la semana, **si supera el filtro de cordura**.
+2. **`schedules.cells`** de la semana anterior, `status='published'`.
+3. **"No lo sé"** — persona ausente del mapa. Nunca 0, nunca inventado.
+
+**Nunca desde `draft`** — sin cambios respecto al encargo anterior.
+
+### 14.2 El filtro de cordura — RECON real antes de fijar el umbral
+
+RECON vía MCP, 60 días de fichajes de las 3 empleadas de Alcalá: **166
+pares limpios, 0 entradas sin salida**, pero 4 jornadas por encima de 12h —
+una de **23h51min** (Johanny, salida que se olvidó y se cerró tarde) y un
+grupo de **3 personas la MISMA noche con salida idéntica de madrugada**
+(18:06→06:38, huella de fallo de sistema, no de trabajo real en una cocina
+que cierra a medianoche). "Posterior al plan" no basta como criterio — una
+salida olvidada es SIEMPRE posterior al plan.
+
+**Umbral**: `maxDailyMinutes + 3×restSafetyMarginMinutes`. Con los valores
+reales de la cuenta (570 + 3×30 = **660 min = 11h**): deriva de política ya
+configurada (el corrido más largo real llega a 9,5h; el margen de cierre
+alargado, 30min, ya está establecido en el proyecto — triplicarlo da
+margen generoso para un mal día sin dejar pasar un fichaje de 12h+ nunca
+visto en un turno real). Confirmación posterior, no ajuste a mano: la
+distribución real de duraciones tiene un hueco limpio entre 584 y 674
+minutos — el umbral de 660 cae justo en ese hueco, separando lo legítimo
+de lo anómalo sin haber sido calibrado contra estos datos.
+
+### 14.3 Implementación (`src/services/scheduleSolver.ts`)
+
+Dos funciones puras, exportadas y testeadas directamente (sin mock de
+Supabase, mismo patrón que el resto del fichero):
+- `resolveSeedFromClockEntries(rows, weekStartMs, sanityThresholdMinutes)`
+  — empareja entrada→salida, se queda con el ÚLTIMO par cerrado, aplica el
+  filtro. Si falla, no prueba uno anterior — cae al escalón 2 tal cual
+  (regla explícita del encargo).
+- `resolveSeedFromPublishedCells(prevCells, tplTimes, employeeId)` — igual
+  cálculo que el RECON manual del encargo anterior (fin del último turno de
+  la semana, `absEnd − WEEK_END_ABS`), ahora reutilizable.
+
+`fetchPreviousWeekBoundary()` (async, toca BBDD) las envuelve: consulta
+`clock_entries` (sin filtrar por local — el descanso es de la persona, no
+del sitio) y, para quien no resolvió por fichaje, `schedules` publicado +
+`shift_templates` de esa semana. Devuelve `seedByEmployee` y
+`sourceByEmployee` (`'fichaje' | 'publicado' | 'ninguno'`, registrado por
+persona — auditable).
+
+`runScheduleSolver()` la llama automáticamente si nadie pasa un mapa
+manual (el parámetro anterior pasa a llamarse
+`previousWeekLastShiftEndByEmployeeOverride`, para tests/casos especiales
+— sustituye entero, no se fusiona). Devuelve un tercer campo,
+`crossWeekRestSourceByEmployee`, junto a `rows`/`outcome`.
+
+### 14.4 "Avisar y seguir" — visible en pantalla (`CalendarioPage.tsx`)
+
+Nuevo estado `proposalWeeklyRest` (por persona: minutos, estado, fuente),
+poblado en `doPropose()`. En el desglose por persona, una píldora junto a
+cada fila:
+- **Sin comprobar** (`source==='ninguno'`): píldora neutra (gris, con
+  icono de aviso) "Descanso semanal: no comprobado" — **nunca se pinta en
+  verde** algo que no se ha podido verificar cruzando con la semana
+  anterior (regla explícita §3 del encargo).
+- **Comprobado**: píldora verde/ámbar/roja (`ok`/`al_limite`/`incumple`,
+  mismos tokens de color que el resto de la app) con las horas exactas y,
+  al pasar el ratón, la fuente (fichaje real / cuadrante publicado).
+
+Nunca bloquea la generación — la propuesta se genera igual, el aviso es
+solo informativo, tal como pedía §3 ("avisar y seguir").
+
+### 14.5 Tests (`tests/unit/services/scheduleSolver.test.ts`, 17 en total, 5 nuevos)
+
+1. Descarta el fichaje real de 23h51min (RECON exacto).
+2. Descarta el grupo de 12h31min con 3 personas la misma madrugada (RECON
+   exacto) — el caso que demuestra por qué "posterior al plan" no basta.
+3. Acepta un fichaje normal (9h, por debajo del umbral) como semilla.
+4. **Cascada completa** (el test que pedía §5.2 del encargo): fichaje
+   anómalo de Johanny descartado → cae al cuadrante publicado (mismo caso
+   real, Tarde/Noche 19:45-00:15, seed=15) → con esa semilla el motor NO
+   declara ningún incumplimiento (`hasWeeklyRestViolation:false`,
+   `weeklyRestStatusByEmployee` distinto de `'incumple'`).
+5. Sin fichajes válidos y sin cuadrante publicado: no revienta, `"no lo
+   sé"` (`crossWeekRestCheckedByEmployee:false`), propuesta generada igual.
+
+Los 12 tests anteriores siguen en verde sin cambios. `tsc -b`, `npm run
+build`, `eslint` en verde (los 15 problemas preexistentes de
+`CalendarioPage.tsx` — 8 errores `react-hooks/set-state-in-effect` + 7
+avisos `no-restricted-syntax` de `.toFixed()` — están en líneas que este
+encargo no toca; confirmado comparando `eslint` con y sin los cambios de
+esta sesión, exactamente los mismos 15). Suite completa: **170 tests
+pasan** (antes 165), mismos 3 ficheros preexistentes en rojo sin relación
+(multitenancy/rutas, 6 tests).
+
+### 14.6 Pendiente
+
+Rodaje real en Alcalá con "Proponer cuadrante": confirmar en pantalla que
+la píldora de descanso semanal aparece por persona y que, con la semana
+03/08 publicada real, la de Johanny/Natacha/Pamela sale como "comprobado"
+(fuente: fichaje o publicado, según qué dato exista en ese momento) — sin
+credenciales de Julio en este entorno, solo verificado por test.

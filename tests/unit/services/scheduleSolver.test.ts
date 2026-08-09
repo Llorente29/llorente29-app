@@ -23,7 +23,10 @@
 // el test al resultado del puerto, se corrige el puerto (regla del encargo).
 
 import { describe, it, expect } from 'vitest'
-import { solveWeekSchedule, type SolverInput, type SolverTemplate, type SolverEmployeeInput } from '../../../src/services/scheduleSolver'
+import {
+  solveWeekSchedule, resolveSeedFromClockEntries, resolveSeedFromPublishedCells,
+  type SolverInput, type SolverTemplate, type SolverEmployeeInput,
+} from '../../../src/services/scheduleSolver'
 
 // ---- Plantillas reales de Alcalá (minutos desde medianoche, fin>1440 = cruza) ----
 const TPL_M: SolverTemplate = { id: 'M', label: 'Mañana', iniMin: 750, finMin: 1005, kind: 'demanda', uso: 1, coverageByDay: [1, 1, 1, 1, 1, 1, 1] }
@@ -414,5 +417,127 @@ describe('scheduleSolver — el descanso semanal cruza la frontera de semana', (
     expect(vacio.feasible).toBe(true)
     expect(vacio.crossWeekRestCheckedByEmployee.X).toBe(false)
     expect(vacio.minWeeklyRestMinutes).toBe(36 * 60 + 30)
+  })
+})
+
+// ENCARGO F10 "conectar la semilla de frontera" (09/08 noche) — cascada
+// fichaje→publicado→"no lo sé", con el filtro de cordura que evita que una
+// salida olvidada (siempre posterior al plan) se cuele como semilla.
+// resolveSeedFromClockEntries/resolveSeedFromPublishedCells son las dos
+// funciones puras que hace el adaptador (fetchPreviousWeekBoundary, que sí
+// toca BBDD y no se testea aquí, mismo patrón que el resto del fichero:
+// funciones puras testeadas directamente, sin mock de Supabase).
+describe('scheduleSolver — conectar la semilla de frontera (cascada fichaje → publicado → "no lo sé")', () => {
+  // Valores reales de la cuenta Foodint (RECON vía MCP, 09/08 noche):
+  // max_daily_minutes_plan=570, rest_safety_margin_minutes=30.
+  const SANITY_THRESHOLD = 570 + 3 * 30 // 660 min = 11h
+
+  it('descarta un fichaje de 23h52min (RECON real de Alcalá: salida que se olvidó y se cerró tarde) — nunca se usa como semilla', () => {
+    // Datos reales, tal cual en clock_entries (employee_id de Johanny,
+    // últimos 60 días, la jornada más larga de las tres empleadas).
+    const rows = [
+      { type: 'entrada', datetime: '2026-07-03T17:45:11.449+00:00' },
+      { type: 'salida', datetime: '2026-07-04T17:36:38.141+00:00' }, // 1431 min después
+    ]
+    const seed = resolveSeedFromClockEntries(rows, new Date('2026-07-06T00:00:00Z').getTime(), SANITY_THRESHOLD)
+    expect(seed).toBeNull()
+  })
+
+  it('descarta también el grupo de 12h31min con salida idéntica en 3 personas la misma madrugada (huella de fallo de sistema, no de trabajo real)', () => {
+    // RECON real: Johanny, Natacha y Pamela — las tres con exactamente el
+    // mismo par entrada 18:06 → salida 06:38 la noche del 13/06, imposible
+    // en una cocina que cierra a medianoche.
+    const rows = [
+      { type: 'entrada', datetime: '2026-06-13T18:06:41.942+00:00' },
+      { type: 'salida', datetime: '2026-06-14T06:37:48.428+00:00' }, // 751 min
+    ]
+    const seed = resolveSeedFromClockEntries(rows, new Date('2026-06-15T00:00:00Z').getTime(), SANITY_THRESHOLD)
+    expect(seed).toBeNull()
+  })
+
+  it('acepta un fichaje real normal (Corrido1, 9,5h) como semilla — el filtro no descarta jornadas legítimas', () => {
+    const rows = [
+      { type: 'entrada', datetime: '2026-08-09T14:45:00+00:00' }, // 16:45 hora local, irrelevante aquí — solo importa la duración
+      { type: 'salida', datetime: '2026-08-09T23:45:00+00:00' }, // 540 min = 9h, por debajo del umbral 660
+    ]
+    const seed = resolveSeedFromClockEntries(rows, new Date('2026-08-10T00:00:00Z').getTime(), SANITY_THRESHOLD)
+    expect(seed).not.toBeNull()
+  })
+
+  it('cascada completa: fichaje anómalo descartado → cae al cuadrante publicado → el motor no declara ningún incumplimiento', () => {
+    // 1. El último fichaje de Johanny antes de esta semana es la jornada de
+    // 23h52min (anómala) — el escalón 1 la descarta.
+    const clockSeed = resolveSeedFromClockEntries(
+      [
+        { type: 'entrada', datetime: '2026-07-03T17:45:11.449+00:00' },
+        { type: 'salida', datetime: '2026-07-04T17:36:38.141+00:00' },
+      ],
+      new Date('2026-07-06T00:00:00Z').getTime(), SANITY_THRESHOLD
+    )
+    expect(clockSeed).toBeNull()
+
+    // 2. Escalón 2: la semana anterior SÍ está publicada, con su último
+    // turno real (Tarde/Noche F/S, 19:45-00:15, como Johanny en el caso real
+    // de Alcalá) — el mismo caso que produce seed=15 en el RECON de
+    // ENCARGO_CODE_f10_descanso_entre_semanas.md.
+    const prevCells = { T: { '6': ['Johanny'] } } // domingo (día 6) — Tarde/Noche
+    const tplTimes = new Map([['T', { iniMin: 1185, finMin: 1455 }]]) // 19:45-00:15
+    const publishedSeed = resolveSeedFromPublishedCells(prevCells, tplTimes, 'Johanny')
+    expect(publishedSeed).toBe(15)
+
+    // 3. Con la semilla del cuadrante publicado (NUNCA la del fichaje
+    // descartado), un patrón normal de la semana siguiente NO declara
+    // ningún incumplimiento — es justo lo que el filtro de cordura protege:
+    // si se hubiera usado el fichaje de 23h52min tal cual, el motor habría
+    // "visto" un descanso de apertura absurdamente largo y podría haber
+    // enmascarado un problema real, o al revés, un descarte mal hecho podría
+    // fabricar un incumplimiento inexistente. Ninguna de las dos cosas pasa.
+    const TPL_MANANA: SolverTemplate = { id: 'M', label: 'Mañana', iniMin: 750, finMin: 1005, kind: 'demanda', uso: 1, coverageByDay: [1, 1, 1, 1, 1, 1, 1] }
+    const TPL_LARGA_SIN_USO: SolverTemplate = { id: 'DUMMY', label: 'Dummy (nunca demandada)', iniMin: 0, finMin: 540, kind: 'demanda', uso: 0, coverageByDay: [1, 1, 1, 1, 1, 1, 1] }
+    const persona: SolverEmployeeInput[] = [{ id: 'Johanny', name: 'Johanny', contractedHoursWeek: 40 }]
+    const demandUniforme: Record<number, number>[] = Array.from({ length: 7 }, () => ({ 13: 1 }))
+    const out = solveWeekSchedule({
+      weekIndex: 0,
+      templates: [TPL_MANANA, TPL_LARGA_SIN_USO],
+      employees: persona,
+      vacationDaysByEmployee: new Map(),
+      demandByDayHour: demandUniforme,
+      maxDailyHours: 9.5, splitGapMinutes: 90, restBetweenShiftsMinutes: 720,
+      toleranceFraction: 0.10, peakWeekday: 0, peakWeekend: 0,
+      weeklyRestMinutesMin: 2160, restSafetyMarginMinutes: 30,
+      previousWeekLastShiftEndByEmployee: new Map([['Johanny', publishedSeed]]),
+    })
+
+    expect(out.feasible).toBe(true)
+    expect(out.hasWeeklyRestViolation).toBe(false)
+    expect(out.weeklyRestStatusByEmployee.Johanny).not.toBe('incumple')
+    expect(out.crossWeekRestCheckedByEmployee.Johanny).toBe(true)
+  })
+
+  it('sin fichajes válidos y sin cuadrante publicado la semana anterior: "no lo sé", nunca un crash ni un 0 inventado', () => {
+    const seedFromClock = resolveSeedFromClockEntries([], Date.now(), SANITY_THRESHOLD)
+    expect(seedFromClock).toBeNull()
+    const seedFromPublished = resolveSeedFromPublishedCells({}, new Map(), 'Johanny')
+    expect(seedFromPublished).toBeNull()
+
+    // Con ninguna de las dos fuentes disponibles, la propuesta se genera
+    // igual (avisar y seguir — §3 del encargo), nunca bloquea.
+    const TPL_MANANA: SolverTemplate = { id: 'M', label: 'Mañana', iniMin: 750, finMin: 1005, kind: 'demanda', uso: 1, coverageByDay: [1, 1, 1, 1, 1, 1, 1] }
+    const TPL_LARGA_SIN_USO: SolverTemplate = { id: 'DUMMY', label: 'Dummy (nunca demandada)', iniMin: 0, finMin: 540, kind: 'demanda', uso: 0, coverageByDay: [1, 1, 1, 1, 1, 1, 1] }
+    const persona: SolverEmployeeInput[] = [{ id: 'Johanny', name: 'Johanny', contractedHoursWeek: 40 }]
+    const demandUniforme: Record<number, number>[] = Array.from({ length: 7 }, () => ({ 13: 1 }))
+    const out = solveWeekSchedule({
+      weekIndex: 0,
+      templates: [TPL_MANANA, TPL_LARGA_SIN_USO],
+      employees: persona,
+      vacationDaysByEmployee: new Map(),
+      demandByDayHour: demandUniforme,
+      maxDailyHours: 9.5, splitGapMinutes: 90, restBetweenShiftsMinutes: 720,
+      toleranceFraction: 0.10, peakWeekday: 0, peakWeekend: 0,
+      weeklyRestMinutesMin: 2160, restSafetyMarginMinutes: 30,
+      previousWeekLastShiftEndByEmployee: new Map(), // ninguna de las dos fuentes resolvió nada
+    })
+    expect(out.feasible).toBe(true)
+    expect(out.crossWeekRestCheckedByEmployee.Johanny).toBe(false) // "no lo sé", visible y distinguible de un OK comprobado
   })
 })
