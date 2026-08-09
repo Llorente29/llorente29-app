@@ -270,6 +270,16 @@ export default function CalendarioPage() {
   // turno largo · dotación de pico · franja forzada · bloque fijo · refuerzo).
   // Desglose honesto (§4): de dónde sale cada hora, no solo el total.
   const [proposalBreakdown, setProposalBreakdown] = useState<Map<string, Record<string, number>> | null>(null)
+  // ENCARGO F10 "conectar la semilla de frontera" (09/08 noche) — descanso
+  // semanal por persona de la última propuesta del solver (§3: "un 'no lo
+  // sé' visible en la pantalla, distinguible de un 'comprobado y OK'").
+  // Solo cubre "Proponer cuadrante" (el solver TS) — "Cubrir el resto" sigue
+  // en generate_week_schedule, que no calcula esto.
+  const [proposalWeeklyRest, setProposalWeeklyRest] = useState<Map<string, {
+    minutes: number
+    status: 'ok' | 'al_limite' | 'incumple'
+    source: 'fichaje' | 'publicado' | 'ninguno'
+  }> | null>(null)
 
   const employees = useMemo(
     () => staff.filter(e => e.active && (e.locationId === locationId || (e.assignedLocations || []).includes(locationId))),
@@ -373,6 +383,7 @@ export default function CalendarioPage() {
     setProposalGaps(null)
     setProposalStats(null)
     setProposalBreakdown(null)
+    setProposalWeeklyRest(null)
     setProposalError(null)
     // Aviso: horario comercial abierto sin personal (lee de BD; refleja lo guardado)
     getStaffingGaps(locationId).then(setStaffingGaps).catch(() => setStaffingGaps([]))
@@ -731,6 +742,7 @@ export default function CalendarioPage() {
     setProposalGaps(null)
     setProposalStats(null)
     setProposalBreakdown(null)
+    setProposalWeeklyRest(null)
     setProposalError(null)
   }
 
@@ -790,9 +802,18 @@ export default function CalendarioPage() {
       const solverEmployees: SolverEmployeeInput[] = employees.map(e => ({
         id: e.id, name: e.name, contractedHoursWeek: e.contractedHoursWeek ?? 40,
       }))
-      const { rows, outcome } = await runScheduleSolver(
+      const { rows, outcome, crossWeekRestSourceByEmployee } = await runScheduleSolver(
         activeAccountId, locationId, weekStart, solverEmployees, vacationDaysThisWeek()
       )
+      const weeklyRestMap = new Map<string, { minutes: number; status: 'ok' | 'al_limite' | 'incumple'; source: 'fichaje' | 'publicado' | 'ninguno' }>()
+      for (const e of solverEmployees) {
+        weeklyRestMap.set(e.id, {
+          minutes: outcome.weeklyRestByEmployee[e.id] ?? 0,
+          status: outcome.weeklyRestStatusByEmployee[e.id] ?? 'incumple',
+          source: crossWeekRestSourceByEmployee[e.id] ?? 'ninguno',
+        })
+      }
+      setProposalWeeklyRest(weeklyRestMap)
       if (!outcome.feasible) {
         setProposalError('El solver no encontró ninguna semana completa legal para este equipo y esta demanda — revisa los huecos declarados en la rejilla para ver qué restricción bloquea cada asiento.')
       }
@@ -1054,6 +1075,7 @@ export default function CalendarioPage() {
     setProposalGaps(null)
     setProposalStats(null)
     setProposalBreakdown(null)
+    setProposalWeeklyRest(null)
   }
 
   return (
@@ -1256,6 +1278,31 @@ export default function CalendarioPage() {
                     {BREAKDOWN_ORDER.filter(k => byCat[k] > 0).map(k => `${BREAKDOWN_LABEL[k]} ${fmtHours(byCat[k])}`).join(' · ')}
                     {' '}({fmtHours(totalProp)} de esta propuesta)
                   </span>
+                  {proposalWeeklyRest?.get(e.id) && (() => {
+                    const r = proposalWeeklyRest.get(e.id)!
+                    const hrs = Math.round((r.minutes / 60) * 10) / 10
+                    // ENCARGO F10 "conectar la semilla de frontera" (09/08
+                    // noche) §3: "no lo sé" visible y distinguible de un
+                    // "comprobado y OK" — nunca se pinta verde algo que no
+                    // se ha podido verificar cruzando con la semana anterior.
+                    if (r.source === 'ninguno') {
+                      return (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-card border border-border-default text-text-secondary" title="No hay fichaje sano ni cuadrante publicado de la semana anterior para comprobar la frontera del lunes — este descanso semanal se calcula solo dentro de esta semana.">
+                          <AlertTriangle size={11} /> Descanso semanal: no comprobado
+                        </span>
+                      )
+                    }
+                    const cls = r.status === 'ok' ? 'bg-success-bg text-success'
+                      : r.status === 'al_limite' ? 'bg-warning-bg text-warning'
+                        : 'bg-danger-bg text-danger'
+                    const label = r.status === 'ok' ? 'OK' : r.status === 'al_limite' ? 'al límite' : 'incumple'
+                    const fuente = r.source === 'fichaje' ? 'fichaje real' : 'cuadrante publicado'
+                    return (
+                      <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${cls}`} title={`Descanso semanal: ${hrs}h, comprobado contra la semana anterior (fuente: ${fuente}).`}>
+                        Descanso semanal {label} ({hrs}h)
+                      </span>
+                    )
+                  })()}
                 </div>
               )
             })}
