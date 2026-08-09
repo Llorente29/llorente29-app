@@ -75,11 +75,17 @@ export async function fetchLaborModel(accountId: string, roleKinds: string[]): P
 }
 
 export async function saveLaborModelRow(accountId: string, row: LaborModelRow): Promise<void> {
+  // ENCARGO F10 (09/08, bug §3.1) — NUNCA escribir open_close_extra desde
+  // aquí. team_labor_requirement lo suma como PERSONAS extra en la hora de
+  // apertura/cierre (no minutos): guardar el panel puso open_close_extra=30
+  // a la vez que pre_open_minutes=30 y pidió 31 cocineros a las 13:00. El
+  // campo queda leído (fetchLaborModel) solo para mostrar el valor vivo,
+  // nunca vuelve a escribirse desde este panel — sustituido por
+  // pre_open_minutes/post_close_minutes.
   const payload = {
     driver: row.driver,
     per_person_hour: row.perPersonHour,
     min_on_open: row.minOnOpen,
-    open_close_extra: row.openCloseExtra,
     peak_weekday: row.peakWeekday,
     peak_weekend: row.peakWeekend,
     pre_open_minutes: row.preOpenMinutes,

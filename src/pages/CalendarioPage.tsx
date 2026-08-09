@@ -2034,12 +2034,14 @@ function LaborModelModal({ accountId, locationId, weekStart, roleKinds, onClose 
                       onChange={e => patchRow(r.roleKind, { minOnOpen: Math.max(0, Number(e.target.value) || 0) })}
                       className="mt-0.5 w-full border border-border-default rounded px-2 py-1.5 text-sm bg-card" />
                   </label>
-                  <label className="text-[11px] text-text-secondary">
-                    Extra apertura/cierre (viejo, superado)
-                    <input type="number" min={0} value={r.openCloseExtra}
-                      onChange={e => patchRow(r.roleKind, { openCloseExtra: Math.max(0, Number(e.target.value) || 0) })}
-                      className="mt-0.5 w-full border border-border-default rounded px-2 py-1.5 text-sm bg-card" />
-                  </label>
+                  {r.openCloseExtra > 0 && (
+                    <div className="text-[11px] text-text-secondary col-span-2">
+                      <span className="font-semibold text-warning">Extra apertura/cierre (viejo, superado): {r.openCloseExtra}</span> — ya
+                      no se edita desde aquí (bug 09/08: sumaba PERSONAS, no minutos, a la
+                      hora de apertura/cierre). Sustituido por los 2 campos de abajo. Para
+                      quitarlo hace falta un UPDATE directo en BBDD.
+                    </div>
+                  )}
                 </div>
                 {/* ENCARGO F10 (09/08) — "Cubrir el resto": dotación de pico
                     (parámetro 1) y márgenes de apertura/cierre (parámetro 4).
