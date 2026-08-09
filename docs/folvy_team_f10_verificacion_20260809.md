@@ -443,3 +443,155 @@ en rojo (`routes.test.ts`, `brandsService.mappers`, `salesChannelsService.mapper
 - El punto ciego de fin de semana (arriba) queda **fuera de este encargo**,
   declarado como posible encargo aparte, prioritario según el propio
   encargo si se confirmaba — y se ha confirmado.
+
+---
+
+## 13. El descanso semanal cruza la frontera de semana (encargo 6º, 09/08 noche)
+
+### 13.1 RECON contra BBDD real (MCP, antes de tocar código)
+
+Confirmado el caso exacto que reportaba Julio, letra por letra, contra las
+filas reales de `schedules`:
+
+- Semana **03/08 publicada** (`schedules.status='published'`, Alcalá):
+  Johanny, Natacha y Pamela tienen las tres su último turno del domingo
+  (día 6) en la plantilla `Tarde/Noche F/S` (`19:45–00:15`) o en un partido
+  que termina en ella — **las tres terminan a las 00:15 del lunes**.
+- Borrador semana **10/08** (`schedules` id `1e95fdbc-93b2-4ae2-a8a1-38dfbda9b8d8`,
+  `status='draft'`): el primer turno de Pamela es el **martes (día 1) a las
+  12:30** (plantilla `Mañana`).
+- Descanso real de Pamela: 00:15 lunes → 12:30 martes = **36h15min**
+  exactos. `break_policy` real de la cuenta: `weekly_rest_minutes=2160`
+  (36h), `rest_safety_margin_minutes=30`. 2175min ≥ 2160 (cumple la ley por
+  15 min) pero < 2190 (2160+30, el margen) → **al_limite**, nunca visible
+  hasta ahora porque ningún motor miraba la frontera.
+
+Confirma exactamente lo que decía el encargo: **ni `scheduleSolver.ts` ni
+`generate_week_schedule` comprueban esto.** En plpgsql, `has_weekly_rest`
+(T1240) usa literalmente `p_week_start::timestamp` como pared de apertura
+(`(min turno) - p_week_start`) — el mismo límite, confirmado leyendo la
+función, no solo por analogía.
+
+### 13.2 Arreglo implementado en `src/services/scheduleSolver.ts`
+
+**`SolverInput`** gana 3 campos:
+- `weeklyRestMinutesMin` (antes no existía — el descanso semanal NUNCA se
+  comparaba contra ningún mínimo, solo se minimizaba como preferencia).
+- `restSafetyMarginMinutes`.
+- `previousWeekLastShiftEndByEmployee?: Map<string, number>` — minutos del
+  fin del último turno de la semana anterior, relativos al lunes 00:00 de
+  esta semana (puede ser negativo). Persona ausente del mapa, o mapa
+  entero ausente = "no lo sé".
+
+**Sembrado**: `lastShiftEndAbs` se inicializa con el valor del mapa cuando
+existe — esto alimenta DOS cosas a la vez: (a) el descanso de apertura
+(`first − weekOpenSeed`, sustituye al `first − 0` de antes) y (b) el
+chequeo duro de `restBetweenShiftsMinutes` (12h entre turnos), que ahora
+también protege el primer turno de la semana, no solo los internos. La
+lógica de deshacer en el backtracking (`rec()`) ya era genérica — no
+distinguía "valor sembrado" de "turno real anterior" — así que no hizo
+falta tocarla, solo la inicialización.
+
+**Restricción de generación** (no solo diagnóstico, como pedía el
+encargo): nuevo criterio, EL PRIMERO del objetivo lexicográfico (por
+delante incluso de horas) — nº de personas por debajo del mínimo LEGAL.
+Igual que `has_weekly_rest` es un filtro duro en plpgsql, aquí cualquier
+semana sin violaciones legales gana SIEMPRE a cualquier semana con alguna,
+sin importar horas/partidos/spread. Si de verdad no hay forma de evitarlo
+(todas las semanas completas violan el mínimo), el motor sigue devolviendo
+la mejor encontrada — declarada, no oculta (`hasWeeklyRestViolation:
+true`), mismo principio que el resto del proyecto.
+
+El margen (30min) no se convierte en restricción dura (un cuadrante a
+mínimo+5min es legal) — sigue el patrón ya usado en plpgsql (T1310): se
+reporta como diagnóstico de 3 estados (`weeklyRestStatusByEmployee`:
+`ok`/`al_limite`/`incumple`, igual que `propose_schedule_rest`), y la
+preferencia por MÁS descanso (ya existente, criterio 5 del objetivo) ya
+empuja hacia superarlo cuando es alcanzable sin coste en otros criterios.
+
+**Nuevos campos de salida**: `weeklyRestByEmployee` (antes solo se veía el
+peor, ahora cada persona), `weeklyRestStatusByEmployee`,
+`crossWeekRestCheckedByEmployee` (declara honestamente qué personas
+tuvieron dato real de frontera), `hasWeeklyRestViolation`.
+
+**Alcance — solo el solver TS, como pedía el encargo**: `generate_week_schedule`
+NO se ha tocado. `runScheduleSolver()` (el adaptador que llama al RPC real)
+gana un parámetro opcional `previousWeekLastShiftEndByEmployee` que HOY
+nadie pasa desde `CalendarioPage.tsx` — sin el fetch real (§13.3, bloqueado
+en decisión de Julio), el comportamiento no cambia frente a antes de este
+encargo: sigue cayendo a "no lo sé" con la pared del lunes 00:00 como
+límite, declarado vía `crossWeekRestCheckedByEmployee=false`.
+
+### 13.3 Decisión pendiente de Julio — de dónde sale el "último turno anterior"
+
+**No la he tomado yo.** Propuesta, con el caso "no existe" resuelto:
+
+**Prioridad: `clock_entries` (si existen Y son posteriores al fin de turno
+planeado) → `schedules.cells` con `status='published'` → "no lo sé".**
+
+- **`clock_entries`** cuando existan: es lo que de verdad pasó. Si alguien
+  fichó salida más tarde de lo planeado (cierre alargado, motivo real de
+  este proyecto — ver `rest_safety_margin_minutes`: "30min = lo que
+  realmente se alarga un cierre de cocina"), el descanso real es MÁS CORTO
+  que el plan, y es precisamente el caso que puede convertir un "al_limite"
+  en "incumple" sin que el plan lo vea nunca.
+- **`schedules.cells` publicado** cuando no hay fichaje todavía (se
+  planifica con antelación, antes de que ocurra la semana anterior): es el
+  contrato con el empleado, estable — nunca cambia bajo los pies de la
+  propuesta de esta semana. **Explícitamente NO el borrador** (`draft`):
+  puede editarse en cualquier momento, y sembrar desde algo mutable
+  significa que la propuesta de esta semana queda huérfana en cuanto
+  alguien edita el borrador de la anterior — contaminación circular que el
+  propio encargo señala como el riesgo real (huecos falsos, motivos que
+  dejan de ser fiables).
+- **Ninguna de las dos existe** (semana anterior sin publicar todavía, o
+  cuenta nueva sin historial): "no lo sé" — `crossWeekRestCheckedByEmployee=false`,
+  nunca un 0 inventado ni una violación fabricada. Ya implementado y
+  probado (§13.4).
+
+Pendiente de que Julio confirme o corrija esta prioridad antes de construir
+el fetch real dentro de `runScheduleSolver()`.
+
+### 13.4 Tests (`tests/unit/services/scheduleSolver.test.ts`, 12 en total, 3 nuevos)
+
+1. **Re-medición de `d7964ca` con la frontera real** (mismo describe que el
+   reparto justo): sembrando los 3 valores reales de RECON (Johanny,
+   Natacha, Pamela → 15 min cada una) sobre `DEMAND_1008`, la elección
+   PROPIA del solver actual sigue en **43,5h, `ok` para las tres,
+   `hasWeeklyRestViolation:false`** — el 43,5h de `d7964ca` NO era un
+   espejismo del instrumento ciego, se sostiene con el instrumento
+   arreglado. (El 36h15min real de Pamela viene del borrador `1e95fdbc…`
+   YA GUARDADO, generado por una versión anterior a este reparto justo, no
+   de la elección propia de este solver para esta demanda — de ahí el test
+   siguiente, que aísla y reproduce ese caso exacto de forma determinista.)
+2. **Caso real de Pamela, aislado**: fixture de 1 persona/1 plantilla real
+   (Mañana) que reproduce EXACTAMENTE su patrón (libra el lunes, primer
+   turno el martes 12:30, sembrado con el fin real del domingo anterior,
+   00:15) → `minWeeklyRestMinutes` **exactos 36h15min** (no un umbral,
+   el número literal), estado `al_limite` (cumple ley, no margen).
+3. **Semana anterior inexistente o vacía**: mismo fixture sin sembrar (mapa
+   ausente Y mapa vacío, los dos casos) → no revienta, `feasible:true`,
+   `crossWeekRestCheckedByEmployee:false`, y el número que sale (36h30min,
+   `ok`) es explícitamente MAYOR que el real (36h15min, `al_limite`) — el
+   "número mayor" que describía el encargo, reproducido y confirmado.
+
+Los 9 tests anteriores siguen en verde sin cambios de comportamiento (los 2
+inline de "nivel de plantilla" y `baseInput()` ganaron los 2 campos nuevos
+obligatorios con los valores reales de la cuenta, 2160/30 — no afecta a
+ninguna aserción existente). `tsc -b`, `npm run build`, `eslint` en verde.
+Los 3 ficheros en rojo preexistentes (multitenancy/rutas) siguen igual, sin
+empeorar (165 tests pasan en total en la suite completa, antes 162 — sube
+justo por los 3 nuevos de este encargo).
+
+### 13.5 `generate_week_schedule` (plpgsql) — recomendación, sin tocar
+
+Confirmado el mismo defecto (§13.1: `has_weekly_rest` usa la misma pared de
+`p_week_start`). **Recomendación**: no invertir en arreglarlo todavía. El
+backport en sí sería barato (`has_weekly_rest` ya acepta `p_turnos` como un
+array de intervalos — bastaría con que el CALLER anteponga el intervalo del
+último turno real de la semana anterior a ese mismo array, sin tocar la
+firma de la función) — el coste no es técnico, es tocar un motor que quizá
+se retire pronto. Mejor decidir primero si "Cubrir el resto" pasa al
+solver TS (pendiente, declarado desde el sexto frente) y arreglar UNA vez,
+en el motor que quede vivo, que arreglarlo dos veces por separado. No
+tocado, regla de NO DESTRUCCIÓN.

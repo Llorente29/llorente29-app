@@ -79,6 +79,27 @@ export interface SolverInput {
   peakWeekday: number
   /** team_labor_model.peak_weekend — 0 = sin suelo */
   peakWeekend: number
+  /** break_policy.weekly_rest_minutes (art. 37.1 ET, default 2160 = 36h) —
+   *  suelo LEGAL del descanso semanal. ENCARGO F10 "el descanso semanal no
+   *  cruza la frontera de semana" (09/08 noche): pasa a ser una restricción
+   *  de generación real (objetivo, rango 0), no solo un valor que se
+   *  minimizaba sin comparar contra nada. */
+  weeklyRestMinutesMin: number
+  /** break_policy.rest_safety_margin_minutes (default 30) — colchón
+   *  operativo SOBRE el mínimo legal. No es restricción dura (un cuadrante
+   *  a mínimo+5min es legal); marca el estado 'al_limite' en el diagnóstico
+   *  de salida (ver SolverOutcome.weeklyRestStatusByEmployee), igual que ya
+   *  hace propose_schedule_rest en plpgsql. */
+  restSafetyMarginMinutes: number
+  /** employeeId -> minutos del fin de su ÚLTIMO turno de la semana ANTERIOR,
+   *  medidos relativos al lunes 00:00 de ESTA semana (p.ej. un turno que
+   *  terminó el domingo a las 00:15 → 15; uno que terminó el domingo a las
+   *  23:45 → -15). Sin esto, el motor no ve la frontera entre semanas —
+   *  ver cabecera de solveWeekSchedule. Persona ausente del mapa (o mapa
+   *  entero ausente) = "no lo sé": el motor NO inventa una violación ni un
+   *  verde falso, cae al comportamiento anterior (pared en el lunes 00:00)
+   *  y lo declara en SolverOutcome.crossWeekRestCheckedByEmployee. */
+  previousWeekLastShiftEndByEmployee?: Map<string, number>
   /** salvavidas de rendimiento: nº máximo de nodos de backtracking a nivel
    *  semana antes de rendirse y devolver lo mejor encontrado hasta ese punto
    *  (timedOut=true). El prototipo no lo necesita a esta escala (3
@@ -126,11 +147,30 @@ export interface SolverOutcome {
   /** ENCARGO F10 "reparto justo" (09/08 noche) — máximo de turnos partidos
    *  que se lleva UNA persona (antes solo se minimizaba el total). */
   maxSplitsPerEmployee: number
-  /** minutos del descanso semanal más corto entre las personas, calculado
-   *  SOLO dentro de la semana que se resuelve (mismo límite que
-   *  has_weekly_rest en plpgsql) — NO ve la semana anterior/siguiente, ver
-   *  cabecera de solveWeekSchedule. */
+  /** minutos del descanso semanal más corto entre las personas. Con
+   *  `previousWeekLastShiftEndByEmployee` informado, YA cruza la frontera
+   *  del lunes (ver cabecera de solveWeekSchedule); sin él, sigue con el
+   *  límite anterior (pared en el lunes 00:00 de esta semana) — comprobar
+   *  crossWeekRestCheckedByEmployee antes de confiar en este número como
+   *  descanso real. NO ve la frontera de CIERRE (domingo de esta semana →
+   *  lunes de la siguiente): esa es la semana que aún no existe, fuera de
+   *  alcance de una sola llamada a este motor. */
   minWeeklyRestMinutes: number
+  /** descanso semanal de CADA persona (no solo el peor) — minutos. */
+  weeklyRestByEmployee: Record<string, number>
+  /** 'ok' (>= mínimo+margen) | 'al_limite' (>= mínimo, < mínimo+margen) |
+   *  'incumple' (< mínimo legal) — mismo criterio de 3 estados que
+   *  propose_schedule_rest en plpgsql (T1300), ahora con datos de frontera
+   *  reales cuando el caller los da. */
+  weeklyRestStatusByEmployee: Record<string, 'ok' | 'al_limite' | 'incumple'>
+  /** true si esa persona tenía dato real de frontera (semana anterior
+   *  informada) — false = "no lo sé", el número de arriba usa la pared del
+   *  lunes 00:00 como límite provisional, no un descanso real verificado. */
+  crossWeekRestCheckedByEmployee: Record<string, boolean>
+  /** true si AL MENOS una persona queda por debajo del mínimo LEGAL
+   *  (weeklyRestMinutesMin) en la mejor semana encontrada — el motor ya no
+   *  puede evitarlo sin romper otra restricción dura; declarado, no oculto. */
+  hasWeeklyRestViolation: boolean
 }
 
 /* =====================================================
@@ -449,36 +489,54 @@ export function solveWeekSchedule(input: SolverInput): SolverOutcome {
   const maxInternalGap: Record<string, number> = {} // mayor hueco visto entre dos turnos consecutivos de la persona
   for (const e of employees) { hours[e.id] = 0; longCount[e.id] = 0; splitsByEmployee[e.id] = 0 }
 
-  let bestObj: [number, number, number, number, number] | null = null
+  // ENCARGO F10 "el descanso semanal no cruza la frontera de semana" (09/08
+  // noche) — sembrar el fin del último turno de la semana ANTERIOR, si el
+  // caller lo da. `weekOpenSeed` se usa para el "descanso de apertura"
+  // (lunes de esta semana hacia atrás); `lastShiftEndAbs` se siembra igual
+  // para que el chequeo duro de restBetweenShiftsMinutes también vea la
+  // frontera en el primer turno de la semana, no solo entre turnos ya
+  // dentro de ella. Persona ausente del mapa = "no lo sé": cae al
+  // comportamiento anterior (pared en el lunes 00:00), nunca se inventa.
+  const weekOpenSeed: Record<string, number> = {}
+  const crossWeekChecked: Record<string, boolean> = {}
+  for (const e of employees) {
+    const seeded = input.previousWeekLastShiftEndByEmployee?.get(e.id)
+    weekOpenSeed[e.id] = seeded ?? 0
+    crossWeekChecked[e.id] = seeded !== undefined
+    if (seeded !== undefined) lastShiftEndAbs[e.id] = seeded
+  }
+
+  let bestObj: [number, number, number, number, number, number] | null = null
   let bestPlan: Record<string, SolverSeat[]>[] | null = null
   let bestHours: Record<string, number> | null = null
   let bestLong: Record<string, number> | null = null
   let bestSplits = 0
   let bestMinWeeklyRest = 0
+  let bestWeeklyRestByEmployee: Record<string, number> = {}
   const plan: Record<string, SolverSeat[]>[] = []
   let splitsAcc = 0
 
-  // Descanso semanal "dentro de la semana que se resuelve" — mismo criterio
-  // que ya usa has_weekly_rest en plpgsql (v3/v4/T1700): el hueco más largo
-  // de cada persona, con la propia semana (lunes 00:00 a lunes 00:00
-  // siguiente) como límite si no tiene turno pegado a ese borde. ⚠️ NO ve
-  // más allá de esta semana — mismo límite que el resto del proyecto, no
-  // sustituye una comprobación real contra la semana anterior/siguiente
-  // (deuda declarada aparte, ver informe de este encargo).
-  function minWeeklyRestNow(): number {
-    let worst = Infinity
+  // Descanso semanal de CADA persona. "Apertura" (lunes de esta semana hacia
+  // atrás) usa weekOpenSeed cuando el caller dio la frontera real; si no,
+  // cae a la pared del lunes 00:00 (mismo límite que tenía antes esta
+  // función y que sigue teniendo has_weekly_rest en plpgsql). "Cierre"
+  // (domingo de esta semana hacia adelante) NO tiene dato real posible — la
+  // semana siguiente no existe todavía en el momento de resolver esta —,
+  // deuda declarada aparte, no arreglable desde una sola llamada a este motor.
+  function weeklyRestByEmployeeNow(): Record<string, number> {
+    const result: Record<string, number> = {}
     for (const e of employees) {
       const first = firstShiftStartAbs[e.id]
-      const last = lastShiftEndAbs[e.id]
-      let rest: number
-      if (first === undefined || last === undefined) {
-        rest = WEEK_END_ABS // no trabajó ningún día: toda la semana es descanso
-      } else {
-        rest = Math.max(first - 0, WEEK_END_ABS - last, maxInternalGap[e.id] ?? 0)
+      if (first === undefined) {
+        result[e.id] = WEEK_END_ABS // no trabajó ningún día: toda la semana es descanso
+        continue
       }
-      if (rest < worst) worst = rest
+      const last = lastShiftEndAbs[e.id] ?? first
+      const opening = first - weekOpenSeed[e.id]
+      const closing = WEEK_END_ABS - last
+      result[e.id] = Math.max(opening, closing, maxInternalGap[e.id] ?? 0)
     }
-    return worst === Infinity ? WEEK_END_ABS : worst
+    return result
   }
 
   function rec(d: number) {
@@ -489,7 +547,19 @@ export function solveWeekSchedule(input: SolverInput): SolverOutcome {
       const vals = employees.map((e) => hours[e.id])
       const spread = vals.length > 0 ? Math.max(...vals) - Math.min(...vals) : 0
       const maxSplits = employees.length > 0 ? Math.max(...employees.map((e) => splitsByEmployee[e.id])) : 0
-      const minRest = minWeeklyRestNow()
+      const weeklyRestByEmployee = weeklyRestByEmployeeNow()
+      const minRest = Object.values(weeklyRestByEmployee).reduce((a, b) => Math.min(a, b), WEEK_END_ABS)
+      // ENCARGO F10 "el descanso semanal no cruza la frontera de semana"
+      // (09/08 noche): nº de personas por debajo del mínimo LEGAL
+      // (weeklyRestMinutesMin) va PRIMERO, por delante de horas/partidos —
+      // es una restricción legal, no una preferencia de reparto. Con
+      // previousWeekLastShiftEndByEmployee sin informar para nadie, este
+      // término usa la misma pared de lunes 00:00 que ya tenía el cálculo
+      // (comportamiento sin cambios frente a los tests anteriores a este
+      // encargo).
+      const legalRestViolations = employees.reduce(
+        (a, e) => a + (weeklyRestByEmployee[e.id] < input.weeklyRestMinutesMin - 1e-9 ? 1 : 0), 0
+      )
       // Orden: huecos ya está resuelto en la Fase 2a (antes de llegar aquí).
       // dev, splits totales y spread COMO ESTABAN — maxSplits/−minRest
       // (reparto justo) van DESPUÉS de spread, no en el orden literal del
@@ -504,15 +574,16 @@ export function solveWeekSchedule(input: SolverInput): SolverOutcome {
       // vez de 2-2-1 cuando el 2-2-1 exigiría tocar las horas. Declarado en
       // la entrega, no maquillado — es una decisión de negocio de Julio si
       // se prefiere lo contrario.
-      const obj: [number, number, number, number, number] =
-        [round2(dev), splitsAcc, round2(spread), maxSplits, -round2(minRest)]
-      if (!bestObj || lexLess5(obj, bestObj)) {
+      const obj: [number, number, number, number, number, number] =
+        [legalRestViolations, round2(dev), splitsAcc, round2(spread), maxSplits, -round2(minRest)]
+      if (!bestObj || lexLess6(obj, bestObj)) {
         bestObj = obj
         bestPlan = plan.map((x) => ({ ...x }))
         bestHours = { ...hours }
         bestLong = { ...longCount }
         bestSplits = splitsAcc
         bestMinWeeklyRest = minRest
+        bestWeeklyRestByEmployee = weeklyRestByEmployee
       }
       return
     }
@@ -654,6 +725,19 @@ export function solveWeekSchedule(input: SolverInput): SolverOutcome {
     }
   }
 
+  const weeklyRestByEmployee = bestPlan ? bestWeeklyRestByEmployee : {}
+  const weeklyRestStatusByEmployee: Record<string, 'ok' | 'al_limite' | 'incumple'> = {}
+  for (const e of employees) {
+    const rest = weeklyRestByEmployee[e.id]
+    weeklyRestStatusByEmployee[e.id] = rest === undefined
+      ? 'incumple'
+      : rest < input.weeklyRestMinutesMin - 1e-9
+        ? 'incumple'
+        : rest < input.weeklyRestMinutesMin + input.restSafetyMarginMinutes - 1e-9
+          ? 'al_limite'
+          : 'ok'
+  }
+
   return {
     feasible: bestPlan !== null,
     timedOut,
@@ -662,11 +746,15 @@ export function solveWeekSchedule(input: SolverInput): SolverOutcome {
     hoursByEmployee: bestHours ?? hours,
     longShiftCountByEmployee: bestLong ?? longCount,
     splits: bestSplits,
-    deviation: bestObj ? bestObj[0] : 0,
-    spread: bestObj ? bestObj[2] : 0,
+    deviation: bestObj ? bestObj[1] : 0,
+    spread: bestObj ? bestObj[3] : 0,
     uncoveredBySeatCover: totalUncovered,
-    maxSplitsPerEmployee: bestObj ? bestObj[3] : 0,
+    maxSplitsPerEmployee: bestObj ? bestObj[4] : 0,
     minWeeklyRestMinutes: bestPlan ? bestMinWeeklyRest : 0,
+    weeklyRestByEmployee,
+    weeklyRestStatusByEmployee,
+    crossWeekRestCheckedByEmployee: { ...crossWeekChecked },
+    hasWeeklyRestViolation: bestObj ? bestObj[0] > 0 : false,
   }
 }
 
@@ -683,8 +771,11 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100
 }
 
-function lexLess5(a: [number, number, number, number, number], b: [number, number, number, number, number]): boolean {
-  for (let i = 0; i < 5; i++) {
+function lexLess6(
+  a: [number, number, number, number, number, number],
+  b: [number, number, number, number, number, number]
+): boolean {
+  for (let i = 0; i < 6; i++) {
     if (a[i] < b[i]) return true
     if (a[i] > b[i]) return false
   }
@@ -748,6 +839,7 @@ async function fetchSolverTemplates(locationId: string, weekStart: string): Prom
 
 async function fetchBreakPolicyForSolver(accountId: string): Promise<{
   maxDailyHours: number; splitGapMinutes: number; restBetweenShiftsMinutes: number; toleranceFraction: number
+  weeklyRestMinutesMin: number; restSafetyMarginMinutes: number
 }> {
   const { data } = await db().from('break_policy').select('*')
     .eq('account_id', accountId).is('location_id', null).maybeSingle()
@@ -756,6 +848,11 @@ async function fetchBreakPolicyForSolver(accountId: string): Promise<{
     splitGapMinutes: Number(data?.split_min_gap_minutes ?? 90),
     restBetweenShiftsMinutes: Number(data?.min_rest_between_shifts_minutes ?? 720),
     toleranceFraction: Number(data?.contract_tolerance_pct ?? 0) / 100,
+    // ENCARGO F10 "el descanso semanal no cruza la frontera de semana"
+    // (09/08 noche): mismos defaults que weekly_rest_minutes_for/
+    // rest_safety_margin_for en plpgsql (T1240/T1300) — 36h legal + 30min.
+    weeklyRestMinutesMin: Number(data?.weekly_rest_minutes ?? 2160),
+    restSafetyMarginMinutes: Number(data?.rest_safety_margin_minutes ?? 30),
   }
 }
 
@@ -826,7 +923,15 @@ export async function runScheduleSolver(
   weekStart: string,
   employees: SolverEmployeeInput[],
   vacationDaysByEmployee: Map<string, Set<number>>,
-  role: string = 'cocina'
+  role: string = 'cocina',
+  // ENCARGO F10 "el descanso semanal no cruza la frontera de semana" (09/08
+  // noche) — §3 del encargo pide una decisión de Julio ANTES de construir
+  // el fetch real (publicado vs borrador vs fichajes de la semana anterior;
+  // ver la propuesta en la entrega). Hasta que se decida, este parámetro se
+  // deja sin cablear desde CalendarioPage (nadie lo pasa todavía) — el
+  // solver cae a "no lo sé" (comportamiento anterior, declarado en
+  // crossWeekRestCheckedByEmployee), nunca a un verde falso.
+  previousWeekLastShiftEndByEmployee?: Map<string, number>
 ): Promise<{ rows: SolverRunRow[]; outcome: SolverOutcome }> {
   const [templates, laborReq, breakPolicy, peaks] = await Promise.all([
     fetchSolverTemplates(locationId, weekStart),
@@ -854,6 +959,9 @@ export async function runScheduleSolver(
     toleranceFraction: breakPolicy.toleranceFraction,
     peakWeekday: peaks.peakWeekday,
     peakWeekend: peaks.peakWeekend,
+    weeklyRestMinutesMin: breakPolicy.weeklyRestMinutesMin,
+    restSafetyMarginMinutes: breakPolicy.restSafetyMarginMinutes,
+    previousWeekLastShiftEndByEmployee,
   })
 
   const rows: SolverRunRow[] = outcome.seats.map((s) => ({

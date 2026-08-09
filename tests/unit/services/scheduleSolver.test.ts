@@ -71,6 +71,10 @@ function baseInput(demand: Record<number, number>[], weekIndex: number): SolverI
     toleranceFraction: 0.10,
     peakWeekday: 2,
     peakWeekend: 3,
+    // Valores reales de la cuenta Foodint (RECON vía MCP, 09/08 noche):
+    // break_policy.weekly_rest_minutes=2160 (36h), rest_safety_margin_minutes=30.
+    weeklyRestMinutesMin: 2160,
+    restSafetyMarginMinutes: 30,
   }
 }
 
@@ -203,6 +207,7 @@ describe('scheduleSolver — nivel de plantilla (coverage declarado > uso histó
       demandByDayHour: demand,
       maxDailyHours: 9.5, splitGapMinutes: 90, restBetweenShiftsMinutes: 720,
       toleranceFraction: 0.10, peakWeekday: 0, peakWeekend: 0,
+      weeklyRestMinutesMin: 2160, restSafetyMarginMinutes: 30,
     })
     const jueves = out.seats.filter((s) => s.day === 3 && !s.isHueco)
     expect(jueves.length).toBeGreaterThan(0)
@@ -231,6 +236,7 @@ describe('scheduleSolver — nivel de plantilla (coverage declarado > uso histó
       demandByDayHour: demand,
       maxDailyHours: 9.5, splitGapMinutes: 90, restBetweenShiftsMinutes: 720,
       toleranceFraction: 0.10, peakWeekday: 0, peakWeekend: 0,
+      weeklyRestMinutesMin: 2160, restSafetyMarginMinutes: 30,
     })
     const sabado = out.seats.filter((s) => s.day === 5)
     expect(sabado.some((s) => s.templateId === 'C1-real' && !s.isHueco)).toBe(true)
@@ -281,6 +287,7 @@ describe('scheduleSolver — reparto justo de partidos y descanso semanal', () =
       demandByDayHour: demand,
       maxDailyHours: 9.5, splitGapMinutes: 90, restBetweenShiftsMinutes: 720,
       toleranceFraction: 0.10, peakWeekday: 0, peakWeekend: 0,
+      weeklyRestMinutesMin: 2160, restSafetyMarginMinutes: 30,
     })
 
     expect(out.feasible).toBe(true)
@@ -307,5 +314,105 @@ describe('scheduleSolver — reparto justo de partidos y descanso semanal', () =
     // arriba, no maquillado): valor exacto verificado, no un umbral vago.
     expect(out.maxSplitsPerEmployee).toBe(3)
     expect(out.minWeeklyRestMinutes).toBeCloseTo(43.5 * 60, 0)
+  })
+
+  // ENCARGO F10 "el descanso semanal no cruza la frontera de semana" (09/08
+  // noche), §5: el 43,5h de arriba estaba medido SIN ver la frontera de
+  // semana — con la frontera real sembrada (RECON vía MCP: Johanny, Natacha
+  // y Pamela terminan el domingo de la semana 03/08 PUBLICADA a las 00:15
+  // del lunes → seed=15 para las 3), la elección propia del solver para
+  // esta demanda SIGUE dando 43,5h y 'ok' para las tres — el 43,5h no era
+  // un espejismo del instrumento ciego, se confirma con el instrumento
+  // arreglado. (El 36h15min real de Pamela viene del borrador YA GUARDADO
+  // `1e95fdbc…`, generado por una versión anterior a este reparto justo —
+  // no de la propia elección de este solver para esta demanda; ver el test
+  // siguiente, que reproduce ese caso exacto de forma aislada y determinista.)
+  it('re-medición de la semana 10/08 con la frontera real sembrada: sigue en 43,5h, sin violación', () => {
+    const seed = new Map([['Johanny', 15], ['Natacha', 15], ['Pamela', 15]])
+    const out = solveWeekSchedule({ ...baseInput(DEMAND_1008, 1), previousWeekLastShiftEndByEmployee: seed })
+
+    expect(out.hoursByEmployee.Johanny).toBeCloseTo(39.25, 2)
+    expect(out.hoursByEmployee.Natacha).toBeCloseTo(39.25, 2)
+    expect(out.hoursByEmployee.Pamela).toBeCloseTo(39.25, 2)
+    expect(out.minWeeklyRestMinutes).toBeCloseTo(43.5 * 60, 0)
+    expect(out.crossWeekRestCheckedByEmployee.Johanny).toBe(true)
+    expect(out.crossWeekRestCheckedByEmployee.Natacha).toBe(true)
+    expect(out.crossWeekRestCheckedByEmployee.Pamela).toBe(true)
+    expect(out.weeklyRestStatusByEmployee.Johanny).toBe('ok')
+    expect(out.weeklyRestStatusByEmployee.Natacha).toBe('ok')
+    expect(out.weeklyRestStatusByEmployee.Pamela).toBe('ok')
+    expect(out.hasWeeklyRestViolation).toBe(false)
+  })
+})
+
+// ENCARGO F10 "el descanso semanal no cruza la frontera de semana" (09/08
+// noche) — §1/§3 del encargo. Fixture: 1 persona, 1 plantilla real de
+// Alcalá (Mañana, 12:30-16:45) en los 7 días (demanda uniforme -> Fase 1
+// libra siempre el lunes, día 0, por orden estable), más una plantilla
+// "larga" nunca demandada solo para que Mañana no herede el tope de "1
+// corrido/semana" (que no le corresponde a un turno normal repetido a
+// diario — mismo escollo de fixture que ya salió en el encargo anterior con
+// plantillas de igual duración). Con 1 sola persona y 1 asiento/día, no hay
+// ambigüedad: el resultado es determinista, no depende de que la búsqueda
+// "encuentre" el caso.
+describe('scheduleSolver — el descanso semanal cruza la frontera de semana', () => {
+  const TPL_MANANA: SolverTemplate = { id: 'M', label: 'Mañana', iniMin: 750, finMin: 1005, kind: 'demanda', uso: 1, coverageByDay: [1, 1, 1, 1, 1, 1, 1] }
+  const TPL_LARGA_SIN_USO: SolverTemplate = { id: 'DUMMY', label: 'Dummy (nunca demandada)', iniMin: 0, finMin: 540, kind: 'demanda', uso: 0, coverageByDay: [1, 1, 1, 1, 1, 1, 1] }
+  const persona: SolverEmployeeInput[] = [{ id: 'X', name: 'X', contractedHoursWeek: 40 }]
+  const demandUniforme: Record<number, number>[] = Array.from({ length: 7 }, () => ({ 13: 1 }))
+
+  function inputCon(seed?: Map<string, number>): SolverInput {
+    return {
+      weekIndex: 0,
+      templates: [TPL_MANANA, TPL_LARGA_SIN_USO],
+      employees: persona,
+      vacationDaysByEmployee: new Map(),
+      demandByDayHour: demandUniforme,
+      maxDailyHours: 9.5, splitGapMinutes: 90, restBetweenShiftsMinutes: 720,
+      toleranceFraction: 0.10, peakWeekday: 0, peakWeekend: 0,
+      weeklyRestMinutesMin: 2160, restSafetyMarginMinutes: 30,
+      previousWeekLastShiftEndByEmployee: seed,
+    }
+  }
+
+  it('caso real de Pamela: termina el domingo a las 00:15, entra el martes a las 12:30 → 36h15min, al_limite (por debajo del margen)', () => {
+    // Persona libra el lunes (día 0, demanda uniforme -> día 0 gana por
+    // orden estable) y trabaja mar-dom con Mañana cada día. Su primer turno
+    // de la semana es el martes (día 1) a las 12:30. Semana anterior:
+    // terminó el domingo a las 00:15 -> seed=15 (15 minutos ya dentro de
+    // este lunes).
+    const out = solveWeekSchedule(inputCon(new Map([['X', 15]])))
+
+    expect(out.feasible).toBe(true)
+    expect(out.daysOff.X).toBe(0)
+    // 36h15min exactos — ni un minuto más, ni un minuto menos.
+    expect(out.minWeeklyRestMinutes).toBe(36 * 60 + 15)
+    expect(out.weeklyRestByEmployee.X).toBe(36 * 60 + 15)
+    // Cumple la ley por 15 minutos (2175 >= 2160) pero por debajo del
+    // margen operativo (2160+30=2190) — 'al_limite', no 'ok'.
+    expect(out.weeklyRestStatusByEmployee.X).toBe('al_limite')
+    expect(out.hasWeeklyRestViolation).toBe(false)
+    expect(out.crossWeekRestCheckedByEmployee.X).toBe(true)
+  })
+
+  it('semana anterior inexistente o vacía: no revienta, declara "no lo sé" en vez de un verde falso', () => {
+    // Sin dato de frontera (parámetro ausente): el motor no inventa nada,
+    // cae a la pared del lunes 00:00 (comportamiento anterior a este
+    // encargo) y lo declara explícitamente vía crossWeekRestCheckedByEmployee.
+    const sinDato = solveWeekSchedule(inputCon(undefined))
+    expect(sinDato.feasible).toBe(true)
+    expect(sinDato.crossWeekRestCheckedByEmployee.X).toBe(false)
+    // El número que cae aquí (36h30min, con la pared del lunes como límite)
+    // es MAYOR que el real (36h15min) — exactamente el "número mayor" que
+    // el encargo pedía dejar de reportar cuando SÍ hay dato de frontera.
+    expect(sinDato.minWeeklyRestMinutes).toBe(36 * 60 + 30)
+    expect(sinDato.weeklyRestStatusByEmployee.X).toBe('ok') // verde — el punto ciego exacto que describe el encargo
+
+    // Mapa vacío (semana anterior existe pero sin turnos, o consulta sin
+    // filas): mismo resultado que "ausente" — no un crash ni un 0 inventado.
+    const vacio = solveWeekSchedule(inputCon(new Map()))
+    expect(vacio.feasible).toBe(true)
+    expect(vacio.crossWeekRestCheckedByEmployee.X).toBe(false)
+    expect(vacio.minWeeklyRestMinutes).toBe(36 * 60 + 30)
   })
 })
