@@ -1,89 +1,110 @@
--- 20260809T1530_generate_week_schedule_v3_ancla_plantillas.sql
--- Aplicada: SÍ, en forma CORREGIDA, el 09/08/2026 (migración registrada en
--- Supabase como "20260809T1530_generate_week_schedule_v3_ancla_plantillas_fix",
--- via MCP). Este fichero se ha sincronizado a posteriori con esa versión
--- corregida — no lo edites como si fuera la migración aplicada tal cual
--- salió de aquí la primera vez.
+-- 20260809T1600_generate_week_schedule_reparto_v4.sql
+-- Aplicada: NO — propuesta, pendiente de que Julio la ejecute y verifique.
 --
--- 🔴 CORRECCIÓN 09/08 (ENCARGO_CODE_reparto_2, §5): la versión que salió de
--- esta sesión tenía un ERROR 42601 — PL/pgSQL no admite `select ... into
--- v_day_total[d+1]` (un elemento de array como destino de un INTO). Se
--- corrigió pasando por una variable escalar `v_tmp` y asignando el array
--- aparte (`v_day_total[d+1] := coalesce(v_tmp,0);`). Ver el bloque
--- "for d in 0..6 loop ... end loop" más abajo, ya con el fix.
+-- ENCARGO CODE F10 (2ª parte, 09/08/2026) — arregla el REPARTO del generador.
+-- El anclaje a shift_templates (v3, T1530 corregida) funciona y NO se toca.
+-- Este cambio es solo de ORDEN y de FILTROS DUROS en cómo se asignan las
+-- personas a los asientos que v3 ya genera bien.
 --
--- NUEVA REGLA DE PROCESO desde esta corrección: ninguna migración con
--- PL/pgSQL llega a Julio sin haber pasado una validación de sintaxis por MCP
--- (crear con nombre temporal, comprobar, borrar) — ver
--- docs/folvy_team_f10_verificacion_20260809.md y memoria de Claude.
+-- Evidencia que motiva el cambio (prueba de aceptación ejecutada por Julio,
+-- Alcalá semana 2026-08-03, motor v3 contra el cuadrante real publicado):
+--   Horas: 124,25 reales vs 114,25 del motor.
+--   Días trabajados: 6·6·6 reales vs 4·6·4 del motor.
+--   Corridos de 9,5h: 1 cada uno en la realidad vs Johanny 4 · Pamela 3 ·
+--     Natacha 0 en el motor.
+--   Huecos: 0 reales vs 2 el domingo (el día de mayor demanda) en el motor.
+--   Subir contract_tolerance_pct a 10% no cambió nada — no era la causa.
 --
--- ENCARGO CODE F10 — Bloque A.4. Rediseño de generate_week_schedule (v2→v3).
--- Parte de la definición VIVA capturada por pg_get_functiondef el 09/08/2026
--- (después de la migración T0945, que ya está en producción) y la sustituye
--- entera porque el cambio de forma de salida (o_ini/o_fin pasan de hora
--- entera a texto "HH:MM", se añade o_shift_template_id) exige DROP + CREATE:
--- CREATE OR REPLACE no admite cambiar el tipo de las columnas de salida.
+-- CAMBIO A — Asignar los días en orden de DEMANDA, no de calendario:
+--   La GENERACIÓN de asientos (qué plantillas abrir cada día, cuánta gente)
+--   sigue siendo día a día en orden natural — no se toca, ahí no está el
+--   bug. Lo que cambia es que ahora hay DOS pasadas: la 1ª (fase de
+--   generación) construye y guarda los asientos de los 7 días en
+--   `v_assign_all` (jsonb, clave = día 0-6) sin asignar a nadie todavía. La
+--   2ª (fase de asignación) recorre los días por `v_day_total` DESCENDENTE
+--   (domingo, el más fuerte, primero) y ahí sí asigna personas. Antes, el
+--   greedy cronológico llegaba al domingo con los tres casi agotados; ahora
+--   el domingo se sirve primero y el lunes (el más flojo) se sirve con lo
+--   que quede — que es justo el margen que sobra.
 --
--- ⚠️ CAMBIO DE CONTRATO — leer antes de aplicar:
---   o_ini / o_fin dejan de ser "hora entera" (13, 17) y pasan a ser texto
---   "HH:MM" ("14:45", "00:15"). Se añade o_shift_template_id (uuid, null solo
---   en el bloque de refuerzo excepcional). ESTA MIGRACIÓN Y EL DEPLOY DEL
---   FRONTEND (scheduleProposalService.ts + CalendarioPage.tsx, mismo commit)
---   DEBEN IR JUNTOS. Si el SQL llega antes que el frontend nuevo, el botón
---   "Proponer cuadrante" viejo recibirá o_ini/o_fin como texto donde esperaba
---   número y las horas saldrán mal hasta que el frontend se despliegue. Si el
---   frontend nuevo llega antes que el SQL, el botón "Cubrir el resto" no
---   existe todavía en la BBDD y fallará con error de RPC hasta aplicar esto.
+-- CAMBIO B — Tope DURO de un turno largo por persona y semana:
+--   `had_long` deja de ser solo preferencia blanda en el ORDER BY: para un
+--   asiento de la plantilla más larga (identificada por `tpl_id`, NO por la
+--   etiqueta `kind='demanda_largo'` — esa etiqueta solo marca el asiento
+--   GARANTIZADO del día pico; el greedy normal de demanda también puede
+--   elegir la misma plantilla larga como mejor cobertura y la deja en
+--   `kind='demanda'`. Detectado en la validación por MCP de este mismo
+--   encargo: sin mirar el tpl_id, Pamela se llevó 3 corridos de 9,5h bajo
+--   "Demanda prevista" y el tope no se enteraba), el WHERE excluye a quien
+--   ya tiene un asiento de esa plantilla esta semana. Si eso deja el asiento
+--   sin nadie, se reintenta SIN esa exclusión (`v_allow_long_repeat`), y el
+--   motivo que sale es distinto y explícito: 'Segundo turno largo — no
+--   había alternativa' — el encargado ve que fue una excepción forzada, no
+--   un reparto normal.
 --
--- QUÉ CAMBIA respecto a v2 (hallazgos §1 del encargo, con su número):
---   #5 Local cerrado (locations.active=false) → 0 filas, nunca un cuadrante
---      en rojo. Guard al principio de la función.
---   #1 Ancla a shift_templates reales de kind='demanda' en vez de generar
---      bloques libres por hora entera. Cada plantilla se pondera por su USO
---      HISTÓRICO real en schedules.cells (últimos 90 días) para que, entre
---      gemelas sin depurar (F7.2, pendiente de Julio — Mañana vs Mañana1),
---      gane la que de verdad se usa, sin tener que borrar ni desactivar nada.
---   kind='forzado' se abre siempre que coverage_<dia> > 0 (parámetro 3).
---   kind='no_productivo' se coloca y suma horas pero no descuenta demanda
---      (parámetro 4).
---   #4 min_shift_minutes ya no es un ">= 1" hardcodeado: el ÚNICO bloque que
---      se genera fuera de plantilla (el refuerzo excepcional) se descarta y
---      se declara hueco directo si no llega al mínimo — nunca sale un turno
---      suelto por debajo.
---   #3 Tolerancia sobre contrato configurable (break_policy.contract_
---      tolerance_pct, 0 % por defecto = comportamiento previo exacto).
---   Dotación en el pico (team_labor_model.peak_weekday/peak_weekend, 0 por
---      defecto = sin efecto) y márgenes de apertura/cierre (pre_open_minutes/
---      post_close_minutes, 0 por defecto = sin efecto) — parámetros 1 y 4.
---   Reparto del excedente (§3.A.5): un turno largo (la plantilla 'demanda' de
---      mayor duración) por persona, colocado en uno de los v_n_emp días de
---      mayor demanda de la semana; un día "objetivo" de descanso por persona,
---      deprioritizado (no bloqueado) en el desempate. Ambos rotan semana a
---      semana por FÓRMULA (offset = nº de semana desde una fecha ancla fija),
---      no leyendo el cuadrante de la semana anterior — más simple y no
---      depende de que exista una semana previa guardada.
+-- CAMBIO C — Equilibrar días trabajados:
+--   Nueva columna `dias_trabajados` (nº de fechas distintas ya asignadas esa
+--   semana a este candidato, contando lo que llevan las fases de demanda ya
+--   procesadas). Entra en el ORDER BY con MÁS peso que la distancia al
+--   contrato, y también más que `is_target_off` (que se queda, pero después
+--   de este criterio). Combinado con el Cambio A, el resultado converge solo
+--   hacia jornadas parecidas: quien menos días lleva entra primero.
 --
--- LÍMITES DECLARADOS DE ESTA VERSIÓN (decir la verdad, no maquillar):
---   - Equidad de fines de semana/cierres y "continuidad" (§3.A.5, puntos 3 y
---     4) NO están implementados — solo distancia al contrato como desempate
---     final, igual que v2. Declarado, no fingido.
---   - El ajuste por plantilla ('gain' del greedy) puntúa la cobertura SOLO
---     contra la demanda del mismo día natural: el tramo de un turno que cruza
---     medianoche (p.ej. Corrido1 hasta las 00:15) no puntúa contra la demanda
---     de la madrugada del día siguiente. Simplificación declarada — evita
---     llevar un libro de demanda entre días distintos.
---   - "Fin de semana" para peak_weekend = sábado y domingo (viernes cuenta
---     como entre semana). Ajustable si Julio quiere otra frontera.
---   - Si dos turnos abren (o cierran) exactamente a la misma hora, el margen
---     de apertura/cierre se aplica a los dos, no a uno solo.
+-- CAMBIO D — Huecos con motivo específico:
+--   Cuando nadie puede cubrir un asiento, antes de declarar el hueco se
+--   cuenta CUÁNTOS candidatos activos (misma base que la selección — mismo
+--   local/vacaciones) caen en cada restricción dura (contrato, descanso de
+--   12h, descanso semanal, jornada máxima diaria, solape, hueco de turno
+--   partido insuficiente) y se listan las que de verdad bloquearon a
+--   alguien, con el recuento. Sustituye al genérico "nadie puede sin
+--   incumplir convenio", que era cierto pero no decía cuál.
 --
--- MÉTODO: DROP + CREATE (no hay forma de conservar el body viejo con
--- CREATE OR REPLACE cuando cambia el tipo de columnas de salida). Idempotente
--- por construcción: reaplicar este fichero vuelve a dejar la función igual.
+-- NO SE TOCA (regla del encargo, §0.bis y §7): el anclaje a shift_templates,
+-- `kind`, ponderación por uso histórico, `max_daily_minutes_plan` vs
+-- `max_daily_minutes`, `team_compliance_scan`, ritmo 15, tolerancia de
+-- contrato configurable (sigue en 0%), filtro de local cerrado.
+--
+-- LÍMITES DECLARADOS que siguen igual que en v3 (no se resuelven aquí):
+--   equidad de fines de semana/cierres y "continuidad" personal — no
+--   implementadas, fuera de alcance explícito de este encargo (§7).
+--
+-- MÉTODO: CREATE OR REPLACE (la firma de salida no cambia respecto a v3 —
+-- mismos 11 o_* — solo cambia el cuerpo). Parte de la definición VIVA
+-- corregida (post ERROR 42601, ver T1530 actualizada en este mismo commit).
+--
+-- 🔴 VALIDACIÓN (regla nueva, §5 del encargo): esta función se creó con un
+-- nombre temporal (_tmp_validate_gws_v4) vía MCP, se comprobó que COMPILA y
+-- que EJECUTA contra Alcalá/2026-08-03 sin error, y se borró — antes de
+-- escribir este fichero. La primera ejecución de prueba encontró un bug real
+-- (ver CAMBIO B más abajo: el tope duro no miraba `tpl_id`, solo `kind`, y
+-- Pamela se llevó 3 corridos bajo "Demanda prevista"); se corrigió y se
+-- volvió a validar antes de dar esto por bueno.
+--
+-- RESULTADO HONESTO de la 2ª ejecución (ya con el fix), Alcalá 03/08, no
+-- maquillado — Julio debe leerlo antes de aplicar:
+--   Horas totales: 110,0 (Johanny 36,5 · Natacha 37,0 · Pamela 36,5) — BAJA
+--     respecto a los 114,25 de v3 y sigue lejos de los 124,25 reales.
+--   Días trabajados: Johanny 6 · Natacha 5 · Pamela 6 — mucho mejor que el
+--     4·6·4 de v3, pero no llega al 6·6·6 real.
+--   El LUNES completo (el día de menor demanda) se queda en 2 huecos — con
+--     0% de tolerancia, los 3 llegan sin margen de contrato para cubrirlo.
+--     Es la contracara exacta de arreglar el Cambio A: al servir primero el
+--     día fuerte, el día flojo es el que se queda sin margen, no al revés.
+--   Turno largo: ya NO se repite en silencio — cuando se repite, sale
+--     etiquetado 'Segundo turno largo — no había alternativa'. Pero SIGUE
+--     repitiéndose 1-2 veces por persona en varios casos, porque el greedy
+--     de demanda (que no se toca, §0.bis) decide que el pico de sábado y
+--     domingo necesita DOS corridos simultáneos — con solo 3 personas, tapar
+--     eso sin ningún repetido es matemáticamente imposible salvo que se abra
+--     más hueco. Esto es un límite del paso de cobertura, no del reparto.
+--   ⚠️ RECOMENDACIÓN: repetir la prueba con contract_tolerance_pct > 0 (p.ej.
+--     10%, la cifra que ya usa el generador cliente) — el hallazgo de la 1ª
+--     parte del encargo ("subir la tolerancia no cambiaba nada") se midió
+--     contra el v3 con el bug del orden cronológico. Con el orden por
+--     demanda ya corregido, la tolerancia puede comportarse distinto: dale
+--     una oportunidad real antes de descartarla otra vez.
 
-drop function if exists public.generate_week_schedule(uuid, uuid, date, text, numeric);
-
-create function public.generate_week_schedule(
+create or replace function public.generate_week_schedule(
   p_account uuid,
   p_location uuid,
   p_week_start date,
@@ -121,15 +142,18 @@ declare
   v_n_emp int := 1;
   v_long_tpl_id uuid; v_long_dur numeric;
   v_long_days int[] := array[]::int[];
+  v_day_order int[];
   v_week_idx int;
-  -- acumuladores del plan (mismo patrón que v2)
+  -- acumuladores del plan
   v_horas jsonb := '{}'::jsonb;
   v_turnos jsonb := '{}'::jsonb;
   v_plan jsonb := '[]'::jsonb;
   v_gaps jsonb := '[]'::jsonb;
   v_long_assigned jsonb := '{}'::jsonb;
+  -- CAMBIO A: asientos de los 7 días, generados en fase 1, asignados en fase 2
+  v_assign_all jsonb := '{}'::jsonb;
   -- por día
-  d int;
+  d int; i int;
   v_fecha date;
   v_day_orig jsonb;
   v_remaining jsonb;
@@ -146,6 +170,10 @@ declare
   r_a record; r_c record;
   v_ini_ts timestamp; v_fin_ts timestamp; v_dur numeric; v_found boolean;
   v_seat_is_long boolean; v_seat_motivo text; v_seat_capa int;
+  -- CAMBIO B: tope duro de un turno largo/semana con reintento explícito
+  v_attempt int; v_allow_long_repeat boolean; v_relaxed_long boolean;
+  -- CAMBIO D: diagnóstico de qué restricción bloqueó el asiento
+  v_n_solapa int; v_n_12h int; v_n_contrato int; v_n_jornada int; v_n_gap int; v_n_descanso int;
 begin
   -- Hallazgo #5: local cerrado → cero filas, nunca un cuadrante en rojo.
   if not exists (select 1 from public.locations l where l.id = p_location and l.active) then
@@ -251,8 +279,20 @@ begin
   end if;
   v_long_days := coalesce(v_long_days, array[]::int[]);
 
+  -- CAMBIO A: orden de asignación por demanda descendente (todos los 7 días,
+  -- no solo los v_n_emp más fuertes — v_long_days de arriba sigue siendo solo
+  -- para decidir DÓNDE va el turno largo; esto decide en qué ORDEN se sirve
+  -- a la gente).
+  select array_agg(x.d order by x.tot desc, x.d asc) into v_day_order
+  from (select gs.d, v_day_total[gs.d+1] as tot from generate_series(0,6) gs(d)) x(d,tot);
+
   v_week_idx := (p_week_start - date '2024-01-01')::int / 7;
 
+  -- ══════════════════════════════════════════════════════════════════════
+  -- FASE 1 — GENERACIÓN: qué asientos hacen falta cada día (orden natural,
+  -- sin tocar — aquí no estaba el problema). No se asigna a nadie todavía;
+  -- se guarda en v_assign_all[d] para que la fase 2 los sirva en otro orden.
+  -- ══════════════════════════════════════════════════════════════════════
   for d in 0..6 loop
     v_fecha := p_week_start + d;
 
@@ -465,9 +505,19 @@ begin
       end if;
     end if;
 
-    -- Asignar empleado a cada asiento del día, en el orden en que se generó
-    -- (forzado/no_productivo primero, curva de demanda, turno largo, pico,
-    -- refuerzo al final).
+    -- CAMBIO A: se guarda para la fase 2, todavía sin asignar a nadie.
+    v_assign_all := jsonb_set(v_assign_all, array[d::text], v_assign_day);
+  end loop;
+
+  -- ══════════════════════════════════════════════════════════════════════
+  -- FASE 2 — ASIGNACIÓN: se sirve primero el día de mayor demanda
+  -- (v_day_order), no el lunes. Es el cambio de mayor efecto (§3.A).
+  -- ══════════════════════════════════════════════════════════════════════
+  for i in 1..7 loop
+    d := v_day_order[i];
+    v_fecha := p_week_start + d;
+    v_assign_day := coalesce(v_assign_all -> d::text, '[]'::jsonb);
+
     for r_a in
       select a->>'tpl_id' as tpl_id, a->>'kind' as kind,
              (a->>'ini_min')::int as ini_min, (a->>'fin_min')::int as fin_min
@@ -476,12 +526,141 @@ begin
       v_ini_ts := v_fecha::timestamp + make_interval(mins => r_a.ini_min);
       v_fin_ts := v_fecha::timestamp + make_interval(mins => r_a.fin_min);
       v_dur := (r_a.fin_min - r_a.ini_min) / 60.0;
-      v_seat_is_long := (r_a.kind = 'demanda_largo');
+      -- OJO: no basta con mirar kind='demanda_largo' (esa etiqueta solo marca
+      -- el asiento GARANTIZADO del día pico). El greedy normal de demanda
+      -- también puede elegir la plantilla más larga como mejor cobertura y
+      -- la etiqueta como 'demanda' — sin este OR, el tope duro del CAMBIO B
+      -- no se aplicaba a esos asientos y una misma persona podía acumular
+      -- varios corridos de 9,5h bajo motivo "Demanda prevista" (encontrado
+      -- en la validación por MCP antes de entregar, no en producción).
+      v_seat_is_long := (v_long_tpl_id is not null and r_a.tpl_id = v_long_tpl_id::text);
       v_found := false;
+      v_relaxed_long := false;
+      v_allow_long_repeat := false;
 
-      for r_c in
-        with cand as (
-          select e.id, e.name, coalesce(e.contracted_hours_week,40) ctr,
+      -- CAMBIO B: intento 0 = estricto (nadie repite turno largo). Intento 1
+      -- SOLO si el asiento es largo y el 0 no encontró a nadie: se relaja la
+      -- exclusión y el motivo lo deja dicho.
+      for v_attempt in 0..1 loop
+        if v_attempt = 1 then
+          exit when not v_seat_is_long or v_found;
+          v_allow_long_repeat := true;
+        end if;
+
+        for r_c in
+          with cand as (
+            select e.id, e.name, coalesce(e.contracted_hours_week,40) ctr,
+                   coalesce((v_horas->>e.id::text)::numeric,0) ya,
+                   (select coalesce(sum(extract(epoch from ((t->>1)::timestamp-(t->>0)::timestamp))/3600),0)
+                      from jsonb_array_elements(coalesce(v_turnos->e.id::text,'[]'::jsonb)) t
+                     where (t->>0)::timestamp::date = v_fecha) h_dia,
+                   (select count(*) from jsonb_array_elements(coalesce(v_turnos->e.id::text,'[]'::jsonb)) t
+                     where (t->>0)::timestamp::date = v_fecha) n_dia,
+                   -- CAMBIO C: días distintos ya asignados esta semana (con
+                   -- lo que llevan procesado las iteraciones previas de fase 2).
+                   (select count(distinct (t->>0)::timestamp::date)
+                      from jsonb_array_elements(coalesce(v_turnos->e.id::text,'[]'::jsonb)) t) as dias_trabajados,
+                   (select min(greatest(extract(epoch from (v_ini_ts-(t->>1)::timestamp))/60,
+                                        extract(epoch from ((t->>0)::timestamp-v_fin_ts))/60))
+                      from jsonb_array_elements(coalesce(v_turnos->e.id::text,'[]'::jsonb)) t
+                     where (t->>0)::timestamp::date = v_fecha) gap_min,
+                   exists (select 1 from jsonb_array_elements(coalesce(v_turnos->e.id::text,'[]'::jsonb)) t
+                            where (t->>0)::timestamp < v_fin_ts and (t->>1)::timestamp > v_ini_ts) solapa,
+                   exists (select 1 from jsonb_array_elements(coalesce(v_turnos->e.id::text,'[]'::jsonb)) t
+                            where (t->>0)::timestamp::date <> v_fecha
+                              and ( ((t->>1)::timestamp <= v_ini_ts
+                                     and v_ini_ts < (t->>1)::timestamp + make_interval(mins=>v_rest_12h))
+                                 or (v_fin_ts <= (t->>0)::timestamp
+                                     and (t->>0)::timestamp < v_fin_ts + make_interval(mins=>v_rest_12h)) )
+                   ) viola_12h,
+                   row_number() over (order by e.name) as rnk,
+                   coalesce((v_long_assigned->>e.id::text)::boolean,false) as had_long
+            from public.employees e
+            where e.account_id=p_account and e.active
+              and (e.location_id=p_location
+                   or (e.assigned_locations is not null
+                       and to_jsonb(e.assigned_locations) @> to_jsonb(p_location::text)))
+              and not exists (select 1 from public.vacations v
+                              where v.employee_id=e.id and v.status='aprobada'
+                                and v_fecha between v.start_date and v.end_date)
+          ),
+          cand2 as (
+            select c.*,
+                   (d = ((c.rnk - 1 + v_week_idx) % 7)) as is_target_off,
+                   (array_length(v_long_days,1) > 0
+                    and d = v_long_days[1 + ((c.rnk - 1 + v_week_idx) % array_length(v_long_days,1))]) as is_target_long
+            from cand c
+          )
+          select c.id, c.name, c.ctr, c.ya, c.n_dia from cand2 c
+          where not c.solapa and not c.viola_12h
+            and c.ya + v_dur <= c.ctr * (1 + v_tol_pct/100.0)
+            and c.h_dia + v_dur <= v_max_h
+            and (c.n_dia = 0 or c.gap_min = 0 or c.gap_min >= v_split_gap)
+            -- CAMBIO B: filtro duro (no preferencia) salvo reintento relajado.
+            and (not v_seat_is_long or not c.had_long or v_allow_long_repeat)
+            and public.has_weekly_rest(coalesce(v_turnos->c.id::text,'[]'::jsonb),
+                  v_ini_ts, v_fin_ts, p_week_start, v_rest_min)
+          order by
+            (v_seat_is_long and c.is_target_long) desc,
+            (v_seat_is_long and c.had_long) asc,
+            -- CAMBIO C: equilibrar días trabajados, con más peso que
+            -- is_target_off y que la distancia al contrato.
+            c.dias_trabajados asc,
+            c.is_target_off asc,
+            (c.n_dia > 0) desc,
+            (c.ctr - c.ya) desc,
+            c.name
+          limit 1
+        loop
+          v_relaxed_long := (v_attempt = 1);
+          v_seat_motivo := case
+            when v_relaxed_long then 'Segundo turno largo — no había alternativa'
+            else case r_a.kind
+              when 'forzado' then 'Franja forzada'
+              when 'no_productivo' then 'Bloque fijo no productivo'
+              when 'demanda_largo' then 'Turno largo · día de mayor demanda'
+              when 'demanda_pico' then 'Dotación mínima en el pico'
+              when 'refuerzo' then 'Refuerzo excepcional · demanda residual'
+              else 'Demanda prevista'
+            end
+          end;
+          v_seat_capa := case r_a.kind
+            when 'demanda_largo' then 2 when 'demanda_pico' then 3
+            when 'refuerzo' then 4 else 1 end;
+          v_plan := v_plan || jsonb_build_object(
+            'f', v_fecha, 'ini', r_a.ini_min, 'fin', r_a.fin_min, 'tpl', r_a.tpl_id,
+            'capa', v_seat_capa, 'emp', r_c.id, 'nom', r_c.name, 'motivo', v_seat_motivo);
+          v_horas := jsonb_set(v_horas, array[r_c.id::text], to_jsonb(r_c.ya + v_dur));
+          v_turnos := jsonb_set(v_turnos, array[r_c.id::text],
+                       coalesce(v_turnos->r_c.id::text,'[]'::jsonb)
+                       || jsonb_build_array(jsonb_build_array(
+                            to_char(v_ini_ts,'YYYY-MM-DD"T"HH24:MI:SS'),
+                            to_char(v_fin_ts,'YYYY-MM-DD"T"HH24:MI:SS'))));
+          if v_seat_is_long then
+            v_long_assigned := jsonb_set(v_long_assigned, array[r_c.id::text], to_jsonb(true));
+          end if;
+          v_found := true;
+        end loop;
+
+        exit when v_found;
+      end loop;
+
+      if not v_found then
+        -- CAMBIO D: diagnóstico — cuántos candidatos, de la misma base
+        -- (activos, de este local, sin vacaciones ese día), caen en cada
+        -- restricción dura. Mismo cálculo que el WHERE de arriba, sin LIMIT.
+        select
+          count(*) filter (where solapa),
+          count(*) filter (where viola_12h),
+          count(*) filter (where ya + v_dur > ctr * (1 + v_tol_pct/100.0)),
+          count(*) filter (where h_dia + v_dur > v_max_h),
+          count(*) filter (where not (n_dia = 0 or gap_min = 0 or gap_min >= v_split_gap)),
+          count(*) filter (where not public.has_weekly_rest(coalesce(v_turnos->id::text,'[]'::jsonb),
+                                    v_ini_ts, v_fin_ts, p_week_start, v_rest_min))
+          into v_n_solapa, v_n_12h, v_n_contrato, v_n_jornada, v_n_gap, v_n_descanso
+        from (
+          select e.id,
+                 coalesce(e.contracted_hours_week,40) ctr,
                  coalesce((v_horas->>e.id::text)::numeric,0) ya,
                  (select coalesce(sum(extract(epoch from ((t->>1)::timestamp-(t->>0)::timestamp))/3600),0)
                     from jsonb_array_elements(coalesce(v_turnos->e.id::text,'[]'::jsonb)) t
@@ -500,9 +679,7 @@ begin
                                    and v_ini_ts < (t->>1)::timestamp + make_interval(mins=>v_rest_12h))
                                or (v_fin_ts <= (t->>0)::timestamp
                                    and (t->>0)::timestamp < v_fin_ts + make_interval(mins=>v_rest_12h)) )
-                 ) viola_12h,
-                 row_number() over (order by e.name) as rnk,
-                 coalesce((v_long_assigned->>e.id::text)::boolean,false) as had_long
+                 ) viola_12h
           from public.employees e
           where e.account_id=p_account and e.active
             and (e.location_id=p_location
@@ -511,60 +688,22 @@ begin
             and not exists (select 1 from public.vacations v
                             where v.employee_id=e.id and v.status='aprobada'
                               and v_fecha between v.start_date and v.end_date)
-        ),
-        cand2 as (
-          select c.*,
-                 (d = ((c.rnk - 1 + v_week_idx) % 7)) as is_target_off,
-                 (array_length(v_long_days,1) > 0
-                  and d = v_long_days[1 + ((c.rnk - 1 + v_week_idx) % array_length(v_long_days,1))]) as is_target_long
-          from cand c
-        )
-        select c.id, c.name, c.ctr, c.ya, c.n_dia from cand2 c
-        where not c.solapa and not c.viola_12h
-          and c.ya + v_dur <= c.ctr * (1 + v_tol_pct/100.0)
-          and c.h_dia + v_dur <= v_max_h
-          and (c.n_dia = 0 or c.gap_min = 0 or c.gap_min >= v_split_gap)
-          and public.has_weekly_rest(coalesce(v_turnos->c.id::text,'[]'::jsonb),
-                v_ini_ts, v_fin_ts, p_week_start, v_rest_min)
-        order by
-          (v_seat_is_long and c.is_target_long) desc,
-          (v_seat_is_long and c.had_long) asc,
-          c.is_target_off asc,
-          (c.n_dia > 0) desc,
-          (c.ctr - c.ya) desc,
-          c.name
-        limit 1
-      loop
-        v_seat_motivo := case r_a.kind
-          when 'forzado' then 'Franja forzada'
-          when 'no_productivo' then 'Bloque fijo no productivo'
-          when 'demanda_largo' then 'Turno largo · día de mayor demanda'
-          when 'demanda_pico' then 'Dotación mínima en el pico'
-          when 'refuerzo' then 'Refuerzo excepcional · demanda residual'
-          else 'Demanda prevista'
-        end;
-        v_seat_capa := case r_a.kind
-          when 'demanda_largo' then 2 when 'demanda_pico' then 3
-          when 'refuerzo' then 4 else 1 end;
-        v_plan := v_plan || jsonb_build_object(
-          'f', v_fecha, 'ini', r_a.ini_min, 'fin', r_a.fin_min, 'tpl', r_a.tpl_id,
-          'capa', v_seat_capa, 'emp', r_c.id, 'nom', r_c.name, 'motivo', v_seat_motivo);
-        v_horas := jsonb_set(v_horas, array[r_c.id::text], to_jsonb(r_c.ya + v_dur));
-        v_turnos := jsonb_set(v_turnos, array[r_c.id::text],
-                     coalesce(v_turnos->r_c.id::text,'[]'::jsonb)
-                     || jsonb_build_array(jsonb_build_array(
-                          to_char(v_ini_ts,'YYYY-MM-DD"T"HH24:MI:SS'),
-                          to_char(v_fin_ts,'YYYY-MM-DD"T"HH24:MI:SS'))));
-        if v_seat_is_long then
-          v_long_assigned := jsonb_set(v_long_assigned, array[r_c.id::text], to_jsonb(true));
-        end if;
-        v_found := true;
-      end loop;
+        ) c;
 
-      if not v_found then
+        v_seat_motivo := (
+          select coalesce(nullif(string_agg(part, ' · '), ''), 'no hay empleados activos en este local')
+          from (
+            select 'tope de horas contratadas (' || v_n_contrato || ')' as part where coalesce(v_n_contrato,0) > 0
+            union all select 'descanso de 12h (' || v_n_12h || ')' where coalesce(v_n_12h,0) > 0
+            union all select 'descanso semanal (' || v_n_descanso || ')' where coalesce(v_n_descanso,0) > 0
+            union all select 'jornada máxima diaria (' || v_n_jornada || ')' where coalesce(v_n_jornada,0) > 0
+            union all select 'ya tienen turno solapado (' || v_n_solapa || ')' where coalesce(v_n_solapa,0) > 0
+            union all select 'hueco de turno partido insuficiente (' || v_n_gap || ')' where coalesce(v_n_gap,0) > 0
+          ) parts
+        );
         v_gaps := v_gaps || jsonb_build_object(
           'f', v_fecha, 'ini', r_a.ini_min, 'fin', r_a.fin_min, 'tpl', r_a.tpl_id,
-          'motivo', 'SIN CUBRIR — nadie puede sin incumplir convenio');
+          'motivo', 'SIN CUBRIR — ' || v_seat_motivo);
       end if;
     end loop;
 
@@ -595,10 +734,10 @@ end
 $function$;
 
 comment on function public.generate_week_schedule(uuid, uuid, date, text, numeric) is
-  'ENCARGO F10 v3, 09/08/2026. Ancla la propuesta a shift_templates reales (kind=demanda/forzado/no_productivo), pondera duplicadas sin depurar por uso histórico, respeta min_shift_minutes, tolerancia de contrato y dotación de pico configurables, refuerzo excepcional único cuadrado a hora completa. Límites declarados: sin equidad de cierres/continuidad, sin libro de demanda entre días al cruzar medianoche — ver cabecera de la migración.';
+  'ENCARGO F10 reparto v4, 09/08/2026. Fase 1 genera asientos día a día (sin tocar), fase 2 asigna personas en orden de demanda descendente. Tope duro de un turno largo/persona/semana con reintento explícito. dias_trabajados equilibra jornadas, más peso que distancia a contrato. Huecos con motivo desglosado por restricción. Ancla a shift_templates de v3, no se toca.';
 
--- Guard: aborta si la función no quedó con la forma nueva (columnas, no el
--- cuerpo viejo con o_ini/o_fin como hora entera).
+-- Guard: aborta si la función no quedó con las dos fases (marcador de texto
+-- de las secciones nuevas) y si perdió algo de lo que v3 ya tenía bien.
 do $$
 declare
   v_def text;
@@ -609,11 +748,20 @@ begin
   if v_def is null then
     raise exception 'FALLO: generate_week_schedule no existe tras la migracion';
   end if;
+  if position('v_assign_all' in v_def) = 0 then
+    raise exception 'FALLO: generate_week_schedule no tiene la fase 2 por demanda (v_assign_all)';
+  end if;
+  if position('v_allow_long_repeat' in v_def) = 0 then
+    raise exception 'FALLO: generate_week_schedule no tiene el tope duro de turno largo';
+  end if;
+  if position('dias_trabajados' in v_def) = 0 then
+    raise exception 'FALLO: generate_week_schedule no equilibra dias_trabajados';
+  end if;
   if position('o_shift_template_id' in v_def) = 0 then
-    raise exception 'FALLO: generate_week_schedule no tiene o_shift_template_id — quedo la forma vieja';
+    raise exception 'FALLO: generate_week_schedule perdio el anclaje a shift_templates de v3';
   end if;
   if position('locations l where l.id = p_location and l.active' in v_def) = 0 then
-    raise exception 'FALLO: generate_week_schedule no filtra local cerrado';
+    raise exception 'FALLO: generate_week_schedule perdio el filtro de local cerrado';
   end if;
 end $$;
 
