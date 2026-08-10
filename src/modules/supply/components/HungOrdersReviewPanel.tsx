@@ -1,15 +1,19 @@
 // src/modules/supply/components/HungOrdersReviewPanel.tsx
 //
-// P1 (10/08) — Saneado ONE-SHOT de pedidos "enviado" colgados. SOLO LISTA: no
-// hay ningún botón que cancele, cierre ni enlace nada desde aquí. Decisión
-// NO DESTRUCCIÓN (06/08) — Julio aprueba fila a fila; la aplicación es un
-// paso aparte y deliberado (por la app o por MCP con verificación).
+// P1 (10/08) — Saneado de pedidos "enviado" colgados.
+// P1.b (10/08) — pasa de barrido one-shot a vigía PERMANENTE: solo entran los
+// vencidos más de `hung_order_days_threshold` días. La fila sigue siendo solo
+// lectura salvo "Cerrar pendiente" (CloseShortOrderModal), que sí escribe —
+// con motivo SIEMPRE obligatorio y sin tocar stock. Decisión NO DESTRUCCIÓN
+// (06/08) sigue vigente para todo lo demás.
 
 import { useEffect, useState } from 'react'
-import { Loader2, RefreshCw, AlertTriangle, Ban, Search, HelpCircle } from 'lucide-react'
+import { Loader2, RefreshCw, AlertTriangle, Ban, Search, HelpCircle, Lock } from 'lucide-react'
+import { useApp } from '@/context/AppContext'
 import {
   getHungOrdersReview, type HungOrderReview, type HungOrderAction,
 } from '@/modules/supply/services/purchaseOrderCleanupService'
+import CloseShortOrderModal from '@/modules/supply/components/CloseShortOrderModal'
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—'
@@ -28,10 +32,12 @@ export default function HungOrdersReviewPanel({
   accountId: string
   onError: (m: string) => void
 }) {
+  const { userProfile } = useApp()
   const [rows, setRows] = useState<HungOrderReview[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [reloadTick, setReloadTick] = useState(0)
+  const [closingRow, setClosingRow] = useState<HungOrderReview | null>(null)
 
   useEffect(() => {
     if (!accountId) { setRows([]); return }
@@ -72,29 +78,30 @@ export default function HungOrdersReviewPanel({
       <div className="flex items-start gap-2 p-3 rounded-md bg-warning-bg text-warning border border-warning/20 text-xs">
         <AlertTriangle size={15} className="shrink-0 mt-0.5" />
         <span>
-          Solo lista propuestas — nada se ha cancelado, cerrado ni enlazado. {rows.length} pedido{rows.length === 1 ? '' : 's'} "enviado" sin cerrar,
-          revisado{rows.length === 1 ? '' : 's'} de toda la cuenta (todos los locales).
+          Vigía de pedidos "enviado" vencidos más de {rows[0]?.hungOrderDaysThreshold ?? 14} días. Solo lectura salvo "Cerrar pendiente"
+          (pide motivo, no toca stock). {rows.length} pedido{rows.length === 1 ? '' : 's'} en revisión, de toda la cuenta (todos los locales).
         </span>
       </div>
 
       {rows.length === 0 ? (
         <p className="text-sm text-text-secondary p-4 border border-dashed border-border-default rounded-lg">
-          Sin pedidos "enviado" colgados en esta cuenta.
+          Sin pedidos "enviado" vencidos por encima del umbral en esta cuenta.
         </p>
       ) : (
-        <div className="border border-border-default rounded-lg overflow-hidden">
-          <div className="flex items-center gap-3 px-3 py-2 bg-page text-[11px] uppercase tracking-wide text-text-tertiary border-b border-border-default">
+        <div className="border border-border-default rounded-lg overflow-x-auto">
+          <div className="flex items-center gap-3 px-3 py-2 bg-page text-[11px] uppercase tracking-wide text-text-tertiary border-b border-border-default min-w-[640px]">
             <span className="w-24">Código</span>
             <span className="flex-1">Proveedor / Local</span>
             <span className="w-20 text-right">Retraso</span>
             <span className="w-14 text-right">Líneas</span>
             <span className="w-64">Propuesta</span>
+            <span className="w-36 shrink-0" />
           </div>
           {rows.map(o => {
             const meta = ACTION_META[o.proposedAction]
             const Icon = meta.Icon
             return (
-              <div key={o.orderId} className="flex items-start gap-3 px-3 py-2.5 border-t border-border-default first:border-t-0">
+              <div key={o.orderId} className="flex items-start gap-3 px-3 py-2.5 border-t border-border-default first:border-t-0 min-w-[640px]">
                 <span className="w-24 text-sm font-medium text-text-primary shrink-0">{o.code ?? 'Pedido'}</span>
                 <span className="flex-1 min-w-0">
                   <span className="block text-sm text-text-primary truncate">{o.supplierName ?? 'Sin proveedor'}</span>
@@ -113,10 +120,30 @@ export default function HungOrdersReviewPanel({
                   </span>
                   <span className="block text-[11px] text-text-tertiary mt-1 leading-snug">{o.proposedNote}</span>
                 </span>
+                <span className="w-36 shrink-0 text-right">
+                  <button
+                    type="button"
+                    onClick={() => setClosingRow(o)}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border border-border-default text-text-secondary bg-card hover:bg-page transition-base"
+                    title="El proveedor no lo va a servir, o ya no se completará: pide un motivo y lo cierra."
+                  >
+                    <Lock size={13} />
+                    Cerrar pendiente
+                  </button>
+                </span>
               </div>
             )
           })}
         </div>
+      )}
+
+      {closingRow && (
+        <CloseShortOrderModal
+          order={closingRow.order}
+          actorName={userProfile?.displayName ?? null}
+          onClose={() => setClosingRow(null)}
+          onDone={() => { setClosingRow(null); setReloadTick(t => t + 1) }}
+        />
       )}
     </div>
   )

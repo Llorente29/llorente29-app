@@ -409,3 +409,53 @@ export async function getPendingReceptionsReport(
     })),
   }))
 }
+
+// ─── Cierre corto — "ya no lo van a servir" (P1.b, 10/08) ─────────────────
+// Válvula manual DE ÚLTIMO RECURSO para que un pendiente no se pudra otra vez
+// 56 días: SIEMPRE con motivo obligatorio + nota con autor y fecha. NUNCA toca
+// stock (ni una fila de stock_movement) — solo status + notes de purchase_order,
+// vía el mismo update de tabla que ya usan los botones Cancelar/Cerrar
+// existentes (RLS ya lo permite; no hace falta RPC nueva).
+//
+// Destino según el estado de partida — el modelo YA distingue "no llegó nada"
+// (cancelado) de "llegó algo, el resto no se completará" (cerrado); el cierre
+// corto solo reutiliza esa distinción, no inventa un tercer estado:
+//   'enviado'          → 'cancelado' (nada confirmado; "no va a llegar").
+//   'recibido_parcial' → 'cerrado'   (algo sí llegó; se cierra con lo que hay).
+export type ShortCloseReasonCode = 'no_supplied' | 'ordered_elsewhere' | 'mistake' | 'other'
+
+export const SHORT_CLOSE_REASONS: { code: ShortCloseReasonCode; label: string }[] = [
+  { code: 'no_supplied', label: 'El proveedor no lo va a servir' },
+  { code: 'ordered_elsewhere', label: 'Se pidió por otra vía' },
+  { code: 'mistake', label: 'Error al crear el pedido' },
+  { code: 'other', label: 'Otro' },
+]
+
+export function shortCloseReasonLabel(code: string): string {
+  return SHORT_CLOSE_REASONS.find(r => r.code === code)?.label ?? code
+}
+
+/** Destino de un cierre corto según el estado de partida. null = no aplica (estado terminal o no reconocido). */
+export function shortCloseTargetStatus(current: PurchaseOrderStatus): PurchaseOrderStatus | null {
+  if (current === 'enviado') return 'cancelado'
+  if (current === 'recibido_parcial') return 'cerrado'
+  return null
+}
+
+export async function closeShortPurchaseOrder(input: {
+  order: PurchaseOrder
+  reasonCode: ShortCloseReasonCode
+  notes: string | null
+  actorName: string | null
+}): Promise<PurchaseOrder> {
+  const target = shortCloseTargetStatus(input.order.status)
+  if (!target) {
+    throw new Error(`Cierre corto: el pedido ${input.order.code ?? input.order.id} está en estado "${input.order.status}", no se puede cerrar así.`)
+  }
+  const now = new Date().toISOString().slice(0, 16).replace('T', ' ')
+  const reasonLabel = shortCloseReasonLabel(input.reasonCode)
+  const note = `Cierre corto (${reasonLabel}) por ${input.actorName ?? 'alguien'} el ${now}` +
+    (input.notes?.trim() ? `: ${input.notes.trim()}` : '.')
+  const combinedNotes = input.order.notes ? `${input.order.notes}\n${note}` : note
+  return updatePurchaseOrder(input.order.id, { status: target, notes: combinedNotes })
+}

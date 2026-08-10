@@ -1,25 +1,31 @@
 // src/modules/supply/services/purchaseOrderCleanupService.ts
 //
-// P1 (10/08) — Saneado ONE-SHOT de los pedidos "enviado" colgados. SOLO
-// DIAGNÓSTICO: ninguna función de aquí escribe nada. Propone una acción por
-// pedido para que Julio la apruebe fila a fila; aplicarla (cancelar, o
-// enlazar+cerrar) es un paso aparte y deliberado (app o MCP con verificación),
-// fuera de este PR. Decisión NO DESTRUCCIÓN (06/08): nada se borra/oculta sin
-// aprobación explícita.
+// P1 (10/08) — diagnóstico de pedidos "enviado" colgados. SOLO DIAGNÓSTICO:
+// ninguna función de aquí escribe nada por sí sola. Propone una acción por
+// pedido para que Julio la apruebe fila a fila.
 //
-// Dos causas conocidas (hallazgo 10/08):
+// P1.b (10/08) — deja de ser un barrido one-shot: se convierte en vigía
+// PERMANENTE. Solo entran en la lista los pedidos "enviado" vencidos más de
+// `hung_order_days_threshold` días (supply_settings, default 14) — eso es lo
+// que justifica proponer el cierre corto. El botón "Cerrar pendiente" del
+// panel (CloseShortOrderModal) SÍ escribe, con motivo obligatorio; el resto
+// de la fila sigue siendo solo lectura.
+//
+// Dos causas conocidas (hallazgo 10/08) que ayudan a elegir el motivo del
+// cierre corto:
 //   - Pedido en un local YA CERRADO (locations.active=false) → propone
 //     'cancelar_local_cerrado' (así nacieron los fantasma de Plaza Castilla).
 //   - Pedido en un local activo, con recepciones CONFIRMADAS del MISMO
 //     proveedor+local que nunca se enlazaron (purchase_order_id NULL) →
 //     propone 'revisar_casado' (probablemente SÍ llegó, solo que la recepción
-//     no se enlazó al pedido — antes de esta migración no había ni la
-//     pregunta). Sin candidatos → 'revisar_manual' (no se inventa un matching
-//     sin pistas).
+//     no se enlazó al pedido). Sin candidatos → 'revisar_manual' (no se
+//     inventa un matching sin pistas).
 
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
-import { listPurchaseOrders, listPurchaseOrderLines } from '@/modules/supply/services/purchaseOrderService'
-import { listGoodsReceipts } from '@/modules/supply/services/goodsReceiptService'
+import {
+  listPurchaseOrders, listPurchaseOrderLines, type PurchaseOrder,
+} from '@/modules/supply/services/purchaseOrderService'
+import { listGoodsReceipts, getSupplySettings } from '@/modules/supply/services/goodsReceiptService'
 import { listSuppliers } from '@/modules/kitchen/services/purchaseFormatService'
 
 function requireSupabase(): void {
@@ -41,16 +47,22 @@ export interface HungOrderReview {
   orderDate: string
   expectedDate: string | null
   daysOverdue: number
+  hungOrderDaysThreshold: number
   lineCount: number
   proposedAction: HungOrderAction
   proposedNote: string
   /** Recepciones confirmadas del mismo proveedor+local sin pedido enlazado (candidatas). */
   unmatchedReceiptCodes: string[]
+  /** Pedido completo, para "Cerrar pendiente" (CloseShortOrderModal). */
+  order: PurchaseOrder
 }
 
-function daysOverdueFor(expectedDate: string | null): number {
-  if (!expectedDate) return 0
-  const exp = new Date(expectedDate + 'T00:00:00').getTime()
+// Sin expected_date: se usa order_date como referencia (igual que el filtro de
+// ventana del muelle en OrderReceiveFlow.tsx) — "sin fecha" no es "invisible
+// para siempre" para la vigía.
+function daysOverdueFor(expectedDate: string | null, orderDate: string): number {
+  const ref = expectedDate ?? orderDate
+  const exp = new Date(ref + 'T00:00:00').getTime()
   const now = Date.now()
   const d = Math.floor((now - exp) / 86400000)
   return d > 0 ? d : 0
@@ -59,13 +71,19 @@ function daysOverdueFor(expectedDate: string | null): number {
 export async function getHungOrdersReview(accountId: string): Promise<HungOrderReview[]> {
   requireSupabase()
 
-  const [orders, locRes, receipts, suppliers] = await Promise.all([
+  const [allOrders, locRes, receipts, suppliers, settings] = await Promise.all([
     listPurchaseOrders({ accountId, status: 'enviado' }),
     supabase!.from('locations').select('id, name, active').eq('account_id', accountId),
     listGoodsReceipts({ accountId, status: 'confirmado' }),
     listSuppliers(accountId),
+    getSupplySettings(accountId),
   ])
   if (locRes.error) throw new Error(`Error cargando locales: ${locRes.error.message}`)
+
+  const threshold = settings.hungOrderDaysThreshold
+  // Vigía: solo entran los "enviado" vencidos más de `threshold` días (por
+  // expected_date, o por order_date si no hay expected_date).
+  const orders = allOrders.filter(o => daysOverdueFor(o.expectedDate, o.orderDate) > threshold)
 
   const locationById = new Map<string, { name: string; active: boolean }>()
   for (const r of (locRes.data ?? []) as Row[]) {
@@ -95,17 +113,18 @@ export async function getHungOrdersReview(accountId: string): Promise<HungOrderR
     const key = o.supplierId && o.locationId ? `${o.supplierId}|${o.locationId}` : ''
     const candidates = unmatchedByKey.get(key) ?? []
 
+    const daysOverdue = daysOverdueFor(o.expectedDate, o.orderDate)
     let proposedAction: HungOrderAction
     let proposedNote: string
     if (!locationActive) {
       proposedAction = 'cancelar_local_cerrado'
-      proposedNote = `Local "${loc?.name ?? '—'}" cerrado (locations.active=false). Propuesto: cancelar.`
+      proposedNote = `Local "${loc?.name ?? '—'}" cerrado (locations.active=false). Vencido ${daysOverdue} días (umbral ${threshold}). Propuesto: cerrar pendiente — "el proveedor no lo va a servir".`
     } else if (candidates.length > 0) {
       proposedAction = 'revisar_casado'
-      proposedNote = `${candidates.length} recepción(es) confirmada(s) de este proveedor en este local sin pedido enlazado (${candidates.join(', ')}). Propuesto: revisar y enlazar a mano si corresponde.`
+      proposedNote = `${candidates.length} recepción(es) confirmada(s) de este proveedor en este local sin pedido enlazado (${candidates.join(', ')}). Vencido ${daysOverdue} días (umbral ${threshold}). Revisa si es un casado antes de cerrar.`
     } else {
       proposedAction = 'revisar_manual'
-      proposedNote = 'Sin recepciones sin enlazar de este proveedor/local que lo expliquen. Revisar a mano: ¿sigue vigente o se cancela?'
+      proposedNote = `Vencido ${daysOverdue} días (umbral ${threshold}) sin recepciones sin enlazar que lo expliquen. Propuesto: cerrar pendiente si ya no va a llegar.`
     }
 
     return {
@@ -118,11 +137,13 @@ export async function getHungOrdersReview(accountId: string): Promise<HungOrderR
       locationActive,
       orderDate: o.orderDate,
       expectedDate: o.expectedDate,
-      daysOverdue: daysOverdueFor(o.expectedDate),
+      daysOverdue,
+      hungOrderDaysThreshold: threshold,
       lineCount: lineCounts[i] ?? 0,
       proposedAction,
       proposedNote,
       unmatchedReceiptCodes: candidates,
+      order: o,
     }
   }).sort((a, b) => b.daysOverdue - a.daysOverdue)
 }
