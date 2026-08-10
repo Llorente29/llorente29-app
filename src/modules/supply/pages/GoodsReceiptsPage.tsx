@@ -19,6 +19,7 @@
 // El aviso (flash) se auto-cierra a los segundos (no obliga a teclear).
 
 import { useEffect, useMemo, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { Plus, PackageCheck, PackagePlus, AlertTriangle, Search, Loader2, Eye, RotateCcw, PencilLine, ScanLine, Settings2 } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
@@ -69,6 +70,8 @@ export default function GoodsReceiptsPage() {
   const { authUserId } = useApp()
   const { resolvedLocationId } = useLocationScope()
   const isMobile = useIsMobile()
+  const location = useLocation()
+  const navigate = useNavigate()
 
   const [receipts, setReceipts] = useState<GoodsReceipt[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
@@ -80,6 +83,23 @@ export default function GoodsReceiptsPage() {
   const [view, setView] = useState<View>('list')
   const [prefill, setPrefill] = useState<ReceiptPrefill | null>(null)
   const [ocrPrefill, setOcrPrefill] = useState<OcrPrefill | null>(null)
+
+  // Arranque rápido desde el vigía de stock negativo (Almacén → Teórico vs
+  // Real → Stock negativo): llega por navigate(state), no por props (esta
+  // página es una ruta de nivel superior). Se consume UNA vez al montar y se
+  // limpia el state de navegación para que atrás/refrescar no lo reabra solo.
+  const [quickReceipt, setQuickReceipt] = useState<{ supplierId: string; search: string } | null>(null)
+  useEffect(() => {
+    const state = location.state as { quickReceipt?: { supplierId: string; search: string } } | null
+    if (state?.quickReceipt) {
+      setQuickReceipt(state.quickReceipt)
+      setPrefill(null)
+      setOcrPrefill(null)
+      setView('form')
+      navigate(location.pathname, { replace: true, state: null })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // C2.2.c — ajustes de avisos (umbral precio %, días caducidad).
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -213,6 +233,7 @@ export default function GoodsReceiptsPage() {
         })),
       }
       setPrefill(pf)
+      setQuickReceipt(null)
       setView('form')
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'No se pudo abrir la recepción.')
@@ -290,6 +311,7 @@ export default function GoodsReceiptsPage() {
         })),
       }
       setPrefill(pf)
+      setQuickReceipt(null)
       setView('form')
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'No se pudo abrir la corrección.')
@@ -304,7 +326,7 @@ export default function GoodsReceiptsPage() {
       <ReceiptScanPanel
         accountId={activeAccountId}
         onBack={() => { setView('list'); setReloadTick(t => t + 1) }}
-        onCreateReceipt={(ocr) => { setPrefill(null); setOcrPrefill(ocr); setView('form') }}
+        onCreateReceipt={(ocr) => { setPrefill(null); setOcrPrefill(ocr); setQuickReceipt(null); setView('form') }}
       />
     )
   }
@@ -321,15 +343,18 @@ export default function GoodsReceiptsPage() {
     )
   }
 
-  // ── Vista FORM: nueva recepción ciega, corrección (prefill) o propuesta OCR ──
+  // ── Vista FORM: nueva recepción ciega, corrección (prefill), propuesta OCR
+  //    o arranque rápido del vigía de stock negativo (quickReceipt) ──
   if (view === 'form' && activeAccountId) {
     return (
       <GoodsReceiptForm
         accountId={activeAccountId}
         prefill={prefill}
         ocrPrefill={ocrPrefill}
-        onBack={() => { setView(ocrPrefill ? 'scan' : 'list'); setPrefill(null); setOcrPrefill(null); setReloadTick(t => t + 1) }}
-        onSaved={(msg) => { setView('list'); setPrefill(null); setOcrPrefill(null); if (msg) setFlash(msg); setReloadTick(t => t + 1) }}
+        initialSupplierId={quickReceipt?.supplierId ?? null}
+        focusSearch={quickReceipt?.search ?? null}
+        onBack={() => { setView(ocrPrefill ? 'scan' : 'list'); setPrefill(null); setOcrPrefill(null); setQuickReceipt(null); setReloadTick(t => t + 1) }}
+        onSaved={(msg) => { setView('list'); setPrefill(null); setOcrPrefill(null); setQuickReceipt(null); if (msg) setFlash(msg); setReloadTick(t => t + 1) }}
       />
     )
   }
@@ -374,7 +399,7 @@ export default function GoodsReceiptsPage() {
           </button>
           <button
             type="button"
-            onClick={() => { setPrefill(null); setView('form') }}
+            onClick={() => { setPrefill(null); setQuickReceipt(null); setView('form') }}
             disabled={!activeAccountId}
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base"
           >
