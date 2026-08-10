@@ -268,6 +268,7 @@ SHOP · SUBDOMINIO POR TIENDA EN PRODUCCIÓN (02/07): cada tienda resuelve por h
 - **Precios sala/terraza/barra** (cuando haya TPV): NO modelo nuevo — barra/salón/terraza = **canales** (`sales_channel` type 'dine_in'); precio en el MISMO `menu_item_override` que Glovo/Uber/Shop. MATIZ: el recargo de terraza debe ser una **REGLA** (% o fijo sobre base, estilo `channel_rate`), no precio plato a plato. Requisito del canal 'dine_in' para el frente TPV.
 - **N:N categorías** (producto en varias categorías de la misma carta, estilo Otter) = NO ahora; Folvy sigue **1:1** (`menu_category_id` único); frente estructural aparte si surge necesidad real. (Lo que Julio pedía como "muy necesario" era producto en varias MARCAS — resuelto con la ficha-cockpit.)
 - Menores (ajustables): añadir a marca copia el PVP de origen; quitar marca = archiva (no se puede quitar la marca que estás viendo, se hace desde su carta); `created_by` va NULL al crear (retoque menor pendiente — no se quiso adivinar el hook de identidad de Kitchen).
+- **TPV T1 (11/08): `/tpv` vive FUERA de `AccountStatusGate`.** La ruta se cablea en `App.tsx` ANTES del return final (`<AccountStatusGate><Shell /></AccountStatusGate>`), a la altura del gate de sesión/welcome — no dentro del Shell. Decisión EXPLÍCITA de Julio: una cuenta suspendida por impago debe poder seguir cobrando por el TPV (no dejar a un restaurante sin caja por una factura pendiente). **NO "arreglar" esto moviendo `/tpv` dentro del gate** — es a propósito, no un descuido.
 
 ---
 

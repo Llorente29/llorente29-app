@@ -34,6 +34,65 @@
 -- mismo patrón que courier.assigned_locations: array vacío = todos los
 -- locales). Admin/manager de la cuenta: cualquier local, sin restricción.
 -- set_order_status NO se toca.
+--
+-- T1.b (11/08) — FIX de esta misma tanda, aplicado ANTES de que Julio corriera
+-- la versión original (nunca llegó a producción): pos_short_code generado con
+-- 'T' || 3 dígitos aleatorios tenía ~50% de colisión a partir de 38 tickets/
+-- día (paradoja del cumpleaños sobre solo 1000 valores). Se sustituye por un
+-- contador diario por local, atómico (pos_ticket_counter + UPSERT), formato
+-- 'Txxx' con 3 dígitos — mismo patrón visual que los códigos existentes de
+-- lastapp/hubrise (1 letra + 3 dígitos: "G924", "U246"...). Reinicia cada día
+-- DE NEGOCIO (no cada medianoche): reutiliza el corte de 4h en Europe/Madrid
+-- ya establecido en orders_feed/_kitchen_day_banner_for (RECON 11/08: es la
+-- única noción de "día de negocio" que existe en el proyecto, duplicada
+-- inline en cada sitio que la usa — se sigue el mismo patrón aquí, no se
+-- extrae una función compartida nueva). DEUDA EXPLÍCITA: si algún día un
+-- local necesita un corte distinto de 4h, hoy no hay dónde configurarlo —
+-- ni aquí ni en orders_feed ni en _kitchen_day_banner_for.
+
+-- ── Contador diario de ticket por local (mostrador) ─────────────────────
+
+create table if not exists public.pos_ticket_counter (
+  account_id     uuid not null references public.accounts(id),
+  location_id    uuid not null references public.locations(id),
+  business_date  date not null,
+  last_number    integer not null default 0,
+  updated_at     timestamptz not null default now(),
+  primary key (account_id, location_id, business_date)
+);
+
+alter table public.pos_ticket_counter enable row level security;
+revoke all on public.pos_ticket_counter from public, anon, authenticated;
+-- Sin políticas: tabla interna, solo la toca _pos_next_ticket_code
+-- (SECURITY DEFINER). No se expone al cliente — ni falta que hace.
+
+create or replace function public._pos_next_ticket_code(p_account_id uuid, p_location_id uuid)
+returns text
+language plpgsql
+security definer
+set search_path to 'public'
+as $$
+declare
+  v_tz          text;
+  v_cutoff      interval := make_interval(hours => 4);
+  v_business_date date;
+  v_seq         integer;
+begin
+  select coalesce(a.timezone, 'Europe/Madrid') into v_tz from accounts a where a.id = p_account_id;
+  v_business_date := (date_trunc('day', (now() at time zone v_tz) - v_cutoff))::date;
+
+  insert into pos_ticket_counter (account_id, location_id, business_date, last_number)
+  values (p_account_id, p_location_id, v_business_date, 1)
+  on conflict (account_id, location_id, business_date)
+  do update set last_number = pos_ticket_counter.last_number + 1, updated_at = now()
+  returning last_number into v_seq;
+
+  return 'T' || lpad(v_seq::text, 3, '0');
+end;
+$$;
+
+revoke all on function public._pos_next_ticket_code(uuid, uuid) from public, anon;
+grant execute on function public._pos_next_ticket_code(uuid, uuid) to authenticated;
 
 -- ── Helper de acceso ─────────────────────────────────────────────────────
 
@@ -410,6 +469,13 @@ begin
   -- Totales: SOBRE EL PAYLOAD (una vez por línea raíz), no sumando sale_line
   -- después — _shop_reprice_line ya pliega mods+combo en el precio de la
   -- línea raíz; sumar también las hijas de sale_line duplicaría el impacto.
+  --
+  -- DEUDA EXPLÍCITA (T1.b, 11/08, señalada por Julio — NO se toca en T1):
+  -- el IVA de la línea usa el vat_rate del PRODUCTO RAÍZ para toda la línea,
+  -- modificadores y componentes de combo incluidos. Si un combo mezcla tipos
+  -- (p.ej. comida 10% + cerveza 21%), la base/cuota salen mal. Tolerable en
+  -- mostrador (T1); INACEPTABLE en T3 (fiscal/VeriFactu exige desglose por
+  -- tipo impositivo real). Arreglar en T3, no aquí.
   for v_line in select * from jsonb_array_elements(p_lines)
   loop
     v_repr   := public._shop_reprice_line(p_account_id, v_line);
@@ -434,7 +500,7 @@ begin
     ) values (
       p_account_id, p_location_id, p_brand_id, v_channel, 'folvy_pos', 'pickup',
       'open', null, now(), now(), round(v_total_sum, 2), round(v_base_sum, 2), round(v_tax_sum, 2),
-      null, null, 'auto', 'T' || lpad((floor(random() * 1000))::text, 3, '0'),
+      null, null, 'auto', public._pos_next_ticket_code(p_account_id, p_location_id),
       jsonb_build_object('lines', p_lines)::text, auth.uid(), v_actor
     )
     returning id into v_sale_id;
