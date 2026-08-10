@@ -78,7 +78,8 @@ export default function ItemPeekPanel({
   )
   const unit = item.unitAbbr ?? ''
   const qtyBase = Number(item.qty)
-  const hasStock = Number.isFinite(qtyBase) && qtyBase > 0
+  const hasStock = Number.isFinite(qtyBase) && qtyBase !== 0
+  const isNegative = Number.isFinite(qtyBase) && qtyBase < 0
 
   // base resultante de la calculadora
   const calcBase = useMemo(() => {
@@ -116,6 +117,16 @@ export default function ItemPeekPanel({
               <div className="flex items-center gap-2 text-text-secondary text-sm py-2"><Loader2 size={14} className="animate-spin" /> Cargando formatos…</div>
             ) : !hasStock ? (
               <p className="text-sm text-text-tertiary">Sin contar todavía.</p>
+            ) : isNegative ? (
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-sm pt-1">
+                  <span className="text-text-secondary">Base</span>
+                  <span className="tabular-nums font-medium text-danger">{nf2.format(qtyBase)} {unit}</span>
+                </div>
+                <p className="text-xs text-danger">
+                  Stock negativo — revisa la causa en Almacén → Teórico vs Real → Stock negativo.
+                </p>
+              </div>
             ) : (
               <div className="space-y-1">
                 {sorted.filter(f => f.qtyInBase > 1).map(f => (

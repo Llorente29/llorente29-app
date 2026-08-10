@@ -384,7 +384,7 @@ export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuild
                         <div className="w-16 text-right shrink-0">
                           <div className="text-[10px] text-text-tertiary">Stock</div>
                           <div className="text-[13px] text-text-secondary tabular-nums">
-                            {formatStockForOrder(e.stockOnHand, e.formatQtyInBase, e.formatName, e.baseUnitAbbr)}
+                            {formatStockForOrder(e.stockOnHand, e.baseUnitAbbr)}
                           </div>
                         </div>
 

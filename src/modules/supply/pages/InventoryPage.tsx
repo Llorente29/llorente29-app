@@ -31,6 +31,7 @@ import AvtSection from '@/modules/supply/components/AvtSection'
 import AvtPeriodSection from '@/modules/supply/components/AvtPeriodSection'
 import AutoInventorySection from '@/modules/supply/components/AutoInventorySection'
 import StorageZonesSection from '@/modules/supply/components/StorageZonesSection'
+import NegativeStockSection from '@/modules/supply/components/NegativeStockSection'
 import KitchenItemDetailPage from '@/modules/kitchen/pages/KitchenItemDetailPage'
 import {
   createInventoryCount,
@@ -51,6 +52,7 @@ import {
 import type { Employee } from '@/types'
 import { getStorageCoverage, type StorageCoverage } from '@/modules/supply/services/storageZonesService'
 import { getStockLevelsOverview } from '@/modules/supply/services/stockLevelService'
+import { getNegativeStockReport } from '@/modules/supply/services/negativeStockService'
 
 export default function InventoryPage() {
   const { activeAccountId, accountsLoading } = useActiveAccount()
@@ -67,7 +69,7 @@ export default function InventoryPage() {
 
   // navegación: las 5 secciones del módulo Almacén
   const [tab, setTab] = useState<'resumen' | 'existencias' | 'niveles' | 'movimientos' | 'inventarios' | 'avt'>('resumen')
-  const [avtView, setAvtView] = useState<'desviacion' | 'consumo'>('desviacion')
+  const [avtView, setAvtView] = useState<'desviacion' | 'consumo' | 'negativo'>('desviacion')
   const [avtMode, setAvtMode] = useState<'puntual' | 'periodo'>('periodo')
   // dentro de Inventarios: conteos | autoinventario
   const [invTab, setInvTab] = useState<'conteos' | 'autoinv'>('conteos')
@@ -303,7 +305,7 @@ export default function InventoryPage() {
           accountId={activeAccountId}
           locationId={locationId}
           reloadTick={reloadTick}
-          onNavigate={(t) => setTab(t)}
+          onNavigate={(t, av) => { setTab(t); if (av) setAvtView(av) }}
           onError={(m) => setError(m)}
         />
       )}
@@ -389,9 +391,13 @@ export default function InventoryPage() {
               className={`px-3 py-1.5 text-sm transition-base border-l border-border-default ${avtView === 'consumo' ? 'bg-accent text-text-on-accent' : 'text-text-secondary hover:bg-page'}`}>
               Consumo teórico
             </button>
+            <button type="button" onClick={() => setAvtView('negativo')}
+              className={`px-3 py-1.5 text-sm transition-base border-l border-border-default ${avtView === 'negativo' ? 'bg-accent text-text-on-accent' : 'text-text-secondary hover:bg-page'}`}>
+              Stock negativo
+            </button>
           </div>
 
-          {avtView === 'desviacion' ? (
+          {avtView === 'desviacion' && (
             <div className="space-y-3">
               <div className="inline-flex rounded-md border border-border-default overflow-hidden">
                 <button type="button" onClick={() => setAvtMode('periodo')}
@@ -417,12 +423,20 @@ export default function InventoryPage() {
                 />
               )}
             </div>
-          ) : (
+          )}
+          {avtView === 'consumo' && (
             <ConsumptionSection
               accountId={activeAccountId}
               locationId={locationId}
               onError={(m) => setError(m)}
               onFlash={(m) => setFlash(m)}
+            />
+          )}
+          {avtView === 'negativo' && locationId && (
+            <NegativeStockSection
+              accountId={activeAccountId}
+              locationId={locationId}
+              onError={(m) => setError(m)}
             />
           )}
         </div>
@@ -460,11 +474,12 @@ function SummarySection({
   accountId: string
   locationId: string
   reloadTick: number
-  onNavigate: (t: 'existencias' | 'niveles' | 'movimientos' | 'inventarios' | 'avt') => void
+  onNavigate: (t: 'existencias' | 'niveles' | 'movimientos' | 'inventarios' | 'avt', avtView?: 'desviacion' | 'consumo' | 'negativo') => void
   onError: (m: string) => void
 }) {
   const [cov, setCov] = useState<StorageCoverage | null>(null)
   const [belowMin, setBelowMin] = useState<number | null>(null)
+  const [negAlerts, setNegAlerts] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const eur = (v: number) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v)
 
@@ -479,6 +494,15 @@ function SummarySection({
     getStockLevelsOverview({ accountId, locationId })
       .then(items => { if (!cancelled) setBelowMin(items.filter(i => i.belowMin).length) })
       .catch(() => { if (!cancelled) setBelowMin(null) })
+    // vigía de stock negativo: no bloquea el resumen, pero si falla la tarjeta
+    // se queda en "—" (nunca en "0 sin alertas" — folvy_reglas.md §2, un error
+    // no es "cero resultados").
+    getNegativeStockReport(accountId, locationId)
+      .then(r => { if (!cancelled) setNegAlerts(r.items.filter(i => i.isAlert).length) })
+      .catch(e => {
+        console.warn('[InventoryPage] negative_stock_report falló en el resumen:', e)
+        if (!cancelled) setNegAlerts(null)
+      })
     return () => { cancelled = true }
   }, [accountId, locationId, reloadTick]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -514,7 +538,7 @@ function SummarySection({
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         <button type="button" onClick={() => onNavigate('niveles')}
           className={`text-left rounded-lg p-4 border transition-base ${(belowMin ?? 0) > 0 ? 'bg-danger-bg border-danger/30 hover:border-danger/50' : 'bg-page border-border-default hover:border-accent/40'}`}>
           <div className="text-[12px] uppercase tracking-wide text-text-secondary mb-1">Bajo mínimo</div>
@@ -537,6 +561,23 @@ function SummarySection({
           <div className="text-[12px] uppercase tracking-wide text-text-secondary mb-1">Desviación teórico vs real</div>
           <div className="text-2xl font-medium text-text-primary">AvT</div>
           <div className="text-xs text-text-tertiary mt-1">merma y salud del dato</div>
+        </button>
+        <button type="button" onClick={() => onNavigate('avt', 'negativo')}
+          className={`text-left rounded-lg p-4 border transition-base ${(negAlerts ?? 0) > 0 ? 'bg-danger-bg border-danger/30 hover:border-danger/50' : 'bg-page border-border-default hover:border-accent/40'}`}>
+          <div className="text-[12px] uppercase tracking-wide text-text-secondary mb-1">Stock negativo</div>
+          {negAlerts == null ? (
+            <div className="text-sm text-text-tertiary">—</div>
+          ) : negAlerts > 0 ? (
+            <>
+              <div className="text-2xl font-medium text-danger tabular-nums">{negAlerts}</div>
+              <div className="text-xs text-danger mt-1">artículo{negAlerts === 1 ? '' : 's'} en alerta</div>
+            </>
+          ) : (
+            <>
+              <div className="text-2xl font-medium text-success tabular-nums">0</div>
+              <div className="text-xs text-text-tertiary mt-1">sin alertas</div>
+            </>
+          )}
         </button>
       </div>
     </div>

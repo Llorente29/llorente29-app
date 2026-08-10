@@ -112,16 +112,15 @@ export default function ItemStockPanel({
       </div>
 
       {data.locations.map(loc => {
-        const d = formatStockQty(loc.qty, data.unitAbbr, data.buyFormatName, data.buyFormatQtyInBase, loc.valueEur)
+        const d = formatStockQty(loc.qty, data.unitAbbr, loc.valueEur)
         const dirty = !!edits[loc.locationId]
         const minNum = parseNum(val(loc.locationId, 'min'))
         const belowMin = minNum != null && loc.qty < minNum
         return (
-          <div key={loc.locationId} className={`flex items-center gap-3 py-1.5 px-1 rounded-md ${belowMin ? 'bg-danger-bg' : ''}`}>
+          <div key={loc.locationId} className={`flex items-center gap-3 py-1.5 px-1 rounded-md ${belowMin || d.negative ? 'bg-danger-bg' : ''}`}>
             <span className="flex-1 text-sm text-text-primary truncate">{loc.locationName}</span>
             <span className="w-24 text-right">
-              <span className={`block text-sm tabular-nums ${belowMin ? 'text-danger font-medium' : d.counted ? 'text-text-primary font-medium' : 'text-text-tertiary'}`}>{d.main}</span>
-              {d.sub && <span className="block text-[11px] text-text-tertiary tabular-nums">{d.sub}</span>}
+              <span className={`block text-sm tabular-nums ${belowMin || d.negative ? 'text-danger font-medium' : d.counted ? 'text-text-primary font-medium' : 'text-text-tertiary'}`}>{d.main}</span>
             </span>
             <span className="w-16 text-right text-xs text-text-secondary tabular-nums">{loc.valueEur > 0 ? eur(loc.valueEur) : '—'}</span>
             <span className="w-16 text-right">

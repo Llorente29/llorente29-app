@@ -6,7 +6,7 @@
 // (diferenciador: números honestos o ninguno) + tabla ordenada por € perdido.
 
 import { useEffect, useMemo, useState } from 'react'
-import { Loader2, TrendingDown, AlertTriangle, ShieldCheck, ShieldAlert, ShieldQuestion } from 'lucide-react'
+import { Loader2, TrendingDown, AlertTriangle, ShieldCheck, ShieldAlert, ShieldQuestion, RefreshCw } from 'lucide-react'
 import {
   getLatestApprovedCount, listCountLines, classifyAvtCause,
   getApprovedCountBefore, getIncompleteConsumptionItems,
@@ -43,13 +43,19 @@ export default function AvtSection({
   const [count, setCount] = useState<ApprovedCountRef | null>(null)
   const [lines, setLines] = useState<InventoryCountLine[]>([])
   const [incompleteSet, setIncompleteSet] = useState<Set<string>>(new Set())
+  // AISLADO del resto: si esta RPC falla, NO puede confundirse con "sin conteo"
+  // ni dejar `incompleteSet` silenciosamente vacío — el vigía no puede decir
+  // "0 con consumo no medible" / salud "Buena" sin saberlo de verdad
+  // (folvy_reglas.md §2 — un error no es "cero resultados").
+  const [incompleteError, setIncompleteError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [loaded, setLoaded] = useState(false)
+  const [reloadTick, setReloadTick] = useState(0)
 
   useEffect(() => {
-    if (!accountId || !locationId) { setLines([]); setCount(null); setIncompleteSet(new Set()); setLoaded(true); setLoading(false); return }
+    if (!accountId || !locationId) { setLines([]); setCount(null); setIncompleteSet(new Set()); setIncompleteError(null); setLoaded(true); setLoading(false); return }
     let cancelled = false
-    setLoading(true); setLoaded(false)
+    setLoading(true); setLoaded(false); setIncompleteError(null)
     ;(async () => {
       try {
         const c = await getLatestApprovedCount(accountId, locationId)
@@ -64,12 +70,18 @@ export default function AvtSection({
             const prev = c.closedAt
               ? await getApprovedCountBefore(accountId, locationId, c.closedAt)
               : null
-            const inc = await getIncompleteConsumptionItems(
-              accountId, locationId, prev?.closedAt ?? null, c.closedAt ?? null,
-            )
-            if (!cancelled) setIncompleteSet(inc)
+            try {
+              const inc = await getIncompleteConsumptionItems(
+                accountId, locationId, prev?.closedAt ?? null, c.closedAt ?? null,
+              )
+              if (!cancelled) { setIncompleteSet(inc); setIncompleteError(null) }
+            } catch (e) {
+              console.warn('[AvtSection] avt_incomplete_raws falló:', e)
+              if (!cancelled) setIncompleteError(e instanceof Error ? e.message : 'No se pudo calcular el consumo no medible.')
+            }
           } else if (!cancelled) {
             setIncompleteSet(new Set())
+            setIncompleteError(null)
           }
         } else {
           setLines([])
@@ -82,7 +94,7 @@ export default function AvtSection({
       }
     })()
     return () => { cancelled = true }
-  }, [accountId, locationId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [accountId, locationId, reloadTick]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const isOpening = count?.isOpening ?? false
 
@@ -122,6 +134,22 @@ export default function AvtSection({
         <TrendingDown size={28} className="mx-auto mb-2 text-text-tertiary" />
         Todavía no hay ningún conteo aprobado en este local.<br />
         El AvT compara el teórico contra un conteo real: cierra y aprueba un conteo para empezar a medir la desviación.
+      </div>
+    )
+  }
+  // NUNCA un "0 con consumo no medible" / salud "Buena" tranquilizador si esto
+  // falló: sin saberlo de verdad, no se pinta la tabla ni la salud del dato.
+  if (incompleteError) {
+    return (
+      <div className="flex items-center justify-between gap-3 p-4 rounded-lg border border-danger/30 bg-danger-bg text-sm">
+        <span className="text-danger">
+          No se pudo calcular el consumo no medible de este conteo. {incompleteError} — sin esto no se
+          puede confirmar la fiabilidad de la desviación.
+        </span>
+        <button type="button" onClick={() => setReloadTick(t => t + 1)}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border border-danger/30 text-danger hover:bg-danger/10 transition-base shrink-0">
+          <RefreshCw size={13} /> Reintentar
+        </button>
       </div>
     )
   }

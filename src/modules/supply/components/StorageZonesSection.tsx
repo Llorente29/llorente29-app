@@ -32,6 +32,10 @@ import AssignToZonesModal from '@/modules/supply/components/AssignToZonesModal'
 import ImportZonesModal from '@/modules/supply/components/ImportZonesModal'
 import ItemPeekPanel, { type PeekItem } from '@/modules/supply/components/ItemPeekPanel'
 import { useApp } from '@/context/AppContext'
+import {
+  getNegativeStockReport, negativeStockCauseLabel, negativeStockCauseExplanation, negativeStockCauseAction,
+  type NegativeStockItem,
+} from '@/modules/supply/services/negativeStockService'
 
 const PAGE = 50
 
@@ -55,8 +59,6 @@ type GlobalHit = {
   zoneName: string | null
   qty: number | null
   unitAbbr: string | null
-  buyFormatName: string | null
-  buyFormatQtyInBase: number | null
   valueEur: number | null
   familyName?: string | null
 }
@@ -84,6 +86,9 @@ export default function StorageZonesSection({
   const [loading, setLoading] = useState(true)
   const [reloadKey, setReloadKey] = useState(0)
   const [families, setFamilies] = useState<IngredientFamily[]>([])
+  // vigía de stock negativo: causa por artículo, para pintar la fila en rojo con
+  // tooltip. No bloquea la pantalla si falla — se degrada a "rojo sin causa".
+  const [negMap, setNegMap] = useState<Map<string, NegativeStockItem>>(new Map())
 
   // alta de zona
   const [newName, setNewName] = useState('')
@@ -117,6 +122,21 @@ export default function StorageZonesSection({
     if (!accountId || !locationId) return
     loadCoverage()
   }, [accountId, locationId, reloadKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!accountId || !locationId) return
+    let cancelled = false
+    getNegativeStockReport(accountId, locationId)
+      .then(r => { if (!cancelled) setNegMap(new Map(r.items.map(i => [i.recipeItemId, i]))) })
+      .catch(e => {
+        // El rojo de una fila negativa NO depende de esto (sale de qty_on_hand,
+        // ya cargado aparte): si esto falla, la fila sigue en rojo, solo pierde
+        // el tooltip de causa (cae al genérico). Igualmente no se traga mudo.
+        console.warn('[StorageZonesSection] negative_stock_report falló (tooltips de causa degradados):', e)
+        if (!cancelled) setNegMap(new Map())
+      })
+    return () => { cancelled = true }
+  }, [accountId, locationId, reloadKey])
 
   useEffect(() => {
     if (!accountId) return
@@ -153,7 +173,6 @@ export default function StorageZonesSection({
               .then(res => res.items.map(it => ({
                 recipeItemId: it.recipeItemId, name: it.name, zoneName: z.name,
                 qty: it.qty, unitAbbr: it.unitAbbr,
-                buyFormatName: it.buyFormatName, buyFormatQtyInBase: it.buyFormatQtyInBase,
                 valueEur: it.valueEur,
               } as GlobalHit)))
               .catch(() => [] as GlobalHit[]),
@@ -163,7 +182,6 @@ export default function StorageZonesSection({
           .then(res => res.items.map(o => ({
             recipeItemId: o.recipeItemId, name: o.name, zoneName: null,
             qty: o.qty, unitAbbr: o.unitAbbr,
-            buyFormatName: o.buyFormatName, buyFormatQtyInBase: o.buyFormatQtyInBase,
             valueEur: o.valueEur, familyName: o.familyName,
           } as GlobalHit)))
           .catch(() => [] as GlobalHit[])
@@ -349,7 +367,7 @@ export default function StorageZonesSection({
                       ? <span className="text-text-secondary">{h.zoneName}</span>
                       : <span className="text-warning inline-flex items-center gap-1"><AlertTriangle size={12} /> Sin zona</span>}
                   </span>
-                  <QtyCell qty={h.qty} unitAbbr={h.unitAbbr} bfName={h.buyFormatName} bfQib={h.buyFormatQtyInBase} valueEur={h.valueEur} />
+                  <QtyCell qty={h.qty} unitAbbr={h.unitAbbr} valueEur={h.valueEur} neg={negMap.get(h.recipeItemId)} />
                   <span className="w-16 text-right text-xs text-text-tertiary tabular-nums shrink-0">{fmtEur2(h.valueEur)}</span>
                 </div>
               ))}
@@ -361,7 +379,7 @@ export default function StorageZonesSection({
       {/* Sin zona (huérfanos) */}
       <OrphansPanel
         accountId={accountId} locationId={locationId} families={families} reloadKey={reloadKey}
-        orphanCount={k?.orphans ?? 0} orphanValue={k?.orphanValue ?? 0}
+        orphanCount={k?.orphans ?? 0} orphanValue={k?.orphanValue ?? 0} negMap={negMap}
         onAssign={(itemIds, label) => setAssignTarget({ mode: 'assign', itemIds, label })}
         onPeek={setPeek}
       />
@@ -376,14 +394,14 @@ export default function StorageZonesSection({
         ) : rootZones.map(root => (
           <div key={root.id} className="space-y-2">
             <ZoneCard
-              zone={root} isChild={false} accountId={accountId} locationId={locationId} reloadKey={reloadKey}
+              zone={root} isChild={false} accountId={accountId} locationId={locationId} reloadKey={reloadKey} negMap={negMap}
               onChanged={refreshAll} onError={onError} onFlash={onFlash} onPeek={setPeek}
               onMove={(itemIds, label) => setAssignTarget({ mode: 'move', itemIds, label, fromZoneId: root.id })}
               onEmpty={() => handleEmptyZone(root)} onRename={() => handleRename(root)} onArchive={() => handleArchive(root)}
             />
             {childrenOf(root.id).map(child => (
               <ZoneCard
-                key={child.id} zone={child} isChild accountId={accountId} locationId={locationId} reloadKey={reloadKey}
+                key={child.id} zone={child} isChild accountId={accountId} locationId={locationId} reloadKey={reloadKey} negMap={negMap}
                 onChanged={refreshAll} onError={onError} onFlash={onFlash} onPeek={setPeek}
                 onMove={(itemIds, label) => setAssignTarget({ mode: 'move', itemIds, label, fromZoneId: child.id })}
                 onEmpty={() => handleEmptyZone(child)} onRename={() => handleRename(child)} onArchive={() => handleArchive(child)}
@@ -448,28 +466,32 @@ function Kpi({ label, value, warn }: { label: string; value: number | string; wa
   )
 }
 
-// ── Celda de cantidad: formato de compra grande + base debajo (o "sin contar") ──
+// ── Celda de cantidad: stock en unidad base (o "sin contar"). Un negativo se
+// pinta en rojo con tooltip de causa — AUTO-PROTECCIÓN, nunca "sin contar" ni 0.
 function QtyCell({
-  qty, unitAbbr, bfName, bfQib, valueEur,
+  qty, unitAbbr, valueEur, neg,
 }: {
   qty: number | null
   unitAbbr: string | null
-  bfName: string | null
-  bfQib: number | null
   valueEur?: number | null
+  neg?: NegativeStockItem | null
 }) {
-  const d = formatStockQty(qty, unitAbbr, bfName, bfQib, valueEur)
+  const d = formatStockQty(qty, unitAbbr, valueEur)
+  const title = d.negative
+    ? (neg
+        ? `${negativeStockCauseLabel(neg.cause)}: ${negativeStockCauseExplanation(neg.cause)} → ${negativeStockCauseAction(neg.cause)}`
+        : 'Stock negativo — revisa la causa en Almacén → Teórico vs Real → Stock negativo.')
+    : undefined
   return (
-    <span className="w-28 text-right shrink-0">
-      <span className={`block text-sm font-medium tabular-nums ${d.counted ? 'text-text-primary' : 'text-text-tertiary'}`}>{d.main}</span>
-      {d.sub && <span className="block text-[11px] text-text-tertiary tabular-nums">{d.sub}</span>}
+    <span className="w-28 text-right shrink-0" title={title}>
+      <span className={`block text-sm font-medium tabular-nums ${d.negative ? 'text-danger' : d.counted ? 'text-text-primary' : 'text-text-tertiary'}`}>{d.main}</span>
     </span>
   )
 }
 
 // ── Panel "Sin zona" (huérfanos) ──
 function OrphansPanel({
-  accountId, locationId, families, reloadKey, orphanCount, orphanValue, onAssign, onPeek,
+  accountId, locationId, families, reloadKey, orphanCount, orphanValue, negMap, onAssign, onPeek,
 }: {
   accountId: string
   locationId: string
@@ -477,6 +499,7 @@ function OrphansPanel({
   reloadKey: number
   orphanCount: number
   orphanValue: number
+  negMap: Map<string, NegativeStockItem>
   onAssign: (itemIds: string[], label: string) => void
   onPeek: (item: PeekItem) => void
 }) {
@@ -562,7 +585,7 @@ function OrphansPanel({
                   </button>
                   <button type="button" onClick={() => onPeek({ recipeItemId: o.recipeItemId, name: o.name, valueEur: o.valueEur, qty: o.qty, unitAbbr: o.unitAbbr, familyName: o.familyName })}
                     className="flex-1 text-left text-sm text-text-primary hover:text-accent truncate">{o.name}</button>
-                  <QtyCell qty={o.qty} unitAbbr={o.unitAbbr} bfName={o.buyFormatName} bfQib={o.buyFormatQtyInBase} valueEur={o.valueEur} />
+                  <QtyCell qty={o.qty} unitAbbr={o.unitAbbr} valueEur={o.valueEur} neg={negMap.get(o.recipeItemId)} />
                   <span className="text-sm text-text-secondary tabular-nums w-16 text-right shrink-0">{fmtEur2(o.valueEur)}</span>
                 </div>
               )
@@ -593,7 +616,7 @@ function OrphansPanel({
 
 // ── Tarjeta de zona ──
 function ZoneCard({
-  zone, isChild, accountId, locationId, reloadKey,
+  zone, isChild, accountId, locationId, reloadKey, negMap,
   onChanged, onError, onFlash, onPeek, onMove, onEmpty, onRename, onArchive,
 }: {
   zone: ZoneCoverage
@@ -601,6 +624,7 @@ function ZoneCard({
   accountId: string
   locationId: string
   reloadKey: number
+  negMap: Map<string, NegativeStockItem>
   onChanged: () => void
   onError: (m: string) => void
   onFlash: (m: string) => void
@@ -672,7 +696,7 @@ function ZoneCard({
             <div key={it.recipeItemId} className="flex items-center gap-2.5 px-3.5 py-1.5 border-t border-border-default first:border-t-0">
               <button type="button" onClick={() => onPeek({ recipeItemId: it.recipeItemId, name: it.name, valueEur: it.valueEur, qty: it.qty, unitAbbr: it.unitAbbr })}
                 className="flex-1 text-left text-sm text-text-secondary hover:text-accent truncate">{it.name}</button>
-              <QtyCell qty={it.qty} unitAbbr={it.unitAbbr} bfName={it.buyFormatName} bfQib={it.buyFormatQtyInBase} valueEur={it.valueEur} />
+              <QtyCell qty={it.qty} unitAbbr={it.unitAbbr} valueEur={it.valueEur} neg={negMap.get(it.recipeItemId)} />
               <span className="text-xs text-text-tertiary tabular-nums w-16 text-right shrink-0">{fmtEur2(it.valueEur)}</span>
             </div>
           ))}
@@ -706,7 +730,7 @@ function ZoneCard({
                   {it.name}
                   {it.isPrimary && <span className="ml-2 text-[10px] text-accent border border-accent/40 rounded px-1 py-0.5">principal</span>}
                 </button>
-                <QtyCell qty={it.qty} unitAbbr={it.unitAbbr} bfName={it.buyFormatName} bfQib={it.buyFormatQtyInBase} valueEur={it.valueEur} />
+                <QtyCell qty={it.qty} unitAbbr={it.unitAbbr} valueEur={it.valueEur} neg={negMap.get(it.recipeItemId)} />
                 <span className="text-sm text-text-secondary tabular-nums w-14 text-right shrink-0">{fmtEur2(it.valueEur)}</span>
                 <button type="button" onClick={() => onMove([it.recipeItemId], it.name)} title="Mover a otra zona" className="p-1 text-text-tertiary hover:text-accent"><ArrowRightLeft size={14} /></button>
                 <button type="button" onClick={() => quickRemove(it.recipeItemId)} title="Quitar (a sin zona)" className="p-1 text-text-tertiary hover:text-danger"><X size={14} /></button>
