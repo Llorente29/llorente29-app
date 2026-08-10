@@ -213,6 +213,43 @@ function formatShortDate(iso: string | null): string {
   return new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: 'short' }).format(new Date(iso + 'T00:00:00'))
 }
 
+// ── P1.b: casado automático del albarán escaneado con un pedido ───────────
+// El trabajador del muelle NUNCA elige pedido a mano en el caso normal — el
+// sistema propone solo, con proveedor+local ya filtrados como hard filter y
+// esto como score de desempate: solape de texto entre lo leído del albarán y
+// las líneas del pedido, más cercanía de expected_date. Sencillo a propósito
+// (sin NLP): normaliza y compara conjuntos de palabras de 3+ letras.
+function normalizeWords(s: string): string {
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9\s]/g, ' ').trim()
+}
+function wordSet(s: string): Set<string> {
+  return new Set(normalizeWords(s).split(/\s+/).filter(t => t.length >= 3))
+}
+/** 0..1: fracción de líneas del albarán que casan (≥50% de palabras comunes) con alguna línea del pedido. */
+function lineOverlapScore(ocrProductNames: string[], poProductNames: string[]): number {
+  if (ocrProductNames.length === 0) return 0
+  const poSets = poProductNames.map(wordSet)
+  let matched = 0
+  for (const name of ocrProductNames) {
+    const ot = wordSet(name)
+    if (ot.size === 0) continue
+    const hit = poSets.some(pt => {
+      if (pt.size === 0) return false
+      let common = 0
+      for (const t of ot) if (pt.has(t)) common++
+      return common / Math.min(ot.size, pt.size) >= 0.5
+    })
+    if (hit) matched++
+  }
+  return matched / ocrProductNames.length
+}
+/** 0..1: 1 = entrega esperada hoy, decae linealmente hasta 0 en +-windowDays. */
+function dateProximityScore(expectedDate: string | null, nowMs: number, windowDays: number): number {
+  if (!expectedDate || windowDays <= 0) return 0
+  const diffDays = Math.abs(nowMs - new Date(expectedDate + 'T00:00:00').getTime()) / 86400000
+  return Math.max(0, 1 - diffDays / windowDays)
+}
+
 // €/UNIDAD BASE (€/g, €/ml, €/ud) → €/UNIDAD HUMANA (€/kg, €/L, €/ud) para que el
 // aviso de precio se entienda (0,00954 €/g no se lee; 9,54 €/kg sí). Reutiliza
 // pickDisplayUnit + unitPriceFromBase de unitConversion. Necesita el KitchenUnit
@@ -518,9 +555,19 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
   // los otros modos ya traen su pedido resuelto por su propio camino. No fija la
   // cabecera (a diferencia de `order`): el proveedor/local los sigue eligiendo la
   // persona, esto solo ofrece enlazar lo que ya eligió con un pedido enviado.
+  //
+  // P1.b (escanear-primero, principio rector del muelle): en modo OCR el
+  // trabajador NUNCA elige pedido a mano en el caso normal. `orderMatchMode`
+  // decide qué enseñar: 'none' (sin candidato, recepción suelta, no se
+  // pregunta nada), 'auto' (1 candidato o score dominante → se enlaza solo,
+  // línea informativa discreta) o 'ambiguous' (2-3 tarjetas, "¿Es este?").
+  // En modo CIEGO manual (sin OCR) esto no se usa: sigue el picker de botones
+  // de siempre, sin auto-elegir nada (el trabajador de oficina ve la lista).
   const [candidateOrders, setCandidateOrders] = useState<PurchaseOrder[]>([])
   const [candidateLineCounts, setCandidateLineCounts] = useState<Map<string, number>>(new Map())
   const [candidateOverdue, setCandidateOverdue] = useState<Map<string, number>>(new Map())
+  const [orderMatchMode, setOrderMatchMode] = useState<'none' | 'auto' | 'ambiguous'>('none')
+  const [orderMatchOverridden, setOrderMatchOverridden] = useState(false) // "cambiar" tras auto-enlazar
   const [loadingOrders, setLoadingOrders] = useState(false)
   const [pickedOrderId, setPickedOrderId] = useState<string | null>(null)
 
@@ -540,6 +587,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
   const [supplySettings, setSupplySettings] = useState<SupplySettings>({
     priceAlertPct: 15, expiryAlertDays: 3, negotiatedAlertPct: 0, driftAlertPct: 25, driftWindowMonths: 6,
     negStockRelPct: 5, negStockAbsQty: 5, negStockWindowDays: 60,
+    dockPendingWindowBeforeDays: 7, dockPendingWindowAfterDays: 3, hungOrderDaysThreshold: 14,
   })
   // Unidades de cocina (para expresar el €/base de los avisos en €/kg, €/L, €/ud).
   const [units, setUnits] = useState<KitchenUnit[]>([])
@@ -806,39 +854,94 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
   // Candidatos de pedido: modo CIEGO (manual o revisión de OCR SIN pedido ya
   // enlazado), cuando ya hay proveedor+local. La revisión de OCR es este mismo
   // componente (ocrPrefill sin order) — el selector le sirve igual. Mismo
-  // criterio de "pendiente" que OrderReceiveFlow (enviado / recibido_parcial).
+  // criterio de "pendiente" que OrderReceiveFlow (enviado / recibido_parcial),
+  // MÁS la ventana de vigencia (dockPendingWindow*Days, configurable): los
+  // "enviado" fuera de ventana no son candidatos aquí ni en el muelle — solo
+  // lo vivo. Los "recibido_parcial" no se filtran por ventana. Sin
+  // expected_date: se usa order_date como referencia (igual que en
+  // OrderReceiveFlow) — "sin fecha" no es "candidato para siempre".
   useEffect(() => {
     if (order || correcting) { setCandidateOrders([]); return }
-    if (!supplierId || !locationId) { setCandidateOrders([]); setPickedOrderId(null); return }
+    if (!supplierId || !locationId) {
+      setCandidateOrders([]); setPickedOrderId(null); setOrderMatchMode('none'); setOrderMatchOverridden(false)
+      return
+    }
     let cancelled = false
     setLoadingOrders(true)
     listPurchaseOrders({ accountId, locationId })
       .then(async rows => {
         if (cancelled) return
-        const filtered = rows.filter(o =>
-          o.supplierId === supplierId && (o.status === 'enviado' || o.status === 'recibido_parcial'))
+        const nowMs = Date.now()
+        const before = supplySettings.dockPendingWindowBeforeDays
+        const after = supplySettings.dockPendingWindowAfterDays
+        const filtered = rows.filter(o => {
+          if (o.supplierId !== supplierId) return false
+          if (o.status === 'recibido_parcial') return true
+          if (o.status !== 'enviado') return false
+          const refDate = o.expectedDate ?? o.orderDate
+          const diffDays = (nowMs - new Date(refDate + 'T00:00:00').getTime()) / 86400000
+          return diffDays <= before && diffDays >= -after
+        })
         setCandidateOrders(filtered)
         // Si el pedido elegido deja de ser candidato (cambió proveedor/local), se olvida.
         setPickedOrderId(prev => (prev && filtered.some(o => o.id === prev)) ? prev : null)
         // Días de retraso calculados AQUÍ (una vez, al cargar) — no en el render:
         // Date.now() dentro de JSX rompe la pureza del render (react-hooks/purity).
-        const nowMs = Date.now()
         setCandidateOverdue(new Map(filtered.map(o => [
           o.id,
-          o.expectedDate ? Math.floor((nowMs - new Date(o.expectedDate + 'T00:00:00').getTime()) / 86400000) : 0,
+          Math.floor((nowMs - new Date((o.expectedDate ?? o.orderDate) + 'T00:00:00').getTime()) / 86400000),
         ])))
-        // nº de líneas por pedido, para que la persona sepa el tamaño antes de elegir.
-        const counts = await Promise.all(filtered.map(o =>
-          listPurchaseOrderLines(o.id).then(ls => [o.id, ls.length] as const).catch(() => [o.id, 0] as const)))
-        if (!cancelled) setCandidateLineCounts(new Map(counts))
+
+        if (filtered.length === 0) {
+          setCandidateLineCounts(new Map())
+          setOrderMatchMode('none'); setOrderMatchOverridden(false)
+          return
+        }
+
+        // Líneas de cada candidato: nº (para la ficha) y, en OCR, productName
+        // (para el score de solape). Un solo fetch por candidato para ambas cosas.
+        const linesByOrder = await Promise.all(filtered.map(o =>
+          listPurchaseOrderLines(o.id).then(ls => [o.id, ls] as const).catch(() => [o.id, [] as PurchaseOrderLine[]] as const)))
+        if (cancelled) return
+        setCandidateLineCounts(new Map(linesByOrder.map(([id, ls]) => [id, ls.length])))
+
+        // Solo se auto-decide en OCR (principio rector: el trabajador de muelle
+        // nunca elige a mano el caso normal). El picker manual sigue igual.
+        if (!fromOcr || !ocrPrefill) {
+          setOrderMatchMode('none'); setOrderMatchOverridden(false)
+          return
+        }
+        const ocrNames = ocrPrefill.lines.map(l => l.productName).filter(Boolean)
+        const windowDays = Math.max(before, after, 1)
+        const scores = new Map(linesByOrder.map(([id, ls]) => {
+          const order2 = filtered.find(o => o.id === id)!
+          const lineScore = lineOverlapScore(ocrNames, ls.map(l => l.productName))
+          const dateScore = dateProximityScore(order2.expectedDate, nowMs, windowDays)
+          return [id, lineScore * 0.7 + dateScore * 0.3] as const
+        }))
+
+        const ranked = [...filtered].sort((a, b) => (scores.get(b.id) ?? 0) - (scores.get(a.id) ?? 0))
+        const top = ranked[0]
+        const topScore = scores.get(top.id) ?? 0
+        const secondScore = ranked[1] ? (scores.get(ranked[1].id) ?? 0) : 0
+        const dominant = filtered.length === 1 || (topScore >= 0.5 && topScore - secondScore >= 0.25)
+        setOrderMatchOverridden(false)
+        if (dominant) {
+          setOrderMatchMode('auto')
+          setPickedOrderId(top.id)
+        } else {
+          setOrderMatchMode('ambiguous')
+        }
       })
       .catch((e: unknown) => {
         console.warn('[GoodsReceiptForm] listPurchaseOrders (candidatos) falló:', e)
-        if (!cancelled) setCandidateOrders([])
+        if (!cancelled) { setCandidateOrders([]); setOrderMatchMode('none') }
       })
       .finally(() => { if (!cancelled) setLoadingOrders(false) })
     return () => { cancelled = true }
-  }, [accountId, supplierId, locationId, order, correcting])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountId, supplierId, locationId, order, correcting, fromOcr,
+      supplySettings.dockPendingWindowBeforeDays, supplySettings.dockPendingWindowAfterDays])
 
   // Auto-casado por recipe_item_id contra el pedido elegido (modo ciego, manual
   // u OCR). NO bloquea: lo que no casa se queda sin purchase_order_line_id
@@ -1574,54 +1677,86 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
         </div>
       </div>
 
-      {/* "¿De qué pedido viene?" — modo ciego (manual o revisión de OCR), con
-          proveedor+local ya resueltos */}
-      {!order && !correcting && supplierId && locationId && (
-        <div className="rounded-lg border border-border-default bg-card p-4">
-          <div className="flex items-center gap-2 mb-2.5">
-            <Truck size={16} className="text-text-secondary shrink-0" />
-            <span className="text-sm font-medium text-text-primary">¿De qué pedido viene?</span>
-            {loadingOrders && <Loader2 size={14} className="animate-spin text-text-tertiary" />}
-          </div>
-          {!loadingOrders && candidateOrders.length === 0 ? (
-            <p className="text-xs text-text-tertiary">
-              Sin pedidos enviados de este proveedor a este local. Se registra como compra directa.
-            </p>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={() => setPickedOrderId(null)} disabled={saving}
-                className={`text-left px-3 py-2 rounded-md border text-sm transition-base disabled:opacity-50 ${
-                  !pickedOrderId ? 'border-accent bg-accent/10 text-accent' : 'border-border-default text-text-secondary hover:text-text-primary'}`}>
-                Sin pedido (compra directa)
-              </button>
-              {candidateOrders.map(o => {
-                const overdueDays = candidateOverdue.get(o.id) ?? 0
-                const on = pickedOrderId === o.id
-                const nLines = candidateLineCounts.get(o.id) ?? 0
-                return (
-                  <button key={o.id} type="button" onClick={() => setPickedOrderId(o.id)} disabled={saving}
-                    className={`text-left px-3 py-2 rounded-md border text-sm transition-base disabled:opacity-50 ${
-                      on ? 'border-accent bg-accent/10 text-accent' : 'border-border-default text-text-secondary hover:text-text-primary'}`}>
-                    <span className="font-medium">{o.code ?? 'Pedido'}</span>
-                    <span className="text-xs text-text-tertiary ml-1.5">
-                      {formatShortDate(o.orderDate)} · {nLines} línea{nLines === 1 ? '' : 's'}
-                      {o.expectedDate ? ` · esperado ${formatShortDate(o.expectedDate)}` : ''}
-                    </span>
-                    {overdueDays > 0 && (
-                      <span className="block text-[11px] text-danger mt-0.5">{overdueDays} día{overdueDays === 1 ? '' : 's'} de retraso</span>
-                    )}
-                  </button>
-                )
-              })}
+      {/* "¿De qué pedido viene?" — modo ciego, con proveedor+local ya resueltos.
+          PRINCIPIO RECTOR del muelle: en OCR el trabajador NUNCA elige a mano
+          el caso normal. Tres presentaciones según orderMatchMode:
+            - 'auto' (1 candidato o score dominante): línea discreta + "Cambiar".
+            - 'ambiguous' (2-3 candidatos, sin ganador claro): tarjetas grandes,
+              UNA pregunta ("¿Es este?").
+            - 'none' (sin candidatos): nada — recepción suelta, no se pregunta.
+          orderMatchOverridden (clic en "Cambiar", o respuesta a la pregunta)
+          pasa al MISMO picker de botones de siempre — el de "Contar a mano"
+          no cambia de lógica, solo de cuándo se muestra. */}
+      {!order && !correcting && supplierId && locationId && (fromOcr ? (
+        <>
+          {loadingOrders && (
+            <div className="flex items-center gap-1.5 text-xs text-text-tertiary">
+              <Loader2 size={12} className="animate-spin" /> Buscando el pedido…
             </div>
           )}
-          {pickedOrderId && (
-            <p className="text-[11px] text-text-tertiary mt-2.5">
-              Las líneas de abajo que coincidan por artículo se enlazan solas al pedido. Lo que no coincida se queda sin enlazar — no bloquea.
-            </p>
+
+          {!loadingOrders && !orderMatchOverridden && orderMatchMode === 'auto' && pickedOrderId && (() => {
+            const o = candidateOrders.find(c => c.id === pickedOrderId)
+            if (!o) return null
+            return (
+              <div className="flex items-center gap-2 flex-wrap px-3 py-2 rounded-md bg-accent-bg/50 border border-accent/20 text-xs text-text-secondary">
+                <Truck size={13} className="text-accent shrink-0" />
+                <span>
+                  Pedido <strong className="text-text-primary">{o.code ?? 'sin código'}</strong>
+                  {o.expectedDate ? ` del ${formatShortDate(o.expectedDate)}` : ''} — enlazado solo.
+                </span>
+                <button type="button" onClick={() => setOrderMatchOverridden(true)} disabled={saving}
+                  className="ml-auto text-accent underline hover:opacity-80 disabled:opacity-50 shrink-0">
+                  Cambiar
+                </button>
+              </div>
+            )
+          })()}
+
+          {!loadingOrders && !orderMatchOverridden && orderMatchMode === 'ambiguous' && (
+            <div className="rounded-lg border border-accent/30 bg-accent-bg/30 p-4 space-y-2.5">
+              <p className="text-sm font-medium text-text-primary">¿Es este el pedido?</p>
+              <div className="grid gap-2">
+                {candidateOrders.slice(0, 3).map(o => {
+                  const overdueDays = candidateOverdue.get(o.id) ?? 0
+                  const nLines = candidateLineCounts.get(o.id) ?? 0
+                  return (
+                    <button key={o.id} type="button" disabled={saving}
+                      onClick={() => { setPickedOrderId(o.id); setOrderMatchOverridden(true) }}
+                      className="text-left p-3 rounded-lg border-2 border-border-default bg-card hover:border-accent transition-base disabled:opacity-50">
+                      <div className="font-medium text-text-primary">{o.code ?? 'Pedido'}</div>
+                      <div className="text-xs text-text-secondary mt-0.5">
+                        {nLines} línea{nLines === 1 ? '' : 's'}
+                        {o.expectedDate ? ` · esperado ${formatShortDate(o.expectedDate)}` : ''}
+                        {overdueDays > 0 ? ` · ${overdueDays} día${overdueDays === 1 ? '' : 's'} de retraso` : ''}
+                      </div>
+                    </button>
+                  )
+                })}
+                <button type="button" disabled={saving}
+                  onClick={() => { setPickedOrderId(null); setOrderMatchOverridden(true) }}
+                  className="text-left p-3 rounded-lg border-2 border-dashed border-border-default text-text-secondary hover:border-accent hover:text-text-primary transition-base disabled:opacity-50">
+                  Ninguno — es compra directa
+                </button>
+              </div>
+            </div>
           )}
-        </div>
-      )}
+
+          {orderMatchOverridden && (
+            <FullOrderPicker
+              candidateOrders={candidateOrders} candidateOverdue={candidateOverdue}
+              candidateLineCounts={candidateLineCounts} pickedOrderId={pickedOrderId}
+              loadingOrders={loadingOrders} saving={saving} onPick={setPickedOrderId}
+            />
+          )}
+        </>
+      ) : (
+        <FullOrderPicker
+          candidateOrders={candidateOrders} candidateOverdue={candidateOverdue}
+          candidateLineCounts={candidateLineCounts} pickedOrderId={pickedOrderId}
+          loadingOrders={loadingOrders} saving={saving} onPick={setPickedOrderId}
+        />
+      ))}
 
       {error && <div className="p-3 rounded-md bg-danger-bg text-danger border border-danger/20 text-sm">{error}</div>}
 
@@ -2242,6 +2377,69 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
           />
         )
       })()}
+    </div>
+  )
+}
+
+// Picker de botones "de siempre": lo usa "Contar a mano" (sin cambios de
+// lógica, per encargo) y el modo OCR cuando el trabajador pide "Cambiar" o
+// responde la pregunta de desambiguación. "Sin pedido" es una opción visible,
+// nunca implícita.
+function FullOrderPicker({
+  candidateOrders, candidateOverdue, candidateLineCounts, pickedOrderId, loadingOrders, saving, onPick,
+}: {
+  candidateOrders: PurchaseOrder[]
+  candidateOverdue: Map<string, number>
+  candidateLineCounts: Map<string, number>
+  pickedOrderId: string | null
+  loadingOrders: boolean
+  saving: boolean
+  onPick: (id: string | null) => void
+}) {
+  return (
+    <div className="rounded-lg border border-border-default bg-card p-4">
+      <div className="flex items-center gap-2 mb-2.5">
+        <Truck size={16} className="text-text-secondary shrink-0" />
+        <span className="text-sm font-medium text-text-primary">¿De qué pedido viene?</span>
+        {loadingOrders && <Loader2 size={14} className="animate-spin text-text-tertiary" />}
+      </div>
+      {!loadingOrders && candidateOrders.length === 0 ? (
+        <p className="text-xs text-text-tertiary">
+          Sin pedidos enviados de este proveedor a este local. Se registra como compra directa.
+        </p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => onPick(null)} disabled={saving}
+            className={`text-left px-3 py-2 rounded-md border text-sm transition-base disabled:opacity-50 ${
+              !pickedOrderId ? 'border-accent bg-accent/10 text-accent' : 'border-border-default text-text-secondary hover:text-text-primary'}`}>
+            Sin pedido (compra directa)
+          </button>
+          {candidateOrders.map(o => {
+            const overdueDays = candidateOverdue.get(o.id) ?? 0
+            const on = pickedOrderId === o.id
+            const nLines = candidateLineCounts.get(o.id) ?? 0
+            return (
+              <button key={o.id} type="button" onClick={() => onPick(o.id)} disabled={saving}
+                className={`text-left px-3 py-2 rounded-md border text-sm transition-base disabled:opacity-50 ${
+                  on ? 'border-accent bg-accent/10 text-accent' : 'border-border-default text-text-secondary hover:text-text-primary'}`}>
+                <span className="font-medium">{o.code ?? 'Pedido'}</span>
+                <span className="text-xs text-text-tertiary ml-1.5">
+                  {formatShortDate(o.orderDate)} · {nLines} línea{nLines === 1 ? '' : 's'}
+                  {o.expectedDate ? ` · esperado ${formatShortDate(o.expectedDate)}` : ''}
+                </span>
+                {overdueDays > 0 && (
+                  <span className="block text-[11px] text-danger mt-0.5">{overdueDays} día{overdueDays === 1 ? '' : 's'} de retraso</span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      )}
+      {pickedOrderId && (
+        <p className="text-[11px] text-text-tertiary mt-2.5">
+          Las líneas de abajo que coincidan por artículo se enlazan solas al pedido. Lo que no coincida se queda sin enlazar — no bloquea.
+        </p>
+      )}
     </div>
   )
 }

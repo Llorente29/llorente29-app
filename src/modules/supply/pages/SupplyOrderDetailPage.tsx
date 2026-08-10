@@ -6,16 +6,19 @@
 //
 // Estado del pedido: AUTOMÁTICO por defecto. recibido/recibido_parcial los lleva
 // el sistema al confirmar/anular recepciones (recompute_purchase_order_status).
-// Manual SOLO como último recurso: enviar (humano manda el pedido), cancelar
-// (pendiente que no llega a nada, sin recepciones confirmadas) y cerrar
-// (recibido parcial que no se completará). La automatización nunca cancela ni
-// cierra: eso es decisión de negocio.
+// Manual SOLO como último recurso: enviar (humano manda el pedido), cancelar un
+// BORRADOR (nunca se envió, no hace falta motivo) y "Cerrar pendiente" — cierre
+// corto P1.b (10/08) — para 'enviado'/'recibido_parcial' que ya no van a
+// completarse, SIEMPRE con motivo (CloseShortOrderModal, compartido con el
+// vigía de gestión). La automatización nunca cancela ni cierra por su cuenta:
+// eso es decisión de negocio.
 //
 // REGISTRAR RECEPCIÓN (C2): abre GoodsReceiptForm con el pedido precargado.
 
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, Plus, Trash2, Check, Loader2, X, Send, Package, PackageCheck, FileText, Ban, Lock } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
+import { useApp } from '@/context/AppContext'
 import {
   getPurchaseOrderById,
   updatePurchaseOrder,
@@ -26,13 +29,13 @@ import {
   type PurchaseOrderLine,
   type PurchaseOrderStatus,
 } from '@/modules/supply/services/purchaseOrderService'
-import { listGoodsReceipts } from '@/modules/supply/services/goodsReceiptService'
 import { listRecipeItems } from '@/modules/kitchen/services/recipeItemService'
 import { listSuppliers, listFormatsByItem } from '@/modules/kitchen/services/purchaseFormatService'
 import { listUnits } from '@/modules/kitchen/services/kitchenUnitService'
 import { listSupplyLocations, buildFormatLabel, type SupplyLocation } from '@/modules/supply/services/supplierCatalogService'
 import { buildPurchaseOrderPdfData, generatePurchaseOrderPdf } from '@/modules/supply/services/purchaseOrderPdf'
 import GoodsReceiptForm from '@/modules/supply/pages/GoodsReceiptForm'
+import CloseShortOrderModal from '@/modules/supply/components/CloseShortOrderModal'
 import type { Supplier, KitchenUnit, PurchaseFormat } from '@/types/kitchen'
 import type { RecipeItem } from '@/types/kitchen'
 
@@ -63,6 +66,7 @@ interface SupplyOrderDetailPageProps {
 
 export default function SupplyOrderDetailPage({ orderId, onBack }: SupplyOrderDetailPageProps) {
   const { activeAccountId } = useActiveAccount()
+  const { userProfile } = useApp()
 
   const [order, setOrder] = useState<PurchaseOrder | null>(null)
   const [lines, setLines] = useState<PurchaseOrderLine[]>([])
@@ -72,7 +76,6 @@ export default function SupplyOrderDetailPage({ orderId, onBack }: SupplyOrderDe
   const [units, setUnits] = useState<KitchenUnit[]>([])
   // Formatos de las líneas indexados por purchaseFormatId (para la unidad legible).
   const [formatById, setFormatById] = useState<Map<string, PurchaseFormat>>(new Map())
-  const [hasConfirmedReceipts, setHasConfirmedReceipts] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -81,6 +84,7 @@ export default function SupplyOrderDetailPage({ orderId, onBack }: SupplyOrderDe
   const [generatingPdf, setGeneratingPdf] = useState(false)
   const [reloadTick, setReloadTick] = useState(0)
   const [receiving, setReceiving] = useState(false)
+  const [closingShort, setClosingShort] = useState(false)
 
   useEffect(() => {
     if (!activeAccountId) return
@@ -93,10 +97,9 @@ export default function SupplyOrderDetailPage({ orderId, onBack }: SupplyOrderDe
       listSuppliers(activeAccountId),
       listRecipeItems({ accountId: activeAccountId, type: 'raw' }),
       listSupplyLocations(activeAccountId),
-      listGoodsReceipts({ accountId: activeAccountId }),
       listUnits(),
     ])
-      .then(([ord, lns, sups, ings, locs, receipts, uts]) => {
+      .then(([ord, lns, sups, ings, locs, uts]) => {
         if (cancelled) return
         if (!ord) {
           setError('Este pedido ya no existe.')
@@ -109,9 +112,6 @@ export default function SupplyOrderDetailPage({ orderId, onBack }: SupplyOrderDe
         setIngredients(ings)
         setLocations(locs)
         setUnits(uts)
-        setHasConfirmedReceipts(
-          receipts.some(r => r.purchaseOrderId === orderId && r.status === 'confirmado'),
-        )
       })
       .catch((err: unknown) => {
         if (cancelled) return
@@ -216,18 +216,14 @@ export default function SupplyOrderDetailPage({ orderId, onBack }: SupplyOrderDe
     }
   }
 
-  // Manual de último recurso: cancelar (pendiente que no llega a nada) y
-  // cerrar (recibido parcial que no se completará). Terminales: la
-  // automatización del auto-estado nunca los pisa.
-  async function handleCancelOrder() {
+  // Cancelar un BORRADOR (nunca se envió): sin motivo, no hace falta — no hay
+  // nada pendiente que "dejar de esperar". Terminal: la automatización del
+  // auto-estado nunca lo pisa. 'enviado'/'recibido_parcial' usan el cierre
+  // corto (CloseShortOrderModal, motivo obligatorio) — ver botón más abajo.
+  async function handleCancelDraft() {
     if (!order) return
-    if (!window.confirm('¿Cancelar este pedido? No se podrá recibir y queda como cancelado.')) return
+    if (!window.confirm('¿Cancelar este borrador? No se podrá enviar ni recibir.')) return
     await handleChangeStatus('cancelado')
-  }
-  async function handleCloseOrder() {
-    if (!order) return
-    if (!window.confirm('¿Cerrar el pedido? Se marca como completado a falta de lo no recibido (no se completará el resto).')) return
-    await handleChangeStatus('cerrado')
   }
 
   async function handleDownloadPdf() {
@@ -435,10 +431,10 @@ export default function SupplyOrderDetailPage({ orderId, onBack }: SupplyOrderDe
             )}
 
             {/* Manual de último recurso */}
-            {(order.status === 'borrador' || order.status === 'enviado') && !hasConfirmedReceipts && (
+            {order.status === 'borrador' && (
               <button
                 type="button"
-                onClick={handleCancelOrder}
+                onClick={handleCancelDraft}
                 disabled={savingStatus}
                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium border border-danger/30 text-danger bg-card hover:bg-danger-bg disabled:opacity-50 disabled:cursor-not-allowed transition-base"
               >
@@ -446,20 +442,29 @@ export default function SupplyOrderDetailPage({ orderId, onBack }: SupplyOrderDe
                 Cancelar pedido
               </button>
             )}
-            {order.status === 'recibido_parcial' && (
+            {(order.status === 'enviado' || order.status === 'recibido_parcial') && (
               <button
                 type="button"
-                onClick={handleCloseOrder}
+                onClick={() => setClosingShort(true)}
                 disabled={savingStatus}
                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium border border-border-default text-text-secondary bg-card hover:bg-page disabled:opacity-50 disabled:cursor-not-allowed transition-base"
-                title="El pedido no se completará: ciérralo con lo recibido."
+                title="El proveedor no lo va a servir, o ya no se completará: pide un motivo y lo cierra."
               >
                 <Lock size={15} />
-                Cerrar (no se completará)
+                Cerrar pendiente
               </button>
             )}
           </div>
         </>
+      )}
+
+      {closingShort && order && (
+        <CloseShortOrderModal
+          order={order}
+          actorName={userProfile?.displayName ?? null}
+          onClose={() => setClosingShort(false)}
+          onDone={(updated) => { setClosingShort(false); setOrder(updated) }}
+        />
       )}
 
       {addOpen && order && activeAccountId && (

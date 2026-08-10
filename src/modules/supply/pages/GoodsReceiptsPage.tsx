@@ -106,6 +106,7 @@ export default function GoodsReceiptsPage() {
   const [settings, setSettings] = useState<SupplySettings>({
     priceAlertPct: 15, expiryAlertDays: 3, negotiatedAlertPct: 0, driftAlertPct: 25, driftWindowMonths: 6,
     negStockRelPct: 5, negStockAbsQty: 5, negStockWindowDays: 60,
+    dockPendingWindowBeforeDays: 7, dockPendingWindowAfterDays: 3, hungOrderDaysThreshold: 14,
   })
   const [savingSettings, setSavingSettings] = useState(false)
   async function openSettings() {
@@ -581,6 +582,35 @@ export default function GoodsReceiptsPage() {
                   onChange={e => setSettings(s => ({ ...s, negStockWindowDays: Number(e.target.value) }))} disabled={savingSettings}
                   className="w-24 px-3 py-2 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent" />
                 <span className="text-sm text-text-secondary">días (sin consumo en la ventana, usa el histórico)</span>
+              </div>
+            </label>
+
+            <div className="pt-1 border-t border-border-default">
+              <h4 className="text-sm font-medium text-text-primary pt-3">Muelle y vigía de pedidos</h4>
+              <p className="text-xs text-text-secondary mt-0.5">
+                Qué ventana de pedidos ve el trabajador al recepcionar, y cuándo un pedido colgado entra en el vigía de gestión.
+              </p>
+            </div>
+            <label className="block">
+              <span className="text-sm text-text-primary">El muelle enseña pedidos con entrega entre</span>
+              <div className="mt-1 flex items-center gap-2 flex-wrap">
+                <input type="number" min={0} max={90} value={settings.dockPendingWindowBeforeDays}
+                  onChange={e => setSettings(s => ({ ...s, dockPendingWindowBeforeDays: Number(e.target.value) }))} disabled={savingSettings}
+                  className="w-20 px-3 py-2 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent" />
+                <span className="text-sm text-text-secondary">días atrás y</span>
+                <input type="number" min={0} max={30} value={settings.dockPendingWindowAfterDays}
+                  onChange={e => setSettings(s => ({ ...s, dockPendingWindowAfterDays: Number(e.target.value) }))} disabled={savingSettings}
+                  className="w-20 px-3 py-2 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent" />
+                <span className="text-sm text-text-secondary">días adelante (los "recibido parcial" salen siempre)</span>
+              </div>
+            </label>
+            <label className="block">
+              <span className="text-sm text-text-primary">Pedido enviado vencido más de</span>
+              <div className="mt-1 flex items-center gap-2">
+                <input type="number" min={1} max={90} value={settings.hungOrderDaysThreshold}
+                  onChange={e => setSettings(s => ({ ...s, hungOrderDaysThreshold: Number(e.target.value) }))} disabled={savingSettings}
+                  className="w-24 px-3 py-2 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent" />
+                <span className="text-sm text-text-secondary">días → aparece en Saneado con propuesta de cierre corto</span>
               </div>
             </label>
 

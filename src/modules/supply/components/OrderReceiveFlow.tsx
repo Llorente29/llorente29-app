@@ -1,10 +1,22 @@
 // src/modules/supply/components/OrderReceiveFlow.tsx
 //
-// PANTALLA "RECEPCIONES" del trabajador / oficina. Un solo sitio para todo:
-//   · PEDIDOS PENDIENTES (enviado / recibido_parcial): eliges uno → contar a mano
-//     o escanear su albarán (OCR casado contra las líneas del pedido).
-//   · SIN PEDIDO (siempre disponible): escanear un albarán suelto (OCR) o recibir
-//     a ciegas (eliges proveedor y cuentas).
+// PANTALLA "RECEPCIONES" del trabajador / oficina. Rediseño P1.b (10/08) —
+// ESCANEAR-PRIMERO, mobile-first. Crítica literal de Julio al probar P1:
+// "El trabajador que recepciona abre su móvil, entra en recepción, escanea,
+// rellena y ya está. ¿Cómo va a enlazarlo desde el móvil?"
+//
+// PRINCIPIO RECTOR: el camino del trabajador es abrir → escanear → contar →
+// listo. Cero conceptos nuevos. Por eso la pantalla de aterrizaje ya NO obliga
+// a elegir un pedido antes de nada — el botón grande "Escanear albarán" es la
+// acción primaria y lleva DIRECTO al escáner; el casado con el pedido pasa
+// SOLO, dentro de GoodsReceiptForm (score de proveedor+local+fecha+solape de
+// líneas — ver ese fichero). "Pedidos pendientes" y "Contar a mano" siguen
+// existiendo pero como secundarios, no como paso obligatorio.
+//
+// "Pedidos pendientes" muestra SOLO lo vivo (ventana configurable,
+// supply_settings.dock_pending_window_*_days) + los recibido_parcial, con su
+// "falta: X, Y" (líneas aún no completas) — nunca cadáveres de meses; eso vive
+// en gestión (Pedidos → Pendiente de recepción / Saneado).
 //
 // Reusa GoodsReceiptForm (prop `order` enlaza el pedido; `ocrPrefill` trae lo
 // leído; sin ninguna de las dos = recepción ciega) y ReceiptScanPanel (OCR).
@@ -14,17 +26,17 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import {
-  ArrowLeft, Loader2, PackageCheck, ChevronRight, Truck, Search, ScanLine, ListChecks,
+  ArrowLeft, Loader2, PackageCheck, ChevronRight, Truck, Search, ScanLine, ListChecks, Camera,
 } from 'lucide-react'
 import {
-  listPurchaseOrders,
-  type PurchaseOrder,
-  type PurchaseOrderStatus,
+  listPurchaseOrders, listPurchaseOrderLines,
+  type PurchaseOrder, type PurchaseOrderStatus,
 } from '@/modules/supply/services/purchaseOrderService'
 import { listSuppliers } from '@/modules/kitchen/services/purchaseFormatService'
 import type { Supplier } from '@/types/kitchen'
 import GoodsReceiptForm, { type OcrPrefill } from '@/modules/supply/pages/GoodsReceiptForm'
 import ReceiptScanPanel from '@/modules/supply/pages/ReceiptScanPanel'
+import { getSupplySettings, listOrderLineReceived, type SupplySettings } from '@/modules/supply/services/goodsReceiptService'
 
 interface Props {
   accountId: string
@@ -39,6 +51,12 @@ interface Props {
 
 // Estados que cuentan como "pendiente de recibir".
 const PENDING_STATUSES: PurchaseOrderStatus[] = ['enviado', 'recibido_parcial']
+
+const SETTINGS_DEFAULTS: SupplySettings = {
+  priceAlertPct: 15, expiryAlertDays: 3, negotiatedAlertPct: 0, driftAlertPct: 25, driftWindowMonths: 6,
+  negStockRelPct: 5, negStockAbsQty: 5, negStockWindowDays: 60,
+  dockPendingWindowBeforeDays: 7, dockPendingWindowAfterDays: 3, hungOrderDaysThreshold: 14,
+}
 
 const STATUS_LABEL: Partial<Record<PurchaseOrderStatus, string>> = {
   enviado: 'Pendiente',
@@ -56,18 +74,20 @@ function formatDate(value: string | null): string {
 }
 
 // Paso interno. picked = pedido elegido (null en las vías "sin pedido").
-type Step = 'list' | 'choose' | 'manual' | 'scan' | 'form-scan'
+type Step = 'landing' | 'choose' | 'manual' | 'scan' | 'form-scan'
 
 export default function OrderReceiveFlow({ accountId, locationId, confirmPolicy, onBack, onSaved }: Props) {
   const [orders, setOrders] = useState<PurchaseOrder[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  // "falta: X, Y" por pedido recibido_parcial (nombres de línea aún incompleta).
+  const [missingByOrder, setMissingByOrder] = useState<Map<string, string[]>>(new Map())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [reloadTick, setReloadTick] = useState(0)
 
-  const [step, setStep] = useState<Step>('list')
-  const [picked, setPicked] = useState<PurchaseOrder | null>(null)  // null = sin pedido
+  const [step, setStep] = useState<Step>('landing')
+  const [picked, setPicked] = useState<PurchaseOrder | null>(null)
   const [ocr, setOcr] = useState<OcrPrefill | null>(null)
 
   useEffect(() => {
@@ -77,11 +97,45 @@ export default function OrderReceiveFlow({ accountId, locationId, confirmPolicy,
     Promise.all([
       listPurchaseOrders({ accountId, locationId: locationId ?? undefined }),
       listSuppliers(accountId),
+      getSupplySettings(accountId).catch(() => SETTINGS_DEFAULTS),
     ])
-      .then(([rows, sups]) => {
+      .then(async ([rows, sups, settings]) => {
         if (cancelled) return
-        setOrders(rows.filter(o => PENDING_STATUSES.includes(o.status)))
+        const before = settings.dockPendingWindowBeforeDays
+        const after = settings.dockPendingWindowAfterDays
+        const nowMs = Date.now()
+        // Solo lo vivo: "enviado" dentro de ventana, o CUALQUIER "recibido_parcial"
+        // (sigue abierto, no es un cadáver — se queda hasta que se cierre o complete).
+        // Sin expected_date: se usa order_date como referencia — igual de vivo no es
+        // "sin fecha = para siempre" (así se colaba PED-00006, de junio, sin cerrar).
+        const pending = rows.filter(o => {
+          if (!PENDING_STATUSES.includes(o.status)) return false
+          if (o.status === 'recibido_parcial') return true
+          const refDate = o.expectedDate ?? o.orderDate
+          const diffDays = (nowMs - new Date(refDate + 'T00:00:00').getTime()) / 86400000
+          return diffDays <= before && diffDays >= -after
+        })
+        setOrders(pending)
         setSuppliers(sups)
+
+        // "falta: X, Y" — solo para los recibido_parcial visibles (normalmente 0-1).
+        const parciales = pending.filter(o => o.status === 'recibido_parcial')
+        const missing = await Promise.all(parciales.map(async (o): Promise<readonly [string, string[]]> => {
+          try {
+            const [lines, received] = await Promise.all([
+              listPurchaseOrderLines(o.id),
+              listOrderLineReceived(o.id),
+            ])
+            const receivedByLine = new Map(received.map(r => [r.purchaseOrderLineId, r.receivedConfirmed]))
+            const stillMissing = lines
+              .filter(l => (receivedByLine.get(l.id) ?? 0) < l.qtyOrdered)
+              .map(l => l.productName)
+            return [o.id, stillMissing] as const
+          } catch {
+            return [o.id, []] as const
+          }
+        }))
+        if (!cancelled) setMissingByOrder(new Map(missing))
       })
       .catch((err: unknown) => {
         if (cancelled) return
@@ -108,18 +162,19 @@ export default function OrderReceiveFlow({ accountId, locationId, confirmPolicy,
     })
   }, [orders, search, supplierNameById])
 
-  function backToList() {
-    setStep('list'); setPicked(null); setOcr(null); setReloadTick(t => t + 1)
+  function backToLanding() {
+    setStep('landing'); setPicked(null); setOcr(null); setReloadTick(t => t + 1)
   }
   // Volver desde el form/escáner: si venía de un pedido → a "cómo recibir"; si era
-  // sin pedido → a la lista.
+  // sin pedido → al aterrizaje.
   function backFromFlow() {
     setOcr(null)
     if (picked) setStep('choose')
-    else backToList()
+    else backToLanding()
   }
 
-  // ── Recepción a mano (contra pedido si picked; a ciegas si null) ──
+  // ── Recepción a mano (contra pedido si picked; a ciegas si null — el casado
+  //    con pedido, si aplica, lo decide GoodsReceiptForm solo) ──
   if (step === 'manual') {
     return (
       <GoodsReceiptForm
@@ -127,7 +182,7 @@ export default function OrderReceiveFlow({ accountId, locationId, confirmPolicy,
         order={picked ?? undefined}
         confirmPolicy={confirmPolicy}
         onBack={backFromFlow}
-        onSaved={(msg) => { backToList(); onSaved(msg) }}
+        onSaved={(msg) => { backToLanding(); onSaved(msg) }}
       />
     )
   }
@@ -143,7 +198,9 @@ export default function OrderReceiveFlow({ accountId, locationId, confirmPolicy,
     )
   }
 
-  // ── Recepción con el albarán leído (fusión pedido+OCR si picked; OCR suelto si null) ──
+  // ── Recepción con el albarán leído (fusión pedido+OCR si picked; OCR suelto
+  //    si null — el caso normal del muelle: aquí GoodsReceiptForm busca el
+  //    pedido solo, sin preguntar nada salvo que sea ambiguo) ──
   if (step === 'form-scan' && ocr) {
     return (
       <GoodsReceiptForm
@@ -152,19 +209,19 @@ export default function OrderReceiveFlow({ accountId, locationId, confirmPolicy,
         confirmPolicy={confirmPolicy}
         ocrPrefill={ocr}
         onBack={backFromFlow}
-        onSaved={(msg) => { backToList(); onSaved(msg) }}
+        onSaved={(msg) => { backToLanding(); onSaved(msg) }}
       />
     )
   }
 
   const pickedSupplier = picked?.supplierId ? (supplierNameById.get(picked.supplierId) ?? 'Proveedor') : 'Sin proveedor'
 
-  // ── Elegir cómo recibir el pedido seleccionado ──
+  // ── Elegir cómo recibir el pedido seleccionado (shortcut desde la lista) ──
   if (step === 'choose' && picked) {
     return (
       <div className="min-h-screen bg-page">
         <div className="px-4 pt-5 pb-3 flex items-center gap-3">
-          <button onClick={backToList} className="text-text-secondary w-9 h-9 rounded-full hover:bg-accent-bg flex items-center justify-center transition-base shrink-0" aria-label="Volver">
+          <button onClick={backToLanding} className="text-text-secondary w-9 h-9 rounded-full hover:bg-accent-bg flex items-center justify-center transition-base shrink-0" aria-label="Volver">
             <ArrowLeft size={20} />
           </button>
           <div className="min-w-0">
@@ -207,7 +264,8 @@ export default function OrderReceiveFlow({ accountId, locationId, confirmPolicy,
     )
   }
 
-  // ── LISTA: pedidos pendientes + recepción sin pedido (siempre) ──
+  // ── ATERRIZAJE: escanear (primario) · pedidos pendientes (referencia, solo
+  //    lo vivo) · contar a mano (secundario, siempre disponible) ──
   return (
     <div className="min-h-screen bg-page">
       <div className="px-4 pt-5 pb-3 flex items-center gap-3">
@@ -216,16 +274,29 @@ export default function OrderReceiveFlow({ accountId, locationId, confirmPolicy,
         </button>
         <div className="min-w-0">
           <h2 className="text-xl font-display font-medium text-text-primary truncate">Recepciones</h2>
-          <p className="text-sm text-text-secondary mt-0.5">Recibe un pedido pendiente o un albarán suelto.</p>
+          <p className="text-sm text-text-secondary mt-0.5">Haz una foto del albarán. El pedido se busca solo.</p>
         </div>
       </div>
 
-      <div className="px-4 pb-8 space-y-4 max-w-2xl mx-auto">
+      <div className="px-4 pb-8 space-y-5 max-w-2xl mx-auto">
         {error && (
           <div className="p-3 rounded-md bg-danger-bg text-danger border border-danger/20 text-sm">{error}</div>
         )}
 
-        {/* Pedidos pendientes */}
+        {/* PRIMARIO: escanear albarán — el camino normal del muelle */}
+        <button onClick={() => { setPicked(null); setOcr(null); setStep('scan') }}
+          className="w-full text-left p-5 rounded-2xl bg-accent text-text-on-accent shadow-md hover:opacity-95 transition-base active:scale-[0.99] flex items-center gap-4">
+          <span className="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+            <Camera size={26} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-lg font-semibold">Escanear albarán</p>
+            <p className="text-sm opacity-90 mt-0.5">Hazle una foto — el sistema busca el pedido por ti.</p>
+          </div>
+          <ChevronRight size={22} className="shrink-0" />
+        </button>
+
+        {/* Pedidos pendientes — secundario, solo referencia; solo lo vivo */}
         <div className="space-y-2.5">
           <p className="text-xs font-medium text-text-secondary uppercase tracking-wide">Pedidos pendientes</p>
 
@@ -242,19 +313,19 @@ export default function OrderReceiveFlow({ accountId, locationId, confirmPolicy,
           )}
 
           {loading ? (
-            <div className="flex items-center justify-center gap-2 py-10 text-text-secondary">
+            <div className="flex items-center justify-center gap-2 py-6 text-text-secondary">
               <Loader2 size={18} className="animate-spin" /> Cargando pedidos…
             </div>
           ) : visible.length === 0 ? (
-            <div className="p-5 rounded-lg border border-dashed border-border-default text-center">
-              <PackageCheck size={26} className="mx-auto text-text-secondary mb-1.5" />
-              <p className="text-sm font-medium text-text-primary">No hay pedidos pendientes</p>
-              <p className="text-xs text-text-secondary mt-0.5">Puedes recibir un albarán sin pedido abajo.</p>
+            <div className="p-4 rounded-lg border border-dashed border-border-default text-center">
+              <PackageCheck size={22} className="mx-auto text-text-secondary mb-1" />
+              <p className="text-xs text-text-secondary">Sin pedidos pendientes a la vista. Escanea el albarán y ya está.</p>
             </div>
           ) : (
             <ul className="space-y-2.5">
               {visible.map(o => {
                 const supName = o.supplierId ? (supplierNameById.get(o.supplierId) ?? 'Proveedor') : 'Sin proveedor'
+                const missing = missingByOrder.get(o.id) ?? []
                 return (
                   <li key={o.id}>
                     <button onClick={() => { setPicked(o); setOcr(null); setStep('choose') }}
@@ -273,6 +344,13 @@ export default function OrderReceiveFlow({ accountId, locationId, confirmPolicy,
                           {o.code ?? 'Sin código'} · Pedido {formatDate(o.orderDate)}
                           {o.expectedDate ? ` · Entrega ${formatDate(o.expectedDate)}` : ''}
                         </p>
+                        {o.status === 'recibido_parcial' && (
+                          <p className="text-xs text-warning mt-0.5 truncate">
+                            {missing.length === 0
+                              ? 'Parcial — revisando qué falta…'
+                              : `Parcial — falta: ${missing.slice(0, 3).join(', ')}${missing.length > 3 ? ` y ${missing.length - 3} más` : ''}`}
+                          </p>
+                        )}
                       </div>
                       <ChevronRight size={18} className="text-text-secondary shrink-0" />
                     </button>
@@ -283,30 +361,17 @@ export default function OrderReceiveFlow({ accountId, locationId, confirmPolicy,
           )}
         </div>
 
-        {/* Recepción sin pedido (siempre disponible) */}
+        {/* Contar a mano — secundario, siempre disponible */}
         <div className="space-y-2.5 pt-1">
-          <p className="text-xs font-medium text-text-secondary uppercase tracking-wide">Recibir sin pedido</p>
-
-          <button onClick={() => { setPicked(null); setOcr(null); setStep('scan') }}
-            className="w-full text-left p-4 rounded-2xl bg-card border border-border-default shadow-sm hover:border-accent hover:shadow-md transition-base active:scale-[0.99] flex items-center gap-3">
-            <span className="w-11 h-11 rounded-full bg-accent-bg flex items-center justify-center shrink-0">
-              <ScanLine size={22} className="text-accent" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="font-semibold text-text-primary">Escanear albarán</p>
-              <p className="text-xs text-text-secondary mt-0.5">La IA lee el papel del proveedor.</p>
-            </div>
-            <ChevronRight size={18} className="text-text-secondary shrink-0" />
-          </button>
-
+          <p className="text-xs font-medium text-text-secondary uppercase tracking-wide">Otra forma de recibir</p>
           <button onClick={() => { setPicked(null); setOcr(null); setStep('manual') }}
             className="w-full text-left p-4 rounded-2xl bg-card border border-border-default shadow-sm hover:border-accent hover:shadow-md transition-base active:scale-[0.99] flex items-center gap-3">
             <span className="w-11 h-11 rounded-full bg-page flex items-center justify-center shrink-0 border border-border-default">
               <ListChecks size={22} className="text-text-secondary" />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="font-semibold text-text-primary">A ciegas</p>
-              <p className="text-xs text-text-secondary mt-0.5">Eliges proveedor y cuentas lo que llega.</p>
+              <p className="font-semibold text-text-primary">Contar a mano</p>
+              <p className="text-xs text-text-secondary mt-0.5">Sin foto: eliges proveedor y cuentas lo que llega.</p>
             </div>
             <ChevronRight size={18} className="text-text-secondary shrink-0" />
           </button>

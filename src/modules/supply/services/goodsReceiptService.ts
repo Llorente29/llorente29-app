@@ -1429,6 +1429,9 @@ export interface SupplySettings {
   negStockRelPct: number      // vigía de stock negativo: % del consumo reciente (anti-ruido)
   negStockAbsQty: number      // vigía de stock negativo: suelo absoluto (unidad base)
   negStockWindowDays: number  // vigía de stock negativo: ventana del "consumo reciente"
+  dockPendingWindowBeforeDays: number  // muelle: pedidos "enviado" vencidos hasta N días siguen en la lista
+  dockPendingWindowAfterDays: number   // muelle: pedidos "enviado" con entrega hasta N días en el futuro
+  hungOrderDaysThreshold: number       // vigía de gestión: a partir de cuántos días vencido se propone cierre corto
 }
 const SUPPLY_SETTINGS_DEFAULTS: SupplySettings = {
   priceAlertPct: 15,
@@ -1439,12 +1442,15 @@ const SUPPLY_SETTINGS_DEFAULTS: SupplySettings = {
   negStockRelPct: 5,
   negStockAbsQty: 5,
   negStockWindowDays: 60,
+  dockPendingWindowBeforeDays: 7,
+  dockPendingWindowAfterDays: 3,
+  hungOrderDaysThreshold: 14,
 }
 
 export async function getSupplySettings(accountId: string): Promise<SupplySettings> {
   requireSupabase()
   const { data, error } = await from('supply_settings')
-    .select('price_alert_pct, expiry_alert_days, negotiated_alert_pct, drift_alert_pct, drift_window_months, neg_stock_rel_pct, neg_stock_abs_qty, neg_stock_window_days')
+    .select('price_alert_pct, expiry_alert_days, negotiated_alert_pct, drift_alert_pct, drift_window_months, neg_stock_rel_pct, neg_stock_abs_qty, neg_stock_window_days, dock_pending_window_before_days, dock_pending_window_after_days, hung_order_days_threshold')
     .eq('account_id', accountId)
     .maybeSingle()
   if (error || !data) return { ...SUPPLY_SETTINGS_DEFAULTS }   // sin fila → defaults de fábrica
@@ -1457,6 +1463,9 @@ export async function getSupplySettings(accountId: string): Promise<SupplySettin
     negStockRelPct: Number((data as Row).neg_stock_rel_pct ?? SUPPLY_SETTINGS_DEFAULTS.negStockRelPct),
     negStockAbsQty: Number((data as Row).neg_stock_abs_qty ?? SUPPLY_SETTINGS_DEFAULTS.negStockAbsQty),
     negStockWindowDays: Number((data as Row).neg_stock_window_days ?? SUPPLY_SETTINGS_DEFAULTS.negStockWindowDays),
+    dockPendingWindowBeforeDays: Number((data as Row).dock_pending_window_before_days ?? SUPPLY_SETTINGS_DEFAULTS.dockPendingWindowBeforeDays),
+    dockPendingWindowAfterDays: Number((data as Row).dock_pending_window_after_days ?? SUPPLY_SETTINGS_DEFAULTS.dockPendingWindowAfterDays),
+    hungOrderDaysThreshold: Number((data as Row).hung_order_days_threshold ?? SUPPLY_SETTINGS_DEFAULTS.hungOrderDaysThreshold),
   }
 }
 
@@ -1475,6 +1484,9 @@ export async function saveSupplySettings(
       neg_stock_rel_pct: s.negStockRelPct,
       neg_stock_abs_qty: s.negStockAbsQty,
       neg_stock_window_days: s.negStockWindowDays,
+      dock_pending_window_before_days: s.dockPendingWindowBeforeDays,
+      dock_pending_window_after_days: s.dockPendingWindowAfterDays,
+      hung_order_days_threshold: s.hungOrderDaysThreshold,
       updated_at: new Date().toISOString(),
       created_by: createdBy,
       created_by_name: createdByName,
