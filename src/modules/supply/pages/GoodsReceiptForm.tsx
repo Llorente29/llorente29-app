@@ -150,6 +150,13 @@ interface GoodsReceiptFormProps {
   // locations.receipt_approval — si el local está en 'oficina', el que recibe solo
   // deja BORRADOR (la oficina confirma). Lo usa el móvil del trabajador.
   confirmPolicy?: 'always' | 'by-location'
+  // Arranque rápido desde el vigía de stock negativo (Almacén → Teórico vs Real):
+  // recepción CIEGA (sin order/prefill/ocrPrefill) pero con el proveedor ya
+  // elegido y el buscador de artículos apuntando al que hay que cargar. La
+  // persona sigue tecleando la cantidad real — esto solo quita fricción de
+  // navegación, no rellena nada por su cuenta.
+  initialSupplierId?: string | null
+  focusSearch?: string | null
   onBack: () => void
   onSaved: (message?: string) => void
 }
@@ -482,7 +489,7 @@ function wizardToPack(
   return { count: 1, innerBase: per * fu.factor, innerName: 'Ud', container: wz.containerName.trim() || (wz.shape === 'peso' ? friendlyUnit(baseAbbr).label : 'Ud') }
 }
 
-export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill, confirmPolicy = 'always', onBack, onSaved }: GoodsReceiptFormProps) {
+export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill, confirmPolicy = 'always', initialSupplierId, focusSearch, onBack, onSaved }: GoodsReceiptFormProps) {
   const { userProfile, authUserId } = useApp()
   const op = useOperativeLocation()
   const againstOrder = !!order
@@ -492,7 +499,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
 
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [locations, setLocations] = useState<SupplyLocation[]>([])
-  const [supplierId, setSupplierId] = useState<string>(order?.supplierId ?? prefill?.supplierId ?? ocrPrefill?.supplierId ?? '')
+  const [supplierId, setSupplierId] = useState<string>(order?.supplierId ?? prefill?.supplierId ?? ocrPrefill?.supplierId ?? initialSupplierId ?? '')
   const [locationId, setLocationId] = useState<string>(order?.locationId ?? prefill?.locationId ?? ocrPrefill?.locationId ?? '')
   // El local operativo (contexto) prevalece salvo que la cabecera venga fijada por un documento.
   useEffect(() => {
@@ -502,7 +509,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
   const [supplierDoc, setSupplierDoc] = useState<string>(prefill?.supplierDocNumber ?? ocrPrefill?.supplierDocNumber ?? '')
 
   const [draft, setDraft] = useState<DraftLine[]>([])
-  const [search, setSearch] = useState('')
+  const [search, setSearch] = useState(focusSearch ?? '')
 
   const [loadingMeta, setLoadingMeta] = useState(true)
   const [loadingLines, setLoadingLines] = useState(false)
