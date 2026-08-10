@@ -90,11 +90,9 @@ function mapSlotOption(o: any): SlotOption {
   }
 }
 
-export async function getDishConfig(slug: string, menuItemId: string): Promise<DishConfig | null> {
-  if (!supabase) throw new Error('Supabase no configurado')
-  const { data, error } = await (supabase as any).rpc('shop_item_config', { p_slug: slug, p_menu_item_id: menuItemId })
-  if (error) throw new Error(error.message)
-  if (!data) return null
+/** Mapea la forma jsonb común de shop_item_config/pos_item_config a DishConfig. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- jsonb dinámico de la RPC, mismo patrón que mapAllergens/mapModGroup/mapSlotOption de este fichero
+export function mapDishConfigJson(data: any): DishConfig {
   return {
     id: data.id,
     name: data.name,
@@ -109,6 +107,14 @@ export async function getDishConfig(slug: string, menuItemId: string): Promise<D
       options: (s.options ?? []).map(mapSlotOption),
     })),
   }
+}
+
+export async function getDishConfig(slug: string, menuItemId: string): Promise<DishConfig | null> {
+  if (!supabase) throw new Error('Supabase no configurado')
+  const { data, error } = await (supabase as any).rpc('shop_item_config', { p_slug: slug, p_menu_item_id: menuItemId })
+  if (error) throw new Error(error.message)
+  if (!data) return null
+  return mapDishConfigJson(data)
 }
 
 // ── Selección del usuario ───────────────────────────────────────────────
