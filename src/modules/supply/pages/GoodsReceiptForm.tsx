@@ -25,7 +25,7 @@
 // Tras confirmar, VUELVE SOLO (onSaved con mensaje); aviso como toast en lista.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, Search, Loader2, Check, Save, ListChecks, AlertTriangle, Box, ArrowRight } from 'lucide-react'
+import { ArrowLeft, Search, Loader2, Check, Save, ListChecks, AlertTriangle, Box, ArrowRight, Truck } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import { useOperativeLocation } from '@/modules/supply/hooks/useOperativeLocation'
 import OperativeLocationBanner from '@/modules/supply/components/OperativeLocationBanner'
@@ -43,6 +43,7 @@ import {
 } from '@/modules/supply/services/supplierCatalogService'
 import {
   listPurchaseOrderLines,
+  listPurchaseOrders,
   type PurchaseOrder,
   type PurchaseOrderLine,
 } from '@/modules/supply/services/purchaseOrderService'
@@ -205,6 +206,11 @@ function parseNum(v: string): number | null {
   if (v.trim() === '') return null
   const n = Number(v.replace(',', '.'))
   return Number.isFinite(n) ? n : null
+}
+
+function formatShortDate(iso: string | null): string {
+  if (!iso) return '—'
+  return new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: 'short' }).format(new Date(iso + 'T00:00:00'))
 }
 
 // €/UNIDAD BASE (€/g, €/ml, €/ud) → €/UNIDAD HUMANA (€/kg, €/L, €/ud) para que el
@@ -508,6 +514,16 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
   const [receiptDate, setReceiptDate] = useState<string>(ocrPrefill?.receiptDate ?? new Date().toISOString().slice(0, 10))
   const [supplierDoc, setSupplierDoc] = useState<string>(prefill?.supplierDocNumber ?? ocrPrefill?.supplierDocNumber ?? '')
 
+  // "¿De qué pedido viene?" — SOLO en modo ciego (sin order/prefill/ocrPrefill):
+  // los otros modos ya traen su pedido resuelto por su propio camino. No fija la
+  // cabecera (a diferencia de `order`): el proveedor/local los sigue eligiendo la
+  // persona, esto solo ofrece enlazar lo que ya eligió con un pedido enviado.
+  const [candidateOrders, setCandidateOrders] = useState<PurchaseOrder[]>([])
+  const [candidateLineCounts, setCandidateLineCounts] = useState<Map<string, number>>(new Map())
+  const [candidateOverdue, setCandidateOverdue] = useState<Map<string, number>>(new Map())
+  const [loadingOrders, setLoadingOrders] = useState(false)
+  const [pickedOrderId, setPickedOrderId] = useState<string | null>(null)
+
   const [draft, setDraft] = useState<DraftLine[]>([])
   const [search, setSearch] = useState(focusSearch ?? '')
 
@@ -785,7 +801,85 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
     }
   }
 
-  const linkedOrderId = order?.id ?? prefill?.purchaseOrderId ?? null
+  const linkedOrderId = order?.id ?? prefill?.purchaseOrderId ?? pickedOrderId ?? null
+
+  // Candidatos de pedido: modo CIEGO (manual o revisión de OCR SIN pedido ya
+  // enlazado), cuando ya hay proveedor+local. La revisión de OCR es este mismo
+  // componente (ocrPrefill sin order) — el selector le sirve igual. Mismo
+  // criterio de "pendiente" que OrderReceiveFlow (enviado / recibido_parcial).
+  useEffect(() => {
+    if (order || correcting) { setCandidateOrders([]); return }
+    if (!supplierId || !locationId) { setCandidateOrders([]); setPickedOrderId(null); return }
+    let cancelled = false
+    setLoadingOrders(true)
+    listPurchaseOrders({ accountId, locationId })
+      .then(async rows => {
+        if (cancelled) return
+        const filtered = rows.filter(o =>
+          o.supplierId === supplierId && (o.status === 'enviado' || o.status === 'recibido_parcial'))
+        setCandidateOrders(filtered)
+        // Si el pedido elegido deja de ser candidato (cambió proveedor/local), se olvida.
+        setPickedOrderId(prev => (prev && filtered.some(o => o.id === prev)) ? prev : null)
+        // Días de retraso calculados AQUÍ (una vez, al cargar) — no en el render:
+        // Date.now() dentro de JSX rompe la pureza del render (react-hooks/purity).
+        const nowMs = Date.now()
+        setCandidateOverdue(new Map(filtered.map(o => [
+          o.id,
+          o.expectedDate ? Math.floor((nowMs - new Date(o.expectedDate + 'T00:00:00').getTime()) / 86400000) : 0,
+        ])))
+        // nº de líneas por pedido, para que la persona sepa el tamaño antes de elegir.
+        const counts = await Promise.all(filtered.map(o =>
+          listPurchaseOrderLines(o.id).then(ls => [o.id, ls.length] as const).catch(() => [o.id, 0] as const)))
+        if (!cancelled) setCandidateLineCounts(new Map(counts))
+      })
+      .catch((e: unknown) => {
+        console.warn('[GoodsReceiptForm] listPurchaseOrders (candidatos) falló:', e)
+        if (!cancelled) setCandidateOrders([])
+      })
+      .finally(() => { if (!cancelled) setLoadingOrders(false) })
+    return () => { cancelled = true }
+  }, [accountId, supplierId, locationId, order, correcting])
+
+  // Auto-casado por recipe_item_id contra el pedido elegido (modo ciego, manual
+  // u OCR). NO bloquea: lo que no casa se queda sin purchase_order_line_id
+  // (línea extra del proveedor — pasa en la vida real; en OCR también puede
+  // quedar así si el artículo aún no se ha casado por texto). Recalcula desde
+  // cero en cada cambio de pedido elegido, así que "Sin pedido" limpia el casado.
+  useEffect(() => {
+    if (order || correcting) return
+    if (!pickedOrderId) {
+      setDraft(d => d.some(l => l.poLineId)
+        ? d.map(l => ({ ...l, poLineId: null, qtyOrdered: null, alreadyReceived: null, pending: null }))
+        : d)
+      return
+    }
+    let cancelled = false
+    Promise.all([
+      listPurchaseOrderLines(pickedOrderId),
+      listOrderLineReceived(pickedOrderId),
+    ]).then(([poLines, received]) => {
+      if (cancelled) return
+      const byItem = new Map<string, PurchaseOrderLine>()
+      for (const l of poLines) if (l.recipeItemId && !byItem.has(l.recipeItemId)) byItem.set(l.recipeItemId, l)
+      const receivedByPoLine = new Map(received.map(r => [r.purchaseOrderLineId, r.receivedConfirmed]))
+      setDraft(d => d.map(line => {
+        const match = line.recipeItemId ? byItem.get(line.recipeItemId) : undefined
+        if (!match) return line.poLineId ? { ...line, poLineId: null, qtyOrdered: null, alreadyReceived: null, pending: null } : line
+        const already = receivedByPoLine.get(match.id) ?? 0
+        return {
+          ...line,
+          poLineId: match.id,
+          qtyOrdered: match.qtyOrdered,
+          alreadyReceived: already,
+          pending: Math.max(0, match.qtyOrdered - already),
+        }
+      }))
+    }).catch((e: unknown) => {
+      console.warn('[GoodsReceiptForm] auto-casado de líneas contra el pedido falló:', e)
+      setError('No se pudo enlazar el pedido elegido. Puedes seguir sin enlazarlo.')
+    })
+    return () => { cancelled = true }
+  }, [pickedOrderId, order, correcting, fromOcr])
 
   useEffect(() => {
     let cancelled = false
@@ -1479,6 +1573,55 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
             className="w-full px-2 py-1.5 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50" />
         </div>
       </div>
+
+      {/* "¿De qué pedido viene?" — modo ciego (manual o revisión de OCR), con
+          proveedor+local ya resueltos */}
+      {!order && !correcting && supplierId && locationId && (
+        <div className="rounded-lg border border-border-default bg-card p-4">
+          <div className="flex items-center gap-2 mb-2.5">
+            <Truck size={16} className="text-text-secondary shrink-0" />
+            <span className="text-sm font-medium text-text-primary">¿De qué pedido viene?</span>
+            {loadingOrders && <Loader2 size={14} className="animate-spin text-text-tertiary" />}
+          </div>
+          {!loadingOrders && candidateOrders.length === 0 ? (
+            <p className="text-xs text-text-tertiary">
+              Sin pedidos enviados de este proveedor a este local. Se registra como compra directa.
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => setPickedOrderId(null)} disabled={saving}
+                className={`text-left px-3 py-2 rounded-md border text-sm transition-base disabled:opacity-50 ${
+                  !pickedOrderId ? 'border-accent bg-accent/10 text-accent' : 'border-border-default text-text-secondary hover:text-text-primary'}`}>
+                Sin pedido (compra directa)
+              </button>
+              {candidateOrders.map(o => {
+                const overdueDays = candidateOverdue.get(o.id) ?? 0
+                const on = pickedOrderId === o.id
+                const nLines = candidateLineCounts.get(o.id) ?? 0
+                return (
+                  <button key={o.id} type="button" onClick={() => setPickedOrderId(o.id)} disabled={saving}
+                    className={`text-left px-3 py-2 rounded-md border text-sm transition-base disabled:opacity-50 ${
+                      on ? 'border-accent bg-accent/10 text-accent' : 'border-border-default text-text-secondary hover:text-text-primary'}`}>
+                    <span className="font-medium">{o.code ?? 'Pedido'}</span>
+                    <span className="text-xs text-text-tertiary ml-1.5">
+                      {formatShortDate(o.orderDate)} · {nLines} línea{nLines === 1 ? '' : 's'}
+                      {o.expectedDate ? ` · esperado ${formatShortDate(o.expectedDate)}` : ''}
+                    </span>
+                    {overdueDays > 0 && (
+                      <span className="block text-[11px] text-danger mt-0.5">{overdueDays} día{overdueDays === 1 ? '' : 's'} de retraso</span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+          {pickedOrderId && (
+            <p className="text-[11px] text-text-tertiary mt-2.5">
+              Las líneas de abajo que coincidan por artículo se enlazan solas al pedido. Lo que no coincida se queda sin enlazar — no bloquea.
+            </p>
+          )}
+        </div>
+      )}
 
       {error && <div className="p-3 rounded-md bg-danger-bg text-danger border border-danger/20 text-sm">{error}</div>}
 

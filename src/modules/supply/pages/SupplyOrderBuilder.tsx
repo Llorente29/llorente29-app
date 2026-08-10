@@ -36,7 +36,10 @@ import {
 import {
   createPurchaseOrder,
   createPurchaseOrderLine,
+  getPendingReceptionsReport,
+  type PendingReceptionOrder,
 } from '@/modules/supply/services/purchaseOrderService'
+import { formatBaseQty } from '@/modules/supply/lib/stockDisplay'
 
 interface SupplyOrderBuilderProps {
   onBack: () => void
@@ -62,6 +65,11 @@ function parseQty(v: string | undefined): number {
   if (!v) return 0
   const n = Number(v.replace(',', '.'))
   return Number.isFinite(n) ? n : 0
+}
+
+function formatShortOrderDate(iso: string | null): string {
+  if (!iso) return '—'
+  return new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: 'short' }).format(new Date(iso + 'T00:00:00'))
 }
 
 // Unidad legible de la fila (formato "caja" o unidad base "kg").
@@ -90,6 +98,12 @@ export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuild
   const [loadingCatalog, setLoadingCatalog] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // "En camino": pedidos enviados/parciales de ESTE local, cualquier proveedor
+  // (un artículo puede estar pedido a otro proveedor). Puramente informativo —
+  // nunca bloquea pedir más (a veces se quiere duplicar). Si falla, el aviso
+  // simplemente no aparece; no es el dato principal de la pantalla.
+  const [pendingOrders, setPendingOrders] = useState<PendingReceptionOrder[]>([])
 
   // Cargar proveedores + locales al entrar.
   useEffect(() => {
@@ -131,6 +145,37 @@ export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuild
       .finally(() => { if (!cancelled) setLoadingCatalog(false) })
     return () => { cancelled = true }
   }, [activeAccountId, supplierId, locationId])
+
+  // "En camino" por local (independiente del proveedor elegido en el desplegable).
+  useEffect(() => {
+    if (!activeAccountId || !locationId) { setPendingOrders([]); return }
+    let cancelled = false
+    getPendingReceptionsReport(activeAccountId, locationId)
+      .then(rows => { if (!cancelled) setPendingOrders(rows) })
+      .catch((err: unknown) => {
+        console.warn('[SupplyOrderBuilder] pending_receptions_report falló (aviso "en camino" no disponible):', err)
+        if (!cancelled) setPendingOrders([])
+      })
+    return () => { cancelled = true }
+  }, [activeAccountId, locationId])
+
+  // Por artículo: cantidad pendiente total (unidad base) + el pedido de
+  // referencia (el primero, ya viene ordenado por expected_date asc = el más
+  // próximo/urgente). Solo cuenta lo REALMENTE pendiente (pedido > recibido).
+  const pendingByItem = useMemo(() => {
+    const m = new Map<string, { qty: number; unitAbbr: string | null; code: string | null; date: string | null }>()
+    for (const o of pendingOrders) {
+      for (const l of o.lines) {
+        if (!l.recipeItemId) continue
+        const pending = l.qtyOrderedBase - l.qtyReceivedBase
+        if (pending <= 0) continue
+        const cur = m.get(l.recipeItemId)
+        if (cur) cur.qty += pending
+        else m.set(l.recipeItemId, { qty: pending, unitAbbr: l.unitAbbr, code: o.code, date: o.expectedDate })
+      }
+    }
+    return m
+  }, [pendingOrders])
 
   const visibleCatalog = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -192,10 +237,21 @@ export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuild
 
   const eur = (v: number) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(v)
 
+  // Higiene (10/08): listSupplyLocations ya filtra active=true, pero el local
+  // OPERATIVO puede venir de una elección de gerente (header) que no pasa por
+  // ese filtro — así nacieron los pedidos fantasma de Plaza Castilla (local
+  // cerrado). No se toca useOperativeLocation (lo usan otras pantallas): se
+  // cruza aquí contra la lista ya activa antes de dejar guardar.
+  const locationIsActive = !loadingSuppliers && locations.some(l => l.id === locationId)
+
   async function handleSave() {
     if (!activeAccountId || !supplierId) { setError('Elige un proveedor.'); return }
     if (!op.isResolved || !locationId) {
       setError('No hay un local operativo definido. Revisa el aviso de local arriba.')
+      return
+    }
+    if (!locationIsActive) {
+      setError('El local operativo no está activo. No se pueden crear pedidos para un local cerrado — cambia de local arriba.')
       return
     }
     if (filledCount === 0) { setError('Pon cantidad en al menos un artículo.'); return }
@@ -264,12 +320,19 @@ export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuild
 
       <OperativeLocationBanner op={op} locations={locations} />
 
+      {!loadingSuppliers && op.isResolved && locationId && !locationIsActive && (
+        <div className="p-3 rounded-md bg-danger-bg text-danger border border-danger/20 text-sm">
+          El local operativo no está activo (cerrado). No se pueden crear pedidos nuevos para él —
+          cambia de local operativo antes de continuar.
+        </div>
+      )}
+
       {/* Datos del pedido */}
       <div className="rounded-xl border border-border-default bg-card p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <div>
           <label className="block text-xs font-medium text-text-secondary mb-1">Local (entrega)</label>
-          <p className="px-2 py-1.5 text-sm text-text-primary">
-            {locations.find(l => l.id === locationId)?.name ?? '—'}
+          <p className={`px-2 py-1.5 text-sm ${locationIsActive ? 'text-text-primary' : 'text-danger'}`}>
+            {locations.find(l => l.id === locationId)?.name ?? (locationId ? 'Local no activo' : '—')}
           </p>
         </div>
         <div>
@@ -359,6 +422,7 @@ export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuild
                   const warn = warningFor(e, qty)
                   const srcLabel = e.suggestionSource ? SOURCE_LABEL[e.suggestionSource] : null
                   const canSuggest = e.suggestedQty != null && e.suggestedQty > 0
+                  const pending = pendingByItem.get(e.recipeItemId)
                   return (
                     <div
                       key={e.articleSupplierId}
@@ -378,6 +442,12 @@ export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuild
                               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent-bg text-accent">preferente</span>
                             )}
                           </div>
+                          {pending && (
+                            <div className="text-[11px] text-accent mt-0.5 truncate">
+                              En camino: {formatBaseQty(pending.qty, pending.unitAbbr)}
+                              {pending.code ? ` (${pending.code}${pending.date ? `, esperado el ${formatShortOrderDate(pending.date)}` : ''})` : ''}
+                            </div>
+                          )}
                         </div>
 
                         {/* Stock */}
@@ -482,7 +552,7 @@ export default function SupplyOrderBuilder({ onBack, onSaved }: SupplyOrderBuild
                 <button
                   type="button"
                   onClick={handleSave}
-                  disabled={saving || filledCount === 0}
+                  disabled={saving || filledCount === 0 || !locationIsActive}
                   className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-base"
                 >
                   {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check size={15} />}

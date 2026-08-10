@@ -23,6 +23,8 @@ import { listSuppliers } from '@/modules/kitchen/services/purchaseFormatService'
 import type { Supplier } from '@/types/kitchen'
 import SupplyOrderDetailPage from '@/modules/supply/pages/SupplyOrderDetailPage'
 import SupplyOrderBuilder from '@/modules/supply/pages/SupplyOrderBuilder'
+import PendingReceptionsPanel from '@/modules/supply/components/PendingReceptionsPanel'
+import HungOrdersReviewPanel from '@/modules/supply/components/HungOrdersReviewPanel'
 
 const STATUS_LABEL: Record<PurchaseOrderStatus, string> = {
   borrador: 'Borrador',
@@ -54,6 +56,7 @@ function formatEur(value: number | null): string {
 }
 
 type View = 'list' | 'builder'
+type Tab = 'todos' | 'pendientes' | 'saneado'
 
 export default function SupplyOrdersPage() {
   const { activeAccountId, accountsLoading } = useActiveAccount()
@@ -67,6 +70,7 @@ export default function SupplyOrdersPage() {
   const [search, setSearch] = useState('')
   const [reloadTick, setReloadTick] = useState(0)
   const [view, setView] = useState<View>('list')
+  const [tab, setTab] = useState<Tab>('todos')
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -158,6 +162,37 @@ export default function SupplyOrdersPage() {
         </button>
       </div>
 
+      <div className="inline-flex rounded-md border border-border-default overflow-hidden">
+        <button type="button" onClick={() => setTab('todos')}
+          className={`px-3 py-1.5 text-sm transition-base ${tab === 'todos' ? 'bg-accent text-text-on-accent' : 'text-text-secondary hover:bg-page'}`}>
+          Todos
+        </button>
+        <button type="button" onClick={() => setTab('pendientes')}
+          className={`px-3 py-1.5 text-sm transition-base border-l border-border-default ${tab === 'pendientes' ? 'bg-accent text-text-on-accent' : 'text-text-secondary hover:bg-page'}`}>
+          Pendiente de recepción
+        </button>
+        <button type="button" onClick={() => setTab('saneado')}
+          className={`px-3 py-1.5 text-sm transition-base border-l border-border-default ${tab === 'saneado' ? 'bg-accent text-text-on-accent' : 'text-text-secondary hover:bg-page'}`}>
+          Saneado (colgados)
+        </button>
+      </div>
+
+      {tab === 'pendientes' && (
+        !activeAccountId ? null : !resolvedLocationId ? (
+          <p className="text-sm text-text-secondary p-4 border border-dashed border-border-default rounded-lg">
+            Elige un local concreto (arriba) para ver lo pendiente de recepción — no se puede consolidar entre locales.
+          </p>
+        ) : (
+          <PendingReceptionsPanel accountId={activeAccountId} locationId={resolvedLocationId} onError={setError} />
+        )
+      )}
+
+      {tab === 'saneado' && activeAccountId && (
+        <HungOrdersReviewPanel accountId={activeAccountId} onError={setError} />
+      )}
+
+      {tab === 'todos' && (
+      <>
       {!loading && !error && orders.length > 0 && (
         <div className="relative max-w-sm">
           <Search size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-secondary" />
@@ -245,6 +280,8 @@ export default function SupplyOrdersPage() {
             </table>
           </div>
         )
+      )}
+      </>
       )}
     </div>
   )
