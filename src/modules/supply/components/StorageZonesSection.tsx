@@ -33,7 +33,7 @@ import ImportZonesModal from '@/modules/supply/components/ImportZonesModal'
 import ItemPeekPanel, { type PeekItem } from '@/modules/supply/components/ItemPeekPanel'
 import { useApp } from '@/context/AppContext'
 import {
-  getNegativeStockReport, negativeStockCauseLabel, negativeStockCauseExplanation, negativeStockCauseAction,
+  getNegativeStockReport, negativeStockCauseLabel, negativeStockCauseExplanation, negativeStockCauseHint,
   type NegativeStockItem,
 } from '@/modules/supply/services/negativeStockService'
 
@@ -479,7 +479,7 @@ function QtyCell({
   const d = formatStockQty(qty, unitAbbr, valueEur)
   const title = d.negative
     ? (neg
-        ? `${negativeStockCauseLabel(neg.cause)}: ${negativeStockCauseExplanation(neg.cause)} → ${negativeStockCauseAction(neg.cause)}`
+        ? `${negativeStockCauseLabel(neg.cause)}: ${negativeStockCauseExplanation(neg.cause)} ${negativeStockCauseHint(neg.cause)}`
         : 'Stock negativo — revisa la causa en Almacén → Teórico vs Real → Stock negativo.')
     : undefined
   return (

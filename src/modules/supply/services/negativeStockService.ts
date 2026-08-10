@@ -91,12 +91,18 @@ const CAUSE_EXPLANATION: Record<NegativeStockCause, string> = {
   otras_salidas: 'No cuadra solo con compras vs consumo: revisa mermas, ajustes o traspasos de este artículo.',
 }
 
-const CAUSE_ACTION: Record<NegativeStockCause, string> = {
-  sin_entradas: 'Dar de alta la producción o cargar la compra pendiente.',
-  compras_por_detras: 'Cargar las recepciones que falten.',
-  otras_salidas: 'Revisar mermas, ajustes o traspasos, o hacer un conteo físico.',
+// PISTA, no orden (10/08, refinamiento de Julio): la causa es una HIPÓTESIS
+// (consumo > recepción no prueba que falte una compra — puede ser un error de
+// escandallo, una merma, personal, un traspaso...). El remedio universal es
+// siempre "Ajustar/Contar" (la persona mete la cifra real y el motivo real);
+// "Cargar recepción" es un atajo opcional cuando de verdad hay proveedor. Este
+// texto solo explica por qué el sistema sospecha esto, nunca manda a hacer algo.
+const CAUSE_HINT: Record<NegativeStockCause, string> = {
+  sin_entradas: 'Probablemente: no hay compra cargada, o es una elaboración de casa sin producción dada de alta.',
+  compras_por_detras: 'Probablemente: falta cargar alguna recepción — el consumo registrado supera lo comprado.',
+  otras_salidas: 'Probablemente: merma, ajuste, traspaso o error de escandallo — no cuadra solo con compras vs consumo.',
 }
 
 export function negativeStockCauseLabel(c: NegativeStockCause): string { return CAUSE_LABEL[c] }
 export function negativeStockCauseExplanation(c: NegativeStockCause): string { return CAUSE_EXPLANATION[c] }
-export function negativeStockCauseAction(c: NegativeStockCause): string { return CAUSE_ACTION[c] }
+export function negativeStockCauseHint(c: NegativeStockCause): string { return CAUSE_HINT[c] }

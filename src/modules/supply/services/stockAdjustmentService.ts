@@ -52,11 +52,18 @@ export async function registerAdjustment(input: RegisterAdjustmentInput): Promis
   }
 }
 
-// Motivos de ajuste (alineados con los reason_code del backend).
+// Motivos de ajuste. reason_code es TEXTO LIBRE en el backend (register_adjustment
+// solo exige que no esté vacío, sin CHECK ni enum) — añadir motivos aquí no
+// necesita migración. Cubren las causas reales de un stock negativo/descuadrado
+// (10/08, vigía de stock negativo): recuento, falta de recepción, merma,
+// caducidad, error de escandallo, consumo de personal, traspaso no registrado.
 export const ADJUST_REASONS: { code: string; label: string }[] = [
   { code: 'count_correction', label: 'Corrección de conteo' },
   { code: 'direct_receipt',   label: 'Recepción directa' },
   { code: 'waste',            label: 'Merma' },
   { code: 'expired',          label: 'Caducado' },
+  { code: 'recipe_error',     label: 'Error de escandallo' },
+  { code: 'staff_use',        label: 'Consumo de personal' },
+  { code: 'transfer',         label: 'Traspaso no registrado' },
   { code: 'other',            label: 'Otro' },
 ]
