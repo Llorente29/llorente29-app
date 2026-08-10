@@ -564,13 +564,15 @@ export async function getIncompleteConsumptionItems(
   toIso: string | null,
 ): Promise<Set<string>> {
   requireSupabase()
-  // CAST PUNTUAL: avt_incomplete_raws no está aún en database.ts (CLI de Supabase
-  // roto; misma deuda que materialize/duplicate). Se retira al regenerar los tipos.
-  const rpc = supabase!.rpc as unknown as (
+  // CAST PUNTUAL **inline**: avt_incomplete_raws no está aún en database.ts (CLI
+  // de Supabase roto; misma deuda que materialize/duplicate). El cast y la
+  // llamada van en la MISMA expresión — nunca `const rpc = supabase.rpc` suelto,
+  // que pierde el `this` de supabase-js y la petición ni se envía ("Cannot read
+  // properties of undefined (reading 'rest')"). Se retira al regenerar los tipos.
+  const { data, error } = await (supabase!.rpc as unknown as (
     fn: string,
     args: Record<string, unknown>,
-  ) => Promise<{ data: unknown; error: { message: string } | null }>
-  const { data, error } = await rpc('avt_incomplete_raws', {
+  ) => Promise<{ data: unknown; error: { message: string } | null }>)('avt_incomplete_raws', {
     p_account: accountId,
     p_from: fromIso,
     p_to: toIso,
