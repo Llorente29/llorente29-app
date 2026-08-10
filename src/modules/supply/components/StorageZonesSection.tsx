@@ -128,7 +128,13 @@ export default function StorageZonesSection({
     let cancelled = false
     getNegativeStockReport(accountId, locationId)
       .then(r => { if (!cancelled) setNegMap(new Map(r.items.map(i => [i.recipeItemId, i]))) })
-      .catch(() => { if (!cancelled) setNegMap(new Map()) })
+      .catch(e => {
+        // El rojo de una fila negativa NO depende de esto (sale de qty_on_hand,
+        // ya cargado aparte): si esto falla, la fila sigue en rojo, solo pierde
+        // el tooltip de causa (cae al genérico). Igualmente no se traga mudo.
+        console.warn('[StorageZonesSection] negative_stock_report falló (tooltips de causa degradados):', e)
+        if (!cancelled) setNegMap(new Map())
+      })
     return () => { cancelled = true }
   }, [accountId, locationId, reloadKey])
 

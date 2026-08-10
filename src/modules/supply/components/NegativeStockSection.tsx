@@ -9,9 +9,14 @@
 // de alta producción / conteo físico). Los artículos por debajo del umbral
 // (ruido, tipo Tomate Pera) NO se listan aquí para no distraer, pero no están
 // escondidos: se ven en Existencias con su cifra real.
+//
+// folvy_reglas.md §2 — un error NO es "cero resultados": si la carga falla,
+// esta sección muestra ESTADO DE ERROR, nunca "Sin alertas" (un vigía que dice
+// "todo bien" al fallar es peor que no tener vigía). `loadError` distingue
+// "cargó y vino vacío" (verde, legítimo) de "no cargó" (rojo, reintentar).
 
 import { useEffect, useState } from 'react'
-import { Loader2, AlertTriangle, ShieldCheck, Settings2 } from 'lucide-react'
+import { Loader2, AlertTriangle, ShieldCheck, Settings2, RefreshCw } from 'lucide-react'
 import {
   getNegativeStockReport, negativeStockCauseLabel, negativeStockCauseAction,
   type NegativeStockItem,
@@ -36,11 +41,14 @@ export default function NegativeStockSection({
   const [relPct, setRelPct] = useState(5)
   const [absQty, setAbsQty] = useState(5)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [reloadTick, setReloadTick] = useState(0)
 
   useEffect(() => {
     if (!accountId || !locationId) { setItems([]); return }
     let cancelled = false
     setLoading(true)
+    setLoadError(null)
     getNegativeStockReport(accountId, locationId)
       .then(r => {
         if (cancelled) return
@@ -49,16 +57,35 @@ export default function NegativeStockSection({
         setRelPct(r.thresholdRelPct)
         setAbsQty(r.thresholdAbsQty)
       })
-      .catch(e => { if (!cancelled) onError(e instanceof Error ? e.message : 'Error cargando el stock negativo.') })
+      .catch(e => {
+        if (cancelled) return
+        const msg = e instanceof Error ? e.message : 'Error cargando el stock negativo.'
+        console.warn('[NegativeStockSection] negative_stock_report falló:', e)
+        setLoadError(msg)
+        onError(msg)
+      })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [accountId, locationId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [accountId, locationId, reloadTick]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const alerts = items.filter(i => i.isAlert)
   const noise = items.filter(i => !i.isAlert)
 
   if (loading) {
     return <div className="flex items-center gap-2 text-text-secondary text-sm p-4"><Loader2 size={15} className="animate-spin" /> Calculando stock negativo…</div>
+  }
+
+  // NUNCA "Sin alertas" aquí: si falló la carga, no sabemos si hay alertas o no.
+  if (loadError) {
+    return (
+      <div className="flex items-center justify-between gap-3 p-4 rounded-lg border border-danger/30 bg-danger-bg text-sm">
+        <span className="text-danger">No se pudo cargar el stock negativo. {loadError}</span>
+        <button type="button" onClick={() => setReloadTick(t => t + 1)}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border border-danger/30 text-danger hover:bg-danger/10 transition-base shrink-0">
+          <RefreshCw size={13} /> Reintentar
+        </button>
+      </div>
+    )
   }
 
   return (

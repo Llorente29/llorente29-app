@@ -38,15 +38,19 @@ export interface NegativeStockReport {
 
 /**
  * negative_stock_report no está aún en database.ts (migración pendiente de
- * aplicar por Julio). CAST PUNTUAL — mismo patrón que avt_incomplete_raws en
- * inventoryCountService.ts; se retira al regenerar los tipos.
+ * regenerar tipos). CAST PUNTUAL **inline**: el cast y la llamada van en la
+ * MISMA expresión — nunca `const rpc = supabase.rpc` suelto, que pierde el
+ * `this` de supabase-js y la petición ni se envía ("Cannot read properties of
+ * undefined (reading 'rest')"). Ya pasó dos veces en prod (24/07, 26/07);
+ * folvy_reglas.md §2.
  */
 async function callNegativeStockReport(accountId: string, locationId: string) {
-  const rpc = supabase!.rpc as unknown as (
+  return (supabase!.rpc as unknown as (
     fn: string,
     args: Record<string, unknown>,
-  ) => Promise<{ data: unknown; error: { message: string } | null }>
-  return rpc('negative_stock_report', { p_account: accountId, p_location: locationId })
+  ) => Promise<{ data: unknown; error: { message: string } | null }>)(
+    'negative_stock_report', { p_account: accountId, p_location: locationId },
+  )
 }
 
 export async function getNegativeStockReport(

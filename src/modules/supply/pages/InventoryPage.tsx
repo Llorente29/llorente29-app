@@ -494,10 +494,15 @@ function SummarySection({
     getStockLevelsOverview({ accountId, locationId })
       .then(items => { if (!cancelled) setBelowMin(items.filter(i => i.belowMin).length) })
       .catch(() => { if (!cancelled) setBelowMin(null) })
-    // vigía de stock negativo (no bloquea el resumen; si falla, se ignora)
+    // vigía de stock negativo: no bloquea el resumen, pero si falla la tarjeta
+    // se queda en "—" (nunca en "0 sin alertas" — folvy_reglas.md §2, un error
+    // no es "cero resultados").
     getNegativeStockReport(accountId, locationId)
       .then(r => { if (!cancelled) setNegAlerts(r.items.filter(i => i.isAlert).length) })
-      .catch(() => { if (!cancelled) setNegAlerts(null) })
+      .catch(e => {
+        console.warn('[InventoryPage] negative_stock_report falló en el resumen:', e)
+        if (!cancelled) setNegAlerts(null)
+      })
     return () => { cancelled = true }
   }, [accountId, locationId, reloadTick]) // eslint-disable-line react-hooks/exhaustive-deps
 
