@@ -470,12 +470,17 @@ begin
   -- después — _shop_reprice_line ya pliega mods+combo en el precio de la
   -- línea raíz; sumar también las hijas de sale_line duplicaría el impacto.
   --
-  -- DEUDA EXPLÍCITA (T1.b, 11/08, señalada por Julio — NO se toca en T1):
-  -- el IVA de la línea usa el vat_rate del PRODUCTO RAÍZ para toda la línea,
-  -- modificadores y componentes de combo incluidos. Si un combo mezcla tipos
-  -- (p.ej. comida 10% + cerveza 21%), la base/cuota salen mal. Tolerable en
-  -- mostrador (T1); INACEPTABLE en T3 (fiscal/VeriFactu exige desglose por
-  -- tipo impositivo real). Arreglar en T3, no aquí.
+  -- IVA de la línea = vat_rate del producto raíz (aplicado a toda la línea,
+  -- mods y componentes de combo incluidos). CORRECTO, no es una simplificación:
+  -- en hostelería el servicio de restauración va al 10% completo (AEAT, art.
+  -- 91.Uno.2.2º LIVA) — SIN excepción para bebida alcohólica servida en el
+  -- acto (esa exclusión es de entregas de bienes para nutrición, no de
+  -- servicios de hostelería). Confirmado en catálogo: los 523 productos de
+  -- Llorente29 están al 10%, sin excepción. Nota para T3 (VeriFactu exige
+  -- desglose por tipo impositivo, trivial con un tipo único): si algún día
+  -- aparece un escenario real de dos tipos (venta de bienes cerrados sin
+  -- servicio — botella sin abrir, café en grano — o un local en Canarias con
+  -- IGIC), se revisa entonces. No se construye para un cliente que no existe.
   for v_line in select * from jsonb_array_elements(p_lines)
   loop
     v_repr   := public._shop_reprice_line(p_account_id, v_line);
