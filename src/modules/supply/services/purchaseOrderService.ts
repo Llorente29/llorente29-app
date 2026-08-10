@@ -339,3 +339,73 @@ export async function deletePurchaseOrderLine(id: string): Promise<void> {
   const { error } = await from('purchase_order_line').delete().eq('id', id)
   if (error) throw new Error(`Error borrando línea ${id}: ${error.message}`)
 }
+
+// ─── Panel "Pendiente de recepción" (P1, 10/08) ───────────────────────────
+// Lee pending_receptions_report: pedidos 'enviado'/'recibido_parcial' del
+// local, con días de retraso y pedido-vs-recibido por línea EN UNIDAD BASE
+// (no en el conteo bruto de formato — dos formatos del mismo pedido no se
+// comparan en crudo). Solo lectura, no escribe stock ni cambia estados.
+
+export interface PendingReceptionLine {
+  recipeItemId: string | null
+  productName: string
+  unitAbbr: string | null
+  qtyOrderedBase: number
+  qtyReceivedBase: number
+  complete: boolean
+}
+
+export interface PendingReceptionOrder {
+  orderId: string
+  code: string | null
+  supplierId: string | null
+  supplierName: string | null
+  locationId: string | null
+  locationName: string | null
+  orderDate: string
+  expectedDate: string | null
+  status: PurchaseOrderStatus
+  daysOverdue: number
+  lines: PendingReceptionLine[]
+}
+
+/**
+ * pending_receptions_report no está aún en database.ts (migración pendiente
+ * de regenerar tipos). CAST PUNTUAL inline — cast y llamada en la MISMA
+ * expresión, nunca `const rpc = supabase.rpc` suelto (pierde el `this` de
+ * supabase-js: "Cannot read properties of undefined (reading 'rest')").
+ */
+export async function getPendingReceptionsReport(
+  accountId: string,
+  locationId: string,
+): Promise<PendingReceptionOrder[]> {
+  requireSupabase()
+  const { data, error } = await (supabase!.rpc as unknown as (
+    fn: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ data: unknown; error: { message: string } | null }>)(
+    'pending_receptions_report', { p_account: accountId, p_location: locationId },
+  )
+  if (error) throw new Error(`No se pudo leer lo pendiente de recepción: ${error.message}`)
+  const obj = (data ?? {}) as { orders?: Row[] }
+  return ((obj.orders ?? []) as Row[]).map((o): PendingReceptionOrder => ({
+    orderId: String(o.order_id),
+    code: (o.code as string | null) ?? null,
+    supplierId: (o.supplier_id as string | null) ?? null,
+    supplierName: (o.supplier_name as string | null) ?? null,
+    locationId: (o.location_id as string | null) ?? null,
+    locationName: (o.location_name as string | null) ?? null,
+    orderDate: String(o.order_date),
+    expectedDate: (o.expected_date as string | null) ?? null,
+    status: o.status as PurchaseOrderStatus,
+    daysOverdue: Number(o.days_overdue ?? 0),
+    lines: ((o.lines ?? []) as Row[]).map((l): PendingReceptionLine => ({
+      recipeItemId: (l.recipe_item_id as string | null) ?? null,
+      productName: (l.product_name as string) ?? '(sin nombre)',
+      unitAbbr: (l.unit_abbr as string | null) ?? null,
+      qtyOrderedBase: Number(l.qty_ordered_base ?? 0),
+      qtyReceivedBase: Number(l.qty_received_base ?? 0),
+      complete: Boolean(l.complete),
+    })),
+  }))
+}
