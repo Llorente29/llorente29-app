@@ -85,6 +85,7 @@ export default function GoodsReceiptsPage() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settings, setSettings] = useState<SupplySettings>({
     priceAlertPct: 15, expiryAlertDays: 3, negotiatedAlertPct: 0, driftAlertPct: 25, driftWindowMonths: 6,
+    negStockRelPct: 5, negStockAbsQty: 5, negStockWindowDays: 60,
   })
   const [savingSettings, setSavingSettings] = useState(false)
   async function openSettings() {
@@ -523,6 +524,41 @@ export default function GoodsReceiptsPage() {
                 <span className="text-sm text-text-secondary">días o menos</span>
               </div>
             </label>
+
+            <div className="pt-1 border-t border-border-default">
+              <h4 className="text-sm font-medium text-text-primary pt-3">Vigía de stock negativo</h4>
+              <p className="text-xs text-text-secondary mt-0.5">
+                Cuándo un artículo en negativo pasa de "ruido" a "alerta" en Almacén → Teórico vs Real.
+              </p>
+            </div>
+            <label className="block">
+              <span className="text-sm text-text-primary">Alertar si el negativo supera</span>
+              <div className="mt-1 flex items-center gap-2">
+                <input type="number" min={0} max={100} value={settings.negStockRelPct}
+                  onChange={e => setSettings(s => ({ ...s, negStockRelPct: Number(e.target.value) }))} disabled={savingSettings}
+                  className="w-24 px-3 py-2 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent" />
+                <span className="text-sm text-text-secondary">% del consumo reciente</span>
+              </div>
+            </label>
+            <label className="block">
+              <span className="text-sm text-text-primary">…o al menos (suelo, evita ruido)</span>
+              <div className="mt-1 flex items-center gap-2">
+                <input type="number" min={0} value={settings.negStockAbsQty}
+                  onChange={e => setSettings(s => ({ ...s, negStockAbsQty: Number(e.target.value) }))} disabled={savingSettings}
+                  className="w-24 px-3 py-2 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent" />
+                <span className="text-sm text-text-secondary">unidades base (g/ml/ud)</span>
+              </div>
+            </label>
+            <label className="block">
+              <span className="text-sm text-text-primary">Consumo reciente = ventana de</span>
+              <div className="mt-1 flex items-center gap-2">
+                <input type="number" min={1} max={365} value={settings.negStockWindowDays}
+                  onChange={e => setSettings(s => ({ ...s, negStockWindowDays: Number(e.target.value) }))} disabled={savingSettings}
+                  className="w-24 px-3 py-2 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent" />
+                <span className="text-sm text-text-secondary">días (sin consumo en la ventana, usa el histórico)</span>
+              </div>
+            </label>
+
             <div className="flex items-center justify-end gap-2 pt-1">
               <button type="button" onClick={() => setSettingsOpen(false)} disabled={savingSettings}
                 className="px-3 py-2 rounded-md text-sm font-medium border border-border-default bg-card hover:bg-page disabled:opacity-50 transition-base">Cancelar</button>

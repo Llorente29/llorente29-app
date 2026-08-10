@@ -1426,6 +1426,9 @@ export interface SupplySettings {
   negotiatedAlertPct: number  // umbral sobre el precio PACTADO (0 = avisa en cuanto lo supere)
   driftAlertPct: number       // (6b) umbral de deriva sostenida de precio (%)
   driftWindowMonths: number   // (6b) ventana de la deriva (meses)
+  negStockRelPct: number      // vigía de stock negativo: % del consumo reciente (anti-ruido)
+  negStockAbsQty: number      // vigía de stock negativo: suelo absoluto (unidad base)
+  negStockWindowDays: number  // vigía de stock negativo: ventana del "consumo reciente"
 }
 const SUPPLY_SETTINGS_DEFAULTS: SupplySettings = {
   priceAlertPct: 15,
@@ -1433,12 +1436,15 @@ const SUPPLY_SETTINGS_DEFAULTS: SupplySettings = {
   negotiatedAlertPct: 0,
   driftAlertPct: 25,
   driftWindowMonths: 6,
+  negStockRelPct: 5,
+  negStockAbsQty: 5,
+  negStockWindowDays: 60,
 }
 
 export async function getSupplySettings(accountId: string): Promise<SupplySettings> {
   requireSupabase()
   const { data, error } = await from('supply_settings')
-    .select('price_alert_pct, expiry_alert_days, negotiated_alert_pct, drift_alert_pct, drift_window_months')
+    .select('price_alert_pct, expiry_alert_days, negotiated_alert_pct, drift_alert_pct, drift_window_months, neg_stock_rel_pct, neg_stock_abs_qty, neg_stock_window_days')
     .eq('account_id', accountId)
     .maybeSingle()
   if (error || !data) return { ...SUPPLY_SETTINGS_DEFAULTS }   // sin fila → defaults de fábrica
@@ -1448,6 +1454,9 @@ export async function getSupplySettings(accountId: string): Promise<SupplySettin
     negotiatedAlertPct: Number((data as Row).negotiated_alert_pct ?? SUPPLY_SETTINGS_DEFAULTS.negotiatedAlertPct),
     driftAlertPct: Number((data as Row).drift_alert_pct ?? SUPPLY_SETTINGS_DEFAULTS.driftAlertPct),
     driftWindowMonths: Number((data as Row).drift_window_months ?? SUPPLY_SETTINGS_DEFAULTS.driftWindowMonths),
+    negStockRelPct: Number((data as Row).neg_stock_rel_pct ?? SUPPLY_SETTINGS_DEFAULTS.negStockRelPct),
+    negStockAbsQty: Number((data as Row).neg_stock_abs_qty ?? SUPPLY_SETTINGS_DEFAULTS.negStockAbsQty),
+    negStockWindowDays: Number((data as Row).neg_stock_window_days ?? SUPPLY_SETTINGS_DEFAULTS.negStockWindowDays),
   }
 }
 
@@ -1463,6 +1472,9 @@ export async function saveSupplySettings(
       negotiated_alert_pct: s.negotiatedAlertPct,
       drift_alert_pct: s.driftAlertPct,
       drift_window_months: s.driftWindowMonths,
+      neg_stock_rel_pct: s.negStockRelPct,
+      neg_stock_abs_qty: s.negStockAbsQty,
+      neg_stock_window_days: s.negStockWindowDays,
       updated_at: new Date().toISOString(),
       created_by: createdBy,
       created_by_name: createdByName,

@@ -15,6 +15,7 @@
 // (gancho); de momento la función admite un flag para futuro filtro.
 
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
+import { formatBaseQty } from '../lib/stockDisplay'
 
 export interface SupplierCatalogEntry {
   articleSupplierId: string      // id de article_supplier (la relación proveedor↔artículo)
@@ -121,37 +122,18 @@ export function buildFormatLabel(
 }
 
 /**
- * Stock legible para la pantalla de pedido. El stock vive en unidad base
- * (g/ml/ud); el comprador piensa en FORMATO (cajas). Si conocemos la
- * equivalencia del formato preferente (formatQtyInBase), convertimos el stock
- * a "número de formatos" — igual que hace tspoon ("4,5 Caja"). Si no hay
- * formato, caemos a la unidad base legible (kg/L). Null → "—".
- *
- * Ej: Patatas 43.530 g, Caja = 10.000 g → "4,4 Caja".
- *     Aceite 780 ml, sin formato → "780 ml".
+ * Stock legible para la pantalla de pedido, en UNIDAD BASE (kg/L/ud) — igual
+ * que Existencias y la ficha del artículo (fuente única: formatBaseQty). NO se
+ * convierte a nº de formatos: con más de un tamaño de compra (mozzarella en
+ * bolsas de 1/1,5/2 kg) esa cuenta es ambigua y el "sugerido"/"cantidad a
+ * pedir" ya usan el formato de compra por su lado. Null → "—".
  */
 export function formatStockForOrder(
   stockOnHand: number | null,
-  formatQtyInBase: number | null,
-  formatName: string | null,
   baseAbbr: string | null,
 ): string {
   if (stockOnHand === null || stockOnHand === undefined) return '—'
-
-  const nf = (v: number, max = 1) =>
-    new Intl.NumberFormat('es-ES', { maximumFractionDigits: max }).format(v)
-
-  // Con formato de envase real → expresar en nº de formatos ("4,4 Caja").
-  if (formatQtyInBase && formatQtyInBase > 0 && formatName && !isUnitWord(formatName)) {
-    const n = stockOnHand / formatQtyInBase
-    const plural = n === 1 ? formatName : `${formatName}s`
-    return `${nf(n)} ${plural.toLowerCase()}`
-  }
-
-  // Sin envase → unidad base legible (escalar g→kg, ml→L cuando procede).
-  if (baseAbbr === 'g' && Math.abs(stockOnHand) >= 1000) return `${nf(stockOnHand / 1000)} kg`
-  if (baseAbbr === 'ml' && Math.abs(stockOnHand) >= 1000) return `${nf(stockOnHand / 1000)} L`
-  return `${nf(stockOnHand, 0)} ${baseAbbr ?? ''}`.trim()
+  return formatBaseQty(stockOnHand, baseAbbr)
 }
 
 /**

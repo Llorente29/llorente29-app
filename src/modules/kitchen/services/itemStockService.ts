@@ -24,8 +24,6 @@ export interface ItemLocationStock {
 
 export interface ItemStockByLocation {
   unitAbbr: string | null
-  buyFormatName: string | null
-  buyFormatQtyInBase: number | null
   totalQty: number
   totalValue: number
   locations: ItemLocationStock[]
@@ -41,8 +39,6 @@ export async function getItemStockByLocation(accountId: string, recipeItemId: st
   const o = (data ?? {}) as Row
   return {
     unitAbbr: (o.unit_abbr as string | null) ?? null,
-    buyFormatName: (o.buy_format_name as string | null) ?? null,
-    buyFormatQtyInBase: o.buy_format_qty_in_base == null ? null : Number(o.buy_format_qty_in_base),
     totalQty: Number(o.total_qty ?? 0),
     totalValue: Number(o.total_value ?? 0),
     locations: ((o.locations ?? []) as Row[]).map(r => ({

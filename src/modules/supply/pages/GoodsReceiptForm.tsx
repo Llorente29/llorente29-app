@@ -516,6 +516,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
   // C2.2.c — ajustes de avisos + precios de referencia por artículo del proveedor.
   const [supplySettings, setSupplySettings] = useState<SupplySettings>({
     priceAlertPct: 15, expiryAlertDays: 3, negotiatedAlertPct: 0, driftAlertPct: 25, driftWindowMonths: 6,
+    negStockRelPct: 5, negStockAbsQty: 5, negStockWindowDays: 60,
   })
   // Unidades de cocina (para expresar el €/base de los avisos en €/kg, €/L, €/ud).
   const [units, setUnits] = useState<KitchenUnit[]>([])
