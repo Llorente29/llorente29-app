@@ -30,7 +30,7 @@ export default function CloseShortOrderModal({
   const canSave = reason !== '' && !saving && target !== null
 
   async function submit() {
-    if (!canSave || reason === '') return
+    if (!canSave) return
     setSaving(true)
     setError(null)
     try {

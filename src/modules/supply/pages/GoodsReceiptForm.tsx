@@ -566,7 +566,6 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
   const [candidateOrders, setCandidateOrders] = useState<PurchaseOrder[]>([])
   const [candidateLineCounts, setCandidateLineCounts] = useState<Map<string, number>>(new Map())
   const [candidateOverdue, setCandidateOverdue] = useState<Map<string, number>>(new Map())
-  const [candidateScores, setCandidateScores] = useState<Map<string, number>>(new Map())
   const [orderMatchMode, setOrderMatchMode] = useState<'none' | 'auto' | 'ambiguous'>('none')
   const [orderMatchOverridden, setOrderMatchOverridden] = useState(false) // "cambiar" tras auto-enlazar
   const [loadingOrders, setLoadingOrders] = useState(false)
@@ -894,7 +893,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
         ])))
 
         if (filtered.length === 0) {
-          setCandidateLineCounts(new Map()); setCandidateScores(new Map())
+          setCandidateLineCounts(new Map())
           setOrderMatchMode('none'); setOrderMatchOverridden(false)
           return
         }
@@ -909,7 +908,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
         // Solo se auto-decide en OCR (principio rector: el trabajador de muelle
         // nunca elige a mano el caso normal). El picker manual sigue igual.
         if (!fromOcr || !ocrPrefill) {
-          setCandidateScores(new Map()); setOrderMatchMode('none'); setOrderMatchOverridden(false)
+          setOrderMatchMode('none'); setOrderMatchOverridden(false)
           return
         }
         const ocrNames = ocrPrefill.lines.map(l => l.productName).filter(Boolean)
@@ -920,7 +919,6 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
           const dateScore = dateProximityScore(order2.expectedDate, nowMs, windowDays)
           return [id, lineScore * 0.7 + dateScore * 0.3] as const
         }))
-        setCandidateScores(scores)
 
         const ranked = [...filtered].sort((a, b) => (scores.get(b.id) ?? 0) - (scores.get(a.id) ?? 0))
         const top = ranked[0]
