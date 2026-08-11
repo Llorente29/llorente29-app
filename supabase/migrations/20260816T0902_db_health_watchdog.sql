@@ -5,39 +5,74 @@
 -- avisara ANTES. Este vigía cierra ese hueco: RPC de chequeo + cron cada minuto +
 -- rastro con retención corta + aviso por el canal de notificaciones YA EXISTENTE
 -- (edge `system-alert`, ya versionada en supabase/functions/system-alert — no se
--- crea edge nueva, no hace falta: el patrón "cron llama a system-alert vía
--- net.http_post con x-cron-secret de Vault" ya existe en producción, ver el cron
+-- crea edge nueva: el patrón "cron llama a system-alert vía net.http_post con
+-- x-cron-secret de Vault" ya existe en producción, ver el cron
 -- `hubrise-order-stuck-watchdog`, que este vigía calca).
 --
--- Umbral del encargo ("más de 3 procesos esperando lock durante más de 2
--- min") — interpretación corregida (Julio, 2ª vuelta): lo que importa es que
--- el CONTEO agregado de procesos esperando lock lleve sostenido por encima de
--- 3 durante 2 minutos, no que cada proceso individual lleve él mismo 2 min
--- bloqueado. db_health_snapshot() ahora es un chequeo instantáneo (conteo
--- crudo de wait_event_type='Lock', sin filtro de tiempo); la persistencia se
--- mide en db_health_watchdog() mirando los snapshots ya guardados en
--- db_health_snapshot_log de los últimos 2 minutos: dispara solo si TODOS los
--- snapshots de esa ventana rompen el umbral Y hay al menos 2 (una sola
--- lectura, aunque rompa, no basta para llamarlo "sostenido" — evita un falso
--- positivo en el primer minuto de vida del cron o justo tras un reinicio).
--- Con el cron a */1 min, 2 snapshots consecutivos cubren la ventana de 2 min
--- pedida por el encargo.
+-- ADENDA (11/08 mañana) sobre esta migración:
 --
--- SIN CATCH MUDO: si el propio chequeo falla (p.ej. pg_stat_activity no
--- accesible), el vigía intenta avisar de ESE fallo por el mismo canal y luego
--- relanza la excepción (queda también en cron.job_run_details).
+-- §1 Umbral corregido a persistencia entre snapshots — YA estaba así desde la
+-- entrega anterior (db_health_snapshot() es un chequeo instantáneo del conteo
+-- agregado de wait_event_type='Lock'; db_health_watchdog() exige que TODOS los
+-- snapshots de los últimos 2 min lo rompan y que haya al menos 2, para no
+-- disparar con una lectura suelta). La adenda confirma que esta es la lectura
+-- correcta: en la madrugada del 11/08 cada espera individual duraba 1-3s
+-- (statement_timeout cancelaba antes de los 2min) — un umbral por-proceso
+-- nunca habría sonado. Se añade AQUÍ la segunda condición barata que pide la
+-- adenda: conexiones totales > 80% de max_connections (agotamiento de pool,
+-- el otro modo de fallo de una tormenta de escrituras).
 --
--- Antiruido: no repite el aviso de bloqueo si ya avisó en los últimos 15 min
--- mientras la condición persiste (evita spam de 1 email/minuto en un incidente
--- largo, sin dejar de avisar del inicio y de una posible recaída).
+-- §5 (reformulado) — Julio retira la auto-baja por 30 días sin latido (rompe
+-- con el calendario real de hostelería: un bar cerrado en agosto no es un
+-- dispositivo fantasma) y pide en su lugar un REPORTE, sin efecto operativo
+-- automático. Se añade db_health_stale_devices_report(): cron DIARIO
+-- (separado del vigía de bloqueos, que es cada minuto — mezclar un reporte de
+-- inventario de baja frecuencia en el cron crítico de cada minuto sería ruido)
+-- que lista kds_device activos sin latido >30 días y avisa solo si hay alguno
+-- (silencioso si no).
 --
--- Validado por MCP antes de escribir este fichero: compiló y corrió con
--- nombres temporales _tmp_check_*, y la lógica de persistencia se probó
--- aparte con 3 casos (ambos snapshots rompen -> dispara; uno solo rompe de
--- dos -> no dispara; una sola lectura aunque rompa -> no dispara) — regla
--- "validar SQL por MCP antes de entregar".
+-- §6 Guardia anti-regresión — db_health_snapshot() ahora también cuenta
+-- cuántas funciones de public tienen `update ... kds_device` en su cuerpo
+-- (regex de la propia adenda: 'update\s+(public\.)?kds_device'). Esperado
+-- SIEMPRE 3, y ESTOS SON LOS 3 LEGÍTIMOS (no tocar sin actualizar este
+-- comentario y el umbral):
+--   1) kds_heartbeat                 — el latido de raíz (este encargo)
+--   2) report_device_app_version     — reporte de versión al arrancar la app
+--   3) set_device_mode_by_token      — cambio de modo al vincular la tablet
+-- Si el conteo != 3 en cualquier snapshot futuro, alguien ha vuelto a meter
+-- una escritura en una función de lectura (el incidente completo del 11/08,
+-- de nuevo) y el vigía avisa (con antiruido de 24h, no cada minuto).
+--
+-- §4 de la adenda (kds_authorize no comprueba is_active) — VERIFICADO Y
+-- REFUTADO por RECON en vivo, NO se aplica ningún cambio a kds_authorize:
+-- kds_resolve_device (la única puerta de entrada por token; barrido de
+-- pg_proc confirma que NINGUNA función busca kds_device por token sin pasar
+-- por ella) ya filtra `is_active = true`. Probado empíricamente contra 2 de
+-- los 3 dispositivos que Julio dio de baja esta mañana (Cocina Alcalá y
+-- Tablet J): kds_authorize(location_id, token) con su token real devuelve
+-- 'kds: token de dispositivo no válido' — ya no autorizan, hoy, sin tocar
+-- nada de esta migración. No hay escritura correctiva que hacer aquí.
+--
+-- SIN CATCH MUDO: si el propio chequeo falla, el vigía intenta avisar de ESE
+-- fallo por el mismo canal (con su propio antiruido de 30min) y relanza la
+-- excepción (queda también en cron.job_run_details).
+--
+-- Antiruido general: cada tipo de aviso (bloqueos, conexiones, regresión,
+-- fallo del propio vigía) se debounca por separado en db_health_alert_log —
+-- tabla de auditoría de avisos enviados, no solo un flag.
+--
+-- Validado por MCP con nombres temporales _tmp_check_* antes de escribir este
+-- fichero: db_health_snapshot() corrió contra pg_stat_activity real (hoy:
+-- writer_count=15 — correcto, 0900/0901 aún no aplicadas, confirma que el
+-- guard detecta el estado "no son 3"); la lógica de persistencia de bloqueos
+-- se probó aparte con 3 casos (ver commit anterior). AVISO DE TRANSPARENCIA:
+-- una de estas pruebas (con writer_count=15 real) SÍ disparó una llamada real
+-- a system-alert (aviso 'db-health-writer-regression' de prueba, visible en
+-- net._http_response) — inofensivo, ningún dato tocado, pero es un correo de
+-- prueba real que habrá llegado a SYSTEM_ALERT_TO. Avisado en el parte, no se
+-- oculta.
 
--- ── 1) Tabla de rastro (retención corta, deny-all — patrón F0.3) ──────────────
+-- ── 1) Tablas de rastro y de avisos (retención corta, deny-all — patrón F0.3) ─
 
 create table if not exists public.db_health_snapshot_log (
   id                 bigint generated by default as identity primary key,
@@ -45,7 +80,7 @@ create table if not exists public.db_health_snapshot_log (
   total_connections  int not null,
   waiting_locks      int not null,
   oldest_tx_seconds  numeric not null,
-  alerted            boolean not null default false
+  writer_count       int not null
 );
 
 comment on table public.db_health_snapshot_log is
@@ -53,13 +88,33 @@ comment on table public.db_health_snapshot_log is
   'SECURITY DEFINER (fix/kds-latido-raiz, 11/08). Retención: 48h, se autolimpia '
   'en cada ejecución de db_health_watchdog(). waiting_locks = conteo crudo de '
   'pg_stat_activity con wait_event_type=Lock en el momento del snapshot; la '
-  'persistencia (>3 durante >2min) se evalúa comparando snapshots consecutivos, '
-  'no dentro de esta fila.';
+  'persistencia (>3 durante >2min) se evalúa comparando snapshots consecutivos. '
+  'writer_count = nº de funciones public con `update ... kds_device` en su '
+  'cuerpo — guard anti-regresión, esperado SIEMPRE 3.';
 
 alter table public.db_health_snapshot_log enable row level security;
 
 create index if not exists idx_db_health_snapshot_log_checked_at
   on public.db_health_snapshot_log (checked_at desc);
+
+create table if not exists public.db_health_alert_log (
+  id      bigint generated by default as identity primary key,
+  kind    text not null,
+  sent_at timestamptz not null default now(),
+  detail  text
+);
+
+comment on table public.db_health_alert_log is
+  'RLS deny-all intencional. Auditoría + antiruido de los avisos que manda '
+  'db_health_watchdog()/db_health_stale_devices_report() — un aviso de tipo '
+  '`kind` no se repite mientras exista una fila reciente de ese kind dentro de '
+  'su ventana de debounce (15min bloqueos/conexiones, 24h regresión, 30min '
+  'fallo del propio vigía). Retención: 30 días.';
+
+alter table public.db_health_alert_log enable row level security;
+
+create index if not exists idx_db_health_alert_log_kind_sent_at
+  on public.db_health_alert_log (kind, sent_at desc);
 
 -- ── 2) RPC de chequeo (puro, instantáneo, sin efectos secundarios) ────────────
 
@@ -73,6 +128,8 @@ declare
   v_total_conn   int;
   v_waiting_lock int;
   v_oldest_tx_s  numeric;
+  v_writer_count int;
+  v_max_conn     int;
 begin
   select count(*) into v_total_conn from pg_stat_activity;
 
@@ -84,20 +141,32 @@ begin
   from pg_stat_activity
   where xact_start is not null;
 
+  -- Guard anti-regresión (§6): esperado SIEMPRE 3 — ver los 3 nombres
+  -- legítimos documentados en la cabecera de este fichero.
+  select count(*) into v_writer_count
+  from pg_proc p
+  join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'public' and p.prosrc ~* 'update\s+(public\.)?kds_device';
+
+  select setting::int into v_max_conn from pg_settings where name = 'max_connections';
+
   return jsonb_build_object(
     'total_connections', v_total_conn,
     'waiting_locks',     v_waiting_lock,
-    'oldest_tx_seconds', coalesce(round(v_oldest_tx_s), 0)
+    'oldest_tx_seconds', coalesce(round(v_oldest_tx_s), 0),
+    'writer_count',      v_writer_count,
+    'max_connections',   v_max_conn
   );
 end;
 $function$;
 
 comment on function public.db_health_snapshot() is
   'Chequeo puro e instantáneo de salud de BBDD (conexiones, procesos '
-  'esperando lock AHORA, tx más vieja). Sin efectos secundarios y sin juicio '
-  'de persistencia — eso lo hace db_health_watchdog() comparando snapshots.';
+  'esperando lock AHORA, tx más vieja, conteo anti-regresión de escritores de '
+  'kds_device, max_connections). Sin efectos secundarios y sin juicio de '
+  'persistencia — eso lo hace db_health_watchdog() comparando snapshots.';
 
--- ── 3) Vigía: registra + evalúa persistencia + avisa ──────────────────────────
+-- ── 3) Vigía: registra + evalúa 3 condiciones + avisa (con antiruido) ────────
 
 CREATE OR REPLACE FUNCTION public.db_health_watchdog()
 RETURNS void
@@ -108,73 +177,136 @@ AS $function$
 declare
   v_snap        jsonb;
   v_waiting     int;
-  v_row_id      bigint;
+  v_writers     int;
+  v_total_conn  int;
+  v_max_conn    int;
   v_n_snapshots int;
   v_n_breaching int;
-  v_last_alert  timestamptz;
   v_secret      text;
 begin
   begin
-    v_snap    := public.db_health_snapshot();
-    v_waiting := (v_snap->>'waiting_locks')::int;
+    v_snap       := public.db_health_snapshot();
+    v_waiting    := (v_snap->>'waiting_locks')::int;
+    v_writers    := (v_snap->>'writer_count')::int;
+    v_total_conn := (v_snap->>'total_connections')::int;
+    v_max_conn   := (v_snap->>'max_connections')::int;
 
     insert into public.db_health_snapshot_log
-      (total_connections, waiting_locks, oldest_tx_seconds)
+      (total_connections, waiting_locks, oldest_tx_seconds, writer_count)
     values
-      ((v_snap->>'total_connections')::int, v_waiting, (v_snap->>'oldest_tx_seconds')::numeric)
-    returning id into v_row_id;
+      (v_total_conn, v_waiting, (v_snap->>'oldest_tx_seconds')::numeric, v_writers);
 
     delete from public.db_health_snapshot_log where checked_at < now() - interval '48 hours';
+    delete from public.db_health_alert_log where sent_at < now() - interval '30 days';
 
-    -- Persistencia: ¿todos los snapshots de los últimos 2 min rompen el
-    -- umbral, y hay al menos 2 para poder llamarlo "sostenido"?
+    -- Aviso 1 — bloqueos sostenidos: >3 esperando lock en TODOS los snapshots
+    -- de los últimos 2 min, con al menos 2 lecturas (evita falso positivo de
+    -- una lectura suelta). Antiruido: 15 min.
     select count(*), count(*) filter (where waiting_locks > 3)
       into v_n_snapshots, v_n_breaching
       from public.db_health_snapshot_log
       where checked_at >= now() - interval '2 minutes';
 
-    if v_n_snapshots >= 2 and v_n_breaching = v_n_snapshots then
-      select max(checked_at) into v_last_alert
-      from public.db_health_snapshot_log where alerted;
-
-      if v_last_alert is null or v_last_alert < now() - interval '15 minutes' then
-        select decrypted_secret into v_secret from vault.decrypted_secrets where name = 'cron_secret';
-        if v_secret is not null then
-          perform net.http_post(
-            url     := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/system-alert',
-            headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', v_secret),
-            body    := jsonb_build_object(
-              'subject', 'BBDD con bloqueos — ' || v_waiting || ' proceso(s) esperando lock, sostenido >2min',
-              'message', 'db_health_watchdog detectó más de 3 procesos esperando lock en ' || v_n_snapshots
-                         || ' snapshots consecutivos de los últimos 2 minutos (ahora mismo: ' || v_waiting || ').' || chr(10)
-                         || 'Conexiones totales: ' || (v_snap->>'total_connections')
-                         || '. Transacción más antigua: ' || (v_snap->>'oldest_tx_seconds') || 's.' || chr(10)
-                         || 'Así empezó el incidente del 11/08 (caída ~45 min con los 3 locales cerrados). Revisar pg_stat_activity ya.',
-              'kind', 'db-health'
-            ),
-            timeout_milliseconds := 10000
-          );
-          update public.db_health_snapshot_log set alerted = true where id = v_row_id;
-        else
-          raise warning 'db_health_watchdog: secret cron_secret ausente en Vault, no se pudo avisar';
-        end if;
-      end if;
-    end if;
-  exception when others then
-    -- Sin catch mudo: si el propio chequeo falla, eso también es un aviso.
-    begin
+    if v_n_snapshots >= 2 and v_n_breaching = v_n_snapshots
+       and not exists (
+         select 1 from public.db_health_alert_log
+         where kind = 'db-health-lock' and sent_at >= now() - interval '15 minutes'
+       ) then
       select decrypted_secret into v_secret from vault.decrypted_secrets where name = 'cron_secret';
       if v_secret is not null then
         perform net.http_post(
           url     := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/system-alert',
           headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', v_secret),
           body    := jsonb_build_object(
-            'subject', 'db_health_watchdog FALLÓ',
-            'message', 'El vigía de salud de BBDD lanzó una excepción y no pudo completar su chequeo: ' || sqlerrm,
-            'kind', 'db-health-watchdog-error'
+            'subject', 'BBDD con bloqueos — ' || v_waiting || ' proceso(s) esperando lock, sostenido >2min',
+            'message', 'db_health_watchdog detectó más de 3 procesos esperando lock en ' || v_n_snapshots
+                       || ' snapshots consecutivos de los últimos 2 minutos (ahora mismo: ' || v_waiting || ').' || chr(10)
+                       || 'Conexiones totales: ' || v_total_conn
+                       || '. Transacción más antigua: ' || (v_snap->>'oldest_tx_seconds') || 's.' || chr(10)
+                       || 'Así empezó el incidente del 11/08 (caída ~45 min con los 3 locales cerrados). Revisar pg_stat_activity ya.',
+            'kind', 'db-health'
           ),
           timeout_milliseconds := 10000
         );
+        insert into public.db_health_alert_log (kind, detail) values ('db-health-lock', v_waiting || ' esperando lock');
+      end if;
+    end if;
+
+    -- Aviso 2 — conexiones cerca del máximo (>80% de max_connections): el
+    -- otro modo de fallo de una tormenta de escrituras (agotamiento de pool).
+    -- Instantáneo, no exige persistencia. Antiruido: 15 min.
+    if v_max_conn > 0 and v_total_conn > 0.8 * v_max_conn
+       and not exists (
+         select 1 from public.db_health_alert_log
+         where kind = 'db-health-connections' and sent_at >= now() - interval '15 minutes'
+       ) then
+      select decrypted_secret into v_secret from vault.decrypted_secrets where name = 'cron_secret';
+      if v_secret is not null then
+        perform net.http_post(
+          url     := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/system-alert',
+          headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', v_secret),
+          body    := jsonb_build_object(
+            'subject', 'BBDD cerca del límite de conexiones — ' || v_total_conn || '/' || v_max_conn,
+            'message', 'db_health_watchdog detectó ' || v_total_conn || ' conexiones activas de un máximo de '
+                       || v_max_conn || ' (>80%).' || chr(10)
+                       || 'Revisar pg_stat_activity: puede ser el mismo patrón del 11/08 (tormenta de escrituras agotando el pool).',
+            'kind', 'db-health'
+          ),
+          timeout_milliseconds := 10000
+        );
+        insert into public.db_health_alert_log (kind, detail) values ('db-health-connections', v_total_conn || '/' || v_max_conn);
+      end if;
+    end if;
+
+    -- Aviso 3 — guard anti-regresión (§6): esperado SIEMPRE 3 escritores de
+    -- kds_device (ver los 3 nombres legítimos en la cabecera del fichero).
+    -- Antiruido largo (24h): una regresión no se resuelve en minutos, pero
+    -- tampoco hace falta repetir el aviso cada minuto mientras se corrige.
+    if v_writers <> 3
+       and not exists (
+         select 1 from public.db_health_alert_log
+         where kind = 'db-health-writer-regression' and sent_at >= now() - interval '24 hours'
+       ) then
+      select decrypted_secret into v_secret from vault.decrypted_secrets where name = 'cron_secret';
+      if v_secret is not null then
+        perform net.http_post(
+          url     := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/system-alert',
+          headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', v_secret),
+          body    := jsonb_build_object(
+            'subject', 'REGRESIÓN: ' || v_writers || ' funciones escriben kds_device (se esperaban 3)',
+            'message', 'Alguien ha vuelto a meter una escritura de last_seen_at en una función de LECTURA de kds_device '
+                       || '(el incidente completo del 11/08, de nuevo).' || chr(10)
+                       || 'Esperado: kds_heartbeat, report_device_app_version, set_device_mode_by_token — y nada más.' || chr(10)
+                       || 'select proname from pg_proc join pg_namespace on ... where prosrc ~* ''update\s+(public\.)?kds_device'' para ver cuál.',
+            'kind', 'db-health'
+          ),
+          timeout_milliseconds := 10000
+        );
+        insert into public.db_health_alert_log (kind, detail) values ('db-health-writer-regression', v_writers || ' escritores');
+      end if;
+    end if;
+  exception when others then
+    -- Sin catch mudo: si el propio chequeo falla, eso también es un aviso
+    -- (con su propio antiruido de 30min para no repetir cada minuto).
+    begin
+      if not exists (
+        select 1 from public.db_health_alert_log
+        where kind = 'db-health-watchdog-error' and sent_at >= now() - interval '30 minutes'
+      ) then
+        select decrypted_secret into v_secret from vault.decrypted_secrets where name = 'cron_secret';
+        if v_secret is not null then
+          perform net.http_post(
+            url     := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/system-alert',
+            headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', v_secret),
+            body    := jsonb_build_object(
+              'subject', 'db_health_watchdog FALLÓ',
+              'message', 'El vigía de salud de BBDD lanzó una excepción y no pudo completar su chequeo: ' || sqlerrm,
+              'kind', 'db-health-watchdog-error'
+            ),
+            timeout_milliseconds := 10000
+          );
+          insert into public.db_health_alert_log (kind, detail) values ('db-health-watchdog-error', sqlerrm);
+        end if;
       end if;
     exception when others then
       null; -- último recurso; queda igualmente en cron.job_run_details
@@ -185,19 +317,102 @@ end;
 $function$;
 
 comment on function public.db_health_watchdog() is
-  'Registra un snapshot de salud cada minuto (cron db-health-watchdog) y avisa '
-  'por system-alert si >3 procesos esperan lock de forma sostenida (todos los '
-  'snapshots de los últimos 2min, mínimo 2 lecturas). Antiruido: no repite '
-  'aviso en <15min mientras persiste. Nunca falla en silencio.';
+  'Registra un snapshot cada minuto (cron db-health-watchdog) y avisa por '
+  'system-alert ante 3 condiciones independientes, cada una con su propio '
+  'antiruido en db_health_alert_log: (1) bloqueos sostenidos >2min, (2) '
+  'conexiones >80% de max_connections, (3) regresión del guard anti-escritura '
+  '(writer_count != 3). Nunca falla en silencio.';
+
+-- ── 4) Reporte DIARIO de dispositivos fantasma (§5 reformulado — SIN baja '
+-- automática, solo aviso; separado del vigía de cada minuto a propósito) ────
+
+CREATE OR REPLACE FUNCTION public.db_health_stale_devices_report()
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+declare
+  v_secret text;
+  v_list   text;
+  v_count  int;
+begin
+  select string_agg(
+           format('%s (%s) — último latido: %s',
+             d.label, l.name, coalesce(d.last_seen_at::text, 'nunca')),
+           chr(10) order by d.last_seen_at nulls first
+         ), count(*)
+    into v_list, v_count
+  from kds_device d
+  join locations l on l.id = d.location_id
+  where d.is_active
+    and (d.last_seen_at is null or d.last_seen_at < now() - interval '30 days');
+
+  if v_count is null or v_count = 0 then
+    return; -- silencioso: nada que avisar hoy
+  end if;
+
+  select decrypted_secret into v_secret from vault.decrypted_secrets where name = 'cron_secret';
+  if v_secret is null then
+    raise warning 'db_health_stale_devices_report: secret cron_secret ausente en Vault, no se pudo avisar';
+    return;
+  end if;
+
+  perform net.http_post(
+    url     := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/system-alert',
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', v_secret),
+    body    := jsonb_build_object(
+      'subject', v_count || ' dispositivo(s) KDS activo(s) sin latido hace más de 30 días',
+      'message', 'Solo REPORTE — ninguna baja automática. Revisar si siguen en uso o dar de baja a mano (is_active=false):'
+                 || chr(10) || chr(10) || v_list,
+      'kind', 'db-health-stale-devices'
+    ),
+    timeout_milliseconds := 10000
+  );
+exception when others then
+  begin
+    select decrypted_secret into v_secret from vault.decrypted_secrets where name = 'cron_secret';
+    if v_secret is not null then
+      perform net.http_post(
+        url     := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/system-alert',
+        headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', v_secret),
+        body    := jsonb_build_object(
+          'subject', 'db_health_stale_devices_report FALLÓ',
+          'message', 'El reporte diario de dispositivos fantasma lanzó una excepción: ' || sqlerrm,
+          'kind', 'db-health-stale-devices-error'
+        ),
+        timeout_milliseconds := 10000
+      );
+    end if;
+  exception when others then
+    null;
+  end;
+  raise;
+end;
+$function$;
+
+comment on function public.db_health_stale_devices_report() is
+  'Reporte DIARIO (cron db-health-stale-devices-daily, 08:00) de kds_device '
+  'con is_active=true y last_seen_at NULL o >30 días. Solo aviso — CERO '
+  'efecto operativo automático (§5 de la adenda, retirada la auto-baja: no '
+  'penaliza a un local cerrado por vacaciones). Silencioso si no hay nada '
+  'que reportar.';
 
 -- No exponer a clientes: solo el cron (postgres) las llama.
 revoke all on function public.db_health_snapshot() from public, anon, authenticated;
 revoke all on function public.db_health_watchdog() from public, anon, authenticated;
+revoke all on function public.db_health_stale_devices_report() from public, anon, authenticated;
 
--- ── 4) Cron cada minuto ────────────────────────────────────────────────────────
+-- ── 5) Crons ─────────────────────────────────────────────────────────────────
 
 select cron.schedule(
   'db-health-watchdog',
   '* * * * *',
   $cron$select public.db_health_watchdog()$cron$
+);
+
+select cron.schedule(
+  'db-health-stale-devices-daily',
+  '0 8 * * *',
+  $cron$select public.db_health_stale_devices_report()$cron$
 );
