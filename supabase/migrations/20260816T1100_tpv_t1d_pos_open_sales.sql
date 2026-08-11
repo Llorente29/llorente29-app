@@ -1,4 +1,8 @@
--- Aplicada: PENDIENTE (Julio, por MCP).
+-- Aplicada: SÍ — por Julio vía MCP, 11/08 ~22:20. Verificada con query
+-- independiente (pos_open_sales/pos_pending_delivery_sales con EXECUTE para
+-- authenticated y bloqueadas para anon; _modgroups_of_item devuelve
+-- group_type) y con uso real: panel "Cuentas" mostró T001, se recuperó, se
+-- cobró y se marcó Entregado — las tres cosas pasando por estas RPC.
 --
 -- ENCARGO TPV T1.d — cerrar el ciclo de venta, Tarea A.1 + apoyo de C/D.
 --
