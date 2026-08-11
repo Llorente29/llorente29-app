@@ -29,6 +29,23 @@ interface AlertBody {
 const FROM = "Folvy Alertas <no-reply@folvy.app>";
 const REPLY_TO = "jgcolon@idasal.com";
 
+// Origen visible en el pie del correo — derivado de `kind`, nunca fijo.
+// Antes decía "vigilante de ingesta (Folvy)" en TODOS los avisos, incluidos
+// los del vigía de salud de BBDD (kind='db-health*'), que es un sistema
+// distinto — en una alerta real de madrugada ese pie manda a mirar donde no
+// es. Lista cerrada de kinds conocidos (11/08); el fallback nunca afirma un
+// origen que no se puede verificar, muestra el kind crudo en su lugar.
+function originFor(kind: string): string {
+  if (kind.startsWith("db-health")) return "vigía de salud de BBDD (Folvy)";
+  if (kind === "synthetic_ping") return "vigilante de ingesta — ping sintético (Folvy)";
+  if (kind === "catcher-delivery") return "Catcher — entregas de pedidos (Folvy)";
+  if (kind === "hubrise-callback") return "HubRise — callback de disponibilidad (Folvy)";
+  if (kind === "availability-dispatch" || kind === "location-status-dispatch" || kind === "brand-closure") {
+    return "vigía de disponibilidad HubRise (Folvy)";
+  }
+  return `Folvy — kind sin mapear: "${kind}"`;
+}
+
 Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -77,7 +94,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     `— — —\n` +
     `Tipo: ${kind}\n` +
     `Enviado: ${new Date().toISOString()}\n` +
-    `Origen: vigilante de ingesta (Folvy)`;
+    `Origen: ${originFor(kind)}`;
 
   try {
     const res = await fetch("https://api.resend.com/emails", {
