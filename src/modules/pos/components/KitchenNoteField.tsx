@@ -39,14 +39,14 @@ export default function KitchenNoteField({ value, onChange, autoFocus }: Props) 
   const activeParts = splitNoteParts(value).map(p => p.toLowerCase())
   return (
     <div>
-      <label className="block text-xs font-medium text-text-secondary mb-1.5">Nota de cocina (opcional)</label>
+      <label className="block text-xs font-bold text-tpv-txt-2 mb-1.5">Nota de cocina (opcional)</label>
       <div className="flex flex-wrap gap-1.5 mb-2">
         {QUICK_KITCHEN_NOTES.map(note => {
           const active = activeParts.includes(note.toLowerCase())
           return (
             <button
               key={note} type="button" onClick={() => onChange(toggleQuickNote(value, note))}
-              className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-base ${active ? 'border-accent bg-accent-bg text-accent' : 'border-border-default bg-page text-text-secondary hover:bg-card'}`}
+              className={`min-h-tap-small px-2.5 rounded-full text-xs font-bold border transition-base ${active ? 'border-tpv-accent bg-tpv-accent/25 text-white' : 'border-tpv-line bg-tpv-surface-2 text-tpv-txt-2 hover:bg-tpv-bg'}`}
             >
               {note}
             </button>
@@ -60,9 +60,9 @@ export default function KitchenNoteField({ value, onChange, autoFocus }: Props) 
         maxLength={KITCHEN_NOTE_MAX_LEN}
         placeholder="Ej. sin cebolla, poco hecho…"
         autoFocus={autoFocus}
-        className="w-full px-3 py-2.5 text-sm border border-border-default rounded-lg bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+        className="w-full min-h-tap px-3 text-sm border border-tpv-line rounded-tpv bg-tpv-surface-2 text-tpv-txt placeholder:text-tpv-txt-2 focus:outline-none focus:ring-2 focus:ring-tpv-accent"
       />
-      <p className="text-[11px] text-text-tertiary text-right mt-0.5">{value.length}/{KITCHEN_NOTE_MAX_LEN}</p>
+      <p className="text-[11px] text-tpv-txt-2 text-right mt-0.5">{value.length}/{KITCHEN_NOTE_MAX_LEN}</p>
     </div>
   )
 }

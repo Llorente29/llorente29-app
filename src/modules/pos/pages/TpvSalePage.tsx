@@ -551,7 +551,10 @@ export default function TpvSalePage({ onExit }: { onExit: () => void }) {
                   <span className="text-tpv-code font-extrabold text-tpv-txt">{t.posShortCode ?? 'Cuenta'}</span>
                   <span className="text-tpv-amount font-extrabold text-tpv-txt">{eur(t.total)}</span>
                 </div>
-                <span className="inline-flex items-center gap-1.5 self-start rounded-tpv px-2.5 py-1.5 text-xs font-extrabold bg-tpv-ok/20 text-tpv-ok">
+                {/* Verde como TEXTO pequeño no llega a 4,5:1 (misma familia de
+                    problema que "blanco sobre --ok", medido por Julio 11/08) —
+                    el semántico va en el fondo/tinte, el texto en blanco. */}
+                <span className="inline-flex items-center gap-1.5 self-start rounded-tpv px-2.5 py-1.5 text-xs font-extrabold bg-tpv-ok/25 text-white">
                   ✓ Cobrada · falta entregar
                 </span>
                 <button
