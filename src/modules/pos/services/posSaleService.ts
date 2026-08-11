@@ -160,28 +160,35 @@ function parseRawTabLines(raw: string | null): PosLinePayload[] {
   }
 }
 
+// T1.d (11/08): antes, estas dos funciones consultaban `sale` DIRECTO desde
+// el cliente (.from('sale')...), sin pasar por _pos_can_operate — el único
+// sitio del TPV que rompía ese patrón (upsert_pos_sale y pos_item_config sí
+// lo usan). La RLS de sale ('sale_read') es de CUENTA, no de LOCAL: un
+// empleado con acceso a un solo local podía, en teoría, leer cuentas de
+// OTRO local de la misma cuenta sin que el servidor lo impidiera (el filtro
+// por location_id era solo un .eq() del cliente). pos_open_sales/
+// pos_pending_delivery_sales cierran ese hueco: mismo guard que el resto.
+function mapOpenTicket(r: Record<string, unknown>): OpenPosTicket {
+  return {
+    id: r.id as string,
+    posShortCode: (r.posShortCode as string) ?? null,
+    status: r.status as string,
+    orderStatus: (r.orderStatus as string) ?? null,
+    paymentStatus: (r.paymentStatus as string) ?? null,
+    brandId: (r.brandId as string) ?? null,
+    total: Number(r.total ?? 0),
+    openedAt: r.openedAt as string,
+    lines: parseRawTabLines(r.rawTab as string | null),
+  }
+}
+
 export async function listOpenPosTickets(accountId: string, locationId: string): Promise<OpenPosTicket[]> {
   requireSupabase()
-  const { data, error } = await supabase!
-    .from('sale')
-    .select('id, pos_short_code, status, order_status, payment_status, brand_id, total, opened_at, raw_tab')
-    .eq('account_id', accountId)
-    .eq('location_id', locationId)
-    .eq('source', 'folvy_pos')
-    .eq('status', 'open')
-    .order('opened_at', { ascending: false })
+  const { data, error } = await (supabase!.rpc as unknown as RpcFn)('pos_open_sales', {
+    p_account_id: accountId, p_location_id: locationId,
+  })
   if (error) throw new Error(`Error listando cuentas abiertas: ${error.message}`)
-  return (data ?? []).map(r => ({
-    id: r.id as string,
-    posShortCode: (r.pos_short_code as string) ?? null,
-    status: r.status as string,
-    orderStatus: (r.order_status as string) ?? null,
-    paymentStatus: (r.payment_status as string) ?? null,
-    brandId: (r.brand_id as string) ?? null,
-    total: Number(r.total ?? 0),
-    openedAt: r.opened_at as string,
-    lines: parseRawTabLines(r.raw_tab as string | null),
-  }))
+  return ((data as Record<string, unknown>[]) ?? []).map(mapOpenTicket)
 }
 
 // Ventas cobradas ('closed'), pendientes de marcar Entregado (para el botón
@@ -189,25 +196,9 @@ export async function listOpenPosTickets(accountId: string, locationId: string):
 // un paso deliberado aparte cierra a 'completed' y dispara el consumo de stock.
 export async function listChargedPendingDeliveryTickets(accountId: string, locationId: string): Promise<OpenPosTicket[]> {
   requireSupabase()
-  const { data, error } = await supabase!
-    .from('sale')
-    .select('id, pos_short_code, status, order_status, payment_status, brand_id, total, opened_at, raw_tab')
-    .eq('account_id', accountId)
-    .eq('location_id', locationId)
-    .eq('source', 'folvy_pos')
-    .eq('status', 'closed')
-    .neq('order_status', 'completed')
-    .order('opened_at', { ascending: false })
+  const { data, error } = await (supabase!.rpc as unknown as RpcFn)('pos_pending_delivery_sales', {
+    p_account_id: accountId, p_location_id: locationId,
+  })
   if (error) throw new Error(`Error listando cuentas cobradas: ${error.message}`)
-  return (data ?? []).map(r => ({
-    id: r.id as string,
-    posShortCode: (r.pos_short_code as string) ?? null,
-    status: r.status as string,
-    orderStatus: (r.order_status as string) ?? null,
-    paymentStatus: (r.payment_status as string) ?? null,
-    brandId: (r.brand_id as string) ?? null,
-    total: Number(r.total ?? 0),
-    openedAt: r.opened_at as string,
-    lines: parseRawTabLines(r.raw_tab as string | null),
-  }))
+  return ((data as Record<string, unknown>[]) ?? []).map(mapOpenTicket)
 }

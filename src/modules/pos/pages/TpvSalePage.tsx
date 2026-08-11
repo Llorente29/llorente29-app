@@ -24,6 +24,7 @@ import {
   type PosBrand, type PosChannelKind, type OpenPosTicket, type PosLinePayload,
 } from '@/modules/pos/services/posSaleService'
 import PosItemConfigModal, { type PosConfiguredLine } from '@/modules/pos/components/PosItemConfigModal'
+import PosLineNoteModal from '@/modules/pos/components/PosLineNoteModal'
 import type { OrderLine } from '@/modules/shop/services/dishConfigService'
 
 interface CartLine {
@@ -34,6 +35,17 @@ interface CartLine {
   totalPrice: number
   displayName: string
   summary: string[]
+}
+
+// Subconjunto de OpenPosTicket que handleDeliver necesita — así puede
+// tomar tanto una fila del panel "Cuentas" como la venta recién cobrada
+// (que aún no tiene status/orderStatus/total de vuelta del servidor
+// re-formateados como OpenPosTicket, solo lo que upsertPosSale devolvió).
+interface DeliverableTicket {
+  id: string
+  posShortCode: string | null
+  brandId: string | null
+  lines: PosLinePayload[]
 }
 
 // eslint-disable-next-line no-restricted-syntax -- n es un cálculo local (líneas/carrito), nunca dato crudo del servidor
@@ -65,6 +77,9 @@ export default function TpvSalePage({ onExit }: { onExit: () => void }) {
   const [saleId, setSaleId] = useState<string | null>(null)
   const [channelKind, setChannelKind] = useState<PosChannelKind>('counter')
   const [configItem, setConfigItem] = useState<CatalogProduct | null>(null)
+  // T1.d (11/08): tocar una línea del carrito abre su nota de cocina — cubre
+  // también productos simples, que nunca pasan por PosItemConfigModal.
+  const [noteEditKey, setNoteEditKey] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [flash, setFlash] = useState<string | null>(null)
 
@@ -72,6 +87,10 @@ export default function TpvSalePage({ onExit }: { onExit: () => void }) {
   const [pendingDelivery, setPendingDelivery] = useState<OpenPosTicket[]>([])
   const [showTickets, setShowTickets] = useState(false)
   const [payMethodPick, setPayMethodPick] = useState(false)
+  // T1.d (11/08): tras Cobrar, el "Entregado" de esa venta se ofrece aquí
+  // mismo, a un toque — sin obligar a abrir el panel "Cuentas" para
+  // encontrarla en "Cobradas, pendientes de entregar".
+  const [chargedTicket, setChargedTicket] = useState<DeliverableTicket | null>(null)
 
   // ── Marcas del local ──
   useEffect(() => {
@@ -153,12 +172,21 @@ export default function TpvSalePage({ onExit }: { onExit: () => void }) {
   }
 
   function loadTicket(t: OpenPosTicket) {
+    // T1.d (11/08): antes recuperar una cuenta pisaba silenciosamente
+    // cualquier línea sin guardar que hubiera en pantalla. Ahora se avisa.
+    if (cart.length > 0) {
+      const ok = window.confirm(
+        `Hay ${cart.length} línea(s) sin guardar en pantalla. Si recuperas ${t.posShortCode ?? 'esta cuenta'} se descartan. ¿Continuar?`
+      )
+      if (!ok) return
+    }
     setSaleId(t.id)
     setBrandId(t.brandId ?? brandId)
     setCart(t.lines.map((l, i) => ({
       key: `${l.menuItemId}-${i}-${Date.now()}`, orderLine: l, kitchenNote: l.kitchenNote,
       unitPrice: l.unitPrice, totalPrice: l.totalPrice, displayName: l.name, summary: l.summary ?? [],
     })))
+    setChargedTicket(null)
     setShowTickets(false)
     setFlash(`Cuenta ${t.posShortCode ?? ''} recuperada.`)
   }
@@ -175,13 +203,19 @@ export default function TpvSalePage({ onExit }: { onExit: () => void }) {
         saleId, accountId: activeAccountId, locationId: operativeLocationId, brandId,
         channelKind, lines, action, paymentMethod, deviceToken,
       })
-      setSaleId(res.saleId)
-      if (action === 'save') setFlash(`Cuenta guardada · ${res.posShortCode ?? ''}`)
-      if (action === 'command') setFlash(`Comandado · ${res.posShortCode ?? ''} — ya está en cocina`)
+      // T1.d (11/08): las 3 acciones cierran el ciclo en pantalla — el
+      // carrito ya no se queda "vivo" tras Guardar/Comandar (el bug real que
+      // describe el encargo: el siguiente cliente heredaba las líneas del
+      // anterior). Para seguir editando una cuenta guardada/comandada, se
+      // recupera desde "Cuentas" (loadTicket ya soporta eso).
+      if (action === 'save') setFlash(`Cuenta guardada · ${res.posShortCode ?? ''} — recupérala desde "Cuentas" para seguir editándola.`)
+      if (action === 'command') setFlash(`Comandado · ${res.posShortCode ?? ''} — ya está en cocina.`)
       if (action === 'charge') {
-        setFlash(`Cobrado (${paymentMethod === 'cash' ? 'efectivo' : 'tarjeta'}) · ${res.posShortCode ?? ''}`)
-        setCart([]); setSaleId(null); setPayMethodPick(false)
+        setFlash(null)
+        setPayMethodPick(false)
+        setChargedTicket({ id: res.saleId, posShortCode: res.posShortCode, brandId, lines })
       }
+      setCart([]); setSaleId(null)
       reloadTickets()
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error en el TPV.')
@@ -192,8 +226,10 @@ export default function TpvSalePage({ onExit }: { onExit: () => void }) {
 
   // "Entregado" actúa sobre una cuenta YA COBRADA que puede no ser la que hay
   // en pantalla — se le pasan sus propias líneas (t.lines), nunca el carrito
-  // en curso (evita el bug de mandar p_lines=[] o las de otra cuenta).
-  async function handleDeliver(t: OpenPosTicket) {
+  // en curso (evita el bug de mandar p_lines=[] o las de otra cuenta). Sirve
+  // tanto para el banner de "recién cobrada" (a un toque) como para la fila
+  // del panel "Cuentas" → "Cobradas, pendientes de entregar".
+  async function handleDeliver(t: DeliverableTicket) {
     if (!activeAccountId || !operativeLocationId) return
     setSaving(true); setError(null)
     try {
@@ -202,6 +238,7 @@ export default function TpvSalePage({ onExit }: { onExit: () => void }) {
         brandId: t.brandId, channelKind, lines: t.lines, action: 'deliver',
       })
       setFlash(`Entregado ${t.posShortCode ?? ''} — stock descontado.`)
+      if (chargedTicket?.id === t.id) setChargedTicket(null)
       reloadTickets()
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error marcando Entregado.')
@@ -250,7 +287,7 @@ export default function TpvSalePage({ onExit }: { onExit: () => void }) {
           {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
         </select>
         <button
-          onClick={() => setShowTickets(s => !s)}
+          onClick={() => { const next = !showTickets; setShowTickets(next); if (next) reloadTickets() }}
           className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border border-border-default bg-card hover:bg-page transition-base shrink-0"
         >
           <ListChecks size={16} /> Cuentas ({openTickets.length}{pendingDelivery.length > 0 ? ` +${pendingDelivery.length}` : ''})
@@ -273,6 +310,21 @@ export default function TpvSalePage({ onExit }: { onExit: () => void }) {
         <div className="px-4 py-2 bg-success-bg text-success text-sm border-b border-success/20 flex items-center justify-between">
           <span>{flash}</span>
           <button onClick={() => setFlash(null)} className="text-xs underline">cerrar</button>
+        </div>
+      )}
+      {chargedTicket && (
+        <div className="px-4 py-3 bg-success-bg border-b border-success/20 flex items-center justify-between gap-3">
+          <span className="text-sm text-success font-medium">Cobrado · {chargedTicket.posShortCode ?? ''} — márcala Entregado cuando salga.</span>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => void handleDeliver(chargedTicket)}
+              disabled={saving}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50"
+            >
+              {saving ? <Loader2 className="animate-spin" size={15} /> : <PackageCheck size={15} />} Entregado
+            </button>
+            <button onClick={() => setChargedTicket(null)} className="text-xs text-text-secondary underline">Ahora no</button>
+          </div>
         </div>
       )}
 
@@ -371,14 +423,20 @@ export default function TpvSalePage({ onExit }: { onExit: () => void }) {
               {cart.length === 0 && <p className="text-sm text-text-tertiary text-center py-10">La cuenta está vacía.</p>}
               {cart.map(l => (
                 <div key={l.key} className="p-3 rounded-xl border border-border-default bg-page">
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="text-sm font-medium text-text-primary flex-1 min-w-0">{l.displayName}</span>
-                    <span className="text-sm font-semibold text-text-primary shrink-0">{eur(l.totalPrice)}</span>
-                  </div>
-                  {l.summary.length > 0 && (
-                    <p className="text-xs text-text-secondary mt-0.5 leading-snug">{l.summary.join(' · ')}</p>
-                  )}
-                  {l.kitchenNote && <p className="text-xs text-warning mt-0.5">Nota: {l.kitchenNote}</p>}
+                  <button type="button" onClick={() => setNoteEditKey(l.key)} className="w-full text-left">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-sm font-medium text-text-primary flex-1 min-w-0">{l.displayName}</span>
+                      <span className="text-sm font-semibold text-text-primary shrink-0">{eur(l.totalPrice)}</span>
+                    </div>
+                    {l.summary.length > 0 && (
+                      <p className="text-xs text-text-secondary mt-0.5 leading-snug">{l.summary.join(' · ')}</p>
+                    )}
+                    {l.kitchenNote ? (
+                      <p className="text-xs text-warning mt-0.5 font-medium">Nota: {l.kitchenNote}</p>
+                    ) : (
+                      <p className="text-xs text-text-tertiary mt-0.5">+ Añadir nota de cocina</p>
+                    )}
+                  </button>
                   <div className="flex items-center justify-between mt-2">
                     <div className="flex items-center gap-2">
                       <button onClick={() => changeQty(l.key, -1)} className="w-7 h-7 rounded-full border border-border-default flex items-center justify-center text-text-secondary hover:bg-card"><Minus size={13} /></button>
@@ -438,6 +496,22 @@ export default function TpvSalePage({ onExit }: { onExit: () => void }) {
           onAdd={line => handleConfigured(configItem, line)}
         />
       )}
+
+      {noteEditKey && (() => {
+        const l = cart.find(c => c.key === noteEditKey)
+        if (!l) return null
+        return (
+          <PosLineNoteModal
+            displayName={l.displayName}
+            initialNote={l.kitchenNote}
+            onClose={() => setNoteEditKey(null)}
+            onSave={note => {
+              setCart(prev => prev.map(c => c.key === noteEditKey ? { ...c, kitchenNote: note } : c))
+              setNoteEditKey(null)
+            }}
+          />
+        )
+      })()}
     </div>
   )
 }

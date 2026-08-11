@@ -32,6 +32,11 @@ export interface ModifierGroup {
   min: number
   max: number
   allowRepetition: boolean
+  // 'choice' | 'extras' | 'removal' | 'cross_sell' en los datos reales de hoy
+  // (verificado en vivo, TPV T1.d Tarea D) — tipado como string a propósito:
+  // Shop no lo usa todavía y un valor futuro fuera de esos 4 no debe romper
+  // el tipo, solo degradar (quien lo consuma decide el fallback, no aquí).
+  groupType: string
   options: ModifierOption[]
 }
 
@@ -77,6 +82,7 @@ function mapModGroup(g: any): ModifierGroup {
   return {
     id: g.id, name: g.name, min: g.min ?? 0, max: g.max ?? 99,
     allowRepetition: g.allow_repetition === true,
+    groupType: typeof g.group_type === 'string' && g.group_type ? g.group_type : 'extras',
     options: (g.options ?? []).map(mapModOption),
   }
 }
