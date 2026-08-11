@@ -16,14 +16,13 @@ import { ClipboardList, MonitorPlay, CircleOff, Printer as PrinterIcon, Loader2,
 import KdsBoard from '../kds/components/KdsBoard'
 import KdsAlarmOverlay from '../kds/components/KdsAlarmOverlay'
 import AvailabilityNoticeOverlay from '../kds/components/AvailabilityNoticeOverlay'
-import { getBoard } from '../kds/services/kdsService'
-import { getDeviceLocation, type TabletLocationInfo } from './services/tabletAvailabilityService'
 import TabletAvailabilityTab from './TabletAvailabilityTab'
 import OrdersFeed from '../orders/components/OrdersFeed'
 import PrintersSettingsPage from '../printing/components/PrintersSettingsPage'
 import QrScanButton from '../printing/components/QrScanButton'
 import { extractToken } from '../printing/pairingUtils'
-import { pairEstacion, unpairDevice } from '../../native/print/printWorker'
+import { pairEstacion, unpairDevice, onPrintJobExhausted, type PrintExhaustedInfo } from '../../native/print/printWorker'
+import { useDeviceTokenValidation, tokenValidationMessage } from './hooks/useDeviceTokenValidation'
 
 const TOKEN_KEY = 'kds_device_token' // mismo token que el kiosco
 
@@ -37,16 +36,22 @@ function clearToken(): void {
   try { window.localStorage.removeItem(TOKEN_KEY) } catch { /* noop */ }
 }
 
-type Status = 'idle' | 'checking' | 'valid' | 'invalid'
 type Tab = 'pedidos' | 'cocina' | 'disponibilidad' | 'impresoras'
 
 export default function TabletStationRoute() {
   const [token, setToken] = useState<string | null>(null)
-  const [status, setStatus] = useState<Status>('idle')
   const [pasteValue, setPasteValue] = useState('')
-  const [error, setError] = useState<string | null>(null)
   const [tab, setTab] = useState<Tab>('pedidos')
-  const [locInfo, setLocInfo] = useState<TabletLocationInfo | null>(null)
+
+  // fix/tablet-robustez (12/08): valida con device_location_by_token (~16ms,
+  // no kds_board ~1-2s) con reintento infinito ante red/lentitud — solo un
+  // rechazo EXPLÍCITO del servidor desvincula y pide vincular de nuevo.
+  const validation = useDeviceTokenValidation(token, () => { clearToken(); unpairDevice(); setToken(null) })
+
+  // Tarea E.2: aviso visible cuando una comanda/ticket agota sus 3 intentos
+  // de impresión — antes se perdía muda hasta que el cliente reclamaba.
+  const [printFailure, setPrintFailure] = useState<PrintExhaustedInfo | null>(null)
+  useEffect(() => onPrintJobExhausted(setPrintFailure), [])
 
   // Resolución inicial del token: ?token= en la URL o localStorage.
   useEffect(() => {
@@ -81,25 +86,6 @@ export default function TabletStationRoute() {
     }
   }, [])
 
-  // Valida el token (kds_board) y, en paralelo, carga el local del dispositivo.
-  useEffect(() => {
-    if (!token) { setStatus('idle'); return }
-    let cancelled = false
-    setStatus('checking')
-    setError(null)
-    getBoard(null, token)
-      .then(() => { if (!cancelled) setStatus('valid') })
-      .catch((e: unknown) => {
-        if (cancelled) return
-        setStatus('invalid')
-        setError(e instanceof Error ? e.message : 'Token no válido')
-      })
-    getDeviceLocation(token)
-      .then((info) => { if (!cancelled) setLocInfo(info) })
-      .catch(() => { /* la cabecera tolera no tener nombre */ })
-    return () => { cancelled = true }
-  }, [token])
-
   // Vincula la tablet: guarda el token (de un pegado o de un QR), arranca el
   // worker de impresión y fija el modo del dispositivo = estacion.
   function linkWith(rawTokenOrUrl: string) {
@@ -119,13 +105,11 @@ export default function TabletStationRoute() {
     clearToken()
     unpairDevice()      // para el worker y borra token(s) + modo del dispositivo
     setToken(null)
-    setStatus('idle')
-    setError(null)
-    setLocInfo(null)
   }
 
-  // ── Pantalla de vinculación ───────────────────────────────────────────────
-  if (!token || status === 'invalid') {
+  // ── Pantalla de vinculación — SOLO ante rechazo explícito, nunca por red/lentitud ──
+  if (!token || validation.kind === 'rejected') {
+    const rejectedMessage = validation.kind === 'rejected' ? validation.message : null
     return (
       <div className="fixed inset-0 bg-zinc-950 text-zinc-100 flex items-center justify-center p-6">
         <div className="w-full max-w-md text-center">
@@ -136,9 +120,9 @@ export default function TabletStationRoute() {
             Escanea el <strong>QR de la estación</strong> (Ajustes de cocina → Dispositivos → QR) o
             pega el token del dispositivo. Al vincular, esta tablet queda como estación e imprime sola.
           </p>
-          {status === 'invalid' && error && (
+          {rejectedMessage && (
             <div className="mt-4 rounded-lg bg-red-500/15 text-red-200 ring-1 ring-red-500/40 px-3 py-2 text-sm">
-              El token no es válido o fue revocado. {error}
+              {rejectedMessage}
             </div>
           )}
           <div className="mt-6 flex flex-col gap-2">
@@ -166,11 +150,16 @@ export default function TabletStationRoute() {
     )
   }
 
-  // ── Comprobando token ─────────────────────────────────────────────────────
-  if (status === 'checking') {
+  // ── Validando (Tarea C): red/lentitud NUNCA piden vincular, reintentan solos ──
+  if (validation.kind === 'idle' || validation.kind === 'trying') {
+    const msg = tokenValidationMessage(validation) ?? 'Conectando con Folvy…'
     return (
-      <div className="fixed inset-0 bg-zinc-950 text-zinc-400 flex items-center justify-center gap-2">
-        <Loader2 className="animate-spin" size={20} /> Conectando con la cocina…
+      <div className="fixed inset-0 bg-zinc-950 text-zinc-400 flex flex-col items-center justify-center gap-2 text-center px-6">
+        <Loader2 className="animate-spin" size={20} />
+        <span>{msg}</span>
+        {validation.kind === 'trying' && validation.attempt > 0 && (
+          <span className="text-xs text-zinc-600">Intento {validation.attempt}</span>
+        )}
       </div>
     )
   }
@@ -182,6 +171,7 @@ export default function TabletStationRoute() {
     { id: 'disponibilidad', label: 'Disponibilidad', icon: CircleOff },
     { id: 'impresoras', label: 'Impresoras', icon: PrinterIcon },
   ]
+  const locInfo = validation.kind === 'valid' ? validation.info : null
   const locationName = locInfo?.locationName ?? 'Local'
 
   return (
@@ -222,6 +212,15 @@ export default function TabletStationRoute() {
           </button>
         </div>
       </header>
+
+      {printFailure && (
+        <div className="flex items-center justify-between gap-3 px-4 py-2 bg-red-500/15 text-red-200 ring-1 ring-red-500/40 text-sm shrink-0">
+          <span>
+            No se pudo imprimir ({printFailure.docType} · {printFailure.printerName}) tras 3 intentos. {printFailure.error}
+          </span>
+          <button onClick={() => setPrintFailure(null)} className="shrink-0 underline text-xs">cerrar</button>
+        </div>
+      )}
 
       {/* Alarma de reparto: banner+sonido a nivel de ruta → visible en CUALQUIER pestaña. */}
       <KdsAlarmOverlay locationId={locInfo?.locationId ?? null} token={token} />

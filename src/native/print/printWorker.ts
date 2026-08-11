@@ -31,6 +31,7 @@ import { renderForType } from './ticketRenderer';
 import { renderDoc } from './escpos';
 import { renderBagImage, renderKitchenImage, canvasToEscpos } from './ticketImage';
 import { EscposPrinter } from './EscposPrinter';
+import { runPollingLoop, type RetryLoopHandle } from '@/lib/retryBackoff';
 
 const TOKEN_KEY = 'folvy_print_device_token';
 // Token de la Estación (/estacion). Es el MISMO kds_device.token; lo leemos como
@@ -104,11 +105,37 @@ async function rpc(fn: string, args: any): Promise<any> {
   return data;
 }
 
-let timer: ReturnType<typeof setInterval> | null = null;
+let pollHandle: RetryLoopHandle | null = null;
 let busy = false;
 let deviceToken = '';
 
-async function tick() {
+// Tarea E.2 (fix/tablet-robustez, 12/08): aviso visible cuando un trabajo
+// agota sus 3 intentos — hoy se pierde mudo hasta que el cliente reclama.
+// Este módulo no es un componente (lo importa main.tsx a nivel de app), así
+// que expone un pub/sub minúsculo en vez de tocar notificationsService.ts
+// (regla del proyecto: no tocarlo) — TabletStationRoute se suscribe y pinta
+// un banner.
+export interface PrintExhaustedInfo { docType: string; printerName: string; error: string; at: number }
+type ExhaustedListener = (info: PrintExhaustedInfo) => void;
+const exhaustedListeners = new Set<ExhaustedListener>();
+
+function notifyPrintExhausted(info: Omit<PrintExhaustedInfo, 'at'>): void {
+  const full = { ...info, at: Date.now() };
+  for (const cb of exhaustedListeners) cb(full);
+}
+
+export function onPrintJobExhausted(cb: ExhaustedListener): () => void {
+  exhaustedListeners.add(cb);
+  return () => { exhaustedListeners.delete(cb); };
+}
+
+// fix/tablet-robustez (12/08), Tarea D: "una tablet que no puede pintar el
+// tablero todavía puede imprimir comandas" — el reclamo de trabajos NUNCA
+// depende de si kds_board (el tablero) responde o no. Ya era así por
+// construcción (módulos independientes, ver comentario de latido más abajo);
+// esto solo le añade backoff (Tarea B) para no esperar el intervalo fijo
+// completo tras un fallo de red.
+async function tick(): Promise<void> {
   if (busy || !deviceToken) return;
   busy = true;
   try {
@@ -116,7 +143,7 @@ async function tick() {
     if (!Array.isArray(jobs) || jobs.length === 0) return;
 
     for (const job of jobs) {
-      const { job_id, doc_type, payload, printer, config } = job;
+      const { job_id, doc_type, payload, printer, config, attempts } = job;
       const ip = printer?.ip;
       const port = printer?.port || 9100;
       // Flags del papel gobernados por BBDD. Sin `config` (RPC antigua) → apagado.
@@ -147,12 +174,21 @@ async function tick() {
         await rpc('report_print_job', { p_device_token: deviceToken, p_job_id: job_id, p_ok: true });
         console.log(`[folvy-print] ok ${doc_type} -> ${printer.name} (${ip})`);
       } catch (e: any) {
-        try { await rpc('report_print_job', { p_device_token: deviceToken, p_job_id: job_id, p_ok: false, p_error: e?.message || String(e) }); } catch { /* */ }
-        console.error(`[folvy-print] error ${doc_type} -> ${printer?.name}: ${e?.message || e}`);
+        const errorMsg = e?.message || String(e);
+        try { await rpc('report_print_job', { p_device_token: deviceToken, p_job_id: job_id, p_ok: false, p_error: errorMsg }); } catch { /* */ }
+        console.error(`[folvy-print] error ${doc_type} -> ${printer?.name}: ${errorMsg}`);
+        // Tarea E.2: 3er intento (claim_print_jobs ya devuelve attempts tras
+        // incrementarlo al reclamar) — el servidor no lo reintentará más,
+        // avisa en pantalla en vez de perderse mudo hasta que reclame el cliente.
+        if (attempts >= 3) notifyPrintExhausted({ docType: doc_type, printerName: printer?.name || '?', error: errorMsg });
       }
     }
   } catch (e: any) {
     console.error('[folvy-print] claim:', e?.message || e);
+    // Se relanza para que runPollingLoop lo cuente como fallo y aplique
+    // backoff (Tarea B) — swallowear aquí haría que el bucle creyera que
+    // fue un éxito y perdiera la cuenta de fallos consecutivos.
+    throw e;
   } finally {
     busy = false;
   }
@@ -165,16 +201,17 @@ export function startPrintWorker(opts: { token: string; pollMs?: number }) {
   }
   deviceToken = opts.token;
   writeStored(TOKEN_KEY, opts.token);
-  if (timer) clearInterval(timer);
+  if (pollHandle) pollHandle.cancel();
   const ms = opts.pollMs || 3000;
-  timer = setInterval(() => { void tick(); }, ms);
-  void tick();
+  // fix/tablet-robustez (12/08), Tarea B: backoff en fallo (1s,2s,5s,10s,30s,
+  // luego cada 30s), vuelve a los 3s normales en cuanto un reclamo funciona.
+  pollHandle = runPollingLoop({ call: tick, normalIntervalMs: ms });
   console.log(`[folvy-print] worker iniciado (sondeo ${ms} ms)`);
 }
 
 export function stopPrintWorker() {
-  if (timer) clearInterval(timer);
-  timer = null;
+  if (pollHandle) pollHandle.cancel();
+  pollHandle = null;
   console.log('[folvy-print] worker parado');
 }
 
@@ -272,19 +309,20 @@ autostart();
 // (native/appUpdate.ts, RPC report_device_app_version) en su propio ciclo; el
 // latido solo hace lo que su nombre dice.
 const HEARTBEAT_MS = 60_000;
-let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+let heartbeatHandle: RetryLoopHandle | null = null;
 
+// fix/tablet-robustez (12/08), Tarea D: el latido corre pase lo que pase en
+// la interfaz — YA era así por construcción (este módulo se importa una
+// sola vez, sin efecto, en main.tsx; no depende de ninguna pantalla ni
+// componente montado). Tarea B añade backoff: en vez de esperar 60s fijos
+// tras un fallo, reintenta a 1s/2s/5s/10s/30s y vuelve a 60s en cuanto late
+// bien — así el vigía del servidor tarda menos en volver a ver vida.
 async function heartbeatTick(): Promise<void> {
   const token = resolveToken();
-  if (!token) return;
-  try {
-    await rpc('kds_heartbeat', { p_token: token });
-  } catch (e: any) {
-    console.warn('[kds-heartbeat] fallo:', e?.message || e);
-  }
+  if (!token) return; // sin token no hay nada que latir — no es un fallo
+  await rpc('kds_heartbeat', { p_token: token });
 }
 
-if (!heartbeatTimer) {
-  heartbeatTimer = setInterval(() => { void heartbeatTick(); }, HEARTBEAT_MS);
-  void heartbeatTick();
+if (!heartbeatHandle) {
+  heartbeatHandle = runPollingLoop({ call: heartbeatTick, normalIntervalMs: HEARTBEAT_MS });
 }
