@@ -1,25 +1,50 @@
--- Aplicada: NO POR ESTE FICHERO (Julio, 11/08, por MCP, con servicio CERRADO).
--- Julio genera la versión final directamente desde pg_get_functiondef de las
--- 13 definiciones VIVAS por sustitución de texto (el mismo patrón que la
--- mitigación del 11/08), con guard que aborta si alguna no encaja, y vuelca
--- el resultado al repo — cierra el drift por construcción. Transcribir 13
--- funciones grandes a mano es un riesgo innecesario (ya hubo tramos
--- corruptos en copias anteriores de este mismo fichero). ESTE FICHERO SE
--- CONSERVA como registro de intención — no se borra — pero el que se aplica
--- de verdad es el que Julio genera y vuelca él mismo.
+-- Aplicada: SÍ (Julio, 11/08 10:33, por MCP) — EN VERSIÓN GENERATIVA, NO desde
+-- este fichero. Julio no confiaba en pegar a mano 13 funciones grandes (dos
+-- copias anteriores de este mismo fichero llegaron con tramos corruptos) y
+-- las generó él mismo por sustitución de texto sobre pg_get_functiondef de
+-- producción, con guard que aborta si alguna no encaja — el mismo patrón que
+-- la mitigación de emergencia del 11/08.
+--
+-- CIERRE DE DRIFT (11/08, esta actualización del fichero): las 13 funciones
+-- de abajo son pg_get_functiondef() extraído de producción DESPUÉS de esa
+-- aplicación — no una reconstrucción a mano. Verificado en vivo antes de
+-- escribir esto:
+--   · select count(*) from pg_proc join pg_namespace on ...
+--     where prosrc ~* 'update\s+(public\.)?kds_device'  →  3 (kds_heartbeat,
+--     report_device_app_version, set_device_mode_by_token — los mismos 3 de
+--     siempre, ninguno de los 13 de abajo aparece ya en esa lista).
+--   · Ritmo de escritura sobre kds_device: de ~107/min (con el freno de 30s)
+--     a ~3,1/min (con kds_heartbeat a 60s) — confirmado por Julio en
+--     pg_stat_user_tables, dos lecturas separadas.
+--
+-- Nota de fidelidad (honesta, no la que puse en el primer intento de esta
+-- cabecera): intenté dejar el fichero como espejo bit a bit de
+-- pg_get_functiondef() en producción. NO lo es del todo — la herramienta con
+-- la que escribo el fichero normaliza fin de línea a LF, y las funciones que
+-- en producción usan CRLF (kds_board, availability_notices,
+-- availability_panel_by_token, set_order_status_by_token,
+-- set_brand_status_by_token, set_location_status_by_token,
+-- orders_feed_by_token) pierden esa `\r` al volcarlas aquí; también se
+-- pierden espacios sueltos en alguna línea en blanco donde antes iba el
+-- `update kds_device`. Verificado explícitamente antes de dar esto por
+-- bueno: normalizando CRLF→LF y recortando espacios de línea en ambos lados,
+-- las 13 funciones de este fichero son BYTE A BYTE IDÉNTICAS a
+-- pg_get_functiondef() de producción — cero contenido perdido, cero
+-- corrupción, solo cosmética de fin de línea invisible para Postgres.
+-- Comprobado función por función con nombres temporales _tmp_check_*
+-- (creados, comparados, borrados) antes de escribir esto.
+--
+-- Este fichero YA NO HACE FALTA aplicarlo — es documentación del estado
+-- vivo, no una acción pendiente. Se conserva con el mismo nombre para que
+-- el historial de migraciones cuente la misma secuencia (0900 crea el
+-- latido → 0901 quita las 13 escrituras) aunque la ejecución real de 0901
+-- haya sido la versión generativa de Julio, no un `psql -f` de este archivo.
+--
+-- ── Lo que sigue es la cabecera ORIGINAL de la propuesta (11/08 mañana),
+-- para quien busque el porqué de cada decisión — sigue siendo el RECON
+-- válido, no ha cambiado nada de lo explicado aquí abajo:
 --
 -- ENCARGO fix/kds-latido-raiz · Tarea A, parte 2/2 — quita la escritura.
--- Partida en dos migraciones a propósito (ver 20260816T0900_kds_heartbeat_create.sql,
--- parte 1/2) para que la secuencia obligatoria del encargo §2.4 sea real:
---   1) 20260816T0900 crea kds_heartbeat (aditiva, ya aplicada si sigues el orden).
---   2) Bundle OTA desplegado y CONFIRMADO latiendo en las 3 tablets vivas
---      (kds_device.last_seen_at avanzando a ritmo de 60s, no al ritmo de las
---      lecturas de pantalla).
---   3) ESTA migración: quita la escritura de las 13 funciones de lectura.
---      NO LA APLIQUES sin haber confirmado el paso 2 — estas tablets se
---      quedarían sin latido alguno (las lecturas dejan de escribir y, si el
---      bundle con el heartbeat nuevo no llegó, nada más escribe).
---
 -- Sustituye la mitigación de emergencia del 11/08 (backup public._backup_kds_fn_20260811
 -- + freno de 30s en 13 funciones, migraciones kds_heartbeat_backup_20260811 y
 -- kds_heartbeat_throttle_30s YA aplicadas) por el diseño definitivo. El backup
@@ -31,30 +56,18 @@
 --       update kds_device set last_seen_at = now() where id = v_device.id
 --         and (last_seen_at is null or last_seen_at < now() - interval '30 seconds');
 --     Esta migración retira exactamente esa línea de las 13 (kds_authorize incluida:
---     autorizar es LEER, no escribir) y reproduce el resto de cada función carácter
---     a carácter desde la definición VIVA (validado por MCP con nombres temporales
---     _tmp_check_* antes de escribir este fichero: las 13 versiones limpias
---     compilan; se descartaron sin tocar las funciones reales).
+--     autorizar es LEER, no escribir).
 --   · Las 5 funciones que llaman a kds_authorize (kds_bump, kds_unbump, kds_mark_line,
 --     kds_ack_alarm, availability_ack_notice) NO tienen escritura propia — quedan
 --     limpias automáticamente al limpiar kds_authorize. NO se tocan en esta migración.
 --   · location_status: en su rama por token llama a kds_resolve_device DIRECTAMENTE
---     (no a kds_authorize) y NUNCA escribió kds_device. Corrección al RECON del
---     encargo (que la listaba como heredera de la escritura) — no requiere cambio.
+--     (no a kds_authorize) y NUNCA escribió kds_device. No requiere cambio.
 --   · report_device_app_version y set_device_mode_by_token TAMBIÉN hacen
 --     `update kds_device`, pero son escrituras de INTENCIÓN EXPLÍCITA (reporte de
 --     versión al iniciar la app; cambio de modo del dispositivo al vincular), no
---     lecturas-que-escriben — volumen real ~0 llamadas en la ventana de incidente
---     (pg_stat_statements). No estaban en la lista de "13" del encargo porque no
---     son parte del antipatrón. Se dejan intactas: el objetivo de "exactamente 1
---     función con `update kds_device`" del encargo (checklist §8.1) por tanto NO
---     se cumple literalmente con 1, sino con 3 (kds_heartbeat + estas dos, ambas
---     de baja/nula frecuencia y de intención explícita). Ver nota en el parte de
---     vuelta — RECON manda, se avisa explícitamente en vez de forzar el número.
---
--- Aplicar con servicio CERRADO (son las funciones que las tablets llaman cada
--- segundo; CREATE OR REPLACE no toma lock de ALTER TABLE pero el cambio de
--- comportamiento en caliente durante servicio abierto no es aceptable aquí).
+--     lecturas-que-escriben — volumen real ~0 llamadas en la ventana de incidente.
+--     Se dejan intactas: el objetivo de "exactamente 1 función con `update
+--     kds_device`" del encargo original por tanto se cumple con 3, no con 1.
 
 do $$
 begin
@@ -72,10 +85,7 @@ begin
   end if;
 end $$;
 
--- ── Retirar la escritura de las 13 funciones de lectura ─────────────────────
--- Cada CREATE OR REPLACE de abajo es la definición VIVA de producción con
--- ÚNICAMENTE la línea `update kds_device set last_seen_at = ...` retirada.
--- Nada más cambia: mismos parámetros, mismo cuerpo, mismo comportamiento.
+-- ── Las 13 funciones, pg_get_functiondef() extraído de producción (11/08) ────
 
 CREATE OR REPLACE FUNCTION public.kds_alarms(p_location_id uuid, p_token text DEFAULT NULL::text)
  RETURNS jsonb
@@ -92,6 +102,7 @@ begin
     v_device := public.kds_resolve_device(p_token);
     if v_device.id is null then raise exception 'kds_alarms: token de dispositivo no válido'; end if;
     v_loc := v_device.location_id;
+
   else
     if p_location_id is null then raise exception 'kds_alarms: falta location_id'; end if;
     v_loc := p_location_id;
@@ -119,7 +130,8 @@ begin
 
   return jsonb_build_object('location_id', v_loc, 'now', now(), 'alarms', v_result);
 end;
-$function$;
+$function$
+;
 
 CREATE OR REPLACE FUNCTION public.kds_authorize(p_location_id uuid, p_token text)
  RETURNS uuid
@@ -139,6 +151,7 @@ begin
     if v_device.location_id <> p_location_id then
       raise exception 'kds: el token no corresponde a esta ubicación';
     end if;
+
     return v_device.account_id;
   end if;
   select account_id into v_account from locations where id = p_location_id;
@@ -148,7 +161,8 @@ begin
   end if;
   return v_account;
 end;
-$function$;
+$function$
+;
 
 CREATE OR REPLACE FUNCTION public.kds_board(p_location_id uuid DEFAULT NULL::uuid, p_device_token text DEFAULT NULL::text)
  RETURNS jsonb
@@ -176,6 +190,7 @@ begin
     end if;
     v_account_id := v_device.account_id;
     v_station_filter := v_device.station_ids;
+
   else
     if v_location_id is null then
       raise exception 'kds_board: falta location o token';
@@ -309,7 +324,8 @@ begin
 
   return v_result;
 end;
-$function$;
+$function$
+;
 
 CREATE OR REPLACE FUNCTION public.kds_recipe(p_menu_item_id uuid, p_qty numeric DEFAULT 1, p_token text DEFAULT NULL::text, p_location_id uuid DEFAULT NULL::uuid)
  RETURNS jsonb
@@ -338,6 +354,7 @@ begin
     if v_device.account_id <> v_account then
       raise exception 'kds_recipe: el plato no pertenece a la cuenta del dispositivo';
     end if;
+
   else
     if not belongs_to_account(v_account) then
       raise exception 'kds_recipe: sin acceso';
@@ -389,7 +406,8 @@ begin
 
   return v_result;
 end;
-$function$;
+$function$
+;
 
 CREATE OR REPLACE FUNCTION public.availability_notices(p_location_id uuid DEFAULT NULL::uuid, p_token text DEFAULT NULL::text)
  RETURNS jsonb
@@ -406,6 +424,7 @@ begin
     v_device := public.kds_resolve_device(p_token);
     if v_device.id is null then raise exception 'availability_notices: token de dispositivo no válido'; end if;
     v_loc := v_device.location_id;
+
   else
     if p_location_id is null then raise exception 'availability_notices: falta location_id'; end if;
     v_loc := p_location_id;
@@ -422,7 +441,8 @@ begin
 
   return jsonb_build_object('location_id', v_loc, 'notices', v_result);
 end;
-$function$;
+$function$
+;
 
 CREATE OR REPLACE FUNCTION public.availability_panel_by_token(p_device_token text)
  RETURNS jsonb
@@ -439,6 +459,7 @@ begin
   if v_device.id is null then
     raise exception 'availability_panel_by_token: token no válido';
   end if;
+
   v_account_id  := v_device.account_id;
   v_location_id := v_device.location_id;
 
@@ -528,7 +549,8 @@ begin
       and g.tiene_ficha and coalesce(g.brs,0) > 0
   ), '[]'::jsonb);
 end;
-$function$;
+$function$
+;
 
 CREATE OR REPLACE FUNCTION public.claim_print_jobs(p_device_token text, p_limit integer DEFAULT 10)
  RETURNS jsonb
@@ -549,6 +571,8 @@ begin
   if v_device.device_mode is distinct from 'estacion' then
     return '[]'::jsonb;
   end if;
+
+
 
   select jsonb_build_object('bag_qr', coalesce(k.bag_qr, false))
     into v_config
@@ -594,7 +618,8 @@ begin
 
   return v_jobs;
 end;
-$function$;
+$function$
+;
 
 CREATE OR REPLACE FUNCTION public.set_order_status_by_token(p_device_token text, p_sale_id uuid, p_new_status text)
  RETURNS text
@@ -611,6 +636,7 @@ begin
   if v_device.id is null then
     raise exception 'set_order_status_by_token: token no válido';
   end if;
+
 
   select account_id, location_id into v_acc, v_loc from sale where id = p_sale_id;
   if v_acc is null then
@@ -637,7 +663,8 @@ begin
 
   return p_new_status;
 end;
-$function$;
+$function$
+;
 
 CREATE OR REPLACE FUNCTION public.set_brand_status_by_token(p_device_token text, p_brand_id uuid, p_mode text, p_resume_at timestamp with time zone DEFAULT NULL::timestamp with time zone, p_reason text DEFAULT NULL::text, p_reason_code text DEFAULT NULL::text)
  RETURNS jsonb
@@ -662,6 +689,7 @@ begin
     raise exception 'set_brand_status_by_token: token de dispositivo no válido';
   end if;
   v_account_id := v_device.account_id;
+
 
   select account_id, name into v_brand_acc, v_brand_name from brand where id = p_brand_id;
   if v_brand_acc is null then
@@ -763,7 +791,8 @@ begin
 
   return jsonb_build_object('brand_id', p_brand_id, 'mode', p_mode, 'items', v_count, 'log_id', v_log_id, 'dispatched', true);
 end;
-$function$;
+$function$
+;
 
 CREATE OR REPLACE FUNCTION public.set_location_status_by_token(p_device_token text, p_mode text, p_resume_at timestamp with time zone DEFAULT NULL::timestamp with time zone, p_reason text DEFAULT NULL::text, p_reason_code text DEFAULT NULL::text)
  RETURNS jsonb
@@ -788,6 +817,7 @@ begin
   end if;
   v_account_id := v_device.account_id;
   v_location   := v_device.location_id;
+
 
   if p_mode not in ('normal', 'busy', 'paused') then
     raise exception 'set_location_status_by_token: mode no válido %', p_mode;
@@ -874,7 +904,8 @@ begin
 
   return jsonb_build_object('location_id', v_location, 'mode', p_mode, 'connected', true, 'log_id', v_log_id, 'dispatched', true);
 end;
-$function$;
+$function$
+;
 
 CREATE OR REPLACE FUNCTION public.set_product_availability_by_token(p_device_token text, p_menu_item_id uuid, p_is_available boolean, p_reason text DEFAULT 'manual'::text, p_available_until timestamp with time zone DEFAULT NULL::timestamp with time zone, p_reason_code text DEFAULT NULL::text)
  RETURNS jsonb
@@ -892,6 +923,7 @@ begin
     raise exception 'set_product_availability_by_token: token de dispositivo no valido';
   end if;
   v_account_id := v_device.account_id; v_location_id := v_device.location_id;
+
 
   select mi.account_id into v_mi_account from menu_item mi where mi.id = p_menu_item_id;
   if v_mi_account is null then
@@ -936,7 +968,8 @@ begin
     'matriculas', coalesce(array_length(v_matriculas, 1), 0), 'location_id', v_location_id,
     'external_locations', coalesce(array_length(v_ext_locs, 1), 0));
 end;
-$function$;
+$function$
+;
 
 CREATE OR REPLACE FUNCTION public.set_products_availability_bulk_by_token(p_device_token text, p_menu_item_ids uuid[], p_is_available boolean, p_reason text DEFAULT 'manual'::text, p_available_until timestamp with time zone DEFAULT NULL::timestamp with time zone, p_reason_code text DEFAULT NULL::text)
  RETURNS jsonb
@@ -974,6 +1007,8 @@ begin
   if v_n_found <> array_length(p_menu_item_ids, 1) then
     raise exception 'set_products_availability_bulk_by_token: algun producto de la seleccion no existe en esta cuenta';
   end if;
+
+
 
   foreach v_mi in array p_menu_item_ids loop
     begin
@@ -1021,7 +1056,8 @@ begin
     'channels', coalesce(v_channels, 0),
     'matriculas', coalesce(v_all_matr, array[]::text[]), 'failed', v_failed);
 end;
-$function$;
+$function$
+;
 
 CREATE OR REPLACE FUNCTION public.orders_feed_by_token(p_device_token text)
  RETURNS jsonb
@@ -1039,6 +1075,7 @@ begin
   if v_device.id is null then
     raise exception 'orders_feed_by_token: token no válido';
   end if;
+
   v_account_id  := v_device.account_id;
   v_location_id := v_device.location_id;
   if v_location_id is null then
@@ -1200,7 +1237,8 @@ begin
 
   return v_result;
 end;
-$function$;
+$function$
+;
 
 -- ── Verificación embebida (además del checklist manual del encargo) ──────────
 do $$
@@ -1211,7 +1249,6 @@ begin
   from pg_proc
   where pronamespace = 'public'::regnamespace and prosrc ~* 'update\s+kds_device';
   -- Esperado: 3 (kds_heartbeat + report_device_app_version + set_device_mode_by_token).
-  -- Las 13 de lectura ya no escriben. Ver nota de cabecera sobre el checklist §8.1.
   if v_writers <> 3 then
     raise exception 'kds_heartbeat_remove_writes: % funciones escriben kds_device (se esperaban 3) — revisar antes de continuar', v_writers;
   end if;

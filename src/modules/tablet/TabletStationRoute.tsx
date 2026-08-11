@@ -3,16 +3,24 @@
 // ESTACIÓN DE TABLET — ruta pública /estacion (la monta App.tsx ANTES de los
 // gates de sesión, igual que /cocina-tv). FRONTERA DE TOKEN: no hay login; el
 // dispositivo se identifica con kds_device.token. Terminal a pantalla completa
-// con tres pestañas de la misma realidad operativa:
+// con pestañas de la misma realidad operativa:
 //   · Pedidos        (feed de pedidos por token)        — Capa 3 (pendiente)
-//   · Cocina         (tablero KDS por token)            — Capa 1
 //   · Disponibilidad (86: agotar/reactivar por token)   — Capa 2
+//   · Impresoras
+//   · Cocina (tablero KDS por token, Capa 1) — OCULTA 11/08: KDS viejo sin
+//     uso real (kds_board: 2 llamadas en 6h+ frente a 6.568 de
+//     orders_feed_by_token, que es lo que alimenta la pestaña Pedidos).
+//     Sigue en el código (comentada en el array `tabs`, no borrada).
+//
+// Nota aparte: `getBoard(null, token)` (kds_board) SÍ se sigue llamando una
+// vez al montar, como validación del token — no tiene relación con la
+// pestaña oculta, no se toca.
 //
 // Comparte el MISMO TOKEN que el kiosco (kds_device.token). /cocina-tv se
 // mantiene aparte como modo "solo tablero".
 
 import { useEffect, useState } from 'react'
-import { ClipboardList, MonitorPlay, CircleOff, Printer as PrinterIcon, Loader2, LogOut } from 'lucide-react'
+import { ClipboardList, CircleOff, Printer as PrinterIcon, Loader2, LogOut } from 'lucide-react'
 import KdsBoard from '../kds/components/KdsBoard'
 import KdsAlarmOverlay from '../kds/components/KdsAlarmOverlay'
 import AvailabilityNoticeOverlay from '../kds/components/AvailabilityNoticeOverlay'
@@ -178,7 +186,11 @@ export default function TabletStationRoute() {
   // ── Terminal con barra de pestañas ────────────────────────────────────────
   const tabs: { id: Tab; label: string; icon: typeof ClipboardList }[] = [
     { id: 'pedidos', label: 'Pedidos', icon: ClipboardList },
-    { id: 'cocina', label: 'Cocina', icon: MonitorPlay },
+    // 'cocina' (KdsBoard, KDS viejo) oculta 11/08 — mismo patrón que la
+    // entrada de Folvy Orders (ver orders/module.tsx): comentada, no
+    // borrada. El render de abajo (`{tab === 'cocina' && <KdsBoard .../>}`)
+    // se deja tal cual — inalcanzable sin esta pestaña, pero no se toca.
+    // { id: 'cocina', label: 'Cocina', icon: MonitorPlay },
     { id: 'disponibilidad', label: 'Disponibilidad', icon: CircleOff },
     { id: 'impresoras', label: 'Impresoras', icon: PrinterIcon },
   ]
