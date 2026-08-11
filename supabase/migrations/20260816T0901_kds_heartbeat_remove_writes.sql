@@ -1,11 +1,21 @@
 -- Aplicada: PENDIENTE (Julio, por MCP, con servicio CERRADO — ver nota abajo).
 --
--- ENCARGO fix/kds-latido-raiz · Tarea A — diseño de raíz del latido de kds_device.
+-- ENCARGO fix/kds-latido-raiz · Tarea A, parte 2/2 — quita la escritura.
+-- Partida en dos migraciones a propósito (ver 20260816T0900_kds_heartbeat_create.sql,
+-- parte 1/2) para que la secuencia obligatoria del encargo §2.4 sea real:
+--   1) 20260816T0900 crea kds_heartbeat (aditiva, ya aplicada si sigues el orden).
+--   2) Bundle OTA desplegado y CONFIRMADO latiendo en las 3 tablets vivas
+--      (kds_device.last_seen_at avanzando a ritmo de 60s, no al ritmo de las
+--      lecturas de pantalla).
+--   3) ESTA migración: quita la escritura de las 13 funciones de lectura.
+--      NO LA APLIQUES sin haber confirmado el paso 2 — estas tablets se
+--      quedarían sin latido alguno (las lecturas dejan de escribir y, si el
+--      bundle con el heartbeat nuevo no llegó, nada más escribe).
+--
 -- Sustituye la mitigación de emergencia del 11/08 (backup public._backup_kds_fn_20260811
 -- + freno de 30s en 13 funciones, migraciones kds_heartbeat_backup_20260811 y
--- kds_heartbeat_throttle_30s YA aplicadas) por el diseño definitivo: un RPC de
--- latido dedicado (kds_heartbeat) y CERO escrituras en kds_device desde funciones
--- de LECTURA. El backup del 11/08 NO se toca ni se borra (es la red de reversión).
+-- kds_heartbeat_throttle_30s YA aplicadas) por el diseño definitivo. El backup
+-- del 11/08 NO se toca ni se borra (es la red de reversión).
 --
 -- RECON verificado en vivo (fusiona sobre pg_get_functiondef de producción, no
 -- sobre lo que dice el repo, que está pre-incidente):
@@ -34,30 +44,6 @@
 --     de baja/nula frecuencia y de intención explícita). Ver nota en el parte de
 --     vuelta — RECON manda, se avisa explícitamente en vez de forzar el número.
 --
--- kds_heartbeat: el encargo pedía firma (p_device_id, p_token) calcando
--- kds_authorize. RECON del cliente (Tarea previa a tocar el bundle): las
--- tablets (TabletStationRoute.tsx, KdsKioskRoute.tsx, printWorker.ts) solo
--- persisten el TOKEN en localStorage (`kds_device_token`) — nunca un
--- device_id propio, y no hay hoy ningún flujo que se lo entregue al vincular.
--- Exigir p_device_id obligaría a inventar ese flujo solo para repetir un
--- chequeo que el token ya hace por sí solo (kds_resolve_device ya exige
--- token exacto + is_active=true → resuelve como máximo UNA fila; conocer esa
--- fila ya implica poseer el token). Es la misma foto que las otras 13
--- funciones _by_token, ninguna pide un id adicional. Se simplifica a
--- (p_token, p_app_version, p_platform) — desviación del encargo explicada
--- aquí, no silenciosa. Guarda mínimo de 10s (no 30s: el latido ya lo dispara
--- un único setInterval de cliente a un ritmo mucho menor que una lectura de
--- pantalla) como red de seguridad barata ante un futuro bug de cliente que lo
--- llame en bucle — la razón de ser de todo este encargo es exactamente ese
--- escenario. p_app_version/p_platform opcionales: mismo patrón que
--- report_device_app_version (que se queda intacto para clientes viejos que aún lo
--- llamen por separado).
---
--- SECUENCIA OBLIGATORIA (encargo §2.4): esta migración NO se aplica hasta que el
--- bundle OTA con la llamada a kds_heartbeat esté desplegado y confirmado latiendo
--- en las 3 tablets vivas. Aplicarla antes dejaría a esas tablets sin latido alguno
--- (las lecturas dejan de escribir y el heartbeat nuevo aún no existe en su bundle).
---
 -- Aplicar con servicio CERRADO (son las funciones que las tablets llaman cada
 -- segundo; CREATE OR REPLACE no toma lock de ALTER TABLE pero el cambio de
 -- comportamiento en caliente durante servicio abierto no es aceptable aquí).
@@ -68,50 +54,17 @@ begin
     select 1 from pg_proc
     where pronamespace = 'public'::regnamespace and proname = 'kds_resolve_device'
   ) then
-    raise exception 'kds_heartbeat_raiz: falta kds_resolve_device — RECON desactualizado, parar';
+    raise exception 'kds_heartbeat_remove_writes: falta kds_resolve_device — RECON desactualizado, parar';
+  end if;
+  if not exists (
+    select 1 from pg_proc
+    where pronamespace = 'public'::regnamespace and proname = 'kds_heartbeat'
+  ) then
+    raise exception 'kds_heartbeat_remove_writes: falta kds_heartbeat — aplica primero 20260816T0900_kds_heartbeat_create.sql y confirma el latido en las 3 tablets antes de seguir';
   end if;
 end $$;
 
--- ── 1) Latido dedicado ───────────────────────────────────────────────────────
-
-CREATE OR REPLACE FUNCTION public.kds_heartbeat(
-  p_token text,
-  p_app_version text DEFAULT NULL::text,
-  p_platform text DEFAULT NULL::text
-)
-RETURNS boolean
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path TO 'public'
-AS $function$
-declare
-  v_device kds_device;
-begin
-  v_device := public.kds_resolve_device(p_token);
-  if v_device.id is null then
-    return false;
-  end if;
-
-  update kds_device
-  set last_seen_at   = now(),
-      app_version    = coalesce(nullif(btrim(coalesce(p_app_version, '')), ''), app_version),
-      platform       = coalesce(nullif(btrim(coalesce(p_platform, '')), ''), platform),
-      app_version_at = case when nullif(btrim(coalesce(p_app_version, '')), '') is not null then now() else app_version_at end,
-      updated_at     = now()
-  where id = v_device.id
-    and (last_seen_at is null or last_seen_at < now() - interval '10 seconds');
-
-  return true;
-end;
-$function$;
-
-comment on function public.kds_heartbeat(text, text, text) is
-  'Único RPC que escribe kds_device.last_seen_at (fix/kds-latido-raiz, 11/08). '
-  'Llamado por un solo setInterval de cliente, NO desde funciones de lectura.';
-
-grant execute on function public.kds_heartbeat(text, text, text) to public, anon, authenticated;
-
--- ── 2) Retirar la escritura de las 13 funciones de lectura ─────────────────────
+-- ── Retirar la escritura de las 13 funciones de lectura ─────────────────────
 -- Cada CREATE OR REPLACE de abajo es la definición VIVA de producción con
 -- ÚNICAMENTE la línea `update kds_device set last_seen_at = ...` retirada.
 -- Nada más cambia: mismos parámetros, mismo cuerpo, mismo comportamiento.
@@ -1241,7 +1194,7 @@ begin
 end;
 $function$;
 
--- ── 3) Verificación embebida (además del checklist manual del encargo) ────────
+-- ── Verificación embebida (además del checklist manual del encargo) ──────────
 do $$
 declare
   v_writers int;
@@ -1252,7 +1205,7 @@ begin
   -- Esperado: 3 (kds_heartbeat + report_device_app_version + set_device_mode_by_token).
   -- Las 13 de lectura ya no escriben. Ver nota de cabecera sobre el checklist §8.1.
   if v_writers <> 3 then
-    raise exception 'kds_heartbeat_raiz: % funciones escriben kds_device (se esperaban 3) — revisar antes de continuar', v_writers;
+    raise exception 'kds_heartbeat_remove_writes: % funciones escriben kds_device (se esperaban 3) — revisar antes de continuar', v_writers;
   end if;
 end $$;
 
