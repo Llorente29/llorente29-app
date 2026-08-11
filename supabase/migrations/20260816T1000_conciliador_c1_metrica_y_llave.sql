@@ -78,6 +78,46 @@
 --   demasiado pequeño para justificar más tiempo en esta pasada; si Julio
 --   quiere las 3+1 líneas exactas están en el informe de vuelta).
 --
+-- §1.4 — ¿QUIÉN LLAMA a channel_settlement_match_recompute()/
+-- channel_settlement_match_status_recompute()? Pregunta que Julio detectó
+-- que faltaba en el parte de vuelta: la primera versión de este fichero
+-- las creaba y las invocaba UNA VEZ en el backfill (§6), pero no dejaba
+-- previsto NADA para después — exactamente el problema que describe el
+-- encargo ("el conciliador sigue sin funcionar solo"). No estaba previsto,
+-- lo digo en vez de callarlo. Decisión: CRON DIARIO
+-- (channel-settlement-match-daily, 06:30 UTC — mismo patrón ya en
+-- producción que db-health-stale-devices-daily), no un trigger. Por qué
+-- cron y no trigger: un trigger en channel_settlement_order (al cargar)
+-- solo resuelve un lado — si la venta de Folvy llega DESPUÉS de cargar la
+-- liquidación (lo normal: liquidaciones se cargan por lotes mensuales,
+-- ventas entran continuamente), haría falta OTRO trigger simétrico en
+-- `sale`, y la combinación de dos triggers en dos tablas para mantenerse
+-- sincronizados es más frágil que un recálculo diario completo — el coste
+-- de recorrer 6.638 filas (y su crecimiento mensual) es irrelevante, y un
+-- cron es más fácil de auditar en cron.job_run_details si algo falla. Se
+-- añade channel_settlement_daily_recompute() (wrapper con `raise warning`
+-- si algo falla, sin catch mudo) y su cron — ver §5.5 más abajo.
+--
+-- §1.5 — Verificación pedida por Julio antes de aplicar: ¿la guarda de
+-- ±2 días (calibrada con los 304 casados reales de Glovo, distancia 0/-1)
+-- rechaza casados legítimos de Uber? Comprobado por MCP (solo lectura, sin
+-- tocar la tabla real): de los candidatos únicos de Uber (sin filtro de
+-- fecha), 232 están a EXACTAMENTE 0 días y los otros 4 son los mismos 4
+-- falsos positivos de §1.2.b (84/119/187/190 días). A diferencia de Glovo,
+-- Uber no tiene NINGÚN caso a -1 día — sus pedidos de madrugada no cruzan
+-- de día en el dato que informa Uber. La guarda de ±2 días no rechaza
+-- ningún casado legítimo en ninguno de los dos canales; para Uber es
+-- incluso más holgada de lo necesario.
+--
+-- §1.6 — channel_economics_dashboard (verificación pedida antes de
+-- aplicar): el cambio SOLO añade el campo 'pedidos_sin_origen' dentro de
+-- 'salud' y cambia el CÁLCULO (no el nombre ni el tipo) de
+-- 'pct_casado_pos' — sigue siendo un number|null, misma clave. Ningún otro
+-- campo de 'salud', ni 'kpis'/'waterfall'/'by_brand'/'by_channel'/
+-- 'per_order' (los 5 bloques restantes del jsonb), cambia una sola línea
+-- respecto a la versión en producción — se copiaron verbatim. Nada se
+-- renombra, nada cambia de tipo.
+--
 -- ── Tarea A: match_status ────────────────────────────────────────────────
 -- Columna nueva, NO se toca `matched` (compatibilidad con lo que ya lo lee).
 -- Calculado por channel_settlement_match_status_recompute(): 'casada' si
@@ -386,9 +426,52 @@ comment on function public.channel_economics_dashboard(uuid, date, date, text, u
    cuántas se excluyeron, para que el porcentaje no parezca inflado sin
    explicación.';
 
+-- ── 5.5) Quién llama: cron diario propio (§1.4) ──────────────────────────
+-- Sin esto, las dos funciones de arriba existen pero nadie las invoca tras
+-- el backfill inicial — el conciliador seguiría sin funcionar solo.
+
+CREATE OR REPLACE FUNCTION public.channel_settlement_daily_recompute()
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+begin
+  perform public.channel_settlement_match_recompute(null);
+  perform public.channel_settlement_match_status_recompute(null);
+exception when others then
+  -- Sin catch mudo. No se encola un aviso por correo aquí a propósito: esa
+  -- infraestructura (system_alert_queue) vive en la rama
+  -- fix/system-alert-cola-reintento, independiente de esta — no se crea una
+  -- dependencia entre ramas que se aplican por separado. raise warning
+  -- basta para este caso: un día de match_status desactualizado no es un
+  -- incidente, es mantenimiento de frescura de un dato de conciliación.
+  raise warning 'channel_settlement_daily_recompute: excepción: %', sqlerrm;
+  raise;
+end;
+$function$;
+
+comment on function public.channel_settlement_daily_recompute() is
+  'Cron diario (channel-settlement-match-daily, 06:30 UTC) que mantiene el
+   casado al día sin intervención manual (11/08, respuesta a "¿quién la
+   llama?"): re-intenta channel_settlement_match_recompute() sobre lo que
+   siga sin casar (venta que llegó tarde, ambigüedad de duplicado que se
+   resolvió) y refresca match_status. No escala a email — ver comentario en
+   el cuerpo de la función.';
+
+revoke all on function public.channel_settlement_daily_recompute() from public, anon, authenticated;
+
+select cron.schedule(
+  'channel-settlement-match-daily',
+  '30 6 * * *',
+  $cron$select public.channel_settlement_daily_recompute()$cron$
+);
+
 -- ── 6) Backfill: recalcula sobre los datos ya cargados ──────────────────
 -- Orden obligatorio: primero casar (puede convertir sin_casar en casada),
--- luego status (usa el matched ya actualizado).
+-- luego status (usa el matched ya actualizado). El cron diario de arriba
+-- ya cubriría esto en su primera ejecución, pero no se espera a mañana:
+-- el backfill corre YA, al aplicar esta migración.
 
 select public.channel_settlement_match_recompute(null);
 select public.channel_settlement_match_status_recompute(null);
