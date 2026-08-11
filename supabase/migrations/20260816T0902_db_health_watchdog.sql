@@ -1,4 +1,15 @@
--- Aplicada: PENDIENTE (Julio, por MCP).
+-- Aplicada: SÍ (Julio, 11/08, por MCP). Verificado en vivo: 3 ejecuciones del
+-- cron OK, snapshots cada minuto en marcha, writer_count=3, guard
+-- anti-regresión armado, 0 avisos falsos. NOTA (11/08, misma tarde): esta
+-- versión tiene 2 defectos encontrados leyendo el código ya en producción,
+-- corregidos SIN reeditar este fichero (migración aplicada no se toca) en
+-- 20260816T0906_snapshot_conexiones_reales_y_writer_count_diario.sql — (1)
+-- el Aviso 2 comparaba pg_stat_activity completo contra max_connections,
+-- inflado por ~9-10 procesos internos que no ocupan esa plaza; (2)
+-- writer_count (Aviso 3) se recalculaba cada minuto pese a costar 283ms y
+-- avisar como mucho 1 vez/día — movido a chequeo diario propio. El resto de
+-- esta migración (tablas, Avisos 1/4/5/6, cron cada minuto) sigue vigente
+-- sin cambios.
 --
 -- ENCARGO fix/kds-latido-raiz · Tarea B — vigía de salud de BBDD.
 -- El 11/08 nos enteramos de la caída porque la app no cargaba: no había nada que
