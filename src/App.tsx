@@ -19,6 +19,7 @@ import RepartidorRoute from './modules/repartidor/RepartidorRoute'
 import SeguimientoRoute from './modules/seguimiento/SeguimientoRoute'
 import ShopHubRoute from './modules/shop/ShopHubRoute'
 import { isShopHost } from './modules/shop/shopHost'
+import TpvSaleRoute from './modules/pos/TpvSaleRoute'
 
 // G-8.6 (Sprint 3): App.tsx reducido. El render autenticado es el Shell modular
 // (src/shell/Shell.tsx), que vive en la raÃ­z y resuelve la cuenta por AppContext.
@@ -155,6 +156,20 @@ export default function App() {
         <Route path="*" element={<Navigate to="/welcome" replace />} />
       </Routes>
     )
+  }
+
+  // 3-quinquies. TPV T1 (venta mostrador/para llevar) â€” pantalla a pantalla
+  //        completa SIN el Shell, pero CON sesiÃ³n (a diferencia de
+  //        /cocina-tv y /estacion, que son de frontera de token). Vale para
+  //        cualquier rol (worker/manager/admin): cualquier empleado debe
+  //        poder cobrar, no solo quien tenga Shell. Va DESPUÃ‰S de welcome
+  //        (3-bis) y ANTES del gate de rol worker (3-quater), para que no lo
+  //        intercepte TrabajadorApp. Aprobado explÃ­citamente por Julio
+  //        (encargo TPV T1.b, 11/08) â€” queda FUERA de AccountStatusGate a
+  //        propÃ³sito: una cuenta suspendida por impago sigue pudiendo cobrar
+  //        en el mostrador. Ver nota en CONTEXTO_CLAUDE.md.
+  if (location.pathname.startsWith('/tpv')) {
+    return <TpvSaleRoute />
   }
 
   // 3-ter. PANEL SUPERADMIN FOLVY (/_admin) â€” SesiÃ³n 15.
