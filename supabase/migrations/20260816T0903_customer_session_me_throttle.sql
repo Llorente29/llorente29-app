@@ -1,4 +1,4 @@
--- Aplicada: PENDIENTE (Julio, por MCP).
+-- Aplicada: SÍ (Julio, 11/08, por MCP).
 --
 -- ENCARGO fix/kds-latido-raiz · Tarea D — mismo antipatrón (lectura que
 -- escribe) detectado en el barrido de pg_proc por 'last_seen|heartbeat|

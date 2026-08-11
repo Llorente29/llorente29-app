@@ -1,7 +1,8 @@
--- Aplicada: PENDIENTE (Julio, por MCP). Puede aplicarse en cualquier momento,
--- con servicio abierto o cerrado: es 100% ADITIVA, no toca ninguna función
--- existente ni quita ninguna escritura todavía. Ver 20260816T0901 (la que sí
--- quita las escrituras) para la parte que exige servicio cerrado y secuencia.
+-- Aplicada: SÍ (Julio, 11/08, por MCP), con la corrección del guard final
+-- (ver más abajo) — el resto, tal cual. Es 100% ADITIVA, no tocó ninguna
+-- función existente ni quitó ninguna escritura todavía. Ver 20260816T0901
+-- (la que sí quita las escrituras) para la parte que exige servicio cerrado
+-- y secuencia — sigue PENDIENTE hasta confirmar el bundle OTA latiendo.
 --
 -- ENCARGO fix/kds-latido-raiz · Tarea A, parte 1/2 — crea el latido de raíz.
 -- Partida en dos migraciones a propósito (11/08) para que la secuencia
@@ -94,10 +95,17 @@ grant execute on function public.kds_heartbeat(text, text, text) to public, anon
 
 do $$
 begin
+  -- CORRECCIÓN (aplicada por Julio, sincronizada aquí 11/08): la versión
+  -- original comparaba pg_get_function_identity_arguments() — que NO incluye
+  -- los DEFAULT (verificado en vivo: devuelve 'p_token text, p_app_version
+  -- text, p_platform text', sin 'DEFAULT NULL::text') — contra un texto CON
+  -- defaults. Ese guard abortaba SIEMPRE, aunque la función se creara bien.
+  -- pg_get_function_arguments() sí los incluye; es la que se aplicó y la que
+  -- queda aquí.
   if not exists (
     select 1 from pg_proc
     where pronamespace = 'public'::regnamespace and proname = 'kds_heartbeat'
-      and pg_get_function_identity_arguments(oid) = 'p_token text, p_app_version text DEFAULT NULL::text, p_platform text DEFAULT NULL::text'
+      and pg_get_function_arguments(oid) = 'p_token text, p_app_version text DEFAULT NULL::text, p_platform text DEFAULT NULL::text'
   ) then
     raise exception 'kds_heartbeat_create: kds_heartbeat no quedó creada con la firma esperada';
   end if;

@@ -1,4 +1,12 @@
--- Aplicada: PENDIENTE (Julio, por MCP, con servicio CERRADO — ver nota abajo).
+-- Aplicada: NO POR ESTE FICHERO (Julio, 11/08, por MCP, con servicio CERRADO).
+-- Julio genera la versión final directamente desde pg_get_functiondef de las
+-- 13 definiciones VIVAS por sustitución de texto (el mismo patrón que la
+-- mitigación del 11/08), con guard que aborta si alguna no encaja, y vuelca
+-- el resultado al repo — cierra el drift por construcción. Transcribir 13
+-- funciones grandes a mano es un riesgo innecesario (ya hubo tramos
+-- corruptos en copias anteriores de este mismo fichero). ESTE FICHERO SE
+-- CONSERVA como registro de intención — no se borra — pero el que se aplica
+-- de verdad es el que Julio genera y vuelca él mismo.
 --
 -- ENCARGO fix/kds-latido-raiz · Tarea A, parte 2/2 — quita la escritura.
 -- Partida en dos migraciones a propósito (ver 20260816T0900_kds_heartbeat_create.sql,

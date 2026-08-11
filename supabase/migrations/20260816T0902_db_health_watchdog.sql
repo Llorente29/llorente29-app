@@ -260,9 +260,25 @@ begin
 
     -- Aviso 3 — guard anti-regresión (§6): esperado SIEMPRE 3 escritores de
     -- kds_device (ver los 3 nombres legítimos en la cabecera del fichero).
-    -- Antiruido largo (24h): una regresión no se resuelve en minutos, pero
-    -- tampoco hace falta repetir el aviso cada minuto mientras se corrige.
+    -- CORRECCIÓN (Julio, 11/08 2ª vuelta): hoy writer_count=16 porque 0900
+    -- ya está aplicada pero 0901 (la que quita las 13 escrituras) todavía
+    -- no — con el guard tal cual, el vigía mandaría un falso positivo desde
+    -- su primer minuto de vida. El aviso solo tiene sentido para una
+    -- REGRESIÓN: "ya estuvo en 3 alguna vez y ahora ya no". Se arma solo
+    -- (sin flag manual ni fecha) exigiendo que exista al menos un snapshot
+    -- histórico con writer_count=3 — antes de aplicar 0901 esa condición es
+    -- imposible (nunca ha sido 3), así que el guard queda callado sin más;
+    -- en cuanto 0901 se aplique y el cron registre su primer snapshot en 3,
+    -- el guard se arma automáticamente para cualquier regresión futura.
+    -- Límite conocido y documentado (no oculto): db_health_snapshot_log tiene
+    -- retención de 48h — si una regresión futura durase >48h sin corregirse,
+    -- el último snapshot bueno (writer_count=3) caería fuera de la ventana y
+    -- este aviso dejaría de repetirse; para entonces ya habrían saltado ≥2
+    -- avisos (antiruido 24h) sin que nadie actuara, así que es un caso de
+    -- segundo orden. No se alarga la retención solo por esto (el encargo
+    -- pide tabla pequeña a propósito).
     if v_writers <> 3
+       and exists (select 1 from public.db_health_snapshot_log where writer_count = 3)
        and not exists (
          select 1 from public.db_health_alert_log
          where kind = 'db-health-writer-regression' and sent_at >= now() - interval '24 hours'
@@ -337,14 +353,17 @@ declare
   v_list   text;
   v_count  int;
 begin
+  -- LEFT JOIN a propósito (corrección Julio 11/08): un dispositivo con
+  -- location_id NULL es justo el que más interesa reportar — con INNER JOIN
+  -- desaparecía en vez de destacar.
   select string_agg(
            format('%s (%s) — último latido: %s',
-             d.label, l.name, coalesce(d.last_seen_at::text, 'nunca')),
+             d.label, coalesce(l.name, 'sin local'), coalesce(d.last_seen_at::text, 'nunca')),
            chr(10) order by d.last_seen_at nulls first
          ), count(*)
     into v_list, v_count
   from kds_device d
-  join locations l on l.id = d.location_id
+  left join locations l on l.id = d.location_id
   where d.is_active
     and (d.last_seen_at is null or d.last_seen_at < now() - interval '30 days');
 
@@ -392,7 +411,8 @@ end;
 $function$;
 
 comment on function public.db_health_stale_devices_report() is
-  'Reporte DIARIO (cron db-health-stale-devices-daily, 08:00) de kds_device '
+  'Reporte DIARIO (cron db-health-stale-devices-daily, 06:00 UTC ≈ 08:00 '
+  'Madrid en verano) de kds_device '
   'con is_active=true y last_seen_at NULL o >30 días. Solo aviso — CERO '
   'efecto operativo automático (§5 de la adenda, retirada la auto-baja: no '
   'penaliza a un local cerrado por vacaciones). Silencioso si no hay nada '
@@ -411,8 +431,14 @@ select cron.schedule(
   $cron$select public.db_health_watchdog()$cron$
 );
 
+-- 06:00 UTC (corrección Julio 11/08): cron.timezone de este proyecto es GMT
+-- fijo, sin DST (verificado: show timezone / cron.timezone = 'GMT'). 06:00
+-- UTC = 08:00 Madrid en horario de verano (CEST, UTC+2, que es lo que rige
+-- ahora mismo, 11/08). En horario de invierno (CET, UTC+1) esto cae a las
+-- 07:00 Madrid — pg_cron no soporta DST, ningún cron fijo da las 8 reales
+-- los 365 días del año. Deuda menor, no se resuelve aquí.
 select cron.schedule(
   'db-health-stale-devices-daily',
-  '0 8 * * *',
+  '0 6 * * *',
   $cron$select public.db_health_stale_devices_report()$cron$
 );
