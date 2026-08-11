@@ -58,6 +58,22 @@ export default {
         // semánticos del margen (no es ganar/perder, es "dato neutro").
         'background-info': '#E3E8ED',
         'text-info': '#1E3A5F',
+
+        // ── TPV (T1.f, 11/08): tema oscuro propio, escopado a .tpv-root ──
+        // Los valores viven en src/modules/pos/theme/tpvTokens.css — esto
+        // solo los expone como clases de Tailwind (bg-tpv-surface,
+        // text-tpv-txt-2...). No tocar sin tocar ese fichero también.
+        'tpv-bg': 'var(--tpv-bg)',
+        'tpv-surface': 'var(--tpv-surface)',
+        'tpv-surface-2': 'var(--tpv-surface-2)',
+        'tpv-line': 'var(--tpv-line)',
+        'tpv-txt': 'var(--tpv-txt)',
+        'tpv-txt-2': 'var(--tpv-txt-2)',
+        'tpv-accent': 'var(--tpv-accent)',
+        'tpv-ok': 'var(--tpv-ok)',
+        'tpv-warn': 'var(--tpv-warn)',
+        'tpv-danger': 'var(--tpv-danger)',
+        'tpv-note': 'var(--tpv-note)',
       },
       fontFamily: {
         // Display → Space Grotesk (grotesca moderna). Fallback a Inter para
@@ -81,6 +97,8 @@ export default {
         'md': '8px',
         'lg': '10px',
         'xl': '14px',
+        // TPV (T1.f): --tpv-radius en tpvTokens.css.
+        'tpv': 'var(--tpv-radius)',
       },
       boxShadow: {
         'sm': '0 1px 2px rgba(21, 23, 26, 0.04)',
@@ -95,6 +113,20 @@ export default {
       minHeight: {
         'touch': '44px',
         'touch-base': '48px',
+        // TPV (T1.f) — objetivos táctiles del sistema de diseño §1/§2.1-2.3:
+        // ≥76px cualquier control, ≥96px acciones críticas, 52px suelo
+        // absoluto (solo +/- de cantidad y controles de cabecera). No
+        // negociable en ningún formato, tablet incluida.
+        'tap': '76px',
+        'tap-critical': '96px',
+        'tap-small': '52px',
+      },
+      spacing: {
+        // Mismos valores que minHeight.tap-* — para que h-tap/w-tap/p-tap
+        // etc. (no solo min-h-tap) tiren del mismo número único.
+        'tap': '76px',
+        'tap-critical': '96px',
+        'tap-small': '52px',
       },
     },
   },
