@@ -120,13 +120,34 @@ export default {
         'tap': '76px',
         'tap-critical': '96px',
         'tap-small': '52px',
+        // Tamaños de botón que la Tarea B pide por número exacto, no en el
+        // bloque --tap del §1 pero igual de "no se escribe suelto":
+        // categorías ≥82px (4.1 preámbulo), tile de producto ≥118px (4.1).
+        'tpv-cat': '82px',
+        'tpv-product': '118px',
       },
       spacing: {
-        // Mismos valores que minHeight.tap-* — para que h-tap/w-tap/p-tap
-        // etc. (no solo min-h-tap) tiren del mismo número único.
+        // Mismos valores que minHeight.tap-*/tpv-* — para que h-/w-/p-
+        // (no solo min-h-) tiren del mismo número único.
         'tap': '76px',
         'tap-critical': '96px',
         'tap-small': '52px',
+        'tpv-cat': '82px',
+        'tpv-product': '118px',
+      },
+      fontSize: {
+        // Tamaños de texto que el sistema de diseño fija por número exacto
+        // (4.1-4.3): nombre de producto/línea 17px, precio de línea 18px,
+        // precio de tile 22px, código de ticket 30px, importe de tarjeta
+        // 27px, total de cuenta 38px, modificador 13px. Nombrados por rol,
+        // no por tamaño, para que el componente diga QUÉ es, no cuánto mide.
+        'tpv-mod': ['13px', { lineHeight: '1.35' }],
+        'tpv-name': ['17px', { lineHeight: '1.2' }],
+        'tpv-line-price': ['18px', { lineHeight: '1.2' }],
+        'tpv-tile-price': ['22px', { lineHeight: '1.15', letterSpacing: '-0.02em' }],
+        'tpv-amount': ['27px', { lineHeight: '1.1', letterSpacing: '-0.02em' }],
+        'tpv-code': ['30px', { lineHeight: '1', letterSpacing: '-0.02em' }],
+        'tpv-total': ['38px', { lineHeight: '1', letterSpacing: '-0.03em' }],
       },
     },
   },
