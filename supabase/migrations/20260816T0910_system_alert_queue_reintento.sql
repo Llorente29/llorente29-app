@@ -68,6 +68,27 @@
 -- db_health_alert_log. VALIDADO por MCP: 5 ticks con la condición
 -- degradada sostenida → exactamente 1 fila de meta-aviso, no una por tick.
 --
+-- CONCURRENCIA (encontrado por Julio en revisión, 11/08 — no lo tenía la
+-- primera versión de este fichero): si dos ejecuciones de
+-- system_alert_queue_drain() se solapan (el cron se retrasa un tick, o
+-- alguien lo llama a mano mientras el cron corre), ambas podían leer la
+-- MISMA fila 'pending' y, la de disparo, llamar a net.http_post DOS VECES
+-- para el mismo aviso — correo duplicado. Los dos bucles (resolver +
+-- disparar) llevan ahora `for update skip locked`, el mismo patrón que ya
+-- usa claim_print_jobs para que dos tablets no reclamen el mismo print_job:
+-- cada ejecución bloquea las filas que toca mientras dura su transacción
+-- (la función entera es una transacción implícita), y una segunda ejecución
+-- solapada simplemente las salta en vez de esperarlas o tocarlas también.
+-- Nota honesta sobre el alcance de la validación: se comprobó por MCP que
+-- la sintaxis compila y que el comportamiento de un solo hilo no cambia
+-- (mismas 3 rondas de la máquina de estados, repetidas después de este
+-- cambio) — NO se ha podido simular una concurrencia real de dos
+-- ejecuciones solapadas con esta herramienta (las llamadas MCP son
+-- secuenciales, no dos transacciones abiertas a la vez); la garantía aquí
+-- es el patrón en sí (FOR UPDATE SKIP LOCKED es la primitiva estándar de
+-- Postgres para esto) más el precedente ya en producción en
+-- claim_print_jobs, no una prueba de carrera literal.
+--
 -- Alcance deliberado: solo se rewiran los 3 emisores SQL que ya llamaban a
 -- net.http_post directamente (db_health_watchdog, db_health_
 -- writer_regression_check, db_health_stale_devices_report) — son los que
@@ -208,11 +229,17 @@ declare
   v_to_fire     int;
   v_degraded_n  int;
 begin
-  -- 3.1) Resolver peticiones en vuelo (mandadas en un tick anterior)
+  -- 3.1) Resolver peticiones en vuelo (mandadas en un tick anterior).
+  -- FOR UPDATE SKIP LOCKED (mismo patrón que claim_print_jobs): si dos
+  -- ejecuciones de este drenaje se solapan (cron que se retrasa, llamada a
+  -- mano mientras el cron corre), la segunda salta las filas que la primera
+  -- ya tiene en curso en vez de tocarlas también — sin esto, ambas podrían
+  -- leer la misma fila y, en 3.2, disparar el mismo aviso dos veces.
   for v_row in
     select * from public.system_alert_queue
     where status = 'pending' and request_id is not null
     order by id
+    for update skip locked
   loop
     select status_code, error_msg into v_status_code, v_error_msg
     from net._http_response where id = v_row.request_id;
@@ -263,10 +290,14 @@ begin
       raise warning 'system_alert_queue_drain: secret cron_secret ausente en Vault, % aviso(s) en cola sin poder dispararse', v_to_fire;
     end if;
   else
+    -- Mismo FOR UPDATE SKIP LOCKED que en 3.1 y en claim_print_jobs: evita
+    -- que dos ejecuciones solapadas disparen net.http_post dos veces para
+    -- la misma fila (correo duplicado).
     for v_row in
       select * from public.system_alert_queue
       where status = 'pending' and request_id is null and attempts < 3
       order by id
+      for update skip locked
     loop
       select net.http_post(
         url     := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/system-alert',
