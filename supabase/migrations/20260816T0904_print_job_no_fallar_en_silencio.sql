@@ -1,4 +1,6 @@
--- Aplicada: PENDIENTE (Julio, por MCP).
+-- Aplicada: SÍ (Julio, 11/08 ~11:45, por MCP; sin drift — verificada carácter
+-- a carácter contra la definición viva ANTES de aplicar). Verificado en vivo:
+-- 2 triggers con rastro, 0 catch mudos.
 --
 -- ENCARGO fix/limpieza-kds-viejo-y-prevencion (11/08 mediodía) · Tarea B —
 -- "que no se pueda encolar a una impresora apagada".

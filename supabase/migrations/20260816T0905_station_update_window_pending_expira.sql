@@ -1,4 +1,21 @@
--- Aplicada: PENDIENTE (Julio, por MCP).
+-- Aplicada: SÍ (Julio, 11/08 ~11:45, por MCP). Verificado en vivo: ventana de
+-- 2h activa, 3 tablets respondiendo. Aplicada en versión GENERATIVA
+-- (sustitución quirúrgica sobre lo vivo, mismo criterio que 20260816T0901) —
+-- drift cerrado el mismo día: extraído pg_get_functiondef() de
+-- station_update_window en producción y verificado con nombre temporal
+-- _tmp_check_suw2 que el CREATE OR REPLACE de más abajo es BYTE A BYTE
+-- IDÉNTICO a lo vivo (a diferencia de la 0901, aquí sí coincide exacto — sin
+-- caveat de CRLF). La única diferencia real es que la versión aplicada por
+-- Julio no incluye el comentario "-- CORRECCIÓN (11/08)..." dentro del cuerpo
+-- de la función (se reescribió más compacto) — cero diferencia de lógica,
+-- confirmado con la comparación de prosrc.
+--
+-- CONFIRMACIÓN ADICIONAL (Julio, 11/08, con datos propios): mismo umbral,
+-- mediana 1,04s / p95 2,75s / n=1.812 — coincide exacto con el RECON de
+-- abajo. Dato que faltaba: de 2.730 trabajos, solo 15 (0,549%) tardaron más
+-- de 2h en enviarse, y en ese caso el peor efecto es un reload que retrasa
+-- segundos la impresión (el trabajo sigue en la cola, no se pierde). Umbral
+-- de 2h confirmado seguro con datos reales, no solo con el percentil.
 --
 -- ENCARGO fix/limpieza-kds-viejo-y-prevencion (11/08 mediodía) · Tarea D —
 -- la ventana de actualización no puede bloquearse para siempre.
@@ -64,13 +81,8 @@ begin
   select count(*) into v_pending_jobs
     from print_job j
    where j.location_id = v_device.location_id
-     and (
-       -- CORRECCIÓN (11/08): antes `j.status = 'pending'` sin límite de
-       -- antigüedad — un trabajo atascado bloqueaba la ventana para siempre.
-       -- Ver cabecera de esta migración para la justificación del umbral.
-       (j.status = 'pending' and j.created_at > now() - interval '2 hours')
-       or (j.status = 'sent' and j.sent_at > now() - interval '60 minutes')
-     );
+     and ((j.status = 'pending' and j.created_at > now() - interval '2 hours')
+       or (j.status = 'sent' and j.sent_at > now() - interval '60 minutes'));
 
   select count(*) into v_active_orders
     from sale s

@@ -35,21 +35,22 @@
 -- que, por su propio antiruido de 24h, como mucho se notifica una vez al día
 -- — desproporción real, no solo estética.
 --
--- Se mueve el cómputo de writer_count a una función y un cron propios,
--- diarios, tal como pide el encargo (opción "uno propio", no se mezcla con
+-- Se mueve el cómputo de writer_count a una función y un cron propios, CADA
+-- 15 MINUTOS (decisión de Julio, 11/08 tarde — ver abajo), tal como pide el
+-- encargo (opción "uno propio", no se mezcla con
 -- db_health_stale_devices_report() para no acoplar dos responsabilidades
 -- distintas — inventario de dispositivos fantasma no tiene nada que ver con
 -- regresión de código). db_health_snapshot() deja de calcular writer_count
 -- (ya no aparece en su jsonb); db_health_watchdog() deja de tener Aviso 3 (se
 -- traslada entero, lógica de autoarmado y antiruido incluidos, a
 -- db_health_writer_regression_check()). La columna
--- db_health_snapshot_log.writer_count pasa a admitir NULL: las 1.440 filas
--- diarias del chequeo de cada minuto la dejan NULL (nunca se mide ahí);
--- db_health_writer_regression_check() inserta 1 fila/día con el valor real
--- medido. ELEGIDO explícitamente NULL en vez de "rellenar con el último
--- valor conocido" (opción que también pedía Julio, la descarto y digo por
--- qué): rellenar arrastrando el valor previo haría parecer que cada fila es
--- una medición fresca cuando no lo es — NULL es la respuesta honesta a
+-- db_health_snapshot_log.writer_count pasa a admitir NULL: las filas del
+-- chequeo de cada minuto la dejan NULL (nunca se mide ahí);
+-- db_health_writer_regression_check() inserta 1 fila cada 15 min con el
+-- valor real medido. ELEGIDO explícitamente NULL en vez de "rellenar con el
+-- último valor conocido" (opción que también pedía Julio, la descarto y digo
+-- por qué): rellenar arrastrando el valor previo haría parecer que cada fila
+-- es una medición fresca cuando no lo es — NULL es la respuesta honesta a
 -- "¿cuántos escritores había en este snapshot?" cuando no se ha mirado.
 -- El autoarmado ("¿ha habido alguna vez un snapshot con writer_count=3?") no
 -- se rompe: sigue siendo un `exists (... where writer_count = 3)`, indiferente
@@ -58,19 +59,21 @@
 -- el guard queda armado desde el primer minuto de esta migración, sin
 -- ventana de desprotección.
 --
--- Aviso de latencia de detección (no oculto, a valorar por Julio): antes de
--- esta migración la regresión de escritores se detectaba en ≤1 minuto; con
--- cadencia diaria pasa a detectarse en ≤24h. Los Avisos 1 y 2 (bloqueos,
--- conexiones), que SÍ siguen siendo cada minuto y sin cambios aquí, ya cazan
--- el SÍNTOMA de una tormenta de escrituras (bloqueos/conexiones disparadas)
--- con la misma rapidez de siempre — lo que se retrasa a 24h es solo la
--- "huella dactilar" de la causa (qué función concreta volvió a escribir), no
--- la alarma de que algo va mal. Si se prefiere más rapidez sin volver al
--- coste de cada minuto, un punto intermedio razonable sería cada 15 min
--- (283ms × 96/día ≈ 27s/día de coste, frente a 283ms × 1.440/día ≈ 6,8
--- min/día de coste con la cadencia vieja) — no se aplica aquí porque el
--- encargo pide explícitamente cron diario; decirlo si se prefiere ese punto
--- intermedio y se cambia el cron.schedule de abajo.
+-- DECISIÓN DE CADENCIA (Julio, 11/08 tarde): cada 15 minutos, no diario. Se
+-- ofreció el punto intermedio como aviso de latencia (antes de esta
+-- migración la regresión se detectaba en ≤1 minuto; con cadencia diaria
+-- pasaría a ≤24h) y Julio lo eligió explícitamente con su propio argumento:
+-- una regresión desplegada un viernes por la mañana no se detectaría con
+-- cadencia diaria hasta el sábado de madrugada, que es plena hora punta de
+-- fin de semana — demasiado tarde. Con 15 min el coste es 283ms × 96/día ≈
+-- 27s/día (despreciable) y la detección baja a ≤15 min. El antiruido de 24h
+-- (sin cambios) sigue evitando el spam de avisos repetidos mientras la
+-- regresión no se corrija. Los Avisos 1 y 2 (bloqueos, conexiones), que SÍ
+-- siguen siendo cada minuto y sin cambios aquí, ya cazan el SÍNTOMA de una
+-- tormenta de escrituras con la misma rapidez de siempre — lo que bajaba de
+-- ≤1min a ≤24h (y ahora queda en ≤15min) era solo la "huella dactilar" de la
+-- causa (qué función concreta volvió a escribir), no la alarma de que algo
+-- va mal.
 --
 -- Validado por MCP con nombre temporal _tmp_check_db_health_snapshot() antes
 -- de escribir este fichero (creado, comparado contra pg_stat_activity real,
@@ -80,10 +83,10 @@
 do $$
 begin
   if not exists (select 1 from pg_proc where pronamespace='public'::regnamespace and proname='db_health_snapshot') then
-    raise exception 'snapshot_conexiones_reales_y_writer_count_diario: falta db_health_snapshot — RECON desactualizado, parar';
+    raise exception 'snapshot_conexiones_reales_y_writer_count_cada_15min: falta db_health_snapshot — RECON desactualizado, parar';
   end if;
   if not exists (select 1 from pg_proc where pronamespace='public'::regnamespace and proname='db_health_watchdog') then
-    raise exception 'snapshot_conexiones_reales_y_writer_count_diario: falta db_health_watchdog — RECON desactualizado, parar';
+    raise exception 'snapshot_conexiones_reales_y_writer_count_cada_15min: falta db_health_watchdog — RECON desactualizado, parar';
   end if;
 end $$;
 
@@ -100,8 +103,8 @@ comment on table public.db_health_snapshot_log is
   'waiting_locks = conteo crudo de TODO pg_stat_activity con '
   'wait_event_type=Lock (aquí sí interesa cualquier backend). writer_count '
   'es NULL en las filas del chequeo de cada minuto (ya no se calcula ahí por '
-  'coste, ver 20260816T0906) y solo lleva valor real en la fila diaria que '
-  'inserta db_health_writer_regression_check() — guard anti-regresión, '
+  'coste, ver 20260816T0906) y solo lleva valor real en la fila que inserta '
+  'cada 15 min db_health_writer_regression_check() — guard anti-regresión, '
   'esperado SIEMPRE 3 cuando no es NULL.';
 
 -- ── 2) db_health_snapshot(): conexiones reales, sin writer_count ────────────
@@ -148,7 +151,7 @@ comment on function public.db_health_snapshot() is
   'Chequeo puro e instantáneo de salud de BBDD (conexiones de CLIENTE real, '
   'procesos esperando lock AHORA, tx más vieja, max_connections). Sin '
   'writer_count desde 20260816T0906 (ver db_health_writer_regression_check, '
-  'chequeo diario aparte) — sin efectos secundarios y sin juicio de '
+  'chequeo aparte cada 15 min) — sin efectos secundarios y sin juicio de '
   'persistencia, eso lo hace db_health_watchdog() comparando snapshots.';
 
 -- ── 3) db_health_watchdog(): igual, menos el Aviso 3 (trasladado) ───────────
@@ -178,8 +181,8 @@ begin
     v_max_conn   := (v_snap->>'max_connections')::int;
 
     -- writer_count ya no se mide aquí (ver 20260816T0906): la columna queda
-    -- NULL en esta fila. db_health_writer_regression_check() (cron diario)
-    -- inserta la única fila del día con valor real.
+    -- NULL en esta fila. db_health_writer_regression_check() (cron cada 15
+    -- min) inserta la fila con valor real.
     insert into public.db_health_snapshot_log
       (total_connections, waiting_locks, oldest_tx_seconds)
     values
@@ -251,7 +254,7 @@ begin
     end if;
 
     -- Aviso 3 (regresión de escritores de kds_device) TRASLADADO a
-    -- db_health_writer_regression_check() — cron diario propio, ver
+    -- db_health_writer_regression_check() — cron propio cada 15 min, ver
     -- 20260816T0906. Dejaba de tener sentido evaluarlo aquí: costaba 283ms
     -- cada minuto (1.440 veces/día) para un aviso con antiruido de 24h.
 
@@ -376,12 +379,12 @@ comment on function public.db_health_watchdog() is
   'conexiones de cliente >80%, print_job pending >2h, print_job no terminal '
   'en impresora inactiva, pedidos sin impresora activa), cada una con su '
   'propio antiruido en db_health_alert_log. La regresión del guard '
-  'anti-escritura (writer_count != 3) se evalúa aparte, diario, en '
+  'anti-escritura (writer_count != 3) se evalúa aparte, cada 15 min, en '
   'db_health_writer_regression_check() (20260816T0906) — demasiado cara '
   '(283ms medido) para correr cada minuto cuando su propio antiruido es de '
   '24h. Nunca falla en silencio.';
 
--- ── 4) Nueva función: regresión de escritores, cadencia diaria ──────────────
+-- ── 4) Nueva función: regresión de escritores, cadencia cada 15 min ────────
 
 CREATE OR REPLACE FUNCTION public.db_health_writer_regression_check()
 RETURNS void
@@ -408,7 +411,7 @@ begin
     join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and p.prosrc ~* 'update\s+(public\.)?kds_device';
 
-    -- Única fila del día con writer_count real; el resto de columnas se
+    -- Fila con writer_count real (1 cada 15 min); el resto de columnas se
     -- recalculan aquí también (baratas, ver db_health_snapshot()) para que
     -- la fila sea autoconsistente y no dependa de encajar con la última fila
     -- del minuto anterior.
@@ -441,8 +444,8 @@ begin
             'message', 'Alguien ha vuelto a meter una escritura de last_seen_at en una función de LECTURA de kds_device '
                        || '(el incidente completo del 11/08, de nuevo).' || chr(10)
                        || 'Esperado: kds_heartbeat, report_device_app_version, set_device_mode_by_token — y nada más.' || chr(10)
-                       || 'Este chequeo corre 1 vez/día (db-health-writer-regression-daily) — si esto llega, la '
-                       || 'regresión pudo llevar hasta 24h sin detectarse por este aviso concreto (los Avisos 1/2 de '
+                       || 'Este chequeo corre cada 15 min (db-health-writer-regression-15m) — si esto llega, la '
+                       || 'regresión pudo llevar hasta 15 min sin detectarse por este aviso concreto (los Avisos 1/2 de '
                        || 'db_health_watchdog, cada minuto, ya habrían cazado el SÍNTOMA de bloqueos/conexiones antes).' || chr(10)
                        || 'select proname from pg_proc join pg_namespace on ... where prosrc ~* ''update\s+(public\.)?kds_device'' para ver cuál.',
             'kind', 'db-health'
@@ -465,7 +468,7 @@ begin
             headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', v_secret),
             body    := jsonb_build_object(
               'subject', 'db_health_writer_regression_check FALLÓ',
-              'message', 'El chequeo diario de regresión de escritores lanzó una excepción: ' || sqlerrm,
+              'message', 'El chequeo de regresión de escritores (cada 15 min) lanzó una excepción: ' || sqlerrm,
               'kind', 'db-health-writer-regression-check-error'
             ),
             timeout_milliseconds := 10000
@@ -482,22 +485,24 @@ end;
 $function$;
 
 comment on function public.db_health_writer_regression_check() is
-  'Chequeo DIARIO (cron db-health-writer-regression-daily, 06:10 UTC) del '
-  'guard anti-regresión de escritores de kds_device (esperado SIEMPRE 3: '
+  'Chequeo cada 15 MIN (cron db-health-writer-regression-15m) del guard '
+  'anti-regresión de escritores de kds_device (esperado SIEMPRE 3: '
   'kds_heartbeat, report_device_app_version, set_device_mode_by_token). '
   'Trasladado aquí desde db_health_watchdog() el 11/08 (20260816T0906) por '
   'coste: 283ms medido en producción, desproporcionado para correr cada '
-  'minuto cuando su antiruido es de 24h. Inserta 1 fila/día en '
-  'db_health_snapshot_log con writer_count real (el resto de filas del día, '
-  'del chequeo de cada minuto, lo dejan NULL).';
+  'minuto cuando su antiruido es de 24h — cada 15 min (decisión de Julio, '
+  '11/08 tarde) el coste total es ~27s/día y la detección baja de ≤24h a '
+  '≤15min. Inserta 1 fila cada 15 min en db_health_snapshot_log con '
+  'writer_count real (el resto de filas, del chequeo de cada minuto, lo '
+  'dejan NULL).';
 
 revoke all on function public.db_health_writer_regression_check() from public, anon, authenticated;
 
--- ── 5) Cron diario ───────────────────────────────────────────────────────────
+-- ── 5) Cron cada 15 minutos ──────────────────────────────────────────────────
 
 select cron.schedule(
-  'db-health-writer-regression-daily',
-  '10 6 * * *',
+  'db-health-writer-regression-15m',
+  '*/15 * * * *',
   $cron$select public.db_health_writer_regression_check()$cron$
 );
 
