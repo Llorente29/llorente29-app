@@ -1,4 +1,31 @@
--- Aplicada: PENDIENTE (Julio, por MCP).
+-- Aplicada: SÍ (Julio, 11/08 17:19, por MCP). Verificado en vivo: aviso de
+-- prueba encolado→entregado en 1 intento, cron activo con 3 ejecuciones OK,
+-- 0 emisores llamando ya a net.http_post directo.
+--
+-- CORRECCIÓN de Julio al aplicar (repo sincronizado con lo vivo tras esto):
+-- los tres manejadores `exception when others` encolaban el aviso y LUEGO
+-- hacían `raise` — al relanzar, la transacción se revierte y esa fila
+-- encolada se pierde: el aviso de "el vigía ha fallado" nunca habría
+-- salido. Corregido añadiendo `raise warning '<función>: excepción: %',
+-- sqlerrm` ANTES del encolado en las tres funciones — el warning va a los
+-- logs del servidor y NO se revierte con el raise de abajo (mismo
+-- razonamiento ya aplicado al meta-aviso de system_alert_queue_drain(), que
+-- usa raise warning como vía independiente del canal; aquí faltaba en los
+-- manejadores de las 3 funciones emisoras). El encolado en sí SÍ puede
+-- perderse con el rollback — se acepta, porque si la condición persiste el
+-- siguiente tick vuelve a intentarlo.
+--
+-- Nota aparte: el fichero que Julio recibió en el chat llegó truncado en el
+-- bloque de excepción de db_health_watchdog (faltaba la línea
+-- `perform public._queue_system_alert(` con su primer parámetro) — lo
+-- reconstruyó él mismo siguiendo el patrón de las otras seis llamadas.
+-- Verificado: el fichero de ESTE repo (antes de esta sincronización) SÍ
+-- tenía esa línea completa — el truncamiento pasó al copiar/pegar el texto
+-- en el chat, no en el fichero real. Los 3 cuerpos de función de abajo se
+-- han sustituido por pg_get_functiondef() en vivo, verbatim (incluye la
+-- pérdida de acentos de siempre al aplicar a mano, y una frase menos en el
+-- mensaje de db_health_writer_regression_check que Julio no reescribió al
+-- reconstruir — sin efecto funcional, solo texto del correo).
 --
 -- ENCARGO (11/08 tarde) — cola con reintento para system-alert. Prioridad
 -- ALTA, explícita por delante de todo salvo T1.c: "un vigía en el que
@@ -364,10 +391,10 @@ revoke all on function public.system_alert_queue_drain() from public, anon, auth
 -- ── 4) db_health_watchdog: encola en vez de llamar a net.http_post directo ──
 
 CREATE OR REPLACE FUNCTION public.db_health_watchdog()
-RETURNS void
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path TO 'public'
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
 AS $function$
 declare
   v_snap            jsonb;
@@ -386,7 +413,6 @@ begin
     v_total_conn := (v_snap->>'total_connections')::int;
     v_max_conn   := (v_snap->>'max_connections')::int;
 
-    -- writer_count ya no se mide aquí: la columna queda NULL en esta fila.
     insert into public.db_health_snapshot_log
       (total_connections, waiting_locks, oldest_tx_seconds)
     values
@@ -400,7 +426,6 @@ begin
       into v_n_snapshots, v_n_breaching
       from public.db_health_snapshot_log
       where checked_at >= now() - interval '2 minutes';
-
     if v_n_snapshots >= 2 and v_n_breaching = v_n_snapshots
        and not exists (
          select 1 from public.db_health_alert_log
@@ -409,16 +434,16 @@ begin
       perform public._queue_system_alert(
         'db-health',
         'BBDD con bloqueos — ' || v_waiting || ' proceso(s) esperando lock, sostenido >2min',
-        'db_health_watchdog detectó más de 3 procesos esperando lock en ' || v_n_snapshots
-          || ' snapshots consecutivos de los últimos 2 minutos (ahora mismo: ' || v_waiting || ').' || chr(10)
+        'db_health_watchdog detecto mas de 3 procesos esperando lock en ' || v_n_snapshots
+          || ' snapshots consecutivos de los ultimos 2 minutos (ahora mismo: ' || v_waiting || ').' || chr(10)
           || 'Conexiones de cliente: ' || v_total_conn
-          || '. Transacción más antigua: ' || (v_snap->>'oldest_tx_seconds') || 's.' || chr(10)
-          || 'Así empezó el incidente del 11/08. Revisar pg_stat_activity ya.',
+          || '. Transaccion mas antigua: ' || (v_snap->>'oldest_tx_seconds') || 's.' || chr(10)
+          || 'Asi empezo el incidente del 11/08. Revisar pg_stat_activity ya.',
         'db-health-lock'
       );
     end if;
 
-    -- Aviso 2 — conexiones de CLIENTE cerca del máximo
+    -- Aviso 2 — conexiones de CLIENTE cerca del maximo
     if v_max_conn > 0 and v_total_conn > 0.8 * v_max_conn
        and not exists (
          select 1 from public.db_health_alert_log
@@ -426,21 +451,18 @@ begin
        ) then
       perform public._queue_system_alert(
         'db-health',
-        'BBDD cerca del límite de conexiones — ' || v_total_conn || '/' || v_max_conn,
-        'db_health_watchdog detectó ' || v_total_conn || ' conexiones de CLIENTE activas de un máximo de '
+        'BBDD cerca del limite de conexiones — ' || v_total_conn || '/' || v_max_conn,
+        'db_health_watchdog detecto ' || v_total_conn || ' conexiones de CLIENTE activas de un maximo de '
           || v_max_conn || ' (>80%).' || chr(10)
-          || 'Revisar pg_stat_activity: puede ser el mismo patrón del 11/08.',
+          || 'Revisar pg_stat_activity: puede ser el mismo patron del 11/08.',
         'db-health-connections'
       );
     end if;
-
-    -- Aviso 3 (regresión de escritores) sigue en db_health_writer_regression_check() — cron propio cada 15 min.
 
     -- Aviso 4 — print_job en pending >2h
     select count(*) into v_stuck_print
     from print_job
     where status = 'pending' and created_at < now() - interval '2 hours';
-
     if v_stuck_print > 0
        and not exists (
          select 1 from public.db_health_alert_log
@@ -448,9 +470,9 @@ begin
        ) then
       perform public._queue_system_alert(
         'db-health',
-        v_stuck_print || ' trabajo(s) de impresión atascados >2h',
-        'db_health_watchdog detectó ' || v_stuck_print || ' print_job en pending desde hace más de 2 horas.' || chr(10)
-          || 'Así se acumularon los 76 de Carabanchel (08-09/08) durante 3 días sin que nadie se enterara.',
+        v_stuck_print || ' trabajo(s) de impresion atascados >2h',
+        'db_health_watchdog detecto ' || v_stuck_print || ' print_job en pending desde hace mas de 2 horas.' || chr(10)
+          || 'Asi se acumularon los 76 de Carabanchel (08-09/08) durante 3 dias sin que nadie se enterara.',
         'db-health-print-stuck'
       );
     end if;
@@ -460,7 +482,6 @@ begin
     from print_job pj
     join printer p on p.id = pj.printer_id
     where pj.status in ('pending', 'sent') and p.is_active = false;
-
     if v_inactive_print > 0
        and not exists (
          select 1 from public.db_health_alert_log
@@ -468,8 +489,8 @@ begin
        ) then
       perform public._queue_system_alert(
         'db-health',
-        v_inactive_print || ' trabajo(s) de impresión encolados a impresora INACTIVA',
-        'db_health_watchdog detectó ' || v_inactive_print || ' print_job (pending/sent) cuya impresora tiene is_active=false.' || chr(10)
+        v_inactive_print || ' trabajo(s) de impresion encolados a impresora INACTIVA',
+        'db_health_watchdog detecto ' || v_inactive_print || ' print_job (pending/sent) cuya impresora tiene is_active=false.' || chr(10)
           || 'Nunca se van a imprimir: claim_print_jobs solo reclama de impresoras activas.',
         'db-health-print-inactive-printer'
       );
@@ -479,7 +500,6 @@ begin
     select count(*) into v_route_failures
     from public.print_route_failure_log
     where created_at >= now() - interval '10 minutes';
-
     if v_route_failures > 0
        and not exists (
          select 1 from public.db_health_alert_log
@@ -488,20 +508,24 @@ begin
       perform public._queue_system_alert(
         'db-health',
         'Pedido(s) aceptado(s) sin impresora activa en el local',
-        'db_health_watchdog detectó ' || v_route_failures || ' aviso(s) en print_route_failure_log de los últimos 10 minutos.',
+        'db_health_watchdog detecto ' || v_route_failures || ' aviso(s) en print_route_failure_log de los ultimos 10 minutos.',
         'db-health-print-no-active-printer'
       );
     end if;
 
   exception when others then
+    -- raise warning PRIMERO: va a los logs del servidor y NO se revierte con
+    -- el raise de abajo. El encolado si se revierte — se mantiene porque si la
+    -- condicion persiste, el siguiente tick lo vuelve a intentar.
+    raise warning 'db_health_watchdog: excepcion: %', sqlerrm;
     if not exists (
       select 1 from public.db_health_alert_log
       where kind = 'db-health-watchdog-error' and sent_at >= now() - interval '30 minutes'
     ) then
       perform public._queue_system_alert(
         'db-health-watchdog-error',
-        'db_health_watchdog FALLÓ',
-        'El vigía de salud de BBDD lanzó una excepción: ' || sqlerrm,
+        'db_health_watchdog FALLO',
+        'El vigia de salud de BBDD lanzo una excepcion: ' || sqlerrm,
         'db-health-watchdog-error'
       );
     end if;
@@ -524,10 +548,10 @@ comment on function public.db_health_watchdog() is
 -- ── 5) db_health_writer_regression_check: idem ──────────────────────────────
 
 CREATE OR REPLACE FUNCTION public.db_health_writer_regression_check()
-RETURNS void
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path TO 'public'
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
 AS $function$
 declare
   v_snap    jsonb;
@@ -535,9 +559,6 @@ declare
 begin
   begin
     v_snap := public.db_health_snapshot();
-
-    -- Guard anti-regresión: funciones de public con `update ... kds_device`.
-    -- Esperado SIEMPRE 3. Medido: 283ms (barrido de pg_proc con regex).
     select count(*) into v_writers
     from pg_proc p
     join pg_namespace n on n.oid = p.pronamespace
@@ -552,7 +573,6 @@ begin
       v_writers
     );
 
-    -- Autoarmado: el aviso de REGRESIÓN solo tiene sentido si alguna vez estuvo en 3.
     if v_writers <> 3
        and exists (select 1 from public.db_health_snapshot_log where writer_count = 3)
        and not exists (
@@ -561,23 +581,23 @@ begin
        ) then
       perform public._queue_system_alert(
         'db-health',
-        'REGRESIÓN: ' || v_writers || ' funciones escriben kds_device (se esperaban 3)',
-        'Alguien ha vuelto a meter una escritura de last_seen_at en una función de LECTURA de kds_device '
+        'REGRESION: ' || v_writers || ' funciones escriben kds_device (se esperaban 3)',
+        'Alguien ha vuelto a meter una escritura de last_seen_at en una funcion de LECTURA de kds_device '
           || '(el incidente completo del 11/08, de nuevo).' || chr(10)
-          || 'Esperado: kds_heartbeat, report_device_app_version, set_device_mode_by_token — y nada más.' || chr(10)
-          || 'Este chequeo corre cada 15 min; los Avisos 1/2 del watchdog (cada minuto) ya habrían cazado el SÍNTOMA antes.',
+          || 'Esperado: kds_heartbeat, report_device_app_version, set_device_mode_by_token — y nada mas.',
         'db-health-writer-regression'
       );
     end if;
   exception when others then
+    raise warning 'db_health_writer_regression_check: excepcion: %', sqlerrm;
     if not exists (
       select 1 from public.db_health_alert_log
       where kind = 'db-health-writer-regression-check-error' and sent_at >= now() - interval '30 minutes'
     ) then
       perform public._queue_system_alert(
         'db-health-writer-regression-check-error',
-        'db_health_writer_regression_check FALLÓ',
-        'El chequeo de regresión de escritores (cada 15 min) lanzó una excepción: ' || sqlerrm,
+        'db_health_writer_regression_check FALLO',
+        'El chequeo de regresion de escritores (cada 15 min) lanzo una excepcion: ' || sqlerrm,
         'db-health-writer-regression-check-error'
       );
     end if;
@@ -595,19 +615,17 @@ comment on function public.db_health_writer_regression_check() is
 -- ── 6) db_health_stale_devices_report: idem (sin antiruido — no lo tenía) ──
 
 CREATE OR REPLACE FUNCTION public.db_health_stale_devices_report()
-RETURNS void
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path TO 'public'
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
 AS $function$
 declare
   v_list  text;
   v_count int;
 begin
-  -- LEFT JOIN a propósito: un dispositivo con location_id NULL es justo el
-  -- que más interesa reportar.
   select string_agg(
-           format('%s (%s) — último latido: %s',
+           format('%s (%s) — ultimo latido: %s',
              d.label, coalesce(l.name, 'sin local'), coalesce(d.last_seen_at::text, 'nunca')),
            chr(10) order by d.last_seen_at nulls first
          ), count(*)
@@ -618,20 +636,21 @@ begin
     and (d.last_seen_at is null or d.last_seen_at < now() - interval '30 days');
 
   if v_count is null or v_count = 0 then
-    return; -- silencioso: nada que avisar hoy
+    return;
   end if;
 
   perform public._queue_system_alert(
     'db-health-stale-devices',
-    v_count || ' dispositivo(s) KDS activo(s) sin latido hace más de 30 días',
-    'Solo REPORTE — ninguna baja automática. Revisar si siguen en uso o dar de baja a mano (is_active=false):'
+    v_count || ' dispositivo(s) KDS activo(s) sin latido hace mas de 30 dias',
+    'Solo REPORTE — ninguna baja automatica. Revisar si siguen en uso o dar de baja a mano (is_active=false):'
       || chr(10) || chr(10) || v_list
   );
 exception when others then
+  raise warning 'db_health_stale_devices_report: excepcion: %', sqlerrm;
   perform public._queue_system_alert(
     'db-health-stale-devices-error',
-    'db_health_stale_devices_report FALLÓ',
-    'El reporte diario de dispositivos fantasma lanzó una excepción: ' || sqlerrm
+    'db_health_stale_devices_report FALLO',
+    'El reporte diario de dispositivos fantasma lanzo una excepcion: ' || sqlerrm
   );
   raise;
 end;
