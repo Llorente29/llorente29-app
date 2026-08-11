@@ -245,3 +245,46 @@ if (typeof window !== 'undefined') {
 }
 
 autostart();
+
+// ── Latido de kds_device (fix/kds-latido-raiz, 11/08) ────────────────────────
+//
+// RAÍZ del incidente del 11/08 (BBDD caída ~45min, 3 locales cerrados): las
+// lecturas de pantalla (orders_feed, kds_board, claim_print_jobs...) escribían
+// kds_device.last_seen_at en cada poll -> con locales cerrados y 3 tablets
+// solas, ~38.600 escrituras/6h sobre 7 filas. Mitigado en caliente el 11/08
+// con un freno de 30s (ver backup public._backup_kds_fn_20260811); ESTE
+// bloque es el rediseño de raíz: un único RPC de latido, en un único
+// setInterval de app, y las 13 funciones de lectura dejan de escribir del
+// todo (migración 20260816T0900_kds_heartbeat_raiz.sql).
+//
+// A diferencia del worker de impresión (solo imprime en la app nativa), el
+// latido corre en TODAS las plataformas: la kiosco-TV /cocina-tv es web y
+// también necesita latir. Ambas rutas (web /cocina-tv y app nativa /estacion)
+// comparten el mismo localStorage 'kds_device_token' — resolveToken() ya lo
+// lee sin gate de plataforma, así que basta un único intervalo global.
+//
+// Intervalo: no hay hoy un umbral de "tablet viva" codificado en la UI que
+// RECONciliar (RECON de este encargo, 11/08 — no se encontró semáforo con
+// número); se toma 60s, la resolución que el propio incidente documentó como
+// objetivo (30-60s) y el ejemplo del encargo (umbral 2min -> latido a mitad).
+//
+// app_version/platform NO se mandan aquí: ya los reporta reportAppVersion()
+// (native/appUpdate.ts, RPC report_device_app_version) en su propio ciclo; el
+// latido solo hace lo que su nombre dice.
+const HEARTBEAT_MS = 60_000;
+let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+
+async function heartbeatTick(): Promise<void> {
+  const token = resolveToken();
+  if (!token) return;
+  try {
+    await rpc('kds_heartbeat', { p_token: token });
+  } catch (e: any) {
+    console.warn('[kds-heartbeat] fallo:', e?.message || e);
+  }
+}
+
+if (!heartbeatTimer) {
+  heartbeatTimer = setInterval(() => { void heartbeatTick(); }, HEARTBEAT_MS);
+  void heartbeatTick();
+}
