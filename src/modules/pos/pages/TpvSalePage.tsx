@@ -14,7 +14,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   Loader2, Plus, Minus, Trash2, ArrowLeft,
-  Banknote, CreditCard, ClipboardList, Save, PackageCheck, ListChecks,
+  Banknote, CreditCard, ClipboardList, Save, PackageCheck, ListChecks, MonitorOff,
 } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useOperativeLocation } from '@/modules/supply/hooks/useOperativeLocation'
@@ -39,9 +39,20 @@ interface CartLine {
 // eslint-disable-next-line no-restricted-syntax -- n es un cálculo local (líneas/carrito), nunca dato crudo del servidor
 function eur(n: number): string { return n.toFixed(2).replace('.', ',') + ' €' }
 
+// T1.c (11/08): mismo token que /estacion y el kiosco KDS (kds_device_token
+// en localStorage) — si esta tablet ya está pareada como estación, la venta
+// queda trazada a ese dispositivo. Se lee una sola vez al montar; no hay
+// pantalla de vinculación aquí (a diferencia de /estacion), el TPV vende
+// igual sin token, solo pierde trazabilidad de dispositivo.
+const DEVICE_TOKEN_KEY = 'kds_device_token'
+function readDeviceToken(): string | null {
+  try { return window.localStorage.getItem(DEVICE_TOKEN_KEY) } catch { return null }
+}
+
 export default function TpvSalePage({ onExit }: { onExit: () => void }) {
   const { activeAccountId } = useActiveAccount()
   const { operativeLocationId, isResolved, blocker, canChoose, chooseOptions, setManualLocation, loading: locLoading } = useOperativeLocation()
+  const [deviceToken] = useState<string | null>(readDeviceToken)
 
   const [brands, setBrands] = useState<PosBrand[]>([])
   const [brandId, setBrandId] = useState<string | null>(null)
@@ -162,7 +173,7 @@ export default function TpvSalePage({ onExit }: { onExit: () => void }) {
       }))
       const res = await upsertPosSale({
         saleId, accountId: activeAccountId, locationId: operativeLocationId, brandId,
-        channelKind, lines, action, paymentMethod,
+        channelKind, lines, action, paymentMethod, deviceToken,
       })
       setSaleId(res.saleId)
       if (action === 'save') setFlash(`Cuenta guardada · ${res.posShortCode ?? ''}`)
@@ -244,6 +255,17 @@ export default function TpvSalePage({ onExit }: { onExit: () => void }) {
         >
           <ListChecks size={16} /> Cuentas ({openTickets.length}{pendingDelivery.length > 0 ? ` +${pendingDelivery.length}` : ''})
         </button>
+        {!deviceToken && (
+          // Discreto a propósito (T1.c): no bloquea la venta, solo lo hace
+          // visible para quien mire la pantalla — un TPV que no sabe desde
+          // qué dispositivo vende es algo que el dueño debería poder notar.
+          <span
+            title="Esta pantalla no está vinculada a un dispositivo Folvy — la venta se registra igual, sin trazabilidad de dispositivo. Vincular en Ajustes de pedidos → Dispositivos."
+            className="hidden sm:inline-flex items-center gap-1 text-xs text-text-tertiary shrink-0"
+          >
+            <MonitorOff size={14} /> Sin dispositivo
+          </span>
+        )}
       </div>
 
       {error && <div className="px-4 py-2 bg-danger-bg text-danger text-sm border-b border-danger/20">{error}</div>}

@@ -103,6 +103,12 @@ export async function upsertPosSale(input: {
   lines: PosLinePayload[]
   action: PosAction
   paymentMethod?: 'cash' | 'card' | null
+  // T1.c (11/08): token crudo del dispositivo (kds_device_token en
+  // localStorage, mismo que /estacion y printWorker) — el servidor resuelve
+  // el device_id por kds_resolve_device(), el cliente nunca manda un uuid
+  // propio. null si esta tablet no está pareada (p.ej. TPV abierto desde el
+  // ordenador de oficina): la venta se registra igual, sin bloquear.
+  deviceToken?: string | null
 }): Promise<PosSaleResult> {
   requireSupabase()
   const { data, error } = await (supabase!.rpc as unknown as RpcFn)('upsert_pos_sale', {
@@ -114,6 +120,7 @@ export async function upsertPosSale(input: {
     p_lines: input.lines,
     p_action: input.action,
     p_payment_method: input.paymentMethod ?? null,
+    p_device_token: input.deviceToken ?? null,
   })
   if (error) throw new Error(`Error en el TPV: ${error.message}`)
   const d = data as Record<string, unknown>
