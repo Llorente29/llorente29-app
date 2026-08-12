@@ -175,6 +175,7 @@ export async function getSupplierCatalog(
       .select('id, item_id, name, qty_in_base, parent_format_id')
       .eq('account_id', accountId)
       .in('item_id', itemIds)
+      .is('archived_at', null)
     if (ef) throw new Error(`Error cargando los formatos: ${ef.message}`)
     // necesitamos la unidad base de cada artículo para la etiqueta legible
     const baseByItem = new Map<string, string | null>()
