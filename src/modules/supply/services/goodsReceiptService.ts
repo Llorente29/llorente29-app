@@ -103,6 +103,12 @@ export interface GoodsReceiptInsert {
 
 export interface GoodsReceiptUpdate {
   supplierId?: string | null
+  // ENCARGO CODE (12/08) — fix/enlace-pedido-recepcion: faltaba en el patch de
+  // update. reviewingDraft (oficina confirmando un borrador) pasaba SIEMPRE
+  // por updateGoodsReceipt, que nunca escribía purchase_order_id — así que
+  // aunque el formulario calculara linkedOrderId bien, el enlace nunca se
+  // guardaba en la sesión donde de verdad se confirma.
+  purchaseOrderId?: string | null
   supplierDocNumber?: string | null
   receiptDate?: string
   receivedAt?: string | null
@@ -274,6 +280,7 @@ function receiptInsertToRow(input: GoodsReceiptInsert): Row {
 function receiptUpdateToRow(patch: GoodsReceiptUpdate): Row {
   const row: Row = {}
   if (patch.supplierId !== undefined) row.supplier_id = patch.supplierId
+  if (patch.purchaseOrderId !== undefined) row.purchase_order_id = patch.purchaseOrderId
   if (patch.supplierDocNumber !== undefined) row.supplier_doc_number = patch.supplierDocNumber
   if (patch.receiptDate !== undefined) row.receipt_date = patch.receiptDate
   if (patch.receivedAt !== undefined) row.received_at = patch.receivedAt
