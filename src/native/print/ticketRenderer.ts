@@ -66,6 +66,27 @@ function allergenList(line: any) {
   const a = line.allergens || [];
   return a.length ? a.join(' · ') : '';
 }
+// ENCARGO TPV T1.e Tarea C (12/08): la comanda usa el nombre de cocina si
+// existe y no está vacío, nunca un hueco (kitchenName?.trim() || name).
+// Tolerante a que el campo aún no exista en el JSON (migración sin aplicar):
+// kitchenName llega undefined -> cae a name, cero cambio visible.
+function kitchenLineName(line: any): string {
+  const kn = typeof line.kitchenName === 'string' ? line.kitchenName.trim() : '';
+  return kn || line.name;
+}
+// Gemela de modifierLines() PERO con el nombre de cocina — separada a
+// propósito (no un flag global) porque modifierLines() la siguen usando
+// renderBagTicket() y renderLabels(), que NUNCA deben ver kitchenName: es
+// el mismo line.children que lee el ticket del cliente, con precios.
+function kitchenModifierLines(children: any) {
+  return (children || []).map((c: any) => {
+    const tone = childTone(c);
+    const prefix = tone === 'remove' ? 'SIN ' : tone === 'add' ? '+ ' : '';
+    const display = kitchenLineName(c);
+    const cleanName = display.replace(/^\s*(sin|no|quitar|without|sans)\s+/i, '');
+    return { text: prefix + (tone === 'remove' ? cleanName : display), tone };
+  });
+}
 function flattenItems(order: any) {
   const out: any[] = [];
   const pushExpanded = (it: any) => {
@@ -172,8 +193,8 @@ export function renderKitchenTicket(order: any): TicketDoc {
   for (const key of keys) {
     b.push({ kind: 'banner', text: key });
     for (const line of groups.get(key)!) {
-      b.push({ kind: 'text', text: `${line.qty}x ${line.name}`, bold: true, size: 3 });
-      for (const m of modifierLines(line.children)) {
+      b.push({ kind: 'text', text: `${line.qty}x ${kitchenLineName(line)}`, bold: true, size: 3 });
+      for (const m of kitchenModifierLines(line.children)) {
         b.push({ kind: 'text', text: '  ' + m.text, bold: m.tone === 'remove', size: m.tone === 'remove' ? 2 : 1 });
       }
       const al = allergenList(line);

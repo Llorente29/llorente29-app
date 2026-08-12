@@ -64,6 +64,14 @@ export interface KdsLineChild {
   qty: number
   line_type: string
   customer_note: string | null
+  /** ENCARGO TPV T1.e Tarea C (12/08): nombre de cocina, si existe y no está
+   *  vacío. TIPADO EN ESPERA — kds_board (RECON 12/08, pg_get_functiondef en
+   *  vivo) construye 'name' desde sale_line.product_name y NO joina
+   *  menu_item.kitchen_name; el campo llega siempre undefined hasta que una
+   *  migración APARTE (no la de order_for_print/orders_feed_by_token) toque
+   *  kds_board. El fallback a `name` hace que esto sea inofensivo mientras
+   *  tanto — no es lo mismo que "ya funciona en el Pase". */
+  kitchenName?: string | null
 }
 
 export interface KdsLine {
@@ -81,6 +89,8 @@ export interface KdsLine {
   children: KdsLineChild[]
   /** Nota del cliente para ESTE plato (de raw_tab por organizationProductId). */
   customer_note: string | null
+  /** Ver nota en KdsLineChild.kitchenName — mismo hueco pendiente en kds_board. */
+  kitchenName?: string | null
 }
 
 /** Estación tal como la devuelve kds_board (para nombrar grupos en el kiosco,

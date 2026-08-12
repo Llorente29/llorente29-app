@@ -29,6 +29,16 @@ import { allergenLabel, type AllergenCode } from '@/modules/kitchen/lib/allergen
 
 const SIN_ESTACION = '__none__'
 
+// ENCARGO TPV T1.e Tarea C (12/08): el Pase usa el nombre de cocina si existe
+// y no está vacío — nunca el nombre de venta. Nunca un hueco: si kitchenName
+// viene null/vacío/en blanco, cae a `name`. KdsTicketCard es KDS puro (nunca
+// ticket de cliente), así que aquí no hace falta separar helpers como en
+// ticketRenderer.ts — se aplica sin condiciones.
+function kitchenLineName(x: { name: string; kitchenName?: string | null }): string {
+  const kn = typeof x.kitchenName === 'string' ? x.kitchenName.trim() : ''
+  return kn || x.name
+}
+
 interface KdsTicketCardProps {
   ticket: KdsTicket
   /** id de estación → nombre (con sesión). Si falta, se muestra etiqueta corta. */
@@ -294,14 +304,14 @@ function KdsLineRow({ line, onMarkLine, onOpenCook }: {
           {isCombo ? (
             <>
               <div className={`text-xs font-medium ${struck ? 'line-through text-zinc-600' : 'text-zinc-400'}`}>
-                ▸ {line.name}
+                ▸ {kitchenLineName(line)}
               </div>
               <ul className="mt-0.5 space-y-0.5">
                 {comboItems.map(c => (
                   <li key={c.line_id} className={`leading-tight ${struck ? 'line-through text-zinc-500' : 'text-zinc-100'}`}>
                     <span className="text-[15px] font-medium">
                       {c.qty > 1 && <span className="text-zinc-400 mr-1 tabular-nums">{c.qty}×</span>}
-                      {c.name}
+                      {kitchenLineName(c)}
                     </span>
                     {c.customer_note && <NoteChip note={c.customer_note} />}
                   </li>
@@ -316,7 +326,7 @@ function KdsLineRow({ line, onMarkLine, onOpenCook }: {
                 struck ? 'line-through text-zinc-500' : 'text-zinc-100'
               } ${clickable ? 'hover:text-[#5FD3A0] cursor-pointer' : 'cursor-default'}`}
             >
-              <span className="text-[15px] font-medium">{line.name}</span>
+              <span className="text-[15px] font-medium">{kitchenLineName(line)}</span>
               {clickable && <ChefHat size={13} className="inline ml-1.5 -mt-0.5 text-zinc-500" />}
               {line.allergens.length > 0 && (
                 <span className="ml-1.5 text-[#E8B84B] text-xs align-middle" title={line.allergens.map(a => allergenLabel(a as AllergenCode)).join(', ')}>
@@ -330,7 +340,7 @@ function KdsLineRow({ line, onMarkLine, onOpenCook }: {
             <ul className="mt-0.5 pl-3 border-l border-zinc-700 space-y-0.5">
               {modifiers.map(m => (
                 <li key={m.line_id} className={`text-[13px] ${struck ? 'line-through text-zinc-600' : 'text-zinc-400'}`}>
-                  {m.qty > 1 && <span className="tabular-nums mr-1">{m.qty}×</span>}{m.name}
+                  {m.qty > 1 && <span className="tabular-nums mr-1">{m.qty}×</span>}{kitchenLineName(m)}
                   {m.customer_note && <NoteChip note={m.customer_note} />}
                 </li>
               ))}
