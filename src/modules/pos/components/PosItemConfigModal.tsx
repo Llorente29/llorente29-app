@@ -4,10 +4,6 @@
 // TAL CUAL la lógica de selección/precio/validación de dishConfigService.ts
 // (ya construida y probada en Folvy Shop — DishConfigModal.tsx es la
 // hermana visual de este componente, con los mismos mutadores de estado).
-// Diferencias deliberadas frente a la de Shop: estilo Tailwind (el TPV vive
-// dentro del admin, no de la piel de marca de Shop), botones grandes
-// (principio rector: móvil/táctil primero), y un campo de nota de cocina
-// por línea (hueco que Last no tiene).
 //
 // TPV T1.d (11/08), Tareas C y D: nada se deshabilita sin decir por qué
 // (contador siempre visible, mensaje de máximo/mínimo, foco al grupo que
@@ -18,6 +14,14 @@
 // group_type que no sea ninguno de los 4 se trata como 'extras' — no hay
 // combinación real hoy que lo dispare, pero si apareciera no rompe nada,
 // solo se agrupa ahí (ver dishConfigService.mapModGroup, mismo fallback).
+//
+// TPV T1.f (11/08), Tarea D: sistema de diseño aplicado — tema oscuro
+// (tpvTokens.css, heredado del .tpv-root que envuelve TpvSalePage), sin
+// cambiar nada de la lógica de arriba. Dos cautelas de contraste medidas
+// por Julio 11/08 y aplicadas aquí: --danger y --ok NUNCA como color de
+// texto pequeño (fallan 4,5:1) — donde antes había texto rojo/verde suelto,
+// ahora es un relleno de color con texto blanco encima, o el semántico vive
+// solo en el borde/fondo mientras el texto se queda neutro.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { X, Loader2, Minus, Plus } from 'lucide-react'
@@ -193,28 +197,28 @@ export default function PosItemConfigModal({ accountId, locationId, menuItemId, 
   let lastSection: SectionKey | null = null
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4" role="dialog" aria-modal="true" onClick={onClose}>
-      <div className="bg-card w-full sm:max-w-lg max-h-[92vh] sm:max-h-[88vh] rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border-default shrink-0">
-          <h3 className="text-lg font-display font-medium text-text-primary truncate">
+    <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4" role="dialog" aria-modal="true" onClick={onClose}>
+      <div className="bg-tpv-surface w-full sm:max-w-lg max-h-[92vh] sm:max-h-[88vh] rounded-t-tpv sm:rounded-tpv shadow-2xl flex flex-col border border-tpv-line" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-tpv-line shrink-0">
+          <h3 className="text-lg font-extrabold text-tpv-txt truncate">
             {status === 'ready' && config ? config.name : 'Cargando…'}
           </h3>
-          <button type="button" onClick={onClose} aria-label="Cerrar" className="w-9 h-9 rounded-full flex items-center justify-center text-text-secondary hover:bg-page transition-base shrink-0">
+          <button type="button" onClick={onClose} aria-label="Cerrar" className="w-10 h-10 rounded-full flex items-center justify-center text-tpv-txt-2 hover:bg-tpv-surface-2 transition-base shrink-0">
             <X size={20} />
           </button>
         </div>
 
         {status === 'loading' && (
-          <div className="flex items-center justify-center gap-2 py-16 text-text-secondary"><Loader2 className="animate-spin" size={20} /> Cargando…</div>
+          <div className="flex items-center justify-center gap-2 py-16 text-tpv-txt-2"><Loader2 className="animate-spin" size={20} /> Cargando…</div>
         )}
         {status === 'error' && (
-          <div className="p-6 text-center text-text-secondary">No se pudo cargar este producto.</div>
+          <div className="p-6 text-center text-tpv-txt-2">No se pudo cargar este producto.</div>
         )}
 
         {status === 'ready' && config && (
           <>
             <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
-              {config.description && <p className="text-sm text-text-secondary">{config.description}</p>}
+              {config.description && <p className="text-sm text-tpv-txt-2">{config.description}</p>}
 
               {sortedBaseGroups.map(g => {
                 const section = sectionKeyOf(groupSortRank(g))
@@ -241,13 +245,13 @@ export default function PosItemConfigModal({ accountId, locationId, menuItemId, 
                 return (
                   <div key={slot.id} ref={registerGroupRef(slot.name)}>
                     <div className="flex items-baseline justify-between mb-1">
-                      <span className="text-base font-semibold text-text-primary">{slot.name}</span>
-                      {slot.min > 0 && <span className="text-[11px] font-bold text-accent uppercase tracking-wide">obligatorio</span>}
+                      <span className="text-tpv-name font-bold text-tpv-txt">{slot.name}</span>
+                      {slot.min > 0 && <ObligatorioBadge />}
                     </div>
-                    <p className={`text-xs mb-2 ${slotErr ? 'text-danger font-medium' : 'text-text-secondary'}`}>
+                    <p className="text-xs text-tpv-txt-2 mb-2">
                       {slot.max === 1 ? `Elige una opción · llevas ${chosen.length}` : `Elige de ${slot.min} a ${slot.max} · llevas ${chosen.length}`}
                     </p>
-                    {slotErr && <p className="text-xs font-medium text-danger mb-2">Elige {slot.min === 1 ? 'una opción' : `al menos ${slot.min}`}.</p>}
+                    {slotErr && <ErrorPill text={`Elige ${slot.min === 1 ? 'una opción' : `al menos ${slot.min}`}.`} />}
 
                     <div className="space-y-2">
                       {slot.options.map(opt => {
@@ -260,18 +264,18 @@ export default function PosItemConfigModal({ accountId, locationId, menuItemId, 
                               type="button"
                               disabled={blocked}
                               onClick={() => setSlotChoice(slot.id, opt.menuItemId, slot.max, !checked)}
-                              className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-base ${checked ? 'border-accent bg-accent-bg active:scale-[0.99]' : blocked ? 'border-border-default bg-page opacity-50 cursor-not-allowed' : 'border-border-default bg-card hover:bg-page active:scale-[0.99]'}`}
+                              className={`w-full flex items-center gap-3 p-3 rounded-tpv border text-left transition-base ${checked ? 'border-tpv-accent bg-tpv-accent/15 active:scale-[0.99]' : blocked ? 'border-tpv-line bg-tpv-surface-2 opacity-55 cursor-not-allowed' : 'border-tpv-line bg-tpv-surface-2 hover:bg-tpv-bg active:scale-[0.99]'}`}
                             >
-                              {opt.photoUrl && <img src={opt.photoUrl} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0" />}
-                              <span className="flex-1 min-w-0 text-sm font-medium text-text-primary">{opt.name}</span>
-                              {opt.priceImpact !== 0 && <span className="text-sm font-semibold text-text-primary shrink-0">{plus(opt.priceImpact)}</span>}
+                              {opt.photoUrl && <img src={opt.photoUrl} alt="" className="w-10 h-10 rounded-tpv object-cover shrink-0" />}
+                              <span className="flex-1 min-w-0 text-tpv-name font-bold text-tpv-txt">{opt.name}</span>
+                              {opt.priceImpact !== 0 && <span className="text-sm font-extrabold text-tpv-note shrink-0">{plus(opt.priceImpact)}</span>}
                             </button>
 
                             {checked && opt.modifierGroups.map(g => {
                               const k = nestedKey(slot.id, opt.menuItemId, g.id)
                               const scope = `${opt.name} · ${g.name}`
                               return (
-                                <div key={g.id} className="ml-4 mt-2 pl-3 border-l-2 border-border-default">
+                                <div key={g.id} className="ml-4 mt-2 pl-3 border-l-2 border-tpv-line">
                                   <GroupBlock
                                     group={g}
                                     isChecked={oid => isModChecked(k, oid, false)}
@@ -294,13 +298,13 @@ export default function PosItemConfigModal({ accountId, locationId, menuItemId, 
               <KitchenNoteField value={kitchenNote} onChange={setKitchenNote} />
             </div>
 
-            <div className="px-4 py-3 border-t border-border-default shrink-0">
+            <div className="px-4 py-3 border-t border-tpv-line shrink-0">
               {showErrors && !valid && (
-                <p className="text-xs font-medium text-danger text-center mb-2">Completa las opciones obligatorias marcadas.</p>
+                <p className="text-xs font-bold text-center mb-2"><ErrorPill text="Completa las opciones obligatorias marcadas." /></p>
               )}
               <button
                 type="button" onClick={handleAdd}
-                className={`w-full py-4 rounded-xl text-base font-semibold transition-base ${valid ? 'bg-accent text-text-on-accent hover:opacity-90 active:scale-[0.99]' : 'bg-page text-text-tertiary cursor-not-allowed'}`}
+                className={`w-full min-h-tap-critical rounded-tpv text-lg font-extrabold transition-base ${valid ? 'bg-tpv-ok text-white hover:opacity-90 active:scale-[0.99]' : 'bg-tpv-surface-2 text-tpv-txt-2 cursor-not-allowed'}`}
               >
                 Añadir · {eur(total)}
               </button>
@@ -312,10 +316,19 @@ export default function PosItemConfigModal({ accountId, locationId, menuItemId, 
   )
 }
 
+// Verde/rojo nunca como texto pequeño suelto (medido 11/08: falla 4,5:1) —
+// siempre relleno de color + texto blanco encima.
+function ErrorPill({ text }: { text: string }) {
+  return <span className="inline-block bg-tpv-danger text-white text-xs font-bold rounded px-2 py-1">{text}</span>
+}
+function ObligatorioBadge() {
+  return <span className="inline-block bg-tpv-accent/25 text-white text-[11px] font-extrabold uppercase tracking-wide rounded px-1.5 py-0.5">obligatorio</span>
+}
+
 function SectionHeader({ section }: { section: SectionKey }) {
   return (
-    <div className={section === 'cross_sell' ? 'mt-6 pt-4 border-t border-border-default' : ''}>
-      <span className="text-[11px] font-bold text-text-tertiary uppercase tracking-wider">{SECTION_LABEL[section]}</span>
+    <div className={section === 'cross_sell' ? 'mt-6 pt-4 border-t border-tpv-line' : ''}>
+      <span className="text-[11px] font-extrabold text-tpv-txt-2 uppercase tracking-wider">{SECTION_LABEL[section]}</span>
     </div>
   )
 }
@@ -341,38 +354,38 @@ function GroupBlock({ group, isChecked, onToggle, onQty, showError, registerRef 
   return (
     <div ref={registerRef} className="mt-2">
       <div className="flex items-baseline justify-between mb-1">
-        <span className="text-base font-semibold text-text-primary">{group.name}</span>
-        {group.min > 0 && <span className="text-[11px] font-bold text-accent uppercase tracking-wide">obligatorio</span>}
+        <span className="text-tpv-name font-bold text-tpv-txt">{group.name}</span>
+        {group.min > 0 && <ObligatorioBadge />}
       </div>
-      <p className={`text-xs mb-1 ${belowMin && showError ? 'text-danger font-medium' : 'text-text-secondary'}`}>{counterText}</p>
+      <p className="text-xs text-tpv-txt-2 mb-1">{counterText}</p>
       {belowMin && (
-        <p className={`text-xs font-medium mb-2 ${showError ? 'text-danger' : 'text-accent'}`}>Te falta {group.min - count}.</p>
+        showError ? <ErrorPill text={`Te falta ${group.min - count}.`} /> : <p className="text-xs font-bold text-tpv-warn mb-2">Te falta {group.min - count}.</p>
       )}
       {atMax && (
-        <p className="text-xs font-medium text-accent mb-2">Máximo {group.max} — quita uno para cambiar.</p>
+        <p className="text-xs font-bold text-tpv-warn mb-2">Máximo {group.max} — quita uno para cambiar.</p>
       )}
       {showError && !belowMin && !atMax && (
-        <p className="text-xs font-medium text-danger mb-2">Elige {group.min === 1 ? 'al menos 1 opción' : `al menos ${group.min}`}.</p>
+        <ErrorPill text={`Elige ${group.min === 1 ? 'al menos 1 opción' : `al menos ${group.min}`}.`} />
       )}
-      <div className="space-y-2">
+      <div className="space-y-2 mt-2">
         {group.options.map(o => {
           const checked = isChecked(o.id)
           const blocked = !checked && atMax
           return (
-            <div key={o.id} className={`flex items-center gap-3 p-3 rounded-xl border transition-base ${checked ? 'border-accent bg-accent-bg' : blocked ? 'border-border-default bg-page opacity-50' : 'border-border-default bg-card'}`}>
+            <div key={o.id} className={`flex items-center gap-3 p-3 rounded-tpv border transition-base ${checked ? 'border-tpv-accent bg-tpv-accent/15' : blocked ? 'border-tpv-line bg-tpv-surface-2 opacity-55' : 'border-tpv-line bg-tpv-surface-2'}`}>
               <button
                 type="button" disabled={blocked}
                 onClick={() => onToggle(o.id, !checked)}
-                className={`flex-1 min-w-0 flex items-center gap-3 text-left ${blocked ? 'cursor-not-allowed' : 'active:scale-[0.99]'}`}
+                className={`flex-1 min-w-0 flex items-center gap-3 text-left min-h-tap-small ${blocked ? 'cursor-not-allowed' : 'active:scale-[0.99]'}`}
               >
-                <span className="flex-1 min-w-0 text-sm font-medium text-text-primary">{o.name}</span>
-                {o.priceImpact !== 0 && <span className="text-sm font-semibold text-text-primary shrink-0">{plus(o.priceImpact)}</span>}
+                <span className="flex-1 min-w-0 text-tpv-name font-bold text-tpv-txt">{o.name}</span>
+                {o.priceImpact !== 0 && <span className="text-sm font-extrabold text-tpv-note shrink-0">{plus(o.priceImpact)}</span>}
               </button>
               {checked && group.allowRepetition && (
                 <span className="flex items-center gap-2 shrink-0">
-                  <button type="button" onClick={() => onQty(o.id, -1)} className="w-7 h-7 rounded-full border border-border-default flex items-center justify-center text-text-secondary hover:bg-page"><Minus size={13} /></button>
-                  <span className="min-w-[1.2em] text-center text-sm font-semibold text-text-primary">{checked.qty}</span>
-                  <button type="button" onClick={() => onQty(o.id, 1)} disabled={atMax} className={`w-7 h-7 rounded-full border border-border-default flex items-center justify-center text-text-secondary hover:bg-page ${atMax ? 'opacity-40 cursor-not-allowed' : ''}`}><Plus size={13} /></button>
+                  <button type="button" onClick={() => onQty(o.id, -1)} className="min-w-tap-small min-h-tap-small rounded-tpv border border-tpv-line flex items-center justify-center text-tpv-txt-2 hover:bg-tpv-bg"><Minus size={16} /></button>
+                  <span className="min-w-[1.4em] text-center text-base font-extrabold text-tpv-txt">{checked.qty}</span>
+                  <button type="button" onClick={() => onQty(o.id, 1)} disabled={atMax} className={`min-w-tap-small min-h-tap-small rounded-tpv border border-tpv-line flex items-center justify-center text-tpv-txt-2 hover:bg-tpv-bg ${atMax ? 'opacity-40 cursor-not-allowed' : ''}`}><Plus size={16} /></button>
                 </span>
               )}
             </div>

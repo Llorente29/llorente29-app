@@ -1,0 +1,51 @@
+/* src/modules/pos/theme/tpvTokens.css
+ *
+ * TPV T1.f — sistema de diseño del TPV (folvy_tpv_sistema_diseno_20260811.md
+ * §1, aprobado por Julio). FUENTE ÚNICA: ningún color, tamaño de objetivo
+ * táctil o radio del TPV se escribe a mano en un componente — todo sale de
+ * aquí. Escopado a .tpv-root (no :root global): el TPV es oscuro a
+ * propósito, el resto del admin vive en el tema claro de tailwind.config.js
+ * y no debe heredar esto.
+ *
+ * Nombres = los del documento markdown, que manda sobre los de la maqueta
+ * HTML de referencia (folvy_tpv_diseno.html usa --surface2/--txt2/--acc/
+ * --gold, sin guion y con otro nombre — decisión de Julio 11/08: el
+ * markdown manda, la maqueta es solo referencia visual).
+ *
+ * tailwind.config.js referencia estas MISMAS variables (colors.tpv-*  =
+ * 'var(--tpv-*)') — un componente usa la clase de Tailwind
+ * (bg-tpv-surface, text-tpv-txt-2...); el único sitio con var(--tpv-...)
+ * literal fuera de aquí es el color de familia/marca dinámico (viene de la
+ * BBDD, no puede ser una clase estática) y su fallback.
+ */
+.tpv-root {
+  /* Superficies */
+  --tpv-bg: #0F1115;
+  --tpv-surface: #181B22;
+  --tpv-surface-2: #20242E;
+  --tpv-line: #2E3440;
+  --tpv-line-strong: #6B7690;  /* borde con peso — separa tarjeta/foto de su fondo */
+
+  /* Texto */
+  --tpv-txt: #FFFFFF;
+  --tpv-txt-2: #A8B0BF;
+
+  /* Semánticos — nunca un color crudo en un componente */
+  /* ENCARGO CODE (12/08): --accent y --warn medidos por Julio 11/08 con
+     fallo real (--accent daba 3,68:1 con blanco, por debajo del 4,5:1
+     exigido). Valores nuevos medidos (fórmula WCAG de luminancia relativa,
+     no estimados): --accent #2563EB sobre blanco = 5,17:1. --accent-text
+     #60A5FA sobre --tpv-surface (#181B22, fondo real del diálogo de
+     producto) = 6,78:1; sobre --tpv-surface-2 (#20242E) = 6,10:1. */
+  --tpv-accent: #2563EB;       /* seleccionado, en curso */
+  --tpv-accent-text: #60A5FA;  /* texto/icono de acento sobre fondo oscuro */
+  --tpv-ok: #16A34A;      /* cobrado, confirmado, acción principal */
+  --tpv-warn: #F59E0B;    /* atención: tiempo excedido, sin dispositivo */
+  --tpv-danger: #DC2626;  /* destructivo, agotado */
+  --tpv-note: #EAB308;    /* nota de cocina, producto estrella */
+
+  /* Forma */
+  --tpv-radius: 12px;
+
+  color-scheme: dark;
+}

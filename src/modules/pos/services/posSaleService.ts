@@ -148,6 +148,10 @@ export interface OpenPosTicket {
   total: number
   openedAt: string
   lines: PosLinePayload[]
+  // T1.f (11/08): chips de la tarjeta de cuenta (nº de líneas, quién la
+  // abrió) — el RPC ya los devuelve desde T1.d, solo faltaba tipar el campo.
+  lineCount: number | null
+  createdByName: string | null
 }
 
 function parseRawTabLines(raw: string | null): PosLinePayload[] {
@@ -179,6 +183,8 @@ function mapOpenTicket(r: Record<string, unknown>): OpenPosTicket {
     total: Number(r.total ?? 0),
     openedAt: r.openedAt as string,
     lines: parseRawTabLines(r.rawTab as string | null),
+    lineCount: r.lineCount != null ? Number(r.lineCount) : null,
+    createdByName: (r.createdByName as string) ?? null,
   }
 }
 

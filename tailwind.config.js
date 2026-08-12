@@ -58,6 +58,24 @@ export default {
         // semánticos del margen (no es ganar/perder, es "dato neutro").
         'background-info': '#E3E8ED',
         'text-info': '#1E3A5F',
+
+        // ── TPV (T1.f, 11/08): tema oscuro propio, escopado a .tpv-root ──
+        // Los valores viven en src/modules/pos/theme/tpvTokens.css — esto
+        // solo los expone como clases de Tailwind (bg-tpv-surface,
+        // text-tpv-txt-2...). No tocar sin tocar ese fichero también.
+        'tpv-bg': 'var(--tpv-bg)',
+        'tpv-surface': 'var(--tpv-surface)',
+        'tpv-surface-2': 'var(--tpv-surface-2)',
+        'tpv-line': 'var(--tpv-line)',
+        'tpv-line-strong': 'var(--tpv-line-strong)',
+        'tpv-txt': 'var(--tpv-txt)',
+        'tpv-txt-2': 'var(--tpv-txt-2)',
+        'tpv-accent': 'var(--tpv-accent)',
+        'tpv-accent-text': 'var(--tpv-accent-text)',
+        'tpv-ok': 'var(--tpv-ok)',
+        'tpv-warn': 'var(--tpv-warn)',
+        'tpv-danger': 'var(--tpv-danger)',
+        'tpv-note': 'var(--tpv-note)',
       },
       fontFamily: {
         // Display → Space Grotesk (grotesca moderna). Fallback a Inter para
@@ -81,6 +99,8 @@ export default {
         'md': '8px',
         'lg': '10px',
         'xl': '14px',
+        // TPV (T1.f): --tpv-radius en tpvTokens.css.
+        'tpv': 'var(--tpv-radius)',
       },
       boxShadow: {
         'sm': '0 1px 2px rgba(21, 23, 26, 0.04)',
@@ -95,6 +115,41 @@ export default {
       minHeight: {
         'touch': '44px',
         'touch-base': '48px',
+        // TPV (T1.f) — objetivos táctiles del sistema de diseño §1/§2.1-2.3:
+        // ≥76px cualquier control, ≥96px acciones críticas, 52px suelo
+        // absoluto (solo +/- de cantidad y controles de cabecera). No
+        // negociable en ningún formato, tablet incluida.
+        'tap': '76px',
+        'tap-critical': '96px',
+        'tap-small': '52px',
+        // Tamaños de botón que la Tarea B pide por número exacto, no en el
+        // bloque --tap del §1 pero igual de "no se escribe suelto":
+        // categorías ≥82px (4.1 preámbulo), tile de producto ≥118px (4.1).
+        'tpv-cat': '82px',
+        'tpv-product': '118px',
+      },
+      spacing: {
+        // Mismos valores que minHeight.tap-*/tpv-* — para que h-/w-/p-
+        // (no solo min-h-) tiren del mismo número único.
+        'tap': '76px',
+        'tap-critical': '96px',
+        'tap-small': '52px',
+        'tpv-cat': '82px',
+        'tpv-product': '118px',
+      },
+      fontSize: {
+        // Tamaños de texto que el sistema de diseño fija por número exacto
+        // (4.1-4.3): nombre de producto/línea 17px, precio de línea 18px,
+        // precio de tile 22px, código de ticket 30px, importe de tarjeta
+        // 27px, total de cuenta 38px, modificador 13px. Nombrados por rol,
+        // no por tamaño, para que el componente diga QUÉ es, no cuánto mide.
+        'tpv-mod': ['13px', { lineHeight: '1.35' }],
+        'tpv-name': ['17px', { lineHeight: '1.2' }],
+        'tpv-line-price': ['18px', { lineHeight: '1.2' }],
+        'tpv-tile-price': ['22px', { lineHeight: '1.15', letterSpacing: '-0.02em' }],
+        'tpv-amount': ['27px', { lineHeight: '1.1', letterSpacing: '-0.02em' }],
+        'tpv-code': ['30px', { lineHeight: '1', letterSpacing: '-0.02em' }],
+        'tpv-total': ['38px', { lineHeight: '1', letterSpacing: '-0.03em' }],
       },
     },
   },
