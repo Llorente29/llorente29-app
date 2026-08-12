@@ -309,6 +309,7 @@ async function syncLocation(
   locationExtId: string,
   dryRun: boolean,
   nowIso: string,
+  watchOrgProductId?: string | null,
 ): Promise<any> {
   const { catalogMap, debug: catalogDebug } = await resolveLocationCatalogs(token, locationExtId);
 
@@ -416,6 +417,24 @@ async function syncLocation(
 
   const disabledProductsSummary = await summarizeDisabledProducts(sb, accountId, rows);
 
+  // Sonda de solo lectura: estado crudo (enabled true o false, TODOS los
+  // catálogos/canales) de UN producto concreto por organization_product_id.
+  // Los catalog_product_id guardados quedan obsoletos entre barridos (Last
+  // los regenera) — nunca se sondea por ellos, siempre se resuelve en vivo
+  // recorriendo los catálogos actuales, igual que el resto del sync.
+  const watchedProductRows = watchOrgProductId
+    ? rows
+        .filter((r) => r.organization_product_id === watchOrgProductId)
+        .map((r) => ({
+          external_catalog_id: r.external_catalog_id,
+          external_channel: r.external_channel,
+          external_brand_name: r.external_brand_name,
+          catalog_product_id: r.catalog_product_id,
+          product_name: r.product_name,
+          is_enabled: r.is_enabled,
+        }))
+    : null;
+
   if (!dryRun) {
     if (rows.length > 0) {
       const { error: upErr } = await sb
@@ -441,6 +460,7 @@ async function syncLocation(
     catalog_failures: catalogFailures,
     _debug_catalog_discovery: catalogDebug,
     disabled_products_summary: disabledProductsSummary,
+    watched_product_rows: watchedProductRows,
     ...stats,
     missing_now: newlyMissingIds.length,
     still_missing: missingIds.length - newlyMissingIds.length,
@@ -485,6 +505,7 @@ Deno.serve(async (req: Request) => {
   if ("error" in integ) return jsonResponse({ error: integ.error }, 404);
 
   const dryRun = body.dry_run === true;
+  const watchOrgProductId = typeof body.watch_organization_product_id === "string" ? body.watch_organization_product_id : null;
   const nowIso = new Date().toISOString();
   const startedAt = Date.now();
 
@@ -505,7 +526,7 @@ Deno.serve(async (req: Request) => {
   const failed: any[] = [];
   for (const locId of locationIds) {
     try {
-      const r = await syncLocation(sb, accountId, orgId, integ.token, locId, dryRun, nowIso);
+      const r = await syncLocation(sb, accountId, orgId, integ.token, locId, dryRun, nowIso, watchOrgProductId);
       byLocation.push(r);
     } catch (e) {
       failed.push({ external_location_id: locId, error: String(e) });
