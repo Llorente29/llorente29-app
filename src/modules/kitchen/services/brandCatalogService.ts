@@ -144,9 +144,20 @@ export async function listBrandsWithCatalog(accountId: string): Promise<CatalogB
 // Categorías + productos Y COMBOS de una marca, agrupados por categoría.
 // Los combos viven en su menu_category_id como un producto más (se distinguen por
 // productType='combo' para mostrar su nº de slots). Lo sin categoría → "Sin categoría".
+//
+// locationId (opcional, ENCARGO CODE 12/08): cuando se pasa, isAvailable deja
+// de ser SOLO menu_item.is_available (columna muerta, importada de Last hace
+// tiempo — no significa "agotado") y también descarta lo que product_availability
+// marca agotado para ESE local o global (location_id null), igual que
+// pos_item_config y search_products_86. Sin locationId, comportamiento IDÉNTICO
+// al de siempre — así Kitchen (KitchenMenuPage, edición de carta) y el preview
+// de Shop (StorefrontPreview, que no conocen "el local" en ese contexto) no
+// cambian. Quien sí necesita disponibilidad real por local (el TPV) pasa su
+// operativeLocationId.
 export async function listCategoriesWithProducts(
   accountId: string,
   brandId: string,
+  locationId?: string | null,
 ): Promise<CatalogCategory[]> {
   requireSupabase()
 
@@ -165,12 +176,36 @@ export async function listCategoriesWithProducts(
   // los tipos generados; se lee sin regenerar todo el fichero de tipos.
   const { data: items, error: miErr } = await (supabase! as any)
     .from('menu_item')
-    .select('id, name, short_name, description, photo_url, price, product_type, menu_category_id, recipe_item_id, is_active, is_available, needs_review, position, mirror_of_item_id')
+    .select('id, name, short_name, description, photo_url, price, product_type, menu_category_id, recipe_item_id, external_id, is_active, is_available, needs_review, position, mirror_of_item_id')
     .eq('account_id', accountId)
     .eq('brand_id', brandId)
     .order('position', { ascending: true })
     .order('name', { ascending: true }) as { data: Record<string, unknown>[] | null; error: { message: string } | null }
   if (miErr) throw new Error(`Error listando productos: ${miErr.message}`)
+
+  // Disponibilidad real por local (solo si se pidió) — mismo criterio que
+  // pos_item_config: bloquea por external_id O recipe_item_id, local
+  // concreto o global (location_id null), respeta available_until caducado.
+  const blockedByExternalId = new Set<string>()
+  const blockedByRecipeItemId = new Set<string>()
+  if (locationId) {
+    const { data: pa, error: paErr } = await supabase!
+      .from('product_availability')
+      .select('external_id, recipe_item_id, location_id, is_available, available_until')
+      .eq('account_id', accountId)
+      .eq('is_available', false)
+      .or(`location_id.eq.${locationId},location_id.is.null`)
+    if (paErr) throw new Error(`Error leyendo disponibilidad: ${paErr.message}`)
+    const now = Date.now()
+    for (const row of pa ?? []) {
+      const until = row.available_until as string | null
+      if (until && new Date(until).getTime() < now) continue // caducada: no bloquea
+      const ext = row.external_id as string | null
+      const rid = row.recipe_item_id as string | null
+      if (ext) blockedByExternalId.add(ext)
+      if (rid) blockedByRecipeItemId.add(rid)
+    }
+  }
 
   // Conteo de grupos modificadores por producto
   const itemIds = (items ?? []).map((i) => i.id as string)
@@ -223,7 +258,10 @@ export async function listCategoriesWithProducts(
     categoryId: (i.menu_category_id as string) ?? null,
     recipeItemId: (i.recipe_item_id as string) ?? null,
     isActive: i.is_active !== false,
-    isAvailable: i.is_available !== false,
+    isAvailable:
+      i.is_available !== false
+      && !blockedByExternalId.has((i.external_id as string) ?? '')
+      && !blockedByRecipeItemId.has((i.recipe_item_id as string) ?? ''),
     modifierGroupCount: groupCountByItem.get(i.id as string) ?? 0,
     comboSlotCount: slotCountByCombo.get(i.id as string) ?? 0,
     position: Number(i.position ?? 0),

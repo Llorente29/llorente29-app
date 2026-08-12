@@ -104,11 +104,15 @@ export default function TpvSalePage({ onExit }: { onExit: () => void }) {
   }, [activeAccountId, operativeLocationId])
 
   // ── Carta de la marca elegida ──
+  // ENCARGO CODE (12/08): pasa operativeLocationId para que isAvailable
+  // refleje product_availability real del local, no solo la columna muerta
+  // menu_item.is_available — si no, la rejilla seguía ocultando los 146
+  // productos aunque pos_item_config ya estuviera arreglado.
   useEffect(() => {
     if (!activeAccountId || !brandId) { setCategories([]); return }
     let cancelled = false
     setLoadingCatalog(true)
-    listCategoriesWithProducts(activeAccountId, brandId)
+    listCategoriesWithProducts(activeAccountId, brandId, operativeLocationId)
       .then(cats => {
         if (cancelled) return
         setCategories(cats)
@@ -117,7 +121,7 @@ export default function TpvSalePage({ onExit }: { onExit: () => void }) {
       .catch((e: unknown) => { if (!cancelled) setError(e instanceof Error ? e.message : 'Error cargando la carta.') })
       .finally(() => { if (!cancelled) setLoadingCatalog(false) })
     return () => { cancelled = true }
-  }, [activeAccountId, brandId])
+  }, [activeAccountId, brandId, operativeLocationId])
 
   // ── Cuentas abiertas / pendientes de entregar ──
   function reloadTickets() {
