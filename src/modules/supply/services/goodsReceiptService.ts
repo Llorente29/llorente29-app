@@ -62,6 +62,11 @@ export interface GoodsReceiptLine {
   recipeItemId: string | null
   productName: string
   rawText: string | null
+  // ENCARGO CODE (12/08) fix/recepcion-fromocr-borrador: existe en la fila
+  // (goods_receipt_line.supplier_code, se guarda desde el OCR) y se leía con
+  // `select('*')`, pero rowToReceiptLine la descartaba — nadie la mapeaba al
+  // objeto TS. Sin ella, el casado por código no tenía ancla al revisar.
+  supplierCode: string | null
   qtyReceived: number
   purchaseUnitId: string | null
   purchaseFormatId: string | null
@@ -235,6 +240,7 @@ function rowToReceiptLine(row: Row): GoodsReceiptLine {
     recipeItemId: (row.recipe_item_id as string | null) ?? null,
     productName: row.product_name as string,
     rawText: (row.raw_text as string | null) ?? null,
+    supplierCode: (row.supplier_code as string | null) ?? null,
     qtyReceived: Number(row.qty_received),
     purchaseUnitId: (row.purchase_unit_id as string | null) ?? null,
     purchaseFormatId: (row.purchase_format_id as string | null) ?? null,

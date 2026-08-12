@@ -103,6 +103,14 @@ export interface ReceiptPrefillLine {
   qtyReceived: number
   unitCost: number | null
   purchaseOrderLineId: string | null
+  // ENCARGO CODE (12/08) fix/recepcion-fromocr-borrador. Sin esto, revisar un
+  // borrador que vino de OCR no tiene ni el texto ni el código con los que
+  // casar (el dato SÍ está en goods_receipt_line — raw_text/supplier_code —
+  // pero handleReviewDraft no lo leía). Sin código/texto, el casado
+  // automático y el desglose de formato del albarán quedan sin ancla aunque
+  // needsResolution ya no bloquee dónde se muestran.
+  rawText: string | null
+  supplierCode: string | null
 }
 
 // Propuesta OCR (C2.2.a-2): cabecera resuelta + líneas leídas del albarán.
@@ -594,6 +602,22 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
   const correcting = !!prefill
   const fromOcr = !!ocrPrefill
   const fixedHeader = againstOrder || correcting   // en OCR la cabecera es editable (propuesta)
+  // ENCARGO CODE (12/08) fix/recepcion-fromocr-borrador. `fromOcr` significa
+  // "esta sesión trae ocrPrefill" (escaneo en vivo) — NO "esta línea necesita
+  // casado y formato". Revisar un borrador que SÍ vino de OCR (correcting &&
+  // prefill) es un camino distinto que nunca pasa ocrPrefill, y las líneas
+  // siguen igual de sin-casar y sin-formato que el día que se escanearon.
+  // Confundir los dos dejó Fila 1.5, Fila 2 y el casado automático (R1')
+  // inalcanzables justo donde Julio revisa — mismo patrón que `correcting`
+  // en el efecto de candidatos de pedido (PR #54) y que `updateGoodsReceipt`
+  // sin purchaseOrderId. `needsResolution` es la condición correcta: "puede
+  // haber algo que casar/formatear" — cierto en escaneo en vivo Y en
+  // corregir/revisar (prefill), falso solo contra pedido o catálogo ciego,
+  // donde el artículo YA viene fijado por construcción y no hay nada que
+  // resolver. `fromOcr` en sí se queda para lo que de verdad depende de la
+  // PROPUESTA en vivo (ocrPrefill.proposedSupplierName, el layout foto+lista
+  // del escaneo, el aprendizaje de alias) — eso sí es "vengo de escanear ahora".
+  const needsResolution = fromOcr || correcting
 
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [locations, setLocations] = useState<SupplyLocation[]>([])
@@ -771,7 +795,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
   useEffect(() => { draftRef.current = draft }, [draft])
 
   useEffect(() => {
-    if (!fromOcr || !supplierId) { setCatalogByItem(new Map()); return }
+    if (!needsResolution || !supplierId) { setCatalogByItem(new Map()); return }
     let cancelled = false
     getSupplierCatalog(accountId, supplierId)
       .then(entries => {
@@ -782,7 +806,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
       })
       .catch(() => { if (!cancelled) setCatalogByItem(new Map()) })
     return () => { cancelled = true }
-  }, [fromOcr, accountId, supplierId])
+  }, [needsResolution, accountId, supplierId])
 
   // ── R1' — índices de lectura sobre el MISMO catálogo, por código/texto/
   // palabra. No son consultas nuevas: catalogByItem ya está cargado para el
@@ -815,7 +839,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
   }, [catalogByItem])
 
   // ── R1' — casado automático (ENCARGO CODE feat/recepcion-casado-automatico,
-  // §2.1). Para cada línea OCR sin artículo y sin tocar a mano (matchTouched),
+  // §2.1). Para cada línea sin artículo y sin tocar a mano (matchTouched),
   // busca en el catálogo del proveedor por orden de certeza:
   //   1) supplier_code exacto      → auto-casa, verde, matchType 'code'
   //   2) supplier_item_name exacto → auto-casa, verde, matchType 'learned'
@@ -827,12 +851,28 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
   // (formatTouched). Arrastra SOLO el artículo: el formato lo resuelve el
   // efecto de Tramo A en cuanto ve el recipeItemId puesto (misma cadena que
   // ya usa un casado manual desde LineMatchPicker).
+  //
+  // ENCARGO CODE (12/08) fix/recepcion-fromocr-borrador — guardaba `fromOcr`,
+  // que es "esta sesión trae ocrPrefill", no "esta línea necesita casado".
+  // Al revisar un borrador (correcting && prefill) las líneas siguen
+  // exactamente igual de sin-casar, pero llegan por `prefill`, nunca por
+  // `ocrPrefill` — el efecto no corría justo donde Julio revisa. Ahora usa
+  // needsResolution (fromOcr || correcting). También rellena `matchedName`
+  // para una línea YA casada que llega sin nombre para mostrar (el borrador
+  // no lo transporta — ver handleReviewDraft/ReceiptPrefillLine).
   useEffect(() => {
-    if (!fromOcr || catalogByItem.size === 0) return
+    if (!needsResolution || catalogByItem.size === 0) return
     setDraft(d => {
       let changed = false
       const next = d.map(l => {
-        if (l.recipeItemId || l.matchTouched) return l
+        if (l.recipeItemId) {
+          if (l.matchedName || l.matchTouched) return l
+          const known = catalogByItem.get(l.recipeItemId)
+          if (!known) return l
+          changed = true
+          return { ...l, matchedName: known.itemName }
+        }
+        if (l.matchTouched) return l
         const text = (l.rawText ?? l.productName ?? '').trim()
         let entry: SupplierCatalogEntry | undefined
         let matchType: string | null = null
@@ -850,7 +890,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
       })
       return changed ? next : d
     })
-  }, [fromOcr, catalogByItem, catalogByCode, catalogByText])
+  }, [needsResolution, catalogByItem, catalogByCode, catalogByText])
 
   // ── R1' §2.2 — "nombre razonable, candidato ÚNICO": NO se auto-aplica.
   // Medido en datos reales (12/08, cuenta Foodint): de 4 casos que esta regla
@@ -864,7 +904,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
   // explícito (nunca automática): rellena suggestedRecipeItemId/Name, no
   // recipeItemId. Ver Fila 1.5 ("¿Es esto?") y acceptSuggestion/dismissSuggestion.
   useEffect(() => {
-    if (!fromOcr || catalogByItem.size === 0) return
+    if (!needsResolution || catalogByItem.size === 0) return
     setDraft(d => {
       let changed = false
       const next = d.map(l => {
@@ -882,7 +922,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
       })
       return changed ? next : d
     })
-  }, [fromOcr, catalogByItem, catalogWordIndex])
+  }, [needsResolution, catalogByItem, catalogWordIndex])
 
   // "Ajustar como el albarán": fija el DESGLOSE (Caja = count × interior) en la línea.
   // El total (formatQtyInBase) se deriva del desglose; al persistir, ensurePackTree
@@ -934,7 +974,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
     [draft],
   )
   useEffect(() => {
-    if (!fromOcr) return
+    if (!needsResolution) return
     let cancelled = false
     ;(async () => {
       const todo = draftRef.current.filter(l => l.recipeItemId && !l.formatTouched)
@@ -1022,7 +1062,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
       }
     })()
     return () => { cancelled = true }
-  }, [fromOcr, matchSignature, supplierId, catalogByItem])
+  }, [needsResolution, matchSignature, supplierId, catalogByItem])
 
   // C2.2.b.2 — alta de proveedor inline (cuando el OCR no casó proveedor).
   const [supCreate, setSupCreate] = useState(false)
@@ -1428,7 +1468,12 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
             poLineId: l.purchaseOrderLineId,
             lotCode: null,
             expiryDate: null,
-            rawText: null, supplierCode: null, matchedName: null, matchSemaphore: null, matchType: null,
+            // ENCARGO CODE (12/08) fix/recepcion-fromocr-borrador: rawText/
+            // supplierCode ya no se hardcodean a null — sin ellos el casado
+            // automático (R1') no tiene ancla al revisar un borrador OCR.
+            // matchedName se queda null a propósito: el efecto de casado lo
+            // rellena desde catalogByItem en cuanto carga (ver "tier 0").
+            rawText: l.rawText, supplierCode: l.supplierCode, matchedName: null, matchSemaphore: null, matchType: null,
           }
         })
       } else if (againstOrder && order) {
@@ -2230,7 +2275,7 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                     // "Ajustar como el albarán": leemos los números del TEXTO del albarán
                     // ("CAJA 3 UD DE 1 KG" → 3 × 1 kg), determinista. Si no encaja → no prefijamos.
                     const fu = friendlyUnit(l.baseUnit?.abbr)
-                    const albaranPack = fromOcr ? parsePack(l.rawText, l.baseUnit?.abbr) : null
+                    const albaranPack = needsResolution ? parsePack(l.rawText, l.baseUnit?.abbr) : null
                     const albaranPackTotalBase = albaranPack ? albaranPack.n * albaranPack.m * fu.factor : null
                     const formatMismatchAlbaran = albaranPackTotalBase != null && albaranPackTotalBase > 0 && l.formatQtyInBase != null && Math.abs(l.formatQtyInBase - albaranPackTotalBase) / albaranPackTotalBase > 0.02
 
@@ -2240,12 +2285,12 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                         {/* Fila 1: artículo + estado/avisos */}
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
-                            {!fromOcr && (
+                            {!needsResolution && (
                               <span className="text-base font-medium text-text-primary">{l.productName}</span>
                             )}
 
                             {/* Lo que dice el albarán, agrupado (cantidad/importe arriba, detalle en gris) */}
-                            {fromOcr && (l.rawText || l.albaranQty != null || l.lineAmount != null) && (
+                            {needsResolution && (l.rawText || l.albaranQty != null || l.lineAmount != null) && (
                               <div className="mt-1.5 rounded-md bg-page px-2.5 py-1.5">
                                 <div className="text-[10px] text-text-tertiary">El albarán dice</div>
                                 {(l.albaranQty != null || l.lineAmount != null) && (
@@ -2269,13 +2314,13 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                                 )}
                               </div>
                             )}
-                            {/* No-OCR: lote/caduca y referencia de pedido sueltos */}
-                            {!fromOcr && (l.lotCode || l.expiryDate) && (
+                            {/* Contra pedido / catálogo ciego: lote/caduca y referencia de pedido sueltos */}
+                            {!needsResolution && (l.lotCode || l.expiryDate) && (
                               <div className="text-[11px] text-text-tertiary mt-1">
                                 {l.lotCode ? `lote ${l.lotCode}` : ''}{l.lotCode && l.expiryDate ? ' · ' : ''}{l.expiryDate ? `caduca ${l.expiryDate}` : ''}
                               </div>
                             )}
-                            {!fromOcr && hasReference && (
+                            {!needsResolution && hasReference && (
                               <div className="text-[11px] text-text-tertiary mt-0.5">
                                 pedido {l.qtyOrdered ?? '—'} · recibido {l.alreadyReceived ?? '—'} · pendiente {l.pending ?? '—'}
                               </div>
@@ -2317,8 +2362,12 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                             mismo gesto tanto si el casado automático ya resolvió la línea
                             como si no. ENCARGO CODE (12/08) R1' feat/recepcion-casado-
                             automatico. Reutiliza LineMatchPicker tal cual — ya trae
-                            propuestas + buscador + "Crear artículo nuevo"; no se duplica. */}
-                        {fromOcr && (
+                            propuestas + buscador + "Crear artículo nuevo"; no se duplica.
+                            needsResolution (no fromOcr): contra pedido o catálogo ciego el
+                            artículo ya viene fijado y esta fila no aporta nada; en escaneo
+                            en vivo O revisando un borrador (fix/recepcion-fromocr-borrador)
+                            sí puede faltar casado, se muestre como se muestre la línea. */}
+                        {needsResolution && (
                           <div className="mt-2">
                             {l.recipeItemId ? (
                               <div className="rounded-md border border-border-default bg-page px-3 py-2">
@@ -2371,9 +2420,10 @@ export default function GoodsReceiptForm({ accountId, order, prefill, ocrPrefill
                             grande que abre <FormatPicker/> (hoja con tarjetas + "crear
                             formato nuevo", que reutiliza el wizard T1). "Sin formato" ya
                             no es un gris mudo: es un aviso que no se puede pasar por alto,
-                            con una única salida deliberada (marcar "no inventariar"). */}
+                            con una única salida deliberada (marcar "no inventariar").
+                            needsResolution, no fromOcr — mismo motivo que Fila 1.5. */}
                         <div className="mt-2">
-                          {!fromOcr ? (
+                          {!needsResolution ? (
                             <p className="text-[11px] text-text-secondary">formato: {l.formatLabel ?? '—'}</p>
                           ) : !l.recipeItemId ? (
                             <span className="text-[11px] text-text-tertiary">casa el artículo primero</span>
