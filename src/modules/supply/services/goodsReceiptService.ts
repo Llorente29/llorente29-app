@@ -1217,6 +1217,10 @@ export function matchTypeLabel(mt: string): string {
     case 'code': return 'por código'
     case 'name_exact': return 'por nombre'
     case 'name_normalized': return 'por nombre'
+    // ENCARGO CODE (12/08) R1' — casado automático desde article_supplier
+    // (la memoria que learn_from_receipt ya escribe y nadie leía).
+    case 'learned': return 'ya lo compraste así'
+    case 'learned_fuzzy': return 'probable — confírmalo'
     case 'fuzzy': return 'parecido'
     case 'manual': return 'elegido a mano'
     case 'created': return 'nuevo'
